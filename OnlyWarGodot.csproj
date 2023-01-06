@@ -1,0 +1,9 @@
+<Project Sdk="Godot.NET.Sdk/4.0.0-beta.10">
+  <PropertyGroup>
+    <TargetFramework>net6.0</TargetFramework>
+    <EnableDynamicLoading>true</EnableDynamicLoading>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Mono.Data.Sqlite" Version="1.0.61" />
+  </ItemGroup>
+</Project>

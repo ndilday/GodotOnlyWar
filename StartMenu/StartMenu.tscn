@@ -1,0 +1,58 @@
+[gd_scene load_steps=4 format=3 uid="uid://b5sny34jdvj4p"]
+
+[ext_resource type="Script" path="res://StartMenu/StartMenu.cs" id="1_k7bfn"]
+[ext_resource type="Texture2D" uid="uid://bafy7025gadvp" path="res://StartMenu/burningBuilding.jpg" id="1_vpgy8"]
+
+[sub_resource type="Theme" id="Theme_hbxc8"]
+
+[node name="StartMenu" type="Control"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+script = ExtResource("1_k7bfn")
+
+[node name="BackgroundImage" type="TextureRect" parent="."]
+layout_mode = 0
+offset_left = -150.0
+offset_right = 2850.0
+offset_bottom = 1993.0
+scale = Vector2(0.39, 0.39)
+texture = ExtResource("1_vpgy8")
+
+[node name="TitleLabel" type="RichTextLabel" parent="."]
+layout_mode = 1
+anchors_preset = 5
+anchor_left = 0.5
+anchor_right = 0.5
+offset_left = -412.0
+offset_top = 100.0
+offset_right = 288.0
+offset_bottom = 300.0
+grow_horizontal = 2
+theme = SubResource("Theme_hbxc8")
+text = "ONLY WAR"
+fit_content_height = true
+scroll_active = false
+tab_size = 3
+
+[node name="NewGameButton" type="Button" parent="."]
+layout_mode = 0
+offset_left = 474.0
+offset_top = 426.0
+offset_right = 567.0
+offset_bottom = 457.0
+text = "New Game"
+
+[node name="LoadGameButton" type="Button" parent="."]
+layout_mode = 0
+offset_left = 474.0
+offset_top = 468.0
+offset_right = 570.0
+offset_bottom = 499.0
+disabled = true
+text = "Load Game"
+
+[connection signal="pressed" from="NewGameButton" to="." method="OnNewGameButtonPressed"]

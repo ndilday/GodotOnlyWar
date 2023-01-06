@@ -1,0 +1,89 @@
+[gd_scene load_steps=3 format=3 uid="uid://ctrhbg0anf5cx"]
+
+[ext_resource type="Theme" uid="uid://ylp8bk1nhedq" path="res://MainGameScreen/OnlyWarTheme.tres" id="1_ea6pw"]
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_ru2t3"]
+bg_color = Color(0.0117647, 0.188235, 0.615686, 1)
+
+[node name="BottomMenu" type="Control"]
+layout_mode = 3
+anchors_preset = 12
+anchor_top = 1.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_top = -50.0
+grow_horizontal = 2
+grow_vertical = 0
+theme = ExtResource("1_ea6pw")
+
+[node name="Panel" type="Panel" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+theme = ExtResource("1_ea6pw")
+theme_override_styles/panel = SubResource("StyleBoxFlat_ru2t3")
+
+[node name="MarginContainer" type="MarginContainer" parent="Panel"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_constants/margin_left = 10
+
+[node name="HBoxContainer" type="HBoxContainer" parent="Panel/MarginContainer"]
+layout_mode = 2
+
+[node name="ChapterButton" type="Button" parent="Panel/MarginContainer/HBoxContainer"]
+layout_mode = 2
+disabled = true
+text = "Chapter"
+
+[node name="ApothecaryButton" type="Button" parent="Panel/MarginContainer/HBoxContainer"]
+layout_mode = 2
+disabled = true
+text = "Apothecarium"
+
+[node name="ReclusiumButton" type="Button" parent="Panel/MarginContainer/HBoxContainer"]
+layout_mode = 2
+disabled = true
+text = "Reclusium"
+
+[node name="LibraryButton" type="Button" parent="Panel/MarginContainer/HBoxContainer"]
+layout_mode = 2
+disabled = true
+text = "Librarium"
+
+[node name="ArmoryButton" type="Button" parent="Panel/MarginContainer/HBoxContainer"]
+layout_mode = 2
+disabled = true
+text = "Armamentarium"
+
+[node name="RecruitmentButton" type="Button" parent="Panel/MarginContainer/HBoxContainer"]
+layout_mode = 2
+disabled = true
+text = "Conquistorum"
+
+[node name="FleetButton" type="Button" parent="Panel/MarginContainer/HBoxContainer"]
+layout_mode = 2
+disabled = true
+text = "Classis"
+
+[node name="DiplomacyButton" type="Button" parent="Panel/MarginContainer/HBoxContainer"]
+layout_mode = 2
+disabled = true
+text = "Diplomacy"
+
+[node name="ArchiveButton" type="Button" parent="Panel/MarginContainer/HBoxContainer"]
+layout_mode = 2
+disabled = true
+text = "Archive"
+
+[node name="EndTurnButton" type="Button" parent="Panel/MarginContainer/HBoxContainer"]
+layout_mode = 2
+disabled = true
+text = "End Turn"

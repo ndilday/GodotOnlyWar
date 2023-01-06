@@ -1,0 +1,13 @@
+{
+  "profiles": {
+    "OnlyWarGodot": {
+      "commandName": "Project"
+    },
+    "Run Only War": {
+      "commandName": "Executable",
+      "executablePath": "C:\\Projects\\Godot_v4.0-beta10_mono_win64\\Godot_v4.0-beta10_mono_win64.exe",
+      "workingDirectory": "C:\\Projects\\GodotOnlyWar",
+      "nativeDebugging": true
+    }
+  }
+}

@@ -1,0 +1,16 @@
+[gd_resource type="Theme" load_steps=4 format=3 uid="uid://ylp8bk1nhedq"]
+
+[ext_resource type="FontFile" uid="uid://7esl44skgu48" path="res://Fonts/FamiljenGroteskGF-Bold.otf" id="1_b5eft"]
+[ext_resource type="FontFile" uid="uid://dp0txv56eyu6q" path="res://Fonts/FamiljenGroteskGF-Regular.otf" id="2_y6c3v"]
+[ext_resource type="FontFile" uid="uid://5deyjhj5fvil" path="res://Fonts/sui generis rg.otf" id="3_oritb"]
+
+[resource]
+default_font = ExtResource("3_oritb")
+default_font_size = 14
+Button/constants/h_separation = 20
+Fonts/fonts/large = ExtResource("1_b5eft")
+Fonts/fonts/normal = ExtResource("2_y6c3v")
+MarginContainer/constants/margin_bottom = 5
+MarginContainer/constants/margin_left = 5
+MarginContainer/constants/margin_right = 5
+MarginContainer/constants/margin_top = 5
