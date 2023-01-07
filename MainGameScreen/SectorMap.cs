@@ -1,9 +1,8 @@
 using Godot;
+using OnlyWar.Models;
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Security.AccessControl;
-using System.Security.Cryptography.X509Certificates;
 
 enum Facing { North, East, South, West}
 struct BorderPoint
@@ -15,14 +14,12 @@ struct BorderPoint
 
 public partial class SectorMap : Node2D
 {
-    [Export]
-    public Vector2i GridDimensions = new(50, 50);
-    [Export]
-    public Vector2i CellSize = new(20, 20);
-    [Export(PropertyHint.Range, "5, 50, 5")]
-    private ushort MaxSubsectorCellDiameter = 10;
-    [Export(PropertyHint.Range, "0.05, 0.25, 0.05")]
-    private float PlanetChance = 0.05f;
+    public Vector2i GridDimensions =
+        new(GameDataSingleton.Instance.GameRulesData.SectorSize.Item1,
+            GameDataSingleton.Instance.GameRulesData.SectorSize.Item2);
+    public Vector2i CellSize = 
+        new(GameDataSingleton.Instance.GameRulesData.SectorCellSize.Item1,
+            GameDataSingleton.Instance.GameRulesData.SectorCellSize.Item2);
 
     private Vector2i _halfCellSize;
     private ushort[] _sectorIds;
@@ -37,7 +34,7 @@ public partial class SectorMap : Node2D
         _halfCellSize = CellSize / 2;
         _sectorIds = new ushort[GridDimensions.x * GridDimensions.y];
         _hasPlanet = new bool[GridDimensions.x * GridDimensions.y];
-        GeneratePlanets();
+        PlacePlanets();
         GenerateSubssectors();
     }
 
@@ -78,7 +75,7 @@ public partial class SectorMap : Node2D
         label.Position = mapPos;*/
     }
 
-    private void GeneratePlanets()
+    private void PlacePlanets()
     {
         _subsectorPlanetMap = new Dictionary<ushort, List<Vector2i>>();
 
@@ -86,19 +83,17 @@ public partial class SectorMap : Node2D
         Vector2 starTextureScale = new Vector2(0.05f, 0.05f);
         ushort currentSubsectorId = 1;
         Random rand = new Random();
-        for (int i = 0; i < GridDimensions.x * GridDimensions.y; i++)
+        foreach(var kvp in GameDataSingleton.Instance.Sector.Planets)
         {
-            if (rand.NextDouble() <= PlanetChance)
-            {
-                _hasPlanet[i] = true;
-                Vector2i gridPosition = IndexToGridPosition(i);
-                DrawStar(starTexture, starTextureScale, gridPosition);
-                _subsectorPlanetMap[currentSubsectorId] = new List<Vector2i>
+            Vector2i gridPosition = new(kvp.Value.Position.Item1, kvp.Value.Position.Item2);
+            int index = GridPositionToIndex(gridPosition);
+            _hasPlanet[index] = true;
+            DrawStar(starTexture, starTextureScale, gridPosition);
+            _subsectorPlanetMap[currentSubsectorId] = new List<Vector2i>
                 {
                     gridPosition
                 };
-                currentSubsectorId++;
-            }
+            currentSubsectorId++;
         }
     }
 
@@ -141,9 +136,9 @@ public partial class SectorMap : Node2D
 
     private void GenerateSubssectors()
     {
-        _subsectorDiameterSquaredMap = CombineSubsectors(_subsectorPlanetMap, MaxSubsectorCellDiameter);
+        _subsectorDiameterSquaredMap = CombineSubsectors(_subsectorPlanetMap, GameDataSingleton.Instance.GameRulesData.MaxSubsectorCellDiameter);
         _subsectorCenterMap = CalculateSubSectorCenters(_subsectorPlanetMap);
-        AssignGridSubsectors(_subsectorPlanetMap, _subsectorCenterMap, _subsectorDiameterSquaredMap, _sectorIds, MaxSubsectorCellDiameter / 2);
+        AssignGridSubsectors(_subsectorPlanetMap, _subsectorCenterMap, _subsectorDiameterSquaredMap, _sectorIds, GameDataSingleton.Instance.GameRulesData.MaxSubsectorCellDiameter / 2);
         _subsectorVertexListMap = DetermineSubsectorBorderPoints(_sectorIds);
     }
 

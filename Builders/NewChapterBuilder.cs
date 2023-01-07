@@ -13,24 +13,25 @@ using OnlyWar.Models.Units;
 
 namespace OnlyWar.Builders
 {
-    public static class NewChapterBuilder
+    internal static class NewChapterBuilder
     {
         private delegate void TrainingFunction(PlayerSoldier playerSoldier);
-        public static PlayerForce CreateChapter(Faction faction, 
+        internal static PlayerForce CreateChapter(Faction faction, 
                                             Date trainingStartDate,
-                                            GameSettings gameSettings)
+                                            GameRulesData data,
+                                            Date date)
         {
             Date trainingEndDate = new Date(trainingStartDate.GetTotalWeeks() + 104);
             var soldierTemplate = faction.SoldierTemplates[0];
             var soldiers =
                 SoldierFactory.Instance.GenerateNewSoldiers(1000, 
                                                             soldierTemplate.Species, 
-                                                            gameSettings.Sector.SkillTemplateList)
+                                                            data.SkillTemplateList)
                 .Select(s => new PlayerSoldier(s, $"{TempNameGenerator.GetName()} {TempNameGenerator.GetName()}"))
                 .ToList();
 
             SoldierTrainingCalculator trainingHelper =
-                new SoldierTrainingCalculator(gameSettings.Sector.BaseSkillMap.Values);
+                new SoldierTrainingCalculator(data.BaseSkillMap.Values);
             foreach (PlayerSoldier soldier in soldiers)
             {
                 soldier.AddEntryToHistory(trainingStartDate + ": accepted into training");
@@ -40,7 +41,7 @@ namespace OnlyWar.Builders
                     // add psychic specific training here
                 }
                 trainingHelper.EvaluateSoldier(soldier, trainingEndDate);
-                soldier.ProgenoidImplantDate = new Date(gameSettings.Date.Millenium, gameSettings.Date.Year - 2, RNG.GetIntBelowMax(1, 53));
+                soldier.ProgenoidImplantDate = new Date(date.Millenium, date.Year - 2, RNG.GetIntBelowMax(1, 53));
             }
 
             Dictionary<int, PlayerSoldier> unassignedSoldierMap = soldiers.ToDictionary(s => s.Id);
@@ -52,7 +53,7 @@ namespace OnlyWar.Builders
             foreach (PlayerSoldier soldier in soldiers)
             {
                 ApplySoldierTypeTraining(soldier);
-                trainingHelper.EvaluateSoldier(soldier, gameSettings.Date);
+                trainingHelper.EvaluateSoldier(soldier, date);
 
             }
             chapter.Fleet.TaskForces.Add(new TaskForce(faction, faction.FleetTemplates.First().Value));

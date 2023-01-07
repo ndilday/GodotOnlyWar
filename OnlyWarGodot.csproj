@@ -2,6 +2,7 @@
   <PropertyGroup>
     <TargetFramework>net6.0</TargetFramework>
     <EnableDynamicLoading>true</EnableDynamicLoading>
+    <RootNamespace>OnlyWar</RootNamespace>
   </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="Mono.Data.Sqlite" Version="1.0.61" />

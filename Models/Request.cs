@@ -24,14 +24,12 @@ namespace OnlyWar.Models
         public Date DateRequestMade { get; private set; }
 
         public Date DateRequestFulfilled { get; private set; }
-        public GameSettings GameSettings { get; private set; }
 
-        public PresenceRequest(int id, Planet planet, Character requester, GameSettings gameSettings,
+        public PresenceRequest(int id, Planet planet, Character requester,
                                Date dateRequestMade,  Date fulfilledDate = null)
         {
             Id = id;
             TargetPlanet = planet;
-            GameSettings = gameSettings;
             Requester = requester;
             DateRequestMade = dateRequestMade;
             DateRequestFulfilled = fulfilledDate;
@@ -43,13 +41,14 @@ namespace OnlyWar.Models
         }
         public bool IsRequestCompleted()
         {
+            GameRulesData data = GameDataSingleton.Instance.GameRulesData;
             if (_completed) return true;
-            if(TargetPlanet.PlanetFactionMap.ContainsKey(GameSettings.Sector.PlayerFaction.Id) &&
-                TargetPlanet.PlanetFactionMap[GameSettings.Sector.PlayerFaction.Id].LandedSquads.Count > 0)
+            if(TargetPlanet.PlanetFactionMap.ContainsKey(data.PlayerFaction.Id) &&
+                TargetPlanet.PlanetFactionMap[data.PlayerFaction.Id].LandedSquads.Count > 0)
             {
                 // TODO: it should really require more than just dropping a soldier
                 _completed = true;
-                DateRequestFulfilled = GameSettings.Date;
+                DateRequestFulfilled = GameDataSingleton.Instance.Date;
                 return true;
             }
             return false;
