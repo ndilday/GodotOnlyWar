@@ -6,5 +6,6 @@
   </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="Mono.Data.Sqlite" Version="1.0.61" />
+    <PackageReference Include="SQLite" Version="3.13.0" />
   </ItemGroup>
 </Project>
