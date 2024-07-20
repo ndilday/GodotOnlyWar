@@ -12,7 +12,7 @@ namespace OnlyWar.Helpers.Battles
 {
     public class BattleSquadPlanner
     {
-        private readonly BattleGrid _grid;
+        private readonly BattleGridManager _grid;
         private readonly ConcurrentBag<IAction> _shootActionBag;
         private readonly ConcurrentBag<IAction> _moveActionBag;
         private readonly ConcurrentBag<IAction> _meleeActionBag;
@@ -22,7 +22,7 @@ namespace OnlyWar.Helpers.Battles
         private readonly MeleeWeapon _defaultMeleeWeapon;
         private readonly ConcurrentQueue<string> _log;
 
-        public BattleSquadPlanner(BattleGrid grid, 
+        public BattleSquadPlanner(BattleGridManager grid, 
                                   Dictionary<int, BattleSquad> opposingSoldierIdSquadMap, 
                                   ConcurrentBag<IAction> shootActionBag,
                                   ConcurrentBag<IAction> moveActionBag,
@@ -607,10 +607,7 @@ namespace OnlyWar.Helpers.Battles
         {
             Tuple<int, int> desiredMove = CalculateMovementAlongLine(line, moveSpeed);
             Tuple<int, int> newLocation = new Tuple<int, int>(soldier.TopLeft.Item1 + desiredMove.Item1, soldier.TopLeft.Item2 + desiredMove.Item2);
-            if (_grid.IsSpaceReserved(newLocation) || !_grid.IsEmpty(newLocation))
-            {
-                newLocation = FindBestLocation(soldier.TopLeft, newLocation, moveSpeed);
-            }
+            newLocation = FindBestLocation(soldier.TopLeft, newLocation, moveSpeed);
             soldier.CurrentSpeed = moveSpeed;
             _grid.ReserveSpace(newLocation);
             ushort orientation = CalculateOrientationFromVector(line);
@@ -624,12 +621,12 @@ namespace OnlyWar.Helpers.Battles
             else if(line.Item1 == 0)
             {
                 targetLocation = new Tuple<int, int>(0, line.Item2 < 0 ? -(int)moveSpeed : (int)moveSpeed);
-                if (!_grid.IsSpaceReserved(targetLocation) && _grid.IsEmpty(targetLocation)) return targetLocation;
+                if (_grid.IsSpaceAvailable(targetLocation)) return targetLocation;
             }
             else if(line.Item2 == 0)
             {
                 targetLocation = new Tuple<int, int>(line.Item1 < 0 ? -(int)moveSpeed : (int)moveSpeed, 0);
-                if (!_grid.IsSpaceReserved(targetLocation) && _grid.IsEmpty(targetLocation)) return targetLocation;
+                if (_grid.IsSpaceAvailable(targetLocation)) return targetLocation;
             }
 
             // multiply line by the square root of moveSpeed^2/line^2
@@ -723,7 +720,7 @@ namespace OnlyWar.Helpers.Battles
                     while (newY * newY <= speedSq - xMoveSq)
                     {
                         Tuple<int, int> newTarget = new Tuple<int, int>(startingPoint.Item1 + xMove, startingPoint.Item2 + newY);
-                        if (!_grid.IsSpaceReserved(newTarget) && _grid.IsEmpty(newTarget))
+                        if (_grid.IsSpaceAvailable(newTarget))
                         {
                             return newTarget;
                         }
@@ -747,7 +744,7 @@ namespace OnlyWar.Helpers.Battles
                     while (newX * newX <= speedSq - yMoveSq)
                     {
                         Tuple<int, int> newTarget = new Tuple<int, int>(startingPoint.Item1 + newX, startingPoint.Item2 + yMove);
-                        if (!_grid.IsSpaceReserved(newTarget) && _grid.IsEmpty(newTarget))
+                        if (_grid.IsSpaceAvailable(newTarget))
                         {
                             return newTarget;
                         }

@@ -90,7 +90,7 @@ namespace OnlyWar.Helpers.Battles
             config.PlayerSquads = CreateBattleSquadList(playerSquads, true);
             config.OpposingSquads = CreateBattleSquadList(opposingSquads, false);
             config.Planet = planet;
-            config.Grid = new BattleGrid();
+            config.Grid = new BattleGridManager();
             AnnihilationPlacer placer = new AnnihilationPlacer(config.Grid);
             placer.PlaceSquads(config.PlayerSquads, config.OpposingSquads);
             return config;
@@ -128,7 +128,7 @@ namespace OnlyWar.Helpers.Battles
             config.PlayerSquads = CreateBattleSquadList(playerSquads, true);
             config.OpposingSquads = CreateBattleSquadList(opposingSquads, false);
             config.Planet = planet;
-            config.Grid = new BattleGrid();
+            config.Grid = new BattleGridManager();
             AmbushPlacer placer = new AmbushPlacer(config.Grid);
             placer.PlaceSquads(config.PlayerSquads, config.OpposingSquads);
             return config;

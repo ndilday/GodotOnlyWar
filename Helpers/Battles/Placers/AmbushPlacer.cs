@@ -6,9 +6,9 @@ namespace OnlyWar.Helpers.Battles.Placers
 {
     public class AmbushPlacer
     {
-        private readonly BattleGrid _grid;
+        private readonly BattleGridManager _grid;
 
-        public AmbushPlacer(BattleGrid grid)
+        public AmbushPlacer(BattleGridManager grid)
         {
             _grid = grid;
         }
@@ -39,7 +39,7 @@ namespace OnlyWar.Helpers.Battles.Placers
                 ushort right = (ushort)(xMid + squadSize.Item1 - squadSize.Item1 / 2);
                 bottomLimit = (ushort)(top - squadSize.Item2);
                 squadPositionMap[squad] = new Tuple<int, int>(left, bottomLimit);
-                _grid.PlaceBattleSquad(squad, new Tuple<int, int>(left, bottomLimit), true);
+                BattleSquadPlacer.PlaceBattleSquad(_grid, squad, new Tuple<int, int>(left, bottomLimit), true);
 
                 top -= (ushort)(squadSize.Item2 + 1);
 
@@ -74,7 +74,7 @@ namespace OnlyWar.Helpers.Battles.Placers
                     // start at top left of killzone, fill downward
                     currentY -= squadSize.Item1;
                     int left = currentX - squadSize.Item2;
-                    _grid.PlaceBattleSquad(squad, new Tuple<int, int>(left, currentY), false);
+                    BattleSquadPlacer.PlaceBattleSquad(_grid, squad, new Tuple<int, int>(left, currentY), false);
                     if(currentY <= bottomLimit)
                     {
                         onLeft = false;
@@ -86,7 +86,7 @@ namespace OnlyWar.Helpers.Battles.Placers
                 {
                     // start at top left of killzone, fill right
                     squadPositionMap[squad] = new Tuple<int, int>(currentX, currentY);
-                    _grid.PlaceBattleSquad(squad, new Tuple<int, int>(currentX, currentY), true);
+                    BattleSquadPlacer.PlaceBattleSquad(_grid, squad, new Tuple<int, int>(currentX, currentY), true);
                     currentX += squadSize.Item1;
                     if(currentX >= rightLimit)
                     {

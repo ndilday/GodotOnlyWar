@@ -5,9 +5,9 @@ namespace OnlyWar.Helpers.Battles.Placers
 {
     class AnnihilationPlacer
     {
-        private readonly BattleGrid _grid;
+        private readonly BattleGridManager _grid;
 
-        public AnnihilationPlacer(BattleGrid grid)
+        public AnnihilationPlacer(BattleGridManager grid)
         {
             _grid = grid;
         }

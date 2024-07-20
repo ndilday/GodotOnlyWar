@@ -8,11 +8,11 @@ namespace OnlyWar.Helpers.Battles.Actions
     public class MoveAction : IAction
     {
         private readonly BattleSoldier _soldier;
-        private readonly BattleGrid _grid;
+        private readonly BattleGridManager _grid;
         private readonly Tuple<int, int> _newTopLeft;
         private readonly ushort _orientation;
         private readonly ConcurrentBag<MoveResolution> _resultList;
-        public MoveAction(BattleSoldier soldier, BattleGrid grid, Tuple<int, int> newTopLeft, ushort orientation, ConcurrentBag<MoveResolution> resultList)
+        public MoveAction(BattleSoldier soldier, BattleGridManager grid, Tuple<int, int> newTopLeft, ushort orientation, ConcurrentBag<MoveResolution> resultList)
         {
             _soldier = soldier;
             _grid = grid;
