@@ -76,43 +76,23 @@ namespace OnlyWar.Helpers.Battles.Actions
 
         private void HandleHit()
         {
-            HitLocation hitLocation = DetermineHitLocation(_target);
-            // make sure this body part hasn't already been shot off
+            HitLocation hitLocation = HitLocationCalculator.DetermineHitLocation(_target);
+            // make sure this body part hasn't already been severed
             if (!hitLocation.IsSevered)
             {
+                // calculate damage based on attacker's strength, weapon multiplier, and 
                 float damage = _attacker.Soldier.Strength * _weapon.Template.StrengthMultiplier * (3.5f + ((float)RNG.NextGaussianDouble() * 1.75f));
+                // determine armor effectiveness based on penetration of the weapon
                 float effectiveArmor = _target.Armor.Template.ArmorProvided * _weapon.Template.ArmorMultiplier;
+                // determine how much damage penetrates the armor
                 float penDamage = damage - effectiveArmor;
                 if (penDamage > 0)
                 {
+                    // determine size of wound
                     float totalDamage = penDamage * _weapon.Template.WoundMultiplier;
                     _resultList.Add(new WoundResolution(_attacker, _weapon.Template, _target, totalDamage, hitLocation));
                 }
             }
-        }
-
-        private HitLocation DetermineHitLocation(BattleSoldier soldier)
-        {
-            // we're using the "lottery ball" approach to randomness here, where each point of probability
-            // for each available body party defines the size of the random linear distribution
-            // TODO: factor in cover/body position
-            // 
-            int roll = RNG.GetIntBelowMax(0, soldier.Soldier.Body.TotalProbabilityMap[soldier.Stance]);
-            foreach (HitLocation location in soldier.Soldier.Body.HitLocations)
-            {
-                int locationChance = location.Template.HitProbabilityMap[(int)soldier.Stance];
-                if (roll < locationChance)
-                {
-                    return location;
-                }
-                else
-                {
-                    // this is basically an easy iterative way to figure out which body part on the "chart" the roll matches
-                    roll -= locationChance;
-                }
-            }
-            // this should never happen
-            throw new InvalidOperationException("Could not determine a hit location");
         }
     }
 }

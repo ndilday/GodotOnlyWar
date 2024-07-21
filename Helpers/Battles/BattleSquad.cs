@@ -154,7 +154,7 @@ namespace OnlyWar.Helpers.Battles
         private void AllocateEquipment()
         {
             List<BattleSoldier> tempSquad = new List<BattleSoldier>(Soldiers);
-            var wsList = Squad.Loadout.ToList();
+            List<WeaponSet> wsList = Squad.Loadout.ToList();
             // need to allocate weapons from squad weapon sets
             if (Soldiers[0].Soldier.Template.IsSquadLeader)
             {
@@ -169,14 +169,14 @@ namespace OnlyWar.Helpers.Battles
                 // TODO: we'll want to stop assuming Dex as the base stat at some point
                 if (ws.PrimaryRangedWeapon != null)
                 {
-                    var bestShooter = tempSquad.OrderByDescending(s => s.Soldier.GetTotalSkillValue(ws.PrimaryRangedWeapon.RelatedSkill)).First();
+                    BattleSoldier bestShooter = tempSquad.OrderByDescending(s => s.Soldier.GetTotalSkillValue(ws.PrimaryRangedWeapon.RelatedSkill)).First();
                     bestShooter.AddWeapons(ws.GetRangedWeapons(), ws.GetMeleeWeapons());
                     bestShooter.Armor = new Armor(Squad.SquadTemplate.Armor);
                     tempSquad.Remove(bestShooter);
                 }
                 else
                 {
-                    var bestHitter = tempSquad.OrderByDescending(s => s.Soldier.GetTotalSkillValue(ws.PrimaryMeleeWeapon.RelatedSkill)).First();
+                    BattleSoldier bestHitter = tempSquad.OrderByDescending(s => s.Soldier.GetTotalSkillValue(ws.PrimaryMeleeWeapon.RelatedSkill)).First();
                     bestHitter.AddWeapons(ws.GetRangedWeapons(), ws.GetMeleeWeapons());
                     bestHitter.Armor = new Armor(Squad.SquadTemplate.Armor);
                     tempSquad.Remove(bestHitter);

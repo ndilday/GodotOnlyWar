@@ -25,7 +25,7 @@ namespace OnlyWar.Helpers.Battles
                 throw new InvalidOperationException($"Soldier {soldier.Soldier.Id} is already placed.");
             }
 
-            foreach (var cell in cells)
+            foreach (Tuple<int,int> cell in cells)
             {
                 if (_grid.GetCellObject(cell) != null || _grid.IsCellReserved(cell))
                 {
@@ -85,7 +85,7 @@ namespace OnlyWar.Helpers.Battles
                 throw new ArgumentException("Soldier not found");
             }
             //var targetSet = _playerSoldierIds.Contains(id) ? _opposingSoldierIds : _playerSoldierIds;
-            var startLocations = _grid.GetObjectCells(soldierId);
+            IList<Tuple<int, int>> startLocations = _grid.GetObjectCells(soldierId);
             bool soldierTeam = _soldierSideMap[soldierId];
             closestSoldierId = -1;
             float distanceSq = float.MaxValue;

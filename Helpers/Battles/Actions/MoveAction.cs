@@ -24,7 +24,7 @@ namespace OnlyWar.Helpers.Battles.Actions
         public void Execute()
         {
             _resultList.Add(new MoveResolution(_soldier, _grid, _newTopLeft, _orientation));
-            _soldier.TurnsShooting++;
+            _soldier.TurnsRunning++;
         }
     }
 }

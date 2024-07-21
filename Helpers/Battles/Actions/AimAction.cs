@@ -20,15 +20,16 @@ namespace OnlyWar.Helpers.Battles.Actions
         }
         public void Execute()
         {
+            // check is this is maintaining aim or starting with a new target
             if(_soldier.Aim?.Item1 != _target)
             {
-                // this is a new aim
+                // this is a new target
                 _log.Enqueue(_soldier.Soldier.Name + " aims");
                 _soldier.Aim = new Tuple<BattleSoldier, RangedWeapon, int>(_target, _weapon, 0);
             }
             else
             {
-                // increment the existing aim
+                // containing aim, increment the bonus
                 _log.Enqueue(_soldier.Soldier.Name + " continues aiming");
                 int curAim = _soldier.Aim.Item3;
                 _soldier.Aim = new Tuple<BattleSoldier, RangedWeapon, int>(_target, _weapon, curAim + 1);

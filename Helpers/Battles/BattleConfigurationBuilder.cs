@@ -16,7 +16,7 @@ namespace OnlyWar.Helpers.Battles
             
             bool playerForcePresent = planet.PlanetFactionMap.ContainsKey(playerFactionId) &&
                 planet.PlanetFactionMap[playerFactionId].LandedSquads.Count > 0;
-            var opFactions = planet.PlanetFactionMap.Values
+            IEnumerable<PlanetFaction> opFactions = planet.PlanetFactionMap.Values
                 .Where(f => !f.Faction.IsDefaultFaction && !f.Faction.IsPlayerFaction);
             if (!playerForcePresent || opFactions == null || opFactions.Count() == 0) return null;
             // does it really make sense for faction squads on planet to be

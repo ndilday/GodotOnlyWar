@@ -55,16 +55,19 @@ namespace OnlyWar.Helpers.Battles.Actions
         private float CalculateToHitModifiers(float soldierSkill)
         {
             float totalModifier = 0;
+            // the bulky weapon penalty is usually added when the weapon is fired while moving
             if (_useBulk)
             {
                 totalModifier -= _weapon.Template.Bulk;
             }
+            // if the soldier is aiming at the current target with the current weapon, add the accuracy bonus
             if(_soldier.Aim?.Item1 == _target && _soldier.Aim?.Item2 == _weapon)
             {
                 // accuracy of the weapon is limited by the soldier skill
                 // TODO: take this into account with enemies, rather than using high attribute, low skill
                 totalModifier += _soldier.Aim.Item3 + Math.Min(_weapon.Template.Accuracy, soldierSkill) + 1;
             }
+            // apply modifiers for rate of fire, taget size, and range
             totalModifier += BattleModifiersUtil.CalculateRateOfFireModifier(_numberOfShots);
             totalModifier += BattleModifiersUtil.CalculateSizeModifier(_target.Soldier.Size);
             totalModifier += BattleModifiersUtil.CalculateRangeModifier(_range, _target.CurrentSpeed);
@@ -74,7 +77,7 @@ namespace OnlyWar.Helpers.Battles.Actions
         
         private void HandleHit()
         {
-            HitLocation hitLocation = DetermineHitLocation(_target);
+            HitLocation hitLocation = HitLocationCalculator.DetermineHitLocation(_target);
             // make sure this body part hasn't already been shot off
             if(!hitLocation.IsSevered)
             {
@@ -87,30 +90,6 @@ namespace OnlyWar.Helpers.Battles.Actions
                     _resultList.Add(new WoundResolution(_soldier, _weapon.Template, _target, totalDamage, hitLocation));
                 }
             }
-        }
-
-        private HitLocation DetermineHitLocation(BattleSoldier soldier)
-        {
-            // we're using the "lottery ball" approach to randomness here, where each point of probability
-            // for each available body party defines the size of the random linear distribution
-            // TODO: factor in cover/body position
-            // 
-            int roll = RNG.GetIntBelowMax(0, soldier.Soldier.Body.TotalProbabilityMap[soldier.Stance]);
-            foreach (HitLocation location in soldier.Soldier.Body.HitLocations)
-            {
-                int locationChance = location.Template.HitProbabilityMap[(int)soldier.Stance];
-                if (roll < locationChance)
-                {
-                    return location;
-                }
-                else
-                {
-                    // this is basically an easy iterative way to figure out which body part on the "chart" the roll matches
-                    roll -= locationChance;
-                }
-            }
-            // this should never happen
-            throw new InvalidOperationException("Could not determine a hit location");
         }
     }
 }

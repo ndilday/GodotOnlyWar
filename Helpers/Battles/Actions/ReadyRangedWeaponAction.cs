@@ -16,23 +16,29 @@ namespace OnlyWar.Helpers.Battles.Actions
         public void Execute()
         {
             int handsFree = _soldier.HandsFree;
+
+            // handle two-handed weapons
             if(_weapon.Template.Location == EquipLocation.TwoHand && handsFree < 2)
             {
-                // unequip any equipped weapons
+                // not enough hands free, unequip any equipped weapons
                 _soldier.EquippedRangedWeapons.Clear();
                 _soldier.EquippedMeleeWeapons.Clear();
             }
-            if(_weapon.Template.Location == EquipLocation.OneHand && handsFree < 1)
+            // handle one-handed weapons
+            else if(_weapon.Template.Location == EquipLocation.OneHand && handsFree < 1)
             {
+                // not enough hands free, unequip ranged weapons if possible
                 if(_soldier.EquippedRangedWeapons.Count > 0)
                 {
                     _soldier.EquippedRangedWeapons.Clear();
                 }
+                // if no ranged weapons equipped, unequip any melee weapons
                 else
                 {
                     _soldier.EquippedMeleeWeapons.Clear();
                 }
             }
+            // equip the new weapon
             _soldier.EquippedRangedWeapons.Add(_weapon);
         }
     }
