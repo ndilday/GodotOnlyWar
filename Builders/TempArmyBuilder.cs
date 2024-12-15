@@ -73,9 +73,9 @@ namespace OnlyWar.Builders
             }
         }
 
-        public static Unit GenerateArmyFromPlanetFaction(PlanetFaction planetFaction)
+        public static Unit GenerateArmyFromRegionFaction(RegionFaction regionFaction)
         {
-            return GenerateArmy(0, planetFaction.Faction);
+            return GenerateArmy(0, regionFaction.PlanetFaction.Faction);
         }
     }
 }

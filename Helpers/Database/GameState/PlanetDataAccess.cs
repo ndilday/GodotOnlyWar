@@ -15,7 +15,10 @@ namespace OnlyWar.Helpers.Database.GameState
         {
             Dictionary<int, List<PlanetFaction>> planetFactions =
                 GetPlanetFactions(connection, factionMap, characterMap);
-            List<Planet> planetList = new List<Planet>();
+            Dictionary<int, List<Tuple<int, int, int>>> planetRegionMap = GetRegionData(connection, factionMap);
+            
+            List<Planet> planetList = [];
+            Dictionary<int, Region> regionMap = [];
             using (var command = connection.CreateCommand())
             {
                 command.CommandText = "SELECT * FROM Planet";
@@ -40,13 +43,21 @@ namespace OnlyWar.Helpers.Database.GameState
                     {
                         controllingFaction = null;
                     }
-                    // for now, we're hard coding all planets to be size 10
+                    // for now, we're hard coding all planets to be size 16
                     Planet planet =
-                        new Planet(id, name, new Tuple<ushort, ushort>((ushort)x, (ushort)y), 10, template, importance, taxLevel)
+                        new Planet(id, name, new Tuple<ushort, ushort>((ushort)x, (ushort)y), 16, template, importance, taxLevel)
                         {
                             ControllingFaction = controllingFaction,
                             IsUnderAssault = isUnderAssault
                         };
+
+                    foreach(Tuple<int, int, int> regionData in planetRegionMap[id])
+                    {
+                        Region region = new Region(regionData.Item1, planet, regionData.Item3);
+                        regionMap[regionData.Item1] = region;
+                        planet.Regions[regionData.Item2] = region;
+                    }
+                    // set up region adjacency
                     foreach (PlanetFaction planetFaction in planetFactions[id])
                     {
                         planet.PlanetFactionMap.Add(planetFaction.Faction.Id, planetFaction);
@@ -54,14 +65,45 @@ namespace OnlyWar.Helpers.Database.GameState
                     planetList.Add(planet);
                 }
             }
+
+            // Fetch data from the RegionFaction table
+            PopulateRegionFactions(connection, factionMap, regionMap);
+
             return planetList;
+        }
+
+        private Dictionary<int, List<Tuple<int, int, int>>> GetRegionData(IDbConnection connection,
+                                                                       IReadOnlyDictionary<int, Faction> factionMap)
+        {
+            Dictionary<int, List<Tuple<int, int, int>>> regionDataMap = [];
+            using (var command = connection.CreateCommand())
+            {
+                command.CommandText = "SELECT * FROM Region";
+                var reader = command.ExecuteReader();
+
+                while (reader.Read())
+                {
+                    int id = reader.GetInt32(0);
+                    int planetId = reader.GetInt32(1);
+                    int regionNumber = reader.GetInt32(2);
+                    int regionType = reader.GetInt32(3);
+                    bool isUnderAssault = reader.GetBoolean(4);
+
+                    if (!regionDataMap.ContainsKey(planetId))
+                    {
+                        regionDataMap[planetId] = [];
+                    }
+                    regionDataMap[planetId].Add(new Tuple<int, int, int>(id, regionNumber, regionType));
+                }
+            }
+            return regionDataMap;
         }
 
         private Dictionary<int, List<PlanetFaction>> GetPlanetFactions(IDbConnection connection,
                                                                        IReadOnlyDictionary<int, Faction> factionMap,
                                                                        IReadOnlyDictionary<int, Character> characterMap)
         {
-            Dictionary<int, List<PlanetFaction>> planetPlanetFactionMap = new Dictionary<int, List<PlanetFaction>>();
+            Dictionary<int, List<PlanetFaction>> planetPlanetFactionMap = [];
             using (var command = connection.CreateCommand())
             {
                 command.CommandText = "SELECT * FROM PlanetFaction";
@@ -73,20 +115,16 @@ namespace OnlyWar.Helpers.Database.GameState
                     int planetId = reader.GetInt32(0);
                     int factionId = reader.GetInt32(1);
                     bool isPublic = reader.GetBoolean(2);
-                    int population = reader.GetInt32(3);
-                    int pdfMembers = reader.GetInt32(4);
-                    int planetaryControl = reader.GetInt32(5);
-                    float playerReputation = (float)reader[6];
-                    if (reader[7].GetType() != typeof(DBNull))
+                    int planetaryControl = reader.GetInt32(3);
+                    float playerReputation = (float)reader[4];
+                    if (reader[5].GetType() != typeof(DBNull))
                     {
-                        leaderId = reader.GetInt32(7);
+                        leaderId = reader.GetInt32(5);
                     }
                     PlanetFaction planetFaction =
                         new PlanetFaction(factionMap[factionId])
                         {
                             IsPublic = isPublic,
-                            Population = population,
-                            PDFMembers = pdfMembers,
                             PlanetaryControl = planetaryControl,
                             PlayerReputation = playerReputation,
                             Leader = leaderId == null ? null : characterMap[(int)leaderId]
@@ -94,7 +132,7 @@ namespace OnlyWar.Helpers.Database.GameState
 
                     if (!planetPlanetFactionMap.ContainsKey(planetId))
                     {
-                        planetPlanetFactionMap[planetId] = new List<PlanetFaction>();
+                        planetPlanetFactionMap[planetId] = [];
                     }
                     planetPlanetFactionMap[planetId].Add(planetFaction);
                 }
@@ -102,10 +140,42 @@ namespace OnlyWar.Helpers.Database.GameState
             return planetPlanetFactionMap;
         }
 
+        private static void PopulateRegionFactions(IDbConnection connection,
+                                                                       IReadOnlyDictionary<int, Faction> factionMap,
+                                                                       IReadOnlyDictionary<int, Region> regionMap)
+        {
+            Dictionary<int, List<RegionFaction>> regionRegionFactionMap = [];
+            using (var command = connection.CreateCommand())
+            {
+                command.CommandText = "SELECT * FROM RegionFaction";
+                var reader = command.ExecuteReader();
+
+                while (reader.Read())
+                {
+                    int regionId = reader.GetInt32(0);
+                    int factionId = reader.GetInt32(1);
+                    bool isPublic = reader.GetBoolean(2);
+                    int population = reader.GetInt32(3);
+                    int pdfMembers = reader.GetInt32(4);
+
+                    Region region = regionMap[regionId];
+                    PlanetFaction planetFaction = region.Planet.PlanetFactionMap[factionId];
+                    RegionFaction regionFaction =
+                        new(planetFaction, region)
+                        {
+                            IsPublic = isPublic,
+                            Population = population,
+                            PDFMembers = pdfMembers
+                        };
+                    region.RegionFactionMap[regionFaction.PlanetFaction.Faction.Id] = regionFaction;
+                }
+            }
+        }
+
         public Dictionary<int, Character> GetCharacterMap(IDbConnection connection, 
                                                            IReadOnlyDictionary<int, Faction> factionMap)
         {
-            Dictionary<int, Character> characterMap = new Dictionary<int, Character>();
+            Dictionary<int, Character> characterMap = [];
             using (var command = connection.CreateCommand())
             {
                 command.CommandText = "SELECT * FROM Character";
@@ -159,6 +229,8 @@ namespace OnlyWar.Helpers.Database.GameState
                 command.ExecuteNonQuery();
             }
             SavePlanetFactions(transaction, planet.Id, planet.PlanetFactionMap);
+            SavePlanetRegions(transaction, planet.Id, planet.Regions);
+            SaveRegionFactions(transaction, planet.Regions);
         }
 
         public void SaveCharacter(IDbTransaction transaction, Character character)
@@ -176,7 +248,7 @@ namespace OnlyWar.Helpers.Database.GameState
             }
         }
 
-        private void SavePlanetFactions(IDbTransaction transaction, int planetId, Dictionary<int, PlanetFaction> planetFactions)
+        private static void SavePlanetFactions(IDbTransaction transaction, int planetId, Dictionary<int, PlanetFaction> planetFactions)
         {
             foreach(KeyValuePair<int, PlanetFaction> planetFaction in planetFactions)
             {
@@ -194,6 +266,40 @@ namespace OnlyWar.Helpers.Database.GameState
                 {
                     command.CommandText = insert;
                     command.ExecuteNonQuery();
+                }
+            }
+        }
+
+        private static void SavePlanetRegions(IDbTransaction transaction, int planetId, Region[] regions)
+        {
+            for(int i = 0; i < regions.Length; i++)
+            {
+                string insert = $@"INSERT INTO Region 
+                    (Id, PlanetId, RegionNumber, RegionType, IsUnderAssault) VALUES 
+                    ({regions[i].Id}, {planetId}, {i}, 0, 0);";
+                using (var command = transaction.Connection.CreateCommand())
+                {
+                    command.CommandText = insert;
+                    command.ExecuteNonQuery();
+                }
+            }
+        }
+
+        private static void SaveRegionFactions(IDbTransaction transaction, Region[] regions)
+        {
+            foreach (var region in regions)
+            {
+                foreach (RegionFaction regionFaction in region.RegionFactionMap.Values)
+                {
+                    string insert = $@"INSERT INTO RegionFaction
+                    (RegionId, FactionId, IsPublic, Population, PDFMembers) VALUES 
+                    ({region.Id}, {regionFaction.PlanetFaction.Faction.Id}, {regionFaction.IsPublic}, 
+                     {regionFaction.Population}, {regionFaction.PDFMembers});";
+                    using (var command = transaction.Connection.CreateCommand())
+                    {
+                        command.CommandText = insert;
+                        command.ExecuteNonQuery();
+                    }
                 }
             }
         }

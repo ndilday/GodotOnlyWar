@@ -11,17 +11,14 @@ namespace OnlyWar.Builders
     {
         private PlanetBuilder() 
         {
-            _usedPlanetNameIndexes = new HashSet<int>();
+            _usedPlanetNameIndexes = [];
         }
         private static PlanetBuilder _instance;
         public static PlanetBuilder Instance
         {
             get
             {
-                if(_instance == null)
-                {
-                    _instance = new PlanetBuilder();
-                }
+                _instance ??= new PlanetBuilder();
                 return _instance;
             }
         }
@@ -56,12 +53,19 @@ namespace OnlyWar.Builders
             // TODO: make this configurable
             if(infiltratingFaction != null)
             {
-                double infiltrationRate = RNG.GetLinearDouble() / 2.0;
+                double infiltrationRate = RNG.GetLinearDouble() / 32.0;
                 PlanetFaction infiltration = new PlanetFaction(infiltratingFaction);
                 infiltration.PlayerReputation = 0;
                 infiltration.IsPublic = false;
-                infiltration.Population = (int)(popToDistribute * infiltrationRate);
-                infiltration.PDFMembers = (int)(infiltration.Population / 33);
+
+                foreach (Region region in planet.Regions)
+                {
+                    RegionFaction regionFaction = new RegionFaction(infiltration, region);
+                    regionFaction.Population = (int)(popToDistribute * infiltrationRate);
+                    regionFaction.PDFMembers = (int)(infiltration.Population / 33);
+                    region.RegionFactionMap[infiltration.Faction.Id] = regionFaction;
+                }
+                
                 planet.PlanetFactionMap[infiltratingFaction.Id] = infiltration;
                 if(RNG.GetLinearDouble() < infiltrationRate / 2)
                 {
@@ -72,10 +76,15 @@ namespace OnlyWar.Builders
             PlanetFaction planetFaction = new PlanetFaction(controllingFaction);
             planetFaction.PlayerReputation = 0;
             planetFaction.IsPublic = true;
-            planetFaction.Population = popToDistribute;
-            planetFaction.PDFMembers = popToDistribute / 33;
+
+            foreach (Region region in planet.Regions)
+            {
+                RegionFaction regionFaction = new RegionFaction(planetFaction, region);
+                regionFaction.Population = (int)(popToDistribute/16);
+                regionFaction.PDFMembers = (int)(regionFaction.Population / 33);
+            }
+
             // for now, all planets start completely in the control of a single faction
-            planetFaction.PlanetaryControl = 10;
             planet.PlanetFactionMap[controllingFaction.Id] = planetFaction;
             planet.ControllingFaction = controllingFaction;
 

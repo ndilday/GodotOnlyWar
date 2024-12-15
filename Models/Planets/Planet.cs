@@ -16,18 +16,27 @@ namespace OnlyWar.Models.Planets
         public readonly int Importance;
         public readonly int TaxLevel;
         public readonly int Size;
+        public readonly Region[] Regions;
         public bool IsUnderAssault { get; set; }
 
         public List<TaskForce> TaskForces;
         public readonly Dictionary<int, PlanetFaction> PlanetFactionMap;
         public Faction ControllingFaction;
+
+        public float Stability
+        {
+            get
+            {
+                return 0;
+            }
+        }
         
         // planetary population is in thousands
         public long Population
         {
             get
             {
-                return PlanetFactionMap.Sum(pfm => pfm.Value.Population);
+                return Regions.Sum(r => r.Population);
             }
         }
 
@@ -37,7 +46,7 @@ namespace OnlyWar.Models.Planets
         {
             get
             {
-                return PlanetFactionMap.Sum(pfm => pfm.Value.PDFMembers);
+                return Regions.Sum(r => r.PlanetaryDefenseForces);
             }
         }
 
@@ -51,8 +60,9 @@ namespace OnlyWar.Models.Planets
             Template = template;
             Importance = importance;
             TaxLevel = taxLevel;
-            TaskForces = new List<TaskForce>();
-            PlanetFactionMap = new Dictionary<int, PlanetFaction>();
+            TaskForces = [];
+            PlanetFactionMap = [];
+            Regions = new Region[16];
         }
 
     }

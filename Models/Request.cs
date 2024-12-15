@@ -1,4 +1,5 @@
 ﻿using OnlyWar.Models.Planets;
+using System.Linq;
 
 namespace OnlyWar.Models
 {
@@ -43,13 +44,15 @@ namespace OnlyWar.Models
         {
             GameRulesData data = GameDataSingleton.Instance.GameRulesData;
             if (_completed) return true;
-            if(TargetPlanet.PlanetFactionMap.ContainsKey(data.PlayerFaction.Id) &&
-                TargetPlanet.PlanetFactionMap[data.PlayerFaction.Id].LandedSquads.Count > 0)
+            if(TargetPlanet.PlanetFactionMap.ContainsKey(data.PlayerFaction.Id))
             {
-                // TODO: it should really require more than just dropping a soldier
-                _completed = true;
-                DateRequestFulfilled = GameDataSingleton.Instance.Date;
-                return true;
+                if (TargetPlanet.Regions.Where(r => r.RegionFactionMap.ContainsKey(data.PlayerFaction.Id)).Any(r => r.RegionFactionMap[data.PlayerFaction.Id].LandedSquads.Any()))
+                {
+                    // TODO: it should really require more than just dropping a soldier
+                    _completed = true;
+                    DateRequestFulfilled = GameDataSingleton.Instance.Date;
+                    return true;
+                }
             }
             return false;
         }

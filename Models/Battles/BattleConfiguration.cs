@@ -8,7 +8,7 @@ namespace OnlyWar.Models.Battles
     {
         public IReadOnlyList<BattleSquad> PlayerSquads;
         public IReadOnlyList<BattleSquad> OpposingSquads;
-        public Planet Planet;
+        public Region Region;
         public BattleGridManager Grid;
     }
 }

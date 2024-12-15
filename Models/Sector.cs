@@ -27,11 +27,11 @@ namespace OnlyWar.Models
         public Sector()
         {
             
-            _characters = new List<Character>();
-            _planets = new Dictionary<int, Planet>();
-            _fleets = new Dictionary<int, TaskForce>();
-            _subsectorPlanetMap = new Dictionary<ushort, List<Tuple<ushort, ushort>>>();
-            _subsectorCenterMap = new Dictionary<ushort, Tuple<ushort, ushort>>();
+            _characters = [];
+            _planets = [];
+            _fleets = [];
+            _subsectorPlanetMap = [];
+            _subsectorCenterMap = [];
         }
 
         public Sector(List<Character> characters, List<Planet> planets, List<TaskForce> fleets) 
