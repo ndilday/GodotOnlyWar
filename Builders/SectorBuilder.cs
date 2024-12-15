@@ -12,9 +12,9 @@ namespace OnlyWar.Builders
     {
         public static Sector GenerateSector(int seed, GameRulesData data)
         {
-            List<Planet> planetList = new();
-            List<Character> characterList = new();
-            List<TaskForce> forceList = new();
+            List<Planet> planetList = [];
+            List<Character> characterList = [];
+            List<TaskForce> forceList = [];
 
             RNG.Reset(seed);
 

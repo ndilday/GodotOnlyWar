@@ -11,7 +11,7 @@ namespace OnlyWar.Models.Soldiers
 
         public Soldier(BodyTemplate body)
         {
-            _skills = new Dictionary<int, Skill>();
+            _skills = [];
             Body = new Body(body);
         }
 

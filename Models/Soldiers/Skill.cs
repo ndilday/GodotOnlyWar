@@ -21,7 +21,8 @@ namespace OnlyWar.Models.Soldiers
         Military = 5,
         Professional = 6,
         Tech = 7,
-        Apothecary = 8
+        Apothecary = 8,
+        Espionage = 9
     }
 
     public class BaseSkill

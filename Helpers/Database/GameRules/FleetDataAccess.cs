@@ -29,7 +29,7 @@ namespace OnlyWar.Helpers.Database.GameRules
         private Dictionary<int, List<BoatTemplate>> GetBoatTemplatesByFactionId(IDbConnection connection)
         {
             Dictionary<int, List<BoatTemplate>> factionTemplateMap =
-                new Dictionary<int, List<BoatTemplate>>();
+                [];
             using (var command = connection.CreateCommand())
             {
                 command.CommandText = "SELECT * FROM BoatTemplate";
@@ -43,7 +43,7 @@ namespace OnlyWar.Helpers.Database.GameRules
                     BoatTemplate boatTemplate = new BoatTemplate(id, name, soldierCap);
                     if (!factionTemplateMap.ContainsKey(factionId))
                     {
-                        factionTemplateMap[factionId] = new List<BoatTemplate>();
+                        factionTemplateMap[factionId] = [];
                     }
                     factionTemplateMap[factionId].Add(boatTemplate);
                 }
@@ -54,7 +54,7 @@ namespace OnlyWar.Helpers.Database.GameRules
         private Dictionary<int, List<ShipTemplate>> GetShipTemplatesByFactionId(IDbConnection connection)
         {
             Dictionary<int, List<ShipTemplate>> factionTemplateMap =
-                new Dictionary<int, List<ShipTemplate>>();
+                [];
             using (var command = connection.CreateCommand())
             {
                 command.CommandText = "SELECT * FROM ShipTemplate";
@@ -70,7 +70,7 @@ namespace OnlyWar.Helpers.Database.GameRules
                     ShipTemplate boatTemplate = new ShipTemplate(id, name, soldierCap, boatCap, landerCap);
                     if (!factionTemplateMap.ContainsKey(factionId))
                     {
-                        factionTemplateMap[factionId] = new List<ShipTemplate>();
+                        factionTemplateMap[factionId] = [];
                     }
                     factionTemplateMap[factionId].Add(boatTemplate);
                 }
@@ -80,7 +80,7 @@ namespace OnlyWar.Helpers.Database.GameRules
 
         private Dictionary<int, List<int>> GetFleetShipTemplateLists(IDbConnection connection)
         {
-            Dictionary<int, List<int>> fleetToShipMap = new Dictionary<int, List<int>>();
+            Dictionary<int, List<int>> fleetToShipMap = [];
             using (var command = connection.CreateCommand())
             {
                 command.CommandText = "SELECT * FROM FleetTemplateShipTemplate";
@@ -91,7 +91,7 @@ namespace OnlyWar.Helpers.Database.GameRules
                     int shipId = reader.GetInt32(2);
                     if (!fleetToShipMap.ContainsKey(fleetId))
                     {
-                        fleetToShipMap[fleetId] = new List<int>();
+                        fleetToShipMap[fleetId] = [];
                     }
                     fleetToShipMap[fleetId].Add(shipId);
                 }
@@ -104,7 +104,7 @@ namespace OnlyWar.Helpers.Database.GameRules
                                                                                   Dictionary<int, List<int>> fleetShipMap)
         {
             Dictionary<int, List<FleetTemplate>> factionTemplateMap =
-                new Dictionary<int, List<FleetTemplate>>();
+                [];
             using (var command = connection.CreateCommand())
             {
                 command.CommandText = "SELECT * FROM FleetTemplate";
@@ -116,7 +116,7 @@ namespace OnlyWar.Helpers.Database.GameRules
                     string name = reader[2].ToString();
 
                     List<ShipTemplate> baseList = factionShipMap[factionId];
-                    List<ShipTemplate> fleetShipTemplateList = new List<ShipTemplate>();
+                    List<ShipTemplate> fleetShipTemplateList = [];
                     foreach (int shipTemplateId in fleetShipMap[id])
                     {
                         fleetShipTemplateList.Add(baseList.First(st => st.Id == shipTemplateId));
@@ -125,7 +125,7 @@ namespace OnlyWar.Helpers.Database.GameRules
                     FleetTemplate fleetTemplate = new FleetTemplate(id, name, fleetShipTemplateList);
                     if (!factionTemplateMap.ContainsKey(factionId))
                     {
-                        factionTemplateMap[factionId] = new List<FleetTemplate>();
+                        factionTemplateMap[factionId] = [];
                     }
                     factionTemplateMap[factionId].Add(fleetTemplate);
                 }

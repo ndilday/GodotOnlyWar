@@ -13,7 +13,7 @@ namespace OnlyWar.Models
         public List<string> SubEvents { get; private set; }
         public EventHistory()
         {
-            SubEvents = new List<string>();
+            SubEvents = [];
         }
     }
 
@@ -37,7 +37,7 @@ namespace OnlyWar.Models
         public Fleet(string fleetName, Character leader, string title)
             : base(fleetName, leader, title)
         {
-            TaskForces = new List<TaskForce>();
+            TaskForces = [];
         }
     }
 
@@ -58,7 +58,7 @@ namespace OnlyWar.Models
         {
             if (SquadMap == null)
             {
-                SquadMap = new Dictionary<int, Squad>();
+                SquadMap = [];
                 foreach (Squad squad in OrderOfBattle.Squads)
                 {
                     SquadMap[squad.Id] = squad;
@@ -89,15 +89,15 @@ namespace OnlyWar.Models
             Leader = leader;
             Army = army;
             Fleet = fleet;
-            _battleHistory = new Dictionary<Date, List<EventHistory>>();
-            Requests = new List<IRequest>();
+            _battleHistory = [];
+            Requests = [];
         }
 
         public void AddToBattleHistory(Date date, string title, List<string> events)
         {
             if (!_battleHistory.ContainsKey(date))
             {
-                _battleHistory[date] = new List<EventHistory>();
+                _battleHistory[date] = [];
             }
             EventHistory history = new EventHistory
             {

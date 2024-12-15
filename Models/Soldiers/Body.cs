@@ -355,8 +355,8 @@ namespace OnlyWar.Models.Soldiers
             }
         }
 
-        static readonly List<HitLocationTemplate> list = new List<HitLocationTemplate>
-            {
+        static readonly List<HitLocationTemplate> list =
+            [
                 new HitLocationTemplate
                 {
                     Id = 0,
@@ -551,7 +551,7 @@ namespace OnlyWar.Models.Soldiers
                     IsMeleeWeaponHolder = false,
                     IsVital = false
                 }
-            };
+            ];
 
         private HumanBodyTemplate() : base(list) { }
     }
@@ -572,8 +572,8 @@ namespace OnlyWar.Models.Soldiers
             }
         }
 
-        static readonly List<HitLocationTemplate> list = new List<HitLocationTemplate>
-            {
+        static readonly List<HitLocationTemplate> list =
+            [
                 new HitLocationTemplate
                 {
                     Id = 0,
@@ -798,7 +798,7 @@ namespace OnlyWar.Models.Soldiers
                     IsMeleeWeaponHolder = false,
                     IsVital = false
                 }
-            };
+            ];
 
         private TyranidWarriorBodyTemplate() : base(list) { }
     }

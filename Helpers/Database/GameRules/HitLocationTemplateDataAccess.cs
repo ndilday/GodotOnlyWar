@@ -10,7 +10,7 @@ namespace OnlyWar.Helpers.Database.GameRules
         public Dictionary<int, List<HitLocationTemplate>> GetHitLocationsByBodyId(IDbConnection connection)
         {
             Dictionary<int, List<HitLocationTemplate>> hitLocationTemplateMap =
-                new Dictionary<int, List<HitLocationTemplate>>();
+                [];
             var stanceProbabilityMap = GetStanceHitProbabilitiesByHitLocationId(connection);
             using (var command = connection.CreateCommand())
             {
@@ -47,7 +47,7 @@ namespace OnlyWar.Helpers.Database.GameRules
                         };
                     if (!hitLocationTemplateMap.ContainsKey(bodyId))
                     {
-                        hitLocationTemplateMap[bodyId] = new List<HitLocationTemplate>();
+                        hitLocationTemplateMap[bodyId] = [];
                     }
                     hitLocationTemplateMap[bodyId].Add(hitLocationTemplate);
                 }
@@ -57,7 +57,7 @@ namespace OnlyWar.Helpers.Database.GameRules
 
         private Dictionary<int, int[]> GetStanceHitProbabilitiesByHitLocationId(IDbConnection connection)
         {
-            Dictionary<int, int[]> hitProbabilityMap = new Dictionary<int, int[]>();
+            Dictionary<int, int[]> hitProbabilityMap = [];
             using (var command = connection.CreateCommand())
             {
                 command.CommandText = "SELECT * FROM HitLocationStanceSize";

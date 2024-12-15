@@ -18,7 +18,7 @@ namespace OnlyWar.Models.Fleets
         {
             Id = _idGenerator++;
             Name = $"{template.ClassName}-{Id}";
-            _loadedSquads = new List<Squad>();
+            _loadedSquads = [];
             Template = template;
         }
 
@@ -51,14 +51,14 @@ namespace OnlyWar.Models.Fleets
             Id = id;
             Name = name;
             Template = template;
-            Boats = new List<Boat>();
-            _loadedSquads = new List<Squad>();
+            Boats = [];
+            _loadedSquads = [];
         }
 
         public Ship(int id, string name, ShipTemplate template, BoatTemplate boatTemplate) 
             : this(id, name, template)
         {
-            _loadedSquads = new List<Squad>();
+            _loadedSquads = [];
             LoadedSoldierCount = 0;
             for (byte i = 0; i < Template.BoatCapacity; i++)
             {

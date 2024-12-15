@@ -53,7 +53,7 @@ namespace OnlyWar.Models.Fleets
         {
             Id = _nextTaskForceId++;
             Faction = faction;
-            Ships = new List<Ship>();
+            Ships = [];
         }
     }
 }

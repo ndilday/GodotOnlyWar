@@ -18,7 +18,7 @@ namespace OnlyWar.Helpers.Database.GameState
                                                                IReadOnlyDictionary<int, Ship> shipMap,
                                                                List<Planet> planetList)
         {
-            Dictionary<int, List<Squad>> squadMap = new Dictionary<int, List<Squad>>();
+            Dictionary<int, List<Squad>> squadMap = [];
             using (var command = connection.CreateCommand())
             {
                 command.CommandText = "SELECT * FROM Squad";
@@ -50,7 +50,7 @@ namespace OnlyWar.Helpers.Database.GameState
 
                     if (!squadMap.ContainsKey(parentUnitId))
                     {
-                        squadMap[parentUnitId] = new List<Squad>();
+                        squadMap[parentUnitId] = [];
                     }
 
                     if (squadWeaponSetMap.ContainsKey(id))
@@ -68,9 +68,9 @@ namespace OnlyWar.Helpers.Database.GameState
                                    IReadOnlyDictionary<int, UnitTemplate> unitTemplateMap,
                                    IReadOnlyDictionary<int, List<Squad>> unitSquadMap)
         {
-            List<Unit> unitList = new List<Unit>();
-            Dictionary<int, Unit> unitMap = new Dictionary<int, Unit>();
-            Dictionary<int, List<Unit>> parentUnitMap = new Dictionary<int, List<Unit>>();
+            List<Unit> unitList = [];
+            Dictionary<int, Unit> unitMap = [];
+            Dictionary<int, List<Unit>> parentUnitMap = [];
             using (var command = connection.CreateCommand())
             {
                 command.CommandText = "SELECT * FROM Unit";
@@ -108,7 +108,7 @@ namespace OnlyWar.Helpers.Database.GameState
                         parentUnitId = reader.GetInt32(3);
                         if (!parentUnitMap.ContainsKey(parentUnitId))
                         {
-                            parentUnitMap[parentUnitId] = new List<Unit>();
+                            parentUnitMap[parentUnitId] = [];
                         }
                         parentUnitMap[parentUnitId].Add(unit);
                     }
@@ -131,7 +131,7 @@ namespace OnlyWar.Helpers.Database.GameState
                                                                    IReadOnlyDictionary<int, WeaponSet> weaponSets)
         {
             Dictionary<int, List<WeaponSet>> squadWeaponSetMap = 
-                new Dictionary<int, List<WeaponSet>>();
+                [];
             using (var command = connection.CreateCommand())
             {
                 command.CommandText = "SELECT * FROM SquadWeaponSet";
@@ -145,7 +145,7 @@ namespace OnlyWar.Helpers.Database.GameState
 
                     if (!squadWeaponSetMap.ContainsKey(squadId))
                     {
-                        squadWeaponSetMap[squadId] = new List<WeaponSet>();
+                        squadWeaponSetMap[squadId] = [];
                     }
                     squadWeaponSetMap[squadId].Add(weaponSet);
                 }

@@ -80,7 +80,7 @@ namespace OnlyWar.Helpers.Database.GameState
         private Dictionary<int, Dictionary<int, ushort>> GetFactionCasualtiesBySoldierId(IDbConnection connection)
         {
             Dictionary<int, Dictionary<int, ushort>> soldierFactionCasualtyMap = 
-                new Dictionary<int, Dictionary<int, ushort>>();
+                [];
             using (var command = connection.CreateCommand())
             {
                 command.CommandText = "SELECT * FROM PlayerSoldierFactionCasualtyCount";
@@ -93,7 +93,7 @@ namespace OnlyWar.Helpers.Database.GameState
 
                     if (!soldierFactionCasualtyMap.ContainsKey(soldierId))
                     {
-                        soldierFactionCasualtyMap[soldierId] = new Dictionary<int, ushort>();
+                        soldierFactionCasualtyMap[soldierId] = [];
                     }
                     soldierFactionCasualtyMap[soldierId][factionId] = count;
 
@@ -105,7 +105,7 @@ namespace OnlyWar.Helpers.Database.GameState
         private Dictionary<int, Dictionary<int, ushort>> GetRangedWeaponCasualtiesBySoldierId(IDbConnection connection)
         {
             Dictionary<int, Dictionary<int, ushort>> soldierWeaponCasualtyMap =
-                new Dictionary<int, Dictionary<int, ushort>>();
+                [];
             using (var command = connection.CreateCommand())
             {
                 command.CommandText = "SELECT * FROM PlayerSoldierRangedWeaponCasualtyCount";
@@ -118,7 +118,7 @@ namespace OnlyWar.Helpers.Database.GameState
 
                     if (!soldierWeaponCasualtyMap.ContainsKey(soldierId))
                     {
-                        soldierWeaponCasualtyMap[soldierId] = new Dictionary<int, ushort>();
+                        soldierWeaponCasualtyMap[soldierId] = [];
                     }
                     soldierWeaponCasualtyMap[soldierId][weaponTemplateId] = count;
 
@@ -130,7 +130,7 @@ namespace OnlyWar.Helpers.Database.GameState
         private Dictionary<int, Dictionary<int, ushort>> GetMeleeWeaponCasualtiesBySoldierId(IDbConnection connection)
         {
             Dictionary<int, Dictionary<int, ushort>> soldierWeaponCasualtyMap =
-                new Dictionary<int, Dictionary<int, ushort>>();
+                [];
             using (var command = connection.CreateCommand())
             {
                 command.CommandText = "SELECT * FROM PlayerSoldierMeleeWeaponCasualtyCount";
@@ -143,7 +143,7 @@ namespace OnlyWar.Helpers.Database.GameState
 
                     if (!soldierWeaponCasualtyMap.ContainsKey(soldierId))
                     {
-                        soldierWeaponCasualtyMap[soldierId] = new Dictionary<int, ushort>();
+                        soldierWeaponCasualtyMap[soldierId] = [];
                     }
                     soldierWeaponCasualtyMap[soldierId][weaponTemplateId] = count;
 
@@ -154,7 +154,7 @@ namespace OnlyWar.Helpers.Database.GameState
 
         private Dictionary<int, List<string>> GetHistoryBySoldierId(IDbConnection connection)
         {
-            Dictionary<int, List<string>> soldierEntryListMap = new Dictionary<int, List<string>>();
+            Dictionary<int, List<string>> soldierEntryListMap = [];
             using (var command = connection.CreateCommand())
             {
                 command.CommandText = "SELECT * FROM PlayerSoldierHistory";
@@ -166,7 +166,7 @@ namespace OnlyWar.Helpers.Database.GameState
 
                     if (!soldierEntryListMap.ContainsKey(soldierId))
                     {
-                        soldierEntryListMap[soldierId] = new List<string>();
+                        soldierEntryListMap[soldierId] = [];
                     }
                     soldierEntryListMap[soldierId].Add(entry);
 
@@ -182,7 +182,7 @@ namespace OnlyWar.Helpers.Database.GameState
                                                                  IReadOnlyDictionary<int, Dictionary<int, ushort>> meleeWeaponCasualtyMap,
                                                                  IReadOnlyDictionary<int, List<string>> historyMap)
         {
-            Dictionary<int, PlayerSoldier> playerSoldierMap = new Dictionary<int, PlayerSoldier>();
+            Dictionary<int, PlayerSoldier> playerSoldierMap = [];
             using (var command = connection.CreateCommand())
             {
                 command.CommandText = "SELECT * FROM PlayerSoldier";
@@ -210,7 +210,7 @@ namespace OnlyWar.Helpers.Database.GameState
                     }
                     else
                     {
-                        history = new List<string>();
+                        history = [];
                     }
 
                     Dictionary<int, ushort> rangedWeaponCasualties;
@@ -220,7 +220,7 @@ namespace OnlyWar.Helpers.Database.GameState
                     }
                     else
                     {
-                        rangedWeaponCasualties = new Dictionary<int, ushort>();
+                        rangedWeaponCasualties = [];
                     }
 
                     Dictionary<int, ushort> meleeWeaponCasualties;
@@ -230,7 +230,7 @@ namespace OnlyWar.Helpers.Database.GameState
                     }
                     else
                     {
-                        meleeWeaponCasualties = new Dictionary<int, ushort>();
+                        meleeWeaponCasualties = [];
                     }
 
                     Dictionary<int, ushort> factionCasualties;
@@ -240,7 +240,7 @@ namespace OnlyWar.Helpers.Database.GameState
                     }
                     else
                     {
-                        factionCasualties = new Dictionary<int, ushort>();
+                        factionCasualties = [];
                     }
 
                     PlayerSoldier playerSoldier = new PlayerSoldier(baseSoldierMap[soldierId], melee, ranged,

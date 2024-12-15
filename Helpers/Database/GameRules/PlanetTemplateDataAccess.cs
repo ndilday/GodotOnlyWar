@@ -10,7 +10,7 @@ namespace OnlyWar.Helpers.Database.GameRules
     {
         public Dictionary<int, PlanetTemplate> GetData(IDbConnection connection)
         {
-            Dictionary<int, PlanetTemplate> templateMap = new Dictionary<int, PlanetTemplate>();
+            Dictionary<int, PlanetTemplate> templateMap = [];
 
             using (var command = connection.CreateCommand())
             {

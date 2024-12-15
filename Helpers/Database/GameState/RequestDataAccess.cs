@@ -12,7 +12,7 @@ namespace OnlyWar.Helpers.Database.GameState
                                           IReadOnlyDictionary<int, Character> characterMap,
                                           List<Planet> planetList)
         {
-            List<IRequest> requests = new List<IRequest>();
+            List<IRequest> requests = [];
             using (var command = connection.CreateCommand())
             {
                 command.CommandText = "SELECT * FROM Request";

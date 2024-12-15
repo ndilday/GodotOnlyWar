@@ -78,6 +78,7 @@ namespace OnlyWar.Helpers.Database.GameState
             IDbConnection dbCon = new SqliteConnection(connection);
             dbCon.Open();
             var characterMap = _planetDataAccess.GetCharacterMap(dbCon, factionMap);
+            //var regionData = _planetDataAccess.Get
             var planets = _planetDataAccess.GetPlanets(dbCon, factionMap, characterMap, 
                                                        planetTemplateMap);
             var requests = _requestDataAccess.GetRequests(dbCon, characterMap, planets);

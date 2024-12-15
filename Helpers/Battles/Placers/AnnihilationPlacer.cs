@@ -14,7 +14,7 @@ namespace OnlyWar.Helpers.Battles.Placers
         public Dictionary<BattleSquad, Tuple<ushort, ushort>> PlaceSquads(IEnumerable<BattleSquad> bottomSquads, 
                                                             IEnumerable<BattleSquad> topSquads)
         {
-            Dictionary<BattleSquad, Tuple<ushort, ushort>> result = new();
+            Dictionary<BattleSquad, Tuple<ushort, ushort>> result = [];
 
             ArmyLayout bottomLayout = ArmyLayoutHelper.Instance.LayoutArmyLine(bottomSquads, true);
             ArmyLayout topLayout = ArmyLayoutHelper.Instance.LayoutArmyLine(topSquads, true);

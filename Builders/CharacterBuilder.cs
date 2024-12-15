@@ -22,7 +22,7 @@ namespace OnlyWar.Builders
                 Paranoia = (float)RNG.GetLinearDouble(),
                 Patience = (float)RNG.GetLinearDouble(),
                 OpinionOfPlayerForce = (float)RNG.GetLinearDouble(),
-                OpinionOfSoldier = new Dictionary<ISoldier, float>(),
+                OpinionOfSoldier = [],
                 ActiveRequest = null
             };
         }

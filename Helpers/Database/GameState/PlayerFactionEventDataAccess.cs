@@ -9,7 +9,7 @@ namespace OnlyWar.Helpers.Database.GameState
         public Dictionary<Date, List<EventHistory>> GetHistory(IDbConnection connection)
         {
             Dictionary<Date, List<EventHistory>> history =
-                new Dictionary<Date, List<EventHistory>>();
+                [];
             var subEvents = GetPlayerFactionSubEvents(connection);
             using (var command = connection.CreateCommand())
             {
@@ -33,7 +33,7 @@ namespace OnlyWar.Helpers.Database.GameState
                     }
                     if (!history.ContainsKey(date))
                     {
-                        history[date] = new List<EventHistory>();
+                        history[date] = [];
                     }
                     history[date].Add(historyEntry);
                 }
@@ -43,7 +43,7 @@ namespace OnlyWar.Helpers.Database.GameState
 
         private Dictionary<int, List<string>> GetPlayerFactionSubEvents(IDbConnection connection)
         {
-            Dictionary<int, List<string>> subEvents = new Dictionary<int, List<string>>();
+            Dictionary<int, List<string>> subEvents = [];
             using (var command = connection.CreateCommand())
             {
                 command.CommandText = "SELECT * FROM PlayerFactionSubEvent";
@@ -54,7 +54,7 @@ namespace OnlyWar.Helpers.Database.GameState
                     string entry = reader[1].ToString();
                     if (!subEvents.ContainsKey(playerFactionEventId))
                     {
-                        subEvents[playerFactionEventId] = new List<string>();
+                        subEvents[playerFactionEventId] = [];
                     }
                     subEvents[playerFactionEventId].Add(entry);
                 }

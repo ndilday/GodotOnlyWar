@@ -61,7 +61,7 @@ namespace OnlyWar.Helpers.Database.GameState
         private Dictionary<int, List<HitLocation>> GetHitLocationsBySoldierId(IDbConnection connection,
                                                                               IReadOnlyDictionary<int, HitLocationTemplate> hitLocationTemplateMap)
         {
-            Dictionary<int, List<HitLocation>> hitLocationMap = new Dictionary<int, List<HitLocation>>();
+            Dictionary<int, List<HitLocation>> hitLocationMap = [];
             using (var command = connection.CreateCommand())
             {
                 command.CommandText = "SELECT * FROM HitLocation";
@@ -80,7 +80,7 @@ namespace OnlyWar.Helpers.Database.GameState
 
                     if (!hitLocationMap.ContainsKey(soldierId))
                     {
-                        hitLocationMap[soldierId] = new List<HitLocation>();
+                        hitLocationMap[soldierId] = [];
                     }
                     hitLocationMap[soldierId].Add(hitLocation);
                 }
@@ -91,7 +91,7 @@ namespace OnlyWar.Helpers.Database.GameState
         private Dictionary<int, List<Skill>> GetSkillsBySoldierId(IDbConnection connection,
                                                                   IReadOnlyDictionary<int, BaseSkill> baseSkillMap)
         {
-            Dictionary<int, List<Skill>> skillMap = new Dictionary<int, List<Skill>>();
+            Dictionary<int, List<Skill>> skillMap = [];
             using (var command = connection.CreateCommand())
             {
                 command.CommandText = "SELECT * FROM SoldierSkill";
@@ -107,7 +107,7 @@ namespace OnlyWar.Helpers.Database.GameState
 
                     if (!skillMap.ContainsKey(soldierId))
                     {
-                        skillMap[soldierId] = new List<Skill>();
+                        skillMap[soldierId] = [];
                     }
                     skillMap[soldierId].Add(skill);
                 }
@@ -121,7 +121,7 @@ namespace OnlyWar.Helpers.Database.GameState
                                                      IReadOnlyDictionary<int, List<Skill>> skillMap,
                                                      IReadOnlyDictionary<int, List<HitLocation>> hitLocationMap)
         {
-            Dictionary<int, Soldier> soldiers = new Dictionary<int, Soldier>();
+            Dictionary<int, Soldier> soldiers = [];
             using (var command = connection.CreateCommand())
             {
                 command.CommandText = "SELECT * FROM Soldier";

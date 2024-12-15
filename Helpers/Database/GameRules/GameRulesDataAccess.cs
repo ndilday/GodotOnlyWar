@@ -106,7 +106,7 @@ namespace OnlyWar.Helpers.Database.GameRules
                                          Dictionary<int, List<ShipTemplate>> factionShipMap,
                                          Dictionary<int, List<FleetTemplate>> factionFleetMap)
         {
-            List<Faction> factionList = new List<Faction>();
+            List<Faction> factionList = [];
             using (var command = connection.CreateCommand())
             {
                 command.CommandText = "SELECT * FROM Faction";
@@ -152,7 +152,7 @@ namespace OnlyWar.Helpers.Database.GameRules
         private List<SkillTemplate> GetSkillTemplates(IDbConnection connection,
                                                       Dictionary<int, BaseSkill> baseSkillMap)
         {
-            List<SkillTemplate> skillTemplateList = new List<SkillTemplate>();
+            List<SkillTemplate> skillTemplateList = [];
             using (var command = connection.CreateCommand())
             {
                 command.CommandText = "SELECT * FROM SkillTemplate";
@@ -178,7 +178,7 @@ namespace OnlyWar.Helpers.Database.GameRules
 
         private Dictionary<int, List<int>> GetUnitTemplateHierarchy(IDbConnection connection)
         {
-            Dictionary<int, List<int>> unitTemplateTree = new Dictionary<int, List<int>>();
+            Dictionary<int, List<int>> unitTemplateTree = [];
             using (var command = connection.CreateCommand())
             {
                 command.CommandText = "SELECT * FROM UnitTemplateTree";
@@ -190,7 +190,7 @@ namespace OnlyWar.Helpers.Database.GameRules
 
                     if (!unitTemplateTree.ContainsKey(parentUnitId))
                     {
-                        unitTemplateTree[parentUnitId] = new List<int>();
+                        unitTemplateTree[parentUnitId] = [];
                     }
                     unitTemplateTree[parentUnitId].Add(childUnitId);
                 }
@@ -203,8 +203,8 @@ namespace OnlyWar.Helpers.Database.GameRules
                                                                                 Dictionary<int, List<SquadTemplate>> unitSquadMap,
                                                                                 Dictionary<int, SquadTemplate> squadTemplateMap)
         {
-            Dictionary<int, List<UnitTemplate>> factionUnitTemplateMap = new Dictionary<int, List<UnitTemplate>>();
-            Dictionary<int, UnitTemplate> unitTemplateMap = new Dictionary<int, UnitTemplate>();
+            Dictionary<int, List<UnitTemplate>> factionUnitTemplateMap = [];
+            Dictionary<int, UnitTemplate> unitTemplateMap = [];
             using (var command = connection.CreateCommand())
             {
                 command.CommandText = "SELECT * FROM UnitTemplate";
@@ -227,7 +227,7 @@ namespace OnlyWar.Helpers.Database.GameRules
 
                     if (!factionUnitTemplateMap.ContainsKey(factionId))
                     {
-                        factionUnitTemplateMap[factionId] = new List<UnitTemplate>();
+                        factionUnitTemplateMap[factionId] = [];
                     }
                     UnitTemplate unitTemplate = new UnitTemplate(id, name, isTop, hqSquad, unitSquadMap[id]);
                     factionUnitTemplateMap[factionId].Add(unitTemplate);
@@ -246,7 +246,7 @@ namespace OnlyWar.Helpers.Database.GameRules
         private Dictionary<int, List<SquadTemplate>> GetSquadTemplatesByUnitTemplateId(IDbConnection connection,
                                                                                        Dictionary<int, SquadTemplate> squadTemplateMap)
         {
-            Dictionary<int, List<SquadTemplate>> unitSquadTemplateMap = new Dictionary<int, List<SquadTemplate>>();
+            Dictionary<int, List<SquadTemplate>> unitSquadTemplateMap = [];
             using (var command = connection.CreateCommand())
             {
                 command.CommandText = "SELECT * FROM UnitTemplateSquadTemplate";
@@ -258,7 +258,7 @@ namespace OnlyWar.Helpers.Database.GameRules
 
                     if (!unitSquadTemplateMap.ContainsKey(unitTemplateId))
                     {
-                        unitSquadTemplateMap[unitTemplateId] = new List<SquadTemplate>();
+                        unitSquadTemplateMap[unitTemplateId] = [];
                     }
                     unitSquadTemplateMap[unitTemplateId].Add(squadTemplateMap[squadTemplateId]);
                 }

@@ -119,7 +119,7 @@ namespace OnlyWar.Models.Battles
             // divide the force per zone by the INT + Tactics of the Mission Leader
             // to determine the size of force the landing troops will face
             int opposingForcePoints = (int)(forcePointsPerZone / GetSkillOfLeader(attackingSquads, "Tactics"));
-            List<Unit> armyList = new();
+            List<Unit> armyList = [];
             while(opposingForcePoints > 0)
             {
                 Unit army = TempArmyBuilder.GenerateArmy(targetFaction.Faction);

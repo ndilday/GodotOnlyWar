@@ -63,7 +63,7 @@ namespace OnlyWar.Models
             {
                 template.Faction = this;
             }
-            Units = new List<Unit>();
+            Units = [];
         }
     }
 }

@@ -43,12 +43,12 @@ namespace OnlyWar.Models.Units
             Id = _nextId++;
             Name = name;
             UnitTemplate = template;
-            AssignedVehicles = new List<int>();
-            ChildUnits = new List<Unit>();
+            AssignedVehicles = [];
+            ChildUnits = [];
             
             int i = 1;
             
-            _squads = new List<Squad>();
+            _squads = [];
             if (template.HQSquad != null)
             {
                 _squads.Add(new Squad(name + " HQ Squad", this, template.HQSquad));

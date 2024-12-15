@@ -62,7 +62,7 @@ namespace OnlyWar.Helpers.Battles
 
         public List<ChosenRangedWeapon> GetWeaponsForRange(float range)
         {
-            List<ChosenRangedWeapon> list = new List<ChosenRangedWeapon>();
+            List<ChosenRangedWeapon> list = [];
             foreach(BattleSoldier soldier in Soldiers)
             {
                 ChosenRangedWeapon bestWeapon = null;

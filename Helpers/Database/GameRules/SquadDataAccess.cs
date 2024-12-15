@@ -65,7 +65,7 @@ namespace OnlyWar.Helpers.Database.GameRules
             IDbConnection connection, Dictionary<int, BaseSkill> baseSkillMap)
         {
             Dictionary<int, List<Tuple<BaseSkill, float>>> soldierTemplateMosMap =
-                new Dictionary<int, List<Tuple<BaseSkill, float>>>();
+                [];
             using (var command = connection.CreateCommand())
             {
                 command.CommandText = "SELECT * FROM SoldierMosTraining";
@@ -82,7 +82,7 @@ namespace OnlyWar.Helpers.Database.GameRules
 
                     if (!soldierTemplateMosMap.ContainsKey(soldierTemplateId))
                     {
-                        soldierTemplateMosMap[soldierTemplateId] = new List<Tuple<BaseSkill, float>>();
+                        soldierTemplateMosMap[soldierTemplateId] = [];
                     }
                     soldierTemplateMosMap[soldierTemplateId].Add(training);
                 }
@@ -93,7 +93,7 @@ namespace OnlyWar.Helpers.Database.GameRules
 
         private Dictionary<int, ArmorTemplate> GetArmorTemplates(IDbConnection connection)
         {
-            Dictionary<int, ArmorTemplate> armorTemplateMap = new Dictionary<int, ArmorTemplate>();
+            Dictionary<int, ArmorTemplate> armorTemplateMap = [];
             using (var command = connection.CreateCommand())
             {
                 command.CommandText = "SELECT * FROM ArmorTemplate";
@@ -119,7 +119,7 @@ namespace OnlyWar.Helpers.Database.GameRules
             Dictionary<int, BaseSkill> baseSkillMap)
         {
             Dictionary<int, MeleeWeaponTemplate> factionWeaponTemplateMap =
-                new Dictionary<int, MeleeWeaponTemplate>();
+                [];
             using (var command = connection.CreateCommand())
             {
                 command.CommandText = "SELECT * FROM MeleeWeaponTemplate";
@@ -157,7 +157,7 @@ namespace OnlyWar.Helpers.Database.GameRules
             Dictionary<int, BaseSkill> baseSkillMap)
         {
             Dictionary<int, RangedWeaponTemplate> factionWeaponTemplateMap =
-                new Dictionary<int, RangedWeaponTemplate>();
+                [];
             using (var command = connection.CreateCommand())
             {
                 command.CommandText = "SELECT * FROM RangedWeaponTemplate";
@@ -201,7 +201,7 @@ namespace OnlyWar.Helpers.Database.GameRules
         {
             RangedWeaponTemplate primaryRanged, secondaryRanged;
             MeleeWeaponTemplate primaryMelee, secondaryMelee;
-            Dictionary<int, WeaponSet> weaponSetMap = new Dictionary<int, WeaponSet>();
+            Dictionary<int, WeaponSet> weaponSetMap = [];
 
             using (var command = connection.CreateCommand())
             {
@@ -259,7 +259,7 @@ namespace OnlyWar.Helpers.Database.GameRules
 
         private Dictionary<int, List<int>> GetSquadTemplateWeaponSetIdsBySquadTemplateWeaponOptionId(IDbConnection connection)
         {
-            Dictionary<int, List<int>> weaponOptionToWeaponSetMap = new Dictionary<int, List<int>>();
+            Dictionary<int, List<int>> weaponOptionToWeaponSetMap = [];
             using (var command = connection.CreateCommand())
             {
                 command.CommandText = "SELECT * FROM SquadTemplateWeaponOptionWeaponSet";
@@ -270,7 +270,7 @@ namespace OnlyWar.Helpers.Database.GameRules
                     int squadTemplateWeaponOption = reader.GetInt32(2);
                     if (!weaponOptionToWeaponSetMap.ContainsKey(squadTemplateWeaponOption))
                     {
-                        weaponOptionToWeaponSetMap[squadTemplateWeaponOption] = new List<int>();
+                        weaponOptionToWeaponSetMap[squadTemplateWeaponOption] = [];
                     }
                     weaponOptionToWeaponSetMap[squadTemplateWeaponOption].Add(weaponSetId);
                 }
@@ -284,7 +284,7 @@ namespace OnlyWar.Helpers.Database.GameRules
             Dictionary<int, WeaponSet> weaponSetMap)
         {
             Dictionary<int, List<SquadWeaponOption>> squadWeaponOptionMap =
-                new Dictionary<int, List<SquadWeaponOption>>();
+                [];
             using (var command = connection.CreateCommand())
             {
                 command.CommandText = "SELECT * FROM SquadTemplateWeaponOption";
@@ -298,7 +298,7 @@ namespace OnlyWar.Helpers.Database.GameRules
                     int max = reader.GetInt32(4);
 
                     List<int> baseList = weaponOptionWeaponSetMap[id];
-                    List<WeaponSet> weaponSetList = new List<WeaponSet>();
+                    List<WeaponSet> weaponSetList = [];
                     foreach (int weaponSetId in baseList)
                     {
                         weaponSetList.Add(weaponSetMap[weaponSetId]);
@@ -307,7 +307,7 @@ namespace OnlyWar.Helpers.Database.GameRules
                     SquadWeaponOption weaponOption = new SquadWeaponOption(name, min, max, weaponSetList);
                     if (!squadWeaponOptionMap.ContainsKey(squadTemplateId))
                     {
-                        squadWeaponOptionMap[squadTemplateId] = new List<SquadWeaponOption>();
+                        squadWeaponOptionMap[squadTemplateId] = [];
                     }
                     squadWeaponOptionMap[squadTemplateId].Add(weaponOption);
                 }
@@ -319,7 +319,7 @@ namespace OnlyWar.Helpers.Database.GameRules
                                                                                               Dictionary<int, SoldierTemplate> soldierTemplateMap)
         {
             Dictionary<int, List<SquadTemplateElement>> elementsMap =
-                new Dictionary<int, List<SquadTemplateElement>>();
+                [];
             using (var command = connection.CreateCommand())
             {
                 command.CommandText = "SELECT * FROM SquadTemplateElement";
@@ -335,7 +335,7 @@ namespace OnlyWar.Helpers.Database.GameRules
 
                     if (!elementsMap.ContainsKey(squadTemplateId))
                     {
-                        elementsMap[squadTemplateId] = new List<SquadTemplateElement>();
+                        elementsMap[squadTemplateId] = [];
                     }
                     elementsMap[squadTemplateId].Add(new SquadTemplateElement(template, (byte)min, (byte)max));
                 }
@@ -350,8 +350,8 @@ namespace OnlyWar.Helpers.Database.GameRules
             Dictionary<int, List<SquadWeaponOption>> squadWeaponOptionMap,
             Dictionary<int, ArmorTemplate> armorTemplateMap)
         {
-            Dictionary<int, SquadTemplate> squadTemplateMap = new Dictionary<int, SquadTemplate>();
-            Dictionary<int, List<SquadTemplate>> squadTemplatesByFactionId = new Dictionary<int, List<SquadTemplate>>();
+            Dictionary<int, SquadTemplate> squadTemplateMap = [];
+            Dictionary<int, List<SquadTemplate>> squadTemplatesByFactionId = [];
             using (var command = connection.CreateCommand())
             {
                 command.CommandText = "SELECT * FROM SquadTemplate";
@@ -380,7 +380,7 @@ namespace OnlyWar.Helpers.Database.GameRules
                     squadTemplateMap[id] = squadTemplate;
                     if (!squadTemplatesByFactionId.ContainsKey(factionId))
                     {
-                        squadTemplatesByFactionId[factionId] = new List<SquadTemplate>();
+                        squadTemplatesByFactionId[factionId] = [];
                     }
                     squadTemplatesByFactionId[factionId].Add(squadTemplate);
                 }
@@ -391,7 +391,7 @@ namespace OnlyWar.Helpers.Database.GameRules
         private Dictionary<int, NormalizedValueTemplate> GetAttributeTemplates(IDbConnection connection)
         {
             Dictionary<int, NormalizedValueTemplate> attributeTemplateMap =
-                new Dictionary<int, NormalizedValueTemplate>();
+                [];
             using (var command = connection.CreateCommand())
             {
                 command.CommandText = "SELECT * FROM AttributeTemplate";
@@ -417,7 +417,7 @@ namespace OnlyWar.Helpers.Database.GameRules
                                                                      Dictionary<int, NormalizedValueTemplate> attributeMap,
                                                                      Dictionary<int, List<HitLocationTemplate>> hitLocationTemplateMap)
         {
-            Dictionary<int, List<Species>> speciesMap = new Dictionary<int, List<Species>>();
+            Dictionary<int, List<Species>> speciesMap = [];
             using (var command = connection.CreateCommand())
             {
                 command.CommandText = "SELECT * FROM Species";
@@ -459,7 +459,7 @@ namespace OnlyWar.Helpers.Database.GameRules
 
                     if (!speciesMap.ContainsKey(factionId))
                     {
-                        speciesMap[factionId] = new List<Species>();
+                        speciesMap[factionId] = [];
                     }
                     speciesMap[factionId].Add(species);
                 }
@@ -473,7 +473,7 @@ namespace OnlyWar.Helpers.Database.GameRules
             Dictionary<int, List<Species>> speciesMap)
         {
             Dictionary<int, List<SoldierTemplate>> soldierTemplatesByFactionId = 
-                new Dictionary<int, List<SoldierTemplate>>();
+                [];
             using (var command = connection.CreateCommand())
             {
                 command.CommandText = "SELECT * FROM SoldierTemplate";
@@ -500,7 +500,7 @@ namespace OnlyWar.Helpers.Database.GameRules
 
                     if (!soldierTemplatesByFactionId.ContainsKey(factionId))
                     {
-                        soldierTemplatesByFactionId[factionId] = new List<SoldierTemplate>();
+                        soldierTemplatesByFactionId[factionId] = [];
                     }
                     soldierTemplatesByFactionId[factionId].Add(soldierTemplate);
                 }

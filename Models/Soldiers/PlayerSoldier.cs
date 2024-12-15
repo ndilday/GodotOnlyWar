@@ -112,10 +112,10 @@ namespace OnlyWar.Models.Soldiers
         {
             _soldier = soldier;
             _soldier.Name = name;
-            _soldierHistory = new List<string>();
-            _rangedWeaponCasualtyCountMap = new Dictionary<int, ushort>();
-            _meleeWeaponCasualtyCountMap = new Dictionary<int, ushort>();
-            _factionCasualtyCountMap = new Dictionary<int, ushort>();
+            _soldierHistory = [];
+            _rangedWeaponCasualtyCountMap = [];
+            _meleeWeaponCasualtyCountMap = [];
+            _factionCasualtyCountMap = [];
             if (soldier.AssignedSquad != null)
             {
                 _assignedSquad = soldier.AssignedSquad;

@@ -18,7 +18,7 @@ namespace OnlyWar.Helpers.Battles.Resolutions
 
         public WoundResolver(bool allowVerbose)
         {
-            WoundQueue = new ConcurrentBag<WoundResolution>();
+            WoundQueue = [];
             _allowVerbose = allowVerbose;
             ResolutionLog = "";
         }

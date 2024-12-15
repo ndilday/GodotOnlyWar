@@ -13,7 +13,7 @@ namespace OnlyWar.Helpers.Database.GameState
         public Dictionary<int, List<Ship>> GetShipsByFleetId(IDbConnection connection,
                                                              IReadOnlyDictionary<int, ShipTemplate> shipTemplateMap)
         {
-            Dictionary<int, List<Ship>> fleetShipMap = new Dictionary<int, List<Ship>>();
+            Dictionary<int, List<Ship>> fleetShipMap = [];
             using (var command = connection.CreateCommand())
             {
                 command.CommandText = "SELECT * FROM Ship";
@@ -29,7 +29,7 @@ namespace OnlyWar.Helpers.Database.GameState
 
                     if (!fleetShipMap.ContainsKey(fleetId))
                     {
-                        fleetShipMap[fleetId] = new List<Ship>();
+                        fleetShipMap[fleetId] = [];
                     }
                     fleetShipMap[fleetId].Add(ship);
                 }
@@ -42,7 +42,7 @@ namespace OnlyWar.Helpers.Database.GameState
                                                 IReadOnlyDictionary<int, Faction> factionMap,
                                                 IReadOnlyList<Planet> planetList)
         {
-            List<TaskForce> fleetList = new List<TaskForce>();
+            List<TaskForce> fleetList = [];
             using (var command = connection.CreateCommand())
             {
                 command.CommandText = "SELECT * FROM Fleet";

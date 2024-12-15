@@ -16,7 +16,7 @@ namespace OnlyWar.Helpers.Battles.Placers
         public Dictionary<BattleSquad, Tuple<int, int>> PlaceSquads(IReadOnlyList<BattleSquad> ambushedSquads,
                                                             IReadOnlyList<BattleSquad> ambushingSquads)
         {
-            Dictionary<BattleSquad, Tuple<int, int>> result = new Dictionary<BattleSquad, Tuple<int, int>>();
+            Dictionary<BattleSquad, Tuple<int, int>> result = [];
             // TODO: prevent crippled soldiers from being deployed
             var killZone = PlaceAmbushedSquads(ambushedSquads, 0, 0, result);
             PlaceAmbushingSquads(ambushingSquads, killZone, result);

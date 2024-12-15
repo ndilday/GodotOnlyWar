@@ -40,7 +40,7 @@ namespace OnlyWar.Helpers
                 throw new InvalidOperationException($"Cell {cell} is already occupied.");
             }
             _cellObjectMap[cell] = objectId;
-            _objectCellsMap[objectId] = new List<Tuple<int, int>> { cell };
+            _objectCellsMap[objectId] = [cell];
         }
 
         public void FreeCells(IEnumerable<Tuple<int, int>> cells)

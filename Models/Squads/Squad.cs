@@ -31,9 +31,9 @@ namespace OnlyWar.Models.Squads
             ParentUnit = parentUnit;
             SquadTemplate = template;
             IsInReserve = true;
-            _members = new List<ISoldier>();
+            _members = [];
             //AssignedVehicles = new List<int>();
-            Loadout = new List<WeaponSet>();
+            Loadout = [];
         }
 
         public Squad(int id, string name, Unit parentUnit, SquadTemplate template, bool isInReserve)
@@ -47,9 +47,9 @@ namespace OnlyWar.Models.Squads
             ParentUnit = parentUnit;
             SquadTemplate = template;
             IsInReserve = isInReserve;
-            _members = new List<ISoldier>();
+            _members = [];
             //AssignedVehicles = new List<int>();
-            Loadout = new List<WeaponSet>();
+            Loadout = [];
         }
 
         public void AddSquadMember(ISoldier soldier)

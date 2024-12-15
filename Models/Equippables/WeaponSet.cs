@@ -13,10 +13,10 @@ namespace OnlyWar.Models.Equippables
         public IReadOnlyCollection<RangedWeapon> GetRangedWeapons()
         {
             if (PrimaryRangedWeapon == null) return null;
-            List<RangedWeapon> list = new List<RangedWeapon>
-            {
+            List<RangedWeapon> list =
+            [
                 new RangedWeapon(PrimaryRangedWeapon)
-            };
+            ];
             if (SecondaryRangedWeapon != null)
             {
                 list.Add(new RangedWeapon(SecondaryRangedWeapon));
@@ -26,10 +26,10 @@ namespace OnlyWar.Models.Equippables
         public IReadOnlyCollection<MeleeWeapon> GetMeleeWeapons()
         {
             if (PrimaryMeleeWeapon == null) return null;
-            List<MeleeWeapon> list = new List<MeleeWeapon>
-            {
+            List<MeleeWeapon> list =
+            [
                 new MeleeWeapon(PrimaryMeleeWeapon)
-            };
+            ];
             if (SecondaryMeleeWeapon != null)
             {
                 list.Add(new MeleeWeapon(SecondaryMeleeWeapon));

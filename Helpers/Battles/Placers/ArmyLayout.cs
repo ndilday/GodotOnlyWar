@@ -12,8 +12,8 @@ namespace OnlyWar.Helpers.Battles.Placers
 
         public ArmyLayout()
         {
-            SquadPositionMap = new Dictionary<int, Tuple<int, int>>();
-            SquadLayoutMap = new Dictionary<int, BattleSquadLayout>();
+            SquadPositionMap = [];
+            SquadLayoutMap = [];
         }
     }
 
@@ -43,10 +43,10 @@ namespace OnlyWar.Helpers.Battles.Placers
 
             ArmyLayout layout = new();
 
-            List<BattleSquad> fastSquads = new();
-            List<BattleSquad> heavySquads = new();
-            List<BattleSquad> hqSquads = new();
-            List<BattleSquad> defaultSquads = new();
+            List<BattleSquad> fastSquads = [];
+            List<BattleSquad> heavySquads = [];
+            List<BattleSquad> hqSquads = [];
+            List<BattleSquad> defaultSquads = [];
 
             foreach(BattleSquad squad in squads)
             {

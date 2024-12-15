@@ -76,10 +76,10 @@ namespace OnlyWar.Helpers.Battles
         {
             Soldier = soldier;
             BattleSquad = squad;
-            MeleeWeapons = new List<MeleeWeapon>();
-            RangedWeapons = new List<RangedWeapon>();
-            EquippedMeleeWeapons = new List<MeleeWeapon>();
-            EquippedRangedWeapons = new List<RangedWeapon>();
+            MeleeWeapons = [];
+            RangedWeapons = [];
+            EquippedMeleeWeapons = [];
+            EquippedRangedWeapons = [];
             TopLeft = null;
             Aim = null;
             IsInMelee = false;

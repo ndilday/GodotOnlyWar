@@ -12,7 +12,7 @@ namespace OnlyWar.Helpers.Battles.Resolutions
 
         public MoveResolver()
         {
-            MoveQueue = new ConcurrentBag<MoveResolution>();
+            MoveQueue = [];
         }
 
         public void Resolve()

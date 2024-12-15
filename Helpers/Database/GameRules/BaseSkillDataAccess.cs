@@ -8,7 +8,7 @@ namespace OnlyWar.Helpers.Database.GameRules
     {
         public Dictionary<int, BaseSkill> GetBaseSkills(IDbConnection connection)
         {
-            Dictionary<int, BaseSkill> baseSkillMap = new Dictionary<int, BaseSkill>();
+            Dictionary<int, BaseSkill> baseSkillMap = [];
             using (var command = connection.CreateCommand())
             {
                 command.CommandText = "SELECT * FROM BaseSkill";

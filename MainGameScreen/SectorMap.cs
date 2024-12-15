@@ -77,7 +77,7 @@ public partial class SectorMap : Node2D
 
 	private void PlacePlanets()
 	{
-		_subsectorPlanetMap = new Dictionary<ushort, List<Vector2I>>();
+		_subsectorPlanetMap = [];
 
 		var starTexture = (Texture2D)GD.Load("res://MainGameScreen/UICircle.png");
 		Vector2 starTextureScale = new Vector2(0.05f, 0.05f);
@@ -89,10 +89,10 @@ public partial class SectorMap : Node2D
 			int index = GridPositionToIndex(gridPosition);
 			_hasPlanet[index] = true;
 			DrawStar(starTexture, starTextureScale, gridPosition);
-			_subsectorPlanetMap[currentSubsectorId] = new List<Vector2I>
-				{
-					gridPosition
-				};
+			_subsectorPlanetMap[currentSubsectorId] =
+                [
+                    gridPosition
+				];
 			currentSubsectorId++;
 		}
 	}
@@ -190,9 +190,9 @@ public partial class SectorMap : Node2D
 	private Dictionary<ushort, int> CombineSubsectors(Dictionary<ushort, List<Vector2I>> subsectorPlanetMap, ushort subsectorMaxDiameter)
 	{
 		int maxDistanceSquared = subsectorMaxDiameter * subsectorMaxDiameter;
-		Dictionary<Tuple<ushort, ushort>, int> subsectorPairDistanceMap = new Dictionary<Tuple<ushort, ushort>, int>();
-		Dictionary<ushort, List<ushort>> subsectorPairMap = new Dictionary<ushort, List<ushort>>();
-		Dictionary<ushort, int> subsectorInternalDistance = new Dictionary<ushort, int>();
+		Dictionary<Tuple<ushort, ushort>, int> subsectorPairDistanceMap = [];
+		Dictionary<ushort, List<ushort>> subsectorPairMap = [];
+		Dictionary<ushort, int> subsectorInternalDistance = [];
 
 		// calculate the distance between each subsector
 		foreach (var kvp in subsectorPlanetMap)
@@ -213,11 +213,11 @@ public partial class SectorMap : Node2D
 					subsectorPairDistanceMap[sectorPairId] = longestPlanetaryDistance;
 					if (!subsectorPairMap.ContainsKey(kvp.Key))
 					{
-						subsectorPairMap[kvp.Key] = new List<ushort>();
+						subsectorPairMap[kvp.Key] = [];
 					}
 					if (!subsectorPairMap.ContainsKey(kvp2.Key))
 					{
-						subsectorPairMap[kvp2.Key] = new List<ushort>();
+						subsectorPairMap[kvp2.Key] = [];
 					}
 
 					subsectorPairMap[kvp.Key].Add(kvp2.Key);
@@ -340,7 +340,7 @@ public partial class SectorMap : Node2D
 	private Dictionary<ushort, List<Vector2I>> DetermineSubsectorBorderPoints(ushort[] sectorIds)
 	{
 		int i = 0;
-		Dictionary<ushort, List<Vector2I>> subsectorVertexListMap = new Dictionary<ushort, List<Vector2I>>();
+		Dictionary<ushort, List<Vector2I>> subsectorVertexListMap = [];
 		while(i < sectorIds.Length)
 		{
 			ushort subsectorId = sectorIds[i];
@@ -350,7 +350,7 @@ public partial class SectorMap : Node2D
 			}
 			else
 			{
-				List<Vector2I> vertexList = new List<Vector2I>();
+				List<Vector2I> vertexList = [];
 				subsectorVertexListMap[subsectorId] = vertexList;
 				// because we're processing to the right and down, the top edge is a border
 				Vector2I gridPosition = IndexToGridPosition(i);
@@ -494,7 +494,7 @@ public partial class SectorMap : Node2D
 
 	private Dictionary<ushort, Vector2I> CalculateSubSectorCenters(Dictionary<ushort, List<Vector2I>> subsectorPlanetMap)
 	{
-		Dictionary<ushort, Vector2I> centers = new Dictionary<ushort, Vector2I>();
+		Dictionary<ushort, Vector2I> centers = [];
 		foreach (var subsectorPlanetList in subsectorPlanetMap)
 		{
 			int x = subsectorPlanetList.Value.Sum(v => v.X) / subsectorPlanetList.Value.Count;
