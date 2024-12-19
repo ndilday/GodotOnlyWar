@@ -7,7 +7,6 @@ namespace OnlyWar.Models.Planets
     {
         public readonly int Id;
         public readonly Planet Planet;
-        public readonly PlanetFaction ControllingFaction;
         // territory is diamond-shaped
         // 1
         // 2 3
@@ -34,6 +33,22 @@ namespace OnlyWar.Models.Planets
             get
             {
                 return RegionFactionMap.Sum(rfm => rfm.Value.PDFMembers);
+            }
+        }
+
+        // really basic, for now: if there's only one public faction, it's the controlling faction
+        public RegionFaction ControllingFaction
+        {
+            get
+            {
+                if(RegionFactionMap.Where(rf => rf.Value.IsPublic).Count() == 1)
+                {
+                    return RegionFactionMap.Where(rf => rf.Value.IsPublic).First().Value;
+                }
+                else
+                {
+                    return null;
+                }
             }
         }
 

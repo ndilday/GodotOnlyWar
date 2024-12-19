@@ -3,7 +3,6 @@ using System.Collections.Generic;
 using System.Linq;
 
 using OnlyWar.Models.Fleets;
-using OnlyWar.Models.Squads;
 
 namespace OnlyWar.Models.Planets
 {
