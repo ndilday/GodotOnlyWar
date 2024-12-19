@@ -68,20 +68,14 @@ namespace OnlyWar.Helpers.Battles
                 {
                     foreach(Squad squad in regionFaction.LandedSquads)
                     {
-                        if(!squad.IsInReserve)
-                        {
-                            playerSquads.Add(squad);
-                        }
+                        playerSquads.Add(squad);
                     }
                 }
                 else if(!regionFaction.PlanetFaction.Faction.IsDefaultFaction)
                 {
                     foreach(Squad squad in regionFaction.LandedSquads)
                     {
-                        if(!squad.IsInReserve)
-                        {
-                            opposingSquads.Add(squad);
-                        }
+                        opposingSquads.Add(squad);
                     }
                 }
             }
@@ -106,20 +100,14 @@ namespace OnlyWar.Helpers.Battles
                 {
                     foreach (Squad squad in regionFaction.LandedSquads)
                     {
-                        if (!squad.IsInReserve)
-                        {
-                            playerSquads.Add(squad);
-                        }
+                        playerSquads.Add(squad);
                     }
                 }
                 else if (!regionFaction.PlanetFaction.Faction.IsDefaultFaction)
                 {
                     foreach (Squad squad in regionFaction.LandedSquads)
                     {
-                        if (!squad.IsInReserve)
-                        {
-                            opposingSquads.Add(squad);
-                        }
+                        opposingSquads.Add(squad);
                     }
                 }
             }

@@ -45,7 +45,6 @@ namespace OnlyWar.Builders
 
         private static void AddSquad(Squad squad)
         {
-            squad.IsInReserve = false;
             foreach (SquadTemplateElement element in squad.SquadTemplate.Elements)
             {
                 SoldierTemplate template = element.SoldierTemplate;

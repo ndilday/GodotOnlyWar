@@ -1,5 +1,6 @@
 ﻿using OnlyWar.Models.Equippables;
 using OnlyWar.Models.Fleets;
+using OnlyWar.Models.Orders;
 using OnlyWar.Models.Planets;
 using OnlyWar.Models.Soldiers;
 using OnlyWar.Models.Units;
@@ -16,13 +17,13 @@ namespace OnlyWar.Models.Squads
         public string Name { get; set; }
         public Unit ParentUnit { get; set; }
         public SquadTemplate SquadTemplate { get; private set; }
-        public bool IsInReserve { get; set; }
         public ISoldier SquadLeader { get => Members.FirstOrDefault(m => m.Template.IsSquadLeader); }
         public IReadOnlyCollection<ISoldier> Members { get => _members; }
         // if Loadout count < Member count, assume the rest are using the default loadout in the template
         public List<WeaponSet> Loadout { get; set; }
-        public Planet Location { get; set; }
+        public Region CurrentRegion { get; set; }
         public Ship BoardedLocation { get; set; }
+        public IOrder CurrentOrders { get; set; }
         //public List<int> AssignedVehicles;
         public Squad(string name, Unit parentUnit, SquadTemplate template)
         {
@@ -30,13 +31,12 @@ namespace OnlyWar.Models.Squads
             Name = name;
             ParentUnit = parentUnit;
             SquadTemplate = template;
-            IsInReserve = true;
             _members = [];
             //AssignedVehicles = new List<int>();
             Loadout = [];
         }
 
-        public Squad(int id, string name, Unit parentUnit, SquadTemplate template, bool isInReserve)
+        public Squad(int id, string name, Unit parentUnit, SquadTemplate template)
         {
             Id = id;
             if(id > _nextId)
@@ -46,7 +46,6 @@ namespace OnlyWar.Models.Squads
             Name = name;
             ParentUnit = parentUnit;
             SquadTemplate = template;
-            IsInReserve = isInReserve;
             _members = [];
             //AssignedVehicles = new List<int>();
             Loadout = [];
