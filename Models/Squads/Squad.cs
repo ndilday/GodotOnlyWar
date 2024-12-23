@@ -6,6 +6,7 @@ using OnlyWar.Models.Soldiers;
 using OnlyWar.Models.Units;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading;
 
 namespace OnlyWar.Models.Squads
 {
@@ -13,12 +14,21 @@ namespace OnlyWar.Models.Squads
     {
         private static int _nextId = 0;
         private readonly List<ISoldier> _members;
-        public int Id { get; private set; }
+        public int Id { get; }
         public string Name { get; set; }
-        public Unit ParentUnit { get; set; }
-        public SquadTemplate SquadTemplate { get; private set; }
+        public SquadTemplate SquadTemplate { get; }
         public ISoldier SquadLeader { get => Members.FirstOrDefault(m => m.Template.IsSquadLeader); }
         public IReadOnlyCollection<ISoldier> Members { get => _members; }
+        public Faction Faction
+        {
+            get
+            {
+                if (ParentUnit == null) return null;
+                return ParentUnit.Faction;
+            }
+        }
+
+        public Unit ParentUnit { get; set; }
         // if Loadout count < Member count, assume the rest are using the default loadout in the template
         public List<WeaponSet> Loadout { get; set; }
         public Region CurrentRegion { get; set; }
@@ -41,7 +51,7 @@ namespace OnlyWar.Models.Squads
             Id = id;
             if(id > _nextId)
             {
-                _nextId = id + 1;
+                Interlocked.Exchange(ref _nextId, id + 1);
             }
             Name = name;
             ParentUnit = parentUnit;

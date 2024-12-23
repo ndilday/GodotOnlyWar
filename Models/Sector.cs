@@ -1,6 +1,4 @@
-﻿using OnlyWar.Builders;
-using OnlyWar.Helpers;
-using OnlyWar.Models.Fleets;
+﻿using OnlyWar.Models.Fleets;
 using OnlyWar.Models.Planets;
 using System;
 using System.Collections.Generic;
@@ -49,7 +47,7 @@ namespace OnlyWar.Models
                 _fleets[fleet.Id] = fleet;
                 if (fleet.Planet != null)
                 {
-                    fleet.Planet.TaskForces.Add(fleet);
+                    fleet.Planet.OrbitingTaskForceList.Add(fleet);
                 }
             }
         }
@@ -74,7 +72,7 @@ namespace OnlyWar.Models
             _fleets[newFleet.Id] = newFleet;
             if (newFleet.Planet != null)
             {
-                newFleet.Planet.TaskForces.Add(newFleet);
+                newFleet.Planet.OrbitingTaskForceList.Add(newFleet);
             }
         }
 
@@ -94,7 +92,7 @@ namespace OnlyWar.Models
             mergingFleet.Ships.Clear();
             remainingFleet.Ships.Sort((x, y) => x.Template.Id.CompareTo(y.Template.Id));
             _fleets.Remove(mergingFleet.Id);
-            mergingFleet.Planet.TaskForces.Remove(mergingFleet);
+            mergingFleet.Planet.OrbitingTaskForceList.Remove(mergingFleet);
         }
 
         public TaskForce SplitOffNewFleet(TaskForce originalFleet,
@@ -114,7 +112,7 @@ namespace OnlyWar.Models
             }
             if (newFleet.Planet != null)
             {
-                newFleet.Planet.TaskForces.Add(newFleet);
+                newFleet.Planet.OrbitingTaskForceList.Add(newFleet);
             }
             _fleets[newFleet.Id] = newFleet;
             return newFleet;

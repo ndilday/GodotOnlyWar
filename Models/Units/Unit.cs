@@ -1,7 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
-
+using System.Threading;
 using OnlyWar.Models.Soldiers;
 using OnlyWar.Models.Squads;
 
@@ -13,6 +13,7 @@ namespace OnlyWar.Models.Units
         private readonly List<Squad> _squads;
         public int Id { get; private set; }
         public string Name { get; set; }
+        public Faction Faction { get; }
         public UnitTemplate UnitTemplate { get; private set; }
         public Squad HQSquad
         {
@@ -32,16 +33,18 @@ namespace OnlyWar.Models.Units
             Id = id;
             if(id > _nextId)
             {
-                _nextId = id + 1;
+                Interlocked.Exchange(ref _nextId, id + 1);
             }
             Name = name;
             UnitTemplate = template;
+            Faction = template.Faction;
             _squads = squads;
         }
         public Unit(string name, UnitTemplate template)
         {
-            Id = _nextId++;
+            Id = Interlocked.Exchange(ref _nextId, _nextId + 1);
             Name = name;
+            Faction = template.Faction;
             UnitTemplate = template;
             AssignedVehicles = [];
             ChildUnits = [];

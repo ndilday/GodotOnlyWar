@@ -46,10 +46,10 @@ CREATE TABLE PlayerSoldierFactionCasualtyCount (PlayerSoldierId INTEGER NOT NULL
 CREATE TABLE PlayerSoldierHistory (PlayerSoldierId INTEGER NOT NULL REFERENCES PlayerSoldier (SoldierId), Entry STRING NOT NULL);
 
 -- Table: PlayerSoldierMeleeWeaponCasualtyCount
-CREATE TABLE PlayerSoldierMeleeWeaponCasualtyCount (PlayerSoldierId REFERENCES PlayerSoldier (SoldierId) NOT NULL, MeleeWeaponTemplateId INTEGER, Count INTEGER NOT NULL);
+CREATE TABLE PlayerSoldierMeleeWeaponCasualtyCount (PlayerSoldierId INTEGER REFERENCES PlayerSoldier (SoldierId) NOT NULL, MeleeWeaponTemplateId INTEGER, Count INTEGER NOT NULL);
 
 -- Table: PlayerSoldierRangedWeaponCasualtyCount
-CREATE TABLE PlayerSoldierRangedWeaponCasualtyCount (PlayerSoldierId REFERENCES PlayerSoldier (SoldierId) NOT NULL, RangedWeaponTemplateId INTEGER, Count INTEGER NOT NULL);
+CREATE TABLE PlayerSoldierRangedWeaponCasualtyCount (PlayerSoldierId INTEGER REFERENCES PlayerSoldier (SoldierId) NOT NULL, RangedWeaponTemplateId INTEGER, Count INTEGER NOT NULL);
 
 -- Table: Request
 CREATE TABLE Request (Id INTEGER PRIMARY KEY UNIQUE NOT NULL, CharacterId INTEGER REFERENCES Character (Id) NOT NULL, PlanetId INTEGER REFERENCES Planet (Id) NOT NULL, RequestDate     INTEGER NOT NULL, FulfillmentDate INTEGER);
@@ -64,13 +64,16 @@ CREATE TABLE Soldier (Id INTEGER PRIMARY KEY NOT NULL UNIQUE, SoldierTemplateId 
 CREATE TABLE SoldierSkill (SoldierId INTEGER NOT NULL REFERENCES Soldiers (Id), BaseSkillId INTEGER NOT NULL, PointsInvested REAL NOT NULL);
 
 -- Table: Squad
-CREATE TABLE Squad (Id INTEGER PRIMARY KEY UNIQUE NOT NULL, SquadTemplateId INTEGER NOT NULL, ParentUnitId INTEGER NOT NULL REFERENCES Unit (Id), Name STRING NOT NULL, LoadedShipId INTEGER REFERENCES Ships (Id), LandedPlanetId INTEGER REFERENCES Planets (Id), IsInReserve BOOLEAN NOT NULL);
+CREATE TABLE Squad (Id INTEGER PRIMARY KEY UNIQUE NOT NULL, SquadTemplateId INTEGER NOT NULL, ParentUnitId INTEGER NOT NULL REFERENCES Unit (Id), Name STRING NOT NULL, LoadedShipId INTEGER REFERENCES Ship (Id), LandedRegionId INTEGER REFERENCES Region(Id));
 
 -- Table: SquadWeaponSet
 CREATE TABLE SquadWeaponSet (SquadId INTEGER NOT NULL REFERENCES Squad (Id), WeaponSetId INTEGER NOT NULL);
 
 -- Table: Unit
 CREATE TABLE Unit (Id INTEGER PRIMARY KEY UNIQUE NOT NULL, FactionId INTEGER NOT NULL, UnitTemplateId INTEGER NOT NULL, ParentUnitId INTEGER REFERENCES Unit (Id), Name STRING NOT NULL);
+
+-- Table: Order
+CREATE TABLE DefendRegionOrder (OrderId INTEGER PRIMARY KEY UNIQUE NOT NULL, SquadId INTEGER NOT NULL REFERENCES Squad (Id), RegionId INTEGER NOT NULL REFERENCES Region (Id));
 
 COMMIT TRANSACTION;
 PRAGMA foreign_keys = on;

@@ -279,7 +279,7 @@ namespace OnlyWar.Helpers
             {
                 if (squad.Members.Count == 0) continue;
                 // scout squads on active duty don't have time to train, they'll get battle experience
-                if (squad.IsInReserve)
+                if (squad.CurrentOrders == null || squad.CurrentOrders.OrderType == Models.Orders.OrderType.Train)
                 {
                     bool goodTeacher = false;
                     TrainingFocuses focuses = squadFocusMap[squad.Id];

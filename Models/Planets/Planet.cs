@@ -18,7 +18,7 @@ namespace OnlyWar.Models.Planets
         public readonly Region[] Regions;
         public bool IsUnderAssault { get; set; }
 
-        public List<TaskForce> TaskForces;
+        public List<TaskForce> OrbitingTaskForceList;
         public readonly Dictionary<int, PlanetFaction> PlanetFactionMap;
         public Faction ControllingFaction;
 
@@ -59,7 +59,7 @@ namespace OnlyWar.Models.Planets
             Template = template;
             Importance = importance;
             TaxLevel = taxLevel;
-            TaskForces = [];
+            OrbitingTaskForceList = [];
             PlanetFactionMap = [];
             Regions = new Region[16];
         }

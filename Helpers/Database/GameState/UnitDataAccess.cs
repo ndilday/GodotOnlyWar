@@ -33,7 +33,7 @@ namespace OnlyWar.Helpers.Database.GameState
 
                     SquadTemplate template = squadTemplateMap[squadTemplateId];
 
-                    Squad squad = new Squad(id, name, null, template, isInReserve);
+                    Squad squad = new Squad(id, name, null, template);
 
 
                     if (reader[4].GetType() != typeof(DBNull))
@@ -44,8 +44,9 @@ namespace OnlyWar.Helpers.Database.GameState
 
                     if (reader[5].GetType() != typeof(DBNull))
                     {
-                        Planet planet = planetList.First(p => p.Id == reader.GetInt32(5));
-                        squad.Location = planet;
+                        
+                        Region region = planetList.SelectMany(p => p.Regions).First(r => r.Id == reader.GetInt32(5));
+                        squad.CurrentRegion = region;
                     }
 
                     if (!squadMap.ContainsKey(parentUnitId))
@@ -169,9 +170,9 @@ namespace OnlyWar.Helpers.Database.GameState
         {
             string safeName = squad.Name.Replace("\'", "\'\'");
             string ship = squad.BoardedLocation == null ? "null" : squad.BoardedLocation.Id.ToString();
-            string planet = squad.Location == null ? "null" : squad.Location.Id.ToString();
+            string region = squad.CurrentRegion == null ? "null" : squad.CurrentRegion.Id.ToString();
             string insert = $@"INSERT INTO Squad VALUES ({squad.Id}, {squad.SquadTemplate.Id}, 
-                {squad.ParentUnit.Id}, '{safeName}', {ship}, {planet}, {squad.IsInReserve});";
+                {squad.ParentUnit.Id}, '{safeName}', {ship}, {region});";
             using (var command = transaction.Connection.CreateCommand())
             {
                 command.CommandText = insert;
