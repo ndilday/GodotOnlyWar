@@ -34,7 +34,7 @@ namespace OnlyWar.Helpers.Database.GameRules
         private readonly HitLocationTemplateDataAccess _hitLocationDataAccess;
         private readonly FleetDataAccess _fleetDataAccess;
         private readonly PlanetTemplateDataAccess _planetDataAccess;
-        private readonly SquadDataAccess _squadDataAccess;
+        private readonly SquadTemplateDataAccess _squadDataAccess;
 
         private static GameRulesDataAccess _instance;
 
@@ -44,7 +44,7 @@ namespace OnlyWar.Helpers.Database.GameRules
             _hitLocationDataAccess = new HitLocationTemplateDataAccess();
             _fleetDataAccess = new FleetDataAccess();
             _planetDataAccess = new PlanetTemplateDataAccess();
-            _squadDataAccess = new SquadDataAccess();
+            _squadDataAccess = new SquadTemplateDataAccess();
         }
 
         public static GameRulesDataAccess Instance

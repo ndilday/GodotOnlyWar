@@ -9,7 +9,7 @@ using System.Linq;
 
 namespace OnlyWar.Helpers.Database.GameRules
 {
-    public class SquadDataBlob
+    public class SquadTemplateDataBlob
     {
         public Dictionary<int, ArmorTemplate> ArmorTemplates { get; set; }
         public Dictionary<int, RangedWeaponTemplate> RangedWeaponTemplateMap { get; set; }
@@ -21,9 +21,9 @@ namespace OnlyWar.Helpers.Database.GameRules
         public Dictionary<int, SquadTemplate> SquadTemplatesById { get; set; }
     }
 
-    public class SquadDataAccess
+    public class SquadTemplateDataAccess
     {
-        public SquadDataBlob GetSquadDataBlob(IDbConnection connection, 
+        public SquadTemplateDataBlob GetSquadDataBlob(IDbConnection connection, 
                                               Dictionary<int, BaseSkill> baseSkillMap,
                                               Dictionary<int, List<HitLocationTemplate>> hitLocationMap)
         {
@@ -48,7 +48,7 @@ namespace OnlyWar.Helpers.Database.GameRules
             var squadElements = GetSquadTemplateElementsBySquadId(connection, basicSoldierTemplateMap);
             var squadTemplates = GetSquadTemplatesById(connection, squadElements, weaponSets, 
                                                        squadWeaponOptions, armorTemplates);
-            return new SquadDataBlob
+            return new SquadTemplateDataBlob
             {
                 ArmorTemplates = armorTemplates,
                 MeleeWeaponTemplateMap= meleeWeapons,

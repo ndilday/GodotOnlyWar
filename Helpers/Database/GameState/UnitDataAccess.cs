@@ -1,5 +1,6 @@
 ﻿using OnlyWar.Models.Equippables;
 using OnlyWar.Models.Fleets;
+using OnlyWar.Models.Orders;
 using OnlyWar.Models.Planets;
 using OnlyWar.Models.Squads;
 using OnlyWar.Models.Units;
@@ -16,9 +17,10 @@ namespace OnlyWar.Helpers.Database.GameState
                                                                IReadOnlyDictionary<int, SquadTemplate> squadTemplateMap,
                                                                IReadOnlyDictionary<int, List<WeaponSet>> squadWeaponSetMap,
                                                                IReadOnlyDictionary<int, Ship> shipMap,
-                                                               List<Planet> planetList)
+                                                               IReadOnlyDictionary<int, Region> regionMap)
         {
             Dictionary<int, List<Squad>> squadMap = [];
+            Dictionary<int, Squad> squadByIdMap = [];
             using (var command = connection.CreateCommand())
             {
                 command.CommandText = "SELECT * FROM Squad";
@@ -34,24 +36,17 @@ namespace OnlyWar.Helpers.Database.GameState
                     SquadTemplate template = squadTemplateMap[squadTemplateId];
 
                     Squad squad = new Squad(id, name, null, template);
+                    squadByIdMap[id] = squad;
 
 
                     if (reader[4].GetType() != typeof(DBNull))
                     {
-                        Ship ship = shipMap[reader.GetInt32(4)];
-                        squad.BoardedLocation = ship;
+                        squad.BoardedLocation = shipMap[reader.GetInt32(4)];
                     }
 
                     if (reader[5].GetType() != typeof(DBNull))
                     {
-                        
-                        Region region = planetList.SelectMany(p => p.Regions).First(r => r.Id == reader.GetInt32(5));
-                        squad.CurrentRegion = region;
-                    }
-
-                    if (!squadMap.ContainsKey(parentUnitId))
-                    {
-                        squadMap[parentUnitId] = [];
+                        squad.CurrentRegion = regionMap[reader.GetInt32(5)];
                     }
 
                     if (squadWeaponSetMap.ContainsKey(id))
@@ -59,10 +54,44 @@ namespace OnlyWar.Helpers.Database.GameState
                         squad.Loadout = squadWeaponSetMap[id];
                     }
 
+                    if (!squadMap.ContainsKey(parentUnitId))
+                    {
+                        squadMap[parentUnitId] = [];
+                    }
+
                     squadMap[parentUnitId].Add(squad);
                 }
             }
+            PopulateOrdersBySquadId(connection, regionMap, squadByIdMap);
+
             return squadMap;
+        }
+
+        private void PopulateOrdersBySquadId(IDbConnection connection,
+                                            IReadOnlyDictionary<int, Region> regionMap,
+                                            IReadOnlyDictionary<int, Squad> squadMap)
+        {
+            PopulateDefendRegionBorderOrders(connection, regionMap, squadMap);
+        }
+
+        private void PopulateDefendRegionBorderOrders(IDbConnection connection,
+                                                      IReadOnlyDictionary<int, Region> regionMap,
+                                                      IReadOnlyDictionary<int, Squad> squadMap)
+        {
+            using (var command = connection.CreateCommand())
+            {
+                command.CommandText = "SELECT * FROM DefendRegionOrder";
+                var reader = command.ExecuteReader();
+                while (reader.Read())
+                {
+                    int id = reader.GetInt32(0);
+                    int squadId = reader.GetInt32(1);
+                    int regionId = reader.GetInt32(2);
+                    int borderRegionId = reader.GetInt32(3);
+
+                    squadMap[squadId].CurrentOrders = new DefendRegionOrder(id, squadMap[squadId], regionMap[regionId], regionMap[borderRegionId]);
+                }
+            }
         }
 
         public List<Unit> GetUnits(IDbConnection connection,
@@ -183,6 +212,10 @@ namespace OnlyWar.Helpers.Database.GameState
             {
                 SaveSquadLoadout(transaction, squad);
             }
+            if(squad.CurrentOrders != null)
+            {
+                SaveSquadOrders(transaction, squad);
+            }
         }
 
         private void SaveSquadLoadout(IDbTransaction transaction, Squad squad)
@@ -196,6 +229,27 @@ namespace OnlyWar.Helpers.Database.GameState
                     command.CommandText = insert;
                     command.ExecuteNonQuery();
                 }
+            }
+        }
+
+        private void SaveSquadOrders(IDbTransaction transaction, Squad squad)
+        {
+            string insert = "";
+            switch(squad.CurrentOrders)
+            {
+                case DefendRegionOrder defendRegionOrder:
+                    // CREATE TABLE DefendRegionOrder (OrderId INTEGER PRIMARY KEY UNIQUE NOT NULL, SquadId INTEGER NOT NULL REFERENCES Squad (Id), RegionId INTEGER NOT NULL REFERENCES Region (Id));
+                    insert = $@"INSERT INTO DefendRegionOrder VALUES 
+                        ({defendRegionOrder.Id}, {squad.Id}, {defendRegionOrder.TargetRegion}, {defendRegionOrder.BorderToDefend});";
+                    break;
+                default:
+                    throw new InvalidCastException();
+
+            }
+            using (var command = transaction.Connection.CreateCommand())
+            {
+                command.CommandText = insert;
+                command.ExecuteNonQuery();
             }
         }
     }

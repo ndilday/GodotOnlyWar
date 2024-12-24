@@ -3,6 +3,7 @@ using OnlyWar.Models.Planets;
 using System;
 using System.Collections.Generic;
 using System.Data;
+using System.Linq;
 
 namespace OnlyWar.Helpers.Database.GameState
 {
@@ -15,7 +16,6 @@ namespace OnlyWar.Helpers.Database.GameState
         {
             Dictionary<int, List<PlanetFaction>> planetFactions =
                 GetPlanetFactions(connection, factionMap, characterMap);
-            Dictionary<int, List<Tuple<int, int, int>>> planetRegionMap = GetRegionData(connection, factionMap);
             
             List<Planet> planetList = [];
             Dictionary<int, Region> regionMap = [];
@@ -51,12 +51,6 @@ namespace OnlyWar.Helpers.Database.GameState
                             IsUnderAssault = isUnderAssault
                         };
 
-                    foreach(Tuple<int, int, int> regionData in planetRegionMap[id])
-                    {
-                        Region region = new Region(regionData.Item1, planet, regionData.Item3);
-                        regionMap[regionData.Item1] = region;
-                        planet.Regions[regionData.Item2] = region;
-                    }
                     // set up region adjacency
                     foreach (PlanetFaction planetFaction in planetFactions[id])
                     {
@@ -72,10 +66,11 @@ namespace OnlyWar.Helpers.Database.GameState
             return planetList;
         }
 
-        private Dictionary<int, List<Tuple<int, int, int>>> GetRegionData(IDbConnection connection,
-                                                                       IReadOnlyDictionary<int, Faction> factionMap)
+        public Dictionary<int, Region> GetRegions(IDbConnection connection,
+                                                   IReadOnlyDictionary<int, Faction> factionMap,
+                                                   IReadOnlyCollection<Planet> planets)
         {
-            Dictionary<int, List<Tuple<int, int, int>>> regionDataMap = [];
+            Dictionary<int, Region> regionMap = [];
             using (var command = connection.CreateCommand())
             {
                 command.CommandText = "SELECT * FROM Region";
@@ -89,14 +84,13 @@ namespace OnlyWar.Helpers.Database.GameState
                     int regionType = reader.GetInt32(3);
                     bool isUnderAssault = reader.GetBoolean(4);
 
-                    if (!regionDataMap.ContainsKey(planetId))
-                    {
-                        regionDataMap[planetId] = [];
-                    }
-                    regionDataMap[planetId].Add(new Tuple<int, int, int>(id, regionNumber, regionType));
+                    Planet planet = planets.First(p => p.Id == planetId);
+                    Region region = new Region(id, planet, regionType);
+                    regionMap[id] = region;
+                    planet.Regions[regionNumber] = region;
                 }
             }
-            return regionDataMap;
+            return regionMap;
         }
 
         private Dictionary<int, List<PlanetFaction>> GetPlanetFactions(IDbConnection connection,
