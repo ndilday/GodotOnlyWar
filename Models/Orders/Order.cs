@@ -23,6 +23,7 @@ namespace OnlyWar.Models.Orders
     public enum OrderType
     {
         MoveToRegion,
+        AttackRegion,
         DefendBorder,
         LandInRegion,
         ConvertPopulation,

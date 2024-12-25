@@ -72,6 +72,7 @@ namespace OnlyWar.Helpers.Database.GameState
                                             IReadOnlyDictionary<int, Squad> squadMap)
         {
             PopulateDefendRegionBorderOrders(connection, regionMap, squadMap);
+            PopulateAttackRegionBorderOrders(connection, regionMap, squadMap);
         }
 
         private void PopulateDefendRegionBorderOrders(IDbConnection connection,
@@ -90,6 +91,25 @@ namespace OnlyWar.Helpers.Database.GameState
                     int borderRegionId = reader.GetInt32(3);
 
                     squadMap[squadId].CurrentOrders = new DefendRegionOrder(id, squadMap[squadId], regionMap[regionId], regionMap[borderRegionId]);
+                }
+            }
+        }
+
+        private void PopulateAttackRegionBorderOrders(IDbConnection connection,
+                                                      IReadOnlyDictionary<int, Region> regionMap,
+                                                      IReadOnlyDictionary<int, Squad> squadMap)
+        {
+            using (var command = connection.CreateCommand())
+            {
+                command.CommandText = "SELECT * FROM AttackRegionOrder";
+                var reader = command.ExecuteReader();
+                while (reader.Read())
+                {
+                    int id = reader.GetInt32(0);
+                    int squadId = reader.GetInt32(1);
+                    int regionId = reader.GetInt32(2);
+
+                    squadMap[squadId].CurrentOrders = new AttackRegionOrder(id, squadMap[squadId], regionMap[regionId]);
                 }
             }
         }
@@ -241,6 +261,11 @@ namespace OnlyWar.Helpers.Database.GameState
                     // CREATE TABLE DefendRegionOrder (OrderId INTEGER PRIMARY KEY UNIQUE NOT NULL, SquadId INTEGER NOT NULL REFERENCES Squad (Id), RegionId INTEGER NOT NULL REFERENCES Region (Id));
                     insert = $@"INSERT INTO DefendRegionOrder VALUES 
                         ({defendRegionOrder.Id}, {squad.Id}, {defendRegionOrder.TargetRegion}, {defendRegionOrder.BorderToDefend});";
+                    break;
+                case AttackRegionOrder attackRegionOrder:
+                    // CREATE TABLE AttackRegionOrder (OrderId INTEGER PRIMARY KEY UNIQUE NOT NULL, SquadId INTEGER NOT NULL REFERENCES Squad (Id));
+                    insert = $@"INSERT INTO AttackRegionOrder VALUES 
+                        ({attackRegionOrder.Id}, {squad.Id}, {attackRegionOrder.TargetRegion});";
                     break;
                 default:
                     throw new InvalidCastException();
