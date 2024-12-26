@@ -21,7 +21,7 @@ namespace OnlyWar.Helpers.Database.GameRules
                     int id = reader.GetInt32(0);
                     string name = reader[1].ToString();
                     int probability = reader.GetInt32(2);
-                    int popBase = reader.GetInt32(3);
+                    long popBase = reader.GetInt64(3);
                     float popStdDev = Convert.ToSingle(reader[4]);
                     int importanceBase = reader.GetInt32(5);
                     float importanceStdDev = Convert.ToSingle(reader[6]);
