@@ -60,8 +60,12 @@ namespace OnlyWar.Helpers.Database.GameRules
         }
         public GameRulesBlob GetData(string filePath)
         {
-            string connection = $"URI=file:{filePath}";
-            IDbConnection dbCon = new SqliteConnection(connection);
+            var connectionString = new SqliteConnectionStringBuilder()
+            {
+                Mode = SqliteOpenMode.ReadOnly,
+                DataSource = filePath
+            }.ToString();
+            IDbConnection dbCon = new SqliteConnection(connectionString);
             dbCon.Open();
             var baseSkills = _baseSkillDataAccess.GetBaseSkills(dbCon);
             var skillTemplates = GetSkillTemplates(dbCon, baseSkills);
@@ -116,9 +120,9 @@ namespace OnlyWar.Helpers.Database.GameRules
                     int id = reader.GetInt32(0);
                     string name = reader[1].ToString();
                     Color color = ConvertDatabaseObjectToColor(reader[2]);
-                    bool isPlayer = (bool)reader[3];
-                    bool isDefault = (bool)reader[4];
-                    bool canInfiltrate = (bool)reader[5];
+                    bool isPlayer = Convert.ToBoolean(reader[3]);
+                    bool isDefault = Convert.ToBoolean(reader[4]);
+                    bool canInfiltrate = Convert.ToBoolean(reader[5]);
                     GrowthType growthType = (GrowthType)reader.GetInt32(6);
 
                     var speciesMap = factionSpeciesMap.ContainsKey(id) ?
@@ -161,8 +165,8 @@ namespace OnlyWar.Helpers.Database.GameRules
                 {
                     int id = reader.GetInt32(0);
                     int baseSkillId = reader.GetInt32(1);
-                    float baseValue = (float)reader[2];
-                    float stdDev = (float)reader[3];
+                    float baseValue = Convert.ToSingle(reader[2]);
+                    float stdDev = Convert.ToSingle(reader[3]);
                     SkillTemplate skillTemplate = new SkillTemplate
                     {
                         BaseSkill = baseSkillMap[baseSkillId],
@@ -214,7 +218,7 @@ namespace OnlyWar.Helpers.Database.GameRules
                     int id = reader.GetInt32(0);
                     int factionId = reader.GetInt32(1);
                     string name = reader[2].ToString();
-                    bool isTop = (bool)reader[3];
+                    bool isTop = Convert.ToBoolean(reader[3]);
                     SquadTemplate hqSquad;
                     if (reader[4].GetType() != typeof(DBNull))
                     {

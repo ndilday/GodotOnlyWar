@@ -21,14 +21,14 @@ namespace OnlyWar.Helpers.Database.GameRules
                     int id = reader.GetInt32(0);
                     int bodyId = reader.GetInt32(1);
                     string name = reader[2].ToString();
-                    float naturalArmor = (float)reader[3];
-                    float woundMultiplier = (float)reader[4];
+                    float naturalArmor = Convert.ToSingle(reader[3]);
+                    float woundMultiplier = Convert.ToSingle(reader[4]);
                     int crippleLevel = Convert.ToInt32(reader[5]);
                     int severLevel = Convert.ToInt32(reader[6]);
-                    bool isMotive = (bool)reader[7];
-                    bool isRanged = (bool)reader[8];
-                    bool isMelee = (bool)reader[9];
-                    bool isVital = (bool)reader[10];
+                    bool isMotive = Convert.ToBoolean(reader[7]);
+                    bool isRanged = Convert.ToBoolean(reader[8]);
+                    bool isMelee = Convert.ToBoolean(reader[9]);
+                    bool isVital = Convert.ToBoolean(reader[10]);
                     int[] hitProbabilityMap = stanceProbabilityMap[id];
                     HitLocationTemplate hitLocationTemplate =
                         new HitLocationTemplate

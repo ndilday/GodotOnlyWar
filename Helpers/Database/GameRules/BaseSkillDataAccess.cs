@@ -1,4 +1,5 @@
 ﻿using OnlyWar.Models.Soldiers;
+using System;
 using System.Collections.Generic;
 using System.Data;
 
@@ -18,8 +19,8 @@ namespace OnlyWar.Helpers.Database.GameRules
                     int id = reader.GetInt32(0);
                     string name = reader[1].ToString();
                     SkillCategory category = (SkillCategory)reader.GetInt32(2);
-                    var attribute = (Attribute)reader.GetInt32(3);
-                    float difficulty = (float)reader[4];
+                    var attribute = (Models.Soldiers.Attribute)reader.GetInt32(3);
+                    float difficulty = Convert.ToSingle(reader[4]);
                     BaseSkill baseSkill = new BaseSkill(id, category, name, attribute, difficulty);
 
                     baseSkillMap[id] = baseSkill;

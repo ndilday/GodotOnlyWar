@@ -28,6 +28,7 @@ public partial class SectorMap : Node2D
 	private Dictionary<ushort, Vector2I> _subsectorCenterMap;
 	private Dictionary<ushort, int> _subsectorDiameterSquaredMap;
 	private Dictionary<ushort, List<Vector2I>> _subsectorVertexListMap;
+
 	// Called when the node enters the scene tree for the first time.
 	public override void _Ready()
 	{

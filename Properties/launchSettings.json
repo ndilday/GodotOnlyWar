@@ -5,7 +5,7 @@
     },
     "Run Only War": {
       "commandName": "Executable",
-      "executablePath": "C:\\Projects\\Godot_v4.0-beta10_mono_win64\\Godot_v4.0-beta10_mono_win64.exe",
+      "executablePath": "C:\\Projects\\Godot_v4.4-dev7_mono_win64\\Godot_v4.4-dev7_mono_win64.exe",
       "workingDirectory": "C:\\Projects\\GodotOnlyWar",
       "nativeDebugging": true
     }

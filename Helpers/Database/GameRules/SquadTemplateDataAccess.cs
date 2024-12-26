@@ -74,7 +74,7 @@ namespace OnlyWar.Helpers.Database.GameRules
                 {
                     int soldierTemplateId = reader.GetInt32(0);
                     int baseSkillId = reader.GetInt32(1);
-                    float points = (float)reader[2];
+                    float points = Convert.ToSingle(reader[2]);
 
                     BaseSkill baseSkill = baseSkillMap[baseSkillId];
 
@@ -130,14 +130,14 @@ namespace OnlyWar.Helpers.Database.GameRules
                     string name = reader[1].ToString();
                     int location = reader.GetInt32(2);
                     int baseSkillId = reader.GetInt32(3);
-                    float accuracy = (float)reader[4];
-                    float armorMultiplier = (float)reader[5];
-                    float woundMultiplier = (float)reader[6];
-                    float requiredStrength = (float)reader[7];
-                    float strengthMultiplier = (float)reader[8];
-                    float extraDamage = (float)reader[9];
-                    float parryMod = (float)reader[10];
-                    float extraAttacks = (float)reader[11];
+                    float accuracy = Convert.ToSingle(reader[4]);
+                    float armorMultiplier = Convert.ToSingle(reader[5]);
+                    float woundMultiplier = Convert.ToSingle(reader[6]);
+                    float requiredStrength = Convert.ToSingle(reader[7]);
+                    float strengthMultiplier = Convert.ToSingle(reader[8]);
+                    float extraDamage = Convert.ToSingle(reader[9]);
+                    float parryMod = Convert.ToSingle(reader[10]);
+                    float extraAttacks = Convert.ToSingle(reader[11]);
 
                     BaseSkill baseSkill = baseSkillMap[baseSkillId];
 
@@ -168,17 +168,17 @@ namespace OnlyWar.Helpers.Database.GameRules
                     string name = reader[1].ToString();
                     int location = reader.GetInt32(2);
                     int baseSkillId = reader.GetInt32(3);
-                    float accuracy = (float)reader[4];
-                    float armorMultiplier = (float)reader[5];
-                    float woundMultiplier = (float)reader[6];
-                    float requiredStrength = (float)reader[7];
-                    float damageMultiplier = (float)reader[8];
-                    float maxRange = (float)reader[9];
+                    float accuracy = Convert.ToSingle(reader[4]);
+                    float armorMultiplier = Convert.ToSingle(reader[5]);
+                    float woundMultiplier = Convert.ToSingle(reader[6]);
+                    float requiredStrength = Convert.ToSingle(reader[7]);
+                    float damageMultiplier = Convert.ToSingle(reader[8]);
+                    float maxRange = Convert.ToSingle(reader[9]);
                     byte rof = reader.GetByte(10);
                     ushort ammo = (ushort)reader.GetInt16(11);
                     ushort recoil = (ushort)reader.GetInt16(12);
                     ushort bulk = (ushort)reader.GetInt16(13);
-                    bool doesDamageDegrade = (bool)reader[14];
+                    bool doesDamageDegrade = Convert.ToBoolean(reader[14]);
                     ushort reloadTime = (ushort)reader.GetInt16(15);
 
                     BaseSkill baseSkill = baseSkillMap[baseSkillId];
@@ -399,8 +399,8 @@ namespace OnlyWar.Helpers.Database.GameRules
                 while (reader.Read())
                 {
                     int id = reader.GetInt32(0);
-                    float baseValue = (float)reader[1];
-                    float stdDev = (float)reader[2];
+                    float baseValue = Convert.ToSingle(reader[1]);
+                    float stdDev = Convert.ToSingle(reader[2]);
                     NormalizedValueTemplate attributeTemplate = new NormalizedValueTemplate
                     {
                         BaseValue = baseValue,
@@ -486,7 +486,7 @@ namespace OnlyWar.Helpers.Database.GameRules
                     string name = reader[3].ToString();
                     int rank = reader.GetInt32(4);
                     int subrank = reader.GetInt32(5);
-                    bool isSquadLeader = (bool)reader[6];
+                    bool isSquadLeader = Convert.ToBoolean(reader[6]);
                     int specialistType = reader.GetInt32(7);
                     List<Tuple<BaseSkill, float>> trainingList = null;
                     if (soldierTemplateTrainingMap.ContainsKey(id))
