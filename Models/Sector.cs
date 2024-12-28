@@ -20,6 +20,7 @@ namespace OnlyWar.Models
         public IReadOnlyDictionary<ushort, List<Tuple<ushort, ushort>>> SubsectorPlanetMap { get => _subsectorPlanetMap; }
         public IReadOnlyDictionary<ushort, Tuple<ushort, ushort>> SubsectorCenterMap { get => _subsectorCenterMap; }
         public IReadOnlyDictionary<int, TaskForce> Fleets { get => _fleets; }
+        public PlayerForce PlayerForce { get; }
         
 
         public Sector()
@@ -32,9 +33,10 @@ namespace OnlyWar.Models
             _subsectorCenterMap = [];
         }
 
-        public Sector(List<Character> characters, List<Planet> planets, List<TaskForce> fleets) 
+        public Sector(PlayerForce playerForce, List<Character> characters, List<Planet> planets, List<TaskForce> fleets) 
             : this()
         {
+            PlayerForce = playerForce;
             _characters.AddRange(characters);
 
             foreach (Planet planet in planets)

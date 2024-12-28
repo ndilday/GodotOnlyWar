@@ -16,10 +16,10 @@ namespace OnlyWar.Models
         public Date Date { get; set; }
         private GameDataSingleton()
         {
-            Date = new(39, 500, 1);
+            Date date = new(39, 500, 1);
+            Date = date;
             GameRulesData = new();
-            Sector = SectorBuilder.GenerateSector(Random.Shared.Next(), GameRulesData);
-            // Load Sector Data
+            Sector = SectorBuilder.GenerateSector(Random.Shared.Next(), GameRulesData, date);
         }
 
         private void LoadSectorData(string fileName)

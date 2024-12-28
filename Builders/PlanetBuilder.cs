@@ -25,87 +25,107 @@ namespace OnlyWar.Builders
 
         private static HashSet<int> _usedPlanetNameIndexes;
 
-        private static int _nextId = 0;
+        private static int _nextPlanetId = 0;
         private static int _nextRegionId = 0;
-        private static int _leaderId = 0;
+        private static int _nextLeaderId = 0;
+
         public Planet GenerateNewPlanet(IReadOnlyDictionary<int, PlanetTemplate> planetTemplateMap, 
                                         Tuple<ushort, ushort> position, Faction controllingFaction, Faction infiltratingFaction)
         {
             PlanetTemplate template = DeterminePlanetTemplate(planetTemplateMap);
             Faction leaderFaction = controllingFaction;
             int nameIndex = RNG.GetIntBelowMax(0, TempPlanetList.PlanetNames.Length);
-            while(_usedPlanetNameIndexes.Contains(nameIndex))
+            while (_usedPlanetNameIndexes.Contains(nameIndex))
             {
                 nameIndex = RNG.GetIntBelowMax(0, TempPlanetList.PlanetNames.Length);
             }
             _usedPlanetNameIndexes.Add(nameIndex);
             int importance = (int)(template.ImportanceRange.BaseValue)
                 + (int)(RNG.NextGaussianDouble() * template.ImportanceRange.StandardDeviation);
-            int taxLevel = 
+            int taxLevel =
                 RNG.GetIntBelowMax(template.TaxRange.MinValue, template.TaxRange.MaxValue + 1);
-            // for now, we're hardcoding all planets to be size 10
-            Planet planet = new Planet(_nextId, TempPlanetList.PlanetNames[nameIndex], 
-                                       position, 10, template, importance, taxLevel);
-            for(int i = 0; i < 16; i++)
-            {
-                planet.Regions[i] = new Region(_nextRegionId, planet, 0);
-                _nextRegionId++;
-            }
-            _nextId++;
-
-            int popToDistribute = (int)(template.PopulationRange.BaseValue)
-                + (int)(Math.Pow(10, RNG.NextGaussianDouble()) * template.PopulationRange.StandardDeviation);
-            // determine if this planet starts with a genestealer cult in place
-            // TODO: make this configurable
-            if(infiltratingFaction != null)
-            {
-                double infiltrationRate = RNG.GetLinearDouble() / 32.0;
-                PlanetFaction infiltration = new PlanetFaction(infiltratingFaction);
-                infiltration.PlayerReputation = 0;
-                infiltration.IsPublic = false;
-
-                foreach (Region region in planet.Regions)
-                {
-                    RegionFaction regionFaction = new RegionFaction(infiltration, region);
-                    regionFaction.Population = (int)(popToDistribute * infiltrationRate);
-                    regionFaction.PDFMembers = (int)(infiltration.Population / 33);
-                    region.RegionFactionMap[infiltration.Faction.Id] = regionFaction;
-                }
-                
-                planet.PlanetFactionMap[infiltratingFaction.Id] = infiltration;
-                if(RNG.GetLinearDouble() < infiltrationRate / 2)
-                {
-                    leaderFaction = infiltratingFaction;
-                }
-            }
+            Planet planet = new Planet(_nextPlanetId, TempPlanetList.PlanetNames[nameIndex],
+                                       position, 16, template, importance, taxLevel);
+            _nextPlanetId++;
 
             PlanetFaction planetFaction = new PlanetFaction(controllingFaction);
             planetFaction.PlayerReputation = 0;
             planetFaction.IsPublic = true;
+            planet.ControllingFaction = controllingFaction;
+            planet.PlanetFactionMap[controllingFaction.Id] = planetFaction;
+            
 
-            foreach (Region region in planet.Regions)
+            PopulateRegions(template, planet, planetFaction);
+
+            if (infiltratingFaction != null)
             {
-                RegionFaction regionFaction = new RegionFaction(planetFaction, region);
-                regionFaction.Population = (int)(popToDistribute/16);
-                regionFaction.PDFMembers = (int)(regionFaction.Population / 33);
+                HandleInfiltratingFaction(infiltratingFaction, planet);
             }
 
-            // for now, all planets start completely in the control of a single faction
-            planet.PlanetFactionMap[controllingFaction.Id] = planetFaction;
-            planet.ControllingFaction = controllingFaction;
-
-            if(controllingFaction.IsDefaultFaction)
+            if (controllingFaction.IsDefaultFaction)
             {
-                planetFaction.Leader = CharacterBuilder.GenerateCharacter(_leaderId, leaderFaction);
-                if(!leaderFaction.IsDefaultFaction)
+                planetFaction.Leader = CharacterBuilder.GenerateCharacter(_nextLeaderId, leaderFaction);
+                if (!leaderFaction.IsDefaultFaction)
                 {
                     // if the planetary leader is a member of a GC,
                     // they'll never reuest player aid 
                     planetFaction.Leader.OpinionOfPlayerForce = -1;
                 }
-                _leaderId++;
+                _nextLeaderId++;
             }
             return planet;
+        }
+
+        private static void HandleInfiltratingFaction(Faction infiltratingFaction, Planet planet)
+        {
+            PlanetFaction infiltration = new PlanetFaction(infiltratingFaction);
+            double infiltrationRate = RNG.GetLinearDouble() / 2.0;
+            infiltration.PlayerReputation = 0;
+            infiltration.IsPublic = false;
+            planet.PlanetFactionMap[infiltratingFaction.Id] = infiltration;
+
+            foreach (Region region in planet.Regions)
+            {
+                RegionFaction owningRegionFaction = region.RegionFactionMap.First().Value;
+                long infiltrationPopulation = (long)(region.Population * infiltrationRate);
+                int infiltrationPdf = (int)(infiltrationPopulation / 33);
+                RegionFaction regionFaction = new RegionFaction(infiltration, region);
+                regionFaction.Population = infiltrationPopulation;
+                regionFaction.PDFMembers = infiltrationPdf;
+                owningRegionFaction.Population -= infiltrationPopulation;
+                owningRegionFaction.PDFMembers -= infiltrationPdf;
+                region.RegionFactionMap[infiltration.Faction.Id] = regionFaction;
+            }
+        }
+
+        private void PopulateRegions(PlanetTemplate template, Planet planet, PlanetFaction planetFaction)
+        {
+            for (int i = 0; i < 16; i++)
+            {
+                planet.Regions[i] = new Region(_nextRegionId, planet, 0);
+                _nextRegionId++;
+            }
+
+            int popToDistribute = (int)(template.PopulationRange.BaseValue)
+                + (int)(Math.Pow(10, RNG.NextGaussianDouble()) * template.PopulationRange.StandardDeviation);
+
+            // Distribute population using power law with wiggle
+            float alpha = 1.5f; // Experiment with this value (1.0 to 3.0 are common)
+            float wiggleFactor = 0.2f; // Experiment with this value (0.0 to 0.5 are reasonable)
+
+            List<long> regionPopulations = DistributePopulationPowerLaw(popToDistribute, 16, alpha, wiggleFactor);
+
+            foreach (Region region in planet.Regions)
+            {
+                int randomIndex = RNG.GetIntBelowMax(0, regionPopulations.Count - 1);
+                long regionPopulation = regionPopulations[randomIndex];
+                regionPopulations.RemoveAt(randomIndex);
+
+                RegionFaction regionFaction = new RegionFaction(planetFaction, region);
+                regionFaction.Population = regionPopulation;
+                regionFaction.PDFMembers = (int)(regionFaction.Population / 33);
+                region.RegionFactionMap[planetFaction.Faction.Id] = regionFaction;
+            }
         }
 
         private PlanetTemplate DeterminePlanetTemplate(IReadOnlyDictionary<int, PlanetTemplate> templates)
@@ -129,6 +149,59 @@ namespace OnlyWar.Builders
             }
             // this should never happen
             throw new InvalidOperationException("Could not determine a planet template");
+        }
+
+        private List<long> DistributePopulationPowerLaw(int totalPopulation, int numRegions, float alpha, float wiggleFactor)
+        {
+            // 1. Calculate the normalization constant (C)
+            double C = 0;
+            for (int i = 1; i <= numRegions; i++)
+            {
+                C += Math.Pow(i, -alpha);
+            }
+            C = totalPopulation / C;
+
+            // 2. Generate base populations using the power law
+            List<long> basePopulations = new List<long>();
+            for (int i = 1; i <= numRegions; i++)
+            {
+                long basePop = (long)(C * Math.Pow(i, -alpha));
+                basePopulations.Add(basePop);
+            }
+
+            // 3. Apply the "wiggle factor"
+            List<long> finalPopulations = new List<long>();
+            long currentTotal = 0; // Keep track of running total for adjustments
+            for (int i = 0; i < numRegions; i++)
+            {
+                float randomFactor = 1 + (float)RNG.GetLinearDouble() * wiggleFactor * (RNG.GetIntBelowMax(0,2) == 0 ? -1 : 1); // Randomly add or subtract
+                long population = (long)(basePopulations[i] * randomFactor);
+                population = population < 0 ? 0 : population;
+                currentTotal += population;
+                finalPopulations.Add(population);
+            }
+
+            // 4. Adjust populations to match the total (if necessary)
+            long difference = totalPopulation - currentTotal;
+            if (difference != 0)
+            {
+                // Distribute the difference proportionally
+                for (int i = 0; i < numRegions; i++)
+                {
+                    double proportion = (double)finalPopulations[i] / currentTotal;
+                    long adjustment = (long)(difference * proportion);
+                    finalPopulations[i] += adjustment;
+                }
+
+                // If there's still a minor difference, add it to a random region
+                long remainingDifference = totalPopulation - finalPopulations.Sum();
+                if (remainingDifference != 0)
+                {
+                    finalPopulations[RNG.GetIntBelowMax(0, numRegions)] += remainingDifference;
+                }
+            }
+
+            return finalPopulations;
         }
     }
 }

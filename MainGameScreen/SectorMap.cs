@@ -109,42 +109,30 @@ public partial class SectorMap : Node2D
 
 	private void PlaceFleets()
 	{
-		var shipTexture = (Texture2D)GD.Load(("res://Assets/shipAtlastTexture.tres"));
-		Vector2 shipTextureScale = new Vector2(0.05f, 0.05f);
+		var shipTexture = GD.Load<AtlasTexture>(("res://Assets/shipAtlasTexture.tres"));
+		Vector2 shipTextureScale = new Vector2(0.1f, 0.1f);
 		foreach(var taskForceKvp in GameDataSingleton.Instance.Sector.Fleets)
 		{
             TaskForce taskForce = taskForceKvp.Value;
 
             // Determine the position for the fleet's sprite
-            Vector2 fleetPosition;
+            Vector2I gridPosition;
             if (taskForce.Planet != null)
             {
                 // Fleet is in orbit around a planet
 
                 // Assuming you have a way to get the planet's position
                 // You'll need to implement GetPlanetSpritePosition or similar
-                Vector2I gridPosition = new(taskForce.Planet.Position.Item1, taskForce.Planet.Position.Item2);
-                Vector2 planetSpritePosition = CalculateMapPosition(gridPosition);
-
-                // Offset from the top-right of the planet
-                fleetPosition = planetSpritePosition + HalfCellSize;
+                gridPosition = new(taskForce.Planet.Position.Item1, taskForce.Planet.Position.Item2);
             }
             else
             {
                 // Fleet is in space, use its map coordinates
-                fleetPosition = CalculateMapPosition(new Vector2I(taskForce.Position.Item1, taskForce.Position.Item2));
+                gridPosition = new Vector2I(taskForce.Position.Item1, taskForce.Position.Item2);
             }
 
-            // Create the sprite and add it to the scene
-            Sprite2D fleetSprite = new Sprite2D();
-            AddChild(fleetSprite);
-
-            // Make sure you are the owner of the new node, or it will not save properly
-            fleetSprite.Owner = this;
-            fleetSprite.Texture = shipTexture;
-            fleetSprite.Scale = shipTextureScale;
-            fleetSprite.Position = fleetPosition;
-            fleetSprite.ZIndex = 2;
+			// Make sure you are the owner of the new node, or it will not save properly
+			DrawTexture(shipTexture, shipTextureScale, gridPosition, 2, true);
 
             // You might want to store a reference to the sprite in the TaskForce 
             // or in a separate dictionary for later access/updates.
@@ -153,14 +141,20 @@ public partial class SectorMap : Node2D
         }
     }
 
-	private void DrawTexture(Texture2D texture, Vector2 scale, Vector2I gridPosition)
+	private void DrawTexture(Texture2D texture, Vector2 scale, Vector2I gridPosition, int zIndex = 1, bool offset=false)
 	{
 		Sprite2D newSprite = new Sprite2D();
 		this.AddChild(newSprite);
         newSprite.Owner = this;
-        newSprite.GlobalPosition = CalculateMapPosition(gridPosition);
+		Vector2I mapPosition = CalculateMapPosition(gridPosition);
+		if(offset)
+		{
+			mapPosition += HalfCellSize * new Vector2I( 1,-1);
+		}
+        newSprite.GlobalPosition = mapPosition;
         newSprite.Texture = texture;
         newSprite.Scale = scale;
+		newSprite.ZIndex = zIndex;
 	}
 
 	private void GenerateSubssectors()
