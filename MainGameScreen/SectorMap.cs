@@ -1,5 +1,6 @@
 using Godot;
 using OnlyWar.Models;
+using OnlyWar.Models.Fleets;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -21,10 +22,10 @@ public partial class SectorMap : Node2D
 		new(GameDataSingleton.Instance.GameRulesData.SectorCellSize.Item1,
 			GameDataSingleton.Instance.GameRulesData.SectorCellSize.Item2);
 
-	private Vector2I _halfCellSize;
-	private ushort[] _sectorIds;
-	private bool[] _hasPlanet;
-	private Dictionary<ushort, List<Vector2I>> _subsectorPlanetMap;
+	public Vector2I HalfCellSize { get; private set; }
+	public ushort[] SectorIds { get; private set; }
+	public bool[] HasPlanet { get; private set; }
+    private Dictionary<ushort, List<Vector2I>> _subsectorPlanetMap;
 	private Dictionary<ushort, Vector2I> _subsectorCenterMap;
 	private Dictionary<ushort, int> _subsectorDiameterSquaredMap;
 	private Dictionary<ushort, List<Vector2I>> _subsectorVertexListMap;
@@ -32,25 +33,17 @@ public partial class SectorMap : Node2D
 	// Called when the node enters the scene tree for the first time.
 	public override void _Ready()
 	{
-		_halfCellSize = CellSize / 2;
-		_sectorIds = new ushort[GridDimensions.X * GridDimensions.Y];
-		_hasPlanet = new bool[GridDimensions.X * GridDimensions.Y];
+		HalfCellSize = CellSize / 2;
+		SectorIds = new ushort[GridDimensions.X * GridDimensions.Y];
+		HasPlanet = new bool[GridDimensions.X * GridDimensions.Y];
 		PlacePlanets();
+		PlaceFleets();
 		GenerateSubssectors();
 	}
 
 	public override void _Input(InputEvent @event)
 	{
-		if(@event is InputEventMouseButton emb && emb.ButtonIndex == MouseButton.Left)
-		{
-			Vector2 gmpos = GetGlobalMousePosition();
-			Vector2I mousePosition = new((int)(gmpos.X), (int)(gmpos.Y));
-			Vector2I gridPosition = CalculateGridCoordinates(mousePosition);
-			int index = GridPositionToIndex(gridPosition);
-			string text = $"({gridPosition.X},{gridPosition.Y})\nPlanet: {_hasPlanet[index]}\nSubsector: {_sectorIds[index]}";
-			GetNode<TopMenu>("CanvasLayer/TopMenu").SetDebugText(text);
-		}
-	}
+    }
 
 	public override void _Draw()
 	{
@@ -62,21 +55,37 @@ public partial class SectorMap : Node2D
 			DrawColoredPolygon(kvp.Value.Select(vector => new Vector2(vector.X, vector.Y)).ToArray(), ConvertHsvToRgb(colorVal, 0.5f, 0.95f));
 			colorVal += goldenRatioConjugate;
 			colorVal %= 1;
-			/*borders.Polygon = kvp.Value.Select(vector => new Vector2(vector.X, vector.Y)).ToArray();
-			this.AddChild(borders);
-			borders.Owner = this;
-			borders.Color = ConvertHsvToRgb(colorVal, 0.5f, 0.95f);
-			*/
 		}
-		/*Vector2I mapPos = CalculateMapPosition(gridPos);
-		Label label = new Label();
-		this.AddChild(label);
-		label.Owner = this;
-		label.Text = _sectorIds[index].ToString();
-		label.Position = mapPos;*/
 	}
 
-	private void PlacePlanets()
+    public Vector2I CalculateMapPosition(Vector2I gridPosition)
+    {
+        return gridPosition * CellSize + HalfCellSize;
+    }
+
+    public Vector2I CalculateGridCoordinates(Vector2I mapPosition)
+    {
+        return (mapPosition / CellSize);
+    }
+
+    public bool IsWithinBounds(Vector2I cellCoordinates)
+    {
+        return (cellCoordinates.X >= 0 && cellCoordinates.X < GridDimensions.X && cellCoordinates.Y >= 0 && cellCoordinates.Y < GridDimensions.Y);
+    }
+
+    public int GridPositionToIndex(Vector2I cell)
+    {
+        return (GridDimensions.X * cell.Y + cell.X);
+    }
+
+    public Vector2I IndexToGridPosition(int index)
+    {
+        int x = index % GridDimensions.X;
+        int y = index / GridDimensions.X;
+        return new Vector2I(x, y);
+    }
+
+    private void PlacePlanets()
 	{
 		_subsectorPlanetMap = [];
 
@@ -88,8 +97,8 @@ public partial class SectorMap : Node2D
 		{
 			Vector2I gridPosition = new(kvp.Value.Position.Item1, kvp.Value.Position.Item2);
 			int index = GridPositionToIndex(gridPosition);
-			_hasPlanet[index] = true;
-			DrawStar(starTexture, starTextureScale, gridPosition);
+			HasPlanet[index] = true;
+			DrawTexture(starTexture, starTextureScale, gridPosition);
 			_subsectorPlanetMap[currentSubsectorId] =
                 [
                     gridPosition
@@ -98,49 +107,68 @@ public partial class SectorMap : Node2D
 		}
 	}
 
-	private void DrawStar(Texture2D starTexture, Vector2 starTextureScale, Vector2I gridPosition)
+	private void PlaceFleets()
 	{
-		Sprite2D newStarSprite = new Sprite2D();
-		this.AddChild(newStarSprite);
-		newStarSprite.Owner = this;
-		newStarSprite.GlobalPosition = CalculateMapPosition(gridPosition);
-		newStarSprite.Texture = starTexture;
-		newStarSprite.Scale = starTextureScale;
-	}
+		var shipTexture = (Texture2D)GD.Load(("res://Assets/shipAtlastTexture.tres"));
+		Vector2 shipTextureScale = new Vector2(0.05f, 0.05f);
+		foreach(var taskForceKvp in GameDataSingleton.Instance.Sector.Fleets)
+		{
+            TaskForce taskForce = taskForceKvp.Value;
 
-	public Vector2I CalculateMapPosition(Vector2I gridPosition)
-	{
-		return gridPosition * CellSize + _halfCellSize;
-	}
+            // Determine the position for the fleet's sprite
+            Vector2 fleetPosition;
+            if (taskForce.Planet != null)
+            {
+                // Fleet is in orbit around a planet
 
-	public Vector2I CalculateGridCoordinates(Vector2I mapPosition)
-	{
-		return (mapPosition / CellSize);
-	}
+                // Assuming you have a way to get the planet's position
+                // You'll need to implement GetPlanetSpritePosition or similar
+                Vector2I gridPosition = new(taskForce.Planet.Position.Item1, taskForce.Planet.Position.Item2);
+                Vector2 planetSpritePosition = CalculateMapPosition(gridPosition);
 
-	public bool IsWithinBounds(Vector2I cellCoordinates)
-	{
-		return (cellCoordinates.X >= 0 && cellCoordinates.X < GridDimensions.X && cellCoordinates.Y >= 0 && cellCoordinates.Y < GridDimensions.Y);
-	}
+                // Offset from the top-right of the planet
+                fleetPosition = planetSpritePosition + HalfCellSize;
+            }
+            else
+            {
+                // Fleet is in space, use its map coordinates
+                fleetPosition = CalculateMapPosition(new Vector2I(taskForce.Position.Item1, taskForce.Position.Item2));
+            }
 
-	public int GridPositionToIndex(Vector2I cell)
-	{
-		return (GridDimensions.X * cell.Y + cell.X);
-	}
+            // Create the sprite and add it to the scene
+            Sprite2D fleetSprite = new Sprite2D();
+            AddChild(fleetSprite);
 
-	public Vector2I IndexToGridPosition(int index)
+            // Make sure you are the owner of the new node, or it will not save properly
+            fleetSprite.Owner = this;
+            fleetSprite.Texture = shipTexture;
+            fleetSprite.Scale = shipTextureScale;
+            fleetSprite.Position = fleetPosition;
+            fleetSprite.ZIndex = 2;
+
+            // You might want to store a reference to the sprite in the TaskForce 
+            // or in a separate dictionary for later access/updates.
+            // For example:
+            // taskForce.Sprite = fleetSprite; 
+        }
+    }
+
+	private void DrawTexture(Texture2D texture, Vector2 scale, Vector2I gridPosition)
 	{
-		int x = index % GridDimensions.X;
-		int y = index / GridDimensions.X;
-		return new Vector2I(x, y);
+		Sprite2D newSprite = new Sprite2D();
+		this.AddChild(newSprite);
+        newSprite.Owner = this;
+        newSprite.GlobalPosition = CalculateMapPosition(gridPosition);
+        newSprite.Texture = texture;
+        newSprite.Scale = scale;
 	}
 
 	private void GenerateSubssectors()
 	{
 		_subsectorDiameterSquaredMap = CombineSubsectors(_subsectorPlanetMap, GameDataSingleton.Instance.GameRulesData.MaxSubsectorCellDiameter);
 		_subsectorCenterMap = CalculateSubSectorCenters(_subsectorPlanetMap);
-		AssignGridSubsectors(_subsectorPlanetMap, _subsectorCenterMap, _subsectorDiameterSquaredMap, _sectorIds, GameDataSingleton.Instance.GameRulesData.MaxSubsectorCellDiameter / 2);
-		_subsectorVertexListMap = DetermineSubsectorBorderPoints(_sectorIds);
+		AssignGridSubsectors(_subsectorPlanetMap, _subsectorCenterMap, _subsectorDiameterSquaredMap, SectorIds, GameDataSingleton.Instance.GameRulesData.MaxSubsectorCellDiameter / 2);
+		_subsectorVertexListMap = DetermineSubsectorBorderPoints(SectorIds);
 	}
 
 	private Color ConvertHsvToRgb(float h, float s, float v)
@@ -326,13 +354,13 @@ public partial class SectorMap : Node2D
 					int distanceSquared = CalculateDistanceSquared(gridPos, subsectorCenter.Value);
 					if (distanceSquared < currentDistanceSquared && distanceSquared <= radiusSquared)
 					{
-						_sectorIds[index] = subsectorCenter.Key;
+						SectorIds[index] = subsectorCenter.Key;
 						currentDistanceSquared = distanceSquared;
 					}
 				}
 				if (currentDistanceSquared == minDiameterSquared * 10)
 				{
-					_sectorIds[index] = 0;
+					SectorIds[index] = 0;
 				}
 			}
 		}
@@ -356,7 +384,7 @@ public partial class SectorMap : Node2D
 				// because we're processing to the right and down, the top edge is a border
 				Vector2I gridPosition = IndexToGridPosition(i);
 				Vector2I cellCenterPosition = CalculateMapPosition(gridPosition);
-				Vector2I topLeft = cellCenterPosition - _halfCellSize;
+				Vector2I topLeft = cellCenterPosition - HalfCellSize;
 				Vector2I topRight = new Vector2I(topLeft.X + CellSize.X, topLeft.Y);
 				BorderPoint currentPoint = new BorderPoint
 				{
@@ -479,11 +507,11 @@ public partial class SectorMap : Node2D
 				break;
 		}
 		// if left is in bounds and part of this sector, it's next
-		if (IsWithinBounds(left.gridPos) && _sectorIds[GridPositionToIndex(left.gridPos)] == subsectorId)
+		if (IsWithinBounds(left.gridPos) && SectorIds[GridPositionToIndex(left.gridPos)] == subsectorId)
 		{
 			return left;
 		}
-		else if (IsWithinBounds(straight.gridPos) && _sectorIds[GridPositionToIndex(straight.gridPos)] == subsectorId)
+		else if (IsWithinBounds(straight.gridPos) && SectorIds[GridPositionToIndex(straight.gridPos)] == subsectorId)
 		{
 			return straight;
 		}

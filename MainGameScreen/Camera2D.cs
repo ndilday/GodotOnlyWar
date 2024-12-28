@@ -24,22 +24,45 @@ public partial class Camera2D : Godot.Camera2D
 
 	public override void _Input(InputEvent @event)
 	{
-		if(@event is InputEventMouseMotion emm && emm.ButtonMask == MouseButtonMask.Right)
+        if (@event is InputEventMouseButton emb)
+        {
+            if (emb.ButtonIndex == MouseButton.Left)
+            {
+                Vector2 gmpos = GetGlobalMousePosition();
+                Vector2I mousePosition = new((int)(gmpos.X), (int)(gmpos.Y));
+                Vector2I gridPosition = _sectorMap.CalculateGridCoordinates(mousePosition);
+                int index = _sectorMap.GridPositionToIndex(gridPosition);
+                string text = $"({gridPosition.X},{gridPosition.Y})\nPlanet: {_sectorMap.HasPlanet[index]}\nSubsector: {_sectorMap.SectorIds[index]}";
+                _sectorMap.GetNode<TopMenu>("CanvasLayer/TopMenu").SetDebugText(text);
+            }
+            // zoom in
+            else if (emb.ButtonIndex == MouseButton.WheelUp)
+            {
+                ZoomIn();
+            }
+            // zoom out
+            else if (emb.ButtonIndex == MouseButton.WheelDown)
+            {
+                ZoomOut();
+            }
+        }
+
+        // Handle keyboard zoom
+        else if (@event is InputEventKey eventKey)
+        {
+            if (eventKey.Pressed && (eventKey.Keycode == Key.Equal || eventKey.Keycode == Key.KpAdd))
+            {
+                ZoomIn();
+            }
+            else if (eventKey.Pressed && (eventKey.Keycode == Key.Minus || eventKey.Keycode == Key.KpSubtract))
+            {
+                ZoomOut();
+            }
+        }
+        else if (@event is InputEventMouseMotion emm && emm.ButtonMask == MouseButtonMask.Right)
 		{
 			// TODO: add clamping
 			Position -= emm.Relative * Zoom;
-		}
-		else if(@event is InputEventMouseButton emb && emb.Pressed)
-		{
-			switch(emb.ButtonIndex)
-			{
-				case MouseButton.WheelUp:
-					ZoomIn();
-					break;
-				case MouseButton.WheelDown:
-					ZoomOut();
-					break;
-			}
 		}
 	}
 
