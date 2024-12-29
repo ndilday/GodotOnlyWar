@@ -159,9 +159,9 @@ public partial class SectorMap : Node2D
 
 	private void GenerateSubssectors()
 	{
-		_subsectorDiameterSquaredMap = CombineSubsectors(_subsectorPlanetMap, GameDataSingleton.Instance.GameRulesData.MaxSubsectorCellDiameter);
+		_subsectorDiameterSquaredMap = CombineSubsectors(_subsectorPlanetMap, GameDataSingleton.Instance.GameRulesData.MaxSubsectorDiameter);
 		_subsectorCenterMap = CalculateSubSectorCenters(_subsectorPlanetMap);
-		AssignGridSubsectors(_subsectorPlanetMap, _subsectorCenterMap, _subsectorDiameterSquaredMap, SectorIds, GameDataSingleton.Instance.GameRulesData.MaxSubsectorCellDiameter / 2);
+		AssignGridSubsectors(_subsectorPlanetMap, _subsectorCenterMap, _subsectorDiameterSquaredMap, SectorIds, GameDataSingleton.Instance.GameRulesData.MaxSubsectorDiameter / 2);
 		_subsectorVertexListMap = DetermineSubsectorBorderPoints(SectorIds);
 	}
 
