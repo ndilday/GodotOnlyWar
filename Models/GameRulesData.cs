@@ -17,7 +17,7 @@ namespace OnlyWar.Models
         // measured in pixels
         public Tuple<ushort, ushort> SectorCellSize { get; private set; }
         // in RAW, 20 light years is the maximum subsector diameter
-        public ushort MaxSubsectorDiameter { get; private set; }
+        public ushort MaxSubsectorCellDiameter { get; private set; }
         // percent chance of a planet in a sector cell
         public float PlanetChance { get; private set; }
         // Battle Data
@@ -47,7 +47,7 @@ namespace OnlyWar.Models
             DebugMode = true;
             SectorSize = new(200, 200);
             SectorCellSize = new(20, 20);
-            MaxSubsectorDiameter = 20;
+            MaxSubsectorCellDiameter = 20;
             PlanetChance = 0.02f;
             BattleCellSize = new(20, 20);
 
