@@ -10,19 +10,20 @@ using OnlyWar.Helpers;
 using OnlyWar.Models.Soldiers;
 using OnlyWar.Models.Squads;
 using OnlyWar.Models.Units;
+using OnlyWar.Models.Planets;
 
 namespace OnlyWar.Builders
 {
     internal static class NewChapterBuilder
     {
         private delegate void TrainingFunction(PlayerSoldier playerSoldier);
-        internal static PlayerForce CreateChapter(Faction faction, 
-                                            Date trainingStartDate,
-                                            GameRulesData data,
-                                            Date date)
+
+        internal static PlayerForce CreateChapter(GameRulesData data,
+                                                  Date trainingStartDate,
+                                                  Date date)
         {
             Date trainingEndDate = new Date(trainingStartDate.GetTotalWeeks() + 104);
-            SoldierTemplate soldierTemplate = faction.SoldierTemplates[0];
+            SoldierTemplate soldierTemplate = data.PlayerFaction.SoldierTemplates[0];
             List<PlayerSoldier> soldiers =
                 SoldierFactory.Instance.GenerateNewSoldiers(1000, 
                                                             soldierTemplate.Species, 
@@ -45,10 +46,10 @@ namespace OnlyWar.Builders
             }
 
             Dictionary<int, PlayerSoldier> unassignedSoldierMap = soldiers.ToDictionary(s => s.Id);
-            PlayerForce chapter = BuildChapterFromUnitTemplate(faction,
-                                                               faction.UnitTemplates.Values.First(ut => ut.IsTopLevelUnit), 
+            PlayerForce chapter = BuildChapterFromUnitTemplate(data.PlayerFaction,
+                                                               data.PlayerFaction.UnitTemplates.Values.First(ut => ut.IsTopLevelUnit), 
                                                                soldiers);
-            PopulateOrderOfBattle(trainingEndDate.ToString(), unassignedSoldierMap, chapter.Army.OrderOfBattle, faction);
+            PopulateOrderOfBattle(trainingEndDate.ToString(), unassignedSoldierMap, chapter.Army.OrderOfBattle, data.PlayerFaction);
             chapter.Army.PopulateSquadMap();
             foreach (PlayerSoldier soldier in soldiers)
             {
@@ -56,7 +57,12 @@ namespace OnlyWar.Builders
                 trainingHelper.EvaluateSoldier(soldier, date);
 
             }
-            chapter.Fleet.TaskForces.Add(new TaskForce(faction, faction.FleetTemplates.First().Value));
+            chapter.Fleet.TaskForces.Add(new TaskForce(data.PlayerFaction, data.PlayerFaction.FleetTemplates.First().Value));
+            List<string> foundingHistoryEntries = new List<string>
+            {
+                $"{data.PlayerFaction.UnitTemplates.First().Value.Name} officially forms with its first 1,000 battle brothers."
+            };
+            chapter.AddToBattleHistory(date, "Chapter Founding", foundingHistoryEntries);
             return chapter;
         }
 

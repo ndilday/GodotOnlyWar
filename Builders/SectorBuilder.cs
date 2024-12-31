@@ -40,7 +40,9 @@ namespace OnlyWar.Builders
                 }
             }
 
-            PlayerForce playerForce = CreateChapter(data, currentDate, planetList);
+            Date trainingStartDate = new Date(currentDate.Millenium, currentDate.Year - 4, 1);
+            PlayerForce playerForce = NewChapterBuilder.CreateChapter(data, trainingStartDate, currentDate);
+            FoundChapterPlanet(planetList, data.PlayerFaction);
             PlaceStartingForces(planetList, playerForce, forceList);
 
             return new Sector(playerForce, characterList, planetList, forceList);
@@ -72,52 +74,7 @@ namespace OnlyWar.Builders
             return PlanetBuilder.Instance.GenerateNewPlanet(data.PlanetTemplateMap, position, controllingFaction, infiltratingFaction);
         }
 
-        private static PlayerForce CreateChapter(GameRulesData data, Date currentDate, List<Planet> planetList)
-        {
-            Date basicTrainingEndDate = new Date(currentDate.Millenium, currentDate.Year - 3, 52);
-            Date trainingStartDate = new Date(currentDate.Millenium, currentDate.Year - 4, 1);
-            var soldierTemplate = data.PlayerFaction.SoldierTemplates[0];
-            var soldiers =
-                SoldierFactory.Instance.GenerateNewSoldiers(1000, soldierTemplate.Species, data.SkillTemplateList)
-                .Select(s => new PlayerSoldier(s, $"{TempNameGenerator.GetName()} {TempNameGenerator.GetName()}"))
-                .ToList();
-
-            string foo = "";
-            SoldierTrainingCalculator trainingHelper =
-                new SoldierTrainingCalculator(data.BaseSkillMap.Values);
-            foreach (PlayerSoldier soldier in soldiers)
-            {
-                soldier.AddEntryToHistory(trainingStartDate + ": accepted into training");
-                if (soldier.PsychicPower > 0)
-                {
-                    soldier.AddEntryToHistory(trainingStartDate + ": psychic ability detected, acolyte training initiated");
-                    // add psychic specific training here
-                }
-                trainingHelper.EvaluateSoldier(soldier, basicTrainingEndDate);
-                soldier.ProgenoidImplantDate = new Date(currentDate.Millenium, currentDate.Year - 2, RNG.GetIntBelowMax(1, 53));
-
-                foo += $"{(int)soldier.MeleeRating}, {(int)soldier.RangedRating}, {(int)soldier.LeadershipRating}, {(int)soldier.AncientRating}, {(int)soldier.MedicalRating}, {(int)soldier.TechRating}, {(int)soldier.PietyRating}\n";
-            }
-
-
-            //System.IO.File.WriteAllText($"{Application.streamingAssetsPath}/ratings.csv", foo);
-
-            List<string> foundingHistoryEntries = new List<string>
-            {
-                $"{data.PlayerFaction.UnitTemplates.First().Value.Name} officially forms with its first 1,000 battle brothers."
-            };
-            // post-MOS evaluations
-            foreach (PlayerSoldier soldier in soldiers)
-            {
-                trainingHelper.EvaluateSoldier(soldier, currentDate);
-            }
-            //GameDataSingleton.Instance.Sector.PlayerForce.Faction.Units.Add(GameDataSingleton.Instance.Sector.PlayerForce.OrderOfBattle);
-            FoundChapterPlanet(planetList, data.PlayerFaction);
-
-            var chapter = NewChapterBuilder.CreateChapter(data.PlayerFaction, trainingStartDate, data, currentDate);
-            chapter.AddToBattleHistory(currentDate, "Chapter Founding",foundingHistoryEntries);
-            return chapter;
-        }
+        
 
         private static void FoundChapterPlanet(List<Planet> planetList, Faction playerFaction)
         {
