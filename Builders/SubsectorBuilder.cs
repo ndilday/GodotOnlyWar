@@ -13,7 +13,7 @@ namespace OnlyWar.Builders
         {
             Dictionary<ushort, List<Planet>> subsectorPlanetMap = [];
             Dictionary<ushort, Vector2I> subsectorCenterMap;
-            Dictionary<ushort, int> subsectorDiameterSquaredMap;
+            Dictionary<ushort, int> subsectorRadiusSquaredMap;
             Dictionary<ushort, List<Vector2I>> subsectorCellListMap = [];
             List<Subsector> subsectorList = [];
             // subsector 0 is reserved for empty space that is not part of a subsector
@@ -25,18 +25,40 @@ namespace OnlyWar.Builders
                 subsectorPlanetMap[subsectorId] = [planet];
                 subsectorId++;
             }
-            
-            subsectorDiameterSquaredMap = CombineSubsectors(subsectorPlanetMap, GameDataSingleton.Instance.GameRulesData.MaxSubsectorCellDiameter);
+
+            ushort maxDiameter = GameDataSingleton.Instance.GameRulesData.MaxSubsectorCellDiameter;
+            CombineSubsectors(subsectorPlanetMap, maxDiameter);
             subsectorCenterMap = CalculateSubsectorCenters(subsectorPlanetMap);
-            subsectorCellListMap = AssignGridSubsectors(subsectorPlanetMap, subsectorCenterMap, subsectorDiameterSquaredMap, gridDimensions);
+            subsectorRadiusSquaredMap = CalculateSubsectorSquaredRadii(subsectorPlanetMap, subsectorCenterMap);
+            subsectorCellListMap = AssignGridSubsectors(subsectorPlanetMap, subsectorCenterMap, subsectorRadiusSquaredMap, gridDimensions, (ushort)(maxDiameter / 2));
             foreach(var kvp in subsectorCellListMap)
             {
-                subsectorList.Add(new Subsector(kvp.Key.ToString(), subsectorPlanetMap[kvp.Key], kvp.Value));
+                subsectorList.Add(new Subsector(kvp.Key.ToString(), kvp.Key, subsectorPlanetMap[kvp.Key], kvp.Value));
             }
             return subsectorList;
         }
 
-        private static Dictionary<ushort, int> CombineSubsectors(Dictionary<ushort, List<Planet>> subsectorPlanetMap, ushort subsectorMaxDiameter)
+        private static Dictionary<ushort, int> CalculateSubsectorSquaredRadii(Dictionary<ushort, List<Planet>> subsectorPlanetMap, Dictionary<ushort, Vector2I> subsectorCenterMap)
+        {
+            Dictionary<ushort, int> subsectorRadiusSquaredMap = [];
+            foreach (var kvp in subsectorPlanetMap)
+            {
+                int maxDistanceSquared = 0;
+                foreach (var planet in kvp.Value)
+                {
+                    Vector2I planetPosition = new Vector2I(planet.Position.Item1, planet.Position.Item2);
+                    int distanceSquared = CalculateDistanceSquared(planetPosition, subsectorCenterMap[kvp.Key]);
+                    if (distanceSquared > maxDistanceSquared)
+                    {
+                        maxDistanceSquared = distanceSquared;
+                    }
+                }
+                subsectorRadiusSquaredMap[kvp.Key] = maxDistanceSquared;
+            }
+            return subsectorRadiusSquaredMap;
+        }
+
+        private static void CombineSubsectors(Dictionary<ushort, List<Planet>> subsectorPlanetMap, ushort subsectorMaxDiameter)
         {
             int maxDistanceSquared = subsectorMaxDiameter * subsectorMaxDiameter;
             Dictionary<Tuple<ushort, ushort>, int> subsectorPairDistanceSquaredMap = [];
@@ -142,11 +164,10 @@ namespace OnlyWar.Builders
                     }
                 }
             }
-            return subsectorInternalDistanceSquaredMap;
         }
 
         private static Dictionary<ushort, List<Vector2I>> AssignGridSubsectors(Dictionary<ushort, List<Planet>> subsectorPlanetMap, Dictionary<ushort, Vector2I> subsectorCenterMap,
-                                                                               Dictionary<ushort, int> subsectorDiameterSquaredMap, Vector2I gridDimensions)
+                                                                               Dictionary<ushort, int> subsectorRadiusSquaredMap, Vector2I gridDimensions, ushort subsectorMaxRadius)
         {
             Dictionary<ushort, List<Vector2I>> subsectorCellListMap = [];
             // iterate through each cell in the grid
@@ -161,10 +182,10 @@ namespace OnlyWar.Builders
                     // find the closest subsector center
                     foreach (var subsectorCenter in subsectorCenterMap)
                     {
-                        int diameterSquared = subsectorDiameterSquaredMap[subsectorCenter.Key];
-
-                        int radiusSquared = diameterSquared / 4;
+                        int radiusSquared = Math.Max(subsectorRadiusSquaredMap[subsectorCenter.Key], subsectorMaxRadius * subsectorMaxRadius);
+                        
                         int distanceSquared = CalculateDistanceSquared(gridPos, subsectorCenter.Value);
+
                         if (distanceSquared < currentDistanceSquared && distanceSquared <= radiusSquared)
                         {
                             currentSubsectorId = subsectorCenter.Key;
@@ -192,8 +213,8 @@ namespace OnlyWar.Builders
             Dictionary<ushort, Vector2I> centers = [];
             foreach (var subsectorPlanetList in subsectorPlanetMap)
             {
-                int x = subsectorPlanetList.Value.Sum(v => v.Position.Item1) / subsectorPlanetList.Value.Count;
-                int y = subsectorPlanetList.Value.Sum(v => v.Position.Item2) / subsectorPlanetList.Value.Count;
+                int x = (int)Math.Round((float)subsectorPlanetList.Value.Sum(v => v.Position.Item1) / (float)subsectorPlanetList.Value.Count);
+                int y = (int)Math.Round((float)subsectorPlanetList.Value.Sum(v => v.Position.Item2) / (float)subsectorPlanetList.Value.Count);
                 centers[subsectorPlanetList.Key] = new Vector2I(x, y);
             }
             return centers;

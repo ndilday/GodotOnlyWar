@@ -2,6 +2,7 @@ using Godot;
 using OnlyWar.Builders;
 using OnlyWar.Models;
 using OnlyWar.Models.Fleets;
+using OnlyWar.Models.Planets;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -37,8 +38,16 @@ public partial class SectorMap : Node2D
 		HasPlanet = new bool[GridDimensions.X * GridDimensions.Y];
 		PlacePlanets();
 		PlaceFleets();
-		SubsectorBuilder.BuildSubsectors(GameDataSingleton.Instance.Sector.Planets.Values, GridDimensions);
-	}
+		List<Subsector> subsectors = SubsectorBuilder.BuildSubsectors(GameDataSingleton.Instance.Sector.Planets.Values, GridDimensions);
+        foreach(Subsector subsector in subsectors)
+        {
+            foreach (Vector2I cell in subsector.Cells)
+            {
+                SectorIds[GridPositionToIndex(cell)] = subsector.Id;
+            }
+        }
+        _subsectorVertexListMap = DetermineSubsectorBorderPoints(subsectors);
+    }
 
 	public override void _Draw()
 	{
@@ -124,40 +133,33 @@ public partial class SectorMap : Node2D
         }
     }
 
-    private Dictionary<ushort, List<Vector2I>> DetermineSubsectorBorderPoints(ushort[] sectorIds)
+    private Dictionary<ushort, List<Vector2I>> DetermineSubsectorBorderPoints(IEnumerable<Subsector> subsectors)
     {
         int i = 0;
         Dictionary<ushort, List<Vector2I>> subsectorVertexListMap = [];
-        while (i < sectorIds.Length)
+        foreach(Subsector subsector in subsectors)
         {
-            ushort subsectorId = sectorIds[i];
-            if (subsectorId == 0 || subsectorVertexListMap.ContainsKey(subsectorId))
+            List<Vector2I> vertexList = [];
+            subsectorVertexListMap[subsector.Id] = vertexList;
+            // the first cell should be the top left of the subsector
+            Vector2I gridPosition = subsector.Cells[0];
+            Vector2I cellCenterPosition = CalculateMapPosition(gridPosition);
+            Vector2I topLeft = cellCenterPosition - HalfCellSize;
+            Vector2I topRight = new Vector2I(topLeft.X + CellSize.X, topLeft.Y);
+            BorderPoint currentPoint = new BorderPoint
             {
-                i++;
-            }
-            else
+                gridPos = gridPosition,
+                mapPoint = topRight,
+                orientation = Facing.East
+            };
+            vertexList.Add(topRight);
+            while (currentPoint.mapPoint != topLeft)
             {
-                List<Vector2I> vertexList = [];
-                subsectorVertexListMap[subsectorId] = vertexList;
-                // because we're processing to the right and down, the top edge is a border
-                Vector2I gridPosition = IndexToGridPosition(i);
-                Vector2I cellCenterPosition = CalculateMapPosition(gridPosition);
-                Vector2I topLeft = cellCenterPosition - HalfCellSize;
-                Vector2I topRight = new Vector2I(topLeft.X + CellSize.X, topLeft.Y);
-                BorderPoint currentPoint = new BorderPoint
-                {
-                    gridPos = gridPosition,
-                    mapPoint = topRight,
-                    orientation = Facing.East
-                };
-                vertexList.Add(topRight);
-                while (currentPoint.mapPoint != topLeft)
-                {
-                    currentPoint = GetNextPoint(currentPoint, subsectorId);
-                    vertexList.Add(currentPoint.mapPoint);
-                }
+                currentPoint = GetNextPoint(currentPoint, subsector.Id);
+                vertexList.Add(currentPoint.mapPoint);
             }
         }
+
         return subsectorVertexListMap;
     }
 
