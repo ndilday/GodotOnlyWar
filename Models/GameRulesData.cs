@@ -12,9 +12,13 @@ namespace OnlyWar.Models
     {
         public bool DebugMode { get; private set; }
         // Sector Data
+        // Measured in light years
         public Tuple<ushort, ushort> SectorSize { get; private set; }
+        // measured in pixels
         public Tuple<ushort, ushort> SectorCellSize { get; private set; }
-        public ushort MaxSubsectorCellDiameter { get; private set; }
+        // in RAW, 20 light years is the maximum subsector diameter
+        public ushort MaxSubsectorDiameter { get; private set; }
+        // percent chance of a planet in a sector cell
         public float PlanetChance { get; private set; }
         // Battle Data
         public Tuple<ushort, ushort> BattleCellSize { get; private set; }
@@ -38,13 +42,13 @@ namespace OnlyWar.Models
 
         public GameRulesData()
         {
-            var gameBlob = GameRulesDataAccess.Instance.GetData("C:\\Projects\\GodotOnlyWar\\Database\\OnlyWar.s3db");
+            var gameBlob = GameRulesDataAccess.Instance.GetData(".\\Database\\OnlyWar.s3db");
             
             DebugMode = true;
-            SectorSize = new(50, 50);
+            SectorSize = new(200, 200);
             SectorCellSize = new(20, 20);
-            MaxSubsectorCellDiameter = 10;
-            PlanetChance = 0.05f;
+            MaxSubsectorDiameter = 20;
+            PlanetChance = 0.02f;
             BattleCellSize = new(20, 20);
 
             _factions = gameBlob.Factions;

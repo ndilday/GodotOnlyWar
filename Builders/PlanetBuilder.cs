@@ -106,8 +106,8 @@ namespace OnlyWar.Builders
                 _nextRegionId++;
             }
 
-            int popToDistribute = (int)(template.PopulationRange.BaseValue)
-                + (int)(Math.Pow(10, RNG.NextGaussianDouble()) * template.PopulationRange.StandardDeviation);
+            long popToDistribute = (long)(template.PopulationRange.BaseValue)
+                + (long)(Math.Pow(10, RNG.NextGaussianDouble()) * template.PopulationRange.StandardDeviation);
 
             // Distribute population using power law with wiggle
             float alpha = 1.5f; // Experiment with this value (1.0 to 3.0 are common)
@@ -151,7 +151,7 @@ namespace OnlyWar.Builders
             throw new InvalidOperationException("Could not determine a planet template");
         }
 
-        private List<long> DistributePopulationPowerLaw(int totalPopulation, int numRegions, float alpha, float wiggleFactor)
+        private List<long> DistributePopulationPowerLaw(long totalPopulation, int numRegions, float alpha, float wiggleFactor)
         {
             // 1. Calculate the normalization constant (C)
             double C = 0;
