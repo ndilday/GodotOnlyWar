@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Drawing;
 using System.Linq;
 using Godot;
 using OnlyWar.Models;
@@ -9,11 +10,16 @@ namespace OnlyWar.Builders
 {
     public static class SubsectorBuilder
     {
+        public struct Circle
+        {
+            public Vector2 Center;
+            public float RadiusSquared;
+        }
+
         public static List<Subsector> BuildSubsectors(IEnumerable<Planet> planets, Vector2I gridDimensions)
         {
             Dictionary<ushort, List<Planet>> subsectorPlanetMap = [];
-            Dictionary<ushort, Vector2I> subsectorCenterMap;
-            Dictionary<ushort, int> subsectorRadiusSquaredMap;
+            Dictionary<ushort, Circle> subsectorCircleMap;
             Dictionary<ushort, List<Vector2I>> subsectorCellListMap = [];
             List<Subsector> subsectorList = [];
             // subsector 0 is reserved for empty space that is not part of a subsector
@@ -28,34 +34,14 @@ namespace OnlyWar.Builders
 
             ushort maxDiameter = GameDataSingleton.Instance.GameRulesData.MaxSubsectorCellDiameter;
             CombineSubsectors(subsectorPlanetMap, maxDiameter);
-            subsectorCenterMap = CalculateSubsectorCenters(subsectorPlanetMap);
-            subsectorRadiusSquaredMap = CalculateSubsectorSquaredRadii(subsectorPlanetMap, subsectorCenterMap);
-            subsectorCellListMap = AssignGridSubsectors(subsectorPlanetMap, subsectorCenterMap, subsectorRadiusSquaredMap, gridDimensions, (ushort)(maxDiameter / 2));
+            subsectorCircleMap = CalculateSubsectorCircles(subsectorPlanetMap);
+            //subsectorRadiusSquaredMap = CalculateSubsectorSquaredRadii(subsectorPlanetMap, subsectorCenterMap);
+            subsectorCellListMap = AssignGridSubsectors(subsectorPlanetMap, subsectorCircleMap, gridDimensions, (ushort)(maxDiameter / 2));
             foreach(var kvp in subsectorCellListMap)
             {
                 subsectorList.Add(new Subsector(kvp.Key.ToString(), kvp.Key, subsectorPlanetMap[kvp.Key], kvp.Value));
             }
             return subsectorList;
-        }
-
-        private static Dictionary<ushort, int> CalculateSubsectorSquaredRadii(Dictionary<ushort, List<Planet>> subsectorPlanetMap, Dictionary<ushort, Vector2I> subsectorCenterMap)
-        {
-            Dictionary<ushort, int> subsectorRadiusSquaredMap = [];
-            foreach (var kvp in subsectorPlanetMap)
-            {
-                int maxDistanceSquared = 0;
-                foreach (var planet in kvp.Value)
-                {
-                    Vector2I planetPosition = new Vector2I(planet.Position.Item1, planet.Position.Item2);
-                    int distanceSquared = CalculateDistanceSquared(planetPosition, subsectorCenterMap[kvp.Key]);
-                    if (distanceSquared > maxDistanceSquared)
-                    {
-                        maxDistanceSquared = distanceSquared;
-                    }
-                }
-                subsectorRadiusSquaredMap[kvp.Key] = maxDistanceSquared;
-            }
-            return subsectorRadiusSquaredMap;
         }
 
         private static void CombineSubsectors(Dictionary<ushort, List<Planet>> subsectorPlanetMap, ushort subsectorMaxDiameter)
@@ -166,8 +152,8 @@ namespace OnlyWar.Builders
             }
         }
 
-        private static Dictionary<ushort, List<Vector2I>> AssignGridSubsectors(Dictionary<ushort, List<Planet>> subsectorPlanetMap, Dictionary<ushort, Vector2I> subsectorCenterMap,
-                                                                               Dictionary<ushort, int> subsectorRadiusSquaredMap, Vector2I gridDimensions, ushort subsectorMaxRadius)
+        private static Dictionary<ushort, List<Vector2I>> AssignGridSubsectors(Dictionary<ushort, List<Planet>> subsectorPlanetMap, Dictionary<ushort, Circle> subsectorCircleMap,
+                                                                               Vector2I gridDimensions, ushort subsectorMaxRadius)
         {
             Dictionary<ushort, List<Vector2I>> subsectorCellListMap = [];
             // iterate through each cell in the grid
@@ -176,19 +162,22 @@ namespace OnlyWar.Builders
                 for (int i = 0; i < gridDimensions.X; i++)
                 {
                     Vector2I gridPos = new Vector2I(i, j);
-                    int currentDistanceSquared = int.MaxValue;
+                    float currentDistanceSquared = int.MaxValue;
                     ushort currentSubsectorId = 0;
 
                     // find the closest subsector center
-                    foreach (var subsectorCenter in subsectorCenterMap)
+                    foreach (var subsectorCircle in subsectorCircleMap)
                     {
-                        int radiusSquared = Math.Max(subsectorRadiusSquaredMap[subsectorCenter.Key], subsectorMaxRadius * subsectorMaxRadius);
-                        
-                        int distanceSquared = CalculateDistanceSquared(gridPos, subsectorCenter.Value);
+                        float subsectorRadiusSquared = subsectorCircleMap[subsectorCircle.Key].RadiusSquared;
+                        float subsectorMaxRadiusSquared = subsectorMaxRadius * subsectorMaxRadius;
+                        float maxRadiusSquared = Math.Max(subsectorRadiusSquared, subsectorMaxRadiusSquared);
+                        //float maxRadiusSquared = subsectorRadiusSquared;
 
-                        if (distanceSquared < currentDistanceSquared && distanceSquared <= radiusSquared)
+                        float distanceSquared = CalculateDistanceSquared(gridPos, subsectorCircle.Value.Center);
+
+                        if (distanceSquared < currentDistanceSquared && distanceSquared <= maxRadiusSquared)
                         {
-                            currentSubsectorId = subsectorCenter.Key;
+                            currentSubsectorId = subsectorCircle.Key;
                             currentDistanceSquared = distanceSquared;
                         }
                     }
@@ -208,16 +197,130 @@ namespace OnlyWar.Builders
             return subsectorCellListMap;
         }
 
-        private static Dictionary<ushort, Vector2I> CalculateSubsectorCenters(Dictionary<ushort, List<Planet>> subsectorPlanetMap)
+        private static Dictionary<ushort, Circle> CalculateSubsectorCircles(Dictionary<ushort, List<Planet>> subsectorPlanetMap)
         {
-            Dictionary<ushort, Vector2I> centers = [];
+            Dictionary<ushort, Circle> circles = [];
             foreach (var subsectorPlanetList in subsectorPlanetMap)
             {
-                int x = (int)Math.Round((float)subsectorPlanetList.Value.Sum(v => v.Position.Item1) / (float)subsectorPlanetList.Value.Count);
-                int y = (int)Math.Round((float)subsectorPlanetList.Value.Sum(v => v.Position.Item2) / (float)subsectorPlanetList.Value.Count);
-                centers[subsectorPlanetList.Key] = new Vector2I(x, y);
+                List<Vector2> points = subsectorPlanetList.Value.Select(p => new Vector2(p.Position.Item1, p.Position.Item2)).ToList();
+                circles[subsectorPlanetList.Key] = FindMinimumEnclosingCircle(points, new List<Vector2>());
             }
-            return centers;
+            return circles;
+        }
+
+        private static Circle FindMinimumEnclosingCircle(List<Vector2> points, List<Vector2> boundary)
+        {
+            if (points.Count == 0 || boundary.Count == 3)
+            {
+                return CalculateCircle(boundary);
+            }
+
+            Vector2 point = points[points.Count - 1];
+            points = points.GetRange(0, points.Count - 1);
+
+            Circle circle = FindMinimumEnclosingCircle(points, boundary);
+            
+            if (!IsInsideCircle(circle, point))
+            {
+                boundary = boundary.GetRange(0, boundary.Count);
+                boundary.Add(point);
+                circle = FindMinimumEnclosingCircle(points, boundary);
+            }
+
+            return circle;
+        }
+
+        private static Circle CalculateCircle(List<Vector2> boundary)
+        {
+            if (boundary.Count == 0)
+            {
+                return new Circle { Center = new Vector2(0, 0), RadiusSquared = 0 };
+            }
+            else if (boundary.Count == 1)
+            {
+                return new Circle { Center = boundary[0], RadiusSquared = 0 };
+            }
+            else if (boundary.Count == 2)
+            {
+                Vector2 newCenter = new Vector2((boundary[0].X + boundary[1].X) / 2, (boundary[0].Y + boundary[1].Y) / 2);
+                return new Circle
+                {
+                    Center = newCenter,
+                    RadiusSquared = CalculateDistanceSquared(boundary[0], newCenter)
+                };
+            }
+            else
+            {
+                // Check if the points are collinear or form an obtuse triangle
+                // Find the midpoint of the segment formed by the two farthest points
+                float dist12 = CalculateDistanceSquared(boundary[0], boundary[1]);
+                float dist13 = CalculateDistanceSquared(boundary[0], boundary[2]);
+                float dist23 = CalculateDistanceSquared(boundary[1], boundary[2]);
+
+                if (dist12 > dist13 + dist23)
+                {
+                    Vector2 midpoint = new Vector2((boundary[0].X + boundary[1].X) / 2, (boundary[0].Y + boundary[1].Y) / 2);
+                    return new Circle
+                    {
+                        Center = midpoint,
+                        RadiusSquared = CalculateDistanceSquared(boundary[0], midpoint)
+                    };
+                }
+                else if (dist13 > dist12 + dist23)
+                {
+                    Vector2 midpoint = new Vector2((boundary[0].X + boundary[2].X) / 2, (boundary[0].Y + boundary[2].Y) / 2);
+                    return new Circle
+                    {
+                        Center = midpoint,
+                        RadiusSquared = CalculateDistanceSquared(boundary[0], midpoint)
+                    };
+                }
+                else if (dist23 > dist12 + dist13)
+                {
+                    Vector2 midpoint = new Vector2((boundary[1].X + boundary[2].X) / 2, (boundary[1].Y + boundary[2].Y) / 2);
+                    return new Circle 
+                    { 
+                        Center = midpoint, 
+                        RadiusSquared = CalculateDistanceSquared(boundary[1], midpoint) 
+                    };
+                }
+                else
+                {
+                    float p0 = boundary[0].X * boundary[0].X + boundary[0].Y * boundary[0].Y;
+                    float p1 = boundary[1].X * boundary[1].X + boundary[1].Y * boundary[1].Y;
+                    float p2 = boundary[2].X * boundary[2].X + boundary[2].Y * boundary[2].Y;
+                    Vector2 v21 = boundary[2] - boundary[1];
+                    Vector2 v02 = boundary[0] - boundary[2];
+                    Vector2 v10 = boundary[1] - boundary[0];
+                    float centerX = (p0 * v21.Y + p1 * v02.Y + p2 * v10.Y) / (boundary[0].X * v21.Y + boundary[1].X * v02.Y + boundary[2].X * v10.Y) / 2;
+                    float centerY = (p0 * v21.X + p1 * v02.X + p2 * v10.X) / (boundary[0].Y * v21.X + boundary[1].Y * v02.X + boundary[2].Y * v10.X) / 2;
+                    Vector2 newCenter = new Vector2(centerX, centerY);
+                    return new Circle
+                    {
+                        Center = newCenter,
+                        RadiusSquared = CalculateDistanceSquared(boundary[0], newCenter)
+                    };
+                }
+            }
+        }
+
+        private static bool IsInsideCircle(Circle circle, Vector2 point)
+        {
+            return CalculateDistanceSquared(circle.Center, point) <= circle.RadiusSquared;
+        }
+
+        private static float CalculateRadiusSquared(Vector2 center, List<Vector2> boundary)
+        {
+            float maxDistanceSquared = 0;
+            foreach (var point in boundary)
+            {
+                float distanceSquared = CalculateDistanceSquared(center, point);
+                if (distanceSquared > maxDistanceSquared)
+                {
+                    maxDistanceSquared = distanceSquared;
+                }
+            }
+            return maxDistanceSquared;
         }
 
         private static int CalculateLongestPlanetaryDistanceSquared(List<Planet> planets1, List<Planet> planets2)
@@ -225,11 +328,10 @@ namespace OnlyWar.Builders
             int longestPlanetaryDistance = 0;
             foreach (var planet1 in planets1)
             {
-                Vector2I coordinate1 = new Vector2I(planet1.Position.Item1, planet1.Position.Item2);
                 foreach (var planet2 in planets2)
                 {
-                    Vector2I coordinate2 = new Vector2I(planet2.Position.Item1, planet2.Position.Item2);
-                    int distance = CalculateDistanceSquared(coordinate1, coordinate2);
+                    int distance = (planet1.Position.Item1 - planet2.Position.Item1) * (planet1.Position.Item1 - planet2.Position.Item1) + 
+                        (planet1.Position.Item2 - planet2.Position.Item2) * (planet1.Position.Item2 - planet2.Position.Item2);
                     if (distance > longestPlanetaryDistance)
                     {
                         longestPlanetaryDistance = distance;
@@ -240,10 +342,10 @@ namespace OnlyWar.Builders
             return longestPlanetaryDistance;
         }
 
-        private static int CalculateDistanceSquared(Vector2I coordinate1, Vector2I coordinate2)
+        private static float CalculateDistanceSquared(Vector2 coordinate1, Vector2 coordinate2)
         {
-            int xDiff = coordinate1.X - coordinate2.X;
-            int yDiff = coordinate1.Y - coordinate2.Y;
+            float xDiff = coordinate1.X - coordinate2.X;
+            float yDiff = coordinate1.Y - coordinate2.Y;
             return (xDiff * xDiff) + (yDiff * yDiff);
         }
     }

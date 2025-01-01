@@ -344,6 +344,6 @@ public partial class SectorMap : Node2D
 				b = q;
 				break;
 		}
-		return new Color(r, g, b);
+		return new Color(r, g, b, 0.25f);
 	}
 }

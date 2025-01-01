@@ -1,7 +1,8 @@
 {
   "profiles": {
     "OnlyWarGodot": {
-      "commandName": "Project"
+      "commandName": "Project",
+      "nativeDebugging": true
     },
     "Run Only War": {
       "commandName": "Executable",
