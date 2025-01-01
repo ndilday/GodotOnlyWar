@@ -1,0 +1,383 @@
+[gd_scene load_steps=4 format=3 uid="uid://tbhmylubxaee"]
+
+[ext_resource type="Texture2D" uid="uid://bf76xmspnp2sg" path="res://Assets/vitruvian-man-3.jpg" id="1_sxhff"]
+[ext_resource type="FontFile" uid="uid://caltl8x5gfsdo" path="res://Fonts/sui generis rg.otf" id="2_nu0sl"]
+
+[sub_resource type="Theme" id="Theme_7tgn0"]
+default_font = ExtResource("2_nu0sl")
+default_font_size = 12
+
+[node name="SoldierView" type="Control"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="Panel" type="Panel" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="MenuBar" type="MenuBar" parent="."]
+custom_minimum_size = Vector2(0, 50)
+layout_mode = 1
+anchors_preset = 10
+anchor_right = 1.0
+grow_horizontal = 2
+
+[node name="DataPanel" type="Panel" parent="."]
+layout_mode = 1
+anchors_preset = -1
+offset_left = 20.0
+offset_top = 50.0
+offset_right = 320.0
+offset_bottom = 350.0
+
+[node name="Header" type="Panel" parent="DataPanel"]
+custom_minimum_size = Vector2(0, 30)
+layout_mode = 1
+anchors_preset = 10
+anchor_right = 1.0
+offset_bottom = 50.0
+grow_horizontal = 2
+
+[node name="Label" type="Label" parent="DataPanel/Header"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+text = "Biggus Diccus"
+horizontal_alignment = 1
+vertical_alignment = 1
+
+[node name="VBoxContainer" type="VBoxContainer" parent="DataPanel"]
+layout_mode = 1
+anchors_preset = -1
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = 5.0
+offset_top = 55.0
+offset_right = -5.0
+offset_bottom = -5.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="DataLinePanel" type="Panel" parent="DataPanel/VBoxContainer"]
+custom_minimum_size = Vector2(0, 20)
+layout_mode = 2
+
+[node name="Label" type="Label" parent="DataPanel/VBoxContainer/DataLinePanel"]
+layout_mode = 1
+anchors_preset = 9
+anchor_bottom = 1.0
+offset_right = 1.0
+grow_vertical = 2
+text = "Time in Service"
+
+[node name="Label2" type="Label" parent="DataPanel/VBoxContainer/DataLinePanel"]
+layout_mode = 1
+anchors_preset = 11
+anchor_left = 1.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = -1.0
+grow_horizontal = 0
+grow_vertical = 2
+text = "7 years, 3 months"
+
+[node name="DataLinePanel2" type="Panel" parent="DataPanel/VBoxContainer"]
+custom_minimum_size = Vector2(0, 20)
+layout_mode = 2
+
+[node name="Label" type="Label" parent="DataPanel/VBoxContainer/DataLinePanel2"]
+layout_mode = 1
+anchors_preset = 9
+anchor_bottom = 1.0
+offset_right = 1.0
+grow_vertical = 2
+text = "Unit"
+
+[node name="Label2" type="Label" parent="DataPanel/VBoxContainer/DataLinePanel2"]
+layout_mode = 1
+anchors_preset = 11
+anchor_left = 1.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = -1.0
+grow_horizontal = 0
+grow_vertical = 2
+text = "3rd Company, A Squad"
+
+[node name="DataLinePanel3" type="Panel" parent="DataPanel/VBoxContainer"]
+custom_minimum_size = Vector2(0, 20)
+layout_mode = 2
+
+[node name="Label" type="Label" parent="DataPanel/VBoxContainer/DataLinePanel3"]
+layout_mode = 1
+anchors_preset = 9
+anchor_bottom = 1.0
+offset_right = 1.0
+grow_vertical = 2
+text = "Location"
+
+[node name="Label2" type="Label" parent="DataPanel/VBoxContainer/DataLinePanel3"]
+layout_mode = 1
+anchors_preset = 11
+anchor_left = 1.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = -1.0
+grow_horizontal = 0
+grow_vertical = 2
+text = "Aboard Immortal"
+
+[node name="DataLinePanel4" type="Panel" parent="DataPanel/VBoxContainer"]
+custom_minimum_size = Vector2(0, 20)
+layout_mode = 2
+
+[node name="Label" type="Label" parent="DataPanel/VBoxContainer/DataLinePanel4"]
+layout_mode = 1
+anchors_preset = 9
+anchor_bottom = 1.0
+offset_right = 1.0
+grow_vertical = 2
+text = "Lorem Ipsem"
+
+[node name="Label2" type="Label" parent="DataPanel/VBoxContainer/DataLinePanel4"]
+layout_mode = 1
+anchors_preset = 11
+anchor_left = 1.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = -1.0
+grow_horizontal = 0
+grow_vertical = 2
+text = "Lorem Ipsum"
+
+[node name="DataLinePanel5" type="Panel" parent="DataPanel/VBoxContainer"]
+custom_minimum_size = Vector2(0, 20)
+layout_mode = 2
+
+[node name="Label" type="Label" parent="DataPanel/VBoxContainer/DataLinePanel5"]
+layout_mode = 1
+anchors_preset = 9
+anchor_bottom = 1.0
+offset_right = 1.0
+grow_vertical = 2
+text = "Lorem Ipsum"
+
+[node name="Label2" type="Label" parent="DataPanel/VBoxContainer/DataLinePanel5"]
+layout_mode = 1
+anchors_preset = 11
+anchor_left = 1.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = -1.0
+grow_horizontal = 0
+grow_vertical = 2
+text = "Who the Bell Tolls"
+
+[node name="MedicalPanel" type="Panel" parent="."]
+layout_mode = 1
+anchors_preset = -1
+offset_left = 330.0
+offset_top = 50.0
+offset_right = 630.0
+offset_bottom = 350.0
+
+[node name="TextureRect" type="TextureRect" parent="MedicalPanel"]
+modulate = Color(1, 1, 1, 0.12549)
+layout_mode = 1
+anchors_preset = -1
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = 10.0
+offset_top = 50.0
+offset_right = -10.0
+grow_horizontal = 2
+grow_vertical = 2
+texture = ExtResource("1_sxhff")
+expand_mode = 1
+
+[node name="Header" type="Panel" parent="MedicalPanel"]
+custom_minimum_size = Vector2(0, 30)
+layout_mode = 1
+anchors_preset = 10
+anchor_right = 1.0
+offset_bottom = 50.0
+grow_horizontal = 2
+
+[node name="Label" type="Label" parent="MedicalPanel/Header"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+text = "Apothcarial Report"
+horizontal_alignment = 1
+vertical_alignment = 1
+
+[node name="RecommendationPanel" type="Panel" parent="."]
+layout_mode = 1
+anchors_preset = -1
+offset_left = 20.0
+offset_top = 360.0
+offset_right = 320.0
+offset_bottom = 660.0
+
+[node name="Header" type="Panel" parent="RecommendationPanel"]
+custom_minimum_size = Vector2(0, 30)
+layout_mode = 1
+anchors_preset = 10
+anchor_right = 1.0
+offset_bottom = 50.0
+grow_horizontal = 2
+
+[node name="Label" type="Label" parent="RecommendationPanel/Header"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+text = "Sergeant Report"
+horizontal_alignment = 1
+vertical_alignment = 1
+
+[node name="AwardsPanel" type="Panel" parent="."]
+layout_mode = 1
+anchors_preset = -1
+offset_left = 330.0
+offset_top = 360.0
+offset_right = 630.0
+offset_bottom = 660.0
+
+[node name="Header" type="Panel" parent="AwardsPanel"]
+custom_minimum_size = Vector2(0, 30)
+layout_mode = 1
+anchors_preset = 10
+anchor_right = 1.0
+offset_bottom = 50.0
+grow_horizontal = 2
+
+[node name="Label" type="Label" parent="AwardsPanel/Header"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+text = "Awards and Accolades"
+horizontal_alignment = 1
+vertical_alignment = 1
+
+[node name="SoldierHistoryPanel" type="Panel" parent="."]
+custom_minimum_size = Vector2(200, 200)
+layout_mode = 1
+anchors_preset = -1
+anchor_left = 1.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = -350.0
+offset_top = 50.0
+offset_right = -20.0
+offset_bottom = -20.0
+grow_horizontal = 0
+grow_vertical = 2
+
+[node name="Header" type="Panel" parent="SoldierHistoryPanel"]
+custom_minimum_size = Vector2(0, 30)
+layout_mode = 1
+anchors_preset = 10
+anchor_right = 1.0
+offset_bottom = 50.0
+grow_horizontal = 2
+
+[node name="Label" type="Label" parent="SoldierHistoryPanel/Header"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+text = "History"
+horizontal_alignment = 1
+vertical_alignment = 1
+
+[node name="RichTextLabel" type="RichTextLabel" parent="SoldierHistoryPanel"]
+custom_minimum_size = Vector2(200, 100)
+layout_mode = 1
+anchors_preset = -1
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = 5.0
+offset_top = 50.0
+offset_right = -5.0
+offset_bottom = -5.0
+grow_horizontal = 2
+grow_vertical = 2
+theme = SubResource("Theme_7tgn0")
+text = "Lorem Ipsum
+Lorem Ipsum
+Lorem Ipsum
+Lorem Ipsum
+Lorem Ipsum
+Lorem Ipsum
+Lorem Ipsum
+Lorem Ipsum
+Lorem Ipsum
+Lorem Ipsum
+Lorem Ipsum
+Lorem Ipsum
+Lorem Ipsum
+Lorem Ipsum
+Lorem Ipsum
+Lorem Ipsum
+Lorem Ipsum
+Lorem Ipsum
+Lorem Ipsum
+Lorem Ipsum
+Lorem Ipsum
+Lorem Ipsum
+Lorem Ipsum
+Lorem Ipsum
+Lorem Ipsum
+Lorem Ipsum
+Lorem Ipsum
+Lorem Ipsum
+Lorem Ipsum
+Lorem Ipsum
+Lorem Ipsum
+Lorem Ipsum
+Lorem Ipsum
+Lorem Ipsum
+Lorem Ipsum
+Lorem Ipsum
+Lorem Ipsum
+Lorem Ipsum
+Lorem Ipsum
+Lorem Ipsum
+Lorem Ipsum
+Lorem Ipsum
+Lorem Ipsum
+Lorem Ipsum
+Lorem Ipsum
+Lorem Ipsum
+Lorem Ipsum
+Lorem Ipsum
+Lorem Ipsum
+Lorem Ipsum
+Lorem Ipsum"
+
+[node name="FooterBar" type="Panel" parent="."]
+layout_mode = 0
+offset_right = 40.0
+offset_bottom = 40.0
