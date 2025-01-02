@@ -86,7 +86,7 @@ public partial class SectorMap : Node2D
 
     private void PlacePlanets()
 	{
-		var starTexture = (Texture2D)GD.Load("res://MainGameScreen/UICircle.png");
+		var starTexture = (Texture2D)GD.Load("res://Assets/UICircle.png");
 		Vector2 starTextureScale = new Vector2(0.05f, 0.05f);
 		Random rand = new Random();
 		foreach(var kvp in GameDataSingleton.Instance.Sector.Planets)

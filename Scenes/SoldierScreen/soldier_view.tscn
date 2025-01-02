@@ -1,10 +1,10 @@
 [gd_scene load_steps=4 format=3 uid="uid://tbhmylubxaee"]
 
-[ext_resource type="Texture2D" uid="uid://bf76xmspnp2sg" path="res://Assets/vitruvian-man-3.jpg" id="1_sxhff"]
-[ext_resource type="FontFile" uid="uid://caltl8x5gfsdo" path="res://Fonts/sui generis rg.otf" id="2_nu0sl"]
+[ext_resource type="Texture2D" uid="uid://bf76xmspnp2sg" path="res://Assets/vitruvian-man-3.jpg" id="1_holfx"]
+[ext_resource type="FontFile" uid="uid://caltl8x5gfsdo" path="res://Fonts/sui generis rg.otf" id="2_dlnbx"]
 
 [sub_resource type="Theme" id="Theme_7tgn0"]
-default_font = ExtResource("2_nu0sl")
+default_font = ExtResource("2_dlnbx")
 default_font_size = 12
 
 [node name="SoldierView" type="Control"]
@@ -203,7 +203,7 @@ offset_top = 50.0
 offset_right = -10.0
 grow_horizontal = 2
 grow_vertical = 2
-texture = ExtResource("1_sxhff")
+texture = ExtResource("1_holfx")
 expand_mode = 1
 
 [node name="Header" type="Panel" parent="MedicalPanel"]

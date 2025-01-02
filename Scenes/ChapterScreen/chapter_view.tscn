@@ -1,16 +1,16 @@
 [gd_scene load_steps=10 format=3 uid="uid://brakfass7dxfu"]
 
-[ext_resource type="Texture2D" uid="uid://bf76xmspnp2sg" path="res://Assets/vitruvian-man-3.jpg" id="1_2sr8g"]
-[ext_resource type="Texture2D" uid="uid://dmckrmhneu1eo" path="res://Assets/elite-icon.jpg" id="1_epw1m"]
-[ext_resource type="Texture2D" uid="uid://os1bepy0n88p" path="res://Assets/boltgun_chainsword_icon.png" id="2_mhuxi"]
-[ext_resource type="FontFile" uid="uid://caltl8x5gfsdo" path="res://Fonts/sui generis rg.otf" id="2_vhanj"]
-[ext_resource type="Texture2D" uid="uid://cpab0evldmtds" path="res://Assets/tactical_reserve.png" id="3_qttsu"]
-[ext_resource type="Texture2D" uid="uid://0ypjl56xnp8i" path="res://Assets/assault-reserve-icon.png" id="4_g5fa0"]
-[ext_resource type="Texture2D" uid="uid://c3hrwyyawu5ck" path="res://Assets/devestator-reserve-icon.png" id="5_mi2gb"]
-[ext_resource type="Texture2D" uid="uid://bdh5b7ws6iuwv" path="res://Assets/scout-reserve-icon.png" id="6_bq4lh"]
+[ext_resource type="Script" path="res://MainGameScreen/ChapterView.cs" id="1_ctr43"]
+[ext_resource type="Texture2D" uid="uid://dmckrmhneu1eo" path="res://Assets/elite-icon.jpg" id="2_npeqo"]
+[ext_resource type="Texture2D" uid="uid://os1bepy0n88p" path="res://Assets/boltgun_chainsword_icon.png" id="3_oyxpg"]
+[ext_resource type="Texture2D" uid="uid://cpab0evldmtds" path="res://Assets/tactical_reserve.png" id="4_gpckc"]
+[ext_resource type="Texture2D" uid="uid://0ypjl56xnp8i" path="res://Assets/assault-reserve-icon.png" id="5_5aif3"]
+[ext_resource type="Texture2D" uid="uid://c3hrwyyawu5ck" path="res://Assets/devestator-reserve-icon.png" id="6_nicrn"]
+[ext_resource type="Texture2D" uid="uid://bdh5b7ws6iuwv" path="res://Assets/scout-reserve-icon.png" id="7_f3wyx"]
+[ext_resource type="FontFile" uid="uid://caltl8x5gfsdo" path="res://Fonts/sui generis rg.otf" id="8_e43dt"]
 
 [sub_resource type="Theme" id="Theme_7tgn0"]
-default_font = ExtResource("2_vhanj")
+default_font = ExtResource("8_e43dt")
 default_font_size = 12
 
 [node name="ChapterView" type="Control"]
@@ -20,6 +20,7 @@ anchor_right = 1.0
 anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
+script = ExtResource("1_ctr43")
 
 [node name="Panel" type="Panel" parent="."]
 layout_mode = 1
@@ -43,7 +44,7 @@ anchor_bottom = 1.0
 offset_left = 20.0
 offset_top = 50.0
 offset_right = 320.0
-offset_bottom = -20.0
+offset_bottom = -50.0
 
 [node name="Header" type="Panel" parent="DataPanel"]
 custom_minimum_size = Vector2(0, 30)
@@ -79,102 +80,89 @@ grow_vertical = 2
 [node name="HQButton" type="Button" parent="DataPanel/VBoxContainer"]
 layout_mode = 2
 text = "Chapter HQ"
-icon = ExtResource("1_epw1m")
+icon = ExtResource("2_npeqo")
 expand_icon = true
 
 [node name="ArmoryButton" type="Button" parent="DataPanel/VBoxContainer"]
 layout_mode = 2
 text = "Armory"
-icon = ExtResource("1_epw1m")
+icon = ExtResource("2_npeqo")
 expand_icon = true
 
 [node name="LibrariusButton" type="Button" parent="DataPanel/VBoxContainer"]
 layout_mode = 2
 text = "Librarius"
-icon = ExtResource("1_epw1m")
+icon = ExtResource("2_npeqo")
 expand_icon = true
 
 [node name="FirstCompanyButton" type="Button" parent="DataPanel/VBoxContainer"]
 layout_mode = 2
 text = "First Company"
-icon = ExtResource("1_epw1m")
+icon = ExtResource("2_npeqo")
 expand_icon = true
 
 [node name="SecondCompanyButton" type="Button" parent="DataPanel/VBoxContainer"]
 layout_mode = 2
 text = "Second Company"
-icon = ExtResource("2_mhuxi")
+icon = ExtResource("3_oyxpg")
 expand_icon = true
 
 [node name="ThirdCompanyButton" type="Button" parent="DataPanel/VBoxContainer"]
 layout_mode = 2
 text = "Third Company"
-icon = ExtResource("2_mhuxi")
+icon = ExtResource("3_oyxpg")
 expand_icon = true
 
 [node name="FourthCompanyButton" type="Button" parent="DataPanel/VBoxContainer"]
 layout_mode = 2
 text = "Fourth Company"
-icon = ExtResource("2_mhuxi")
+icon = ExtResource("3_oyxpg")
 expand_icon = true
 
 [node name="FifthCompanyButton" type="Button" parent="DataPanel/VBoxContainer"]
 layout_mode = 2
 text = "Fifth Company"
-icon = ExtResource("2_mhuxi")
+icon = ExtResource("3_oyxpg")
 expand_icon = true
 
 [node name="SixthCompanyButton" type="Button" parent="DataPanel/VBoxContainer"]
 layout_mode = 2
 text = "Sixth Company"
-icon = ExtResource("3_qttsu")
+icon = ExtResource("4_gpckc")
 expand_icon = true
 
 [node name="SeventhCompanyButton2" type="Button" parent="DataPanel/VBoxContainer"]
 layout_mode = 2
 text = "Seventh Company"
-icon = ExtResource("3_qttsu")
+icon = ExtResource("4_gpckc")
 expand_icon = true
 
 [node name="EighthCompanyButton3" type="Button" parent="DataPanel/VBoxContainer"]
 layout_mode = 2
 text = "Eighth Company"
-icon = ExtResource("4_g5fa0")
+icon = ExtResource("5_5aif3")
 expand_icon = true
 
 [node name="NinthCompanyButton4" type="Button" parent="DataPanel/VBoxContainer"]
 layout_mode = 2
 text = "Ninth Company"
-icon = ExtResource("5_mi2gb")
+icon = ExtResource("6_nicrn")
 expand_icon = true
 
 [node name="TenthCompanyButton5" type="Button" parent="DataPanel/VBoxContainer"]
 layout_mode = 2
 text = "Tenth Company"
-icon = ExtResource("6_bq4lh")
+icon = ExtResource("7_f3wyx")
 expand_icon = true
 
 [node name="SquadList" type="Panel" parent="."]
 layout_mode = 1
 anchors_preset = -1
+anchor_bottom = 1.0
 offset_left = 330.0
 offset_top = 50.0
 offset_right = 630.0
-offset_bottom = 350.0
-
-[node name="TextureRect" type="TextureRect" parent="SquadList"]
-modulate = Color(1, 1, 1, 0.12549)
-layout_mode = 1
-anchors_preset = -1
-anchor_right = 1.0
-anchor_bottom = 1.0
-offset_left = 10.0
-offset_top = 50.0
-offset_right = -10.0
-grow_horizontal = 2
-grow_vertical = 2
-texture = ExtResource("1_2sr8g")
-expand_mode = 1
+offset_bottom = -50.0
 
 [node name="Header" type="Panel" parent="SquadList"]
 custom_minimum_size = Vector2(0, 30)
@@ -195,32 +183,15 @@ text = "Squads"
 horizontal_alignment = 1
 vertical_alignment = 1
 
-[node name="AwardsPanel" type="Panel" parent="."]
+[node name="VBoxContainer" type="VBoxContainer" parent="SquadList"]
 layout_mode = 1
 anchors_preset = -1
-offset_left = 330.0
-offset_top = 360.0
-offset_right = 630.0
-offset_bottom = 660.0
-
-[node name="Header" type="Panel" parent="AwardsPanel"]
-custom_minimum_size = Vector2(0, 30)
-layout_mode = 1
-anchors_preset = 10
-anchor_right = 1.0
-offset_bottom = 50.0
-grow_horizontal = 2
-
-[node name="Label" type="Label" parent="AwardsPanel/Header"]
-layout_mode = 1
-anchors_preset = 15
 anchor_right = 1.0
 anchor_bottom = 1.0
+offset_top = 50.0
+offset_bottom = -5.0
 grow_horizontal = 2
 grow_vertical = 2
-text = "Awards and Accolades"
-horizontal_alignment = 1
-vertical_alignment = 1
 
 [node name="SoldierHistoryPanel" type="Panel" parent="."]
 custom_minimum_size = Vector2(200, 200)
