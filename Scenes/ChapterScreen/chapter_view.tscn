@@ -37,7 +37,7 @@ anchors_preset = 10
 anchor_right = 1.0
 grow_horizontal = 2
 
-[node name="DataPanel" type="Panel" parent="."]
+[node name="CompanyPanel" type="Panel" parent="."]
 layout_mode = 1
 anchors_preset = -1
 anchor_bottom = 1.0
@@ -46,7 +46,7 @@ offset_top = 50.0
 offset_right = 320.0
 offset_bottom = -50.0
 
-[node name="Header" type="Panel" parent="DataPanel"]
+[node name="Header" type="Panel" parent="CompanyPanel"]
 custom_minimum_size = Vector2(0, 30)
 layout_mode = 1
 anchors_preset = 10
@@ -54,7 +54,7 @@ anchor_right = 1.0
 offset_bottom = 50.0
 grow_horizontal = 2
 
-[node name="Label" type="Label" parent="DataPanel/Header"]
+[node name="Label" type="Label" parent="CompanyPanel/Header"]
 layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
@@ -65,7 +65,7 @@ text = "Companies"
 horizontal_alignment = 1
 vertical_alignment = 1
 
-[node name="VBoxContainer" type="VBoxContainer" parent="DataPanel"]
+[node name="VBoxContainer" type="VBoxContainer" parent="CompanyPanel"]
 layout_mode = 1
 anchors_preset = -1
 anchor_right = 1.0
@@ -77,79 +77,79 @@ offset_bottom = -5.0
 grow_horizontal = 2
 grow_vertical = 2
 
-[node name="HQButton" type="Button" parent="DataPanel/VBoxContainer"]
+[node name="HQButton" type="Button" parent="CompanyPanel/VBoxContainer"]
 layout_mode = 2
 text = "Chapter HQ"
 icon = ExtResource("2_npeqo")
 expand_icon = true
 
-[node name="ArmoryButton" type="Button" parent="DataPanel/VBoxContainer"]
+[node name="ArmoryButton" type="Button" parent="CompanyPanel/VBoxContainer"]
 layout_mode = 2
 text = "Armory"
 icon = ExtResource("2_npeqo")
 expand_icon = true
 
-[node name="LibrariusButton" type="Button" parent="DataPanel/VBoxContainer"]
+[node name="LibrariusButton" type="Button" parent="CompanyPanel/VBoxContainer"]
 layout_mode = 2
 text = "Librarius"
 icon = ExtResource("2_npeqo")
 expand_icon = true
 
-[node name="FirstCompanyButton" type="Button" parent="DataPanel/VBoxContainer"]
+[node name="FirstCompanyButton" type="Button" parent="CompanyPanel/VBoxContainer"]
 layout_mode = 2
 text = "First Company"
 icon = ExtResource("2_npeqo")
 expand_icon = true
 
-[node name="SecondCompanyButton" type="Button" parent="DataPanel/VBoxContainer"]
+[node name="SecondCompanyButton" type="Button" parent="CompanyPanel/VBoxContainer"]
 layout_mode = 2
 text = "Second Company"
 icon = ExtResource("3_oyxpg")
 expand_icon = true
 
-[node name="ThirdCompanyButton" type="Button" parent="DataPanel/VBoxContainer"]
+[node name="ThirdCompanyButton" type="Button" parent="CompanyPanel/VBoxContainer"]
 layout_mode = 2
 text = "Third Company"
 icon = ExtResource("3_oyxpg")
 expand_icon = true
 
-[node name="FourthCompanyButton" type="Button" parent="DataPanel/VBoxContainer"]
+[node name="FourthCompanyButton" type="Button" parent="CompanyPanel/VBoxContainer"]
 layout_mode = 2
 text = "Fourth Company"
 icon = ExtResource("3_oyxpg")
 expand_icon = true
 
-[node name="FifthCompanyButton" type="Button" parent="DataPanel/VBoxContainer"]
+[node name="FifthCompanyButton" type="Button" parent="CompanyPanel/VBoxContainer"]
 layout_mode = 2
 text = "Fifth Company"
 icon = ExtResource("3_oyxpg")
 expand_icon = true
 
-[node name="SixthCompanyButton" type="Button" parent="DataPanel/VBoxContainer"]
+[node name="SixthCompanyButton" type="Button" parent="CompanyPanel/VBoxContainer"]
 layout_mode = 2
 text = "Sixth Company"
 icon = ExtResource("4_gpckc")
 expand_icon = true
 
-[node name="SeventhCompanyButton2" type="Button" parent="DataPanel/VBoxContainer"]
+[node name="SeventhCompanyButton2" type="Button" parent="CompanyPanel/VBoxContainer"]
 layout_mode = 2
 text = "Seventh Company"
 icon = ExtResource("4_gpckc")
 expand_icon = true
 
-[node name="EighthCompanyButton3" type="Button" parent="DataPanel/VBoxContainer"]
+[node name="EighthCompanyButton3" type="Button" parent="CompanyPanel/VBoxContainer"]
 layout_mode = 2
 text = "Eighth Company"
 icon = ExtResource("5_5aif3")
 expand_icon = true
 
-[node name="NinthCompanyButton4" type="Button" parent="DataPanel/VBoxContainer"]
+[node name="NinthCompanyButton4" type="Button" parent="CompanyPanel/VBoxContainer"]
 layout_mode = 2
 text = "Ninth Company"
 icon = ExtResource("6_nicrn")
 expand_icon = true
 
-[node name="TenthCompanyButton5" type="Button" parent="DataPanel/VBoxContainer"]
+[node name="TenthCompanyButton5" type="Button" parent="CompanyPanel/VBoxContainer"]
 layout_mode = 2
 text = "Tenth Company"
 icon = ExtResource("7_f3wyx")
