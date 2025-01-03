@@ -1,7 +1,7 @@
 [gd_scene load_steps=4 format=3 uid="uid://ce35p0pqsk045"]
 
-[ext_resource type="Theme" path="res://MainGameScreen/OnlyWarTheme.tres" id="1_b5lk8"]
-[ext_resource type="Script" path="res://MainGameScreen/TopMenu.cs" id="2_qvt33"]
+[ext_resource type="Theme" uid="uid://ylp8bk1nhedq" path="res://Scenes/OnlyWarTheme.tres" id="1_b5lk8"]
+[ext_resource type="Script" uid="uid://dphyy23swga8y" path="res://Scenes/MainGameScreen/TopMenu.cs" id="2_qvt33"]
 
 [sub_resource type="StyleBoxFlat" id="StyleBoxFlat_ye40b"]
 bg_color = Color(0.0117647, 0.188235, 0.615686, 1)

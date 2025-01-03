@@ -15,14 +15,27 @@ public enum CompanyType
 public partial class ChapterView : Control
 {
     private VBoxContainer _companyVBox;
-    public void _Ready()
+    private VBoxContainer _squadVBox;
+    public event EventHandler<int> CompanyButtonPressed;
+    public event EventHandler<int> SquadButtonPressed;
+    public override void _Ready()
     {
         // Called every time the node is added to the scene
-        _companyVBox = GetNode<VBoxContainer>("CompanyPanel/VBoxContainer");
+        _companyVBox = GetNode<VBoxContainer>("CompanyList/VBoxContainer");
+        _squadVBox = GetNode<VBoxContainer>("SquadList/VBoxContainer");
     }
 
     public void PopulateCompanyList(IReadOnlyList<Tuple<int, CompanyType, string>> companies)
     {
+        var existingButtons = _companyVBox.GetChildren();
+        if(existingButtons != null)
+        {
+            foreach (var child in existingButtons)
+            {
+                _companyVBox.RemoveChild(child);
+                child.QueueFree();
+            }
+        }
         foreach (Tuple<int, CompanyType, string> company in companies)
         {
             AddCompany(company.Item1, company.Item2, company.Item3);
@@ -33,8 +46,11 @@ public partial class ChapterView : Control
     {
         Button companyButton = new Button();
         companyButton.Text = name;
+        companyButton.SetMeta("id", id);
         companyButton.MouseDefaultCursorShape = Control.CursorShape.PointingHand;
         companyButton.IconAlignment = HorizontalAlignment.Left;
+        companyButton.ExpandIcon = true;
+        companyButton.Pressed += () => CompanyButtonPressed?.Invoke(this, id);
         switch (type)
         {
             case CompanyType.Veteran:
@@ -61,5 +77,33 @@ public partial class ChapterView : Control
         companyLabel.Connect("mouse_button_pressed", this, nameof(OnCompanyMousePressed), new Godot.Collections.Array { id });*/
         _companyVBox.AddChild(companyButton);
         
+    }
+
+    public void PopulateSquadList(IReadOnlyList<Tuple<int, string>> squads)
+    {
+        var existingButtons = _squadVBox.GetChildren();
+        if (existingButtons != null)
+        {
+            foreach (var child in existingButtons)
+            {
+                _squadVBox.RemoveChild(child);
+                child.QueueFree();
+            }
+        }
+        foreach (Tuple<int, string> squad in squads)
+        {
+            AddSquad(squad.Item1, squad.Item2);
+        }
+    }
+
+    private void AddSquad(int id, string name)
+    {
+        Button squadButton = new Button();
+        squadButton.Text = name;
+        squadButton.SetMeta("id", id);
+        squadButton.MouseDefaultCursorShape = Control.CursorShape.PointingHand;
+        squadButton.Pressed += () => SquadButtonPressed?.Invoke(this, id);
+        _companyVBox.AddChild(squadButton);
+
     }
 }

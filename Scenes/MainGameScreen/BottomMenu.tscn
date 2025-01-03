@@ -1,6 +1,7 @@
-[gd_scene load_steps=3 format=3 uid="uid://ctrhbg0anf5cx"]
+[gd_scene load_steps=4 format=3 uid="uid://ctrhbg0anf5cx"]
 
-[ext_resource type="Theme" uid="uid://ylp8bk1nhedq" path="res://MainGameScreen/OnlyWarTheme.tres" id="1_ea6pw"]
+[ext_resource type="Theme" uid="uid://ylp8bk1nhedq" path="res://Scenes/OnlyWarTheme.tres" id="1_ea6pw"]
+[ext_resource type="Script" uid="uid://dn41upo2v5pgr" path="res://Scenes/MainGameScreen/BottomMenu.cs" id="2_4yhh4"]
 
 [sub_resource type="StyleBoxFlat" id="StyleBoxFlat_ru2t3"]
 bg_color = Color(0.0117647, 0.188235, 0.615686, 1)
@@ -15,6 +16,7 @@ offset_top = -50.0
 grow_horizontal = 2
 grow_vertical = 0
 theme = ExtResource("1_ea6pw")
+script = ExtResource("2_4yhh4")
 
 [node name="Panel" type="Panel" parent="."]
 layout_mode = 1
@@ -40,7 +42,6 @@ layout_mode = 2
 
 [node name="ChapterButton" type="Button" parent="Panel/MarginContainer/HBoxContainer"]
 layout_mode = 2
-disabled = true
 text = "Chapter"
 
 [node name="ApothecaryButton" type="Button" parent="Panel/MarginContainer/HBoxContainer"]

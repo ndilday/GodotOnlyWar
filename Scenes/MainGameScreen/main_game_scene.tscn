@@ -1,0 +1,15 @@
+[gd_scene load_steps=3 format=3 uid="uid://hbcnhfu1vqdb"]
+
+[ext_resource type="Script" uid="uid://cs7ejn2kgabxr" path="res://Scenes/MainGameScreen/MainGameScene.cs" id="1_g3hiw"]
+[ext_resource type="PackedScene" uid="uid://ck5vq6a7t604p" path="res://Scenes/MainGameScreen/SectorMap.tscn" id="2_lvld5"]
+
+[node name="MainGameScene" type="Control"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+script = ExtResource("1_g3hiw")
+
+[node name="SectorMap" parent="." instance=ExtResource("2_lvld5")]
