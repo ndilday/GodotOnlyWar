@@ -12,6 +12,7 @@ namespace OnlyWar.Models.Soldiers
         private readonly Soldier _soldier;
         private readonly List<string> _soldierHistory;
         private readonly List<SoldierEvaluation> _soldierEvaluationHistory;
+        private readonly List<SoldierAward> _soldierAwards;
         private readonly Dictionary<int, ushort> _rangedWeaponCasualtyCountMap;
         private readonly Dictionary<int, ushort> _meleeWeaponCasualtyCountMap;
         private readonly Dictionary<int, ushort> _factionCasualtyCountMap;
@@ -23,6 +24,7 @@ namespace OnlyWar.Models.Soldiers
         public IReadOnlyDictionary<int, ushort> MeleeWeaponCasualtyCountMap { get => _meleeWeaponCasualtyCountMap; }
         public IReadOnlyDictionary<int, ushort> FactionCasualtyCountMap { get => _factionCasualtyCountMap; }
         public IReadOnlyList<SoldierEvaluation> SoldierEvaluationHistory { get => _soldierEvaluationHistory; }
+        public IReadOnlyList<SoldierAward> SoldierAwards { get => _soldierAwards; }
 
         #region ISoldier passthrough
         public int Id => _soldier.Id;
@@ -109,6 +111,8 @@ namespace OnlyWar.Models.Soldiers
             _soldier = soldier;
             _soldier.Name = name;
             _soldierHistory = [];
+            _soldierEvaluationHistory = [];
+            _soldierAwards = [];
             _rangedWeaponCasualtyCountMap = [];
             _meleeWeaponCasualtyCountMap = [];
             _factionCasualtyCountMap = [];
@@ -151,6 +155,11 @@ namespace OnlyWar.Models.Soldiers
         public void AddEvaluation(SoldierEvaluation evaluation)
         {
             _soldierEvaluationHistory.Add(evaluation);
+        }
+
+        public void AddAward(SoldierAward award)
+        {
+            _soldierAwards.Add(award);
         }
 
         public void AddRangedKill(int factionId, int weaponTemplateId)

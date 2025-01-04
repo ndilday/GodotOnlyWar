@@ -19,7 +19,8 @@ public partial class SoldierController : Control
 	{
 		PopulateSoldierData(soldier);
 		PopulateSoldierHistory(soldier);
-    }
+		PopulateSoldierAwards(soldier);
+	}
 
 	private void PopulateSoldierData(PlayerSoldier soldier)
 	{
@@ -45,5 +46,15 @@ public partial class SoldierController : Control
 			soldierHistory.Add(entry);
 		}
 		SoldierView.PopulateSoldierHistory(soldierHistory);
+	}
+
+	private void PopulateSoldierAwards(PlayerSoldier soldier)
+	{
+		List<string> soldierAwards = new List<string>();
+		foreach (var award in soldier.SoldierAwards)
+		{
+			soldierAwards.Add($"{award.DateAwarded.ToString()}: {award.Name}");
+		}
+		SoldierView.PopulateSoldierAwards(soldierAwards);
 	}
 }

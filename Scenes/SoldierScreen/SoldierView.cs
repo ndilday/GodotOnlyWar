@@ -7,12 +7,14 @@ public partial class SoldierView : Control
 {
 	private VBoxContainer _soldierDataVBox;
 	private RichTextLabel _soldierHistoryRichText;
+	private RichTextLabel _soldierAwardsRichText;
 
 	public override void _Ready()
 	{
 		_soldierDataVBox = GetNode<VBoxContainer>("DataPanel/VBoxContainer");
-        _soldierHistoryRichText = GetNode<RichTextLabel>("HistoryPanel/RichTextLabel");
-    }
+		_soldierHistoryRichText = GetNode<RichTextLabel>("HistoryPanel/RichTextLabel");
+		_soldierAwardsRichText = GetNode<RichTextLabel>("AwardsPanel/RichTextLabel");
+	}
 	public void PopulateSoldierData(IReadOnlyList<Tuple<string, string>> stringPairs)
 	{
 		var existingLines = _soldierDataVBox.GetChildren();
@@ -36,30 +38,39 @@ public partial class SoldierView : Control
 		linePanel.SizeFlagsHorizontal = SizeFlags.Fill;
 		linePanel.SizeFlagsVertical = SizeFlags.Fill;
 		linePanel.CustomMinimumSize = new Vector2(0, 20);
-        Label lineLabel = new Label();
+		Label lineLabel = new Label();
 		lineLabel.Text = label;
 		lineLabel.HorizontalAlignment = HorizontalAlignment.Left;
-        lineLabel.SizeFlagsHorizontal = SizeFlags.ExpandFill;
-        linePanel.AddChild(lineLabel);
+		lineLabel.SizeFlagsHorizontal = SizeFlags.ExpandFill;
+		linePanel.AddChild(lineLabel);
 		Label lineValue = new Label();
 		lineValue.Text = value;
 		lineValue.HorizontalAlignment = HorizontalAlignment.Right;
-        lineValue.SizeFlagsHorizontal = SizeFlags.ExpandFill;
-        linePanel.AddChild(lineValue);
+		lineValue.SizeFlagsHorizontal = SizeFlags.ExpandFill;
+		linePanel.AddChild(lineValue);
 		_soldierDataVBox.AddChild(linePanel);
 	}
 
 	public void PopulateSoldierHistory(IReadOnlyList<string> historyEntries)
 	{
-        // Clear existing text (if any)
-        _soldierHistoryRichText.Clear();
+		// Clear existing text (if any)
+		_soldierHistoryRichText.Clear();
 
-        // Add each entry with a newline
-        foreach (string entry in historyEntries)
-        {
-            _soldierHistoryRichText.AddText(entry + "\n");
-        }
-    }
+		// Add each entry with a newline
+		foreach (string entry in historyEntries)
+		{
+			_soldierHistoryRichText.AddText(entry + "\n");
+		}
+	}
 
-	
+	public void PopulateSoldierAwards(IReadOnlyList<string> awardEntries)
+	{
+		// Clear existing text (if any)
+		_soldierAwardsRichText.Clear();
+		// Add each entry with a newline
+		foreach (string entry in awardEntries)
+		{
+			_soldierAwardsRichText.AddText(entry + "\n");
+		}
+	}
 }

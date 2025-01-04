@@ -6,10 +6,15 @@ using System.Threading.Tasks;
 
 namespace OnlyWar.Models.Soldiers
 {
-    internal class SoldierAward
+    public class SoldierAward
     {
-        Date DateAwarded { get; }
-        string Name { get; }
+        public Date DateAwarded { get; }
+        public string Name { get; }
 
+        public SoldierAward(Date dateAwarded, string name)
+        {
+            DateAwarded = dateAwarded;
+            Name = name;
+        }
     }
 }
