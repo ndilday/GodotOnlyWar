@@ -87,7 +87,7 @@ namespace OnlyWar.Builders
 
             // assign Champtions to the CM and each Company
             List<PlayerSoldier> champions = unassignedSoldierMap.Values
-                                                .OrderByDescending(s => s.MeleeRating)
+                                                .OrderByDescending(s => s.SoldierEvaluationHistory[0].MeleeRating)
                                                 .ToList();
             SoldierTemplate championType = faction.SoldierTemplates
                                               .Values
@@ -96,7 +96,7 @@ namespace OnlyWar.Builders
 
             // assign Ancients to the CM and each Company
             List<PlayerSoldier> ancients = unassignedSoldierMap.Values
-                                               .OrderByDescending(s => s.AncientRating)
+                                               .OrderByDescending(s => s.SoldierEvaluationHistory[0].AncientRating)
                                                .ToList();
             SoldierTemplate ancientType = faction.SoldierTemplates
                                              .Values
@@ -146,7 +146,7 @@ namespace OnlyWar.Builders
         private static void AssignChapterMaster(Dictionary<int, PlayerSoldier> unassignedSoldierMap, 
                                                 Unit chapter, string year, Faction faction)
         {
-            PlayerSoldier master = unassignedSoldierMap.Values.OrderByDescending(s => s.LeadershipRating).First();
+            PlayerSoldier master = unassignedSoldierMap.Values.OrderByDescending(s => s.SoldierEvaluationHistory[0].LeadershipRating).First();
             master.Template = faction.SoldierTemplates.Values.First(st => st.Name == "Chapter Master");
             master.AssignedSquad = chapter.HQSquad;
             chapter.HQSquad.AddSquadMember(master);
@@ -190,12 +190,12 @@ namespace OnlyWar.Builders
                                               Unit chapter, string year, Faction faction)
         {
             IEnumerable<PlayerSoldier> techMarines = 
-                unassignedSoldierMap.Values.Where(s => s.TechRating > 50).OrderByDescending(s => s.TechRating).Take(50);
+                unassignedSoldierMap.Values.Where(s => s.SoldierEvaluationHistory[0].TechRating > 50).OrderByDescending(s => s.SoldierEvaluationHistory[0].TechRating).Take(50);
             // assume for now that there's a single unit to hold all of the Techmarines
             Squad armory = chapter.Squads.First(s => s.Name == "Armory");
             foreach (PlayerSoldier soldier in techMarines)
             {
-                if (soldier.TechRating > 100 && armory.SquadLeader == null)
+                if (soldier.SoldierEvaluationHistory[0].TechRating > 100 && armory.SquadLeader == null)
                 {
                     soldier.Template = faction.SoldierTemplates.Values.First(st => st.Name == "Master of the Forge");
                 }
@@ -215,14 +215,14 @@ namespace OnlyWar.Builders
                                                Unit chapter, string year, Faction faction)
         {
             IEnumerable<PlayerSoldier> apothecaries = unassignedSoldierMap.Values
-                                                   .Where(s => s.MedicalRating > 75)
-                                                   .OrderByDescending(s => s.MedicalRating)
+                                                   .Where(s => s.SoldierEvaluationHistory[0].MedicalRating > 75)
+                                                   .OrderByDescending(s => s.SoldierEvaluationHistory[0].MedicalRating)
                                                    .Take(20);
             // assume for now that there's a single unit to hold all of the Techmarines
             Squad apo = chapter.Squads.First(s => s.Name == "Apothecarion");
             foreach (PlayerSoldier soldier in apothecaries)
             {
-                if (soldier.MedicalRating > 100 && apo.SquadLeader == null)
+                if (soldier.SoldierEvaluationHistory[0].MedicalRating > 100 && apo.SquadLeader == null)
                 {
                     soldier.Template = faction.SoldierTemplates.Values.First(st => st.Name == "Master of the Apothecarion");
                 }
@@ -241,14 +241,14 @@ namespace OnlyWar.Builders
         private static void AssignChaplains(Dictionary<int, PlayerSoldier> unassignedSoldierMap, 
                                             Unit chapter, string year, Faction faction)
         {
-            IEnumerable<PlayerSoldier> chaplains = unassignedSoldierMap.Values.Where(s => s.PietyRating > 90)
-                                                    .OrderByDescending(s => s.PietyRating)
+            IEnumerable<PlayerSoldier> chaplains = unassignedSoldierMap.Values.Where(s => s.SoldierEvaluationHistory[0].PietyRating > 90)
+                                                    .OrderByDescending(s => s.SoldierEvaluationHistory[0].PietyRating)
                                                     .Take(20);
             // assume for now that there's a single unit to hold all of the Techmarines
             Squad reclusium = chapter.Squads.First(s => s.Name == "Reclusium");
             foreach (PlayerSoldier soldier in chaplains)
             {
-                if (soldier.PietyRating > 100 && reclusium.SquadLeader == null)
+                if (soldier.SoldierEvaluationHistory[0].PietyRating > 100 && reclusium.SquadLeader == null)
                 {
                     soldier.Template = faction.SoldierTemplates.Values.First(st => st.Name == "Master of Sanctity");
                 }
@@ -270,8 +270,8 @@ namespace OnlyWar.Builders
             // see if there is an impressive enough leader to be the Veteran Captain
             List<PlayerSoldier> veteranLeaders = 
                 unassignedSoldierMap.Values
-                                    .Where(s => s.LeadershipRating > 100 && s.MeleeRating > 100 && s.RangedRating > 110)
-                                    .OrderByDescending(s => s.LeadershipRating)
+                                    .Where(s => s.SoldierEvaluationHistory[0].LeadershipRating > 100 && s.SoldierEvaluationHistory[0].MeleeRating > 100 && s.SoldierEvaluationHistory[0].RangedRating > 110)
+                                    .OrderByDescending(s => s.SoldierEvaluationHistory[0].LeadershipRating)
                                     .ToList();
             if (veteranLeaders.Count > 0)
             {
@@ -279,7 +279,7 @@ namespace OnlyWar.Builders
                 AssignSoldier(unassignedSoldierMap, veteranLeaders, firstCompany.HQSquad,
                     faction.SoldierTemplates.Values.First(st => st.Name == "Captain"), year);
             }
-            List<PlayerSoldier> leaders = unassignedSoldierMap.Values.OrderByDescending(s => s.LeadershipRating).Take(20).ToList();
+            List<PlayerSoldier> leaders = unassignedSoldierMap.Values.OrderByDescending(s => s.SoldierEvaluationHistory[0].LeadershipRating).Take(20).ToList();
             // assign Recruitment Captain next
             // assuming Tenth Company for now
             Unit tenthCompany = chapter.ChildUnits.First(u => u.Name == "Tenth Company");
@@ -300,11 +300,11 @@ namespace OnlyWar.Builders
         private static void AssignVeterans(Dictionary<int, PlayerSoldier> unassignedSoldierMap, 
                                            Unit chapter, string year, Faction faction)
         {
-            IEnumerable<PlayerSoldier> veterans = unassignedSoldierMap.Values.Where(s => s.MeleeRating > 100 && s.RangedRating > 110);
-            List<PlayerSoldier> veteranLeaders = veterans.Where(s => s.LeadershipRating > 235).OrderByDescending(s => s.LeadershipRating).ToList();
+            IEnumerable<PlayerSoldier> veterans = unassignedSoldierMap.Values.Where(s => s.SoldierEvaluationHistory[0].MeleeRating > 100 && s.SoldierEvaluationHistory[0].RangedRating > 110);
+            List<PlayerSoldier> veteranLeaders = veterans.Where(s => s.SoldierEvaluationHistory[0].LeadershipRating > 235).OrderByDescending(s => s.SoldierEvaluationHistory[0].LeadershipRating).ToList();
             // if there are no veteran sgts, leave First Company empty for now
             if (veteranLeaders.Count == 0) return;
-            List<PlayerSoldier> vetList = veterans.Except(veteranLeaders).OrderByDescending(s => s.MeleeRating).ToList();
+            List<PlayerSoldier> vetList = veterans.Except(veteranLeaders).OrderByDescending(s => s.SoldierEvaluationHistory[0].MeleeRating).ToList();
             int squadSize = (vetList.Count / veteranLeaders.Count) + 1;
             if(squadSize < 5)
             {
@@ -347,7 +347,7 @@ namespace OnlyWar.Builders
                                                  Unit chapter, string year, Faction faction)
         {
             int sgtNeed = ((unassignedSoldierMap.Count - 1) / 10) + 1;
-            List<PlayerSoldier> leaderList = unassignedSoldierMap.Values.OrderByDescending(s => s.LeadershipRating).Take(sgtNeed).ToList();
+            List<PlayerSoldier> leaderList = unassignedSoldierMap.Values.OrderByDescending(s => s.SoldierEvaluationHistory[0].LeadershipRating).Take(sgtNeed).ToList();
             List<PlayerSoldier> scoutList = unassignedSoldierMap.Values.Except(leaderList).ToList();
             Unit lastCompany = null;
             Squad lastSquad = null;
@@ -451,43 +451,43 @@ namespace OnlyWar.Builders
         private static void AssignMarines(Dictionary<int, PlayerSoldier> unassignedSoldierMap, 
                                           Unit chapter, string year, Faction faction)
         {
-            List<PlayerSoldier> devList = unassignedSoldierMap.Values.Where(s => s.MeleeRating >= 86 
-                                                              && s.MeleeRating < 95
-                                                              && s.RangedRating >= 98
-                                                              && s.LeadershipRating < 50)
-                                                     .OrderByDescending(s => s.RangedRating)
+            List<PlayerSoldier> devList = unassignedSoldierMap.Values.Where(s => s.SoldierEvaluationHistory[0].MeleeRating >= 86 
+                                                              && s.SoldierEvaluationHistory[0].MeleeRating < 95
+                                                              && s.SoldierEvaluationHistory[0].RangedRating >= 98
+                                                              && s.SoldierEvaluationHistory[0].LeadershipRating < 50)
+                                                     .OrderByDescending(s => s.SoldierEvaluationHistory[0].RangedRating)
                                                      .ToList();
 
-            List<PlayerSoldier> assList = unassignedSoldierMap.Values.Where(s => s.MeleeRating >= 95 
-                                                              && s.RangedRating >= 98
-                                                              && s.RangedRating < 105
-                                                              && s.LeadershipRating < 50)
-                                                     .OrderByDescending(s => s.MeleeRating)
+            List<PlayerSoldier> assList = unassignedSoldierMap.Values.Where(s => s.SoldierEvaluationHistory[0].MeleeRating >= 95 
+                                                              && s.SoldierEvaluationHistory[0].RangedRating >= 98
+                                                              && s.SoldierEvaluationHistory[0].RangedRating < 105
+                                                              && s.SoldierEvaluationHistory[0].LeadershipRating < 50)
+                                                     .OrderByDescending(s => s.SoldierEvaluationHistory[0].MeleeRating)
                                                      .ToList();
             
-            List<PlayerSoldier> tactList = unassignedSoldierMap.Values.Where(s => s.MeleeRating >= 95
-                                                               && s.RangedRating >= 105 
-                                                               && s.LeadershipRating < 50)
+            List<PlayerSoldier> tactList = unassignedSoldierMap.Values.Where(s => s.SoldierEvaluationHistory[0].MeleeRating >= 95
+                                                               && s.SoldierEvaluationHistory[0].RangedRating >= 105 
+                                                               && s.SoldierEvaluationHistory[0].LeadershipRating < 50)
                                                       .ToList();
             
-            List<PlayerSoldier> devSgtList = unassignedSoldierMap.Values.Where(s => s.MeleeRating >= 86 
-                                                                 && s.MeleeRating < 95
-                                                                 && s.RangedRating >= 98
-                                                                 && s.LeadershipRating >= 50)
-                                                        .OrderByDescending(s => s.LeadershipRating)
+            List<PlayerSoldier> devSgtList = unassignedSoldierMap.Values.Where(s => s.SoldierEvaluationHistory[0].MeleeRating >= 86 
+                                                                 && s.SoldierEvaluationHistory[0].MeleeRating < 95
+                                                                 && s.SoldierEvaluationHistory[0].RangedRating >= 98
+                                                                 && s.SoldierEvaluationHistory[0].LeadershipRating >= 50)
+                                                        .OrderByDescending(s => s.SoldierEvaluationHistory[0].LeadershipRating)
                                                         .ToList();
             
-            List<PlayerSoldier> assSgtList = unassignedSoldierMap.Values.Where(s => s.MeleeRating >= 95 
-                                                                 && s.RangedRating >= 98
-                                                                 && s.RangedRating < 105
-                                                                 && s.LeadershipRating >= 50)
-                                                        .OrderByDescending(s => s.LeadershipRating)
+            List<PlayerSoldier> assSgtList = unassignedSoldierMap.Values.Where(s => s.SoldierEvaluationHistory[0].MeleeRating >= 95 
+                                                                 && s.SoldierEvaluationHistory[0].RangedRating >= 98
+                                                                 && s.SoldierEvaluationHistory[0].RangedRating < 105
+                                                                 && s.SoldierEvaluationHistory[0].LeadershipRating >= 50)
+                                                        .OrderByDescending(s => s.SoldierEvaluationHistory[0].LeadershipRating)
                                                         .ToList();
             
-            List<PlayerSoldier> tactSgtList = unassignedSoldierMap.Values.Where(s => s.MeleeRating >= 95 
-                                                                  && s.RangedRating >= 105 
-                                                                  && s.LeadershipRating >= 50)
-                                                         .OrderByDescending(s => s.LeadershipRating)
+            List<PlayerSoldier> tactSgtList = unassignedSoldierMap.Values.Where(s => s.SoldierEvaluationHistory[0].MeleeRating >= 95 
+                                                                  && s.SoldierEvaluationHistory[0].RangedRating >= 105 
+                                                                  && s.SoldierEvaluationHistory[0].LeadershipRating >= 50)
+                                                         .OrderByDescending(s => s.SoldierEvaluationHistory[0].LeadershipRating)
                                                          .ToList();
 
             BalanceLists(assList, devList, tactList, assSgtList, devSgtList, tactSgtList);
@@ -496,8 +496,8 @@ namespace OnlyWar.Builders
             AssignAssaultMarines(unassignedSoldierMap, chapter, year, faction, assList, assSgtList);
             if (assList.Count > 0)
             {
-                devList.AddRange(assList.Where(a => a.RangedRating > 60));
-                devList = devList.OrderByDescending(s => s.RangedRating).ToList();
+                devList.AddRange(assList.Where(a => a.SoldierEvaluationHistory[0].RangedRating > 60));
+                devList = devList.OrderByDescending(s => s.SoldierEvaluationHistory[0].RangedRating).ToList();
             }
             AssignDevastatorMarines(unassignedSoldierMap, chapter, year, faction, devList, devSgtList);
         }

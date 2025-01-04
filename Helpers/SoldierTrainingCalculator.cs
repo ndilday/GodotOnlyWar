@@ -26,71 +26,75 @@ namespace OnlyWar.Helpers
             _skillsByName = baseSkills.ToDictionary(bs => bs.Name);
         }
 
-        public void UpdateRatings(PlayerSoldier soldier)
+        public void UpdateRatings(Date date, PlayerSoldier soldier)
         {
             // Melee score = (Speed * STR * Melee)
             // Expected score = 16 * 16 * 15.5/8 = 1000
             // low-end = 15 * 15 * 14/8 = 850
             // high-end = 17 * 17 * 16/8 = 578
-            soldier.MeleeRating = 
+            float meleeRating = 
                 soldier.Strength * soldier.GetTotalSkillValue(_skillsByName["Sword"]) 
                 / (float)(RNG.GetDoubleInRange(1.44f, 1.76f) * RNG.GetDoubleInRange(1.44f, 1.76f));
             // marksman, sharpshooter, sniper
             // Ranged Score = PER * Ranged
             Skill bestRanged = soldier.GetBestSkillInCategory(SkillCategory.Ranged);
-            soldier.RangedRating =
+            float rangedRating =
                     (soldier.Dexterity + bestRanged.SkillBonus)
                     / (float)RNG.GetDoubleInRange(0.144f, 0.176f); 
             // Leadership Score = CHA * Leadership * Tactics
-            soldier.LeadershipRating = soldier.Ego
+            float leadershipRating = soldier.Ego
                 * soldier.GetTotalSkillValue(_skillsByName["Leadership"])
                 * soldier.GetTotalSkillValue(_skillsByName["Tactics"])
                 / (float)(RNG.GetDoubleInRange(12.6f, 15.4f) * RNG.GetDoubleInRange(1.26f, 1.54f) * RNG.GetDoubleInRange(1.26f, 1.54f));
             // Ancient Score = EGO * BOD
-            soldier.AncientRating = soldier.Ego * soldier.Constitution
+            float ancientRating = soldier.Ego * soldier.Constitution
                 / (float)(RNG.GetDoubleInRange(1.26f, 1.54f) * RNG.GetDoubleInRange(2.88f, 3.52f));
             // Medical Score = INT * Medicine
-            soldier.MedicalRating = 
+            float medicalRating = 
                 soldier.GetTotalSkillValue(_skillsByName["Diagnosis"])
                 * soldier.GetTotalSkillValue(_skillsByName["First Aid"])
                 / (float)(RNG.GetDoubleInRange(0.99f, 1.21f) * RNG.GetDoubleInRange(1.17f, 1.43f));
             // Tech Score =  INT * TechRapair
-            soldier.TechRating = 
+            float techRating = 
                 soldier.GetTotalSkillValue(_skillsByName["Armory (Small Arms)"])
                 * soldier.GetTotalSkillValue(_skillsByName["Armory (Vehicle)"])
                 / (float)(RNG.GetDoubleInRange(1.17f, 1.43f) * RNG.GetDoubleInRange(1.17f, 1.43f));
             // Piety Score = Piety * Ritual * Persuade
-            soldier.PietyRating = 
+            float pietyRating = 
                 soldier.GetTotalSkillValue(_skillsByName["Theology (Emperor of Man)"])
                 / (float)RNG.GetDoubleInRange(0.108f, 0.132f);
+
+            SoldierEvaluation eval = new(date, meleeRating, rangedRating, leadershipRating, ancientRating, medicalRating, techRating, pietyRating);
+            soldier.AddEvaluation(eval);
         }
 
         public void EvaluateSoldier(PlayerSoldier soldier, Date trainingFinishedYear)
         {
-            UpdateRatings(soldier);
+            UpdateRatings(trainingFinishedYear, soldier);
+            SoldierEvaluation eval = soldier.SoldierEvaluationHistory.Last();
 
             //if (soldier.MeleeRating > 115) soldier.AddEntryToHistory(trainingFinishedYear.ToString() + ": Awarded Adamantium Sword of the Emperor badge during training");
-            if (soldier.MeleeRating > 100) soldier.AddEntryToHistory(trainingFinishedYear.ToString() + ": Awarded Gold Sword of the Emperor badge during training");
-            else if (soldier.MeleeRating > 95) soldier.AddEntryToHistory(trainingFinishedYear.ToString() + ": Awarded Silver Sword of the Emperor badge during training");
-            else if (soldier.MeleeRating > 86) soldier.AddEntryToHistory(trainingFinishedYear.ToString() + ": Awarded Bronze Sword of the Emperor badge during training");
+            if (eval.MeleeRating > 100) soldier.AddEntryToHistory(trainingFinishedYear.ToString() + ": Awarded Gold Sword of the Emperor badge during training");
+            else if (eval.MeleeRating > 95) soldier.AddEntryToHistory(trainingFinishedYear.ToString() + ": Awarded Silver Sword of the Emperor badge during training");
+            else if (eval.MeleeRating > 86) soldier.AddEntryToHistory(trainingFinishedYear.ToString() + ": Awarded Bronze Sword of the Emperor badge during training");
 
-            if (soldier.RangedRating > 110) soldier.AddEntryToHistory(trainingFinishedYear.ToString() + ": Awarded Gold Marksman badge during training with " + soldier.GetBestSkillInCategory(SkillCategory.Ranged).BaseSkill.Name);
-            else if (soldier.RangedRating > 105) soldier.AddEntryToHistory(trainingFinishedYear.ToString() + ": Awarded Silver Marksman badge during training with " + soldier.GetBestSkillInCategory(SkillCategory.Ranged).BaseSkill.Name);
-            else if (soldier.RangedRating > 98) soldier.AddEntryToHistory(trainingFinishedYear.ToString() + ": Awarded Bronze Marksman badge during training with " + soldier.GetBestSkillInCategory(SkillCategory.Ranged).BaseSkill.Name);
+            if (eval.RangedRating > 110) soldier.AddEntryToHistory(trainingFinishedYear.ToString() + ": Awarded Gold Marksman badge during training with " + soldier.GetBestSkillInCategory(SkillCategory.Ranged).BaseSkill.Name);
+            else if (eval.RangedRating > 105) soldier.AddEntryToHistory(trainingFinishedYear.ToString() + ": Awarded Silver Marksman badge during training with " + soldier.GetBestSkillInCategory(SkillCategory.Ranged).BaseSkill.Name);
+            else if (eval.RangedRating > 98) soldier.AddEntryToHistory(trainingFinishedYear.ToString() + ": Awarded Bronze Marksman badge during training with " + soldier.GetBestSkillInCategory(SkillCategory.Ranged).BaseSkill.Name);
 
-            if (soldier.LeadershipRating > 100) soldier.AddEntryToHistory(trainingFinishedYear.ToString() + ": Awarded Gold Voice of the Emperor badge during training");
-            else if (soldier.LeadershipRating > 70) soldier.AddEntryToHistory(trainingFinishedYear.ToString() + ": Awarded Silver Voice of the Emperor badge during training");
-            else if (soldier.LeadershipRating > 50) soldier.AddEntryToHistory(trainingFinishedYear.ToString() + ": Awarded Bronze Voice of the Emperor badge during training");
+            if (eval.LeadershipRating > 100) soldier.AddEntryToHistory(trainingFinishedYear.ToString() + ": Awarded Gold Voice of the Emperor badge during training");
+            else if (eval.LeadershipRating > 70) soldier.AddEntryToHistory(trainingFinishedYear.ToString() + ": Awarded Silver Voice of the Emperor badge during training");
+            else if (eval.LeadershipRating > 50) soldier.AddEntryToHistory(trainingFinishedYear.ToString() + ": Awarded Bronze Voice of the Emperor badge during training");
 
-            if (soldier.AncientRating > 125) soldier.AddEntryToHistory(trainingFinishedYear.ToString() + ": Awarded Gold Banner of the Emperor badge during training");
-            else if (soldier.AncientRating > 110) soldier.AddEntryToHistory(trainingFinishedYear.ToString() + ": Awarded Silver Banner of the Emperor badge during training");
-            else if (soldier.AncientRating > 95) soldier.AddEntryToHistory(trainingFinishedYear.ToString() + ": Awarded Bronze Banner of the Emperor badge during training");
+            if (eval.AncientRating > 125) soldier.AddEntryToHistory(trainingFinishedYear.ToString() + ": Awarded Gold Banner of the Emperor badge during training");
+            else if (eval.AncientRating > 110) soldier.AddEntryToHistory(trainingFinishedYear.ToString() + ": Awarded Silver Banner of the Emperor badge during training");
+            else if (eval.AncientRating > 95) soldier.AddEntryToHistory(trainingFinishedYear.ToString() + ": Awarded Bronze Banner of the Emperor badge during training");
 
-            if (soldier.MedicalRating > 75) soldier.AddEntryToHistory(trainingFinishedYear.ToString() + ": Flagged for potential training as Apothecary");
+            if (eval.MedicalRating > 75) soldier.AddEntryToHistory(trainingFinishedYear.ToString() + ": Flagged for potential training as Apothecary");
 
-            if (soldier.TechRating > 50) soldier.AddEntryToHistory(trainingFinishedYear.ToString() + ": Flagged for potential training as Techmarine");
+            if (eval.TechRating > 50) soldier.AddEntryToHistory(trainingFinishedYear.ToString() + ": Flagged for potential training as Techmarine");
 
-            if (soldier.PietyRating > 90) soldier.AddEntryToHistory(trainingFinishedYear.ToString() + ": Awarded Devout badge and declared a Novice");
+            if (eval.PietyRating > 90) soldier.AddEntryToHistory(trainingFinishedYear.ToString() + ": Awarded Devout badge and declared a Novice");
         }
 
         public void ApplySoldierWorkExperience(ISoldier soldier, float points)

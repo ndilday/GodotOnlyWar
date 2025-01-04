@@ -14,17 +14,16 @@ namespace OnlyWar.Helpers.Database.GameState
             var rangedWeaponCasualtyMap = GetRangedWeaponCasualtiesBySoldierId(dbCon);
             var meleeWeaponCasualtyMap = GetMeleeWeaponCasualtiesBySoldierId(dbCon);
             var historyMap = GetHistoryBySoldierId(dbCon);
-            var playerSoldiers = GetPlayerSoldiers(dbCon, soldierMap, factionCasualtyMap, 
-                                                   rangedWeaponCasualtyMap, meleeWeaponCasualtyMap, historyMap);
+            var evaluationMap = GetEvaluationsBySoldierId(dbCon);
+            var playerSoldiers = GetPlayerSoldiers(dbCon, soldierMap, factionCasualtyMap, rangedWeaponCasualtyMap, 
+                                                   meleeWeaponCasualtyMap, historyMap, evaluationMap);
             return playerSoldiers;
         }
 
         public void SavePlayerSoldier(IDbTransaction transaction, PlayerSoldier playerSoldier)
         {
             string insert = $@"INSERT INTO PlayerSoldier VALUES ({playerSoldier.Id}, 
-                {playerSoldier.MeleeRating}, {playerSoldier.RangedRating}, {playerSoldier.LeadershipRating},
-                {playerSoldier.MedicalRating}, {playerSoldier.TechRating}, {playerSoldier.PietyRating},
-                {playerSoldier.AncientRating},{playerSoldier.ProgenoidImplantDate.Millenium},
+                {playerSoldier.ProgenoidImplantDate.Millenium},
                 {playerSoldier.ProgenoidImplantDate.Year},{playerSoldier.ProgenoidImplantDate.Week});";
             using (var command = transaction.Connection.CreateCommand())
             {
@@ -69,6 +68,19 @@ namespace OnlyWar.Helpers.Database.GameState
             {
                 string safeEntry = entry.Replace("\'", "\'\'");
                 insert = $@"INSERT INTO PlayerSoldierHistory VALUES ({playerSoldier.Id}, '{safeEntry}');";
+                using (var command = transaction.Connection.CreateCommand())
+                {
+                    command.CommandText = insert;
+                    command.ExecuteNonQuery();
+                }
+            }
+
+            foreach(SoldierEvaluation evaluation in playerSoldier.SoldierEvaluationHistory)
+            {
+                insert = $@"INSERT INTO SoldierEvaluation VALUES ({playerSoldier.Id}, 
+                {evaluation.EvaluationDate.Millenium}, {evaluation.EvaluationDate.Year}, {evaluation.EvaluationDate.Week}
+                {evaluation.MeleeRating}, {evaluation.RangedRating}, {evaluation.LeadershipRating},
+                {evaluation.MedicalRating}, {evaluation.TechRating}, {evaluation.PietyRating}, {evaluation.AncientRating})";
                 using (var command = transaction.Connection.CreateCommand())
                 {
                     command.CommandText = insert;
@@ -175,12 +187,48 @@ namespace OnlyWar.Helpers.Database.GameState
             return soldierEntryListMap;
         }
 
+        private Dictionary<int, List<SoldierEvaluation>> GetEvaluationsBySoldierId(IDbConnection connection)
+        {
+            Dictionary<int, List<SoldierEvaluation>> soldierEvalListMap = [];
+            using (var command = connection.CreateCommand())
+            {
+                command.CommandText = "SELECT * FROM SoldierEvaluation";
+                var reader = command.ExecuteReader();
+                while (reader.Read())
+                {
+                    int soldierId = reader.GetInt32(0);
+                    int millenium = reader.GetInt32(1);
+                    int year = reader.GetInt32(2);
+                    int week = reader.GetInt32(3);
+
+                    Date date = new Date(millenium, year, week);
+                    float melee = reader.GetFloat(4);
+                    float ranged = reader.GetFloat(5);
+                    float leadership = reader.GetFloat(6);
+                    float medical = reader.GetFloat(7);
+                    float tech = reader.GetFloat(8);
+                    float piety = reader.GetFloat(9);
+                    float ancient = reader.GetFloat(10);
+
+                    SoldierEvaluation entry = new SoldierEvaluation(date, melee, ranged, leadership, medical, tech, piety, ancient);
+
+                    if (!soldierEvalListMap.ContainsKey(soldierId))
+                    {
+                        soldierEvalListMap[soldierId] = [];
+                    }
+                    soldierEvalListMap[soldierId].Add(entry);
+                }
+            }
+            return soldierEvalListMap;
+        }
+
         private Dictionary<int, PlayerSoldier> GetPlayerSoldiers(IDbConnection connection,
                                                                  IReadOnlyDictionary<int, Soldier> baseSoldierMap,
                                                                  IReadOnlyDictionary<int, Dictionary<int, ushort>> factionCasualtyMap,
                                                                  IReadOnlyDictionary<int, Dictionary<int, ushort>> rangedWeaponCasualtyMap,
                                                                  IReadOnlyDictionary<int, Dictionary<int, ushort>> meleeWeaponCasualtyMap,
-                                                                 IReadOnlyDictionary<int, List<string>> historyMap)
+                                                                 IReadOnlyDictionary<int, List<string>> historyMap,
+                                                                 IReadOnlyDictionary<int, List<SoldierEvaluation>> evaluationMap)
         {
             Dictionary<int, PlayerSoldier> playerSoldierMap = [];
             using (var command = connection.CreateCommand())
@@ -190,16 +238,9 @@ namespace OnlyWar.Helpers.Database.GameState
                 while (reader.Read())
                 {
                     int soldierId = reader.GetInt32(0);
-                    float melee = (float)reader[1];
-                    float ranged = (float)reader[2];
-                    float leadership = (float)reader[3];
-                    float medical = (float)reader[4];
-                    float tech = (float)reader[5];
-                    float piety = (float)reader[6];
-                    float ancient = (float)reader[7];
-                    int implantMillenium = reader.GetInt32(8);
-                    int implantYear = reader.GetInt32(9);
-                    int implantWeek = reader.GetInt32(10);
+                    int implantMillenium = reader.GetInt32(1);
+                    int implantYear = reader.GetInt32(2);
+                    int implantWeek = reader.GetInt32(3);
 
                     Date implantDate = new Date(implantMillenium, implantYear, implantWeek);
 
@@ -211,6 +252,16 @@ namespace OnlyWar.Helpers.Database.GameState
                     else
                     {
                         history = [];
+                    }
+
+                    List<SoldierEvaluation> evals;
+                    if(evaluationMap.ContainsKey(soldierId))
+                    {
+                        evals = evaluationMap[soldierId];
+                    }
+                    else
+                    {
+                        evals = [];
                     }
 
                     Dictionary<int, ushort> rangedWeaponCasualties;
@@ -243,8 +294,7 @@ namespace OnlyWar.Helpers.Database.GameState
                         factionCasualties = [];
                     }
 
-                    PlayerSoldier playerSoldier = new PlayerSoldier(baseSoldierMap[soldierId], melee, ranged,
-                                                                    leadership, medical, tech, piety, ancient,
+                    PlayerSoldier playerSoldier = new PlayerSoldier(baseSoldierMap[soldierId], evals,
                                                                     implantDate, history, rangedWeaponCasualties,
                                                                     meleeWeaponCasualties, factionCasualties);
 

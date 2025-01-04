@@ -11,6 +11,7 @@ namespace OnlyWar.Models.Soldiers
     {
         private readonly Soldier _soldier;
         private readonly List<string> _soldierHistory;
+        private readonly List<SoldierEvaluation> _soldierEvaluationHistory;
         private readonly Dictionary<int, ushort> _rangedWeaponCasualtyCountMap;
         private readonly Dictionary<int, ushort> _meleeWeaponCasualtyCountMap;
         private readonly Dictionary<int, ushort> _factionCasualtyCountMap;
@@ -18,16 +19,11 @@ namespace OnlyWar.Models.Soldiers
 
         public Date ProgenoidImplantDate { get; set; }
         public IReadOnlyCollection<string> SoldierHistory { get => _soldierHistory; }
-        public float MeleeRating { get; set; }
-        public float RangedRating { get; set; }
-        public float LeadershipRating { get; set; }
-        public float MedicalRating { get; set; }
-        public float TechRating { get; set; }
-        public float PietyRating { get; set; }
-        public float AncientRating { get; set; }
         public IReadOnlyDictionary<int, ushort> RangedWeaponCasualtyCountMap { get => _rangedWeaponCasualtyCountMap; }
         public IReadOnlyDictionary<int, ushort> MeleeWeaponCasualtyCountMap { get => _meleeWeaponCasualtyCountMap; }
         public IReadOnlyDictionary<int, ushort> FactionCasualtyCountMap { get => _factionCasualtyCountMap; }
+        public IReadOnlyList<SoldierEvaluation> SoldierEvaluationHistory { get => _soldierEvaluationHistory; }
+
         #region ISoldier passthrough
         public int Id => _soldier.Id;
 
@@ -125,23 +121,15 @@ namespace OnlyWar.Models.Soldiers
             }
         }
 
-        public PlayerSoldier(Soldier soldier, float melee, float ranged,
-                             float leadership, float medical, float tech,
-                             float piety, float ancient, Date implantDate,
-                             List<string> history,
+        public PlayerSoldier(Soldier soldier, List<SoldierEvaluation> evaluations, 
+                             Date implantDate, List<string> history,
                              Dictionary<int, ushort> rangedWeaponCasualties,
                              Dictionary<int, ushort> meleeWeaponCasualties,
                              Dictionary<int, ushort> factionCasualties)
         {
             _soldier = soldier;
             _soldierHistory = history;
-            MeleeRating = melee;
-            RangedRating = ranged;
-            LeadershipRating = leadership;
-            MedicalRating = medical;
-            TechRating = tech;
-            PietyRating = piety;
-            AncientRating = ancient;
+            _soldierEvaluationHistory = evaluations;
             ProgenoidImplantDate = implantDate;
             _rangedWeaponCasualtyCountMap = rangedWeaponCasualties;
             _meleeWeaponCasualtyCountMap = meleeWeaponCasualties;
@@ -158,6 +146,11 @@ namespace OnlyWar.Models.Soldiers
         public void AddEntryToHistory(string entry)
         {
             _soldierHistory.Add(entry);
+        }
+
+        public void AddEvaluation(SoldierEvaluation evaluation)
+        {
+            _soldierEvaluationHistory.Add(evaluation);
         }
 
         public void AddRangedKill(int factionId, int weaponTemplateId)
