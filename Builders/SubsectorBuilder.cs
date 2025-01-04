@@ -309,20 +309,6 @@ namespace OnlyWar.Builders
             return CalculateDistanceSquared(circle.Center, point) <= circle.RadiusSquared;
         }
 
-        private static float CalculateRadiusSquared(Vector2 center, List<Vector2> boundary)
-        {
-            float maxDistanceSquared = 0;
-            foreach (var point in boundary)
-            {
-                float distanceSquared = CalculateDistanceSquared(center, point);
-                if (distanceSquared > maxDistanceSquared)
-                {
-                    maxDistanceSquared = distanceSquared;
-                }
-            }
-            return maxDistanceSquared;
-        }
-
         private static int CalculateLongestPlanetaryDistanceSquared(List<Planet> planets1, List<Planet> planets2)
         {
             int longestPlanetaryDistance = 0;

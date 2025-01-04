@@ -54,7 +54,7 @@ public partial class ChapterView : Control
         switch (type)
         {
             case CompanyType.Veteran:
-                companyButton.Icon = GD.Load<Texture2D>("res://Assets/elite-icon.png");
+                companyButton.Icon = GD.Load<Texture2D>("res://Assets/elite-icon.jpg");
                 break;
             case CompanyType.Tactical:
                 companyButton.Icon = GD.Load<Texture2D>("res://Assets/boltgun_chainsword_icon.png");
@@ -103,7 +103,7 @@ public partial class ChapterView : Control
         squadButton.SetMeta("id", id);
         squadButton.MouseDefaultCursorShape = Control.CursorShape.PointingHand;
         squadButton.Pressed += () => SquadButtonPressed?.Invoke(this, id);
-        _companyVBox.AddChild(squadButton);
+        _squadVBox.AddChild(squadButton);
 
     }
 }

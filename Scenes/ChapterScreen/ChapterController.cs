@@ -51,16 +51,16 @@ public partial class ChapterController : Control
 				case "Veteran Company":
 					companyType = CompanyType.Veteran;
 					break;
-				case "Tactical Company":
+				case "Battle Company":
 					companyType = CompanyType.Tactical;
 					break;
-				case "Reserve Tactical Company":
+				case "Tactical Company":
 					companyType = CompanyType.ReserveTactical;
 					break;
-				case "Reserve Assault Company":
+				case "Assault Company":
 					companyType = CompanyType.ReserveAssault;
 					break;
-				case "Reserve Devastator Company":
+				case "Devastator Company":
 					companyType = CompanyType.ReserveDevastator;
 					break;
 				case "Scout Company":
