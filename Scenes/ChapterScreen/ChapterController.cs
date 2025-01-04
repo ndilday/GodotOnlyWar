@@ -1,13 +1,17 @@
 using Godot;
 using OnlyWar.Models;
+using OnlyWar.Models.Soldiers;
 using OnlyWar.Models.Squads;
 using OnlyWar.Models.Units;
 using System;
 using System.Collections.Generic;
+using System.Linq;
 
 public partial class ChapterController : Control
 {
 	public ChapterView ChapterView {get;set;}
+
+	public event EventHandler<int> SoldierSelectedForDisplay;
 
 	public override void _Ready()
 	{
@@ -17,6 +21,8 @@ public partial class ChapterController : Control
 		}
 		List<Tuple<int, CompanyType, string>> companyList = [];
 		ChapterView.CompanyButtonPressed += HandleCompanyButtonPressed;
+		ChapterView.SquadButtonPressed += HandleSquadButtonPressed;
+		ChapterView.SoldierButtonPressed += HandleSoldierButtonPressed;
 		PopulateCompanyList(companyList);
 	} 
 
@@ -40,6 +46,25 @@ public partial class ChapterController : Control
 		}
 		ChapterView.PopulateSquadList(squadList);
 	}
+
+	private void HandleSquadButtonPressed(object sender, int squadId)
+	{
+		// get squad data
+		Squad squad = GameDataSingleton.Instance.Sector.PlayerForce.Army.OrderOfBattle.GetAllSquads().First(s => s.Id == squadId);
+		// get soldier data
+		List<Tuple<int, string>> soldierList = [];
+		foreach (ISoldier soldier in squad.Members)
+		{
+			soldierList.Add(new Tuple<int, string>(soldier.Id, soldier.Name));
+		}
+		ChapterView.PopulateSoldierList(soldierList);
+	}
+
+	private void HandleSoldierButtonPressed(object sender, int soldierId)
+	{
+		SoldierSelectedForDisplay?.Invoke(this, soldierId);
+	}
+
 
 	private void PopulateCompanyList(List<Tuple<int, CompanyType, string>> companyList)
 	{
