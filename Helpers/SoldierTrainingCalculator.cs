@@ -99,7 +99,7 @@ namespace OnlyWar.Helpers
 
         public void AwardSoldier(PlayerSoldier soldier, Date awardDate, string awardName, string type, ushort level)
         {
-            if(!soldier.SoldierAwards.Any(a => a.Type == type && a.Level < level))
+            if(!soldier.SoldierAwards.Any(a => a.Type == type && a.Level >= level))
             {
                 soldier.AddEntryToHistory(awardDate.ToString() + ": Awarded " + awardName);
                 soldier.AddAward(new SoldierAward(awardDate, awardName, type, level));
