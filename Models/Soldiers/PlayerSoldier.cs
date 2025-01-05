@@ -126,7 +126,7 @@ namespace OnlyWar.Models.Soldiers
         }
 
         public PlayerSoldier(Soldier soldier, List<SoldierEvaluation> evaluations, 
-                             Date implantDate, List<string> history,
+                             List<SoldierAward> awards, Date implantDate, List<string> history,
                              Dictionary<int, ushort> rangedWeaponCasualties,
                              Dictionary<int, ushort> meleeWeaponCasualties,
                              Dictionary<int, ushort> factionCasualties)
@@ -134,6 +134,7 @@ namespace OnlyWar.Models.Soldiers
             _soldier = soldier;
             _soldierHistory = history;
             _soldierEvaluationHistory = evaluations;
+            _soldierAwards = awards;
             ProgenoidImplantDate = implantDate;
             _rangedWeaponCasualtyCountMap = rangedWeaponCasualties;
             _meleeWeaponCasualtyCountMap = meleeWeaponCasualties;

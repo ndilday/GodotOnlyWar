@@ -15,8 +15,9 @@ namespace OnlyWar.Helpers.Database.GameState
             var meleeWeaponCasualtyMap = GetMeleeWeaponCasualtiesBySoldierId(dbCon);
             var historyMap = GetHistoryBySoldierId(dbCon);
             var evaluationMap = GetEvaluationsBySoldierId(dbCon);
+            var awardMap = GetAwardsBySoldierId(dbCon);
             var playerSoldiers = GetPlayerSoldiers(dbCon, soldierMap, factionCasualtyMap, rangedWeaponCasualtyMap, 
-                                                   meleeWeaponCasualtyMap, historyMap, evaluationMap);
+                                                   meleeWeaponCasualtyMap, historyMap, evaluationMap, awardMap);
             return playerSoldiers;
         }
 
@@ -78,9 +79,21 @@ namespace OnlyWar.Helpers.Database.GameState
             foreach(SoldierEvaluation evaluation in playerSoldier.SoldierEvaluationHistory)
             {
                 insert = $@"INSERT INTO SoldierEvaluation VALUES ({playerSoldier.Id}, 
-                {evaluation.EvaluationDate.Millenium}, {evaluation.EvaluationDate.Year}, {evaluation.EvaluationDate.Week}
+                {evaluation.EvaluationDate.Millenium}, {evaluation.EvaluationDate.Year}, {evaluation.EvaluationDate.Week},
                 {evaluation.MeleeRating}, {evaluation.RangedRating}, {evaluation.LeadershipRating},
                 {evaluation.MedicalRating}, {evaluation.TechRating}, {evaluation.PietyRating}, {evaluation.AncientRating})";
+                using (var command = transaction.Connection.CreateCommand())
+                {
+                    command.CommandText = insert;
+                    command.ExecuteNonQuery();
+                }
+            }
+
+            foreach (SoldierAward award in playerSoldier.SoldierAwards)
+            {
+                insert = $@"INSERT INTO SoldierAward VALUES ({playerSoldier.Id}, 
+                {award.DateAwarded.Millenium}, {award.DateAwarded.Year}, {award.DateAwarded.Week},
+                {award.Name}, {award.Type}, {award.Level})";
                 using (var command = transaction.Connection.CreateCommand())
                 {
                     command.CommandText = insert;
@@ -222,13 +235,45 @@ namespace OnlyWar.Helpers.Database.GameState
             return soldierEvalListMap;
         }
 
+        private Dictionary<int, List<SoldierAward>> GetAwardsBySoldierId(IDbConnection connection)
+        {
+            Dictionary<int, List<SoldierAward>> soldierAwardListMap = [];
+            using (var command = connection.CreateCommand())
+            {
+                command.CommandText = "SELECT * FROM SoldierAward";
+                var reader = command.ExecuteReader();
+                while (reader.Read())
+                {
+                    int soldierId = reader.GetInt32(0);
+                    int millenium = reader.GetInt32(1);
+                    int year = reader.GetInt32(2);
+                    int week = reader.GetInt32(3);
+
+                    Date date = new Date(millenium, year, week);
+                    string name = reader.GetString(4);
+                    string type = reader.GetString(5);
+                    ushort level = (ushort)reader.GetInt16(6);
+
+                    SoldierAward entry = new SoldierAward(date, name, type, level);
+
+                    if (!soldierAwardListMap.ContainsKey(soldierId))
+                    {
+                        soldierAwardListMap[soldierId] = [];
+                    }
+                    soldierAwardListMap[soldierId].Add(entry);
+                }
+            }
+            return soldierAwardListMap;
+        }
+
         private Dictionary<int, PlayerSoldier> GetPlayerSoldiers(IDbConnection connection,
                                                                  IReadOnlyDictionary<int, Soldier> baseSoldierMap,
                                                                  IReadOnlyDictionary<int, Dictionary<int, ushort>> factionCasualtyMap,
                                                                  IReadOnlyDictionary<int, Dictionary<int, ushort>> rangedWeaponCasualtyMap,
                                                                  IReadOnlyDictionary<int, Dictionary<int, ushort>> meleeWeaponCasualtyMap,
                                                                  IReadOnlyDictionary<int, List<string>> historyMap,
-                                                                 IReadOnlyDictionary<int, List<SoldierEvaluation>> evaluationMap)
+                                                                 IReadOnlyDictionary<int, List<SoldierEvaluation>> evaluationMap,
+                                                                 IReadOnlyDictionary<int, List<SoldierAward>> awardMap)
         {
             Dictionary<int, PlayerSoldier> playerSoldierMap = [];
             using (var command = connection.CreateCommand())
@@ -264,6 +309,16 @@ namespace OnlyWar.Helpers.Database.GameState
                         evals = [];
                     }
 
+                    List<SoldierAward> awards;
+                    if(awardMap.ContainsKey(soldierId))
+                    {
+                        awards = awardMap[soldierId];
+                    }
+                    else
+                    {
+                        awards = [];
+                    }
+
                     Dictionary<int, ushort> rangedWeaponCasualties;
                     if (rangedWeaponCasualtyMap.ContainsKey(soldierId))
                     {
@@ -294,7 +349,7 @@ namespace OnlyWar.Helpers.Database.GameState
                         factionCasualties = [];
                     }
 
-                    PlayerSoldier playerSoldier = new PlayerSoldier(baseSoldierMap[soldierId], evals,
+                    PlayerSoldier playerSoldier = new PlayerSoldier(baseSoldierMap[soldierId], evals, awards,
                                                                     implantDate, history, rangedWeaponCasualties,
                                                                     meleeWeaponCasualties, factionCasualties);
 

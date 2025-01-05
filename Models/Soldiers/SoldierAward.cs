@@ -10,11 +10,15 @@ namespace OnlyWar.Models.Soldiers
     {
         public Date DateAwarded { get; }
         public string Name { get; }
+        public string Type { get; }
+        public ushort Level { get; }
 
-        public SoldierAward(Date dateAwarded, string name)
+        public SoldierAward(Date dateAwarded, string name, string type, ushort level)
         {
             DateAwarded = dateAwarded;
             Name = name;
+            Type = type;
+            Level = level;
         }
     }
 }

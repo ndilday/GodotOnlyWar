@@ -74,21 +74,21 @@ namespace OnlyWar.Helpers
             SoldierEvaluation eval = soldier.SoldierEvaluationHistory.Last();
 
             //if (soldier.MeleeRating > 115) soldier.AddEntryToHistory(trainingFinishedYear.ToString() + ": Awarded Adamantium Sword of the Emperor badge during training");
-            if (eval.MeleeRating > 100) AwardSoldier(soldier, trainingFinishedYear, "Gold Sword of the Emperor");
-            else if (eval.MeleeRating > 95) AwardSoldier(soldier, trainingFinishedYear, "Silver Sword of the Emperor");
-            else if (eval.MeleeRating > 86) AwardSoldier(soldier, trainingFinishedYear, "Bronze Sword of the Emperor");
+            if (eval.MeleeRating > 100) AwardSoldier(soldier, trainingFinishedYear, "Gold Sword of the Emperor", "Sword", 3);
+            else if (eval.MeleeRating > 95) AwardSoldier(soldier, trainingFinishedYear, "Silver Sword of the Emperor", "Sword", 2);
+            else if (eval.MeleeRating > 86) AwardSoldier(soldier, trainingFinishedYear, "Bronze Sword of the Emperor", "Sword", 1);
 
-            if (eval.RangedRating > 110) AwardSoldier(soldier, trainingFinishedYear, $"Gold {soldier.GetBestSkillInCategory(SkillCategory.Ranged).BaseSkill.Name} of the Emperor");
-            else if (eval.RangedRating > 105) AwardSoldier(soldier, trainingFinishedYear, $"Silver {soldier.GetBestSkillInCategory(SkillCategory.Ranged).BaseSkill.Name} of the Emperor");
-            else if (eval.RangedRating > 98) AwardSoldier(soldier, trainingFinishedYear, $"Bronze {soldier.GetBestSkillInCategory(SkillCategory.Ranged).BaseSkill.Name} of the Emperor");
+            if (eval.RangedRating > 110) AwardSoldier(soldier, trainingFinishedYear, $"Gold {soldier.GetBestSkillInCategory(SkillCategory.Ranged).BaseSkill.Name} of the Emperor", "Gun", 3);
+            else if (eval.RangedRating > 105) AwardSoldier(soldier, trainingFinishedYear, $"Silver {soldier.GetBestSkillInCategory(SkillCategory.Ranged).BaseSkill.Name} of the Emperor", "Gun", 2);
+            else if (eval.RangedRating > 98) AwardSoldier(soldier, trainingFinishedYear, $"Bronze {soldier.GetBestSkillInCategory(SkillCategory.Ranged).BaseSkill.Name} of the Emperor", "Gun", 1);
 
-            if (eval.LeadershipRating > 100) AwardSoldier(soldier, trainingFinishedYear, "Gold Voice of the Emperor");
-            else if (eval.LeadershipRating > 70) AwardSoldier(soldier, trainingFinishedYear, "Silver Voice of the Emperor");
-            else if (eval.LeadershipRating > 50) AwardSoldier(soldier, trainingFinishedYear, "Bronze Voice of the Emperor");
+            if (eval.LeadershipRating > 100) AwardSoldier(soldier, trainingFinishedYear, "Gold Voice of the Emperor", "Voice", 3);
+            else if (eval.LeadershipRating > 70) AwardSoldier(soldier, trainingFinishedYear, "Silver Voice of the Emperor", "Voice", 2);
+            else if (eval.LeadershipRating > 50) AwardSoldier(soldier, trainingFinishedYear, "Bronze Voice of the Emperor", "Voice", 1);
 
-            if (eval.AncientRating > 125) AwardSoldier(soldier, trainingFinishedYear, "Gold Banner of the Emperor");
-            else if (eval.AncientRating > 110) AwardSoldier(soldier, trainingFinishedYear, "Silver Banner of the Emperor");
-            else if (eval.AncientRating > 95) AwardSoldier(soldier, trainingFinishedYear, "Bronze Banner of the Emperor");
+            if (eval.AncientRating > 125) AwardSoldier(soldier, trainingFinishedYear, "Gold Banner of the Emperor", "Banner", 3);
+            else if (eval.AncientRating > 110) AwardSoldier(soldier, trainingFinishedYear, "Silver Banner of the Emperor", "Banner", 2);
+            else if (eval.AncientRating > 95) AwardSoldier(soldier, trainingFinishedYear, "Bronze Banner of the Emperor", "Banner", 1);
 
             if (eval.MedicalRating > 75) soldier.AddEntryToHistory(trainingFinishedYear.ToString() + ": Flagged for potential training as Apothecary");
 
@@ -97,12 +97,12 @@ namespace OnlyWar.Helpers
             if (eval.PietyRating > 90) soldier.AddEntryToHistory(trainingFinishedYear.ToString() + ": Awarded Devout badge and declared a Novice");
         }
 
-        public void AwardSoldier(PlayerSoldier soldier, Date awardDate, string awardName)
+        public void AwardSoldier(PlayerSoldier soldier, Date awardDate, string awardName, string type, ushort level)
         {
-            if(!soldier.SoldierAwards.Any(a => a.Name == awardName))
+            if(!soldier.SoldierAwards.Any(a => a.Type == type && a.Level < level))
             {
                 soldier.AddEntryToHistory(awardDate.ToString() + ": Awarded " + awardName);
-                soldier.AddAward(new SoldierAward(awardDate, awardName));
+                soldier.AddAward(new SoldierAward(awardDate, awardName, type, level));
             }
         }
 
