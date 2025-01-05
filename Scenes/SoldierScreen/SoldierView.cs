@@ -8,12 +8,14 @@ public partial class SoldierView : Control
 	private VBoxContainer _soldierDataVBox;
 	private RichTextLabel _soldierHistoryRichText;
 	private RichTextLabel _soldierAwardsRichText;
+	private RichTextLabel _sergeantReportRichText;
 
 	public override void _Ready()
 	{
 		_soldierDataVBox = GetNode<VBoxContainer>("DataPanel/VBoxContainer");
 		_soldierHistoryRichText = GetNode<RichTextLabel>("HistoryPanel/RichTextLabel");
 		_soldierAwardsRichText = GetNode<RichTextLabel>("AwardsPanel/RichTextLabel");
+		_sergeantReportRichText = GetNode<RichTextLabel>("RecommendationPanel/RichTextLabel");
 	}
 	public void PopulateSoldierData(IReadOnlyList<Tuple<string, string>> stringPairs)
 	{
@@ -72,5 +74,13 @@ public partial class SoldierView : Control
 		{
 			_soldierAwardsRichText.AddText(entry + "\n");
 		}
+	}
+
+	public void PopulateSergeantReport(string report)
+	{
+		// Clear existing text (if any)
+		_sergeantReportRichText.Clear();
+		// Add the report
+		_sergeantReportRichText.AddText(report);
 	}
 }
