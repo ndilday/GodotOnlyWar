@@ -1,5 +1,4 @@
 using Godot;
-using OnlyWar.Models.Squads;
 using System;
 using System.Collections.Generic;
 
@@ -28,7 +27,7 @@ public partial class ChapterView : Control
     {
         // Called every time the node is added to the scene
         _companyVBox = GetNode<VBoxContainer>("CompanyList/VBoxContainer");
-        _squadVBox = GetNode<VBoxContainer>("SquadList/VBoxContainer");
+        _squadVBox = GetNode<VBoxContainer>("SquadList/ScrollContainer/VBoxContainer");
         _soldierVBox = GetNode<VBoxContainer>("SoldierList/VBoxContainer");
         _companyButtonGroup = new ButtonGroup();
         _squadButtonGroup = new ButtonGroup();
@@ -36,15 +35,9 @@ public partial class ChapterView : Control
 
     public void PopulateCompanyList(IReadOnlyList<Tuple<int, CompanyType, string>> companies)
     {
-        var existingButtons = _companyVBox.GetChildren();
-        if (existingButtons != null)
-        {
-            foreach (var child in existingButtons)
-            {
-                _companyVBox.RemoveChild(child);
-                child.QueueFree();
-            }
-        }
+        ClearVBox(_soldierVBox);
+        ClearVBox(_squadVBox);
+        ClearVBox(_companyVBox);
         foreach (Tuple<int, CompanyType, string> company in companies)
         {
             AddCompany(company.Item1, company.Item2, company.Item3);
@@ -89,18 +82,23 @@ public partial class ChapterView : Control
 
     public void PopulateSquadList(IReadOnlyList<Tuple<int, string>> squads)
     {
-        var existingButtons = _squadVBox.GetChildren();
+        ClearVBox(_squadVBox);
+        foreach (Tuple<int, string> squad in squads)
+        {
+            AddSquad(squad.Item1, squad.Item2);
+        }
+    }
+
+    private void ClearVBox(VBoxContainer vbox)
+    {
+        var existingButtons = vbox.GetChildren();
         if (existingButtons != null)
         {
             foreach (var child in existingButtons)
             {
-                _squadVBox.RemoveChild(child);
+                vbox.RemoveChild(child);
                 child.QueueFree();
             }
-        }
-        foreach (Tuple<int, string> squad in squads)
-        {
-            AddSquad(squad.Item1, squad.Item2);
         }
     }
 
@@ -118,15 +116,7 @@ public partial class ChapterView : Control
 
     public void PopulateSoldierList(IReadOnlyList<Tuple<int, string>> soldiers)
     {
-        var existingButtons = _soldierVBox.GetChildren();
-        if (existingButtons != null)
-        {
-            foreach (var child in existingButtons)
-            {
-                _soldierVBox.RemoveChild(child);
-                child.QueueFree();
-            }
-        }
+        ClearVBox(_soldierVBox);
         if (soldiers == null || soldiers.Count == 0)
         {
             _soldierVBox.AddChild(new Label() { Text = "No soldiers in this squad" });
@@ -149,4 +139,6 @@ public partial class ChapterView : Control
         soldierButton.Pressed += () => SoldierButtonPressed?.Invoke(this, id);
         _soldierVBox.AddChild(soldierButton);
     }
+
+    //private void 
 }

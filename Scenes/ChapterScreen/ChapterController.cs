@@ -19,11 +19,10 @@ public partial class ChapterController : Control
 		{
 			ChapterView = GetNode<ChapterView>("ChapterView");
 		}
-		List<Tuple<int, CompanyType, string>> companyList = [];
 		ChapterView.CompanyButtonPressed += HandleCompanyButtonPressed;
 		ChapterView.SquadButtonPressed += HandleSquadButtonPressed;
 		ChapterView.SoldierButtonPressed += HandleSoldierButtonPressed;
-		PopulateCompanyList(companyList);
+		PopulateCompanyList();
 	} 
 
 	public override void _ExitTree()
@@ -42,7 +41,7 @@ public partial class ChapterController : Control
 		List<Tuple<int, string>> squadList = [];
 		foreach (Squad squad in company.Squads)
 		{
-			squadList.Add(new Tuple<int, string>(squad.Id, squad.Name));
+			squadList.Add(new Tuple<int, string>(squad.Id, $"{squad.Name} ({squad.SquadTemplate.Name})"));
 		}
 		ChapterView.PopulateSquadList(squadList);
 	}
@@ -55,7 +54,7 @@ public partial class ChapterController : Control
 		List<Tuple<int, string>> soldierList = [];
 		foreach (ISoldier soldier in squad.Members)
 		{
-			soldierList.Add(new Tuple<int, string>(soldier.Id, soldier.Name));
+			soldierList.Add(new Tuple<int, string>(soldier.Id, $"{soldier.Template.Name} {soldier.Name}"));
 		}
 		ChapterView.PopulateSoldierList(soldierList);
 	}
@@ -66,9 +65,10 @@ public partial class ChapterController : Control
 	}
 
 
-	private void PopulateCompanyList(List<Tuple<int, CompanyType, string>> companyList)
+	public void PopulateCompanyList()
 	{
-		foreach (Unit company in GameDataSingleton.Instance.Sector.PlayerForce.Army.OrderOfBattle.ChildUnits)
+		List<Tuple<int, CompanyType, string>> companyList = [];
+        foreach (Unit company in GameDataSingleton.Instance.Sector.PlayerForce.Army.OrderOfBattle.ChildUnits)
 		{
 			CompanyType companyType;
 			switch (company.UnitTemplate.Name)

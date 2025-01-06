@@ -1,14 +1,19 @@
 using Godot;
+using OnlyWar.Models.Soldiers;
 using OnlyWar.Models.Squads;
 using System;
 using System.Collections.Generic;
 
 public partial class SoldierView : Control
 {
+	public event EventHandler<int> TransferTargetSelected;
+
 	private VBoxContainer _soldierDataVBox;
 	private RichTextLabel _soldierHistoryRichText;
 	private RichTextLabel _soldierAwardsRichText;
 	private RichTextLabel _sergeantReportRichText;
+	private MenuButton _transferButton;
+
 
 	public override void _Ready()
 	{
@@ -16,6 +21,8 @@ public partial class SoldierView : Control
 		_soldierHistoryRichText = GetNode<RichTextLabel>("HistoryPanel/RichTextLabel");
 		_soldierAwardsRichText = GetNode<RichTextLabel>("AwardsPanel/RichTextLabel");
 		_sergeantReportRichText = GetNode<RichTextLabel>("RecommendationPanel/RichTextLabel");
+		_transferButton = GetNode<MenuButton>("TopMenuPanel/MarginContainer/HBoxContainer/TransferButton");
+		_transferButton.GetPopup().IndexPressed += (long index) => TransferTargetSelected?.Invoke(this, (int)index);
 	}
 	public void PopulateSoldierData(IReadOnlyList<Tuple<string, string>> stringPairs)
 	{
@@ -82,5 +89,14 @@ public partial class SoldierView : Control
 		_sergeantReportRichText.Clear();
 		// Add the report
 		_sergeantReportRichText.AddText(report);
+	}
+
+	public void PopulateTransferOptions(List<string> openings)
+	{
+		_transferButton.GetPopup().Clear();
+		foreach (string opening in openings)
+		{
+			_transferButton.GetPopup().AddItem(opening);
+		}
 	}
 }

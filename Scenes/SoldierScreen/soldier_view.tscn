@@ -46,7 +46,7 @@ grow_horizontal = 2
 layout_mode = 1
 anchors_preset = -1
 offset_left = 20.0
-offset_top = 50.0
+offset_top = 60.0
 offset_right = 320.0
 offset_bottom = 350.0
 
@@ -200,7 +200,7 @@ text = "Who the Bell Tolls"
 layout_mode = 1
 anchors_preset = -1
 offset_left = 330.0
-offset_top = 50.0
+offset_top = 60.0
 offset_right = 630.0
 offset_bottom = 350.0
 
@@ -251,7 +251,7 @@ anchors_preset = -1
 offset_left = 20.0
 offset_top = 360.0
 offset_right = 320.0
-offset_bottom = 660.0
+offset_bottom = 708.0
 
 [node name="Header" type="Panel" parent="SoldierView/RecommendationPanel"]
 custom_minimum_size = Vector2(0, 30)
@@ -292,7 +292,7 @@ anchors_preset = -1
 offset_left = 330.0
 offset_top = 360.0
 offset_right = 630.0
-offset_bottom = 660.0
+offset_bottom = 708.0
 
 [node name="Header" type="Panel" parent="SoldierView/AwardsPanel"]
 custom_minimum_size = Vector2(0, 30)
@@ -335,9 +335,9 @@ anchor_left = 1.0
 anchor_right = 1.0
 anchor_bottom = 1.0
 offset_left = -350.0
-offset_top = 50.0
+offset_top = 60.0
 offset_right = -20.0
-offset_bottom = -20.0
+offset_bottom = -60.0
 grow_horizontal = 0
 grow_vertical = 2
 
@@ -378,3 +378,26 @@ theme = SubResource("Theme_7tgn0")
 layout_mode = 0
 offset_right = 40.0
 offset_bottom = 40.0
+
+[node name="TopMenuPanel" type="Panel" parent="SoldierView"]
+layout_mode = 1
+anchors_preset = 10
+anchor_right = 1.0
+offset_bottom = 50.0
+grow_horizontal = 2
+
+[node name="MarginContainer" type="MarginContainer" parent="SoldierView/TopMenuPanel"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_constants/margin_left = 10
+
+[node name="HBoxContainer" type="HBoxContainer" parent="SoldierView/TopMenuPanel/MarginContainer"]
+layout_mode = 2
+
+[node name="TransferButton" type="MenuButton" parent="SoldierView/TopMenuPanel/MarginContainer/HBoxContainer"]
+layout_mode = 2
+text = "Transfer"

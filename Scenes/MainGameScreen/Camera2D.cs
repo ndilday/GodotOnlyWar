@@ -33,7 +33,7 @@ public partial class Camera2D : Godot.Camera2D
                 Vector2I gridPosition = _sectorMap.CalculateGridCoordinates(mousePosition);
                 int index = _sectorMap.GridPositionToIndex(gridPosition);
                 string text = $"({gridPosition.X},{gridPosition.Y})\nPlanet: {_sectorMap.HasPlanet[index]}\nSubsector: {_sectorMap.SectorIds[index]}";
-                _sectorMap.GetNode<TopMenu>("CanvasLayer/TopMenu").SetDebugText(text);
+                _sectorMap.GetNode<TopMenu>("UILayer/TopMenu").SetDebugText(text);
             }
             // zoom in
             else if (emb.ButtonIndex == MouseButton.WheelUp)

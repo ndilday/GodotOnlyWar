@@ -14,9 +14,9 @@ ignore_rotation = false
 script = ExtResource("2_u2h2t")
 _sectorMap = NodePath("..")
 
-[node name="CanvasLayer" type="CanvasLayer" parent="."]
+[node name="UILayer" type="CanvasLayer" parent="."]
 
-[node name="TopMenu" parent="CanvasLayer" instance=ExtResource("3_pdcxs")]
+[node name="TopMenu" parent="UILayer" instance=ExtResource("3_pdcxs")]
 grow_vertical = 2
 
-[node name="BottomMenu" parent="CanvasLayer" instance=ExtResource("3_6x2gg")]
+[node name="BottomMenu" parent="UILayer" instance=ExtResource("3_6x2gg")]
