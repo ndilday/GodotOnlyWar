@@ -391,6 +391,7 @@ layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
 anchor_bottom = 1.0
+offset_right = -50.0
 grow_horizontal = 2
 grow_vertical = 2
 theme_override_constants/margin_left = 10
@@ -401,3 +402,14 @@ layout_mode = 2
 [node name="TransferButton" type="MenuButton" parent="SoldierView/TopMenuPanel/MarginContainer/HBoxContainer"]
 layout_mode = 2
 text = "Transfer"
+
+[node name="CloseButton" type="Button" parent="SoldierView/TopMenuPanel"]
+layout_mode = 1
+anchors_preset = 1
+anchor_left = 1.0
+anchor_right = 1.0
+offset_left = -40.0
+offset_top = 5.0
+offset_bottom = 45.0
+grow_horizontal = 0
+text = "X"

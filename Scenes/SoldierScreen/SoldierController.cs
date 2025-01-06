@@ -49,71 +49,73 @@ public partial class SoldierController : Control
 		PopulateTransferOptions(soldier);
 	}
 
-	public void FinalizeSoldierTransfer()
+	public bool FinalizeSoldierTransfer()
 	{
 		if (_selectedTransfer != null)
 		{
-            Squad currentSquad = _selectedSoldier.AssignedSquad;
-            // move soldier to his new role
-            _selectedSoldier.AssignedSquad = null;
-            currentSquad.RemoveSquadMember(_selectedSoldier);
-            if (_selectedSoldier.Template.IsSquadLeader
-                && (currentSquad.SquadTemplate.SquadType & SquadTypes.HQ) == 0)
-            {
-                // if soldier is squad leader and its not an HQ Squad, change name
-                currentSquad.Name = currentSquad.SquadTemplate.Name;
-            }
-            Squad newSquad = GameDataSingleton.Instance.Sector.PlayerForce.Army.SquadMap[_selectedTransfer.Item1];
-            _selectedSoldier.AssignedSquad = newSquad;
-            newSquad.AddSquadMember(_selectedSoldier);
+			Squad currentSquad = _selectedSoldier.AssignedSquad;
+			// move soldier to his new role
+			_selectedSoldier.AssignedSquad = null;
+			currentSquad.RemoveSquadMember(_selectedSoldier);
+			if (_selectedSoldier.Template.IsSquadLeader
+				&& (currentSquad.SquadTemplate.SquadType & SquadTypes.HQ) == 0)
+			{
+				// if soldier is squad leader and its not an HQ Squad, change name
+				currentSquad.Name = currentSquad.SquadTemplate.Name;
+			}
+			Squad newSquad = GameDataSingleton.Instance.Sector.PlayerForce.Army.SquadMap[_selectedTransfer.Item1];
+			_selectedSoldier.AssignedSquad = newSquad;
+			newSquad.AddSquadMember(_selectedSoldier);
 
-            UpdateSquadLocations(currentSquad, newSquad);
+			UpdateSquadLocations(currentSquad, newSquad);
 
-            Date date = GameDataSingleton.Instance.Date;
+			Date date = GameDataSingleton.Instance.Date;
 			if (_selectedSoldier.Template != _selectedTransfer.Item2)
 			{
 				_selectedSoldier.AddEntryToHistory($"{date}: promoted to {_selectedTransfer.Item2.Name}");
-                _selectedSoldier.Template = _selectedTransfer.Item2;
-            }
-            if (_selectedSoldier.Template.IsSquadLeader
-                && (newSquad.SquadTemplate.SquadType & SquadTypes.HQ) == 0)
-            {
-                // if soldier is squad leader and its not an HQ Squad, change name
-                newSquad.Name = _selectedSoldier.Name.Split(' ')[1] + " Squad";
-            }
-            
-            if (currentSquad.Members.Count == 0 &&
-               (currentSquad.SquadTemplate.SquadType & SquadTypes.Scout) == SquadTypes.Scout)
-            {
-                // delete scout squads when they're emptied out
-                Unit parentUnit = currentSquad.ParentUnit;
-                parentUnit.RemoveSquad(currentSquad);
-                GameDataSingleton.Instance.Sector.PlayerForce.Army.SquadMap.Remove(currentSquad.Id);
-            }
-            if (currentSquad != newSquad)
-            {
-                _selectedSoldier.AddEntryToHistory($"{date}: transferred to {_selectedTransfer.Item3}");
-            }
-        }
-        _selectedTransfer = null;
-    }
+				_selectedSoldier.Template = _selectedTransfer.Item2;
+			}
+			if (_selectedSoldier.Template.IsSquadLeader
+				&& (newSquad.SquadTemplate.SquadType & SquadTypes.HQ) == 0)
+			{
+				// if soldier is squad leader and its not an HQ Squad, change name
+				newSquad.Name = _selectedSoldier.Name.Split(' ')[1] + " Squad";
+			}
+			
+			if (currentSquad.Members.Count == 0 &&
+			   (currentSquad.SquadTemplate.SquadType & SquadTypes.Scout) == SquadTypes.Scout)
+			{
+				// delete scout squads when they're emptied out
+				Unit parentUnit = currentSquad.ParentUnit;
+				parentUnit.RemoveSquad(currentSquad);
+				GameDataSingleton.Instance.Sector.PlayerForce.Army.SquadMap.Remove(currentSquad.Id);
+			}
+			if (currentSquad != newSquad)
+			{
+				_selectedSoldier.AddEntryToHistory($"{date}: transferred to {_selectedTransfer.Item3}");
+			}
+			_selectedTransfer = null;
+			return true;
+		}
+		return false;
+	}
 
-    private void UpdateSquadLocations(Squad oldSquad, Squad newSquad)
-    {
-        if (newSquad.Members.Count == 1)
-        {
-            // make the location of the new squad the same as the old one
-            newSquad.CurrentRegion = oldSquad.CurrentRegion;
-            newSquad.BoardedLocation = oldSquad.BoardedLocation;
-        }
-        if (oldSquad.Members.Count == 0)
-        {
-            oldSquad.CurrentRegion = null;
-            oldSquad.BoardedLocation = null;
-        }
-    }
+	private void UpdateSquadLocations(Squad oldSquad, Squad newSquad)
+	{
+		if (newSquad.Members.Count == 1)
+		{
+			// make the location of the new squad the same as the old one
+			newSquad.CurrentRegion = oldSquad.CurrentRegion;
+			newSquad.BoardedLocation = oldSquad.BoardedLocation;
+		}
+		if (oldSquad.Members.Count == 0)
+		{
+			oldSquad.CurrentRegion = null;
+			oldSquad.BoardedLocation = null;
+		}
+	}
 
-    private void PopulateSoldierData(PlayerSoldier soldier)
+	private void PopulateSoldierData(PlayerSoldier soldier)
 	{
 		List<Tuple<string, string>> soldierData = new List<Tuple<string, string>>();
 		soldierData.Add(new Tuple<string, string>("Name", soldier.Name));
@@ -143,11 +145,11 @@ public partial class SoldierController : Control
 			{
 				soldierHistory.Add($"{date}: promoted to {newRole.Item2.Name}");
 			}
-            if (soldier.AssignedSquad.Id != newRole.Item1)
-            {
-                _selectedSoldier.AddEntryToHistory($"{date}: transferred to {_selectedTransfer.Item3}");
-            }
-        }
+			if (soldier.AssignedSquad.Id != newRole.Item1)
+			{
+				_selectedSoldier.AddEntryToHistory($"{date}: transferred to {_selectedTransfer.Item3}");
+			}
+		}
 		SoldierView.PopulateSoldierHistory(soldierHistory);
 	}
 

@@ -10,6 +10,7 @@ public partial class MainGameScene : Control
     private SectorMap _sectorMap;
     private ChapterController _chapterScreen;
     private SoldierController _soldierScreen;
+    private SoldierView _soldierView;
     private CanvasItem _previousScreen;
     private CanvasLayer _mainUILayer;
     public override void _Ready()
@@ -32,12 +33,7 @@ public partial class MainGameScene : Control
             }
             else if (_soldierScreen.Visible)
             {
-                _soldierScreen.FinalizeSoldierTransfer();
-                // reset the company list to reflect the transfer
-                _chapterScreen.PopulateCompanyList();
-                _soldierScreen.Visible = false;
-                _previousScreen.Visible = true;
-                _previousScreen = null;
+                OnSoldierViewCloseButtonPressed(null, null);
             }
         }
     }
@@ -63,11 +59,25 @@ public partial class MainGameScene : Control
             PackedScene soldierScene = GD.Load<PackedScene>("res://Scenes/SoldierScreen/soldier_view.tscn");
             _soldierScreen = (SoldierController)soldierScene.Instantiate();
             AddChild(_soldierScreen);
+            _soldierView = _soldierScreen.GetNode<SoldierView>("SoldierView");
+            _soldierView.CloseButtonPressed += OnSoldierViewCloseButtonPressed;
         }
         PlayerSoldier soldier = (PlayerSoldier)GameDataSingleton.Instance.Sector.PlayerForce.Army.OrderOfBattle.GetAllMembers().First(s => s.Id == soldierId);
         _soldierScreen.DisplaySoldierData(soldier);
         _previousScreen = _chapterScreen;
         _chapterScreen.Visible = false;
         _soldierScreen.Visible = true;
+    }
+
+    private void OnSoldierViewCloseButtonPressed(object sender, EventArgs e)
+    {
+        if (_soldierScreen.FinalizeSoldierTransfer())
+        // reset the company list to reflect the transfer
+        {
+            _chapterScreen.PopulateCompanyList();
+        }
+        _soldierScreen.Visible = false;
+        _previousScreen.Visible = true;
+        _previousScreen = null;
     }
 }

@@ -68,7 +68,7 @@ public partial class ChapterController : Control
 	public void PopulateCompanyList()
 	{
 		List<Tuple<int, CompanyType, string>> companyList = [];
-        foreach (Unit company in GameDataSingleton.Instance.Sector.PlayerForce.Army.OrderOfBattle.ChildUnits)
+		foreach (Unit company in GameDataSingleton.Instance.Sector.PlayerForce.Army.OrderOfBattle.ChildUnits)
 		{
 			CompanyType companyType;
 			switch (company.UnitTemplate.Name)
