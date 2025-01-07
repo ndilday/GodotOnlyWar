@@ -9,7 +9,7 @@ public partial class SoldierView : Control
 	public event EventHandler<int> TransferTargetSelected;
 	public event EventHandler CloseButtonPressed;
 
-    private VBoxContainer _soldierDataVBox;
+	private VBoxContainer _soldierDataVBox;
 	private RichTextLabel _soldierHistoryRichText;
 	private RichTextLabel _soldierAwardsRichText;
 	private RichTextLabel _sergeantReportRichText;
@@ -24,9 +24,9 @@ public partial class SoldierView : Control
 		_soldierAwardsRichText = GetNode<RichTextLabel>("AwardsPanel/RichTextLabel");
 		_sergeantReportRichText = GetNode<RichTextLabel>("RecommendationPanel/RichTextLabel");
 		_transferButton = GetNode<MenuButton>("TopMenuPanel/MarginContainer/HBoxContainer/TransferButton");
-        _closeButton = GetNode<Button>("TopMenuPanel/CloseButton");
+		_closeButton = GetNode<Button>("TopMenuPanel/CloseButton");
 		_closeButton.Pressed += () => CloseButtonPressed?.Invoke(this, EventArgs.Empty);
-        _transferButton.GetPopup().IndexPressed += (long index) => TransferTargetSelected?.Invoke(this, (int)index);
+		_transferButton.GetPopup().IndexPressed += (long index) => TransferTargetSelected?.Invoke(this, (int)index);
 	}
 	public void PopulateSoldierData(IReadOnlyList<Tuple<string, string>> stringPairs)
 	{

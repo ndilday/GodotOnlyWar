@@ -17,6 +17,8 @@ public partial class MainGameScene : Control
     {
         _bottomMenu = GetNode<BottomMenu>("./SectorMap/UILayer/BottomMenu");
         _bottomMenu.CompanyButtonPressed += OnCompanyButtonPressed;
+        _bottomMenu.EndTurnButtonPressed += OnEndTurnButtonPressed;
+        _bottomMenu.ConquistorumButtonPressed += OnConquistorumButtonPressed;
         _sectorMap = GetNode<SectorMap>("./SectorMap");
         _mainUILayer = GetNode<CanvasLayer>("./SectorMap/UILayer");
     }
@@ -38,7 +40,7 @@ public partial class MainGameScene : Control
         }
     }
 
-    public void OnCompanyButtonPressed(object sender, EventArgs e)
+    private void OnCompanyButtonPressed(object sender, EventArgs e)
     {
         if(_chapterScreen == null)
         {
@@ -52,7 +54,18 @@ public partial class MainGameScene : Control
         _chapterScreen.Visible = true;
     }
 
-    public void OnSoldierSelectedForDisplay(object sender, int soldierId)
+    private void OnEndTurnButtonPressed(object sender, EventArgs e)
+    {
+        // handle squad orders
+        // handle ship movement
+    }
+
+    private void OnConquistorumButtonPressed(object sender, EventArgs e)
+    {
+        // open the Conquistorum screen
+    }
+
+    private void OnSoldierSelectedForDisplay(object sender, int soldierId)
     {
         if(_soldierScreen == null)
         {

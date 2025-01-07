@@ -66,7 +66,6 @@ text = "Armamentarium"
 
 [node name="RecruitmentButton" type="Button" parent="Panel/MarginContainer/HBoxContainer"]
 layout_mode = 2
-disabled = true
 text = "Conquistorum"
 
 [node name="FleetButton" type="Button" parent="Panel/MarginContainer/HBoxContainer"]
@@ -86,5 +85,4 @@ text = "Archive"
 
 [node name="EndTurnButton" type="Button" parent="Panel/MarginContainer/HBoxContainer"]
 layout_mode = 2
-disabled = true
 text = "End Turn"
