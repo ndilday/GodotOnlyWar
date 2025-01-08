@@ -14,6 +14,6 @@ public partial class BottomMenu : Control
 		Button endTurnButton = GetNode<Button>("./Panel/MarginContainer/HBoxContainer/EndTurnButton");
 		endTurnButton.Pressed += () => EndTurnButtonPressed?.Invoke(this, EventArgs.Empty);
 		Button conquistorumButton = GetNode<Button>("./Panel/MarginContainer/HBoxContainer/ConquistorumButton");
-        conquistorumButton.Pressed += () => ConquistorumButtonPressed?.Invoke(this, EventArgs.Empty);
-    }
+		conquistorumButton.Pressed += () => ConquistorumButtonPressed?.Invoke(this, EventArgs.Empty);
+	}
 }
