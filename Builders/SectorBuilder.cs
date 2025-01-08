@@ -41,7 +41,8 @@ namespace OnlyWar.Builders
             }
 
             Date trainingStartDate = new Date(currentDate.Millenium, currentDate.Year - 4, 1);
-            PlayerForce playerForce = NewChapterBuilder.CreateChapter(data, trainingStartDate, currentDate);
+            ISoldierTrainingService trainingService = new SoldierTrainingCalculator(GameDataSingleton.Instance.GameRulesData.BaseSkillMap.Values);
+            PlayerForce playerForce = NewChapterBuilder.CreateChapter(data, trainingService, trainingStartDate, currentDate);
             FoundChapterPlanet(planetList, data.PlayerFaction);
             PlaceStartingForces(planetList, playerForce, forceList);
 

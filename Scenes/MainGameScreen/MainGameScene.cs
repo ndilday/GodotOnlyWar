@@ -1,4 +1,5 @@
 using Godot;
+using OnlyWar.Helpers.Sector;
 using OnlyWar.Models;
 using OnlyWar.Models.Soldiers;
 using System;
@@ -13,6 +14,7 @@ public partial class MainGameScene : Control
     private SoldierView _soldierView;
     private CanvasItem _previousScreen;
     private CanvasLayer _mainUILayer;
+    private TurnController _turnController;
     public override void _Ready()
     {
         _bottomMenu = GetNode<BottomMenu>("./SectorMap/UILayer/BottomMenu");
@@ -21,6 +23,7 @@ public partial class MainGameScene : Control
         _bottomMenu.ConquistorumButtonPressed += OnConquistorumButtonPressed;
         _sectorMap = GetNode<SectorMap>("./SectorMap");
         _mainUILayer = GetNode<CanvasLayer>("./SectorMap/UILayer");
+        _turnController = new TurnController();
     }
 
     public override void _UnhandledInput(InputEvent @event)
@@ -57,6 +60,7 @@ public partial class MainGameScene : Control
     private void OnEndTurnButtonPressed(object sender, EventArgs e)
     {
         // handle squad orders
+        _turnController.ProcessTurn(GameDataSingleton.Instance.Sector);
         // handle ship movement
     }
 

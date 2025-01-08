@@ -55,7 +55,6 @@ public partial class SoldierController : Control
 		{
 			Squad currentSquad = _selectedSoldier.AssignedSquad;
 			// move soldier to his new role
-			_selectedSoldier.AssignedSquad = null;
 			currentSquad.RemoveSquadMember(_selectedSoldier);
 			if (_selectedSoldier.Template.IsSquadLeader
 				&& (currentSquad.SquadTemplate.SquadType & SquadTypes.HQ) == 0)
@@ -64,7 +63,6 @@ public partial class SoldierController : Control
 				currentSquad.Name = currentSquad.SquadTemplate.Name;
 			}
 			Squad newSquad = GameDataSingleton.Instance.Sector.PlayerForce.Army.SquadMap[_selectedTransfer.Item1];
-			_selectedSoldier.AssignedSquad = newSquad;
 			newSquad.AddSquadMember(_selectedSoldier);
 
 			UpdateSquadLocations(currentSquad, newSquad);

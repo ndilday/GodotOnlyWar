@@ -10,7 +10,6 @@ using OnlyWar.Helpers;
 using OnlyWar.Models.Soldiers;
 using OnlyWar.Models.Squads;
 using OnlyWar.Models.Units;
-using OnlyWar.Models.Planets;
 
 namespace OnlyWar.Builders
 {
@@ -19,6 +18,7 @@ namespace OnlyWar.Builders
         private delegate void TrainingFunction(PlayerSoldier playerSoldier);
 
         internal static PlayerForce CreateChapter(GameRulesData data,
+                                                  ISoldierTrainingService trainingService,
                                                   Date trainingStartDate,
                                                   Date date)
         {
@@ -31,8 +31,6 @@ namespace OnlyWar.Builders
                 .Select(s => new PlayerSoldier(s, $"{TempNameGenerator.GetName()} {TempNameGenerator.GetName()}"))
                 .ToList();
 
-            SoldierTrainingCalculator trainingHelper =
-                new SoldierTrainingCalculator(data.BaseSkillMap.Values);
             foreach (PlayerSoldier soldier in soldiers)
             {
                 soldier.AddEntryToHistory(trainingStartDate + ": accepted into training");
@@ -41,7 +39,7 @@ namespace OnlyWar.Builders
                     soldier.AddEntryToHistory(trainingStartDate + ": psychic ability detected, acolyte training initiated");
                     // add psychic specific training here
                 }
-                trainingHelper.EvaluateSoldier(soldier, trainingEndDate);
+                trainingService.EvaluateSoldier(soldier, trainingEndDate);
                 soldier.ProgenoidImplantDate = new Date(date.Millenium, date.Year - 2, RNG.GetIntBelowMax(1, 53));
             }
             //string csv = GetSoldierRatingCsv(soldiers);
@@ -55,7 +53,7 @@ namespace OnlyWar.Builders
             foreach (PlayerSoldier soldier in soldiers)
             {
                 ApplySoldierTypeTraining(soldier);
-                trainingHelper.EvaluateSoldier(soldier, date);
+                trainingService.EvaluateSoldier(soldier, date);
 
             }
             // write soldier ratings to a csv file
@@ -162,7 +160,6 @@ namespace OnlyWar.Builders
         {
             PlayerSoldier master = unassignedSoldierMap.Values.OrderByDescending(s => s.SoldierEvaluationHistory[0].LeadershipRating).First();
             master.Template = faction.SoldierTemplates.Values.First(st => st.Name == "Chapter Master");
-            master.AssignedSquad = chapter.HQSquad;
             chapter.HQSquad.AddSquadMember(master);
             master.AddEntryToHistory(year + ": voted by the chapter to become the first Chapter Master");
             unassignedSoldierMap.Remove(master.Id);
@@ -193,7 +190,6 @@ namespace OnlyWar.Builders
                 {
                     soldier.Template = faction.SoldierTemplates.Values.First(st => st.Name == "Lexicanium");
                 }
-                soldier.AssignedSquad = library;
                 library.AddSquadMember(soldier);
                 soldier.AddEntryToHistory(year + ": Promoted to " + soldier.Template.Name + " and assigned to " + soldier.AssignedSquad.Name);
                 unassignedSoldierMap.Remove(soldier.Id);
@@ -217,7 +213,6 @@ namespace OnlyWar.Builders
                 {
                     soldier.Template = faction.SoldierTemplates.Values.First(st => st.Name == "Techmarine");
                 }
-                soldier.AssignedSquad = armory;
                 armory.AddSquadMember(soldier);
                 soldier.AddEntryToHistory(year + ": Returned from Mars, promoted to " 
                     + soldier.Template.Name + " and assigned to " + soldier.AssignedSquad.Name);
@@ -244,7 +239,6 @@ namespace OnlyWar.Builders
                 {
                     soldier.Template = faction.SoldierTemplates.Values.First(st => st.Name == "Apothecary");
                 }
-                soldier.AssignedSquad = apo;
                 apo.AddSquadMember(soldier);
                 soldier.AddEntryToHistory(year + ": finished medical and genetic training, promoted to " 
                     + soldier.Template.Name + " and assigned to " + soldier.AssignedSquad.Name);
@@ -270,7 +264,6 @@ namespace OnlyWar.Builders
                 {
                     soldier.Template = faction.SoldierTemplates.Values.First(st => st.Name == "Chaplain");
                 }
-                soldier.AssignedSquad = reclusium;
                 reclusium.AddSquadMember(soldier);
                 soldier.AddEntryToHistory(year + ": promoted to " + soldier.Template.Name 
                     + " and assigned to " + soldier.AssignedSquad.Name);
@@ -649,7 +642,6 @@ namespace OnlyWar.Builders
             PlayerSoldier soldier = soldierList[0];
             soldier.Template = type;
             squad.AddSquadMember(soldier);
-            soldier.AssignedSquad = squad;
             soldier.AddEntryToHistory(year + ": promoted to " + soldier.Template.Name 
                 + " and assigned to " + soldier.AssignedSquad.Name);
             unassignedSoldierMap.Remove(soldier.Id);

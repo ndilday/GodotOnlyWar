@@ -9,18 +9,21 @@ using System.Linq;
 
 namespace OnlyWar.Helpers.Battles
 {
-    public static class BattleConfigurationBuilder
+    public class BattleConfigurationBuilder
     {
-        public static IReadOnlyList<BattleConfiguration> BuildBattleConfigurations(Region region, int playerFactionId, int alliedFactionId)
+        int _playerFactionId;
+        int _alliedFactionId;
+        public BattleConfigurationBuilder(int playerFactionId, int alliedFactionId)
+        {
+            _playerFactionId = playerFactionId;
+            _alliedFactionId = alliedFactionId;
+        }
+        public IReadOnlyList<BattleConfiguration> BuildBattleConfigurations(Region region, IReadOnlyList<Squad> activeSquads)
         {
             
-            bool playerForcePresent = region.RegionFactionMap.ContainsKey(playerFactionId) &&
-                region.RegionFactionMap[playerFactionId].LandedSquads.Count > 0;
-            IEnumerable<RegionFaction> opFactions = region.RegionFactionMap.Values
-                .Where(f => !f.PlanetFaction.Faction.IsDefaultFaction && !f.PlanetFaction.Faction.IsPlayerFaction);
-            if (!playerForcePresent || opFactions == null || opFactions.Count() == 0) return null;
-            // does it really make sense for faction squads on planet to be
-            // independent from the faction map?
+            // cluster squads by faction, order, and location
+            // grant each cluser an initative modifier based on faction, order, and size of cluster
+            // sort clusters by initiative (plus a wiggle factor, at least to fix ties)
             return null;
         }
 

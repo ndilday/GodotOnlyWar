@@ -66,6 +66,7 @@ namespace OnlyWar.Models.Squads
             if (!_members.Contains(soldier))
             {
                 _members.Add(soldier);
+                soldier.AssignedSquad = this;
             }
         }
 
@@ -74,6 +75,7 @@ namespace OnlyWar.Models.Squads
             if(_members.Contains(soldier))
             {
                 _members.Remove(soldier);
+                soldier.AssignedSquad = null;
             }
         }
 

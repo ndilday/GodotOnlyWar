@@ -1,14 +1,21 @@
 ﻿using System.Collections.Generic;
 using System.Linq;
+using OnlyWar.Helpers.Battles;
+using OnlyWar.Models;
 using OnlyWar.Models.Planets;
 using OnlyWar.Models.Squads;
 
 namespace OnlyWar.Helpers.Sector
 {
-    static class TurnController
+    class TurnController
     {
+        BattleConfigurationBuilder _battleConfigurationBuilder;
 
-        public static void ProcessTurn(Models.Sector sector)
+        public TurnController()
+        {
+            _battleConfigurationBuilder = new BattleConfigurationBuilder(GameDataSingleton.Instance.GameRulesData.PlayerFaction.Id, GameDataSingleton.Instance.GameRulesData.DefaultFaction.Id);
+        }
+        public void ProcessTurn(Models.Sector sector)
         {
             // for each planet, associate all landed and orbiting squads into the region their Orders target
             foreach(Planet planet in sector.Planets.Values)
@@ -16,12 +23,12 @@ namespace OnlyWar.Helpers.Sector
                 var regionSquadMap = MapSquadsToTargetRegions(planet);
                 foreach(var kvp in regionSquadMap)
                 {
-                    //var factionSquadMap = kvp.Value.ToDictionary(squad => squad.)
+                    _battleConfigurationBuilder.BuildBattleConfigurations(kvp.Key, kvp.Value);
                 }
             }
         }
 
-        private static Dictionary<Region, List<Squad>> MapSquadsToTargetRegions(Planet planet)
+        private Dictionary<Region, List<Squad>> MapSquadsToTargetRegions(Planet planet)
         {
             // Get all squads on the planet (in regions)
             var planetSquads = planet.Regions

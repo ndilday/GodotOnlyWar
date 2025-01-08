@@ -7,6 +7,15 @@ using System.Linq;
 
 namespace OnlyWar.Helpers
 {
+    public interface ISoldierTrainingService
+    {
+        public void UpdateRatings(Date date, PlayerSoldier soldier);
+        public void EvaluateSoldier(PlayerSoldier soldier, Date trainingFinishedYear);
+        public void AwardSoldier(PlayerSoldier soldier, Date awardDate, string awardName, string type, ushort level);
+        public void ApplySoldierWorkExperience(ISoldier soldier, float points);
+        public void TrainScouts(IEnumerable<Squad> scoutSquads, Dictionary<int, TrainingFocuses> squadFocusMap);
+    }
+
     [Flags]
     public enum TrainingFocuses
     {
@@ -17,7 +26,7 @@ namespace OnlyWar.Helpers
         Ranged = 0x8
     }
 
-    public class SoldierTrainingCalculator
+    public class SoldierTrainingCalculator : ISoldierTrainingService
     {
         private readonly IReadOnlyDictionary<string, BaseSkill> _skillsByName;
 
