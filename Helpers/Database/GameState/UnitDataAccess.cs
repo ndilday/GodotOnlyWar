@@ -1,4 +1,5 @@
-﻿using OnlyWar.Models.Equippables;
+﻿using Godot;
+using OnlyWar.Models.Equippables;
 using OnlyWar.Models.Fleets;
 using OnlyWar.Models.Orders;
 using OnlyWar.Models.Planets;
@@ -8,6 +9,8 @@ using System;
 using System.Collections.Generic;
 using System.Data;
 using System.Linq;
+using static System.Runtime.InteropServices.JavaScript.JSType;
+using System.Xml;
 
 namespace OnlyWar.Helpers.Database.GameState
 {
@@ -71,45 +74,26 @@ namespace OnlyWar.Helpers.Database.GameState
                                             IReadOnlyDictionary<int, Region> regionMap,
                                             IReadOnlyDictionary<int, Squad> squadMap)
         {
-            PopulateDefendRegionBorderOrders(connection, regionMap, squadMap);
-            PopulateAttackRegionBorderOrders(connection, regionMap, squadMap);
-        }
-
-        private void PopulateDefendRegionBorderOrders(IDbConnection connection,
-                                                      IReadOnlyDictionary<int, Region> regionMap,
-                                                      IReadOnlyDictionary<int, Squad> squadMap)
-        {
             using (var command = connection.CreateCommand())
             {
-                command.CommandText = "SELECT * FROM DefendRegionOrder";
+                command.CommandText = "SELECT * FROM SquadOrder";
                 var reader = command.ExecuteReader();
                 while (reader.Read())
                 {
-                    int id = reader.GetInt32(0);
+                    int orderId = reader.GetInt32(0);
                     int squadId = reader.GetInt32(1);
                     int regionId = reader.GetInt32(2);
-                    int borderRegionId = reader.GetInt32(3);
-
-                    squadMap[squadId].CurrentOrders = new DefendRegionOrder(id, squadMap[squadId], regionMap[regionId], regionMap[borderRegionId]);
-                }
-            }
-        }
-
-        private void PopulateAttackRegionBorderOrders(IDbConnection connection,
-                                                      IReadOnlyDictionary<int, Region> regionMap,
-                                                      IReadOnlyDictionary<int, Squad> squadMap)
-        {
-            using (var command = connection.CreateCommand())
-            {
-                command.CommandText = "SELECT * FROM AttackRegionOrder";
-                var reader = command.ExecuteReader();
-                while (reader.Read())
-                {
-                    int id = reader.GetInt32(0);
-                    int squadId = reader.GetInt32(1);
-                    int regionId = reader.GetInt32(2);
-
-                    squadMap[squadId].CurrentOrders = new AttackRegionOrder(id, squadMap[squadId], regionMap[regionId]);
+                    int disposition = reader.GetInt32(3);
+                    bool isQuiet = reader.GetBoolean(4);
+                    bool isActivelyEngaging = reader.GetBoolean(5);
+                    int aggression = reader.GetInt32(6);
+                    int missionType = reader.GetInt32(7);
+                    Disposition disp = (Disposition)disposition;
+                    Aggression agg = (Aggression)aggression;
+                    MissionType mt = (MissionType)missionType;
+                    Region region = regionMap[regionId];
+                    Squad squad = squadMap[squadId];
+                    squad.CurrentOrders = new Order(orderId, squad, region, disp, isQuiet, isActivelyEngaging, agg, mt);
                 }
             }
         }
@@ -254,27 +238,19 @@ namespace OnlyWar.Helpers.Database.GameState
 
         private void SaveSquadOrders(IDbTransaction transaction, Squad squad)
         {
-            string insert = "";
-            switch(squad.CurrentOrders)
+            if(squad.CurrentOrders != null)
             {
-                case DefendRegionOrder defendRegionOrder:
-                    // CREATE TABLE DefendRegionOrder (OrderId INTEGER PRIMARY KEY UNIQUE NOT NULL, SquadId INTEGER NOT NULL REFERENCES Squad (Id), RegionId INTEGER NOT NULL REFERENCES Region (Id));
-                    insert = $@"INSERT INTO DefendRegionOrder VALUES 
-                        ({defendRegionOrder.Id}, {squad.Id}, {defendRegionOrder.TargetRegion}, {defendRegionOrder.BorderToDefend});";
-                    break;
-                case AttackRegionOrder attackRegionOrder:
-                    // CREATE TABLE AttackRegionOrder (OrderId INTEGER PRIMARY KEY UNIQUE NOT NULL, SquadId INTEGER NOT NULL REFERENCES Squad (Id));
-                    insert = $@"INSERT INTO AttackRegionOrder VALUES 
-                        ({attackRegionOrder.Id}, {squad.Id}, {attackRegionOrder.TargetRegion});";
-                    break;
-                default:
-                    throw new InvalidCastException();
-
-            }
-            using (var command = transaction.Connection.CreateCommand())
-            {
-                command.CommandText = insert;
-                command.ExecuteNonQuery();
+                Order order = squad.CurrentOrders;
+                // CREATE TABLE SquadOrder (OrderId INTEGER PRIMARY KEY UNIQUE NOT NULL, SquadId INTEGER NOT NULL REFERENCES Squad (Id), RegionId INTEGER NOT NULL REFERENCES Region (Id), Disposition INTEGER NOT NULL, IsQuiet BOOLEAN NOT NULL, IsActivelyEngaging BOOLEAN NOT NULL, Aggression INTEGER NOT NULL, MissionType INTEGER NOT NULL);
+                string insert = $@"INSERT INTO SquadOrder VALUES 
+                    ({order.Id}, {squad.Id}, {order.TargetRegion.Id}, 
+                    {order.Disposition}, {order.IsQuiet}, {order.IsActivelyEngaging}, 
+                    {order.LevelOfAggression}, {order.MissionType});";
+                using (var command = transaction.Connection.CreateCommand())
+                {
+                    command.CommandText = insert;
+                    command.ExecuteNonQuery();
+                }
             }
         }
     }

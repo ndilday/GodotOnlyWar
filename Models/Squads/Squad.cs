@@ -33,7 +33,7 @@ namespace OnlyWar.Models.Squads
         public List<WeaponSet> Loadout { get; set; }
         public Region CurrentRegion { get; set; }
         public Ship BoardedLocation { get; set; }
-        public IOrder CurrentOrders { get; set; }
+        public Order CurrentOrders { get; set; }
         //public List<int> AssignedVehicles;
         public Squad(string name, Unit parentUnit, SquadTemplate template)
         {
