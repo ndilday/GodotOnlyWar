@@ -23,50 +23,7 @@ namespace OnlyWar.Helpers.Battles
         }
         public IReadOnlyList<BattleConfiguration> BuildBattleConfigurations(Region region, IReadOnlyList<Squad> activeSquads)
         {
-
-            // TODO: make player and allied faction work together
-            // right now, we're giving each squad its own initative; may switch to one initative per faction/side
-            
-            Dictionary<int, int> factionSquadCount = activeSquads.GroupBy(s => s.Faction.Id).ToDictionary(g => g.Key, g => g.Count());
-            SortedList<float, int> initativeMap = GenerateInitiativeOrder(activeSquads, factionSquadCount, region);
-            
-            foreach (var entry in initativeMap.Reverse())
-            {
-                // this cluster acts next
-            }
-            
             return null;
-        }
-
-        private SortedList<float, int> GenerateInitiativeOrder(IReadOnlyList<Squad> squads, Dictionary<int, int> factionSquadCount, Region region)
-        {
-            // for each cluster, calculate the initiative modifier
-            SortedList<float, int> initiativeMap = [];
-            foreach (Squad squad in squads)
-            {
-                float initiative = 0;
-                
-                // we probably want faction specific initiative modifiers
-                // or possibly some sort of faction+order modifiers, if we think certain factions do better at certain sorts of tactics
-                // order-specific modifiers
-                if(squad.CurrentRegion == region)
-                {
-                    // bonus for the action originating in this region
-                    initiative += 1.0f;
-                }
-
-                // factor in aggression of order
-                initiative += (int)squad.CurrentOrders.LevelOfAggression;
-
-                // the larger the number of squads working together, the slower their initiative
-                initiative -= 1.0f - (1.0f / factionSquadCount[squad.Faction.Id]);
-
-                // add a random wiggle of 0-1 to the initiative
-                initiative += (float)RNG.NextGaussianDouble();
-
-                initiativeMap.Add(initiative, squad.Id);
-            }
-            return initiativeMap;
         }
 
         private static Unit GenerateNewArmy(RegionFaction regionFaction, Planet planet)
