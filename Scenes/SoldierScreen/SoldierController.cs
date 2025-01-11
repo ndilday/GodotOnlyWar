@@ -46,6 +46,7 @@ public partial class SoldierController : Control
 		PopulateSoldierHistory(soldier);
 		PopulateSoldierAwards(soldier);
 		PopulateSergeantReport(soldier);
+		PopulateSoldierInjuryReport(soldier);
 		PopulateTransferOptions(soldier);
 	}
 
@@ -161,7 +162,12 @@ public partial class SoldierController : Control
 		SoldierView.PopulateSoldierAwards(soldierAwards);
 	}
 
-	private void PopulateSergeantReport(PlayerSoldier soldier)
+	private void PopulateSoldierInjuryReport(PlayerSoldier soldier)
+    {
+        SoldierView.PopulateSoldierInjuryReport(GenerateSoldierInjurySummary(soldier));
+    }
+
+    private void PopulateSergeantReport(PlayerSoldier soldier)
 	{
 		string squadType = soldier.AssignedSquad.SquadTemplate.Name;
 		SoldierEvaluation evaluation = soldier.SoldierEvaluationHistory[soldier.SoldierEvaluationHistory.Count - 1];
@@ -323,4 +329,43 @@ public partial class SoldierController : Control
 		}
 		return openSpots;
 	}
+
+    private string GenerateSoldierInjurySummary(ISoldier selectedSoldier)
+    {
+        string summary = selectedSoldier.Name + "\n";
+        byte recoveryTime = 0;
+        bool isSevered = false;
+        foreach (HitLocation hl in selectedSoldier.Body.HitLocations)
+        {
+            if (hl.Wounds.WoundTotal != 0)
+            {
+                if (hl.IsSevered)
+                {
+                    isSevered = true;
+                }
+                byte woundTime = hl.Wounds.RecoveryTimeLeft();
+                if (woundTime > recoveryTime)
+                {
+                    recoveryTime = woundTime;
+                }
+                summary += hl.ToString() + "\n";
+            }
+        }
+        if (isSevered)
+        {
+            summary += selectedSoldier.Name +
+                " will be unable to perform field duties until receiving cybernetic replacements\n";
+        }
+        else if (recoveryTime > 0)
+        {
+            summary += selectedSoldier.Name +
+                " requires " + recoveryTime.ToString() + " weeks to be fully fit for duty\n";
+        }
+        else
+        {
+            summary += selectedSoldier.Name +
+                " is fully fit and ready to serve the Emperor\n";
+        }
+        return summary;
+    }
 }

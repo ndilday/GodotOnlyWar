@@ -1,0 +1,251 @@
+[gd_scene load_steps=10 format=3 uid="uid://brakfass7dxfu"]
+
+[ext_resource type="Script" uid="uid://cbsf677ytdwpu" path="res://Scenes/ChapterScreen/ChapterView.cs" id="1_ctr43"]
+[ext_resource type="Texture2D" uid="uid://dmckrmhneu1eo" path="res://Assets/elite-icon.jpg" id="2_npeqo"]
+[ext_resource type="Script" uid="uid://dnabalq7a1gh" path="res://Scenes/ChapterScreen/ChapterController.cs" id="2_oyxpg"]
+[ext_resource type="Texture2D" uid="uid://os1bepy0n88p" path="res://Assets/boltgun_chainsword_icon.png" id="3_oyxpg"]
+[ext_resource type="Texture2D" uid="uid://cpab0evldmtds" path="res://Assets/tactical_reserve.png" id="4_gpckc"]
+[ext_resource type="Texture2D" uid="uid://0ypjl56xnp8i" path="res://Assets/assault-reserve-icon.png" id="5_5aif3"]
+[ext_resource type="Texture2D" uid="uid://c3hrwyyawu5ck" path="res://Assets/devestator-reserve-icon.png" id="6_nicrn"]
+[ext_resource type="Texture2D" uid="uid://bdh5b7ws6iuwv" path="res://Assets/scout-reserve-icon.png" id="7_f3wyx"]
+
+[sub_resource type="ButtonGroup" id="ButtonGroup_ctr43"]
+
+[node name="ChapterController" type="Control"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+script = ExtResource("2_oyxpg")
+
+[node name="ChapterView" type="Control" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+script = ExtResource("1_ctr43")
+
+[node name="Panel" type="Panel" parent="ChapterView"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="MenuBar" type="MenuBar" parent="ChapterView"]
+custom_minimum_size = Vector2(0, 50)
+layout_mode = 1
+anchors_preset = 10
+anchor_right = 1.0
+grow_horizontal = 2
+
+[node name="CompanyList" type="Panel" parent="ChapterView"]
+layout_mode = 1
+anchors_preset = -1
+anchor_bottom = 1.0
+offset_left = 20.0
+offset_top = 50.0
+offset_right = 320.0
+offset_bottom = -50.0
+
+[node name="Header" type="Panel" parent="ChapterView/CompanyList"]
+custom_minimum_size = Vector2(0, 30)
+layout_mode = 1
+anchors_preset = 10
+anchor_right = 1.0
+offset_bottom = 50.0
+grow_horizontal = 2
+
+[node name="Label" type="Label" parent="ChapterView/CompanyList/Header"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+text = "Companies"
+horizontal_alignment = 1
+vertical_alignment = 1
+
+[node name="VBoxContainer" type="VBoxContainer" parent="ChapterView/CompanyList"]
+layout_mode = 1
+anchors_preset = -1
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = 5.0
+offset_top = 55.0
+offset_right = -5.0
+offset_bottom = -5.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="HQButton" type="Button" parent="ChapterView/CompanyList/VBoxContainer"]
+layout_mode = 2
+theme_override_colors/font_pressed_color = Color(0.25098, 0.25098, 0.25098, 1)
+toggle_mode = true
+button_group = SubResource("ButtonGroup_ctr43")
+text = "Chapter HQ"
+icon = ExtResource("2_npeqo")
+expand_icon = true
+
+[node name="ArmoryButton" type="Button" parent="ChapterView/CompanyList/VBoxContainer"]
+layout_mode = 2
+text = "Armory"
+icon = ExtResource("2_npeqo")
+expand_icon = true
+
+[node name="LibrariusButton" type="Button" parent="ChapterView/CompanyList/VBoxContainer"]
+layout_mode = 2
+text = "Librarius"
+icon = ExtResource("2_npeqo")
+expand_icon = true
+
+[node name="FirstCompanyButton" type="Button" parent="ChapterView/CompanyList/VBoxContainer"]
+layout_mode = 2
+text = "First Company"
+icon = ExtResource("2_npeqo")
+expand_icon = true
+
+[node name="SecondCompanyButton" type="Button" parent="ChapterView/CompanyList/VBoxContainer"]
+layout_mode = 2
+text = "Second Company"
+icon = ExtResource("3_oyxpg")
+expand_icon = true
+
+[node name="ThirdCompanyButton" type="Button" parent="ChapterView/CompanyList/VBoxContainer"]
+layout_mode = 2
+text = "Third Company"
+icon = ExtResource("3_oyxpg")
+expand_icon = true
+
+[node name="FourthCompanyButton" type="Button" parent="ChapterView/CompanyList/VBoxContainer"]
+layout_mode = 2
+text = "Fourth Company"
+icon = ExtResource("3_oyxpg")
+expand_icon = true
+
+[node name="FifthCompanyButton" type="Button" parent="ChapterView/CompanyList/VBoxContainer"]
+layout_mode = 2
+text = "Fifth Company"
+icon = ExtResource("3_oyxpg")
+expand_icon = true
+
+[node name="SixthCompanyButton" type="Button" parent="ChapterView/CompanyList/VBoxContainer"]
+layout_mode = 2
+text = "Sixth Company"
+icon = ExtResource("4_gpckc")
+expand_icon = true
+
+[node name="SeventhCompanyButton2" type="Button" parent="ChapterView/CompanyList/VBoxContainer"]
+layout_mode = 2
+text = "Seventh Company"
+icon = ExtResource("4_gpckc")
+expand_icon = true
+
+[node name="EighthCompanyButton3" type="Button" parent="ChapterView/CompanyList/VBoxContainer"]
+layout_mode = 2
+text = "Eighth Company"
+icon = ExtResource("5_5aif3")
+expand_icon = true
+
+[node name="NinthCompanyButton4" type="Button" parent="ChapterView/CompanyList/VBoxContainer"]
+layout_mode = 2
+text = "Ninth Company"
+icon = ExtResource("6_nicrn")
+expand_icon = true
+
+[node name="TenthCompanyButton5" type="Button" parent="ChapterView/CompanyList/VBoxContainer"]
+layout_mode = 2
+text = "Tenth Company"
+icon = ExtResource("7_f3wyx")
+expand_icon = true
+
+[node name="SquadList" type="Panel" parent="ChapterView"]
+layout_mode = 1
+anchors_preset = -1
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = 330.0
+offset_top = 50.0
+offset_right = -330.0
+offset_bottom = -50.0
+
+[node name="Header" type="Panel" parent="ChapterView/SquadList"]
+custom_minimum_size = Vector2(0, 30)
+layout_mode = 1
+anchors_preset = 10
+anchor_right = 1.0
+offset_bottom = 50.0
+grow_horizontal = 2
+
+[node name="Label" type="Label" parent="ChapterView/SquadList/Header"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+text = "Squads"
+horizontal_alignment = 1
+vertical_alignment = 1
+
+[node name="ScrollContainer" type="ScrollContainer" parent="ChapterView/SquadList"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_top = 50.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="VBoxContainer" type="VBoxContainer" parent="ChapterView/SquadList/ScrollContainer"]
+layout_mode = 2
+
+[node name="FooterBar" type="Panel" parent="ChapterView"]
+layout_mode = 0
+offset_right = 40.0
+offset_bottom = 40.0
+
+[node name="SoldierList" type="Panel" parent="ChapterView"]
+layout_mode = 1
+anchors_preset = -1
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = 714.0
+offset_top = 50.0
+offset_right = -20.0
+offset_bottom = -50.0
+
+[node name="Header" type="Panel" parent="ChapterView/SoldierList"]
+custom_minimum_size = Vector2(0, 30)
+layout_mode = 1
+anchors_preset = 10
+anchor_right = 1.0
+offset_bottom = 50.0
+grow_horizontal = 2
+
+[node name="Label" type="Label" parent="ChapterView/SoldierList/Header"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+text = "Soldiers"
+horizontal_alignment = 1
+vertical_alignment = 1
+
+[node name="VBoxContainer" type="VBoxContainer" parent="ChapterView/SoldierList"]
+layout_mode = 1
+anchors_preset = -1
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_top = 50.0
+offset_bottom = -5.0
+grow_horizontal = 2
+grow_vertical = 2

@@ -1,0 +1,417 @@
+[gd_scene load_steps=6 format=3 uid="uid://bxhbiojiaymgv"]
+
+[ext_resource type="Texture2D" uid="uid://bf76xmspnp2sg" path="res://Assets/vitruvian-man-3.jpg" id="1_holfx"]
+[ext_resource type="Script" uid="uid://dd50mrfovtx4u" path="res://Scenes/SoldierScreen/SoldierController.cs" id="1_myihu"]
+[ext_resource type="FontFile" uid="uid://caltl8x5gfsdo" path="res://Fonts/sui generis rg.otf" id="2_dlnbx"]
+[ext_resource type="Script" uid="uid://qoo3dbowfv84" path="res://Scenes/SoldierScreen/SoldierView.cs" id="2_lnvjb"]
+
+[sub_resource type="Theme" id="Theme_7tgn0"]
+default_font = ExtResource("2_dlnbx")
+default_font_size = 12
+
+[node name="SoldierController" type="Control"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+script = ExtResource("1_myihu")
+
+[node name="SoldierView" type="Control" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+script = ExtResource("2_lnvjb")
+
+[node name="Panel" type="Panel" parent="SoldierView"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="MenuBar" type="MenuBar" parent="SoldierView"]
+custom_minimum_size = Vector2(0, 50)
+layout_mode = 1
+anchors_preset = 10
+anchor_right = 1.0
+grow_horizontal = 2
+
+[node name="DataPanel" type="Panel" parent="SoldierView"]
+layout_mode = 1
+anchors_preset = -1
+offset_left = 20.0
+offset_top = 60.0
+offset_right = 320.0
+offset_bottom = 350.0
+
+[node name="Header" type="Panel" parent="SoldierView/DataPanel"]
+custom_minimum_size = Vector2(0, 30)
+layout_mode = 1
+anchors_preset = 10
+anchor_right = 1.0
+offset_bottom = 50.0
+grow_horizontal = 2
+
+[node name="Label" type="Label" parent="SoldierView/DataPanel/Header"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+text = "Soldier Details"
+horizontal_alignment = 1
+vertical_alignment = 1
+
+[node name="VBoxContainer" type="VBoxContainer" parent="SoldierView/DataPanel"]
+layout_mode = 1
+anchors_preset = -1
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = 5.0
+offset_top = 55.0
+offset_right = -5.0
+offset_bottom = -5.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="DataLinePanel" type="Panel" parent="SoldierView/DataPanel/VBoxContainer"]
+custom_minimum_size = Vector2(0, 20)
+layout_mode = 2
+
+[node name="Label" type="Label" parent="SoldierView/DataPanel/VBoxContainer/DataLinePanel"]
+layout_mode = 1
+anchors_preset = 9
+anchor_bottom = 1.0
+offset_right = 1.0
+grow_vertical = 2
+text = "Time in Service"
+
+[node name="Label2" type="Label" parent="SoldierView/DataPanel/VBoxContainer/DataLinePanel"]
+layout_mode = 1
+anchors_preset = 11
+anchor_left = 1.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = -1.0
+grow_horizontal = 0
+grow_vertical = 2
+text = "7 years, 3 months"
+
+[node name="DataLinePanel2" type="Panel" parent="SoldierView/DataPanel/VBoxContainer"]
+custom_minimum_size = Vector2(0, 20)
+layout_mode = 2
+
+[node name="Label" type="Label" parent="SoldierView/DataPanel/VBoxContainer/DataLinePanel2"]
+layout_mode = 1
+anchors_preset = 9
+anchor_bottom = 1.0
+offset_right = 1.0
+grow_vertical = 2
+text = "Unit"
+
+[node name="Label2" type="Label" parent="SoldierView/DataPanel/VBoxContainer/DataLinePanel2"]
+layout_mode = 1
+anchors_preset = 11
+anchor_left = 1.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = -1.0
+grow_horizontal = 0
+grow_vertical = 2
+text = "3rd Company, A Squad"
+
+[node name="DataLinePanel3" type="Panel" parent="SoldierView/DataPanel/VBoxContainer"]
+custom_minimum_size = Vector2(0, 20)
+layout_mode = 2
+
+[node name="Label" type="Label" parent="SoldierView/DataPanel/VBoxContainer/DataLinePanel3"]
+layout_mode = 1
+anchors_preset = 9
+anchor_bottom = 1.0
+offset_right = 1.0
+grow_vertical = 2
+text = "Location"
+
+[node name="Label2" type="Label" parent="SoldierView/DataPanel/VBoxContainer/DataLinePanel3"]
+layout_mode = 1
+anchors_preset = 11
+anchor_left = 1.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = -1.0
+grow_horizontal = 0
+grow_vertical = 2
+text = "Aboard Immortal"
+
+[node name="DataLinePanel4" type="Panel" parent="SoldierView/DataPanel/VBoxContainer"]
+custom_minimum_size = Vector2(0, 20)
+layout_mode = 2
+
+[node name="Label" type="Label" parent="SoldierView/DataPanel/VBoxContainer/DataLinePanel4"]
+layout_mode = 1
+anchors_preset = 9
+anchor_bottom = 1.0
+offset_right = 1.0
+grow_vertical = 2
+text = "Lorem Ipsem"
+
+[node name="Label2" type="Label" parent="SoldierView/DataPanel/VBoxContainer/DataLinePanel4"]
+layout_mode = 1
+anchors_preset = 11
+anchor_left = 1.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = -1.0
+grow_horizontal = 0
+grow_vertical = 2
+text = "Lorem Ipsum"
+
+[node name="DataLinePanel5" type="Panel" parent="SoldierView/DataPanel/VBoxContainer"]
+custom_minimum_size = Vector2(0, 20)
+layout_mode = 2
+
+[node name="Label" type="Label" parent="SoldierView/DataPanel/VBoxContainer/DataLinePanel5"]
+layout_mode = 1
+anchors_preset = 9
+anchor_bottom = 1.0
+offset_right = 1.0
+grow_vertical = 2
+text = "Lorem Ipsum"
+
+[node name="Label2" type="Label" parent="SoldierView/DataPanel/VBoxContainer/DataLinePanel5"]
+layout_mode = 1
+anchors_preset = 11
+anchor_left = 1.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = -1.0
+grow_horizontal = 0
+grow_vertical = 2
+text = "Who the Bell Tolls"
+
+[node name="InjuryPanel" type="Panel" parent="SoldierView"]
+layout_mode = 1
+anchors_preset = -1
+offset_left = 330.0
+offset_top = 60.0
+offset_right = 630.0
+offset_bottom = 350.0
+
+[node name="Header" type="Panel" parent="SoldierView/InjuryPanel"]
+custom_minimum_size = Vector2(0, 30)
+layout_mode = 1
+anchors_preset = 10
+anchor_right = 1.0
+offset_bottom = 50.0
+grow_horizontal = 2
+
+[node name="Label" type="Label" parent="SoldierView/InjuryPanel/Header"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+text = "Apothcarial Report"
+horizontal_alignment = 1
+vertical_alignment = 1
+
+[node name="TextureRect" type="TextureRect" parent="SoldierView/InjuryPanel"]
+modulate = Color(1, 1, 1, 0.12549)
+layout_mode = 1
+anchors_preset = -1
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = 10.0
+offset_top = 50.0
+offset_right = -10.0
+grow_horizontal = 2
+grow_vertical = 2
+texture = ExtResource("1_holfx")
+expand_mode = 1
+
+[node name="RichTextLabel" type="RichTextLabel" parent="SoldierView/InjuryPanel"]
+layout_mode = 1
+anchors_preset = -1
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = 5.0
+offset_top = 55.0
+offset_right = -5.0
+offset_bottom = -5.0
+
+[node name="RecommendationPanel" type="Panel" parent="SoldierView"]
+layout_mode = 1
+anchors_preset = -1
+offset_left = 20.0
+offset_top = 360.0
+offset_right = 320.0
+offset_bottom = 708.0
+
+[node name="Header" type="Panel" parent="SoldierView/RecommendationPanel"]
+custom_minimum_size = Vector2(0, 30)
+layout_mode = 1
+anchors_preset = 10
+anchor_right = 1.0
+offset_bottom = 50.0
+grow_horizontal = 2
+
+[node name="Label" type="Label" parent="SoldierView/RecommendationPanel/Header"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+text = "Sergeant Report"
+horizontal_alignment = 1
+vertical_alignment = 1
+
+[node name="RichTextLabel" type="RichTextLabel" parent="SoldierView/RecommendationPanel"]
+custom_minimum_size = Vector2(200, 100)
+layout_mode = 1
+anchors_preset = -1
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = 5.0
+offset_top = 50.0
+offset_right = -5.0
+offset_bottom = -5.0
+grow_horizontal = 2
+grow_vertical = 2
+theme = SubResource("Theme_7tgn0")
+
+[node name="AwardsPanel" type="Panel" parent="SoldierView"]
+layout_mode = 1
+anchors_preset = -1
+offset_left = 330.0
+offset_top = 360.0
+offset_right = 630.0
+offset_bottom = 708.0
+
+[node name="Header" type="Panel" parent="SoldierView/AwardsPanel"]
+custom_minimum_size = Vector2(0, 30)
+layout_mode = 1
+anchors_preset = 10
+anchor_right = 1.0
+offset_bottom = 50.0
+grow_horizontal = 2
+
+[node name="Label" type="Label" parent="SoldierView/AwardsPanel/Header"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+text = "Awards and Accolades"
+horizontal_alignment = 1
+vertical_alignment = 1
+
+[node name="RichTextLabel" type="RichTextLabel" parent="SoldierView/AwardsPanel"]
+custom_minimum_size = Vector2(200, 100)
+layout_mode = 1
+anchors_preset = -1
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = 5.0
+offset_top = 50.0
+offset_right = -5.0
+offset_bottom = -5.0
+grow_horizontal = 2
+grow_vertical = 2
+theme = SubResource("Theme_7tgn0")
+
+[node name="HistoryPanel" type="Panel" parent="SoldierView"]
+custom_minimum_size = Vector2(200, 200)
+layout_mode = 1
+anchors_preset = -1
+anchor_left = 1.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = -350.0
+offset_top = 60.0
+offset_right = -20.0
+offset_bottom = -60.0
+grow_horizontal = 0
+grow_vertical = 2
+
+[node name="Header" type="Panel" parent="SoldierView/HistoryPanel"]
+custom_minimum_size = Vector2(0, 30)
+layout_mode = 1
+anchors_preset = 10
+anchor_right = 1.0
+offset_bottom = 50.0
+grow_horizontal = 2
+
+[node name="Label" type="Label" parent="SoldierView/HistoryPanel/Header"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+text = "History"
+horizontal_alignment = 1
+vertical_alignment = 1
+
+[node name="RichTextLabel" type="RichTextLabel" parent="SoldierView/HistoryPanel"]
+custom_minimum_size = Vector2(200, 100)
+layout_mode = 1
+anchors_preset = -1
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = 5.0
+offset_top = 50.0
+offset_right = -5.0
+offset_bottom = -5.0
+grow_horizontal = 2
+grow_vertical = 2
+theme = SubResource("Theme_7tgn0")
+
+[node name="FooterBar" type="Panel" parent="SoldierView"]
+layout_mode = 0
+offset_right = 40.0
+offset_bottom = 40.0
+
+[node name="TopMenuPanel" type="Panel" parent="SoldierView"]
+layout_mode = 1
+anchors_preset = 10
+anchor_right = 1.0
+offset_bottom = 50.0
+grow_horizontal = 2
+
+[node name="MarginContainer" type="MarginContainer" parent="SoldierView/TopMenuPanel"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_right = -50.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_constants/margin_left = 10
+
+[node name="HBoxContainer" type="HBoxContainer" parent="SoldierView/TopMenuPanel/MarginContainer"]
+layout_mode = 2
+
+[node name="TransferButton" type="MenuButton" parent="SoldierView/TopMenuPanel/MarginContainer/HBoxContainer"]
+layout_mode = 2
+text = "Transfer"
+
+[node name="CloseButton" type="Button" parent="SoldierView/TopMenuPanel"]
+layout_mode = 1
+anchors_preset = 1
+anchor_left = 1.0
+anchor_right = 1.0
+offset_left = -40.0
+offset_top = 5.0
+offset_bottom = 45.0
+grow_horizontal = 0
+text = "X"

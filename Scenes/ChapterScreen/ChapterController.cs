@@ -30,9 +30,9 @@ public partial class ChapterController : Control
 		if (ChapterView != null)
 		{
 			ChapterView.CompanyButtonPressed -= HandleCompanyButtonPressed;
-            ChapterView.SquadButtonPressed -= HandleSquadButtonPressed;
-            ChapterView.SoldierButtonPressed -= HandleSoldierButtonPressed;
-        }
+			ChapterView.SquadButtonPressed -= HandleSquadButtonPressed;
+			ChapterView.SoldierButtonPressed -= HandleSoldierButtonPressed;
+		}
 	}
 
 	private void HandleCompanyButtonPressed(object sender, int companyId)

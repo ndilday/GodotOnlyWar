@@ -12,6 +12,7 @@ public partial class SoldierView : Control
 	private VBoxContainer _soldierDataVBox;
 	private RichTextLabel _soldierHistoryRichText;
 	private RichTextLabel _soldierAwardsRichText;
+	private RichTextLabel _soldierInjuryRichText;
 	private RichTextLabel _sergeantReportRichText;
 	private MenuButton _transferButton;
 	private Button _closeButton;
@@ -23,7 +24,8 @@ public partial class SoldierView : Control
 		_soldierHistoryRichText = GetNode<RichTextLabel>("HistoryPanel/RichTextLabel");
 		_soldierAwardsRichText = GetNode<RichTextLabel>("AwardsPanel/RichTextLabel");
 		_sergeantReportRichText = GetNode<RichTextLabel>("RecommendationPanel/RichTextLabel");
-		_transferButton = GetNode<MenuButton>("TopMenuPanel/MarginContainer/HBoxContainer/TransferButton");
+        _soldierInjuryRichText = GetNode<RichTextLabel>("InjuryPanel/RichTextLabel");
+        _transferButton = GetNode<MenuButton>("TopMenuPanel/MarginContainer/HBoxContainer/TransferButton");
 		_closeButton = GetNode<Button>("TopMenuPanel/CloseButton");
 		_closeButton.Pressed += () => CloseButtonPressed?.Invoke(this, EventArgs.Empty);
 		_transferButton.GetPopup().IndexPressed += (long index) => TransferTargetSelected?.Invoke(this, (int)index);
@@ -87,7 +89,15 @@ public partial class SoldierView : Control
 		}
 	}
 
-	public void PopulateSergeantReport(string report)
+	public void PopulateSoldierInjuryReport(string report)
+    {
+        // Clear existing text (if any)
+        _soldierInjuryRichText.Clear();
+		// Add the injury summary
+		_soldierInjuryRichText.Text = report;
+    }
+
+    public void PopulateSergeantReport(string report)
 	{
 		// Clear existing text (if any)
 		_sergeantReportRichText.Clear();
@@ -102,5 +112,44 @@ public partial class SoldierView : Control
 		{
 			_transferButton.GetPopup().AddItem(opening);
 		}
+	}
+
+	private string GenerateSoldierInjurySummary(ISoldier selectedSoldier)
+	{
+		string summary = selectedSoldier.Name + "\n";
+		byte recoveryTime = 0;
+		bool isSevered = false;
+		foreach (HitLocation hl in selectedSoldier.Body.HitLocations)
+		{
+			if (hl.Wounds.WoundTotal != 0)
+			{
+				if (hl.IsSevered)
+				{
+					isSevered = true;
+				}
+				byte woundTime = hl.Wounds.RecoveryTimeLeft();
+				if (woundTime > recoveryTime)
+				{
+					recoveryTime = woundTime;
+				}
+				summary += hl.ToString() + "\n";
+			}
+		}
+		if (isSevered)
+		{
+			summary += selectedSoldier.Name +
+				" will be unable to perform field duties until receiving cybernetic replacements\n";
+		}
+		else if (recoveryTime > 0)
+		{
+			summary += selectedSoldier.Name +
+				" requires " + recoveryTime.ToString() + " weeks to be fully fit for duty\n";
+		}
+		else
+		{
+			summary += selectedSoldier.Name +
+				" is fully fit and ready to serve the Emperor\n";
+		}
+		return summary;
 	}
 }
