@@ -18,7 +18,7 @@ public partial class MainGameScene : Control
     public override void _Ready()
     {
         _bottomMenu = GetNode<BottomMenu>("./SectorMap/UILayer/BottomMenu");
-        _bottomMenu.CompanyButtonPressed += OnCompanyButtonPressed;
+        _bottomMenu.ChapterButtonPressed += OnCompanyButtonPressed;
         _bottomMenu.EndTurnButtonPressed += OnEndTurnButtonPressed;
         _bottomMenu.ConquistorumButtonPressed += OnConquistorumButtonPressed;
         _sectorMap = GetNode<SectorMap>("./SectorMap");
@@ -47,7 +47,7 @@ public partial class MainGameScene : Control
     {
         if(_chapterScreen == null)
         {
-            PackedScene chapterScene = GD.Load<PackedScene>("res://Scenes/ChapterScreen/chapter_view.tscn");
+            PackedScene chapterScene = GD.Load<PackedScene>("res://Scenes/ChapterScreen/chapter_screen.tscn");
             _chapterScreen = (ChapterController)chapterScene.Instantiate();
             _chapterScreen.SoldierSelectedForDisplay += (object s, int soldierId) => OnSoldierSelectedForDisplay(s, soldierId);
             AddChild(_chapterScreen);
@@ -73,7 +73,7 @@ public partial class MainGameScene : Control
     {
         if(_soldierScreen == null)
         {
-            PackedScene soldierScene = GD.Load<PackedScene>("res://Scenes/SoldierScreen/soldier_view.tscn");
+            PackedScene soldierScene = GD.Load<PackedScene>("res://Scenes/SoldierScreen/soldier_screen.tscn");
             _soldierScreen = (SoldierController)soldierScene.Instantiate();
             AddChild(_soldierScreen);
             _soldierView = _soldierScreen.GetNode<SoldierView>("SoldierView");

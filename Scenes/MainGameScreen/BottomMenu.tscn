@@ -46,7 +46,6 @@ text = "Chapter"
 
 [node name="ApothecaryButton" type="Button" parent="Panel/MarginContainer/HBoxContainer"]
 layout_mode = 2
-disabled = true
 text = "Apothecarium"
 
 [node name="ReclusiumButton" type="Button" parent="Panel/MarginContainer/HBoxContainer"]

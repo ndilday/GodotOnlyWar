@@ -9,13 +9,6 @@ namespace OnlyWar.Helpers
 {
     public class OrderProcessor
     {
-        internal enum Phase
-        {
-            Infiltrate,
-            Act,
-            Exfiltrate
-        }
-
         public void ProcessRegionOrders(Region region, IReadOnlyList<Squad> activeSquads)
         {
             // TODO: make player and allied faction work together
@@ -23,14 +16,14 @@ namespace OnlyWar.Helpers
 
             Dictionary<int, int> factionSquadCount = activeSquads.GroupBy(s => s.Faction.Id).ToDictionary(g => g.Key, g => g.Count());
             SortedList<float, int> initativeMap = GenerateInitiativeOrder(activeSquads, factionSquadCount, region);
-            Dictionary<int, Phase> squadPhaseCompletedMap = new Dictionary<int, Phase>();
+            Dictionary<int, bool> raidingSquadHasActedMap = new Dictionary<int, bool>();
             while(initativeMap.Count > 0)
             {
                 var entry = initativeMap.Last();
                 // this squad acts next
                 Squad squad = activeSquads.First(s => s.Id == entry.Value);
                 // if the squad is not currently in the region, it has to move there as its first step
-                if (squad.CurrentRegion != region && !squadPhaseCompletedMap.ContainsKey(squad.Id))
+                if (squad.CurrentRegion != region && !raidingSquadHasActedMap.ContainsKey(squad.Id))
                 {
                     // check to see if the squad is detected/intercepted on its way to the region
                     HandleSquadMove();
@@ -39,24 +32,31 @@ namespace OnlyWar.Helpers
                     initativeMap.Remove(entry.Key);
                     initativeMap.Add(newKey, squad.Id);
                 }
-                else if (!squadPhaseCompletedMap.ContainsKey(squad.Id))
+                else if (!raidingSquadHasActedMap.ContainsKey(squad.Id))
                 {
                     // squad is in the region and has not acted yet
+                    HandleSquadAction();
+                    // squad doesn't need to exfiltrate, has finished its mission
+                    initativeMap.Remove(entry.Key);
                 }
                 else
                 {
-                    Phase phase = squadPhaseCompletedMap[squad.Id];
-                    if(phase == Phase.Infiltrate)
+                    if (!raidingSquadHasActedMap[squad.Id])
                     {
                         // squad has infiltrated the region and is now acting
+                        HandleSquadAction();
+                        float newKey = entry.Key - 1.0f;
+                        initativeMap.Remove(entry.Key);
+                        initativeMap.Add(newKey, squad.Id);
+                        raidingSquadHasActedMap[squad.Id] = true;
                     }
-                    else if (phase == Phase.Act)
+                    else
                     {
                         // squad has acted and is now exfiltrating
                         HandleSquadMove();
                         // squad has left the region
                         initativeMap.Remove(entry.Key);
-                        squadPhaseCompletedMap.Remove(squad.Id);
+                        raidingSquadHasActedMap.Remove(squad.Id);
                     }
                 }
             }
@@ -98,6 +98,10 @@ namespace OnlyWar.Helpers
 
         }
 
+        private void HandleSquadAction()
+        {
+
+        }
 
     }
 }
