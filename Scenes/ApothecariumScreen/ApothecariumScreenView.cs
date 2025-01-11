@@ -6,14 +6,18 @@ public partial class ApothecariumScreenView : Panel
 {
 	private RichTextLabel _geneseedReportRichText;
 	private RichTextLabel _injuryDetailRichText;
+	private Button _closeButton;
 	private VBoxContainer _squadVBox;
 	private ButtonGroup _squadButtonGroup;
 
 	public event EventHandler<int> SquadButtonPressed;
+    public event EventHandler CloseButtonPressed;
 
-	public override void _Ready()
+    public override void _Ready()
 	{
-		_geneseedReportRichText = GetNode<RichTextLabel>("GeneseedPanel/RichTextLabel");
+        _closeButton = GetNode<Button>("CloseButton");
+        _closeButton.Pressed += () => CloseButtonPressed?.Invoke(this, EventArgs.Empty);
+        _geneseedReportRichText = GetNode<RichTextLabel>("GeneseedPanel/RichTextLabel");
 		_injuryDetailRichText = GetNode<RichTextLabel>("InjuryReportPanel/RichTextLabel");
 		_squadVBox = GetNode<VBoxContainer>("InjuryReportPanel/ScrollContainer/VBoxContainer");
 		_squadButtonGroup = new ButtonGroup();

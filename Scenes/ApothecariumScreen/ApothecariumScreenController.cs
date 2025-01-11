@@ -8,7 +8,9 @@ using System.Linq;
 
 public partial class ApothecariumScreenController : Control
 {
-	ApothecariumScreenView _view;
+	public event EventHandler CloseButtonPressed;
+
+    ApothecariumScreenView _view;
 	private const string GENESEED_FORMAT = @"Sir! Currently, we have {0} Geneseed stored.
 Within the next year, we anticipate {1} implanted Progenoid Glands will mature.";
 	private const string SQUAD_FORMAT = @"{0} has {1} wounded members.
@@ -20,7 +22,8 @@ It will require approximately {4} weeks before all marines in the squad (other t
 		_view = GetNode<ApothecariumScreenView>("ApothecariumScreenView");
 		_view.PopulateGeneseedReport(GenerateGeneseedReport());
 		_view.PopulateSquadList(GetSquadsWithInjuredSoldiers());
-		_view.SquadButtonPressed += HandleSquadButtonPressed;
+        _view.SquadButtonPressed += HandleSquadButtonPressed;
+        _view.CloseButtonPressed += (object? sender, EventArgs e) => CloseButtonPressed?.Invoke(sender, e);
 	}
 
 	public override void _ExitTree()

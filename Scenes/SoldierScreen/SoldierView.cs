@@ -24,8 +24,8 @@ public partial class SoldierView : Control
 		_soldierHistoryRichText = GetNode<RichTextLabel>("HistoryPanel/RichTextLabel");
 		_soldierAwardsRichText = GetNode<RichTextLabel>("AwardsPanel/RichTextLabel");
 		_sergeantReportRichText = GetNode<RichTextLabel>("RecommendationPanel/RichTextLabel");
-        _soldierInjuryRichText = GetNode<RichTextLabel>("InjuryPanel/RichTextLabel");
-        _transferButton = GetNode<MenuButton>("TopMenuPanel/MarginContainer/HBoxContainer/TransferButton");
+		_soldierInjuryRichText = GetNode<RichTextLabel>("InjuryPanel/RichTextLabel");
+		_transferButton = GetNode<MenuButton>("TopMenuPanel/MarginContainer/HBoxContainer/TransferButton");
 		_closeButton = GetNode<Button>("TopMenuPanel/CloseButton");
 		_closeButton.Pressed += () => CloseButtonPressed?.Invoke(this, EventArgs.Empty);
 		_transferButton.GetPopup().IndexPressed += (long index) => TransferTargetSelected?.Invoke(this, (int)index);
@@ -90,14 +90,14 @@ public partial class SoldierView : Control
 	}
 
 	public void PopulateSoldierInjuryReport(string report)
-    {
-        // Clear existing text (if any)
-        _soldierInjuryRichText.Clear();
+	{
+		// Clear existing text (if any)
+		_soldierInjuryRichText.Clear();
 		// Add the injury summary
 		_soldierInjuryRichText.Text = report;
-    }
+	}
 
-    public void PopulateSergeantReport(string report)
+	public void PopulateSergeantReport(string report)
 	{
 		// Clear existing text (if any)
 		_sergeantReportRichText.Clear();

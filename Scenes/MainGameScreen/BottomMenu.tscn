@@ -44,7 +44,7 @@ layout_mode = 2
 layout_mode = 2
 text = "Chapter"
 
-[node name="ApothecaryButton" type="Button" parent="Panel/MarginContainer/HBoxContainer"]
+[node name="ApothecariumButton" type="Button" parent="Panel/MarginContainer/HBoxContainer"]
 layout_mode = 2
 text = "Apothecarium"
 

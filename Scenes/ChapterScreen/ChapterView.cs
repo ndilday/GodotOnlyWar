@@ -17,18 +17,22 @@ public partial class ChapterView : Control
     private VBoxContainer _companyVBox;
     private VBoxContainer _squadVBox;
     private VBoxContainer _soldierVBox;
+    private Button _closeButton;
     private ButtonGroup _companyButtonGroup;
     private ButtonGroup _squadButtonGroup;
 
     public event EventHandler<int> CompanyButtonPressed;
     public event EventHandler<int> SquadButtonPressed;
     public event EventHandler<int> SoldierButtonPressed;
+    public event EventHandler CloseButtonPressed;
     public override void _Ready()
     {
         // Called every time the node is added to the scene
         _companyVBox = GetNode<VBoxContainer>("CompanyList/VBoxContainer");
         _squadVBox = GetNode<VBoxContainer>("SquadList/ScrollContainer/VBoxContainer");
         _soldierVBox = GetNode<VBoxContainer>("SoldierList/VBoxContainer");
+        _closeButton = GetNode<Button>("CloseButton");
+        _closeButton.Pressed += () => CloseButtonPressed?.Invoke(this, EventArgs.Empty);
         _companyButtonGroup = new ButtonGroup();
         _squadButtonGroup = new ButtonGroup();
     }

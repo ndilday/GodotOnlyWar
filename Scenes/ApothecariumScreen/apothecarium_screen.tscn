@@ -18,7 +18,7 @@ grow_horizontal = 2
 grow_vertical = 2
 script = ExtResource("1_o7ml8")
 
-[node name="ApothecariumScreenView" type="Panel" parent="."]
+[node name="ApothecariumScreenView" type="Control" parent="."]
 layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
@@ -38,15 +38,28 @@ grow_vertical = 2
 texture = ExtResource("3_dltn2")
 expand_mode = 4
 
-[node name="GeneseedPanel" type="Panel" parent="."]
+[node name="CloseButton" type="Button" parent="ApothecariumScreenView"]
 layout_mode = 1
 anchors_preset = -1
-offset_left = 20.0
-offset_top = 360.0
-offset_right = 320.0
-offset_bottom = 708.0
+anchor_left = 1.0
+anchor_right = 1.0
+offset_left = -50.0
+offset_top = 10.0
+offset_right = -10.0
+offset_bottom = 50.0
+text = "X"
 
-[node name="Header" type="Panel" parent="GeneseedPanel"]
+[node name="GeneseedPanel" type="Panel" parent="ApothecariumScreenView"]
+layout_mode = 1
+anchors_preset = -1
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = 10.0
+offset_top = 55.0
+offset_right = -5.0
+offset_bottom = -5.0
+
+[node name="Header" type="Panel" parent="ApothecariumScreenView/GeneseedPanel"]
 custom_minimum_size = Vector2(0, 30)
 layout_mode = 1
 anchors_preset = 10
@@ -54,7 +67,7 @@ anchor_right = 1.0
 offset_bottom = 50.0
 grow_horizontal = 2
 
-[node name="Label" type="Label" parent="GeneseedPanel/Header"]
+[node name="Label" type="Label" parent="ApothecariumScreenView/GeneseedPanel/Header"]
 layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
@@ -65,7 +78,7 @@ text = "Geneseed Report"
 horizontal_alignment = 1
 vertical_alignment = 1
 
-[node name="RichTextLabel" type="RichTextLabel" parent="GeneseedPanel"]
+[node name="RichTextLabel" type="RichTextLabel" parent="ApothecariumScreenView/GeneseedPanel"]
 custom_minimum_size = Vector2(200, 100)
 layout_mode = 1
 anchors_preset = -1
@@ -79,20 +92,20 @@ grow_horizontal = 2
 grow_vertical = 2
 theme = SubResource("Theme_upmh7")
 
-[node name="InjuryReportPanel" type="Panel" parent="."]
+[node name="InjuryReportPanel" type="Panel" parent="ApothecariumScreenView"]
 layout_mode = 1
 anchors_preset = -1
-anchor_left = 1.0
+anchor_left = 0.5
 anchor_right = 1.0
 anchor_bottom = 1.0
-offset_left = -410.0
-offset_top = 10.0
+offset_left = 5.0
+offset_top = 55.0
 offset_right = -10.0
 offset_bottom = -10.0
 grow_horizontal = 0
 grow_vertical = 2
 
-[node name="Header" type="Panel" parent="InjuryReportPanel"]
+[node name="Header" type="Panel" parent="ApothecariumScreenView/InjuryReportPanel"]
 custom_minimum_size = Vector2(0, 30)
 layout_mode = 1
 anchors_preset = 10
@@ -100,7 +113,7 @@ anchor_right = 1.0
 offset_bottom = 50.0
 grow_horizontal = 2
 
-[node name="Label" type="Label" parent="InjuryReportPanel/Header"]
+[node name="Label" type="Label" parent="ApothecariumScreenView/InjuryReportPanel/Header"]
 layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
@@ -111,7 +124,7 @@ text = "Injury Report"
 horizontal_alignment = 1
 vertical_alignment = 1
 
-[node name="ScrollContainer" type="ScrollContainer" parent="InjuryReportPanel"]
+[node name="ScrollContainer" type="ScrollContainer" parent="ApothecariumScreenView/InjuryReportPanel"]
 layout_mode = 1
 anchors_preset = -1
 anchor_right = 1.0
@@ -121,10 +134,10 @@ offset_top = 50.0
 offset_bottom = -5.0
 grow_horizontal = 2
 
-[node name="VBoxContainer" type="VBoxContainer" parent="InjuryReportPanel/ScrollContainer"]
+[node name="VBoxContainer" type="VBoxContainer" parent="ApothecariumScreenView/InjuryReportPanel/ScrollContainer"]
 layout_mode = 2
 
-[node name="RichTextLabel" type="RichTextLabel" parent="InjuryReportPanel"]
+[node name="RichTextLabel" type="RichTextLabel" parent="ApothecariumScreenView/InjuryReportPanel"]
 custom_minimum_size = Vector2(200, 100)
 layout_mode = 1
 anchors_preset = -1

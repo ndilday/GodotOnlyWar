@@ -12,13 +12,15 @@ public partial class ChapterController : Control
 	public ChapterView ChapterView {get;set;}
 
 	public event EventHandler<int> SoldierSelectedForDisplay;
+    public event EventHandler CloseButtonPressed;
 
-	public override void _Ready()
+    public override void _Ready()
 	{
 		if (ChapterView == null)
 		{
 			ChapterView = GetNode<ChapterView>("ChapterView");
-		}
+            ChapterView.CloseButtonPressed += (object? sender, EventArgs e) => CloseButtonPressed?.Invoke(sender, e);
+        }
 		ChapterView.CompanyButtonPressed += HandleCompanyButtonPressed;
 		ChapterView.SquadButtonPressed += HandleSquadButtonPressed;
 		ChapterView.SoldierButtonPressed += HandleSoldierButtonPressed;
