@@ -8,7 +8,8 @@ public partial class Camera2D : Godot.Camera2D
     int MapBorderPixels = 100;
     [Export]
 	SectorMap _sectorMap;
-	float _minZoom, _maxZoom;
+    [Export]
+    float MaxZoom = 10;
 	Vector2I _mapPixelDimensions;
 	// Called when the node enters the scene tree for the first time.
 	public override void _Ready()
@@ -17,33 +18,21 @@ public partial class Camera2D : Godot.Camera2D
 								  _sectorMap.GridDimensions.Y * _sectorMap.CellSize.Y + 2 * MapBorderPixels);
     }
 
-	// Called every frame. 'delta' is the elapsed time since the previous frame.
-	public override void _Process(double delta)
-	{
-	}
-
 	public override void _Input(InputEvent @event)
 	{
         if (@event is InputEventMouseButton emb)
         {
-            if (emb.ButtonIndex == MouseButton.Left)
-            {
-                Vector2 gmpos = GetGlobalMousePosition();
-                Vector2I mousePosition = new((int)(gmpos.X), (int)(gmpos.Y));
-                Vector2I gridPosition = _sectorMap.CalculateGridCoordinates(mousePosition);
-                int index = _sectorMap.GridPositionToIndex(gridPosition);
-                string text = $"({gridPosition.X},{gridPosition.Y})\nPlanet: {_sectorMap.HasPlanet[index]}\nSubsector: {_sectorMap.SectorIds[index]}";
-                _sectorMap.GetNode<TopMenu>("UILayer/TopMenu").SetDebugText(text);
-            }
             // zoom in
-            else if (emb.ButtonIndex == MouseButton.WheelUp)
+            if (emb.ButtonIndex == MouseButton.WheelUp && emb.IsPressed())
             {
-                ZoomIn();
+                ZoomIn(GetGlobalMousePosition());
+                GetViewport().SetInputAsHandled();
             }
             // zoom out
-            else if (emb.ButtonIndex == MouseButton.WheelDown)
+            else if (emb.ButtonIndex == MouseButton.WheelDown && emb.IsPressed())
             {
-                ZoomOut();
+                ZoomOut(GetGlobalMousePosition());
+                GetViewport().SetInputAsHandled();
             }
         }
 
@@ -52,36 +41,81 @@ public partial class Camera2D : Godot.Camera2D
         {
             if (eventKey.Pressed && (eventKey.Keycode == Key.Equal || eventKey.Keycode == Key.KpAdd))
             {
-                ZoomIn();
+                ZoomIn(null);
             }
             else if (eventKey.Pressed && (eventKey.Keycode == Key.Minus || eventKey.Keycode == Key.KpSubtract))
             {
-                ZoomOut();
+                ZoomOut(null);
             }
         }
         else if (@event is InputEventMouseMotion emm && emm.ButtonMask == MouseButtonMask.Right)
 		{
-			// TODO: add clamping
-			Position -= emm.Relative * Zoom;
-		}
+            Position -= emm.Relative;
+
+        }
 	}
 
-	private void ZoomIn()
+    /*private void ClampCameraPosition(Vector2 moveVector)
+    {
+        // Get the current viewport size and zoom
+        Vector2 viewportSize = GetViewportRect().Size;
+        Vector2 currentZoom = Zoom;
+
+        // Calculate the edges of the viewable area in world coordinates
+        // The offsets here ensure that the camera stops at the edge of the border
+        float leftEdge = -MapBorderPixels * currentZoom.X;
+        float topEdge = -MapBorderPixels * currentZoom.Y;
+        float rightEdge = (_mapPixelDimensions.X + MapBorderPixels) * currentZoom.X;
+        float bottomEdge = (_mapPixelDimensions.Y + MapBorderPixels) * currentZoom.Y;
+
+        // Calculate the new position
+        Vector2 newPosition = Position + moveVector;
+
+        // Clamp the new position within the calculated bounds
+        newPosition.X = Mathf.Clamp(newPosition.X, leftEdge - viewportSize.X / 2, rightEdge - viewportSize.X / 2);
+        newPosition.Y = Mathf.Clamp(newPosition.Y, bottomEdge - viewportSize.Y / 2, topEdge - viewportSize.Y / 2);
+
+        // Update the camera position
+        Position = newPosition;
+    }*/
+
+    private void ZoomIn(Vector2? zoomCenter)
 	{
-		float maxZoom = 10;
-		float newZoom = Math.Min(1.5f * Zoom.X, maxZoom);
-		Zoom = new(newZoom, newZoom);
+        if (!zoomCenter.HasValue)
+        {
+            // If no zoom center is provided, use the center of the viewport
+            zoomCenter = GetViewport().GetVisibleRect().Size / 2;
+        }
+        float newZoom = Math.Min(1.5f * Zoom.X, MaxZoom);
+        ZoomTo(newZoom, zoomCenter.Value);
 	}
-	private void ZoomOut()
+	private void ZoomOut(Vector2? zoomCenter)
 	{
-		
-		// calculate total possible map width
-		// double borders plus 
+        if (!zoomCenter.HasValue)
+        {
+            // If no zoom center is provided, use the center of the viewport
+            zoomCenter = GetViewport().GetVisibleRect().Size / 2;
+        }
         Vector2 screenSize = GetViewport().GetVisibleRect().Size;
 		float minZoomX = screenSize.X / _mapPixelDimensions.X;
 		float minZoomY = screenSize.Y / _mapPixelDimensions.Y;
 		float minZoom = Math.Min(minZoomX, minZoomY);
 		float newZoom = Math.Max(2 * Zoom.X / 3, minZoom);
-        Zoom = new(newZoom, newZoom);
+        ZoomTo(newZoom, zoomCenter.Value);
 	}
+
+    public void ZoomTo(float zoomLevel, Vector2 zoomCenter)
+    {
+        // zoom and then adjust
+        Zoom = new Vector2(zoomLevel, zoomLevel);
+        GD.Print($"zoomCenter: {zoomCenter.X},{zoomCenter.Y}");
+
+        // Calculate the new center after zooming
+        Vector2 newCenter = Position + GetViewport().GetVisibleRect().Size / (2 * zoomLevel);
+        GD.Print($"current Position: {Position.X},{Position.Y}");
+        GD.Print($"newCenter: {newCenter.X},{newCenter.Y}");
+        // Adjust the position to keep the zoom center fixed
+        Position += zoomCenter - newCenter;
+        GD.Print($"new Position: {Position.X},{Position.Y}");
+    }
 }

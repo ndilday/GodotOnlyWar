@@ -8,6 +8,7 @@ using System.Linq;
 public partial class MainGameScene : Control
 {
     private BottomMenu _bottomMenu;
+    private TopMenu _topMenu;
     private SectorMap _sectorMap;
     private ChapterController _chapterScreen;
     private ApothecariumScreenController _apothecariumScreen;
@@ -19,17 +20,18 @@ public partial class MainGameScene : Control
     private TurnController _turnController;
     public override void _Ready()
     {
-        _bottomMenu = GetNode<BottomMenu>("./SectorMap/UILayer/BottomMenu");
+        _bottomMenu = GetNode<BottomMenu>("UILayer/BottomMenu");
+        _topMenu = GetNode<TopMenu>("UILayer/TopMenu");
         _bottomMenu.ChapterButtonPressed += HandleChapterButtonPressed;
         _bottomMenu.ApothecariumButtonPressed += HandleApothecariumButtonPressed;
         _bottomMenu.ConquistorumButtonPressed += HandleConquistorumButtonPressed;
         _bottomMenu.EndTurnButtonPressed += HandleEndTurnButtonPressed;
-        _sectorMap = GetNode<SectorMap>("./SectorMap");
-        _mainUILayer = GetNode<CanvasLayer>("./SectorMap/UILayer");
+        _sectorMap = GetNode<SectorMap>("SectorMap");
+        _mainUILayer = GetNode<CanvasLayer>("UILayer");
         _turnController = new TurnController();
     }
 
-    public override void _UnhandledInput(InputEvent @event)
+    public override void _Input(InputEvent @event)
     {
         if (@event.IsActionPressed("ui_cancel"))    // "ui_cancel" is mapped to Escape)
         {
@@ -48,6 +50,20 @@ public partial class MainGameScene : Control
             else if (_soldierScreen.Visible)
             {
                 OnSoldierViewCloseButtonPressed(null, null);
+            }
+        }
+
+        if (@event is InputEventMouseButton emb)
+        {
+            if (emb.ButtonIndex == MouseButton.Left)
+            {
+                Vector2 gmpos = GetGlobalMousePosition();
+                Vector2I mousePosition = new((int)(gmpos.X), (int)(gmpos.Y));
+                GD.Print($"Left click at {mousePosition.X},{mousePosition.Y}");
+                Vector2I gridPosition = _sectorMap.CalculateGridCoordinates(mousePosition);
+                int index = _sectorMap.GridPositionToIndex(gridPosition);
+                string text = $"({gridPosition.X},{gridPosition.Y})\n{mousePosition.X},{mousePosition.Y}";
+                _topMenu.SetDebugText(text);
             }
         }
     }

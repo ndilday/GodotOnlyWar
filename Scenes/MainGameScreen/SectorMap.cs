@@ -27,12 +27,14 @@ public partial class SectorMap : Node2D
 	public Vector2I HalfCellSize { get; private set; }
 	public ushort[] SectorIds { get; private set; }
 	public bool[] HasPlanet { get; private set; }
+    private Camera2D _camera;
 	
 	private Dictionary<ushort, List<Vector2I>> _subsectorVertexListMap;
 
 	// Called when the node enters the scene tree for the first time.
 	public override void _Ready()
 	{
+        _camera = GetNode<Camera2D>("Camera2D");
 		HalfCellSize = CellSize / 2;
 		SectorIds = new ushort[GridDimensions.X * GridDimensions.Y];
 		HasPlanet = new bool[GridDimensions.X * GridDimensions.Y];
@@ -47,6 +49,10 @@ public partial class SectorMap : Node2D
             }
         }
         _subsectorVertexListMap = DetermineSubsectorBorderPoints(subsectors);
+        Planet centerPlanet = GameDataSingleton.Instance.Sector.Planets.Values.First(p => p.ControllingFaction == GameDataSingleton.Instance.Sector.PlayerForce.Faction);
+        Vector2I gridPosition = new Vector2I(centerPlanet.Position.Item1, centerPlanet.Position.Item2);
+        Vector2I mapPosition = CalculateMapPosition(gridPosition);
+        _camera.ZoomTo(1, mapPosition);
     }
 
 	public override void _Draw()

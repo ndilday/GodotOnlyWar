@@ -1,9 +1,7 @@
-[gd_scene load_steps=5 format=3 uid="uid://ck5vq6a7t604p"]
+[gd_scene load_steps=3 format=3 uid="uid://ck5vq6a7t604p"]
 
-[ext_resource type="Script" uid="uid://blj3k4e13p7kj" path="res://Scenes/MainGameScreen/SectorMap.cs" id="1_6knhr"]
-[ext_resource type="Script" uid="uid://bf2k36bi4isky" path="res://Scenes/MainGameScreen/Camera2D.cs" id="2_u2h2t"]
-[ext_resource type="PackedScene" uid="uid://ctrhbg0anf5cx" path="res://Scenes/MainGameScreen/BottomMenu.tscn" id="3_6x2gg"]
-[ext_resource type="PackedScene" uid="uid://ce35p0pqsk045" path="res://Scenes/MainGameScreen/TopMenu.tscn" id="3_pdcxs"]
+[ext_resource type="Script" uid="uid://dxjcoomk1hh52" path="res://Scenes/MainGameScreen/SectorMap.cs" id="1_6knhr"]
+[ext_resource type="Script" uid="uid://bxlstn6vwfs7w" path="res://Scenes/MainGameScreen/Camera2D.cs" id="2_u2h2t"]
 
 [node name="SectorMap" type="Node2D"]
 script = ExtResource("1_6knhr")
@@ -11,12 +9,11 @@ script = ExtResource("1_6knhr")
 [node name="Camera2D" type="Camera2D" parent="." node_paths=PackedStringArray("_sectorMap")]
 anchor_mode = 0
 ignore_rotation = false
+limit_left = -20000
+limit_top = -20000
+limit_right = 20000
+limit_bottom = 20000
+limit_smoothed = true
+editor_draw_limits = true
 script = ExtResource("2_u2h2t")
 _sectorMap = NodePath("..")
-
-[node name="UILayer" type="CanvasLayer" parent="."]
-
-[node name="TopMenu" parent="UILayer" instance=ExtResource("3_pdcxs")]
-grow_vertical = 2
-
-[node name="BottomMenu" parent="UILayer" instance=ExtResource("3_6x2gg")]

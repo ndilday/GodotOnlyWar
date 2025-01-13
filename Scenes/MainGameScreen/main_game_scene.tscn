@@ -1,7 +1,9 @@
-[gd_scene load_steps=3 format=3 uid="uid://hbcnhfu1vqdb"]
+[gd_scene load_steps=5 format=3 uid="uid://hbcnhfu1vqdb"]
 
-[ext_resource type="Script" uid="uid://cs7ejn2kgabxr" path="res://Scenes/MainGameScreen/MainGameScene.cs" id="1_g3hiw"]
+[ext_resource type="Script" uid="uid://cw7kvndqwpbdy" path="res://Scenes/MainGameScreen/MainGameScene.cs" id="1_g3hiw"]
 [ext_resource type="PackedScene" uid="uid://ck5vq6a7t604p" path="res://Scenes/MainGameScreen/SectorMap.tscn" id="2_lvld5"]
+[ext_resource type="PackedScene" uid="uid://ce35p0pqsk045" path="res://Scenes/MainGameScreen/TopMenu.tscn" id="3_7t35a"]
+[ext_resource type="PackedScene" uid="uid://ctrhbg0anf5cx" path="res://Scenes/MainGameScreen/BottomMenu.tscn" id="4_1ccxp"]
 
 [node name="MainGameScene" type="Control"]
 layout_mode = 3
@@ -13,3 +15,11 @@ grow_vertical = 2
 script = ExtResource("1_g3hiw")
 
 [node name="SectorMap" parent="." instance=ExtResource("2_lvld5")]
+position = Vector2(0, 50)
+
+[node name="UILayer" type="CanvasLayer" parent="."]
+
+[node name="TopMenu" parent="UILayer" instance=ExtResource("3_7t35a")]
+grow_vertical = 2
+
+[node name="BottomMenu" parent="UILayer" instance=ExtResource("4_1ccxp")]
