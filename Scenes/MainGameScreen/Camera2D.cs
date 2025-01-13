@@ -84,7 +84,7 @@ public partial class Camera2D : Godot.Camera2D
         if (!zoomCenter.HasValue)
         {
             // If no zoom center is provided, use the center of the viewport
-            zoomCenter = GetViewport().GetVisibleRect().Size / 2;
+            zoomCenter = Position + GetViewport().GetVisibleRect().Size / (2 * Zoom.X);
         }
         float newZoom = Math.Min(1.5f * Zoom.X, MaxZoom);
         ZoomTo(newZoom, zoomCenter.Value);
@@ -94,7 +94,7 @@ public partial class Camera2D : Godot.Camera2D
         if (!zoomCenter.HasValue)
         {
             // If no zoom center is provided, use the center of the viewport
-            zoomCenter = GetViewport().GetVisibleRect().Size / 2;
+            zoomCenter = Position + GetViewport().GetVisibleRect().Size / (2 * Zoom.X);
         }
         Vector2 screenSize = GetViewport().GetVisibleRect().Size;
 		float minZoomX = screenSize.X / _mapPixelDimensions.X;

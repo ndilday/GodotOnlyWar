@@ -15,8 +15,9 @@ public partial class ConquistorumScreenController : Control
 	public override void _Ready()
 	{
 		_view = GetNode<ConquistorumScreenView>("ConquistorumScreenView");
-		_view.CloseButtonPressed += (object sender, EventArgs e) => CloseButtonPressed?.Invoke(sender, e);
+		_view.CloseButtonPressed += (object sender, EventArgs e) => CloseButtonPressed?.Invoke(this, e);
 		_view.SquadButtonPressed += HandleSquadButtonPressed;
+		PopulateScountSquadList();
 	}
 
 	private void PopulateScountSquadList()
@@ -94,19 +95,19 @@ public partial class ConquistorumScreenController : Control
 		}
 		if (maxLevel == 4)
 		{
-			return name + " is ready for his Black Carapace and assignment to a Devastator Squad; I believe he will rise to be a Sergeant himself in short order.";
+			return name + " is ready for his Black Carapace and assignment to a Devastator Squad; I believe he will rise to be a Sergeant himself in short order.\n";
 		}
 		else if (maxLevel > 1)
 		{
-			return name + " is ready for his Black Carapace and assignment to a Devastator Squad; I believe he will rise through the ranks quickly";
+			return name + " is ready for his Black Carapace and assignment to a Devastator Squad; I believe he will rise through the ranks quickly.\n";
 		}
 		else if (maxLevel == 1)
 		{
-			return name + " is ready for his Black Carapace and assignment to a Devastator Squad.";
+			return name + " is ready for his Black Carapace and assignment to a Devastator Squad.\n";
 		}
 		else
 		{
-			return name + " is not ready to become a Battle Brother, and should acquire more seasoning before taking the Black Carapace.";
+			return name + " is not ready to become a Battle Brother, and should acquire more seasoning before taking the Black Carapace.\n";
 		}
 
 	}

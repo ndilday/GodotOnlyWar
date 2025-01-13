@@ -3,6 +3,7 @@ using OnlyWar.Builders;
 using OnlyWar.Models;
 using OnlyWar.Models.Fleets;
 using OnlyWar.Models.Planets;
+using OnlyWar.Scenes.MainGameScreen;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -17,7 +18,10 @@ struct BorderPoint
 
 public partial class SectorMap : Node2D
 {
-	public Vector2I GridDimensions =
+    public event EventHandler<int> PlanetClicked;
+    public event EventHandler<int> FleetClicked;
+
+    public Vector2I GridDimensions =
 		new(GameDataSingleton.Instance.GameRulesData.SectorSize.Item1,
 			GameDataSingleton.Instance.GameRulesData.SectorSize.Item2);
 	public Vector2I CellSize = 
@@ -101,14 +105,15 @@ public partial class SectorMap : Node2D
 			int index = GridPositionToIndex(gridPosition);
 			HasPlanet[index] = true;
             var color = kvp.Value.ControllingFaction.Color;
-            DrawTexture(starTexture, starTextureScale, gridPosition, new Godot.Color(color.R, color.G, color.B, color.A));
+            ClickableSprite2D planet = DrawTexture(starTexture, starTextureScale, gridPosition, new Godot.Color(color.R, color.G, color.B, color.A));
+            planet.Pressed += (object sender, EventArgs e) => PlanetClicked.Invoke(planet, kvp.Key);
 		}
 	}
 
 	private void PlaceFleets()
 	{
 		var shipTexture = GD.Load<AtlasTexture>(("res://Assets/shipAtlasTexture.tres"));
-		Vector2 shipTextureScale = new Vector2(0.1f, 0.1f);
+		Vector2 shipTextureScale = new Vector2(0.2f, 0.2f);
 		foreach(var taskForceKvp in GameDataSingleton.Instance.Sector.Fleets)
 		{
             TaskForce taskForce = taskForceKvp.Value;
@@ -130,8 +135,14 @@ public partial class SectorMap : Node2D
             }
 
 			// Make sure you are the owner of the new node, or it will not save properly
-			DrawTexture(shipTexture, shipTextureScale, gridPosition, Color.Color8(255, 255, 255), 2, true);
+			ClickableSprite2D fleet = DrawTexture(shipTexture, shipTextureScale, gridPosition, Color.Color8(255, 255, 255), 2, true);
+            fleet.Pressed += (object sender, EventArgs e) => FleetClicked.Invoke(fleet, taskForceKvp.Key);
         }
+    }
+
+    private void Fleet_Pressed(object sender, EventArgs e)
+    {
+        throw new NotImplementedException();
     }
 
     private Dictionary<ushort, List<Vector2I>> DetermineSubsectorBorderPoints(IEnumerable<Subsector> subsectors)
@@ -286,9 +297,9 @@ public partial class SectorMap : Node2D
         return (cellCoordinates.X >= 0 && cellCoordinates.X < GridDimensions.X && cellCoordinates.Y >= 0 && cellCoordinates.Y < GridDimensions.Y);
     }
 
-    private void DrawTexture(Texture2D texture, Vector2 scale, Vector2I gridPosition, Color color, int zIndex = 1, bool offset=false)
+    private ClickableSprite2D DrawTexture(Texture2D texture, Vector2 scale, Vector2I gridPosition, Color color, int zIndex = 1, bool offset=false)
 	{
-		Sprite2D newSprite = new Sprite2D();
+		ClickableSprite2D newSprite = new ClickableSprite2D();
 		this.AddChild(newSprite);
         newSprite.Owner = this;
 		Vector2I mapPosition = CalculateMapPosition(gridPosition);
@@ -301,6 +312,7 @@ public partial class SectorMap : Node2D
         newSprite.Modulate = color;
         newSprite.Scale = scale;
 		newSprite.ZIndex = zIndex;
+        return newSprite;
 	}
 
 	private Color ConvertHsvToRgb(float h, float s, float v)

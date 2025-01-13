@@ -2,7 +2,7 @@ using Godot;
 using System;
 using System.Collections.Generic;
 
-public partial class ApothecariumScreenView : Panel
+public partial class ApothecariumScreenView : Control
 {
 	private RichTextLabel _geneseedReportRichText;
 	private RichTextLabel _injuryDetailRichText;

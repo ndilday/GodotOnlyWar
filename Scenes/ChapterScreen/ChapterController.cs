@@ -19,7 +19,7 @@ public partial class ChapterController : Control
 		if (ChapterView == null)
 		{
 			ChapterView = GetNode<ChapterView>("ChapterView");
-			ChapterView.CloseButtonPressed += (object sender, EventArgs e) => CloseButtonPressed?.Invoke(sender, e);
+			ChapterView.CloseButtonPressed += (object sender, EventArgs e) => CloseButtonPressed?.Invoke(this, e);
 		}
 		ChapterView.CompanyButtonPressed += HandleCompanyButtonPressed;
 		ChapterView.SquadButtonPressed += HandleSquadButtonPressed;

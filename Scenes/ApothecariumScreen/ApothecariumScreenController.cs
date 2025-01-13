@@ -23,7 +23,7 @@ It will require approximately {4} weeks before all marines in the squad (other t
 		_view.PopulateGeneseedReport(GenerateGeneseedReport());
 		_view.PopulateSquadList(GetSquadsWithInjuredSoldiers());
 		_view.SquadButtonPressed += HandleSquadButtonPressed;
-		_view.CloseButtonPressed += (object? sender, EventArgs e) => CloseButtonPressed?.Invoke(sender, e);
+		_view.CloseButtonPressed += (object sender, EventArgs e) => CloseButtonPressed?.Invoke(this, e);
 	}
 
 	public override void _ExitTree()

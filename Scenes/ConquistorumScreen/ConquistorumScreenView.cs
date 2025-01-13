@@ -17,7 +17,7 @@ public partial class ConquistorumScreenView : Control
 		_closeButton = GetNode<Button>("CloseButton");
 		_closeButton.Pressed += () => CloseButtonPressed?.Invoke(this, EventArgs.Empty);
 		_squadReadinessRichText = GetNode<RichTextLabel>("SquadReportPanel/RichTextLabel");
-		_squadVBox = GetNode<VBoxContainer>("InjuryReportPanel/ScrollContainer/VBoxContainer");
+		_squadVBox = GetNode<VBoxContainer>("SquadList/ScrollContainer/VBoxContainer");
 		_squadButtonGroup = new ButtonGroup();
 	}
 

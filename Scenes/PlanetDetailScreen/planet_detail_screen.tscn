@@ -1,9 +1,11 @@
-[gd_scene load_steps=3 format=3 uid="uid://07rf3bgdgrn0"]
+[gd_scene load_steps=4 format=3 uid="uid://07rf3bgdgrn0"]
 
-[ext_resource type="Script" path="res://Scenes/PlanetDetailScreen/PlanetDetailScreenController.cs" id="1_n1xus"]
-[ext_resource type="Script" path="res://Scenes/PlanetDetailScreen/PlanetDetailScreenView.cs" id="2_vcagg"]
+[ext_resource type="Script" uid="uid://cdwljd2lijk2t" path="res://Scenes/PlanetDetailScreen/PlanetDetailScreenController.cs" id="1_n1xus"]
+[ext_resource type="Script" uid="uid://bblrys4ifm4rc" path="res://Scenes/PlanetDetailScreen/PlanetDetailScreenView.cs" id="2_vcagg"]
+[ext_resource type="Texture2D" uid="uid://dim2tk4p64awv" path="res://Assets/planet-1702788_1920.jpg" id="3_vcagg"]
 
 [node name="PlanetDetailScreenController" type="Control"]
+clip_contents = true
 layout_mode = 3
 anchors_preset = 15
 anchor_right = 1.0
@@ -12,7 +14,8 @@ grow_horizontal = 2
 grow_vertical = 2
 script = ExtResource("1_n1xus")
 
-[node name="PlanetDetailScreenView" type="Panel" parent="."]
+[node name="PlanetDetailScreenView" type="Control" parent="."]
+clip_contents = true
 layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
@@ -20,3 +23,26 @@ anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
 script = ExtResource("2_vcagg")
+
+[node name="TextureRect" type="TextureRect" parent="PlanetDetailScreenView"]
+modulate = Color(1, 1, 1, 0.25098)
+clip_contents = true
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+texture = ExtResource("3_vcagg")
+expand_mode = 3
+
+[node name="CloseButton" type="Button" parent="PlanetDetailScreenView"]
+layout_mode = 1
+anchors_preset = -1
+anchor_left = 1.0
+anchor_right = 1.0
+offset_left = -50.0
+offset_top = 10.0
+offset_right = -10.0
+offset_bottom = 50.0
+text = "X"
