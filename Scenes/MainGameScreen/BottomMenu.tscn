@@ -63,7 +63,7 @@ layout_mode = 2
 disabled = true
 text = "Armamentarium"
 
-[node name="RecruitmentButton" type="Button" parent="Panel/MarginContainer/HBoxContainer"]
+[node name="ConquistorumButton" type="Button" parent="Panel/MarginContainer/HBoxContainer"]
 layout_mode = 2
 text = "Conquistorum"
 

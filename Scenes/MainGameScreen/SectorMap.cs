@@ -94,8 +94,8 @@ public partial class SectorMap : Node2D
 			Vector2I gridPosition = new(kvp.Value.Position.Item1, kvp.Value.Position.Item2);
 			int index = GridPositionToIndex(gridPosition);
 			HasPlanet[index] = true;
-			DrawTexture(starTexture, starTextureScale, gridPosition);
-
+            var color = kvp.Value.ControllingFaction.Color;
+            DrawTexture(starTexture, starTextureScale, gridPosition, new Godot.Color(color.R, color.G, color.B, color.A));
 		}
 	}
 
@@ -124,18 +124,12 @@ public partial class SectorMap : Node2D
             }
 
 			// Make sure you are the owner of the new node, or it will not save properly
-			DrawTexture(shipTexture, shipTextureScale, gridPosition, 2, true);
-
-            // You might want to store a reference to the sprite in the TaskForce 
-            // or in a separate dictionary for later access/updates.
-            // For example:
-            // taskForce.Sprite = fleetSprite; 
+			DrawTexture(shipTexture, shipTextureScale, gridPosition, Color.Color8(255, 255, 255), 2, true);
         }
     }
 
     private Dictionary<ushort, List<Vector2I>> DetermineSubsectorBorderPoints(IEnumerable<Subsector> subsectors)
     {
-        int i = 0;
         Dictionary<ushort, List<Vector2I>> subsectorVertexListMap = [];
         foreach(Subsector subsector in subsectors)
         {
@@ -286,7 +280,7 @@ public partial class SectorMap : Node2D
         return (cellCoordinates.X >= 0 && cellCoordinates.X < GridDimensions.X && cellCoordinates.Y >= 0 && cellCoordinates.Y < GridDimensions.Y);
     }
 
-    private void DrawTexture(Texture2D texture, Vector2 scale, Vector2I gridPosition, int zIndex = 1, bool offset=false)
+    private void DrawTexture(Texture2D texture, Vector2 scale, Vector2I gridPosition, Color color, int zIndex = 1, bool offset=false)
 	{
 		Sprite2D newSprite = new Sprite2D();
 		this.AddChild(newSprite);
@@ -298,6 +292,7 @@ public partial class SectorMap : Node2D
 		}
         newSprite.GlobalPosition = mapPosition;
         newSprite.Texture = texture;
+        newSprite.Modulate = color;
         newSprite.Scale = scale;
 		newSprite.ZIndex = zIndex;
 	}

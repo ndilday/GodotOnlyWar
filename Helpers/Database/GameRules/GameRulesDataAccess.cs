@@ -273,11 +273,13 @@ namespace OnlyWar.Helpers.Database.GameRules
         private Color ConvertDatabaseObjectToColor(object obj)
         {
             long colorInt = (long)obj;
+            long a = (colorInt & 0xFF) << 24;
+            long argb = a + (colorInt >> 8);
             /*long r = colorInt / 0x01000000;
             long g = (colorInt / 0x00010000) & 0x000000ff;
             long b = (colorInt / 0x00000100) & 0x000000ff;
             long a = colorInt & 0x000000ff;*/
-            return Color.FromArgb((int)colorInt);
+            return Color.FromArgb((int)argb);
         }
     }
 }

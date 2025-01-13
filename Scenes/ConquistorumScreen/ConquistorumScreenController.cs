@@ -15,7 +15,7 @@ public partial class ConquistorumScreenController : Control
 	public override void _Ready()
 	{
 		_view = GetNode<ConquistorumScreenView>("ConquistorumScreenView");
-		_view.CloseButtonPressed += (object? sender, EventArgs e) => CloseButtonPressed?.Invoke(sender, e);
+		_view.CloseButtonPressed += (object sender, EventArgs e) => CloseButtonPressed?.Invoke(sender, e);
 		_view.SquadButtonPressed += HandleSquadButtonPressed;
 	}
 
@@ -35,111 +35,79 @@ public partial class ConquistorumScreenController : Control
 	private void HandleSquadButtonPressed(object sender, int squadId)
 	{
 		Squad squad = GameDataSingleton.Instance.Sector.PlayerForce.Army.OrderOfBattle.GetAllSquads().First(s => s.Id == squadId);
-        string squadReport = "";
+		string squadReport = "";
 
-        // should we ignore the SGT here or not?
-        if (squad.Members.Count == 0)
-        {
-            squadReport += "This squad has no members. ";
-        }
-        else
-        {
-            foreach (PlayerSoldier soldier in squad.Members)
-            {
-                if (soldier.Template.IsSquadLeader)
-                {
-                    // TODO: add code to test whether the SGT still feels he has things
-                    // to teach the soldiers
-                }
-                else
-                {
-                    squadReport += GetSergeantDescription(soldier.Name, soldier.SoldierEvaluationHistory[soldier.SoldierEvaluationHistory.Count - 1]);
-                }
-            }
-        }
-        _view.PopulateSquadReadinessReport(squadReport);
-    }
+		// should we ignore the SGT here or not?
+		if (squad.Members.Count == 0)
+		{
+			squadReport += "This squad has no members. ";
+		}
+		else
+		{
+			foreach (PlayerSoldier soldier in squad.Members)
+			{
+				if (soldier.Template.IsSquadLeader)
+				{
+					// TODO: add code to test whether the SGT still feels he has things
+					// to teach the soldiers
+				}
+				else
+				{
+					squadReport += GetSergeantDescription(soldier.Name, soldier.SoldierEvaluationHistory[soldier.SoldierEvaluationHistory.Count - 1]);
+				}
+			}
+		}
+		_view.PopulateSquadReadinessReport(squadReport);
+	}
 
-    private string GetRecruiterDescription(PlayerSoldier soldier)
-    {
-        if (soldier.RangedRating > 105)
-        {
-            if (soldier.MeleeRating > 90)
-            {
-                if (soldier.MeleeRating > 100 && soldier.RangedRating > 105)
-                {
-                    return soldier.Name + " is ready to accept the Black Carapace and join a Devastator Squad; I think he will rise through the ranks quickly.\n";
-                }
-                else
-                {
-                    return soldier.Name + " is ready to be promoted to a Devastator Squad, but I would prefer he earn more seasoning first.\n";
-                }
-            }
-            else
-            {
-                return soldier.Name + " could be promoted in an emergency, but is not ready to face hand-to-hand combat.\n";
-            }
-        }
-        else if (soldier.MeleeRating > 90)
-        {
-            return soldier.Name + " has a good grasp of the sword, but his mastery of the bolter leaves something to be desired.\n";
-        }
-        else
-        {
-            return soldier.Name + " is not ready to become a Battle Brother, and should acquire more seasoning before taking the Black Carapace.\n";
-        }
-    }
+	private string GetSergeantDescription(string name, SoldierEvaluation evaluation)
+	{
+		//determine highest level soldier is rated for
+		// sgt level requires silver gun and sword, plus silver leadership
+		// tactical requires silver level gun and sword skills
+		// assault requires silver level sword skills and bronze gun skills
+		// devestator requires bronze gun skills
 
-    private string GetSergeantDescription(string name, SoldierEvaluation evaluation)
-    {
-        //determine highest level soldier is rated for
-        // sgt level requires silver gun and sword, plus silver leadership
-        // tactical requires silver level gun and sword skills
-        // assault requires silver level sword skills and bronze gun skills
-        // devestator requires bronze gun skills
+		// maxLevel -> Scout:0; Devestator:1; Assault:2; Tactical:3; Sergeant:4
+		int maxLevel = 0;
+		if (evaluation.RangedRating > 105 && evaluation.MeleeRating < 90)
+		{
+			maxLevel = 1;
+		}
+		else if (evaluation.RangedRating > 105 && evaluation.MeleeRating > 90)
+		{
+			if (evaluation.RangedRating > 110 && evaluation.MeleeRating > 95)
+			{
+				if (evaluation.LeadershipRating > 55)
+				{
+					maxLevel = 4;
+				}
+				else
+				{
+					maxLevel = 3;
+				}
+			}
+			else
+			{
+				maxLevel = 2;
+			}
+		}
+		if (maxLevel == 4)
+		{
+			return name + " is ready for his Black Carapace and assignment to a Devastator Squad; I believe he will rise to be a Sergeant himself in short order.";
+		}
+		else if (maxLevel > 1)
+		{
+			return name + " is ready for his Black Carapace and assignment to a Devastator Squad; I believe he will rise through the ranks quickly";
+		}
+		else if (maxLevel == 1)
+		{
+			return name + " is ready for his Black Carapace and assignment to a Devastator Squad.";
+		}
+		else
+		{
+			return name + " is not ready to become a Battle Brother, and should acquire more seasoning before taking the Black Carapace.";
+		}
 
-        // maxLevel -> Scout:0; Devestator:1; Assault:2; Tactical:3; Sergeant:4
-        int maxLevel = 0;
-        if (evaluation.RangedRating > 105 && evaluation.MeleeRating < 90)
-        {
-            maxLevel = 1;
-        }
-        else if (evaluation.RangedRating > 105 && evaluation.MeleeRating > 90)
-        {
-            if (evaluation.RangedRating > 110 && evaluation.MeleeRating > 95)
-            {
-                if (evaluation.LeadershipRating > 55)
-                {
-                    maxLevel = 4;
-                }
-                else
-                {
-                    maxLevel = 3;
-                }
-            }
-            else
-            {
-                maxLevel = 2;
-            }
-        }
-        if (maxLevel == 4)
-        {
-            return name + " is ready for his Black Carapace and assignment to a Devastator Squad; I believe he will rise to be a Sergeant himself in short order.";
-
-
-        }
-        else if (maxLevel > 1)
-        {
-            return name + " is ready for his Black Carapace and assignment to a Devastator Squad; I believe he will rise through the ranks quickly";
-        }
-        else if(maxLevel == 1)
-        {
-            return name + " is ready for his Black Carapace and assignment to a Devastator Squad.";
-        }
-        else
-        {
-            return name + " is not ready to become a Battle Brother, and should acquire more seasoning before taking the Black Carapace.";
-        }
-
-        
-    }
+	}
+}
