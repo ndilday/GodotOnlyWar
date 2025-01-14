@@ -49,8 +49,8 @@ public partial class PlanetDetailScreenController : Control
 		for(int i = 0; i < 16; i++)
 		{
 			Region region = planet.Regions[i];
-            List<TreeNode> unitsInRegion = new List<TreeNode>();
-            if (region.RegionFactionMap.ContainsKey(playerFaction.Id))
+			List<TreeNode> unitsInRegion = new List<TreeNode>();
+			if (region.RegionFactionMap.ContainsKey(playerFaction.Id))
 			{
 				var unitSquadMap = region.RegionFactionMap[playerFaction.Id].LandedSquads.GroupBy(s => s.ParentUnit).ToDictionary(group => group.Key, group => group.ToList());
 				foreach(var kvp in unitSquadMap)
@@ -68,8 +68,8 @@ public partial class PlanetDetailScreenController : Control
 				}
 				
 			}
-            TreeNode regionNode = new TreeNode(region.Id, GetRegionName(planet, i), unitsInRegion);
-            regionList.Add(regionNode);
+			TreeNode regionNode = new TreeNode(region.Id, GetRegionName(planet, i), unitsInRegion);
+			regionList.Add(regionNode);
 		}
 		_view.PopulateRegionTree(regionList);
 	}
@@ -81,37 +81,37 @@ public partial class PlanetDetailScreenController : Control
 			case 0:
 				return $"{planet.Name} Alpha";
 			case 1:
-                return $"{planet.Name} Beta";
-            case 2:
-                return $"{planet.Name} Gamma";
-            case 3:
-                return $"{planet.Name} Delta";
-            case 4:
-                return $"{planet.Name} Epsilon";
-            case 5:
-                return $"{planet.Name} Zeta";
-            case 6:
-                return $"{planet.Name} Eta";
-            case 7:
-                return $"{planet.Name} Theta";
-            case 8:
-                return $"{planet.Name} Iota";
-            case 9:
-                return $"{planet.Name} Kappa";
-            case 10:
-                return $"{planet.Name} Lambda";
-            case 11:
-                return $"{planet.Name} Mu";
-            case 12:
-                return $"{planet.Name} Nu";
-            case 13:
-                return $"{planet.Name} Xi";
-            case 14:
-                return $"{planet.Name} Omicron";
-            case 15:
-                return $"{planet.Name} Pi";
+				return $"{planet.Name} Beta";
+			case 2:
+				return $"{planet.Name} Gamma";
+			case 3:
+				return $"{planet.Name} Delta";
+			case 4:
+				return $"{planet.Name} Epsilon";
+			case 5:
+				return $"{planet.Name} Zeta";
+			case 6:
+				return $"{planet.Name} Eta";
+			case 7:
+				return $"{planet.Name} Theta";
+			case 8:
+				return $"{planet.Name} Iota";
+			case 9:
+				return $"{planet.Name} Kappa";
+			case 10:
+				return $"{planet.Name} Lambda";
+			case 11:
+				return $"{planet.Name} Mu";
+			case 12:
+				return $"{planet.Name} Nu";
+			case 13:
+				return $"{planet.Name} Xi";
+			case 14:
+				return $"{planet.Name} Omicron";
+			case 15:
+				return $"{planet.Name} Pi";
 			default:
 				return $"{planet.Name} Omega";
-        }
+		}
 	}
 }
