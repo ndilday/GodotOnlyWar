@@ -1,6 +1,7 @@
 using Godot;
 using OnlyWar.Helpers.Sector;
 using OnlyWar.Models;
+using OnlyWar.Models.Planets;
 using OnlyWar.Models.Soldiers;
 using System;
 using System.Linq;
@@ -129,6 +130,7 @@ public partial class MainGameScene : Control
 
     private void HandlePlanetClicked(object sender, int planetId)
     {
+        Planet planet = GameDataSingleton.Instance.Sector.Planets[planetId];
         if (_planetDetailScreen == null)
         {
             PackedScene planetScene = GD.Load<PackedScene>("res://Scenes/PlanetDetailScreen/planet_detail_screen.tscn");
@@ -137,6 +139,8 @@ public partial class MainGameScene : Control
             _planetDetailScreen.CloseButtonPressed += HandleCloseScreen;
             _mainUILayer.AddChild(_planetDetailScreen);
         }
+        _planetDetailScreen.PopulateFleetTree(planet);
+        _planetDetailScreen.PopulateRegionTree(planet);
         _planetDetailScreen.Visible = true;
         SetMainScreenVisibility(false);
         GD.Print($"Planet {planetId} Clicked");

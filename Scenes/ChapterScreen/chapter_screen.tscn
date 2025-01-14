@@ -221,6 +221,7 @@ grow_vertical = 2
 
 [node name="VBoxContainer" type="VBoxContainer" parent="ChapterView/SquadList/ScrollContainer"]
 layout_mode = 2
+size_flags_horizontal = 3
 
 [node name="SoldierList" type="Panel" parent="ChapterView"]
 layout_mode = 1

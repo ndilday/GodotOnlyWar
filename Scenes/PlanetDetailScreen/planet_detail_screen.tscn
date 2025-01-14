@@ -46,3 +46,92 @@ offset_top = 10.0
 offset_right = -10.0
 offset_bottom = 50.0
 text = "X"
+
+[node name="ShipListPanel" type="Panel" parent="PlanetDetailScreenView"]
+layout_mode = 1
+anchors_preset = -1
+anchor_right = 0.3
+anchor_bottom = 1.0
+offset_left = 10.0
+offset_top = 55.0
+offset_right = -5.0
+offset_bottom = -10.0
+
+[node name="Header" type="Panel" parent="PlanetDetailScreenView/ShipListPanel"]
+custom_minimum_size = Vector2(0, 30)
+layout_mode = 1
+anchors_preset = 10
+anchor_right = 1.0
+offset_bottom = 50.0
+grow_horizontal = 2
+
+[node name="Label" type="Label" parent="PlanetDetailScreenView/ShipListPanel/Header"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+text = "Ships In Orbit"
+horizontal_alignment = 1
+vertical_alignment = 1
+
+[node name="Tree" type="Tree" parent="PlanetDetailScreenView/ShipListPanel"]
+layout_mode = 1
+anchors_preset = -1
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = 5.0
+offset_top = 55.0
+offset_right = -5.0
+offset_bottom = -5.0
+
+[node name="RegionListPanel" type="Panel" parent="PlanetDetailScreenView"]
+layout_mode = 1
+anchors_preset = -1
+anchor_left = 0.7
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = 5.0
+offset_top = 55.0
+offset_right = -10.0
+offset_bottom = -10.0
+
+[node name="Header" type="Panel" parent="PlanetDetailScreenView/RegionListPanel"]
+custom_minimum_size = Vector2(0, 30)
+layout_mode = 1
+anchors_preset = 10
+anchor_right = 1.0
+offset_bottom = 50.0
+grow_horizontal = 2
+
+[node name="Label" type="Label" parent="PlanetDetailScreenView/RegionListPanel/Header"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+text = "Regions"
+horizontal_alignment = 1
+vertical_alignment = 1
+
+[node name="VBoxContainer" type="VBoxContainer" parent="PlanetDetailScreenView/RegionListPanel"]
+layout_mode = 1
+anchors_preset = -1
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_top = 50.0
+offset_bottom = -5.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="Tree" type="Tree" parent="PlanetDetailScreenView/RegionListPanel"]
+layout_mode = 1
+anchors_preset = -1
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = 5.0
+offset_top = 55.0
+offset_right = -5.0
+offset_bottom = -5.0
