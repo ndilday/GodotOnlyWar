@@ -21,16 +21,16 @@ public partial class PlanetDetailScreenView : Control
 	private Button _closeButton;
 	private Tree _fleetTree;
 	private Tree _regionTree;
-    private VBoxContainer _planetDataVBox;
-    
+	private VBoxContainer _planetDataVBox;
+	
 	public event EventHandler CloseButtonPressed;
 
 	public override void _Ready()
 	{
 		_closeButton = GetNode<Button>("CloseButton");
 		_closeButton.Pressed += () => CloseButtonPressed?.Invoke(this, EventArgs.Empty);
-        _planetDataVBox = GetNode<VBoxContainer>("DataPanel/VBoxContainer");
-        _fleetTree = GetNode<Tree>("ShipListPanel/Tree");
+		_planetDataVBox = GetNode<VBoxContainer>("DataPanel/VBoxContainer");
+		_fleetTree = GetNode<Tree>("ShipListPanel/Tree");
 		_regionTree = GetNode<Tree>("RegionListPanel/Tree");
 	}
 
@@ -75,39 +75,39 @@ public partial class PlanetDetailScreenView : Control
 		}
 	}
 
-    public void PopulatePlanetData(IReadOnlyList<Tuple<string, string>> stringPairs)
-    {
-        var existingLines = _planetDataVBox.GetChildren();
-        if (existingLines != null)
-        {
-            foreach (var line in existingLines)
-            {
-                _planetDataVBox.RemoveChild(line);
-                line.QueueFree();
-            }
-        }
-        foreach (Tuple<string, string> line in stringPairs)
-        {
-            AddLine(line.Item1, line.Item2);
-        }
-    }
+	public void PopulatePlanetData(IReadOnlyList<Tuple<string, string>> stringPairs)
+	{
+		var existingLines = _planetDataVBox.GetChildren();
+		if (existingLines != null)
+		{
+			foreach (var line in existingLines)
+			{
+				_planetDataVBox.RemoveChild(line);
+				line.QueueFree();
+			}
+		}
+		foreach (Tuple<string, string> line in stringPairs)
+		{
+			AddLine(line.Item1, line.Item2);
+		}
+	}
 
-    private void AddLine(string label, string value)
-    {
-        Panel linePanel = new Panel();
-        linePanel.SizeFlagsHorizontal = SizeFlags.Fill;
-        linePanel.SizeFlagsVertical = SizeFlags.Fill;
-        linePanel.CustomMinimumSize = new Vector2(0, 20);
-        Label lineLabel = new Label();
-        lineLabel.Text = label;
-        lineLabel.HorizontalAlignment = HorizontalAlignment.Left;
-        lineLabel.SizeFlagsHorizontal = SizeFlags.ExpandFill;
-        linePanel.AddChild(lineLabel);
-        Label lineValue = new Label();
-        lineValue.Text = value;
-        lineValue.HorizontalAlignment = HorizontalAlignment.Right;
-        lineValue.SizeFlagsHorizontal = SizeFlags.ExpandFill;
-        linePanel.AddChild(lineValue);
-        _soldierDataVBox.AddChild(linePanel);
-    }
+	private void AddLine(string label, string value)
+	{
+		Panel linePanel = new Panel();
+		linePanel.SizeFlagsHorizontal = SizeFlags.Fill;
+		linePanel.SizeFlagsVertical = SizeFlags.Fill;
+		linePanel.CustomMinimumSize = new Vector2(0, 20);
+		Label lineLabel = new Label();
+		lineLabel.Text = label;
+		lineLabel.HorizontalAlignment = HorizontalAlignment.Left;
+		lineLabel.SizeFlagsHorizontal = SizeFlags.ExpandFill;
+		linePanel.AddChild(lineLabel);
+		Label lineValue = new Label();
+		lineValue.Text = value;
+		lineValue.HorizontalAlignment = HorizontalAlignment.Right;
+		lineValue.SizeFlagsHorizontal = SizeFlags.ExpandFill;
+		linePanel.AddChild(lineValue);
+		_planetDataVBox.AddChild(linePanel);
+	}
 }

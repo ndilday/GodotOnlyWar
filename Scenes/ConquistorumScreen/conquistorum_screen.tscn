@@ -130,3 +130,4 @@ offset_bottom = -5.0
 grow_horizontal = 2
 grow_vertical = 2
 theme = SubResource("Theme_rathx")
+bbcode_enabled = true

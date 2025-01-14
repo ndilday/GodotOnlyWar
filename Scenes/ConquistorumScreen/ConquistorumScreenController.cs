@@ -9,13 +9,16 @@ using OnlyWar.Models.Soldiers;
 
 public partial class ConquistorumScreenController : Control
 {
-	ConquistorumScreenView _view;
+	private ConquistorumScreenView _view;
+
 	public event EventHandler CloseButtonPressed;
+	public event EventHandler<int> SoldierLinkClicked;
 
 	public override void _Ready()
 	{
 		_view = GetNode<ConquistorumScreenView>("ConquistorumScreenView");
 		_view.CloseButtonPressed += (object sender, EventArgs e) => CloseButtonPressed?.Invoke(this, e);
+		_view.LinkClicked += HandleLinkClicked;
 		_view.SquadButtonPressed += HandleSquadButtonPressed;
 		PopulateScountSquadList();
 	}
@@ -54,14 +57,14 @@ public partial class ConquistorumScreenController : Control
 				}
 				else
 				{
-					squadReport += GetSergeantDescription(soldier.Name, soldier.SoldierEvaluationHistory[soldier.SoldierEvaluationHistory.Count - 1]);
+					squadReport += GetSergeantDescription(soldier.Id, soldier.Name, soldier.SoldierEvaluationHistory[soldier.SoldierEvaluationHistory.Count - 1]);
 				}
 			}
 		}
 		_view.PopulateSquadReadinessReport(squadReport);
 	}
 
-	private string GetSergeantDescription(string name, SoldierEvaluation evaluation)
+	private string GetSergeantDescription(int id, string name, SoldierEvaluation evaluation)
 	{
 		//determine highest level soldier is rated for
 		// sgt level requires silver gun and sword, plus silver leadership
@@ -70,6 +73,7 @@ public partial class ConquistorumScreenController : Control
 		// devestator requires bronze gun skills
 
 		// maxLevel -> Scout:0; Devestator:1; Assault:2; Tactical:3; Sergeant:4
+		string nameMarkup = $"[url={id}]{name}[/url]"; 
 		int maxLevel = 0;
 		if (evaluation.RangedRating > 105 && evaluation.MeleeRating < 90)
 		{
@@ -95,20 +99,25 @@ public partial class ConquistorumScreenController : Control
 		}
 		if (maxLevel == 4)
 		{
-			return name + " is ready for his Black Carapace and assignment to a Devastator Squad; I believe he will rise to be a Sergeant himself in short order.\n";
+			return nameMarkup + " is ready for his Black Carapace and assignment to a Devastator Squad; I believe he will rise to be a Sergeant himself in short order.\n\n";
 		}
 		else if (maxLevel > 1)
 		{
-			return name + " is ready for his Black Carapace and assignment to a Devastator Squad; I believe he will rise through the ranks quickly.\n";
+			return nameMarkup + " is ready for his Black Carapace and assignment to a Devastator Squad; I believe he will rise through the ranks quickly.\n\n";
 		}
 		else if (maxLevel == 1)
 		{
-			return name + " is ready for his Black Carapace and assignment to a Devastator Squad.\n";
+			return nameMarkup + " is ready for his Black Carapace and assignment to a Devastator Squad.\n\n";
 		}
 		else
 		{
-			return name + " is not ready to become a Battle Brother, and should acquire more seasoning before taking the Black Carapace.\n";
+			return nameMarkup + " is not ready to become a Battle Brother, and should acquire more seasoning before taking the Black Carapace.\n\n";
 		}
+	}
 
+	private void HandleLinkClicked(object sender, Variant meta)
+	{
+		int soldierId = meta.AsInt32();
+		SoldierLinkClicked.Invoke(this, soldierId);
 	}
 }

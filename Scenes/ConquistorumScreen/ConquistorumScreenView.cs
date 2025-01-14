@@ -11,12 +11,14 @@ public partial class ConquistorumScreenView : Control
 
 	public event EventHandler CloseButtonPressed;
 	public event EventHandler<int> SquadButtonPressed;
+	public event EventHandler<Variant> LinkClicked;
 
 	public override void _Ready()
 	{
 		_closeButton = GetNode<Button>("CloseButton");
 		_closeButton.Pressed += () => CloseButtonPressed?.Invoke(this, EventArgs.Empty);
 		_squadReadinessRichText = GetNode<RichTextLabel>("SquadReportPanel/RichTextLabel");
+		_squadReadinessRichText.MetaClicked += (Variant meta) => LinkClicked?.Invoke(this, meta); ;
 		_squadVBox = GetNode<VBoxContainer>("SquadList/ScrollContainer/VBoxContainer");
 		_squadButtonGroup = new ButtonGroup();
 	}

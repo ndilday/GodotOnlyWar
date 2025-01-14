@@ -24,13 +24,13 @@ public partial class MainGameScene : Control
     {
         _bottomMenu = GetNode<BottomMenu>("UILayer/BottomMenu");
         _topMenu = GetNode<TopMenu>("UILayer/TopMenu");
-        _bottomMenu.ChapterButtonPressed += HandleChapterButtonPressed;
-        _bottomMenu.ApothecariumButtonPressed += HandleApothecariumButtonPressed;
-        _bottomMenu.ConquistorumButtonPressed += HandleConquistorumButtonPressed;
-        _bottomMenu.EndTurnButtonPressed += HandleEndTurnButtonPressed;
+        _bottomMenu.ChapterButtonPressed += OnChapterButtonPressed;
+        _bottomMenu.ApothecariumButtonPressed += OnApothecariumButtonPressed;
+        _bottomMenu.ConquistorumButtonPressed += OnConquistorumButtonPressed;
+        _bottomMenu.EndTurnButtonPressed += OnEndTurnButtonPressed;
         _sectorMap = GetNode<SectorMap>("SectorMap");
-        _sectorMap.PlanetClicked += HandlePlanetClicked;
-        _sectorMap.FleetClicked += HandleFleetClicked;
+        _sectorMap.PlanetClicked += OnPlanetClicked;
+        _sectorMap.FleetClicked += OnFleetClicked;
         _mainUILayer = GetNode<CanvasLayer>("UILayer");
         _turnController = new TurnController();
     }
@@ -41,15 +41,15 @@ public partial class MainGameScene : Control
         {
             if (_chapterScreen.Visible) 
             {
-                HandleCloseScreen(_chapterScreen, EventArgs.Empty);
+                OnCloseScreen(_chapterScreen, EventArgs.Empty);
             }
             else if(_apothecariumScreen.Visible)
             {
-                HandleCloseScreen(_apothecariumScreen, EventArgs.Empty);
+                OnCloseScreen(_apothecariumScreen, EventArgs.Empty);
             }
             else if(_conquistorumScreen.Visible)
             {
-                HandleCloseScreen(_conquistorumScreen, EventArgs.Empty);
+                OnCloseScreen(_conquistorumScreen, EventArgs.Empty);
             }
             else if (_soldierScreen.Visible)
             {
@@ -80,55 +80,56 @@ public partial class MainGameScene : Control
         _bottomMenu.Visible = isVisible;
     }
 
-    private void HandleChapterButtonPressed(object sender, EventArgs e)
+    private void OnChapterButtonPressed(object sender, EventArgs e)
     {
         if(_chapterScreen == null)
         {
             PackedScene chapterScene = GD.Load<PackedScene>("res://Scenes/ChapterScreen/chapter_screen.tscn");
             _chapterScreen = (ChapterController)chapterScene.Instantiate();
             _chapterScreen.SoldierSelectedForDisplay += (object s, int soldierId) => OnSoldierSelectedForDisplay(s, soldierId);
-            _chapterScreen.CloseButtonPressed += HandleCloseScreen;
+            _chapterScreen.CloseButtonPressed += OnCloseScreen;
             _mainUILayer.AddChild(_chapterScreen);
         }
         _chapterScreen.Visible = true;
         SetMainScreenVisibility(false);
     }
 
-    private void HandleCloseScreen(object sender, EventArgs e)
+    private void OnCloseScreen(object sender, EventArgs e)
     {
         SetMainScreenVisibility(true);
         ((Control)(sender)).Visible = false;
     }
 
-    private void HandleApothecariumButtonPressed(object sender, EventArgs e)
+    private void OnApothecariumButtonPressed(object sender, EventArgs e)
     {
         // open the Apothecarium screen
         if (_apothecariumScreen == null)
         {
             PackedScene apothecariumScene = GD.Load<PackedScene>("res://Scenes/ApothecariumScreen/apothecarium_screen.tscn");
             _apothecariumScreen = (ApothecariumScreenController)apothecariumScene.Instantiate();
-            _apothecariumScreen.CloseButtonPressed += HandleCloseScreen;
+            _apothecariumScreen.CloseButtonPressed += OnCloseScreen;
             _mainUILayer.AddChild(_apothecariumScreen);
         }
         _apothecariumScreen.Visible = true;
         SetMainScreenVisibility(false);
     }
 
-    private void HandleConquistorumButtonPressed(object sender, EventArgs e)
+    private void OnConquistorumButtonPressed(object sender, EventArgs e)
     {
         // open the Conquistorum screen
         if (_conquistorumScreen == null)
         {
             PackedScene conquistorumScene = GD.Load<PackedScene>("res://Scenes/ConquistorumScreen/conquistorum_screen.tscn");
             _conquistorumScreen = (ConquistorumScreenController)conquistorumScene.Instantiate();
-            _conquistorumScreen.CloseButtonPressed += HandleCloseScreen;
+            _conquistorumScreen.CloseButtonPressed += OnCloseScreen;
+            _conquistorumScreen.SoldierLinkClicked += OnSoldierSelectedForDisplay;
             _mainUILayer.AddChild(_conquistorumScreen);
         }
         _conquistorumScreen.Visible = true;
         SetMainScreenVisibility(false);
     }
 
-    private void HandlePlanetClicked(object sender, int planetId)
+    private void OnPlanetClicked(object sender, int planetId)
     {
         Planet planet = GameDataSingleton.Instance.Sector.Planets[planetId];
         if (_planetDetailScreen == null)
@@ -136,7 +137,7 @@ public partial class MainGameScene : Control
             PackedScene planetScene = GD.Load<PackedScene>("res://Scenes/PlanetDetailScreen/planet_detail_screen.tscn");
             _planetDetailScreen = (PlanetDetailScreenController)planetScene.Instantiate();
             
-            _planetDetailScreen.CloseButtonPressed += HandleCloseScreen;
+            _planetDetailScreen.CloseButtonPressed += OnCloseScreen;
             _mainUILayer.AddChild(_planetDetailScreen);
         }
         _planetDetailScreen.PopulateFleetTree(planet);
@@ -146,11 +147,11 @@ public partial class MainGameScene : Control
         GD.Print($"Planet {planetId} Clicked");
     }
 
-    private void HandleFleetClicked(object sender, int fleetId) 
+    private void OnFleetClicked(object sender, int fleetId) 
     { 
     }
 
-    private void HandleEndTurnButtonPressed(object sender, EventArgs e)
+    private void OnEndTurnButtonPressed(object sender, EventArgs e)
     {
         // handle squad orders
         _turnController.ProcessTurn(GameDataSingleton.Instance.Sector);

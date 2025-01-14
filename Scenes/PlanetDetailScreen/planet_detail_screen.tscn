@@ -50,7 +50,7 @@ text = "X"
 [node name="ShipListPanel" type="Panel" parent="PlanetDetailScreenView"]
 layout_mode = 1
 anchors_preset = -1
-anchor_right = 0.3
+anchor_right = 0.33
 anchor_bottom = 1.0
 offset_left = 10.0
 offset_top = 55.0
@@ -86,10 +86,167 @@ offset_top = 55.0
 offset_right = -5.0
 offset_bottom = -5.0
 
+[node name="DataPanel" type="Panel" parent="PlanetDetailScreenView"]
+layout_mode = 1
+anchors_preset = -1
+anchor_left = 0.33
+anchor_right = 0.66
+anchor_bottom = 0.5
+offset_left = 5.0
+offset_top = 55.0
+offset_right = -5.0
+offset_bottom = -5.0
+
+[node name="Header" type="Panel" parent="PlanetDetailScreenView/DataPanel"]
+custom_minimum_size = Vector2(0, 30)
+layout_mode = 1
+anchors_preset = 10
+anchor_right = 1.0
+offset_bottom = 50.0
+grow_horizontal = 2
+
+[node name="Label" type="Label" parent="PlanetDetailScreenView/DataPanel/Header"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+text = "Planet Details"
+horizontal_alignment = 1
+vertical_alignment = 1
+
+[node name="VBoxContainer" type="VBoxContainer" parent="PlanetDetailScreenView/DataPanel"]
+layout_mode = 1
+anchors_preset = -1
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = 5.0
+offset_top = 55.0
+offset_right = -5.0
+offset_bottom = -5.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="DataLinePanel" type="Panel" parent="PlanetDetailScreenView/DataPanel/VBoxContainer"]
+custom_minimum_size = Vector2(0, 20)
+layout_mode = 2
+
+[node name="Label" type="Label" parent="PlanetDetailScreenView/DataPanel/VBoxContainer/DataLinePanel"]
+layout_mode = 1
+anchors_preset = 9
+anchor_bottom = 1.0
+offset_right = 1.0
+grow_vertical = 2
+text = "Time in Service"
+
+[node name="Label2" type="Label" parent="PlanetDetailScreenView/DataPanel/VBoxContainer/DataLinePanel"]
+layout_mode = 1
+anchors_preset = 11
+anchor_left = 1.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = -1.0
+grow_horizontal = 0
+grow_vertical = 2
+text = "7 years, 3 months"
+
+[node name="DataLinePanel2" type="Panel" parent="PlanetDetailScreenView/DataPanel/VBoxContainer"]
+custom_minimum_size = Vector2(0, 20)
+layout_mode = 2
+
+[node name="Label" type="Label" parent="PlanetDetailScreenView/DataPanel/VBoxContainer/DataLinePanel2"]
+layout_mode = 1
+anchors_preset = 9
+anchor_bottom = 1.0
+offset_right = 1.0
+grow_vertical = 2
+text = "Unit"
+
+[node name="Label2" type="Label" parent="PlanetDetailScreenView/DataPanel/VBoxContainer/DataLinePanel2"]
+layout_mode = 1
+anchors_preset = 11
+anchor_left = 1.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = -1.0
+grow_horizontal = 0
+grow_vertical = 2
+text = "3rd Company, A Squad"
+
+[node name="DataLinePanel3" type="Panel" parent="PlanetDetailScreenView/DataPanel/VBoxContainer"]
+custom_minimum_size = Vector2(0, 20)
+layout_mode = 2
+
+[node name="Label" type="Label" parent="PlanetDetailScreenView/DataPanel/VBoxContainer/DataLinePanel3"]
+layout_mode = 1
+anchors_preset = 9
+anchor_bottom = 1.0
+offset_right = 1.0
+grow_vertical = 2
+text = "Location"
+
+[node name="Label2" type="Label" parent="PlanetDetailScreenView/DataPanel/VBoxContainer/DataLinePanel3"]
+layout_mode = 1
+anchors_preset = 11
+anchor_left = 1.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = -1.0
+grow_horizontal = 0
+grow_vertical = 2
+text = "Aboard Immortal"
+
+[node name="DataLinePanel4" type="Panel" parent="PlanetDetailScreenView/DataPanel/VBoxContainer"]
+custom_minimum_size = Vector2(0, 20)
+layout_mode = 2
+
+[node name="Label" type="Label" parent="PlanetDetailScreenView/DataPanel/VBoxContainer/DataLinePanel4"]
+layout_mode = 1
+anchors_preset = 9
+anchor_bottom = 1.0
+offset_right = 1.0
+grow_vertical = 2
+text = "Lorem Ipsem"
+
+[node name="Label2" type="Label" parent="PlanetDetailScreenView/DataPanel/VBoxContainer/DataLinePanel4"]
+layout_mode = 1
+anchors_preset = 11
+anchor_left = 1.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = -1.0
+grow_horizontal = 0
+grow_vertical = 2
+text = "Lorem Ipsum"
+
+[node name="DataLinePanel5" type="Panel" parent="PlanetDetailScreenView/DataPanel/VBoxContainer"]
+custom_minimum_size = Vector2(0, 20)
+layout_mode = 2
+
+[node name="Label" type="Label" parent="PlanetDetailScreenView/DataPanel/VBoxContainer/DataLinePanel5"]
+layout_mode = 1
+anchors_preset = 9
+anchor_bottom = 1.0
+offset_right = 1.0
+grow_vertical = 2
+text = "Lorem Ipsum"
+
+[node name="Label2" type="Label" parent="PlanetDetailScreenView/DataPanel/VBoxContainer/DataLinePanel5"]
+layout_mode = 1
+anchors_preset = 11
+anchor_left = 1.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = -1.0
+grow_horizontal = 0
+grow_vertical = 2
+text = "Who the Bell Tolls"
+
 [node name="RegionListPanel" type="Panel" parent="PlanetDetailScreenView"]
 layout_mode = 1
 anchors_preset = -1
-anchor_left = 0.7
+anchor_left = 0.66
 anchor_right = 1.0
 anchor_bottom = 1.0
 offset_left = 5.0
@@ -135,3 +292,27 @@ offset_left = 5.0
 offset_top = 55.0
 offset_right = -5.0
 offset_bottom = -5.0
+
+[node name="ButtonPanel" type="Panel" parent="PlanetDetailScreenView"]
+layout_mode = 1
+anchors_preset = -1
+anchor_left = 0.33
+anchor_top = 0.5
+anchor_right = 0.66
+anchor_bottom = 1.0
+offset_left = 5.0
+offset_top = 5.0
+offset_right = -5.0
+offset_bottom = -5.0
+
+[node name="VBoxContainer" type="VBoxContainer" parent="PlanetDetailScreenView/ButtonPanel"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="Button" type="Button" parent="PlanetDetailScreenView/ButtonPanel/VBoxContainer"]
+layout_mode = 2
+text = "< Transfer to Ship"
