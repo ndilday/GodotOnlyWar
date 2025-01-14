@@ -18,8 +18,8 @@ public partial class ConquistorumScreenController : Control
 	{
 		_view = GetNode<ConquistorumScreenView>("ConquistorumScreenView");
 		_view.CloseButtonPressed += (object sender, EventArgs e) => CloseButtonPressed?.Invoke(this, e);
-		_view.LinkClicked += HandleLinkClicked;
-		_view.SquadButtonPressed += HandleSquadButtonPressed;
+		_view.LinkClicked += OnLinkClicked;
+		_view.SquadButtonPressed += OnSquadButtonPressed;
 		PopulateScountSquadList();
 	}
 
@@ -36,7 +36,7 @@ public partial class ConquistorumScreenController : Control
 		_view.PopulateSquadList(squadList);
 	}
 
-	private void HandleSquadButtonPressed(object sender, int squadId)
+	private void OnSquadButtonPressed(object sender, int squadId)
 	{
 		Squad squad = GameDataSingleton.Instance.Sector.PlayerForce.Army.OrderOfBattle.GetAllSquads().First(s => s.Id == squadId);
 		string squadReport = "";
@@ -115,7 +115,7 @@ public partial class ConquistorumScreenController : Control
 		}
 	}
 
-	private void HandleLinkClicked(object sender, Variant meta)
+	private void OnLinkClicked(object sender, Variant meta)
 	{
 		int soldierId = meta.AsInt32();
 		SoldierLinkClicked.Invoke(this, soldierId);

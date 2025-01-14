@@ -21,9 +21,9 @@ public partial class ChapterController : Control
 			ChapterView = GetNode<ChapterView>("ChapterView");
 			ChapterView.CloseButtonPressed += (object sender, EventArgs e) => CloseButtonPressed?.Invoke(this, e);
 		}
-		ChapterView.CompanyButtonPressed += HandleCompanyButtonPressed;
-		ChapterView.SquadButtonPressed += HandleSquadButtonPressed;
-		ChapterView.SoldierButtonPressed += HandleSoldierButtonPressed;
+		ChapterView.CompanyButtonPressed += OnCompanyButtonPressed;
+		ChapterView.SquadButtonPressed += OnSquadButtonPressed;
+		ChapterView.SoldierButtonPressed += OnSoldierButtonPressed;
 		PopulateCompanyList();
 	} 
 
@@ -31,13 +31,13 @@ public partial class ChapterController : Control
 	{
 		if (ChapterView != null)
 		{
-			ChapterView.CompanyButtonPressed -= HandleCompanyButtonPressed;
-			ChapterView.SquadButtonPressed -= HandleSquadButtonPressed;
-			ChapterView.SoldierButtonPressed -= HandleSoldierButtonPressed;
+			ChapterView.CompanyButtonPressed -= OnCompanyButtonPressed;
+			ChapterView.SquadButtonPressed -= OnSquadButtonPressed;
+			ChapterView.SoldierButtonPressed -= OnSoldierButtonPressed;
 		}
 	}
 
-	private void HandleCompanyButtonPressed(object sender, int companyId)
+	private void OnCompanyButtonPressed(object sender, int companyId)
 	{
 		// get company data
 		Unit company = GameDataSingleton.Instance.Sector.PlayerForce.Army.OrderOfBattle.ChildUnits.Find(c => c.Id == companyId);
@@ -50,7 +50,7 @@ public partial class ChapterController : Control
 		ChapterView.PopulateSquadList(squadList);
 	}
 
-	private void HandleSquadButtonPressed(object sender, int squadId)
+	private void OnSquadButtonPressed(object sender, int squadId)
 	{
 		// get squad data
 		Squad squad = GameDataSingleton.Instance.Sector.PlayerForce.Army.OrderOfBattle.GetAllSquads().First(s => s.Id == squadId);
@@ -63,7 +63,7 @@ public partial class ChapterController : Control
 		ChapterView.PopulateSoldierList(soldierList);
 	}
 
-	private void HandleSoldierButtonPressed(object sender, int soldierId)
+	private void OnSoldierButtonPressed(object sender, int soldierId)
 	{
 		SoldierSelectedForDisplay?.Invoke(this, soldierId);
 	}

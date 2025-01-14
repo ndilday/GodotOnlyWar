@@ -22,7 +22,7 @@ It will require approximately {4} weeks before all marines in the squad (other t
 		_view = GetNode<ApothecariumScreenView>("ApothecariumScreenView");
 		_view.PopulateGeneseedReport(GenerateGeneseedReport());
 		_view.PopulateSquadList(GetSquadsWithInjuredSoldiers());
-		_view.SquadButtonPressed += HandleSquadButtonPressed;
+		_view.SquadButtonPressed += OnSquadButtonPressed;
 		_view.CloseButtonPressed += (object sender, EventArgs e) => CloseButtonPressed?.Invoke(this, e);
 	}
 
@@ -30,7 +30,7 @@ It will require approximately {4} weeks before all marines in the squad (other t
 	{
 		if (_view != null)
 		{
-			_view.SquadButtonPressed -= HandleSquadButtonPressed;
+			_view.SquadButtonPressed -= OnSquadButtonPressed;
 		}
 	}
 
@@ -73,7 +73,7 @@ It will require approximately {4} weeks before all marines in the squad (other t
 		return $"{squad.Name}, ({squad.ParentUnit.Name})";
 	}
 
-	private void HandleSquadButtonPressed(object sender, int squadId)
+	private void OnSquadButtonPressed(object sender, int squadId)
 	{
 		Squad squad = GameDataSingleton.Instance.Sector.PlayerForce.Army.OrderOfBattle.GetAllSquads().First(s => s.Id == squadId);
 		_view.PopulateInjuryDetail(GetSquadInjuryDetail(squad));
