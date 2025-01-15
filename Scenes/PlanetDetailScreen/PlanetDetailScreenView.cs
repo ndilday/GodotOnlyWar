@@ -20,12 +20,14 @@ public partial class PlanetDetailScreenView : Control
 {
 	private Button _closeButton;
 	private Button _landingButton;
+	private Button _loadingButton;
 	private Tree _fleetTree;
 	private Tree _regionTree;
 	private VBoxContainer _planetDataVBox;
 	
 	public event EventHandler CloseButtonPressed;
 	public event EventHandler LandingButtonPressed;
+	public event EventHandler LoadingButtonPressed;
 	public event EventHandler<int> SquadDoubleClicked;
 	public event EventHandler<Vector2I> FleetTreeItemClicked;
 	public event EventHandler FleetTreeDeselected;
@@ -38,6 +40,8 @@ public partial class PlanetDetailScreenView : Control
 		_closeButton.Pressed += () => CloseButtonPressed?.Invoke(this, EventArgs.Empty);
 		_landingButton = GetNode<Button>("ButtonPanel/VBoxContainer/LandingButton");
 		_landingButton.Pressed += () => LandingButtonPressed?.Invoke(this, EventArgs.Empty);
+		_loadingButton = GetNode<Button>("ButtonPanel/VBoxContainer/LoadingButton");
+		_loadingButton.Pressed += () => LoadingButtonPressed?.Invoke(this, EventArgs.Empty);
 		_planetDataVBox = GetNode<VBoxContainer>("DataPanel/VBoxContainer");
 		_fleetTree = GetNode<Tree>("ShipListPanel/Tree");
 		_fleetTree.ItemSelected += OnFleetTreeItemSelected;
@@ -67,6 +71,12 @@ public partial class PlanetDetailScreenView : Control
 	{
 		_landingButton.Text = text;
 		_landingButton.Disabled = !enable;
+	}
+
+	public void EnableLoadingButton(bool enable, string text)
+	{
+		_loadingButton.Text = text;
+		_loadingButton.Disabled = !enable;
 	}
 
 	private void AddTreeChildren(Tree tree, TreeItem parentItem, IReadOnlyList<TreeNode> nodes, int level)

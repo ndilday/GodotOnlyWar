@@ -136,7 +136,7 @@ layout_mode = 2
 layout_mode = 1
 anchors_preset = 9
 anchor_bottom = 1.0
-offset_right = 1.0
+offset_right = 117.0
 grow_vertical = 2
 text = "Time in Service"
 
@@ -146,10 +146,11 @@ anchors_preset = 11
 anchor_left = 1.0
 anchor_right = 1.0
 anchor_bottom = 1.0
-offset_left = -1.0
+offset_left = -137.0
 grow_horizontal = 0
 grow_vertical = 2
 text = "7 years, 3 months"
+horizontal_alignment = 2
 
 [node name="DataLinePanel2" type="Panel" parent="PlanetDetailScreenView/DataPanel/VBoxContainer"]
 custom_minimum_size = Vector2(0, 20)
@@ -313,12 +314,7 @@ anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
 
-[node name="SquadDetails" type="Button" parent="PlanetDetailScreenView/ButtonPanel/VBoxContainer"]
-layout_mode = 2
-disabled = true
-text = "Squad Details"
-
-[node name="TransferToShipButton" type="Button" parent="PlanetDetailScreenView/ButtonPanel/VBoxContainer"]
+[node name="LoadingButton" type="Button" parent="PlanetDetailScreenView/ButtonPanel/VBoxContainer"]
 layout_mode = 2
 disabled = true
 text = "< Transfer to Ship"

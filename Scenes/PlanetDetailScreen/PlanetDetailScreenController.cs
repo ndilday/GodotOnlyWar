@@ -6,6 +6,7 @@ using OnlyWar.Models.Squads;
 using OnlyWar.Models.Units;
 using System;
 using System.Collections.Generic;
+using System.ComponentModel.Design;
 using System.Linq;
 
 public partial class PlanetDetailScreenController : Control
@@ -290,15 +291,69 @@ public partial class PlanetDetailScreenController : Control
 		}
 		else if(_selectedShip != null)
 		{
-			_view.EnableLandingButton(false, "No squads on ship to land");
+			_view.EnableLandingButton(false, "No squads on ship to land >");
 		}
 		else
 		{
-			_view.EnableLandingButton(false, "Land Squad in region");
+			_view.EnableLandingButton(false, "Land Squad in region >");
 		}
 
 		// loading squads is more complicated
-		// determine load of squad(s) selected
-		// determine capacity of ship
+		if(_selectedShip == null && _selectedLoadedSquad == null)
+		{
+			_view.EnableLoadingButton(false, "< Select a ship to load troops into");
+		}
+		else if(_selectedRegion == null)
+		{
+            _view.EnableLoadingButton(false, "< Select a squad to load into ships");
+        }
+		else
+		{
+			int shipCapacity;
+			string shipName;
+			// determine ship capacity
+			if(_selectedShip == null)
+			{
+				shipName = _selectedLoadedSquad.BoardedLocation.Name;
+				shipCapacity = _selectedLoadedSquad.BoardedLocation.AvailableCapacity;
+			}
+			else
+			{
+				shipName = _selectedShip.Name;
+				shipCapacity = _selectedShip.AvailableCapacity;
+			}
+
+			//determine number of troops that will be loaded
+			int capacityRequired;
+			if(_selectedSquad != null)
+			{
+				capacityRequired = _selectedSquad.Members.Count;
+			}
+			else if(_selectedUnit != null)
+			{
+				capacityRequired = _selectedRegion.RegionFactionMap[GameDataSingleton.Instance.GameRulesData.PlayerFaction.Id].LandedSquads
+					.Where(s => s.ParentUnit == _selectedUnit)
+					.Sum(s => s.Members.Count);
+			}
+			else
+			{
+                capacityRequired = _selectedRegion.RegionFactionMap[GameDataSingleton.Instance.GameRulesData.PlayerFaction.Id].LandedSquads
+                    .Sum(s => s.Members.Count);
+            }
+
+
+			if(capacityRequired > shipCapacity)
+			{
+				_view.EnableLoadingButton(false, $"< {shipName} cannot fit that many troops!");
+			}
+			else if(_selectedSquad != null)
+			{
+				_view.EnableLoadingButton(true, $"< Load {_selectedSquad.Name} onto {shipName}");
+			}
+			else
+			{
+                _view.EnableLoadingButton(true, $"< Load troops onto {shipName}");
+            }
+		}
 	}
 }
