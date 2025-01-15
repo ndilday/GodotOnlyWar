@@ -11,11 +11,12 @@ using System.Linq;
 public partial class PlanetDetailScreenController : Control
 {
 	private PlanetDetailScreenView _view;
-	private int? _selectedShip;
-	private int? _selectedLoadedSquad;
-	private int? _selectedRegion;
-	private int? _selectedUnit;
-	private int? _selectedSquad;
+	private Planet _selectedPlanet;
+	private Ship _selectedShip;
+	private Squad _selectedLoadedSquad;
+	private Region _selectedRegion;
+	private Unit _selectedUnit;
+	private Squad _selectedSquad;
 
 	public event EventHandler CloseButtonPressed;
 
@@ -31,6 +32,7 @@ public partial class PlanetDetailScreenController : Control
 
 	public void PopulatePlanetData(Planet planet)
 	{
+		_selectedPlanet = planet;
 		PopulatePlanetDetails(planet);
 		PopulateFleetTree(planet);
 		PopulateRegionTree(planet);
@@ -51,7 +53,8 @@ public partial class PlanetDetailScreenController : Control
 						TreeNode node = new TreeNode(squad.Id, squad.Name, new List<TreeNode>());
 						nodes.Add(node);
 					}
-					TreeNode shipNode = new TreeNode(ship.Id, ship.Name, nodes);
+					string text = $"{ship.Name} ({ship.LoadedSoldierCount}/{ship.Template.SoldierCapacity})";
+					TreeNode shipNode = new TreeNode(ship.Id, text, nodes);
 					shipList.Add(shipNode);
 				}
 			}
@@ -152,6 +155,7 @@ public partial class PlanetDetailScreenController : Control
 		{
 			lines.Add(new Tuple<string, string>("Xenos Present", planet.ControllingFaction.Name));
 		}
+		_view.PopulatePlanetData(lines);
 	}
 
 	private string ConvertImportanceToString(int importance)
@@ -230,15 +234,16 @@ public partial class PlanetDetailScreenController : Control
 		{
 			case 0:
 				// Fleet
-				_selectedShip = e.Y;
+				_selectedShip = _selectedPlanet.OrbitingTaskForceList.SelectMany(tf => tf.Ships).First(s => s.Id == e.Y);
 				_selectedLoadedSquad = null;
 				break;
 			case 1:
 				// Squad
 				_selectedShip = null;
-				_selectedLoadedSquad = e.Y;
+				_selectedLoadedSquad = _selectedPlanet.OrbitingTaskForceList.SelectMany(tf => tf.Ships).SelectMany(s => s.LoadedSquads).First(s => s.Id == e.Y);
 				break;
 		}
+		UpdateButtons();
 	}
 
 	private void OnRegionTreeItemClicked(object sender, Vector2I e)
@@ -247,22 +252,53 @@ public partial class PlanetDetailScreenController : Control
 		{
 			case 0:
 				// Region
-				_selectedRegion = e.Y;
+				_selectedRegion = _selectedPlanet.Regions.First(r => r.Id == e.Y);
 				_selectedUnit = null;
 				_selectedSquad = null;
 				break;
 			case 1:
 				// Unit
-				_selectedRegion = null;
-				_selectedUnit = e.Y;
+				TreeItem item = (TreeItem)sender;
+				Vector2I regionMeta = item.GetParent().GetMetadata(0).AsVector2I();
+				_selectedRegion = _selectedPlanet.Regions.First(r => r.Id == regionMeta.Y);
+				_selectedUnit = GameDataSingleton.Instance.Sector.PlayerForce.Army.OrderOfBattle.ChildUnits.First(u => u.Id == e.Y);
 				_selectedSquad = null;
 				break;
 			case 2:
 				// Squad
-				_selectedRegion = null;
+				Squad squad = GameDataSingleton.Instance.Sector.PlayerForce.Army.SquadMap[e.Y];
+				item = (TreeItem)sender;
+				regionMeta = item.GetParent().GetParent().GetMetadata(0).AsVector2I();
+				_selectedRegion = _selectedPlanet.Regions.First(r => r.Id == regionMeta.Y);
 				_selectedUnit = null;
-				_selectedSquad = e.Y;
+				_selectedSquad = GameDataSingleton.Instance.Sector.PlayerForce.Army.SquadMap[e.Y];
 				break;
 		}
+		UpdateButtons();
+	}
+
+	private void UpdateButtons()
+	{
+		// see if a loaded squad or ship is selected, and something selected on the right side
+		if (_selectedShip != null && _selectedShip.LoadedSquads.Count() > 0 && _selectedRegion != null)
+		{
+			_view.EnableLandingButton(true, $"Land all Squads on {_selectedShip.Name} in region >");
+		}
+		else if(_selectedLoadedSquad != null && _selectedRegion != null)
+		{
+			_view.EnableLandingButton(true, $"Land {_selectedSquad.Name} in region >");
+		}
+		else if(_selectedShip != null)
+		{
+			_view.EnableLandingButton(false, "No squads on ship to land");
+		}
+		else
+		{
+			_view.EnableLandingButton(false, "Land Squad in region");
+		}
+
+		// loading squads is more complicated
+		// determine load of squad(s) selected
+		// determine capacity of ship
 	}
 }

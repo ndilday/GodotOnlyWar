@@ -19,11 +19,13 @@ public class TreeNode
 public partial class PlanetDetailScreenView : Control
 {
 	private Button _closeButton;
+	private Button _landingButton;
 	private Tree _fleetTree;
 	private Tree _regionTree;
 	private VBoxContainer _planetDataVBox;
 	
 	public event EventHandler CloseButtonPressed;
+	public event EventHandler LandingButtonPressed;
 	public event EventHandler<int> SquadDoubleClicked;
 	public event EventHandler<Vector2I> FleetTreeItemClicked;
 	public event EventHandler FleetTreeDeselected;
@@ -34,6 +36,8 @@ public partial class PlanetDetailScreenView : Control
 	{
 		_closeButton = GetNode<Button>("CloseButton");
 		_closeButton.Pressed += () => CloseButtonPressed?.Invoke(this, EventArgs.Empty);
+		_landingButton = GetNode<Button>("ButtonPanel/VBoxContainer/LandingButton");
+		_landingButton.Pressed += () => LandingButtonPressed?.Invoke(this, EventArgs.Empty);
 		_planetDataVBox = GetNode<VBoxContainer>("DataPanel/VBoxContainer");
 		_fleetTree = GetNode<Tree>("ShipListPanel/Tree");
 		_fleetTree.ItemSelected += OnFleetTreeItemSelected;
@@ -43,7 +47,7 @@ public partial class PlanetDetailScreenView : Control
 		_regionTree.NothingSelected += () => RegionTreeDeselected(this, EventArgs.Empty);
 	}
 
-    public void PopulateShipTree(IReadOnlyList<TreeNode> entries)
+	public void PopulateShipTree(IReadOnlyList<TreeNode> entries)
 	{
 		_fleetTree.Clear();
 		TreeItem root = _fleetTree.CreateItem();
@@ -59,23 +63,29 @@ public partial class PlanetDetailScreenView : Control
 		AddTreeChildren(_regionTree, root, entries, 0);
 	}
 
-    private void AddTreeChildren(Tree tree, TreeItem parentItem, IReadOnlyList<TreeNode> nodes, int level)
-    {
-        foreach (TreeNode childNode in nodes)
-        {
-            TreeItem childItem = tree.CreateItem(parentItem);
-            childItem.SetText(0, childNode.Name);
-            Vector2I vector = new Vector2I(level, childNode.Id);
-            Variant meta = Variant.From(vector);
-            childItem.SetMetadata(0, meta);
+	public void EnableLandingButton(bool enable, string text)
+	{
+		_landingButton.Text = text;
+		_landingButton.Disabled = !enable;
+	}
+
+	private void AddTreeChildren(Tree tree, TreeItem parentItem, IReadOnlyList<TreeNode> nodes, int level)
+	{
+		foreach (TreeNode childNode in nodes)
+		{
+			TreeItem childItem = tree.CreateItem(parentItem);
+			childItem.SetText(0, childNode.Name);
+			Vector2I vector = new Vector2I(level, childNode.Id);
+			Variant meta = Variant.From(vector);
+			childItem.SetMetadata(0, meta);
 			if (childNode.Children?.Count > 0)
 			{
 				AddTreeChildren(tree, childItem, childNode.Children, level+1);
 			}
-        }
-    }
+		}
+	}
 
-    public void PopulatePlanetData(IReadOnlyList<Tuple<string, string>> stringPairs)
+	public void PopulatePlanetData(IReadOnlyList<Tuple<string, string>> stringPairs)
 	{
 		var existingLines = _planetDataVBox.GetChildren();
 		if (existingLines != null)
@@ -100,28 +110,30 @@ public partial class PlanetDetailScreenView : Control
 		linePanel.CustomMinimumSize = new Vector2(0, 20);
 		Label lineLabel = new Label();
 		lineLabel.Text = label;
+		lineLabel.AnchorLeft = 0;
 		lineLabel.HorizontalAlignment = HorizontalAlignment.Left;
 		lineLabel.SizeFlagsHorizontal = SizeFlags.ExpandFill;
 		linePanel.AddChild(lineLabel);
 		Label lineValue = new Label();
 		lineValue.Text = value;
+		lineValue.AnchorRight = 1;
 		lineValue.HorizontalAlignment = HorizontalAlignment.Right;
 		lineValue.SizeFlagsHorizontal = SizeFlags.ExpandFill;
 		linePanel.AddChild(lineValue);
 		_planetDataVBox.AddChild(linePanel);
 	}
 
-    private void OnRegionTreeItemSelected()
-    {
-        TreeItem item = _regionTree.GetSelected();
-        Vector2I meta = item.GetMetadata(0).As<Vector2I>();
-        RegionTreeItemClicked.Invoke(item, meta);
-    }
+	private void OnRegionTreeItemSelected()
+	{
+		TreeItem item = _regionTree.GetSelected();
+		Vector2I meta = item.GetMetadata(0).As<Vector2I>();
+		RegionTreeItemClicked.Invoke(item, meta);
+	}
 
-    private void OnFleetTreeItemSelected()
-    {
-        TreeItem item = _fleetTree.GetSelected();
-        Vector2I meta = item.GetMetadata(0).As<Vector2I>();
-        FleetTreeItemClicked.Invoke(item, meta);
-    }
+	private void OnFleetTreeItemSelected()
+	{
+		TreeItem item = _fleetTree.GetSelected();
+		Vector2I meta = item.GetMetadata(0).As<Vector2I>();
+		FleetTreeItemClicked.Invoke(item, meta);
+	}
 }

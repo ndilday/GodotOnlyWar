@@ -56,11 +56,13 @@ public partial class SoldierView : Control
 		Label lineLabel = new Label();
 		lineLabel.Text = label;
 		lineLabel.HorizontalAlignment = HorizontalAlignment.Left;
+		lineLabel.AnchorLeft = 0;
 		lineLabel.SizeFlagsHorizontal = SizeFlags.ExpandFill;
 		linePanel.AddChild(lineLabel);
 		Label lineValue = new Label();
 		lineValue.Text = value;
 		lineValue.HorizontalAlignment = HorizontalAlignment.Right;
+		lineValue.AnchorRight = 1;
 		lineValue.SizeFlagsHorizontal = SizeFlags.ExpandFill;
 		linePanel.AddChild(lineValue);
 		_soldierDataVBox.AddChild(linePanel);
