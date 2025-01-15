@@ -140,8 +140,7 @@ public partial class MainGameScene : Control
             _planetDetailScreen.CloseButtonPressed += OnCloseScreen;
             _mainUILayer.AddChild(_planetDetailScreen);
         }
-        _planetDetailScreen.PopulateFleetTree(planet);
-        _planetDetailScreen.PopulateRegionTree(planet);
+        _planetDetailScreen.PopulatePlanetData(planet);
         _planetDetailScreen.Visible = true;
         SetMainScreenVisibility(false);
         GD.Print($"Planet {planetId} Clicked");

@@ -313,6 +313,17 @@ anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
 
-[node name="Button" type="Button" parent="PlanetDetailScreenView/ButtonPanel/VBoxContainer"]
+[node name="SquadDetails" type="Button" parent="PlanetDetailScreenView/ButtonPanel/VBoxContainer"]
 layout_mode = 2
+disabled = true
+text = "Squad Details"
+
+[node name="TransferToShipButton" type="Button" parent="PlanetDetailScreenView/ButtonPanel/VBoxContainer"]
+layout_mode = 2
+disabled = true
 text = "< Transfer to Ship"
+
+[node name="TransferToRegionButton" type="Button" parent="PlanetDetailScreenView/ButtonPanel/VBoxContainer"]
+layout_mode = 2
+disabled = true
+text = "Land In Region >"

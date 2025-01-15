@@ -24,6 +24,11 @@ public partial class PlanetDetailScreenView : Control
 	private VBoxContainer _planetDataVBox;
 	
 	public event EventHandler CloseButtonPressed;
+	public event EventHandler<int> SquadDoubleClicked;
+	public event EventHandler<Vector2I> FleetTreeItemClicked;
+	public event EventHandler FleetTreeDeselected;
+	public event EventHandler<Vector2I> RegionTreeItemClicked;
+	public event EventHandler RegionTreeDeselected;
 
 	public override void _Ready()
 	{
@@ -31,25 +36,19 @@ public partial class PlanetDetailScreenView : Control
 		_closeButton.Pressed += () => CloseButtonPressed?.Invoke(this, EventArgs.Empty);
 		_planetDataVBox = GetNode<VBoxContainer>("DataPanel/VBoxContainer");
 		_fleetTree = GetNode<Tree>("ShipListPanel/Tree");
+		_fleetTree.ItemSelected += OnFleetTreeItemSelected;
+		_fleetTree.NothingSelected += () => FleetTreeDeselected(this, EventArgs.Empty);
 		_regionTree = GetNode<Tree>("RegionListPanel/Tree");
+		_regionTree.ItemSelected += OnRegionTreeItemSelected;
+		_regionTree.NothingSelected += () => RegionTreeDeselected(this, EventArgs.Empty);
 	}
 
-	public void PopulateShipTree(IReadOnlyList<TreeNode> entries)
+    public void PopulateShipTree(IReadOnlyList<TreeNode> entries)
 	{
 		_fleetTree.Clear();
 		TreeItem root = _fleetTree.CreateItem();
 		_fleetTree.HideRoot = true;
-		foreach (TreeNode entry in entries)
-		{
-			// create a tree item from Item1, and children for the entries in Item2
-			TreeItem parent = _fleetTree.CreateItem(root);
-			parent.SetText(0, entry.Name);
-			foreach(TreeNode childEntry in entry.Children)
-			{
-				TreeItem child = _fleetTree.CreateItem(parent);
-				child.SetText(0, childEntry.Name);
-			}
-		}
+		AddTreeChildren(_fleetTree, root, entries, 0);
 	}
 
 	public void PopulateRegionTree(IReadOnlyList<TreeNode> entries)
@@ -57,25 +56,26 @@ public partial class PlanetDetailScreenView : Control
 		_regionTree.Clear();
 		TreeItem root = _regionTree.CreateItem();
 		_regionTree.HideRoot = true;
-		foreach (TreeNode entry in entries)
-		{
-			// create a tree item from Item1, and children for the entries in Item2
-			TreeItem parent = _regionTree.CreateItem(root);
-			parent.SetText(0, entry.Name);
-			foreach (TreeNode childEntry in entry.Children)
-			{
-				TreeItem child = _regionTree.CreateItem(parent);
-				child.SetText(0, childEntry.Name);
-				foreach(TreeNode grandChildEntry in  childEntry.Children)
-				{
-					TreeItem grandchild = _regionTree.CreateItem(child);
-					grandchild.SetText(0, grandChildEntry.Name);
-				}
-			}
-		}
+		AddTreeChildren(_regionTree, root, entries, 0);
 	}
 
-	public void PopulatePlanetData(IReadOnlyList<Tuple<string, string>> stringPairs)
+    private void AddTreeChildren(Tree tree, TreeItem parentItem, IReadOnlyList<TreeNode> nodes, int level)
+    {
+        foreach (TreeNode childNode in nodes)
+        {
+            TreeItem childItem = tree.CreateItem(parentItem);
+            childItem.SetText(0, childNode.Name);
+            Vector2I vector = new Vector2I(level, childNode.Id);
+            Variant meta = Variant.From(vector);
+            childItem.SetMetadata(0, meta);
+			if (childNode.Children?.Count > 0)
+			{
+				AddTreeChildren(tree, childItem, childNode.Children, level+1);
+			}
+        }
+    }
+
+    public void PopulatePlanetData(IReadOnlyList<Tuple<string, string>> stringPairs)
 	{
 		var existingLines = _planetDataVBox.GetChildren();
 		if (existingLines != null)
@@ -110,4 +110,18 @@ public partial class PlanetDetailScreenView : Control
 		linePanel.AddChild(lineValue);
 		_planetDataVBox.AddChild(linePanel);
 	}
+
+    private void OnRegionTreeItemSelected()
+    {
+        TreeItem item = _regionTree.GetSelected();
+        Vector2I meta = item.GetMetadata(0).As<Vector2I>();
+        RegionTreeItemClicked.Invoke(item, meta);
+    }
+
+    private void OnFleetTreeItemSelected()
+    {
+        TreeItem item = _fleetTree.GetSelected();
+        Vector2I meta = item.GetMetadata(0).As<Vector2I>();
+        FleetTreeItemClicked.Invoke(item, meta);
+    }
 }
