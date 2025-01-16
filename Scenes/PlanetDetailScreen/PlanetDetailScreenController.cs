@@ -6,7 +6,6 @@ using OnlyWar.Models.Squads;
 using OnlyWar.Models.Units;
 using System;
 using System.Collections.Generic;
-using System.ComponentModel.Design;
 using System.Linq;
 
 public partial class PlanetDetailScreenController : Control
@@ -14,10 +13,11 @@ public partial class PlanetDetailScreenController : Control
 	private PlanetDetailScreenView _view;
 	private Planet _selectedPlanet;
 	private Ship _selectedShip;
+	private Unit _selectedLoadedUnit;
 	private Squad _selectedLoadedSquad;
 	private Region _selectedRegion;
-	private Unit _selectedUnit;
-	private Squad _selectedSquad;
+	private Unit _selectedLandedUnit;
+	private Squad _selectedLandedSquad;
 
 	public event EventHandler CloseButtonPressed;
 
@@ -29,6 +29,8 @@ public partial class PlanetDetailScreenController : Control
 		_view.RegionTreeItemClicked += OnRegionTreeItemClicked;
 		_view.FleetTreeDeselected += OnFleetTreeDeselected;
 		_view.FleetTreeItemClicked += OnFleetTreeItemClicked;
+		_view.LandingButtonPressed += OnLandingButtonPressed;
+		_view.LoadingButtonPressed += OnLoadingButtonPressed;
 	}
 
 	public void PopulatePlanetData(Planet planet)
@@ -37,6 +39,7 @@ public partial class PlanetDetailScreenController : Control
 		PopulatePlanetDetails(planet);
 		PopulateFleetTree(planet);
 		PopulateRegionTree(planet);
+		UpdateButtons();
 	}
 
 	private void PopulateFleetTree(Planet planet)
@@ -49,11 +52,13 @@ public partial class PlanetDetailScreenController : Control
 				foreach(Ship ship in taskForce.Ships)
 				{
 					List<TreeNode> nodes = new List<TreeNode>();
-					foreach(Squad squad in ship.LoadedSquads)
+                    var unitSquadMap = ship.LoadedSquads.GroupBy(s => s.ParentUnit).ToDictionary(group => group.Key, group => group.ToList());
+					nodes = GetUnitTreeNodes(unitSquadMap);
+                    /*foreach (Squad squad in ship.LoadedSquads)
 					{
 						TreeNode node = new TreeNode(squad.Id, squad.Name, new List<TreeNode>());
 						nodes.Add(node);
-					}
+					}*/
 					string text = $"{ship.Name} ({ship.LoadedSoldierCount}/{ship.Template.SoldierCapacity})";
 					TreeNode shipNode = new TreeNode(ship.Id, text, nodes);
 					shipList.Add(shipNode);
@@ -72,30 +77,40 @@ public partial class PlanetDetailScreenController : Control
 			Region region = planet.Regions[i];
 			List<TreeNode> unitsInRegion = new List<TreeNode>();
 			if (region.RegionFactionMap.ContainsKey(playerFaction.Id))
-			{
-				var unitSquadMap = region.RegionFactionMap[playerFaction.Id].LandedSquads.GroupBy(s => s.ParentUnit).ToDictionary(group => group.Key, group => group.ToList());
-				foreach(var kvp in unitSquadMap)
-				{
-					List<TreeNode> squads = new List<TreeNode>();
-					foreach (Squad squad in kvp.Value)
-					{
-						if (squad.Members.Count > 0)
-						{
-							squads.Add(new TreeNode(squad.Id, squad.Name, new List<TreeNode>()));
-						}
-					}
-					TreeNode unit = new TreeNode(kvp.Key.Id, kvp.Key.Name, squads);
-					unitsInRegion.Add(unit);
-				}
-				
-			}
-			TreeNode regionNode = new TreeNode(region.Id, GetRegionName(planet, i), unitsInRegion);
+            {
+                var unitSquadMap = region.RegionFactionMap[playerFaction.Id].LandedSquads.GroupBy(s => s.ParentUnit).ToDictionary(group => group.Key, group => group.ToList());
+                unitsInRegion = GetUnitTreeNodes(unitSquadMap);
+
+            }
+            TreeNode regionNode = new TreeNode(region.Id, GetRegionName(planet, i), unitsInRegion);
 			regionList.Add(regionNode);
 		}
 		_view.PopulateRegionTree(regionList);
 	}
 
-	private string GetRegionName(Planet planet, int i)
+    private static List<TreeNode> GetUnitTreeNodes(Dictionary<Unit, List<Squad>> unitSquadMap)
+    {
+        List<TreeNode> unitTreeNodes = new List<TreeNode>();
+        foreach (var kvp in unitSquadMap)
+        {
+            List<TreeNode> squads = new List<TreeNode>();
+            foreach (Squad squad in kvp.Value)
+            {
+                if (squad.Members.Count > 0)
+                {
+                    squads.Add(new TreeNode(squad.Id, squad.Name, new List<TreeNode>()));
+                }
+            }
+			if (squads.Count > 0)
+			{
+				TreeNode unit = new TreeNode(kvp.Key.Id, kvp.Key.Name, squads);
+				unitTreeNodes.Add(unit);
+			}
+        }
+		return unitTreeNodes;
+    }
+
+    private string GetRegionName(Planet planet, int i)
 	{
 		switch(i)
 		{
@@ -219,13 +234,14 @@ public partial class PlanetDetailScreenController : Control
 	private void OnRegionTreeDeselected(object sender, EventArgs e)
 	{
 		_selectedRegion = null;
-		_selectedSquad = null;
-		_selectedUnit = null;
+		_selectedLandedSquad = null;
+		_selectedLandedUnit = null;
 	}
 
 	private void OnFleetTreeDeselected(object sender, EventArgs e)
 	{
 		_selectedShip = null;
+		_selectedLoadedUnit = null;
 		_selectedLoadedSquad = null;
 	}
 
@@ -236,14 +252,24 @@ public partial class PlanetDetailScreenController : Control
 			case 0:
 				// Fleet
 				_selectedShip = _selectedPlanet.OrbitingTaskForceList.SelectMany(tf => tf.Ships).First(s => s.Id == e.Y);
+				_selectedLoadedUnit = null;
 				_selectedLoadedSquad = null;
 				break;
 			case 1:
-				// Squad
-				_selectedShip = null;
-				_selectedLoadedSquad = _selectedPlanet.OrbitingTaskForceList.SelectMany(tf => tf.Ships).SelectMany(s => s.LoadedSquads).First(s => s.Id == e.Y);
+                // Unit
+                TreeItem item = (TreeItem)sender;
+                Vector2I shipMeta = item.GetParent().GetMetadata(0).AsVector2I();
+                _selectedShip = _selectedPlanet.OrbitingTaskForceList.SelectMany(tf => tf.Ships).First(s => s.Id == e.Y);
+				_selectedLoadedUnit = GameDataSingleton.Instance.Sector.PlayerForce.Army.OrderOfBattle.ChildUnits.First(u => u.Id == e.Y);
+                _selectedLoadedSquad = null;
 				break;
-		}
+            case 2:
+                // Squad
+				_selectedLandedUnit = null;
+                _selectedLoadedSquad = GameDataSingleton.Instance.Sector.PlayerForce.Army.SquadMap[e.Y];
+				_selectedShip = _selectedLoadedSquad.BoardedLocation;
+                break;
+        }
 		UpdateButtons();
 	}
 
@@ -254,16 +280,16 @@ public partial class PlanetDetailScreenController : Control
 			case 0:
 				// Region
 				_selectedRegion = _selectedPlanet.Regions.First(r => r.Id == e.Y);
-				_selectedUnit = null;
-				_selectedSquad = null;
+				_selectedLandedUnit = null;
+				_selectedLandedSquad = null;
 				break;
 			case 1:
 				// Unit
 				TreeItem item = (TreeItem)sender;
 				Vector2I regionMeta = item.GetParent().GetMetadata(0).AsVector2I();
 				_selectedRegion = _selectedPlanet.Regions.First(r => r.Id == regionMeta.Y);
-				_selectedUnit = GameDataSingleton.Instance.Sector.PlayerForce.Army.OrderOfBattle.ChildUnits.First(u => u.Id == e.Y);
-				_selectedSquad = null;
+				_selectedLandedUnit = GameDataSingleton.Instance.Sector.PlayerForce.Army.OrderOfBattle.ChildUnits.First(u => u.Id == e.Y);
+				_selectedLandedSquad = null;
 				break;
 			case 2:
 				// Squad
@@ -271,8 +297,8 @@ public partial class PlanetDetailScreenController : Control
 				item = (TreeItem)sender;
 				regionMeta = item.GetParent().GetParent().GetMetadata(0).AsVector2I();
 				_selectedRegion = _selectedPlanet.Regions.First(r => r.Id == regionMeta.Y);
-				_selectedUnit = null;
-				_selectedSquad = GameDataSingleton.Instance.Sector.PlayerForce.Army.SquadMap[e.Y];
+				_selectedLandedUnit = null;
+				_selectedLandedSquad = GameDataSingleton.Instance.Sector.PlayerForce.Army.SquadMap[e.Y];
 				break;
 		}
 		UpdateButtons();
@@ -283,23 +309,39 @@ public partial class PlanetDetailScreenController : Control
 		// see if a loaded squad or ship is selected, and something selected on the right side
 		if (_selectedShip != null && _selectedShip.LoadedSquads.Count() > 0 && _selectedRegion != null)
 		{
-			_view.EnableLandingButton(true, $"Land all Squads on {_selectedShip.Name} in region >");
+			if (_selectedLoadedSquad != null)
+			{
+				_view.EnableLandingButton(true, $"Land {_selectedLandedSquad.Name} in region >");
+			}
+			else if (_selectedLandedUnit != null)
+			{
+                // multiple squads selected at the unit or ship level
+                _view.EnableLandingButton(true, $"Land troops from {_selectedShip.Name} in region >");
+            }
+			else
+			{
+				_view.EnableLandingButton(true, $"Land all Squads on {_selectedShip.Name} in region >");
+			}
 		}
-		else if(_selectedLoadedSquad != null && _selectedRegion != null)
-		{
-			_view.EnableLandingButton(true, $"Land {_selectedSquad.Name} in region >");
-		}
-		else if(_selectedShip != null)
+		else if(_selectedShip != null && _selectedRegion != null)
 		{
 			_view.EnableLandingButton(false, "No squads on ship to land >");
 		}
+		else if(_selectedShip != null)
+		{
+            _view.EnableLandingButton(false, "Select a Region to Land Troops >");
+        }
+		else if(_selectedRegion != null)
+		{
+            _view.EnableLandingButton(false, "Select a Ship with troops to land >");
+        }
 		else
 		{
 			_view.EnableLandingButton(false, "Land Squad in region >");
 		}
 
 		// loading squads is more complicated
-		if(_selectedShip == null && _selectedLoadedSquad == null)
+		if(_selectedShip == null)
 		{
 			_view.EnableLoadingButton(false, "< Select a ship to load troops into");
 		}
@@ -325,14 +367,14 @@ public partial class PlanetDetailScreenController : Control
 
 			//determine number of troops that will be loaded
 			int capacityRequired;
-			if(_selectedSquad != null)
+			if(_selectedLandedSquad != null)
 			{
-				capacityRequired = _selectedSquad.Members.Count;
+				capacityRequired = _selectedLandedSquad.Members.Count;
 			}
-			else if(_selectedUnit != null)
+			else if(_selectedLandedUnit != null)
 			{
 				capacityRequired = _selectedRegion.RegionFactionMap[GameDataSingleton.Instance.GameRulesData.PlayerFaction.Id].LandedSquads
-					.Where(s => s.ParentUnit == _selectedUnit)
+					.Where(s => s.ParentUnit == _selectedLandedUnit)
 					.Sum(s => s.Members.Count);
 			}
 			else
@@ -346,9 +388,9 @@ public partial class PlanetDetailScreenController : Control
 			{
 				_view.EnableLoadingButton(false, $"< {shipName} cannot fit that many troops!");
 			}
-			else if(_selectedSquad != null)
+			else if(_selectedLandedSquad != null)
 			{
-				_view.EnableLoadingButton(true, $"< Load {_selectedSquad.Name} onto {shipName}");
+				_view.EnableLoadingButton(true, $"< Load {_selectedLandedSquad.Name} onto {shipName}");
 			}
 			else
 			{
@@ -356,4 +398,90 @@ public partial class PlanetDetailScreenController : Control
             }
 		}
 	}
+
+	private void ClearSelections()
+	{
+		_selectedShip = null;
+		_selectedLoadedUnit = null;
+		_selectedLoadedSquad = null;
+		_selectedRegion = null;
+		_selectedLandedUnit = null;
+		_selectedLandedSquad = null;
+	}
+
+	private void OnLandingButtonPressed(object sender, EventArgs e)
+	{
+		foreach(Squad squad in GetSelectedLoadedSquads())
+		{
+			// remove squad from ship
+			Ship ship = squad.BoardedLocation;
+            ship.RemoveSquad(squad);
+			// add squad to region
+			_selectedRegion.RegionFactionMap[GameDataSingleton.Instance.Sector.PlayerForce.Faction.Id].LandedSquads.Add(squad);
+			// update squad
+            squad.CurrentRegion = _selectedRegion;
+			squad.BoardedLocation = null;
+			
+		}
+		ClearSelections();
+		PopulateFleetTree(_selectedPlanet);
+		PopulateRegionTree(_selectedPlanet);
+		UpdateButtons();
+	}
+
+	private IEnumerable<Squad> GetSelectedLoadedSquads()
+	{
+		if (_selectedLoadedSquad != null)
+		{
+			return new List<Squad>{ _selectedLoadedSquad };
+		}
+		else if(_selectedLoadedUnit != null)
+		{
+			return _selectedShip.LoadedSquads.Where(s => s.ParentUnit == _selectedLoadedUnit).ToList();
+		}
+		else
+		{
+			return _selectedShip.LoadedSquads.ToList();
+		}
+	}
+
+	private void OnLoadingButtonPressed(object sender, EventArgs e)
+	{
+        foreach (Squad squad in GetSelectedLandedSquads())
+        {
+            // remove squad from region
+            RegionFaction regionFaction = _selectedRegion.RegionFactionMap[GameDataSingleton.Instance.Sector.PlayerForce.Faction.Id];
+			regionFaction.LandedSquads.Remove(squad);
+            // add squad to ship
+			_selectedShip.LoadSquad(squad);
+            // update squad
+            squad.CurrentRegion = null;
+            squad.BoardedLocation = _selectedShip;
+
+        }
+		ClearSelections();
+        PopulateFleetTree(_selectedPlanet);
+        PopulateRegionTree(_selectedPlanet);
+        UpdateButtons();
+    }
+
+	private IEnumerable<Squad> GetSelectedLandedSquads()
+	{
+		if (_selectedLandedSquad != null)
+		{
+			return new List<Squad> { _selectedLandedSquad };
+		}
+		else
+		{
+			RegionFaction regionFaction = _selectedRegion.RegionFactionMap[GameDataSingleton.Instance.Sector.PlayerForce.Faction.Id];
+			if (_selectedLandedUnit != null)
+			{
+				return regionFaction.LandedSquads.Where(s => s.ParentUnit == _selectedLandedUnit).ToList();
+			}
+			else
+			{
+				return regionFaction.LandedSquads.ToList();
+			}
+		}
+    }
 }
