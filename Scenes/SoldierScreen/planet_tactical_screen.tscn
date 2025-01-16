@@ -1,8 +1,9 @@
-[gd_scene load_steps=4 format=3 uid="uid://563o3v1l5hmo"]
+[gd_scene load_steps=5 format=3 uid="uid://563o3v1l5hmo"]
 
 [ext_resource type="Texture2D" uid="uid://gpd4k5tpuqes" path="res://Assets/aliens_in_range.png" id="1_aqn8a"]
 [ext_resource type="Texture2D" uid="uid://c7t88wlp8iwc3" path="res://Assets/helmet_icon.png" id="2_rgh1x"]
 [ext_resource type="Texture2D" uid="uid://gxdtvsvevutx" path="res://Assets/genestealer_icon.png" id="3_57ct6"]
+[ext_resource type="Texture2D" uid="uid://ci3w8uygstkqn" path="res://Assets/droppod_icon.png" id="4_57ct6"]
 
 [node name="PlanetTacticalScreenController" type="Control"]
 layout_mode = 3
@@ -31,6 +32,17 @@ grow_vertical = 2
 texture = ExtResource("1_aqn8a")
 expand_mode = 4
 stretch_mode = 4
+
+[node name="CloseButton" type="Button" parent="PlanetTacticalScreenView"]
+layout_mode = 1
+anchors_preset = -1
+anchor_left = 1.0
+anchor_right = 1.0
+offset_left = -50.0
+offset_top = 10.0
+offset_right = -10.0
+offset_bottom = 50.0
+text = "X"
 
 [node name="Panel" type="Panel" parent="PlanetTacticalScreenView"]
 custom_minimum_size = Vector2(50, 50)
@@ -75,6 +87,10 @@ layout_mode = 1
 anchors_preset = -1
 anchor_right = 1.0
 anchor_bottom = 1.0
+offset_left = 5.0
+offset_top = 5.0
+offset_right = -5.0
+offset_bottom = -5.0
 texture = ExtResource("2_rgh1x")
 expand_mode = 3
 
@@ -95,6 +111,16 @@ anchors_preset = -1
 anchor_right = 1.0
 anchor_bottom = 1.0
 texture = ExtResource("3_57ct6")
+expand_mode = 3
+
+[node name="TextureRect" type="TextureRect" parent="PlanetTacticalScreenView/Panel3"]
+layout_mode = 1
+anchors_preset = -1
+anchor_left = 0.4
+anchor_right = 0.6
+offset_top = -20.0
+offset_bottom = 20.0
+texture = ExtResource("4_57ct6")
 expand_mode = 3
 
 [node name="Panel4" type="Panel" parent="PlanetTacticalScreenView"]
@@ -226,3 +252,244 @@ anchor_top = 0.2
 anchor_right = 0.88
 anchor_bottom = 0.32
 grow_horizontal = 2
+
+[node name="DataPanel" type="Panel" parent="PlanetTacticalScreenView"]
+layout_mode = 1
+anchors_preset = -1
+anchor_top = 0.55
+anchor_right = 0.33
+anchor_bottom = 1.0
+offset_left = 10.0
+offset_right = -5.0
+offset_bottom = -10.0
+
+[node name="Header" type="Panel" parent="PlanetTacticalScreenView/DataPanel"]
+custom_minimum_size = Vector2(0, 30)
+layout_mode = 1
+anchors_preset = 10
+anchor_right = 1.0
+offset_bottom = 50.0
+grow_horizontal = 2
+
+[node name="Label" type="Label" parent="PlanetTacticalScreenView/DataPanel/Header"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+text = "Region Details"
+horizontal_alignment = 1
+vertical_alignment = 1
+
+[node name="VBoxContainer" type="VBoxContainer" parent="PlanetTacticalScreenView/DataPanel"]
+layout_mode = 1
+anchors_preset = -1
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = 5.0
+offset_top = 55.0
+offset_right = -5.0
+offset_bottom = -5.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="DataLinePanel" type="Panel" parent="PlanetTacticalScreenView/DataPanel/VBoxContainer"]
+custom_minimum_size = Vector2(0, 20)
+layout_mode = 2
+
+[node name="Label" type="Label" parent="PlanetTacticalScreenView/DataPanel/VBoxContainer/DataLinePanel"]
+layout_mode = 1
+anchors_preset = 9
+anchor_bottom = 1.0
+offset_right = 117.0
+grow_vertical = 2
+text = "Time in Service"
+
+[node name="Label2" type="Label" parent="PlanetTacticalScreenView/DataPanel/VBoxContainer/DataLinePanel"]
+layout_mode = 1
+anchors_preset = 11
+anchor_left = 1.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = -137.0
+grow_horizontal = 0
+grow_vertical = 2
+text = "7 years, 3 months"
+horizontal_alignment = 2
+
+[node name="DataLinePanel2" type="Panel" parent="PlanetTacticalScreenView/DataPanel/VBoxContainer"]
+custom_minimum_size = Vector2(0, 20)
+layout_mode = 2
+
+[node name="Label" type="Label" parent="PlanetTacticalScreenView/DataPanel/VBoxContainer/DataLinePanel2"]
+layout_mode = 1
+anchors_preset = 9
+anchor_bottom = 1.0
+offset_right = 1.0
+grow_vertical = 2
+text = "Unit"
+
+[node name="Label2" type="Label" parent="PlanetTacticalScreenView/DataPanel/VBoxContainer/DataLinePanel2"]
+layout_mode = 1
+anchors_preset = 11
+anchor_left = 1.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = -1.0
+grow_horizontal = 0
+grow_vertical = 2
+text = "3rd Company, A Squad"
+
+[node name="DataLinePanel3" type="Panel" parent="PlanetTacticalScreenView/DataPanel/VBoxContainer"]
+custom_minimum_size = Vector2(0, 20)
+layout_mode = 2
+
+[node name="Label" type="Label" parent="PlanetTacticalScreenView/DataPanel/VBoxContainer/DataLinePanel3"]
+layout_mode = 1
+anchors_preset = 9
+anchor_bottom = 1.0
+offset_right = 1.0
+grow_vertical = 2
+text = "Location"
+
+[node name="Label2" type="Label" parent="PlanetTacticalScreenView/DataPanel/VBoxContainer/DataLinePanel3"]
+layout_mode = 1
+anchors_preset = 11
+anchor_left = 1.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = -1.0
+grow_horizontal = 0
+grow_vertical = 2
+text = "Aboard Immortal"
+
+[node name="DataLinePanel4" type="Panel" parent="PlanetTacticalScreenView/DataPanel/VBoxContainer"]
+custom_minimum_size = Vector2(0, 20)
+layout_mode = 2
+
+[node name="Label" type="Label" parent="PlanetTacticalScreenView/DataPanel/VBoxContainer/DataLinePanel4"]
+layout_mode = 1
+anchors_preset = 9
+anchor_bottom = 1.0
+offset_right = 1.0
+grow_vertical = 2
+text = "Lorem Ipsem"
+
+[node name="Label2" type="Label" parent="PlanetTacticalScreenView/DataPanel/VBoxContainer/DataLinePanel4"]
+layout_mode = 1
+anchors_preset = 11
+anchor_left = 1.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = -1.0
+grow_horizontal = 0
+grow_vertical = 2
+text = "Lorem Ipsum"
+
+[node name="DataLinePanel5" type="Panel" parent="PlanetTacticalScreenView/DataPanel/VBoxContainer"]
+custom_minimum_size = Vector2(0, 20)
+layout_mode = 2
+
+[node name="Label" type="Label" parent="PlanetTacticalScreenView/DataPanel/VBoxContainer/DataLinePanel5"]
+layout_mode = 1
+anchors_preset = 9
+anchor_bottom = 1.0
+offset_right = 1.0
+grow_vertical = 2
+text = "Lorem Ipsum"
+
+[node name="Label2" type="Label" parent="PlanetTacticalScreenView/DataPanel/VBoxContainer/DataLinePanel5"]
+layout_mode = 1
+anchors_preset = 11
+anchor_left = 1.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = -1.0
+grow_horizontal = 0
+grow_vertical = 2
+text = "Who the Bell Tolls"
+
+[node name="RegionListPanel" type="Panel" parent="PlanetTacticalScreenView"]
+layout_mode = 1
+anchors_preset = -1
+anchor_left = 0.33
+anchor_top = 0.55
+anchor_right = 0.66
+anchor_bottom = 1.0
+offset_left = 5.0
+offset_right = -10.0
+offset_bottom = -10.0
+
+[node name="Header" type="Panel" parent="PlanetTacticalScreenView/RegionListPanel"]
+custom_minimum_size = Vector2(0, 30)
+layout_mode = 1
+anchors_preset = 10
+anchor_right = 1.0
+offset_bottom = 50.0
+grow_horizontal = 2
+
+[node name="Label" type="Label" parent="PlanetTacticalScreenView/RegionListPanel/Header"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+text = "Forces In Region"
+horizontal_alignment = 1
+vertical_alignment = 1
+
+[node name="VBoxContainer" type="VBoxContainer" parent="PlanetTacticalScreenView/RegionListPanel"]
+layout_mode = 1
+anchors_preset = -1
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_top = 50.0
+offset_bottom = -5.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="Tree" type="Tree" parent="PlanetTacticalScreenView/RegionListPanel"]
+layout_mode = 1
+anchors_preset = -1
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = 5.0
+offset_top = 55.0
+offset_right = -5.0
+offset_bottom = -5.0
+
+[node name="ButtonPanel" type="Panel" parent="PlanetTacticalScreenView"]
+layout_mode = 1
+anchors_preset = -1
+anchor_left = 0.66
+anchor_top = 0.55
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = 5.0
+offset_right = -10.0
+offset_bottom = -10.0
+
+[node name="VBoxContainer" type="VBoxContainer" parent="PlanetTacticalScreenView/ButtonPanel"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="LoadingButton" type="Button" parent="PlanetTacticalScreenView/ButtonPanel/VBoxContainer"]
+layout_mode = 2
+disabled = true
+text = "Airdrop Forces Into Region"
+
+[node name="LandingButton" type="Button" parent="PlanetTacticalScreenView/ButtonPanel/VBoxContainer"]
+layout_mode = 2
+disabled = true
+text = "Cancel Air Assault"
+
+[node name="LoadingButton2" type="Button" parent="PlanetTacticalScreenView/ButtonPanel/VBoxContainer"]
+layout_mode = 2
+disabled = true
+text = "Order Squad"
