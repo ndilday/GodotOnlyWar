@@ -17,6 +17,7 @@ public partial class MainGameScene : Control
     private SoldierController _soldierScreen;
     private SoldierView _soldierView;
     private PlanetDetailScreenController _planetDetailScreen;
+    private PlanetTacticalScreenController _planetTacticalScreen;
     private Control _previousScreen;
     private CanvasLayer _mainUILayer;
     private TurnController _turnController;
@@ -132,18 +133,40 @@ public partial class MainGameScene : Control
     private void OnPlanetClicked(object sender, int planetId)
     {
         Planet planet = GameDataSingleton.Instance.Sector.Planets[planetId];
+        //LoadPlanetDetailScreen(planet);
+        LoadPlanetTacticalScreen(planet);
+    }
+
+    private void LoadPlanetDetailScreen(Planet planet)
+    {
         if (_planetDetailScreen == null)
         {
             PackedScene planetScene = GD.Load<PackedScene>("res://Scenes/PlanetDetailScreen/planet_detail_screen.tscn");
             _planetDetailScreen = (PlanetDetailScreenController)planetScene.Instantiate();
-            
+
             _planetDetailScreen.CloseButtonPressed += OnCloseScreen;
             _mainUILayer.AddChild(_planetDetailScreen);
         }
         _planetDetailScreen.PopulatePlanetData(planet);
         _planetDetailScreen.Visible = true;
         SetMainScreenVisibility(false);
-        GD.Print($"Planet {planetId} Clicked");
+        GD.Print($"Planet {planet.Id} Clicked");
+    }
+
+    private void LoadPlanetTacticalScreen(Planet planet)
+    {
+        if (_planetTacticalScreen == null)
+        {
+            PackedScene planetScene = GD.Load<PackedScene>("res://Scenes/PlanetDetailScreen/planet_tactical_screen.tscn");
+            _planetTacticalScreen = (PlanetTacticalScreenController)planetScene.Instantiate();
+
+            _planetTacticalScreen.CloseButtonPressed += OnCloseScreen;
+            _mainUILayer.AddChild(_planetTacticalScreen);
+        }
+        //_planetTacticalScreen.PopulatePlanetData(planet);
+        _planetTacticalScreen.Visible = true;
+        SetMainScreenVisibility(false);
+        GD.Print($"Planet {planet.Id} Clicked");
     }
 
     private void OnFleetClicked(object sender, int fleetId) 
