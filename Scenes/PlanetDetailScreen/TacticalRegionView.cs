@@ -1,0 +1,41 @@
+using Godot;
+using System;
+
+public partial class TacticalRegionView : Control
+{
+	[Export]
+	public int RegionId { get; set; }
+	private Button _button;
+	private TextureRect _playerPublic, _playerHidden, _civilian, _xenos, _droppod;
+	private RichTextLabel _playerPopulation, _civilianPopulation, _xenosPopulation;
+
+	public event EventHandler<int> TacticalRegionPressed;
+
+	public override void _Ready()
+	{
+		_button = GetNode<Button>("Button");
+		_button.Pressed += () => TacticalRegionPressed.Invoke(this, RegionId);
+		_playerPublic = GetNode<TextureRect>("Button/TroopTexture");
+		_playerHidden = GetNode<TextureRect>("Button/HiddenTroopTexture");
+		_xenos = GetNode<TextureRect>("Button/XenosTexture");
+		_civilian = GetNode<TextureRect>("Button/CivilianTexture");
+		_droppod = GetNode<TextureRect>("Button/DropPodTexture");
+		_playerPopulation = GetNode<RichTextLabel>("Button/PlayerTroopCountLabel");
+		_civilianPopulation = GetNode<RichTextLabel>("Button/CivilianPopulationLabel");
+		_xenosPopulation = GetNode<RichTextLabel>("Button/XenosPopulationLabel");
+	}
+
+	public void Populate(int regionId, bool showPlayerPublic, bool showPlayerHidden, bool showCivilian, bool showXenos, bool showDropPod,
+		string playerPopulation, string civilianPopulation, string xenosPopulation)
+	{
+		RegionId = regionId;
+		_playerPublic.Visible = showPlayerPublic;
+		_playerHidden.Visible = showPlayerHidden;
+		_civilian.Visible = showCivilian;
+		_xenos.Visible = showXenos;
+		_droppod.Visible = showDropPod;
+		_playerPopulation.Text = playerPopulation;
+		_civilianPopulation.Text = civilianPopulation;
+		_xenosPopulation.Text = xenosPopulation;
+	}
+}

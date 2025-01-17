@@ -163,7 +163,7 @@ public partial class MainGameScene : Control
             _planetTacticalScreen.CloseButtonPressed += OnCloseScreen;
             _mainUILayer.AddChild(_planetTacticalScreen);
         }
-        //_planetTacticalScreen.PopulatePlanetData(planet);
+        _planetTacticalScreen.PopulatePlanetData(planet);
         _planetTacticalScreen.Visible = true;
         SetMainScreenVisibility(false);
         GD.Print($"Planet {planet.Id} Clicked");
