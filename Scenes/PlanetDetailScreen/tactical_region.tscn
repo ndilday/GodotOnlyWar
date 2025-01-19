@@ -1,11 +1,12 @@
-[gd_scene load_steps=7 format=3 uid="uid://bt0o155msnrsf"]
+[gd_scene load_steps=8 format=3 uid="uid://bgmsb5cki6qvk"]
 
-[ext_resource type="Script" path="res://Scenes/PlanetDetailScreen/TacticalRegionController.cs" id="1_8al03"]
-[ext_resource type="Texture2D" uid="uid://b23pn2owysutq" path="res://Assets/helmet_icon.png" id="1_io6l3"]
-[ext_resource type="Texture2D" uid="uid://10hjcsanweov" path="res://Assets/genestealer_icon.png" id="2_8al03"]
-[ext_resource type="Script" uid="uid://cmxikgrc2qqc3" path="res://Scenes/PlanetDetailScreen/TacticalRegionView.cs" id="2_w2nw6"]
-[ext_resource type="Texture2D" uid="uid://c6y2wrst5cn76" path="res://Assets/human_icon.png" id="3_mfyr6"]
-[ext_resource type="Texture2D" uid="uid://dkmk1w8cl6xwl" path="res://Assets/droppod_icon.png" id="4_j7ayy"]
+[ext_resource type="Script" uid="uid://rq3hdiyfue35" path="res://Scenes/PlanetDetailScreen/TacticalRegionController.cs" id="1_8al03"]
+[ext_resource type="Texture2D" uid="uid://c7t88wlp8iwc3" path="res://Assets/helmet_icon.png" id="1_io6l3"]
+[ext_resource type="Texture2D" uid="uid://gxdtvsvevutx" path="res://Assets/genestealer_icon.png" id="2_8al03"]
+[ext_resource type="Script" path="res://Scenes/PlanetDetailScreen/TacticalRegionView.cs" id="2_w2nw6"]
+[ext_resource type="Texture2D" uid="uid://b7uvx4nxwrp5i" path="res://Assets/human_icon.png" id="3_mfyr6"]
+[ext_resource type="Texture2D" uid="uid://ci3w8uygstkqn" path="res://Assets/droppod_icon.png" id="4_j7ayy"]
+[ext_resource type="Texture2D" uid="uid://ueej546ootrb" path="res://Assets/objective_icon.png" id="6_rgdv0"]
 
 [node name="TacticalRegionController" type="Control"]
 layout_mode = 3
@@ -73,6 +74,16 @@ anchor_bottom = 0.625
 texture = ExtResource("3_mfyr6")
 expand_mode = 3
 
+[node name="ObjectiveTexture" type="TextureRect" parent="TacticalRegionView/Button"]
+layout_mode = 1
+anchors_preset = -1
+anchor_left = 0.75
+anchor_top = 0.375
+anchor_right = 1.0
+anchor_bottom = 0.625
+texture = ExtResource("6_rgdv0")
+expand_mode = 3
+
 [node name="DropPodTexture" type="TextureRect" parent="TacticalRegionView/Button"]
 layout_mode = 1
 anchors_preset = -1
@@ -101,7 +112,7 @@ layout_mode = 1
 anchors_preset = -1
 anchor_left = 0.26
 anchor_top = 0.375
-anchor_right = 0.99
+anchor_right = 0.753
 anchor_bottom = 0.625
 theme_override_font_sizes/normal_font_size = 12
 text = "100000"

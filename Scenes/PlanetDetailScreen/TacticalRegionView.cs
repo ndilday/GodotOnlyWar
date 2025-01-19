@@ -6,7 +6,7 @@ public partial class TacticalRegionView : Control
 	[Export]
 	public int RegionId { get; set; }
 	private Button _button;
-	private TextureRect _playerPublic, _playerHidden, _civilian, _xenos, _droppod;
+	private TextureRect _playerPublic, _playerHidden, _civilian, _xenos, _objective, _droppod;
 	private RichTextLabel _playerPopulation, _civilianPopulation, _xenosPopulation;
 
 	public event EventHandler<int> TacticalRegionPressed;
@@ -19,13 +19,14 @@ public partial class TacticalRegionView : Control
 		_playerHidden = GetNode<TextureRect>("Button/HiddenTroopTexture");
 		_xenos = GetNode<TextureRect>("Button/XenosTexture");
 		_civilian = GetNode<TextureRect>("Button/CivilianTexture");
+		_objective = GetNode<TextureRect>("Button/ObjectiveTexture");
 		_droppod = GetNode<TextureRect>("Button/DropPodTexture");
 		_playerPopulation = GetNode<RichTextLabel>("Button/PlayerTroopCountLabel");
 		_civilianPopulation = GetNode<RichTextLabel>("Button/CivilianPopulationLabel");
 		_xenosPopulation = GetNode<RichTextLabel>("Button/XenosPopulationLabel");
 	}
 
-	public void Populate(int regionId, bool showPlayerPublic, bool showPlayerHidden, bool showCivilian, bool showXenos, bool showDropPod,
+	public void Populate(int regionId, bool showPlayerPublic, bool showPlayerHidden, bool showCivilian, bool showXenos, bool showObjective, bool showDropPod,
 		string playerPopulation, string civilianPopulation, string xenosPopulation)
 	{
 		RegionId = regionId;
@@ -33,6 +34,7 @@ public partial class TacticalRegionView : Control
 		_playerHidden.Visible = showPlayerHidden;
 		_civilian.Visible = showCivilian;
 		_xenos.Visible = showXenos;
+		_objective.Visible = showObjective;
 		_droppod.Visible = showDropPod;
 		_playerPopulation.Text = playerPopulation;
 		_civilianPopulation.Text = civilianPopulation;
