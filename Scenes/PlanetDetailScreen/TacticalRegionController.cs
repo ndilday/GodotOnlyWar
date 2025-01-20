@@ -8,15 +8,20 @@ public partial class TacticalRegionController : Control
 {
 	private TacticalRegionView _view;
 	private Button _button;
+	private Region _region;
+
+	public event EventHandler<Region> TacticalRegionPressed;
 
 	public override void _Ready()
 	{
 		_view = GetNode<TacticalRegionView>("TacticalRegionView");
 		_button = GetNode<Button>("TacticalRegionView/Button");
-	}
+        _button.Pressed += () => TacticalRegionPressed.Invoke(this, _region);
+    }
 
 	public void Populate(Region region)
 	{
+		_region = region;
 		RegionFaction playerRegionFaction = region.RegionFactionMap.Values.FirstOrDefault(rf => rf.PlanetFaction.Faction.IsPlayerFaction);
 		RegionFaction defaultFaction = region.RegionFactionMap.Values.FirstOrDefault(rf => rf.PlanetFaction.Faction.IsDefaultFaction);
 		RegionFaction xenosRegionFaction = region.RegionFactionMap.Values.FirstOrDefault(rf => !rf.PlanetFaction.Faction.IsPlayerFaction && !rf.PlanetFaction.Faction.IsDefaultFaction);

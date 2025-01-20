@@ -26,7 +26,6 @@ namespace OnlyWar.Builders
         private static HashSet<int> _usedPlanetNameIndexes;
 
         private static int _nextPlanetId = 0;
-        private static int _nextRegionId = 0;
         private static int _nextLeaderId = 0;
 
         public Planet GenerateNewPlanet(IReadOnlyDictionary<int, PlanetTemplate> planetTemplateMap, 
@@ -102,8 +101,8 @@ namespace OnlyWar.Builders
         {
             for (int i = 0; i < 16; i++)
             {
-                planet.Regions[i] = new Region(_nextRegionId, planet, 0);
-                _nextRegionId++;
+                int regionId = planet.Id * 16 + i;
+                planet.Regions[i] = new Region(regionId, planet, 0);
             }
 
             long popToDistribute = (long)(template.PopulationRange.BaseValue)

@@ -1,9 +1,9 @@
 [gd_scene load_steps=5 format=3 uid="uid://dk4rrs2kymt0v"]
 
-[ext_resource type="Script" path="res://Scenes/PlanetDetailScreen/PlanetTacticalScreenController.cs" id="1_selu7"]
-[ext_resource type="Texture2D" uid="uid://1xvdutv7d2mr" path="res://Assets/aliens_in_range.png" id="2_utl52"]
-[ext_resource type="Script" uid="uid://cdynx78hhf3u5" path="res://Scenes/PlanetDetailScreen/PlanetTacticalScreenView.cs" id="2_xcjox"]
-[ext_resource type="PackedScene" uid="uid://bt0o155msnrsf" path="res://Scenes/PlanetDetailScreen/tactical_region.tscn" id="3_b2wt2"]
+[ext_resource type="Script" uid="uid://dx46hy415lpkw" path="res://Scenes/PlanetDetailScreen/PlanetTacticalScreenController.cs" id="1_selu7"]
+[ext_resource type="Texture2D" uid="uid://gpd4k5tpuqes" path="res://Assets/aliens_in_range.png" id="2_utl52"]
+[ext_resource type="Script" uid="uid://dnvnyhgmy0d0h" path="res://Scenes/PlanetDetailScreen/PlanetTacticalScreenView.cs" id="2_xcjox"]
+[ext_resource type="PackedScene" uid="uid://bgmsb5cki6qvk" path="res://Scenes/PlanetDetailScreen/tactical_region.tscn" id="3_b2wt2"]
 
 [node name="PlanetTacticalScreenController" type="Control"]
 layout_mode = 3
@@ -36,11 +36,12 @@ expand_mode = 4
 stretch_mode = 4
 
 [node name="TacticalRegionPanel" type="Panel" parent="PlanetTacticalScreenView"]
+self_modulate = Color(1, 1, 1, 0)
 layout_mode = 1
 anchors_preset = -1
 anchor_top = 0.01
 anchor_right = 1.0
-anchor_bottom = 0.54
+anchor_bottom = 0.7
 
 [node name="TacticalRegionController1" parent="PlanetTacticalScreenView/TacticalRegionPanel" instance=ExtResource("3_b2wt2")]
 z_index = 3
@@ -230,8 +231,9 @@ text = "X"
 [node name="DataPanel" type="Panel" parent="PlanetTacticalScreenView"]
 layout_mode = 1
 anchors_preset = -1
-anchor_top = 0.55
-anchor_right = 0.33
+anchor_left = 0.33
+anchor_top = 0.71
+anchor_right = 0.66
 anchor_bottom = 1.0
 offset_left = 10.0
 offset_right = -5.0
@@ -387,11 +389,10 @@ text = "Who the Bell Tolls"
 [node name="RegionSquadPanel" type="Panel" parent="PlanetTacticalScreenView"]
 layout_mode = 1
 anchors_preset = -1
-anchor_left = 0.33
 anchor_top = 0.55
-anchor_right = 0.66
+anchor_right = 0.29
 anchor_bottom = 1.0
-offset_left = 5.0
+offset_left = 10.0
 offset_right = -10.0
 offset_bottom = -10.0
 
@@ -437,7 +438,7 @@ offset_bottom = -5.0
 [node name="ButtonPanel" type="Panel" parent="PlanetTacticalScreenView"]
 layout_mode = 1
 anchors_preset = -1
-anchor_left = 0.66
+anchor_left = 0.7
 anchor_top = 0.55
 anchor_right = 1.0
 anchor_bottom = 1.0

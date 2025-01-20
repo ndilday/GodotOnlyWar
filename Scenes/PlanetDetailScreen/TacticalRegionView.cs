@@ -5,16 +5,11 @@ public partial class TacticalRegionView : Control
 {
 	[Export]
 	public int RegionId { get; set; }
-	private Button _button;
 	private TextureRect _playerPublic, _playerHidden, _civilian, _xenos, _objective, _droppod;
 	private RichTextLabel _playerPopulation, _civilianPopulation, _xenosPopulation;
 
-	public event EventHandler<int> TacticalRegionPressed;
-
 	public override void _Ready()
 	{
-		_button = GetNode<Button>("Button");
-		_button.Pressed += () => TacticalRegionPressed.Invoke(this, RegionId);
 		_playerPublic = GetNode<TextureRect>("Button/TroopTexture");
 		_playerHidden = GetNode<TextureRect>("Button/HiddenTroopTexture");
 		_xenos = GetNode<TextureRect>("Button/XenosTexture");

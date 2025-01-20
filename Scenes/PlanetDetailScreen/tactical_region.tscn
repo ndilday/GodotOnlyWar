@@ -1,12 +1,14 @@
-[gd_scene load_steps=8 format=3 uid="uid://bgmsb5cki6qvk"]
+[gd_scene load_steps=9 format=3 uid="uid://bgmsb5cki6qvk"]
 
 [ext_resource type="Script" uid="uid://rq3hdiyfue35" path="res://Scenes/PlanetDetailScreen/TacticalRegionController.cs" id="1_8al03"]
 [ext_resource type="Texture2D" uid="uid://c7t88wlp8iwc3" path="res://Assets/helmet_icon.png" id="1_io6l3"]
 [ext_resource type="Texture2D" uid="uid://gxdtvsvevutx" path="res://Assets/genestealer_icon.png" id="2_8al03"]
-[ext_resource type="Script" path="res://Scenes/PlanetDetailScreen/TacticalRegionView.cs" id="2_w2nw6"]
+[ext_resource type="Script" uid="uid://cev0ccpl08qi0" path="res://Scenes/PlanetDetailScreen/TacticalRegionView.cs" id="2_w2nw6"]
 [ext_resource type="Texture2D" uid="uid://b7uvx4nxwrp5i" path="res://Assets/human_icon.png" id="3_mfyr6"]
 [ext_resource type="Texture2D" uid="uid://ci3w8uygstkqn" path="res://Assets/droppod_icon.png" id="4_j7ayy"]
 [ext_resource type="Texture2D" uid="uid://ueej546ootrb" path="res://Assets/objective_icon.png" id="6_rgdv0"]
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_rgdv0"]
 
 [node name="TacticalRegionController" type="Control"]
 layout_mode = 3
@@ -29,6 +31,7 @@ grow_vertical = 2
 script = ExtResource("2_w2nw6")
 
 [node name="Button" type="Button" parent="TacticalRegionView"]
+self_modulate = Color(0.686275, 0.427451, 0, 1)
 custom_minimum_size = Vector2(32, 32)
 layout_mode = 1
 anchors_preset = 15
@@ -36,6 +39,8 @@ anchor_right = 1.0
 anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
+theme_override_constants/outline_size = 3
+theme_override_styles/normal = SubResource("StyleBoxFlat_rgdv0")
 toggle_mode = true
 
 [node name="TroopTexture" type="TextureRect" parent="TacticalRegionView/Button"]
@@ -75,6 +80,7 @@ texture = ExtResource("3_mfyr6")
 expand_mode = 3
 
 [node name="ObjectiveTexture" type="TextureRect" parent="TacticalRegionView/Button"]
+visible = false
 layout_mode = 1
 anchors_preset = -1
 anchor_left = 0.75
@@ -85,6 +91,7 @@ texture = ExtResource("6_rgdv0")
 expand_mode = 3
 
 [node name="DropPodTexture" type="TextureRect" parent="TacticalRegionView/Button"]
+visible = false
 layout_mode = 1
 anchors_preset = -1
 anchor_left = 0.75
