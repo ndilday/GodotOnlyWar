@@ -58,9 +58,9 @@ public partial class MainGameScene : Control
             }
         }
 
-        if (@event is InputEventMouseButton emb)
+       /* if (@event is InputEventMouseButton emb)
         {
-            if (emb.ButtonIndex == MouseButton.Left && emb.IsPressed())
+            if (emb.ButtonIndex == MouseButton.Left && emb.IsPressed() && _sectorMap.Visible)
             {
                 Vector2 gmpos = GetGlobalMousePosition();
                 Vector2I mousePosition = new((int)(gmpos.X), (int)(gmpos.Y));
@@ -71,12 +71,13 @@ public partial class MainGameScene : Control
                 _topMenu.SetDebugText(text);
                 GetViewport().SetInputAsHandled();
             }
-        }
+        }*/
     }
 
     private void SetMainScreenVisibility(bool isVisible)
     {
         _sectorMap.Visible = isVisible;
+        _sectorMap.SetProcessInput(isVisible);
         _topMenu.Visible = isVisible;
         _bottomMenu.Visible = isVisible;
     }

@@ -72,6 +72,12 @@ public partial class SectorMap : Node2D
 		}
 	}
 
+    public new void SetProcessInput(bool enable)
+    {
+        base.SetProcessInput(enable);
+        _camera.SetProcessInput(enable);
+    }
+
     public Vector2I CalculateMapPosition(Vector2I gridPosition)
     {
         return gridPosition * CellSize + HalfCellSize;
