@@ -1,0 +1,156 @@
+[gd_scene load_steps=6 format=3 uid="uid://dsarfq22dygfx"]
+
+[ext_resource type="PackedScene" uid="uid://cadpqoqxtyo0p" path="res://Scenes/Dialog.tscn" id="1_dvu1q"]
+[ext_resource type="Script" uid="uid://cswadmsuhrvoa" path="res://Scenes/SquadScreen/SquadScreenController.cs" id="2_ti2l8"]
+[ext_resource type="Script" uid="uid://bi4fuirqin5ex" path="res://Scenes/SquadScreen/SquadScreenView.cs" id="3_v5skr"]
+[ext_resource type="Texture2D" uid="uid://cdmukgd7syaa8" path="res://Assets/marines_shooting_jungle.jpg" id="4_v5skr"]
+[ext_resource type="PackedScene" uid="uid://bgmsb5cki6qvk" path="res://Scenes/PlanetDetailScreen/tactical_region.tscn" id="5_p4ihy"]
+
+[node name="SquadScreenController" instance=ExtResource("1_dvu1q")]
+script = ExtResource("2_ti2l8")
+
+[node name="DialogView" parent="." index="0"]
+script = ExtResource("3_v5skr")
+
+[node name="TextureRect" type="TextureRect" parent="DialogView" index="1"]
+modulate = Color(1, 1, 1, 0.156863)
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_top = -128.0
+offset_bottom = 128.0
+grow_horizontal = 2
+grow_vertical = 2
+texture = ExtResource("4_v5skr")
+expand_mode = 5
+
+[node name="RegionPanel" type="Panel" parent="DialogView" index="2"]
+layout_mode = 1
+anchors_preset = -1
+anchor_left = 0.505
+anchor_right = 1.0
+anchor_bottom = 0.5
+
+[node name="TacticalRegionController" parent="DialogView/RegionPanel" index="0" instance=ExtResource("5_p4ihy")]
+layout_mode = 1
+anchors_preset = -1
+anchor_left = 0.35
+anchor_top = 0.01
+anchor_right = 0.65
+anchor_bottom = 0.31
+offset_right = 0.0
+offset_bottom = 0.0
+
+[node name="TacticalRegionController2" parent="DialogView/RegionPanel" index="1" instance=ExtResource("5_p4ihy")]
+layout_mode = 1
+anchors_preset = -1
+anchor_left = 0.35
+anchor_top = 0.35
+anchor_right = 0.65
+anchor_bottom = 0.65
+offset_right = 0.0
+offset_bottom = 0.0
+
+[node name="TacticalRegionController3" parent="DialogView/RegionPanel" index="2" instance=ExtResource("5_p4ihy")]
+layout_mode = 1
+anchors_preset = -1
+anchor_left = 0.35
+anchor_top = 0.69
+anchor_right = 0.65
+anchor_bottom = 0.99
+offset_right = 0.0
+offset_bottom = 0.0
+
+[node name="TacticalRegionController4" parent="DialogView/RegionPanel" index="3" instance=ExtResource("5_p4ihy")]
+layout_mode = 1
+anchors_preset = -1
+anchor_left = 0.68
+anchor_top = 0.16
+anchor_right = 0.98
+anchor_bottom = 0.46
+offset_right = 0.0
+offset_bottom = 0.0
+
+[node name="TacticalRegionController5" parent="DialogView/RegionPanel" index="4" instance=ExtResource("5_p4ihy")]
+layout_mode = 1
+anchors_preset = -1
+anchor_left = 0.68
+anchor_top = 0.54
+anchor_right = 0.98
+anchor_bottom = 0.84
+offset_right = 0.0
+offset_bottom = 0.0
+
+[node name="TacticalRegionController6" parent="DialogView/RegionPanel" index="5" instance=ExtResource("5_p4ihy")]
+layout_mode = 1
+anchors_preset = -1
+anchor_left = 0.02
+anchor_top = 0.16
+anchor_right = 0.32
+anchor_bottom = 0.46
+offset_right = 0.0
+offset_bottom = 0.0
+
+[node name="TacticalRegionController7" parent="DialogView/RegionPanel" index="6" instance=ExtResource("5_p4ihy")]
+layout_mode = 1
+anchors_preset = -1
+anchor_left = 0.02
+anchor_top = 0.54
+anchor_right = 0.32
+anchor_bottom = 0.84
+offset_right = 0.0
+offset_bottom = 0.0
+
+[node name="OrdersPanel" type="Panel" parent="DialogView" index="3"]
+layout_mode = 1
+anchors_preset = -1
+anchor_right = 0.495
+anchor_bottom = 0.5
+
+[node name="Panel" type="Panel" parent="DialogView/OrdersPanel" index="0"]
+layout_mode = 1
+anchors_preset = 10
+anchor_right = 1.0
+offset_bottom = 40.0
+grow_horizontal = 2
+
+[node name="RichTextLabel" type="RichTextLabel" parent="DialogView/OrdersPanel/Panel" index="0"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_font_sizes/normal_font_size = 16
+text = "Orders"
+fit_content = true
+horizontal_alignment = 1
+vertical_alignment = 1
+
+[node name="LoadoutPanel" type="Panel" parent="DialogView" index="4"]
+layout_mode = 1
+anchors_preset = -1
+anchor_top = 0.505
+anchor_right = 0.495
+anchor_bottom = 1.0
+
+[node name="Panel" type="Panel" parent="DialogView/LoadoutPanel" index="0"]
+layout_mode = 1
+anchors_preset = 10
+anchor_right = 1.0
+offset_bottom = 40.0
+grow_horizontal = 2
+
+[node name="RichTextLabel" type="RichTextLabel" parent="DialogView/LoadoutPanel/Panel" index="0"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_font_sizes/normal_font_size = 16
+text = "Loadout"
+fit_content = true
+horizontal_alignment = 1
+vertical_alignment = 1

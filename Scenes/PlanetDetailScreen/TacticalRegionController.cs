@@ -16,8 +16,8 @@ public partial class TacticalRegionController : Control
 	{
 		_view = GetNode<TacticalRegionView>("TacticalRegionView");
 		_button = GetNode<Button>("TacticalRegionView/Button");
-        _button.Pressed += () => TacticalRegionPressed.Invoke(this, _region);
-    }
+		_button.Pressed += () => TacticalRegionPressed.Invoke(this, _region);
+	}
 
 	public void Populate(Region region)
 	{
