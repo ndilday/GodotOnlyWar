@@ -18,6 +18,7 @@ namespace OnlyWar.Models.Missions.Recon
             BaseSkill stealth = GameDataSingleton.Instance.GameRulesData.BaseSkillMap.Values.First(s => s.Name == "Stealth");
             _missionTest = new SquadMissionTest(stealth, 10.0f);
             StepIfSuccess = new ReconPerceptionMissionStep();
+            StepIfFailure = new DetectedMissionStep();
         }
 
         public void ExecuteMissionStep(MissionContext context, float marginOfSuccess, IMissionStep returnStep)

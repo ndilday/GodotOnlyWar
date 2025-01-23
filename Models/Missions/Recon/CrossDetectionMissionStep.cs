@@ -18,7 +18,7 @@ namespace OnlyWar.Models.Missions.Recon
 
         public void ExecuteMissionStep(MissionContext context, float marginOfSuccess, IMissionStep returnStep)
         {
-            // decide whether to figh or flee
+            // decide whether to fight or flee
         }
     }
 }

@@ -18,6 +18,7 @@ namespace OnlyWar.Models.Missions.Recon
             BaseSkill perception = GameDataSingleton.Instance.GameRulesData.BaseSkillMap.Values.First(s => s.Name == "Perception");
             _missionTest = new SquadMissionTest(perception, 10.0f);
             StepIfSuccess = new ReconStealthMissionStep();
+            StepIfFailure = new ReconStealthMissionStep();
         }
 
         public void ExecuteMissionStep(MissionContext context, float marginOfSuccess, IMissionStep returnStep)

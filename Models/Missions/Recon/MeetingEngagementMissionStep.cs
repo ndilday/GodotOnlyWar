@@ -12,7 +12,10 @@ namespace OnlyWar.Models.Missions.Recon
 
         public void ExecuteMissionStep(MissionContext context, float marginOfSuccess, IMissionStep returnStep)
         {
-            throw new NotImplementedException();
+            // build OpFor
+            // set up meeting engagement with OpFor and context.Squad
+
+            returnStep.ExecuteMissionStep(context, marginOfSuccess, returnStep);
         }
     }
 }
