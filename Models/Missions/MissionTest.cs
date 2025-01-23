@@ -1,12 +1,8 @@
-﻿using Godot;
-using OnlyWar.Helpers;
+﻿using OnlyWar.Helpers;
 using OnlyWar.Models.Soldiers;
 using OnlyWar.Models.Squads;
 using System;
-using System.Collections.Generic;
 using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 
 namespace OnlyWar.Models.Missions
 {
@@ -76,9 +72,9 @@ namespace OnlyWar.Models.Missions
         }
     }
 
-    public class LeaderTest : IndividualMissionTest
+    public class LeaderMissionTest : IndividualMissionTest
     {
-        public LeaderTest(BaseSkill skill, float difficulty) : base(skill, difficulty)
+        public LeaderMissionTest(BaseSkill skill, float difficulty) : base(skill, difficulty)
         {
         }
 
@@ -95,11 +91,11 @@ namespace OnlyWar.Models.Missions
         }
     }
 
-    public class SquadTest : IMissionTest
+    public class SquadMissionTest : IMissionTest
     {
         public BaseSkill SkillUsed { get; }
         private float _difficulty;
-        public SquadTest(BaseSkill skill, float difficulty)
+        public SquadMissionTest(BaseSkill skill, float difficulty)
         {
             SkillUsed = skill;
             _difficulty = difficulty;
