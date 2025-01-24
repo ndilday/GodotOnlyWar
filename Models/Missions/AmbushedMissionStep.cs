@@ -4,7 +4,7 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 
-namespace OnlyWar.Models.Missions.Recon
+namespace OnlyWar.Models.Missions
 {
     internal class AmbushedMissionStep : IMissionStep
     {
@@ -12,7 +12,6 @@ namespace OnlyWar.Models.Missions.Recon
 
         public void ExecuteMissionStep(MissionContext context, float marginOfSuccess, IMissionStep returnStep)
         {
-            // build OpFor
             // set up Ambush battle with OpFor attacker and context.Squad defender
 
             returnStep.ExecuteMissionStep(context, marginOfSuccess, returnStep);

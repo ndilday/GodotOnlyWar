@@ -4,7 +4,7 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 
-namespace OnlyWar.Models.Missions.Recon
+namespace OnlyWar.Models.Missions
 {
     public class MeetingEngagementMissionStep : IMissionStep
     {

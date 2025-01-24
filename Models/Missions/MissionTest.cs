@@ -1,4 +1,5 @@
-﻿using OnlyWar.Helpers;
+﻿using Godot;
+using OnlyWar.Helpers;
 using OnlyWar.Models.Soldiers;
 using OnlyWar.Models.Squads;
 using System;
@@ -9,20 +10,21 @@ namespace OnlyWar.Models.Missions
     public interface IMissionTest
     {
         public BaseSkill SkillUsed { get; }
+        // RunMissionTest returns the number of sigmas the squad succeeded or failed by
         public float RunMissionTest(Squad squad);
     }
 
     public static class GaussianMissionTestCalculator
     {
 
-        public static float DetermineMarginOfSuccess(float skillValue, float difficulty)
+        public static float DetermineMarginOfSuccess(float zValue)
         {
-            float advantage = (skillValue - difficulty) / 5.0f;
+            
             double roll = RNG.NextGaussianDouble();
-            return (float)(roll - ApproximateNormalCDF(advantage));
+            return (float)(roll - ApproximateNormalCDF(zValue));
         }
 
-        private static double ApproximateNormalCDF(double zScore)
+        private static float ApproximateNormalCDF(float zScore)
         {
             // Abramowitz and Stegun approximation constants
             const double a1 = 0.319381530;
@@ -41,7 +43,47 @@ namespace OnlyWar.Models.Missions
             if (zScore < 0)
                 prob = 1.0 - prob;
 
-            return prob;
+            return (float)prob;
+        }
+
+        /// <summary>
+        /// Approximates the inverse cumulative distribution function (quantile function)
+        /// of the standard normal distribution using a polynomial approximation.
+        /// </summary>
+        /// <param name="probability">The cumulative probability (between 0 and 1).</param>
+        /// <returns>The approximate Z-score corresponding to the given probability.</returns>
+        public static float ApproximateInverseNormalCDF(float probability)
+        {
+            if (probability <= 0 || probability >= 1)
+            {
+                throw new ArgumentOutOfRangeException("probability", "Probability must be between 0 and 1.");
+            }
+
+            // Constants for the approximation
+            double c0 = 2.515517;
+            double c1 = 0.802853;
+            double c2 = 0.010328;
+            double d1 = 1.432788;
+            double d2 = 0.189269;
+            double d3 = 0.001308;
+
+            double p = probability;
+
+            if (probability > 0.5)
+            {
+                p = 1 - probability;
+            }
+
+            double t = Math.Sqrt(Math.Log(1 / (p * p)));
+
+            double z = t - ((c0 + c1 * t + c2 * t * t) / (1 + d1 * t + d2 * t * t + d3 * t * t * t));
+
+            if (probability > 0.5)
+            {
+                z = -z;
+            }
+
+            return (float)z;
         }
     }
 
@@ -68,7 +110,23 @@ namespace OnlyWar.Models.Missions
 
         protected float RunTestInternal(ISoldier soldier)
         {
-            return GaussianMissionTestCalculator.DetermineMarginOfSuccess(soldier.GetTotalSkillValue(SkillUsed), _difficulty);
+            float advantage = (soldier.GetTotalSkillValue(SkillUsed) - _difficulty) / 5.0f;
+            float probMargin = GaussianMissionTestCalculator.DetermineMarginOfSuccess(advantage) + 1;
+            float zMargin = 0;
+            if(probMargin < 0)
+            {
+                // if they whiffed by more than 50%, treat 50% of it as 4-sigma
+                zMargin -= 4;
+                probMargin += 0.5f;
+            }
+            if(probMargin > 1)
+            {
+                // if they succeeded by more than 50%, treat 50% of it as 4-sigma
+                zMargin += 4;
+                probMargin -= 0.5f;
+            }
+            zMargin += (float)GaussianMissionTestCalculator.ApproximateInverseNormalCDF(probMargin);
+            return zMargin;
         }
     }
 
@@ -103,7 +161,23 @@ namespace OnlyWar.Models.Missions
         public float RunMissionTest(Squad squad)
         {
             float totalSkill = squad.Members.Average(soldier => soldier.GetTotalSkillValue(SkillUsed));
-            return GaussianMissionTestCalculator.DetermineMarginOfSuccess(totalSkill, _difficulty);
+            float advantage = (totalSkill - _difficulty) / 5.0f;
+            float probMargin = GaussianMissionTestCalculator.DetermineMarginOfSuccess(advantage) + 1;
+            float zMargin = 0;
+            if (probMargin < 0)
+            {
+                // if they whiffed by more than 50%, treat 50% of it as 4-sigma
+                zMargin -= 4;
+                probMargin += 0.5f;
+            }
+            if (probMargin > 1)
+            {
+                // if they succeeded by more than 50%, treat 50% of it as 4-sigma
+                zMargin += 4;
+                probMargin -= 0.5f;
+            }
+            zMargin += (float)GaussianMissionTestCalculator.ApproximateInverseNormalCDF(probMargin);
+            return zMargin;
         }
     }
 }
