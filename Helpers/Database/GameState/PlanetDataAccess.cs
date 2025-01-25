@@ -81,11 +81,12 @@ namespace OnlyWar.Helpers.Database.GameState
                     int id = reader.GetInt32(0);
                     int planetId = reader.GetInt32(1);
                     int regionNumber = reader.GetInt32(2);
-                    int regionType = reader.GetInt32(3);
-                    bool isUnderAssault = reader.GetBoolean(4);
+                    string regionName = reader[3].ToString();
+                    int regionType = reader.GetInt32(4);
+                    bool isUnderAssault = reader.GetBoolean(5);
 
                     Planet planet = planets.First(p => p.Id == planetId);
-                    Region region = new Region(id, planet, regionType);
+                    Region region = new Region(id, planet, regionType, regionName);
                     regionMap[id] = region;
                     planet.Regions[regionNumber] = region;
                 }
@@ -269,8 +270,8 @@ namespace OnlyWar.Helpers.Database.GameState
             for(int i = 0; i < regions.Length; i++)
             {
                 string insert = $@"INSERT INTO Region 
-                    (Id, PlanetId, RegionNumber, RegionType, IsUnderAssault) VALUES 
-                    ({regions[i].Id}, {planetId}, {i}, 0, 0);";
+                    (Id, PlanetId, RegionNumber, RegionName, RegionType, IsUnderAssault) VALUES 
+                    ({regions[i].Id}, {planetId}, {i}, {regions[i].Name}, 0, 0);";
                 using (var command = transaction.Connection.CreateCommand())
                 {
                     command.CommandText = insert;

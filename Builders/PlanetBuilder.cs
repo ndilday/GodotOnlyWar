@@ -102,7 +102,7 @@ namespace OnlyWar.Builders
             for (int i = 0; i < 16; i++)
             {
                 int regionId = planet.Id * 16 + i;
-                planet.Regions[i] = new Region(regionId, planet, 0);
+                planet.Regions[i] = new Region(regionId, planet, 0, GetRegionName(planet, i));
             }
 
             long popToDistribute = (long)(template.PopulationRange.BaseValue)
@@ -124,6 +124,47 @@ namespace OnlyWar.Builders
                 regionFaction.Population = regionPopulation;
                 regionFaction.PDFMembers = (int)(regionFaction.Population / 33);
                 region.RegionFactionMap[planetFaction.Faction.Id] = regionFaction;
+            }
+        }
+
+        private string GetRegionName(Planet planet, int i)
+        {
+            switch (i)
+            {
+                case 0:
+                    return $"{planet.Name} Alpha";
+                case 1:
+                    return $"{planet.Name} Beta";
+                case 2:
+                    return $"{planet.Name} Gamma";
+                case 3:
+                    return $"{planet.Name} Delta";
+                case 4:
+                    return $"{planet.Name} Epsilon";
+                case 5:
+                    return $"{planet.Name} Zeta";
+                case 6:
+                    return $"{planet.Name} Eta";
+                case 7:
+                    return $"{planet.Name} Theta";
+                case 8:
+                    return $"{planet.Name} Iota";
+                case 9:
+                    return $"{planet.Name} Kappa";
+                case 10:
+                    return $"{planet.Name} Lambda";
+                case 11:
+                    return $"{planet.Name} Mu";
+                case 12:
+                    return $"{planet.Name} Nu";
+                case 13:
+                    return $"{planet.Name} Xi";
+                case 14:
+                    return $"{planet.Name} Omicron";
+                case 15:
+                    return $"{planet.Name} Pi";
+                default:
+                    return $"{planet.Name} Omega";
             }
         }
 

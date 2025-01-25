@@ -7,6 +7,7 @@ namespace OnlyWar.Models.Planets
     {
         public readonly int Id;
         public readonly Planet Planet;
+        public readonly string Name;
         // territory is diamond-shaped
         // 1
         // 2 3
@@ -52,11 +53,12 @@ namespace OnlyWar.Models.Planets
             }
         }
 
-        public Region(int id, Planet planet, int regionType)
+        public Region(int id, Planet planet, int regionType, string name)
         {
             Id = id;
             Planet = planet;
             RegionFactionMap = [];
+            Name = name;
         }
 
 

@@ -82,7 +82,7 @@ public partial class PlanetDetailScreenController : Control
 				unitsInRegion = GetUnitTreeNodes(unitSquadMap);
 
 			}
-			TreeNode regionNode = new TreeNode(region.Id, GetRegionName(planet, i), unitsInRegion);
+			TreeNode regionNode = new TreeNode(region.Id, region.Name, unitsInRegion);
 			regionList.Add(regionNode);
 		}
 		_view.PopulateRegionTree(regionList);
@@ -108,47 +108,6 @@ public partial class PlanetDetailScreenController : Control
 			}
 		}
 		return unitTreeNodes;
-	}
-
-	private string GetRegionName(Planet planet, int i)
-	{
-		switch(i)
-		{
-			case 0:
-				return $"{planet.Name} Alpha";
-			case 1:
-				return $"{planet.Name} Beta";
-			case 2:
-				return $"{planet.Name} Gamma";
-			case 3:
-				return $"{planet.Name} Delta";
-			case 4:
-				return $"{planet.Name} Epsilon";
-			case 5:
-				return $"{planet.Name} Zeta";
-			case 6:
-				return $"{planet.Name} Eta";
-			case 7:
-				return $"{planet.Name} Theta";
-			case 8:
-				return $"{planet.Name} Iota";
-			case 9:
-				return $"{planet.Name} Kappa";
-			case 10:
-				return $"{planet.Name} Lambda";
-			case 11:
-				return $"{planet.Name} Mu";
-			case 12:
-				return $"{planet.Name} Nu";
-			case 13:
-				return $"{planet.Name} Xi";
-			case 14:
-				return $"{planet.Name} Omicron";
-			case 15:
-				return $"{planet.Name} Pi";
-			default:
-				return $"{planet.Name} Omega";
-		}
 	}
 
 	private void PopulatePlanetDetails(Planet planet)
