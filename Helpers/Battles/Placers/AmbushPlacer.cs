@@ -7,10 +7,12 @@ namespace OnlyWar.Helpers.Battles.Placers
     public class AmbushPlacer
     {
         private readonly BattleGridManager _grid;
+        private readonly ushort _engagementRange;
 
-        public AmbushPlacer(BattleGridManager grid)
+        public AmbushPlacer(BattleGridManager grid, ushort engagementRange)
         {
             _grid = grid;
+            _engagementRange = engagementRange;
         }
 
         public Dictionary<BattleSquad, Tuple<int, int>> PlaceSquads(IReadOnlyList<BattleSquad> ambushedSquads,
@@ -61,7 +63,7 @@ namespace OnlyWar.Helpers.Battles.Placers
         {
             // ambushing forces start 40 yards from the target to the top and left
             int currentY = killZone.Item1.Item2;
-            int currentX = killZone.Item1.Item1 - 40;
+            int currentX = killZone.Item1.Item1 - _engagementRange;
             int bottomLimit = killZone.Item2.Item2 - 50;
             int rightLimit = killZone.Item2.Item1;
             bool onLeft = true;
@@ -78,7 +80,7 @@ namespace OnlyWar.Helpers.Battles.Placers
                     if(currentY <= bottomLimit)
                     {
                         onLeft = false;
-                        currentY = killZone.Item1.Item2 + 40 + (iteration * 4);
+                        currentY = killZone.Item1.Item2 + _engagementRange + (iteration * 4);
                         currentX = killZone.Item1.Item1;
                     }
                 }
@@ -92,7 +94,7 @@ namespace OnlyWar.Helpers.Battles.Placers
                     {
                         onLeft = true;
                         iteration++;
-                        currentX = killZone.Item1.Item1 - 40 - (iteration * 4);
+                        currentX = killZone.Item1.Item1 - _engagementRange - (iteration * 4);
                         currentY = killZone.Item1.Item2;
                     }
                 }
