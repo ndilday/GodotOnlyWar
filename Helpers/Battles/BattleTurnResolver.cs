@@ -41,7 +41,10 @@ namespace OnlyWar.Helpers.Battles
             _opposingBattleSquads = opFor.ToDictionary(squad => squad.Id);
             _opposingFaction = opFor.First().Squad.Faction;
             _woundResolver = new WoundResolver(isVerbose);
+            _woundResolver.OnSoldierDeath += WoundResolver_OnSoldierDeath;
+            _woundResolver.OnSoldierFall += WoundResolver_OnSoldierFall;
             _moveResolver = new MoveResolver(isVerbose);
+            _moveResolver.OnRetreat += MoveResolver_OnRetreat;
             _casualtyMap = new Dictionary<int, BattleSoldier>();
             foreach (BattleSquad squad in _playerBattleSquads.Values)
             {
@@ -59,7 +62,46 @@ namespace OnlyWar.Helpers.Battles
             }
         }
 
-        private void ProcessNextTurn()
+        private void WoundResolver_OnSoldierDeath(BattleSoldier casualty, BattleSoldier inflicter, WeaponTemplate weapon)
+        {
+            _casualtyMap[casualty.Soldier.Id] = casualty;
+            if (casualty.BattleSquad.IsPlayerSquad)
+            {
+                // add death note to soldier history, though we currently just delete it 
+                // we'll probably want it later
+                PlayerSoldier playerSoldier = casualty.Soldier as PlayerSoldier;
+                playerSoldier.AddEntryToHistory($"Killed in battle with the {_opposingFaction.Name} by a {weapon.Name}");
+            }
+            else
+            {
+                // give the inflicter credit for downing this enemy
+                // WARNING: this will lead to multi-counting in some cases
+                // I may later try to divide credit, but having multiple soldiers 
+                // claim credit feels pseudo-realistic for now
+                CreditSoldierForKill(inflicter, weapon);
+            }
+        }
+
+        private void WoundResolver_OnSoldierFall(BattleSoldier fallenSoldier, BattleSoldier inflicter, WeaponTemplate weapon)
+        {
+            _casualtyMap[fallenSoldier.Soldier.Id] = fallenSoldier;
+            if (!fallenSoldier.BattleSquad.IsPlayerSquad)
+            {
+                // give the inflicter credit for downing this enemy
+                // WARNING: this will lead to multi-counting in some cases
+                // I may later try to divide credit, but having multiple soldiers 
+                // claim credit feels pseudo-realistic for now
+                CreditSoldierForKill(inflicter, weapon);
+            }
+        }
+
+        private void MoveResolver_OnRetreat(BattleSoldier soldier)
+        {
+            Log(false, "<b>" + soldier.Soldier.Name + " has retreated from the battlefield</b>");
+            _casualtyMap[soldier.Soldier.Id] = soldier;
+        }
+
+        public void ProcessNextTurn()
         {
             _turnNumber++;
             _grid.ClearReservations();
@@ -98,6 +140,7 @@ namespace OnlyWar.Helpers.Battles
             if (_playerBattleSquads.Count() == 0 || _opposingBattleSquads.Count() == 0)
             {
                 Log(false, "One side destroyed, battle over");
+                ProcessEndOfBattle();
             }
         }
 

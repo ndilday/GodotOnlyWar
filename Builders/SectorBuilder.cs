@@ -43,8 +43,8 @@ namespace OnlyWar.Builders
             Date trainingStartDate = new Date(currentDate.Millenium, currentDate.Year - 4, 1);
             ISoldierTrainingService trainingService = new SoldierTrainingCalculator(data.BaseSkillMap.Values);
             PlayerForce playerForce = NewChapterBuilder.CreateChapter(data, trainingService, trainingStartDate, currentDate);
-            FoundChapterPlanet(planetList, data.PlayerFaction);
-            PlaceStartingForces(planetList, playerForce, forceList);
+            Planet chapterPlanet = FoundChapterPlanet(planetList, data.PlayerFaction);
+            PlaceStartingForces(chapterPlanet, playerForce, forceList);
 
             return new Sector(playerForce, characterList, planetList, forceList);
         }
@@ -77,7 +77,7 @@ namespace OnlyWar.Builders
 
         
 
-        private static void FoundChapterPlanet(List<Planet> planetList, Faction playerFaction)
+        private static Planet FoundChapterPlanet(List<Planet> planetList, Faction playerFaction)
         {
             // TODO: replace this with a random assignment of starting planet
             // and then have the galaxy map screen default to zooming in
@@ -87,6 +87,7 @@ namespace OnlyWar.Builders
             int chapterPlanetIndex = RNG.GetIntBelowMax(0, max);
             Planet chapterPlanet = emptyPlanets.ElementAt(chapterPlanetIndex);
             ReplaceChapterPlanetFaction(chapterPlanet, playerFaction);
+            return chapterPlanet;
         }
 
         private static void ReplaceChapterPlanetFaction(Planet chapterPlanet, Faction playerFaction)
@@ -112,47 +113,22 @@ namespace OnlyWar.Builders
             chapterPlanet.PlanetFactionMap[homePlanetFaction.Faction.Id] = homePlanetFaction;
         }
 
-        private static void PlaceStartingForces(IEnumerable<Planet> planets, PlayerForce playerForce, List<TaskForce> forceList)
+        private static void PlaceStartingForces(Planet startingPlanet, PlayerForce playerForce, List<TaskForce> forceList)
         {
-            foreach (Planet planet in planets)
+            startingPlanet.Regions[0].RegionFactionMap[startingPlanet.ControllingFaction.Id].LandedSquads.AddRange(
+                    playerForce.Army.SquadMap.Values);
+            foreach (Squad squad in playerForce.Army.SquadMap.Values)
             {
-                // For now, put the chapter on their home planet
-                if (planet.ControllingFaction == playerForce.Faction)
+                if (squad.Members.Count > 0)
                 {
-                    planet.Regions[0].RegionFactionMap[planet.ControllingFaction.Id].LandedSquads.AddRange(
-                            playerForce.Army.SquadMap.Values);
-                    foreach (Squad squad in playerForce.Army.SquadMap.Values)
-                    {
-                        if (squad.Members.Count > 0)
-                        {
-                            squad.CurrentRegion = planet.Regions[0];
-                        }
-                    }
-                    foreach (TaskForce taskForce in playerForce.Fleet.TaskForces)
-                    {
-                        taskForce.Planet = planet;
-                        taskForce.Position = planet.Position;
-                        forceList.Add(taskForce);
-                    }
+                    squad.CurrentRegion = startingPlanet.Regions[0];
                 }
-                /*else if (planet.ControllingFaction.UnitTemplates != null)
-                {
-                    int potentialArmies = planet.ControllingFaction
-                                                .UnitTemplates
-                                                .Values
-                                                .Where(ut => ut.IsTopLevelUnit)
-                                                .Count();
-                    // TODO: generalize this
-                    Unit newArmy = TempArmyBuilder.GenerateArmy(
-                        RNG.GetIntBelowMax(0, potentialArmies),
-                        planet.ControllingFaction);
-                    planet.ControllingFaction.Units.Add(newArmy);
-                    planet.FactionSquadListMap[planet.ControllingFaction.Id] = newArmy.Squads.ToList();
-                    foreach (Squad squad in newArmy.Squads)
-                    {
-                        squad.Location = planet;
-                    }
-                }*/
+            }
+            foreach (TaskForce taskForce in playerForce.Fleet.TaskForces)
+            {
+                taskForce.Planet = startingPlanet;
+                taskForce.Position = startingPlanet.Position;
+                forceList.Add(taskForce);
             }
         }
     }

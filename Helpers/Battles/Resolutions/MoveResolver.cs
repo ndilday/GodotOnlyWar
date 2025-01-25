@@ -6,7 +6,7 @@ namespace OnlyWar.Helpers.Battles.Resolutions
     public class MoveResolver : IResolver
     {
         public delegate void RetreatHandler(BattleSoldier battleSoldier);
-        event RetreatHandler OnRetreat;
+        public event RetreatHandler OnRetreat;
 
         public ConcurrentBag<MoveResolution> MoveQueue { get; private set; }
 

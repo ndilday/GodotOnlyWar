@@ -1,11 +1,7 @@
 ﻿using OnlyWar.Helpers.Battles;
 using OnlyWar.Helpers.Battles.Placers;
-using OnlyWar.Models.Squads;
-using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 
 namespace OnlyWar.Models.Missions
 {
@@ -25,6 +21,13 @@ namespace OnlyWar.Models.Missions
             var squadPostionMap = placer.PlaceSquads(playerForce, opFor);
 
             // run the battle
+            BattleTurnResolver resolver = new BattleTurnResolver(bgm, playerForce, opFor, context.Region.Planet, true);
+            bool battleDone = false;
+            resolver.OnBattleComplete += (sender, e) => { battleDone = true; };
+            while(!battleDone)
+            {
+                resolver.ProcessNextTurn();
+            }
 
             returnStep.ExecuteMissionStep(context, marginOfSuccess, returnStep);
         }
