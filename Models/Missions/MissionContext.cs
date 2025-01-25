@@ -7,7 +7,7 @@ namespace OnlyWar.Models.Missions
     public class MissionContext
     {
         public Region Region { get; }
-        public Squad Squad { get; }
+        public List<Squad> PlayerSquads { get; }
         public ushort DaysElapsed { get; set; }
         public List<Squad> OpposingForces { get; set; }
     }

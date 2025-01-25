@@ -53,7 +53,7 @@ namespace OnlyWar.Models.Missions.Recon
                 context.OpposingForces.Add(squad);
             }
 
-            float margin = _missionTest.RunMissionTest(context.Squad);
+            float margin = _missionTest.RunMissionTest(context.PlayerSquads);
             if (margin > 0.0f)
             {
                 StepIfSuccess.ExecuteMissionStep(context, margin, returnStep);

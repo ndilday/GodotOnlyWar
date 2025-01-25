@@ -3,6 +3,7 @@ using OnlyWar.Helpers;
 using OnlyWar.Models.Soldiers;
 using OnlyWar.Models.Squads;
 using System;
+using System.Collections.Generic;
 using System.Linq;
 
 namespace OnlyWar.Models.Missions
@@ -11,7 +12,7 @@ namespace OnlyWar.Models.Missions
     {
         public BaseSkill SkillUsed { get; }
         // RunMissionTest returns the number of sigmas the squad succeeded or failed by
-        public float RunMissionTest(Squad squad);
+        public float RunMissionTest(List<Squad> squads);
     }
 
     public static class GaussianMissionTestCalculator
@@ -99,10 +100,10 @@ namespace OnlyWar.Models.Missions
             _difficulty = difficulty;
         }
 
-        public virtual float RunMissionTest(Squad squad)
+        public virtual float RunMissionTest(List<Squad> squads)
         {
             // find soldier in squad with highest skill in SkillUsed
-            ISoldier bestSoldier = squad.Members
+            ISoldier bestSoldier = squads.SelectMany(s => s.Members)
                 .OrderByDescending(soldier => soldier.GetTotalSkillValue(SkillUsed))
                 .FirstOrDefault();
             return RunTestInternal(bestSoldier);
@@ -136,16 +137,16 @@ namespace OnlyWar.Models.Missions
         {
         }
 
-        public override float RunMissionTest(Squad squad)
+        public override float RunMissionTest(List<Squad> squads)
         {
-            if (squad.SquadLeader == null)
+            if(!squads.Any(s => s.SquadLeader != null))
             {
-                ISoldier bestSoldier = squad.Members
+                return base.RunMissionTest(squads);
+            }
+            ISoldier bestLeader = squads.Select(s => s.SquadLeader)
                 .OrderByDescending(soldier => soldier.GetTotalSkillValue(SkillUsed))
                 .FirstOrDefault();
-                return RunTestInternal(bestSoldier);
-            }
-            return RunTestInternal(squad.SquadLeader);
+            return RunTestInternal(bestLeader);
         }
     }
 
@@ -158,9 +159,9 @@ namespace OnlyWar.Models.Missions
             SkillUsed = skill;
             _difficulty = difficulty;
         }
-        public float RunMissionTest(Squad squad)
+        public float RunMissionTest(List<Squad> squads)
         {
-            float totalSkill = squad.Members.Average(soldier => soldier.GetTotalSkillValue(SkillUsed));
+            float totalSkill = squads.SelectMany(s => s.Members).Average(soldier => soldier.GetTotalSkillValue(SkillUsed));
             float advantage = (totalSkill - _difficulty) / 5.0f;
             float probMargin = GaussianMissionTestCalculator.DetermineMarginOfSuccess(advantage) + 1;
             float zMargin = 0;

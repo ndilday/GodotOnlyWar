@@ -10,7 +10,7 @@ namespace OnlyWar.Helpers.Battles.Resolutions
 
         public ConcurrentBag<MoveResolution> MoveQueue { get; private set; }
 
-        public MoveResolver()
+        public MoveResolver(bool isVerbose)
         {
             MoveQueue = [];
         }

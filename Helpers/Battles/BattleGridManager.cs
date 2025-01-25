@@ -72,7 +72,18 @@ namespace OnlyWar.Helpers.Battles
             _grid.OccupyCells(newLocation, soldier.Soldier.Id);
             _soldierPositionsMap[soldier.Soldier.Id] = newLocation;
         }
-    
+
+        public void RemoveSoldier(int soldierId)
+        {
+            if (_soldiers.ContainsKey(soldierId))
+            {
+                _grid.FreeCells(_soldierPositionsMap[soldierId]);
+                _soldiers.Remove(soldierId);
+                _soldierPositionsMap.Remove(soldierId);
+                _soldierSideMap.Remove(soldierId);
+            }
+        }
+
         public bool IsAdjacentToEnemy(int soldierId)
         {
             return false;
@@ -164,6 +175,11 @@ namespace OnlyWar.Helpers.Battles
         public void ReserveSpace(Tuple<int, int> location)
         {
             _grid.ReserveCell(location);
+        }
+
+        public void ClearReservations()
+        {
+            _grid.ClearReservedCells();
         }
 
         public bool IsSpaceAvailable(Tuple<int, int> location)

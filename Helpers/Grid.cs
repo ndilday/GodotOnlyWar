@@ -79,6 +79,11 @@ namespace OnlyWar.Helpers
         {
             _reservedCells.Remove(cell);
         }
+
+        public void ClearReservedCells()
+        {
+            _reservedCells.Clear();
+        }
     }
 
 }

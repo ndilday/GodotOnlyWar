@@ -20,7 +20,7 @@ namespace OnlyWar.Models.Missions
             // set up Ambush battle with OpFor attacker and context.Squad defender
             BattleGridManager bgm = new BattleGridManager();
             AmbushPlacer placer = new AmbushPlacer(bgm, range);
-            List<BattleSquad> playerForce = new List<BattleSquad> { new BattleSquad(true, context.Squad) };
+            List<BattleSquad> playerForce = context.PlayerSquads.Select(s => new BattleSquad(false, s)).ToList();
             List<BattleSquad> opFor = context.OpposingForces.Select(s => new BattleSquad(false, s)).ToList();
             var squadPostionMap = placer.PlaceSquads(playerForce, opFor);
 
