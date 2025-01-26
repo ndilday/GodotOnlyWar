@@ -4,7 +4,7 @@ using System.Collections.Concurrent;
 
 namespace OnlyWar.Helpers.Battles.Actions
 {
-    class AimAction : IAction
+    public class AimAction : IAction
     {
         private readonly BattleSoldier _soldier;
         private readonly BattleSoldier _target;

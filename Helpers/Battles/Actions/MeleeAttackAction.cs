@@ -1,5 +1,4 @@
-﻿using System;
-using System.Collections.Concurrent;
+﻿using System.Collections.Concurrent;
 
 using OnlyWar.Helpers.Battles.Resolutions;
 using OnlyWar.Models.Equippables;

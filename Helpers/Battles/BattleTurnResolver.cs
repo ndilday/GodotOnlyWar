@@ -28,8 +28,9 @@ namespace OnlyWar.Helpers.Battles
         Dictionary<int, BattleSquad> _soldierBattleSquadMap = new Dictionary<int, BattleSquad>();
         Dictionary<int, BattleSoldier> _casualtyMap;
         bool _isVerbose;
+        BattleHistory _battleHistory;
 
-        public EventHandler OnBattleComplete;
+        public event EventHandler<BattleHistory> OnBattleComplete;
 
         public BattleTurnResolver(BattleGridManager gridManager, IEnumerable<BattleSquad> playerForce, IEnumerable<BattleSquad> opFor, Planet planet, bool isVerbose)
         {
@@ -46,8 +47,11 @@ namespace OnlyWar.Helpers.Battles
             _moveResolver = new MoveResolver(isVerbose);
             _moveResolver.OnRetreat += MoveResolver_OnRetreat;
             _casualtyMap = new Dictionary<int, BattleSoldier>();
+            List<Squad> playerSquadsHistory = new List<Squad>();
+            List<Squad> opposingSquadsHistory = new List<Squad>();
             foreach (BattleSquad squad in _playerBattleSquads.Values)
             {
+                playerSquadsHistory.Add(squad.Squad.DeepCopy());
                 foreach (BattleSoldier soldier in squad.Soldiers)
                 {
                     _soldierBattleSquadMap[soldier.Soldier.Id] = squad;
@@ -55,11 +59,13 @@ namespace OnlyWar.Helpers.Battles
             }
             foreach(BattleSquad squad in _opposingBattleSquads.Values)
             {
+                opposingSquadsHistory.Add(squad.Squad.DeepCopy());
                 foreach (BattleSoldier soldier in squad.Soldiers)
                 {
                     _soldierBattleSquadMap[soldier.Soldier.Id] = squad;
                 }
             }
+            _battleHistory = new BattleHistory(playerSquadsHistory, opposingSquadsHistory);
         }
 
         private void WoundResolver_OnSoldierDeath(BattleSoldier casualty, BattleSoldier inflicter, WeaponTemplate weapon)
@@ -104,6 +110,8 @@ namespace OnlyWar.Helpers.Battles
         public void ProcessNextTurn()
         {
             _turnNumber++;
+            BattleTurn turn = new BattleTurn(_turnNumber);
+            _battleHistory.Turns.Add(turn);
             _grid.ClearReservations();
             _casualtyMap.Clear();
             Log(false, "Turn " + _turnNumber.ToString());
@@ -119,22 +127,21 @@ namespace OnlyWar.Helpers.Battles
                 log.TryDequeue(out string line);
                 Log(false, line);
             }
-
-            HandleShootingAndMoving(shootSegmentActions, moveSegmentActions);
+            HandleShootingAndMoving(shootSegmentActions, moveSegmentActions, turn);
             while (!log.IsEmpty)
             {
                 log.TryDequeue(out string line);
                 Log(false, line);
             }
 
-            HandleMelee(meleeSegmentActions);
+            HandleMelee(meleeSegmentActions, turn);
             while (!log.IsEmpty)
             {
                 log.TryDequeue(out string line);
                 Log(false, line);
             }
 
-            ProcessWounds();
+            ProcessWounds(turn);
             CleanupAtEndOfTurn();
 
             if (_playerBattleSquads.Count() == 0 || _opposingBattleSquads.Count() == 0)
@@ -192,7 +199,8 @@ namespace OnlyWar.Helpers.Battles
         }
 
         private void HandleShootingAndMoving(ConcurrentBag<IAction> shootActions,
-                                    ConcurrentBag<IAction> moveActions)
+                            ConcurrentBag<IAction> moveActions,
+                            BattleTurn turn)
         {
             // EXECUTE
             // once the squads have all finished planning actions, we process the execution logic. 
@@ -207,26 +215,66 @@ namespace OnlyWar.Helpers.Battles
             foreach (IAction action in shootActions)
             {
                 action.Execute();
+                switch (action)
+                {
+                    case AimAction aim:
+                        turn.AimActions.Add(aim);
+                        break;
+                    case ShootAction shoot:
+                        turn.ShootActions.Add(shoot);
+                        break;
+                    case ReadyRangedWeaponAction ready:
+                        turn.ReadyRangedWeaponActions.Add(ready);
+                        break;
+                    case ReloadRangedWeaponAction reload:
+                        turn.ReloadActions.Add(reload);
+                        break;
+                }
             }
             foreach (IAction action in moveActions)
             {
                 action.Execute();
+                switch (action)
+                {
+                    case MoveAction move:
+                        turn.MoveActions.Add(move);
+                        break;
+                }
             }
             _moveResolver.Resolve();
+            foreach (MoveResolution resolution in _moveResolver.MoveQueue)
+            {
+                turn.MoveResolutions.Add(resolution);
+            }
+            _moveResolver.MoveQueue.Clear();
         }
 
-        private void HandleMelee(ConcurrentBag<IAction> meleeActions)
+        private void HandleMelee(ConcurrentBag<IAction> meleeActions, BattleTurn turn)
         {
             foreach (IAction action in meleeActions)
             {
                 action.Execute();
+                switch (action)
+                {
+                    case MeleeAttackAction melee:
+                        turn.MeleeAttackActions.Add(melee);
+                        break;
+                    case ReadyMeleeWeaponAction ready:
+                        turn.ReadyMeleeWeaponActions.Add(ready);
+                        break;
+                }
             }
         }
 
-        private void ProcessWounds()
+        private void ProcessWounds(BattleTurn turn)
         {
             _woundResolver.Resolve();
             Log(false, _woundResolver.ResolutionLog);
+            foreach (WoundResolution resolution in _woundResolver.WoundQueue)
+            {
+                turn.WoundResolutions.Add(resolution);
+            }
+            _woundResolver.WoundQueue.Clear();
         }
 
         private void CleanupAtEndOfTurn()

@@ -1,13 +1,8 @@
-﻿using System;
-using System.Collections.Concurrent;
-
-using OnlyWar.Helpers.Battles.Resolutions;
-using OnlyWar.Models.Equippables;
-using OnlyWar.Models.Soldiers;
+﻿using OnlyWar.Models.Equippables;
 
 namespace OnlyWar.Helpers.Battles.Actions
 {
-    class ReloadRangedWeaponAction : IAction
+    public class ReloadRangedWeaponAction : IAction
     {
         private readonly BattleSoldier _soldier;
         private readonly RangedWeapon _weapon;

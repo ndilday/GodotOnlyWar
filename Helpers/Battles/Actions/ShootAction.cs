@@ -7,7 +7,7 @@ using OnlyWar.Models.Soldiers;
 
 namespace OnlyWar.Helpers.Battles.Actions
 {
-    class ShootAction : IAction
+    public class ShootAction : IAction
     {
         private readonly BattleSoldier _soldier;
         private readonly RangedWeapon _weapon;

@@ -3,7 +3,7 @@ using System;
 
 namespace OnlyWar.Helpers.Battles.Actions
 {
-    class ReadyMeleeWeaponAction : IAction
+    public class ReadyMeleeWeaponAction : IAction
     {
         private readonly BattleSoldier _soldier;
         private readonly MeleeWeapon _weapon;

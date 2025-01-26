@@ -1,6 +1,5 @@
 ﻿using System;
 using System.Collections.Concurrent;
-using System.Collections.Generic;
 using OnlyWar.Helpers.Battles.Resolutions;
 
 namespace OnlyWar.Helpers.Battles.Actions
