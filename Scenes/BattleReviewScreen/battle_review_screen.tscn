@@ -1,0 +1,19 @@
+[gd_scene load_steps=4 format=3 uid="uid://dm1xh48xjd3a2"]
+
+[ext_resource type="PackedScene" uid="uid://cadpqoqxtyo0p" path="res://Scenes/Dialog.tscn" id="1_ppieq"]
+[ext_resource type="Script" path="res://Scenes/BattleReviewScreen/BattleReviewController.cs" id="2_5ub1w"]
+[ext_resource type="Script" path="res://Scenes/BattleReviewScreen/BattleReviewView.cs" id="3_vig3w"]
+
+[node name="DialogController" instance=ExtResource("1_ppieq")]
+script = ExtResource("2_5ub1w")
+
+[node name="DialogView" parent="." index="0"]
+script = ExtResource("3_vig3w")
+
+[node name="Panel" type="Panel" parent="." index="1"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2

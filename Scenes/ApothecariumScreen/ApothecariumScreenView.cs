@@ -2,7 +2,7 @@ using Godot;
 using System;
 using System.Collections.Generic;
 
-public partial class ApothecariumScreenView : Control
+public partial class ApothecariumScreenView : DialogView
 {
 	private RichTextLabel _geneseedReportRichText;
 	private RichTextLabel _injuryDetailRichText;
@@ -15,8 +15,7 @@ public partial class ApothecariumScreenView : Control
 
 	public override void _Ready()
 	{
-		_closeButton = GetNode<Button>("CloseButton");
-		_closeButton.Pressed += () => CloseButtonPressed?.Invoke(this, EventArgs.Empty);
+		base._Ready();
 		_geneseedReportRichText = GetNode<RichTextLabel>("GeneseedPanel/RichTextLabel");
 		_injuryDetailRichText = GetNode<RichTextLabel>("InjuryReportPanel/RichTextLabel");
 		_squadVBox = GetNode<VBoxContainer>("InjuryReportPanel/ScrollContainer/VBoxContainer");

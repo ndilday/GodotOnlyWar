@@ -6,11 +6,9 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 
-public partial class ApothecariumScreenController : Control
+public partial class ApothecariumScreenController : DialogController
 {
-	public event EventHandler CloseButtonPressed;
-
-	ApothecariumScreenView _view;
+	ApothecariumScreenView _apocView;
 	private const string GENESEED_FORMAT = @"Sir! Currently, we have {0} Geneseed stored.
 Within the next year, we anticipate {1} implanted Progenoid Glands will mature.";
 	private const string SQUAD_FORMAT = @"{0} has {1} wounded members.
@@ -19,18 +17,17 @@ It will require approximately {4} weeks before all marines in the squad (other t
 
 	public override void _Ready()
 	{
-		_view = GetNode<ApothecariumScreenView>("ApothecariumScreenView");
-		_view.PopulateGeneseedReport(GenerateGeneseedReport());
-		_view.PopulateSquadList(GetSquadsWithInjuredSoldiers());
-		_view.SquadButtonPressed += OnSquadButtonPressed;
-		_view.CloseButtonPressed += (object sender, EventArgs e) => CloseButtonPressed?.Invoke(this, e);
+		_apocView = GetNode<ApothecariumScreenView>("ApothecariumScreenView");
+		_apocView.PopulateGeneseedReport(GenerateGeneseedReport());
+		_apocView.PopulateSquadList(GetSquadsWithInjuredSoldiers());
+		_apocView.SquadButtonPressed += OnSquadButtonPressed;
 	}
 
 	public override void _ExitTree()
 	{
-		if (_view != null)
+		if (_apocView != null)
 		{
-			_view.SquadButtonPressed -= OnSquadButtonPressed;
+			_apocView.SquadButtonPressed -= OnSquadButtonPressed;
 		}
 	}
 
@@ -76,7 +73,7 @@ It will require approximately {4} weeks before all marines in the squad (other t
 	private void OnSquadButtonPressed(object sender, int squadId)
 	{
 		Squad squad = GameDataSingleton.Instance.Sector.PlayerForce.Army.OrderOfBattle.GetAllSquads().First(s => s.Id == squadId);
-		_view.PopulateInjuryDetail(GetSquadInjuryDetail(squad));
+		_apocView.PopulateInjuryDetail(GetSquadInjuryDetail(squad));
 	}
 
 	private string GetSquadInjuryDetail(Squad squad)
