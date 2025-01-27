@@ -1,8 +1,8 @@
 [gd_scene load_steps=4 format=3 uid="uid://dm1xh48xjd3a2"]
 
 [ext_resource type="PackedScene" uid="uid://cadpqoqxtyo0p" path="res://Scenes/Dialog.tscn" id="1_ppieq"]
-[ext_resource type="Script" path="res://Scenes/BattleReviewScreen/BattleReviewController.cs" id="2_5ub1w"]
-[ext_resource type="Script" path="res://Scenes/BattleReviewScreen/BattleReviewView.cs" id="3_vig3w"]
+[ext_resource type="Script" uid="uid://c5wewkuimf78a" path="res://Scenes/BattleReviewScreen/BattleReviewController.cs" id="2_5ub1w"]
+[ext_resource type="Script" uid="uid://nbfp310chtd7" path="res://Scenes/BattleReviewScreen/BattleReviewView.cs" id="3_vig3w"]
 
 [node name="DialogController" instance=ExtResource("1_ppieq")]
 script = ExtResource("2_5ub1w")
@@ -10,10 +10,89 @@ script = ExtResource("2_5ub1w")
 [node name="DialogView" parent="." index="0"]
 script = ExtResource("3_vig3w")
 
-[node name="Panel" type="Panel" parent="." index="1"]
+[node name="Panel" type="Panel" parent="DialogView" index="1"]
 layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
 anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
+
+[node name="SubViewportContainer" type="SubViewportContainer" parent="DialogView/Panel" index="0"]
+layout_mode = 1
+anchors_preset = -1
+anchor_right = 0.66
+anchor_bottom = 1.0
+offset_left = 10.0
+offset_top = 10.0
+offset_right = -5.0
+offset_bottom = -10.0
+grow_vertical = 2
+stretch = true
+
+[node name="SubViewport" type="SubViewport" parent="DialogView/Panel/SubViewportContainer" index="0"]
+disable_3d = true
+handle_input_locally = false
+size = Vector2i(660, 748)
+render_target_update_mode = 4
+
+[node name="Camera2D" type="Camera2D" parent="DialogView/Panel/SubViewportContainer/SubViewport" index="0"]
+anchor_mode = 0
+
+[node name="Panel" type="Panel" parent="DialogView/Panel" index="1"]
+layout_mode = 1
+anchors_preset = -1
+anchor_left = 0.66
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = 5.0
+offset_right = -10.0
+offset_bottom = -10.0
+grow_horizontal = 0
+grow_vertical = 2
+
+[node name="RichTextLabel" type="RichTextLabel" parent="DialogView/Panel/Panel" index="0"]
+layout_mode = 1
+anchors_preset = -1
+anchor_right = 1.0
+offset_top = 10.0
+offset_bottom = 50.0
+text = "Battle Report"
+horizontal_alignment = 1
+vertical_alignment = 1
+
+[node name="ScrollContainer" type="ScrollContainer" parent="DialogView/Panel/Panel" index="1"]
+layout_mode = 1
+anchors_preset = -1
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = 5.0
+offset_top = 50.0
+offset_right = -5.0
+offset_bottom = -45.0
+
+[node name="RichTextLabel" type="RichTextLabel" parent="DialogView/Panel/Panel/ScrollContainer" index="0"]
+layout_mode = 2
+
+[node name="Button" type="Button" parent="DialogView/Panel/Panel" index="2"]
+layout_mode = 1
+anchors_preset = -1
+anchor_top = 1.0
+anchor_right = 0.5
+anchor_bottom = 1.0
+offset_left = 5.0
+offset_top = -40.0
+offset_right = -5.0
+text = "Previous Turn"
+
+[node name="Button2" type="Button" parent="DialogView/Panel/Panel" index="3"]
+layout_mode = 1
+anchors_preset = -1
+anchor_left = 0.5
+anchor_top = 1.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = 5.0
+offset_top = -40.0
+offset_right = -5.0
+text = "Next Turn"
