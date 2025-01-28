@@ -51,7 +51,7 @@ offset_bottom = -10.0
 grow_horizontal = 0
 grow_vertical = 2
 
-[node name="RichTextLabel" type="RichTextLabel" parent="DialogView/DrawPanel/TurnReportPanel" index="0"]
+[node name="TurnReportLabel" type="RichTextLabel" parent="DialogView/DrawPanel/TurnReportPanel" index="0"]
 layout_mode = 1
 anchors_preset = -1
 anchor_right = 1.0
