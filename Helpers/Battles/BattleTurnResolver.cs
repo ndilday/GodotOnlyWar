@@ -65,7 +65,7 @@ namespace OnlyWar.Helpers.Battles
                     _soldierBattleSquadMap[soldier.Soldier.Id] = squad;
                 }
             }
-            _battleHistory = new BattleHistory(playerSquadsHistory, opposingSquadsHistory);
+            _battleHistory = new BattleHistory(playerSquadsHistory, opposingSquadsHistory, gridManager.GetSoldierPositions());
         }
 
         private void WoundResolver_OnSoldierDeath(BattleSoldier casualty, BattleSoldier inflicter, WeaponTemplate weapon)

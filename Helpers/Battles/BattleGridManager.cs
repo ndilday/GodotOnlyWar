@@ -140,9 +140,14 @@ namespace OnlyWar.Helpers.Battles
             return distanceSq;
         }
 
-        public IList<Tuple<int, int>> GetSoldierPositions(int soldierId)
+        public IList<Tuple<int, int>> GetSoldierPosition(int soldierId)
         {
             return _grid.GetObjectCells(soldierId);
+        }
+
+        public IReadOnlyDictionary<int, IList<Tuple<int, int>>> GetSoldierPositions()
+        {
+            return _soldierPositionsMap;
         }
 
         public Tuple<int, int> GetClosestOpenAdjacency(Tuple<int, int> startingPoint, Tuple<int, int> target)

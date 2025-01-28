@@ -289,7 +289,7 @@ namespace OnlyWar.Helpers.Battles
             }
             else
             {
-                Tuple<int, int> enemyPosition = _grid.GetSoldierPositions(closestEnemyId)[0];
+                Tuple<int, int> enemyPosition = _grid.GetSoldierPosition(closestEnemyId)[0];
                 Tuple<int, int> line = new Tuple<int, int>((short)(enemyPosition.Item1 - soldier.TopLeft.Item1), 
                                                                    (short)(enemyPosition.Item2 - soldier.TopLeft.Item2));
                 // soldier can't get there in one move, advance as far as possible
@@ -347,7 +347,7 @@ namespace OnlyWar.Helpers.Battles
                 // TODO: probably by letting the one with the lower id have it, and the higher id has to 
                 float distance = _grid.GetNearestEnemy(soldier.Soldier.Id, out int closestEnemyId);
                 float moveSpeed = soldier.GetMoveSpeed();
-                Tuple<int, int> enemyPosition = _grid.GetSoldierPositions(closestEnemyId)[0];
+                Tuple<int, int> enemyPosition = _grid.GetSoldierPosition(closestEnemyId)[0];
                 if (distance > moveSpeed + 1)
                 {
                     Tuple<int, int> moveVector = new Tuple<int, int>(enemyPosition.Item1 - soldier.TopLeft.Item1, enemyPosition.Item2 - soldier.TopLeft.Item2);
@@ -372,7 +372,7 @@ namespace OnlyWar.Helpers.Battles
                         // PROTIP: SQRT is a relatively expensive operation, so sort by distance squares when it's about comparative, not absolute, distance
                         var map = oppSquad.Soldiers
                             .Where(s => s.Soldier.Id != closestEnemyId)
-                            .Select(s => new Tuple<int, Tuple<int, int>>(s.Soldier.Id, _grid.GetSoldierPositions(s.Soldier.Id)[0]))
+                            .Select(s => new Tuple<int, Tuple<int, int>>(s.Soldier.Id, _grid.GetSoldierPosition(s.Soldier.Id)[0]))
                             .Select(t => new Tuple<int, Tuple<int, int>, Tuple<int, int>>(t.Item1, t.Item2, new Tuple<int, int>(t.Item2.Item1 - soldier.TopLeft.Item1, t.Item2.Item2 - soldier.TopLeft.Item2)))
                             .Select(u => new Tuple<int, Tuple<int, int>, int>(u.Item1, u.Item2, (u.Item3.Item1 * u.Item3.Item1 + u.Item3.Item2 * u.Item3.Item2)))
                             .OrderBy(u => u.Item3);

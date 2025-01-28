@@ -1,7 +1,7 @@
 [gd_scene load_steps=5 format=3 uid="uid://hbcnhfu1vqdb"]
 
 [ext_resource type="Script" uid="uid://cs7ejn2kgabxr" path="res://Scenes/MainGameScreen/MainGameScene.cs" id="1_g3hiw"]
-[ext_resource type="PackedScene" uid="uid://ck5vq6a7t604p" path="res://Scenes/MainGameScreen/SectorMap.tscn" id="2_lvld5"]
+[ext_resource type="PackedScene" uid="uid://ck5vq6a7t604p" path="res://Scenes/SectorMap/SectorMap.tscn" id="2_lvld5"]
 [ext_resource type="PackedScene" uid="uid://ce35p0pqsk045" path="res://Scenes/MainGameScreen/TopMenu.tscn" id="3_7t35a"]
 [ext_resource type="PackedScene" uid="uid://ctrhbg0anf5cx" path="res://Scenes/MainGameScreen/BottomMenu.tscn" id="4_1ccxp"]
 

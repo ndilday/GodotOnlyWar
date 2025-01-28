@@ -11,10 +11,10 @@ public partial class DialogController : Control
 		{
 			if(child is DialogView)
 			{
-                DialogView view = (DialogView)child;
-                view.CloseButtonPressed += (object sender, EventArgs e) => CloseButtonPressed?.Invoke(this, e);
+				DialogView view = (DialogView)child;
+				view.CloseButtonPressed += (object sender, EventArgs e) => CloseButtonPressed?.Invoke(this, e);
 				break;
-            }
+			}
 		}
 		
 	}

@@ -111,7 +111,7 @@ public partial class SectorMap : Node2D
 			int index = GridPositionToIndex(gridPosition);
 			HasPlanet[index] = true;
             var color = kvp.Value.ControllingFaction.Color;
-            ClickableSprite2D planet = DrawTexture(starTexture, starTextureScale, gridPosition, new Godot.Color(color.R, color.G, color.B, color.A));
+            ClickableSprite2D planet = DrawTexture(starTexture, starTextureScale, gridPosition, new Color(color.R, color.G, color.B, color.A));
             planet.Pressed += (object sender, EventArgs e) => PlanetClicked.Invoke(planet, kvp.Key);
 		}
 	}
