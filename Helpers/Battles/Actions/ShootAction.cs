@@ -37,7 +37,6 @@ namespace OnlyWar.Helpers.Battles.Actions
             float roll = 10.5f + (3.0f * (float)RNG.NextGaussianDouble());
             float total = skill + modifier - roll;
             _soldier.Aim = null;
-            _log.Enqueue($"{_soldier.Soldier.Name} fires a {_weapon.Template.Name} at {_target.Soldier.Name}");
             if(total > 0)
             {
                 _log.Enqueue("<color=red>" + _soldier.Soldier.Name + " hits " + _target.Soldier.Name + " " + Math.Min((int)(total/_weapon.Template.Recoil) + 1, _numberOfShots) + " times</color>");
@@ -90,6 +89,11 @@ namespace OnlyWar.Helpers.Battles.Actions
                     _resultList.Add(new WoundResolution(_soldier, _weapon.Template, _target, totalDamage, hitLocation));
                 }
             }
+        }
+
+        public string Description()
+        {
+            return $"{_soldier.Soldier.Name} fires a {_weapon.Template.Name} {_numberOfShots} times at {_target.Soldier.Name}";
         }
     }
 }

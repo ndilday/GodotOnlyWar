@@ -16,15 +16,15 @@ namespace OnlyWar.Helpers.Battles.Actions
         public void Execute()
         {
             int handsFree = _soldier.HandsFree;
-            if(_weapon.Template.Location == EquipLocation.TwoHand && handsFree < 2)
+            if (_weapon.Template.Location == EquipLocation.TwoHand && handsFree < 2)
             {
                 // unequip any equipped weapons
                 _soldier.EquippedRangedWeapons.Clear();
                 _soldier.EquippedMeleeWeapons.Clear();
             }
-            if(_weapon.Template.Location == EquipLocation.OneHand && handsFree < 1)
+            if (_weapon.Template.Location == EquipLocation.OneHand && handsFree < 1)
             {
-                if(_soldier.EquippedRangedWeapons.Count > 0)
+                if (_soldier.EquippedRangedWeapons.Count > 0)
                 {
                     _soldier.EquippedRangedWeapons.Clear();
                 }
@@ -34,6 +34,11 @@ namespace OnlyWar.Helpers.Battles.Actions
                 }
             }
             _soldier.EquippedMeleeWeapons.Add(_weapon);
+        }
+
+        public string Description()
+        {
+            return $"{_soldier.Soldier.Name} readies {_weapon.Template.Name}";
         }
     }
 }

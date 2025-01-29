@@ -93,5 +93,10 @@ namespace OnlyWar.Helpers.Battles.Actions
                 }
             }
         }
+
+        public string Description()
+        {
+            return "";
+        }
     }
 }

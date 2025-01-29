@@ -36,5 +36,10 @@ namespace OnlyWar.Helpers.Battles.Actions
                 _soldier.ReloadingPhase--;
             }
         }
+
+        public string Description()
+        {
+            return $"{_soldier.Soldier.Name} reloads {_weapon.Template.Name}";
+        }
     }
 }

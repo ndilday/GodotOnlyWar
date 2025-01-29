@@ -41,5 +41,10 @@ namespace OnlyWar.Helpers.Battles.Actions
             // equip the new weapon
             _soldier.EquippedRangedWeapons.Add(_weapon);
         }
+
+        public string Description()
+        {
+            return $"{_soldier.Soldier.Name} readies {_weapon.Template.Name}";
+        }
     }
 }

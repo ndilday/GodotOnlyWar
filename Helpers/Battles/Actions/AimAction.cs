@@ -24,17 +24,26 @@ namespace OnlyWar.Helpers.Battles.Actions
             if(_soldier.Aim?.Item1 != _target)
             {
                 // this is a new target
-                _log.Enqueue(_soldier.Soldier.Name + " aims");
                 _soldier.Aim = new Tuple<BattleSoldier, RangedWeapon, int>(_target, _weapon, 0);
             }
             else
             {
                 // containing aim, increment the bonus
-                _log.Enqueue(_soldier.Soldier.Name + " continues aiming");
                 int curAim = _soldier.Aim.Item3;
                 _soldier.Aim = new Tuple<BattleSoldier, RangedWeapon, int>(_target, _weapon, curAim + 1);
             }
             _soldier.TurnsAiming++;
         }
-    }
+
+        public string Description()
+        {
+            if(_soldier.Aim?.Item1 == _target && _soldier.Aim.Item3 > 0)
+            {
+                return _soldier.Soldier.Name + " continues aiming at " + _target.Soldier.Name;
+            }
+            else
+            {
+                return _soldier.Soldier.Name + " aims at " + _target.Soldier.Name;
+            }
+        }
 }
