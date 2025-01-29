@@ -39,7 +39,7 @@ render_target_update_mode = 4
 [node name="Camera2D" type="Camera2D" parent="DialogView/DrawPanel/SubViewportContainer/SubViewport" index="0"]
 anchor_mode = 0
 
-[node name="TurnReportPanel" type="Panel" parent="DialogView/DrawPanel" index="1"]
+[node name="TurnReportPanel" type="Panel" parent="DialogView" index="2"]
 layout_mode = 1
 anchors_preset = -1
 anchor_left = 0.66
@@ -51,7 +51,7 @@ offset_bottom = -10.0
 grow_horizontal = 0
 grow_vertical = 2
 
-[node name="TurnReportLabel" type="RichTextLabel" parent="DialogView/DrawPanel/TurnReportPanel" index="0"]
+[node name="TurnReportLabel" type="RichTextLabel" parent="DialogView/TurnReportPanel" index="0"]
 layout_mode = 1
 anchors_preset = -1
 anchor_right = 1.0
@@ -61,7 +61,7 @@ text = "Battle Report"
 horizontal_alignment = 1
 vertical_alignment = 1
 
-[node name="ScrollContainer" type="ScrollContainer" parent="DialogView/DrawPanel/TurnReportPanel" index="1"]
+[node name="ScrollContainer" type="ScrollContainer" parent="DialogView/TurnReportPanel" index="1"]
 layout_mode = 1
 anchors_preset = -1
 anchor_right = 1.0
@@ -71,10 +71,10 @@ offset_top = 50.0
 offset_right = -5.0
 offset_bottom = -45.0
 
-[node name="TurnReportRichText" type="RichTextLabel" parent="DialogView/DrawPanel/TurnReportPanel/ScrollContainer" index="0"]
+[node name="TurnReportRichText" type="RichTextLabel" parent="DialogView/TurnReportPanel/ScrollContainer" index="0"]
 layout_mode = 2
 
-[node name="Button" type="Button" parent="DialogView/DrawPanel/TurnReportPanel" index="2"]
+[node name="PreviousTurnButton" type="Button" parent="DialogView/TurnReportPanel" index="2"]
 layout_mode = 1
 anchors_preset = -1
 anchor_top = 1.0
@@ -85,7 +85,7 @@ offset_top = -40.0
 offset_right = -5.0
 text = "Previous Turn"
 
-[node name="Button2" type="Button" parent="DialogView/DrawPanel/TurnReportPanel" index="3"]
+[node name="NextTurnButton" type="Button" parent="DialogView/TurnReportPanel" index="3"]
 layout_mode = 1
 anchors_preset = -1
 anchor_left = 0.5
@@ -96,3 +96,5 @@ offset_left = 5.0
 offset_top = -40.0
 offset_right = -5.0
 text = "Next Turn"
+
+[node name="SpriteHolder" type="Node" parent="." index="1"]

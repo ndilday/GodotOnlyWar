@@ -18,11 +18,14 @@ public partial class BattleReviewController : DialogController
 	private Vector2 _soldierTextureScale, _opForTextureScale;
 	private readonly Vector2I GRID_BORDER_SIZE = Vector2I.One;
 	private Vector2I _pixelsPerGrid;
+	private ushort _currentTurn;
 
 	public override void _Ready()
 	{
 		base._Ready();
 		_view = GetNode<BattleReviewView>("DialogView");
+		_view.PreviousTurnPressed += (object sender, EventArgs e) => OnPreviousTurn();
+		_view.NextTurnPressed += (object sender, EventArgs e) => OnNextTurn();
 		_pixelsPerGrid = new(GameDataSingleton.Instance.GameRulesData.BattleCellSize.Item1, GameDataSingleton.Instance.GameRulesData.BattleCellSize.Item2);
 		_soldierTexture = (Texture2D)GD.Load("res://Assets/helmet.png");
 		Vector2 floatingVector = new Vector2(_pixelsPerGrid.X, _pixelsPerGrid.Y);
@@ -34,17 +37,18 @@ public partial class BattleReviewController : DialogController
 
 	public void LoadNewHistory(BattleHistory history)
 	{
-		foreach(Node child in _spriteHolder.GetChildren())
-        {
+		_currentTurn = 0;
+		foreach (Node child in _spriteHolder.GetChildren())
+		{
 			_spriteHolder.RemoveChild(child);
-            child.QueueFree();
-        }
+			child.QueueFree();
+		}
 
-        _history = history;
+		_history = history;
 
 		_view.SetTurnReportLabel("Battle Review: Turn 0");
 		_view.SetTurnReportText("");
-        _view.EnableTurnButtons(false, true);
+		_view.EnableTurnButtons(false, true);
 
 		Vector2I topLeftOffset = GetTopLeftOfPositions(_history.StartingSoldierLocations.SelectMany(x => x.Value).ToList());
 		foreach(Squad squad in _history.PlayerSquads)
@@ -54,6 +58,33 @@ public partial class BattleReviewController : DialogController
 		foreach(Squad squad in _history.OpposingSquads)
 		{
 			DrawSquad(squad, _history.StartingSoldierLocations, topLeftOffset, _opForTexture, _opForTextureScale, squad.Faction.Color.ToGodotColor());
+		}
+	}
+
+	private void OnPreviousTurn()
+	{
+		if(_currentTurn < 2)
+		{
+			throw new InvalidOperationException("Cannot go back any further.");
+		}
+		int turn = _currentTurn - 1;
+		LoadNewHistory(_history);
+		IncrementToTurn(turn);
+	}
+
+	private void OnNextTurn()
+	{
+		IncrementToTurn(_currentTurn + 1);
+	}
+
+	private void IncrementToTurn(int turn)
+	{
+		_view.SetTurnReportLabel($"Battle Review: Turn {turn}");
+		_view.EnableTurnButtons(turn > 1, turn < _history.Turns.Count);
+		foreach (Node child in _spriteHolder.GetChildren())
+		{
+			_spriteHolder.RemoveChild(child);
+			child.QueueFree();
 		}
 	}
 
