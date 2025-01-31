@@ -22,7 +22,7 @@ namespace OnlyWar.Helpers.Battles.Actions
             _currentTopLeft = currentTopLeft;
         }
 
-        public void Execute()
+        public void Execute(BattleState state)
         {
             _resultList.Add(new MoveResolution(_soldier, _grid, _newTopLeft, _orientation));
             _soldier.TurnsRunning++;

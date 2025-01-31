@@ -13,7 +13,7 @@ namespace OnlyWar.Helpers.Battles.Actions
             _weapon = weapon;
         }
 
-        public void Execute()
+        public void Execute(BattleState state)
         {
             int handsFree = _soldier.HandsFree;
             if (_weapon.Template.Location == EquipLocation.TwoHand && handsFree < 2)

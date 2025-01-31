@@ -216,7 +216,12 @@ namespace OnlyWar.Helpers.Battles
                     Tuple<float, float> effectEstimate = EstimateHitAndDamage(soldier, soldier.Aim.Item1, soldier.Aim.Item2, range, soldier.Aim.Item2.Template.Accuracy + 3);
                     int shotsToFire = CalculateShotsToFire(soldier.Aim.Item2, effectEstimate.Item1, effectEstimate.Item2);
                     soldier.CurrentSpeed = 0;
-                    _shootActionBag.Add(new ShootAction(soldier, soldier.Aim.Item2, soldier.Aim.Item1, range, shotsToFire, false, _woundResolutionBag, _log));
+                    _shootActionBag.Add(new ShootAction(soldier.Soldier.Id, 
+                        soldier.Aim.Item1.Soldier.Id,
+                        soldier.Aim.Item2.Template.Id, 
+                        range,
+                        shotsToFire,
+                        false));
                 }
                 else
                 {
@@ -233,7 +238,12 @@ namespace OnlyWar.Helpers.Battles
                     {
                         int shotsToFire = CalculateShotsToFire(soldier.Aim.Item2, resultEstimate.Item1, resultEstimate.Item2);
                         soldier.CurrentSpeed = 0;
-                        _shootActionBag.Add(new ShootAction(soldier, soldier.Aim.Item2, soldier.Aim.Item1, range, shotsToFire, false, _woundResolutionBag, _log));
+                        _shootActionBag.Add(new ShootAction(soldier.Soldier.Id,
+                            soldier.Aim.Item1.Soldier.Id,
+                            soldier.Aim.Item2.Template.Id,
+                            range,
+                            shotsToFire,
+                            false));
                     }
                     else
                     {
@@ -427,7 +437,7 @@ namespace OnlyWar.Helpers.Battles
                 soldier.CurrentSpeed = moveSpeed;
                 _grid.ReserveSpace(newPos);
                 ushort orientation = CalculateOrientationFromVector(move);
-                _moveActionBag.Add(new MoveAction(soldier, _grid, newPos, orientation, _moveResolutionBag));
+                _moveActionBag.Add(new MoveAction(soldier, _grid, currentPosition, soldier.Orientation, newPos, orientation, _moveResolutionBag));
                 BattleSoldier target = oppSquad.Soldiers.Single(s => s.Soldier.Id == closestEnemyId);
                 _meleeActionBag.Add(new MeleeAttackAction(soldier, target, soldier.MeleeWeapons.Count == 0 ? _defaultMeleeWeapon : soldier.EquippedMeleeWeapons[0], distance >= 2, _woundResolutionBag, _log));
             }
@@ -457,8 +467,12 @@ namespace OnlyWar.Helpers.Battles
                 {
                     int shotsToFire = 
                         CalculateShotsToFire(weaponProfile.Item3, weaponProfile.Item1, weaponProfile.Item2);
-                    _shootActionBag.Add(new ShootAction(soldier, weaponProfile.Item3, target, range, 
-                                                        shotsToFire, isMoving, _woundResolutionBag, _log));
+                    _shootActionBag.Add(new ShootAction(soldier.Soldier.Id,
+                        target.Soldier.Id,
+                        weaponProfile.Item3.Template.Id, 
+                        range, 
+                        shotsToFire, 
+                        isMoving));
                 }
                 else if (!isMoving)
                 {
@@ -611,7 +625,7 @@ namespace OnlyWar.Helpers.Battles
             soldier.CurrentSpeed = moveSpeed;
             _grid.ReserveSpace(newLocation);
             ushort orientation = CalculateOrientationFromVector(line);
-            _moveActionBag.Add(new MoveAction(soldier, _grid, newLocation, orientation, _moveResolutionBag));
+            _moveActionBag.Add(new MoveAction(soldier, _grid, soldier.TopLeft, soldier.Orientation, newLocation, orientation, _moveResolutionBag));
         }
 
         private Tuple<int, int> CalculateMovementAlongLine(Tuple<int, int> line, float moveSpeed)

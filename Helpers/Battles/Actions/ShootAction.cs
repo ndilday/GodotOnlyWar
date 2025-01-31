@@ -1,6 +1,6 @@
 ﻿using System;
-using System.Collections.Concurrent;
-
+using System.Collections.Generic;
+using System.Linq;
 using OnlyWar.Helpers.Battles.Resolutions;
 using OnlyWar.Models.Equippables;
 using OnlyWar.Models.Soldiers;
@@ -9,91 +9,102 @@ namespace OnlyWar.Helpers.Battles.Actions
 {
     public class ShootAction : IAction
     {
-        private readonly BattleSoldier _soldier;
-        private readonly RangedWeapon _weapon;
-        private readonly BattleSoldier _target;
-        private readonly float _range;
-        private int _numberOfShots;
-        private readonly bool _useBulk;
-        private readonly ConcurrentBag<WoundResolution> _resultList;
-        private readonly ConcurrentQueue<string> _log;
+        public int ShooterId { get; }
+        public int TargetId { get; }
+        public int WeaponId { get; }
+        public float Range { get; }
+        public int NumberOfShots { get; }
+        public bool UseBulk { get; }
+        public List<WoundResolution> WoundResolutions { get; }
 
-        public ShootAction(BattleSoldier shooter, RangedWeapon weapon, BattleSoldier target, float range, int numberOfShots, bool useBulk, ConcurrentBag<WoundResolution> resultList, ConcurrentQueue<string> log)
+        public ShootAction(int shooterId, int targetId, int weaponId, float range, int numberOfShots, bool useBulk)
         {
-            _soldier = shooter;
-            _weapon = weapon;
-            _target = target;
-            _range = range;
-            _numberOfShots = numberOfShots;
-            _useBulk = useBulk;
-            _resultList = resultList;
-            _log = log;
+            ShooterId = shooterId;
+            TargetId = targetId;
+            WeaponId = weaponId;
+            Range = range;
+            NumberOfShots = numberOfShots;
+            UseBulk = useBulk;
+            WoundResolutions = new List<WoundResolution>();
         }
 
-        public void Execute()
+        public void Execute(BattleState state)
         {
-            float skill = _soldier.Soldier.GetTotalSkillValue(_weapon.Template.RelatedSkill);
-            float modifier = CalculateToHitModifiers(skill);
-            float roll = 10.5f + (3.0f * (float)RNG.NextGaussianDouble());
-            float total = skill + modifier - roll;
-            _soldier.Aim = null;
-            if(total > 0)
+            // we don't want to resolve hit locations during replays, 
+            // so we need to resolve them before calling Execute
+            if (WoundResolutions.Count == 0)
             {
-                _log.Enqueue("<color=red>" + _soldier.Soldier.Name + " hits " + _target.Soldier.Name + " " + Math.Min((int)(total/_weapon.Template.Recoil) + 1, _numberOfShots) + " times</color>");
-                // there were hits, determine how many
-                do
+                var shooter = state.GetSoldier(ShooterId);
+                var target = state.GetSoldier(TargetId);
+                var weapon = shooter.EquippedRangedWeapons.First(w => w.Template.Id == WeaponId);
+                var skill = shooter.Soldier.GetTotalSkillValue(weapon.Template.RelatedSkill);
+                var modifier = CalculateToHitModifiers(shooter, target, weapon, skill);
+                var roll = 10.5f + (3.0f * (float)RNG.NextGaussianDouble());
+                var total = skill + modifier - roll;
+                shooter.Aim = null;
+                if (total > 0)
                 {
-                    HandleHit();
-                    total -= _weapon.Template.Recoil;
-                    _numberOfShots--;
-                } while (total > 1 && _numberOfShots > 0);
+                    // there were hits, determine how many
+                    int numberOfShots = NumberOfShots;
+                    do
+                    {
+                        HandleHit(shooter, weapon, target);
+                        total -= weapon.Template.Recoil;
+                        numberOfShots--;
+                    } while (total > 1 && numberOfShots > 0);
+                }
+                shooter.TurnsShooting++;
             }
-            _soldier.TurnsShooting++;
+
+            foreach (var woundResolution in WoundResolutions)
+            {
+                woundResolution.Resolve();
+            }
         }
 
-        private float CalculateToHitModifiers(float soldierSkill)
+        private float CalculateToHitModifiers(BattleSoldier shooter, BattleSoldier target, RangedWeapon weapon, float soldierSkill)
         {
             float totalModifier = 0;
             // the bulky weapon penalty is usually added when the weapon is fired while moving
-            if (_useBulk)
+            if (UseBulk)
             {
-                totalModifier -= _weapon.Template.Bulk;
+                totalModifier -= weapon.Template.Bulk;
             }
             // if the soldier is aiming at the current target with the current weapon, add the accuracy bonus
-            if(_soldier.Aim?.Item1 == _target && _soldier.Aim?.Item2 == _weapon)
+            if (shooter.Aim?.Item1 == target && shooter.Aim?.Item2 == weapon)
             {
                 // accuracy of the weapon is limited by the soldier skill
                 // TODO: take this into account with enemies, rather than using high attribute, low skill
-                totalModifier += _soldier.Aim.Item3 + Math.Min(_weapon.Template.Accuracy, soldierSkill) + 1;
+                totalModifier += shooter.Aim.Item3 + Math.Min(weapon.Template.Accuracy, soldierSkill) + 1;
             }
             // apply modifiers for rate of fire, taget size, and range
-            totalModifier += BattleModifiersUtil.CalculateRateOfFireModifier(_numberOfShots);
-            totalModifier += BattleModifiersUtil.CalculateSizeModifier(_target.Soldier.Size);
-            totalModifier += BattleModifiersUtil.CalculateRangeModifier(_range, _target.CurrentSpeed);
+            totalModifier += BattleModifiersUtil.CalculateRateOfFireModifier(NumberOfShots);
+            totalModifier += BattleModifiersUtil.CalculateSizeModifier(target.Soldier.Size);
+            totalModifier += BattleModifiersUtil.CalculateRangeModifier(Range, target.CurrentSpeed);
 
             return totalModifier;
         }
-        
-        private void HandleHit()
+
+        private void HandleHit(BattleSoldier shooter, RangedWeapon weapon, BattleSoldier target)
         {
-            HitLocation hitLocation = HitLocationCalculator.DetermineHitLocation(_target);
+            HitLocation hitLocation = HitLocationCalculator.DetermineHitLocation(target);
             // make sure this body part hasn't already been shot off
-            if(!hitLocation.IsSevered)
+            if (!hitLocation.IsSevered)
             {
-                float damage = BattleModifiersUtil.CalculateDamageAtRange(_weapon, _range) * (3.5f + ((float)RNG.NextGaussianDouble() * 1.75f));
-                float effectiveArmor = _target.Armor.Template.ArmorProvided * _weapon.Template.ArmorMultiplier;
+                float damage = BattleModifiersUtil.CalculateDamageAtRange(weapon, Range) * (3.5f + ((float)RNG.NextGaussianDouble() * 1.75f));
+                float effectiveArmor = target.Armor.Template.ArmorProvided * weapon.Template.ArmorMultiplier;
                 float penDamage = damage - effectiveArmor;
                 if (penDamage > 0)
                 {
-                    float totalDamage = penDamage * _weapon.Template.WoundMultiplier;
-                    _resultList.Add(new WoundResolution(_soldier, _weapon.Template, _target, totalDamage, hitLocation));
+                    float totalDamage = penDamage * weapon.Template.WoundMultiplier;
+                    WoundResolutions.Add(new WoundResolution(shooter, weapon.Template, target, totalDamage, hitLocation));
                 }
             }
         }
 
-        public string Description()
+        /*public string Description()
         {
             return $"{_soldier.Soldier.Name} fires a {_weapon.Template.Name} {_numberOfShots} times at {_target.Soldier.Name}";
-        }
+        }*/
     }
 }

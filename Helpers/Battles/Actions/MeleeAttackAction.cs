@@ -26,7 +26,7 @@ namespace OnlyWar.Helpers.Battles.Actions
             _resultList = resultList;
             _log = log;
         }
-        public void Execute()
+        public void Execute(BattleState state)
         {
             if (IsAdjacentToTarget())
             {
@@ -92,11 +92,6 @@ namespace OnlyWar.Helpers.Battles.Actions
                     _resultList.Add(new WoundResolution(_attacker, _weapon.Template, _target, totalDamage, hitLocation));
                 }
             }
-        }
-
-        public string Description()
-        {
-            return "";
         }
     }
 }

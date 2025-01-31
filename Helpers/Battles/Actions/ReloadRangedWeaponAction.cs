@@ -14,7 +14,7 @@ namespace OnlyWar.Helpers.Battles.Actions
             _ammoLeft = weapon.LoadedAmmo;
         }
 
-        public void Execute()
+        public void Execute(BattleState state)
         {
             _soldier.ReloadingPhase++;
             if(_soldier.ReloadingPhase == _weapon.Template.ReloadTime)
