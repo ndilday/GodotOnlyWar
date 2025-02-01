@@ -84,6 +84,11 @@ namespace OnlyWar.Helpers
         {
             _reservedCells.Clear();
         }
+
+        public HashSet<Tuple<int, int>> GetReservedCells()
+        {
+            return _reservedCells;
+        }
     }
 
 }

@@ -10,20 +10,19 @@ namespace OnlyWar.Helpers.Battles
 {
     public class BattleState
     {
-        private readonly BattleGridManager _grid;
+        private readonly Dictionary<int, IReadOnlyList<Tuple<int, int>>> _soldierPositionsMap;
         private readonly Dictionary<int, BattleSoldier> _soldiers;
 
         public int TurnNumber { get; private set; }
         public IReadOnlyDictionary<int, BattleSoldier> Soldiers { get => _soldiers; }
+        public IReadOnlyDictionary<int, IReadOnlyList<Tuple<int, int>>> SoldierPositionsMap { get => _soldierPositionsMap; }
         public IReadOnlyDictionary<int, BattleSquad> PlayerSquads { get; }
         public IReadOnlyDictionary<int, BattleSquad> OpposingSquads { get; }
 
         // Constructor for creating the initial state
-        public BattleState(BattleGridManager grid,
-                           IReadOnlyDictionary<int, BattleSquad> playerSquads,
+        public BattleState(IReadOnlyDictionary<int, BattleSquad> playerSquads,
                            IReadOnlyDictionary<int, BattleSquad> opposingSquads)
         {
-            _grid = grid;
             _soldiers = new Dictionary<int, BattleSoldier>();
             PlayerSquads = playerSquads;
             OpposingSquads = opposingSquads;
@@ -33,7 +32,8 @@ namespace OnlyWar.Helpers.Battles
             {
                 foreach (BattleSoldier soldier in squad.Soldiers)
                 {
-                    _soldiers[soldier.Soldier.Id] = soldier;
+                    _soldiers[soldier.Soldier.Id] = (BattleSoldier)soldier.Clone();
+                    _soldierPositionsMap[soldier.Soldier.Id] = soldier.PositionList;
                 }
             }
         }
@@ -41,22 +41,24 @@ namespace OnlyWar.Helpers.Battles
         // Constructor for creating a new state based on a previous state (deep copy)
         public BattleState(BattleState original)
         {
-            // Perform a deep copy of the grid
-            _grid = original._grid.DeepCopy();
-
-            // Perform a deep copy of the soldiers
-            _soldiers = original.Soldiers.ToDictionary(
-                kvp => kvp.Key,
-                kvp => kvp.Value.DeepCopy()
-            );
-
             // deep copy of the squads, replacing soldier references with their copies
             PlayerSquads = original.PlayerSquads.ToDictionary(
                 kvp => kvp.Key,
-                kvp => kvp.Value.DeepCopy(_soldiers));
+                kvp => (BattleSquad)kvp.Value.Clone());
             OpposingSquads = original.OpposingSquads.ToDictionary(
                 kvp => kvp.Key,
-                kvp => kvp.Value.DeepCopy(_soldiers));
+                kvp => (BattleSquad)kvp.Value.Clone());
+            // create the soldier dictionaries from these squads
+            _soldiers = new Dictionary<int, BattleSoldier>();
+            _soldierPositionsMap = new Dictionary<int, IReadOnlyList<Tuple<int, int>>>();
+            foreach (BattleSquad squad in PlayerSquads.Values.Concat(OpposingSquads.Values))
+            {
+                foreach (BattleSoldier soldier in squad.Soldiers)
+                {
+                    _soldiers[soldier.Soldier.Id] = (BattleSoldier)soldier.Clone();
+                    _soldierPositionsMap[soldier.Soldier.Id] = soldier.PositionList;
+                }
+            }
 
             TurnNumber = original.TurnNumber + 1;
         }

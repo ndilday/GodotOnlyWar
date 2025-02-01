@@ -4,13 +4,14 @@ using OnlyWar.Models.Orders;
 using OnlyWar.Models.Planets;
 using OnlyWar.Models.Soldiers;
 using OnlyWar.Models.Units;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 
 namespace OnlyWar.Models.Squads
 {
-    public class Squad
+    public class Squad : ICloneable
     {
         private static int _nextId = 0;
         private readonly List<ISoldier> _members;
@@ -59,6 +60,18 @@ namespace OnlyWar.Models.Squads
             _members = [];
             //AssignedVehicles = new List<int>();
             Loadout = [];
+        }
+
+        public Squad Clone()
+        {
+            Squad clone = new Squad(Id, Name, ParentUnit, SquadTemplate);
+            foreach (ISoldier soldier in Members)
+            {
+                clone.AddSquadMember((ISoldier)soldier.Clone());
+            }
+            // loadout doesn't need a deep copy
+            clone.Loadout = Loadout;
+            return clone;
         }
 
         public void AddSquadMember(ISoldier soldier)

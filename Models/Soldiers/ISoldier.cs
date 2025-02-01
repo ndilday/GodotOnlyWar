@@ -1,9 +1,10 @@
 ﻿using OnlyWar.Models.Squads;
+using System;
 using System.Collections.Generic;
 
 namespace OnlyWar.Models.Soldiers
 {
-    public interface ISoldier
+    public interface ISoldier : ICloneable
     {
         int Id { get; }
         string Name { get; }

@@ -7,7 +7,7 @@ using OnlyWar.Models.Soldiers;
 
 namespace OnlyWar.Helpers.Battles
 {
-    public class BattleSoldier
+    public class BattleSoldier : ICloneable
     {
         public ISoldier Soldier { get; private set; }
 
@@ -69,8 +69,24 @@ namespace OnlyWar.Helpers.Battles
             }
         }
 
+        public IReadOnlyList<Tuple<int, int>> PositionList
+        {
+            get
+            {
+                List<Tuple<int, int>> list = [];
+                for (int w = TopLeft.Item1; w < BottomRight.Item1; w++)
+                {
+                    for (int d = BottomRight.Item2; d < TopLeft.Item2; d++)
+                    {
+                        list.Add(new Tuple<int, int>(w, d));
+                    }
+                }
+                return list;
+            }
+        }
+
         // aim stores the target, aiming weapon, and addiional seconds the aim has been maintained
-        public Tuple<BattleSoldier, RangedWeapon, int> Aim { get; set; }
+        public Tuple<int, RangedWeapon, int> Aim { get; set; }
 
         public BattleSoldier(ISoldier soldier, BattleSquad squad)
         {
@@ -87,6 +103,30 @@ namespace OnlyWar.Helpers.Battles
             CurrentSpeed = 0;
             EnemiesTakenDown = 0;
             ReloadingPhase = 0;
+        }
+
+        public object Clone()
+        {
+            BattleSoldier newSoldier = new BattleSoldier((ISoldier)Soldier.Clone(), BattleSquad);
+            newSoldier.TopLeft = new Tuple<int, int>(TopLeft.Item1, TopLeft.Item2);
+            newSoldier.Orientation = Orientation;
+            newSoldier.Armor = Armor;
+            newSoldier.IsInMelee = IsInMelee;
+            newSoldier.ReloadingPhase = ReloadingPhase;
+            newSoldier.Stance = Stance;
+            newSoldier.CurrentSpeed = CurrentSpeed;
+            newSoldier.TurnsRunning = TurnsRunning;
+            newSoldier.TurnsShooting = TurnsShooting;
+            newSoldier.TurnsSwinging = TurnsSwinging;
+            newSoldier.TurnsAiming = TurnsAiming;
+            newSoldier.WoundsTaken = WoundsTaken;
+            newSoldier.EnemiesTakenDown = EnemiesTakenDown;
+            newSoldier.Aim = new Tuple<int, RangedWeapon, int>(Aim.Item1, Aim.Item2, Aim.Item3);
+            newSoldier.EquippedMeleeWeapons = EquippedMeleeWeapons.ToList();
+            newSoldier.EquippedRangedWeapons = EquippedRangedWeapons.ToList();
+            newSoldier.MeleeWeapons = MeleeWeapons;
+            newSoldier.RangedWeapons = RangedWeapons;
+            return newSoldier;
         }
 
         public bool CanFight

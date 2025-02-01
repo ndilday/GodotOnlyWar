@@ -7,7 +7,7 @@ using OnlyWar.Models.Squads;
 
 namespace OnlyWar.Helpers.Battles
 {
-    public class BattleSquad
+    public class BattleSquad : ICloneable
     {
         public int Id { get; private set; }
         public string Name { get; private set; }
@@ -36,6 +36,13 @@ namespace OnlyWar.Helpers.Battles
             IsInMelee = false;
             // order weapon sets by strength of primary weapon
             AllocateEquipment();
+        }
+
+        public object Clone()
+        {
+            BattleSquad newSquad = new BattleSquad(IsPlayerSquad, (Squad)Squad.Clone());
+            newSquad.IsInMelee = IsInMelee;
+            return newSquad;
         }
 
         public Tuple<ushort, ushort> GetSquadBoxSize()

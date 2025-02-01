@@ -192,7 +192,8 @@ namespace OnlyWar.Helpers.Battles
 
         private void AddStandingActionsToBag(BattleSoldier soldier)
         {
-            if(soldier.RangedWeapons.Count == 0)
+            BattleSoldier target = _opposingSoldierIdSquadMap[soldier.Aim.Item1].Soldiers.Single(s => s.Soldier.Id == soldier.Aim.Item1);
+            if (soldier.RangedWeapons.Count == 0)
             {
                 //Debug.Log("ISoldier with no ranged weapons just standing around");
             }
@@ -207,17 +208,17 @@ namespace OnlyWar.Helpers.Battles
                 AddReloadRangedWeaponActionToBag(soldier);
             }
             // determine if soldier was already aiming and the target is still around and not in a melee
-            else if (soldier.Aim != null && _opposingSoldierIdSquadMap.ContainsKey(soldier.Aim.Item1.Soldier.Id) && !soldier.Aim.Item1.IsInMelee)
+            else if (soldier.Aim != null && _opposingSoldierIdSquadMap.ContainsKey(soldier.Aim.Item1) && !target.IsInMelee)
             {
                 // if the aim cannot be improved, go ahead and shoot
                 if (soldier.Aim.Item3 == 3)
                 {
-                    float range = _grid.GetDistanceBetweenSoldiers(soldier.Soldier.Id, soldier.Aim.Item1.Soldier.Id);
-                    Tuple<float, float> effectEstimate = EstimateHitAndDamage(soldier, soldier.Aim.Item1, soldier.Aim.Item2, range, soldier.Aim.Item2.Template.Accuracy + 3);
+                    float range = _grid.GetDistanceBetweenSoldiers(soldier.Soldier.Id, soldier.Aim.Item1);
+                    Tuple<float, float> effectEstimate = EstimateHitAndDamage(soldier, target, soldier.Aim.Item2, range, soldier.Aim.Item2.Template.Accuracy + 3);
                     int shotsToFire = CalculateShotsToFire(soldier.Aim.Item2, effectEstimate.Item1, effectEstimate.Item2);
                     soldier.CurrentSpeed = 0;
                     _shootActionBag.Add(new ShootAction(soldier.Soldier.Id, 
-                        soldier.Aim.Item1.Soldier.Id,
+                        soldier.Aim.Item1,
                         soldier.Aim.Item2.Template.Id, 
                         range,
                         shotsToFire,
@@ -227,19 +228,19 @@ namespace OnlyWar.Helpers.Battles
                 {
                     // the aim can be improved
                     // current aim bonus is 1 for all-out attack, plus weapon accuracy, plus aim
-                    float range = _grid.GetDistanceBetweenSoldiers(soldier.Soldier.Id, soldier.Aim.Item1.Soldier.Id);
+                    float range = _grid.GetDistanceBetweenSoldiers(soldier.Soldier.Id, soldier.Aim.Item1);
                     float currentModifiers = soldier.Aim.Item2.Template.Accuracy + soldier.Aim.Item3 + 1;
                     // item1 is the pre-roll to-hit total; item2 is the expected ratio of damage to con, so 1 is a potential killshot
-                    Tuple<float, float> resultEstimate = EstimateHitAndDamage(soldier, soldier.Aim.Item1, soldier.Aim.Item2, range, currentModifiers);
+                    Tuple<float, float> resultEstimate = EstimateHitAndDamage(soldier, target, soldier.Aim.Item2, range, currentModifiers);
                     // it's about to attack, go ahead and shoot, you may not get another chance
-                    if (soldier.Aim.Item1.GetMoveSpeed() > range
+                    if (target.GetMoveSpeed() > range
                         // there's a good chance of both hitting and killing, go ahead and shoot now
                         || (resultEstimate.Item2 >= 1 && resultEstimate.Item1 >= 6.66f))
                     {
                         int shotsToFire = CalculateShotsToFire(soldier.Aim.Item2, resultEstimate.Item1, resultEstimate.Item2);
                         soldier.CurrentSpeed = 0;
                         _shootActionBag.Add(new ShootAction(soldier.Soldier.Id,
-                            soldier.Aim.Item1.Soldier.Id,
+                            soldier.Aim.Item1,
                             soldier.Aim.Item2.Template.Id,
                             range,
                             shotsToFire,
@@ -249,7 +250,7 @@ namespace OnlyWar.Helpers.Battles
                     {
                         // keep aiming
                         soldier.CurrentSpeed = 0;
-                        _shootActionBag.Add(new AimAction(soldier, soldier.Aim.Item1, soldier.Aim.Item2, _log));
+                        _shootActionBag.Add(new AimAction(soldier, target, soldier.Aim.Item2, _log));
                     }
                 }
             }

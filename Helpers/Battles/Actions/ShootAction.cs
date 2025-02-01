@@ -71,7 +71,7 @@ namespace OnlyWar.Helpers.Battles.Actions
                 totalModifier -= weapon.Template.Bulk;
             }
             // if the soldier is aiming at the current target with the current weapon, add the accuracy bonus
-            if (shooter.Aim?.Item1 == target && shooter.Aim?.Item2 == weapon)
+            if (shooter.Aim?.Item1 == target.Soldier.Id && shooter.Aim?.Item2 == weapon)
             {
                 // accuracy of the weapon is limited by the soldier skill
                 // TODO: take this into account with enemies, rather than using high attribute, low skill

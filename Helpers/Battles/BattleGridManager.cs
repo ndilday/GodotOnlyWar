@@ -3,7 +3,7 @@ using System.Collections.Generic;
 
 namespace OnlyWar.Helpers.Battles
 {
-    public class BattleGridManager
+    public class BattleGridManager : ICloneable
     {
         readonly private Dictionary<int, BattleSoldier> _soldiers;
         readonly private Dictionary<int, IList<Tuple<int, int>>> _soldierPositionsMap;
@@ -16,6 +16,20 @@ namespace OnlyWar.Helpers.Battles
             _soldierPositionsMap = [];
             _soldierSideMap = [];
             _grid = new Grid();
+        }
+
+        public object Clone()
+        {
+            var copy = new BattleGridManager();
+            foreach (BattleSoldier soldier in _soldiers.Values)
+            {
+                copy.PlaceSoldier(soldier, _soldierSideMap[soldier.Soldier.Id], _soldierPositionsMap[soldier.Soldier.Id]);
+            }
+            foreach(Tuple<int, int> cell in _grid.GetReservedCells())
+            {
+                copy.ReserveSpace(cell);
+            }
+            return copy;
         }
 
         public void PlaceSoldier(BattleSoldier soldier, bool side, IList<Tuple<int, int>> cells)
