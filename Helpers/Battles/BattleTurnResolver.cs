@@ -52,6 +52,7 @@ namespace OnlyWar.Helpers.Battles
 
             _currentState = new BattleState(_playerBattleSquads, _opposingBattleSquads);
             _battleHistory = new BattleHistory();
+            _battleHistory.Turns.Add(new BattleTurn(_currentState, new List<IAction>()));
             foreach (BattleSquad squad in playerBattleSquads)
             {
                 foreach (BattleSoldier soldier in squad.Soldiers)
@@ -103,9 +104,10 @@ namespace OnlyWar.Helpers.Battles
 
         public void ProcessNextTurn()
         {
-
             _grid.ClearReservations();
             _casualtyMap.Clear();
+            _currentState = new BattleState(_currentState);
+
             Log(false, "Turn " + _currentState.TurnNumber.ToString());
             // this is a three step process: plan, execute, and apply
 
@@ -119,7 +121,6 @@ namespace OnlyWar.Helpers.Battles
                 log.TryDequeue(out string line);
                 Log(false, line);
             }
-            _currentState = new BattleState(_currentState);
             List<IAction> executedActions = new List<IAction>();
             HandleShooting(shootSegmentActions, executedActions);
             HandleMoving(moveSegmentActions, executedActions);

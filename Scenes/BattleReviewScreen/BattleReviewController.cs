@@ -1,5 +1,6 @@
 using Godot;
 using OnlyWar.Helpers;
+using OnlyWar.Helpers.Battles;
 using OnlyWar.Models;
 using OnlyWar.Models.Battles;
 using OnlyWar.Models.Soldiers;
@@ -50,14 +51,14 @@ public partial class BattleReviewController : DialogController
 		_view.SetTurnReportText("");
 		_view.EnableTurnButtons(false, true);
 
-		Vector2I topLeftOffset = GetTopLeftOfPositions(_history.StartingSoldierLocations.SelectMany(x => x.Value).ToList());
-		foreach(Squad squad in _history.PlayerSquads)
+		Vector2I topLeftOffset = GetTopLeftOfPositions(_history.Turns[0].State.SoldierPositionsMap.Values.SelectMany(x => x).ToList());
+		foreach(BattleSquad squad in _history.Turns[0].State.PlayerSquads.Values)
 		{
-			DrawSquad(squad, _history.StartingSoldierLocations, topLeftOffset, _soldierTexture, _soldierTextureScale, squad.Faction.Color.ToGodotColor());
+			DrawSquad(squad, _history.Turns[0].State.SoldierPositionsMap, topLeftOffset, _soldierTexture, _soldierTextureScale, squad.Squad.Faction.Color.ToGodotColor());
 		}
-		foreach(Squad squad in _history.OpposingSquads)
+		foreach(BattleSquad squad in _history.Turns[0].State.OpposingSquads.Values)
 		{
-			DrawSquad(squad, _history.StartingSoldierLocations, topLeftOffset, _opForTexture, _opForTextureScale, squad.Faction.Color.ToGodotColor());
+			DrawSquad(squad, _history.Turns[0].State.SoldierPositionsMap, topLeftOffset, _opForTexture, _opForTextureScale, squad.Squad.Faction.Color.ToGodotColor());
 		}
 	}
 
@@ -88,7 +89,7 @@ public partial class BattleReviewController : DialogController
 		}
 	}
 
-	public Vector2I GetTopLeftOfPositions(IList<Tuple<int, int>> positions)
+	public Vector2I GetTopLeftOfPositions(IReadOnlyList<Tuple<int, int>> positions)
 	{
 		return new 
 			(
@@ -106,9 +107,9 @@ public partial class BattleReviewController : DialogController
 			);
 	}
 
-	private void DrawSquad(Squad squad, IReadOnlyDictionary<int, IList<Tuple<int, int>>> soldierLocationMap, Vector2I topLeftOffset, Texture2D soldierTexture, Vector2 soldierTextureScale, Color color)
+	private void DrawSquad(BattleSquad squad, IReadOnlyDictionary<int, IReadOnlyList<Tuple<int, int>>> soldierLocationMap, Vector2I topLeftOffset, Texture2D soldierTexture, Vector2 soldierTextureScale, Color color)
 	{
-		foreach (ISoldier soldier in squad.Members)
+		foreach (ISoldier soldier in squad.Soldiers)
 		{
 			var soldierLocations = soldierLocationMap[soldier.Id];
 			if(soldierLocations.Count == 1)
