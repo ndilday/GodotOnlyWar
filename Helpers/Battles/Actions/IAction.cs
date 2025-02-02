@@ -1,4 +1,4 @@
-﻿using OnlyWar.Helpers.Battles;
+﻿using OnlyWar.Models.Battles;
 
 namespace OnlyWar.Helpers.Battles.Actions
 {

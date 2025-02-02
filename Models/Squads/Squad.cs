@@ -62,7 +62,7 @@ namespace OnlyWar.Models.Squads
             Loadout = [];
         }
 
-        public Squad Clone()
+        public object Clone()
         {
             Squad clone = new Squad(Id, Name, ParentUnit, SquadTemplate);
             foreach (ISoldier soldier in Members)

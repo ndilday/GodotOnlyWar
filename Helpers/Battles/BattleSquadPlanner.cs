@@ -18,7 +18,6 @@ namespace OnlyWar.Helpers.Battles
         private readonly ConcurrentBag<IAction> _meleeActionBag;
         private readonly Dictionary<int, BattleSquad> _opposingSoldierIdSquadMap;
         private readonly ConcurrentBag<WoundResolution> _woundResolutionBag;
-        private readonly ConcurrentBag<MoveResolution> _moveResolutionBag;
         private readonly MeleeWeapon _defaultMeleeWeapon;
         private readonly ConcurrentQueue<string> _log;
 
@@ -28,7 +27,6 @@ namespace OnlyWar.Helpers.Battles
                                   ConcurrentBag<IAction> moveActionBag,
                                   ConcurrentBag<IAction> meleeActionBag,
                                   ConcurrentBag<WoundResolution> woundBag, 
-                                  ConcurrentBag<MoveResolution> moveBag, 
                                   ConcurrentQueue<string> log,
                                   MeleeWeapon defaultMeleeWeapon)
         {
@@ -37,7 +35,6 @@ namespace OnlyWar.Helpers.Battles
             _shootActionBag = shootActionBag;
             _moveActionBag = moveActionBag;
             _meleeActionBag = meleeActionBag;
-            _moveResolutionBag = moveBag;
             _woundResolutionBag = woundBag;
             _defaultMeleeWeapon = defaultMeleeWeapon;
             _log = log;
@@ -222,7 +219,8 @@ namespace OnlyWar.Helpers.Battles
                         soldier.Aim.Item2.Template.Id, 
                         range,
                         shotsToFire,
-                        false));
+                        false,
+                        _woundResolutionBag));
                 }
                 else
                 {
@@ -244,7 +242,8 @@ namespace OnlyWar.Helpers.Battles
                             soldier.Aim.Item2.Template.Id,
                             range,
                             shotsToFire,
-                            false));
+                            false,
+                            _woundResolutionBag));
                     }
                     else
                     {
@@ -438,7 +437,7 @@ namespace OnlyWar.Helpers.Battles
                 soldier.CurrentSpeed = moveSpeed;
                 _grid.ReserveSpace(newPos);
                 ushort orientation = CalculateOrientationFromVector(move);
-                _moveActionBag.Add(new MoveAction(soldier, _grid, currentPosition, soldier.Orientation, newPos, orientation, _moveResolutionBag));
+                _moveActionBag.Add(new MoveAction(soldier, _grid, currentPosition, soldier.Orientation, newPos, orientation));
                 BattleSoldier target = oppSquad.Soldiers.Single(s => s.Soldier.Id == closestEnemyId);
                 _meleeActionBag.Add(new MeleeAttackAction(soldier, target, soldier.MeleeWeapons.Count == 0 ? _defaultMeleeWeapon : soldier.EquippedMeleeWeapons[0], distance >= 2, _woundResolutionBag, _log));
             }
@@ -473,7 +472,8 @@ namespace OnlyWar.Helpers.Battles
                         weaponProfile.Item3.Template.Id, 
                         range, 
                         shotsToFire, 
-                        isMoving));
+                        isMoving,
+                        _woundResolutionBag));
                 }
                 else if (!isMoving)
                 {
@@ -626,7 +626,7 @@ namespace OnlyWar.Helpers.Battles
             soldier.CurrentSpeed = moveSpeed;
             _grid.ReserveSpace(newLocation);
             ushort orientation = CalculateOrientationFromVector(line);
-            _moveActionBag.Add(new MoveAction(soldier, _grid, soldier.TopLeft, soldier.Orientation, newLocation, orientation, _moveResolutionBag));
+            _moveActionBag.Add(new MoveAction(soldier, _grid, soldier.TopLeft, soldier.Orientation, newLocation, orientation));
         }
 
         private Tuple<int, int> CalculateMovementAlongLine(Tuple<int, int> line, float moveSpeed)

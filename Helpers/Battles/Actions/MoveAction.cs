@@ -1,6 +1,7 @@
-﻿using System;
-using System.Collections.Concurrent;
+﻿using OnlyWar.Models.Battles;
 using OnlyWar.Helpers.Battles.Resolutions;
+using System;
+using System.Collections.Concurrent;
 
 namespace OnlyWar.Helpers.Battles.Actions
 {
@@ -9,28 +10,32 @@ namespace OnlyWar.Helpers.Battles.Actions
         private readonly BattleSoldier _soldier;
         private readonly BattleGridManager _grid;
         private readonly Tuple<int, int> _newTopLeft, _currentTopLeft;
-        private readonly ushort _orientation, _currentOrientation;
-        private readonly ConcurrentBag<MoveResolution> _resultList;
-        public MoveAction(BattleSoldier soldier, BattleGridManager grid, Tuple<int, int> currentTopLeft, ushort currentOrientation, Tuple<int, int> newTopLeft, ushort orientation, ConcurrentBag<MoveResolution> resultList)
+        private readonly ushort _newOrientation, _currentOrientation;
+        public MoveAction(BattleSoldier soldier, BattleGridManager grid, Tuple<int, int> currentTopLeft, ushort currentOrientation, Tuple<int, int> newTopLeft, ushort orientation)
         {
             _soldier = soldier;
             _grid = grid;
             _newTopLeft = newTopLeft;
-            _orientation = orientation;
-            _resultList = resultList;
+            _newOrientation = orientation;
             _currentOrientation = currentOrientation;
             _currentTopLeft = currentTopLeft;
         }
 
         public void Execute(BattleState state)
         {
-            _resultList.Add(new MoveResolution(_soldier, _grid, _newTopLeft, _orientation));
+            //_resultList.Add(new MoveResolution(_soldier, _grid, _newTopLeft, _orientation));
+            _soldier.TopLeft = _newTopLeft;
+            _soldier.Orientation = _newOrientation;
+            _grid.MoveSoldier(_soldier, _newTopLeft, _newOrientation);
             _soldier.TurnsRunning++;
         }
 
         public void Reverse()
         {
-            _resultList.Add(new MoveResolution(_soldier, _grid, _currentTopLeft, _currentOrientation));
+            //_resultList.Add(new MoveResolution(_soldier, _grid, _currentTopLeft, _currentOrientation));
+            _soldier.TopLeft = _currentTopLeft;
+            _soldier.Orientation = _currentOrientation;
+            _grid.MoveSoldier(_soldier, _currentTopLeft, _currentOrientation);
             _soldier.TurnsRunning--;
         }
 

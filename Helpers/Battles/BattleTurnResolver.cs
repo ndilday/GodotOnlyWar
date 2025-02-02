@@ -16,56 +16,56 @@ namespace OnlyWar.Helpers.Battles
 {
     public class BattleTurnResolver
     {
-        BattleGridManager _grid;
-        Dictionary<int, BattleSquad> _playerBattleSquads, _opposingBattleSquads;
-        Faction _opposingFaction;
-        Planet _planet;
-        ushort _turnNumber;
-        int _startingEnemySoldierCount;
-        List<BattleSoldier> _startingPlayerBattleSoldiers;
-        WoundResolver _woundResolver;
-        MoveResolver _moveResolver;
-        Dictionary<int, BattleSquad> _soldierBattleSquadMap = new Dictionary<int, BattleSquad>();
-        Dictionary<int, BattleSoldier> _casualtyMap;
-        bool _isVerbose;
-        BattleHistory _battleHistory;
+        private BattleGridManager _grid;
+        private readonly Dictionary<int, BattleSquad> _playerBattleSquads, _opposingBattleSquads;
+        private readonly Faction _opposingFaction;
+        private readonly Planet _planet;
+        private int _startingEnemySoldierCount;
+        private readonly List<BattleSoldier> _startingPlayerBattleSoldiers;
+        private readonly WoundResolver _woundResolver;
+        private readonly Dictionary<int, BattleSquad> _soldierBattleSquadMap = new Dictionary<int, BattleSquad>();
+        private readonly Dictionary<int, BattleSoldier> _casualtyMap;
+        private readonly bool _isVerbose;
+        private BattleHistory _battleHistory;
+        private BattleState _currentState;
 
         public event EventHandler<BattleHistory> OnBattleComplete;
 
-        public BattleTurnResolver(BattleGridManager gridManager, IEnumerable<BattleSquad> playerForce, IEnumerable<BattleSquad> opFor, Planet planet, bool isVerbose)
+        public BattleTurnResolver(BattleGridManager grid,
+                                  IList<BattleSquad> playerBattleSquads,
+                                  IList<BattleSquad> opposingBattleSquads,
+                                  Planet planet,
+                                  bool isVerbose)
         {
-            _grid = gridManager;
-            _turnNumber = 0;
+            _grid = grid;
             _planet = planet;
             _isVerbose = isVerbose;
-            _playerBattleSquads = playerForce.ToDictionary(squad => squad.Id);
-            _opposingBattleSquads = opFor.ToDictionary(squad => squad.Id);
-            _opposingFaction = opFor.First().Squad.Faction;
+            _playerBattleSquads = playerBattleSquads.ToDictionary(bs => bs.Id, bs => bs);
+            _opposingBattleSquads = opposingBattleSquads.ToDictionary(os => os.Id, os => os);
+            _opposingFaction = opposingBattleSquads.First().Squad.Faction;
             _woundResolver = new WoundResolver(isVerbose);
             _woundResolver.OnSoldierDeath += WoundResolver_OnSoldierDeath;
             _woundResolver.OnSoldierFall += WoundResolver_OnSoldierFall;
-            _moveResolver = new MoveResolver(isVerbose);
-            _moveResolver.OnRetreat += MoveResolver_OnRetreat;
             _casualtyMap = new Dictionary<int, BattleSoldier>();
-            List<Squad> playerSquadsHistory = new List<Squad>();
-            List<Squad> opposingSquadsHistory = new List<Squad>();
-            foreach (BattleSquad squad in _playerBattleSquads.Values)
+            _startingPlayerBattleSoldiers = playerBattleSquads.SelectMany(bs => bs.Soldiers).ToList();
+            _startingEnemySoldierCount = opposingBattleSquads.SelectMany(s => s.Soldiers).Count();
+
+            _currentState = new BattleState(_playerBattleSquads, _opposingBattleSquads);
+            _battleHistory = new BattleHistory();
+            foreach (BattleSquad squad in playerBattleSquads)
             {
-                playerSquadsHistory.Add(squad.Squad.DeepCopy());
                 foreach (BattleSoldier soldier in squad.Soldiers)
                 {
                     _soldierBattleSquadMap[soldier.Soldier.Id] = squad;
                 }
             }
-            foreach(BattleSquad squad in _opposingBattleSquads.Values)
+            foreach (BattleSquad squad in opposingBattleSquads)
             {
-                opposingSquadsHistory.Add(squad.Squad.DeepCopy());
                 foreach (BattleSoldier soldier in squad.Soldiers)
                 {
                     _soldierBattleSquadMap[soldier.Soldier.Id] = squad;
                 }
             }
-            _battleHistory = new BattleHistory(playerSquadsHistory, opposingSquadsHistory, gridManager.GetSoldierPositions());
         }
 
         private void WoundResolver_OnSoldierDeath(BattleSoldier casualty, BattleSoldier inflicter, WeaponTemplate weapon)
@@ -101,20 +101,12 @@ namespace OnlyWar.Helpers.Battles
             }
         }
 
-        private void MoveResolver_OnRetreat(BattleSoldier soldier)
-        {
-            Log(false, "<b>" + soldier.Soldier.Name + " has retreated from the battlefield</b>");
-            _casualtyMap[soldier.Soldier.Id] = soldier;
-        }
-
         public void ProcessNextTurn()
         {
-            _turnNumber++;
-            BattleTurn turn = new BattleTurn(_turnNumber);
-            _battleHistory.Turns.Add(turn);
+
             _grid.ClearReservations();
             _casualtyMap.Clear();
-            Log(false, "Turn " + _turnNumber.ToString());
+            Log(false, "Turn " + _currentState.TurnNumber.ToString());
             // this is a three step process: plan, execute, and apply
 
             ConcurrentBag<IAction> moveSegmentActions = new ConcurrentBag<IAction>();
@@ -127,23 +119,15 @@ namespace OnlyWar.Helpers.Battles
                 log.TryDequeue(out string line);
                 Log(false, line);
             }
-            HandleShootingAndMoving(shootSegmentActions, moveSegmentActions, turn);
-            while (!log.IsEmpty)
-            {
-                log.TryDequeue(out string line);
-                Log(false, line);
-            }
+            _currentState = new BattleState(_currentState);
+            List<IAction> executedActions = new List<IAction>();
+            HandleShooting(shootSegmentActions, executedActions);
+            HandleMoving(moveSegmentActions, executedActions);
+            HandleMelee(meleeSegmentActions, executedActions);
 
-            HandleMelee(meleeSegmentActions, turn);
-            while (!log.IsEmpty)
-            {
-                log.TryDequeue(out string line);
-                Log(false, line);
-            }
-
-            ProcessWounds(turn);
             CleanupAtEndOfTurn();
 
+            _battleHistory.Turns.Add(new BattleTurn(_currentState, executedActions));
             if (_playerBattleSquads.Count() == 0 || _opposingBattleSquads.Count() == 0)
             {
                 Log(false, "One side destroyed, battle over");
@@ -159,7 +143,7 @@ namespace OnlyWar.Helpers.Battles
             ApplySoldierExperienceForBattle();
             List<PlayerSoldier> dead = RemoveSoldiersKilledInBattle();
             LogBattleToChapterHistory(dead);
-            OnBattleComplete.Invoke(this, null);
+            OnBattleComplete.Invoke(this, _battleHistory);
         }
 
         private void Plan(ConcurrentBag<IAction> shootSegmentActions,
@@ -181,7 +165,6 @@ namespace OnlyWar.Helpers.Battles
                                                                     shootSegmentActions, moveSegmentActions,
                                                                     meleeSegmentActions,
                                                                     _woundResolver.WoundQueue,
-                                                                    _moveResolver.MoveQueue,
                                                                     log, defaultWeapon);
                 planner.PrepareActions(squad);
             };
@@ -192,15 +175,12 @@ namespace OnlyWar.Helpers.Battles
                                                                     shootSegmentActions, moveSegmentActions,
                                                                     meleeSegmentActions,
                                                                     _woundResolver.WoundQueue,
-                                                                    _moveResolver.MoveQueue,
                                                                     log, defaultWeapon);
                 planner.PrepareActions(squad);
             };
         }
 
-        private void HandleShootingAndMoving(ConcurrentBag<IAction> shootActions,
-                            ConcurrentBag<IAction> moveActions,
-                            BattleTurn turn)
+        private void HandleShooting(ConcurrentBag<IAction> shootActions, List<IAction> executedActions)
         {
             // EXECUTE
             // once the squads have all finished planning actions, we process the execution logic. 
@@ -214,67 +194,26 @@ namespace OnlyWar.Helpers.Battles
             //Parallel.ForEach(actionBag, (action) => action.Execute());
             foreach (IAction action in shootActions)
             {
-                action.Execute();
-                switch (action)
-                {
-                    case AimAction aim:
-                        turn.AimActions.Add(aim);
-                        break;
-                    case ShootAction shoot:
-                        turn.ShootActions.Add(shoot);
-                        break;
-                    case ReadyRangedWeaponAction ready:
-                        turn.ReadyRangedWeaponActions.Add(ready);
-                        break;
-                    case ReloadRangedWeaponAction reload:
-                        turn.ReloadActions.Add(reload);
-                        break;
-                }
+                action.Execute(_currentState);
+                executedActions.Add(action);
             }
+        }
+        private void HandleMoving(ConcurrentBag<IAction> moveActions, List<IAction> executedActions)
+        {
             foreach (IAction action in moveActions)
             {
-                action.Execute();
-                switch (action)
-                {
-                    case MoveAction move:
-                        turn.MoveActions.Add(move);
-                        break;
-                }
+                action.Execute(_currentState);
+                executedActions.Add(action);
             }
-            _moveResolver.Resolve();
-            foreach (MoveResolution resolution in _moveResolver.MoveQueue)
-            {
-                turn.MoveResolutions.Add(resolution);
-            }
-            _moveResolver.MoveQueue.Clear();
         }
 
-        private void HandleMelee(ConcurrentBag<IAction> meleeActions, BattleTurn turn)
+        private void HandleMelee(ConcurrentBag<IAction> meleeActions, List<IAction> executedActions)
         {
             foreach (IAction action in meleeActions)
             {
-                action.Execute();
-                switch (action)
-                {
-                    case MeleeAttackAction melee:
-                        turn.MeleeAttackActions.Add(melee);
-                        break;
-                    case ReadyMeleeWeaponAction ready:
-                        turn.ReadyMeleeWeaponActions.Add(ready);
-                        break;
-                }
+                action.Execute(_currentState);
+                executedActions.Add(action);
             }
-        }
-
-        private void ProcessWounds(BattleTurn turn)
-        {
-            _woundResolver.Resolve();
-            Log(false, _woundResolver.ResolutionLog);
-            foreach (WoundResolution resolution in _woundResolver.WoundQueue)
-            {
-                turn.WoundResolutions.Add(resolution);
-            }
-            _woundResolver.WoundQueue.Clear();
         }
 
         private void CleanupAtEndOfTurn()
@@ -307,10 +246,8 @@ namespace OnlyWar.Helpers.Battles
             squad.IsInMelee = atLeastOneSoldierInMelee;
         }
 
-        private void ResetBattleValues(BattleConfiguration config)
+        /*private void ResetBattleValues(BattleConfiguration config)
         {
-            _turnNumber = 0;
-
             _grid = config.Grid;
             _opposingFaction = config.OpposingSquads[0].Squad.ParentUnit.UnitTemplate.Faction;
 
@@ -339,7 +276,7 @@ namespace OnlyWar.Helpers.Battles
                 }
                 _startingEnemySoldierCount += squad.Soldiers.Count;
             }
-        }
+        }*/
 
         private string GetSquadDetails(BattleSquad squad)
         {
@@ -547,7 +484,7 @@ namespace OnlyWar.Helpers.Battles
             }
             else
             {
-               GameDataSingleton.Instance.Sector.PlayerForce.GeneseedStockpile++;
+                GameDataSingleton.Instance.Sector.PlayerForce.GeneseedStockpile++;
                 return "Recovered";
             }
         }

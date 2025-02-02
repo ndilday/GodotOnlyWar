@@ -1,6 +1,7 @@
 ﻿using System.Collections.Concurrent;
 
 using OnlyWar.Helpers.Battles.Resolutions;
+using OnlyWar.Models.Battles;
 using OnlyWar.Models.Equippables;
 using OnlyWar.Models.Soldiers;
 

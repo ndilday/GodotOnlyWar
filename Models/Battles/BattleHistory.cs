@@ -8,17 +8,10 @@ namespace OnlyWar.Models.Battles
 {
     public class BattleHistory
     {
-        public List<Squad> PlayerSquads { get; }
-        public List<Squad> OpposingSquads { get; }
-
-        public IReadOnlyDictionary<int, IList<Tuple<int, int>>> StartingSoldierLocations { get; }
         public List<BattleTurn> Turns { get; }
 
-        public BattleHistory(List<Squad> playerSquads, List<Squad> opposingSquads, IReadOnlyDictionary<int, IList<Tuple<int, int>>> startingPositions)
+        public BattleHistory()
         {
-            PlayerSquads = playerSquads;
-            OpposingSquads = opposingSquads;
-            StartingSoldierLocations = startingPositions;
             Turns = new List<BattleTurn>();
         }
     }

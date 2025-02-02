@@ -1,7 +1,9 @@
 ﻿using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
 using OnlyWar.Helpers.Battles.Resolutions;
+using OnlyWar.Models.Battles;
 using OnlyWar.Models.Equippables;
 using OnlyWar.Models.Soldiers;
 
@@ -9,6 +11,8 @@ namespace OnlyWar.Helpers.Battles.Actions
 {
     public class ShootAction : IAction
     {
+        private readonly ConcurrentBag<WoundResolution> _resultList;
+
         public int ShooterId { get; }
         public int TargetId { get; }
         public int WeaponId { get; }
@@ -17,7 +21,7 @@ namespace OnlyWar.Helpers.Battles.Actions
         public bool UseBulk { get; }
         public List<WoundResolution> WoundResolutions { get; }
 
-        public ShootAction(int shooterId, int targetId, int weaponId, float range, int numberOfShots, bool useBulk)
+        public ShootAction(int shooterId, int targetId, int weaponId, float range, int numberOfShots, bool useBulk, ConcurrentBag<WoundResolution> resultList)
         {
             ShooterId = shooterId;
             TargetId = targetId;
@@ -26,6 +30,7 @@ namespace OnlyWar.Helpers.Battles.Actions
             NumberOfShots = numberOfShots;
             UseBulk = useBulk;
             WoundResolutions = new List<WoundResolution>();
+            _resultList = resultList;
         }
 
         public void Execute(BattleState state)
@@ -48,7 +53,7 @@ namespace OnlyWar.Helpers.Battles.Actions
                     int numberOfShots = NumberOfShots;
                     do
                     {
-                        HandleHit(shooter, weapon, target);
+                        WoundResolutions.Add(HandleHit(shooter, weapon, target));
                         total -= weapon.Template.Recoil;
                         numberOfShots--;
                     } while (total > 1 && numberOfShots > 0);
@@ -58,7 +63,7 @@ namespace OnlyWar.Helpers.Battles.Actions
 
             foreach (var woundResolution in WoundResolutions)
             {
-                woundResolution.Resolve();
+                _resultList.Add(woundResolution);
             }
         }
 
@@ -85,7 +90,7 @@ namespace OnlyWar.Helpers.Battles.Actions
             return totalModifier;
         }
 
-        private void HandleHit(BattleSoldier shooter, RangedWeapon weapon, BattleSoldier target)
+        private WoundResolution HandleHit(BattleSoldier shooter, RangedWeapon weapon, BattleSoldier target)
         {
             HitLocation hitLocation = HitLocationCalculator.DetermineHitLocation(target);
             // make sure this body part hasn't already been shot off
@@ -97,9 +102,10 @@ namespace OnlyWar.Helpers.Battles.Actions
                 if (penDamage > 0)
                 {
                     float totalDamage = penDamage * weapon.Template.WoundMultiplier;
-                    WoundResolutions.Add(new WoundResolution(shooter, weapon.Template, target, totalDamage, hitLocation));
+                    return new WoundResolution(shooter, weapon.Template, target, totalDamage, hitLocation);
                 }
             }
+            return null;
         }
 
         /*public string Description()

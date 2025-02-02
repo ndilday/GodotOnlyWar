@@ -1,4 +1,5 @@
-﻿using OnlyWar.Models.Equippables;
+﻿using OnlyWar.Models.Battles;
+using OnlyWar.Models.Equippables;
 using System;
 
 namespace OnlyWar.Helpers.Battles.Actions
