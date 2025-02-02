@@ -23,7 +23,7 @@ namespace OnlyWar.Models.Missions.Recon
 
         public void ExecuteMissionStep(MissionContext context, float marginOfSuccess, IMissionStep returnStep)
         {
-            float margin = _missionTest.RunMissionTest(context.Squad);
+            float margin = _missionTest.RunMissionTest(context.PlayerSquads);
             if (margin > 0.0f)
             {
                 // TODO: add some kind of recon data to the context

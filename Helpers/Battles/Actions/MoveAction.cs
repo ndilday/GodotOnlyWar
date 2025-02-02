@@ -30,15 +30,6 @@ namespace OnlyWar.Helpers.Battles.Actions
             _soldier.TurnsRunning++;
         }
 
-        public void Reverse()
-        {
-            //_resultList.Add(new MoveResolution(_soldier, _grid, _currentTopLeft, _currentOrientation));
-            _soldier.TopLeft = _currentTopLeft;
-            _soldier.Orientation = _currentOrientation;
-            _grid.MoveSoldier(_soldier, _currentTopLeft, _currentOrientation);
-            _soldier.TurnsRunning--;
-        }
-
         public string Description()
         {
             return $"{_soldier.Soldier.Name} moves from ({_currentTopLeft.Item1}, {_currentTopLeft.Item2}) to ({_newTopLeft.Item1}, {_newTopLeft.Item2})";

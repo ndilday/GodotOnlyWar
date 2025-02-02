@@ -11,6 +11,7 @@ namespace OnlyWar.Helpers.Battles.Actions
 {
     public class ShootAction : IAction
     {
+        private string _soldierName, _targetName, _weaponName;
         private readonly ConcurrentBag<WoundResolution> _resultList;
 
         public int ShooterId { get; }
@@ -42,6 +43,10 @@ namespace OnlyWar.Helpers.Battles.Actions
                 var shooter = state.GetSoldier(ShooterId);
                 var target = state.GetSoldier(TargetId);
                 var weapon = shooter.EquippedRangedWeapons.First(w => w.Template.Id == WeaponId);
+                _soldierName = shooter.Soldier.Name;
+                _targetName = target.Soldier.Name;
+                _weaponName = weapon.Template.Name;
+
                 var skill = shooter.Soldier.GetTotalSkillValue(weapon.Template.RelatedSkill);
                 var modifier = CalculateToHitModifiers(shooter, target, weapon, skill);
                 var roll = 10.5f + (3.0f * (float)RNG.NextGaussianDouble());
@@ -53,7 +58,11 @@ namespace OnlyWar.Helpers.Battles.Actions
                     int numberOfShots = NumberOfShots;
                     do
                     {
-                        WoundResolutions.Add(HandleHit(shooter, weapon, target));
+                        WoundResolution woundResolution = HandleHit(shooter, weapon, target);
+                        if(woundResolution != null)
+                        {
+                            WoundResolutions.Add(woundResolution);
+                        }
                         total -= weapon.Template.Recoil;
                         numberOfShots--;
                     } while (total > 1 && numberOfShots > 0);
@@ -108,9 +117,9 @@ namespace OnlyWar.Helpers.Battles.Actions
             return null;
         }
 
-        /*public string Description()
+        public string Description()
         {
-            return $"{_soldier.Soldier.Name} fires a {_weapon.Template.Name} {_numberOfShots} times at {_target.Soldier.Name}";
-        }*/
+            return $"{_soldierName} fires a {_weaponName} {NumberOfShots} times at {_targetName}, hitting {WoundResolutions.Count} times";
+        }
     }
 }

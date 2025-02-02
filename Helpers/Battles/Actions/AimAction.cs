@@ -1,4 +1,5 @@
-﻿using OnlyWar.Models.Equippables;
+﻿using OnlyWar.Models.Battles;
+using OnlyWar.Models.Equippables;
 using System;
 using System.Collections.Concurrent;
 
@@ -6,44 +7,52 @@ namespace OnlyWar.Helpers.Battles.Actions
 {
     public class AimAction : IAction
     {
-        private readonly BattleSoldier _soldier;
-        private readonly BattleSoldier _target;
+        private readonly int _soldierId;
+        private readonly int _targetId;
         private readonly RangedWeapon _weapon;
         private readonly ConcurrentQueue<string> _log;
+        private string _soldierName, _targetName;
+        private bool _isNew;
 
         public AimAction(BattleSoldier soldier, BattleSoldier target, RangedWeapon weapon, ConcurrentQueue<string> log)
         {
-            _soldier = soldier;
-            _target = target;
+            _soldierId = soldier.Soldier.Id;
+            _soldierName = soldier.Soldier.Name;
+            _targetId = target.Soldier.Id;
+            _targetName = target.Soldier.Name;
             _weapon = weapon;
             _log = log;
         }
-        public void Execute()
+        public void Execute(BattleState state)
         {
+            BattleSoldier soldier = state.GetSoldier(_soldierId);
             // check is this is maintaining aim or starting with a new target
-            if(_soldier.Aim?.Item1 != _target)
+            if (soldier.Aim?.Item1 != _targetId)
             {
                 // this is a new target
-                _soldier.Aim = new Tuple<BattleSoldier, RangedWeapon, int>(_target, _weapon, 0);
+                soldier.Aim = new Tuple<int, RangedWeapon, int>(_targetId, _weapon, 0);
+                _isNew = true;
             }
             else
             {
+                _isNew = false;
                 // containing aim, increment the bonus
-                int curAim = _soldier.Aim.Item3;
-                _soldier.Aim = new Tuple<BattleSoldier, RangedWeapon, int>(_target, _weapon, curAim + 1);
+                int curAim = soldier.Aim.Item3;
+                soldier.Aim = new Tuple<int, RangedWeapon, int>(_targetId, _weapon, curAim + 1);
             }
-            _soldier.TurnsAiming++;
+            soldier.TurnsAiming++;
         }
 
         public string Description()
         {
-            if(_soldier.Aim?.Item1 == _target && _soldier.Aim.Item3 > 0)
+            if (!_isNew)
             {
-                return _soldier.Soldier.Name + " continues aiming at " + _target.Soldier.Name;
+                return $"{_soldierName} continues aiming at {_targetName}";
             }
             else
             {
-                return _soldier.Soldier.Name + " aims at " + _target.Soldier.Name;
+                return $"{_soldierName} aims at {_targetName}";
             }
         }
+    }
 }

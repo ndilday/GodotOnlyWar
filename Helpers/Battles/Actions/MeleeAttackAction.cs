@@ -15,9 +15,9 @@ namespace OnlyWar.Helpers.Battles.Actions
         private readonly ConcurrentBag<WoundResolution> _resultList;
         private readonly ConcurrentQueue<string> _log;
         private readonly bool _didMove;
-        public MeleeAttackAction(BattleSoldier attacker, BattleSoldier target, 
-                                 MeleeWeapon weapon, bool didMove, 
-                                 ConcurrentBag<WoundResolution> resultList, 
+        public MeleeAttackAction(BattleSoldier attacker, BattleSoldier target,
+                                 MeleeWeapon weapon, bool didMove,
+                                 ConcurrentBag<WoundResolution> resultList,
                                  ConcurrentQueue<string> log)
         {
             _attacker = attacker;
@@ -93,6 +93,11 @@ namespace OnlyWar.Helpers.Battles.Actions
                     _resultList.Add(new WoundResolution(_attacker, _weapon.Template, _target, totalDamage, hitLocation));
                 }
             }
+        }
+
+        public string Description()
+        {
+            return $"{_attacker.Soldier.Name} attacks {_target.Soldier.Name} with {_weapon.Template.Name}, hitting {_resultList.Count} times.";
         }
     }
 }

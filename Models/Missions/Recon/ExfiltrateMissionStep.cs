@@ -26,12 +26,12 @@ namespace OnlyWar.Models.Missions.Recon
 
         public void ExecuteMissionStep(MissionContext context, float marginOfSuccess, IMissionStep returnStep)
         {
-            if(context.Squad.Members.All(s => s.MoveSpeed == 0.0f))
+            if(context.PlayerSquads.SelectMany(s => s.Members).All(s => s.MoveSpeed == 0.0f))
             {
                 // they're dead, Jim
                 return;
             }
-            float margin = _missionTest.RunMissionTest(context.Squad);
+            float margin = _missionTest.RunMissionTest(context.PlayerSquads);
             if (margin > 0.0f)
             {
                 StepIfSuccess.ExecuteMissionStep(context, margin, this);

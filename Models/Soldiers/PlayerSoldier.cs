@@ -148,6 +148,15 @@ namespace OnlyWar.Models.Soldiers
             }
         }
 
+        public object Clone()
+        {
+            return new PlayerSoldier((Soldier)_soldier.Clone(), _soldierEvaluationHistory.ToList(),
+                                     _soldierAwards.ToList(), ProgenoidImplantDate, _soldierHistory.ToList(),
+                                     _rangedWeaponCasualtyCountMap.ToDictionary(kvp => kvp.Key, kvp => kvp.Value),
+                                     _meleeWeaponCasualtyCountMap.ToDictionary(kvp => kvp.Key, kvp => kvp.Value),
+                                     _factionCasualtyCountMap.ToDictionary(kvp => kvp.Key, kvp => kvp.Value));
+        }
+
         public void AddEntryToHistory(string entry)
         {
             _soldierHistory.Add(entry);

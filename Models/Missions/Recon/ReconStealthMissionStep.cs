@@ -31,7 +31,7 @@ namespace OnlyWar.Models.Missions.Recon
             else
             {
                 context.DaysElapsed++;
-                float margin = _missionTest.RunMissionTest(context.Squad);
+                float margin = _missionTest.RunMissionTest(context.PlayerSquads);
                 if (margin > 0.0f)
                 {
                     StepIfSuccess.ExecuteMissionStep(context, margin, this);

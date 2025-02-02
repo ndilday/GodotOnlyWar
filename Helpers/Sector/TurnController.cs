@@ -9,12 +9,10 @@ namespace OnlyWar.Helpers.Sector
 {
     class TurnController
     {
-        BattleConfigurationBuilder _battleConfigurationBuilder;
-
         public TurnController()
         {
-            _battleConfigurationBuilder = new BattleConfigurationBuilder(GameDataSingleton.Instance.GameRulesData.PlayerFaction.Id, GameDataSingleton.Instance.GameRulesData.DefaultFaction.Id);
         }
+
         public void ProcessTurn(Models.Sector sector)
         {
             // for each planet, associate all landed and orbiting squads into the region their Orders target
@@ -23,7 +21,6 @@ namespace OnlyWar.Helpers.Sector
                 var regionSquadMap = MapSquadsToTargetRegions(planet);
                 foreach(var kvp in regionSquadMap)
                 {
-                    _battleConfigurationBuilder.BuildBattleConfigurations(kvp.Key, kvp.Value);
                 }
             }
         }

@@ -25,7 +25,7 @@ namespace OnlyWar.Models.Missions.Recon
         {
             if (!ShouldContinue(context)) return;
             context.DaysElapsed++;
-            float margin = _missionTest.RunMissionTest(context.Squad);
+            float margin = _missionTest.RunMissionTest(context.PlayerSquads);
             if (margin > 0.0f)
             {
                 StepIfSuccess.ExecuteMissionStep(context, margin, this);
@@ -38,7 +38,7 @@ namespace OnlyWar.Models.Missions.Recon
 
         public bool ShouldContinue(MissionContext context)
         {
-            if (context.DaysElapsed >= 6 || context.Squad.Members.All(s => s.MoveSpeed == 0)) return false;
+            if (context.DaysElapsed >= 6 || context.PlayerSquads.SelectMany(s => s.Members).All(s => s.MoveSpeed == 0)) return false;
             return true;
         }
     }

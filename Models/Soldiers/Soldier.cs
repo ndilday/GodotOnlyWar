@@ -21,6 +21,26 @@ namespace OnlyWar.Models.Soldiers
             Body = new Body(hitLocations);
         }
 
+        public object Clone()
+        {
+            Soldier newSoldier = new Soldier(Body.HitLocations.ToList(), _skills.Values.ToList());
+            newSoldier.Id = Id;
+            newSoldier.Strength = Strength;
+            newSoldier.Dexterity = Dexterity;
+            newSoldier.Perception = Perception;
+            newSoldier.Intelligence = Intelligence;
+            newSoldier.Ego = Ego;
+            newSoldier.Charisma = Charisma;
+            newSoldier.Constitution = Constitution;
+            newSoldier.PsychicPower = PsychicPower;
+            newSoldier.AttackSpeed = AttackSpeed;
+            newSoldier.Size = Size;
+            newSoldier.MoveSpeed = MoveSpeed;
+            newSoldier.Name = Name;
+            newSoldier.Template = Template;
+            return newSoldier;
+        }
+
         public int FunctioningHands
         {
             get
