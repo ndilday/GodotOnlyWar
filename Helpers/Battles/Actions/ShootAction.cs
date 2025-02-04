@@ -14,6 +14,8 @@ namespace OnlyWar.Helpers.Battles.Actions
         private string _soldierName, _targetName, _weaponName;
         private readonly ConcurrentBag<WoundResolution> _resultList;
 
+        public int ActorId => ShooterId;
+
         public int ShooterId { get; }
         public int TargetId { get; }
         public int WeaponId { get; }

@@ -15,6 +15,8 @@ namespace OnlyWar.Helpers.Battles.Actions
         private readonly ConcurrentBag<WoundResolution> _resultList;
         private readonly ConcurrentQueue<string> _log;
         private readonly bool _didMove;
+
+        public int ActorId => _attacker.Soldier.Id;
         public MeleeAttackAction(BattleSoldier attacker, BattleSoldier target,
                                  MeleeWeapon weapon, bool didMove,
                                  ConcurrentBag<WoundResolution> resultList,

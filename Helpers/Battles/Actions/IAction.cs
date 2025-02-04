@@ -6,5 +6,6 @@ namespace OnlyWar.Helpers.Battles.Actions
     {
         void Execute(BattleState state);
         string Description();
+        int ActorId { get; }
     }
 }

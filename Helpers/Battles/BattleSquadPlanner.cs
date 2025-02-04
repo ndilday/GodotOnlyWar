@@ -437,7 +437,7 @@ namespace OnlyWar.Helpers.Battles
                 soldier.CurrentSpeed = moveSpeed;
                 _grid.ReserveSpace(newPos);
                 ushort orientation = CalculateOrientationFromVector(move);
-                _moveActionBag.Add(new MoveAction(soldier, _grid, currentPosition, soldier.Orientation, newPos, orientation));
+                _moveActionBag.Add(new MoveAction(soldier, _grid, currentPosition, newPos, orientation));
                 BattleSoldier target = oppSquad.Soldiers.Single(s => s.Soldier.Id == closestEnemyId);
                 _meleeActionBag.Add(new MeleeAttackAction(soldier, target, soldier.MeleeWeapons.Count == 0 ? _defaultMeleeWeapon : soldier.EquippedMeleeWeapons[0], distance >= 2, _woundResolutionBag, _log));
             }
@@ -626,7 +626,7 @@ namespace OnlyWar.Helpers.Battles
             soldier.CurrentSpeed = moveSpeed;
             _grid.ReserveSpace(newLocation);
             ushort orientation = CalculateOrientationFromVector(line);
-            _moveActionBag.Add(new MoveAction(soldier, _grid, soldier.TopLeft, soldier.Orientation, newLocation, orientation));
+            _moveActionBag.Add(new MoveAction(soldier, _grid, soldier.TopLeft, newLocation, orientation));
         }
 
         private Tuple<int, int> CalculateMovementAlongLine(Tuple<int, int> line, float moveSpeed)

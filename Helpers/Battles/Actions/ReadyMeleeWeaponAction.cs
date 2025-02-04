@@ -8,6 +8,9 @@ namespace OnlyWar.Helpers.Battles.Actions
     {
         private readonly BattleSoldier _soldier;
         private readonly MeleeWeapon _weapon;
+
+        public int ActorId => _soldier.Soldier.Id;
+
         public ReadyMeleeWeaponAction(BattleSoldier soldier, MeleeWeapon weapon)
         {
             _soldier = soldier;

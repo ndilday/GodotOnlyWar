@@ -10,14 +10,16 @@ namespace OnlyWar.Helpers.Battles.Actions
         private readonly BattleSoldier _soldier;
         private readonly BattleGridManager _grid;
         private readonly Tuple<int, int> _newTopLeft, _currentTopLeft;
-        private readonly ushort _newOrientation, _currentOrientation;
-        public MoveAction(BattleSoldier soldier, BattleGridManager grid, Tuple<int, int> currentTopLeft, ushort currentOrientation, Tuple<int, int> newTopLeft, ushort orientation)
+        private readonly ushort _newOrientation;
+
+        public int ActorId => _soldier.Soldier.Id;
+
+        public MoveAction(BattleSoldier soldier, BattleGridManager grid, Tuple<int, int> currentTopLeft, Tuple<int, int> newTopLeft, ushort orientation)
         {
             _soldier = soldier;
             _grid = grid;
             _newTopLeft = newTopLeft;
             _newOrientation = orientation;
-            _currentOrientation = currentOrientation;
             _currentTopLeft = currentTopLeft;
         }
 

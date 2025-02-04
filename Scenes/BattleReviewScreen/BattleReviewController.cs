@@ -1,6 +1,7 @@
 using Godot;
 using OnlyWar.Helpers;
 using OnlyWar.Helpers.Battles;
+using OnlyWar.Helpers.Battles.Actions;
 using OnlyWar.Models;
 using OnlyWar.Models.Battles;
 using OnlyWar.Models.Soldiers;
@@ -38,56 +39,54 @@ public partial class BattleReviewController : DialogController
 
 	public void LoadNewHistory(BattleHistory history)
 	{
-		_currentTurn = 0;
-		foreach (Node child in _spriteHolder.GetChildren())
-		{
-			_spriteHolder.RemoveChild(child);
-			child.QueueFree();
-		}
-
-		_history = history;
-
-		_view.SetTurnReportLabel("Battle Review: Turn 0");
-		_view.SetTurnReportText("");
-		_view.EnableTurnButtons(false, true);
-
-		Vector2I topLeftOffset = GetTopLeftOfPositions(_history.Turns[0].State.SoldierPositionsMap.Values.SelectMany(x => x).ToList());
-		foreach(BattleSquad squad in _history.Turns[0].State.PlayerSquads.Values)
-		{
-			DrawSquad(squad, _history.Turns[0].State.SoldierPositionsMap, topLeftOffset, _soldierTexture, _soldierTextureScale, squad.Squad.Faction.Color.ToGodotColor());
-		}
-		foreach(BattleSquad squad in _history.Turns[0].State.OpposingSquads.Values)
-		{
-			DrawSquad(squad, _history.Turns[0].State.SoldierPositionsMap, topLeftOffset, _opForTexture, _opForTextureScale, squad.Squad.Faction.Color.ToGodotColor());
-		}
+        _history = history;
+		DisplayTurn(0);
 	}
 
 	private void OnPreviousTurn()
 	{
-		if(_currentTurn < 2)
+		if(_currentTurn < 1)
 		{
 			throw new InvalidOperationException("Cannot go back any further.");
 		}
-		int turn = _currentTurn - 1;
-		LoadNewHistory(_history);
-		IncrementToTurn(turn);
+		DisplayTurn(_currentTurn - 1);
 	}
 
 	private void OnNextTurn()
 	{
-		IncrementToTurn(_currentTurn + 1);
+		DisplayTurn(_currentTurn + 1);
 	}
 
-	private void IncrementToTurn(int turn)
+	private void DisplayTurn(int turn)
 	{
-		_view.SetTurnReportLabel($"Battle Review: Turn {turn}");
-		_view.EnableTurnButtons(turn > 1, turn < _history.Turns.Count);
-		foreach (Node child in _spriteHolder.GetChildren())
+        _currentTurn = (ushort)turn;
+
+        _view.SetTurnReportLabel("Battle Review: Turn 0");
+		string turnReport = "";
+		foreach(IAction action in _history.Turns[_currentTurn].Actions.OrderByDescending(a => a.ActorId))
 		{
-			_spriteHolder.RemoveChild(child);
-			child.QueueFree();
-		}
-	}
+            turnReport += action.Description() + "\n";
+        }
+        _view.SetTurnReportText(turnReport);
+        _view.EnableTurnButtons(turn > 1, turn < _history.Turns.Count);
+
+        foreach (Node child in _spriteHolder.GetChildren())
+        {
+            _spriteHolder.RemoveChild(child);
+            child.QueueFree();
+        }
+
+        Vector2I topLeftOffset = GetTopLeftOfPositions(_history.Turns[0].State.SoldierPositionsMap.Values.SelectMany(x => x).ToList());
+        foreach (BattleSquad squad in _history.Turns[_currentTurn].State.PlayerSquads.Values)
+        {
+            DrawSquad(squad, _history.Turns[_currentTurn].State.SoldierPositionsMap, topLeftOffset, _soldierTexture, _soldierTextureScale, squad.Squad.Faction.Color.ToGodotColor());
+        }
+        foreach (BattleSquad squad in _history.Turns[_currentTurn].State.OpposingSquads.Values)
+        {
+            DrawSquad(squad, _history.Turns[_currentTurn].State.SoldierPositionsMap, topLeftOffset, _opForTexture, _opForTextureScale, squad.Squad.Faction.Color.ToGodotColor());
+        }
+
+    }
 
 	public Vector2I GetTopLeftOfPositions(IReadOnlyList<Tuple<int, int>> positions)
 	{

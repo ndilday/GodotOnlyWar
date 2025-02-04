@@ -14,6 +14,8 @@ namespace OnlyWar.Helpers.Battles.Actions
         private string _soldierName, _targetName;
         private bool _isNew;
 
+        public int ActorId => _soldierId;
+
         public AimAction(BattleSoldier soldier, BattleSoldier target, RangedWeapon weapon, ConcurrentQueue<string> log)
         {
             _soldierId = soldier.Soldier.Id;
@@ -23,6 +25,7 @@ namespace OnlyWar.Helpers.Battles.Actions
             _weapon = weapon;
             _log = log;
         }
+
         public void Execute(BattleState state)
         {
             BattleSoldier soldier = state.GetSoldier(_soldierId);
