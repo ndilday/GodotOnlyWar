@@ -69,15 +69,15 @@ namespace OnlyWar.Helpers.Battles
             }
         }
 
-        private void WoundResolver_OnSoldierDeath(BattleSoldier casualty, BattleSoldier inflicter, WeaponTemplate weapon)
+        private void WoundResolver_OnSoldierDeath(WoundResolution wound, WoundLevel woundLevel)
         {
-            _casualtyMap[casualty.Soldier.Id] = casualty;
-            if (casualty.BattleSquad.IsPlayerSquad)
+            _casualtyMap[wound.Suffererer.Soldier.Id] = wound.Suffererer;
+            if (wound.Suffererer.BattleSquad.IsPlayerSquad)
             {
                 // add death note to soldier history, though we currently just delete it 
                 // we'll probably want it later
-                PlayerSoldier playerSoldier = casualty.Soldier as PlayerSoldier;
-                playerSoldier.AddEntryToHistory($"Killed in battle with the {_opposingFaction.Name} by a {weapon.Name}");
+                PlayerSoldier playerSoldier = wound.Suffererer.Soldier as PlayerSoldier;
+                playerSoldier.AddEntryToHistory($"Killed in battle with the {_opposingFaction.Name} by a {wound.Weapon.Name}");
             }
             else
             {
@@ -85,20 +85,20 @@ namespace OnlyWar.Helpers.Battles
                 // WARNING: this will lead to multi-counting in some cases
                 // I may later try to divide credit, but having multiple soldiers 
                 // claim credit feels pseudo-realistic for now
-                CreditSoldierForKill(inflicter, weapon);
+                CreditSoldierForKill(wound.Inflicter, wound.Weapon);
             }
         }
 
-        private void WoundResolver_OnSoldierFall(BattleSoldier fallenSoldier, BattleSoldier inflicter, WeaponTemplate weapon)
+        private void WoundResolver_OnSoldierFall(WoundResolution wound, WoundLevel woundLevel)
         {
-            _casualtyMap[fallenSoldier.Soldier.Id] = fallenSoldier;
-            if (!fallenSoldier.BattleSquad.IsPlayerSquad)
+            _casualtyMap[wound.Suffererer.Soldier.Id] = wound.Suffererer;
+            if (!wound.Suffererer.BattleSquad.IsPlayerSquad)
             {
                 // give the inflicter credit for downing this enemy
                 // WARNING: this will lead to multi-counting in some cases
                 // I may later try to divide credit, but having multiple soldiers 
                 // claim credit feels pseudo-realistic for now
-                CreditSoldierForKill(inflicter, weapon);
+                CreditSoldierForKill(wound.Inflicter, wound.Weapon);
             }
         }
 

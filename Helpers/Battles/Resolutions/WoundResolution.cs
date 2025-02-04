@@ -10,6 +10,7 @@ namespace OnlyWar.Helpers.Battles.Resolutions
         public BattleSoldier Suffererer { get; }
         public float Damage { get; }
         public HitLocation HitLocation { get; }
+        public string Description { get; set; }
 
         public WoundResolution(BattleSoldier inflicter, WeaponTemplate weapon, BattleSoldier sufferer, float damage, HitLocation hitLocation)
         {
@@ -18,6 +19,7 @@ namespace OnlyWar.Helpers.Battles.Resolutions
             Suffererer = sufferer;
             Damage = damage;
             HitLocation = hitLocation;
+            Description = null;
         }
     }
 }

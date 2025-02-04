@@ -219,8 +219,7 @@ namespace OnlyWar.Helpers.Battles
                         soldier.Aim.Item2.Template.Id, 
                         range,
                         shotsToFire,
-                        false,
-                        _woundResolutionBag));
+                        false));
                 }
                 else
                 {
@@ -242,8 +241,7 @@ namespace OnlyWar.Helpers.Battles
                             soldier.Aim.Item2.Template.Id,
                             range,
                             shotsToFire,
-                            false,
-                            _woundResolutionBag));
+                            false));
                     }
                     else
                     {
@@ -338,7 +336,7 @@ namespace OnlyWar.Helpers.Battles
                 soldier.CurrentSpeed = 0;
                 MeleeWeapon weapon = soldier.EquippedMeleeWeapons.Count == 0 ? 
                     _defaultMeleeWeapon : soldier.EquippedMeleeWeapons[0];
-                _meleeActionBag.Add(new MeleeAttackAction(soldier, enemy, weapon, false, _woundResolutionBag, _log));
+                _meleeActionBag.Add(new MeleeAttackAction(soldier, enemy, weapon, false, _log));
             }
         }
 
@@ -439,7 +437,7 @@ namespace OnlyWar.Helpers.Battles
                 ushort orientation = CalculateOrientationFromVector(move);
                 _moveActionBag.Add(new MoveAction(soldier, _grid, currentPosition, newPos, orientation));
                 BattleSoldier target = oppSquad.Soldiers.Single(s => s.Soldier.Id == closestEnemyId);
-                _meleeActionBag.Add(new MeleeAttackAction(soldier, target, soldier.MeleeWeapons.Count == 0 ? _defaultMeleeWeapon : soldier.EquippedMeleeWeapons[0], distance >= 2, _woundResolutionBag, _log));
+                _meleeActionBag.Add(new MeleeAttackAction(soldier, target, soldier.MeleeWeapons.Count == 0 ? _defaultMeleeWeapon : soldier.EquippedMeleeWeapons[0], distance >= 2, _log));
             }
         }
 
@@ -472,8 +470,7 @@ namespace OnlyWar.Helpers.Battles
                         weaponProfile.Item3.Template.Id, 
                         range, 
                         shotsToFire, 
-                        isMoving,
-                        _woundResolutionBag));
+                        isMoving));
                 }
                 else if (!isMoving)
                 {

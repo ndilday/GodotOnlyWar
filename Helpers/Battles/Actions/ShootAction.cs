@@ -12,7 +12,6 @@ namespace OnlyWar.Helpers.Battles.Actions
     public class ShootAction : IAction
     {
         private string _soldierName, _targetName, _weaponName;
-        private readonly ConcurrentBag<WoundResolution> _resultList;
 
         public int ActorId => ShooterId;
 
@@ -24,7 +23,7 @@ namespace OnlyWar.Helpers.Battles.Actions
         public bool UseBulk { get; }
         public List<WoundResolution> WoundResolutions { get; }
 
-        public ShootAction(int shooterId, int targetId, int weaponId, float range, int numberOfShots, bool useBulk, ConcurrentBag<WoundResolution> resultList)
+        public ShootAction(int shooterId, int targetId, int weaponId, float range, int numberOfShots, bool useBulk)
         {
             ShooterId = shooterId;
             TargetId = targetId;
@@ -33,7 +32,6 @@ namespace OnlyWar.Helpers.Battles.Actions
             NumberOfShots = numberOfShots;
             UseBulk = useBulk;
             WoundResolutions = new List<WoundResolution>();
-            _resultList = resultList;
         }
 
         public void Execute(BattleState state)
@@ -70,11 +68,6 @@ namespace OnlyWar.Helpers.Battles.Actions
                     } while (total > 1 && numberOfShots > 0);
                 }
                 shooter.TurnsShooting++;
-            }
-
-            foreach (var woundResolution in WoundResolutions)
-            {
-                _resultList.Add(woundResolution);
             }
         }
 

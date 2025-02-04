@@ -7,8 +7,8 @@ namespace OnlyWar.Helpers.Battles.Resolutions
 {
     public class WoundResolver : IResolver
     {
-        public delegate void SoldierDeathHandler(BattleSoldier sufferer, BattleSoldier inflicter, WeaponTemplate weapon);
-        public delegate void SoldierFallHandler(BattleSoldier sufferer, BattleSoldier inflicter, WeaponTemplate weapon);
+        public delegate void SoldierDeathHandler(WoundResolution wound, WoundLevel level);
+        public delegate void SoldierFallHandler(WoundResolution wound, WoundLevel level);
         public event SoldierDeathHandler OnSoldierDeath;
         public event SoldierFallHandler OnSoldierFall;
 
@@ -35,12 +35,7 @@ namespace OnlyWar.Helpers.Battles.Resolutions
 
         private void HandleWound(WoundResolution wound)
         {
-            if (wound.HitLocation.IsSevered)
-            {
-                // this shouldn't happen, as we check elsewhere
-                Log(true, wound.HitLocation.Template.Name + " was previously severed");
-            }
-            else
+            if (!wound.HitLocation.IsSevered)
             {
                 float totalDamage = wound.Damage;
                 WoundLevel woundLevel;
@@ -84,6 +79,7 @@ namespace OnlyWar.Helpers.Battles.Resolutions
                     woundLevel = WoundLevel.Negligible;
                 }
                 wound.HitLocation.Wounds.AddWound(woundLevel);
+                wound.Description = $"{wound.Suffererer.Soldier.Name} suffers {woundLevel.ToString()} wound to {wound.HitLocation.Template.Name}";
 
                 // see if wound.HitLocation is now severed
                 if (wound.HitLocation.IsSevered || wound.HitLocation.IsCrippled)
@@ -91,8 +87,8 @@ namespace OnlyWar.Helpers.Battles.Resolutions
                     // if severed, see if it's an arm or leg
                     if (wound.HitLocation.Template.IsMotive)
                     {
-                        Log(false, "<b>" + wound.Suffererer.Soldier.Name + " can no longer walk</b>");
-                        OnSoldierFall.Invoke(wound.Suffererer, wound.Inflicter, wound.Weapon);
+                        wound.Description += $"\n{wound.Suffererer.Soldier.Name} can no longer walk";
+                        OnSoldierFall.Invoke(wound, woundLevel);
                     }
                     else if(wound.HitLocation.Template.IsRangedWeaponHolder)
                     {
@@ -110,18 +106,10 @@ namespace OnlyWar.Helpers.Battles.Resolutions
                     }
                     if(wound.HitLocation.Template.IsVital && wound.HitLocation.IsCrippled)
                     {
-                        Log(false, "<b>" + wound.Suffererer.Soldier.Name + " has succumbed to their wounds</b>");
-                        OnSoldierFall.Invoke(wound.Suffererer, wound.Inflicter, wound.Weapon);
+                        wound.Description += $"\n{wound.Suffererer.Soldier.Name} has died";
+                        OnSoldierFall.Invoke(wound, woundLevel);
                     }
                 }
-            }
-        }
-
-        private void Log(bool isVerboseMessage, string text)
-        {
-            if (!isVerboseMessage || _allowVerbose)
-            {
-                ResolutionLog += text + "\n";
             }
         }
     }

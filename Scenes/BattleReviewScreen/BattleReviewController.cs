@@ -2,6 +2,7 @@ using Godot;
 using OnlyWar.Helpers;
 using OnlyWar.Helpers.Battles;
 using OnlyWar.Helpers.Battles.Actions;
+using OnlyWar.Helpers.Battles.Resolutions;
 using OnlyWar.Models;
 using OnlyWar.Models.Battles;
 using OnlyWar.Models.Soldiers;
@@ -66,6 +67,20 @@ public partial class BattleReviewController : DialogController
 		foreach(IAction action in _history.Turns[_currentTurn].Actions.OrderByDescending(a => a.ActorId))
 		{
             turnReport += action.Description() + "\n";
+			if (action is ShootAction shootAction)
+			{
+				foreach(WoundResolution wound in shootAction.WoundResolutions)
+                {
+                    turnReport += wound.Description + "\n";
+                }
+            }
+			else if (action is MeleeAttackAction meleeAction)
+			{
+                foreach (WoundResolution wound in meleeAction.WoundResolutions)
+                {
+                    turnReport += wound.Description + "\n";
+                }
+            }
         }
         _view.SetTurnReportText(turnReport);
         _view.EnableTurnButtons(turn > 1, turn < _history.Turns.Count);

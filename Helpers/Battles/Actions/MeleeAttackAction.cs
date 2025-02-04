@@ -4,6 +4,7 @@ using OnlyWar.Helpers.Battles.Resolutions;
 using OnlyWar.Models.Battles;
 using OnlyWar.Models.Equippables;
 using OnlyWar.Models.Soldiers;
+using System.Collections.Generic;
 
 namespace OnlyWar.Helpers.Battles.Actions
 {
@@ -16,18 +17,18 @@ namespace OnlyWar.Helpers.Battles.Actions
         private readonly ConcurrentQueue<string> _log;
         private readonly bool _didMove;
 
+        public List<WoundResolution> WoundResolutions { get; }
         public int ActorId => _attacker.Soldier.Id;
         public MeleeAttackAction(BattleSoldier attacker, BattleSoldier target,
                                  MeleeWeapon weapon, bool didMove,
-                                 ConcurrentBag<WoundResolution> resultList,
                                  ConcurrentQueue<string> log)
         {
             _attacker = attacker;
             _target = target;
             _weapon = weapon;
             _didMove = didMove;
-            _resultList = resultList;
             _log = log;
+            WoundResolutions = new List<WoundResolution>();
         }
         public void Execute(BattleState state)
         {
@@ -92,7 +93,7 @@ namespace OnlyWar.Helpers.Battles.Actions
                 {
                     // determine size of wound
                     float totalDamage = penDamage * _weapon.Template.WoundMultiplier;
-                    _resultList.Add(new WoundResolution(_attacker, _weapon.Template, _target, totalDamage, hitLocation));
+                    WoundResolutions.Add(new WoundResolution(_attacker, _weapon.Template, _target, totalDamage, hitLocation));
                 }
             }
         }
