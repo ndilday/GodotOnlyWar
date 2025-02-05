@@ -3,7 +3,7 @@ using OnlyWar.Models.Fleets;
 using OnlyWar.Models.Squads;
 using OnlyWar.Models.Planets;
 
-namespace OnlyWar.Models.Missions
+namespace OnlyWar.Helpers.Missions
 {
     public enum MissionType
     {
@@ -41,7 +41,7 @@ namespace OnlyWar.Models.Missions
         public TaskForce AssignedTaskForce { get; }
     }
 
-    public interface IGroundMission: IMission
+    public interface IGroundMission : IMission
     {
         public List<Squad> AssignedSquads { get; }
     }
@@ -51,7 +51,7 @@ namespace OnlyWar.Models.Missions
         public Planet Planet { get; }
     }
 
-    public interface IRegionalMission: IGroundMission, IPlanetaryMission
+    public interface IRegionalMission : IGroundMission, IPlanetaryMission
     {
         public Region Region { get; }
     }

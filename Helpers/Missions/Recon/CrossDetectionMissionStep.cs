@@ -1,11 +1,14 @@
-﻿using OnlyWar.Models.Soldiers;
+﻿using OnlyWar.Helpers.Missions;
+using OnlyWar.Models;
+using OnlyWar.Models.Missions;
+using OnlyWar.Models.Soldiers;
 using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 
-namespace OnlyWar.Models.Missions.Recon
+namespace OnlyWar.Helpers.Missions.Recon
 {
     public class CrossDetectionMissionStep : IMissionStep
     {

@@ -5,7 +5,7 @@ using System;
 using System.Collections.Generic;
 
 
-namespace OnlyWar.Models.Missions
+namespace OnlyWar.Helpers.Missions
 {
     class LightningRaidMission : IRegionalMission, ISpaceMission
     {

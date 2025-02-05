@@ -1,8 +1,9 @@
-﻿using OnlyWar.Models.Soldiers;
-using System;
+﻿using OnlyWar.Models;
+using OnlyWar.Models.Missions;
+using OnlyWar.Models.Soldiers;
 using System.Linq;
 
-namespace OnlyWar.Models.Missions.Recon
+namespace OnlyWar.Helpers.Missions.Recon
 {
     public class ReconPerceptionMissionStep : ITestMissionStep
     {

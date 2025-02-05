@@ -1,9 +1,10 @@
 ﻿using OnlyWar.Helpers.Battles;
 using OnlyWar.Helpers.Battles.Placers;
+using OnlyWar.Models.Missions;
 using System.Collections.Generic;
 using System.Linq;
 
-namespace OnlyWar.Models.Missions
+namespace OnlyWar.Helpers.Missions
 {
     internal class AmbushedMissionStep : IMissionStep
     {
@@ -12,7 +13,7 @@ namespace OnlyWar.Models.Missions
         public void ExecuteMissionStep(MissionContext context, float marginOfSuccess, IMissionStep returnStep)
         {
             // every point of margin of success modifies the starting range by 20 yards
-            ushort range = (ushort)(70 + (marginOfSuccess * 20));
+            ushort range = (ushort)(70 + marginOfSuccess * 20);
             // set up Ambush battle with OpFor attacker and context.Squad defender
             BattleGridManager bgm = new BattleGridManager();
             AmbushPlacer placer = new AmbushPlacer(bgm, range);
@@ -24,7 +25,7 @@ namespace OnlyWar.Models.Missions
             BattleTurnResolver resolver = new BattleTurnResolver(bgm, playerForce, opFor, context.Region.Planet, true);
             bool battleDone = false;
             resolver.OnBattleComplete += (sender, e) => { battleDone = true; };
-            while(!battleDone)
+            while (!battleDone)
             {
                 resolver.ProcessNextTurn();
             }

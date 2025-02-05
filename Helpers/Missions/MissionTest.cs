@@ -6,7 +6,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 
-namespace OnlyWar.Models.Missions
+namespace OnlyWar.Helpers.Missions
 {
     public interface IMissionTest
     {
@@ -20,7 +20,7 @@ namespace OnlyWar.Models.Missions
 
         public static float DetermineMarginOfSuccess(float zValue)
         {
-            
+
             double roll = RNG.NextGaussianDouble();
             return (float)(roll - ApproximateNormalCDF(zValue));
         }
@@ -39,7 +39,7 @@ namespace OnlyWar.Models.Missions
             double t = 1.0 / (1.0 + k * x);
 
             double poly = t * (a1 + t * (a2 + t * (a3 + t * (a4 + t * a5))));
-            double prob = 1.0 - (1.0 / Math.Sqrt(2 * Math.PI)) * Math.Exp(-x * x / 2.0) * poly;
+            double prob = 1.0 - 1.0 / Math.Sqrt(2 * Math.PI) * Math.Exp(-x * x / 2.0) * poly;
 
             if (zScore < 0)
                 prob = 1.0 - prob;
@@ -77,7 +77,7 @@ namespace OnlyWar.Models.Missions
 
             double t = Math.Sqrt(Math.Log(1 / (p * p)));
 
-            double z = t - ((c0 + c1 * t + c2 * t * t) / (1 + d1 * t + d2 * t * t + d3 * t * t * t));
+            double z = t - (c0 + c1 * t + c2 * t * t) / (1 + d1 * t + d2 * t * t + d3 * t * t * t);
 
             if (probability > 0.5)
             {
@@ -114,13 +114,13 @@ namespace OnlyWar.Models.Missions
             float advantage = (soldier.GetTotalSkillValue(SkillUsed) - _difficulty) / 5.0f;
             float probMargin = GaussianMissionTestCalculator.DetermineMarginOfSuccess(advantage) + 1;
             float zMargin = 0;
-            if(probMargin < 0)
+            if (probMargin < 0)
             {
                 // if they whiffed by more than 50%, treat 50% of it as 4-sigma
                 zMargin -= 4;
                 probMargin += 0.5f;
             }
-            if(probMargin > 1)
+            if (probMargin > 1)
             {
                 // if they succeeded by more than 50%, treat 50% of it as 4-sigma
                 zMargin += 4;
@@ -139,7 +139,7 @@ namespace OnlyWar.Models.Missions
 
         public override float RunMissionTest(List<Squad> squads)
         {
-            if(!squads.Any(s => s.SquadLeader != null))
+            if (!squads.Any(s => s.SquadLeader != null))
             {
                 return base.RunMissionTest(squads);
             }

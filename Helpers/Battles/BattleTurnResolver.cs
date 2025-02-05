@@ -125,6 +125,7 @@ namespace OnlyWar.Helpers.Battles
             HandleShooting(shootSegmentActions, executedActions);
             HandleMoving(moveSegmentActions, executedActions);
             HandleMelee(meleeSegmentActions, executedActions);
+            _woundResolver.Resolve();
 
             CleanupAtEndOfTurn();
 
@@ -196,7 +197,14 @@ namespace OnlyWar.Helpers.Battles
             foreach (IAction action in shootActions)
             {
                 action.Execute(_currentState);
-                executedActions.Add(action);
+                if (action is ShootAction shootAction)
+                {
+                    foreach (WoundResolution wound in shootAction.WoundResolutions)
+                    {
+                        _woundResolver.WoundQueue.Add(wound);
+                    }
+                }
+                    executedActions.Add(action);
             }
         }
         private void HandleMoving(ConcurrentBag<IAction> moveActions, List<IAction> executedActions)
@@ -213,6 +221,13 @@ namespace OnlyWar.Helpers.Battles
             foreach (IAction action in meleeActions)
             {
                 action.Execute(_currentState);
+                if (action is MeleeAttackAction meleeAction)
+                {
+                    foreach (WoundResolution wound in meleeAction.WoundResolutions)
+                    {
+                        _woundResolver.WoundQueue.Add(wound);
+                    }
+                }
                 executedActions.Add(action);
             }
         }

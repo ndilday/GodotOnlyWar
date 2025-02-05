@@ -1,8 +1,11 @@
-﻿using OnlyWar.Models.Soldiers;
+﻿using OnlyWar.Helpers.Missions;
+using OnlyWar.Models;
+using OnlyWar.Models.Missions;
+using OnlyWar.Models.Soldiers;
 using System;
 using System.Linq;
 
-namespace OnlyWar.Models.Missions.Recon
+namespace OnlyWar.Helpers.Missions.Recon
 {
     public class ReconStealthMissionStep : ITestMissionStep
     {
@@ -23,10 +26,10 @@ namespace OnlyWar.Models.Missions.Recon
 
         public void ExecuteMissionStep(MissionContext context, float marginOfSuccess, IMissionStep returnStep)
         {
-            if(context.DaysElapsed >= 6)
+            if (context.DaysElapsed >= 6)
             {
                 // time to go home
-                
+
             }
             else
             {

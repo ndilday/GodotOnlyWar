@@ -1,10 +1,11 @@
-﻿using System;
+﻿using OnlyWar.Models.Missions;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 
-namespace OnlyWar.Models.Missions
+namespace OnlyWar.Helpers.Missions
 {
     public class MeetingEngagementMissionStep : IMissionStep
     {

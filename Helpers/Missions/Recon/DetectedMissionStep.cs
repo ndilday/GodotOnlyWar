@@ -1,12 +1,15 @@
 ﻿using OnlyWar.Builders;
 using OnlyWar.Helpers;
+using OnlyWar.Helpers.Missions;
+using OnlyWar.Models;
+using OnlyWar.Models.Missions;
 using OnlyWar.Models.Soldiers;
 using OnlyWar.Models.Squads;
 using System;
 using System.Collections.Generic;
 using System.Linq;
 
-namespace OnlyWar.Models.Missions.Recon
+namespace OnlyWar.Helpers.Missions.Recon
 {
     public class DetectedMissionStep : ITestMissionStep
     {
@@ -28,12 +31,12 @@ namespace OnlyWar.Models.Missions.Recon
         public void ExecuteMissionStep(MissionContext context, float marginOfSuccess, IMissionStep returnStep)
         {
             // build OpFor, size increases the lower the MoS, and pushes engagement range in favor of the OpFor
-            int numberOfOpposingSquads = 1 - (ushort)marginOfSuccess;
+            int numberOfOpposingSquads = context.PlayerSquads.Count - (ushort)marginOfSuccess;
             // any fractional value of margin of Success is treated as the probability of an additional squad being added.
-            float fraction = Math.Abs( marginOfSuccess - (ushort)marginOfSuccess );
+            float fraction = Math.Abs(marginOfSuccess - (ushort)marginOfSuccess);
             if (RNG.GetLinearDouble() < fraction)
             {
-                numberOfOpposingSquads++; 
+                numberOfOpposingSquads++;
             }
 
             // shouldn't all be the same squad type

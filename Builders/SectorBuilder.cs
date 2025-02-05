@@ -43,8 +43,9 @@ namespace OnlyWar.Builders
             Date trainingStartDate = new Date(currentDate.Millenium, currentDate.Year - 4, 1);
             ISoldierTrainingService trainingService = new SoldierTrainingCalculator(data.BaseSkillMap.Values);
             PlayerForce playerForce = NewChapterBuilder.CreateChapter(data, trainingService, trainingStartDate, currentDate);
-            Planet chapterPlanet = FoundChapterPlanet(planetList, data.PlayerFaction);
-            PlaceStartingForces(chapterPlanet, playerForce, forceList);
+            FoundTakebackPlanet(playerForce, planetList, forceList);
+            //Planet chapterPlanet = FoundChapterPlanet(planetList, data.PlayerFaction);
+            //PlaceStartingForces(chapterPlanet, playerForce, forceList);
 
             return new Sector(playerForce, characterList, planetList, forceList);
         }
@@ -75,13 +76,36 @@ namespace OnlyWar.Builders
             return PlanetBuilder.Instance.GenerateNewPlanet(data.PlanetTemplateMap, position, controllingFaction, infiltratingFaction);
         }
 
-        
+        private static Planet FoundTakebackPlanet(PlayerForce playerForce, List<Planet> planetList, List<TaskForce> forceList)
+        {
+            var enemyPlanets = planetList.Where(p => !p.ControllingFaction.IsDefaultFaction).OrderBy(p => p.Population);
+            Planet planetToInvade = enemyPlanets.First();
+            // find the region with the lowest population, and set it to the player faction
+            Region regionToInvade = planetToInvade.Regions.OrderBy(r => r.RegionFactionMap[planetToInvade.ControllingFaction.Id].Population).First();
+            regionToInvade.RegionFactionMap.Clear();
+            RegionFaction playerRegionFaction = new RegionFaction(new PlanetFaction(playerForce.Faction), regionToInvade);
+            regionToInvade.RegionFactionMap[playerForce.Faction.Id] = playerRegionFaction;
+
+            playerRegionFaction.LandedSquads.AddRange(playerForce.Army.SquadMap.Values);
+            foreach (Squad squad in playerForce.Army.SquadMap.Values)
+            {
+                if (squad.Members.Count > 0)
+                {
+                    squad.CurrentRegion = regionToInvade;
+                }
+            }
+            foreach (TaskForce taskForce in playerForce.Fleet.TaskForces)
+            {
+                taskForce.Planet = planetToInvade;
+                taskForce.Position = planetToInvade.Position;
+                forceList.Add(taskForce);
+            }
+
+            return planetToInvade;
+        }
 
         private static Planet FoundChapterPlanet(List<Planet> planetList, Faction playerFaction)
         {
-            // TODO: replace this with a random assignment of starting planet
-            // and then have the galaxy map screen default to zooming in
-            // on the Marine starting planet
             var emptyPlanets = planetList.Where(p => p.ControllingFaction.IsDefaultFaction);
             int max = emptyPlanets.Count();
             int chapterPlanetIndex = RNG.GetIntBelowMax(0, max);
