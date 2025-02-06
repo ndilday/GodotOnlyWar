@@ -18,6 +18,7 @@ namespace OnlyWar.Models.Planets
             LandedSquads = new List<Squad>();
             PlanetFaction = planetFaction;
             Region = region;
+            IsPublic = planetFaction.IsPublic;
         }
     }
 }

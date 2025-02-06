@@ -2,28 +2,35 @@ using Godot;
 using System;
 using System.Collections.Generic;
 
-public partial class PlanetTacticalScreenView : Control
+public partial class PlanetTacticalScreenView : DialogView
 {
 	private Button _closeButton;
-    private Tree _regionTree;
+    private Tree _squadTree;
     private VBoxContainer _regionDetailsVBox;
 
-	public event EventHandler CloseButtonPressed;
+    public event EventHandler<Vector2I> SquadTreeItemDoubleClicked;
 
-	public override void _Ready()
+    public override void _Ready()
 	{
-		_closeButton = GetNode<Button>("CloseButton");
-		_closeButton.Pressed += () => CloseButtonPressed?.Invoke(this, EventArgs.Empty);
-        _regionTree = GetNode<Tree>("RegionSquadPanel/Tree");
+        base._Ready();
+        _squadTree = GetNode<Tree>("RegionSquadPanel/Tree");
+        _squadTree.ItemActivated += OnItemActivated;
         _regionDetailsVBox = GetNode<VBoxContainer>("DataPanel/VBoxContainer");
 	}
 
-    public void PopulateRegionTree(IReadOnlyList<TreeNode> entries)
+    private void OnItemActivated()
     {
-        _regionTree.Clear();
-        TreeItem root = _regionTree.CreateItem();
-        _regionTree.HideRoot = true;
-        AddTreeChildren(_regionTree, root, entries, 0);
+        TreeItem item = _squadTree.GetSelected();
+        Vector2I meta = item.GetMetadata(0).As<Vector2I>();
+        SquadTreeItemDoubleClicked.Invoke(item, meta);
+    }
+
+    public void PopulateRegionSquadTree(IReadOnlyList<TreeNode> entries)
+    {
+        _squadTree.Clear();
+        TreeItem root = _squadTree.CreateItem();
+        _squadTree.HideRoot = true;
+        AddTreeChildren(_squadTree, root, entries, 0);
     }
 
     private void AddTreeChildren(Tree tree, TreeItem parentItem, IReadOnlyList<TreeNode> nodes, int level)
@@ -42,7 +49,7 @@ public partial class PlanetTacticalScreenView : Control
         }
     }
 
-    public void PopulateRegionData(IReadOnlyList<Tuple<string, string>> stringPairs)
+    public void ClearRegionData()
     {
         var existingLines = _regionDetailsVBox.GetChildren();
         if (existingLines != null)
@@ -53,6 +60,11 @@ public partial class PlanetTacticalScreenView : Control
                 line.QueueFree();
             }
         }
+    }
+
+    public void PopulateRegionData(IReadOnlyList<Tuple<string, string>> stringPairs)
+    {
+        ClearRegionData();
         foreach (Tuple<string, string> line in stringPairs)
         {
             AddLine(line.Item1, line.Item2);

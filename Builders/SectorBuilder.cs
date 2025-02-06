@@ -56,7 +56,7 @@ namespace OnlyWar.Builders
             // TODO: Once genericized, move into planet factory
             double random = RNG.GetLinearDouble();
             Faction controllingFaction, infiltratingFaction;
-            if (random <= 0.05)
+            if (random <= 0.05f)
             {
                 controllingFaction = data.Factions.First(f => f.Name == "Genestealer Cult");
                 infiltratingFaction = null;

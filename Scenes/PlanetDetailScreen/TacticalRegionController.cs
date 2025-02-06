@@ -6,67 +6,75 @@ using System.Linq;
 
 public partial class TacticalRegionController : Control
 {
-	private TacticalRegionView _view;
-	private Button _button;
-	private Region _region;
+    private TacticalRegionView _view;
+    private Button _button;
+    private Region _region;
 
-	public event EventHandler<Region> TacticalRegionPressed;
+    public event EventHandler<Region> TacticalRegionPressed;
 
-	public override void _Ready()
-	{
-		_view = GetNode<TacticalRegionView>("TacticalRegionView");
-		_button = GetNode<Button>("TacticalRegionView/Button");
-		_button.Pressed += () => TacticalRegionPressed.Invoke(this, _region);
-	}
+    public override void _Ready()
+    {
+        _view = GetNode<TacticalRegionView>("TacticalRegionView");
+        _button = GetNode<Button>("TacticalRegionView/Button");
+        _button.Pressed += () => TacticalRegionPressed.Invoke(this, _region);
+    }
 
-	public void Populate(Region region)
-	{
-		_region = region;
-		RegionFaction playerRegionFaction = region.RegionFactionMap.Values.FirstOrDefault(rf => rf.PlanetFaction.Faction.IsPlayerFaction);
-		RegionFaction defaultFaction = region.RegionFactionMap.Values.FirstOrDefault(rf => rf.PlanetFaction.Faction.IsDefaultFaction);
-		RegionFaction xenosRegionFaction = region.RegionFactionMap.Values.FirstOrDefault(rf => !rf.PlanetFaction.Faction.IsPlayerFaction && !rf.PlanetFaction.Faction.IsDefaultFaction);
-		
-		// we'll need to adjust this to take into account orders later
-		bool showPlayerPublic = playerRegionFaction != null && playerRegionFaction.LandedSquads.Any();
-		string playerPopulation = "";
-		if(showPlayerPublic)
-		{
-			playerPopulation = playerRegionFaction.LandedSquads.Sum(s => s.Members.Count()).ToString();
-		}
-		
-		bool showCivilian = defaultFaction != null && defaultFaction.Population > 0 || (playerRegionFaction != null && playerRegionFaction.Population > 0);
-		string civilianPopulation = "";
-		if(showCivilian)
-		{
-			long population = 0;
-			if(defaultFaction != null)
-			{
-				population += defaultFaction.Population;
-			}
-			if(playerRegionFaction != null)
-			{
-				population += playerRegionFaction.Population;
-			}
-			if(xenosRegionFaction != null && !xenosRegionFaction.IsPublic)
-			{
-				// hidden xenos are added to civilian population
-				population += xenosRegionFaction.Population;
-			}
-			civilianPopulation = population.ToString();
-		}
+    public void Populate(Region region)
+    {
+        _region = region;
+        RegionFaction playerRegionFaction = region.RegionFactionMap.Values.FirstOrDefault(rf => rf.PlanetFaction.Faction.IsPlayerFaction);
+        RegionFaction defaultFaction = region.RegionFactionMap.Values.FirstOrDefault(rf => rf.PlanetFaction.Faction.IsDefaultFaction);
+        RegionFaction xenosRegionFaction = region.RegionFactionMap.Values.FirstOrDefault(rf => !rf.PlanetFaction.Faction.IsPlayerFaction && !rf.PlanetFaction.Faction.IsDefaultFaction);
+        
+        // we'll need to adjust this to take into account orders later
+        bool showPlayerPublic = playerRegionFaction != null && playerRegionFaction.LandedSquads.Any();
+        string playerPopulation = "";
+        if(showPlayerPublic)
+        {
+            playerPopulation = playerRegionFaction.LandedSquads.Sum(s => s.Members.Count()).ToString();
+        }
+        
+        bool showCivilian = defaultFaction != null && defaultFaction.Population > 0 || (playerRegionFaction != null && playerRegionFaction.Population > 0);
+        string civilianPopulation = "";
+        if(showCivilian)
+        {
+            long population = 0;
+            if(defaultFaction != null)
+            {
+                population += defaultFaction.Population;
+            }
+            if(playerRegionFaction != null)
+            {
+                population += playerRegionFaction.Population;
+            }
+            if(xenosRegionFaction != null && !xenosRegionFaction.IsPublic)
+            {
+                // hidden xenos are added to civilian population
+                population += xenosRegionFaction.Population;
+            }
+            civilianPopulation = population.ToString();
+        }
 
-		bool showXenos = xenosRegionFaction != null && xenosRegionFaction.IsPublic;
-		string xenosPopulation = "";
-		if(showXenos)
-		{
-			xenosPopulation = xenosRegionFaction.Population.ToString();
-		}
+        bool showXenos = xenosRegionFaction != null && xenosRegionFaction.IsPublic;
+        string xenosPopulation = "";
+        if(showXenos)
+        {
+            long xenosCount = xenosRegionFaction.Population / 1000 * 1000;
+            if (xenosCount > 0)
+            {
+                xenosPopulation = xenosCount.ToString();
+            }
+            else if (xenosRegionFaction.Population > 0)
+            {
+                xenosPopulation = "Low";
+            }
+        }
 
-		_view.Populate(region.Id, showPlayerPublic, false, showCivilian, showXenos, false, false, playerPopulation, civilianPopulation, xenosPopulation);
-	}
+        _view.Populate(region.Id, showPlayerPublic, false, showCivilian, showXenos, false, false, playerPopulation, civilianPopulation, xenosPopulation);
+    }
 
-	public void AddToButtonGroup(ButtonGroup buttonGroup)
-	{
-		_button.ButtonGroup = buttonGroup;
-	}
+    public void AddToButtonGroup(ButtonGroup buttonGroup)
+    {
+        _button.ButtonGroup = buttonGroup;
+    }
 }

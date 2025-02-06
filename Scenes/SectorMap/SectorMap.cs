@@ -53,7 +53,7 @@ public partial class SectorMap : Node2D
             }
         }
         _subsectorVertexListMap = DetermineSubsectorBorderPoints(subsectors);
-        Planet centerPlanet = GameDataSingleton.Instance.Sector.Planets.Values.First(p => p.ControllingFaction == GameDataSingleton.Instance.Sector.PlayerForce.Faction);
+        Planet centerPlanet = GameDataSingleton.Instance.Sector.PlayerForce.Fleet.TaskForces[0].Planet;
         Vector2I gridPosition = new Vector2I(centerPlanet.Position.Item1, centerPlanet.Position.Item2);
         Vector2I mapPosition = CalculateMapPosition(gridPosition);
         _camera.ZoomTo(1, mapPosition);

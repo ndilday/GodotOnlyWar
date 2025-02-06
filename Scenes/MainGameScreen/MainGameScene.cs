@@ -3,7 +3,9 @@ using OnlyWar.Helpers.Sector;
 using OnlyWar.Models;
 using OnlyWar.Models.Planets;
 using OnlyWar.Models.Soldiers;
+using OnlyWar.Models.Squads;
 using System;
+using System.Collections.Generic;
 using System.Linq;
 
 public partial class MainGameScene : Control
@@ -15,10 +17,11 @@ public partial class MainGameScene : Control
     private ApothecariumScreenController _apothecariumScreen;
     private ConquistorumScreenController _conquistorumScreen;
     private SoldierController _soldierScreen;
+    private SquadScreenController _squadScreen;
     private SoldierView _soldierView;
     private PlanetDetailScreenController _planetDetailScreen;
     private PlanetTacticalScreenController _planetTacticalScreen;
-    private Control _previousScreen;
+    private Stack<Control> _previousScreenStack;
     private CanvasLayer _mainUILayer;
     private TurnController _turnController;
     public override void _Ready()
@@ -34,6 +37,7 @@ public partial class MainGameScene : Control
         _sectorMap.FleetClicked += OnFleetClicked;
         _mainUILayer = GetNode<CanvasLayer>("UILayer");
         _turnController = new TurnController();
+        _previousScreenStack = new Stack<Control>();
     }
 
     public override void _UnhandledInput(InputEvent @event)
@@ -98,7 +102,15 @@ public partial class MainGameScene : Control
 
     private void OnCloseScreen(object sender, EventArgs e)
     {
-        SetMainScreenVisibility(true);
+        if(_previousScreenStack.Count > 0)
+        {
+            Control control = _previousScreenStack.Pop();
+            control.Visible = true;
+        }
+        else
+        {
+            SetMainScreenVisibility(true);
+        }
         ((Control)(sender)).Visible = false;
     }
 
@@ -162,6 +174,7 @@ public partial class MainGameScene : Control
             _planetTacticalScreen = (PlanetTacticalScreenController)planetScene.Instantiate();
 
             _planetTacticalScreen.CloseButtonPressed += OnCloseScreen;
+            _planetTacticalScreen.SquadDoubleClicked += OnSquadDoubleClicked;
             _mainUILayer.AddChild(_planetTacticalScreen);
         }
         _planetTacticalScreen.PopulatePlanetData(planet);
@@ -195,7 +208,7 @@ public partial class MainGameScene : Control
         _soldierScreen.DisplaySoldierData(soldier);
         _soldierScreen.Visible = true;
         Control control = (Control)sender;
-        _previousScreen = control;
+        _previousScreenStack.Push(control);
         control.Visible = false;
     }
 
@@ -206,8 +219,22 @@ public partial class MainGameScene : Control
         {
             _chapterScreen.PopulateCompanyList();
         }
-        _soldierScreen.Visible = false;
-        _previousScreen.Visible = true;
-        _previousScreen = null;
+        OnCloseScreen(_soldierScreen, e);
+    }
+
+    private void OnSquadDoubleClicked(object sender, Squad squad)
+    {
+        if(_squadScreen == null)
+        {
+            PackedScene squadScene = GD.Load<PackedScene>("res://Scenes/SquadScreen/squad_screen.tscn");
+            _squadScreen = (SquadScreenController)squadScene.Instantiate();
+            _mainUILayer.AddChild(_squadScreen);
+            _squadScreen.CloseButtonPressed += OnCloseScreen;
+        }
+        _squadScreen.SetSquad(squad);
+        _squadScreen.Visible = true;
+        Control control = (Control)sender;
+        _previousScreenStack.Push(control);
+        control.Visible = false;
     }
 }
