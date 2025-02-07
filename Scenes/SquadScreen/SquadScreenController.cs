@@ -27,6 +27,18 @@ public partial class SquadScreenController : DialogController
         List<Tuple<string, string>> lines = [];
         lines.Add(new Tuple<string, string>("Squad Name", _squad.Name));
         lines.Add(new Tuple<string, string>("Squad Type", _squad.SquadTemplate.Name));
+        if (_squad.CurrentRegion != null)
+        {
+            lines.Add(new Tuple<string, string>("Location", _squad.CurrentRegion.Name));
+        }
+        else if (_squad.BoardedLocation != null)
+        {
+            lines.Add(new Tuple<string, string>("Ship", _squad.BoardedLocation.Name));
+        }
+        else
+        {
+            lines.Add(new Tuple<string, string>("Location", "Unknown"));
+        }
         lines.Add(new Tuple<string, string>("Squad Size", _squad.Members.Count.ToString()));
         lines.Add(new Tuple<string, string>("Combat Ready Brothers", _squad.Members.Where(s => CanFight(s)).Count().ToString()));
 
