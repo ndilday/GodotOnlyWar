@@ -20,6 +20,7 @@ public partial class SquadScreenController : DialogController
     {
         _squad = squad;
         PopulateSquadDetails();
+        PopulateSquadLoadout();
     }
 
     private void PopulateSquadDetails()
@@ -43,6 +44,21 @@ public partial class SquadScreenController : DialogController
         lines.Add(new Tuple<string, string>("Combat Ready Brothers", _squad.Members.Where(s => CanFight(s)).Count().ToString()));
 
         _view.PopulateSquadData(lines);
+    }
+
+    private void PopulateSquadLoadout()
+    {
+        List<Tuple<List<string>, int, int>> weaponSets = new List<Tuple<List<string>, int, int>>();
+        foreach (var weaponOptions in _squad.SquadTemplate.WeaponOptions)
+        {
+            Tuple<List<string>, int, int> options =
+                new Tuple<List<string>, int, int>(
+                    weaponOptions.Options.Select(o => o.Name).ToList(),
+                    weaponOptions.MinNumber,
+                    weaponOptions.MaxNumber);
+            weaponSets.Add(options);
+        }
+        _view.PopulateSquadLoadout(weaponSets);
     }
 
     private bool CanFight(ISoldier soldier)

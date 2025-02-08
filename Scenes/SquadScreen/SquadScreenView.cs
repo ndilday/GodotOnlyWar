@@ -5,11 +5,13 @@ using System.Collections.Generic;
 public partial class SquadScreenView : DialogView
 {
     private VBoxContainer _squadDetailsVBox;
+    private VBoxContainer _squadLoadoutVBox;
 
     public override void _Ready()
     {
         base._Ready();
         _squadDetailsVBox = GetNode<VBoxContainer>("DataPanel/VBoxContainer");
+        _squadLoadoutVBox = GetNode<VBoxContainer>("LoadoutPanel/VBoxContainer");
     }
 
     public void ClearSquadData()
@@ -20,6 +22,19 @@ public partial class SquadScreenView : DialogView
             foreach (var line in existingLines)
             {
                 _squadDetailsVBox.RemoveChild(line);
+                line.QueueFree();
+            }
+        }
+    }
+
+    public void ClearSquadLoadout()
+    {
+        var existingLines = _squadLoadoutVBox.GetChildren();
+        if (existingLines != null)
+        {
+            foreach (var line in existingLines)
+            {
+                _squadLoadoutVBox.RemoveChild(line);
                 line.QueueFree();
             }
         }
@@ -53,5 +68,19 @@ public partial class SquadScreenView : DialogView
         lineValue.SizeFlagsHorizontal = SizeFlags.ExpandFill;
         linePanel.AddChild(lineValue);
         _squadDetailsVBox.AddChild(linePanel);
+    }
+
+    public void PopulateSquadLoadout(List<Tuple<List<string>, int, int>> weaponSets)
+    {
+        ClearSquadLoadout();
+        PackedScene weaponSetSelectionScene = GD.Load<PackedScene>("res://Scenes/ChapterScreen/weapon_set_selection.tscn");
+        foreach (var weaponSet in weaponSets)
+        {
+            
+            WeaponSetSelectionView view = (WeaponSetSelectionView)weaponSetSelectionScene.Instantiate();
+            _squadLoadoutVBox.AddChild(view);
+            view.Initialize(weaponSet.Item1, weaponSet.Item2, weaponSet.Item3);
+        }
+
     }
 }
