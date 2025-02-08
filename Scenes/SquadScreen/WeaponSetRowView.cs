@@ -1,4 +1,5 @@
 using Godot;
+using System;
 
 public partial class WeaponSetRowView : Control
 {
@@ -9,11 +10,16 @@ public partial class WeaponSetRowView : Control
 	[Export]
 	public int MaximumCount { get => (int)_weaponCount.MaxValue; set => _weaponCount.MaxValue = value; }
 	public int Count { get => (int)_weaponCount.Value; }
-	public override void _Ready()
+	public string Name { get => _weaponSetNameLabel.Text; }
+
+    public event EventHandler<int> CountChanged;
+
+    public override void _Ready()
 	{
 		_weaponSetNameLabel = GetNode<RichTextLabel>("WeaponSetNameLabel");
 		_weaponCount = GetNode<SpinBox>("WeaponCount");
-	}
+		_weaponCount.Changed += () => CountChanged.Invoke(this, (int)_weaponCount.Value);
+    }
 
 	public void SetCount(int count)
 	{
