@@ -14,7 +14,7 @@ public partial class SquadScreenView : DialogView
     {
         base._Ready();
         _squadDetailsVBox = GetNode<VBoxContainer>("DataPanel/VBoxContainer");
-        _squadLoadoutVBox = GetNode<VBoxContainer>("LoadoutPanel/VBoxContainer");
+        _squadLoadoutVBox = GetNode<VBoxContainer>("LoadoutPanel/ScrollContainer/VBoxContainer");
     }
 
     public void ClearSquadData()

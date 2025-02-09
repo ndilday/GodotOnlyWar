@@ -1,7 +1,7 @@
 using Godot;
 using System;
 
-public partial class WeaponSetRowView : Control
+public partial class WeaponSetRowView : HBoxContainer
 {
 	private RichTextLabel _weaponSetNameLabel;
 	private SpinBox _weaponCount;

@@ -2,9 +2,8 @@
 
 [ext_resource type="Script" path="res://Scenes/SquadScreen/WeaponSetRowView.cs" id="1_ejhhc"]
 
-[node name="WeaponSetRowView" type="Control"]
+[node name="WeaponSetRowView" type="HBoxContainer"]
 custom_minimum_size = Vector2(0, 30)
-layout_mode = 3
 anchors_preset = 15
 anchor_right = 1.0
 anchor_bottom = 1.0
@@ -16,21 +15,16 @@ script = ExtResource("1_ejhhc")
 
 [node name="WeaponSetNameLabel" type="RichTextLabel" parent="."]
 custom_minimum_size = Vector2(0, 25)
-layout_mode = 1
-anchors_preset = -1
-anchor_right = 0.7
-anchor_bottom = 1.0
-offset_right = 1.0
-grow_vertical = 2
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_stretch_ratio = 7.0
 text = "Bolter"
 fit_content = true
 vertical_alignment = 1
 
 [node name="WeaponCount" type="SpinBox" parent="."]
 custom_minimum_size = Vector2(0, 30)
-layout_mode = 1
-anchors_preset = -1
-anchor_left = 0.7
-anchor_right = 1.0
-anchor_bottom = 1.0
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_stretch_ratio = 3.0
 max_value = 1.0

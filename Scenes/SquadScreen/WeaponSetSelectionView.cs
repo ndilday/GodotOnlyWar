@@ -2,7 +2,7 @@ using Godot;
 using System;
 using System.Collections.Generic;
 
-public partial class WeaponSetSelectionView : Control
+public partial class WeaponSetSelectionView : PanelContainer
 {
     private List<string> _weaponSetNames;
     private List<WeaponSetRowView> _weaponSetRows;
@@ -14,8 +14,8 @@ public partial class WeaponSetSelectionView : Control
     public event EventHandler<Tuple<string, int>> WeaponSetCountChanged;
     public override void _Ready()
     {
-        _weaponSetVBox = GetNode<VBoxContainer>("PanelContainer/VBoxContainer");
-        _header = GetNode<RichTextLabel>("PanelContainer/VBoxContainer/RichTextLabel");
+        _weaponSetVBox = GetNode<VBoxContainer>("VBoxContainer");
+        _header = GetNode<RichTextLabel>("VBoxContainer/RichTextLabel");
         _weaponSetRows = new List<WeaponSetRowView>();
     }
 
