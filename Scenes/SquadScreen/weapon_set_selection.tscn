@@ -1,7 +1,6 @@
-[gd_scene load_steps=3 format=3 uid="uid://b0ol6f8hvj43u"]
+[gd_scene load_steps=2 format=3 uid="uid://bokraoucv7ore"]
 
 [ext_resource type="Script" path="res://Scenes/SquadScreen/WeaponSetSelectionView.cs" id="1_ii0tk"]
-[ext_resource type="PackedScene" uid="uid://bqab7yc4cnj5i" path="res://Scenes/SquadScreen/weapon_set_row.tscn" id="2_aomip"]
 
 [node name="WeaponSetSelectionView" type="Control"]
 layout_mode = 3
@@ -26,12 +25,7 @@ theme_override_constants/separation = 10
 
 [node name="RichTextLabel" type="RichTextLabel" parent="PanelContainer/VBoxContainer"]
 clip_contents = false
+custom_minimum_size = Vector2(0, 25)
 layout_mode = 2
 text = "Max 1"
 fit_content = true
-
-[node name="WeaponSetRowView" parent="PanelContainer/VBoxContainer" instance=ExtResource("2_aomip")]
-layout_mode = 2
-
-[node name="WeaponSetRowView2" parent="PanelContainer/VBoxContainer" instance=ExtResource("2_aomip")]
-layout_mode = 2

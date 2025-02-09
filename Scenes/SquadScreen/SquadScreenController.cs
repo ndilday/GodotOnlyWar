@@ -1,4 +1,5 @@
 using Godot;
+using OnlyWar.Models.Equippables;
 using OnlyWar.Models.Soldiers;
 using OnlyWar.Models.Squads;
 using System;
@@ -14,6 +15,32 @@ public partial class SquadScreenController : DialogController
     {
         base._Ready();
         _view = GetNode<SquadScreenView>("DialogView");
+        _view.WeaponSetSelectionWeaponSetCountChanged += OnWeaponSetSelectionWeaponSetCountChanged;
+    }
+
+    private void OnWeaponSetSelectionWeaponSetCountChanged(object sender, Tuple<string, int> args)
+    {
+        WeaponSetSelectionView view = (WeaponSetSelectionView)sender;
+        string optionName = view.Name;
+        var matchingLoadouts = _squad.Loadout.Where(ws => ws.Name == args.Item1);
+        if(matchingLoadouts.Count() > args.Item2)
+        {
+            // remove the difference between the current count and the new count
+            for (int i = 0; i < matchingLoadouts.Count() - args.Item2; i++)
+            {
+                _squad.Loadout.Remove(matchingLoadouts.First());
+                _squad.Loadout.Add(_squad.SquadTemplate.DefaultWeapons);
+            }
+        }
+        else if(matchingLoadouts.Count() < args.Item2)
+        {
+            // add the difference between the current count and the new count
+            for (int i = 0; i < args.Item2 - matchingLoadouts.Count(); i++)
+            {
+                _squad.Loadout.Remove(_squad.SquadTemplate.DefaultWeapons);
+                _squad.Loadout.Add(_squad.SquadTemplate.WeaponOptions.First(o => o.Name == optionName).Options.First(o => o.Name == args.Item1));
+            }
+        }
     }
 
     public void SetSquad(Squad squad)
@@ -48,17 +75,40 @@ public partial class SquadScreenController : DialogController
 
     private void PopulateSquadLoadout()
     {
-        List<Tuple<List<string>, int, int>> weaponSets = new List<Tuple<List<string>, int, int>>();
+        List<Tuple<List<string>, string, int, int, int>> weaponSets = new List<Tuple<List<string>, string, int, int, int>>();
+        WeaponSet defaultWs = _squad.SquadTemplate.DefaultWeapons;
+        
+        int ableBodied = _squad.Members.Where(s => CanFight(s)).Count();
+        Dictionary<SquadWeaponOption, int> weaponSetCounts = new Dictionary<SquadWeaponOption, int>();
+        foreach (WeaponSet ws in _squad.Loadout)
+        {
+            if(ws != defaultWs)
+            {
+                var option = _squad.SquadTemplate.WeaponOptions.First(o => o.Options.Contains(ws));
+                if(weaponSetCounts.ContainsKey(option))
+                {
+                    weaponSetCounts[option]++;
+                }
+                else
+                {
+                    weaponSetCounts[option] = 1;
+                }
+            }
+        }
         foreach (var weaponOptions in _squad.SquadTemplate.WeaponOptions)
         {
-            Tuple<List<string>, int, int> options =
-                new Tuple<List<string>, int, int>(
+            Tuple<List<string>, string, int, int, int> options =
+                new Tuple<List<string>, string, int, int, int>(
                     weaponOptions.Options.Select(o => o.Name).ToList(),
+                    weaponOptions.Name,
                     weaponOptions.MinNumber,
-                    weaponOptions.MaxNumber);
+                    weaponOptions.MaxNumber,
+                    weaponSetCounts.ContainsKey(weaponOptions) ? weaponSetCounts[weaponOptions] : 0);
             weaponSets.Add(options);
         }
-        _view.PopulateSquadLoadout(weaponSets);
+        int defaultCount = ableBodied - weaponSetCounts.Values.Sum();
+        Tuple<string, int> defaultOptions = new Tuple<string, int>(defaultWs.Name, defaultCount);
+        _view.PopulateSquadLoadout(weaponSets, defaultOptions, ableBodied);
     }
 
     private bool CanFight(ISoldier soldier)

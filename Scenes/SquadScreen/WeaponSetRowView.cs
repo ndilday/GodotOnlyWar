@@ -10,7 +10,7 @@ public partial class WeaponSetRowView : Control
 	[Export]
 	public int MaximumCount { get => (int)_weaponCount.MaxValue; set => _weaponCount.MaxValue = value; }
 	public int Count { get => (int)_weaponCount.Value; }
-	public string Name { get => _weaponSetNameLabel.Text; }
+	public string WeaponSetName { get => _weaponSetNameLabel.Text; }
 
     public event EventHandler<int> CountChanged;
 
@@ -18,7 +18,7 @@ public partial class WeaponSetRowView : Control
 	{
 		_weaponSetNameLabel = GetNode<RichTextLabel>("WeaponSetNameLabel");
 		_weaponCount = GetNode<SpinBox>("WeaponCount");
-		_weaponCount.Changed += () => CountChanged.Invoke(this, (int)_weaponCount.Value);
+        _weaponCount.ValueChanged += (double d) => CountChanged?.Invoke(this, (int)d);
     }
 
 	public void SetCount(int count)

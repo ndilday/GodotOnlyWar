@@ -10,40 +10,37 @@ public partial class WeaponSetSelectionView : Control
     private RichTextLabel _header;
     private int _minimumCount;
     private int _maximumCount;
+
+    public event EventHandler<Tuple<string, int>> WeaponSetCountChanged;
     public override void _Ready()
     {
         _weaponSetVBox = GetNode<VBoxContainer>("PanelContainer/VBoxContainer");
         _header = GetNode<RichTextLabel>("PanelContainer/VBoxContainer/RichTextLabel");
+        _weaponSetRows = new List<WeaponSetRowView>();
     }
 
-    public void Initialize(List<string> weaponSetNames, int minimumCount, int maximumCount)
+    public void Initialize(List<string> weaponSetNames, string name, int minimumCount, int maximumCount, int currentCount)
     {
-        if(_weaponSetRows != null)
-        {
-            foreach (WeaponSetRowView row in _weaponSetRows)
-            {
-                _weaponSetVBox.RemoveChild(row);
-                row.CountChanged -= OnCountChanged;
-                row.QueueFree();
-                
-            }
-        }
+        Name = name;
+        ClearWeaponSetRows();
         _weaponSetNames = weaponSetNames;
         _minimumCount = minimumCount;
         _maximumCount = maximumCount;
-        UpdateHeaderText();
+        
         foreach(string weaponSetName in _weaponSetNames)
         {
-            PackedScene planetScene = GD.Load<PackedScene>("res://Scenes/SquadScreen/WeaponSetRowView.tscn");
-            WeaponSetRowView row = (WeaponSetRowView)planetScene.Instantiate();
+            PackedScene weaponSetRowScene = GD.Load<PackedScene>("res://Scenes/SquadScreen/weapon_set_row.tscn");
+            WeaponSetRowView row = (WeaponSetRowView)weaponSetRowScene.Instantiate();
+            _weaponSetVBox.AddChild(row);
             row.SetWeaponSetName(weaponSetName);
             row.MinimumCount = _minimumCount;
             row.MaximumCount = _maximumCount;
-            row.SetCount(0);
+            row.SetCount(currentCount);
             row.CountChanged += OnCountChanged;
-            _weaponSetVBox.AddChild(row);
+            
             _weaponSetRows.Add(row);
         }
+        UpdateHeaderText();
     }
 
     public List<Tuple<string, int>> GetWeaponSetCounts()
@@ -51,9 +48,22 @@ public partial class WeaponSetSelectionView : Control
         List<Tuple<string, int>> weaponSetCounts = new List<Tuple<string, int>>();
         foreach (WeaponSetRowView row in _weaponSetRows)
         {
-            weaponSetCounts.Add(new Tuple<string, int>(row.Name, row.Count));
+            weaponSetCounts.Add(new Tuple<string, int>(row.WeaponSetName, row.Count));
         }
         return weaponSetCounts;
+    }
+
+    private void ClearWeaponSetRows()
+    {
+        if (_weaponSetRows != null)
+        {
+            foreach (WeaponSetRowView row in _weaponSetRows)
+            {
+                _weaponSetVBox.RemoveChild(row);
+                row.CountChanged -= OnCountChanged;
+                row.QueueFree();
+            }
+        }
     }
 
     private void UpdateHeaderText()
@@ -102,5 +112,7 @@ public partial class WeaponSetSelectionView : Control
             }
         }
         UpdateHeaderText();
+        Tuple<string, int> eventData = new Tuple<string, int>(row.WeaponSetName, newCount);
+        WeaponSetCountChanged.Invoke(this, eventData);
     }
 }

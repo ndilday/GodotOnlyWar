@@ -6,6 +6,9 @@ public partial class SquadScreenView : DialogView
 {
     private VBoxContainer _squadDetailsVBox;
     private VBoxContainer _squadLoadoutVBox;
+    private int _headcount;
+
+    public event EventHandler<Tuple<string, int>> WeaponSetSelectionWeaponSetCountChanged;
 
     public override void _Ready()
     {
@@ -70,16 +73,23 @@ public partial class SquadScreenView : DialogView
         _squadDetailsVBox.AddChild(linePanel);
     }
 
-    public void PopulateSquadLoadout(List<Tuple<List<string>, int, int>> weaponSets)
+    public void PopulateSquadLoadout(List<Tuple<List<string>, string, int, int, int>> weaponSets, Tuple<string, int> defaultWeaponSet, int headcount)
     {
         ClearSquadLoadout();
-        PackedScene weaponSetSelectionScene = GD.Load<PackedScene>("res://Scenes/ChapterScreen/weapon_set_selection.tscn");
+        _headcount = headcount;
+        PackedScene weaponSetSelectionScene = GD.Load<PackedScene>("res://Scenes/SquadScreen/weapon_set_selection.tscn");
+        // add default Weapon set at top, set min and max for it to its current value
+        WeaponSetSelectionView defaultView = (WeaponSetSelectionView)weaponSetSelectionScene.Instantiate();
+        _squadLoadoutVBox.AddChild(defaultView);
+        List<string> defaultWeaponSetList = new List<string> { defaultWeaponSet.Item1};
+        defaultView.Initialize(defaultWeaponSetList, "default", defaultWeaponSet.Item2, defaultWeaponSet.Item2, defaultWeaponSet.Item2);
         foreach (var weaponSet in weaponSets)
         {
             
             WeaponSetSelectionView view = (WeaponSetSelectionView)weaponSetSelectionScene.Instantiate();
             _squadLoadoutVBox.AddChild(view);
-            view.Initialize(weaponSet.Item1, weaponSet.Item2, weaponSet.Item3);
+            view.Initialize(weaponSet.Item1, weaponSet.Item2, weaponSet.Item3, weaponSet.Item4, weaponSet.Item5);
+            view.WeaponSetCountChanged += (object sender, Tuple<string, int> args) => WeaponSetSelectionWeaponSetCountChanged?.Invoke(sender, args);
         }
 
     }
