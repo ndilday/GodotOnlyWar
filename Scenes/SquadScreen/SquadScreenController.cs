@@ -10,6 +10,7 @@ public partial class SquadScreenController : DialogController
 {
     private Squad _squad;
     private SquadScreenView _view;
+    private int _ableBodied;
 
     public override void _Ready()
     {
@@ -41,11 +42,15 @@ public partial class SquadScreenController : DialogController
                 _squad.Loadout.Add(_squad.SquadTemplate.WeaponOptions.First(o => o.Name == optionName).Options.First(o => o.Name == args.Item1));
             }
         }
+        int defaultCount = _ableBodied - _squad.Loadout.Where(ws => ws != _squad.SquadTemplate.DefaultWeapons).Count();
+        _view.SetDefaultWeaponSetCount(defaultCount);
+        _view.DisableCountIncreases(defaultCount == 0);
     }
 
     public void SetSquad(Squad squad)
     {
         _squad = squad;
+        _ableBodied = _squad.Members.Where(s => CanFight(s)).Count();
         PopulateSquadDetails();
         PopulateSquadLoadout();
     }
@@ -78,7 +83,6 @@ public partial class SquadScreenController : DialogController
         List<Tuple<List<string>, string, int, int, int>> weaponSets = new List<Tuple<List<string>, string, int, int, int>>();
         WeaponSet defaultWs = _squad.SquadTemplate.DefaultWeapons;
         
-        int ableBodied = _squad.Members.Where(s => CanFight(s)).Count();
         Dictionary<SquadWeaponOption, int> weaponSetCounts = new Dictionary<SquadWeaponOption, int>();
         foreach (WeaponSet ws in _squad.Loadout)
         {
@@ -102,13 +106,13 @@ public partial class SquadScreenController : DialogController
                     weaponOptions.Options.Select(o => o.Name).ToList(),
                     weaponOptions.Name,
                     weaponOptions.MinNumber,
-                    weaponOptions.MaxNumber,
+                    Math.Min(weaponOptions.MaxNumber, _ableBodied),
                     weaponSetCounts.ContainsKey(weaponOptions) ? weaponSetCounts[weaponOptions] : 0);
             weaponSets.Add(options);
         }
-        int defaultCount = ableBodied - weaponSetCounts.Values.Sum();
+        int defaultCount = _ableBodied - weaponSetCounts.Values.Sum();
         Tuple<string, int> defaultOptions = new Tuple<string, int>(defaultWs.Name, defaultCount);
-        _view.PopulateSquadLoadout(weaponSets, defaultOptions, ableBodied);
+        _view.PopulateSquadLoadout(weaponSets, defaultOptions);
     }
 
     private bool CanFight(ISoldier soldier)

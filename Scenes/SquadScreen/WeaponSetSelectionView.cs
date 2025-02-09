@@ -1,6 +1,7 @@
 using Godot;
 using System;
 using System.Collections.Generic;
+using System.Linq;
 
 public partial class WeaponSetSelectionView : PanelContainer
 {
@@ -10,6 +11,7 @@ public partial class WeaponSetSelectionView : PanelContainer
     private RichTextLabel _header;
     private int _minimumCount;
     private int _maximumCount;
+    private int _temporaryMaximumCount;
 
     public event EventHandler<Tuple<string, int>> WeaponSetCountChanged;
     public override void _Ready()
@@ -51,6 +53,15 @@ public partial class WeaponSetSelectionView : PanelContainer
             weaponSetCounts.Add(new Tuple<string, int>(row.WeaponSetName, row.Count));
         }
         return weaponSetCounts;
+    }
+
+    public void DisableInrease(bool disable)
+    {
+        int total = _weaponSetRows.Sum(row => row.Count);
+        foreach (WeaponSetRowView row in _weaponSetRows)
+        {
+            row.MaximumCount = disable ? row.Count : row.Count + (_maximumCount - total);
+        }
     }
 
     private void ClearWeaponSetRows()

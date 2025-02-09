@@ -343,3 +343,21 @@ horizontal_scroll_mode = 0
 [node name="VBoxContainer" type="VBoxContainer" parent="DialogView/LoadoutPanel/ScrollContainer" index="0"]
 layout_mode = 2
 size_flags_horizontal = 3
+
+[node name="DefaultHBox" type="HBoxContainer" parent="DialogView/LoadoutPanel/ScrollContainer/VBoxContainer" index="0"]
+layout_mode = 2
+size_flags_vertical = 3
+
+[node name="Name" type="RichTextLabel" parent="DialogView/LoadoutPanel/ScrollContainer/VBoxContainer/DefaultHBox" index="0"]
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_stretch_ratio = 7.0
+text = "Bolter"
+fit_content = true
+
+[node name="Count" type="RichTextLabel" parent="DialogView/LoadoutPanel/ScrollContainer/VBoxContainer/DefaultHBox" index="1"]
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_stretch_ratio = 3.0
+text = "0"
+fit_content = true

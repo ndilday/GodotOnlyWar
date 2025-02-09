@@ -6,9 +6,32 @@ public partial class WeaponSetRowView : HBoxContainer
 	private RichTextLabel _weaponSetNameLabel;
 	private SpinBox _weaponCount;
 	[Export]
-	public int MinimumCount { get => (int)_weaponCount.MinValue; set => _weaponCount.MinValue = value; }
+	public int MinimumCount
+	{
+		get
+		{
+			return (int)_weaponCount.MinValue;
+
+		}
+		set
+		{
+			_weaponCount.MinValue = value;
+			//_weaponCount.
+		}
+	}
 	[Export]
-	public int MaximumCount { get => (int)_weaponCount.MaxValue; set => _weaponCount.MaxValue = value; }
+	public int MaximumCount
+	{
+		get
+		{
+			return (int)_weaponCount.MaxValue;
+		}
+		set
+		{
+			_weaponCount.MaxValue = value;
+			_weaponCount.QueueRedraw();
+		}
+	}
 	public int Count { get => (int)_weaponCount.Value; }
 	public string WeaponSetName { get => _weaponSetNameLabel.Text; }
 
