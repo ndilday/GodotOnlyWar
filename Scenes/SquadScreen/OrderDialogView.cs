@@ -68,6 +68,21 @@ public partial class OrderDialogView : Panel
         }
     }
 
+    public int GetSelectedMissionId()
+    {
+        return _missionOption.GetSelectedId();
+    }
+
+    public void SelectRegion(int regionId)
+    {
+        _regionOption.Select(_regionOption.GetItemIndex(regionId));
+    }
+
+    public void SelectMission(int missionId)
+    {
+        _missionOption.Select(_missionOption.GetItemIndex(missionId));
+    }
+
     private void OnRegionOptionItemSelected(long index)
     {
         RegionOptionSelected?.Invoke(this, _regionOption.GetItemId((int)index));
