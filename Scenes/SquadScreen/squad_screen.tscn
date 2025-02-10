@@ -265,43 +265,11 @@ anchor_bottom = 0.84
 offset_right = 0.0
 offset_bottom = 0.0
 
-[node name="OrdersPanel" type="Panel" parent="DialogView" index="4"]
+[node name="LoadoutPanel" type="Panel" parent="DialogView" index="4"]
 layout_mode = 1
 anchors_preset = -1
 anchor_top = 0.5
 anchor_right = 0.5
-anchor_bottom = 1.0
-offset_left = 5.0
-offset_top = 5.0
-offset_right = -5.0
-offset_bottom = -5.0
-
-[node name="Panel" type="Panel" parent="DialogView/OrdersPanel" index="0"]
-layout_mode = 1
-anchors_preset = 10
-anchor_right = 1.0
-offset_bottom = 40.0
-grow_horizontal = 2
-
-[node name="RichTextLabel" type="RichTextLabel" parent="DialogView/OrdersPanel/Panel" index="0"]
-layout_mode = 1
-anchors_preset = 15
-anchor_right = 1.0
-anchor_bottom = 1.0
-grow_horizontal = 2
-grow_vertical = 2
-theme_override_font_sizes/normal_font_size = 16
-text = "Orders"
-fit_content = true
-horizontal_alignment = 1
-vertical_alignment = 1
-
-[node name="LoadoutPanel" type="Panel" parent="DialogView" index="5"]
-layout_mode = 1
-anchors_preset = -1
-anchor_left = 0.5
-anchor_top = 0.5
-anchor_right = 1.0
 anchor_bottom = 1.0
 offset_left = 5.0
 offset_top = 5.0
@@ -361,3 +329,170 @@ size_flags_horizontal = 3
 size_flags_stretch_ratio = 3.0
 text = "0"
 fit_content = true
+
+[node name="OrdersPanel" type="Panel" parent="DialogView" index="5"]
+layout_mode = 1
+anchors_preset = -1
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = 5.0
+offset_top = 5.0
+offset_right = -5.0
+offset_bottom = -5.0
+
+[node name="Panel" type="Panel" parent="DialogView/OrdersPanel" index="0"]
+layout_mode = 1
+anchors_preset = 10
+anchor_right = 1.0
+offset_bottom = 40.0
+grow_horizontal = 2
+
+[node name="RichTextLabel" type="RichTextLabel" parent="DialogView/OrdersPanel/Panel" index="0"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_font_sizes/normal_font_size = 16
+text = "Orders"
+fit_content = true
+horizontal_alignment = 1
+vertical_alignment = 1
+
+[node name="VBoxContainer" type="VBoxContainer" parent="DialogView/OrdersPanel" index="1"]
+layout_mode = 1
+anchors_preset = -1
+anchor_right = 1.0
+anchor_bottom = 0.5
+offset_left = 5.0
+offset_top = 45.0
+offset_right = -5.0
+offset_bottom = -5.0
+
+[node name="DataLinePanel" type="Panel" parent="DialogView/OrdersPanel/VBoxContainer" index="0"]
+custom_minimum_size = Vector2(0, 20)
+layout_mode = 2
+
+[node name="Label" type="Label" parent="DialogView/OrdersPanel/VBoxContainer/DataLinePanel" index="0"]
+layout_mode = 1
+anchors_preset = 9
+anchor_bottom = 1.0
+offset_right = 117.0
+grow_vertical = 2
+text = "Mission Type"
+
+[node name="Label2" type="Label" parent="DialogView/OrdersPanel/VBoxContainer/DataLinePanel" index="1"]
+layout_mode = 1
+anchors_preset = 11
+anchor_left = 1.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = -137.0
+grow_horizontal = 0
+grow_vertical = 2
+text = "Recon"
+horizontal_alignment = 2
+
+[node name="DataLinePanel2" type="Panel" parent="DialogView/OrdersPanel/VBoxContainer" index="1"]
+custom_minimum_size = Vector2(0, 20)
+layout_mode = 2
+
+[node name="Label" type="Label" parent="DialogView/OrdersPanel/VBoxContainer/DataLinePanel2" index="0"]
+layout_mode = 1
+anchors_preset = 9
+anchor_bottom = 1.0
+offset_right = 117.0
+grow_vertical = 2
+text = "Mission Target"
+
+[node name="Label2" type="Label" parent="DialogView/OrdersPanel/VBoxContainer/DataLinePanel2" index="1"]
+layout_mode = 1
+anchors_preset = 11
+anchor_left = 1.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = -137.0
+grow_horizontal = 0
+grow_vertical = 2
+text = "Region Foobar"
+horizontal_alignment = 2
+
+[node name="DataLinePanel3" type="Panel" parent="DialogView/OrdersPanel/VBoxContainer" index="2"]
+custom_minimum_size = Vector2(0, 20)
+layout_mode = 2
+
+[node name="Label" type="Label" parent="DialogView/OrdersPanel/VBoxContainer/DataLinePanel3" index="0"]
+layout_mode = 1
+anchors_preset = 9
+anchor_bottom = 1.0
+offset_right = 117.0
+grow_vertical = 2
+text = "Size of Operation"
+
+[node name="Label2" type="Label" parent="DialogView/OrdersPanel/VBoxContainer/DataLinePanel3" index="1"]
+layout_mode = 1
+anchors_preset = 11
+anchor_left = 1.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = -137.0
+grow_horizontal = 0
+grow_vertical = 2
+text = "3 Squads"
+horizontal_alignment = 2
+
+[node name="DataLinePanel4" type="Panel" parent="DialogView/OrdersPanel/VBoxContainer" index="3"]
+custom_minimum_size = Vector2(0, 20)
+layout_mode = 2
+
+[node name="Label" type="Label" parent="DialogView/OrdersPanel/VBoxContainer/DataLinePanel4" index="0"]
+layout_mode = 1
+anchors_preset = 9
+anchor_bottom = 1.0
+offset_right = 117.0
+grow_vertical = 2
+text = "Engagement Level"
+
+[node name="Label2" type="Label" parent="DialogView/OrdersPanel/VBoxContainer/DataLinePanel4" index="1"]
+layout_mode = 1
+anchors_preset = 11
+anchor_left = 1.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = -137.0
+grow_horizontal = 0
+grow_vertical = 2
+text = "Prudent"
+horizontal_alignment = 2
+
+[node name="ButtonVBox" type="VBoxContainer" parent="DialogView/OrdersPanel" index="2"]
+layout_mode = 1
+anchors_preset = -1
+anchor_top = 0.5
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = 5.0
+offset_right = -5.0
+offset_bottom = -5.0
+
+[node name="UnassignButton" type="Button" parent="DialogView/OrdersPanel/ButtonVBox" index="0"]
+layout_mode = 2
+disabled = true
+text = "Unassign"
+
+[node name="EditMissionButton" type="Button" parent="DialogView/OrdersPanel/ButtonVBox" index="1"]
+layout_mode = 2
+disabled = true
+text = "Edit Mission Parameters"
+
+[node name="NewOrdersButton" type="Button" parent="DialogView/OrdersPanel/ButtonVBox" index="2"]
+layout_mode = 2
+text = "New Orders"
+
+[node name="AssignToExistingButton" type="Button" parent="DialogView/OrdersPanel/ButtonVBox" index="3"]
+layout_mode = 2
+disabled = true
+text = "Assign to Existing Operation"

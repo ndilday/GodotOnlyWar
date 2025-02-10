@@ -53,6 +53,7 @@ public partial class SquadScreenController : DialogController
         _ableBodied = _squad.Members.Where(s => CanFight(s)).Count();
         PopulateSquadDetails();
         PopulateSquadLoadout();
+        PopulateSquadOrders();
     }
 
     private void PopulateSquadDetails()
@@ -113,6 +114,25 @@ public partial class SquadScreenController : DialogController
         int defaultCount = _ableBodied - weaponSetCounts.Values.Sum();
         Tuple<string, int> defaultOptions = new Tuple<string, int>(defaultWs.Name, defaultCount);
         _view.PopulateSquadLoadout(weaponSets, defaultOptions);
+    }
+
+    private void PopulateSquadOrders()
+    {
+        PopulateOrderDetails();
+    }
+
+    private void PopulateOrderDetails()
+    {
+        List<Tuple<string, string>> lines = [];
+        if (_squad.CurrentOrders != null)
+        {
+            lines.Add(new Tuple<string, string>("Mission Type", _squad.CurrentOrders.MissionType.ToString()));
+            lines.Add(new Tuple<string, string>("Mission Target", _squad.CurrentOrders.TargetRegion.Name));
+            lines.Add(new Tuple<string, string>("Size of Operation", "This Squad"));
+            lines.Add(new Tuple<string, string>("Engagement Level", _squad.CurrentOrders.LevelOfAggression.ToString()));
+            _view.SetOpenOrdersButtonText("Edit Current Orders");
+        }
+        _view.PopulateOrderDetails(lines);
     }
 
     private bool CanFight(ISoldier soldier)

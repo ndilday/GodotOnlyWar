@@ -6,19 +6,32 @@ public partial class SquadScreenView : DialogView
 {
     private VBoxContainer _squadDetailsVBox;
     private VBoxContainer _squadLoadoutVBox;
+    private VBoxContainer _squadOrderDetailsVBox;
     private RichTextLabel _defaultName;
     private RichTextLabel _defaultCount;
+    private Button _unassignButton;
+    private Button _openOrdersButton;
+    private Button _assignToExistingButton;
     private List<WeaponSetSelectionView> _weaponSets;
 
     public event EventHandler<Tuple<string, int>> WeaponSetSelectionWeaponSetCountChanged;
+    public event EventHandler OrdersUnassigned;
+    public event EventHandler OpenOrders;
 
     public override void _Ready()
     {
         base._Ready();
         _squadDetailsVBox = GetNode<VBoxContainer>("DataPanel/VBoxContainer");
         _squadLoadoutVBox = GetNode<VBoxContainer>("LoadoutPanel/ScrollContainer/VBoxContainer");
+        _squadOrderDetailsVBox = GetNode<VBoxContainer>("OrdersPanel/VBoxContainer");
         _defaultName = GetNode<RichTextLabel>("LoadoutPanel/ScrollContainer/VBoxContainer/DefaultHBox/Name");
         _defaultCount = GetNode<RichTextLabel>("LoadoutPanel/ScrollContainer/VBoxContainer/DefaultHBox/Count");
+        _unassignButton = GetNode<Button>("OrdersPanel/ButtonVBox/UnassignButton");
+        _unassignButton.Pressed += () => OrdersUnassigned(this, EventArgs.Empty);
+        _openOrdersButton = GetNode<Button>("OrdersPanel/ButtonVBox/OpenOrdersButton");
+        _openOrdersButton.Pressed += () => OpenOrders(this, EventArgs.Empty);
+        _assignToExistingButton = GetNode<Button>("OrdersPanel/ButtonVBox/AssignToExistingButton");
+        _assignToExistingButton.Pressed += OnAssignToExistingPressed;
         _weaponSets = new List<WeaponSetSelectionView>();
     }
 
@@ -49,12 +62,32 @@ public partial class SquadScreenView : DialogView
         }
     }
 
+    public void ClearOrderDetails()
+    {
+        var existingLines = _squadOrderDetailsVBox.GetChildren();
+        if (existingLines != null)
+        {
+            foreach (var line in existingLines)
+            {
+                _squadOrderDetailsVBox.RemoveChild(line);
+                line.QueueFree();
+            }
+        }
+        _unassignButton.Disabled = true;
+        _openOrdersButton.Disabled = false;
+    }
+
+    public void SetOpenOrdersButtonText(string text)
+    {
+        _openOrdersButton.Text = text;
+    }
+
     public void PopulateSquadData(IReadOnlyList<Tuple<string, string>> stringPairs)
     {
         ClearSquadData();
         foreach (Tuple<string, string> line in stringPairs)
         {
-            AddLine(line.Item1, line.Item2);
+            AddLine(_squadDetailsVBox, line.Item1, line.Item2);
         }
     }
 
@@ -78,6 +111,15 @@ public partial class SquadScreenView : DialogView
 
     }
 
+    public void PopulateOrderDetails(List<Tuple<string, string>> lines)
+    {
+        ClearOrderDetails();
+        foreach (Tuple<string, string> line in lines)
+        {
+            AddLine(_squadOrderDetailsVBox, line.Item1, line.Item2);
+        }
+    }
+
     public void SetDefaultWeaponSetCount(int count)
     {
         _defaultCount.Text = count.ToString();
@@ -96,7 +138,17 @@ public partial class SquadScreenView : DialogView
         WeaponSetSelectionWeaponSetCountChanged?.Invoke(sender, args);
     }
 
-    private void AddLine(string label, string value)
+    private void OnNewOrdersPressed()
+    {
+
+    }
+
+    private void OnAssignToExistingPressed()
+    {
+
+    }
+
+    private void AddLine(VBoxContainer container, string label, string value)
     {
         Panel linePanel = new Panel();
         linePanel.SizeFlagsHorizontal = SizeFlags.Fill;
@@ -114,6 +166,6 @@ public partial class SquadScreenView : DialogView
         lineValue.HorizontalAlignment = HorizontalAlignment.Right;
         lineValue.SizeFlagsHorizontal = SizeFlags.ExpandFill;
         linePanel.AddChild(lineValue);
-        _squadDetailsVBox.AddChild(linePanel);
+        container.AddChild(linePanel);
     }
 }

@@ -16,7 +16,6 @@ public partial class WeaponSetRowView : HBoxContainer
 		set
 		{
 			_weaponCount.MinValue = value;
-			//_weaponCount.
 		}
 	}
 	[Export]
@@ -29,7 +28,6 @@ public partial class WeaponSetRowView : HBoxContainer
 		set
 		{
 			_weaponCount.MaxValue = value;
-			_weaponCount.QueueRedraw();
 		}
 	}
 	public int Count { get => (int)_weaponCount.Value; }
