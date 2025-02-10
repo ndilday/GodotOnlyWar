@@ -1,10 +1,11 @@
-[gd_scene load_steps=6 format=3 uid="uid://dsarfq22dygfx"]
+[gd_scene load_steps=7 format=3 uid="uid://dsarfq22dygfx"]
 
 [ext_resource type="PackedScene" uid="uid://cadpqoqxtyo0p" path="res://Scenes/Dialog.tscn" id="1_dvu1q"]
 [ext_resource type="Script" uid="uid://cswadmsuhrvoa" path="res://Scenes/SquadScreen/SquadScreenController.cs" id="2_ti2l8"]
 [ext_resource type="Script" uid="uid://bi4fuirqin5ex" path="res://Scenes/SquadScreen/SquadScreenView.cs" id="3_v5skr"]
 [ext_resource type="Texture2D" uid="uid://cdmukgd7syaa8" path="res://Assets/marines_shooting_jungle.jpg" id="4_v5skr"]
 [ext_resource type="PackedScene" uid="uid://bgmsb5cki6qvk" path="res://Scenes/PlanetDetailScreen/tactical_region.tscn" id="5_p4ihy"]
+[ext_resource type="PackedScene" uid="uid://ctlbf6wo4jcii" path="res://Scenes/SquadScreen/order_dialog.tscn" id="6_p4ihy"]
 
 [node name="SquadScreenController" instance=ExtResource("1_dvu1q")]
 script = ExtResource("2_ti2l8")
@@ -492,3 +493,7 @@ text = "Edit Mission Parameters"
 layout_mode = 2
 disabled = true
 text = "Assign to Existing Operation"
+
+[node name="OrderDialogController" parent="DialogView" index="6" instance=ExtResource("6_p4ihy")]
+visible = false
+layout_mode = 1

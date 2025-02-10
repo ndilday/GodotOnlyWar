@@ -10,6 +10,7 @@ public partial class SquadScreenController : DialogController
 {
     private Squad _squad;
     private SquadScreenView _view;
+    private OrderDialogController _orderController;
     private int _ableBodied;
 
     public override void _Ready()
@@ -17,6 +18,12 @@ public partial class SquadScreenController : DialogController
         base._Ready();
         _view = GetNode<SquadScreenView>("DialogView");
         _view.WeaponSetSelectionWeaponSetCountChanged += OnWeaponSetSelectionWeaponSetCountChanged;
+        _view.OpenOrders += OnOpenOrders;
+        _orderController = GetNode<OrderDialogController>("DialogView/OrderDialogController");
+    }
+    private void OnOpenOrders(object sender, EventArgs e)
+    {
+        _orderController.Visible = true;
     }
 
     private void OnWeaponSetSelectionWeaponSetCountChanged(object sender, Tuple<string, int> args)
