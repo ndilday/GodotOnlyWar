@@ -1,7 +1,7 @@
 [gd_scene load_steps=3 format=3 uid="uid://ctlbf6wo4jcii"]
 
 [ext_resource type="Script" uid="uid://b443rpj6kcnov" path="res://Scenes/SquadScreen/OrderDialogController.cs" id="1_xrp5v"]
-[ext_resource type="Script" path="res://Scenes/SquadScreen/OrderDialogView.cs" id="2_503px"]
+[ext_resource type="Script" uid="uid://bta6v4wkcssf8" path="res://Scenes/SquadScreen/OrderDialogView.cs" id="2_503px"]
 
 [node name="OrderDialogController" type="Control"]
 layout_mode = 3
@@ -27,7 +27,7 @@ anchor_right = 1.0
 offset_bottom = 40.0
 grow_horizontal = 2
 
-[node name="RichTextLabel" type="RichTextLabel" parent="OrderDialogView/Panel"]
+[node name="HeaderLabel" type="RichTextLabel" parent="OrderDialogView/Panel"]
 layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
@@ -161,4 +161,5 @@ offset_left = -105.0
 offset_top = -45.0
 offset_right = -5.0
 offset_bottom = -5.0
+disabled = true
 text = "Confirm"
