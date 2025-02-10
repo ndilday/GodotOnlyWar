@@ -44,11 +44,11 @@ namespace OnlyWar.Models.Orders
 
     public enum Aggression
     {
-        Cautious = -2,
-        Manoeuvre = -1,
-        Normal = 0,
-        Attritional = 1,
-        Absolute = 2
+        Avoid = 0,
+        Cautious = 1,
+        Normal = 2,
+        Attritional = 3,
+        Aggressive = 4
     }
 
     public enum MissionType

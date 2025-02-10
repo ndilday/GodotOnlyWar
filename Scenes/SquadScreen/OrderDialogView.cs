@@ -15,6 +15,7 @@ public partial class OrderDialogView : Panel
 
     public event EventHandler<int> MissionOptionSelected;
     public event EventHandler<int> RegionOptionSelected;
+    public event EventHandler<int> AggressionOptionSelected;
     public event EventHandler<Tuple<int, int, int>> OrdersConfirmed;
     public event EventHandler Canceled;
 
@@ -38,6 +39,11 @@ public partial class OrderDialogView : Panel
     public void SetHeader(string header)
     {
         _headerLabel.Text = header;
+    }
+
+    public void SetAggressionDescription(string text)
+    {
+        _aggressionDescription.Text = text;
     }
 
     public void ClearRegionOptions()
@@ -97,6 +103,7 @@ public partial class OrderDialogView : Panel
 
     private void OnAggressionOptionItemSelected(long index)
     {
+        AggressionOptionSelected?.Invoke(this, _aggressionOption.GetItemId((int)index));
         _confirmButton.Disabled = _regionOption.Selected == -1 || _missionOption.Selected == -1;
     }
 

@@ -14,6 +14,7 @@ public partial class OrderDialogController : Control
     {
         _view = GetNode<OrderDialogView>("OrderDialogView");
         _view.RegionOptionSelected += OnRegionOptionSelected;
+        _view.AggressionOptionSelected += OnAggressionOptionSelected;
     }
 
     public void PopulateOrderData(Squad squad)
@@ -44,5 +45,11 @@ public partial class OrderDialogController : Control
         // get the currently selected mission, if any
         // populate the mission dropbox
         // if the currently selected mission is still possible in the newly selected region, select it in the new region
+    }
+
+    private void OnAggressionOptionSelected(object sender, int e)
+    {
+        // change aggression helper text
+        _view.SetAggressionDescription("");
     }
 }
