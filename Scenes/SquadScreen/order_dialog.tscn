@@ -1,0 +1,47 @@
+[gd_scene load_steps=3 format=3 uid="uid://ctlbf6wo4jcii"]
+
+[ext_resource type="Script" path="res://Scenes/SquadScreen/OrderDialogController.cs" id="1_xrp5v"]
+[ext_resource type="Script" path="res://Scenes/SquadScreen/OrderDialogView.cs" id="2_503px"]
+
+[node name="OrderDialogController" type="Control"]
+layout_mode = 3
+anchor_left = 0.1
+anchor_top = 0.1
+anchor_right = 0.9
+anchor_bottom = 0.9
+script = ExtResource("1_xrp5v")
+
+[node name="OrderDialogView" type="Panel" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+script = ExtResource("2_503px")
+
+[node name="CancelButton" type="Button" parent="OrderDialogView"]
+layout_mode = 1
+anchors_preset = -1
+anchor_left = 1.0
+anchor_top = 1.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = -210.0
+offset_top = -45.0
+offset_right = -110.0
+offset_bottom = -5.0
+text = "Cancel"
+
+[node name="ConfirmButton" type="Button" parent="OrderDialogView"]
+layout_mode = 1
+anchors_preset = -1
+anchor_left = 1.0
+anchor_top = 1.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = -105.0
+offset_top = -45.0
+offset_right = -5.0
+offset_bottom = -5.0
+text = "Confirm"
