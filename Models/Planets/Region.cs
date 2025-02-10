@@ -1,4 +1,5 @@
-﻿using System.Collections.Generic;
+﻿using System;
+using System.Collections.Generic;
 using System.Linq;
 
 namespace OnlyWar.Models.Planets
@@ -8,6 +9,7 @@ namespace OnlyWar.Models.Planets
         public readonly int Id;
         public readonly Planet Planet;
         public readonly string Name;
+        public readonly Tuple<int, int> Coordinates;
         // territory is diamond-shaped
         // 1
         // 2 3
@@ -53,12 +55,13 @@ namespace OnlyWar.Models.Planets
             }
         }
 
-        public Region(int id, Planet planet, int regionType, string name)
+        public Region(int id, Planet planet, int regionType, string name, Tuple<int, int> coordinates)
         {
             Id = id;
             Planet = planet;
             RegionFactionMap = [];
             Name = name;
+            Coordinates = coordinates;
         }
 
 

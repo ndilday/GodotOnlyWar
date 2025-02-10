@@ -86,7 +86,7 @@ namespace OnlyWar.Helpers.Database.GameState
                     bool isUnderAssault = reader.GetBoolean(5);
 
                     Planet planet = planets.First(p => p.Id == planetId);
-                    Region region = new Region(id, planet, regionType, regionName);
+                    Region region = new Region(id, planet, regionType, regionName, RegionExtensions.GetCoordinatesFromRegionNumber(regionNumber));
                     regionMap[id] = region;
                     planet.Regions[regionNumber] = region;
                 }
