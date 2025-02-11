@@ -48,6 +48,11 @@ namespace OnlyWar.Helpers
             }
         }
 
+        public static List<Region> GetSelfAndAdjacentRegions(Region region)
+        {
+            return new List<Region> { region }.Union(GetAdjacentRegions(region)).ToList();
+        }
+
         public static List<Region> GetAdjacentRegions(Region region)
         {
             List<Region> adjacentRegions = new List<Region>();

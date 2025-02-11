@@ -1,7 +1,10 @@
-[gd_scene load_steps=3 format=3 uid="uid://ctlbf6wo4jcii"]
+[gd_scene load_steps=4 format=3 uid="uid://ctlbf6wo4jcii"]
 
 [ext_resource type="Script" uid="uid://b443rpj6kcnov" path="res://Scenes/SquadScreen/OrderDialogController.cs" id="1_xrp5v"]
 [ext_resource type="Script" uid="uid://bta6v4wkcssf8" path="res://Scenes/SquadScreen/OrderDialogView.cs" id="2_503px"]
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_xrp5v"]
+bg_color = Color(0, 0, 0, 1)
 
 [node name="OrderDialogController" type="Control"]
 layout_mode = 3
@@ -18,6 +21,7 @@ anchor_right = 1.0
 anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
+theme_override_styles/panel = SubResource("StyleBoxFlat_xrp5v")
 script = ExtResource("2_503px")
 
 [node name="Panel" type="Panel" parent="OrderDialogView"]
@@ -81,6 +85,7 @@ fit_content = true
 layout_mode = 2
 size_flags_horizontal = 3
 size_flags_stretch_ratio = 5.0
+disabled = true
 item_count = 1
 popup/item_0/text = "Planetus Alpha"
 popup/item_0/id = 0

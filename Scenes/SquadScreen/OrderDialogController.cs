@@ -1,5 +1,6 @@
 using Godot;
 using OnlyWar.Helpers;
+using OnlyWar.Models.Orders;
 using OnlyWar.Models.Planets;
 using OnlyWar.Models.Squads;
 using System;
@@ -21,13 +22,26 @@ public partial class OrderDialogController : Control
         _view = GetNode<OrderDialogView>("OrderDialogView");
         _view.RegionOptionSelected += OnRegionOptionSelected;
         _view.AggressionOptionSelected += OnAggressionOptionSelected;
+        _view.OrdersConfirmed += OnOrdersConfirmed;
+        _view.Canceled += OnCanceled;
     }
 
     public void PopulateOrderData(Squad squad)
     {
         _squad = squad;
+        
+        string header = $"Orders for {squad.Name}, {squad.ParentUnit.Name}";
+        _view.SetHeader(header);
+
         // determine the regions adjacent to the squad's current region
-        var adjacentRegions = RegionExtensions.GetAdjacentRegions(squad.CurrentRegion);
+        var adjacentRegions = RegionExtensions.GetSelfAndAdjacentRegions(squad.CurrentRegion);
+        PopulateRegionOptions(adjacentRegions);
+
+        if (squad.CurrentOrders == null)
+        {
+            _view.SetAggressionDescription("");
+            _view.SetMissionDescription("");
+        }
     }
 
     private void PopulateRegionOptions(IReadOnlyList<Region> regions, Region currentlySelectedRegion = null)
@@ -39,19 +53,27 @@ public partial class OrderDialogController : Control
         {
             _view.SelectRegion(currentlySelectedRegion.Id);
         }
+        else
+        {
+            _view.SelectRegion(-1);
+        }
     }
 
     private void PopulateMissions(Region region)
     {
-
+        Tuple<string, int> recon = new Tuple<string, int>("Recon", 0);
+        _view.PopulateMissionOptions(new List<Tuple<string, int>> { recon });
     }
 
     private void OnRegionOptionSelected(object sender, int e)
     {
+        // get selected region
+        Region selectedRegion = _squad.CurrentRegion.Planet.Regions.First(r => r.Id == e);
         // get the missions available for the selected region
         // get the currently selected mission, if any
         // populate the mission dropbox
         // if the currently selected mission is still possible in the newly selected region, select it in the new region
+        PopulateMissions(selectedRegion);
     }
 
     private void OnAggressionOptionSelected(object sender, int e)
@@ -78,5 +100,19 @@ public partial class OrderDialogController : Control
         }
 
         _view.SetAggressionDescription(text);
+    }
+
+    private void OnOrdersConfirmed(object sender, Tuple<int, int, int> args)
+    {
+        Region selectedRegion = _squad.CurrentRegion.Planet.Regions.First(r => r.Id == args.Item1);
+        //mission stuff related to args.Item2;
+        Aggression aggro = (Aggression)args.Item3;
+        _squad.CurrentOrders = new Order(0, _squad, selectedRegion, Disposition.Mobile, true, false, aggro, MissionType.Recon);
+        Visible = false;
+    }
+
+    private void OnCanceled(object sender, EventArgs e)
+    {
+        Visible = false;
     }
 }

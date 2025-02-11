@@ -58,6 +58,7 @@ namespace OnlyWar.Models.Orders
         Sabotage,
         Assassination,
         Ambush,
-        Recovery
+        Recovery,
+        Recon
     }
 }

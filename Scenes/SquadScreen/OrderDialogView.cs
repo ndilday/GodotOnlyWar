@@ -46,6 +46,11 @@ public partial class OrderDialogView : Panel
         _aggressionDescription.Text = text;
     }
 
+    public void SetMissionDescription(string text)
+    {
+        _missionDescription.Text = text;
+    }
+
     public void ClearRegionOptions()
     {
         _regionOption.Clear();
@@ -93,6 +98,7 @@ public partial class OrderDialogView : Panel
     {
         RegionOptionSelected?.Invoke(this, _regionOption.GetItemId((int)index));
         _confirmButton.Disabled = _missionOption.Selected == -1 || _aggressionOption.Selected == -1;
+        _missionOption.Disabled = false;
     }
 
     private void OnMissionOptionItemSelected(long index)

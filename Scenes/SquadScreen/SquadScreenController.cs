@@ -23,6 +23,7 @@ public partial class SquadScreenController : DialogController
     }
     private void OnOpenOrders(object sender, EventArgs e)
     {
+        _orderController.PopulateOrderData(_squad);
         _orderController.Visible = true;
     }
 
@@ -138,6 +139,10 @@ public partial class SquadScreenController : DialogController
             lines.Add(new Tuple<string, string>("Size of Operation", "This Squad"));
             lines.Add(new Tuple<string, string>("Engagement Level", _squad.CurrentOrders.LevelOfAggression.ToString()));
             _view.SetOpenOrdersButtonText("Edit Current Orders");
+        }
+        else
+        {
+            _view.SetOpenOrdersButtonText("Assign Orders");
         }
         _view.PopulateOrderDetails(lines);
     }
