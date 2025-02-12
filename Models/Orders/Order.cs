@@ -1,4 +1,4 @@
-﻿using OnlyWar.Models.Missions;
+﻿using OnlyWar.Builders;
 using OnlyWar.Models.Planets;
 using OnlyWar.Models.Squads;
 
@@ -20,6 +20,18 @@ namespace OnlyWar.Models.Orders
         public bool IsActivelyEngaging { get; }
         public Aggression LevelOfAggression { get; }
         public MissionType MissionType { get; }
+
+        public Order(Squad orderedSquad, Region targetRegion, Disposition disposition, bool isQuiet, bool isActivelyEngaging, Aggression levelOfAggression, MissionType missionType)
+        {
+            Id = OrderIdGenerator.GetNextOrderId();
+            OrderedSquad = orderedSquad;
+            Disposition = disposition;
+            IsQuiet = isQuiet;
+            IsActivelyEngaging = isActivelyEngaging;
+            LevelOfAggression = levelOfAggression;
+            TargetRegion = targetRegion;
+            MissionType = missionType;
+        }
 
         public Order(int id, Squad orderedSquad, Region targetRegion, Disposition disposition, bool isQuiet, bool isActivelyEngaging, Aggression levelOfAggression, MissionType missionType)
         {
@@ -53,12 +65,21 @@ namespace OnlyWar.Models.Orders
 
     public enum MissionType
     {
-        Default = 0,
-        Train,
-        Sabotage,
+        LightningRaid,
+        Infiltrate,
+        EstablishAirhead,
+        CloseAirSupport,
+        HitAndRun,
+        Recon,
+        Patrol,
+        Advance,
+        DeepStrike,
+        Fortify,
+        DefenseInDepth,
+        LastStand,
         Assassination,
+        ObjectiveRaid,
         Ambush,
-        Recovery,
-        Recon
+        Extermination
     }
 }

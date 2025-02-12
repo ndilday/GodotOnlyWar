@@ -1,5 +1,6 @@
 using Godot;
 using OnlyWar.Helpers;
+using OnlyWar.Models;
 using OnlyWar.Models.Orders;
 using OnlyWar.Models.Planets;
 using OnlyWar.Models.Squads;
@@ -107,7 +108,12 @@ public partial class OrderDialogController : Control
         Region selectedRegion = _squad.CurrentRegion.Planet.Regions.First(r => r.Id == args.Item1);
         //mission stuff related to args.Item2;
         Aggression aggro = (Aggression)args.Item3;
-        _squad.CurrentOrders = new Order(0, _squad, selectedRegion, Disposition.Mobile, true, false, aggro, MissionType.Recon);
+        if(_squad.CurrentOrders != null)
+        {
+            GameDataSingleton.Instance.Sector.RemoveOrder(_squad.CurrentOrders);
+        }
+        _squad.CurrentOrders = new Order(_squad, selectedRegion, Disposition.Mobile, true, false, aggro, MissionType.Recon);
+        GameDataSingleton.Instance.Sector.AddNewOrder(_squad.CurrentOrders);
         Visible = false;
     }
 

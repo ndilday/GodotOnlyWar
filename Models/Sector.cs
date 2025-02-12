@@ -1,4 +1,5 @@
 ﻿using OnlyWar.Models.Fleets;
+using OnlyWar.Models.Orders;
 using OnlyWar.Models.Planets;
 using System;
 using System.Collections.Generic;
@@ -14,12 +15,14 @@ namespace OnlyWar.Models
         private readonly Dictionary<ushort, List<Tuple<ushort, ushort>>> _subsectorPlanetMap;
         private readonly Dictionary<ushort, Tuple<ushort, ushort>> _subsectorCenterMap;
         private readonly List<Character> _characters;
+        private readonly Dictionary<int, Order> _orders;
         
         public List<Character> Characters { get => _characters; }
         public IReadOnlyDictionary<int, Planet> Planets { get => _planets; }
         public IReadOnlyDictionary<ushort, List<Tuple<ushort, ushort>>> SubsectorPlanetMap { get => _subsectorPlanetMap; }
         public IReadOnlyDictionary<ushort, Tuple<ushort, ushort>> SubsectorCenterMap { get => _subsectorCenterMap; }
         public IReadOnlyDictionary<int, TaskForce> Fleets { get => _fleets; }
+        public IReadOnlyDictionary<int, Order> Orders { get => _orders; }
         public PlayerForce PlayerForce { get; }
         
 
@@ -31,6 +34,7 @@ namespace OnlyWar.Models
             _fleets = [];
             _subsectorPlanetMap = [];
             _subsectorCenterMap = [];
+            _orders = [];
         }
 
         public Sector(PlayerForce playerForce, List<Character> characters, List<Planet> planets, List<TaskForce> fleets) 
@@ -75,6 +79,19 @@ namespace OnlyWar.Models
             if (newFleet.Planet != null)
             {
                 newFleet.Planet.OrbitingTaskForceList.Add(newFleet);
+            }
+        }
+
+        public void AddNewOrder(Order newOrder)
+        {
+            _orders[newOrder.Id] = newOrder;
+        }
+
+        public void RemoveOrder(Order existingOrder)
+        {
+            if(_orders.ContainsKey(existingOrder.Id))
+            {
+                _orders.Remove(existingOrder.Id);
             }
         }
 

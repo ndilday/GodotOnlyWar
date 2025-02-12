@@ -1,11 +1,12 @@
-﻿using OnlyWar.Models;
+﻿using OnlyWar.Helpers.Missions.Recon;
+using OnlyWar.Models;
 using OnlyWar.Models.Missions;
 using OnlyWar.Models.Soldiers;
 using System.Linq;
 
-namespace OnlyWar.Helpers.Missions.Recon
+namespace OnlyWar.Helpers.Missions
 {
-    public class InfiltrateMissionStep : ITestMissionStep
+    public class ExfiltrateMissionStep : ITestMissionStep
     {
         private readonly IMissionTest _missionTest;
 
@@ -14,7 +15,7 @@ namespace OnlyWar.Helpers.Missions.Recon
         public IMissionStep StepIfSuccess { get; }
         public IMissionStep StepIfFailure { get; }
 
-        public InfiltrateMissionStep()
+        public ExfiltrateMissionStep()
         {
             BaseSkill stealth = GameDataSingleton.Instance.GameRulesData.BaseSkillMap.Values.First(s => s.Name == "Stealth");
             _missionTest = new SquadMissionTest(stealth, 10.0f);
@@ -24,8 +25,11 @@ namespace OnlyWar.Helpers.Missions.Recon
 
         public void ExecuteMissionStep(MissionContext context, float marginOfSuccess, IMissionStep returnStep)
         {
-            if (!ShouldContinue(context)) return;
-            context.DaysElapsed++;
+            if (context.PlayerSquads.SelectMany(s => s.Members).All(s => s.MoveSpeed == 0.0f))
+            {
+                // they're dead, Jim
+                return;
+            }
             float margin = _missionTest.RunMissionTest(context.PlayerSquads);
             if (margin > 0.0f)
             {
@@ -35,12 +39,6 @@ namespace OnlyWar.Helpers.Missions.Recon
             {
                 StepIfFailure.ExecuteMissionStep(context, margin, this);
             }
-        }
-
-        public bool ShouldContinue(MissionContext context)
-        {
-            if (context.DaysElapsed >= 6 || context.PlayerSquads.SelectMany(s => s.Members).All(s => s.MoveSpeed == 0)) return false;
-            return true;
         }
     }
 }

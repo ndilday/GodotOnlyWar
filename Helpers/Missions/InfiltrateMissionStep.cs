@@ -1,11 +1,12 @@
-﻿using OnlyWar.Models;
+﻿using OnlyWar.Builders;
+using OnlyWar.Models;
 using OnlyWar.Models.Missions;
 using OnlyWar.Models.Soldiers;
 using System.Linq;
 
 namespace OnlyWar.Helpers.Missions.Recon
 {
-    public class ExfiltrateMissionStep : ITestMissionStep
+    public class InfiltrateMissionStep : ITestMissionStep
     {
         private readonly IMissionTest _missionTest;
 
@@ -14,30 +15,32 @@ namespace OnlyWar.Helpers.Missions.Recon
         public IMissionStep StepIfSuccess { get; }
         public IMissionStep StepIfFailure { get; }
 
-        public ExfiltrateMissionStep()
+        public InfiltrateMissionStep()
         {
             BaseSkill stealth = GameDataSingleton.Instance.GameRulesData.BaseSkillMap.Values.First(s => s.Name == "Stealth");
             _missionTest = new SquadMissionTest(stealth, 10.0f);
-            StepIfSuccess = new ReconStealthMissionStep();
             StepIfFailure = new DetectedMissionStep();
         }
 
         public void ExecuteMissionStep(MissionContext context, float marginOfSuccess, IMissionStep returnStep)
         {
-            if (context.PlayerSquads.SelectMany(s => s.Members).All(s => s.MoveSpeed == 0.0f))
-            {
-                // they're dead, Jim
-                return;
-            }
+            if (!ShouldContinue(context)) return;
+            context.DaysElapsed++;
             float margin = _missionTest.RunMissionTest(context.PlayerSquads);
             if (margin > 0.0f)
             {
-                StepIfSuccess.ExecuteMissionStep(context, margin, this);
+                MissionStepOrchestrator.GetMainInitialStep(context).ExecuteMissionStep(context, marginOfSuccess, returnStep);
             }
             else
             {
                 StepIfFailure.ExecuteMissionStep(context, margin, this);
             }
+        }
+
+        public bool ShouldContinue(MissionContext context)
+        {
+            if (context.DaysElapsed >= 6 || context.PlayerSquads.SelectMany(s => s.Members).All(s => s.MoveSpeed == 0)) return false;
+            return true;
         }
     }
 }

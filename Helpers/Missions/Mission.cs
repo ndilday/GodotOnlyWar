@@ -1,30 +1,11 @@
 ﻿using System.Collections.Generic;
 using OnlyWar.Models.Fleets;
+using OnlyWar.Models.Orders;
 using OnlyWar.Models.Squads;
 using OnlyWar.Models.Planets;
 
 namespace OnlyWar.Helpers.Missions
 {
-    public enum MissionType
-    {
-        LightningRaid,
-        Infiltrate,
-        EstablishAirhead,
-        CloseAirSupport,
-        HitAndRun,
-        Recon,
-        Patrol,
-        Advance,
-        DeepStrike,
-        Fortify,
-        DefenseInDepth,
-        LastStand,
-        Assassination,
-        ObjectiveRaid,
-        Ambush,
-        Extermination
-    }
-
     public interface IMission
     {
         public int Id { get; }

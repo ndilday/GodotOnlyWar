@@ -1,7 +1,8 @@
 ﻿using System.Collections.Generic;
 using System.Linq;
-using OnlyWar.Helpers.Battles;
-using OnlyWar.Models;
+using OnlyWar.Builders;
+using OnlyWar.Models.Missions;
+using OnlyWar.Models.Orders;
 using OnlyWar.Models.Planets;
 using OnlyWar.Models.Squads;
 
@@ -15,13 +16,10 @@ namespace OnlyWar.Helpers.Sector
 
         public void ProcessTurn(Models.Sector sector)
         {
-            // for each planet, associate all landed and orbiting squads into the region their Orders target
-            foreach(Planet planet in sector.Planets.Values)
+            foreach(Order order in sector.Orders.Values)
             {
-                var regionSquadMap = MapSquadsToTargetRegions(planet);
-                foreach(var kvp in regionSquadMap)
-                {
-                }
+                MissionContext context = new MissionContext(order.TargetRegion, order.MissionType, new List<Squad> { order.OrderedSquad }, new List<Squad>());
+                MissionStepOrchestrator.GetStartingStep(context).ExecuteMissionStep(context, 0, null);
             }
         }
 
