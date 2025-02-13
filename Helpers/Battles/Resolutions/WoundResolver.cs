@@ -107,7 +107,7 @@ namespace OnlyWar.Helpers.Battles.Resolutions
                     if(wound.HitLocation.Template.IsVital && wound.HitLocation.IsCrippled)
                     {
                         wound.Description += $"\n{wound.Suffererer.Soldier.Name} has died";
-                        OnSoldierFall.Invoke(wound, woundLevel);
+                        OnSoldierDeath.Invoke(wound, woundLevel);
                     }
                 }
             }

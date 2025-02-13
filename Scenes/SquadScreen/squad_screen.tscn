@@ -196,7 +196,18 @@ offset_right = -5.0
 offset_bottom = -5.0
 mouse_filter = 2
 
-[node name="TacticalRegionController" parent="DialogView/RegionPanel" index="0" instance=ExtResource("5_p4ihy")]
+[node name="TacticalRegionCenter" parent="DialogView/RegionPanel" index="0" instance=ExtResource("5_p4ihy")]
+layout_mode = 1
+anchors_preset = -1
+anchor_left = 0.35
+anchor_top = 0.35
+anchor_right = 0.65
+anchor_bottom = 0.65
+offset_left = 1.52588e-05
+offset_right = 0.0
+offset_bottom = 0.0
+
+[node name="TacticalRegionNorth" parent="DialogView/RegionPanel" index="1" instance=ExtResource("5_p4ihy")]
 layout_mode = 1
 anchors_preset = -1
 anchor_left = 0.35
@@ -206,17 +217,29 @@ anchor_bottom = 0.31
 offset_right = 0.0
 offset_bottom = 0.0
 
-[node name="TacticalRegionController2" parent="DialogView/RegionPanel" index="1" instance=ExtResource("5_p4ihy")]
+[node name="TacticalRegionNortheast" parent="DialogView/RegionPanel" index="2" instance=ExtResource("5_p4ihy")]
 layout_mode = 1
 anchors_preset = -1
-anchor_left = 0.35
-anchor_top = 0.35
-anchor_right = 0.65
-anchor_bottom = 0.65
-offset_right = 0.0
+anchor_left = 0.68
+anchor_top = 0.16
+anchor_right = 0.98
+anchor_bottom = 0.46
+offset_left = -3.05176e-05
+offset_right = -3.05176e-05
 offset_bottom = 0.0
 
-[node name="TacticalRegionController3" parent="DialogView/RegionPanel" index="2" instance=ExtResource("5_p4ihy")]
+[node name="TacticalRegionSoutheast" parent="DialogView/RegionPanel" index="3" instance=ExtResource("5_p4ihy")]
+layout_mode = 1
+anchors_preset = -1
+anchor_left = 0.68
+anchor_top = 0.54
+anchor_right = 0.98
+anchor_bottom = 0.84
+offset_left = -3.05176e-05
+offset_right = -3.05176e-05
+offset_bottom = 0.0
+
+[node name="TacticalRegionSouth" parent="DialogView/RegionPanel" index="4" instance=ExtResource("5_p4ihy")]
 layout_mode = 1
 anchors_preset = -1
 anchor_left = 0.35
@@ -226,43 +249,24 @@ anchor_bottom = 0.99
 offset_right = 0.0
 offset_bottom = 0.0
 
-[node name="TacticalRegionController4" parent="DialogView/RegionPanel" index="3" instance=ExtResource("5_p4ihy")]
-layout_mode = 1
-anchors_preset = -1
-anchor_left = 0.68
-anchor_top = 0.16
-anchor_right = 0.98
-anchor_bottom = 0.46
-offset_right = 0.0
-offset_bottom = 0.0
-
-[node name="TacticalRegionController5" parent="DialogView/RegionPanel" index="4" instance=ExtResource("5_p4ihy")]
-layout_mode = 1
-anchors_preset = -1
-anchor_left = 0.68
-anchor_top = 0.54
-anchor_right = 0.98
-anchor_bottom = 0.84
-offset_right = 0.0
-offset_bottom = 0.0
-
-[node name="TacticalRegionController6" parent="DialogView/RegionPanel" index="5" instance=ExtResource("5_p4ihy")]
-layout_mode = 1
-anchors_preset = -1
-anchor_left = 0.02
-anchor_top = 0.16
-anchor_right = 0.32
-anchor_bottom = 0.46
-offset_right = 0.0
-offset_bottom = 0.0
-
-[node name="TacticalRegionController7" parent="DialogView/RegionPanel" index="6" instance=ExtResource("5_p4ihy")]
+[node name="TacticalRegionSouthwest" parent="DialogView/RegionPanel" index="5" instance=ExtResource("5_p4ihy")]
 layout_mode = 1
 anchors_preset = -1
 anchor_left = 0.02
 anchor_top = 0.54
 anchor_right = 0.32
 anchor_bottom = 0.84
+offset_left = -2.19345e-05
+offset_right = -1.52588e-05
+offset_bottom = 0.0
+
+[node name="TacticalRegionNorthwest" parent="DialogView/RegionPanel" index="6" instance=ExtResource("5_p4ihy")]
+layout_mode = 1
+anchors_preset = -1
+anchor_left = 0.02
+anchor_top = 0.16
+anchor_right = 0.32
+anchor_bottom = 0.46
 offset_right = 0.0
 offset_bottom = 0.0
 

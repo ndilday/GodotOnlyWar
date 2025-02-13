@@ -1,5 +1,4 @@
 using Godot;
-using OnlyWar.Models;
 using OnlyWar.Models.Planets;
 using System;
 using System.Linq;
@@ -70,7 +69,7 @@ public partial class TacticalRegionController : Control
             }
         }
 
-        _view.Populate(region.Id, showPlayerPublic, false, showCivilian, showXenos, false, false, playerPopulation, civilianPopulation, xenosPopulation);
+        _view.Populate(region.Id, region.Name, showPlayerPublic, false, showCivilian, showXenos, false, false, playerPopulation, civilianPopulation, xenosPopulation);
     }
 
     public void AddToButtonGroup(ButtonGroup buttonGroup)

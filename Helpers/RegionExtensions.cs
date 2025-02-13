@@ -32,17 +32,17 @@ namespace OnlyWar.Helpers
                 case 9:
                     return new Tuple<int, int>(3, 3);
                 case 10:
-                    return new Tuple<int, int>(4, 0);
-                case 11:
                     return new Tuple<int, int>(4, 1);
-                case 12:
+                case 11:
                     return new Tuple<int, int>(4, 2);
+                case 12:
+                    return new Tuple<int, int>(4, 3);
                 case 13:
-                    return new Tuple<int, int>(5, 0);
+                    return new Tuple<int, int>(5, 2);
                 case 14:
-                    return new Tuple<int, int>(5, 1);
+                    return new Tuple<int, int>(5, 3);
                 case 15:
-                    return new Tuple<int, int>(6, 0);
+                    return new Tuple<int, int>(6, 3);
                 default:
                     return null;
             }

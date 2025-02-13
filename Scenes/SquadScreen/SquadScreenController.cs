@@ -1,9 +1,12 @@
 using Godot;
+using OnlyWar.Helpers;
 using OnlyWar.Models.Equippables;
+using OnlyWar.Models.Planets;
 using OnlyWar.Models.Soldiers;
 using OnlyWar.Models.Squads;
 using System;
 using System.Collections.Generic;
+using System.Collections.Immutable;
 using System.Linq;
 
 public partial class SquadScreenController : DialogController
@@ -11,6 +14,8 @@ public partial class SquadScreenController : DialogController
     private Squad _squad;
     private SquadScreenView _view;
     private OrderDialogController _orderController;
+    private TacticalRegionController _currentRegion;
+    private Dictionary<string, TacticalRegionController> _adjacenTacticalRegionMap;
     private int _ableBodied;
 
     public override void _Ready()
@@ -20,6 +25,8 @@ public partial class SquadScreenController : DialogController
         _view.WeaponSetSelectionWeaponSetCountChanged += OnWeaponSetSelectionWeaponSetCountChanged;
         _view.OpenOrders += OnOpenOrders;
         _orderController = GetNode<OrderDialogController>("DialogView/OrderDialogController");
+        _currentRegion = GetNode<TacticalRegionController>("DialogView/RegionPanel/TacticalRegionCenter");
+        _adjacenTacticalRegionMap = GetAdjacentRegionDisplayMap();
     }
     private void OnOpenOrders(object sender, EventArgs e)
     {
@@ -62,6 +69,7 @@ public partial class SquadScreenController : DialogController
         PopulateSquadDetails();
         PopulateSquadLoadout();
         PopulateSquadOrders();
+        PopulateTacticalRegions();
     }
 
     private void PopulateSquadDetails()
@@ -147,6 +155,18 @@ public partial class SquadScreenController : DialogController
         _view.PopulateOrderDetails(lines);
     }
 
+    private void PopulateTacticalRegions()
+    {
+        _currentRegion.Populate(_squad.CurrentRegion);
+        var adjacentRegions = RegionExtensions.GetAdjacentRegions(_squad.CurrentRegion);
+        foreach(Region region in adjacentRegions)
+        {
+            string direction = GetDirectionFromCurrentToNeighbour(_squad.CurrentRegion, region);
+            _adjacenTacticalRegionMap[direction].Populate(region);
+            _adjacenTacticalRegionMap[direction].Visible = true;
+        }
+    }
+
     private bool CanFight(ISoldier soldier)
     {
         bool canWalk = !soldier.Body.HitLocations.Where(hl => hl.Template.IsMotive)
@@ -156,5 +176,40 @@ public partial class SquadScreenController : DialogController
         bool canFight = !soldier.Body.HitLocations.Where(hl => hl.Template.IsRangedWeaponHolder)
                                                 .All(hl => hl.IsCrippled || hl.IsSevered);
         return canWalk && canFuncion && canFight;
+    }
+
+    private Dictionary<string, TacticalRegionController> GetAdjacentRegionDisplayMap()
+    {
+        var regionDirectionMap = new Dictionary<string, TacticalRegionController>();
+        regionDirectionMap["NW"] = GetNode<TacticalRegionController>("DialogView/RegionPanel/TacticalRegionNorthwest");
+        regionDirectionMap["N"] = GetNode<TacticalRegionController>("DialogView/RegionPanel/TacticalRegionNorth");
+        regionDirectionMap["NE"] = GetNode<TacticalRegionController>("DialogView/RegionPanel/TacticalRegionNortheast");
+        regionDirectionMap["SW"] = GetNode<TacticalRegionController>("DialogView/RegionPanel/TacticalRegionSouthwest");
+        regionDirectionMap["S"] = GetNode<TacticalRegionController>("DialogView/RegionPanel/TacticalRegionSouth");
+        regionDirectionMap["SE"] = GetNode<TacticalRegionController>("DialogView/RegionPanel/TacticalRegionSoutheast");
+        foreach(var region in regionDirectionMap.Values)
+        {
+            region.Visible = false;
+        }
+        return regionDirectionMap;
+    }
+
+    private string GetDirectionFromCurrentToNeighbour(Region currentRegion, Region neighbourRegion)
+    {
+        // **You need to implement the logic to determine the direction (e.g., "N", "NE", "E", etc.)**
+        // **based on the relative positions or relationships of `currentRegion` and `neighbourRegion`.**
+
+        // **Example (Conceptual -  you'll need to adapt this to your Region/Grid system):**
+        int dx = neighbourRegion.Coordinates.Item1 - currentRegion.Coordinates.Item1; // Example: Grid coordinates
+        int dy = neighbourRegion.Coordinates.Item2 - currentRegion.Coordinates.Item2;
+
+        if (dy == 1 && dx == 0) return "N";
+        if (dy == 1 && dx == 1) return "NE";
+        if (dy == 0 && dx == 1) return "SE";
+        if (dy == -1 && dx == 0) return "S";
+        if (dy == -1 && dx == -1) return "SW";
+        if (dy == 0 && dx == -1) return "NW";
+
+        return null; // Or throw an exception if direction cannot be determined (error case)
     }
 }

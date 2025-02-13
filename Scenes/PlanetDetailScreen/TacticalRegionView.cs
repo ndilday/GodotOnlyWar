@@ -1,15 +1,15 @@
 using Godot;
-using System;
 
 public partial class TacticalRegionView : Control
 {
 	[Export]
 	public int RegionId { get; set; }
 	private TextureRect _playerPublic, _playerHidden, _civilian, _xenos, _objective, _droppod;
-	private RichTextLabel _playerPopulation, _civilianPopulation, _xenosPopulation;
+	private RichTextLabel _playerPopulation, _civilianPopulation, _xenosPopulation, _regionName;
 
 	public override void _Ready()
 	{
+		_regionName = GetNode<RichTextLabel>("Button/RegionNameLabel");
 		_playerPublic = GetNode<TextureRect>("Button/TroopTexture");
 		_playerHidden = GetNode<TextureRect>("Button/HiddenTroopTexture");
 		_xenos = GetNode<TextureRect>("Button/XenosTexture");
@@ -21,10 +21,11 @@ public partial class TacticalRegionView : Control
 		_xenosPopulation = GetNode<RichTextLabel>("Button/XenosPopulationLabel");
 	}
 
-	public void Populate(int regionId, bool showPlayerPublic, bool showPlayerHidden, bool showCivilian, bool showXenos, bool showObjective, bool showDropPod,
+	public void Populate(int regionId, string name, bool showPlayerPublic, bool showPlayerHidden, bool showCivilian, bool showXenos, bool showObjective, bool showDropPod,
 		string playerPopulation, string civilianPopulation, string xenosPopulation)
 	{
 		RegionId = regionId;
+		_regionName.Text = name;
 		_playerPublic.Visible = showPlayerPublic;
 		_playerHidden.Visible = showPlayerHidden;
 		_civilian.Visible = showCivilian;

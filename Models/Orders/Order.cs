@@ -1,4 +1,5 @@
 ﻿using OnlyWar.Builders;
+using OnlyWar.Models.Missions;
 using OnlyWar.Models.Planets;
 using OnlyWar.Models.Squads;
 
@@ -61,25 +62,5 @@ namespace OnlyWar.Models.Orders
         Normal = 2,
         Attritional = 3,
         Aggressive = 4
-    }
-
-    public enum MissionType
-    {
-        LightningRaid,
-        Infiltrate,
-        EstablishAirhead,
-        CloseAirSupport,
-        HitAndRun,
-        Recon,
-        Patrol,
-        Advance,
-        DeepStrike,
-        Fortify,
-        DefenseInDepth,
-        LastStand,
-        Assassination,
-        ObjectiveRaid,
-        Ambush,
-        Extermination
     }
 }

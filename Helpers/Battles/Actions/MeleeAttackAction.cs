@@ -13,7 +13,6 @@ namespace OnlyWar.Helpers.Battles.Actions
         private readonly BattleSoldier _attacker;
         private readonly BattleSoldier _target;
         private readonly MeleeWeapon _weapon;
-        private readonly ConcurrentBag<WoundResolution> _resultList;
         private readonly ConcurrentQueue<string> _log;
         private readonly bool _didMove;
 
@@ -100,7 +99,7 @@ namespace OnlyWar.Helpers.Battles.Actions
 
         public string Description()
         {
-            return $"{_attacker.Soldier.Name} attacks {_target.Soldier.Name} with {_weapon.Template.Name}, hitting {_resultList.Count} times.";
+            return $"{_attacker.Soldier.Name} attacks {_target.Soldier.Name} with {_weapon.Template.Name}, hitting {WoundResolutions.Count} times.";
         }
     }
 }

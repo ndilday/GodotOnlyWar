@@ -19,6 +19,7 @@ public partial class PlanetDetailScreenController : DialogController
     private Unit _selectedLandedUnit;
     private Squad _selectedLandedSquad;
 
+    public event EventHandler<Squad> SquadDoubleClicked;
 
     public override void _Ready()
     {
@@ -29,6 +30,7 @@ public partial class PlanetDetailScreenController : DialogController
         _view.FleetTreeItemClicked += OnFleetTreeItemClicked;
         _view.LandingButtonPressed += OnLandingButtonPressed;
         _view.LoadingButtonPressed += OnLoadingButtonPressed;
+        _view.SquadDoubleClicked += OnSquadDoubleClicked;
     }
 
     public void PopulatePlanetData(Planet planet)
@@ -259,6 +261,27 @@ public partial class PlanetDetailScreenController : DialogController
                 break;
         }
         UpdateButtons();
+    }
+
+    private void OnSquadDoubleClicked(object sender, Vector2I e)
+    {
+        switch (e.X)
+        {
+            case 0:
+                // Region
+                break;
+            case 1:
+                // Unit
+                /*TreeItem item = (TreeItem)sender;
+                _selectedLandedUnit = GameDataSingleton.Instance.Sector.PlayerForce.Army.OrderOfBattle.ChildUnits.First(u => u.Id == e.Y);
+                _selectedLandedSquad = null;*/
+                break;
+            case 2:
+                // Squad
+                Squad squad = GameDataSingleton.Instance.Sector.PlayerForce.Army.SquadMap[e.Y];
+                SquadDoubleClicked.Invoke(this, squad);
+                break;
+        }
     }
 
     private void UpdateButtons()

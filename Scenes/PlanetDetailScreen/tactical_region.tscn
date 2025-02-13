@@ -15,8 +15,8 @@ layout_mode = 3
 anchors_preset = 15
 anchor_right = 1.0
 anchor_bottom = 1.0
-offset_right = -924.0
-offset_bottom = -668.0
+offset_right = -874.0
+offset_bottom = -618.0
 grow_horizontal = 2
 grow_vertical = 2
 script = ExtResource("1_8al03")
@@ -43,77 +43,59 @@ theme_override_constants/outline_size = 3
 theme_override_styles/normal = SubResource("StyleBoxFlat_rgdv0")
 toggle_mode = true
 
-[node name="TroopTexture" type="TextureRect" parent="TacticalRegionView/Button"]
+[node name="RegionNameLabel" type="RichTextLabel" parent="TacticalRegionView/Button"]
+clip_contents = false
 layout_mode = 1
 anchors_preset = -1
-anchor_right = 0.25
-anchor_bottom = 0.25
-mouse_filter = 2
-texture = ExtResource("1_io6l3")
-expand_mode = 3
-
-[node name="XenosTexture" type="TextureRect" parent="TacticalRegionView/Button"]
-layout_mode = 1
-anchors_preset = -1
-anchor_top = 0.75
-anchor_right = 0.25
-anchor_bottom = 1.0
-mouse_filter = 2
-texture = ExtResource("2_8al03")
-expand_mode = 3
-
-[node name="HiddenTroopTexture" type="TextureRect" parent="TacticalRegionView/Button"]
-modulate = Color(0.392157, 0.392157, 0.392157, 1)
-layout_mode = 1
-anchors_preset = -1
-anchor_left = 0.75
 anchor_right = 1.0
-anchor_bottom = 0.25
-mouse_filter = 2
-texture = ExtResource("1_io6l3")
-expand_mode = 3
+anchor_bottom = 0.24
+grow_horizontal = 2
+text = "Name Name Name Name"
+autowrap_mode = 0
+horizontal_alignment = 1
+vertical_alignment = 1
 
 [node name="CivilianTexture" type="TextureRect" parent="TacticalRegionView/Button"]
 layout_mode = 1
 anchors_preset = -1
-anchor_top = 0.375
+anchor_top = 0.25
 anchor_right = 0.25
-anchor_bottom = 0.625
+anchor_bottom = 0.49
+offset_right = 1.42276
 mouse_filter = 2
 texture = ExtResource("3_mfyr6")
 expand_mode = 3
 
-[node name="ObjectiveTexture" type="TextureRect" parent="TacticalRegionView/Button"]
-visible = false
+[node name="CivilianPopulationLabel" type="RichTextLabel" parent="TacticalRegionView/Button"]
 layout_mode = 1
 anchors_preset = -1
-anchor_left = 0.75
-anchor_top = 0.375
-anchor_right = 1.0
-anchor_bottom = 0.625
+anchor_left = 0.26
+anchor_top = 0.25
+anchor_right = 0.753
+anchor_bottom = 0.49
 mouse_filter = 2
-texture = ExtResource("6_rgdv0")
-expand_mode = 3
+theme_override_font_sizes/normal_font_size = 12
+text = "100000"
+autowrap_mode = 0
+vertical_alignment = 1
 
-[node name="DropPodTexture" type="TextureRect" parent="TacticalRegionView/Button"]
-visible = false
+[node name="TroopTexture" type="TextureRect" parent="TacticalRegionView/Button"]
 layout_mode = 1
 anchors_preset = -1
-anchor_left = 0.75
-anchor_top = 0.75
-anchor_right = 1.0
-anchor_bottom = 1.0
+anchor_top = 0.51
+anchor_right = 0.25
+anchor_bottom = 0.74
 mouse_filter = 2
-texture = ExtResource("4_j7ayy")
+texture = ExtResource("1_io6l3")
 expand_mode = 3
 
 [node name="PlayerTroopCountLabel" type="RichTextLabel" parent="TacticalRegionView/Button"]
 layout_mode = 1
 anchors_preset = -1
 anchor_left = 0.26
-anchor_top = 0.01
+anchor_top = 0.51
 anchor_right = 0.74
-anchor_bottom = 0.25
+anchor_bottom = 0.74
 mouse_filter = 2
 theme_override_font_sizes/normal_font_size = 12
 text = "200/100"
@@ -121,18 +103,27 @@ autowrap_mode = 0
 horizontal_alignment = 1
 vertical_alignment = 1
 
-[node name="CivilianPopulationLabel" type="RichTextLabel" parent="TacticalRegionView/Button"]
+[node name="HiddenTroopTexture" type="TextureRect" parent="TacticalRegionView/Button"]
+modulate = Color(0.392157, 0.392157, 0.392157, 1)
 layout_mode = 1
 anchors_preset = -1
-anchor_left = 0.26
-anchor_top = 0.375
-anchor_right = 0.753
-anchor_bottom = 0.625
+anchor_left = 0.75
+anchor_top = 0.51
+anchor_right = 1.0
+anchor_bottom = 0.74
 mouse_filter = 2
-theme_override_font_sizes/normal_font_size = 12
-text = "100000"
-autowrap_mode = 0
-vertical_alignment = 1
+texture = ExtResource("1_io6l3")
+expand_mode = 3
+
+[node name="XenosTexture" type="TextureRect" parent="TacticalRegionView/Button"]
+layout_mode = 1
+anchors_preset = -1
+anchor_top = 0.76
+anchor_right = 0.25
+anchor_bottom = 1.0
+mouse_filter = 2
+texture = ExtResource("2_8al03")
+expand_mode = 3
 
 [node name="XenosPopulationLabel" type="RichTextLabel" parent="TacticalRegionView/Button"]
 layout_mode = 1
@@ -143,6 +134,30 @@ anchor_right = 0.74
 anchor_bottom = 0.99
 mouse_filter = 2
 theme_override_font_sizes/normal_font_size = 12
-text = "10000"
+text = "1000000"
 autowrap_mode = 0
 vertical_alignment = 1
+
+[node name="ObjectiveTexture" type="TextureRect" parent="TacticalRegionView/Button"]
+visible = false
+layout_mode = 1
+anchors_preset = -1
+anchor_left = 0.75
+anchor_top = 0.76
+anchor_right = 1.0
+anchor_bottom = 1.0
+mouse_filter = 2
+texture = ExtResource("6_rgdv0")
+expand_mode = 3
+
+[node name="DropPodTexture" type="TextureRect" parent="TacticalRegionView/Button"]
+visible = false
+layout_mode = 1
+anchors_preset = -1
+anchor_left = 0.75
+anchor_top = 0.25
+anchor_right = 1.0
+anchor_bottom = 0.49
+mouse_filter = 2
+texture = ExtResource("4_j7ayy")
+expand_mode = 3

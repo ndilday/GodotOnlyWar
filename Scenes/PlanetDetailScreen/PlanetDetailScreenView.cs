@@ -26,7 +26,7 @@ public partial class PlanetDetailScreenView : DialogView
     
     public event EventHandler LandingButtonPressed;
     public event EventHandler LoadingButtonPressed;
-    public event EventHandler<int> SquadDoubleClicked;
+    public event EventHandler<Vector2I> SquadDoubleClicked;
     public event EventHandler<Vector2I> FleetTreeItemClicked;
     public event EventHandler FleetTreeDeselected;
     public event EventHandler<Vector2I> RegionTreeItemClicked;
@@ -41,9 +41,11 @@ public partial class PlanetDetailScreenView : DialogView
         _planetDataVBox = GetNode<VBoxContainer>("DataPanel/VBoxContainer");
         _fleetTree = GetNode<Tree>("ShipListPanel/Tree");
         _fleetTree.ItemSelected += OnFleetTreeItemSelected;
+        _fleetTree.ItemActivated += OnFleetTreeItemActivated;
         _fleetTree.NothingSelected += () => FleetTreeDeselected(this, EventArgs.Empty);
         _regionTree = GetNode<Tree>("RegionListPanel/Tree");
         _regionTree.ItemSelected += OnRegionTreeItemSelected;
+        _regionTree.ItemActivated += OnRegionTreeItemActivated;
         _regionTree.NothingSelected += () => RegionTreeDeselected(this, EventArgs.Empty);
     }
 
@@ -136,10 +138,24 @@ public partial class PlanetDetailScreenView : DialogView
         RegionTreeItemClicked.Invoke(item, meta);
     }
 
+    private void OnRegionTreeItemActivated()
+    {
+        TreeItem item = _regionTree.GetSelected();
+        Vector2I meta = item.GetMetadata(0).As<Vector2I>();
+        SquadDoubleClicked.Invoke(item, meta);
+    }
+
     private void OnFleetTreeItemSelected()
     {
         TreeItem item = _fleetTree.GetSelected();
         Vector2I meta = item.GetMetadata(0).As<Vector2I>();
         FleetTreeItemClicked.Invoke(item, meta);
+    }
+
+    private void OnFleetTreeItemActivated()
+    {
+        TreeItem item = _fleetTree.GetSelected();
+        Vector2I meta = item.GetMetadata(0).As<Vector2I>();
+        SquadDoubleClicked.Invoke(item, meta);
     }
 }

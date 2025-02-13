@@ -1,6 +1,6 @@
-﻿using Godot;
-using OnlyWar.Models.Equippables;
+﻿using OnlyWar.Models.Equippables;
 using OnlyWar.Models.Fleets;
+using OnlyWar.Models.Missions;
 using OnlyWar.Models.Orders;
 using OnlyWar.Models.Planets;
 using OnlyWar.Models.Squads;
@@ -9,8 +9,6 @@ using System;
 using System.Collections.Generic;
 using System.Data;
 using System.Linq;
-using static System.Runtime.InteropServices.JavaScript.JSType;
-using System.Xml;
 
 namespace OnlyWar.Helpers.Database.GameState
 {

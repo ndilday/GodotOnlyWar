@@ -11,7 +11,6 @@ public partial class ApothecariumScreenView : DialogView
     private ButtonGroup _squadButtonGroup;
 
     public event EventHandler<int> SquadButtonPressed;
-    public event EventHandler CloseButtonPressed;
 
     public override void _Ready()
     {

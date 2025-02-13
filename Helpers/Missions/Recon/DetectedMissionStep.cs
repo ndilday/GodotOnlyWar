@@ -1,6 +1,4 @@
 ﻿using OnlyWar.Builders;
-using OnlyWar.Helpers;
-using OnlyWar.Helpers.Missions;
 using OnlyWar.Models;
 using OnlyWar.Models.Missions;
 using OnlyWar.Models.Soldiers;
@@ -22,7 +20,7 @@ namespace OnlyWar.Helpers.Missions.Recon
 
         public DetectedMissionStep()
         {
-            BaseSkill perception = GameDataSingleton.Instance.GameRulesData.BaseSkillMap.Values.First(s => s.Name == "Perception");
+            BaseSkill perception = GameDataSingleton.Instance.GameRulesData.BaseSkillMap.Values.First(s => s.Name == "Tactics");
             _missionTest = new SquadMissionTest(perception, 10.0f);
             StepIfSuccess = new CrossDetectionMissionStep();
             StepIfFailure = new AmbushedMissionStep();

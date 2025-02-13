@@ -1,6 +1,7 @@
 using Godot;
 using OnlyWar.Helpers;
 using OnlyWar.Models;
+using OnlyWar.Models.Missions;
 using OnlyWar.Models.Orders;
 using OnlyWar.Models.Planets;
 using OnlyWar.Models.Squads;
