@@ -37,7 +37,7 @@ public partial class OrderDialogController : Control
 
         // determine the regions adjacent to the squad's current region
         var adjacentRegions = RegionExtensions.GetSelfAndAdjacentRegions(squad.CurrentRegion);
-        PopulateRegionOptions(adjacentRegions);
+        PopulateRegionOptions(adjacentRegions, squad.CurrentOrders?.TargetRegion);
 
         if (squad.CurrentOrders == null)
         {
@@ -90,10 +90,10 @@ public partial class OrderDialogController : Control
             case 1:
                 text = CAUTIOUS;
                 break;
-            case 3:
+            case 2:
                 text = NORMAL;
                 break;
-            case 4:
+            case 3:
                 text = ATTRITIONAL;
                 break;
             default:

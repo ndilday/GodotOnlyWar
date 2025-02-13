@@ -18,11 +18,11 @@ namespace OnlyWar.Helpers.Missions
     public static class GaussianMissionTestCalculator
     {
 
-        public static float DetermineMarginOfSuccess(float zValue)
+        public static float DetermineMarginOfSuccessZvalue(float zValue)
         {
 
-            double roll = RNG.NextGaussianDouble();
-            return (float)(roll - ApproximateNormalCDF(zValue));
+            double roll = RNG.NextRandomZValue();
+            return (float)(zValue - roll);
         }
 
         private static float ApproximateNormalCDF(float zScore)
@@ -111,23 +111,8 @@ namespace OnlyWar.Helpers.Missions
 
         protected float RunTestInternal(ISoldier soldier)
         {
-            float advantage = (soldier.GetTotalSkillValue(SkillUsed) - _difficulty) / 5.0f;
-            float probMargin = GaussianMissionTestCalculator.DetermineMarginOfSuccess(advantage) + 1;
-            float zMargin = 0;
-            if (probMargin < 0)
-            {
-                // if they whiffed by more than 50%, treat 50% of it as 4-sigma
-                zMargin -= 4;
-                probMargin += 0.5f;
-            }
-            if (probMargin > 1)
-            {
-                // if they succeeded by more than 50%, treat 50% of it as 4-sigma
-                zMargin += 4;
-                probMargin -= 0.5f;
-            }
-            zMargin += (float)GaussianMissionTestCalculator.ApproximateInverseNormalCDF(probMargin);
-            return zMargin;
+            float zAdvantage = (soldier.GetTotalSkillValue(SkillUsed) - _difficulty) / 5.0f;
+            return GaussianMissionTestCalculator.DetermineMarginOfSuccessZvalue(zAdvantage);
         }
     }
 
@@ -163,7 +148,7 @@ namespace OnlyWar.Helpers.Missions
         {
             float totalSkill = squads.SelectMany(s => s.Members).Average(soldier => soldier.GetTotalSkillValue(SkillUsed));
             float advantage = (totalSkill - _difficulty) / 5.0f;
-            float probMargin = GaussianMissionTestCalculator.DetermineMarginOfSuccess(advantage) + 1;
+            float probMargin = GaussianMissionTestCalculator.DetermineMarginOfSuccessZvalue(advantage) + 1;
             float zMargin = 0;
             if (probMargin < 0)
             {

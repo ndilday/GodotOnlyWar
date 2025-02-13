@@ -41,7 +41,7 @@ namespace OnlyWar.Helpers.Battles.Actions
                     _target.BattleSquad.IsInMelee = true;
                     float modifier = _weapon.Template.Accuracy + (_didMove ? -2 : 0);
                     float skill = _attacker.Soldier.GetTotalSkillValue(_weapon.Template.RelatedSkill);
-                    float roll = 10.5f + (3.0f * (float)RNG.NextGaussianDouble());
+                    float roll = 10.5f + (3.0f * (float)RNG.NextRandomZValue());
                     float total = skill + modifier - roll;
                     _log.Enqueue(_attacker.Soldier.Name + " swings at " + _target.Soldier.ToString());
                     if (total > 0)
@@ -83,7 +83,7 @@ namespace OnlyWar.Helpers.Battles.Actions
             if (!hitLocation.IsSevered)
             {
                 // calculate damage based on attacker's strength, weapon multiplier, and 
-                float damage = _attacker.Soldier.Strength * _weapon.Template.StrengthMultiplier * (3.5f + ((float)RNG.NextGaussianDouble() * 1.75f));
+                float damage = _attacker.Soldier.Strength * _weapon.Template.StrengthMultiplier * (3.5f + ((float)RNG.NextRandomZValue() * 1.75f));
                 // determine armor effectiveness based on penetration of the weapon
                 float effectiveArmor = _target.Armor.Template.ArmorProvided * _weapon.Template.ArmorMultiplier;
                 // determine how much damage penetrates the armor

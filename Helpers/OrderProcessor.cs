@@ -86,7 +86,7 @@ namespace OnlyWar.Helpers
                 initiative -= 1.0f - (1.0f / factionSquadCount[squad.Faction.Id]);
 
                 // add a random wiggle of 0-1 to the initiative
-                initiative += (float)RNG.NextGaussianDouble();
+                initiative += (float)RNG.NextRandomZValue();
 
                 initiativeMap.Add(initiative, squad.Id);
             }

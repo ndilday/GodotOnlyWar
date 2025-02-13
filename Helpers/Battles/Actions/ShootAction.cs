@@ -49,7 +49,7 @@ namespace OnlyWar.Helpers.Battles.Actions
 
                 var skill = shooter.Soldier.GetTotalSkillValue(weapon.Template.RelatedSkill);
                 var modifier = CalculateToHitModifiers(shooter, target, weapon, skill);
-                var roll = 10.5f + (3.0f * (float)RNG.NextGaussianDouble());
+                var roll = 10.5f + (3.0f * (float)RNG.NextRandomZValue());
                 var total = skill + modifier - roll;
                 shooter.Aim = null;
                 if (total > 0)
@@ -100,7 +100,7 @@ namespace OnlyWar.Helpers.Battles.Actions
             // make sure this body part hasn't already been shot off
             if (!hitLocation.IsSevered)
             {
-                float damage = BattleModifiersUtil.CalculateDamageAtRange(weapon, Range) * (3.5f + ((float)RNG.NextGaussianDouble() * 1.75f));
+                float damage = BattleModifiersUtil.CalculateDamageAtRange(weapon, Range) * (3.5f + ((float)RNG.NextRandomZValue() * 1.75f));
                 float effectiveArmor = target.Armor.Template.ArmorProvided * weapon.Template.ArmorMultiplier;
                 float penDamage = damage - effectiveArmor;
                 if (penDamage > 0)

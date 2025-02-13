@@ -10,7 +10,7 @@ namespace OnlyWar.Helpers
         {
             _random = new Random(seed);
         }
-        public static double NextGaussianDouble()
+        public static double NextRandomZValue()
         {
             double u1 = 1.0 - _random.NextDouble(); //uniform(0,1] random doubles
             double u2 = 1.0 - _random.NextDouble();

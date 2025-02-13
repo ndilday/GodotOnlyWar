@@ -18,7 +18,7 @@ namespace OnlyWar.Helpers.Missions.Recon
         public InfiltrateMissionStep()
         {
             BaseSkill stealth = GameDataSingleton.Instance.GameRulesData.BaseSkillMap.Values.First(s => s.Name == "Stealth");
-            _missionTest = new SquadMissionTest(stealth, 10.0f);
+            _missionTest = new SquadMissionTest(stealth, 12.5f);
             StepIfFailure = new DetectedMissionStep();
         }
 
@@ -29,7 +29,7 @@ namespace OnlyWar.Helpers.Missions.Recon
             float margin = _missionTest.RunMissionTest(context.PlayerSquads);
             if (margin > 0.0f)
             {
-                MissionStepOrchestrator.GetMainInitialStep(context).ExecuteMissionStep(context, marginOfSuccess, returnStep);
+                MissionStepOrchestrator.GetMainInitialStep(context).ExecuteMissionStep(context, margin, returnStep);
             }
             else
             {

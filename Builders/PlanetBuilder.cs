@@ -40,7 +40,7 @@ namespace OnlyWar.Builders
             }
             _usedPlanetNameIndexes.Add(nameIndex);
             int importance = (int)(template.ImportanceRange.BaseValue)
-                + (int)(RNG.NextGaussianDouble() * template.ImportanceRange.StandardDeviation);
+                + (int)(RNG.NextRandomZValue() * template.ImportanceRange.StandardDeviation);
             int taxLevel =
                 RNG.GetIntBelowMax(template.TaxRange.MinValue, template.TaxRange.MaxValue + 1);
             Planet planet = new Planet(_nextPlanetId, TempPlanetList.PlanetNames[nameIndex],
@@ -106,7 +106,7 @@ namespace OnlyWar.Builders
             }
 
             long popToDistribute = (long)(template.PopulationRange.BaseValue)
-                + (long)(Math.Pow(10, RNG.NextGaussianDouble()) * template.PopulationRange.StandardDeviation);
+                + (long)(Math.Pow(10, RNG.NextRandomZValue()) * template.PopulationRange.StandardDeviation);
 
             // Distribute population using power law with wiggle
             float alpha = 1.5f; // Experiment with this value (1.0 to 3.0 are common)
