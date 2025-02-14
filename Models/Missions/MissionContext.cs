@@ -14,6 +14,9 @@ namespace OnlyWar.Models.Missions
         public ushort DaysElapsed { get; set; }
         public List<Squad> OpposingForces { get; set; }
 
+        public List<SpecialMission> MissionsToAdd { get; }
+        public List<SpecialMission> MissionsToRemove { get; }
+
         public MissionContext(Region region, MissionType missionType, List<Squad> playerSquads, List<Squad> opposingForces)
         {
             Region = region;
@@ -21,6 +24,8 @@ namespace OnlyWar.Models.Missions
             PlayerSquads = playerSquads;
             OpposingForces = opposingForces;
             DaysElapsed = 0;
+            MissionsToAdd = new List<SpecialMission>();
+            MissionsToRemove = new List<SpecialMission>();
         }
     }
 }

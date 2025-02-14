@@ -5,7 +5,7 @@ using System.Linq;
 
 namespace OnlyWar.Helpers.Missions.Recon
 {
-    public class ReconPerceptionMissionStep : ITestMissionStep
+    public class PerformReconMissionStep : ITestMissionStep
     {
         private readonly IMissionTest _missionTest;
 
@@ -14,7 +14,7 @@ namespace OnlyWar.Helpers.Missions.Recon
         public IMissionStep StepIfSuccess { get; }
         public IMissionStep StepIfFailure { get; }
 
-        public ReconPerceptionMissionStep()
+        public PerformReconMissionStep()
         {
             BaseSkill perception = GameDataSingleton.Instance.GameRulesData.BaseSkillMap.Values.First(s => s.Name == "Tactics");
             _missionTest = new SquadMissionTest(perception, 10.0f);
