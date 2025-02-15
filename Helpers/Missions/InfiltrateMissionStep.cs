@@ -26,6 +26,7 @@ namespace OnlyWar.Helpers.Missions.Recon
         {
             if (!ShouldContinue(context)) return;
             context.DaysElapsed++;
+            // modifiers should include: size of enemy forces, size of player force, terrain, some notion of enemy focus (hunting, defending, hiding), whether enemy is hidden or public
             float margin = _missionTest.RunMissionTest(context.PlayerSquads);
             if (margin > 0.0f)
             {

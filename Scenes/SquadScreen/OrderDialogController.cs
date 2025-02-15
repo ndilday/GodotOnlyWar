@@ -23,6 +23,7 @@ public partial class OrderDialogController : Control
     {
         _view = GetNode<OrderDialogView>("OrderDialogView");
         _view.RegionOptionSelected += OnRegionOptionSelected;
+        _view.MissionOptionSelected += OnMissionOptionSelected;
         _view.AggressionOptionSelected += OnAggressionOptionSelected;
         _view.OrdersConfirmed += OnOrdersConfirmed;
         _view.Canceled += OnCanceled;
@@ -63,7 +64,7 @@ public partial class OrderDialogController : Control
 
     private void PopulateMissions(Region region)
     {
-        Tuple<string, int> recon = new Tuple<string, int>("Recon", 0);
+        Tuple<string, int> recon = new Tuple<string, int>("Recon", (int)MissionType.Recon);
         _view.PopulateMissionOptions(new List<Tuple<string, int>> { recon });
     }
 
@@ -76,6 +77,23 @@ public partial class OrderDialogController : Control
         // populate the mission dropbox
         // if the currently selected mission is still possible in the newly selected region, select it in the new region
         PopulateMissions(selectedRegion);
+    }
+
+    private void OnMissionOptionSelected(object sender, int e)
+    {
+        // change aggression helper text
+        string text;
+        switch ((MissionType)e)
+        {
+            case MissionType.Recon:
+                text = "Probe the area to find hidden enemy forces and opportunities for special missions";
+                break;
+            default:
+                text = "Huh?";
+                break;
+        }
+
+        _view.SetMissionDescription(text);
     }
 
     private void OnAggressionOptionSelected(object sender, int e)
