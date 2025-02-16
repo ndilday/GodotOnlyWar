@@ -102,7 +102,7 @@ namespace OnlyWar.Builders
             for (int i = 0; i < 16; i++)
             {
                 int regionId = planet.Id * 16 + i;
-                planet.Regions[i] = new Region(regionId, planet, 0, GetRegionName(planet, i), RegionExtensions.GetCoordinatesFromRegionNumber(i));
+                planet.Regions[i] = new Region(regionId, planet, 0, GetRegionName(planet, i), RegionExtensions.GetCoordinatesFromRegionNumber(i), 0);
             }
 
             long popToDistribute = (long)(template.PopulationRange.BaseValue)
