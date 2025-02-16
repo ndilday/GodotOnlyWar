@@ -17,7 +17,7 @@ namespace OnlyWar.Helpers.Missions.Recon
         public PerformReconMissionStep()
         {
             BaseSkill perception = GameDataSingleton.Instance.GameRulesData.BaseSkillMap.Values.First(s => s.Name == "Tactics");
-            _missionTest = new SquadMissionTest(perception, 10.0f);
+            _missionTest = new SquadMissionTest(perception, 12.5f);
             StepIfSuccess = new ReconStealthMissionStep();
             StepIfFailure = new ReconStealthMissionStep();
         }
@@ -28,11 +28,14 @@ namespace OnlyWar.Helpers.Missions.Recon
             if (margin > 0.0f)
             {
                 // TODO: add some kind of recon data to the context
-                StepIfSuccess.ExecuteMissionStep(context, margin, returnStep);
+                // do some sort of test to see whether a special mission opportunity is found
+                // if not, improve the inteligence level by the margin
+                context.Region.IntelligenceLevel += margin / 5;
+                StepIfSuccess.ExecuteMissionStep(context, 0, returnStep);
             }
             else
             {
-                StepIfFailure.ExecuteMissionStep(context, margin, returnStep);
+                StepIfFailure.ExecuteMissionStep(context, 0, returnStep);
             }
         }
     }
