@@ -1,4 +1,5 @@
-﻿using System;
+﻿using OnlyWar.Models.Missions;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 
@@ -11,6 +12,7 @@ namespace OnlyWar.Models.Planets
         public readonly string Name;
         public readonly Tuple<int, int> Coordinates;
         public float IntelligenceLevel { get; set; }
+        public List<SpecialMission> SpecialMissions { get; }
         // territory is diamond-shaped
         // 1
         // 2 3
@@ -64,6 +66,7 @@ namespace OnlyWar.Models.Planets
             Name = name;
             Coordinates = coordinates;
             IntelligenceLevel = intelligenceLevel;
+            SpecialMissions = new List<SpecialMission>();
         }
 
 

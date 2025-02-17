@@ -27,10 +27,32 @@ namespace OnlyWar.Helpers.Missions.Recon
             float margin = _missionTest.RunMissionTest(context.PlayerSquads);
             if (margin > 0.0f)
             {
+                float specMissionChance = margin;
+                // add current inelligence level
+                specMissionChance += context.Region.IntelligenceLevel;
+                // subtract one for each special mission already identified
+                specMissionChance -= context.Region.SpecialMissions.Count;
+                specMissionChance -= context.MissionsToAdd.Count;
+                specMissionChance += (float)RNG.NextRandomZValue();
                 // TODO: add some kind of recon data to the context
                 // do some sort of test to see whether a special mission opportunity is found
                 // if not, improve the inteligence level by the margin
-                context.Region.IntelligenceLevel += margin / 5;
+                if (specMissionChance <= 0)
+                {
+                    context.Region.IntelligenceLevel += margin / 5;
+                }
+                else if(specMissionChance >= 2)
+                {
+                    // assassination
+                }
+                else if(specMissionChance >= 1)
+                {
+                    // sabotage
+                }
+                else if (specMissionChance >= 0)
+                {
+                    // ambush, equipment/prisoner recovery
+                }
                 StepIfSuccess.ExecuteMissionStep(context, 0, returnStep);
             }
             else
