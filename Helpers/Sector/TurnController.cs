@@ -1,10 +1,11 @@
-﻿using System.Collections.Generic;
-using System.Linq;
-using OnlyWar.Builders;
+﻿using OnlyWar.Builders;
 using OnlyWar.Models.Missions;
 using OnlyWar.Models.Orders;
 using OnlyWar.Models.Planets;
 using OnlyWar.Models.Squads;
+using System;
+using System.Collections.Generic;
+using System.Linq;
 
 namespace OnlyWar.Helpers.Sector
 {
@@ -25,33 +26,50 @@ namespace OnlyWar.Helpers.Sector
             {
                 foreach(Region region in planet.Regions)
                 {
-                    if(region.IntelligenceLevel > 0)
+                    // 25% chance of unexecuted special missions being removed
+                    foreach (SpecialMission specialMission in region.SpecialMissions)
+                    {
+                        if (RNG.GetIntBelowMax(0, 4) == 0)
+                        {
+                            region.SpecialMissions.Remove(specialMission);
+                        }
+                    }
+                    if (region.IntelligenceLevel > 0)
                     {
                         // see if any intelligence gets spent in exchange for special mission opportunities
-                        float specMissionChance = region.IntelligenceLevel;
+                        float specMissionChance = (float)Math.Log(region.IntelligenceLevel, 2) + 1;
                         // subtract one for each special mission already identified
                         specMissionChance -= region.SpecialMissions.Count;
-                        specMissionChance += (float)RNG.NextRandomZValue();
-                        // TODO: add some kind of recon data to the context
-                        // do some sort of test to see whether a special mission opportunity is found
-                        // if not, improve the inteligence level by the margin
-                        if (specMissionChance >= 2)
+                        for (int i = 0; i < specMissionChance; i++)
                         {
-                            // assassination
-                        }
-                        else if (specMissionChance >= 1)
-                        {
-                            // sabotage
-                            // plant minefield
+                            double chance = RNG.NextRandomZValue();
+                            // TODO: add some kind of recon data to the context
+                            // do some sort of test to see whether a special mission opportunity is found
+                            // if not, improve the inteligence level by the margin
+                            if (chance >= 2)
+                            {
+                                // assassination
+                                SpecialMission ass = new SpecialMission(0, MissionType.Assassination, region);
+                                region.SpecialMissions.Add(ass);
+                            }
+                            else if (chance >= 1)
+                            {
+                                // sabotage
+                                SpecialMission sabotage = new SpecialMission(0, MissionType.Sabotage, region);
+                                region.SpecialMissions.Add(sabotage);
+                                // plant minefield
 
-                        }
-                        else if (specMissionChance >= 0)
-                        {
-                            // ambush, equipment/prisoner recovery
-                            // sniper's nest
-                            // prisoner recovery
-                            // equipment recovery
+                            }
+                            else if (chance >= 0)
+                            {
+                                // ambush, equipment/prisoner recovery
+                                SpecialMission ambush = new SpecialMission(0, MissionType.Ambush, region);
+                                region.SpecialMissions.Add(ambush);
+                                // sniper's nest
+                                // prisoner recovery
+                                // equipment recovery
 
+                            }
                         }
                         // reduce intelligence level by 25%
                         region.IntelligenceLevel *= 0.75f;

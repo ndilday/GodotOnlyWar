@@ -17,6 +17,7 @@ namespace OnlyWar.Models.Missions
         LastStand,
         Assassination,
         ObjectiveRaid,
+        Sabotage,
         Ambush,
         Extermination,
         Training

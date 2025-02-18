@@ -8,5 +8,12 @@ namespace OnlyWar.Models.Missions
         public int Id { get; private set; }
         public MissionType MissionType { get; private set; }
         public Region Region { get; private set; }
+
+        public SpecialMission(int id, MissionType missionType, Region region)
+        {
+            Id = id;
+            MissionType = missionType;
+            Region = region;
+        }
     }
 }

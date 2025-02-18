@@ -16,8 +16,8 @@ namespace OnlyWar.Helpers.Missions.Recon
 
         public PerformReconMissionStep()
         {
-            BaseSkill perception = GameDataSingleton.Instance.GameRulesData.BaseSkillMap.Values.First(s => s.Name == "Tactics");
-            _missionTest = new SquadMissionTest(perception, 12.5f);
+            BaseSkill tactics = GameDataSingleton.Instance.GameRulesData.BaseSkillMap.Values.First(s => s.Name == "Tactics");
+            _missionTest = new SquadMissionTest(tactics, 12.5f);
             StepIfSuccess = new ReconStealthMissionStep();
             StepIfFailure = null;
         }

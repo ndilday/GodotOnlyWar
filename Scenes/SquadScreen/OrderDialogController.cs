@@ -64,8 +64,13 @@ public partial class OrderDialogController : Control
 
     private void PopulateMissions(Region region)
     {
-        Tuple<string, int> recon = new Tuple<string, int>("Recon", (int)MissionType.Recon);
-        _view.PopulateMissionOptions(new List<Tuple<string, int>> { recon });
+        List<Tuple<string, int>> missionOptions = new List<Tuple<string, int>>();
+        missionOptions.Add(new Tuple<string, int>("Recon", (int)MissionType.Recon));
+        foreach (var mission in region.SpecialMissions)
+        {
+            missionOptions.Add(new Tuple<string, int>(mission.MissionType.ToString(), (int)mission.MissionType));
+        }
+        _view.PopulateMissionOptions(missionOptions);
     }
 
     private void OnRegionOptionSelected(object sender, int e)
@@ -87,6 +92,15 @@ public partial class OrderDialogController : Control
         {
             case MissionType.Recon:
                 text = "Probe the area to find hidden enemy forces and opportunities for special missions";
+                break;
+            case MissionType.Assassination:
+                text = "A high-value target has been identified in the area. They will likely be guarded by an elite bodyguard. Eliminating them will greatly reduce the enemy's command and control capabilities.";
+                break;
+                case MissionType.Ambush:
+                text = "We have identified an area the enemy frequently moves forces through that contains oppotune firing lines. Setting up an ambush here will allow us to reduce enemy forces at relatively low risk to our troops, assuming they can get into position undetected.";
+                break;
+                case MissionType.Sabotage:
+                text = "We have identified a target that, if destroyed, will greatly reduce the enemy's ability to wage war in this region. We will need to get in and out quickly, as the enemy will likely be on high alert.";
                 break;
             default:
                 text = "Huh?";
