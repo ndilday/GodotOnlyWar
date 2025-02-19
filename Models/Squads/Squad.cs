@@ -24,8 +24,8 @@ namespace OnlyWar.Models.Squads
         {
             get
             {
-                if (ParentUnit == null) return null;
-                return ParentUnit.Faction;
+                if (SquadTemplate == null) return null;
+                return SquadTemplate.Faction;
             }
         }
 

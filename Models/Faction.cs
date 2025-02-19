@@ -63,6 +63,10 @@ namespace OnlyWar.Models
             {
                 template.Faction = this;
             }
+            foreach(SquadTemplate template in SquadTemplates?.Values ?? Enumerable.Empty<SquadTemplate>())
+            {
+                template.Faction = this;
+            }
             Units = [];
         }
     }

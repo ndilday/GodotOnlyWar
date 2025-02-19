@@ -42,8 +42,10 @@ namespace OnlyWar.Models.Squads
         public WeaponSet DefaultWeapons { get; }
         public SquadTypes SquadType { get; }
         public int BattleValue { get; }
+        public Faction Faction { get; set;  }
 
-        public SquadTemplate(int id, string name, 
+        public SquadTemplate(int id, 
+                             string name, 
                              WeaponSet defaultWeapons, 
                              List<SquadWeaponOption> weaponOptions, 
                              ArmorTemplate armor,

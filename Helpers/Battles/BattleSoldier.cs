@@ -121,7 +121,7 @@ namespace OnlyWar.Helpers.Battles
             newSoldier.TurnsAiming = TurnsAiming;
             newSoldier.WoundsTaken = WoundsTaken;
             newSoldier.EnemiesTakenDown = EnemiesTakenDown;
-            newSoldier.Aim = new Tuple<int, RangedWeapon, int>(Aim.Item1, Aim.Item2, Aim.Item3);
+            newSoldier.Aim = this.Aim == null ? null : new Tuple<int, RangedWeapon, int>(Aim.Item1, Aim.Item2, Aim.Item3);
             newSoldier.EquippedMeleeWeapons = EquippedMeleeWeapons.ToList();
             newSoldier.EquippedRangedWeapons = EquippedRangedWeapons.ToList();
             newSoldier.MeleeWeapons = MeleeWeapons;

@@ -38,11 +38,11 @@ namespace OnlyWar.Models.Battles
             // add the soldiers to the soldier map from the squads
             _soldiers = new Dictionary<int, BattleSoldier>();
             _soldierPositionsMap = new Dictionary<int, IReadOnlyList<Tuple<int, int>>>();
-            foreach (BattleSquad squad in playerSquads.Values.Concat(opposingSquads.Values))
+            foreach (BattleSquad squad in PlayerSquads.Values.Concat(OpposingSquads.Values))
             {
                 foreach (BattleSoldier soldier in squad.Soldiers)
                 {
-                    _soldiers[soldier.Soldier.Id] = (BattleSoldier)soldier.Clone();
+                    _soldiers[soldier.Soldier.Id] = soldier;
                     _soldierPositionsMap[soldier.Soldier.Id] = soldier.PositionList;
                 }
             }
