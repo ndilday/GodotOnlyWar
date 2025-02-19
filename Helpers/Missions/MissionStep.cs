@@ -11,7 +11,7 @@ namespace OnlyWar.Helpers.Missions
 
     public interface ITestMissionStep : IMissionStep
     {
-        public IMissionTest MissionTest { get; }
+        public IMissionCheck MissionTest { get; }
         public IMissionStep StepIfSuccess { get; }
         public IMissionStep StepIfFailure { get; }
     }

@@ -8,10 +8,10 @@ namespace OnlyWar.Helpers.Missions.Recon
 {
     public class InfiltrateMissionStep : ITestMissionStep
     {
-        private readonly IMissionTest _missionTest;
+        private readonly IMissionCheck _missionTest;
 
         public string Description { get { return "Infiltrate"; } }
-        public IMissionTest MissionTest { get; }
+        public IMissionCheck MissionTest { get; }
         public IMissionStep StepIfSuccess { get; }
         public IMissionStep StepIfFailure { get; }
 
@@ -27,7 +27,7 @@ namespace OnlyWar.Helpers.Missions.Recon
             if (!ShouldContinue(context)) return;
             context.DaysElapsed++;
             // modifiers should include: size of enemy forces, size of player force, terrain, some notion of enemy focus (hunting, defending, hiding), whether enemy is hidden or public
-            float margin = _missionTest.RunMissionTest(context.PlayerSquads);
+            float margin = _missionTest.RunMissionCheck(context.PlayerSquads);
             if (margin > 0.0f)
             {
                 MissionStepOrchestrator.GetMainInitialStep(context).ExecuteMissionStep(context, margin, returnStep);

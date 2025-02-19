@@ -9,10 +9,10 @@ namespace OnlyWar.Helpers.Missions.Recon
 {
     public class ReconStealthMissionStep : ITestMissionStep
     {
-        private readonly IMissionTest _missionTest;
+        private readonly IMissionCheck _missionTest;
 
         public string Description { get { return "Recon"; } }
-        public IMissionTest MissionTest { get; }
+        public IMissionCheck MissionTest { get; }
         public IMissionStep StepIfSuccess { get; }
         public IMissionStep StepIfFailure { get; }
 
@@ -34,7 +34,7 @@ namespace OnlyWar.Helpers.Missions.Recon
             else
             {
                 context.DaysElapsed++;
-                float margin = _missionTest.RunMissionTest(context.PlayerSquads);
+                float margin = _missionTest.RunMissionCheck(context.PlayerSquads);
                 if (margin > 0.0f)
                 {
                     StepIfSuccess.ExecuteMissionStep(context, margin, this);

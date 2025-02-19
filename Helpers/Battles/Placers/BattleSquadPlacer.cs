@@ -23,7 +23,7 @@ namespace OnlyWar.Helpers.Battles.Placers
             {
                 startingLocation = PlaceSquadVertically(manager, squad, bottomLeft, squadBoxSize);
             }
-            OnSquadPlaced.Invoke(squad, startingLocation);
+            OnSquadPlaced?.Invoke(squad, startingLocation);
         }
 
         private static Tuple<int, int> PlaceSquadHorizontally(BattleGridManager manager, BattleSquad squad, Tuple<int, int> bottomLeft, Tuple<ushort, ushort> squadBoxSize)

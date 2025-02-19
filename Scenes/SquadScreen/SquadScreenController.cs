@@ -25,6 +25,7 @@ public partial class SquadScreenController : DialogController
         _view.WeaponSetSelectionWeaponSetCountChanged += OnWeaponSetSelectionWeaponSetCountChanged;
         _view.OpenOrders += OnOpenOrders;
         _orderController = GetNode<OrderDialogController>("DialogView/OrderDialogController");
+        _orderController.OrdersConfirmed += OnOrdersConfirmed;
         _currentRegion = GetNode<TacticalRegionController>("DialogView/RegionPanel/TacticalRegionCenter");
         _adjacenTacticalRegionMap = GetAdjacentRegionDisplayMap();
     }
@@ -32,6 +33,12 @@ public partial class SquadScreenController : DialogController
     {
         _orderController.PopulateOrderData(_squad);
         _orderController.Visible = true;
+    }
+
+    private void OnOrdersConfirmed(object sender, EventArgs e)
+    {
+        PopulateOrderDetails();
+        _view.SetOpenOrdersButtonText("Edit Current Orders");
     }
 
     private void OnWeaponSetSelectionWeaponSetCountChanged(object sender, Tuple<string, int> args)

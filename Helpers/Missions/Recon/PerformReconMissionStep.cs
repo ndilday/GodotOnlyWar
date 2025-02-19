@@ -7,10 +7,10 @@ namespace OnlyWar.Helpers.Missions.Recon
 {
     public class PerformReconMissionStep : ITestMissionStep
     {
-        private readonly IMissionTest _missionTest;
+        private readonly IMissionCheck _missionTest;
 
         public string Description { get { return "Recon"; } }
-        public IMissionTest MissionTest { get; }
+        public IMissionCheck MissionTest { get; }
         public IMissionStep StepIfSuccess { get; }
         public IMissionStep StepIfFailure { get; }
 
@@ -25,7 +25,7 @@ namespace OnlyWar.Helpers.Missions.Recon
         public void ExecuteMissionStep(MissionContext context, float marginOfSuccess, IMissionStep returnStep)
         {
             // move the generation of new missions to the turn controller, rather than the individual mission steps
-            float margin = _missionTest.RunMissionTest(context.PlayerSquads);
+            float margin = _missionTest.RunMissionCheck(context.PlayerSquads);
             context.Region.IntelligenceLevel += margin;
             StepIfSuccess.ExecuteMissionStep(context, margin, this);
 

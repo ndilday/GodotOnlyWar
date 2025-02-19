@@ -1,4 +1,5 @@
 using Godot;
+using OnlyWar.Helpers;
 using OnlyWar.Models.Planets;
 using System;
 using System.Linq;
@@ -15,7 +16,7 @@ public partial class TacticalRegionController : Control
     {
         _view = GetNode<TacticalRegionView>("TacticalRegionView");
         _button = GetNode<Button>("TacticalRegionView/Button");
-        _button.Pressed += () => TacticalRegionPressed.Invoke(this, _region);
+        _button.Pressed += () => TacticalRegionPressed?.Invoke(this, _region);
     }
 
     public void Populate(Region region)
@@ -58,15 +59,7 @@ public partial class TacticalRegionController : Control
         string xenosPopulation = "";
         if(showXenos)
         {
-            long xenosCount = xenosRegionFaction.Population / 1000 * 1000;
-            if (xenosCount > 0)
-            {
-                xenosPopulation = xenosCount.ToString();
-            }
-            else if (xenosRegionFaction.Population > 0)
-            {
-                xenosPopulation = "Low";
-            }
+            xenosPopulation = xenosRegionFaction.GetPopulationDescription();
         }
 
         _view.Populate(region.Id, region.Name, showPlayerPublic, false, showCivilian, showXenos, false, false, playerPopulation, civilianPopulation, xenosPopulation);

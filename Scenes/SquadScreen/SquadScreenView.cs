@@ -114,9 +114,14 @@ public partial class SquadScreenView : DialogView
     public void PopulateOrderDetails(List<Tuple<string, string>> lines)
     {
         ClearOrderDetails();
-        foreach (Tuple<string, string> line in lines)
+        if (lines?.Count > 0)
         {
-            AddLine(_squadOrderDetailsVBox, line.Item1, line.Item2);
+            foreach (Tuple<string, string> line in lines)
+            {
+                AddLine(_squadOrderDetailsVBox, line.Item1, line.Item2);
+            }
+            _unassignButton.Disabled = false;
+            _openOrdersButton.Disabled = false;
         }
     }
 

@@ -8,10 +8,10 @@ namespace OnlyWar.Helpers.Missions
 {
     public class ExfiltrateMissionStep : ITestMissionStep
     {
-        private readonly IMissionTest _missionTest;
+        private readonly IMissionCheck _missionTest;
 
         public string Description { get { return "Infiltrate"; } }
-        public IMissionTest MissionTest { get; }
+        public IMissionCheck MissionTest { get; }
         public IMissionStep StepIfSuccess { get; }
         public IMissionStep StepIfFailure { get; }
 
@@ -30,7 +30,7 @@ namespace OnlyWar.Helpers.Missions
                 // they're dead, Jim
                 return;
             }
-            float margin = _missionTest.RunMissionTest(context.PlayerSquads);
+            float margin = _missionTest.RunMissionCheck(context.PlayerSquads);
             if (margin > 0.0f)
             {
                 StepIfSuccess.ExecuteMissionStep(context, margin, this);

@@ -18,6 +18,7 @@ public partial class OrderDialogController : Control
     private const string NORMAL = "The force will engage when it can vanquish the enemy with minimal casualties.";
     private const string ATTRITIONAL = "The force will engage in evenly matched combat; losses are likely";
     private const string AGGRESSIVE = "Here we stand and here shall we die, unbroken and unbowed, though the very hand of death itself come for us, we will spit our defiance to the end!";
+    public event EventHandler OrdersConfirmed;
 
     public override void _Ready()
     {
@@ -148,6 +149,7 @@ public partial class OrderDialogController : Control
         _squad.CurrentOrders = new Order(_squad, selectedRegion, Disposition.Mobile, true, false, aggro, MissionType.Recon);
         GameDataSingleton.Instance.Sector.AddNewOrder(_squad.CurrentOrders);
         Visible = false;
+        OrdersConfirmed?.Invoke(this, EventArgs.Empty);
     }
 
     private void OnCanceled(object sender, EventArgs e)

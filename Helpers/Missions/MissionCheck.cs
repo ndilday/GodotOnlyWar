@@ -8,14 +8,14 @@ using System.Linq;
 
 namespace OnlyWar.Helpers.Missions
 {
-    public interface IMissionTest
+    public interface IMissionCheck
     {
         public BaseSkill SkillUsed { get; }
         // RunMissionTest returns the number of sigmas the squad succeeded or failed by
-        public float RunMissionTest(List<Squad> squads);
+        public float RunMissionCheck(List<Squad> squads);
     }
 
-    public static class GaussianMissionTestCalculator
+    public static class GaussianMissionCheckCalculator
     {
 
         public static float DetermineMarginOfSuccessZvalue(float zValue)
@@ -88,7 +88,7 @@ namespace OnlyWar.Helpers.Missions
         }
     }
 
-    public class IndividualMissionTest : IMissionTest
+    public class IndividualMissionTest : IMissionCheck
     {
         public BaseSkill SkillUsed { get; }
 
@@ -100,19 +100,19 @@ namespace OnlyWar.Helpers.Missions
             _difficulty = difficulty;
         }
 
-        public virtual float RunMissionTest(List<Squad> squads)
+        public virtual float RunMissionCheck(List<Squad> squads)
         {
             // find soldier in squad with highest skill in SkillUsed
             ISoldier bestSoldier = squads.SelectMany(s => s.Members)
                 .OrderByDescending(soldier => soldier.GetTotalSkillValue(SkillUsed))
                 .FirstOrDefault();
-            return RunTestInternal(bestSoldier);
+            return RunCheckInternal(bestSoldier);
         }
 
-        protected float RunTestInternal(ISoldier soldier)
+        protected float RunCheckInternal(ISoldier soldier)
         {
             float zAdvantage = (soldier.GetTotalSkillValue(SkillUsed) - _difficulty) / 5.0f;
-            return GaussianMissionTestCalculator.DetermineMarginOfSuccessZvalue(zAdvantage);
+            return GaussianMissionCheckCalculator.DetermineMarginOfSuccessZvalue(zAdvantage);
         }
     }
 
@@ -122,20 +122,20 @@ namespace OnlyWar.Helpers.Missions
         {
         }
 
-        public override float RunMissionTest(List<Squad> squads)
+        public override float RunMissionCheck(List<Squad> squads)
         {
             if (!squads.Any(s => s.SquadLeader != null))
             {
-                return base.RunMissionTest(squads);
+                return base.RunMissionCheck(squads);
             }
             ISoldier bestLeader = squads.Select(s => s.SquadLeader)
                 .OrderByDescending(soldier => soldier.GetTotalSkillValue(SkillUsed))
                 .FirstOrDefault();
-            return RunTestInternal(bestLeader);
+            return RunCheckInternal(bestLeader);
         }
     }
 
-    public class SquadMissionTest : IMissionTest
+    public class SquadMissionTest : IMissionCheck
     {
         public BaseSkill SkillUsed { get; }
         private float _difficulty;
@@ -144,26 +144,11 @@ namespace OnlyWar.Helpers.Missions
             SkillUsed = skill;
             _difficulty = difficulty;
         }
-        public float RunMissionTest(List<Squad> squads)
+        public float RunMissionCheck(List<Squad> squads)
         {
             float totalSkill = squads.SelectMany(s => s.Members).Average(soldier => soldier.GetTotalSkillValue(SkillUsed));
-            float advantage = (totalSkill - _difficulty) / 5.0f;
-            float probMargin = GaussianMissionTestCalculator.DetermineMarginOfSuccessZvalue(advantage) + 1;
-            float zMargin = 0;
-            if (probMargin < 0)
-            {
-                // if they whiffed by more than 50%, treat 50% of it as 4-sigma
-                zMargin -= 4;
-                probMargin += 0.5f;
-            }
-            if (probMargin > 1)
-            {
-                // if they succeeded by more than 50%, treat 50% of it as 4-sigma
-                zMargin += 4;
-                probMargin -= 0.5f;
-            }
-            zMargin += (float)GaussianMissionTestCalculator.ApproximateInverseNormalCDF(probMargin);
-            return zMargin;
+            float zAdvantage = (totalSkill - _difficulty) / 5.0f;
+            return GaussianMissionCheckCalculator.DetermineMarginOfSuccessZvalue(zAdvantage);
         }
     }
 }

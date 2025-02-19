@@ -1,4 +1,5 @@
 using Godot;
+using OnlyWar.Helpers;
 using OnlyWar.Models;
 using OnlyWar.Models.Planets;
 using OnlyWar.Models.Squads;
@@ -126,26 +127,12 @@ public partial class PlanetTacticalScreenController : DialogController
             // hidden xenos are added to civilian population
             civilianPopulation += xenosRegionFaction.Population;
         }
-        if(civilianPopulation > 0)
+        if (civilianPopulation > 0)
         {
             lines.Add(new Tuple<string, string>("Civilian Population", civilianPopulation.ToString()));
         }
 
-        if(xenosRegionFaction != null && xenosRegionFaction.IsPublic)
-        {
-            long xenosPopulation = xenosRegionFaction.Population/1000 * 1000;
-            if (xenosPopulation > 0)
-            {
-                lines.Add(new Tuple<string, string>("Xenos Strength", xenosPopulation.ToString()));
-            }
-            else if(xenosRegionFaction.Population > 0)
-            {
-                lines.Add(new Tuple<string, string>("Xenos Strength", "Low"));
-            }
-            {
-
-            }
-        }
+        lines.Add(new Tuple<string, string>("Xenos Population",xenosRegionFaction.GetPopulationDescription()));
 
         int playerPopulation = 0;
         if (playerRegionFaction != null && playerRegionFaction.LandedSquads.Any())
