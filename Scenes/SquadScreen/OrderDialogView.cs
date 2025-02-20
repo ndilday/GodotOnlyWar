@@ -77,6 +77,7 @@ public partial class OrderDialogView : Panel
         {
             _missionOption.AddItem(option.Item1, option.Item2);
         }
+        _missionOption.Select(-1);
     }
 
     public int GetSelectedMissionId()

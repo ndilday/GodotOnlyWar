@@ -38,11 +38,20 @@ namespace OnlyWar.Helpers.Battles
             AllocateEquipment();
         }
 
+        private BattleSquad(BattleSquad original)
+        {
+            Id = original.Id;
+            Name = original.Name;
+            // we shouldn't need to clone the squad
+            Squad = original.Squad;
+            IsPlayerSquad = original.IsPlayerSquad;
+            IsInMelee = original.IsInMelee;
+            Soldiers = original.Soldiers.Select(s => (BattleSoldier)s.Clone()).ToList();
+        }
+
         public object Clone()
         {
-            BattleSquad newSquad = new BattleSquad(IsPlayerSquad, (Squad)Squad.Clone());
-            newSquad.IsInMelee = IsInMelee;
-            return newSquad;
+            return new BattleSquad(this);
         }
 
         public Tuple<ushort, ushort> GetSquadBoxSize()

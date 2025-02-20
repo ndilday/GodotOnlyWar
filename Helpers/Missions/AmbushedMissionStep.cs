@@ -17,7 +17,7 @@ namespace OnlyWar.Helpers.Missions
             // set up Ambush battle with OpFor attacker and context.Squad defender
             BattleGridManager bgm = new BattleGridManager();
             AmbushPlacer placer = new AmbushPlacer(bgm, range);
-            List<BattleSquad> playerForce = context.PlayerSquads.Select(s => new BattleSquad(false, s)).ToList();
+            List<BattleSquad> playerForce = context.PlayerSquads.Select(s => new BattleSquad(true, s)).ToList();
             List<BattleSquad> opFor = context.OpposingForces.Select(s => new BattleSquad(false, s)).ToList();
             var squadPostionMap = placer.PlaceSquads(playerForce, opFor);
 

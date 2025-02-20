@@ -189,34 +189,41 @@ namespace OnlyWar.Helpers.Battles
 
         private void AddStandingActionsToBag(BattleSoldier soldier)
         {
-            BattleSoldier target = _opposingSoldierIdSquadMap[soldier.Aim.Item1].Soldiers.Single(s => s.Soldier.Id == soldier.Aim.Item1);
-            if (soldier.RangedWeapons.Count == 0)
+            float range = _grid.GetNearestEnemy(soldier.Soldier.Id, out int closestEnemyId);
+            float speed = _opposingSoldierIdSquadMap[closestEnemyId].Soldiers.First().GetMoveSpeed();
+            // see if the enemy is within charging range and the soldier doesn't already have a target lined up
+            if (speed >= range && (soldier.Aim == null || soldier.RangedWeapons[0].LoadedAmmo == 0))
+            {
+                AddChargeActionsToBag(soldier);
+            }
+            else if (soldier.RangedWeapons.Count == 0)
             {
                 //Debug.Log("ISoldier with no ranged weapons just standing around");
             }
             // do we have a ranged weapon equipped
-            else if(soldier.EquippedRangedWeapons.Count == 0 && soldier.RangedWeapons.Count > 0)
+            else if (soldier.EquippedRangedWeapons.Count == 0 && soldier.RangedWeapons.Count > 0)
             {
                 AddEquipRangedWeaponActionToBag(soldier);
             }
-            else if(soldier.ReloadingPhase > 0 ||
+            else if (soldier.ReloadingPhase > 0 ||
                     (soldier.EquippedRangedWeapons.Count > 0 && soldier.RangedWeapons[0].LoadedAmmo == 0))
             {
                 AddReloadRangedWeaponActionToBag(soldier);
             }
             // determine if soldier was already aiming and the target is still around and not in a melee
-            else if (soldier.Aim != null && _opposingSoldierIdSquadMap.ContainsKey(soldier.Aim.Item1) && !target.IsInMelee)
+            else if (soldier.Aim != null && _opposingSoldierIdSquadMap.ContainsKey(soldier.Aim.Item1))
             {
+                BattleSoldier target = _opposingSoldierIdSquadMap[soldier.Aim.Item1].Soldiers.Single(s => s.Soldier.Id == soldier.Aim.Item1);
                 // if the aim cannot be improved, go ahead and shoot
                 if (soldier.Aim.Item3 == 3)
                 {
-                    float range = _grid.GetDistanceBetweenSoldiers(soldier.Soldier.Id, soldier.Aim.Item1);
+                    range = _grid.GetDistanceBetweenSoldiers(soldier.Soldier.Id, soldier.Aim.Item1);
                     Tuple<float, float> effectEstimate = EstimateHitAndDamage(soldier, target, soldier.Aim.Item2, range, soldier.Aim.Item2.Template.Accuracy + 3);
                     int shotsToFire = CalculateShotsToFire(soldier.Aim.Item2, effectEstimate.Item1, effectEstimate.Item2);
                     soldier.CurrentSpeed = 0;
-                    _shootActionBag.Add(new ShootAction(soldier.Soldier.Id, 
+                    _shootActionBag.Add(new ShootAction(soldier.Soldier.Id,
                         soldier.Aim.Item1,
-                        soldier.Aim.Item2.Template.Id, 
+                        soldier.Aim.Item2.Template.Id,
                         range,
                         shotsToFire,
                         false));
@@ -225,7 +232,7 @@ namespace OnlyWar.Helpers.Battles
                 {
                     // the aim can be improved
                     // current aim bonus is 1 for all-out attack, plus weapon accuracy, plus aim
-                    float range = _grid.GetDistanceBetweenSoldiers(soldier.Soldier.Id, soldier.Aim.Item1);
+                    range = _grid.GetDistanceBetweenSoldiers(soldier.Soldier.Id, soldier.Aim.Item1);
                     float currentModifiers = soldier.Aim.Item2.Template.Accuracy + soldier.Aim.Item3 + 1;
                     // item1 is the pre-roll to-hit total; item2 is the expected ratio of damage to con, so 1 is a potential killshot
                     Tuple<float, float> resultEstimate = EstimateHitAndDamage(soldier, target, soldier.Aim.Item2, range, currentModifiers);

@@ -151,7 +151,7 @@ namespace OnlyWar.Helpers.Battles
                     }
                 }
             }
-            return distanceSq;
+            return (float)Math.Sqrt(distanceSq);
         }
 
         public IList<Tuple<int, int>> GetSoldierPosition(int soldierId)
