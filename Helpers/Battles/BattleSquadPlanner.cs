@@ -2,11 +2,9 @@
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
-
 using OnlyWar.Helpers.Battles.Actions;
 using OnlyWar.Models.Equippables;
 using OnlyWar.Models.Soldiers;
-using OnlyWar.Helpers.Battles.Resolutions;
 
 namespace OnlyWar.Helpers.Battles
 {
@@ -17,7 +15,6 @@ namespace OnlyWar.Helpers.Battles
         private readonly ConcurrentBag<IAction> _moveActionBag;
         private readonly ConcurrentBag<IAction> _meleeActionBag;
         private readonly Dictionary<int, BattleSquad> _opposingSoldierIdSquadMap;
-        private readonly ConcurrentBag<WoundResolution> _woundResolutionBag;
         private readonly MeleeWeapon _defaultMeleeWeapon;
         private readonly ConcurrentQueue<string> _log;
 
@@ -26,7 +23,6 @@ namespace OnlyWar.Helpers.Battles
                                   ConcurrentBag<IAction> shootActionBag,
                                   ConcurrentBag<IAction> moveActionBag,
                                   ConcurrentBag<IAction> meleeActionBag,
-                                  ConcurrentBag<WoundResolution> woundBag, 
                                   ConcurrentQueue<string> log,
                                   MeleeWeapon defaultMeleeWeapon)
         {
@@ -35,32 +31,12 @@ namespace OnlyWar.Helpers.Battles
             _shootActionBag = shootActionBag;
             _moveActionBag = moveActionBag;
             _meleeActionBag = meleeActionBag;
-            _woundResolutionBag = woundBag;
             _defaultMeleeWeapon = defaultMeleeWeapon;
             _log = log;
         }
 
         public void PrepareActions(BattleSquad squad)
         {
-            // retreatng is moving full tilt away from the enemy
-            // TODO: this won't be a valid option when surrounded
-            int retreatVotes = 0;
-            // falling back is moving at 1/3 speed away from the enemy,
-            // leaving the possibility of shooting
-            int fallbackVotes = 0;
-            // advancing is sprinting toward the enemy
-            int advanceVotes = 0;
-            // standing is not moving
-            int standVotes = 0;
-            // charging is moving into hand-to-hand contact with the enemy
-            int chargeVotes = 0;
-
-            // need some concept of squad disposition... stance, whether they're actively aiming
-            // determine closest enemy
-            // determine our optimal range
-            // determine closest enemy optimal range
-            // if the enemy wants to advance, we want to stay put, and vice versa
-            // if we both want to get closer or both want to stay put, it's more interesting
             if (squad.IsInMelee)
             {
                 // it doesn't really matter what the soldiers want to do, it's time to flee or fight
@@ -79,6 +55,25 @@ namespace OnlyWar.Helpers.Battles
             }
             else
             {
+                // need some concept of squad disposition... stance, whether they're actively aiming
+                // determine closest enemy
+                // determine our optimal range
+                // determine closest enemy optimal range
+                // if the enemy wants to advance, we want to stay put, and vice versa
+                // if we both want to get closer or both want to stay put, it's more interesting
+
+                // retreatng is moving full tilt away from the enemy
+                // TODO: this won't be a valid option when surrounded
+                int retreatVotes = 0;
+                // falling back is moving at 1/3 speed away from the enemy,
+                // leaving the possibility of shooting
+                //int fallbackVotes = 0;
+                // advancing is sprinting toward the enemy
+                int advanceVotes = 0;
+                // standing is not moving
+                int standVotes = 0;
+                // charging is moving into hand-to-hand contact with the enemy
+                int chargeVotes = 0;
                 foreach (BattleSoldier soldier in squad.Soldiers)
                 {
                     float distance = _grid.GetNearestEnemy(soldier.Soldier.Id, out int closestSoldierId);
@@ -239,7 +234,7 @@ namespace OnlyWar.Helpers.Battles
                     // it's about to attack, go ahead and shoot, you may not get another chance
                     if (target.GetMoveSpeed() > range
                         // there's a good chance of both hitting and killing, go ahead and shoot now
-                        || (resultEstimate.Item2 >= 1 && resultEstimate.Item1 >= 6.66f))
+                        || (resultEstimate.Item2 >= 1 && resultEstimate.Item1 >= 0.33f))
                     {
                         int shotsToFire = CalculateShotsToFire(soldier.Aim.Item2, resultEstimate.Item1, resultEstimate.Item2);
                         soldier.CurrentSpeed = 0;
@@ -262,7 +257,7 @@ namespace OnlyWar.Helpers.Battles
             else
             {
                 soldier.CurrentSpeed = 0;
-                ShootIfReasonable(soldier, false);
+                AddRangedActionToBag(soldier, false);
             }
         }
 
@@ -311,7 +306,7 @@ namespace OnlyWar.Helpers.Battles
                 AddMoveAction(soldier, moveSpeed, line);
 
                 // should the soldier shoot along the way?
-                ShootIfReasonable(soldier, true);
+                AddRangedActionToBag(soldier, true);
             }
         }
 
@@ -323,7 +318,7 @@ namespace OnlyWar.Helpers.Battles
             AddMoveAction(soldier, moveSpeed, new Tuple<int, int>(0, newY));
 
             // determine if soldier will shoot as he falls back
-            ShootIfReasonable(soldier, true);
+            AddRangedActionToBag(soldier, true);
         }
 
         private void AddMeleeActionsToBag(BattleSoldier soldier)
@@ -371,7 +366,7 @@ namespace OnlyWar.Helpers.Battles
                     AddMoveAction(soldier, moveSpeed, moveVector);
 
                     // should the soldier shoot along the way?
-                    ShootIfReasonable(soldier, true);
+                    AddRangedActionToBag(soldier, true);
                 }
                 else
                 {
@@ -429,7 +424,7 @@ namespace OnlyWar.Helpers.Battles
                 AddMoveAction(soldier, moveSpeed, realMove);
 
                 // should the soldier shoot along the way?
-                ShootIfReasonable(soldier, true);
+                AddRangedActionToBag(soldier, true);
             }
             else if (soldier.EquippedMeleeWeapons.Count == 0 && soldier.MeleeWeapons.Count > 0)
             {
@@ -448,7 +443,7 @@ namespace OnlyWar.Helpers.Battles
             }
         }
 
-        private void ShootIfReasonable(BattleSoldier soldier, bool isMoving)
+        private void AddRangedActionToBag(BattleSoldier soldier, bool isMoving)
         {
             if (soldier.RangedWeapons.Count == 0) return;
             if (soldier.EquippedRangedWeapons.Count == 0)
@@ -461,27 +456,42 @@ namespace OnlyWar.Helpers.Battles
             }
             else
             {
-                float range = _grid.GetNearestEnemy(soldier.Soldier.Id, out int closestEnemyId);
-                BattleSquad oppSquad = _opposingSoldierIdSquadMap[closestEnemyId];
-                BattleSoldier target = oppSquad.GetRandomSquadMember();
-                range = _grid.GetDistanceBetweenSoldiers(soldier.Soldier.Id, target.Soldier.Id);
-                // decide whether to shoot or aim
-                Tuple<float, float, RangedWeapon> weaponProfile = 
-                    ShouldShootAtRange(soldier, target, range, isMoving);
-                if (weaponProfile.Item3 != null)
+                AddShootOrAimActionToBag(soldier, isMoving);
+            }
+        }
+
+        private void AddShootOrAimActionToBag(BattleSoldier soldier, bool isMoving)
+        {
+            float range = _grid.GetNearestEnemy(soldier.Soldier.Id, out int closestEnemyId);
+            BattleSquad oppSquad = _opposingSoldierIdSquadMap[closestEnemyId];
+            BattleSoldier target = oppSquad.GetRandomSquadMember();
+            range = _grid.GetDistanceBetweenSoldiers(soldier.Soldier.Id, target.Soldier.Id);
+            // decide whether to shoot or aim
+            // calculate the expected number of hits if the soldier shoots now
+            // calculate the expected number of hits if the soldier aims for a turn, then shoots
+            // if aiming >= 2xshooting, aim
+            Tuple<float, float, RangedWeapon> shootNow = GetBestWeaponForSituation(soldier, target, range, isMoving, false);
+            Tuple<float, float, RangedWeapon> aimNow = GetBestWeaponForSituation(soldier, target, range, isMoving, true);
+            if (shootNow.Item1 * 2 > aimNow.Item1)
+            {
+                int shotsToFire =
+                    CalculateShotsToFire(shootNow.Item3, shootNow.Item1, shootNow.Item2);
+                _shootActionBag.Add(new ShootAction(soldier.Soldier.Id,
+                    target.Soldier.Id,
+                    shootNow.Item3.Template.Id,
+                    range,
+                    shotsToFire,
+                    isMoving));
+            }
+            else if (!isMoving)
+            {
+                // aim with longest ranged weapon
+                if (aimNow?.Item3 != null)
                 {
-                    int shotsToFire = 
-                        CalculateShotsToFire(weaponProfile.Item3, weaponProfile.Item1, weaponProfile.Item2);
-                    _shootActionBag.Add(new ShootAction(soldier.Soldier.Id,
-                        target.Soldier.Id,
-                        weaponProfile.Item3.Template.Id, 
-                        range, 
-                        shotsToFire, 
-                        isMoving));
+                    _shootActionBag.Add(new AimAction(soldier, target, aimNow.Item3, _log));
                 }
-                else if (!isMoving)
+                else
                 {
-                    // aim with longest ranged weapon
                     _shootActionBag.Add(new AimAction(soldier, target, soldier.EquippedRangedWeapons.OrderByDescending(w => w.Template.MaximumRange).First(), _log));
                 }
             }
@@ -563,16 +573,20 @@ namespace OnlyWar.Helpers.Battles
             return weapon.Template.MaximumRange * distanceRatio;
         }
 
-        private Tuple<float, float, RangedWeapon> ShouldShootAtRange(BattleSoldier soldier, BattleSoldier target, float range, bool useBulk)
+        private Tuple<float, float, RangedWeapon> GetBestWeaponForSituation(BattleSoldier soldier, BattleSoldier target, float range, bool useBulk, bool useAccuracy)
         {
             RangedWeapon bestWeapon = null;
             float bestAccuracy = 0;
             float bestDamage = -0;
             foreach(RangedWeapon weapon in soldier.EquippedRangedWeapons.OrderByDescending(w => w.Template.DamageMultiplier))
             {
-                Tuple<float, float> hitAndDamage = EstimateHitAndDamage(soldier, target, weapon, range, useBulk ? -2 : 0);
+                float bulkAndAccMod = 0;
+                bulkAndAccMod -= useBulk ? weapon.Template.Bulk : 0;
+                // base accuracy bonus is the weapon's accuracy plus 1 for aiming making it an all-out attack
+                bulkAndAccMod += useAccuracy ? weapon.Template.Accuracy + 1 : 0;
+                Tuple<float, float> hitAndDamage = EstimateHitAndDamage(soldier, target, weapon, range, bulkAndAccMod);
                 // if not likely to break through armor, there's little point
-                if (hitAndDamage.Item1 > 6.66f && hitAndDamage.Item2 > bestDamage)
+                if (hitAndDamage.Item1 > 0.1f && hitAndDamage.Item2 > bestDamage)
                 {
                     // about a 1/10 chance of hitting
                     bestAccuracy = hitAndDamage.Item1;
@@ -593,7 +607,7 @@ namespace OnlyWar.Helpers.Battles
                 minRoF = weapon.Template.RateOfFire / 4;
             }
 
-            if (toHitAtMaximumRateOfFire < 6.66)
+            if (toHitAtMaximumRateOfFire < .1f)
             {
                 // don't waste ammo on impossible shots
                 return minRoF;
@@ -618,8 +632,9 @@ namespace OnlyWar.Helpers.Battles
             float rangeMod = BattleModifiersUtil.CalculateRangeModifier(range, target.CurrentSpeed);
             float rofMod = BattleModifiersUtil.CalculateRateOfFireModifier(weapon.Template.RateOfFire);
             float weaponSkill = soldier.Soldier.GetTotalSkillValue(weapon.Template.RelatedSkill);
-            float total = weaponSkill + rofMod + rangeMod + sizeMod + moveAndAimMod;
-            return new Tuple<float, float>(total, expectedDamage);
+            float total = weaponSkill + rofMod + rangeMod + sizeMod + moveAndAimMod - 10.5f;
+            float probability = GaussianCalculator.ApproximateNormalCDF(total);
+            return new Tuple<float, float>(probability, expectedDamage);
         }
 
         private void AddMoveAction(BattleSoldier soldier, float moveSpeed, Tuple<int, int> line)
@@ -782,7 +797,8 @@ namespace OnlyWar.Helpers.Battles
         private float CalculateExpectedDamage(RangedWeapon weapon, float range, float armor, float con)
         {
             float effectiveStrength = BattleModifiersUtil.CalculateDamageAtRange(weapon, range);
-            return ((effectiveStrength * 4.25f) - armor) / con;
+            float effectiveArmor = armor * weapon.Template.ArmorMultiplier;
+            return ((effectiveStrength * 4.25f) - effectiveArmor) / con;
         }
     }
 }

@@ -9,12 +9,14 @@ namespace OnlyWar.Models.Battles
     {
         private readonly Dictionary<int, IReadOnlyList<Tuple<int, int>>> _soldierPositionsMap;
         private readonly Dictionary<int, BattleSoldier> _soldiers;
+        private readonly Dictionary<int, BattleSquad> _playerBattleSquads;
+        private readonly Dictionary<int, BattleSquad> _opposingBattleSquads;
 
         public int TurnNumber { get; private set; }
         public IReadOnlyDictionary<int, BattleSoldier> Soldiers { get => _soldiers; }
         public IReadOnlyDictionary<int, IReadOnlyList<Tuple<int, int>>> SoldierPositionsMap { get => _soldierPositionsMap; }
-        public IReadOnlyDictionary<int, BattleSquad> PlayerSquads { get; }
-        public IReadOnlyDictionary<int, BattleSquad> OpposingSquads { get; }
+        public IReadOnlyDictionary<int, BattleSquad> PlayerSquads { get => _playerBattleSquads; }
+        public IReadOnlyDictionary<int, BattleSquad> OpposingSquads { get => _opposingBattleSquads; }
 
         // Constructor for creating the initial state
         public BattleState(IReadOnlyDictionary<int, BattleSquad> playerSquads,
@@ -28,10 +30,10 @@ namespace OnlyWar.Models.Battles
             TurnNumber = turnNumber;
 
             // deep copy the squads, which will also deep copy the soldiers in the squads
-            PlayerSquads = playerSquads.ToDictionary(
+            _playerBattleSquads = playerSquads.ToDictionary(
                 kvp => kvp.Key,
                 kvp => (BattleSquad)kvp.Value.Clone());
-            OpposingSquads = opposingSquads.ToDictionary(
+            _opposingBattleSquads = opposingSquads.ToDictionary(
                 kvp => kvp.Key,
                 kvp => (BattleSquad)kvp.Value.Clone());
 
@@ -65,6 +67,18 @@ namespace OnlyWar.Models.Battles
             else
             {
                 return OpposingSquads[squadId];
+            }
+        }
+
+        public void RemoveSquad(BattleSquad squad)
+        {
+            if (squad.IsPlayerSquad)
+            {
+                _playerBattleSquads.Remove(squad.Id);
+            }
+            else
+            {
+                _opposingBattleSquads.Remove(squad.Id);
             }
         }
     }

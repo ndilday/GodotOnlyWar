@@ -20,7 +20,7 @@ namespace OnlyWar.Models.Soldiers
         {
             get
             {
-                return (byte)(WoundTotal % 0xf);
+                return (byte)(WoundTotal & 0xf);
             }
         }
 
@@ -28,7 +28,7 @@ namespace OnlyWar.Models.Soldiers
         {
             get
             {
-                return (byte)((WoundTotal / 0x10) % 0xf);
+                return (byte)((WoundTotal / 0x10) & 0xf);
             }
         }
 
@@ -36,7 +36,7 @@ namespace OnlyWar.Models.Soldiers
         {
             get
             {
-                return (byte)((WoundTotal / 0x100) % 0xf);
+                return (byte)((WoundTotal / 0x100) & 0xf);
             }
         }
 
@@ -44,7 +44,7 @@ namespace OnlyWar.Models.Soldiers
         {
             get
             {
-                return (byte)((WoundTotal / 0x1000) % 0xf);
+                return (byte)((WoundTotal / 0x1000) & 0xf);
             }
         }
 
@@ -52,7 +52,7 @@ namespace OnlyWar.Models.Soldiers
         {
             get
             {
-                return (byte)((WoundTotal / 0x10000) % 0xf);
+                return (byte)((WoundTotal / 0x10000) & 0xf);
             }
         }
 
@@ -60,7 +60,7 @@ namespace OnlyWar.Models.Soldiers
         {
             get
             {
-                return (byte)((WoundTotal / 0x100000) % 0xf);
+                return (byte)((WoundTotal / 0x100000) & 0xf);
             }
         }
 
@@ -68,7 +68,7 @@ namespace OnlyWar.Models.Soldiers
         {
             get
             {
-                return (byte)((WoundTotal / 0x1000000) % 0xf);
+                return (byte)((WoundTotal / 0x1000000) & 0xf);
             }
         }
 
@@ -76,7 +76,7 @@ namespace OnlyWar.Models.Soldiers
         {
             get
             {
-                return (byte)((WoundTotal / 0x10000000) % 0xf);
+                return (byte)((WoundTotal / 0x10000000) & 0xf);
             }
         }
 

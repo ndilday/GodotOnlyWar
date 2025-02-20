@@ -28,7 +28,6 @@ namespace OnlyWar.Helpers.Missions.Recon
             float margin = _missionTest.RunMissionCheck(context.PlayerSquads);
             context.Region.IntelligenceLevel += margin;
             StepIfSuccess.ExecuteMissionStep(context, margin, this);
-
         }
     }
 }

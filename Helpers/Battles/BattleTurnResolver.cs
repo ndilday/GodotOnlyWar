@@ -6,7 +6,6 @@ using OnlyWar.Models.Battles;
 using OnlyWar.Models.Equippables;
 using OnlyWar.Models.Planets;
 using OnlyWar.Models.Soldiers;
-using OnlyWar.Models.Squads;
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
@@ -17,7 +16,6 @@ namespace OnlyWar.Helpers.Battles
     public class BattleTurnResolver
     {
         private BattleGridManager _grid;
-        private readonly Dictionary<int, BattleSquad> _playerBattleSquads, _opposingBattleSquads;
         private readonly Faction _opposingFaction;
         private readonly Planet _planet;
         private int _startingEnemySoldierCount;
@@ -40,8 +38,6 @@ namespace OnlyWar.Helpers.Battles
             _grid = grid;
             _planet = planet;
             _isVerbose = isVerbose;
-            _playerBattleSquads = playerBattleSquads.ToDictionary(bs => bs.Id, bs => bs);
-            _opposingBattleSquads = opposingBattleSquads.ToDictionary(os => os.Id, os => os);
             _opposingFaction = opposingBattleSquads.First().Squad.Faction;
             _woundResolver = new WoundResolver(isVerbose);
             _woundResolver.OnSoldierDeath += WoundResolver_OnSoldierDeath;
@@ -50,7 +46,7 @@ namespace OnlyWar.Helpers.Battles
             _startingPlayerBattleSoldiers = playerBattleSquads.SelectMany(bs => bs.Soldiers).ToList();
             _startingEnemySoldierCount = opposingBattleSquads.SelectMany(s => s.Soldiers).Count();
 
-            _currentState = new BattleState(_playerBattleSquads, _opposingBattleSquads);
+            _currentState = new BattleState(playerBattleSquads.ToDictionary(bs => bs.Id, bs => bs), opposingBattleSquads.ToDictionary(os => os.Id, os => os));
             _battleHistory = new BattleHistory();
             _battleHistory.Turns.Add(new BattleTurn(_currentState, new List<IAction>()));
             foreach (BattleSquad squad in playerBattleSquads)
@@ -130,7 +126,7 @@ namespace OnlyWar.Helpers.Battles
             CleanupAtEndOfTurn();
 
             _battleHistory.Turns.Add(new BattleTurn(_currentState, executedActions));
-            if (_playerBattleSquads.Count() == 0 || _opposingBattleSquads.Count() == 0)
+            if (_currentState.PlayerSquads.Count() == 0 || _currentState.OpposingSquads.Count() == 0)
             {
                 Log(false, "One side destroyed, battle over");
                 ProcessEndOfBattle();
@@ -161,22 +157,20 @@ namespace OnlyWar.Helpers.Battles
                 GameDataSingleton.Instance.GameRulesData.MeleeWeaponTemplates.Values
                     .First(mwt => mwt.Name == "Fist"));
             //Parallel.ForEach(_playerSquads.Values, (squad) =>
-            foreach (BattleSquad squad in _playerBattleSquads.Values)
+            foreach (BattleSquad squad in _currentState.PlayerSquads.Values)
             {
                 BattleSquadPlanner planner = new BattleSquadPlanner(_grid, _soldierBattleSquadMap,
                                                                     shootSegmentActions, moveSegmentActions,
                                                                     meleeSegmentActions,
-                                                                    _woundResolver.WoundQueue,
                                                                     log, defaultWeapon);
                 planner.PrepareActions(squad);
             };
             //Parallel.ForEach(_opposingSquads.Values, (squad) =>
-            foreach (BattleSquad squad in _opposingBattleSquads.Values)
+            foreach (BattleSquad squad in _currentState.OpposingSquads.Values)
             {
                 BattleSquadPlanner planner = new BattleSquadPlanner(_grid, _soldierBattleSquadMap,
                                                                     shootSegmentActions, moveSegmentActions,
                                                                     meleeSegmentActions,
-                                                                    _woundResolver.WoundQueue,
                                                                     log, defaultWeapon);
                 planner.PrepareActions(squad);
             };
@@ -201,7 +195,7 @@ namespace OnlyWar.Helpers.Battles
                 {
                     foreach (WoundResolution wound in shootAction.WoundResolutions)
                     {
-                        _woundResolver.WoundQueue.Add(wound);
+                        _woundResolver.WoundList.Add(wound);
                     }
                 }
                     executedActions.Add(action);
@@ -225,7 +219,7 @@ namespace OnlyWar.Helpers.Battles
                 {
                     foreach (WoundResolution wound in meleeAction.WoundResolutions)
                     {
-                        _woundResolver.WoundQueue.Add(wound);
+                        _woundResolver.WoundList.Add(wound);
                     }
                 }
                 executedActions.Add(action);
@@ -241,11 +235,11 @@ namespace OnlyWar.Helpers.Battles
             }
 
             // update who's in melee
-            foreach (BattleSquad squad in _playerBattleSquads.Values)
+            foreach (BattleSquad squad in _currentState.PlayerSquads.Values)
             {
                 UpdateSquadMeleeStatus(squad);
             }
-            foreach (BattleSquad squad in _opposingBattleSquads.Values)
+            foreach (BattleSquad squad in _currentState.OpposingSquads.Values)
             {
                 UpdateSquadMeleeStatus(squad);
             }
@@ -343,21 +337,7 @@ namespace OnlyWar.Helpers.Battles
             _soldierBattleSquadMap.Remove(soldier.Soldier.Id);
             if (squad.Soldiers.Count == 0)
             {
-                RemoveSquad(squad);
-            }
-        }
-
-        private void RemoveSquad(BattleSquad squad)
-        {
-            Log(false, "<b>" + squad.Name + " wiped out</b>");
-
-            if (squad.IsPlayerSquad)
-            {
-                _playerBattleSquads.Remove(squad.Id);
-            }
-            else
-            {
-                _opposingBattleSquads.Remove(squad.Id);
+                _currentState.RemoveSquad(squad);
             }
         }
 
@@ -404,7 +384,7 @@ namespace OnlyWar.Helpers.Battles
             // each turn shooting is .0005 for both DEX and the gun skill
             // each turn aiming is .0005 for the gun skill
             // each turn swinging is .0005 for ST and the melee skill
-            foreach (BattleSquad squad in _playerBattleSquads.Values)
+            foreach (BattleSquad squad in _currentState.PlayerSquads.Values)
             {
                 foreach (BattleSoldier soldier in squad.Soldiers)
                 {
