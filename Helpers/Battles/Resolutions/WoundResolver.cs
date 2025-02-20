@@ -12,14 +12,12 @@ namespace OnlyWar.Helpers.Battles.Resolutions
         public event SoldierDeathHandler OnSoldierDeath;
         public event SoldierFallHandler OnSoldierFall;
 
-        private readonly bool _allowVerbose;
         public string ResolutionLog { get; private set; }
         public ConcurrentBag<WoundResolution> WoundQueue { get; private set; }
 
-        public WoundResolver(bool allowVerbose)
+        public WoundResolver()
         {
             WoundQueue = [];
-            _allowVerbose = allowVerbose;
             ResolutionLog = "";
         }
 
@@ -79,7 +77,7 @@ namespace OnlyWar.Helpers.Battles.Resolutions
                     woundLevel = WoundLevel.Negligible;
                 }
                 wound.HitLocation.Wounds.AddWound(woundLevel);
-                wound.Description = $"{wound.Suffererer.Soldier.Name} suffers {woundLevel.ToString()} wound to {wound.HitLocation.Template.Name}";
+                wound.Description = $"{wound.Suffererer.Soldier.Name} suffers {woundLevel.ToString()} wound to {wound.HitLocation.Template.Name}\n";
 
                 // see if wound.HitLocation is now severed
                 if (wound.HitLocation.IsSevered || wound.HitLocation.IsCrippled)
@@ -87,7 +85,7 @@ namespace OnlyWar.Helpers.Battles.Resolutions
                     // if severed, see if it's an arm or leg
                     if (wound.HitLocation.Template.IsMotive)
                     {
-                        wound.Description += $"\n{wound.Suffererer.Soldier.Name} can no longer walk";
+                        wound.Description += $"{wound.Suffererer.Soldier.Name} can no longer walk\n";
                         OnSoldierFall.Invoke(wound, woundLevel);
                     }
                     else if(wound.HitLocation.Template.IsRangedWeaponHolder)
@@ -106,7 +104,7 @@ namespace OnlyWar.Helpers.Battles.Resolutions
                     }
                     if(wound.HitLocation.Template.IsVital && wound.HitLocation.IsCrippled)
                     {
-                        wound.Description += $"\n{wound.Suffererer.Soldier.Name} has died";
+                        wound.Description += $"{wound.Suffererer.Soldier.Name} has died\n";
                         OnSoldierDeath.Invoke(wound, woundLevel);
                     }
                 }

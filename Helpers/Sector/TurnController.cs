@@ -17,14 +17,15 @@ namespace OnlyWar.Helpers.Sector
 
         public void ProcessTurn(Models.Sector sector)
         {
-            foreach(Order order in sector.Orders.Values)
+            ProcessMissions(sector);
+            UpdateIntelligence(sector.Planets.Values);
+        }
+
+        private static void UpdateIntelligence(IEnumerable<Planet> planets)
+        {
+            foreach (Planet planet in planets)
             {
-                MissionContext context = new MissionContext(order.TargetRegion, order.MissionType, new List<Squad> { order.OrderedSquad }, new List<Squad>());
-                MissionStepOrchestrator.GetStartingStep(context).ExecuteMissionStep(context, 0, null);
-            }
-            foreach(Planet planet in sector.Planets.Values)
-            {
-                foreach(Region region in planet.Regions)
+                foreach (Region region in planet.Regions)
                 {
                     // 25% chance of unexecuted special missions being removed
                     foreach (SpecialMission specialMission in region.SpecialMissions)
@@ -75,6 +76,15 @@ namespace OnlyWar.Helpers.Sector
                         region.IntelligenceLevel *= 0.75f;
                     }
                 }
+            }
+        }
+
+        private static void ProcessMissions(Models.Sector sector)
+        {
+            foreach (Order order in sector.Orders.Values)
+            {
+                MissionContext context = new MissionContext(order.TargetRegion, order.MissionType, order.LevelOfAggression, new List<Squad> { order.OrderedSquad }, new List<Squad>());
+                MissionStepOrchestrator.GetStartingStep(context).ExecuteMissionStep(context, 0, null);
             }
         }
 

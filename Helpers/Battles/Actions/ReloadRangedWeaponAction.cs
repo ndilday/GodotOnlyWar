@@ -28,7 +28,7 @@ namespace OnlyWar.Helpers.Battles.Actions
 
         public string Description()
         {
-            return $"{_soldier.Soldier.Name} reloads {_weapon.Template.Name}";
+            return $"{_soldier.Soldier.Name} reloads {_weapon.Template.Name}\n";
         }
     }
 }

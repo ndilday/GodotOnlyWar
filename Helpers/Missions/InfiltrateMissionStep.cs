@@ -24,8 +24,13 @@ namespace OnlyWar.Helpers.Missions.Recon
 
         public void ExecuteMissionStep(MissionContext context, float marginOfSuccess, IMissionStep returnStep)
         {
-            if (!ShouldContinue(context)) return;
+            if (!ShouldContinue(context))
+            {
+                context.Log.Add("Mission Failed");
+                return;
+            }
             context.DaysElapsed++;
+            context.Log.Add($"Day {context.DaysElapsed}: Force attempting to infiltrate into {context.Region.Name}");
             // modifiers should include: size of enemy forces, size of player force, terrain, some notion of enemy focus (hunting, defending, hiding), whether enemy is hidden or public
             float margin = _missionTest.RunMissionCheck(context.PlayerSquads);
             if (margin > 0.0f)

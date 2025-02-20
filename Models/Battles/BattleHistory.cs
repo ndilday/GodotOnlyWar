@@ -1,8 +1,4 @@
-﻿using OnlyWar.Helpers.Battles.Actions;
-using OnlyWar.Helpers.Battles.Resolutions;
-using OnlyWar.Models.Squads;
-using System;
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 
 namespace OnlyWar.Models.Battles
 {

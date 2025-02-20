@@ -99,7 +99,12 @@ namespace OnlyWar.Helpers.Battles.Actions
 
         public string Description()
         {
-            return $"{_attacker.Soldier.Name} attacks {_target.Soldier.Name} with {_weapon.Template.Name}, hitting {WoundResolutions.Count} times.";
+            string desc = $"{_attacker.Soldier.Name} attacks {_target.Soldier.Name} with {_weapon.Template.Name}, hitting {WoundResolutions.Count} times.\n";
+            foreach(WoundResolution wound in WoundResolutions)
+            {
+                desc += wound.Description;
+            }
+            return desc;
         }
     }
 }

@@ -27,13 +27,16 @@ namespace OnlyWar.Helpers.Missions
         {
             if (context.PlayerSquads.SelectMany(s => s.Members).All(s => s.MoveSpeed == 0.0f))
             {
-                // they're dead, Jim
+                context.Log.Add($"Contact lost with mission force, assumed dead.");
                 return;
             }
+            context.DaysElapsed++;
+            context.Log.Add($"Day {context.DaysElapsed}: Force attempting to exfiltrate from {context.Region.Name}");
             float margin = _missionTest.RunMissionCheck(context.PlayerSquads);
             if (margin > 0.0f)
             {
-                StepIfSuccess.ExecuteMissionStep(context, margin, this);
+                context.Log.Add("Mission Success");
+                return;
             }
             else
             {

@@ -114,7 +114,12 @@ namespace OnlyWar.Helpers.Battles.Actions
 
         public string Description()
         {
-            return $"{_soldierName} fires a {_weaponName} {NumberOfShots} times at {_targetName}, hitting {WoundResolutions.Count} times";
+            string desc = $"{_soldierName} fires a {_weaponName} {NumberOfShots} times at {_targetName}, hitting {WoundResolutions.Count} times\n";
+            foreach (WoundResolution wound in WoundResolutions)
+            {
+                desc += wound.Description;
+            }
+            return desc;
         }
     }
 }

@@ -1,6 +1,5 @@
 ﻿using OnlyWar.Models.Battles;
 using OnlyWar.Models.Equippables;
-using System;
 
 namespace OnlyWar.Helpers.Battles.Actions
 {
@@ -42,7 +41,7 @@ namespace OnlyWar.Helpers.Battles.Actions
 
         public string Description()
         {
-            return $"{_soldier.Soldier.Name} readies {_weapon.Template.Name}";
+            return $"{_soldier.Soldier.Name} readies {_weapon.Template.Name}\n";
         }
     }
 }

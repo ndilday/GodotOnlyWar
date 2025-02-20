@@ -25,6 +25,7 @@ namespace OnlyWar.Helpers.Missions.Recon
         public void ExecuteMissionStep(MissionContext context, float marginOfSuccess, IMissionStep returnStep)
         {
             // move the generation of new missions to the turn controller, rather than the individual mission steps
+            context.Log.Add($"Day {context.DaysElapsed}: Force performs reconnisance in {context.Region.Name}");
             float margin = _missionTest.RunMissionCheck(context.PlayerSquads);
             context.Region.IntelligenceLevel += margin;
             StepIfSuccess.ExecuteMissionStep(context, margin, this);

@@ -50,11 +50,11 @@ namespace OnlyWar.Helpers.Battles.Actions
         {
             if (!_isNew)
             {
-                return $"{_soldierName} continues aiming at {_targetName}";
+                return $"{_soldierName} continues aiming {_weapon.Template.Name} at {_targetName}\n";
             }
             else
             {
-                return $"{_soldierName} aims at {_targetName}";
+                return $"{_soldierName} aims {_weapon.Template.Name} at {_targetName}\n";
             }
         }
     }

@@ -1,7 +1,5 @@
 ﻿using OnlyWar.Models.Battles;
-using OnlyWar.Helpers.Battles.Resolutions;
 using System;
-using System.Collections.Concurrent;
 
 namespace OnlyWar.Helpers.Battles.Actions
 {
@@ -34,7 +32,7 @@ namespace OnlyWar.Helpers.Battles.Actions
 
         public string Description()
         {
-            return $"{_soldier.Soldier.Name} moves from ({_currentTopLeft.Item1}, {_currentTopLeft.Item2}) to ({_newTopLeft.Item1}, {_newTopLeft.Item2})";
+            return $"{_soldier.Soldier.Name} moves from ({_currentTopLeft.Item1}, {_currentTopLeft.Item2}) to ({_newTopLeft.Item1}, {_newTopLeft.Item2})\n";
         }
     }
 }

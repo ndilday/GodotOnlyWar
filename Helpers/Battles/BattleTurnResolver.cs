@@ -23,8 +23,7 @@ namespace OnlyWar.Helpers.Battles
         private readonly WoundResolver _woundResolver;
         private readonly Dictionary<int, BattleSquad> _soldierBattleSquadMap = new Dictionary<int, BattleSquad>();
         private readonly Dictionary<int, BattleSoldier> _casualtyMap;
-        private readonly bool _isVerbose;
-        private BattleHistory _battleHistory;
+        public BattleHistory BattleHistory { get; private set; }
         private BattleState _currentState;
 
         public event EventHandler<BattleHistory> OnBattleComplete;
@@ -32,14 +31,12 @@ namespace OnlyWar.Helpers.Battles
         public BattleTurnResolver(BattleGridManager grid,
                                   IList<BattleSquad> playerBattleSquads,
                                   IList<BattleSquad> opposingBattleSquads,
-                                  Planet planet,
-                                  bool isVerbose)
+                                  Planet planet)
         {
             _grid = grid;
             _planet = planet;
-            _isVerbose = isVerbose;
             _opposingFaction = opposingBattleSquads.First().Squad.Faction;
-            _woundResolver = new WoundResolver(isVerbose);
+            _woundResolver = new WoundResolver();
             _woundResolver.OnSoldierDeath += WoundResolver_OnSoldierDeath;
             _woundResolver.OnSoldierFall += WoundResolver_OnSoldierFall;
             _casualtyMap = new Dictionary<int, BattleSoldier>();
@@ -47,8 +44,8 @@ namespace OnlyWar.Helpers.Battles
             _startingEnemySoldierCount = opposingBattleSquads.SelectMany(s => s.Soldiers).Count();
 
             _currentState = new BattleState(playerBattleSquads.ToDictionary(bs => bs.Id, bs => bs), opposingBattleSquads.ToDictionary(os => os.Id, os => os));
-            _battleHistory = new BattleHistory();
-            _battleHistory.Turns.Add(new BattleTurn(_currentState, new List<IAction>()));
+            BattleHistory = new BattleHistory();
+            BattleHistory.Turns.Add(new BattleTurn(_currentState, new List<IAction>()));
             foreach (BattleSquad squad in playerBattleSquads)
             {
                 foreach (BattleSoldier soldier in squad.Soldiers)
@@ -125,7 +122,7 @@ namespace OnlyWar.Helpers.Battles
 
             CleanupAtEndOfTurn();
 
-            _battleHistory.Turns.Add(new BattleTurn(_currentState, executedActions));
+            BattleHistory.Turns.Add(new BattleTurn(_currentState, executedActions));
             if (_currentState.PlayerSquads.Count() == 0 || _currentState.OpposingSquads.Count() == 0)
             {
                 Log(false, "One side destroyed, battle over");
@@ -141,7 +138,7 @@ namespace OnlyWar.Helpers.Battles
             ApplySoldierExperienceForBattle();
             List<PlayerSoldier> dead = RemoveSoldiersKilledInBattle();
             LogBattleToChapterHistory(dead);
-            OnBattleComplete.Invoke(this, _battleHistory);
+            OnBattleComplete.Invoke(this, BattleHistory);
         }
 
         private void Plan(ConcurrentBag<IAction> shootSegmentActions,
@@ -195,7 +192,7 @@ namespace OnlyWar.Helpers.Battles
                 {
                     foreach (WoundResolution wound in shootAction.WoundResolutions)
                     {
-                        _woundResolver.WoundList.Add(wound);
+                        _woundResolver.WoundQueue.Add(wound);
                     }
                 }
                     executedActions.Add(action);
@@ -219,7 +216,7 @@ namespace OnlyWar.Helpers.Battles
                 {
                     foreach (WoundResolution wound in meleeAction.WoundResolutions)
                     {
-                        _woundResolver.WoundList.Add(wound);
+                        _woundResolver.WoundQueue.Add(wound);
                     }
                 }
                 executedActions.Add(action);
@@ -324,10 +321,7 @@ namespace OnlyWar.Helpers.Battles
 
         private void Log(bool isMessageVerbose, string text)
         {
-            if (_isVerbose || !isMessageVerbose)
-            {
-                GD.Print(text);
-            }
+            GD.Print(text);
         }
 
         private void RemoveSoldier(BattleSoldier soldier, BattleSquad squad)
