@@ -22,6 +22,7 @@ namespace OnlyWar.Helpers.Battles
         public List<MeleeWeapon> MeleeWeapons { get; private set; }
         public List<RangedWeapon> RangedWeapons { get; private set; }
         public Armor Armor { get; set; }
+        public int? TargetId { get; set; }
         public bool IsInMelee { get; set; }
         public ushort ReloadingPhase { get; set; }
         public Stance Stance { get; set; }
@@ -103,6 +104,7 @@ namespace OnlyWar.Helpers.Battles
             CurrentSpeed = 0;
             EnemiesTakenDown = 0;
             ReloadingPhase = 0;
+            TargetId = null;
         }
 
 
@@ -123,11 +125,12 @@ namespace OnlyWar.Helpers.Battles
             TurnsAiming = soldier.TurnsAiming;
             WoundsTaken = soldier.WoundsTaken;
             EnemiesTakenDown = soldier.EnemiesTakenDown;
-            Aim = this.Aim == null ? null : new Tuple<int, RangedWeapon, int>(soldier.Aim.Item1, soldier.Aim.Item2, soldier.Aim.Item3);
+            Aim = soldier.Aim == null ? null : new Tuple<int, RangedWeapon, int>(soldier.Aim.Item1, soldier.Aim.Item2, soldier.Aim.Item3);
             EquippedMeleeWeapons = soldier.EquippedMeleeWeapons.ToList();
             EquippedRangedWeapons = soldier.EquippedRangedWeapons.ToList();
             MeleeWeapons = soldier.MeleeWeapons;
             RangedWeapons = soldier.RangedWeapons;
+            TargetId = soldier.TargetId;
         }
         public object Clone()
         {
@@ -150,6 +153,7 @@ namespace OnlyWar.Helpers.Battles
             newSoldier.EquippedRangedWeapons = EquippedRangedWeapons.ToList();
             newSoldier.MeleeWeapons = MeleeWeapons;
             newSoldier.RangedWeapons = RangedWeapons;
+            newSoldier.TargetId = TargetId;
             return newSoldier;
         }
 

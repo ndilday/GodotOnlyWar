@@ -10,7 +10,6 @@ namespace OnlyWar.Helpers.Battles.Actions
         private readonly int _soldierId;
         private readonly int _targetId;
         private readonly RangedWeapon _weapon;
-        private readonly ConcurrentQueue<string> _log;
         private string _soldierName, _targetName;
         private bool _isNew;
 
@@ -23,7 +22,6 @@ namespace OnlyWar.Helpers.Battles.Actions
             _targetId = target.Soldier.Id;
             _targetName = target.Soldier.Name;
             _weapon = weapon;
-            _log = log;
         }
 
         public void Execute(BattleState state)

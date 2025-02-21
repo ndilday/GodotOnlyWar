@@ -74,7 +74,7 @@ namespace OnlyWar.Helpers.Battles
                 {
                     Tuple<int, int> location = new Tuple<int, int>((short)(newTopLeft.Item1 + w), (short)(newTopLeft.Item2 - d));
                     int? occupier = _grid.GetCellObject(location);
-                    if (occupier != null)
+                    if (occupier != null && occupier != soldier.Soldier.Id)
                     {
                         throw new InvalidOperationException($"Soldier {soldier.Soldier.Id} cannot move to {location.Item1},{location.Item2}; already occupied by Soldier {occupier}");
                     }

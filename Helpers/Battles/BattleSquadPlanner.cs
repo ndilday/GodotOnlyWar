@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.ComponentModel.Design;
 using System.Linq;
 using OnlyWar.Helpers.Battles.Actions;
 using OnlyWar.Models.Equippables;
@@ -322,6 +323,7 @@ namespace OnlyWar.Helpers.Battles
 
         private void AddMeleeActionsToBag(BattleSoldier soldier)
         {
+            soldier.TargetId = null;
             // for now just attack, don't worry about cooler moves
             // if we have melee weapons but none are equipped, we should change that
             if (soldier.EquippedMeleeWeapons.Count == 0 && soldier.MeleeWeapons.Count > 0)
@@ -343,7 +345,8 @@ namespace OnlyWar.Helpers.Battles
 
         private void AddChargeActionsToBag(BattleSoldier soldier)
         {
-            if(soldier.IsInMelee)
+            soldier.TargetId = null;
+            if (soldier.IsInMelee)
             {
                 // determine what sort of manuver to make
                 AddMeleeActionsToBag(soldier);
@@ -398,7 +401,11 @@ namespace OnlyWar.Helpers.Battles
                         {
                             // we weren't able to find an enemy to get near, guess we try to find someone to shoot, instead?
                             //Debug.Log("ISoldier in squad engaged in melee couldn't find anyone to attack");
-                            AddStandingActionsToBag(soldier);
+                            Tuple<int, int> line = new Tuple<int, int>((short)(enemyPosition.Item1 - soldier.TopLeft.Item1),
+                                                                               (short)(enemyPosition.Item2 - soldier.TopLeft.Item2));
+                            // soldier can't get there in one move, advance as far as possible
+                            AddMoveAction(soldier, moveSpeed, line);
+                            //AddStandingActionsToBag(soldier);
                         }
                     }
                     else
@@ -461,10 +468,20 @@ namespace OnlyWar.Helpers.Battles
 
         private void AddShootOrAimActionToBag(BattleSoldier soldier, bool isMoving)
         {
-            float range = _grid.GetNearestEnemy(soldier.Soldier.Id, out int closestEnemyId);
-            BattleSquad oppSquad = _soldierMap[closestEnemyId].BattleSquad;
-            BattleSoldier target = oppSquad.GetRandomSquadMember();
-            range = _grid.GetDistanceBetweenSoldiers(soldier.Soldier.Id, target.Soldier.Id);
+            BattleSoldier target;
+            if (soldier.TargetId != null && _soldierMap.ContainsKey((int)soldier.TargetId))
+            {
+                target = _soldierMap[(int)soldier.TargetId];
+            }
+            else
+            {
+                _grid.GetNearestEnemy(soldier.Soldier.Id, out int closestEnemyId);
+                BattleSquad oppSquad = _soldierMap[closestEnemyId].BattleSquad;
+                target = oppSquad.GetRandomSquadMember();
+                soldier.TargetId = target.Soldier.Id;
+            }
+
+            float range = _grid.GetDistanceBetweenSoldiers(soldier.Soldier.Id, target.Soldier.Id);
             // decide whether to shoot or aim
             // calculate the expected number of hits if the soldier shoots now
             // calculate the expected number of hits if the soldier aims for a turn, then shoots
