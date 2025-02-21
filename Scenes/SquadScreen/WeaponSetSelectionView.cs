@@ -12,6 +12,7 @@ public partial class WeaponSetSelectionView : PanelContainer
     private int _minimumCount;
     private int _maximumCount;
     private int _temporaryMaximumCount;
+    public string OptionName { get; private set; }
 
     public event EventHandler<Tuple<string, int>> WeaponSetCountChanged;
     public override void _Ready()
@@ -23,7 +24,7 @@ public partial class WeaponSetSelectionView : PanelContainer
 
     public void Initialize(List<string> weaponSetNames, string name, int minimumCount, int maximumCount, int currentCount)
     {
-        Name = name;
+        OptionName = name;
         ClearWeaponSetRows();
         _weaponSetNames = weaponSetNames;
         _minimumCount = minimumCount;

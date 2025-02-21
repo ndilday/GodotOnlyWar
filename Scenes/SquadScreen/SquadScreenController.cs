@@ -44,7 +44,7 @@ public partial class SquadScreenController : DialogController
     private void OnWeaponSetSelectionWeaponSetCountChanged(object sender, Tuple<string, int> args)
     {
         WeaponSetSelectionView view = (WeaponSetSelectionView)sender;
-        string optionName = view.Name;
+        string optionName = view.OptionName;
         var matchingLoadouts = _squad.Loadout.Where(ws => ws.Name == args.Item1);
         if(matchingLoadouts.Count() > args.Item2)
         {
