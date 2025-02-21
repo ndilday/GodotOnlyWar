@@ -1,0 +1,31 @@
+[gd_scene load_steps=4 format=3 uid="uid://mjk2hlgl8m80"]
+
+[ext_resource type="PackedScene" uid="uid://cadpqoqxtyo0p" path="res://Scenes/Dialog.tscn" id="1_4b3o3"]
+[ext_resource type="Script" uid="uid://bx5f85xitmqn4" path="res://Scenes/EndOfTurnDialogController.cs" id="2_e3mme"]
+[ext_resource type="Script" uid="uid://q42ga0l7iwl3" path="res://Scenes/EndOfTurnDialogView.cs" id="3_ngawf"]
+
+[node name="DialogController" instance=ExtResource("1_4b3o3")]
+script = ExtResource("2_e3mme")
+
+[node name="DialogView" parent="." index="0"]
+script = ExtResource("3_ngawf")
+
+[node name="Panel" type="Panel" parent="DialogView" index="0"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="ScrollContainer" type="ScrollContainer" parent="DialogView/Panel" index="0"]
+layout_mode = 1
+anchors_preset = -1
+anchor_left = 0.05
+anchor_top = 0.05
+anchor_right = 0.95
+anchor_bottom = 0.95
+
+[node name="VBoxContainer" type="VBoxContainer" parent="DialogView/Panel/ScrollContainer" index="0"]
+layout_mode = 2
+size_flags_horizontal = 3

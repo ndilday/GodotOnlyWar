@@ -1,6 +1,6 @@
 [gd_scene load_steps=2 format=3 uid="uid://cg16rhmauv4bi"]
 
-[ext_resource type="Script" path="res://Scenes/SquadScreen/WeaponSetRowView.cs" id="1_ejhhc"]
+[ext_resource type="Script" uid="uid://bvt6gol0m2oyp" path="res://Scenes/SquadScreen/WeaponSetRowView.cs" id="1_ejhhc"]
 
 [node name="WeaponSetRowView" type="HBoxContainer"]
 custom_minimum_size = Vector2(0, 30)

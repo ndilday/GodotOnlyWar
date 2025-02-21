@@ -24,6 +24,7 @@ public partial class MainGameScene : Control
     private Stack<Control> _previousScreenStack;
     private CanvasLayer _mainUILayer;
     private TurnController _turnController;
+    private EndOfTurnDialogController _endOfTurnDialog;
     public override void _Ready()
     {
         _bottomMenu = GetNode<BottomMenu>("UILayer/BottomMenu");
@@ -191,6 +192,14 @@ public partial class MainGameScene : Control
     {
         // handle squad orders
         _turnController.ProcessTurn(GameDataSingleton.Instance.Sector);
+        if(_endOfTurnDialog == null)
+        {
+            PackedScene endOfTurnScene = GD.Load<PackedScene>("res://Scenes/EndOfTurnDialog.tscn");
+            _endOfTurnDialog = (EndOfTurnDialogController)endOfTurnScene.Instantiate();
+            _endOfTurnDialog.CloseButtonPressed += OnCloseScreen;
+            _mainUILayer.AddChild(_endOfTurnDialog);
+        }
+
         // handle ship movement
     }
 

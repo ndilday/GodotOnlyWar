@@ -1,6 +1,6 @@
 [gd_scene load_steps=2 format=3 uid="uid://bokraoucv7ore"]
 
-[ext_resource type="Script" path="res://Scenes/SquadScreen/WeaponSetSelectionView.cs" id="1_ii0tk"]
+[ext_resource type="Script" uid="uid://djx0x5qmjckwo" path="res://Scenes/SquadScreen/WeaponSetSelectionView.cs" id="1_ii0tk"]
 
 [node name="WeaponSetSelectionView" type="PanelContainer"]
 anchors_preset = 15

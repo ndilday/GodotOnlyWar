@@ -11,17 +11,24 @@ namespace OnlyWar.Helpers.Sector
 {
     class TurnController
     {
+        public List<MissionContext> MissionContexts { get; private set; }
+        public List<SpecialMission> SpecialMissions { get; private set; }
+
         public TurnController()
         {
+            MissionContexts = new List<MissionContext>();
+            SpecialMissions = new List<SpecialMission>();
         }
 
         public void ProcessTurn(Models.Sector sector)
         {
+            MissionContexts.Clear();
+            SpecialMissions.Clear();
             ProcessMissions(sector);
             UpdateIntelligence(sector.Planets.Values);
         }
 
-        private static void UpdateIntelligence(IEnumerable<Planet> planets)
+        private void UpdateIntelligence(IEnumerable<Planet> planets)
         {
             foreach (Planet planet in planets)
             {
@@ -52,12 +59,14 @@ namespace OnlyWar.Helpers.Sector
                                 // assassination
                                 SpecialMission ass = new SpecialMission(0, MissionType.Assassination, region);
                                 region.SpecialMissions.Add(ass);
+                                SpecialMissions.Add(ass);
                             }
                             else if (chance >= 1)
                             {
                                 // sabotage
                                 SpecialMission sabotage = new SpecialMission(0, MissionType.Sabotage, region);
                                 region.SpecialMissions.Add(sabotage);
+                                SpecialMissions.Add(sabotage);
                                 // plant minefield
 
                             }
@@ -66,6 +75,7 @@ namespace OnlyWar.Helpers.Sector
                                 // ambush, equipment/prisoner recovery
                                 SpecialMission ambush = new SpecialMission(0, MissionType.Ambush, region);
                                 region.SpecialMissions.Add(ambush);
+                                SpecialMissions.Add(ambush);
                                 // sniper's nest
                                 // prisoner recovery
                                 // equipment recovery
@@ -79,12 +89,13 @@ namespace OnlyWar.Helpers.Sector
             }
         }
 
-        private static void ProcessMissions(Models.Sector sector)
+        private void ProcessMissions(Models.Sector sector)
         {
             foreach (Order order in sector.Orders.Values)
             {
                 MissionContext context = new MissionContext(order.TargetRegion, order.MissionType, order.LevelOfAggression, new List<Squad> { order.OrderedSquad }, new List<Squad>());
                 MissionStepOrchestrator.GetStartingStep(context).ExecuteMissionStep(context, 0, null);
+                MissionContexts.Add(context);
             }
         }
 

@@ -14,12 +14,12 @@ namespace OnlyWar.Helpers.Battles
         private readonly ConcurrentBag<IAction> _shootActionBag;
         private readonly ConcurrentBag<IAction> _moveActionBag;
         private readonly ConcurrentBag<IAction> _meleeActionBag;
-        private readonly Dictionary<int, BattleSquad> _opposingSoldierIdSquadMap;
         private readonly MeleeWeapon _defaultMeleeWeapon;
+        private readonly IReadOnlyDictionary<int, BattleSoldier> _soldierMap;
         private readonly ConcurrentQueue<string> _log;
 
         public BattleSquadPlanner(BattleGridManager grid, 
-                                  Dictionary<int, BattleSquad> opposingSoldierIdSquadMap, 
+                                  IReadOnlyDictionary<int, BattleSoldier> soldiers,
                                   ConcurrentBag<IAction> shootActionBag,
                                   ConcurrentBag<IAction> moveActionBag,
                                   ConcurrentBag<IAction> meleeActionBag,
@@ -27,11 +27,11 @@ namespace OnlyWar.Helpers.Battles
                                   MeleeWeapon defaultMeleeWeapon)
         {
             _grid = grid;
-            _opposingSoldierIdSquadMap = opposingSoldierIdSquadMap;
             _shootActionBag = shootActionBag;
             _moveActionBag = moveActionBag;
             _meleeActionBag = meleeActionBag;
             _defaultMeleeWeapon = defaultMeleeWeapon;
+            _soldierMap = soldiers;
             _log = log;
         }
 
@@ -77,7 +77,7 @@ namespace OnlyWar.Helpers.Battles
                 foreach (BattleSoldier soldier in squad.Soldiers)
                 {
                     float distance = _grid.GetNearestEnemy(soldier.Soldier.Id, out int closestSoldierId);
-                    BattleSquad closestSquad = _opposingSoldierIdSquadMap[closestSoldierId];
+                    BattleSquad closestSquad = _soldierMap[closestSoldierId].BattleSquad;
                     float targetSize = closestSquad.GetAverageSize();
                     float targetArmor = closestSquad.GetAverageArmor();
                     float targetCon = closestSquad.GetAverageConstitution();
@@ -185,7 +185,7 @@ namespace OnlyWar.Helpers.Battles
         private void AddStandingActionsToBag(BattleSoldier soldier)
         {
             float range = _grid.GetNearestEnemy(soldier.Soldier.Id, out int closestEnemyId);
-            float speed = _opposingSoldierIdSquadMap[closestEnemyId].Soldiers.First().GetMoveSpeed();
+            float speed = _soldierMap[closestEnemyId].BattleSquad.Soldiers.First().GetMoveSpeed();
             // see if the enemy is within charging range and the soldier doesn't already have a target lined up
             if (speed >= range && (soldier.Aim == null || soldier.RangedWeapons[0].LoadedAmmo == 0))
             {
@@ -206,14 +206,14 @@ namespace OnlyWar.Helpers.Battles
                 AddReloadRangedWeaponActionToBag(soldier);
             }
             // determine if soldier was already aiming and the target is still around and not in a melee
-            else if (soldier.Aim != null && _opposingSoldierIdSquadMap.ContainsKey(soldier.Aim.Item1))
+            else if (soldier.Aim != null && _soldierMap.ContainsKey(soldier.Aim.Item1))
             {
-                BattleSoldier target = _opposingSoldierIdSquadMap[soldier.Aim.Item1].Soldiers.Single(s => s.Soldier.Id == soldier.Aim.Item1);
+                BattleSoldier target = _soldierMap[soldier.Aim.Item1];
+                range = _grid.GetDistanceBetweenSoldiers(soldier.Soldier.Id, soldier.Aim.Item1);
                 // if the aim cannot be improved, go ahead and shoot
                 if (soldier.Aim.Item3 == 3)
                 {
-                    range = _grid.GetDistanceBetweenSoldiers(soldier.Soldier.Id, soldier.Aim.Item1);
-                    Tuple<float, float> effectEstimate = EstimateHitAndDamage(soldier, target, soldier.Aim.Item2, range, soldier.Aim.Item2.Template.Accuracy + 3);
+                    Tuple<float, float> effectEstimate = EstimateHitAndDamage(soldier, target, soldier.Aim.Item2, range, soldier.Aim.Item2.Template.Accuracy + 4);
                     int shotsToFire = CalculateShotsToFire(soldier.Aim.Item2, effectEstimate.Item1, effectEstimate.Item2);
                     soldier.CurrentSpeed = 0;
                     _shootActionBag.Add(new ShootAction(soldier.Soldier.Id,
@@ -227,7 +227,6 @@ namespace OnlyWar.Helpers.Battles
                 {
                     // the aim can be improved
                     // current aim bonus is 1 for all-out attack, plus weapon accuracy, plus aim
-                    range = _grid.GetDistanceBetweenSoldiers(soldier.Soldier.Id, soldier.Aim.Item1);
                     float currentModifiers = soldier.Aim.Item2.Template.Accuracy + soldier.Aim.Item3 + 1;
                     // item1 is the pre-roll to-hit total; item2 is the expected ratio of damage to con, so 1 is a potential killshot
                     Tuple<float, float> resultEstimate = EstimateHitAndDamage(soldier, target, soldier.Aim.Item2, range, currentModifiers);
@@ -334,7 +333,7 @@ namespace OnlyWar.Helpers.Battles
             {
                 float distance = _grid.GetNearestEnemy(soldier.Soldier.Id, out int closestEnemyId);
                 if (distance != 1) throw new InvalidOperationException("Attempting to melee with no adjacent enemy");
-                BattleSoldier enemy = _opposingSoldierIdSquadMap[closestEnemyId].Soldiers.Single(s => s.Soldier.Id == closestEnemyId);
+                BattleSoldier enemy = _soldierMap[closestEnemyId];
                 soldier.CurrentSpeed = 0;
                 MeleeWeapon weapon = soldier.EquippedMeleeWeapons.Count == 0 ? 
                     _defaultMeleeWeapon : soldier.EquippedMeleeWeapons[0];
@@ -371,7 +370,7 @@ namespace OnlyWar.Helpers.Battles
                 else
                 {
                     Tuple<int, int> newPos = _grid.GetClosestOpenAdjacency(soldier.TopLeft, enemyPosition);
-                    BattleSquad oppSquad = _opposingSoldierIdSquadMap[closestEnemyId];
+                    BattleSquad oppSquad = _soldierMap[closestEnemyId].BattleSquad;
                     if (newPos == null)
                     {
                         // find the next closest
@@ -463,7 +462,7 @@ namespace OnlyWar.Helpers.Battles
         private void AddShootOrAimActionToBag(BattleSoldier soldier, bool isMoving)
         {
             float range = _grid.GetNearestEnemy(soldier.Soldier.Id, out int closestEnemyId);
-            BattleSquad oppSquad = _opposingSoldierIdSquadMap[closestEnemyId];
+            BattleSquad oppSquad = _soldierMap[closestEnemyId].BattleSquad;
             BattleSoldier target = oppSquad.GetRandomSquadMember();
             range = _grid.GetDistanceBetweenSoldiers(soldier.Soldier.Id, target.Soldier.Id);
             // decide whether to shoot or aim

@@ -21,7 +21,6 @@ namespace OnlyWar.Helpers.Battles
         private int _startingEnemySoldierCount;
         private readonly List<BattleSoldier> _startingPlayerBattleSoldiers;
         private readonly WoundResolver _woundResolver;
-        private readonly Dictionary<int, BattleSquad> _soldierBattleSquadMap = new Dictionary<int, BattleSquad>();
         private readonly Dictionary<int, BattleSoldier> _casualtyMap;
         public BattleHistory BattleHistory { get; private set; }
         private BattleState _currentState;
@@ -46,20 +45,6 @@ namespace OnlyWar.Helpers.Battles
             _currentState = new BattleState(playerBattleSquads.ToDictionary(bs => bs.Id, bs => bs), opposingBattleSquads.ToDictionary(os => os.Id, os => os));
             BattleHistory = new BattleHistory();
             BattleHistory.Turns.Add(new BattleTurn(_currentState, new List<IAction>()));
-            foreach (BattleSquad squad in playerBattleSquads)
-            {
-                foreach (BattleSoldier soldier in squad.Soldiers)
-                {
-                    _soldierBattleSquadMap[soldier.Soldier.Id] = squad;
-                }
-            }
-            foreach (BattleSquad squad in opposingBattleSquads)
-            {
-                foreach (BattleSoldier soldier in squad.Soldiers)
-                {
-                    _soldierBattleSquadMap[soldier.Soldier.Id] = squad;
-                }
-            }
         }
 
         private void WoundResolver_OnSoldierDeath(WoundResolution wound, WoundLevel woundLevel)
@@ -156,7 +141,7 @@ namespace OnlyWar.Helpers.Battles
             //Parallel.ForEach(_playerSquads.Values, (squad) =>
             foreach (BattleSquad squad in _currentState.PlayerSquads.Values)
             {
-                BattleSquadPlanner planner = new BattleSquadPlanner(_grid, _soldierBattleSquadMap,
+                BattleSquadPlanner planner = new BattleSquadPlanner(_grid, _currentState.Soldiers,
                                                                     shootSegmentActions, moveSegmentActions,
                                                                     meleeSegmentActions,
                                                                     log, defaultWeapon);
@@ -165,7 +150,7 @@ namespace OnlyWar.Helpers.Battles
             //Parallel.ForEach(_opposingSquads.Values, (squad) =>
             foreach (BattleSquad squad in _currentState.OpposingSquads.Values)
             {
-                BattleSquadPlanner planner = new BattleSquadPlanner(_grid, _soldierBattleSquadMap,
+                BattleSquadPlanner planner = new BattleSquadPlanner(_grid, _currentState.Soldiers,
                                                                     shootSegmentActions, moveSegmentActions,
                                                                     meleeSegmentActions,
                                                                     log, defaultWeapon);
@@ -228,7 +213,7 @@ namespace OnlyWar.Helpers.Battles
             // handle casualties
             foreach (BattleSoldier soldier in _casualtyMap.Values)
             {
-                RemoveSoldier(soldier, _soldierBattleSquadMap[soldier.Soldier.Id]);
+                RemoveSoldier(soldier);
             }
 
             // update who's in melee
@@ -324,11 +309,12 @@ namespace OnlyWar.Helpers.Battles
             GD.Print(text);
         }
 
-        private void RemoveSoldier(BattleSoldier soldier, BattleSquad squad)
+        private void RemoveSoldier(BattleSoldier soldier)
         {
-            squad.RemoveSoldier(soldier);
+            BattleSquad squad = soldier.BattleSquad;
+            soldier.BattleSquad.RemoveSoldier(soldier);
             _grid.RemoveSoldier(soldier.Soldier.Id);
-            _soldierBattleSquadMap.Remove(soldier.Soldier.Id);
+            
             if (squad.Soldiers.Count == 0)
             {
                 _currentState.RemoveSquad(squad);

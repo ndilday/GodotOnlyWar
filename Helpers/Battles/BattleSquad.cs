@@ -46,7 +46,9 @@ namespace OnlyWar.Helpers.Battles
             Squad = original.Squad;
             IsPlayerSquad = original.IsPlayerSquad;
             IsInMelee = original.IsInMelee;
-            Soldiers = original.Soldiers.Select(s => (BattleSoldier)s.Clone()).ToList();
+            // because of the circular reference, the clone function won't work,
+            // so I made a custom BattleSoldier constructor that does basically the same thing
+            Soldiers = original.Soldiers.Select(s => new BattleSoldier(s, this)).ToList();
         }
 
         public object Clone()

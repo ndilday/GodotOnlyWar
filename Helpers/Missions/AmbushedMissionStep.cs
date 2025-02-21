@@ -22,6 +22,7 @@ namespace OnlyWar.Helpers.Missions
             var squadPostionMap = placer.PlaceSquads(playerForce, opFor);
             int oppForSize = opFor.Sum(s => s.Soldiers.Count);
             string log = $"Day {context.DaysElapsed}: Force was ambushed by {oppForSize} {opFor.First().Squad.Faction.Name}\n";
+            context.Log.Add(log);
             // run the battle
             BattleTurnResolver resolver = new BattleTurnResolver(bgm, playerForce, opFor, context.Region.Planet);
             bool battleDone = false;
@@ -30,8 +31,7 @@ namespace OnlyWar.Helpers.Missions
             {
                 resolver.ProcessNextTurn();
             }
-
-            log += resolver.BattleHistory.GetBattleLog();
+            context.Log.Add(resolver.BattleHistory.GetBattleLog());
             returnStep.ExecuteMissionStep(context, 0, this);
         }
     }

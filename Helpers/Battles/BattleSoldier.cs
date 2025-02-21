@@ -105,6 +105,30 @@ namespace OnlyWar.Helpers.Battles
             ReloadingPhase = 0;
         }
 
+
+        public BattleSoldier(BattleSoldier soldier, BattleSquad squad)
+        {
+            Soldier = soldier.Soldier;
+            BattleSquad = squad;
+            TopLeft = new Tuple<int, int>(soldier.TopLeft.Item1, soldier.TopLeft.Item2);
+            Orientation = soldier.Orientation;
+            Armor = soldier.Armor;
+            IsInMelee = soldier.IsInMelee;
+            ReloadingPhase = soldier.ReloadingPhase;
+            Stance = soldier.Stance;
+            CurrentSpeed = soldier.CurrentSpeed;
+            TurnsRunning = soldier.TurnsRunning;
+            TurnsShooting = soldier.TurnsShooting;
+            TurnsSwinging = soldier.TurnsSwinging;
+            TurnsAiming = soldier.TurnsAiming;
+            WoundsTaken = soldier.WoundsTaken;
+            EnemiesTakenDown = soldier.EnemiesTakenDown;
+            Aim = this.Aim == null ? null : new Tuple<int, RangedWeapon, int>(soldier.Aim.Item1, soldier.Aim.Item2, soldier.Aim.Item3);
+            EquippedMeleeWeapons = soldier.EquippedMeleeWeapons.ToList();
+            EquippedRangedWeapons = soldier.EquippedRangedWeapons.ToList();
+            MeleeWeapons = soldier.MeleeWeapons;
+            RangedWeapons = soldier.RangedWeapons;
+        }
         public object Clone()
         {
             BattleSoldier newSoldier = new BattleSoldier((ISoldier)Soldier.Clone(), BattleSquad);
