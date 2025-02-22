@@ -38,11 +38,11 @@ namespace OnlyWar.Helpers.Battles.Placers
                 Tuple<ushort, ushort> squadSize = squad.GetSquadBoxSize();
                 ushort left = (ushort)(xMid - squadSize.Item1 / 2);
                 ushort right = (ushort)(xMid + squadSize.Item1 - squadSize.Item1 / 2);
-                bottomLimit = (ushort)(top - squadSize.Item2);
+                bottomLimit = (ushort)(topLimit - squadSize.Item2);
                 squadPositionMap[squad] = new Tuple<int, int>(left, bottomLimit);
                 BattleSquadPlacer.PlaceBattleSquad(_grid, squad, new Tuple<int, int>(left, bottomLimit), true);
 
-                top -= (ushort)(squadSize.Item2 + 1);
+                topLimit -= (ushort)(squadSize.Item2 + 1);
 
                 if (left < leftLimit)
                 {

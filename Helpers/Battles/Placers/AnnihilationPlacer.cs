@@ -18,69 +18,53 @@ namespace OnlyWar.Helpers.Battles.Placers
         {
             Dictionary<BattleSquad, Tuple<int, int>> result = [];
 
-            var bottomZone = PlaceBottomSquads(bottomSquads, new Tuple<ushort, ushort>(0, 0), result);
-            PlaceTopSquads(topSquads, bottomZone, result);
+            PlaceSquads(bottomSquads, new Tuple<ushort, ushort>(0, 0), false, result);
+            PlaceSquads(topSquads, new Tuple<ushort, ushort>(0, _range), true, result);
 
             
             return result;
         }
 
-        private Tuple<Tuple<int, int>, Tuple<int, int>> PlaceBottomSquads(IEnumerable<BattleSquad> squads, Tuple<ushort, ushort> startingPoint,
+        private void PlaceSquads(IEnumerable<BattleSquad> squads, Tuple<ushort, ushort> startingPoint, bool isTop,
                                                               Dictionary<BattleSquad, Tuple<int, int>> squadPositionMap)
         {
-            // assume a depth of four yards per squad
-            // center them all on the midpoint, one behind the other
-            ushort topLimit = startingPoint.Item2;
-            ushort bottomLimit = startingPoint.Item2;
+            // start with the left, then place to whichever side is less far from the starting point
+            ushort verticalLimit = startingPoint.Item2;
             ushort leftLimit = startingPoint.Item1;
             ushort rightLimit = startingPoint.Item1;
+            
             foreach (BattleSquad squad in squads)
             {
                 Tuple<ushort, ushort> squadSize = squad.GetSquadBoxSize();
-                ushort left = (ushort)(startingPoint.Item1 - squadSize.Item1 / 2);
-                ushort right = (ushort)(startingPoint.Item1 + squadSize.Item1 - squadSize.Item1 / 2);
-                bottomLimit = (ushort)(startingPoint.Item2 - squadSize.Item2);
-                squadPositionMap[squad] = new Tuple<int, int>(left, bottomLimit);
-                BattleSquadPlacer.PlaceBattleSquad(_grid, squad, new Tuple<int, int>(left, bottomLimit), true);
-
-                topLimit -= (ushort)(squadSize.Item2 + 1);
-
-                if (left < leftLimit)
+                if (rightLimit - startingPoint.Item1 > startingPoint.Item1 - leftLimit)
                 {
-                    leftLimit = left;
+                    leftLimit -= squadSize.Item1;
+                    leftLimit -= 1;
+                    // if isTop, then we are placing the squad above the starting point
+                    if (isTop)
+                    {
+                        BattleSquadPlacer.PlaceBattleSquad(_grid, squad, new Tuple<int, int>(leftLimit, verticalLimit), true);
+                    }
+                    else
+                    {
+                        ushort bottom = (ushort)(verticalLimit - squadSize.Item2);
+                        BattleSquadPlacer.PlaceBattleSquad(_grid, squad, new Tuple<int, int>(leftLimit, bottom), true);
+
+                    }
                 }
-                if (right > rightLimit)
+                else
                 {
-                    rightLimit = right;
-                }
-            }
-
-            return new Tuple<Tuple<int, int>, Tuple<int, int>>(new Tuple<int, int>(leftLimit, topLimit), new Tuple<int, int>(rightLimit, bottomLimit));
-        }
-
-        private void PlaceTopSquads(IEnumerable<BattleSquad> squads,
-                                       Tuple<Tuple<int, int>, Tuple<int, int>> bottomForceCorners,
-                                       Dictionary<BattleSquad, Tuple<int, int>> squadPositionMap)
-        {
-            // assume a depth of four yards per squad
-            // center them all on the midpoint, one behind the other
-            int currentY = bottomForceCorners.Item1.Item2;
-            int currentX = bottomForceCorners.Item1.Item1 - _range;
-            int bottomLimit = bottomForceCorners.Item2.Item2 - _range;
-            int rightLimit = bottomForceCorners.Item2.Item1;
-            int iteration = 0;
-            foreach (BattleSquad squad in squads)
-            {
-                Tuple<ushort, ushort> squadSize = squad.GetSquadBoxSize();
-                // start at top left of killzone, fill right
-                squadPositionMap[squad] = new Tuple<int, int>(currentX, currentY);
-                BattleSquadPlacer.PlaceBattleSquad(_grid, squad, new Tuple<int, int>(currentX, currentY), true);
-                currentX += squadSize.Item1;
-                if (currentX >= rightLimit)
-                {
-                    iteration++;
-                    currentX = bottomForceCorners.Item1.Item1 - _range - (iteration * 4);
-                    currentY = bottomForceCorners.Item1.Item2;
+                    rightLimit += squadSize.Item1;
+                    rightLimit += 1;
+                    if (isTop)
+                    {
+                        BattleSquadPlacer.PlaceBattleSquad(_grid, squad, new Tuple<int, int>(rightLimit, verticalLimit), true);
+                    }
+                    else
+                    {
+                        ushort bottom = (ushort)(verticalLimit - squadSize.Item2);
+                        BattleSquadPlacer.PlaceBattleSquad(_grid, squad, new Tuple<int, int>(rightLimit, bottom), true);
+                    }
                 }
             }
         }
