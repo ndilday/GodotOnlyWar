@@ -16,17 +16,16 @@ namespace OnlyWar.Helpers.Battles.Placers
         }
 
         public Dictionary<BattleSquad, Tuple<int, int>> PlaceSquads(IReadOnlyList<BattleSquad> ambushedSquads,
-                                                            IReadOnlyList<BattleSquad> ambushingSquads)
+                                                                    IReadOnlyList<BattleSquad> ambushingSquads)
         {
             Dictionary<BattleSquad, Tuple<int, int>> result = [];
-            // TODO: prevent crippled soldiers from being deployed
             var killZone = PlaceAmbushedSquads(ambushedSquads, 0, 0, result);
             PlaceAmbushingSquads(ambushingSquads, killZone, result);
             return result;
         }
 
         private Tuple<Tuple<int, int>, Tuple<int, int>> PlaceAmbushedSquads(IEnumerable<BattleSquad> squads, ushort xMid, ushort top,
-                                                              Dictionary<BattleSquad, Tuple<int, int>> squadPositionMap)
+                                                                            Dictionary<BattleSquad, Tuple<int, int>> squadPositionMap)
         {
             // assume a depth of four yards per squad
             // center them all on the midpoint, one behind the other
@@ -58,13 +57,12 @@ namespace OnlyWar.Helpers.Battles.Placers
             return new Tuple<Tuple<int, int>, Tuple<int, int>>(new Tuple<int, int>(leftLimit, topLimit), new Tuple<int, int>(rightLimit, bottomLimit));
         }
         private void PlaceAmbushingSquads(IReadOnlyList<BattleSquad> ambushingSquads, 
-                                             Tuple<Tuple<int, int>, Tuple<int, int>> killZone, 
-                                             Dictionary<BattleSquad, Tuple<int, int>> squadPositionMap)
+                                          Tuple<Tuple<int, int>, Tuple<int, int>> killZone, 
+                                          Dictionary<BattleSquad, Tuple<int, int>> squadPositionMap)
         {
-            // ambushing forces start 40 yards from the target to the top and left
             int currentY = killZone.Item1.Item2;
             int currentX = killZone.Item1.Item1 - _engagementRange;
-            int bottomLimit = killZone.Item2.Item2 - 50;
+            int bottomLimit = killZone.Item2.Item2 - _engagementRange;
             int rightLimit = killZone.Item2.Item1;
             bool onLeft = true;
             int iteration = 0;

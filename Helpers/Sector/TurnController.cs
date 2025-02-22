@@ -1,4 +1,5 @@
 ﻿using OnlyWar.Builders;
+using OnlyWar.Helpers.Battles;
 using OnlyWar.Models.Missions;
 using OnlyWar.Models.Orders;
 using OnlyWar.Models.Planets;
@@ -93,7 +94,11 @@ namespace OnlyWar.Helpers.Sector
         {
             foreach (Order order in sector.Orders.Values)
             {
-                MissionContext context = new MissionContext(order.TargetRegion, order.MissionType, order.LevelOfAggression, new List<Squad> { order.OrderedSquad }, new List<Squad>());
+                List<BattleSquad> playerBattleSquads = new List<BattleSquad>
+                {
+                    new BattleSquad(true, order.OrderedSquad)
+                };
+                MissionContext context = new MissionContext(order.TargetRegion, order.MissionType, order.LevelOfAggression, playerBattleSquads, new List<BattleSquad>());
                 MissionStepOrchestrator.GetStartingStep(context).ExecuteMissionStep(context, 0, null);
                 MissionContexts.Add(context);
             }

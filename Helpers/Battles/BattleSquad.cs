@@ -26,6 +26,14 @@ namespace OnlyWar.Helpers.Battles
             }
         }
 
+        public BattleSoldier SquadLeader
+        {
+            get
+            {
+                return AbleSoldiers.FirstOrDefault(s => s.Soldier.Template.IsSquadLeader);
+            }
+        }
+
         public BattleSquad(bool isPlayerSquad, Squad squad)
         {
             Id = squad.Id;
@@ -59,57 +67,30 @@ namespace OnlyWar.Helpers.Battles
         public Tuple<ushort, ushort> GetSquadBoxSize()
         {
             int numberOfRows = 1;
-            if (Soldiers.Count >= 30)
+            if (AbleSoldiers.Count >= 30)
             {
                 numberOfRows = 3;
             }
-            else if (Soldiers.Count > 7)
+            else if (AbleSoldiers.Count > 7)
             {
                 numberOfRows = 2;
             }
             // membersPerRow is how many soldiers are in each row (back row may be smaller)
-            ushort membersPerRow = (ushort)Math.Ceiling((float)(Soldiers.Count) / (float)(numberOfRows));
-            return new Tuple<ushort, ushort>((ushort)(membersPerRow * Soldiers[0].Soldier.Template.Species.Width), 
-                                             (ushort)(numberOfRows * Soldiers[0].Soldier.Template.Species.Depth));
+            ushort membersPerRow = (ushort)Math.Ceiling((float)(AbleSoldiers.Count) / (float)(numberOfRows));
+            return new Tuple<ushort, ushort>((ushort)(membersPerRow * AbleSoldiers[0].Soldier.Template.Species.Width), 
+                                             (ushort)(numberOfRows * AbleSoldiers[0].Soldier.Template.Species.Depth));
         }
 
         public BattleSoldier GetRandomSquadMember()
         {
-            return Soldiers[RNG.GetIntBelowMax(0, Soldiers.Count)];
+            return AbleSoldiers[RNG.GetIntBelowMax(0, AbleSoldiers.Count)];
         }
 
-        public List<ChosenRangedWeapon> GetWeaponsForRange(float range)
-        {
-            List<ChosenRangedWeapon> list = [];
-            foreach(BattleSoldier soldier in Soldiers)
-            {
-                ChosenRangedWeapon bestWeapon = null;
-                float bestStrength = 0;
-                foreach(RangedWeapon weapon in soldier.RangedWeapons)
-                {
-                    if (soldier.Soldier.FunctioningHands == 0) continue;
-                    ChosenRangedWeapon newWeapon = new ChosenRangedWeapon(weapon, soldier.Soldier);
-                    float newStrength = newWeapon.GetStrengthAtRange(range);
-                    if( bestWeapon == null || bestStrength < newStrength 
-                        || (bestStrength == newStrength && newWeapon.ActiveWeapon.Template.Accuracy > bestWeapon.ActiveWeapon.Template.Accuracy))
-                    {
-                        bestWeapon = newWeapon;
-                        bestStrength = newStrength;
-                    }
-                }
-                if(bestWeapon != null)
-                {
-                    list.Add(bestWeapon);
-                }
-            }
-            return list;
-        }
-    
         public float GetAverageArmor()
         {
             int runningTotal = 0;
             int squadSize = 0;
-            foreach(BattleSoldier soldier in Soldiers)
+            foreach(BattleSoldier soldier in AbleSoldiers)
             {
                 if(soldier.Armor != null)
                 {
@@ -125,7 +106,7 @@ namespace OnlyWar.Helpers.Battles
         {
             float squadSize = 0;
             float runningTotal = 0;
-            foreach(BattleSoldier soldier in Soldiers)
+            foreach(BattleSoldier soldier in AbleSoldiers)
             {
                 runningTotal += soldier.Soldier.Size;
                 squadSize += 1.0f;
@@ -137,7 +118,7 @@ namespace OnlyWar.Helpers.Battles
         {
             float squadSize = 0;
             float runningTotal = 0;
-            foreach (BattleSoldier soldier in Soldiers)
+            foreach (BattleSoldier soldier in AbleSoldiers)
             {
                 runningTotal += soldier.Soldier.Constitution;
                 squadSize += 1.0f;
@@ -148,7 +129,7 @@ namespace OnlyWar.Helpers.Battles
         public float GetSquadMove()
         {
             float runningTotal = float.MaxValue;
-            foreach (BattleSoldier soldier in Soldiers)
+            foreach (BattleSoldier soldier in AbleSoldiers)
             {
                 float currentMaxSpeed = soldier.GetMoveSpeed();
                 if (currentMaxSpeed < runningTotal)
@@ -169,21 +150,31 @@ namespace OnlyWar.Helpers.Battles
             return Squad.Name;
         }
 
+        public int GetPreferredEngagementRange(float targetSize, float targetArmor, float targetCon)
+        {
+            return (int)AbleSoldiers.Average(s => BattleModifiersUtil.CalculateOptimalDistance(s, targetSize, targetArmor, targetCon));
+        }
+
         private void AllocateEquipment()
         {
-            List<BattleSoldier> tempSquad = new List<BattleSoldier>(Soldiers);
-            List<WeaponSet> wsList = Squad.Loadout.ToList();
+            List<BattleSoldier> tempSquad = new List<BattleSoldier>(AbleSoldiers);
+            // order the weapon sets by the strength of the primary weapon
+            List<WeaponSet> wsList = Squad.Loadout.OrderByDescending(ws => ws.PrimaryRangedWeapon?.DamageMultiplier ?? ws.PrimaryMeleeWeapon.StrengthMultiplier).ToList();
             // need to allocate weapons from squad weapon sets
-            if (Soldiers[0].Soldier.Template.IsSquadLeader)
+            if (tempSquad[0].Soldier.Template.IsSquadLeader)
             {
                 // for now, sgt always gets default weapons
-                Soldiers[0].AddWeapons(Squad.SquadTemplate.DefaultWeapons.GetRangedWeapons(), Squad.SquadTemplate.DefaultWeapons.GetMeleeWeapons());
+                tempSquad[0].AddWeapons(Squad.SquadTemplate.DefaultWeapons.GetRangedWeapons(), Squad.SquadTemplate.DefaultWeapons.GetMeleeWeapons());
                 // TODO: personalize armor and weapons
-                Soldiers[0].Armor = new Armor(Squad.SquadTemplate.Armor);
+                tempSquad[0].Armor = new Armor(Squad.SquadTemplate.Armor);
                 tempSquad.RemoveAt(0);
             }
             foreach (WeaponSet ws in wsList)
             {
+                if(tempSquad.Count() == 0)
+                {
+                    break;
+                }
                 // TODO: we'll want to stop assuming Dex as the base stat at some point
                 if (ws.PrimaryRangedWeapon != null)
                 {

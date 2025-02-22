@@ -1,8 +1,6 @@
-﻿using Godot;
-using OnlyWar.Helpers;
+﻿using OnlyWar.Helpers.Battles;
 using OnlyWar.Models.Soldiers;
 using OnlyWar.Models.Squads;
-using System;
 using System.Collections.Generic;
 using System.Linq;
 
@@ -12,7 +10,7 @@ namespace OnlyWar.Helpers.Missions
     {
         public BaseSkill SkillUsed { get; }
         // RunMissionTest returns the number of sigmas the squad succeeded or failed by
-        public float RunMissionCheck(List<Squad> squads);
+        public float RunMissionCheck(List<BattleSquad> squads);
     }
 
     public class IndividualMissionTest : IMissionCheck
@@ -27,18 +25,18 @@ namespace OnlyWar.Helpers.Missions
             _difficulty = difficulty;
         }
 
-        public virtual float RunMissionCheck(List<Squad> squads)
+        public virtual float RunMissionCheck(List<BattleSquad> squads)
         {
             // find soldier in squad with highest skill in SkillUsed
-            ISoldier bestSoldier = squads.SelectMany(s => s.Members)
-                .OrderByDescending(soldier => soldier.GetTotalSkillValue(SkillUsed))
+            BattleSoldier bestSoldier = squads.SelectMany(s => s.AbleSoldiers)
+                .OrderByDescending(soldier => soldier.Soldier.GetTotalSkillValue(SkillUsed))
                 .FirstOrDefault();
             return RunCheckInternal(bestSoldier);
         }
 
-        protected float RunCheckInternal(ISoldier soldier)
+        protected float RunCheckInternal(BattleSoldier soldier)
         {
-            float zAdvantage = (soldier.GetTotalSkillValue(SkillUsed) - _difficulty) / 5.0f;
+            float zAdvantage = (soldier.Soldier.GetTotalSkillValue(SkillUsed) - _difficulty) / 5.0f;
             return GaussianCalculator.DetermineMarginOfSuccessZvalue(zAdvantage);
         }
     }
@@ -49,14 +47,14 @@ namespace OnlyWar.Helpers.Missions
         {
         }
 
-        public override float RunMissionCheck(List<Squad> squads)
+        public override float RunMissionCheck(List<BattleSquad> squads)
         {
-            if (!squads.Any(s => s.SquadLeader != null))
+            if (!squads.Any(s => s.Squad.SquadLeader != null))
             {
                 return base.RunMissionCheck(squads);
             }
-            ISoldier bestLeader = squads.Select(s => s.SquadLeader)
-                .OrderByDescending(soldier => soldier.GetTotalSkillValue(SkillUsed))
+            BattleSoldier bestLeader = squads.Select(s => s.SquadLeader)
+                .OrderByDescending(soldier => soldier?.Soldier.GetTotalSkillValue(SkillUsed))
                 .FirstOrDefault();
             return RunCheckInternal(bestLeader);
         }
@@ -71,9 +69,9 @@ namespace OnlyWar.Helpers.Missions
             SkillUsed = skill;
             _difficulty = difficulty;
         }
-        public float RunMissionCheck(List<Squad> squads)
+        public float RunMissionCheck(List<BattleSquad> squads)
         {
-            float totalSkill = squads.SelectMany(s => s.Members).Average(soldier => soldier.GetTotalSkillValue(SkillUsed));
+            float totalSkill = squads.SelectMany(s => s.AbleSoldiers).Average(soldier => soldier.Soldier.GetTotalSkillValue(SkillUsed));
             float zAdvantage = (totalSkill - _difficulty) / 5.0f;
             return GaussianCalculator.DetermineMarginOfSuccessZvalue(zAdvantage);
         }

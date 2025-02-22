@@ -29,7 +29,7 @@ namespace OnlyWar.Helpers.Missions.Recon
             if (context.DaysElapsed >= 6)
             {
                 // time to go home
-                if (context.Region != context.PlayerSquads.First().CurrentRegion)
+                if (context.Region != context.PlayerSquads.First().Squad.CurrentRegion)
                 {
                     new ExfiltrateMissionStep().ExecuteMissionStep(context, 0.0f, this);
                 }

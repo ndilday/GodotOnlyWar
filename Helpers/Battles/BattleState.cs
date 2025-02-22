@@ -42,7 +42,7 @@ namespace OnlyWar.Models.Battles
             _soldierPositionsMap = new Dictionary<int, IReadOnlyList<Tuple<int, int>>>();
             foreach (BattleSquad squad in PlayerSquads.Values.Concat(OpposingSquads.Values))
             {
-                foreach (BattleSoldier soldier in squad.Soldiers)
+                foreach (BattleSoldier soldier in squad.AbleSoldiers)
                 {
                     _soldiers[soldier.Soldier.Id] = soldier;
                     _soldierPositionsMap[soldier.Soldier.Id] = soldier.PositionList;

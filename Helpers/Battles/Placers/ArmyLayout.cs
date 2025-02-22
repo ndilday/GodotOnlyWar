@@ -73,7 +73,7 @@ namespace OnlyWar.Helpers.Battles.Placers
                     defaultSquads.Add(squad);
                 }
 
-                defaultSquads = defaultSquads.OrderByDescending(s => s.Soldiers[0].GetMoveSpeed()).ToList();
+                defaultSquads = defaultSquads.OrderByDescending(s => s.AbleSoldiers[0].GetMoveSpeed()).ToList();
                 while (fastSquads.Count + defaultSquads.Count > (heavySquads.Count + hqSquads.Count) * 4 &&
                     defaultSquads.Count > 0)
                 {

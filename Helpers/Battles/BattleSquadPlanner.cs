@@ -1,11 +1,9 @@
 ﻿using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
-using System.ComponentModel.Design;
 using System.Linq;
 using OnlyWar.Helpers.Battles.Actions;
 using OnlyWar.Models.Equippables;
-using OnlyWar.Models.Soldiers;
 
 namespace OnlyWar.Helpers.Battles
 {
@@ -42,7 +40,7 @@ namespace OnlyWar.Helpers.Battles
             {
                 // it doesn't really matter what the soldiers want to do, it's time to flee or fight
                 // TODO: evaluate running vs fighting
-                foreach(BattleSoldier soldier in squad.Soldiers)
+                foreach(BattleSoldier soldier in squad.AbleSoldiers)
                 {
                     if (_grid.IsAdjacentToEnemy(soldier.Soldier.Id))
                     {
@@ -75,14 +73,14 @@ namespace OnlyWar.Helpers.Battles
                 int standVotes = 0;
                 // charging is moving into hand-to-hand contact with the enemy
                 int chargeVotes = 0;
-                foreach (BattleSoldier soldier in squad.Soldiers)
+                foreach (BattleSoldier soldier in squad.AbleSoldiers)
                 {
                     float distance = _grid.GetNearestEnemy(soldier.Soldier.Id, out int closestSoldierId);
                     BattleSquad closestSquad = _soldierMap[closestSoldierId].BattleSquad;
                     float targetSize = closestSquad.GetAverageSize();
                     float targetArmor = closestSquad.GetAverageArmor();
                     float targetCon = closestSquad.GetAverageConstitution();
-                    float preferredHitDistance = CalculateOptimalDistance(soldier, targetSize, targetArmor, targetCon);
+                    float preferredHitDistance = BattleModifiersUtil.CalculateOptimalDistance(soldier, targetSize, targetArmor, targetCon);
                     if (preferredHitDistance == -1)
                     {
                         // this soldier wants to run
@@ -93,10 +91,11 @@ namespace OnlyWar.Helpers.Battles
                         if (soldier.EquippedRangedWeapons.Count >= 1)
                         {
                             float desperateHitDistance = EstimateArmorPenDistance(soldier.EquippedRangedWeapons[0], targetArmor);
-                            desperateHitDistance = Math.Min(desperateHitDistance, EstimateHitDistance(soldier.Soldier, soldier.EquippedRangedWeapons[0], targetSize, soldier.HandsFree));
+                            desperateHitDistance = Math.Min(desperateHitDistance, 
+                                                            BattleModifiersUtil.EstimateHitDistance(soldier.Soldier, soldier.EquippedRangedWeapons[0], targetSize, soldier.HandsFree));
                             if (desperateHitDistance > 0)
                             {
-                                float targetPreferredDistance = CalculateOptimalDistance(closestSquad.GetRandomSquadMember(),
+                                float targetPreferredDistance = BattleModifiersUtil.CalculateOptimalDistance(closestSquad.GetRandomSquadMember(),
                                                                            soldier.Soldier.Size,
                                                                            soldier.Armor.Template.ArmorProvided,
                                                                            soldier.Soldier.Constitution);
@@ -130,10 +129,11 @@ namespace OnlyWar.Helpers.Battles
                     }
                     else
                     {
-                        float targetPreferredDistance = CalculateOptimalDistance(closestSquad.GetRandomSquadMember(), 
-                                                                           soldier.Soldier.Size, 
-                                                                           soldier.Armor.Template.ArmorProvided, 
-                                                                           soldier.Soldier.Constitution);
+                        float targetPreferredDistance = BattleModifiersUtil.CalculateOptimalDistance(
+                            closestSquad.GetRandomSquadMember(),
+                            soldier.Soldier.Size, 
+                            soldier.Armor.Template.ArmorProvided,
+                            soldier.Soldier.Constitution);
 
                         if(preferredHitDistance < targetPreferredDistance)
                         {
@@ -153,14 +153,14 @@ namespace OnlyWar.Helpers.Battles
                     _log.Enqueue(squad.Name + " advances");
                     if (chargeVotes >= advanceVotes / 2)
                     {
-                        foreach (BattleSoldier soldier in squad.Soldiers)
+                        foreach (BattleSoldier soldier in squad.AbleSoldiers)
                         {
                             AddChargeActionsToBag(soldier);
                         }
                     }
                     else
                     {
-                        foreach (BattleSoldier soldier in squad.Soldiers)
+                        foreach (BattleSoldier soldier in squad.AbleSoldiers)
                         {
                             AddAdvanceActionsToBag(soldier);
                         }
@@ -168,14 +168,14 @@ namespace OnlyWar.Helpers.Battles
                 }
                 else if (retreatVotes > standVotes && retreatVotes > advanceVotes)
                 {
-                    foreach (BattleSoldier soldier in squad.Soldiers)
+                    foreach (BattleSoldier soldier in squad.AbleSoldiers)
                     {
                         AddRetreatingActionsToBag(soldier, squad);
                     }
                 }
                 else
                 {
-                    foreach (BattleSoldier soldier in squad.Soldiers)
+                    foreach (BattleSoldier soldier in squad.AbleSoldiers)
                     {
                         AddStandingActionsToBag(soldier);
                     }
@@ -186,7 +186,7 @@ namespace OnlyWar.Helpers.Battles
         private void AddStandingActionsToBag(BattleSoldier soldier)
         {
             float range = _grid.GetNearestEnemy(soldier.Soldier.Id, out int closestEnemyId);
-            float speed = _soldierMap[closestEnemyId].BattleSquad.Soldiers.First().GetMoveSpeed();
+            float speed = _soldierMap[closestEnemyId].BattleSquad.AbleSoldiers.First().GetMoveSpeed();
             // see if the enemy is within charging range and the soldier doesn't already have a target lined up
             if (speed >= range && (soldier.Aim == null || soldier.RangedWeapons[0].LoadedAmmo == 0))
             {
@@ -382,7 +382,7 @@ namespace OnlyWar.Helpers.Battles
                         // basically, foreach soldier in the squad of the closest enemy, except the closest enemy (who we already checked)
                         // get their locations, and then sort it according to distance square
                         // PROTIP: SQRT is a relatively expensive operation, so sort by distance squares when it's about comparative, not absolute, distance
-                        var map = oppSquad.Soldiers
+                        var map = oppSquad.AbleSoldiers
                             .Where(s => s.Soldier.Id != closestEnemyId)
                             .Select(s => new Tuple<int, Tuple<int, int>>(s.Soldier.Id, _grid.GetSoldierPosition(s.Soldier.Id)[0]))
                             .Select(t => new Tuple<int, Tuple<int, int>, Tuple<int, int>>(t.Item1, t.Item2, new Tuple<int, int>(t.Item2.Item1 - soldier.TopLeft.Item1, t.Item2.Item2 - soldier.TopLeft.Item2)))
@@ -444,7 +444,7 @@ namespace OnlyWar.Helpers.Battles
                 _grid.ReserveSpace(newPos);
                 ushort orientation = CalculateOrientationFromVector(move);
                 _moveActionBag.Add(new MoveAction(soldier, _grid, currentPosition, newPos, orientation));
-                BattleSoldier target = oppSquad.Soldiers.Single(s => s.Soldier.Id == closestEnemyId);
+                BattleSoldier target = oppSquad.AbleSoldiers.Single(s => s.Soldier.Id == closestEnemyId);
                 _meleeActionBag.Add(new MeleeAttackAction(soldier, target, soldier.MeleeWeapons.Count == 0 ? _defaultMeleeWeapon : soldier.EquippedMeleeWeapons[0], distance >= 2, _log));
             }
         }
@@ -511,68 +511,6 @@ namespace OnlyWar.Helpers.Battles
                     _shootActionBag.Add(new AimAction(soldier, target, soldier.EquippedRangedWeapons.OrderByDescending(w => w.Template.MaximumRange).First(), _log));
                 }
             }
-        }
-
-        private float CalculateOptimalDistance(BattleSoldier soldier, float targetSize, float targetArmor, float targetCon)
-        {
-            int freeHands = soldier.Soldier.FunctioningHands;
-            if(freeHands == 0)
-            {
-                // with no hands free, there's not much combat left for this soldier
-                return -1;
-            }
-            float range = 0;
-            var weapons = soldier.EquippedRangedWeapons.OrderByDescending(w => w.Template.MaximumRange);
-            foreach(RangedWeapon weapon in weapons)
-            {
-                float hitRange = EstimateHitDistance(soldier.Soldier, weapon, targetSize, freeHands);
-                float damRange = EstimateKillDistance(weapon, targetArmor, targetCon);
-                float minVal = Math.Min(hitRange, damRange);
-                if (minVal > range) range = minVal;
-            }
-            return range;
-        }
-
-        private float EstimateHitDistance(ISoldier soldier, RangedWeapon weapon, float targetSize, int freeHands)
-        {
-            float baseTotal = soldier.GetTotalSkillValue(weapon.Template.RelatedSkill);
-
-            if (weapon.Template.Location == EquipLocation.TwoHand && freeHands == 1)
-            {
-                // unless the soldier is strong enough, the weapon can't be used one-handed
-                if (weapon.Template.RequiredStrength * 1.5f > soldier.Strength) return 0;
-                if (weapon.Template.RequiredStrength * 2 > soldier.Strength)
-                {
-                    baseTotal -= (weapon.Template.RequiredStrength * 2) - soldier.Strength;
-                }
-            }
-
-            // we'd like to get to a range where at least 1 bullet will hit more often than not when we aim
-            // +1 for all-out attack, - ROF after the first shot
-            // z value of 0.43 is 
-            baseTotal = baseTotal + 1 + weapon.Template.Accuracy;
-            baseTotal += BattleModifiersUtil.CalculateRateOfFireModifier(weapon.Template.RateOfFire);
-            baseTotal += BattleModifiersUtil.CalculateSizeModifier(targetSize);
-            // if the total doesn't get to 10.5, there will be no range where there's a good chance of hitting, so just keep getting closer
-            if (baseTotal < 10.5) return 0;
-
-            return BattleModifiersUtil.GetRangeForModifier(10.5f - baseTotal);
-        }
-
-        private float EstimateKillDistance(RangedWeapon weapon, float targetArmor, float targetCon)
-        {
-            // if range doesn't matter for damage, we can just limit on hitting 
-            if (!weapon.Template.DoesDamageDegradeWithRange) return weapon.Template.MaximumRange;
-            float effectiveArmor = targetArmor * weapon.Template.ArmorMultiplier;
-            
-            // if there's no chance of doing a wound, maybe we should run?
-            if (weapon.Template.DamageMultiplier * 6 < effectiveArmor) return -1;
-            //if we can't kill in one shot at point blank range, we still need to get as close as possible to have the best chance of taking the target down
-            if ((weapon.Template.DamageMultiplier * 6 - effectiveArmor) * weapon.Template.WoundMultiplier < targetCon) return 0;
-            // find the range with a 1/3 chance of a killshot
-            float distanceRatio = 1 - (((targetCon / weapon.Template.WoundMultiplier) + effectiveArmor) / (4.25f * weapon.Template.DamageMultiplier));
-            if (distanceRatio < 0) return 0;
-            return weapon.Template.MaximumRange * distanceRatio;
         }
 
         private float EstimateArmorPenDistance(RangedWeapon weapon, float targetArmor)

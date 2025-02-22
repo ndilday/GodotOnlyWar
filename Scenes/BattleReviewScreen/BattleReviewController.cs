@@ -123,7 +123,7 @@ public partial class BattleReviewController : DialogController
 
     private void DrawSquad(BattleSquad squad, IReadOnlyDictionary<int, IReadOnlyList<Tuple<int, int>>> soldierLocationMap, Vector2I topLeftOffset, Texture2D soldierTexture, Vector2 soldierTextureScale, Color color)
     {
-        foreach (ISoldier soldier in squad.Soldiers)
+        foreach (ISoldier soldier in squad.AbleSoldiers)
         {
             var soldierLocations = soldierLocationMap[soldier.Id];
             if(soldierLocations.Count == 1)

@@ -39,8 +39,8 @@ namespace OnlyWar.Helpers.Battles
             _woundResolver.OnSoldierDeath += WoundResolver_OnSoldierDeath;
             _woundResolver.OnSoldierFall += WoundResolver_OnSoldierFall;
             _casualtyMap = new Dictionary<int, BattleSoldier>();
-            _startingPlayerBattleSoldiers = playerBattleSquads.SelectMany(bs => bs.Soldiers).ToList();
-            _startingEnemySoldierCount = opposingBattleSquads.SelectMany(s => s.Soldiers).Count();
+            _startingPlayerBattleSoldiers = playerBattleSquads.SelectMany(bs => bs.AbleSoldiers).ToList();
+            _startingEnemySoldierCount = opposingBattleSquads.SelectMany(s => s.AbleSoldiers).Count();
 
             _currentState = new BattleState(playerBattleSquads.ToDictionary(bs => bs.Id, bs => bs), opposingBattleSquads.ToDictionary(os => os.Id, os => os));
             BattleHistory = new BattleHistory();
@@ -230,7 +230,7 @@ namespace OnlyWar.Helpers.Battles
         private void UpdateSquadMeleeStatus(BattleSquad squad)
         {
             bool atLeastOneSoldierInMelee = false;
-            foreach (BattleSoldier soldier in squad.Soldiers)
+            foreach (BattleSoldier soldier in squad.AbleSoldiers)
             {
                 soldier.IsInMelee = _grid.IsAdjacentToEnemy(soldier.Soldier.Id);
                 if (soldier.IsInMelee) atLeastOneSoldierInMelee = true;
@@ -272,8 +272,8 @@ namespace OnlyWar.Helpers.Battles
 
         private string GetSquadDetails(BattleSquad squad)
         {
-            string report = "\n" + squad.Name + "\n" + squad.Soldiers.Count.ToString() + " soldiers standing\n\n";
-            foreach (BattleSoldier soldier in squad.Soldiers)
+            string report = "\n" + squad.Name + "\n" + squad.AbleSoldiers.Count.ToString() + " soldiers standing\n\n";
+            foreach (BattleSoldier soldier in squad.AbleSoldiers)
             {
                 report += GetSoldierDetails(soldier);
             }
@@ -301,7 +301,7 @@ namespace OnlyWar.Helpers.Battles
 
         private string GetSquadSummary(BattleSquad squad)
         {
-            return "\n" + squad.Name + "\n" + squad.Soldiers.Count.ToString() + " soldiers standing\n\n";
+            return "\n" + squad.Name + "\n" + squad.AbleSoldiers.Count.ToString() + " soldiers standing\n\n";
         }
 
         private void Log(bool isMessageVerbose, string text)
@@ -315,7 +315,7 @@ namespace OnlyWar.Helpers.Battles
             soldier.BattleSquad.RemoveSoldier(soldier);
             _grid.RemoveSoldier(soldier.Soldier.Id);
             
-            if (squad.Soldiers.Count == 0)
+            if (squad.AbleSoldiers.Count == 0)
             {
                 _currentState.RemoveSquad(squad);
             }

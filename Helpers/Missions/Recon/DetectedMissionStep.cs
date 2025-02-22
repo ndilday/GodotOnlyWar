@@ -1,4 +1,5 @@
 ﻿using OnlyWar.Builders;
+using OnlyWar.Helpers.Battles;
 using OnlyWar.Models;
 using OnlyWar.Models.Missions;
 using OnlyWar.Models.Soldiers;
@@ -49,7 +50,7 @@ namespace OnlyWar.Helpers.Missions.Recon
                 SquadTemplate squadTemplate = scoutSquadTemplates.ElementAt(RNG.GetIntBelowMax(0, count));
                 Squad squad = SquadFactory.GenerateSquad(squadTemplate, $"{opposingFaction.Name} {context.Region.Name} Recon Squad {i}");
                 context.OpposingForces.Clear();
-                context.OpposingForces.Add(squad);
+                context.OpposingForces.Add(new BattleSquad(false, squad));
             }
 
             float margin = _missionTest.RunMissionCheck(context.PlayerSquads);

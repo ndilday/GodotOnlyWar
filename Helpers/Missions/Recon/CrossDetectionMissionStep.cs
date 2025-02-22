@@ -20,8 +20,8 @@ namespace OnlyWar.Helpers.Missions.Recon
             // decide whether to fight or flee
             context.Log.Add($"Day {context.DaysElapsed}: Force is detected by enemy forces in {context.Region.Name}");
             // compare size of each force
-            float opForSize = context.OpposingForces.Sum(s => s.SquadTemplate.BattleValue);
-            float playerSize = context.PlayerSquads.Sum(s => s.SquadTemplate.BattleValue);
+            float opForSize = context.OpposingForces.Sum(s => s.Squad.SquadTemplate.BattleValue);
+            float playerSize = context.PlayerSquads.Sum(s => s.Squad.SquadTemplate.BattleValue);
             if(context.Aggression == Aggression.Attritional)
             {
                 playerSize *= 2;
@@ -32,12 +32,12 @@ namespace OnlyWar.Helpers.Missions.Recon
             }
             if(playerSize >= opForSize || context.Aggression == Aggression.Aggressive)
             {
-                new MeetingEngagementMissionStep().ExecuteMissionStep(context, 0.0f, returnStep);
+                new MeetingEngagementMissionStep().ExecuteMissionStep(context, marginOfSuccess, returnStep);
             }
             else
             {
                 // attempt to flee
-                new ExfiltrateMissionStep().ExecuteMissionStep(context, 0.0f, this);
+                new ExfiltrateMissionStep().ExecuteMissionStep(context, marginOfSuccess, returnStep);
             }
         }
     }
