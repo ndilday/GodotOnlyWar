@@ -13,7 +13,7 @@ namespace OnlyWar.Builders
     {
         public static IMissionStep GetStartingStep(MissionContext context)
         {
-            if (context.Region != context.PlayerSquads.First().CurrentRegion)
+            if (context.Region != context.PlayerSquads.First().Squad.CurrentRegion)
             {
                 return new InfiltrateMissionStep();
             }

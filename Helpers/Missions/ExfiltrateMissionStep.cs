@@ -18,6 +18,11 @@ namespace OnlyWar.Helpers.Missions
         public ExfiltrateMissionStep()
         {
             BaseSkill stealth = GameDataSingleton.Instance.GameRulesData.BaseSkillMap.Values.First(s => s.Name == "Stealth");
+            // negative mod for size of player force
+            // negative mod for size of enemy force
+            // mod for terrain
+            // mod for enemy recon focus
+            // mod for equipment
             _missionTest = new SquadMissionTest(stealth, 10.0f);
             StepIfSuccess = new ReconStealthMissionStep();
             StepIfFailure = new DetectedMissionStep();
@@ -25,7 +30,7 @@ namespace OnlyWar.Helpers.Missions
 
         public void ExecuteMissionStep(MissionContext context, float marginOfSuccess, IMissionStep returnStep)
         {
-            if (context.PlayerSquads.SelectMany(s => s.Members).All(s => s.MoveSpeed == 0.0f))
+            if (context.PlayerSquads.SelectMany(s => s.AbleSoldiers).Count() == 0)
             {
                 context.Log.Add($"Contact lost with mission force, assumed dead.");
                 return;
@@ -35,7 +40,7 @@ namespace OnlyWar.Helpers.Missions
             float margin = _missionTest.RunMissionCheck(context.PlayerSquads);
             if (margin > 0.0f)
             {
-                context.Log.Add("Mission Success");
+                context.Log.Add("Force has returned to base.");
                 return;
             }
             else

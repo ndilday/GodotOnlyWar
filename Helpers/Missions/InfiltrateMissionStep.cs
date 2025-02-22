@@ -3,6 +3,7 @@ using OnlyWar.Models;
 using OnlyWar.Models.Missions;
 using OnlyWar.Models.Soldiers;
 using System.Linq;
+using System.Net.Mime;
 
 namespace OnlyWar.Helpers.Missions.Recon
 {
@@ -18,6 +19,11 @@ namespace OnlyWar.Helpers.Missions.Recon
         public InfiltrateMissionStep()
         {
             BaseSkill stealth = GameDataSingleton.Instance.GameRulesData.BaseSkillMap.Values.First(s => s.Name == "Stealth");
+            // negative mod for size of player force
+            // negative mod for size of enemy force
+            // mod for terrain
+            // mod for enemy recon focus
+            // mod for equipment
             _missionTest = new SquadMissionTest(stealth, 12.5f);
             StepIfFailure = new DetectedMissionStep();
         }
@@ -26,7 +32,6 @@ namespace OnlyWar.Helpers.Missions.Recon
         {
             if (!ShouldContinue(context))
             {
-                context.Log.Add("Mission Failed");
                 return;
             }
             context.DaysElapsed++;
@@ -45,7 +50,16 @@ namespace OnlyWar.Helpers.Missions.Recon
 
         public bool ShouldContinue(MissionContext context)
         {
-            if (context.DaysElapsed >= 6 || context.PlayerSquads.SelectMany(s => s.Members).All(s => s.MoveSpeed == 0)) return false;
+            if (context.DaysElapsed >= 6)
+            {
+                context.Log.Add("Mission failed: Force unable to infiltrate into region");
+                return false;
+            }
+            else if (context.PlayerSquads.Where(s => s.ShouldContinueMission()).Count() == 0)
+            {
+                context.Log.Add("Mission aborted: too many casualties");
+                return false;
+            }
             return true;
         }
     }

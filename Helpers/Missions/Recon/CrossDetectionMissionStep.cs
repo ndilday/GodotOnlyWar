@@ -12,7 +12,6 @@ namespace OnlyWar.Helpers.Missions.Recon
 
         public CrossDetectionMissionStep()
         {
-            BaseSkill perception = GameDataSingleton.Instance.GameRulesData.BaseSkillMap.Values.First(s => s.Name == "Tactics");
         }
 
         public void ExecuteMissionStep(MissionContext context, float marginOfSuccess, IMissionStep returnStep)

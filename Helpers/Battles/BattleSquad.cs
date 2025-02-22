@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 
 using OnlyWar.Models.Equippables;
+using OnlyWar.Models.Orders;
 using OnlyWar.Models.Squads;
 
 namespace OnlyWar.Helpers.Battles
@@ -128,6 +129,7 @@ namespace OnlyWar.Helpers.Battles
 
         public float GetSquadMove()
         {
+            // TODO: adjust if there are disabled squad members to account for being carried?
             float runningTotal = float.MaxValue;
             foreach (BattleSoldier soldier in AbleSoldiers)
             {
@@ -143,6 +145,37 @@ namespace OnlyWar.Helpers.Battles
         public void RemoveSoldier(BattleSoldier soldier)
         {
             Soldiers.Remove(soldier);
+        }
+
+        public bool ShouldContinueMission()
+        {
+            if (AbleSoldiers.Count == 0)
+            {
+                return false;
+            }
+            if (Squad.CurrentOrders.LevelOfAggression == Aggression.Aggressive)
+            {
+                return true;
+            }
+            else
+            {
+                // see how large the squad currently is compared to its maximum size
+                // TODO: adjust based on whether the squad leader is still around?
+                float ratio = (float)AbleSoldiers.Count / (float)Squad.SquadTemplate.Elements.Sum(e => e.MaximumNumber);
+                switch (Squad.CurrentOrders.LevelOfAggression)
+                {
+                    case Aggression.Avoid:
+                        return ratio >= 0.9f;
+                    case Aggression.Cautious:
+                        return ratio >= 0.75f;
+                    case Aggression.Normal:
+                        return ratio >= 0.5f;
+                    case Aggression.Attritional:
+                        return ratio >= 0.25f;
+                    default:
+                        return false;
+                }
+            }
         }
 
         public override string ToString()

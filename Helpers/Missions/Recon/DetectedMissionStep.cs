@@ -22,6 +22,7 @@ namespace OnlyWar.Helpers.Missions.Recon
         public DetectedMissionStep()
         {
             BaseSkill perception = GameDataSingleton.Instance.GameRulesData.BaseSkillMap.Values.First(s => s.Name == "Tactics");
+            // adjust for size of detecting force
             _missionTest = new SquadMissionTest(perception, 10.0f);
             StepIfSuccess = new CrossDetectionMissionStep();
             StepIfFailure = new AmbushedMissionStep();
