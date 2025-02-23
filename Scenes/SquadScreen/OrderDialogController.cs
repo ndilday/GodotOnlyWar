@@ -43,6 +43,8 @@ public partial class OrderDialogController : Control
 
         if (squad.CurrentOrders == null)
         {
+            _view.UnsetAggressionOption();
+            _view.DisableMissionOption();
             _view.SetAggressionDescription("");
             _view.SetMissionDescription("");
         }

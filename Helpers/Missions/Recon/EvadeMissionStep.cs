@@ -6,18 +6,15 @@ using System.Linq;
 
 namespace OnlyWar.Helpers.Missions.Recon
 {
-    public class EvadeMissionStep : ITestMissionStep
+    public class EvadeMissionStep : ATestMissionStep
     {
-        public string Description { get { return "Evade"; } }
-        public IMissionCheck MissionTest { get; }
-        public IMissionStep StepIfSuccess { get; }
-        public IMissionStep StepIfFailure { get; }
+        public override string Description { get { return "Evade"; } }
 
         public EvadeMissionStep()
         {
         }
 
-        public void ExecuteMissionStep(MissionContext context, float marginOfSuccess, IMissionStep returnStep)
+        public override void ExecuteMissionStep(MissionContext context, float marginOfSuccess, IMissionStep returnStep)
         {
             context.Log.Add($"Day {context.DaysElapsed}: Force attempting to escape enemy force");
             // modify by speeds of each side

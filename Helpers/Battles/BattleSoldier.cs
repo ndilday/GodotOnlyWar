@@ -165,9 +165,11 @@ namespace OnlyWar.Helpers.Battles
                                                         .Any(hl => hl.IsCrippled || hl.IsSevered);
                 bool canFuncion = !Soldier.Body.HitLocations.Where(hl => hl.Template.IsVital)
                                                            .Any(hl => hl.IsCrippled || hl.IsSevered);
-                bool canFight = !Soldier.Body.HitLocations.Where(hl => hl.Template.IsRangedWeaponHolder)
+                bool canShoot = !Soldier.Body.HitLocations.Where(hl => hl.Template.IsRangedWeaponHolder)
                                                         .All(hl => hl.IsCrippled || hl.IsSevered);
-                return canWalk && canFuncion && canFight;
+                bool canFight = !Soldier.Body.HitLocations.Where(hl => hl.Template.IsMeleeWeaponHolder)
+                                                        .All(hl => hl.IsCrippled || hl.IsSevered);
+                return canWalk && canFuncion && canShoot && canFight;
             }
         }
         

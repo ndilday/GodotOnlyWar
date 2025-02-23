@@ -10,25 +10,18 @@ using System.Linq;
 
 namespace OnlyWar.Helpers.Missions.Recon
 {
-    public class DetectedMissionStep : ITestMissionStep
+    public class DetectedMissionStep : ATestMissionStep
     {
-        private readonly IMissionCheck _missionTest;
-
-        public string Description { get { return "Detected"; } }
-        public IMissionCheck MissionTest { get; }
-        public IMissionStep StepIfSuccess { get; }
-        public IMissionStep StepIfFailure { get; }
+        public override string Description { get { return "Detected"; } }
 
         public DetectedMissionStep()
         {
             BaseSkill perception = GameDataSingleton.Instance.GameRulesData.BaseSkillMap.Values.First(s => s.Name == "Tactics");
             // adjust for size of detecting force
             _missionTest = new SquadMissionTest(perception, 10.0f);
-            StepIfSuccess = new CrossDetectionMissionStep();
-            StepIfFailure = new AmbushedMissionStep();
         }
 
-        public void ExecuteMissionStep(MissionContext context, float marginOfSuccess, IMissionStep returnStep)
+        public override void ExecuteMissionStep(MissionContext context, float marginOfSuccess, IMissionStep returnStep)
         {
             // build OpFor, size increases the lower the MoS, and pushes engagement range in favor of the OpFor
             int numberOfOpposingSquads = context.PlayerSquads.Count - (ushort)marginOfSuccess;
@@ -57,11 +50,11 @@ namespace OnlyWar.Helpers.Missions.Recon
             float margin = _missionTest.RunMissionCheck(context.PlayerSquads);
             if (margin > 0.0f)
             {
-                StepIfSuccess.ExecuteMissionStep(context, margin, returnStep);
+                new CrossDetectionMissionStep().ExecuteMissionStep(context, margin, returnStep);
             }
             else
             {
-                StepIfFailure.ExecuteMissionStep(context, margin, returnStep);
+                new AmbushedMissionStep().ExecuteMissionStep(context, margin, returnStep);
             }
         }
     }

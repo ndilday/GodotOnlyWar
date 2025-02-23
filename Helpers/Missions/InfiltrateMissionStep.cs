@@ -7,14 +7,9 @@ using System.Net.Mime;
 
 namespace OnlyWar.Helpers.Missions.Recon
 {
-    public class InfiltrateMissionStep : ITestMissionStep
+    public class InfiltrateMissionStep : ATestMissionStep
     {
-        private readonly IMissionCheck _missionTest;
-
-        public string Description { get { return "Infiltrate"; } }
-        public IMissionCheck MissionTest { get; }
-        public IMissionStep StepIfSuccess { get; }
-        public IMissionStep StepIfFailure { get; }
+        public override string Description { get { return "Infiltrate"; } }
 
         public InfiltrateMissionStep()
         {
@@ -25,10 +20,9 @@ namespace OnlyWar.Helpers.Missions.Recon
             // mod for enemy recon focus
             // mod for equipment
             _missionTest = new SquadMissionTest(stealth, 12.5f);
-            StepIfFailure = new DetectedMissionStep();
         }
 
-        public void ExecuteMissionStep(MissionContext context, float marginOfSuccess, IMissionStep returnStep)
+        public override void ExecuteMissionStep(MissionContext context, float marginOfSuccess, IMissionStep returnStep)
         {
             if (!ShouldContinue(context))
             {
@@ -44,7 +38,7 @@ namespace OnlyWar.Helpers.Missions.Recon
             }
             else
             {
-                StepIfFailure.ExecuteMissionStep(context, margin, this);
+                new DetectedMissionStep().ExecuteMissionStep(context, margin, this);
             }
         }
 

@@ -9,10 +9,12 @@ namespace OnlyWar.Helpers.Missions
         public void ExecuteMissionStep(MissionContext context, float marginOfSuccess, IMissionStep returnStep);
     }
 
-    public interface ITestMissionStep : IMissionStep
+    public abstract class ATestMissionStep : IMissionStep
     {
-        public IMissionCheck MissionTest { get; }
-        public IMissionStep StepIfSuccess { get; }
-        public IMissionStep StepIfFailure { get; }
+        public abstract string Description { get; }
+
+        public abstract void ExecuteMissionStep(MissionContext context, float marginOfSuccess, IMissionStep returnStep);
+
+        protected IMissionCheck _missionTest;
     }
 }

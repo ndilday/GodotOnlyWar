@@ -41,6 +41,17 @@ public partial class OrderDialogView : Panel
         _headerLabel.Text = header;
     }
 
+    public void UnsetAggressionOption()
+    {
+        _aggressionOption.Select(-1);
+    }
+
+    public void DisableMissionOption()
+    {
+        _missionOption.Select(-1);
+        _missionOption.Disabled = true;
+    }
+
     public void SetAggressionDescription(string text)
     {
         _aggressionDescription.Text = text;

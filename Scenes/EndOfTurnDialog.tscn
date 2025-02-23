@@ -1,8 +1,11 @@
-[gd_scene load_steps=4 format=3 uid="uid://mjk2hlgl8m80"]
+[gd_scene load_steps=5 format=3 uid="uid://mjk2hlgl8m80"]
 
 [ext_resource type="PackedScene" uid="uid://cadpqoqxtyo0p" path="res://Scenes/Dialog.tscn" id="1_4b3o3"]
 [ext_resource type="Script" uid="uid://bx5f85xitmqn4" path="res://Scenes/EndOfTurnDialogController.cs" id="2_e3mme"]
 [ext_resource type="Script" uid="uid://q42ga0l7iwl3" path="res://Scenes/EndOfTurnDialogView.cs" id="3_ngawf"]
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_e3mme"]
+bg_color = Color(0, 0, 0, 1)
 
 [node name="DialogController" instance=ExtResource("1_4b3o3")]
 script = ExtResource("2_e3mme")
@@ -17,6 +20,7 @@ anchor_right = 1.0
 anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
+theme_override_styles/panel = SubResource("StyleBoxFlat_e3mme")
 
 [node name="ScrollContainer" type="ScrollContainer" parent="DialogView/Panel" index="0"]
 layout_mode = 1

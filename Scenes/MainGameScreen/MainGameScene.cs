@@ -201,6 +201,10 @@ public partial class MainGameScene : Control
         }
 
         // handle ship movement
+
+        // display end of turn dialog
+        _endOfTurnDialog.AddData(_turnController.MissionContexts, _turnController.SpecialMissions);
+        _endOfTurnDialog.Visible = true;
     }
 
     private void OnSoldierSelectedForDisplay(object sender, int soldierId)

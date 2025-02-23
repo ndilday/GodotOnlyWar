@@ -6,14 +6,10 @@ using System.Linq;
 
 namespace OnlyWar.Helpers.Missions
 {
-    public class ExfiltrateMissionStep : ITestMissionStep
+    public class ExfiltrateMissionStep : ATestMissionStep
     {
-        private readonly IMissionCheck _missionTest;
 
-        public string Description { get { return "Infiltrate"; } }
-        public IMissionCheck MissionTest { get; }
-        public IMissionStep StepIfSuccess { get; }
-        public IMissionStep StepIfFailure { get; }
+        public override string Description { get { return "Infiltrate"; } }
 
         public ExfiltrateMissionStep()
         {
@@ -24,15 +20,13 @@ namespace OnlyWar.Helpers.Missions
             // mod for enemy recon focus
             // mod for equipment
             _missionTest = new SquadMissionTest(stealth, 10.0f);
-            StepIfSuccess = new ReconStealthMissionStep();
-            StepIfFailure = new DetectedMissionStep();
         }
 
-        public void ExecuteMissionStep(MissionContext context, float marginOfSuccess, IMissionStep returnStep)
+        public override void ExecuteMissionStep(MissionContext context, float marginOfSuccess, IMissionStep returnStep)
         {
             if (context.PlayerSquads.SelectMany(s => s.AbleSoldiers).Count() == 0)
             {
-                context.Log.Add($"Contact lost with mission force, assumed dead.");
+                context.Log.Add($"Day {context.DaysElapsed}: Contact lost with mission force, assumed dead.");
                 return;
             }
             context.DaysElapsed++;
@@ -40,12 +34,12 @@ namespace OnlyWar.Helpers.Missions
             float margin = _missionTest.RunMissionCheck(context.PlayerSquads);
             if (margin > 0.0f)
             {
-                context.Log.Add("Force has returned to base.");
+                context.Log.Add("Day {context.DaysElapsed}: Force has returned to base.");
                 return;
             }
             else
             {
-                StepIfFailure.ExecuteMissionStep(context, margin, this);
+                new DetectedMissionStep().ExecuteMissionStep(context, margin, this);
             }
         }
     }

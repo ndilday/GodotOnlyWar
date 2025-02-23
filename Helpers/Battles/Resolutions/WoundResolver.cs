@@ -94,12 +94,22 @@ namespace OnlyWar.Helpers.Battles.Resolutions
                         {
                             wound.Suffererer.EquippedRangedWeapons.RemoveAt(0);
                         }
+                        if (!wound.Suffererer.CanFight)
+                        {
+                            wound.Description += $"{wound.Suffererer.Soldier.Name} can no longer walk\n";
+                            OnSoldierFall.Invoke(wound, woundLevel);
+                        }
                     }
                     else if(wound.HitLocation.Template.IsMeleeWeaponHolder)
                     {
                         if (wound.Suffererer.EquippedMeleeWeapons.Count > 0 && wound.Suffererer.EquippedMeleeWeapons[0].Template.Location == EquipLocation.OneHand)
                         {
                             wound.Suffererer.EquippedMeleeWeapons.RemoveAt(0);
+                        }
+                        if (!wound.Suffererer.CanFight)
+                        {
+                            wound.Description += $"{wound.Suffererer.Soldier.Name} can no longer walk\n";
+                            OnSoldierFall.Invoke(wound, woundLevel);
                         }
                     }
                     if(wound.HitLocation.Template.IsVital && wound.HitLocation.IsCrippled)

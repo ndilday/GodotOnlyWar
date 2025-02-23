@@ -21,6 +21,7 @@ public partial class EndOfTurnDialogView : DialogView
             label.AnchorLeft = 0;
             label.HorizontalAlignment = HorizontalAlignment.Left;
             label.SizeFlagsHorizontal = SizeFlags.ExpandFill;
+            label.FitContent = true;
             _vboxContainer.AddChild(label);
         }
     }
