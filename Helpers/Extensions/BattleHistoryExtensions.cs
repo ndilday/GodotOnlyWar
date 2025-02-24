@@ -2,7 +2,7 @@
 using OnlyWar.Models.Battles;
 using System.Text;
 
-namespace OnlyWar.Helpers
+namespace OnlyWar.Helpers.Extensions
 {
     public static class BattleHistoryExtensions
     {

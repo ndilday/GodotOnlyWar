@@ -1,6 +1,6 @@
 ﻿using System.Drawing;
 
-namespace OnlyWar.Helpers
+namespace OnlyWar.Helpers.Extensions
 {
     public static class ColorExtensions
     {

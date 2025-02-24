@@ -1,8 +1,8 @@
 using Godot;
-using OnlyWar.Helpers;
 using OnlyWar.Helpers.Battles;
 using OnlyWar.Helpers.Battles.Actions;
 using OnlyWar.Helpers.Battles.Resolutions;
+using OnlyWar.Helpers.Extensions;
 using OnlyWar.Models;
 using OnlyWar.Models.Battles;
 using OnlyWar.Models.Soldiers;

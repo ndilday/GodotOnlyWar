@@ -3,7 +3,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 
-namespace OnlyWar.Helpers
+namespace OnlyWar.Helpers.Extensions
 {
     public static class RegionExtensions
     {
@@ -56,7 +56,7 @@ namespace OnlyWar.Helpers
         public static List<Region> GetAdjacentRegions(Region region)
         {
             List<Region> adjacentRegions = new List<Region>();
-            foreach(Region r in region.Planet.Regions)
+            foreach (Region r in region.Planet.Regions)
             {
                 if ((r.Coordinates.Item1 == region.Coordinates.Item1 - 1 ||
                     r.Coordinates.Item1 == region.Coordinates.Item1 ||

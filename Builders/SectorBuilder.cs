@@ -5,7 +5,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using OnlyWar.Helpers;
-using OnlyWar.Models.Soldiers;
+using OnlyWar.Helpers.Extensions;
 using OnlyWar.Models.Squads;
 
 namespace OnlyWar.Builders
@@ -30,10 +30,10 @@ namespace OnlyWar.Builders
                         Planet planet = GeneratePlanet(new Tuple<ushort, ushort>(i, j), data);
                         planetList.Add(planet);
 
-                        if (planet.PlanetFactionMap[planet.ControllingFaction.Id].Leader != null)
+                        if (planet.PlanetFactionMap[planet.GetControllingFaction().Id].Leader != null)
                         {
                             Character leader =
-                                planet.PlanetFactionMap[planet.ControllingFaction.Id].Leader;
+                                planet.PlanetFactionMap[planet.GetControllingFaction().Id].Leader;
                             characterList.Add(leader);
                         }
                     }
@@ -78,10 +78,10 @@ namespace OnlyWar.Builders
 
         private static Planet FoundTakebackPlanet(PlayerForce playerForce, List<Planet> planetList, List<TaskForce> forceList)
         {
-            var enemyPlanets = planetList.Where(p => !p.ControllingFaction.IsDefaultFaction).OrderBy(p => p.Population);
+            var enemyPlanets = planetList.Where(p => !p.GetControllingFaction().IsDefaultFaction).OrderBy(p => p.Population);
             Planet planetToInvade = enemyPlanets.First();
             // find the region with the lowest population, and set it to the player faction
-            Region regionToInvade = planetToInvade.Regions.OrderBy(r => r.RegionFactionMap[planetToInvade.ControllingFaction.Id].Population).First();
+            Region regionToInvade = planetToInvade.Regions.OrderBy(r => r.RegionFactionMap[planetToInvade.GetControllingFaction().Id].Population).First();
             regionToInvade.RegionFactionMap.Clear();
             RegionFaction playerRegionFaction = new RegionFaction(new PlanetFaction(playerForce.Faction), regionToInvade);
             regionToInvade.RegionFactionMap[playerForce.Faction.Id] = playerRegionFaction;
@@ -106,7 +106,7 @@ namespace OnlyWar.Builders
 
         private static Planet FoundChapterPlanet(List<Planet> planetList, Faction playerFaction)
         {
-            var emptyPlanets = planetList.Where(p => p.ControllingFaction.IsDefaultFaction);
+            var emptyPlanets = planetList.Where(p => p.GetControllingFaction().IsDefaultFaction);
             int max = emptyPlanets.Count();
             int chapterPlanetIndex = RNG.GetIntBelowMax(0, max);
             Planet chapterPlanet = emptyPlanets.ElementAt(chapterPlanetIndex);
@@ -116,8 +116,7 @@ namespace OnlyWar.Builders
 
         private static void ReplaceChapterPlanetFaction(Planet chapterPlanet, Faction playerFaction)
         {
-            Faction defaultFaction = chapterPlanet.ControllingFaction;
-            chapterPlanet.ControllingFaction = playerFaction;
+            Faction defaultFaction = chapterPlanet.GetControllingFaction();
             
             PlanetFaction existingPlanetFaction = chapterPlanet.PlanetFactionMap[defaultFaction.Id];
             PlanetFaction homePlanetFaction = new PlanetFaction(playerFaction);
@@ -139,7 +138,7 @@ namespace OnlyWar.Builders
 
         private static void PlaceStartingForces(Planet startingPlanet, PlayerForce playerForce, List<TaskForce> forceList)
         {
-            startingPlanet.Regions[0].RegionFactionMap[startingPlanet.ControllingFaction.Id].LandedSquads.AddRange(
+            startingPlanet.Regions[0].RegionFactionMap[startingPlanet.GetControllingFaction().Id].LandedSquads.AddRange(
                     playerForce.Army.SquadMap.Values);
             foreach (Squad squad in playerForce.Army.SquadMap.Values)
             {

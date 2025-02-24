@@ -18,8 +18,7 @@ namespace OnlyWar.Models.Planets
         public float Detection { get; set; }
         // AntiAir provides bonuses against air atacks and air assaults
         public float AntiAir { get; set; }
-        // I'm not sure what organization will do yet, but it's what assassination should reduce
-        // perhaps it'll factor into size of enemy forces faced in battle
+        // Organization determins how much of the enemy force can be effectively deployed
         public float Organization { get; set; }
 
         public RegionFaction(PlanetFaction planetFaction, Region region)

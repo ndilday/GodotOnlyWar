@@ -5,7 +5,7 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 
-namespace OnlyWar.Helpers
+namespace OnlyWar.Helpers.Extensions
 {
     public static class RegionFactionExtensions
     {

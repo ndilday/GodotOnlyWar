@@ -16,11 +16,9 @@ namespace OnlyWar.Models.Planets
         public readonly int TaxLevel;
         public readonly int Size;
         public readonly Region[] Regions;
-        public bool IsUnderAssault { get; set; }
 
         public List<TaskForce> OrbitingTaskForceList;
         public readonly Dictionary<int, PlanetFaction> PlanetFactionMap;
-        public Faction ControllingFaction;
 
         public float Stability
         {
