@@ -1,5 +1,6 @@
 ﻿using OnlyWar.Builders;
 using OnlyWar.Helpers.Battles;
+using OnlyWar.Helpers.Extensions;
 using OnlyWar.Models.Missions;
 using OnlyWar.Models.Orders;
 using OnlyWar.Models.Planets;
@@ -27,6 +28,8 @@ namespace OnlyWar.Helpers.Sector
             SpecialMissions.Clear();
             ProcessMissions(sector);
             UpdateIntelligence(sector.Planets.Values);
+            // TODO: move this into a thread that can run while the player is interacting with the UI
+            UpdatePlanetaryForcesPlans(sector.Planets.Values);
         }
 
         private void UpdateIntelligence(IEnumerable<Planet> planets)
@@ -127,6 +130,83 @@ namespace OnlyWar.Helpers.Sector
                 .ToDictionary(group => group.Key, group => group.ToList());
 
             return squadsByTargetRegion;
+        }
+
+        private void UpdatePlanetaryForcesPlans(IEnumerable<Planet> planets)
+        {
+            foreach (Planet planet in planets)
+            {
+                if(!planet.IsUnderAssault())
+                {
+                    continue;
+                }
+                foreach (Region region in planet.Regions)
+                {
+                    foreach (RegionFaction regionFaction in region.RegionFactionMap.Values)
+                    {
+                        if (regionFaction.PlanetFaction.Faction.IsPlayerFaction)
+                        {
+                            // Player forces are updated by the player
+                            continue;
+                        }
+                        if(regionFaction.Organization == -1)
+                        {
+                            // initialize the region faction
+                            regionFaction.Organization = 10.0f;
+                            regionFaction.Detection = 0.0f;
+                            regionFaction.Entrenchment = 0.0f;
+                            regionFaction.AntiAir = 0.0f;
+                        }
+                        if (regionFaction.IsPublic)
+                        {
+                            UpdatePublicForcePlans(regionFaction);
+                        }
+                        else
+                        {
+                            UpdateHiddenForcePlans(regionFaction);
+                        }
+                    }
+                }
+            }
+        }
+
+        private void UpdateHiddenForcePlans(RegionFaction hiddenFaction)
+        {
+            // determine if there are public enemy forces in the region
+            // determine if there are public enemy forces in adjacent regions
+            // determine the forces available
+
+        }
+
+        private void UpdatePublicForcePlans(RegionFaction publicFaction)
+        {
+            // determine the forces available
+            long organizedCap = (long)(publicFaction.Organization * 1000);
+            long organizedTroops = Math.Min(publicFaction.Population, organizedCap);
+            long disorganizedTroops = publicFaction.Population - organizedTroops;
+            long garrisonRequirements = (int)(100 * (publicFaction.Detection + publicFaction.Entrenchment + publicFaction.AntiAir));
+            if(garrisonRequirements == 0 && organizedTroops < 100)
+            {
+                // if there are no defenses and not enough organized troops to build any
+                // remaining troops go into hiding
+                publicFaction.IsPublic = false;
+            }
+            else if (garrisonRequirements < organizedTroops)
+            {
+                // there are spare troops for other activities
+                long buildPointsAvailable = (organizedTroops - garrisonRequirements) / 100;
+                // determine if there are public enemy forces in the region
+                // if the organization is below some threshold, need to devote labor to improving that
+                if(organizedCap < organizedTroops)
+                {
+                    // we should probably invest in some Organization
+
+                }
+                // we probably want some minimum amount of detection
+                // after that, some amount of entrenchment
+                // followed by some amount of anti-air
+                // determine if there are public enemy forces in adjacent regions
+            }
         }
     }
 }

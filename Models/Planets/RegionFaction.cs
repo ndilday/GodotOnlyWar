@@ -27,6 +27,7 @@ namespace OnlyWar.Models.Planets
             PlanetFaction = planetFaction;
             Region = region;
             IsPublic = planetFaction.IsPublic;
+            Organization = -1;
         }
     }
 }
