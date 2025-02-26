@@ -5,21 +5,22 @@ using System.Linq;
 
 namespace OnlyWar.Helpers.Missions.Recon
 {
-    public class PerformReconMissionStep : ATestMissionStep
+    public class PerformReconMissionStep : IMissionStep
     {
-        public override string Description { get { return "Recon"; } }
+        public string Description { get { return "Recon"; } }
 
         public PerformReconMissionStep()
         {
-            BaseSkill tactics = GameDataSingleton.Instance.GameRulesData.BaseSkillMap.Values.First(s => s.Name == "Tactics");
-            _missionTest = new SquadMissionTest(tactics, 12.5f);
+            
         }
 
-        public override void ExecuteMissionStep(MissionContext context, float marginOfSuccess, IMissionStep returnStep)
+        public void ExecuteMissionStep(MissionContext context, float marginOfSuccess, IMissionStep returnStep)
         {
+            BaseSkill tactics = GameDataSingleton.Instance.GameRulesData.BaseSkillMap.Values.First(s => s.Name == "Tactics");
+            SquadMissionTest missionTest = new SquadMissionTest(tactics, 12.5f);
             // move the generation of new missions to the turn controller, rather than the individual mission steps
             context.Log.Add($"Day {context.DaysElapsed}: Force performs reconnisance in {context.Region.Name}");
-            float margin = _missionTest.RunMissionCheck(context.PlayerSquads);
+            float margin = missionTest.RunMissionCheck(context.PlayerSquads);
             context.Region.IntelligenceLevel += margin;
             if (context.DaysElapsed >= 6)
             {

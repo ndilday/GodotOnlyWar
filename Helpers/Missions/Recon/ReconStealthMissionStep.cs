@@ -1,26 +1,34 @@
 ﻿using OnlyWar.Helpers.Missions;
 using OnlyWar.Models;
 using OnlyWar.Models.Missions;
+using OnlyWar.Models.Planets;
 using OnlyWar.Models.Soldiers;
 using System;
 using System.Linq;
 
 namespace OnlyWar.Helpers.Missions.Recon
 {
-    public class ReconStealthMissionStep : ATestMissionStep
+    public class ReconStealthMissionStep : IMissionStep
     {
-        public override string Description { get { return "Recon"; } }
+        public string Description { get { return "Recon"; } }
 
-        public ReconStealthMissionStep()
+        public ReconStealthMissionStep(){}
+
+        public void ExecuteMissionStep(MissionContext context, float marginOfSuccess, IMissionStep returnStep)
         {
+            // negative mod for size of enemy force
+            // mod for terrain
+            // mod for enemy recon focus
+            // mod for equipment
             BaseSkill stealth = GameDataSingleton.Instance.GameRulesData.BaseSkillMap.Values.First(s => s.Name == "Stealth");
-            _missionTest = new SquadMissionTest(stealth, 12.5f);
-        }
+            RegionFaction enemyFaction = context.Region.RegionFactionMap.Values.First(rf => !rf.PlanetFaction.Faction.IsPlayerFaction && !rf.PlanetFaction.Faction.IsDefaultFaction);
+            float difficulty = (float)Math.Log(enemyFaction.Detection, 2);
+            // every degree of magnitude of troops adds one to the difficulty
+            difficulty += (float)Math.Log(context.PlayerSquads.Sum(s => s.AbleSoldiers.Count), 10);
+            SquadMissionTest missionTest = new SquadMissionTest(stealth, difficulty);
 
-        public override void ExecuteMissionStep(MissionContext context, float marginOfSuccess, IMissionStep returnStep)
-        {
             context.DaysElapsed++;
-            float margin = _missionTest.RunMissionCheck(context.PlayerSquads);
+            float margin = missionTest.RunMissionCheck(context.PlayerSquads);
             if (margin > 0.0f)
             {
                 new PerformReconMissionStep().ExecuteMissionStep(context, margin, this);

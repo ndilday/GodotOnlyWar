@@ -1,29 +1,32 @@
 ﻿using OnlyWar.Builders;
 using OnlyWar.Models;
 using OnlyWar.Models.Missions;
+using OnlyWar.Models.Planets;
 using OnlyWar.Models.Soldiers;
+using System;
 using System.Linq;
 using System.Net.Mime;
 
 namespace OnlyWar.Helpers.Missions.Recon
 {
-    public class InfiltrateMissionStep : ATestMissionStep
+    public class InfiltrateMissionStep : IMissionStep
     {
-        public override string Description { get { return "Infiltrate"; } }
+        public string Description { get { return "Infiltrate"; } }
 
-        public InfiltrateMissionStep()
+        public InfiltrateMissionStep(){ }
+
+        public void ExecuteMissionStep(MissionContext context, float marginOfSuccess, IMissionStep returnStep)
         {
-            BaseSkill stealth = GameDataSingleton.Instance.GameRulesData.BaseSkillMap.Values.First(s => s.Name == "Stealth");
-            // negative mod for size of player force
             // negative mod for size of enemy force
             // mod for terrain
             // mod for enemy recon focus
             // mod for equipment
-            _missionTest = new SquadMissionTest(stealth, 12.5f);
-        }
-
-        public override void ExecuteMissionStep(MissionContext context, float marginOfSuccess, IMissionStep returnStep)
-        {
+            BaseSkill stealth = GameDataSingleton.Instance.GameRulesData.BaseSkillMap.Values.First(s => s.Name == "Stealth");
+            RegionFaction enemyFaction = context.Region.RegionFactionMap.Values.First(rf => !rf.PlanetFaction.Faction.IsPlayerFaction && !rf.PlanetFaction.Faction.IsDefaultFaction);
+            float difficulty = (float)Math.Log(enemyFaction.Detection, 2);
+            // every degree of magnitude of troops adds one to the difficulty
+            difficulty += (float)Math.Log(context.PlayerSquads.Sum(s => s.AbleSoldiers.Count), 10);
+            SquadMissionTest missionTest = new SquadMissionTest(stealth, difficulty);
             if (!ShouldContinue(context))
             {
                 return;
@@ -31,7 +34,7 @@ namespace OnlyWar.Helpers.Missions.Recon
             context.DaysElapsed++;
             context.Log.Add($"Day {context.DaysElapsed}: Force attempting to infiltrate into {context.Region.Name}");
             // modifiers should include: size of enemy forces, size of player force, terrain, some notion of enemy focus (hunting, defending, hiding), whether enemy is hidden or public
-            float margin = _missionTest.RunMissionCheck(context.PlayerSquads);
+            float margin = missionTest.RunMissionCheck(context.PlayerSquads);
             if (margin > 0.0f)
             {
                 MissionStepOrchestrator.GetMainInitialStep(context).ExecuteMissionStep(context, margin, returnStep);

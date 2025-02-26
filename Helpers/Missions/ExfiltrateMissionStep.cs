@@ -1,29 +1,32 @@
 ﻿using OnlyWar.Helpers.Missions.Recon;
 using OnlyWar.Models;
 using OnlyWar.Models.Missions;
+using OnlyWar.Models.Planets;
 using OnlyWar.Models.Soldiers;
+using System;
 using System.Linq;
 
 namespace OnlyWar.Helpers.Missions
 {
-    public class ExfiltrateMissionStep : ATestMissionStep
+    public class ExfiltrateMissionStep : IMissionStep
     {
 
-        public override string Description { get { return "Infiltrate"; } }
+        public string Description { get { return "Infiltrate"; } }
 
-        public ExfiltrateMissionStep()
+        public ExfiltrateMissionStep(){}
+
+        public void ExecuteMissionStep(MissionContext context, float marginOfSuccess, IMissionStep returnStep)
         {
-            BaseSkill stealth = GameDataSingleton.Instance.GameRulesData.BaseSkillMap.Values.First(s => s.Name == "Stealth");
-            // negative mod for size of player force
             // negative mod for size of enemy force
             // mod for terrain
             // mod for enemy recon focus
             // mod for equipment
-            _missionTest = new SquadMissionTest(stealth, 10.0f);
-        }
-
-        public override void ExecuteMissionStep(MissionContext context, float marginOfSuccess, IMissionStep returnStep)
-        {
+            BaseSkill stealth = GameDataSingleton.Instance.GameRulesData.BaseSkillMap.Values.First(s => s.Name == "Stealth");
+            RegionFaction enemyFaction = context.Region.RegionFactionMap.Values.First(rf => !rf.PlanetFaction.Faction.IsPlayerFaction && !rf.PlanetFaction.Faction.IsDefaultFaction);
+            float difficulty = (float)Math.Log(enemyFaction.Detection, 2);
+            // every degree of magnitude of troops adds one to the difficulty
+            difficulty += (float)Math.Log(context.PlayerSquads.Sum(s => s.AbleSoldiers.Count), 10);
+            SquadMissionTest missionTest = new SquadMissionTest(stealth, difficulty);
             if (context.PlayerSquads.SelectMany(s => s.AbleSoldiers).Count() == 0)
             {
                 context.Log.Add($"Day {context.DaysElapsed}: Contact lost with mission force, assumed dead.");
@@ -31,7 +34,7 @@ namespace OnlyWar.Helpers.Missions
             }
             context.DaysElapsed++;
             context.Log.Add($"Day {context.DaysElapsed}: Force attempting to exfiltrate from {context.Region.Name}");
-            float margin = _missionTest.RunMissionCheck(context.PlayerSquads);
+            float margin = missionTest.RunMissionCheck(context.PlayerSquads);
             if (margin > 0.0f)
             {
                 context.Log.Add("Day {context.DaysElapsed}: Force has returned to base.");

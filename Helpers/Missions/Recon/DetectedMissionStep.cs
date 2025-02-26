@@ -10,19 +10,17 @@ using System.Linq;
 
 namespace OnlyWar.Helpers.Missions.Recon
 {
-    public class DetectedMissionStep : ATestMissionStep
+    public class DetectedMissionStep : IMissionStep
     {
-        public override string Description { get { return "Detected"; } }
+        public string Description { get { return "Detected"; } }
 
-        public DetectedMissionStep()
+        public DetectedMissionStep(){}
+
+        public void ExecuteMissionStep(MissionContext context, float marginOfSuccess, IMissionStep returnStep)
         {
             BaseSkill perception = GameDataSingleton.Instance.GameRulesData.BaseSkillMap.Values.First(s => s.Name == "Tactics");
             // adjust for size of detecting force
-            _missionTest = new SquadMissionTest(perception, 10.0f);
-        }
-
-        public override void ExecuteMissionStep(MissionContext context, float marginOfSuccess, IMissionStep returnStep)
-        {
+            SquadMissionTest missionTest = new SquadMissionTest(perception, 10.0f);
             // build OpFor, size increases the lower the MoS, and pushes engagement range in favor of the OpFor
             int numberOfOpposingSquads = context.PlayerSquads.Count - (ushort)marginOfSuccess;
             // any fractional value of margin of Success is treated as the probability of an additional squad being added.
@@ -47,7 +45,7 @@ namespace OnlyWar.Helpers.Missions.Recon
                 context.OpposingForces.Add(new BattleSquad(false, squad));
             }
 
-            float margin = _missionTest.RunMissionCheck(context.PlayerSquads);
+            float margin = missionTest.RunMissionCheck(context.PlayerSquads);
             if (margin > 0.0f)
             {
                 new CrossDetectionMissionStep().ExecuteMissionStep(context, margin, returnStep);
