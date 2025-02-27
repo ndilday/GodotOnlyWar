@@ -1,7 +1,5 @@
-﻿using OnlyWar.Models;
-using OnlyWar.Models.Missions;
+﻿using OnlyWar.Models.Missions;
 using OnlyWar.Models.Orders;
-using OnlyWar.Models.Soldiers;
 using System.Linq;
 
 namespace OnlyWar.Helpers.Missions.Recon

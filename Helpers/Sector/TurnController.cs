@@ -181,13 +181,15 @@ namespace OnlyWar.Helpers.Sector
         private void UpdatePublicForcePlans(RegionFaction publicFaction)
         {
             // determine the forces available
-            long organizedCap = (long)(publicFaction.Organization * 1000);
-            long organizedTroops = Math.Min(publicFaction.Population, organizedCap);
+            long organizedTroops = (int)(publicFaction.Population * publicFaction.Organization);
             long disorganizedTroops = publicFaction.Population - organizedTroops;
-            long garrisonRequirements = (int)(100 * (publicFaction.Detection + publicFaction.Entrenchment + publicFaction.AntiAir));
-            if(garrisonRequirements == 0 && organizedTroops < 100)
+            int nearbyEnemies = GetAdjacentPlayerAlignedTroops(publicFaction.Region);
+            // we need to garrison at least as many enemies as there are nearby
+            int garrisonRequirements = nearbyEnemies;
+            int structurePoints = (int)(publicFaction.Detection + publicFaction.Entrenchment + publicFaction.AntiAir);
+            if(structurePoints == 0 && garrisonRequirements > organizedTroops)
             {
-                // if there are no defenses and not enough organized troops to build any
+                // if there are no defenses and not enough organized troops to defend
                 // remaining troops go into hiding
                 publicFaction.IsPublic = false;
             }
@@ -195,18 +197,56 @@ namespace OnlyWar.Helpers.Sector
             {
                 // there are spare troops for other activities
                 long buildPointsAvailable = (organizedTroops - garrisonRequirements) / 100;
-                // determine if there are public enemy forces in the region
                 // if the organization is below some threshold, need to devote labor to improving that
-                if(organizedCap < organizedTroops)
+                int orgInvests = 0, detInvests = 0, entInvests = 0, aaInvests = 0;
+                while (buildPointsAvailable > 0)
                 {
-                    // we should probably invest in some Organization
+                    // find the cheapest investment
+                    int orgCost = (int)(Math.Pow(2, orgInvests + 1) * (publicFaction.Population / 100));
+                    int detCost = (int)(Math.Pow(2, publicFaction.Detection + detInvests + 1));
+                    int entCost = (int)(Math.Pow(2, publicFaction.Entrenchment + entInvests + 1));
+                    int aaCost = (int)(Math.Pow(2, publicFaction.AntiAir + aaInvests + 1));
+                    // find the cheapest investment
+                    int minCost = Math.Min(orgCost, Math.Min(detCost, Math.Min(entCost, aaCost)));
+                    if (minCost < buildPointsAvailable)
+                    {
+                        if (minCost == orgCost)
+                        {
+                            orgInvests++;
+                        }
+                        else if (minCost == entCost)
+                        {
+                            entInvests++;
 
+                        }
+                        else if (minCost == detCost)
+                        {
+                            detInvests++;
+                        }
+                        else if (minCost == aaCost)
+                        {
+                            aaInvests++;
+                        }
+                        buildPointsAvailable -= minCost;
+                    }
+                    else
+                    {
+                        // no more investments can be made
+                        break;
+                    }
                 }
-                // we probably want some minimum amount of detection
-                // after that, some amount of entrenchment
-                // followed by some amount of anti-air
-                // determine if there are public enemy forces in adjacent regions
             }
         }
-    }
+
+        private int GetAdjacentPlayerAlignedTroops(Region region)
+        {
+            int totalTroops = 0;
+            foreach (Region adjacentRegion in region.GetSelfAndAdjacentRegions())
+            {
+                totalTroops += adjacentRegion.RegionFactionMap.Values.Where(rf => rf.PlanetFaction.Faction.IsPlayerFaction || rf.PlanetFaction.Faction.IsDefaultFaction)
+                    .SelectMany(rf => rf.LandedSquads)
+                    .Sum(s => s.Members.Count);
+            }
+            return totalTroops;
+        }
 }

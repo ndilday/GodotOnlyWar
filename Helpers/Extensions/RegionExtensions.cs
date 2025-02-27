@@ -48,12 +48,12 @@ namespace OnlyWar.Helpers.Extensions
             }
         }
 
-        public static List<Region> GetSelfAndAdjacentRegions(Region region)
+        public static List<Region> GetSelfAndAdjacentRegions(this Region region)
         {
             return new List<Region> { region }.Union(GetAdjacentRegions(region)).ToList();
         }
 
-        public static List<Region> GetAdjacentRegions(Region region)
+        public static List<Region> GetAdjacentRegions(this Region region)
         {
             List<Region> adjacentRegions = new List<Region>();
             foreach (Region r in region.Planet.Regions)
