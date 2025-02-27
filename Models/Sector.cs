@@ -136,10 +136,5 @@ namespace OnlyWar.Models
             _fleets[newFleet.Id] = newFleet;
             return newFleet;
         }
-
-        public void TakeControlOfPlanet(Planet planet, Faction faction)
-        {
-            planet.ControllingFaction = faction;
-        }
     }
 }

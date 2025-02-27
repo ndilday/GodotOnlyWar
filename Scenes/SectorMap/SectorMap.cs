@@ -1,5 +1,6 @@
 using Godot;
 using OnlyWar.Builders;
+using OnlyWar.Helpers.Extensions;
 using OnlyWar.Models;
 using OnlyWar.Models.Fleets;
 using OnlyWar.Models.Planets;
@@ -110,7 +111,7 @@ public partial class SectorMap : Node2D
 			Vector2I gridPosition = new(kvp.Value.Position.Item1, kvp.Value.Position.Item2);
 			int index = GridPositionToIndex(gridPosition);
 			HasPlanet[index] = true;
-            var color = kvp.Value.ControllingFaction.Color;
+            var color = kvp.Value.GetControllingFaction().Color;
             ClickableSprite2D planet = DrawTexture(starTexture, starTextureScale, gridPosition, new Color(color.R, color.G, color.B, color.A));
             planet.Pressed += (object sender, EventArgs e) => PlanetClicked.Invoke(planet, kvp.Key);
 		}

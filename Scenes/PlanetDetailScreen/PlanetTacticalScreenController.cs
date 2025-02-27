@@ -132,7 +132,16 @@ public partial class PlanetTacticalScreenController : DialogController
             lines.Add(new Tuple<string, string>("Civilian Population", civilianPopulation.ToString()));
         }
 
-        lines.Add(new Tuple<string, string>("Xenos Population",xenosRegionFaction.GetPopulationDescription()));
+        if(xenosRegionFaction != null && xenosRegionFaction.IsPublic)
+        {
+            lines.Add(new Tuple<string, string>("Xenos Population", xenosRegionFaction.GetPopulationDescription()));
+            if (region.IntelligenceLevel > 1)
+            {
+                lines.Add(new Tuple<string, string>("Xenos Defenses", GetDefenseLevelDescription(xenosRegionFaction.Entrenchment)));
+                lines.Add(new Tuple<string, string>("Xenos Listening Posts", GetDefenseLevelDescription(xenosRegionFaction.Detection)));
+                lines.Add(new Tuple<string, string>("Xenos Anti Aircraft Coverage", GetDefenseLevelDescription(xenosRegionFaction.AntiAir)));
+            }
+        }
 
         int playerPopulation = 0;
         if (playerRegionFaction != null && playerRegionFaction.LandedSquads.Any())
@@ -142,5 +151,28 @@ public partial class PlanetTacticalScreenController : DialogController
         lines.Add(new Tuple<string, string>("Marines in Region", playerPopulation.ToString()));
 
         _view.PopulateRegionData(lines);
+    }
+
+    private string GetDefenseLevelDescription(int level)
+    {
+        switch (level)
+        {
+            case 0:
+                return "None";
+            case 1:
+            case 2:
+                return "Minimal";
+            case 3:
+            case 4:
+                return "Mediocre";
+            case 5:
+            case 6:
+                return "Moderate";
+            case 7:
+            case 8:
+                return "Heavy";
+            default:
+                return "Massive";
+        }
     }
 }

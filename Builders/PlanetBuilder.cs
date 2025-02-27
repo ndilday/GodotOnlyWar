@@ -51,7 +51,6 @@ namespace OnlyWar.Builders
             PlanetFaction planetFaction = new PlanetFaction(controllingFaction);
             planetFaction.PlayerReputation = 0;
             planetFaction.IsPublic = true;
-            planet.ControllingFaction = controllingFaction;
             planet.PlanetFactionMap[controllingFaction.Id] = planetFaction;
             
 

@@ -1,4 +1,5 @@
 using Godot;
+using OnlyWar.Helpers.Extensions;
 using OnlyWar.Models;
 using OnlyWar.Models.Fleets;
 using OnlyWar.Models.Planets;
@@ -114,21 +115,22 @@ public partial class PlanetDetailScreenController : DialogController
     {
         List<Tuple<string, string>> lines = [];
         lines.Add(new Tuple<string, string>("Name", planet.Name));
-        if (planet.ControllingFaction.IsDefaultFaction || planet.ControllingFaction.IsPlayerFaction)
+        Faction controllingFaction = planet.GetControllingFaction();
+        if (controllingFaction.IsDefaultFaction || controllingFaction.IsPlayerFaction)
         {
             lines.Add(new Tuple<string, string>("Classification", planet.Template.Name));
             lines.Add(new Tuple<string, string>("Population", planet.Population.ToString()));
             lines.Add(new Tuple<string, string>("PDF Size", planet.PlanetaryDefenseForces.ToString()));
             lines.Add(new Tuple<string, string>("Aestimare", ConvertImportanceToString(planet.Importance)));
             lines.Add(new Tuple<string, string>("Tithe Grade", ConvertTaxRangeToString(planet.TaxLevel)));
-            if (planet.PlanetFactionMap[planet.ControllingFaction.Id].Leader?.ActiveRequest != null)
+            if (planet.PlanetFactionMap[controllingFaction.Id].Leader?.ActiveRequest != null)
             {
                 lines.Add(new Tuple<string, string>("The planetary governor has requested our assistance", ""));
             }
         }
         else
         {
-            lines.Add(new Tuple<string, string>("Xenos Present", planet.ControllingFaction.Name));
+            lines.Add(new Tuple<string, string>("Xenos Present", controllingFaction.Name));
         }
         _view.PopulatePlanetData(lines);
     }
