@@ -91,9 +91,9 @@ namespace OnlyWar.Builders
                 int infiltrationPdf = (int)(infiltrationPopulation / 33);
                 RegionFaction regionFaction = new RegionFaction(infiltration, region);
                 regionFaction.Population = infiltrationPopulation;
-                regionFaction.PDFMembers = infiltrationPdf;
+                regionFaction.Garrison = infiltrationPdf;
                 owningRegionFaction.Population -= infiltrationPopulation;
-                owningRegionFaction.PDFMembers -= infiltrationPdf;
+                owningRegionFaction.Garrison -= infiltrationPdf;
                 region.RegionFactionMap[infiltration.Faction.Id] = regionFaction;
             }
         }
@@ -123,7 +123,7 @@ namespace OnlyWar.Builders
 
                 RegionFaction regionFaction = new RegionFaction(planetFaction, region);
                 regionFaction.Population = regionPopulation;
-                regionFaction.PDFMembers = (int)(regionFaction.Population / 33);
+                regionFaction.Garrison = (int)(regionFaction.Population / 33);
                 region.RegionFactionMap[planetFaction.Faction.Id] = regionFaction;
             }
         }

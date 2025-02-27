@@ -31,26 +31,11 @@ namespace OnlyWar.Helpers.Database.GameState
                     string name = reader[2].ToString();
                     int x = reader.GetInt32(3);
                     int y = reader.GetInt32(4);
-                    int importance = reader.GetInt32(6);
-                    int taxLevel = reader.GetInt32(7);
-                    bool isUnderAssault = reader.GetBoolean(8);
+                    int importance = reader.GetInt32(5);
+                    int taxLevel = reader.GetInt32(6);
                     var template = planetTemplateMap[planetTemplateId];
-                    Faction controllingFaction;
-                    if (reader[5].GetType() != typeof(DBNull))
-                    {
-                        controllingFaction = factionMap[reader.GetInt32(5)];
-                    }
-                    else
-                    {
-                        controllingFaction = null;
-                    }
                     // for now, we're hard coding all planets to be size 16
-                    Planet planet =
-                        new Planet(id, name, new Tuple<ushort, ushort>((ushort)x, (ushort)y), 16, template, importance, taxLevel)
-                        {
-                            ControllingFaction = controllingFaction,
-                            IsUnderAssault = isUnderAssault
-                        };
+                    Planet planet = new Planet(id, name, new Tuple<ushort, ushort>((ushort)x, (ushort)y), 16, template, importance, taxLevel);
 
                     // set up region adjacency
                     foreach (PlanetFaction planetFaction in planetFactions[id])
@@ -153,7 +138,11 @@ namespace OnlyWar.Helpers.Database.GameState
                     int factionId = reader.GetInt32(1);
                     bool isPublic = reader.GetBoolean(2);
                     int population = reader.GetInt32(3);
-                    int pdfMembers = reader.GetInt32(4);
+                    int garrison = reader.GetInt32(4);
+                    int organization = reader.GetInt32(5);
+                    int entrenchment = reader.GetInt32(6);
+                    int detection = reader.GetInt32(7);
+                    int antiAir = reader.GetInt32(8);
 
                     Region region = regionMap[regionId];
                     PlanetFaction planetFaction = region.Planet.PlanetFactionMap[factionId];
@@ -162,7 +151,11 @@ namespace OnlyWar.Helpers.Database.GameState
                         {
                             IsPublic = isPublic,
                             Population = population,
-                            PDFMembers = pdfMembers
+                            Garrison = garrison,
+                            Organization = organization,
+                            Entrenchment = entrenchment,
+                            Detection = detection,
+                            AntiAir = antiAir
                         };
                     region.RegionFactionMap[regionFaction.PlanetFaction.Faction.Id] = regionFaction;
                 }
@@ -211,15 +204,13 @@ namespace OnlyWar.Helpers.Database.GameState
 
         public void SavePlanet(IDbTransaction transaction, Planet planet)
         {
-            string controllingFactionId = planet.ControllingFaction == null ?
-                "null" : planet.ControllingFaction.Id.ToString();
 
             string insert = $@"INSERT INTO Planet 
-                (Id, PlanetTemplateId, Name, x, y, FactionId, 
-                Importance, TaxLevel, IsUnderAssault) VALUES 
+                (Id, PlanetTemplateId, Name, x, y, 
+                Importance, TaxLevel) VALUES 
                 ({planet.Id}, {planet.Template.Id}, '{planet.Name.Replace("\'", "\'\'")}', 
-                {planet.Position.Item1}, {planet.Position.Item2}, {controllingFactionId},
-                {planet.Importance}, {planet.TaxLevel}, {planet.IsUnderAssault});";
+                {planet.Position.Item1}, {planet.Position.Item2},
+                {planet.Importance}, {planet.TaxLevel});";
             using (var command = transaction.Connection.CreateCommand())
             {
                 command.CommandText = insert;
@@ -289,9 +280,10 @@ namespace OnlyWar.Helpers.Database.GameState
                 foreach (RegionFaction regionFaction in region.RegionFactionMap.Values)
                 {
                     string insert = $@"INSERT INTO RegionFaction
-                    (RegionId, FactionId, IsPublic, Population, PDFMembers) VALUES 
+                    (RegionId, FactionId, IsPublic, Population, Garrison, Organization, Entrenchment, Detection, AntiAir) VALUES 
                     ({region.Id}, {regionFaction.PlanetFaction.Faction.Id}, {regionFaction.IsPublic}, 
-                     {regionFaction.Population}, {regionFaction.PDFMembers});";
+                     {regionFaction.Population}, {regionFaction.Garrison}, 
+                     {regionFaction.Organization}, {regionFaction.Entrenchment}, {regionFaction.Detection}, {regionFaction.AntiAir});";
                     using (var command = transaction.Connection.CreateCommand())
                     {
                         command.CommandText = insert;

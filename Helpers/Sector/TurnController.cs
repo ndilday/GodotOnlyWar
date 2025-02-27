@@ -29,7 +29,7 @@ namespace OnlyWar.Helpers.Sector
             ProcessMissions(sector);
             UpdateIntelligence(sector.Planets.Values);
             // TODO: move this into a thread that can run while the player is interacting with the UI
-            UpdatePlanetaryForcesPlans(sector.Planets.Values);
+            ApplyRegionalFactionActivities(sector.Planets.Values);
         }
 
         private void UpdateIntelligence(IEnumerable<Planet> planets)
@@ -132,12 +132,14 @@ namespace OnlyWar.Helpers.Sector
             return squadsByTargetRegion;
         }
 
-        private void UpdatePlanetaryForcesPlans(IEnumerable<Planet> planets)
+        private void ApplyRegionalFactionActivities(IEnumerable<Planet> planets)
         {
             foreach (Planet planet in planets)
             {
-                if(!planet.IsUnderAssault())
+                if (!planet.IsUnderAssault())
                 {
+                    // TODO we'll eventually need to decide what to do planets that are under assault for the second or third time
+                    // currently, they'll just be in whatever state they were left
                     continue;
                 }
                 foreach (Region region in planet.Regions)
@@ -149,28 +151,28 @@ namespace OnlyWar.Helpers.Sector
                             // Player forces are updated by the player
                             continue;
                         }
-                        if(regionFaction.Organization == -1)
+                        if (regionFaction.Organization == -1)
                         {
                             // initialize the region faction
-                            regionFaction.Organization = 10.0f;
-                            regionFaction.Detection = 0.0f;
-                            regionFaction.Entrenchment = 0.0f;
-                            regionFaction.AntiAir = 0.0f;
+                            regionFaction.Organization = 100;
+                            regionFaction.Detection = 1;
+                            regionFaction.Entrenchment = 1;
+                            regionFaction.AntiAir = 1;
                         }
                         if (regionFaction.IsPublic)
                         {
-                            UpdatePublicForcePlans(regionFaction);
+                            ApplyPublicFactionActivities(regionFaction);
                         }
                         else
                         {
-                            UpdateHiddenForcePlans(regionFaction);
+                            ApplyHiddenFactionActivities(regionFaction);
                         }
                     }
                 }
             }
         }
 
-        private void UpdateHiddenForcePlans(RegionFaction hiddenFaction)
+        private void ApplyHiddenFactionActivities(RegionFaction hiddenFaction)
         {
             // determine if there are public enemy forces in the region
             // determine if there are public enemy forces in adjacent regions
@@ -178,16 +180,16 @@ namespace OnlyWar.Helpers.Sector
 
         }
 
-        private void UpdatePublicForcePlans(RegionFaction publicFaction)
+        private void ApplyPublicFactionActivities(RegionFaction publicFaction)
         {
             // determine the forces available
-            long organizedTroops = (int)(publicFaction.Population * publicFaction.Organization);
+            long organizedTroops = (int)(publicFaction.Population * publicFaction.Organization / 100);
             long disorganizedTroops = publicFaction.Population - organizedTroops;
             int nearbyEnemies = GetAdjacentPlayerAlignedTroops(publicFaction.Region);
             // we need to garrison at least as many enemies as there are nearby
             int garrisonRequirements = nearbyEnemies;
             int structurePoints = (int)(publicFaction.Detection + publicFaction.Entrenchment + publicFaction.AntiAir);
-            if(structurePoints == 0 && garrisonRequirements > organizedTroops)
+            if (structurePoints == 0 && garrisonRequirements > organizedTroops)
             {
                 // if there are no defenses and not enough organized troops to defend
                 // remaining troops go into hiding
@@ -201,8 +203,16 @@ namespace OnlyWar.Helpers.Sector
                 int orgInvests = 0, detInvests = 0, entInvests = 0, aaInvests = 0;
                 while (buildPointsAvailable > 0)
                 {
+                    int orgCost;
                     // find the cheapest investment
-                    int orgCost = (int)(Math.Pow(2, orgInvests + 1) * (publicFaction.Population / 100));
+                    if (publicFaction.Organization + orgInvests == 100)
+                    {
+                        orgCost = int.MaxValue;
+                    }
+                    else
+                    {
+                        orgCost = (int)(Math.Pow(2, orgInvests + 1) * (publicFaction.Population / 100));
+                    }
                     int detCost = (int)(Math.Pow(2, publicFaction.Detection + detInvests + 1));
                     int entCost = (int)(Math.Pow(2, publicFaction.Entrenchment + entInvests + 1));
                     int aaCost = (int)(Math.Pow(2, publicFaction.AntiAir + aaInvests + 1));
@@ -235,6 +245,13 @@ namespace OnlyWar.Helpers.Sector
                         break;
                     }
                 }
+                publicFaction.Organization += orgInvests;
+                publicFaction.Detection += detInvests;
+                publicFaction.Entrenchment += entInvests;
+                publicFaction.AntiAir += aaInvests;
+                publicFaction.Garrison = (int)((organizedTroops % 100) + garrisonRequirements + (buildPointsAvailable * 100));
+                float unOrganizedPortion = GaussianCalculator.ApproximateNormalCDF((float)RNG.NextRandomZValue()) + 0.5f;
+                publicFaction.Garrison += (int)(disorganizedTroops * unOrganizedPortion);
             }
         }
 
@@ -249,4 +266,5 @@ namespace OnlyWar.Helpers.Sector
             }
             return totalTroops;
         }
+    }
 }

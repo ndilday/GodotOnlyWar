@@ -38,7 +38,7 @@ namespace OnlyWar.Models.Planets
         {
             get
             {
-                return RegionFactionMap.Sum(rfm => rfm.Value.PDFMembers);
+                return RegionFactionMap.Sum(rfm => rfm.Value.Garrison);
             }
         }
 

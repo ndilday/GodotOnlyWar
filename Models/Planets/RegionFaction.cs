@@ -10,16 +10,17 @@ namespace OnlyWar.Models.Planets
         public readonly Region Region;
         public readonly List<Squad> LandedSquads;
         public long Population { get; set; }
-        public int PDFMembers { get; set; }
+        // Garrison represents PDF forces for the default faction, and forces actively defending for other non-player factions
+        public int Garrison { get; set; }
         public bool IsPublic { get; set; }
         // Entrenchment provides bonsues against attacks
-        public float Entrenchment { get; set; }
+        public int Entrenchment { get; set; }
         // Detection provides bonuses to detecting enemy forces in the region
-        public float Detection { get; set; }
+        public int Detection { get; set; }
         // AntiAir provides bonuses against air atacks and air assaults
-        public float AntiAir { get; set; }
+        public int AntiAir { get; set; }
         // Organization determins how much of the enemy force can be effectively deployed
-        public float Organization { get; set; }
+        public int Organization { get; set; }
 
         public RegionFaction(PlanetFaction planetFaction, Region region)
         {

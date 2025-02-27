@@ -126,7 +126,7 @@ namespace OnlyWar.Builders
             {
                 RegionFaction existingPlanetRegionFaction = region.RegionFactionMap[existingPlanetFaction.Faction.Id];
                 RegionFaction homePlanetRegionFaction = new RegionFaction(homePlanetFaction, region);
-                homePlanetRegionFaction.PDFMembers = existingPlanetRegionFaction.PDFMembers;
+                homePlanetRegionFaction.Garrison = existingPlanetRegionFaction.Garrison;
                 homePlanetRegionFaction.Population = existingPlanetRegionFaction.Population;
                 region.RegionFactionMap.Remove(existingPlanetFaction.Faction.Id);
                 region.RegionFactionMap[playerFaction.Id] = homePlanetRegionFaction;
