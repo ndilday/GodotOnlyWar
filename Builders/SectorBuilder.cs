@@ -78,7 +78,7 @@ namespace OnlyWar.Builders
 
         private static Planet FoundTakebackPlanet(PlayerForce playerForce, List<Planet> planetList, List<TaskForce> forceList)
         {
-            var enemyPlanets = planetList.Where(p => !p.GetControllingFaction().IsDefaultFaction).OrderBy(p => p.Population);
+            var enemyPlanets = planetList.Where(p => !p.GetControllingFaction().IsDefaultFaction && p.Population >= 16000).OrderBy(p => p.Population);
             Planet planetToInvade = enemyPlanets.First();
             // find the region with the lowest population, and set it to the player faction
             Region regionToInvade = planetToInvade.Regions.OrderBy(r => r.RegionFactionMap[planetToInvade.GetControllingFaction().Id].Population).First();

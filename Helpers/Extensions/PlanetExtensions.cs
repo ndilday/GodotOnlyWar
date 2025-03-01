@@ -37,20 +37,23 @@ namespace OnlyWar.Helpers.Extensions
         public static Faction GetControllingFaction(this Planet planet)
         {
             // get the faction with the largest population in the plurality of regions
-            SortedList<Faction, int> factionRegionControlMap = new SortedList<Faction, int>();
+            SortedList<int, int> factionRegionControlMap = new SortedList<int, int>();
+            Dictionary<int, Faction> factionMap = new Dictionary<int, Faction>();
             foreach (Region region in planet.Regions)
             {
                 Faction controllingFaction = region.ControllingFaction?.PlanetFaction.Faction ?? null;
-                if (factionRegionControlMap.ContainsKey(controllingFaction))
+                if (factionRegionControlMap.ContainsKey(controllingFaction.Id))
                 {
-                    factionRegionControlMap[controllingFaction]++;
+                    factionRegionControlMap[controllingFaction.Id]++;
                 }
                 else
                 {
-                    factionRegionControlMap[controllingFaction] = 1;
+                    factionMap[controllingFaction.Id] = controllingFaction;
+                    factionRegionControlMap[controllingFaction.Id] = 1;
                 }
             }
-            return factionRegionControlMap.OrderByDescending(kv => kv.Value).First().Key;
+            int key = factionRegionControlMap.OrderByDescending(kv => kv.Value).First().Key;
+            return factionMap[key];
         }
     }
 }

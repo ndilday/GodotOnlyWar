@@ -27,9 +27,9 @@ namespace OnlyWar.Helpers.Sector
             MissionContexts.Clear();
             SpecialMissions.Clear();
             ProcessMissions(sector);
-            UpdateIntelligence(sector.Planets.Values);
             // TODO: move this into a thread that can run while the player is interacting with the UI
             ApplyRegionalFactionActivities(sector.Planets.Values);
+            UpdateIntelligence(sector.Planets.Values);
         }
 
         private void UpdateIntelligence(IEnumerable<Planet> planets)
@@ -48,47 +48,100 @@ namespace OnlyWar.Helpers.Sector
                     }
                     if (region.IntelligenceLevel > 0)
                     {
-                        // see if any intelligence gets spent in exchange for special mission opportunities
-                        float specMissionChance = (float)Math.Log(region.IntelligenceLevel, 2) + 1;
-                        // subtract one for each special mission already identified
-                        specMissionChance -= region.SpecialMissions.Count;
-                        for (int i = 0; i < specMissionChance; i++)
+                        RegionFaction enemyRegionFaction = region.RegionFactionMap.Values
+                            .Where(rf => !rf.PlanetFaction.Faction.IsPlayerFaction && !rf.PlanetFaction.Faction.IsDefaultFaction).First();
+                        if(enemyRegionFaction != null)
                         {
-                            double chance = RNG.NextRandomZValue();
-                            // TODO: add some kind of recon data to the context
-                            // do some sort of test to see whether a special mission opportunity is found
-                            // if not, improve the inteligence level by the margin
-                            if (chance >= 2)
+                            if(enemyRegionFaction.IsPublic)
                             {
-                                // assassination
-                                SpecialMission ass = new SpecialMission(0, MissionType.Assassination, region);
-                                region.SpecialMissions.Add(ass);
-                                SpecialMissions.Add(ass);
+                                HandlePublicFactionIntelligence();
                             }
-                            else if (chance >= 1)
+                            else
                             {
-                                // sabotage
-                                SpecialMission sabotage = new SpecialMission(0, MissionType.Sabotage, region);
-                                region.SpecialMissions.Add(sabotage);
-                                SpecialMissions.Add(sabotage);
-                                // plant minefield
-
-                            }
-                            else if (chance >= 0)
-                            {
-                                // ambush, equipment/prisoner recovery
-                                SpecialMission ambush = new SpecialMission(0, MissionType.Ambush, region);
-                                region.SpecialMissions.Add(ambush);
-                                SpecialMissions.Add(ambush);
-                                // sniper's nest
-                                // prisoner recovery
-                                // equipment recovery
-
+                                HandleHiddenFactionIntelligence();
                             }
                         }
+                        
                         // reduce intelligence level by 25%
                         region.IntelligenceLevel *= 0.75f;
                     }
+                }
+            }
+        }
+
+        public void HandlePublicFactionIntelligence(Region region, RegionFaction enemyRegionFaction)
+        {
+            // see if any intelligence gets spent in exchange for special mission opportunities
+            float specMissionChance = (float)Math.Log(region.IntelligenceLevel, 2) + 1;
+            // subtract one for each special mission already identified
+            specMissionChance -= region.SpecialMissions.Count;
+            for (int i = 0; i < specMissionChance; i++)
+            {
+                double chance = RNG.NextRandomZValue();
+                // TODO: add some kind of recon data to the context
+                // do some sort of test to see whether a special mission opportunity is found
+                // if not, improve the inteligence level by the margin
+                if (chance >= 2)
+                {
+                    // assassination
+                    SpecialMission ass = new SpecialMission(0, MissionType.Assassination, region);
+                    region.SpecialMissions.Add(ass);
+                    SpecialMissions.Add(ass);
+                }
+                else if (chance >= 1)
+                {
+                    // sabotage
+                    // add up the amount of entrenchment, detection, and antiair in this region
+                    int defenseTotal = enemyRegionFaction.Entrenchment + enemyRegionFaction.Detection + enemyRegionFaction.AntiAir;
+                    if (defenseTotal == 0)
+                    {
+                        //make it an ambush, instead
+                        SpecialMission ambush = new SpecialMission(0, MissionType.Ambush, region);
+                        region.SpecialMissions.Add(ambush);
+                        SpecialMissions.Add(ambush);
+                    }
+                    else
+                    {
+                        int roll = RNG.GetIntBelowMax(0, defenseTotal);
+                        if(roll <= enemyRegionFaction.Entrenchment)
+                        {
+                            // saborage the entrenchments
+                            // TODO: determine the scale of operation, with a larger chance of a small operation, and a tiny chance of a huge operation
+                            SpecialMission sabotage = new SpecialMission(0, MissionType.Sabotage, region);
+                            region.SpecialMissions.Add(sabotage);
+                            SpecialMissions.Add(sabotage);
+                        }
+                        else
+                        {
+                            roll -= enemyRegionFaction.Entrenchment;
+                            if(roll <= enemyRegionFaction.Detection)
+                            {
+                                // sabotage the detection
+                                SpecialMission sabotage = new SpecialMission(0, MissionType.Sabotage, region);
+                                region.SpecialMissions.Add(sabotage);
+                                SpecialMissions.Add(sabotage);
+                            }
+                            else
+                            {
+                                // sabotage the antiair
+                                SpecialMission sabotage = new SpecialMission(0, MissionType.Sabotage, region);
+                                region.SpecialMissions.Add(sabotage);
+                                SpecialMissions.Add(sabotage);
+                            }
+                    }
+                    // plant minefield
+
+                }
+                else if (chance >= 0)
+                {
+                    // ambush, equipment/prisoner recovery
+                    SpecialMission ambush = new SpecialMission(0, MissionType.Ambush, region);
+                    region.SpecialMissions.Add(ambush);
+                    SpecialMissions.Add(ambush);
+                    // sniper's nest
+                    // prisoner recovery
+                    // equipment recovery
+
                 }
             }
         }
@@ -146,7 +199,8 @@ namespace OnlyWar.Helpers.Sector
                 {
                     foreach (RegionFaction regionFaction in region.RegionFactionMap.Values)
                     {
-                        if (regionFaction.PlanetFaction.Faction.IsPlayerFaction)
+                        // TODO: generalize this so that Imperial PDFs can build defenses as well
+                        if (regionFaction.PlanetFaction.Faction.IsPlayerFaction || regionFaction.PlanetFaction.Faction.IsDefaultFaction)
                         {
                             // Player forces are updated by the player
                             continue;
@@ -218,7 +272,7 @@ namespace OnlyWar.Helpers.Sector
                     int aaCost = (int)(Math.Pow(2, publicFaction.AntiAir + aaInvests + 1));
                     // find the cheapest investment
                     int minCost = Math.Min(orgCost, Math.Min(detCost, Math.Min(entCost, aaCost)));
-                    if (minCost < buildPointsAvailable)
+                    if (minCost <= buildPointsAvailable)
                     {
                         if (minCost == orgCost)
                         {
@@ -250,8 +304,12 @@ namespace OnlyWar.Helpers.Sector
                 publicFaction.Entrenchment += entInvests;
                 publicFaction.AntiAir += aaInvests;
                 publicFaction.Garrison = (int)((organizedTroops % 100) + garrisonRequirements + (buildPointsAvailable * 100));
-                float unOrganizedPortion = GaussianCalculator.ApproximateNormalCDF((float)RNG.NextRandomZValue()) + 0.5f;
-                publicFaction.Garrison += (int)(disorganizedTroops * unOrganizedPortion);
+                if (disorganizedTroops > 0)
+                {
+                    // some disorganized troops are part of the garrisoning forces by happenstance
+                    float unOrganizedPortion = GaussianCalculator.ApproximateNormalCDF((float)RNG.NextRandomZValue()) + 0.5f;
+                    publicFaction.Garrison += (int)(disorganizedTroops * unOrganizedPortion);
+                }
             }
         }
 
