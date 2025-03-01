@@ -54,7 +54,7 @@ namespace OnlyWar.Helpers.Sector
                         {
                             if(enemyRegionFaction.IsPublic)
                             {
-                                HandlePublicFactionIntelligence();
+                                HandlePublicFactionIntelligence(region, enemyRegionFaction);
                             }
                             else
                             {
@@ -103,34 +103,35 @@ namespace OnlyWar.Helpers.Sector
                     else
                     {
                         int roll = RNG.GetIntBelowMax(0, defenseTotal);
-                        if(roll <= enemyRegionFaction.Entrenchment)
+                        if (roll <= enemyRegionFaction.Entrenchment)
                         {
                             // saborage the entrenchments
-                            // TODO: determine the scale of operation, with a larger chance of a small operation, and a tiny chance of a huge operation
-                            SpecialMission sabotage = new SpecialMission(0, MissionType.Sabotage, region);
+                            int size = Math.Min(Math.Max((int)RNG.NextRandomZValue() + 1, 1), enemyRegionFaction.Entrenchment);
+                            SabotageMission sabotage = new SabotageMission(0, DefenseType.Entrenchment, size, region);
                             region.SpecialMissions.Add(sabotage);
                             SpecialMissions.Add(sabotage);
                         }
                         else
                         {
                             roll -= enemyRegionFaction.Entrenchment;
-                            if(roll <= enemyRegionFaction.Detection)
+                            if (roll <= enemyRegionFaction.Detection)
                             {
                                 // sabotage the detection
-                                SpecialMission sabotage = new SpecialMission(0, MissionType.Sabotage, region);
+                                int size = Math.Min(Math.Max((int)RNG.NextRandomZValue() + 1, 1), enemyRegionFaction.Detection);
+                                SabotageMission sabotage = new SabotageMission(0, DefenseType.Detection, size, region);
                                 region.SpecialMissions.Add(sabotage);
                                 SpecialMissions.Add(sabotage);
                             }
                             else
                             {
                                 // sabotage the antiair
-                                SpecialMission sabotage = new SpecialMission(0, MissionType.Sabotage, region);
+                                int size = Math.Min(Math.Max((int)RNG.NextRandomZValue() + 1, 1), enemyRegionFaction.AntiAir);
+                                SabotageMission sabotage = new SabotageMission(0, DefenseType.AntiAir, size, region);
                                 region.SpecialMissions.Add(sabotage);
                                 SpecialMissions.Add(sabotage);
                             }
+                        }
                     }
-                    // plant minefield
-
                 }
                 else if (chance >= 0)
                 {
@@ -144,6 +145,11 @@ namespace OnlyWar.Helpers.Sector
 
                 }
             }
+        }
+
+        public void HandleHiddenFactionIntelligence()
+        {
+
         }
 
         private void ProcessMissions(Models.Sector sector)

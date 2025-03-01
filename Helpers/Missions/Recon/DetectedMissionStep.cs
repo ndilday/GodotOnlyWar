@@ -18,9 +18,11 @@ namespace OnlyWar.Helpers.Missions.Recon
 
         public void ExecuteMissionStep(MissionContext context, float marginOfSuccess, IMissionStep returnStep)
         {
-            BaseSkill perception = GameDataSingleton.Instance.GameRulesData.BaseSkillMap.Values.First(s => s.Name == "Tactics");
+            BaseSkill tactics = GameDataSingleton.Instance.GameRulesData.BaseSkillMap.Values.First(s => s.Name == "Tactics");
             // adjust for size of detecting force
-            SquadMissionTest missionTest = new SquadMissionTest(perception, 10.0f);
+            float difficulty = 10.0f;
+            difficulty += (float)Math.Log(context.OpposingForces.Sum(s => s.AbleSoldiers.Count), 10);
+            LeaderMissionTest missionTest = new LeaderMissionTest(tactics, difficulty);
             // build OpFor, size increases the lower the MoS, and pushes engagement range in favor of the OpFor
             int numberOfOpposingSquads = context.PlayerSquads.Count - (ushort)marginOfSuccess;
             // any fractional value of margin of Success is treated as the probability of an additional squad being added.

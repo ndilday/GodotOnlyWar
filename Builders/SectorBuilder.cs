@@ -100,6 +100,20 @@ namespace OnlyWar.Builders
                 taskForce.Position = planetToInvade.Position;
                 forceList.Add(taskForce);
             }
+            foreach(Region region in planetToInvade.Regions)
+            {
+                if (region != regionToInvade)
+                {
+                    RegionFaction enemyRegionFaction = region.RegionFactionMap.Values.First();
+                    enemyRegionFaction.Organization = 1;
+                    enemyRegionFaction.IsPublic = true;
+                    enemyRegionFaction.Entrenchment = 1;
+                    enemyRegionFaction.Detection = 1;
+                    enemyRegionFaction.AntiAir = 1;
+                    enemyRegionFaction.Garrison = (int)enemyRegionFaction.Population;
+
+                }
+            }
 
             return planetToInvade;
         }
