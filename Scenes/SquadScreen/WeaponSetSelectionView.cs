@@ -5,7 +5,7 @@ using System.Linq;
 
 public partial class WeaponSetSelectionView : PanelContainer
 {
-    private List<string> _weaponSetNames;
+    private List<Tuple<string, int>> _weaponSets;
     private List<WeaponSetRowView> _weaponSetRows;
     private VBoxContainer _weaponSetVBox;
     private RichTextLabel _header;
@@ -22,23 +22,23 @@ public partial class WeaponSetSelectionView : PanelContainer
         _weaponSetRows = new List<WeaponSetRowView>();
     }
 
-    public void Initialize(List<string> weaponSetNames, string name, int minimumCount, int maximumCount, int currentCount)
+    public void Initialize(List<Tuple<string, int>> weaponSets, string name, int minimumCount, int maximumCount)
     {
         OptionName = name;
         ClearWeaponSetRows();
-        _weaponSetNames = weaponSetNames;
+        _weaponSets = weaponSets;
         _minimumCount = minimumCount;
         _maximumCount = maximumCount;
         
-        foreach(string weaponSetName in _weaponSetNames)
+        foreach(Tuple<string, int> weaponSet in _weaponSets)
         {
             PackedScene weaponSetRowScene = GD.Load<PackedScene>("res://Scenes/SquadScreen/weapon_set_row.tscn");
             WeaponSetRowView row = (WeaponSetRowView)weaponSetRowScene.Instantiate();
             _weaponSetVBox.AddChild(row);
-            row.SetWeaponSetName(weaponSetName);
+            row.SetWeaponSetName(weaponSet.Item1);
             row.MinimumCount = _minimumCount;
             row.MaximumCount = _maximumCount;
-            row.SetCount(currentCount);
+            row.SetCount(weaponSet.Item2);
             row.CountChanged += OnCountChanged;
             
             _weaponSetRows.Add(row);

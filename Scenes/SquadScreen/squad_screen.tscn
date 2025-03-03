@@ -184,6 +184,26 @@ grow_horizontal = 0
 grow_vertical = 2
 text = "Who the Bell Tolls"
 
+[node name="ButtonVBox" type="VBoxContainer" parent="DialogView/DataPanel" index="2"]
+layout_mode = 1
+anchors_preset = -1
+anchor_top = 0.8
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = 5.0
+offset_right = -5.0
+offset_bottom = -5.0
+grow_vertical = 0
+
+[node name="CopyLoadoutButton" type="Button" parent="DialogView/DataPanel/ButtonVBox" index="0"]
+layout_mode = 2
+text = "Copy Loadout"
+
+[node name="PasteLoadoutButton" type="Button" parent="DialogView/DataPanel/ButtonVBox" index="1"]
+layout_mode = 2
+disabled = true
+text = "Paste Loadout"
+
 [node name="RegionPanel" type="Panel" parent="DialogView" index="3"]
 layout_mode = 1
 anchors_preset = -1
@@ -497,6 +517,15 @@ text = "Edit Mission Parameters"
 layout_mode = 2
 disabled = true
 text = "Assign to Existing Operation"
+
+[node name="CopyOrdersButton" type="Button" parent="DialogView/OrdersPanel/ButtonVBox" index="3"]
+layout_mode = 2
+text = "Copy Orders"
+
+[node name="PasteOrdersButton" type="Button" parent="DialogView/OrdersPanel/ButtonVBox" index="4"]
+layout_mode = 2
+disabled = true
+text = "Paste Orders"
 
 [node name="OrderDialogController" parent="DialogView" index="6" instance=ExtResource("6_p4ihy")]
 visible = false

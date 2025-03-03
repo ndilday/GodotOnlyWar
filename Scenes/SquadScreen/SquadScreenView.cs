@@ -12,11 +12,19 @@ public partial class SquadScreenView : DialogView
     private Button _unassignButton;
     private Button _openOrdersButton;
     private Button _assignToExistingButton;
+    private Button _copyOrdersButton;
+    private Button _pasteOrdersButton;
+    private Button _copyLoadoutButton;
+    private Button _pasteLoadoutButton;
     private List<WeaponSetSelectionView> _weaponSets;
 
     public event EventHandler<Tuple<string, int>> WeaponSetSelectionWeaponSetCountChanged;
     public event EventHandler OrdersUnassigned;
     public event EventHandler OpenOrders;
+    public event EventHandler CopyOrders;
+    public event EventHandler PasteOrders;
+    public event EventHandler CopyLoadout;
+    public event EventHandler PasteLoadout;
 
     public override void _Ready()
     {
@@ -32,6 +40,14 @@ public partial class SquadScreenView : DialogView
         _openOrdersButton.Pressed += () => OpenOrders(this, EventArgs.Empty);
         _assignToExistingButton = GetNode<Button>("OrdersPanel/ButtonVBox/AssignToExistingButton");
         _assignToExistingButton.Pressed += OnAssignToExistingPressed;
+        _copyOrdersButton = GetNode<Button>("OrdersPanel/ButtonVBox/CopyOrdersButton");
+        _copyOrdersButton.Pressed += () => CopyOrders(this, EventArgs.Empty);
+        _pasteOrdersButton = GetNode<Button>("OrdersPanel/ButtonVBox/PasteOrdersButton");
+        _pasteOrdersButton.Pressed += () => PasteOrders(this, EventArgs.Empty);
+        _copyLoadoutButton = GetNode<Button>("DataPanel/ButtonVBox/CopyLoadoutButton");
+        _copyLoadoutButton.Pressed += () => CopyLoadout(this, EventArgs.Empty);
+        _pasteLoadoutButton = GetNode<Button>("DataPanel/ButtonVBox/PasteLoadoutButton");
+        _pasteLoadoutButton.Pressed += () => PasteLoadout(this, EventArgs.Empty);
         _weaponSets = new List<WeaponSetSelectionView>();
     }
 
@@ -91,7 +107,7 @@ public partial class SquadScreenView : DialogView
         }
     }
 
-    public void PopulateSquadLoadout(List<Tuple<List<string>, string, int, int, int>> weaponSets, Tuple<string, int> defaultWeaponSet)
+    public void PopulateSquadLoadout(List<Tuple<List<Tuple<string, int>>, string, int, int>> weaponSets, Tuple<string, int> defaultWeaponSet)
     {
         ClearSquadLoadout();
         PackedScene weaponSetSelectionScene = GD.Load<PackedScene>("res://Scenes/SquadScreen/weapon_set_selection.tscn");
@@ -105,7 +121,7 @@ public partial class SquadScreenView : DialogView
             WeaponSetSelectionView view = (WeaponSetSelectionView)weaponSetSelectionScene.Instantiate();
             _squadLoadoutVBox.AddChild(view);
             _weaponSets.Add(view);
-            view.Initialize(weaponSet.Item1, weaponSet.Item2, weaponSet.Item3, weaponSet.Item4, weaponSet.Item5);
+            view.Initialize(weaponSet.Item1, weaponSet.Item2, weaponSet.Item3, weaponSet.Item4);
             view.WeaponSetCountChanged += OnWeaponSetCountChanged;
         }
 
@@ -136,6 +152,16 @@ public partial class SquadScreenView : DialogView
         {
             weaponSet.DisableInrease(disable);
         }
+    }
+
+    public void DisablePasteOrders(bool disable)
+    {
+        _pasteOrdersButton.Disabled = disable;
+    }
+
+    public void DisablePasteLoadout(bool disable)
+    {
+        _pasteLoadoutButton.Disabled = disable;
     }
 
     private void OnWeaponSetCountChanged(object sender, Tuple<string, int> args)

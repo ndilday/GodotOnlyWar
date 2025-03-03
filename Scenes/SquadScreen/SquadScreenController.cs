@@ -1,6 +1,7 @@
 using Godot;
 using OnlyWar.Helpers.Extensions;
 using OnlyWar.Models.Equippables;
+using OnlyWar.Models.Orders;
 using OnlyWar.Models.Planets;
 using OnlyWar.Models.Soldiers;
 using OnlyWar.Models.Squads;
@@ -17,12 +18,20 @@ public partial class SquadScreenController : DialogController
     private TacticalRegionController _currentRegion;
     private Dictionary<string, TacticalRegionController> _adjacenTacticalRegionMap;
     private int _ableBodied;
+    private Order _savedOrders;
+    private List<WeaponSet> _savedLoadout;
+    private int _savedLoadoutSquadTemplateId;
 
     public override void _Ready()
     {
         base._Ready();
         _view = GetNode<SquadScreenView>("DialogView");
         _view.WeaponSetSelectionWeaponSetCountChanged += OnWeaponSetSelectionWeaponSetCountChanged;
+        _view.OrdersUnassigned += OnOrdersUnassigned;
+        _view.CopyOrders += OnCopyOrders;
+        _view.PasteOrders += OnPasteOrders;
+        _view.CopyLoadout += OnCopyLoadout;
+        _view.PasteLoadout += OnPasteLoadout;
         _view.OpenOrders += OnOpenOrders;
         _orderController = GetNode<OrderDialogController>("DialogView/OrderDialogController");
         _orderController.OrdersConfirmed += OnOrdersConfirmed;
@@ -39,6 +48,48 @@ public partial class SquadScreenController : DialogController
     {
         PopulateOrderDetails();
         _view.SetOpenOrdersButtonText("Edit Current Orders");
+    }
+
+    private void OnOrdersUnassigned(object sender, EventArgs e)
+    {
+        _squad.CurrentOrders = null;
+        PopulateOrderDetails();
+        _view.SetOpenOrdersButtonText("Assign Orders");
+    }
+
+    private void OnCopyOrders(object sender, EventArgs e)
+    {
+        _savedOrders = _squad.CurrentOrders;
+        _view.DisablePasteOrders(false);
+    }
+
+    private void OnPasteOrders(object sender, EventArgs e)
+    {
+        _squad.CurrentOrders = new Order(
+            _squad, 
+            _savedOrders.TargetRegion, 
+            _savedOrders.Disposition, 
+            _savedOrders.IsQuiet, 
+            _savedOrders.IsActivelyEngaging, 
+            _savedOrders.LevelOfAggression, 
+            _savedOrders.MissionType);
+        PopulateOrderDetails();
+    }
+
+    private void OnCopyLoadout(object sender, EventArgs e)
+    {
+        // **You need to implement the logic to copy the current loadout to the clipboard.**
+        _savedLoadout = _squad.Loadout;
+        _savedLoadoutSquadTemplateId = _squad.SquadTemplate.Id;
+        _view.DisablePasteLoadout(false);
+    }
+
+    private void OnPasteLoadout(object sender, EventArgs e)
+    {
+        // **You need to implement the logic to paste the loadout from the clipboard.**
+        _squad.Loadout = _savedLoadout.ToList();
+        PopulateSquadLoadout();
+
     }
 
     private void OnWeaponSetSelectionWeaponSetCountChanged(object sender, Tuple<string, int> args)
@@ -77,6 +128,7 @@ public partial class SquadScreenController : DialogController
         PopulateSquadLoadout();
         PopulateSquadOrders();
         PopulateTacticalRegions();
+        _view.DisablePasteLoadout(_savedLoadout == null || _savedLoadoutSquadTemplateId != _squad.SquadTemplate.Id);
     }
 
     private void PopulateSquadDetails()
@@ -104,34 +156,43 @@ public partial class SquadScreenController : DialogController
 
     private void PopulateSquadLoadout()
     {
-        List<Tuple<List<string>, string, int, int, int>> weaponSets = new List<Tuple<List<string>, string, int, int, int>>();
+        List<Tuple<List<Tuple<string, int>>, string, int, int>> weaponSets = new List<Tuple<List<Tuple<string, int>>, string, int, int>>();
         WeaponSet defaultWs = _squad.SquadTemplate.DefaultWeapons;
         
-        Dictionary<SquadWeaponOption, int> weaponSetCounts = new Dictionary<SquadWeaponOption, int>();
+        Dictionary<string, int> weaponSetCounts = new Dictionary<string, int>();
         foreach (WeaponSet ws in _squad.Loadout)
         {
             if(ws != defaultWs)
             {
-                var option = _squad.SquadTemplate.WeaponOptions.First(o => o.Options.Contains(ws));
-                if(weaponSetCounts.ContainsKey(option))
+                if(weaponSetCounts.ContainsKey(ws.Name))
                 {
-                    weaponSetCounts[option]++;
+                    weaponSetCounts[ws.Name]++;
                 }
                 else
                 {
-                    weaponSetCounts[option] = 1;
+                    weaponSetCounts[ws.Name] = 1;
                 }
             }
         }
         foreach (var weaponOptions in _squad.SquadTemplate.WeaponOptions)
         {
-            Tuple<List<string>, string, int, int, int> options =
-                new Tuple<List<string>, string, int, int, int>(
-                    weaponOptions.Options.Select(o => o.Name).ToList(),
+            List <Tuple<string, int>> choices = new List<Tuple<string, int>>();
+            foreach(var option in weaponOptions.Options)
+            {
+                int count = 0;
+                if (weaponSetCounts.ContainsKey(option.Name))
+                {
+                    count = weaponSetCounts[option.Name];
+                }
+                choices.Add(new Tuple<string, int>(option.Name, count));
+            }
+
+            Tuple<List<Tuple<string, int>>, string, int, int> options =
+                new Tuple<List<Tuple<string, int>>, string, int, int>(
+                    choices,
                     weaponOptions.Name,
                     weaponOptions.MinNumber,
-                    Math.Min(weaponOptions.MaxNumber, _ableBodied),
-                    weaponSetCounts.ContainsKey(weaponOptions) ? weaponSetCounts[weaponOptions] : 0);
+                    Math.Min(weaponOptions.MaxNumber, _ableBodied));
             weaponSets.Add(options);
         }
         int defaultCount = _ableBodied - weaponSetCounts.Values.Sum();
