@@ -1,18 +1,18 @@
-﻿using OnlyWar.Helpers.Missions;
-using OnlyWar.Models;
+﻿using OnlyWar.Helpers.Missions.Recon;
 using OnlyWar.Models.Missions;
 using OnlyWar.Models.Planets;
 using OnlyWar.Models.Soldiers;
+using OnlyWar.Models;
 using System;
 using System.Linq;
 
-namespace OnlyWar.Helpers.Missions.Recon
+namespace OnlyWar.Helpers.Missions.Sabotage
 {
-    public class ReconStealthMissionStep : IMissionStep
+    public class SabotageStealthMissionStep : IMissionStep
     {
-        public string Description { get { return "Recon Stealth"; } }
+        public string Description { get { return "Sabotage Stealth"; } }
 
-        public ReconStealthMissionStep(){}
+        public SabotageStealthMissionStep() { }
 
         public void ExecuteMissionStep(MissionContext context, float marginOfSuccess, IMissionStep returnStep)
         {
@@ -33,7 +33,7 @@ namespace OnlyWar.Helpers.Missions.Recon
             float margin = missionTest.RunMissionCheck(context.PlayerSquads);
             if (margin > 0.0f)
             {
-                new PerformReconMissionStep().ExecuteMissionStep(context, margin, this);
+                new SabotageMissionStep().ExecuteMissionStep(context, margin, this);
             }
             else
             {

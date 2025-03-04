@@ -1,11 +1,8 @@
 ﻿using OnlyWar.Helpers.Missions;
 using OnlyWar.Helpers.Missions.Recon;
+using OnlyWar.Helpers.Missions.Sabotage;
 using OnlyWar.Models.Missions;
-using System;
-using System.Collections.Generic;
 using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 
 namespace OnlyWar.Builders
 {
@@ -26,6 +23,8 @@ namespace OnlyWar.Builders
             {
                 case MissionType.Recon:
                     return new ReconStealthMissionStep();
+                case MissionType.Sabotage:
+                    return new SabotageStealthMissionStep();
             }
             return null;
         }

@@ -15,6 +15,7 @@ namespace OnlyWar.Builders
 {
     internal static class NewChapterBuilder
     {
+        private const int INITIAL_TRAINING_DURATION_WEEKS = 104;
         private delegate void TrainingFunction(PlayerSoldier playerSoldier);
 
         internal static PlayerForce CreateChapter(GameRulesData data,
@@ -22,34 +23,11 @@ namespace OnlyWar.Builders
                                                   Date trainingStartDate,
                                                   Date date)
         {
-            Date trainingEndDate = new Date(trainingStartDate.GetTotalWeeks() + 104);
-            SoldierTemplate soldierTemplate = data.PlayerFaction.SoldierTemplates[0];
-            List<PlayerSoldier> soldiers =
-                SoldierFactory.Instance.GenerateNewSoldiers(1000, 
-                                                            soldierTemplate.Species, 
-                                                            data.SkillTemplateList)
-                .Select(s => new PlayerSoldier(s, $"{TempNameGenerator.GetName()} {TempNameGenerator.GetName()}"))
-                .ToList();
+            Date trainingEndDate =
+                new Date(trainingStartDate.GetTotalWeeks() + INITIAL_TRAINING_DURATION_WEEKS);
+            List<PlayerSoldier> soldiers = GenerateInitialSoldiers(data, trainingService, trainingStartDate, date, trainingEndDate);
 
-            foreach (PlayerSoldier soldier in soldiers)
-            {
-                soldier.AddEntryToHistory(trainingStartDate + ": accepted into training");
-                if (soldier.PsychicPower > 0)
-                {
-                    soldier.AddEntryToHistory(trainingStartDate + ": psychic ability detected, acolyte training initiated");
-                    // add psychic specific training here
-                }
-                trainingService.EvaluateSoldier(soldier, trainingEndDate);
-                soldier.ProgenoidImplantDate = new Date(date.Millenium, date.Year - 2, RNG.GetIntBelowMax(1, 53));
-            }
-            //string csv = GetSoldierRatingCsv(soldiers);
-
-            Dictionary<int, PlayerSoldier> unassignedSoldierMap = soldiers.ToDictionary(s => s.Id);
-            PlayerForce chapter = BuildChapterFromUnitTemplate(data.PlayerFaction,
-                                                               data.PlayerFaction.UnitTemplates.Values.First(ut => ut.IsTopLevelUnit), 
-                                                               soldiers);
-            PopulateOrderOfBattle(trainingEndDate.ToString(), unassignedSoldierMap, chapter.Army.OrderOfBattle, data.PlayerFaction);
-            chapter.Army.PopulateSquadMap();
+            PlayerForce chapter = BuildChapterStructure(data, trainingEndDate, soldiers);
             foreach (PlayerSoldier soldier in soldiers)
             {
                 ApplySoldierTypeTraining(soldier);
@@ -65,6 +43,43 @@ namespace OnlyWar.Builders
             };
             chapter.AddToBattleHistory(date, "Chapter Founding", foundingHistoryEntries);
             return chapter;
+        }
+
+        private static PlayerForce BuildChapterStructure(GameRulesData data, Date trainingEndDate, List<PlayerSoldier> soldiers)
+        {
+            Dictionary<int, PlayerSoldier> unassignedSoldierMap = soldiers.ToDictionary(s => s.Id);
+            PlayerForce chapter = BuildChapterFromUnitTemplate(data.PlayerFaction,
+                                                                           data.PlayerFaction.UnitTemplates.Values.First(ut => ut.IsTopLevelUnit),
+                                                                           soldiers);
+            PopulateOrderOfBattle(trainingEndDate.ToString(), unassignedSoldierMap, chapter.Army.OrderOfBattle, data.PlayerFaction);
+            chapter.Army.PopulateSquadMap();
+            return chapter;
+        }
+
+        private static List<PlayerSoldier> GenerateInitialSoldiers(GameRulesData data, ISoldierTrainingService trainingService, Date trainingStartDate, Date date, Date trainingEndDate)
+        {
+            SoldierTemplate soldierTemplate = data.PlayerFaction.SoldierTemplates[0];
+            List<PlayerSoldier> soldiers =
+                SoldierFactory.Instance.GenerateNewSoldiers(
+                    1000,
+                    soldierTemplate.Species,
+                    data.SkillTemplateList)
+                .Select(s => new PlayerSoldier(s, $"{TempNameGenerator.GetName()} {TempNameGenerator.GetName()}"))
+                .ToList();
+
+            foreach (PlayerSoldier soldier in soldiers)
+            {
+                soldier.AddEntryToHistory(trainingStartDate + ": accepted into training");
+                if (soldier.PsychicPower > 0)
+                {
+                    soldier.AddEntryToHistory(trainingStartDate + ": psychic ability detected, acolyte training initiated");
+                    // add psychic specific training here
+                }
+                trainingService.EvaluateSoldier(soldier, trainingEndDate);
+                soldier.ProgenoidImplantDate = new Date(date.Millenium, date.Year - 2, RNG.GetIntBelowMax(1, 53));
+            }
+            //string csv = GetSoldierRatingCsv(soldiers);
+            return soldiers;
         }
 
         private static string GetSoldierRatingCsv(List<PlayerSoldier> soldiers)
