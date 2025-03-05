@@ -164,6 +164,33 @@ namespace OnlyWar.Helpers.Sector
                 MissionStepOrchestrator.GetStartingStep(context).ExecuteMissionStep(context, 0, null);
                 MissionContexts.Add(context);
             }
+
+            foreach(MissionContext context in MissionContexts)
+            {
+                switch (context.MissionType)
+                {
+                    case MissionType.Recon:
+                        context.Region.IntelligenceLevel += context.Impact;
+                        break;
+                    case MissionType.Sabotage:
+                        SabotageOrder sabotageOrder = (SabotageOrder)context.PlayerSquads.First().Squad.CurrentOrders;
+                        int impact = (int)Math.Min(context.Impact, sabotageOrder.TargetSize);
+                        RegionFaction regionFaction = context.Region.RegionFactionMap.Values.First(rf => !rf.PlanetFaction.Faction.IsPlayerFaction && !rf.PlanetFaction.Faction.IsDefaultFaction);
+                        switch (sabotageOrder.DefenseType)
+                        {
+                            case DefenseType.Entrenchment:
+                                regionFaction.Entrenchment -= impact;
+                                break;
+                            case DefenseType.Detection:
+                                regionFaction.Detection -= impact;
+                                break;
+                            case DefenseType.AntiAir:
+                                regionFaction.AntiAir -= impact;
+                                break;
+                        }
+                        break;
+                }
+            }
         }
 
         private Dictionary<Region, List<Squad>> MapSquadsToTargetRegions(Planet planet)

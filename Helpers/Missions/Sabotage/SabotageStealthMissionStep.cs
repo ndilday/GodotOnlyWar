@@ -33,7 +33,7 @@ namespace OnlyWar.Helpers.Missions.Sabotage
             float margin = missionTest.RunMissionCheck(context.PlayerSquads);
             if (margin > 0.0f)
             {
-                new SabotageMissionStep().ExecuteMissionStep(context, margin, this);
+                new PerformSabotageMissionStep().ExecuteMissionStep(context, margin, this);
             }
             else
             {
