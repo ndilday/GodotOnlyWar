@@ -78,13 +78,18 @@ namespace OnlyWar.Helpers.Sector
             for (int i = 0; i < specMissionChance; i++)
             {
                 double chance = RNG.NextRandomZValue();
-                // TODO: add some kind of recon data to the context
-                // do some sort of test to see whether a special mission opportunity is found
-                // if not, improve the inteligence level by the margin
                 if (chance >= 2)
                 {
                     // assassination
-                    SpecialMission ass = new SpecialMission(0, MissionType.Assassination, region);
+                    // assume that each degree of magnitude of population increases the "size" of the highest leader
+                    // for example, with Tyranids, this could be
+                    // 1-10: Prime
+                    // 11-100: Broodlord
+                    // 101-1000: Zoenthope?
+                    // 1001-10000: Hive Tyrant
+                    int max = (int)Math.Log10(enemyRegionFaction.Population);
+                    int size = Math.Min(Math.Max((int)RNG.NextRandomZValue() + 1, 1), max);
+                    SpecialMission ass = new AssassinationMission(0, size, region);
                     region.SpecialMissions.Add(ass);
                     SpecialMissions.Add(ass);
                 }
@@ -170,6 +175,12 @@ namespace OnlyWar.Helpers.Sector
                 RegionFaction regionFaction = context.Region.RegionFactionMap.Values.First(rf => !rf.PlanetFaction.Faction.IsPlayerFaction && !rf.PlanetFaction.Faction.IsDefaultFaction);
                 switch (context.MissionType)
                 {
+                    case MissionType.Assassination:
+                        // 10 ^ (impact*100) / population = amount of org log
+                        // example impact 1 in a population of 1000 = -1 org point
+                        int orgLost = (int)(context.Impact * 100 / regionFaction.Population);
+                        regionFaction.Organization -= (int)Math.Min(orgLost, regionFaction.Organization);
+                        break;
                     case MissionType.Recon:
                         context.Region.IntelligenceLevel += context.Impact;
                         break;

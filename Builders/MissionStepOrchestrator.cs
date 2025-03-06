@@ -1,4 +1,5 @@
 ﻿using OnlyWar.Helpers.Missions;
+using OnlyWar.Helpers.Missions.Assassination;
 using OnlyWar.Helpers.Missions.Recon;
 using OnlyWar.Helpers.Missions.Sabotage;
 using OnlyWar.Models.Missions;
@@ -25,6 +26,8 @@ namespace OnlyWar.Builders
                     return new ReconStealthMissionStep();
                 case MissionType.Sabotage:
                     return new SabotageStealthMissionStep();
+                case MissionType.Assassination:
+                    return new AssassinateStealthMissionStep();
             }
             return null;
         }

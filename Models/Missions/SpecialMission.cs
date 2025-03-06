@@ -34,4 +34,13 @@ namespace OnlyWar.Models.Missions
             MissionSize = size;
         }
     }
+
+    public class AssassinationMission : SpecialMission
+    {
+        public int MissionSize { get; private set; }
+        public AssassinationMission(int id, int size, Region region) : base(id, MissionType.Assassination, region)
+        {
+            MissionSize = size;
+        }
+    }
 }
