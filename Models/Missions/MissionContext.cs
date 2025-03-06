@@ -19,6 +19,7 @@ namespace OnlyWar.Models.Missions
         public List<SpecialMission> MissionsToAdd { get; }
         public List<SpecialMission> MissionsToRemove { get; }
         public float Impact { get; set; }
+        public int EnemiesKilled { get; set; }
 
         public MissionContext(Region region, MissionType missionType, Aggression aggression, List<BattleSquad> playerSquads, List<BattleSquad> opposingForces)
         {
@@ -32,6 +33,7 @@ namespace OnlyWar.Models.Missions
             MissionsToRemove = new List<SpecialMission>();
             Log = new List<string>();
             Impact = 0.0f;
+            EnemiesKilled = 0;
         }
     }
 }

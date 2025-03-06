@@ -64,6 +64,7 @@ namespace OnlyWar.Helpers.Battles
                 // I may later try to divide credit, but having multiple soldiers 
                 // claim credit feels pseudo-realistic for now
                 CreditSoldierForKill(wound.Inflicter, wound.Weapon);
+                BattleHistory.EnemiesKilled++;
             }
         }
 

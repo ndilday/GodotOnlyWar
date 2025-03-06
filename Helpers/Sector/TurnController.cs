@@ -167,6 +167,7 @@ namespace OnlyWar.Helpers.Sector
 
             foreach(MissionContext context in MissionContexts)
             {
+                RegionFaction regionFaction = context.Region.RegionFactionMap.Values.First(rf => !rf.PlanetFaction.Faction.IsPlayerFaction && !rf.PlanetFaction.Faction.IsDefaultFaction);
                 switch (context.MissionType)
                 {
                     case MissionType.Recon:
@@ -175,7 +176,6 @@ namespace OnlyWar.Helpers.Sector
                     case MissionType.Sabotage:
                         SabotageOrder sabotageOrder = (SabotageOrder)context.PlayerSquads.First().Squad.CurrentOrders;
                         int impact = (int)Math.Min(context.Impact, sabotageOrder.TargetSize);
-                        RegionFaction regionFaction = context.Region.RegionFactionMap.Values.First(rf => !rf.PlanetFaction.Faction.IsPlayerFaction && !rf.PlanetFaction.Faction.IsDefaultFaction);
                         switch (sabotageOrder.DefenseType)
                         {
                             case DefenseType.Entrenchment:
@@ -189,6 +189,11 @@ namespace OnlyWar.Helpers.Sector
                                 break;
                         }
                         break;
+                }
+                regionFaction.Population -= context.EnemiesKilled;
+                if(regionFaction.Population < 0)
+                {
+                    regionFaction.Population = 0;
                 }
             }
         }
