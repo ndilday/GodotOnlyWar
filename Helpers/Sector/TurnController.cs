@@ -43,6 +43,7 @@ namespace OnlyWar.Helpers.Sector
                     {
                         if (RNG.GetIntBelowMax(0, 4) == 0)
                         {
+                            // TODO: add to the end of turn log that the intelligence grew stale
                             region.SpecialMissions.Remove(specialMission);
                         }
                     }
