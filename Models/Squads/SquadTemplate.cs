@@ -43,6 +43,7 @@ namespace OnlyWar.Models.Squads
         public SquadTypes SquadType { get; }
         public int BattleValue { get; }
         public Faction Faction { get; set;  }
+        public SquadTemplate BodyguardSquadTemplate { get; set; }
 
         public SquadTemplate(int id, 
                              string name, 

@@ -352,6 +352,7 @@ namespace OnlyWar.Helpers.Database.GameRules
         {
             Dictionary<int, SquadTemplate> squadTemplateMap = [];
             Dictionary<int, List<SquadTemplate>> squadTemplatesByFactionId = [];
+            Dictionary<int, int> bodyguardMap = [];
             using (var command = connection.CreateCommand())
             {
                 command.CommandText = "SELECT * FROM SquadTemplate";
@@ -365,6 +366,11 @@ namespace OnlyWar.Helpers.Database.GameRules
                     int defaultWeaponSetId = reader.GetInt32(4);
                     int squadType = reader.GetInt32(5);
                     int battleValue = reader.GetInt32(6);
+                    int bodyguardSquadId = -1;
+                    if (reader[7].GetType() != typeof(DBNull))
+                    {
+                        bodyguardMap[id] = reader.GetInt32(7);
+                    }
 
                     ArmorTemplate defaultArmor = armorTemplateMap[defaultArmorId];
                     List<SquadWeaponOption> options = squadWeaponOptionMap.ContainsKey(id) ?
@@ -383,6 +389,10 @@ namespace OnlyWar.Helpers.Database.GameRules
                         squadTemplatesByFactionId[factionId] = [];
                     }
                     squadTemplatesByFactionId[factionId].Add(squadTemplate);
+                    foreach(KeyValuePair<int, int> kvp in bodyguardMap)
+                    {
+                        squadTemplateMap[kvp.Key].BodyguardSquadTemplate = squadTemplateMap[kvp.Value];
+                    }
                 }
             }
             return new Tuple<Dictionary<int, List<SquadTemplate>>, Dictionary<int, SquadTemplate>>(squadTemplatesByFactionId, squadTemplateMap);
