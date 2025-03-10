@@ -13,7 +13,8 @@ namespace OnlyWar.Models.Squads
         Scout = 0x2,
         Elite = 0x4,
         Fast = 0x8,
-        Heavy = 0x10
+        Heavy = 0x10,
+        Bodyguard = 0x20
     }
 
     public class SquadWeaponOption
