@@ -1,6 +1,8 @@
-﻿using OnlyWar.Builders;
+﻿using Godot.NativeInterop;
+using OnlyWar.Builders;
 using OnlyWar.Helpers.Battles;
 using OnlyWar.Helpers.Extensions;
+using OnlyWar.Models;
 using OnlyWar.Models.Missions;
 using OnlyWar.Models.Orders;
 using OnlyWar.Models.Planets;
@@ -28,7 +30,7 @@ namespace OnlyWar.Helpers.Sector
             SpecialMissions.Clear();
             ProcessMissions(sector);
             // TODO: move this into a thread that can run while the player is interacting with the UI
-            ApplyRegionalFactionActivities(sector.Planets.Values);
+            UpdatePlanets(sector.Planets.Values);
             UpdateIntelligence(sector.Planets.Values);
         }
 
@@ -51,9 +53,9 @@ namespace OnlyWar.Helpers.Sector
                     {
                         RegionFaction enemyRegionFaction = region.RegionFactionMap.Values
                             .Where(rf => !rf.PlanetFaction.Faction.IsPlayerFaction && !rf.PlanetFaction.Faction.IsDefaultFaction).First();
-                        if(enemyRegionFaction != null)
+                        if (enemyRegionFaction != null)
                         {
-                            if(enemyRegionFaction.IsPublic)
+                            if (enemyRegionFaction.IsPublic)
                             {
                                 HandlePublicFactionIntelligence(region, enemyRegionFaction);
                             }
@@ -62,7 +64,7 @@ namespace OnlyWar.Helpers.Sector
                                 HandleHiddenFactionIntelligence();
                             }
                         }
-                        
+
                         // reduce intelligence level by 25%
                         region.IntelligenceLevel *= 0.75f;
                     }
@@ -155,6 +157,7 @@ namespace OnlyWar.Helpers.Sector
 
         public void HandleHiddenFactionIntelligence()
         {
+            // determine whether the faction can hide among the population
 
         }
 
@@ -171,7 +174,7 @@ namespace OnlyWar.Helpers.Sector
                 MissionContexts.Add(context);
             }
 
-            foreach(MissionContext context in MissionContexts)
+            foreach (MissionContext context in MissionContexts)
             {
                 RegionFaction regionFaction = context.Region.RegionFactionMap.Values.First(rf => !rf.PlanetFaction.Faction.IsPlayerFaction && !rf.PlanetFaction.Faction.IsDefaultFaction);
                 switch (context.MissionType)
@@ -203,7 +206,7 @@ namespace OnlyWar.Helpers.Sector
                         break;
                 }
                 regionFaction.Population -= context.EnemiesKilled;
-                if(regionFaction.Population < 0)
+                if (regionFaction.Population < 0)
                 {
                     regionFaction.Population = 0;
                 }
@@ -235,48 +238,72 @@ namespace OnlyWar.Helpers.Sector
             return squadsByTargetRegion;
         }
 
-        private void ApplyRegionalFactionActivities(IEnumerable<Planet> planets)
+        private void UpdatePlanets(IEnumerable<Planet> planets)
         {
             foreach (Planet planet in planets)
             {
-                if (!planet.IsUnderAssault())
-                {
-                    // TODO we'll eventually need to decide what to do planets that are under assault for the second or third time
-                    // currently, they'll just be in whatever state they were left
-                    continue;
-                }
                 foreach (Region region in planet.Regions)
                 {
+                    float pdfRatio = (float)region.PlanetaryDefenseForces / (float)region.Population;
                     foreach (RegionFaction regionFaction in region.RegionFactionMap.Values)
                     {
-                        // TODO: generalize this so that Imperial PDFs can build defenses as well
-                        if (regionFaction.PlanetFaction.Faction.IsPlayerFaction || regionFaction.PlanetFaction.Faction.IsDefaultFaction)
-                        {
-                            // Player forces are updated by the player
-                            continue;
-                        }
-                        if (regionFaction.Organization == -1)
-                        {
-                            // initialize the region faction
-                            regionFaction.Organization = 100;
-                            regionFaction.Detection = 1;
-                            regionFaction.Entrenchment = 1;
-                            regionFaction.AntiAir = 1;
-                        }
-                        if (regionFaction.IsPublic)
-                        {
-                            ApplyPublicFactionActivities(regionFaction);
-                        }
-                        else
-                        {
-                            ApplyHiddenFactionActivities(regionFaction);
-                        }
+                        EndOfTurnRegionFactionsUpdate(regionFaction, pdfRatio);
                     }
+                }
+                foreach(PlanetFaction planetFaction in planet.PlanetFactionMap.Values)
+                {
+                    // see if this faction leader is the sort who'd request aid from the player
+                    if (planetFaction.Leader != null)
+                    {
+                        EndOfTurnLeaderUpdate(planet, planetFaction);
+                    }
+                }
+                // TODO: determine if hidden population on planet revolts
+            }
+        }
+
+        private void UpdateRegionFactionForces(RegionFaction regionFaction, float pdfRatio, float newPop)
+        {
+            Planet planet = regionFaction.Region.Planet;
+            bool isDefaultFaction = regionFaction.PlanetFaction.Faction.IsDefaultFaction;
+            bool isPlayerFaction = regionFaction.PlanetFaction.Faction.IsPlayerFaction;
+
+            if(isDefaultFaction || isPlayerFaction || !regionFaction.IsPublic)
+            {
+                // if the pdf is less than three percent of the population, more people are drafted
+                // additionally, secret factions love to infiltrate the PDF
+                if (pdfRatio < 0.03f || !regionFaction.IsPublic)
+                {
+                    regionFaction.Garrison += (int)(newPop * 0.05f);
+                }
+                else
+                {
+                    regionFaction.Garrison += (int)(newPop * 0.025f);
+                }
+            }
+            if (planet.IsUnderAssault())
+            {
+                // TODO: generalize this so that Imperial PDFs can build defenses as well
+                if (regionFaction.Organization == -1)
+                {
+                    // initialize the region faction
+                    regionFaction.Organization = 100;
+                    regionFaction.Detection = 1;
+                    regionFaction.Entrenchment = 1;
+                    regionFaction.AntiAir = 1;
+                }
+                if (regionFaction.IsPublic)
+                {
+                    ApplyPublicFactionWarActivities(regionFaction);
+                }
+                else
+                {
+                    ApplyHiddenFactionWarActivities(regionFaction);
                 }
             }
         }
 
-        private void ApplyHiddenFactionActivities(RegionFaction hiddenFaction)
+        private void ApplyHiddenFactionWarActivities(RegionFaction hiddenFaction)
         {
             // determine if there are public enemy forces in the region
             // determine if there are public enemy forces in adjacent regions
@@ -284,7 +311,7 @@ namespace OnlyWar.Helpers.Sector
 
         }
 
-        private void ApplyPublicFactionActivities(RegionFaction publicFaction)
+        private void ApplyPublicFactionWarActivities(RegionFaction publicFaction)
         {
             // determine the forces available
             long organizedTroops = (int)(publicFaction.Population * publicFaction.Organization / 100);
@@ -373,6 +400,151 @@ namespace OnlyWar.Helpers.Sector
                     .Sum(s => s.Members.Count);
             }
             return totalTroops;
+        }
+
+        private void EndOfTurnRegionFactionsUpdate(RegionFaction regionFaction, float pdfRatio)
+        {
+            Planet planet = regionFaction.Region.Planet;
+            Faction controllingFaction = planet.GetControllingFaction();
+            float newPop = 0;
+            switch (regionFaction.PlanetFaction.Faction.GrowthType)
+            {
+                case GrowthType.Logistic:
+                    newPop = regionFaction.Population * 0.00015f;
+                    break;
+                case GrowthType.Conversion:
+                    newPop = ConvertPopulation(regionFaction.Region, regionFaction, newPop);
+                    if (regionFaction.PlanetFaction.Faction.Id != controllingFaction.Id &&
+                        planet.PlanetFactionMap[controllingFaction.Id].Leader != null)
+                    {
+                        // TODO: see if the governor notices the converted population
+                    }
+                    break;
+                default:
+                    newPop = regionFaction.Population * 0.0001f;
+                    break;
+            }
+            if (RNG.GetLinearDouble() < newPop % 1)
+            {
+                newPop++;
+            }
+            regionFaction.Population += (int)newPop;
+            UpdateRegionFactionForces(regionFaction, pdfRatio, newPop);
+        }
+
+        private void EndOfTurnLeaderUpdate(Planet planet, PlanetFaction planetFaction)
+        {
+            // TODO: see if this leader dies
+            if (planetFaction.Leader.ActiveRequest != null)
+            {
+                // see if the request has been fulfilled
+                if (planetFaction.Leader.ActiveRequest.IsRequestCompleted())
+                {
+                    // remove the active request
+                    planetFaction.Leader.ActiveRequest = null;
+                    // improve leader opinion of player
+                    planetFaction.Leader.OpinionOfPlayerForce +=
+                        planetFaction.Leader.Appreciation * (1 - planetFaction.Leader.OpinionOfPlayerForce);
+                }
+                else
+                {
+                    // decrement the leader's opinion based on the unfulfilled request
+                    // the average governor will drop 0.01 opinion per week.
+                    planetFaction.Leader.OpinionOfPlayerForce -= (0.005f / planetFaction.Leader.Patience);
+                    // TODO: some notion of canceling a request?
+                }
+            }
+            else if (planetFaction.Leader.OpinionOfPlayerForce > 0)
+            {
+                GenerateRequests(planet, planetFaction);
+            }
+        }
+
+        private void GenerateRequests(Planet planet, PlanetFaction planetFaction)
+        {
+            bool found = false;
+            bool evidenceFound = false;
+            if (planet.PlanetFactionMap.Count > 1)
+            {
+                // there are other factions on planet
+                foreach (PlanetFaction planetOtherFaction in planet.PlanetFactionMap.Values)
+                {
+
+                    // make sure this is a different faction and that there isn't already a request about it
+                    if (planetOtherFaction.Faction.Id != planetFaction.Faction.Id)
+                    {
+                        if (!planetOtherFaction.IsPublic)
+                        {
+                            // see if the leader detects this faction
+                            float popRatio = ((float)planetOtherFaction.Population) / ((float)planet.Population);
+                            float chance = popRatio * planetFaction.Leader.Investigation;
+                            double roll = RNG.GetLinearDouble();
+                            if (roll < chance)
+                            {
+                                found = true;
+                                evidenceFound = roll < (chance / 10.0);
+                                break;
+                            }
+                        }
+                        else
+                        {
+                            found = true;
+                            evidenceFound = true;
+                            break;
+                        }
+                    }
+                }
+            }
+            if (!found)
+            {
+                // no real threats, see if the leader is paranoid enough to see a threat anyway
+                double roll = RNG.GetLinearDouble();
+                if (roll < planetFaction.Leader.Paranoia)
+                {
+                    found = true;
+                    evidenceFound = roll < (planetFaction.Leader.Paranoia / 10.0);
+                }
+            }
+
+            if (found)
+            {
+                // determine if the leader wants to turn this finding into a request
+                float chance = planetFaction.Leader.Neediness * planetFaction.Leader.OpinionOfPlayerForce;
+                double roll = RNG.GetLinearDouble();
+                if (roll < chance)
+                {
+                    // generate a new request
+                    IRequest request = RequestFactory.Instance.GenerateNewRequest(planet, planetFaction.Leader, GameDataSingleton.Instance.Date);
+                    planetFaction.Leader.ActiveRequest = request;
+                    GameDataSingleton.Instance.Sector.PlayerForce.Requests.Add(request);
+                }
+            }
+        }
+
+        private float ConvertPopulation(Region region, RegionFaction regionFaction, float newPop)
+        {
+            RegionFaction defaultFaction = region.RegionFactionMap.Values.First(pf => pf.PlanetFaction.Faction.IsDefaultFaction);
+            // converting factions always convert one new member per week
+            if (defaultFaction?.Population > 0)
+            {
+                defaultFaction.Population--;
+                regionFaction.Population++;
+                float pdfChance = (float)(defaultFaction.Garrison) / defaultFaction.Population;
+                if (RNG.GetLinearDouble() < pdfChance)
+                {
+                    defaultFaction.Garrison--;
+                    regionFaction.Garrison++;
+                }
+                if (regionFaction.Population > 100)
+                {
+                    // at larger sizes, converting factions
+                    // also grow organically 
+                    // at a much faster rate than a normal population
+                    newPop = regionFaction.Population * 0.002f;
+                }
+            }
+
+            return newPop;
         }
     }
 }
