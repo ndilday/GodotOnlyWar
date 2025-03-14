@@ -1,7 +1,7 @@
 [gd_scene load_steps=4 format=3 uid="uid://b5sny34jdvj4p"]
 
-[ext_resource type="Script" path="res://StartMenu/StartMenu.cs" id="1_k7bfn"]
-[ext_resource type="Texture2D" uid="uid://bafy7025gadvp" path="res://StartMenu/burningBuilding.jpg" id="1_vpgy8"]
+[ext_resource type="Script" uid="uid://otrqruhs83pp" path="res://Scenes/StartMenu/StartMenu.cs" id="1_k7bfn"]
+[ext_resource type="Texture2D" uid="uid://cvdhymiijfmue" path="res://Scenes/StartMenu/burningBuilding.jpg" id="1_vpgy8"]
 
 [sub_resource type="Theme" id="Theme_hbxc8"]
 
@@ -34,7 +34,6 @@ offset_bottom = 300.0
 grow_horizontal = 2
 theme = SubResource("Theme_hbxc8")
 text = "ONLY WAR"
-fit_content_height = true
 scroll_active = false
 tab_size = 3
 
@@ -52,7 +51,7 @@ offset_left = 474.0
 offset_top = 468.0
 offset_right = 570.0
 offset_bottom = 499.0
-disabled = true
 text = "Load Game"
 
 [connection signal="pressed" from="NewGameButton" to="." method="OnNewGameButtonPressed"]
+[connection signal="pressed" from="LoadGameButton" to="." method="OnLoadGameButtonPressed"]
