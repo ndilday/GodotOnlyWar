@@ -1,4 +1,5 @@
 using Godot;
+using OnlyWar.Helpers.Database.GameState;
 using OnlyWar.Helpers.Sector;
 using OnlyWar.Models;
 using OnlyWar.Models.Planets;
@@ -29,6 +30,7 @@ public partial class MainGameScene : Control
     {
         _bottomMenu = GetNode<BottomMenu>("UILayer/BottomMenu");
         _topMenu = GetNode<TopMenu>("UILayer/TopMenu");
+        _topMenu.SaveButtonPressed += OnSaveButtonPressed;
         _bottomMenu.ChapterButtonPressed += OnChapterButtonPressed;
         _bottomMenu.ApothecariumButtonPressed += OnApothecariumButtonPressed;
         _bottomMenu.ConquistorumButtonPressed += OnConquistorumButtonPressed;
@@ -85,6 +87,42 @@ public partial class MainGameScene : Control
         _sectorMap.SetProcessInput(isVisible);
         _topMenu.Visible = isVisible;
         _bottomMenu.Visible = isVisible;
+    }
+
+    private async void OnSaveButtonPressed(object sender, EventArgs e)
+    {
+        string message = "";
+        var units = GameDataSingleton.Instance.GameRulesData.Factions.SelectMany(f => f.Units);
+        try
+        {
+            GameStateDataAccess.Instance.SaveData(
+                "default.s3db",
+                GameDataSingleton.Instance.Date,
+                GameDataSingleton.Instance.Sector.Characters,
+                GameDataSingleton.Instance.Sector.PlayerForce.Requests,
+                GameDataSingleton.Instance.Sector.Planets.Values,
+                GameDataSingleton.Instance.Sector.Fleets.Values,
+                units,
+                GameDataSingleton.Instance.Sector.PlayerForce.Army.PlayerSoldierMap.Values,
+                GameDataSingleton.Instance.Sector.PlayerForce.BattleHistory);
+            message = "SAVED!";
+        }
+        catch (Exception exception)
+        {
+            GD.PushWarning($"Save Failed: {exception.Message}");
+            message = "SAVE FAILED!";
+        }
+        finally
+        {
+            // Update button text temporarily
+            _topMenu.SetSaveButtonText(message);
+
+            // Wait for a short duration (e.g., 1.5 seconds) using Godot's Timer
+            await ToSignal(GetTree().CreateTimer(2f), "timeout");
+
+            // Revert button text back to original
+            _topMenu.SetSaveButtonText("Save");
+        }
     }
 
     private void OnChapterButtonPressed(object sender, EventArgs e)
