@@ -1,7 +1,7 @@
 [gd_scene load_steps=4 format=3 uid="uid://b5sny34jdvj4p"]
 
-[ext_resource type="Script" uid="uid://otrqruhs83pp" path="res://Scenes/StartMenu/StartMenu.cs" id="1_k7bfn"]
-[ext_resource type="Texture2D" uid="uid://cvdhymiijfmue" path="res://Scenes/StartMenu/burningBuilding.jpg" id="1_vpgy8"]
+[ext_resource type="Script" uid="uid://o0v21k1awlev" path="res://Scenes/StartMenu/StartMenu.cs" id="1_k7bfn"]
+[ext_resource type="Texture2D" uid="uid://drpw28d377tlh" path="res://Scenes/StartMenu/burningBuilding.jpg" id="1_vpgy8"]
 
 [sub_resource type="Theme" id="Theme_hbxc8"]
 

@@ -389,10 +389,10 @@ namespace OnlyWar.Helpers.Database.GameRules
                         squadTemplatesByFactionId[factionId] = [];
                     }
                     squadTemplatesByFactionId[factionId].Add(squadTemplate);
-                    foreach(KeyValuePair<int, int> kvp in bodyguardMap)
-                    {
-                        squadTemplateMap[kvp.Key].BodyguardSquadTemplate = squadTemplateMap[kvp.Value];
-                    }
+                }
+                foreach (KeyValuePair<int, int> kvp in bodyguardMap)
+                {
+                    squadTemplateMap[kvp.Key].BodyguardSquadTemplate = squadTemplateMap[kvp.Value];
                 }
             }
             return new Tuple<Dictionary<int, List<SquadTemplate>>, Dictionary<int, SquadTemplate>>(squadTemplatesByFactionId, squadTemplateMap);

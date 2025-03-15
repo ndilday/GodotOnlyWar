@@ -22,21 +22,20 @@ public partial class StartMenu : Control
 
     private async void LoadMainGameScene(bool loadGame)
     {
-        // Instantiate MainGameScene
-        PackedScene mainGameSceneScene = GD.Load<PackedScene>("res://Scenes/MainGameScreen/main_game_scene.tscn");
-        MainGameScene mainGameSceneInstance = mainGameSceneScene.Instantiate<MainGameScene>();
-
         // Initialize Game Data (New or Load) BEFORE adding MainGameScene to tree
         if (loadGame)
         {
-            LoadGameData(mainGameSceneInstance); // Pass MainGameScene instance if needed later
+            LoadGameData(); // Pass MainGameScene instance if needed later
         }
         else
         {
-            InitializeNewGame(mainGameSceneInstance); // Pass MainGameScene instance if needed later
+            InitializeNewGame(); // Pass MainGameScene instance if needed later
         }
 
         // Replace StartMenu with MainGameScene
+        // Instantiate MainGameScene
+        PackedScene mainGameSceneScene = GD.Load<PackedScene>("res://Scenes/MainGameScreen/main_game_scene.tscn");
+        MainGameScene mainGameSceneInstance = mainGameSceneScene.Instantiate<MainGameScene>();
         QueueFree(); // StartMenu removes itself
         GetParent().AddChild(mainGameSceneInstance); // Add MainGameScene to the *parent* of StartMenu
 
@@ -45,14 +44,14 @@ public partial class StartMenu : Control
         // mainGameSceneInstance.GameWorldLoaded(); // Example signal - implement if needed in MainGameScene
     }
 
-    private void InitializeNewGame(MainGameScene mainGameSceneInstance)
+    private void InitializeNewGame()
     {
         GameDataSingleton.Instance.InitializeNewGameData(
             new GameRulesData(),
             new Date(39, 500, 1));
     }
 
-    private void LoadGameData(MainGameScene mainGameSceneInstance)
+    private void LoadGameData()
     {
         GameRulesData gameRulesData = new GameRulesData(); // Load Game Rules Data (if needed for loading)
 
