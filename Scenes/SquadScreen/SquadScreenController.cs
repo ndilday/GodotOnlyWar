@@ -66,13 +66,13 @@ public partial class SquadScreenController : DialogController
     private void OnPasteOrders(object sender, EventArgs e)
     {
         _squad.CurrentOrders = new Order(
-            _squad, 
-            _savedOrders.TargetRegion, 
+            new List<Squad> { _squad }, 
             _savedOrders.Disposition, 
             _savedOrders.IsQuiet, 
             _savedOrders.IsActivelyEngaging, 
-            _savedOrders.LevelOfAggression, 
-            _savedOrders.MissionType);
+            _savedOrders.LevelOfAggression,
+            _savedOrders.Mission);
+        _savedOrders.AssignedSquads.Add(_squad);
         PopulateOrderDetails();
     }
 
@@ -210,9 +210,9 @@ public partial class SquadScreenController : DialogController
         List<Tuple<string, string>> lines = [];
         if (_squad.CurrentOrders != null)
         {
-            lines.Add(new Tuple<string, string>("Mission Type", _squad.CurrentOrders.MissionType.ToString()));
-            lines.Add(new Tuple<string, string>("Mission Target", _squad.CurrentOrders.TargetRegion.Name));
-            lines.Add(new Tuple<string, string>("Size of Operation", "This Squad"));
+            lines.Add(new Tuple<string, string>("Mission Type", _squad.CurrentOrders.Mission.MissionType.ToString()));
+            lines.Add(new Tuple<string, string>("Mission Target", _squad.CurrentOrders.Mission.Region.Name));
+            lines.Add(new Tuple<string, string>("Size of Operation", $"{_squad.CurrentOrders.AssignedSquads.Count} squads"));
             lines.Add(new Tuple<string, string>("Engagement Level", _squad.CurrentOrders.LevelOfAggression.ToString()));
             _view.SetOpenOrdersButtonText("Edit Current Orders");
         }

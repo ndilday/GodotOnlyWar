@@ -15,19 +15,19 @@ namespace OnlyWar.Helpers.Missions.Recon
         public void ExecuteMissionStep(MissionContext context, float marginOfSuccess, IMissionStep returnStep)
         {
             // decide whether to fight or flee
-            context.Log.Add($"Day {context.DaysElapsed}: Force is detected by enemy forces in {context.Region.Name}");
+            context.Log.Add($"Day {context.DaysElapsed}: Force is detected by enemy forces in {context.Order.Mission.Region.Name}");
             // compare size of each force
             float opForSize = context.OpposingForces.Sum(s => s.Squad.SquadTemplate.BattleValue);
             float playerSize = context.PlayerSquads.Sum(s => s.Squad.SquadTemplate.BattleValue);
-            if(context.Aggression == Aggression.Attritional)
+            if(context.Order.LevelOfAggression == Aggression.Attritional)
             {
                 playerSize *= 2;
             }
-            else if(context.Aggression == Aggression.Cautious)
+            else if(context.Order.LevelOfAggression == Aggression.Cautious)
             {
                 opForSize *= 2;
             }
-            if(playerSize >= opForSize || context.Aggression == Aggression.Aggressive)
+            if(playerSize >= opForSize || context.Order.LevelOfAggression == Aggression.Aggressive)
             {
                 new MeetingEngagementMissionStep().ExecuteMissionStep(context, marginOfSuccess, returnStep);
             }

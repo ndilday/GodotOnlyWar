@@ -1,4 +1,5 @@
 ﻿using OnlyWar.Helpers.Missions;
+using OnlyWar.Helpers.Missions.Ambush;
 using OnlyWar.Helpers.Missions.Assassination;
 using OnlyWar.Helpers.Missions.Recon;
 using OnlyWar.Helpers.Missions.Sabotage;
@@ -11,7 +12,7 @@ namespace OnlyWar.Builders
     {
         public static IMissionStep GetStartingStep(MissionContext context)
         {
-            if (context.Region != context.PlayerSquads.First().Squad.CurrentRegion)
+            if (context.Order.Mission.Region != context.PlayerSquads.First().Squad.CurrentRegion)
             {
                 return new InfiltrateMissionStep();
             }
@@ -20,7 +21,7 @@ namespace OnlyWar.Builders
 
         public static IMissionStep GetMainInitialStep(MissionContext context)
         {
-            switch (context.MissionType)
+            switch (context.Order.Mission.MissionType)
             {
                 case MissionType.Recon:
                     return new ReconStealthMissionStep();
@@ -28,6 +29,8 @@ namespace OnlyWar.Builders
                     return new SabotageStealthMissionStep();
                 case MissionType.Assassination:
                     return new AssassinateStealthMissionStep();
+                case MissionType.Ambush:
+                    return new AmbushStealthMissionStep();
             }
             return null;
         }

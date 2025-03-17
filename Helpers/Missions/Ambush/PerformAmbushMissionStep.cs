@@ -1,19 +1,20 @@
-﻿using OnlyWar.Helpers.Missions.Recon;
-using OnlyWar.Helpers.Missions.Sabotage;
+﻿using OnlyWar.Helpers.Missions.Assassination;
+using OnlyWar.Helpers.Missions.Recon;
 using OnlyWar.Models.Missions;
 using OnlyWar.Models.Planets;
 using OnlyWar.Models.Soldiers;
 using OnlyWar.Models;
 using System;
+using System.Collections.Generic;
 using System.Linq;
 
-namespace OnlyWar.Helpers.Missions.Assassination
+namespace OnlyWar.Helpers.Missions.Ambush
 {
-    public class AssassinateStealthMissionStep : IMissionStep
+    public class PerformAmbushMissionStep : IMissionStep
     {
-        public string Description { get { return "Assassinate Stealth"; } }
+        public string Description { get { return "Ambush"; } }
 
-        public AssassinateStealthMissionStep() { }
+        public PerformAmbushMissionStep() { }
 
         public void ExecuteMissionStep(MissionContext context, float marginOfSuccess, IMissionStep returnStep)
         {
@@ -38,7 +39,7 @@ namespace OnlyWar.Helpers.Missions.Assassination
             }
             else
             {
-                new DetectedMissionStep().ExecuteMissionStep(context, margin, this);
+                new MeetingEngagementMissionStep().ExecuteMissionStep(context, margin, this);
             }
         }
     }

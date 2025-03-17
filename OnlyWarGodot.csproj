@@ -8,7 +8,4 @@
     <PackageReference Include="Microsoft.Data.Sqlite" Version="9.0.0" />
     <PackageReference Include="SQLite" Version="3.13.0" />
   </ItemGroup>
-  <ItemGroup>
-    <Folder Include="Helpers\Missions\Ambush\" />
-  </ItemGroup>
 </Project>

@@ -1,19 +1,22 @@
-﻿using OnlyWar.Helpers.Missions.Recon;
-using OnlyWar.Helpers.Missions.Sabotage;
+﻿using OnlyWar.Helpers.Missions.Assassination;
+using OnlyWar.Helpers.Missions.Recon;
 using OnlyWar.Models.Missions;
 using OnlyWar.Models.Planets;
 using OnlyWar.Models.Soldiers;
 using OnlyWar.Models;
 using System;
+using System.Collections.Generic;
 using System.Linq;
+using System.Text;
+using System.Threading.Tasks;
 
-namespace OnlyWar.Helpers.Missions.Assassination
+namespace OnlyWar.Helpers.Missions.Ambush
 {
-    public class AssassinateStealthMissionStep : IMissionStep
+    public class AmbushStealthMissionStep : IMissionStep
     {
-        public string Description { get { return "Assassinate Stealth"; } }
+        public string Description { get { return "Ambush Stealth"; } }
 
-        public AssassinateStealthMissionStep() { }
+        public AmbushStealthMissionStep() { }
 
         public void ExecuteMissionStep(MissionContext context, float marginOfSuccess, IMissionStep returnStep)
         {
@@ -34,10 +37,11 @@ namespace OnlyWar.Helpers.Missions.Assassination
             float margin = missionTest.RunMissionCheck(context.PlayerSquads);
             if (margin > 0.0f)
             {
-                new PerformAssassinationMissionStep().ExecuteMissionStep(context, margin, this);
+                new PerformAmbushMissionStep().ExecuteMissionStep(context, margin, this);
             }
             else
             {
+                // 
                 new DetectedMissionStep().ExecuteMissionStep(context, margin, this);
             }
         }

@@ -1,5 +1,5 @@
-﻿using OnlyWar.Helpers.Battles;
-using OnlyWar.Helpers.Battles.Placers;
+﻿using OnlyWar.Helpers.Battles.Placers;
+using OnlyWar.Helpers.Battles;
 using OnlyWar.Helpers.Extensions;
 using OnlyWar.Models.Missions;
 using System.Collections.Generic;
@@ -7,7 +7,7 @@ using System.Linq;
 
 namespace OnlyWar.Helpers.Missions
 {
-    internal class AmbushedMissionStep : IMissionStep
+    internal class AmbushMissionStep : IMissionStep
     {
         public string Description { get { return "Ambushed"; } }
 
@@ -18,9 +18,9 @@ namespace OnlyWar.Helpers.Missions
             // set up Ambush battle with OpFor attacker and context.Squad defender
             BattleGridManager bgm = new BattleGridManager();
             AmbushPlacer placer = new AmbushPlacer(bgm, range);
-            var squadPostionMap = placer.PlaceSquads(context.PlayerSquads, context.OpposingForces);
+            var squadPostionMap = placer.PlaceSquads(context.OpposingForces, context.PlayerSquads);
             int oppForSize = context.OpposingForces.Sum(s => s.AbleSoldiers.Count);
-            string log = $"Day {context.DaysElapsed}: Force was ambushed by {oppForSize} {context.OpposingForces.First().Squad.Faction.Name}\n";
+            string log = $"Day {context.DaysElapsed}: Force ambushed {oppForSize} {context.OpposingForces.First().Squad.Faction.Name}\n";
             context.Log.Add(log);
             // run the battle
             BattleTurnResolver resolver = new BattleTurnResolver(bgm, context.PlayerSquads, context.OpposingForces, context.Order.Mission.Region.Planet);

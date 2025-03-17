@@ -22,7 +22,7 @@ namespace OnlyWar.Helpers.Missions.Recon
             // mod for enemy recon focus
             // mod for equipment
             BaseSkill stealth = GameDataSingleton.Instance.GameRulesData.BaseSkillMap.Values.First(s => s.Name == "Stealth");
-            RegionFaction enemyFaction = context.Region.RegionFactionMap.Values.First(rf => !rf.PlanetFaction.Faction.IsPlayerFaction && !rf.PlanetFaction.Faction.IsDefaultFaction);
+            RegionFaction enemyFaction = context.Order.Mission.Region.RegionFactionMap.Values.First(rf => !rf.PlanetFaction.Faction.IsPlayerFaction && !rf.PlanetFaction.Faction.IsDefaultFaction);
             float difficulty = enemyFaction.Detection;
             // every degree of magnitude of troops adds one to the difficulty
             difficulty += (float)Math.Log(context.PlayerSquads.Sum(s => s.AbleSoldiers.Count), 10);
@@ -34,7 +34,7 @@ namespace OnlyWar.Helpers.Missions.Recon
                 return;
             }
             context.DaysElapsed++;
-            context.Log.Add($"Day {context.DaysElapsed}: Force attempting to infiltrate into {context.Region.Name}");
+            context.Log.Add($"Day {context.DaysElapsed}: Force attempting to infiltrate into {context.Order.Mission.Region.Name}");
             // modifiers should include: size of enemy forces, size of player force, terrain, some notion of enemy focus (hunting, defending, hiding), whether enemy is hidden or public
             float margin = missionTest.RunMissionCheck(context.PlayerSquads);
             if (margin > 0.0f)
