@@ -13,14 +13,14 @@ public partial class EndOfTurnDialogController : DialogController
         _view = GetNode<EndOfTurnDialogView>("DialogView");
     }
 
-    public void AddData(IEnumerable<MissionContext> missionContexts, IEnumerable<SpecialMission> specialMissions)
+    public void AddData(IEnumerable<MissionContext> missionContexts, IEnumerable<Mission> specialMissions)
     {
         List<string> strings = new List<string>();
         foreach (MissionContext context in missionContexts)
         {
             strings.AddRange(context.Log);
         }
-        foreach (SpecialMission mission in specialMissions)
+        foreach (Mission mission in specialMissions)
         {
             strings.Add($"We have a {mission.MissionType} opportunity in {mission.Region.Name}");
         }

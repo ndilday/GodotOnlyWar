@@ -1,4 +1,5 @@
-﻿using OnlyWar.Models.Equippables;
+﻿using OnlyWar.Builders;
+using OnlyWar.Models.Equippables;
 using OnlyWar.Models.Fleets;
 using OnlyWar.Models.Missions;
 using OnlyWar.Models.Orders;
@@ -22,6 +23,7 @@ namespace OnlyWar.Helpers.Database.GameState
         {
             Dictionary<int, List<Squad>> squadMap = [];
             Dictionary<int, Squad> squadByIdMap = [];
+            var missionMap = regionMap.Values.SelectMany(r => r.SpecialMissions).ToDictionary(m => m.Id, m => m);
             using (var command = connection.CreateCommand())
             {
                 command.CommandText = "SELECT * FROM Squad";
@@ -63,36 +65,65 @@ namespace OnlyWar.Helpers.Database.GameState
                     squadMap[parentUnitId].Add(squad);
                 }
             }
-            PopulateOrdersBySquadId(connection, regionMap, squadByIdMap);
+            var orderSquadMap = GetOrderSquadMapping(connection, squadByIdMap);
+            PopulateOrdersBySquadId(connection, regionMap, squadByIdMap, orderSquadMap, missionMap);
 
             return squadMap;
         }
 
-        private void PopulateOrdersBySquadId(IDbConnection connection,
-                                            IReadOnlyDictionary<int, Region> regionMap,
-                                            IReadOnlyDictionary<int, Squad> squadMap)
+        private Dictionary<int, List<Squad>> GetOrderSquadMapping(IDbConnection connection,
+            IReadOnlyDictionary<int, Squad> squadMap)
         {
+            Dictionary<int, List<Squad>> orderSquadMap = [];
+
             using (var command = connection.CreateCommand())
             {
-                command.CommandText = "SELECT * FROM SquadOrder";
+                int maxOrderId = 0;
+                command.CommandText = "SELECT * FROM OrderSquad";
                 var reader = command.ExecuteReader();
                 while (reader.Read())
                 {
                     int orderId = reader.GetInt32(0);
                     int squadId = reader.GetInt32(1);
-                    int regionId = reader.GetInt32(2);
-                    int disposition = reader.GetInt32(3);
-                    bool isQuiet = reader.GetBoolean(4);
-                    bool isActivelyEngaging = reader.GetBoolean(5);
-                    int aggression = reader.GetInt32(6);
-                    int missionType = reader.GetInt32(7);
+                    if (!orderSquadMap.ContainsKey(orderId))
+                    {
+                        orderSquadMap[orderId] = [];
+                    }
+                    orderSquadMap[orderId].Add(squadMap[squadId]);
+                }
+            }
+
+            return orderSquadMap;
+        }
+
+        private void PopulateOrdersBySquadId(IDbConnection connection,
+                                            IReadOnlyDictionary<int, Region> regionMap,
+                                            IReadOnlyDictionary<int, Squad> squadMap,
+                                            IReadOnlyDictionary<int, List<Squad>> orderSquadMap,
+                                            IReadOnlyDictionary<int, Mission> missionMap)
+        {
+            using (var command = connection.CreateCommand())
+            {
+                int maxOrderId = 0;
+                command.CommandText = "SELECT * FROM Assignment";
+                var reader = command.ExecuteReader();
+                while (reader.Read())
+                {
+                    int orderId = reader.GetInt32(0);
+                    int missionId = reader.GetInt32(1);
+                    int disposition = reader.GetInt32(2);
+                    bool isQuiet = reader.GetBoolean(3);
+                    bool isActivelyEngaging = reader.GetBoolean(4);
+                    int aggression = reader.GetInt32(5);
                     Disposition disp = (Disposition)disposition;
                     Aggression agg = (Aggression)aggression;
-                    MissionType mt = (MissionType)missionType;
-                    Region region = regionMap[regionId];
-                    Squad squad = squadMap[squadId];
-                    squad.CurrentOrders = new Order(orderId, squad, region, disp, isQuiet, isActivelyEngaging, agg, mt);
+                    Order order = new Order(orderId, orderSquadMap[orderId], disp, isQuiet, isActivelyEngaging, agg, missionMap[missionId]);
+                    if(orderId > maxOrderId)
+                    {
+                        maxOrderId = orderId;
+                    }
                 }
+                IdGenerator.SetNextOrderId(maxOrderId + 1);
             }
         }
 
@@ -214,10 +245,6 @@ namespace OnlyWar.Helpers.Database.GameState
             {
                 SaveSquadLoadout(transaction, squad);
             }
-            if(squad.CurrentOrders != null)
-            {
-                SaveSquadOrders(transaction, squad);
-            }
         }
 
         private void SaveSquadLoadout(IDbTransaction transaction, Squad squad)
@@ -234,16 +261,22 @@ namespace OnlyWar.Helpers.Database.GameState
             }
         }
 
-        private void SaveSquadOrders(IDbTransaction transaction, Squad squad)
+        public void SaveOrder(IDbTransaction transaction, Order order)
         {
-            if(squad.CurrentOrders != null)
+            // CREATE TABLE Assignment (Id INTEGER PRIMARY KEY UNIQUE NOT NULL, MissionId INTEGER NOT NULL REFERENCES Mission (Id), Disposition INTEGER NOT NULL, IsQuiet BOOLEAN NOT NULL, IsActivelyEngaging BOOLEAN NOT NULL, Aggression INTEGER NOT NULL);
+            string insert = $@"INSERT INTO Assignment VALUES 
+            ({ order.Id}, {order.Mission.Id}, {order.Mission.Region.Id}, 
+                {order.Disposition}, {order.IsQuiet}, {order.IsActivelyEngaging}, 
+                {order.LevelOfAggression});";
+            using (var command = transaction.Connection.CreateCommand())
             {
-                Order order = squad.CurrentOrders;
-                // CREATE TABLE SquadOrder (OrderId INTEGER PRIMARY KEY UNIQUE NOT NULL, SquadId INTEGER NOT NULL REFERENCES Squad (Id), RegionId INTEGER NOT NULL REFERENCES Region (Id), Disposition INTEGER NOT NULL, IsQuiet BOOLEAN NOT NULL, IsActivelyEngaging BOOLEAN NOT NULL, Aggression INTEGER NOT NULL, MissionType INTEGER NOT NULL);
-                string insert = $@"INSERT INTO SquadOrder VALUES 
-                    ({order.Id}, {squad.Id}, {order.TargetRegion.Id}, 
-                    {order.Disposition}, {order.IsQuiet}, {order.IsActivelyEngaging}, 
-                    {order.LevelOfAggression}, {order.MissionType});";
+                command.CommandText = insert;
+                command.ExecuteNonQuery();
+            }
+            foreach(Squad squad in order.AssignedSquads)
+            {
+                insert = $@"INSERT INTO OrderSquad VALUES
+                ({order.Id}, {squad.Id});";
                 using (var command = transaction.Connection.CreateCommand())
                 {
                     command.CommandText = insert;

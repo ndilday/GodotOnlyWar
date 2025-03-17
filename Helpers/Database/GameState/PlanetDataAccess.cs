@@ -1,5 +1,7 @@
-﻿using OnlyWar.Helpers.Extensions;
+﻿using OnlyWar.Builders;
+using OnlyWar.Helpers.Extensions;
 using OnlyWar.Models;
+using OnlyWar.Models.Missions;
 using OnlyWar.Models.Planets;
 using System;
 using System.Collections.Generic;
@@ -79,6 +81,48 @@ namespace OnlyWar.Helpers.Database.GameState
                 }
             }
             return regionMap;
+        }
+
+        public void PopulateRegionMissions(IDbConnection connection,
+                                           IReadOnlyDictionary<int, Region> regionMap)
+        {
+            using (var command = connection.CreateCommand())
+            {
+                command.CommandText = "SELECT * FROM Mission";
+                var reader = command.ExecuteReader();
+                int maxId = 0;
+
+                while (reader.Read())
+                {
+                    int id = reader.GetInt32(0);
+                    MissionType missionType = (MissionType)reader.GetInt32(1);
+                    int regionId = reader.GetInt32(2);
+                    string regionName = reader[3].ToString();
+                    int missionSize = reader.GetInt32(4);
+                    DefenseType? defenseType = null;
+                    if (reader[5].GetType() != typeof(DBNull))
+                    {
+                        defenseType = (DefenseType)reader.GetInt32(5);
+                    }
+
+                    Region region = regionMap[regionId];
+                    Mission mission;
+                    if (defenseType == null)
+                    {
+                        mission = new Mission(id, missionType, region, missionSize);
+                    }
+                    else
+                    {
+                        mission = new SabotageMission(id, (DefenseType)defenseType, missionSize, region);
+                    }
+                    region.SpecialMissions.Add(mission);
+                    if(id > maxId)
+                    { 
+                        maxId = id; 
+                    }
+                }
+                IdGenerator.SetNextMissionId(maxId + 1);
+            }
         }
 
         private Dictionary<int, List<PlanetFaction>> GetPlanetFactions(IDbConnection connection,

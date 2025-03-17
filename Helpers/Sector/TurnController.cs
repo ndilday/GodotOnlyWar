@@ -15,12 +15,12 @@ namespace OnlyWar.Helpers.Sector
     class TurnController
     {
         public List<MissionContext> MissionContexts { get; private set; }
-        public List<SpecialMission> SpecialMissions { get; private set; }
+        public List<Mission> SpecialMissions { get; private set; }
 
         public TurnController()
         {
             MissionContexts = new List<MissionContext>();
-            SpecialMissions = new List<SpecialMission>();
+            SpecialMissions = new List<Mission>();
         }
 
         public void ProcessTurn(Models.Sector sector)
@@ -40,12 +40,12 @@ namespace OnlyWar.Helpers.Sector
                 foreach (Region region in planet.Regions)
                 {
                     // 25% chance of unexecuted special missions being removed
-                    foreach (SpecialMission specialMission in region.SpecialMissions)
+                    foreach (Mission mission in region.SpecialMissions)
                     {
                         if (RNG.GetIntBelowMax(0, 4) == 0)
                         {
                             // TODO: add to the end of turn log that the intelligence grew stale
-                            region.SpecialMissions.Remove(specialMission);
+                            region.SpecialMissions.Remove(mission);
                         }
                     }
                     if (region.IntelligenceLevel > 0)
@@ -82,18 +82,7 @@ namespace OnlyWar.Helpers.Sector
                 double chance = RNG.NextRandomZValue();
                 if (chance >= 2)
                 {
-                    // assassination
-                    // assume that each degree of magnitude of population increases the "size" of the highest leader
-                    // for example, with Tyranids, this could be
-                    // 1-10: Prime
-                    // 11-100: Broodlord
-                    // 101-1000: Zoenthope?
-                    // 1001-10000: Hive Tyrant
-                    int max = (int)Math.Log10(enemyRegionFaction.Population);
-                    int size = Math.Min(Math.Max((int)RNG.NextRandomZValue() + 1, 1), max);
-                    SpecialMission ass = new AssassinationMission(0, size, region);
-                    region.SpecialMissions.Add(ass);
-                    SpecialMissions.Add(ass);
+                    GenerateAssassinationMission(region, enemyRegionFaction);
                 }
                 else if (chance >= 1)
                 {
@@ -102,56 +91,78 @@ namespace OnlyWar.Helpers.Sector
                     int defenseTotal = enemyRegionFaction.Entrenchment + enemyRegionFaction.Detection + enemyRegionFaction.AntiAir;
                     if (defenseTotal == 0)
                     {
-                        //make it an ambush, instead
-                        SpecialMission ambush = new SpecialMission(0, MissionType.Ambush, region);
-                        region.SpecialMissions.Add(ambush);
-                        SpecialMissions.Add(ambush);
+                        GenerateAmbushMission(enemyRegionFaction);
                     }
                     else
                     {
-                        int roll = RNG.GetIntBelowMax(0, defenseTotal);
-                        if (roll <= enemyRegionFaction.Entrenchment)
-                        {
-                            // saborage the entrenchments
-                            int size = Math.Min(Math.Max((int)RNG.NextRandomZValue() + 1, 1), enemyRegionFaction.Entrenchment);
-                            SabotageMission sabotage = new SabotageMission(0, DefenseType.Entrenchment, size, region);
-                            region.SpecialMissions.Add(sabotage);
-                            SpecialMissions.Add(sabotage);
-                        }
-                        else
-                        {
-                            roll -= enemyRegionFaction.Entrenchment;
-                            if (roll <= enemyRegionFaction.Detection)
-                            {
-                                // sabotage the detection
-                                int size = Math.Min(Math.Max((int)RNG.NextRandomZValue() + 1, 1), enemyRegionFaction.Detection);
-                                SabotageMission sabotage = new SabotageMission(0, DefenseType.Detection, size, region);
-                                region.SpecialMissions.Add(sabotage);
-                                SpecialMissions.Add(sabotage);
-                            }
-                            else
-                            {
-                                // sabotage the antiair
-                                int size = Math.Min(Math.Max((int)RNG.NextRandomZValue() + 1, 1), enemyRegionFaction.AntiAir);
-                                SabotageMission sabotage = new SabotageMission(0, DefenseType.AntiAir, size, region);
-                                region.SpecialMissions.Add(sabotage);
-                                SpecialMissions.Add(sabotage);
-                            }
-                        }
+                        GenerateSabotageMission(region, enemyRegionFaction, defenseTotal);
                     }
                 }
                 else if (chance >= 0)
                 {
-                    // ambush, equipment/prisoner recovery
-                    SpecialMission ambush = new SpecialMission(0, MissionType.Ambush, region);
-                    region.SpecialMissions.Add(ambush);
-                    SpecialMissions.Add(ambush);
-                    // sniper's nest
-                    // prisoner recovery
-                    // equipment recovery
+                    GenerateAmbushMission(enemyRegionFaction);
 
                 }
             }
+        }
+
+        private void GenerateAmbushMission(RegionFaction enemyRegionFaction)
+        {
+            //make it an ambush, instead
+            double maxSize = Math.Log10(enemyRegionFaction.Garrison);
+            int size = Math.Min(Math.Max((int)RNG.NextRandomZValue() + 1, 1), (int)maxSize);
+            Mission ambush = new Mission(MissionType.Ambush, enemyRegionFaction.Region, size);
+            enemyRegionFaction.Region.SpecialMissions.Add(ambush);
+            SpecialMissions.Add(ambush);
+        }
+
+        private void GenerateSabotageMission(Region region, RegionFaction enemyRegionFaction, int defenseTotal)
+        {
+            int roll = RNG.GetIntBelowMax(0, defenseTotal);
+            if (roll <= enemyRegionFaction.Entrenchment)
+            {
+                // saborage the entrenchments
+                int size = Math.Min(Math.Max((int)RNG.NextRandomZValue() + 1, 1), enemyRegionFaction.Entrenchment);
+                SabotageMission sabotage = new SabotageMission(0, DefenseType.Entrenchment, size, region);
+                region.SpecialMissions.Add(sabotage);
+                SpecialMissions.Add(sabotage);
+            }
+            else
+            {
+                roll -= enemyRegionFaction.Entrenchment;
+                if (roll <= enemyRegionFaction.Detection)
+                {
+                    // sabotage the detection
+                    int size = Math.Min(Math.Max((int)RNG.NextRandomZValue() + 1, 1), enemyRegionFaction.Detection);
+                    SabotageMission sabotage = new SabotageMission(0, DefenseType.Detection, size, region);
+                    region.SpecialMissions.Add(sabotage);
+                    SpecialMissions.Add(sabotage);
+                }
+                else
+                {
+                    // sabotage the antiair
+                    int size = Math.Min(Math.Max((int)RNG.NextRandomZValue() + 1, 1), enemyRegionFaction.AntiAir);
+                    SabotageMission sabotage = new SabotageMission(0, DefenseType.AntiAir, size, region);
+                    region.SpecialMissions.Add(sabotage);
+                    SpecialMissions.Add(sabotage);
+                }
+            }
+        }
+
+        private void GenerateAssassinationMission(Region region, RegionFaction enemyRegionFaction)
+        {
+            // assassination
+            // assume that each degree of magnitude of population increases the "size" of the highest leader
+            // for example, with Tyranids, this could be
+            // 1-10: Prime
+            // 11-100: Broodlord
+            // 101-1000: Zoenthope?
+            // 1001-10000: Hive Tyrant
+            int max = (int)Math.Log10(enemyRegionFaction.Population);
+            int size = Math.Min(Math.Max((int)RNG.NextRandomZValue() + 1, 1), max);
+            Mission ass = new Mission(0, MissionType.Assassination, region, size);
+            region.SpecialMissions.Add(ass);
+            SpecialMissions.Add(ass);
         }
 
         public void HandleHiddenFactionIntelligence()
@@ -164,19 +175,16 @@ namespace OnlyWar.Helpers.Sector
         {
             foreach (Order order in sector.Orders.Values)
             {
-                List<BattleSquad> playerBattleSquads = new List<BattleSquad>
-                {
-                    new BattleSquad(true, order.OrderedSquad)
-                };
-                MissionContext context = new MissionContext(order.TargetRegion, order.MissionType, order.LevelOfAggression, playerBattleSquads, new List<BattleSquad>());
+                List<BattleSquad> playerBattleSquads = order.AssignedSquads.Select(s => new BattleSquad(true, s)).ToList();
+                MissionContext context = new MissionContext(order, playerBattleSquads, new List<BattleSquad>());
                 MissionStepOrchestrator.GetStartingStep(context).ExecuteMissionStep(context, 0, null);
                 MissionContexts.Add(context);
             }
 
             foreach (MissionContext context in MissionContexts)
             {
-                RegionFaction regionFaction = context.Region.RegionFactionMap.Values.First(rf => !rf.PlanetFaction.Faction.IsPlayerFaction && !rf.PlanetFaction.Faction.IsDefaultFaction);
-                switch (context.MissionType)
+                RegionFaction regionFaction = context.Order.Mission.Region.RegionFactionMap.Values.First(rf => !rf.PlanetFaction.Faction.IsPlayerFaction && !rf.PlanetFaction.Faction.IsDefaultFaction);
+                switch (context.Order.Mission.MissionType)
                 {
                     case MissionType.Assassination:
                         // 10 ^ (impact*100) / population = amount of org log
@@ -185,12 +193,12 @@ namespace OnlyWar.Helpers.Sector
                         regionFaction.Organization -= (int)Math.Min(orgLost, regionFaction.Organization);
                         break;
                     case MissionType.Recon:
-                        context.Region.IntelligenceLevel += context.Impact;
+                        context.Order.Mission.Region.IntelligenceLevel += context.Impact;
                         break;
                     case MissionType.Sabotage:
-                        SabotageOrder sabotageOrder = (SabotageOrder)context.PlayerSquads.First().Squad.CurrentOrders;
-                        int impact = (int)Math.Min(context.Impact, sabotageOrder.TargetSize);
-                        switch (sabotageOrder.DefenseType)
+                        SabotageMission sabotageMission = (SabotageMission)context.Order.Mission;
+                        int impact = (int)Math.Min(context.Impact, sabotageMission.MissionSize);
+                        switch (sabotageMission.DefenseType)
                         {
                             case DefenseType.Entrenchment:
                                 regionFaction.Entrenchment -= impact;
@@ -218,20 +226,20 @@ namespace OnlyWar.Helpers.Sector
             var planetSquads = planet.Regions
                 .SelectMany(region => region.RegionFactionMap.Values)
                 .SelectMany(rf => rf.LandedSquads)
-                .Where(s => s.CurrentOrders != null && s.CurrentOrders.TargetRegion != null);
+                .Where(s => s.CurrentOrders != null && s.CurrentOrders.Mission.Region != null);
 
             // Get all squads in fleets orbiting the planet
             var fleetSquads = planet.OrbitingTaskForceList
                 .SelectMany(tf => tf.Ships)
                 .SelectMany(ship => ship.LoadedSquads)
-                .Where(s => s.CurrentOrders != null && s.CurrentOrders.TargetRegion != null);
+                .Where(s => s.CurrentOrders != null && s.CurrentOrders.Mission.Region != null);
 
             // Combine the two lists
             var allSquads = planetSquads.Concat(fleetSquads);
 
             // Group squads by their target region based on their orders
             var squadsByTargetRegion = allSquads
-                .GroupBy(squad => squad.CurrentOrders.TargetRegion)
+                .GroupBy(squad => squad.CurrentOrders.Mission.Region)
                 .ToDictionary(group => group.Key, group => group.ToList());
 
             return squadsByTargetRegion;

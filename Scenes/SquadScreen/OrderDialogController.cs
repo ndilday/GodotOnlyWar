@@ -13,6 +13,7 @@ public partial class OrderDialogController : Control
 {
     private OrderDialogView _view;
     private Squad _squad;
+    private Region _currentlySelectedRegion;
     private const string AVOID = "The force will avoid any encounter that can't be overcome quickly and quietly.";
     private const string CAUTIOUS = "The force will avoid encounters where they do not have an overwhelming advantage.";
     private const string NORMAL = "The force will engage when it can vanquish the enemy with minimal casualties.";
@@ -39,7 +40,8 @@ public partial class OrderDialogController : Control
 
         // determine the regions adjacent to the squad's current region
         var adjacentRegions = RegionExtensions.GetSelfAndAdjacentRegions(squad.CurrentRegion);
-        PopulateRegionOptions(adjacentRegions, squad.CurrentOrders?.TargetRegion);
+        _currentlySelectedRegion = squad.CurrentOrders?.Mission.Region;
+        PopulateRegionOptions(adjacentRegions);
 
         if (squad.CurrentOrders == null)
         {
@@ -50,14 +52,14 @@ public partial class OrderDialogController : Control
         }
     }
 
-    private void PopulateRegionOptions(IReadOnlyList<Region> regions, Region currentlySelectedRegion = null)
+    private void PopulateRegionOptions(IReadOnlyList<Region> regions)
     {
         // foreach region, make a tuple of the region name and region Id
         var tuples = regions.Select(r => new Tuple<string, int>(r.Name, r.Id)).ToList();
         _view.PopulateRegionOptions(tuples);
-        if (currentlySelectedRegion != null)
+        if (_currentlySelectedRegion != null)
         {
-            _view.SelectRegion(currentlySelectedRegion.Id);
+            _view.SelectRegion(_currentlySelectedRegion.Id);
         }
         else
         {
@@ -65,13 +67,13 @@ public partial class OrderDialogController : Control
         }
     }
 
-    private void PopulateMissions(Region region)
+    private void PopulateMissions()
     {
         List<Tuple<string, int>> missionOptions = new List<Tuple<string, int>>();
-        missionOptions.Add(new Tuple<string, int>("Recon", (int)MissionType.Recon));
-        foreach (var mission in region.SpecialMissions)
+        missionOptions.Add(new Tuple<string, int>("Recon", -1));
+        foreach (var mission in _currentlySelectedRegion.SpecialMissions)
         {
-            missionOptions.Add(new Tuple<string, int>(mission.MissionType.ToString(), (int)mission.MissionType));
+            missionOptions.Add(new Tuple<string, int>(mission.MissionType.ToString(), mission.Id));
         }
         _view.PopulateMissionOptions(missionOptions);
     }
@@ -79,19 +81,28 @@ public partial class OrderDialogController : Control
     private void OnRegionOptionSelected(object sender, int e)
     {
         // get selected region
-        Region selectedRegion = _squad.CurrentRegion.Planet.Regions.First(r => r.Id == e);
+        _currentlySelectedRegion = _squad.CurrentRegion.Planet.Regions.First(r => r.Id == e);
         // get the missions available for the selected region
         // get the currently selected mission, if any
         // populate the mission dropbox
         // if the currently selected mission is still possible in the newly selected region, select it in the new region
-        PopulateMissions(selectedRegion);
+        PopulateMissions();
     }
 
     private void OnMissionOptionSelected(object sender, int e)
     {
         // change aggression helper text
         string text;
-        switch ((MissionType)e)
+        MissionType missionType;
+        if(e == -1)
+        {
+            missionType = MissionType.Recon;
+        }
+        else
+        {
+            missionType = _currentlySelectedRegion.SpecialMissions.First(m => m.Id == e).MissionType;
+        }
+        switch (missionType)
         {
             case MissionType.Recon:
                 text = "Probe the area to find hidden enemy forces and opportunities for special missions";
@@ -148,7 +159,17 @@ public partial class OrderDialogController : Control
         {
             GameDataSingleton.Instance.Sector.RemoveOrder(_squad.CurrentOrders);
         }
-        _squad.CurrentOrders = new Order(_squad, selectedRegion, Disposition.Mobile, true, false, aggro, MissionType.Recon);
+
+        Mission mission;
+        if(args.Item2 == -1)
+        {
+            mission = new Mission(MissionType.Recon, selectedRegion, 0);
+        }
+        else
+        {
+            mission = selectedRegion.SpecialMissions.First(m => m.Id == args.Item2);
+        }
+        _squad.CurrentOrders = new Order(new List<Squad> { _squad }, Disposition.Mobile, true, false, aggro, mission);
         GameDataSingleton.Instance.Sector.AddNewOrder(_squad.CurrentOrders);
         Visible = false;
         OrdersConfirmed?.Invoke(this, EventArgs.Empty);

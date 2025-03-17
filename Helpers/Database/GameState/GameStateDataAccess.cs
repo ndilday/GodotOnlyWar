@@ -12,6 +12,7 @@ using System.Collections.Generic;
 using System.Data;
 using System.IO;
 using System.Linq;
+using OnlyWar.Models.Orders;
 
 namespace OnlyWar.Helpers.Database.GameState
 {
@@ -177,6 +178,11 @@ namespace OnlyWar.Helpers.Database.GameState
                         {
                             _soldierDataAccess.SaveSoldier(transaction, soldier);
                         }
+                    }
+                    var orders = squads.Select(s => s.CurrentOrders).Distinct();
+                    foreach(Order order in orders)
+                    {
+                        _unitDataAccess.SaveOrder(transaction, order);
                     }
 
                     foreach(PlayerSoldier playerSoldier in playerSoldiers)

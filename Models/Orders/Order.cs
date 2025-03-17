@@ -1,7 +1,7 @@
 ﻿using OnlyWar.Builders;
 using OnlyWar.Models.Missions;
-using OnlyWar.Models.Planets;
 using OnlyWar.Models.Squads;
+using System.Collections.Generic;
 
 namespace OnlyWar.Models.Orders
 {
@@ -14,39 +14,27 @@ namespace OnlyWar.Models.Orders
     public class Order
     {
         public int Id { get; }
-        public Squad OrderedSquad { get; }
-        public Region TargetRegion { get; }
+        public List<Squad> AssignedSquads { get; }
         public Disposition Disposition { get; }
         public bool IsQuiet { get; }
         public bool IsActivelyEngaging { get; }
         public Aggression LevelOfAggression { get; }
-        public MissionType MissionType { get; }
+        public Mission Mission { get; }
 
-        public Order(Squad orderedSquad, Region targetRegion, Disposition disposition, bool isQuiet, bool isActivelyEngaging, Aggression levelOfAggression, MissionType missionType)
-        {
-            Id = OrderIdGenerator.GetNextOrderId();
-            OrderedSquad = orderedSquad;
-            Disposition = disposition;
-            IsQuiet = isQuiet;
-            IsActivelyEngaging = isActivelyEngaging;
-            LevelOfAggression = levelOfAggression;
-            TargetRegion = targetRegion;
-            MissionType = missionType;
-        }
+        public Order(List<Squad> orderedSquads, Disposition disposition, bool isQuiet, bool isActivelyEngaging, Aggression levelOfAggression, Mission mission) 
+            : this(IdGenerator.GetNextOrderId(), orderedSquads, disposition, isQuiet, isActivelyEngaging, levelOfAggression, mission) {}
 
-        public Order(int id, Squad orderedSquad, Region targetRegion, Disposition disposition, bool isQuiet, bool isActivelyEngaging, Aggression levelOfAggression, MissionType missionType)
+        public Order(int id, List<Squad> orderedSquads, Disposition disposition, bool isQuiet, bool isActivelyEngaging, Aggression levelOfAggression, Mission mission)
         {
             Id = id;
-            OrderedSquad = orderedSquad;
+            AssignedSquads = orderedSquads; 
             Disposition = disposition;
             IsQuiet = isQuiet;
             IsActivelyEngaging = isActivelyEngaging;
             LevelOfAggression = levelOfAggression;
-            TargetRegion = targetRegion;
-            MissionType = missionType;
+            Mission = mission;
         }
     }
-
 
     public enum Disposition
     {
