@@ -10,7 +10,7 @@ namespace OnlyWar.Builders
 {
     public static class TempArmyBuilder
     {
-        public static Unit GenerateArmy(int armyId, Faction faction)
+        private static Unit GenerateArmy(int armyId, Faction faction)
         {
             UnitTemplate template = faction.UnitTemplates.Values
                                                          .Where(ut => ut.IsTopLevelUnit)
@@ -74,7 +74,7 @@ namespace OnlyWar.Builders
 
         public static Unit GenerateArmyFromRegionFaction(RegionFaction regionFaction)
         {
-            return GenerateArmy(0, regionFaction.PlanetFaction.Faction);
+            return GenerateArmy(regionFaction.PlanetFaction.Faction);
         }
     }
 }

@@ -15,6 +15,12 @@ namespace OnlyWar.Models.Units
         public string Name { get; set; }
         public Faction Faction { get; }
         public UnitTemplate UnitTemplate { get; private set; }
+        public IReadOnlyCollection<Squad> Squads { get => _squads; }
+        // if Loadout count < Member count, assume the rest are using the default loadout in the template
+        public List<int> AssignedVehicles;
+        public List<Unit> ChildUnits;
+        public Unit ParentUnit;
+        
         public Squad HQSquad
         {
             get
@@ -22,11 +28,14 @@ namespace OnlyWar.Models.Units
                 return _squads.FirstOrDefault(s => (s.SquadTemplate.SquadType & SquadTypes.HQ) > 0);
             }
         }
-        public IReadOnlyCollection<Squad> Squads { get => _squads; }
-        // if Loadout count < Member count, assume the rest are using the default loadout in the template
-        public List<int> AssignedVehicles;
-        public List<Unit> ChildUnits;
-        public Unit ParentUnit;
+
+        public int BattleValue
+        {
+            get
+            {
+                return _squads.Sum(s => s.SquadTemplate.BattleValue) + ChildUnits.Sum(u => u.BattleValue);
+            }
+        }
 
         public Unit(int id, string name, UnitTemplate template, List<Squad> squads)
         {
@@ -39,6 +48,7 @@ namespace OnlyWar.Models.Units
             UnitTemplate = template;
             Faction = template.Faction;
             _squads = squads;
+            ChildUnits = [];
         }
         public Unit(string name, UnitTemplate template)
         {

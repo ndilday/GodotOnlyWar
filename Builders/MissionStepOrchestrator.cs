@@ -30,7 +30,7 @@ namespace OnlyWar.Builders
                 case MissionType.Assassination:
                     return new AssassinateStealthMissionStep();
                 case MissionType.Ambush:
-                    return new AmbushStealthMissionStep();
+                    return new PositionAmbushMissionStep();
             }
             return null;
         }
