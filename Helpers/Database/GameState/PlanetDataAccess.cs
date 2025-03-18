@@ -314,6 +314,21 @@ namespace OnlyWar.Helpers.Database.GameState
                     command.CommandText = insert;
                     command.ExecuteNonQuery();
                 }
+                foreach (Mission mission in regions[i].SpecialMissions)
+                {
+                    DefenseType? defenseType = null;
+                    if (mission.GetType() == typeof(SabotageMission))
+                    {
+                        defenseType = ((SabotageMission)(mission)).DefenseType;
+                    }
+                    insert = $@"INSERT INTO Mission (Id, MissionType, RegionId, MissionSize, DefenseTypeId) VALUES
+                        ({mission.Id}, {mission.MissionType}, {regions[i].Id}, {mission.MissionSize}, {defenseType})";
+                    using (var command = transaction.Connection.CreateCommand())
+                    {
+                        command.CommandText = insert;
+                        command.ExecuteNonQuery();
+                    }
+                }
             }
         }
 
