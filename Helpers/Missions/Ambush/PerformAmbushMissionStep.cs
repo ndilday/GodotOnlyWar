@@ -30,6 +30,8 @@ namespace OnlyWar.Helpers.Missions.Ambush
             float difficulty = enemyFaction.Detection;
             // every degree of magnitude of troops adds one to the difficulty
             difficulty += (float)Math.Log(context.PlayerSquads.Sum(s => s.AbleSoldiers.Count), 10);
+            // intelligence makes it easier to find a stealthy route
+            difficulty -= context.Order.Mission.Region.IntelligenceLevel;
             SquadMissionTest missionTest = new SquadMissionTest(stealth, difficulty);
             context.OpposingForces = PopulateOpposingForce(context.Order.Mission.MissionSize, enemyFaction);
 

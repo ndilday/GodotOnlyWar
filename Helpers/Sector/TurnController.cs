@@ -257,7 +257,10 @@ namespace OnlyWar.Helpers.Sector
                         EndOfTurnRegionFactionsUpdate(regionFaction, pdfRatio);
                     }
                 }
-                foreach(PlanetFaction planetFaction in planet.PlanetFactionMap.Values)
+
+                CheckForPlanetaryRevolt(planet);
+
+                foreach (PlanetFaction planetFaction in planet.PlanetFactionMap.Values)
                 {
                     // TODO: determine if hidden population on planet revolts
                     // see if this faction leader is the sort who'd request aid from the player
@@ -485,15 +488,71 @@ namespace OnlyWar.Helpers.Sector
                 if (hiddenFactionGarrison > controllingFactionGarrison)
                 {
                     // Revolt triggers!
-                    context.Log.Add($"{hiddenFactionType.Name} forces trigger planetary revolt on {planet.Name}!");
+                    //context.Log.Add($"{hiddenFactionType.Name} forces trigger planetary revolt on {planet.Name}!");
                     foreach (Region region in planet.Regions)
                     {
                         if (region.RegionFactionMap.ContainsKey(hiddenFactionType.Id))
                         {
-                            region.RegionFactionMap[hiddenFactionType.Id].IsPublic = true;
+                            RegionFaction revoltingRegionFaction = region.RegionFactionMap[hiddenFactionType.Id];
+                            revoltingRegionFaction.IsPublic = true;
+                            // if there are any regional defenses, the revolters claim half (plus/minus random roll)
+                            if(region.RegionFactionMap.ContainsKey(controllingFaction.Id))
+                            {
+                                RegionFaction controllingRegionFaction = region.RegionFactionMap[controllingFaction.Id];
+                                if(controllingRegionFaction.Detection > 0)
+                                {
+                                    int revoltShare = controllingRegionFaction.Detection / 2;
+                                    revoltShare += (int)RNG.NextRandomZValue();
+                                    if(revoltShare > controllingRegionFaction.Detection)
+                                    {
+                                        revoltShare = controllingRegionFaction.Detection;
+                                    }
+                                    if(revoltShare < 0)
+                                    {
+                                        revoltShare = 0;
+                                    }
+                                    controllingRegionFaction.Detection -= revoltShare;
+                                    revoltingRegionFaction.Detection += revoltShare;
+                                }
+                                if(controllingRegionFaction.AntiAir > 0)
+                                {
+                                    int revoltShare = controllingRegionFaction.AntiAir / 2;
+                                    revoltShare += (int)RNG.NextRandomZValue();
+                                    if (revoltShare > controllingRegionFaction.AntiAir)
+                                    {
+                                        revoltShare = controllingRegionFaction.AntiAir;
+                                    }
+                                    if (revoltShare < 0)
+                                    {
+                                        revoltShare = 0;
+                                    }
+                                    controllingRegionFaction.AntiAir -= revoltShare;
+                                    revoltingRegionFaction.AntiAir += revoltShare;
+                                }
+                                if (controllingRegionFaction.Entrenchment > 0)
+                                {
+                                    int revoltShare = controllingRegionFaction.Entrenchment / 2;
+                                    revoltShare += (int)RNG.NextRandomZValue();
+                                    if (revoltShare > controllingRegionFaction.Entrenchment)
+                                    {
+                                        revoltShare = controllingRegionFaction.Entrenchment;
+                                    }
+                                    if (revoltShare < 0)
+                                    {
+                                        revoltShare = 0;
+                                    }
+                                    controllingRegionFaction.Entrenchment -= revoltShare;
+                                    revoltingRegionFaction.Entrenchment += revoltShare;
+                                }
+                                // also negatively impact controlling faction's Organization
+                                controllingRegionFaction.Organization = (int)(RNG.GetLinearDouble()*100);
+                            }
                         }
+
                     }
                     hiddenPlanetFaction.IsPublic = true; // Make PlanetFaction public as well
+                    
+
                 }
             }
         }

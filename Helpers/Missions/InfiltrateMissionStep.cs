@@ -28,6 +28,8 @@ namespace OnlyWar.Helpers.Missions.Recon
             difficulty += (float)Math.Log(context.PlayerSquads.Sum(s => s.AbleSoldiers.Count), 10);
             // every degree of magnitude of enemy troops garrisoning the region adds to the difficulty
             difficulty += (float)Math.Log(enemyFaction.Garrison, 10);
+            // intelligence makes it easier to find a stealthy route
+            difficulty -= context.Order.Mission.Region.IntelligenceLevel;
             SquadMissionTest missionTest = new SquadMissionTest(stealth, difficulty);
             if (!ShouldContinue(context))
             {
