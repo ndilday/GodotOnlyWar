@@ -259,13 +259,13 @@ namespace OnlyWar.Helpers.Sector
                 }
                 foreach(PlanetFaction planetFaction in planet.PlanetFactionMap.Values)
                 {
+                    // TODO: determine if hidden population on planet revolts
                     // see if this faction leader is the sort who'd request aid from the player
                     if (planetFaction.Leader != null)
                     {
                         EndOfTurnLeaderUpdate(planet, planetFaction);
                     }
                 }
-                // TODO: determine if hidden population on planet revolts
             }
         }
 
@@ -437,6 +437,65 @@ namespace OnlyWar.Helpers.Sector
             }
             regionFaction.Population += (int)newPop;
             UpdateRegionFactionForces(regionFaction, pdfRatio, newPop);
+        }
+
+        private void CheckForPlanetaryRevolt(Planet planet)
+        {
+            Faction controllingFaction = planet.GetControllingFaction();
+            PlanetFaction controllingPlanetFaction = planet.PlanetFactionMap[controllingFaction.Id];
+            Faction hiddenFactionType = null;
+            PlanetFaction hiddenPlanetFaction = null;
+
+            // Find a hidden faction on the planet (assuming only one hidden faction for now)
+            foreach (var planetFaction in planet.PlanetFactionMap.Values)
+            {
+                if (!planetFaction.IsPublic && !planetFaction.Faction.IsDefaultFaction && !planetFaction.Faction.IsPlayerFaction)
+                {
+                    hiddenFactionType = planetFaction.Faction;
+                    hiddenPlanetFaction = planetFaction;
+                    break; // Assuming only one hidden faction per planet for now
+                }
+            }
+
+            // If no hidden faction, no revolt possible
+            if (hiddenPlanetFaction != null)
+            {
+                int hiddenFactionGarrison = 0;
+                long hiddenFactionPopulation = 0;
+                int controllingFactionGarrison = 0;
+                long controllingFactionPopulation = 0;
+
+                foreach (Region region in planet.Regions)
+                {
+                    foreach (var regionFaction in region.RegionFactionMap.Values)
+                    {
+                        if (regionFaction.PlanetFaction == controllingPlanetFaction)
+                        {
+                            controllingFactionGarrison += regionFaction.Garrison;
+                            controllingFactionPopulation += regionFaction.Population;
+                        }
+                        else if (regionFaction.PlanetFaction == hiddenPlanetFaction)
+                        {
+                            hiddenFactionGarrison += regionFaction.Garrison;
+                            hiddenFactionPopulation += regionFaction.Population;
+                        }
+                    }
+                }
+
+                if (hiddenFactionGarrison > controllingFactionGarrison)
+                {
+                    // Revolt triggers!
+                    context.Log.Add($"{hiddenFactionType.Name} forces trigger planetary revolt on {planet.Name}!");
+                    foreach (Region region in planet.Regions)
+                    {
+                        if (region.RegionFactionMap.ContainsKey(hiddenFactionType.Id))
+                        {
+                            region.RegionFactionMap[hiddenFactionType.Id].IsPublic = true;
+                        }
+                    }
+                    hiddenPlanetFaction.IsPublic = true; // Make PlanetFaction public as well
+                }
+            }
         }
 
         private void EndOfTurnLeaderUpdate(Planet planet, PlanetFaction planetFaction)
