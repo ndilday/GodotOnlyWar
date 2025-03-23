@@ -1,6 +1,6 @@
 using Godot;
+using OnlyWar.Helpers;
 using OnlyWar.Helpers.Database.GameState;
-using OnlyWar.Helpers.Sector;
 using OnlyWar.Models;
 using OnlyWar.Models.Planets;
 using OnlyWar.Models.Soldiers;

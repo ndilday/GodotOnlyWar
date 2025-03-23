@@ -10,6 +10,8 @@ using System.Linq;
 using OnlyWar.Builders;
 using OnlyWar.Helpers.Battles;
 using OnlyWar.Models.Units;
+using OnlyWar.Helpers.Battles.Placers;
+using OnlyWar.Helpers.Extensions;
 
 namespace OnlyWar.Helpers.Missions.Ambush
 {
@@ -39,11 +41,31 @@ namespace OnlyWar.Helpers.Missions.Ambush
             float margin = missionTest.RunMissionCheck(context.PlayerSquads);
             if (margin > 0.0f)
             {
-                new PerformAssassinationMissionStep().ExecuteMissionStep(context, margin, this);
+                // every point of margin of success modifies the starting range by 20 yards
+                ushort range = (ushort)(70 - marginOfSuccess * 20);
+                range = Math.Max(range, (ushort)20);
+                // set up Ambush battle with OpFor attacker and context.Squad defender
+                BattleGridManager bgm = new BattleGridManager();
+                AmbushPlacer placer = new AmbushPlacer(bgm, range);
+                var squadPostionMap = placer.PlaceSquads(context.OpposingForces, context.PlayerSquads);
+                int oppForSize = context.OpposingForces.Sum(s => s.AbleSoldiers.Count);
+                string log = $"Day {context.DaysElapsed}: Force ambushed {oppForSize} {context.OpposingForces.First().Squad.Faction.Name}\n";
+                context.Log.Add(log);
+                // run the battle
+                BattleTurnResolver resolver = new BattleTurnResolver(bgm, context.PlayerSquads, context.OpposingForces, context.Order.Mission.RegionFaction.Region);
+                bool battleDone = false;
+                resolver.OnBattleComplete += (sender, e) => { battleDone = true; };
+                while (!battleDone)
+                {
+                    resolver.ProcessNextTurn();
+                }
+                context.EnemiesKilled += resolver.BattleHistory.EnemiesKilled;
+                context.Log.Add(resolver.BattleHistory.GetBattleLog());
+                new ExfiltrateMissionStep().ExecuteMissionStep(context, 0, null);
             }
             else
             {
-                new MeetingEngagementMissionStep().ExecuteMissionStep(context, margin, this);
+                new MeetingEngagementMissionStep().ExecuteMissionStep(context, margin, new ExfiltrateMissionStep());
             }
         }
 

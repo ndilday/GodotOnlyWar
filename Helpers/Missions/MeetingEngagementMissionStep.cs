@@ -40,6 +40,7 @@ namespace OnlyWar.Helpers.Missions
             {
                 resolver.ProcessNextTurn();
             }
+            context.EnemiesKilled += resolver.BattleHistory.EnemiesKilled;
             context.Log.Add(resolver.BattleHistory.GetBattleLog());
             returnStep.ExecuteMissionStep(context, marginOfSuccess, returnStep);
         }

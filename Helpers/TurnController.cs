@@ -5,12 +5,11 @@ using OnlyWar.Models;
 using OnlyWar.Models.Missions;
 using OnlyWar.Models.Orders;
 using OnlyWar.Models.Planets;
-using OnlyWar.Models.Squads;
 using System;
 using System.Collections.Generic;
 using System.Linq;
 
-namespace OnlyWar.Helpers.Sector
+namespace OnlyWar.Helpers
 {
     class TurnController
     {
@@ -23,7 +22,7 @@ namespace OnlyWar.Helpers.Sector
             SpecialMissions = new List<Mission>();
         }
 
-        public void ProcessTurn(Models.Sector sector)
+        public void ProcessTurn(Sector sector)
         {
             MissionContexts.Clear();
             SpecialMissions.Clear();
@@ -50,7 +49,7 @@ namespace OnlyWar.Helpers.Sector
                     }
                     if (region.IntelligenceLevel > 0)
                     {
-                        foreach(RegionFaction regionFaction in region.RegionFactionMap.Values)
+                        foreach (RegionFaction regionFaction in region.RegionFactionMap.Values)
                         {
                             if (regionFaction.PlanetFaction.Faction.IsPlayerFaction || regionFaction.PlanetFaction.Faction.IsDefaultFaction)
                             {
@@ -173,7 +172,7 @@ namespace OnlyWar.Helpers.Sector
 
         }
 
-        private void ProcessMissions(Models.Sector sector)
+        private void ProcessMissions(Sector sector)
         {
             foreach (Order order in sector.Orders.Values)
             {
@@ -192,7 +191,7 @@ namespace OnlyWar.Helpers.Sector
                         // 10 ^ (impact*100) / population = amount of org log
                         // example impact 1 in a population of 1000 = -1 org point
                         int orgLost = (int)(context.Impact * 100 / regionFaction.Population);
-                        regionFaction.Organization -= (int)Math.Min(orgLost, regionFaction.Organization);
+                        regionFaction.Organization -= Math.Min(orgLost, regionFaction.Organization);
                         break;
                     case MissionType.Recon:
                         context.Order.Mission.RegionFaction.Region.IntelligenceLevel += context.Impact;
@@ -204,7 +203,7 @@ namespace OnlyWar.Helpers.Sector
                         {
                             case DefenseType.Entrenchment:
                                 regionFaction.Entrenchment -= impact;
-                                if(regionFaction.Entrenchment < 0)
+                                if (regionFaction.Entrenchment < 0)
                                 {
                                     regionFaction.Entrenchment = 0;
                                 }
@@ -226,6 +225,16 @@ namespace OnlyWar.Helpers.Sector
                         }
                         break;
                 }
+                // modify population reduction by entrenchment,
+                // as a poor way to simulate defenses
+                // until we get around to making cover, terrain, and fortifications
+                int enemiesKilled = context.EnemiesKilled;
+                if(regionFaction.Entrenchment > 0)
+                {
+                    float ratio = 1.0f - Math.Min(regionFaction.Entrenchment / 10.0f, 1.0f);
+                    
+                    enemiesKilled = (int)(enemiesKilled * ratio);
+                }
                 regionFaction.Population -= context.EnemiesKilled;
                 if (regionFaction.Population < 0)
                 {
@@ -240,10 +249,17 @@ namespace OnlyWar.Helpers.Sector
             {
                 foreach (Region region in planet.Regions)
                 {
-                    float pdfRatio = (float)region.PlanetaryDefenseForces / (float)region.Population;
+                    float pdfRatio = region.PlanetaryDefenseForces / (float)region.Population;
                     foreach (RegionFaction regionFaction in region.RegionFactionMap.Values)
                     {
-                        EndOfTurnRegionFactionsUpdate(regionFaction, pdfRatio);
+                        if(regionFaction.Population <= 0)
+                        {
+                            region.RegionFactionMap.Remove(regionFaction.PlanetFaction.Faction.Id);
+                        }
+                        else
+                        {
+                            EndOfTurnRegionFactionsUpdate(regionFaction, pdfRatio);
+                        }
                     }
                 }
 
@@ -251,9 +267,13 @@ namespace OnlyWar.Helpers.Sector
 
                 foreach (PlanetFaction planetFaction in planet.PlanetFactionMap.Values)
                 {
-                    // TODO: determine if hidden population on planet revolts
+                    // if the planetFaction no longer has any population on the planet, remove it
+                    if (planetFaction.Population <= 0)
+                    {
+                        planet.PlanetFactionMap.Remove(planetFaction.Faction.Id);
+                    }
                     // see if this faction leader is the sort who'd request aid from the player
-                    if (planetFaction.Leader != null)
+                    else if (planetFaction.Leader != null)
                     {
                         EndOfTurnLeaderUpdate(planet, planetFaction);
                     }
@@ -267,7 +287,7 @@ namespace OnlyWar.Helpers.Sector
             bool isDefaultFaction = regionFaction.PlanetFaction.Faction.IsDefaultFaction;
             bool isPlayerFaction = regionFaction.PlanetFaction.Faction.IsPlayerFaction;
 
-            if(isDefaultFaction || isPlayerFaction || !regionFaction.IsPublic)
+            if (isDefaultFaction || isPlayerFaction || !regionFaction.IsPublic)
             {
                 // if the pdf is less than three percent of the population, more people are drafted
                 // additionally, secret factions love to infiltrate the PDF
@@ -318,7 +338,7 @@ namespace OnlyWar.Helpers.Sector
             int nearbyEnemies = GetAdjacentPlayerAlignedTroops(publicFaction.Region);
             // we need to garrison at least as many enemies as there are nearby
             int garrisonRequirements = nearbyEnemies;
-            int structurePoints = (int)(publicFaction.Detection + publicFaction.Entrenchment + publicFaction.AntiAir);
+            int structurePoints = publicFaction.Detection + publicFaction.Entrenchment + publicFaction.AntiAir;
             if (structurePoints == 0 && garrisonRequirements > organizedTroops)
             {
                 // if there are no defenses and not enough organized troops to defend
@@ -343,9 +363,9 @@ namespace OnlyWar.Helpers.Sector
                     {
                         orgCost = (int)(Math.Pow(2, orgInvests + 1) * (publicFaction.Population / 100));
                     }
-                    int detCost = (int)(Math.Pow(2, publicFaction.Detection + detInvests + 1));
-                    int entCost = (int)(Math.Pow(2, publicFaction.Entrenchment + entInvests + 1));
-                    int aaCost = (int)(Math.Pow(2, publicFaction.AntiAir + aaInvests + 1));
+                    int detCost = (int)Math.Pow(2, publicFaction.Detection + detInvests + 1);
+                    int entCost = (int)Math.Pow(2, publicFaction.Entrenchment + entInvests + 1);
+                    int aaCost = (int)Math.Pow(2, publicFaction.AntiAir + aaInvests + 1);
                     // find the cheapest investment
                     int minCost = Math.Min(orgCost, Math.Min(detCost, Math.Min(entCost, aaCost)));
                     if (minCost <= buildPointsAvailable)
@@ -379,7 +399,7 @@ namespace OnlyWar.Helpers.Sector
                 publicFaction.Detection += detInvests;
                 publicFaction.Entrenchment += entInvests;
                 publicFaction.AntiAir += aaInvests;
-                publicFaction.Garrison = (int)((organizedTroops % 100) + garrisonRequirements + (buildPointsAvailable * 100));
+                publicFaction.Garrison = (int)(organizedTroops % 100 + garrisonRequirements + buildPointsAvailable * 100);
                 if (disorganizedTroops > 0)
                 {
                     // some disorganized troops are part of the garrisoning forces by happenstance
@@ -485,25 +505,25 @@ namespace OnlyWar.Helpers.Sector
                             RegionFaction revoltingRegionFaction = region.RegionFactionMap[hiddenFactionType.Id];
                             revoltingRegionFaction.IsPublic = true;
                             // if there are any regional defenses, the revolters claim half (plus/minus random roll)
-                            if(region.RegionFactionMap.ContainsKey(controllingFaction.Id))
+                            if (region.RegionFactionMap.ContainsKey(controllingFaction.Id))
                             {
                                 RegionFaction controllingRegionFaction = region.RegionFactionMap[controllingFaction.Id];
-                                if(controllingRegionFaction.Detection > 0)
+                                if (controllingRegionFaction.Detection > 0)
                                 {
                                     int revoltShare = controllingRegionFaction.Detection / 2;
                                     revoltShare += (int)RNG.NextRandomZValue();
-                                    if(revoltShare > controllingRegionFaction.Detection)
+                                    if (revoltShare > controllingRegionFaction.Detection)
                                     {
                                         revoltShare = controllingRegionFaction.Detection;
                                     }
-                                    if(revoltShare < 0)
+                                    if (revoltShare < 0)
                                     {
                                         revoltShare = 0;
                                     }
                                     controllingRegionFaction.Detection -= revoltShare;
                                     revoltingRegionFaction.Detection += revoltShare;
                                 }
-                                if(controllingRegionFaction.AntiAir > 0)
+                                if (controllingRegionFaction.AntiAir > 0)
                                 {
                                     int revoltShare = controllingRegionFaction.AntiAir / 2;
                                     revoltShare += (int)RNG.NextRandomZValue();
@@ -534,13 +554,13 @@ namespace OnlyWar.Helpers.Sector
                                     revoltingRegionFaction.Entrenchment += revoltShare;
                                 }
                                 // also negatively impact controlling faction's Organization
-                                controllingRegionFaction.Organization = (int)(RNG.GetLinearDouble()*100);
+                                controllingRegionFaction.Organization = (int)(RNG.GetLinearDouble() * 100);
                             }
                         }
 
                     }
                     hiddenPlanetFaction.IsPublic = true; // Make PlanetFaction public as well
-                    
+
 
                 }
             }
@@ -564,7 +584,7 @@ namespace OnlyWar.Helpers.Sector
                 {
                     // decrement the leader's opinion based on the unfulfilled request
                     // the average governor will drop 0.01 opinion per week.
-                    planetFaction.Leader.OpinionOfPlayerForce -= (0.005f / planetFaction.Leader.Patience);
+                    planetFaction.Leader.OpinionOfPlayerForce -= 0.005f / planetFaction.Leader.Patience;
                     // TODO: some notion of canceling a request?
                 }
             }
@@ -590,13 +610,13 @@ namespace OnlyWar.Helpers.Sector
                         if (!planetOtherFaction.IsPublic)
                         {
                             // see if the leader detects this faction
-                            float popRatio = ((float)planetOtherFaction.Population) / ((float)planet.Population);
+                            float popRatio = planetOtherFaction.Population / (float)planet.Population;
                             float chance = popRatio * planetFaction.Leader.Investigation;
                             double roll = RNG.GetLinearDouble();
                             if (roll < chance)
                             {
                                 found = true;
-                                evidenceFound = roll < (chance / 10.0);
+                                evidenceFound = roll < chance / 10.0;
                                 break;
                             }
                         }
@@ -616,7 +636,7 @@ namespace OnlyWar.Helpers.Sector
                 if (roll < planetFaction.Leader.Paranoia)
                 {
                     found = true;
-                    evidenceFound = roll < (planetFaction.Leader.Paranoia / 10.0);
+                    evidenceFound = roll < planetFaction.Leader.Paranoia / 10.0;
                 }
             }
 
@@ -643,7 +663,7 @@ namespace OnlyWar.Helpers.Sector
             {
                 defaultFaction.Population--;
                 regionFaction.Population++;
-                float pdfChance = (float)(defaultFaction.Garrison) / defaultFaction.Population;
+                float pdfChance = (float)defaultFaction.Garrison / defaultFaction.Population;
                 if (RNG.GetLinearDouble() < pdfChance)
                 {
                     defaultFaction.Garrison--;
