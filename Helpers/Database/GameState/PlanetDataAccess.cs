@@ -265,6 +265,7 @@ namespace OnlyWar.Helpers.Database.GameState
             SavePlanetFactions(transaction, planet.Id, planet.PlanetFactionMap);
             SavePlanetRegions(transaction, planet.Id, planet.Regions);
             SaveRegionFactions(transaction, planet.Regions);
+            SaveMissions(transaction, planet.Regions);
         }
 
         public void SaveCharacter(IDbTransaction transaction, Character character)
@@ -345,6 +346,28 @@ namespace OnlyWar.Helpers.Database.GameState
                     ({region.Id}, {regionFaction.PlanetFaction.Faction.Id}, {regionFaction.IsPublic}, 
                      {regionFaction.Population}, {regionFaction.Garrison}, 
                      {regionFaction.Organization}, {regionFaction.Entrenchment}, {regionFaction.Detection}, {regionFaction.AntiAir});";
+                    using (var command = transaction.Connection.CreateCommand())
+                    {
+                        command.CommandText = insert;
+                        command.ExecuteNonQuery();
+                    }
+                }
+            }
+        }
+
+        private static void SaveMissions(IDbTransaction transaction, Region[] regions)
+        {
+            foreach (var region in regions)
+            {
+                foreach (Mission mission in region.SpecialMissions)
+                {
+                    DefenseType? defenseType = null;
+                    if (mission.GetType() == typeof(SabotageMission))
+                    {
+                        defenseType = ((SabotageMission)(mission)).DefenseType;
+                    }
+                    string insert = $@"INSERT INTO Mission (Id, MissionType, RegionId, FactionId, MissionSize, DefenseTypeId) VALUES
+                        ({mission.Id}, {mission.MissionType}, {region.Id}, {mission.RegionFaction.PlanetFaction.Faction.Id}, {mission.MissionSize}, {defenseType})";
                     using (var command = transaction.Connection.CreateCommand())
                     {
                         command.CommandText = insert;
