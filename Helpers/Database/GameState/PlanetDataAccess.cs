@@ -50,6 +50,7 @@ namespace OnlyWar.Helpers.Database.GameState
 
             // Fetch data from the RegionFaction table
             PopulateRegionFactions(connection, factionMap, regionMap);
+            PopulateRegionMissions(connection, regionMap);
 
             return planetList;
         }
@@ -97,7 +98,7 @@ namespace OnlyWar.Helpers.Database.GameState
                     int id = reader.GetInt32(0);
                     MissionType missionType = (MissionType)reader.GetInt32(1);
                     int regionId = reader.GetInt32(2);
-                    string regionName = reader[3].ToString();
+                    int factionId = reader.GetInt32(3);
                     int missionSize = reader.GetInt32(4);
                     DefenseType? defenseType = null;
                     if (reader[5].GetType() != typeof(DBNull))
@@ -106,14 +107,15 @@ namespace OnlyWar.Helpers.Database.GameState
                     }
 
                     Region region = regionMap[regionId];
+                    RegionFaction regionFaction = region.RegionFactionMap[factionId];
                     Mission mission;
                     if (defenseType == null)
                     {
-                        mission = new Mission(id, missionType, region, missionSize);
+                        mission = new Mission(id, missionType, regionFaction, missionSize);
                     }
                     else
                     {
-                        mission = new SabotageMission(id, (DefenseType)defenseType, missionSize, region);
+                        mission = new SabotageMission(id, (DefenseType)defenseType, missionSize, regionFaction);
                     }
                     region.SpecialMissions.Add(mission);
                     if(id > maxId)

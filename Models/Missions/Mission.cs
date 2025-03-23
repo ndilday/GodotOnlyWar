@@ -15,25 +15,25 @@ namespace OnlyWar.Models.Missions
     {
         public int Id { get; private set; }
         public MissionType MissionType { get; private set; }
-        public Region Region { get; private set; }
+        public RegionFaction RegionFaction { get; private set; }
         public int MissionSize { get; private set; }
 
-        public Mission(int id, MissionType missionType, Region region, int missionSize)
+        public Mission(int id, MissionType missionType, RegionFaction regionFaction, int missionSize)
         {
             Id = id;
             MissionType = missionType;
-            Region = region;
+            RegionFaction = regionFaction;
             MissionSize = missionSize;
         }
 
-        public Mission(MissionType missionType, Region region, int missionSize) : this(IdGenerator.GetNextMissionId(), missionType, region, missionSize) { }
+        public Mission(MissionType missionType, RegionFaction regionFaction, int missionSize) : this(IdGenerator.GetNextMissionId(), missionType, regionFaction, missionSize) { }
     }
 
     public class SabotageMission : Mission
     {
         public DefenseType DefenseType { get; private set; }
 
-        public SabotageMission(int id, DefenseType defenseType, int size, Region region) : base(id, MissionType.Sabotage, region, size)
+        public SabotageMission(int id, DefenseType defenseType, int size, RegionFaction regionFaction) : base(id, MissionType.Sabotage, regionFaction, size)
         {
             DefenseType = defenseType;
         }

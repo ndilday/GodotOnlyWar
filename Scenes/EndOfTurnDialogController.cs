@@ -22,7 +22,7 @@ public partial class EndOfTurnDialogController : DialogController
         }
         foreach (Mission mission in specialMissions)
         {
-            strings.Add($"We have a {mission.MissionType} opportunity in {mission.Region.Name}");
+            strings.Add($"We have a {mission.MissionType} opportunity in {mission.RegionFaction.Region.Name}");
         }
 
         _view.AddData(strings);

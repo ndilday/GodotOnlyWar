@@ -40,7 +40,7 @@ public partial class OrderDialogController : Control
 
         // determine the regions adjacent to the squad's current region
         var adjacentRegions = RegionExtensions.GetSelfAndAdjacentRegions(squad.CurrentRegion);
-        _currentlySelectedRegion = squad.CurrentOrders?.Mission.Region;
+        _currentlySelectedRegion = squad.CurrentOrders?.Mission.RegionFaction.Region;
         PopulateRegionOptions(adjacentRegions);
 
         if (squad.CurrentOrders == null)
@@ -163,7 +163,13 @@ public partial class OrderDialogController : Control
         Mission mission;
         if(args.Item2 == -1)
         {
-            mission = new Mission(MissionType.Recon, selectedRegion, 0);
+            // use the first non-player, non-default region faction in this region
+            RegionFaction enemyRegionFaction = selectedRegion.RegionFactionMap.Values.First(rf => !rf.PlanetFaction.Faction.IsPlayerFaction && !rf.PlanetFaction.Faction.IsDefaultFaction);
+            if ((enemyRegionFaction == null))
+            {
+                enemyRegionFaction = selectedRegion.RegionFactionMap.Values.First(rf => rf.PlanetFaction.Faction.IsDefaultFaction);
+            }
+            mission = new Mission(MissionType.Recon, enemyRegionFaction, 0);
         }
         else
         {

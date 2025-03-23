@@ -33,7 +33,7 @@ namespace OnlyWar.Helpers.Missions
             string log = $"Day {context.DaysElapsed}: Force accepted engagement with {oppForSize} {context.OpposingForces.First().Squad.Faction.Name}\n";
             context.Log.Add(log);
             // run the battle
-            BattleTurnResolver resolver = new BattleTurnResolver(bgm, context.PlayerSquads, context.OpposingForces, context.Order.Mission.Region.Planet);
+            BattleTurnResolver resolver = new BattleTurnResolver(bgm, context.PlayerSquads, context.OpposingForces, context.Order.Mission.RegionFaction.Region);
             bool battleDone = false;
             resolver.OnBattleComplete += (sender, e) => { battleDone = true; };
             while (!battleDone)

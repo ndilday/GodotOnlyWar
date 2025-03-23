@@ -22,7 +22,7 @@ namespace OnlyWar.Helpers.Missions.Assassination
             // size 1: Prime
             // size 2: Broodlord
             // size 3: Hive Tyrant
-            RegionFaction enemyFaction = context.Order.Mission.Region.RegionFactionMap.Values.First(rf => !rf.PlanetFaction.Faction.IsPlayerFaction && !rf.PlanetFaction.Faction.IsDefaultFaction);
+            RegionFaction enemyFaction = context.Order.Mission.RegionFaction;
             float difficulty = enemyFaction.Entrenchment + enemyFaction.Detection + (float)Math.Log10(enemyFaction.Garrison);
             LeaderMissionTest missionTest = new LeaderMissionTest(tactics, difficulty);
             float margin = missionTest.RunMissionCheck(context.PlayerSquads);
@@ -34,7 +34,7 @@ namespace OnlyWar.Helpers.Missions.Assassination
             if (context.DaysElapsed >= 6)
             {
                 // time to go home
-                if (context.Order.Mission.Region != context.PlayerSquads.First().Squad.CurrentRegion)
+                if (context.Order.Mission.RegionFaction.Region != context.PlayerSquads.First().Squad.CurrentRegion)
                 {
                     new ExfiltrateMissionStep().ExecuteMissionStep(context, 0.0f, this);
                 }
@@ -58,12 +58,12 @@ namespace OnlyWar.Helpers.Missions.Assassination
                                 .ToList();
             int index = Math.Min(context.Order.Mission.MissionSize, sortedHqSquads.Count) - 1;
             SquadTemplate targetSquadTemplate = sortedHqSquads[index];
-            Squad squad = SquadFactory.GenerateSquad(targetSquadTemplate, $"{enemyFaction.PlanetFaction.Faction.Name} {context.Order.Mission.Region.Name} HQ Squad");
+            Squad squad = SquadFactory.GenerateSquad(targetSquadTemplate, $"{enemyFaction.PlanetFaction.Faction.Name} {context.Order.Mission.RegionFaction.Region.Name} HQ Squad");
             context.OpposingForces.Clear();
             context.OpposingForces.Add(new BattleSquad(false, squad));
             if (addBodyguard && targetSquadTemplate.BodyguardSquadTemplate != null)
             {
-                squad = SquadFactory.GenerateSquad(targetSquadTemplate.BodyguardSquadTemplate, $"{enemyFaction.PlanetFaction.Faction.Name} {context.Order.Mission.Region.Name} Bodyguard Squad");
+                squad = SquadFactory.GenerateSquad(targetSquadTemplate.BodyguardSquadTemplate, $"{enemyFaction.PlanetFaction.Faction.Name} {context.Order.Mission.RegionFaction.Region.Name} Bodyguard Squad");
                 context.OpposingForces.Add(new BattleSquad(false, squad));
             }
         }

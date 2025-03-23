@@ -15,7 +15,7 @@ namespace OnlyWar.Helpers.Missions.Recon
         public void ExecuteMissionStep(MissionContext context, float marginOfSuccess, IMissionStep returnStep)
         {
             // decide whether to fight or flee
-            context.Log.Add($"Day {context.DaysElapsed}: Force is detected by enemy forces in {context.Order.Mission.Region.Name}");
+            context.Log.Add($"Day {context.DaysElapsed}: Force is detected by enemy forces in {context.Order.Mission.RegionFaction.Region.Name}");
             // compare size of each force
             float opForSize = context.OpposingForces.Sum(s => s.Squad.SquadTemplate.BattleValue);
             float playerSize = context.PlayerSquads.Sum(s => s.Squad.SquadTemplate.BattleValue);

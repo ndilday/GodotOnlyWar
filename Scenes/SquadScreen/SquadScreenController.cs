@@ -211,7 +211,8 @@ public partial class SquadScreenController : DialogController
         if (_squad.CurrentOrders != null)
         {
             lines.Add(new Tuple<string, string>("Mission Type", _squad.CurrentOrders.Mission.MissionType.ToString()));
-            lines.Add(new Tuple<string, string>("Mission Target", _squad.CurrentOrders.Mission.Region.Name));
+            lines.Add(new Tuple<string, string>("Mission Location", _squad.CurrentOrders.Mission.RegionFaction.Region.Name));
+            lines.Add(new Tuple<string, string>("Mission Target", _squad.CurrentOrders.Mission.RegionFaction.PlanetFaction.Faction.Name));
             lines.Add(new Tuple<string, string>("Size of Operation", $"{_squad.CurrentOrders.AssignedSquads.Count} squads"));
             lines.Add(new Tuple<string, string>("Engagement Level", _squad.CurrentOrders.LevelOfAggression.ToString()));
             _view.SetOpenOrdersButtonText("Edit Current Orders");

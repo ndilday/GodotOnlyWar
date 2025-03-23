@@ -17,7 +17,7 @@ namespace OnlyWar.Helpers.Battles
     {
         private BattleGridManager _grid;
         private readonly Faction _opposingFaction;
-        private readonly Planet _planet;
+        private readonly Region _region;
         private int _startingEnemySoldierCount;
         private readonly List<BattleSoldier> _startingPlayerBattleSoldiers;
         private readonly WoundResolver _woundResolver;
@@ -30,10 +30,10 @@ namespace OnlyWar.Helpers.Battles
         public BattleTurnResolver(BattleGridManager grid,
                                   IList<BattleSquad> playerBattleSquads,
                                   IList<BattleSquad> opposingBattleSquads,
-                                  Planet planet)
+                                  Region region)
         {
             _grid = grid;
-            _planet = planet;
+            _region = region;
             _opposingFaction = opposingBattleSquads.First().Squad.Faction;
             _woundResolver = new WoundResolver();
             _woundResolver.OnSoldierDeath += WoundResolver_OnSoldierDeath;
@@ -326,8 +326,7 @@ namespace OnlyWar.Helpers.Battles
         {
             foreach (BattleSoldier soldier in _startingPlayerBattleSoldiers)
             {
-                string historyEntry = GameDataSingleton.Instance.Date.ToString()
-                    + ": Fought in a skirmish on " + _planet.Name + ".";
+                string historyEntry = $"{GameDataSingleton.Instance.Date}: Skirmish in {_region.Name}, {_region.Planet.Name}.";
                 if (soldier.EnemiesTakenDown > 0)
                 {
                     historyEntry += $" Felled {soldier.EnemiesTakenDown} {_opposingFaction.Name}.";
@@ -426,8 +425,9 @@ namespace OnlyWar.Helpers.Battles
         private void LogBattleToChapterHistory(List<PlayerSoldier> killedInBattle)
         {
             var subEvents = GetBattleLog(killedInBattle);
+            string title = $"A skirmish in {_region.Name}, {_region.Planet.Name}";
             GameDataSingleton.Instance.Sector.PlayerForce.AddToBattleHistory(GameDataSingleton.Instance.Date,
-                                                                             $"A skirmish on {_planet.Name}",
+                                                                             title,
                                                                              subEvents);
         }
 
