@@ -176,10 +176,23 @@ namespace OnlyWar.Helpers
         {
             foreach (Order order in sector.Orders.Values)
             {
-                List<BattleSquad> playerBattleSquads = order.AssignedSquads.Select(s => new BattleSquad(true, s)).ToList();
-                MissionContext context = new MissionContext(order, playerBattleSquads, new List<BattleSquad>());
-                MissionStepOrchestrator.GetStartingStep(context).ExecuteMissionStep(context, 0, null);
-                MissionContexts.Add(context);
+                if (order.Mission.MissionType == MissionType.Advance && order.Mission.RegionFaction.PlanetFaction.Faction.IsPlayerFaction)
+                {
+                    // move these squads to the new region
+                    foreach(var squad in order.AssignedSquads)
+                    {
+                        squad.CurrentRegion.RegionFactionMap[squad.Faction.Id].LandedSquads.Remove(squad);
+                        squad.CurrentRegion = order.Mission.RegionFaction.Region;
+                        order.Mission.RegionFaction.LandedSquads.Add(squad);
+                    }
+                }
+                else
+                {
+                    List<BattleSquad> playerBattleSquads = order.AssignedSquads.Select(s => new BattleSquad(true, s)).ToList();
+                    MissionContext context = new MissionContext(order, playerBattleSquads, new List<BattleSquad>());
+                    MissionStepOrchestrator.GetStartingStep(context).ExecuteMissionStep(context, 0, null);
+                    MissionContexts.Add(context);
+                }
             }
 
             foreach (MissionContext context in MissionContexts)

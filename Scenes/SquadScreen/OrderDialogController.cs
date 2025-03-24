@@ -71,6 +71,14 @@ public partial class OrderDialogController : Control
     {
         List<Tuple<string, int>> missionOptions = new List<Tuple<string, int>>();
         missionOptions.Add(new Tuple<string, int>("Recon", -1));
+        if(_currentlySelectedRegion.RegionFactionMap.Values.Any(rf => !rf.PlanetFaction.Faction.IsDefaultFaction && !rf.PlanetFaction.Faction.IsPlayerFaction))
+        {
+            missionOptions.Add(new Tuple<string, int>("Attack", -2));
+        }
+        else
+        {
+            missionOptions.Add(new Tuple<string, int>("Move", -2));
+        }
         foreach (var mission in _currentlySelectedRegion.SpecialMissions)
         {
             missionOptions.Add(new Tuple<string, int>(mission.MissionType.ToString(), mission.Id));
@@ -94,9 +102,13 @@ public partial class OrderDialogController : Control
         // change aggression helper text
         string text;
         MissionType missionType;
-        if(e == -1)
+        if (e == -1)
         {
             missionType = MissionType.Recon;
+        }
+        else if (e == -2)
+        {
+            missionType = MissionType.Advance;
         }
         else
         {
@@ -104,6 +116,9 @@ public partial class OrderDialogController : Control
         }
         switch (missionType)
         {
+            case MissionType.Advance:
+                text = "Enter the region, engaging any enemy forces there.";
+                break;
             case MissionType.Recon:
                 text = "Probe the area to find hidden enemy forces and opportunities for special missions";
                 break;
@@ -170,6 +185,20 @@ public partial class OrderDialogController : Control
                 enemyRegionFaction = selectedRegion.RegionFactionMap.Values.First(rf => rf.PlanetFaction.Faction.IsDefaultFaction);
             }
             mission = new Mission(MissionType.Recon, enemyRegionFaction, 0);
+        }
+        else if(args.Item2 == -2)
+        {
+            RegionFaction enemyRegionFaction = selectedRegion.RegionFactionMap.Values.First(rf => !rf.PlanetFaction.Faction.IsPlayerFaction && !rf.PlanetFaction.Faction.IsDefaultFaction && rf.IsPublic);
+            if ((enemyRegionFaction == null))
+            {
+                if (!selectedRegion.RegionFactionMap.Values.Any(rf => !rf.PlanetFaction.Faction.IsPlayerFaction))
+                {
+                    selectedRegion.RegionFactionMap[GameDataSingleton.Instance.Sector.PlayerForce.Faction.Id] = 
+                        new RegionFaction(selectedRegion.Planet.PlanetFactionMap[GameDataSingleton.Instance.Sector.PlayerForce.Faction.Id], selectedRegion);
+                }
+                enemyRegionFaction = selectedRegion.RegionFactionMap[GameDataSingleton.Instance.Sector.PlayerForce.Faction.Id];
+            }
+            mission = new Mission(MissionType.Advance, enemyRegionFaction, 0);
         }
         else
         {
