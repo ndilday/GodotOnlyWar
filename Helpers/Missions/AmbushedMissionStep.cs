@@ -32,6 +32,10 @@ namespace OnlyWar.Helpers.Missions
             }
             context.EnemiesKilled += resolver.BattleHistory.EnemiesKilled;
             context.Log.Add(resolver.BattleHistory.GetBattleLog());
+            if(returnStep == null)
+            {
+                return;
+            }
             returnStep.ExecuteMissionStep(context, 0, this);
         }
     }

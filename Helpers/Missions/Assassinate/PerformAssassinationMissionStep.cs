@@ -1,6 +1,5 @@
 ﻿using OnlyWar.Helpers.Missions.Recon;
 using OnlyWar.Models.Missions;
-using OnlyWar.Models.Orders;
 using OnlyWar.Models.Planets;
 using OnlyWar.Models.Soldiers;
 using OnlyWar.Models.Squads;
@@ -10,7 +9,7 @@ using System.Linq;
 using OnlyWar.Builders;
 using OnlyWar.Helpers.Battles;
 
-namespace OnlyWar.Helpers.Missions.Assassination
+namespace OnlyWar.Helpers.Missions.Assassinate
 {
     public class PerformAssassinationMissionStep : IMissionStep
     {

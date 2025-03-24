@@ -1,5 +1,4 @@
 ﻿using OnlyWar.Helpers.Missions.Recon;
-using OnlyWar.Helpers.Missions.Sabotage;
 using OnlyWar.Models.Missions;
 using OnlyWar.Models.Planets;
 using OnlyWar.Models.Soldiers;
@@ -7,7 +6,7 @@ using OnlyWar.Models;
 using System;
 using System.Linq;
 
-namespace OnlyWar.Helpers.Missions.Assassination
+namespace OnlyWar.Helpers.Missions.Assassinate
 {
     public class AssassinateStealthMissionStep : IMissionStep
     {

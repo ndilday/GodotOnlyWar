@@ -176,7 +176,7 @@ namespace OnlyWar.Helpers
         {
             foreach (Order order in sector.Orders.Values)
             {
-                if (order.Mission.MissionType == MissionType.Advance && order.Mission.RegionFaction.PlanetFaction.Faction.IsPlayerFaction)
+                if (order.Mission.MissionType == MissionType.Advance)
                 {
                     // move these squads to the new region
                     foreach(var squad in order.AssignedSquads)
@@ -186,7 +186,8 @@ namespace OnlyWar.Helpers
                         order.Mission.RegionFaction.LandedSquads.Add(squad);
                     }
                 }
-                else
+                // for advance missions where there is no enemy to assault, we don't evaluate the mission after movement
+                if(order.Mission.MissionType != MissionType.Advance || !order.Mission.RegionFaction.PlanetFaction.Faction.IsPlayerFaction)
                 {
                     List<BattleSquad> playerBattleSquads = order.AssignedSquads.Select(s => new BattleSquad(true, s)).ToList();
                     MissionContext context = new MissionContext(order, playerBattleSquads, new List<BattleSquad>());

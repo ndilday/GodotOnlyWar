@@ -1,6 +1,7 @@
 ﻿using OnlyWar.Helpers.Missions;
 using OnlyWar.Helpers.Missions.Ambush;
-using OnlyWar.Helpers.Missions.Assassination;
+using OnlyWar.Helpers.Missions.Assassinate;
+using OnlyWar.Helpers.Missions.Assault;
 using OnlyWar.Helpers.Missions.Recon;
 using OnlyWar.Helpers.Missions.Sabotage;
 using OnlyWar.Models.Missions;
@@ -31,6 +32,8 @@ namespace OnlyWar.Builders
                     return new AssassinateStealthMissionStep();
                 case MissionType.Ambush:
                     return new PositionAmbushMissionStep();
+                case MissionType.Advance:
+                    return new PrepareAssaultMissionStep();
             }
             return null;
         }
