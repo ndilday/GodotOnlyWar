@@ -254,7 +254,7 @@ anchor_right = 1.0
 anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
-text = "Region Details"
+text = "Planet Details"
 horizontal_alignment = 1
 vertical_alignment = 1
 
@@ -386,7 +386,7 @@ grow_horizontal = 0
 grow_vertical = 2
 text = "Who the Bell Tolls"
 
-[node name="RegionSquadPanel" type="Panel" parent="PlanetTacticalScreenView"]
+[node name="OrbitPanel" type="Panel" parent="PlanetTacticalScreenView"]
 layout_mode = 1
 anchors_preset = -1
 anchor_top = 0.55
@@ -396,7 +396,7 @@ offset_left = 10.0
 offset_right = -10.0
 offset_bottom = -10.0
 
-[node name="Header" type="Panel" parent="PlanetTacticalScreenView/RegionSquadPanel"]
+[node name="Header" type="Panel" parent="PlanetTacticalScreenView/OrbitPanel"]
 custom_minimum_size = Vector2(0, 30)
 layout_mode = 1
 anchors_preset = 10
@@ -404,18 +404,18 @@ anchor_right = 1.0
 offset_bottom = 50.0
 grow_horizontal = 2
 
-[node name="Label" type="Label" parent="PlanetTacticalScreenView/RegionSquadPanel/Header"]
+[node name="Label" type="Label" parent="PlanetTacticalScreenView/OrbitPanel/Header"]
 layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
 anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
-text = "Forces In Region"
+text = "Forces In Orbit"
 horizontal_alignment = 1
 vertical_alignment = 1
 
-[node name="VBoxContainer" type="VBoxContainer" parent="PlanetTacticalScreenView/RegionSquadPanel"]
+[node name="VBoxContainer" type="VBoxContainer" parent="PlanetTacticalScreenView/OrbitPanel"]
 layout_mode = 1
 anchors_preset = -1
 anchor_right = 1.0
@@ -425,7 +425,7 @@ offset_bottom = -5.0
 grow_horizontal = 2
 grow_vertical = 2
 
-[node name="Tree" type="Tree" parent="PlanetTacticalScreenView/RegionSquadPanel"]
+[node name="Tree" type="Tree" parent="PlanetTacticalScreenView/OrbitPanel"]
 layout_mode = 1
 anchors_preset = -1
 anchor_right = 1.0
@@ -463,23 +463,3 @@ text = "Airdrop Forces Into Region"
 layout_mode = 2
 disabled = true
 text = "Cancel Air Assault"
-
-[node name="LoadingButton2" type="Button" parent="PlanetTacticalScreenView/ButtonPanel/VBoxContainer"]
-layout_mode = 2
-disabled = true
-text = "Order Squad"
-
-[node name="LoadingButton3" type="Button" parent="PlanetTacticalScreenView/ButtonPanel/VBoxContainer"]
-layout_mode = 2
-disabled = true
-text = "Order Squad"
-
-[node name="LoadingButton4" type="Button" parent="PlanetTacticalScreenView/ButtonPanel/VBoxContainer"]
-layout_mode = 2
-disabled = true
-text = "Order Squad"
-
-[node name="LoadingButton5" type="Button" parent="PlanetTacticalScreenView/ButtonPanel/VBoxContainer"]
-layout_mode = 2
-disabled = true
-text = "Order Squad"

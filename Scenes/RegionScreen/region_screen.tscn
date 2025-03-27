@@ -1,0 +1,493 @@
+[gd_scene load_steps=7 format=3 uid="uid://bl61mb634d0tv"]
+
+[ext_resource type="PackedScene" uid="uid://cadpqoqxtyo0p" path="res://Scenes/Dialog.tscn" id="1_xuda3"]
+[ext_resource type="Script" path="res://Scenes/RegionScreen/RegionScreenController.cs" id="2_7t0l2"]
+[ext_resource type="Script" path="res://Scenes/RegionScreen/RegionScreenView.cs" id="3_pa3jd"]
+[ext_resource type="Texture2D" uid="uid://cdmukgd7syaa8" path="res://Assets/marines_shooting_jungle.jpg" id="4_pwx37"]
+[ext_resource type="PackedScene" uid="uid://bgmsb5cki6qvk" path="res://Scenes/PlanetDetailScreen/tactical_region.tscn" id="5_wsr1p"]
+[ext_resource type="PackedScene" uid="uid://ctlbf6wo4jcii" path="res://Scenes/SquadScreen/order_dialog.tscn" id="6_ij0pe"]
+
+[node name="RegionScreenController" instance=ExtResource("1_xuda3")]
+script = ExtResource("2_7t0l2")
+
+[node name="DialogView" parent="." index="0"]
+script = ExtResource("3_pa3jd")
+
+[node name="TextureRect" type="TextureRect" parent="DialogView" index="1"]
+modulate = Color(1, 1, 1, 0.156863)
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_top = -128.0
+offset_bottom = 128.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+texture = ExtResource("4_pwx37")
+expand_mode = 5
+
+[node name="DataPanel" type="Panel" parent="DialogView" index="2"]
+layout_mode = 1
+anchors_preset = -1
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = 5.0
+offset_top = 5.0
+offset_right = -5.0
+offset_bottom = -5.0
+
+[node name="Header" type="Panel" parent="DialogView/DataPanel" index="0"]
+custom_minimum_size = Vector2(0, 30)
+layout_mode = 1
+anchors_preset = 10
+anchor_right = 1.0
+offset_bottom = 50.0
+grow_horizontal = 2
+
+[node name="Label" type="Label" parent="DialogView/DataPanel/Header" index="0"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+text = "Region Details"
+horizontal_alignment = 1
+vertical_alignment = 1
+
+[node name="VBoxContainer" type="VBoxContainer" parent="DialogView/DataPanel" index="1"]
+layout_mode = 1
+anchors_preset = -1
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = 5.0
+offset_top = 55.0
+offset_right = -5.0
+offset_bottom = -5.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="DataLinePanel" type="Panel" parent="DialogView/DataPanel/VBoxContainer" index="0"]
+custom_minimum_size = Vector2(0, 20)
+layout_mode = 2
+
+[node name="Label" type="Label" parent="DialogView/DataPanel/VBoxContainer/DataLinePanel" index="0"]
+layout_mode = 1
+anchors_preset = 9
+anchor_bottom = 1.0
+offset_right = 117.0
+grow_vertical = 2
+text = "Time in Service"
+
+[node name="Label2" type="Label" parent="DialogView/DataPanel/VBoxContainer/DataLinePanel" index="1"]
+layout_mode = 1
+anchors_preset = 11
+anchor_left = 1.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = -137.0
+grow_horizontal = 0
+grow_vertical = 2
+text = "7 years, 3 months"
+horizontal_alignment = 2
+
+[node name="DataLinePanel2" type="Panel" parent="DialogView/DataPanel/VBoxContainer" index="1"]
+custom_minimum_size = Vector2(0, 20)
+layout_mode = 2
+
+[node name="Label" type="Label" parent="DialogView/DataPanel/VBoxContainer/DataLinePanel2" index="0"]
+layout_mode = 1
+anchors_preset = 9
+anchor_bottom = 1.0
+offset_right = 1.0
+grow_vertical = 2
+text = "Unit"
+
+[node name="Label2" type="Label" parent="DialogView/DataPanel/VBoxContainer/DataLinePanel2" index="1"]
+layout_mode = 1
+anchors_preset = 11
+anchor_left = 1.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = -1.0
+grow_horizontal = 0
+grow_vertical = 2
+text = "3rd Company, A Squad"
+
+[node name="DataLinePanel3" type="Panel" parent="DialogView/DataPanel/VBoxContainer" index="2"]
+custom_minimum_size = Vector2(0, 20)
+layout_mode = 2
+
+[node name="Label" type="Label" parent="DialogView/DataPanel/VBoxContainer/DataLinePanel3" index="0"]
+layout_mode = 1
+anchors_preset = 9
+anchor_bottom = 1.0
+offset_right = 1.0
+grow_vertical = 2
+text = "Location"
+
+[node name="Label2" type="Label" parent="DialogView/DataPanel/VBoxContainer/DataLinePanel3" index="1"]
+layout_mode = 1
+anchors_preset = 11
+anchor_left = 1.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = -1.0
+grow_horizontal = 0
+grow_vertical = 2
+text = "Aboard Immortal"
+
+[node name="DataLinePanel4" type="Panel" parent="DialogView/DataPanel/VBoxContainer" index="3"]
+custom_minimum_size = Vector2(0, 20)
+layout_mode = 2
+
+[node name="Label" type="Label" parent="DialogView/DataPanel/VBoxContainer/DataLinePanel4" index="0"]
+layout_mode = 1
+anchors_preset = 9
+anchor_bottom = 1.0
+offset_right = 1.0
+grow_vertical = 2
+text = "Lorem Ipsem"
+
+[node name="Label2" type="Label" parent="DialogView/DataPanel/VBoxContainer/DataLinePanel4" index="1"]
+layout_mode = 1
+anchors_preset = 11
+anchor_left = 1.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = -1.0
+grow_horizontal = 0
+grow_vertical = 2
+text = "Lorem Ipsum"
+
+[node name="DataLinePanel5" type="Panel" parent="DialogView/DataPanel/VBoxContainer" index="4"]
+custom_minimum_size = Vector2(0, 20)
+layout_mode = 2
+
+[node name="Label" type="Label" parent="DialogView/DataPanel/VBoxContainer/DataLinePanel5" index="0"]
+layout_mode = 1
+anchors_preset = 9
+anchor_bottom = 1.0
+offset_right = 1.0
+grow_vertical = 2
+text = "Lorem Ipsum"
+
+[node name="Label2" type="Label" parent="DialogView/DataPanel/VBoxContainer/DataLinePanel5" index="1"]
+layout_mode = 1
+anchors_preset = 11
+anchor_left = 1.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = -1.0
+grow_horizontal = 0
+grow_vertical = 2
+text = "Who the Bell Tolls"
+
+[node name="RegionPanel" type="Panel" parent="DialogView" index="3"]
+layout_mode = 1
+anchors_preset = -1
+anchor_left = 0.5
+anchor_right = 1.0
+anchor_bottom = 0.5
+offset_left = 5.0
+offset_top = 5.0
+offset_right = -5.0
+offset_bottom = -5.0
+mouse_filter = 2
+
+[node name="TacticalRegionCenter" parent="DialogView/RegionPanel" index="0" instance=ExtResource("5_wsr1p")]
+layout_mode = 1
+anchors_preset = -1
+anchor_left = 0.35
+anchor_top = 0.35
+anchor_right = 0.65
+anchor_bottom = 0.65
+offset_left = 1.52588e-05
+offset_right = 0.0
+offset_bottom = 0.0
+
+[node name="TacticalRegionNorth" parent="DialogView/RegionPanel" index="1" instance=ExtResource("5_wsr1p")]
+layout_mode = 1
+anchors_preset = -1
+anchor_left = 0.35
+anchor_top = 0.01
+anchor_right = 0.65
+anchor_bottom = 0.31
+offset_right = 0.0
+offset_bottom = 0.0
+
+[node name="TacticalRegionNortheast" parent="DialogView/RegionPanel" index="2" instance=ExtResource("5_wsr1p")]
+layout_mode = 1
+anchors_preset = -1
+anchor_left = 0.68
+anchor_top = 0.16
+anchor_right = 0.98
+anchor_bottom = 0.46
+offset_left = -3.05176e-05
+offset_right = -3.05176e-05
+offset_bottom = 0.0
+
+[node name="TacticalRegionSoutheast" parent="DialogView/RegionPanel" index="3" instance=ExtResource("5_wsr1p")]
+layout_mode = 1
+anchors_preset = -1
+anchor_left = 0.68
+anchor_top = 0.54
+anchor_right = 0.98
+anchor_bottom = 0.84
+offset_left = -3.05176e-05
+offset_right = -3.05176e-05
+offset_bottom = 0.0
+
+[node name="TacticalRegionSouth" parent="DialogView/RegionPanel" index="4" instance=ExtResource("5_wsr1p")]
+layout_mode = 1
+anchors_preset = -1
+anchor_left = 0.35
+anchor_top = 0.69
+anchor_right = 0.65
+anchor_bottom = 0.99
+offset_right = 0.0
+offset_bottom = 0.0
+
+[node name="TacticalRegionSouthwest" parent="DialogView/RegionPanel" index="5" instance=ExtResource("5_wsr1p")]
+layout_mode = 1
+anchors_preset = -1
+anchor_left = 0.02
+anchor_top = 0.54
+anchor_right = 0.32
+anchor_bottom = 0.84
+offset_left = -2.19345e-05
+offset_right = -1.52588e-05
+offset_bottom = 0.0
+
+[node name="TacticalRegionNorthwest" parent="DialogView/RegionPanel" index="6" instance=ExtResource("5_wsr1p")]
+layout_mode = 1
+anchors_preset = -1
+anchor_left = 0.02
+anchor_top = 0.16
+anchor_right = 0.32
+anchor_bottom = 0.46
+offset_right = 0.0
+offset_bottom = 0.0
+
+[node name="LoadoutPanel" type="Panel" parent="DialogView" index="4"]
+layout_mode = 1
+anchors_preset = -1
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 1.0
+offset_left = 5.0
+offset_top = 5.0
+offset_right = -5.0
+offset_bottom = -5.0
+
+[node name="Panel" type="Panel" parent="DialogView/LoadoutPanel" index="0"]
+layout_mode = 1
+anchors_preset = 10
+anchor_right = 1.0
+offset_bottom = 40.0
+grow_horizontal = 2
+
+[node name="RichTextLabel" type="RichTextLabel" parent="DialogView/LoadoutPanel/Panel" index="0"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_font_sizes/normal_font_size = 16
+text = "Squads In Region"
+fit_content = true
+horizontal_alignment = 1
+vertical_alignment = 1
+
+[node name="ScrollContainer" type="ScrollContainer" parent="DialogView/LoadoutPanel" index="1"]
+layout_mode = 1
+anchors_preset = -1
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = 5.0
+offset_top = 45.0
+offset_bottom = -5.0
+grow_horizontal = 2
+grow_vertical = 2
+horizontal_scroll_mode = 0
+
+[node name="Tree" type="Tree" parent="DialogView/LoadoutPanel/ScrollContainer" index="0"]
+layout_mode = 2
+
+[node name="OrdersPanel" type="Panel" parent="DialogView" index="5"]
+layout_mode = 1
+anchors_preset = -1
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = 5.0
+offset_top = 5.0
+offset_right = -5.0
+offset_bottom = -5.0
+
+[node name="Panel" type="Panel" parent="DialogView/OrdersPanel" index="0"]
+layout_mode = 1
+anchors_preset = 10
+anchor_right = 1.0
+offset_bottom = 40.0
+grow_horizontal = 2
+
+[node name="RichTextLabel" type="RichTextLabel" parent="DialogView/OrdersPanel/Panel" index="0"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_font_sizes/normal_font_size = 16
+text = "Orders"
+fit_content = true
+horizontal_alignment = 1
+vertical_alignment = 1
+
+[node name="VBoxContainer" type="VBoxContainer" parent="DialogView/OrdersPanel" index="1"]
+layout_mode = 1
+anchors_preset = -1
+anchor_right = 1.0
+anchor_bottom = 0.5
+offset_left = 5.0
+offset_top = 45.0
+offset_right = -5.0
+offset_bottom = -5.0
+
+[node name="DataLinePanel" type="Panel" parent="DialogView/OrdersPanel/VBoxContainer" index="0"]
+custom_minimum_size = Vector2(0, 20)
+layout_mode = 2
+
+[node name="Label" type="Label" parent="DialogView/OrdersPanel/VBoxContainer/DataLinePanel" index="0"]
+layout_mode = 1
+anchors_preset = 9
+anchor_bottom = 1.0
+offset_right = 117.0
+grow_vertical = 2
+text = "Mission Type"
+
+[node name="Label2" type="Label" parent="DialogView/OrdersPanel/VBoxContainer/DataLinePanel" index="1"]
+layout_mode = 1
+anchors_preset = 11
+anchor_left = 1.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = -137.0
+grow_horizontal = 0
+grow_vertical = 2
+text = "Recon"
+horizontal_alignment = 2
+
+[node name="DataLinePanel2" type="Panel" parent="DialogView/OrdersPanel/VBoxContainer" index="1"]
+custom_minimum_size = Vector2(0, 20)
+layout_mode = 2
+
+[node name="Label" type="Label" parent="DialogView/OrdersPanel/VBoxContainer/DataLinePanel2" index="0"]
+layout_mode = 1
+anchors_preset = 9
+anchor_bottom = 1.0
+offset_right = 117.0
+grow_vertical = 2
+text = "Mission Target"
+
+[node name="Label2" type="Label" parent="DialogView/OrdersPanel/VBoxContainer/DataLinePanel2" index="1"]
+layout_mode = 1
+anchors_preset = 11
+anchor_left = 1.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = -137.0
+grow_horizontal = 0
+grow_vertical = 2
+text = "Region Foobar"
+horizontal_alignment = 2
+
+[node name="DataLinePanel3" type="Panel" parent="DialogView/OrdersPanel/VBoxContainer" index="2"]
+custom_minimum_size = Vector2(0, 20)
+layout_mode = 2
+
+[node name="Label" type="Label" parent="DialogView/OrdersPanel/VBoxContainer/DataLinePanel3" index="0"]
+layout_mode = 1
+anchors_preset = 9
+anchor_bottom = 1.0
+offset_right = 117.0
+grow_vertical = 2
+text = "Size of Operation"
+
+[node name="Label2" type="Label" parent="DialogView/OrdersPanel/VBoxContainer/DataLinePanel3" index="1"]
+layout_mode = 1
+anchors_preset = 11
+anchor_left = 1.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = -137.0
+grow_horizontal = 0
+grow_vertical = 2
+text = "3 Squads"
+horizontal_alignment = 2
+
+[node name="DataLinePanel4" type="Panel" parent="DialogView/OrdersPanel/VBoxContainer" index="3"]
+custom_minimum_size = Vector2(0, 20)
+layout_mode = 2
+
+[node name="Label" type="Label" parent="DialogView/OrdersPanel/VBoxContainer/DataLinePanel4" index="0"]
+layout_mode = 1
+anchors_preset = 9
+anchor_bottom = 1.0
+offset_right = 117.0
+grow_vertical = 2
+text = "Engagement Level"
+
+[node name="Label2" type="Label" parent="DialogView/OrdersPanel/VBoxContainer/DataLinePanel4" index="1"]
+layout_mode = 1
+anchors_preset = 11
+anchor_left = 1.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = -137.0
+grow_horizontal = 0
+grow_vertical = 2
+text = "Prudent"
+horizontal_alignment = 2
+
+[node name="ButtonVBox" type="VBoxContainer" parent="DialogView/OrdersPanel" index="2"]
+layout_mode = 1
+anchors_preset = -1
+anchor_top = 0.5
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = 5.0
+offset_right = -5.0
+offset_bottom = -5.0
+
+[node name="UnassignButton" type="Button" parent="DialogView/OrdersPanel/ButtonVBox" index="0"]
+layout_mode = 2
+disabled = true
+text = "Unassign"
+
+[node name="OpenOrdersButton" type="Button" parent="DialogView/OrdersPanel/ButtonVBox" index="1"]
+layout_mode = 2
+disabled = true
+text = "Edit Mission Parameters"
+
+[node name="AssignToExistingButton" type="Button" parent="DialogView/OrdersPanel/ButtonVBox" index="2"]
+layout_mode = 2
+disabled = true
+text = "Assign to Existing Operation"
+
+[node name="CopyOrdersButton" type="Button" parent="DialogView/OrdersPanel/ButtonVBox" index="3"]
+layout_mode = 2
+text = "Copy Orders"
+
+[node name="PasteOrdersButton" type="Button" parent="DialogView/OrdersPanel/ButtonVBox" index="4"]
+layout_mode = 2
+disabled = true
+text = "Paste Orders"
+
+[node name="OrderDialogController" parent="DialogView" index="6" instance=ExtResource("6_ij0pe")]
+visible = false
+layout_mode = 1
