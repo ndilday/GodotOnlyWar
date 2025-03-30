@@ -1,6 +1,7 @@
 using Godot;
 using OnlyWar.Helpers.Extensions;
 using OnlyWar.Models;
+using OnlyWar.Models.Fleets;
 using OnlyWar.Models.Planets;
 using OnlyWar.Models.Squads;
 using OnlyWar.Models.Units;
@@ -14,7 +15,8 @@ public partial class PlanetTacticalScreenController : DialogController
     private TacticalRegionController[] _tacticalRegions;
     private ButtonGroup _buttonGroup;
 
-    public event EventHandler<Squad> SquadDoubleClicked;
+    public event EventHandler<Region> RegionDoubleClicked;
+    public event EventHandler<Squad> OrbitalSquadDoubleClicked;
 
     public override void _Ready()
     {
@@ -34,6 +36,7 @@ public partial class PlanetTacticalScreenController : DialogController
 
     public void PopulatePlanetData(Planet planet)
     {
+        PopulateOrbitalSquadList(planet.OrbitingTaskForceList);
         for(int i = 0; i < planet.Regions.Length; i++)
         {
             _tacticalRegions[i].Populate(planet.Regions[i]);
@@ -42,8 +45,6 @@ public partial class PlanetTacticalScreenController : DialogController
 
     private void OnTacticalRegionPressed(object sender, Region region)
     {
-        // populate squad list
-        PopulateRegionSquadList(region);
         // populate region data
         PopulateRegionDetails(region);
         // populate buttons
@@ -54,7 +55,7 @@ public partial class PlanetTacticalScreenController : DialogController
         switch (e.X)
         {
             case 0:
-                // Unit
+                // Ship
                 /*TreeItem item = (TreeItem)sender;
                 _selectedLandedUnit = GameDataSingleton.Instance.Sector.PlayerForce.Army.OrderOfBattle.ChildUnits.First(u => u.Id == e.Y);
                 _selectedLandedSquad = null;*/
@@ -62,45 +63,42 @@ public partial class PlanetTacticalScreenController : DialogController
             case 1:
                 // Squad
                 Squad squad = GameDataSingleton.Instance.Sector.PlayerForce.Army.SquadMap[e.Y];
-                SquadDoubleClicked.Invoke(this, squad);
+                OrbitalSquadDoubleClicked.Invoke(this, squad);
                 break;
         }
     }
 
-    private void PopulateRegionSquadList(Region region)
+    private void PopulateOrbitalSquadList(IReadOnlyList<TaskForce> orbitingFleets)
     {
-        List<TreeNode> unitsInRegion = new List<TreeNode>();
+        List<TreeNode> fleets = new List<TreeNode>();
         Faction playerFaction = GameDataSingleton.Instance.Sector.PlayerForce.Faction;
 
-        if (region.RegionFactionMap.ContainsKey(playerFaction.Id))
+        foreach(TaskForce taskForce in orbitingFleets)
         {
-            var unitSquadMap = region.RegionFactionMap[playerFaction.Id].LandedSquads.GroupBy(s => s.ParentUnit).ToDictionary(group => group.Key, group => group.ToList());
-            unitsInRegion = GetUnitTreeNodes(unitSquadMap);
-
-        }
-        _view.PopulateRegionSquadTree(unitsInRegion);
-    }
-
-    private static List<TreeNode> GetUnitTreeNodes(Dictionary<Unit, List<Squad>> unitSquadMap)
-    {
-        List<TreeNode> unitTreeNodes = new List<TreeNode>();
-        foreach (var kvp in unitSquadMap)
-        {
-            List<TreeNode> squads = new List<TreeNode>();
-            foreach (Squad squad in kvp.Value)
+            if(taskForce.Faction == playerFaction)
             {
-                if (squad.Members.Count > 0)
+                foreach(Ship ship in taskForce.Ships)
                 {
-                    squads.Add(new TreeNode(squad.Id, squad.Name, new List<TreeNode>()));
+                    if(ship.LoadedSquads.Any())
+                    {
+                        List<TreeNode> squads = new List<TreeNode>();
+                        foreach (Squad squad in ship.LoadedSquads)
+                        {
+                            if (squad.Members.Count > 0)
+                            {
+                                squads.Add(new TreeNode(squad.Id, squad.Name, new List<TreeNode>()));
+                            }
+                        }
+                        if(squads.Count > 0)
+                        {
+                            TreeNode shipNode = new TreeNode(ship.Id, ship.Name, squads);
+                            fleets.Add(shipNode);
+                        }
+                    }
                 }
             }
-            if (squads.Count > 0)
-            {
-                TreeNode unit = new TreeNode(kvp.Key.Id, kvp.Key.Name, squads);
-                unitTreeNodes.Add(unit);
-            }
         }
-        return unitTreeNodes;
+        _view.PopulateRegionSquadTree(fleets);
     }
 
     private void PopulateRegionDetails(Region region)

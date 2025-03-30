@@ -213,7 +213,7 @@ public partial class MainGameScene : Control
             _planetTacticalScreen = (PlanetTacticalScreenController)planetScene.Instantiate();
 
             _planetTacticalScreen.CloseButtonPressed += OnCloseScreen;
-            _planetTacticalScreen.SquadDoubleClicked += OnSquadDoubleClicked;
+            _planetTacticalScreen.OrbitalSquadDoubleClicked += OnOrbitalSquadDoubleClicked;
             _mainUILayer.AddChild(_planetTacticalScreen);
         }
         _planetTacticalScreen.PopulatePlanetData(planet);
@@ -273,7 +273,7 @@ public partial class MainGameScene : Control
         OnCloseScreen(_soldierScreen, e);
     }
 
-    private void OnSquadDoubleClicked(object sender, Squad squad)
+    private void OnOrbitalSquadDoubleClicked(object sender, Squad squad)
     {
         if(_squadScreen == null)
         {
