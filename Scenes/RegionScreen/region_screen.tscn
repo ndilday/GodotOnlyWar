@@ -1,8 +1,8 @@
 [gd_scene load_steps=7 format=3 uid="uid://bl61mb634d0tv"]
 
 [ext_resource type="PackedScene" uid="uid://cadpqoqxtyo0p" path="res://Scenes/Dialog.tscn" id="1_xuda3"]
-[ext_resource type="Script" path="res://Scenes/RegionScreen/RegionScreenController.cs" id="2_7t0l2"]
-[ext_resource type="Script" path="res://Scenes/RegionScreen/RegionScreenView.cs" id="3_pa3jd"]
+[ext_resource type="Script" uid="uid://utmxosik71fc" path="res://Scenes/RegionScreen/RegionScreenController.cs" id="2_7t0l2"]
+[ext_resource type="Script" uid="uid://b1yvrdle5ym3s" path="res://Scenes/RegionScreen/RegionScreenView.cs" id="3_pa3jd"]
 [ext_resource type="Texture2D" uid="uid://cdmukgd7syaa8" path="res://Assets/marines_shooting_jungle.jpg" id="4_pwx37"]
 [ext_resource type="PackedScene" uid="uid://bgmsb5cki6qvk" path="res://Scenes/PlanetDetailScreen/tactical_region.tscn" id="5_wsr1p"]
 [ext_resource type="PackedScene" uid="uid://ctlbf6wo4jcii" path="res://Scenes/SquadScreen/order_dialog.tscn" id="6_ij0pe"]
@@ -270,7 +270,7 @@ anchor_bottom = 0.46
 offset_right = 0.0
 offset_bottom = 0.0
 
-[node name="LoadoutPanel" type="Panel" parent="DialogView" index="4"]
+[node name="SquadTreePanel" type="Panel" parent="DialogView" index="4"]
 layout_mode = 1
 anchors_preset = -1
 anchor_top = 0.5
@@ -281,14 +281,14 @@ offset_top = 5.0
 offset_right = -5.0
 offset_bottom = -5.0
 
-[node name="Panel" type="Panel" parent="DialogView/LoadoutPanel" index="0"]
+[node name="Panel" type="Panel" parent="DialogView/SquadTreePanel" index="0"]
 layout_mode = 1
 anchors_preset = 10
 anchor_right = 1.0
 offset_bottom = 40.0
 grow_horizontal = 2
 
-[node name="RichTextLabel" type="RichTextLabel" parent="DialogView/LoadoutPanel/Panel" index="0"]
+[node name="RichTextLabel" type="RichTextLabel" parent="DialogView/SquadTreePanel/Panel" index="0"]
 layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
@@ -301,7 +301,7 @@ fit_content = true
 horizontal_alignment = 1
 vertical_alignment = 1
 
-[node name="ScrollContainer" type="ScrollContainer" parent="DialogView/LoadoutPanel" index="1"]
+[node name="ScrollContainer" type="ScrollContainer" parent="DialogView/SquadTreePanel" index="1"]
 layout_mode = 1
 anchors_preset = -1
 anchor_right = 1.0
@@ -313,7 +313,7 @@ grow_horizontal = 2
 grow_vertical = 2
 horizontal_scroll_mode = 0
 
-[node name="Tree" type="Tree" parent="DialogView/LoadoutPanel/ScrollContainer" index="0"]
+[node name="Tree" type="Tree" parent="DialogView/SquadTreePanel/ScrollContainer" index="0"]
 layout_mode = 2
 
 [node name="OrdersPanel" type="Panel" parent="DialogView" index="5"]

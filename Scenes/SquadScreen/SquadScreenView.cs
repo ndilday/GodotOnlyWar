@@ -7,6 +7,7 @@ public partial class SquadScreenView : DialogView
     private VBoxContainer _squadDetailsVBox;
     private VBoxContainer _squadLoadoutVBox;
     private VBoxContainer _squadOrderDetailsVBox;
+    private VBoxContainer _squadMemberVBox;
     private RichTextLabel _defaultName;
     private RichTextLabel _defaultCount;
     private Button _unassignButton;
@@ -32,6 +33,7 @@ public partial class SquadScreenView : DialogView
         _squadDetailsVBox = GetNode<VBoxContainer>("DataPanel/VBoxContainer");
         _squadLoadoutVBox = GetNode<VBoxContainer>("LoadoutPanel/ScrollContainer/VBoxContainer");
         _squadOrderDetailsVBox = GetNode<VBoxContainer>("OrdersPanel/VBoxContainer");
+        _squadMemberVBox = GetNode<VBoxContainer>("SquadMemberPanel/ScrollContainer/VBoxContainer");
         _defaultName = GetNode<RichTextLabel>("LoadoutPanel/ScrollContainer/VBoxContainer/DefaultHBox/Name");
         _defaultCount = GetNode<RichTextLabel>("LoadoutPanel/ScrollContainer/VBoxContainer/DefaultHBox/Count");
         _unassignButton = GetNode<Button>("OrdersPanel/ButtonVBox/UnassignButton");
@@ -138,6 +140,43 @@ public partial class SquadScreenView : DialogView
             }
             _unassignButton.Disabled = false;
             _openOrdersButton.Disabled = false;
+        }
+    }
+
+    public void PopulateSquadMembers(IReadOnlyList<Tuple<int, string>> members)
+    {
+        ClearSquadMembers();
+        if (members == null || members.Count == 0)
+        {
+            RichTextLabel label = new RichTextLabel { Text = "No members assigned.", SizeFlagsHorizontal = SizeFlags.ExpandFill };
+            _squadMemberVBox.AddChild(label);
+        }
+        else
+        {
+            foreach (var member in members)
+            {
+                RichTextLabel label = new RichTextLabel
+                {
+                    Text = member.Item2, // Formatted string "{Rank} {Name}"
+                    FitContent = true,
+                    SizeFlagsHorizontal = SizeFlags.ExpandFill
+                    // Consider adding meta data if click interaction is needed later:
+                    // Meta = Variant.From(member.Item1) // Store soldier ID
+                };
+                // If click interaction needed:
+                // label.MetaClicked += OnMemberLabelClicked;
+                _squadMemberVBox.AddChild(label);
+            }
+        }
+    }
+
+    private void ClearSquadMembers()
+    {
+        var children = _squadMemberVBox.GetChildren();
+        foreach (var child in children)
+        {
+            _squadMemberVBox.RemoveChild(child);
+            child.QueueFree();
         }
     }
 

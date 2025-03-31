@@ -8,6 +8,7 @@ using OnlyWar.Models.Squads;
 using System;
 using System.Collections.Generic;
 using System.Collections.Immutable;
+using System.ComponentModel;
 using System.Linq;
 
 public partial class SquadScreenController : DialogController
@@ -16,7 +17,6 @@ public partial class SquadScreenController : DialogController
     private SquadScreenView _view;
     private OrderDialogController _orderController;
     private TacticalRegionController _currentRegion;
-    private Dictionary<string, TacticalRegionController> _adjacenTacticalRegionMap;
     private int _ableBodied;
     private Order _savedOrders;
     private List<WeaponSet> _savedLoadout;
@@ -36,7 +36,6 @@ public partial class SquadScreenController : DialogController
         _orderController = GetNode<OrderDialogController>("DialogView/OrderDialogController");
         _orderController.OrdersConfirmed += OnOrdersConfirmed;
         _currentRegion = GetNode<TacticalRegionController>("DialogView/RegionPanel/TacticalRegionCenter");
-        _adjacenTacticalRegionMap = GetAdjacentRegionDisplayMap();
     }
     private void OnOpenOrders(object sender, EventArgs e)
     {
@@ -127,7 +126,7 @@ public partial class SquadScreenController : DialogController
         PopulateSquadDetails();
         PopulateSquadLoadout();
         PopulateSquadOrders();
-        PopulateTacticalRegions();
+        PopulateSquadMembers();
         _view.DisablePasteLoadout(_savedLoadout == null || _savedLoadoutSquadTemplateId != _squad.SquadTemplate.Id);
     }
 
@@ -224,16 +223,22 @@ public partial class SquadScreenController : DialogController
         _view.PopulateOrderDetails(lines);
     }
 
-    private void PopulateTacticalRegions()
+    private void PopulateSquadMembers()
     {
-        _currentRegion.Populate(_squad.CurrentRegion);
-        var adjacentRegions = RegionExtensions.GetAdjacentRegions(_squad.CurrentRegion);
-        foreach(Region region in adjacentRegions)
+        List<Tuple<int, string>> memberList = new List<Tuple<int, string>>();
+        if (_squad?.Members != null)
         {
-            string direction = GetDirectionFromCurrentToNeighbour(_squad.CurrentRegion, region);
-            _adjacenTacticalRegionMap[direction].Populate(region);
-            _adjacenTacticalRegionMap[direction].Visible = true;
+            // Order members, e.g., leader first, then by rank/name
+            foreach (var soldier in _squad.Members.OrderByDescending(s => s.Template.IsSquadLeader)
+                                                  .ThenByDescending(s => s.Template.Rank)
+                                                  .ThenBy(s => s.Name))
+            {
+                // Use Rank enum if available, otherwise Rank number
+                string rankString = soldier.Template.Rank.ToString(); // Replace with actual rank name if possible
+                memberList.Add(new Tuple<int, string>(soldier.Id, $"{rankString} {soldier.Name}"));
+            }
         }
+        _view.PopulateSquadMembers(memberList);
     }
 
     private bool CanFight(ISoldier soldier)

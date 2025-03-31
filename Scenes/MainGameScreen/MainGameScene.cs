@@ -22,6 +22,7 @@ public partial class MainGameScene : Control
     private SoldierView _soldierView;
     private PlanetDetailScreenController _planetDetailScreen;
     private PlanetTacticalScreenController _planetTacticalScreen;
+    private RegionScreenController _regionScreen;
     private Stack<Control> _previousScreenStack;
     private CanvasLayer _mainUILayer;
     private TurnController _turnController;
@@ -214,6 +215,7 @@ public partial class MainGameScene : Control
 
             _planetTacticalScreen.CloseButtonPressed += OnCloseScreen;
             _planetTacticalScreen.OrbitalSquadDoubleClicked += OnOrbitalSquadDoubleClicked;
+            _planetTacticalScreen.RegionDoubleClicked += OnRegionDoubleClicked;
             _mainUILayer.AddChild(_planetTacticalScreen);
         }
         _planetTacticalScreen.PopulatePlanetData(planet);
@@ -271,6 +273,37 @@ public partial class MainGameScene : Control
             _chapterScreen.PopulateCompanyList();
         }
         OnCloseScreen(_soldierScreen, e);
+    }
+
+    private void OnRegionDoubleClicked(object sender, Region region)
+    {
+        if(_regionScreen == null)
+        {
+            PackedScene regionScene = GD.Load<PackedScene>("res://Scenes/RegionScreen/region_screen.tscn");
+            _regionScreen = (RegionScreenController)regionScene.Instantiate();
+            _regionScreen.CloseButtonPressed += OnCloseScreen;
+            _mainUILayer.AddChild(_regionScreen);
+        }
+        _regionScreen.SquadDoubleClicked += OnSquadDoubleClicked;
+        Control control = (Control)sender;
+        _previousScreenStack.Push(control);
+        control.Visible = false;
+    }
+
+    private void OnSquadDoubleClicked(object sender, Squad squad)
+    {
+        if (_squadScreen == null)
+        {
+            PackedScene squadScene = GD.Load<PackedScene>("res://Scenes/SquadScreen/squad_screen.tscn");
+            _squadScreen = (SquadScreenController)squadScene.Instantiate();
+            _mainUILayer.AddChild(_squadScreen);
+            _squadScreen.CloseButtonPressed += OnCloseScreen;
+        }
+        _squadScreen.SetSquad(squad);
+        _squadScreen.Visible = true;
+        Control control = (Control)sender;
+        _previousScreenStack.Push(control);
+        control.Visible = false;
     }
 
     private void OnOrbitalSquadDoubleClicked(object sender, Squad squad)
