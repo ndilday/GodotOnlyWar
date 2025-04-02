@@ -61,8 +61,17 @@ public partial class TacticalRegionController : Control
         {
             xenosPopulation = xenosRegionFaction.GetPopulationDescription();
         }
+        Color color;
+        if(region.ControllingFaction != null)
+        {
+            color = region.ControllingFaction.PlanetFaction.Faction.Color.ToGodotColor();
+        }
+        else
+        {
+            color = Colors.DarkRed;
+        }
 
-        _view.Populate(region.Id, region.Name, showPlayerPublic, false, showCivilian, showXenos, false, false, playerPopulation, civilianPopulation, xenosPopulation);
+        _view.Populate(region.Id, region.Name, showPlayerPublic, false, showCivilian, showXenos, false, false, playerPopulation, civilianPopulation, xenosPopulation, color);
     }
 
     public void AddToButtonGroup(ButtonGroup buttonGroup)

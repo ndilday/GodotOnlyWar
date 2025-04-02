@@ -67,6 +67,14 @@ namespace OnlyWar.Models.Soldiers
             set { _assignedSquad = value; }
         }
 
+        public bool CanFight
+        {
+            get
+            {
+                return _soldier.CanFight;
+            }
+        }
+
         public bool IsWounded
         {
             get

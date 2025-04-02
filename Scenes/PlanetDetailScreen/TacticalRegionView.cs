@@ -22,7 +22,7 @@ public partial class TacticalRegionView : Control
 	}
 
 	public void Populate(int regionId, string name, bool showPlayerPublic, bool showPlayerHidden, bool showCivilian, bool showXenos, bool showObjective, bool showDropPod,
-		string playerPopulation, string civilianPopulation, string xenosPopulation)
+		string playerPopulation, string civilianPopulation, string xenosPopulation, Color color)
 	{
 		RegionId = regionId;
 		_regionName.Text = name;
@@ -35,5 +35,11 @@ public partial class TacticalRegionView : Control
 		_playerPopulation.Text = playerPopulation;
 		_civilianPopulation.Text = civilianPopulation;
 		_xenosPopulation.Text = xenosPopulation;
-	}
+        GetNode<Button>("Button").SelfModulate = color;
+    }
+
+	public void SetRegionBackgroundColor(Color color)
+    {
+        GetNode<Button>("Button").SelfModulate = color;
+    }
 }

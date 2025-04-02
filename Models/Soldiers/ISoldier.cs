@@ -23,7 +23,7 @@ namespace OnlyWar.Models.Soldiers
         float MoveSpeed { get; }
         Body Body { get; }
         Squad AssignedSquad { get; set; }
-
+        bool CanFight { get; }
         IReadOnlyCollection<Skill> Skills { get; }
 
         int FunctioningHands { get; }

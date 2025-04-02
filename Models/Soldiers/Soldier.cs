@@ -77,6 +77,22 @@ namespace OnlyWar.Models.Soldiers
 
         public Squad AssignedSquad { get; set; }
 
+        public bool CanFight
+        {
+            get
+            {
+                bool canWalk = !Body.HitLocations.Where(hl => hl.Template.IsMotive)
+                                                        .Any(hl => hl.IsCrippled || hl.IsSevered);
+                bool canFuncion = !Body.HitLocations.Where(hl => hl.Template.IsVital)
+                                                           .Any(hl => hl.IsCrippled || hl.IsSevered);
+                bool canShoot = !Body.HitLocations.Where(hl => hl.Template.IsRangedWeaponHolder)
+                                                        .All(hl => hl.IsCrippled || hl.IsSevered);
+                bool canFight = !Body.HitLocations.Where(hl => hl.Template.IsMeleeWeaponHolder)
+                                                        .All(hl => hl.IsCrippled || hl.IsSevered);
+                return canWalk && canFuncion && canShoot && canFight;
+            }
+        }
+
         public void AddSkillPoints(BaseSkill skill, float points)
         {
             if(!_skills.ContainsKey(skill.Id))

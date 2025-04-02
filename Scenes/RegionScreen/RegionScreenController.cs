@@ -181,18 +181,27 @@ public partial class RegionScreenController : DialogController
         if (unassignedSquads.Count > 0)
         {
             List<TreeNode> unassignedSquadNodes = new List<TreeNode>();
+            List<TreeNode> injuredSquadNodes = new List<TreeNode>();
             foreach (Squad squad in unassignedSquads)
             {
                 string squadDisplayName = $"{squad.Name}, {squad.ParentUnit?.Name ?? "Unknown Unit"}";
                 // Squad nodes are level 1, use squad ID
-                unassignedSquadNodes.Add(new TreeNode(squad.Id, squadDisplayName, null));
+                if (squad.Members.Where(s => s.CanFight).Count() >= 5)
+                {
+                    unassignedSquadNodes.Add(new TreeNode(squad.Id, squadDisplayName, null));
+                }
+                else
+                {
+                    injuredSquadNodes.Add(new TreeNode(squad.Id, squadDisplayName, null));
+                }
             }
 
             // "Unassigned" node is level 0, use a special ID like -1
             topLevelNodes.Add(new TreeNode(-1, "Unassigned", unassignedSquadNodes));
+            topLevelNodes.Add(new TreeNode(-2, "Injured", injuredSquadNodes));
         }
 
-        // 4. Update the view
+        // update the view
         _view.PopulateSquadList(topLevelNodes);
     }
 
@@ -243,9 +252,6 @@ public partial class RegionScreenController : DialogController
         _view.PopulateAdjacentRegions(_currentRegion, adjacentRegionMap);
     }
 
-
-    // --- Signal Handlers from View ---
-
     private void OnSquadSelected(object sender, int squadId)
     {
         // Find the squad regardless of its order grouping
@@ -260,6 +266,7 @@ public partial class RegionScreenController : DialogController
             _selectedSquad = null;
             PopulateOrderDetails(); // Clear order details
         }
+        _view.SetPasteOrdersButtonDisabled(_selectedSquad.Members.Where(s => s.CanFight).Count() < 5);
     }
 
     private void OnSquadDoubleClicked(object sender, int squadId)
@@ -363,26 +370,12 @@ public partial class RegionScreenController : DialogController
         PopulateOrderDetails();
     }
 
-    // --- Helper Methods ---
-
     private RegionFaction GetPlayerRegionFaction()
     {
         if (_currentRegion == null) return null;
         Faction playerFaction = GameDataSingleton.Instance.Sector.PlayerForce.Faction;
         _currentRegion.RegionFactionMap.TryGetValue(playerFaction.Id, out RegionFaction regionFaction);
         return regionFaction;
-    }
-
-    private bool CanFight(ISoldier soldier)
-    {
-        // Basic check, same as in SquadScreenController - maybe move to an extension or helper
-        bool canWalk = !soldier.Body.HitLocations.Where(hl => hl.Template.IsMotive)
-                                                .Any(hl => hl.IsCrippled || hl.IsSevered);
-        bool canFuncion = !soldier.Body.HitLocations.Where(hl => hl.Template.IsVital)
-                                                    .Any(hl => hl.IsCrippled || hl.IsSevered);
-        bool canFight = !soldier.Body.HitLocations.Where(hl => hl.Template.IsRangedWeaponHolder) // simplified check
-                                                .All(hl => hl.IsCrippled || hl.IsSevered);
-        return canWalk && canFuncion && canFight;
     }
 
     private string GetDirectionFromCurrentToNeighbour(Region currentRegion, Region neighbourRegion)
