@@ -33,7 +33,6 @@ namespace OnlyWar.Helpers.Missions.Ambush
             // intelligence makes it easier to find a stealthy route
             difficulty -= context.Order.Mission.RegionFaction.Region.IntelligenceLevel;
             SquadMissionTest missionTest = new SquadMissionTest(stealth, difficulty);
-            context.OpposingForces = PopulateOpposingForce(context.Order.Mission.MissionSize, enemyFaction);
 
             context.DaysElapsed++;
             float margin = missionTest.RunMissionCheck(context.PlayerSquads);
@@ -65,23 +64,6 @@ namespace OnlyWar.Helpers.Missions.Ambush
             {
                 new MeetingEngagementMissionStep().ExecuteMissionStep(context, margin, new ExfiltrateMissionStep());
             }
-        }
-
-        private List<BattleSquad> PopulateOpposingForce(int missionSize, RegionFaction enemyFaction)
-        {
-            List<BattleSquad> opposingForces = new List<BattleSquad>();
-            // determine size of force to generate
-            double log = RNG.GetLinearDouble() + missionSize;
-            int forceSize = (int)Math.Pow(10, log);
-            // generate opposing force
-            int totalGenerated = 0;
-            while (totalGenerated < forceSize)
-            {
-                Unit enemyUnit = TempArmyBuilder.GenerateArmyFromRegionFaction(enemyFaction);
-                opposingForces.AddRange(enemyUnit.GetAllSquads().Select(s => new BattleSquad(false, s)));
-                totalGenerated += enemyUnit.GetAllMembers().Count();
-            }
-            return opposingForces;
         }
     }
 }

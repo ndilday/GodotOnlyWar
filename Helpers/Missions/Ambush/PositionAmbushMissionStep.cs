@@ -1,5 +1,4 @@
 ﻿using OnlyWar.Builders;
-using OnlyWar.Helpers.Missions.Recon;
 using OnlyWar.Models.Missions;
 using OnlyWar.Models.Planets;
 using OnlyWar.Models.Soldiers;
@@ -34,18 +33,36 @@ namespace OnlyWar.Helpers.Missions.Ambush
             // intelligence makes it easier to find a good ambush spot
             difficulty -= context.Order.Mission.RegionFaction.Region.IntelligenceLevel;
             SquadMissionTest missionTest = new SquadMissionTest(stealth, difficulty);
+            context.OpposingForces = PopulateOpposingForce(context.Order.Mission.MissionSize, enemyFaction);
 
             context.DaysElapsed++;
             float margin = missionTest.RunMissionCheck(context.PlayerSquads);
 
             if (margin > 0.0f)
             {
-                new PerformAmbushMissionStep().ExecuteMissionStep(context, margin, this);
+                new PerformAmbushMissionStep().ExecuteMissionStep(context, margin, null);
             }
             else
             {
-                new DetectedMissionStep().ExecuteMissionStep(context, margin, this);
+                new MeetingEngagementMissionStep().ExecuteMissionStep(context, margin, null);
             }
+        }
+
+        private List<BattleSquad> PopulateOpposingForce(int missionSize, RegionFaction enemyFaction)
+        {
+            List<BattleSquad> opposingForces = new List<BattleSquad>();
+            // determine size of force to generate
+            double log = RNG.GetLinearDouble() + missionSize;
+            int forceSize = (int)Math.Pow(10, log);
+            // generate opposing force
+            int totalGenerated = 0;
+            while (totalGenerated < forceSize)
+            {
+                Unit enemyUnit = TempArmyBuilder.GenerateArmyFromRegionFaction(enemyFaction);
+                opposingForces.AddRange(enemyUnit.GetAllSquads().Select(s => new BattleSquad(false, s)));
+                totalGenerated += enemyUnit.GetAllMembers().Count();
+            }
+            return opposingForces;
         }
     }
 }

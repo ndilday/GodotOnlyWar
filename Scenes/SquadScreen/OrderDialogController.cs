@@ -71,7 +71,12 @@ public partial class OrderDialogController : Control
     {
         List<Tuple<string, int>> missionOptions = new List<Tuple<string, int>>();
         missionOptions.Add(new Tuple<string, int>("Recon", -1));
-        if(_currentlySelectedRegion.RegionFactionMap.Values.Any(rf => !rf.PlanetFaction.Faction.IsDefaultFaction && !rf.PlanetFaction.Faction.IsPlayerFaction))
+        if (_currentlySelectedRegion == _squad.CurrentRegion)
+        {
+            missionOptions.Add(new Tuple<string, int>("Defend", -3));
+            missionOptions.Add(new Tuple<string, int>("Patrol", -4));
+        }
+        else if(_currentlySelectedRegion.RegionFactionMap.Values.Any(rf => !rf.PlanetFaction.Faction.IsDefaultFaction && !rf.PlanetFaction.Faction.IsPlayerFaction))
         {
             missionOptions.Add(new Tuple<string, int>("Attack", -2));
         }
@@ -110,6 +115,14 @@ public partial class OrderDialogController : Control
         {
             missionType = MissionType.Advance;
         }
+        else if(e == -3)
+        {
+            missionType = MissionType.DefenseInDepth;
+        }
+        else if(e == -4)
+        {
+            missionType = MissionType.Patrol;
+        }
         else
         {
             missionType = _currentlySelectedRegion.SpecialMissions.First(m => m.Id == e).MissionType;
@@ -119,14 +132,23 @@ public partial class OrderDialogController : Control
             case MissionType.Advance:
                 text = "Enter the region, engaging any enemy forces there.";
                 break;
-            case MissionType.Recon:
-                text = "Probe the area to find hidden enemy forces and opportunities for special missions";
+            case MissionType.Ambush:
+                text = "We have identified an area the enemy frequently moves forces through that contains oppotune firing lines. Setting up an ambush here will allow us to reduce enemy forces at relatively low risk to our troops, assuming they can get into position undetected.";
                 break;
             case MissionType.Assassination:
                 text = "A high-value target has been identified in the area. They will likely be guarded by an elite bodyguard. Eliminating them will greatly reduce the enemy's command and control capabilities.";
                 break;
-                case MissionType.Ambush:
-                text = "We have identified an area the enemy frequently moves forces through that contains oppotune firing lines. Setting up an ambush here will allow us to reduce enemy forces at relatively low risk to our troops, assuming they can get into position undetected.";
+            case MissionType.DefenseInDepth:
+                text = "Defend the region from attacks by enemy forces";
+                break;
+            case MissionType.Extermination:
+                text = "We have identified a hidden enemy cell that we can take out.";
+                break;
+            case MissionType.Patrol:
+                text = "Move around the region, attempting to find hidden or infiltrating enemy forces";
+                break;
+            case MissionType.Recon:
+                text = "Probe the area to find hidden enemy forces and opportunities for special missions";
                 break;
                 case MissionType.Sabotage:
                 text = "We have identified a target that, if destroyed, will greatly reduce the enemy's ability to wage war in this region. We will need to get in and out quickly, as the enemy will likely be on high alert.";

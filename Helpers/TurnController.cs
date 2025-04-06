@@ -27,7 +27,7 @@ namespace OnlyWar.Helpers
             MissionContexts.Clear();
             SpecialMissions.Clear();
             ProcessMissions(sector);
-            // TODO: move this into a thread that can run while the player is interacting with the UI
+            // TODO: what can we move into a thread that can run while the player is interacting with the UI?
             UpdatePlanets(sector.Planets.Values);
             UpdateIntelligence(sector.Planets.Values);
         }
@@ -61,7 +61,7 @@ namespace OnlyWar.Helpers
                             }
                             else
                             {
-                                HandleHiddenFactionIntelligence();
+                                HandleHiddenFactionIntelligence(regionFaction);
                             }
                         }
 
@@ -104,6 +104,21 @@ namespace OnlyWar.Helpers
                     GenerateAmbushMission(enemyRegionFaction);
 
                 }
+            }
+        }
+
+        public void HandleHiddenFactionIntelligence(RegionFaction enemyRegionFaction)
+        {
+            // determine whether the faction can hide among the population
+            float popRatio = (float)enemyRegionFaction.Population / (float)enemyRegionFaction.Region.Population;
+            float zScore = GaussianCalculator.ApproximateInverseNormalCDF(popRatio);
+            zScore += enemyRegionFaction.Region.IntelligenceLevel / 10.0f;
+            double chance = RNG.NextRandomZValue();
+            if(chance < zScore)
+            {
+                int size = Math.Max((int)(zScore - chance), 1);
+                // found a hidden faction cell
+                enemyRegionFaction.Region.SpecialMissions.Add(new Mission(MissionType.Extermination, enemyRegionFaction, size));
             }
         }
 
@@ -164,12 +179,6 @@ namespace OnlyWar.Helpers
             Mission ass = new Mission(0, MissionType.Assassination, enemyRegionFaction, size);
             enemyRegionFaction.Region.SpecialMissions.Add(ass);
             SpecialMissions.Add(ass);
-        }
-
-        public void HandleHiddenFactionIntelligence()
-        {
-            // determine whether the faction can hide among the population
-
         }
 
         private void ProcessMissions(Sector sector)

@@ -24,16 +24,18 @@ namespace OnlyWar.Builders
         {
             switch (context.Order.Mission.MissionType)
             {
+                case MissionType.Advance:
+                    return new PrepareAssaultMissionStep();
+                case MissionType.Ambush:
+                    return new PositionAmbushMissionStep();
+                case MissionType.Assassination:
+                    return new AssassinateStealthMissionStep();
+                case MissionType.Extermination:
+                    return new PositionAmbushMissionStep();
                 case MissionType.Recon:
                     return new ReconStealthMissionStep();
                 case MissionType.Sabotage:
                     return new SabotageStealthMissionStep();
-                case MissionType.Assassination:
-                    return new AssassinateStealthMissionStep();
-                case MissionType.Ambush:
-                    return new PositionAmbushMissionStep();
-                case MissionType.Advance:
-                    return new PrepareAssaultMissionStep();
             }
             return null;
         }
