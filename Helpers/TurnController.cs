@@ -32,155 +32,6 @@ namespace OnlyWar.Helpers
             UpdateIntelligence(sector.Planets.Values);
         }
 
-        private void UpdateIntelligence(IEnumerable<Planet> planets)
-        {
-            foreach (Planet planet in planets)
-            {
-                foreach (Region region in planet.Regions)
-                {
-                    // 25% chance of unexecuted special missions being removed
-                    foreach (Mission mission in region.SpecialMissions)
-                    {
-                        if (RNG.GetIntBelowMax(0, 4) == 0)
-                        {
-                            // TODO: add to the end of turn log that the intelligence grew stale
-                            region.SpecialMissions.Remove(mission);
-                        }
-                    }
-                    if (region.IntelligenceLevel > 0)
-                    {
-                        foreach (RegionFaction regionFaction in region.RegionFactionMap.Values)
-                        {
-                            if (regionFaction.PlanetFaction.Faction.IsPlayerFaction || regionFaction.PlanetFaction.Faction.IsDefaultFaction)
-                            {
-                                continue;
-                            }
-                            if (regionFaction.IsPublic)
-                            {
-                                HandlePublicFactionIntelligence(regionFaction);
-                            }
-                            else
-                            {
-                                HandleHiddenFactionIntelligence(regionFaction);
-                            }
-                        }
-
-                        // reduce intelligence level by 25%
-                        region.IntelligenceLevel *= 0.75f;
-                    }
-                }
-            }
-        }
-
-        public void HandlePublicFactionIntelligence(RegionFaction enemyRegionFaction)
-        {
-            // see if any intelligence gets spent in exchange for special mission opportunities
-            float specMissionChance = (float)Math.Log(enemyRegionFaction.Region.IntelligenceLevel, 2) + 1;
-            // subtract one for each special mission already identified
-            specMissionChance -= enemyRegionFaction.Region.SpecialMissions.Count;
-            for (int i = 0; i < specMissionChance; i++)
-            {
-                double chance = RNG.NextRandomZValue();
-                if (chance >= 2)
-                {
-                    GenerateAssassinationMission(enemyRegionFaction);
-                }
-                else if (chance >= 1)
-                {
-                    // sabotage
-                    // add up the amount of entrenchment, detection, and antiair in this region
-                    int defenseTotal = enemyRegionFaction.Entrenchment + enemyRegionFaction.Detection + enemyRegionFaction.AntiAir;
-                    if (defenseTotal == 0)
-                    {
-                        GenerateAmbushMission(enemyRegionFaction);
-                    }
-                    else
-                    {
-                        GenerateSabotageMission(enemyRegionFaction, defenseTotal);
-                    }
-                }
-                else if (chance >= 0)
-                {
-                    GenerateAmbushMission(enemyRegionFaction);
-
-                }
-            }
-        }
-
-        public void HandleHiddenFactionIntelligence(RegionFaction enemyRegionFaction)
-        {
-            // determine whether the faction can hide among the population
-            float popRatio = (float)enemyRegionFaction.Population / (float)enemyRegionFaction.Region.Population;
-            float zScore = GaussianCalculator.ApproximateInverseNormalCDF(popRatio);
-            zScore += enemyRegionFaction.Region.IntelligenceLevel / 10.0f;
-            double chance = RNG.NextRandomZValue();
-            if(chance < zScore)
-            {
-                int size = Math.Max((int)(zScore - chance), 1);
-                // found a hidden faction cell
-                enemyRegionFaction.Region.SpecialMissions.Add(new Mission(MissionType.Extermination, enemyRegionFaction, size));
-            }
-        }
-
-        private void GenerateAmbushMission(RegionFaction enemyRegionFaction)
-        {
-            //make it an ambush, instead
-            double maxSize = Math.Log10(enemyRegionFaction.Garrison);
-            int size = Math.Min(Math.Max((int)RNG.NextRandomZValue() + 1, 1), (int)maxSize);
-            Mission ambush = new Mission(MissionType.Ambush, enemyRegionFaction, size);
-            enemyRegionFaction.Region.SpecialMissions.Add(ambush);
-            SpecialMissions.Add(ambush);
-        }
-
-        private void GenerateSabotageMission(RegionFaction enemyRegionFaction, int defenseTotal)
-        {
-            int roll = RNG.GetIntBelowMax(0, defenseTotal);
-            if (roll <= enemyRegionFaction.Entrenchment)
-            {
-                // saborage the entrenchments
-                int size = Math.Min(Math.Max((int)RNG.NextRandomZValue() + 1, 1), enemyRegionFaction.Entrenchment);
-                SabotageMission sabotage = new SabotageMission(0, DefenseType.Entrenchment, size, enemyRegionFaction);
-                enemyRegionFaction.Region.SpecialMissions.Add(sabotage);
-                SpecialMissions.Add(sabotage);
-            }
-            else
-            {
-                roll -= enemyRegionFaction.Entrenchment;
-                if (roll <= enemyRegionFaction.Detection)
-                {
-                    // sabotage the detection
-                    int size = Math.Min(Math.Max((int)RNG.NextRandomZValue() + 1, 1), enemyRegionFaction.Detection);
-                    SabotageMission sabotage = new SabotageMission(0, DefenseType.Detection, size, enemyRegionFaction);
-                    enemyRegionFaction.Region.SpecialMissions.Add(sabotage);
-                    SpecialMissions.Add(sabotage);
-                }
-                else
-                {
-                    // sabotage the antiair
-                    int size = Math.Min(Math.Max((int)RNG.NextRandomZValue() + 1, 1), enemyRegionFaction.AntiAir);
-                    SabotageMission sabotage = new SabotageMission(0, DefenseType.AntiAir, size, enemyRegionFaction);
-                    enemyRegionFaction.Region.SpecialMissions.Add(sabotage);
-                    SpecialMissions.Add(sabotage);
-                }
-            }
-        }
-
-        private void GenerateAssassinationMission(RegionFaction enemyRegionFaction)
-        {
-            // assassination
-            // assume that each degree of magnitude of population increases the "size" of the highest leader
-            // for example, with Tyranids, this could be
-            // 1-10: Prime
-            // 11-100: Broodlord
-            // 101-1000: Zoenthope?
-            // 1001-10000: Hive Tyrant
-            int max = (int)Math.Log10(enemyRegionFaction.Population);
-            int size = Math.Min(Math.Max((int)RNG.NextRandomZValue() + 1, 1), max);
-            Mission ass = new Mission(0, MissionType.Assassination, enemyRegionFaction, size);
-            enemyRegionFaction.Region.SpecialMissions.Add(ass);
-            SpecialMissions.Add(ass);
-        }
-
         private void ProcessMissions(Sector sector)
         {
             foreach (Order order in sector.Orders.Values)
@@ -304,6 +155,36 @@ namespace OnlyWar.Helpers
             }
         }
 
+        private void EndOfTurnRegionFactionsUpdate(RegionFaction regionFaction, float pdfRatio)
+        {
+            Planet planet = regionFaction.Region.Planet;
+            Faction controllingFaction = planet.GetControllingFaction();
+            float newPop = 0;
+            switch (regionFaction.PlanetFaction.Faction.GrowthType)
+            {
+                case GrowthType.Logistic:
+                    newPop = regionFaction.Population * 0.00015f;
+                    break;
+                case GrowthType.Conversion:
+                    newPop = ConvertPopulation(regionFaction.Region, regionFaction, newPop);
+                    if (regionFaction.PlanetFaction.Faction.Id != controllingFaction.Id &&
+                        planet.PlanetFactionMap[controllingFaction.Id].Leader != null)
+                    {
+                        // TODO: see if the governor notices the converted population
+                    }
+                    break;
+                default:
+                    newPop = regionFaction.Population * 0.0001f;
+                    break;
+            }
+            if (RNG.GetLinearDouble() < newPop % 1)
+            {
+                newPop++;
+            }
+            regionFaction.Population += (int)newPop;
+            UpdateRegionFactionForces(regionFaction, pdfRatio, newPop);
+        }
+
         private void UpdateRegionFactionForces(RegionFaction regionFaction, float pdfRatio, float newPop)
         {
             Planet planet = regionFaction.Region.Planet;
@@ -358,9 +239,8 @@ namespace OnlyWar.Helpers
             // determine the forces available
             long organizedTroops = (int)(publicFaction.Population * publicFaction.Organization / 100);
             long disorganizedTroops = publicFaction.Population - organizedTroops;
-            int nearbyEnemies = GetAdjacentPlayerAlignedTroops(publicFaction.Region);
+            int garrisonRequirements = GetAdjacentPlayerAlignedTroops(publicFaction.Region);
             // we need to garrison at least as many enemies as there are nearby
-            int garrisonRequirements = nearbyEnemies;
             int structurePoints = publicFaction.Detection + publicFaction.Entrenchment + publicFaction.AntiAir;
             if (structurePoints == 0 && garrisonRequirements > organizedTroops)
             {
@@ -371,7 +251,18 @@ namespace OnlyWar.Helpers
             else if (garrisonRequirements < organizedTroops)
             {
                 // there are spare troops for other activities
-                long buildPointsAvailable = (organizedTroops - garrisonRequirements) / 100;
+                long spareTroops = organizedTroops - garrisonRequirements;
+                int defendingTroops;
+                Region targetRegion = GetAdjacentPlayerAlignedTarget(publicFaction.Region, spareTroops, out defendingTroops);
+                if(targetRegion != null)
+                {
+                    // send an attack
+                    int attackSize = Math.Min((int)((RNG.GetLinearDouble() + 2.0f) * defendingTroops), (int)spareTroops);
+                    spareTroops -= attackSize;
+                    // 
+                }
+                long buildPointsAvailable = (spareTroops) / 100;
+                int extraTroops = (int)((spareTroops) % 100);
                 // if the organization is below some threshold, need to devote labor to improving that
                 int orgInvests = 0, detInvests = 0, entInvests = 0, aaInvests = 0;
                 while (buildPointsAvailable > 0)
@@ -437,41 +328,40 @@ namespace OnlyWar.Helpers
             int totalTroops = 0;
             foreach (Region adjacentRegion in region.GetSelfAndAdjacentRegions())
             {
-                totalTroops += adjacentRegion.RegionFactionMap.Values.Where(rf => rf.PlanetFaction.Faction.IsPlayerFaction || rf.PlanetFaction.Faction.IsDefaultFaction)
+                int regionTroops = adjacentRegion.RegionFactionMap.Values.Where(rf => rf.PlanetFaction.Faction.IsPlayerFaction || rf.PlanetFaction.Faction.IsDefaultFaction)
                     .SelectMany(rf => rf.LandedSquads)
                     .Sum(s => s.Members.Count);
+                if (regionTroops > totalTroops)
+                {
+                    totalTroops = regionTroops;
+                }
             }
             return totalTroops;
         }
 
-        private void EndOfTurnRegionFactionsUpdate(RegionFaction regionFaction, float pdfRatio)
+        private Region GetAdjacentPlayerAlignedTarget(Region region, long spareTroops, out int troopCount)
         {
-            Planet planet = regionFaction.Region.Planet;
-            Faction controllingFaction = planet.GetControllingFaction();
-            float newPop = 0;
-            switch (regionFaction.PlanetFaction.Faction.GrowthType)
+            Region targetRegion = null;
+            int minTroopCount = int.MaxValue;
+            foreach (Region adjacentRegion in region.GetSelfAndAdjacentRegions())
             {
-                case GrowthType.Logistic:
-                    newPop = regionFaction.Population * 0.00015f;
-                    break;
-                case GrowthType.Conversion:
-                    newPop = ConvertPopulation(regionFaction.Region, regionFaction, newPop);
-                    if (regionFaction.PlanetFaction.Faction.Id != controllingFaction.Id &&
-                        planet.PlanetFactionMap[controllingFaction.Id].Leader != null)
-                    {
-                        // TODO: see if the governor notices the converted population
-                    }
-                    break;
-                default:
-                    newPop = regionFaction.Population * 0.0001f;
-                    break;
+                var adjacentRegionFactions = adjacentRegion.RegionFactionMap.Values.Where(rf => rf.PlanetFaction.Faction.IsPlayerFaction || rf.PlanetFaction.Faction.IsDefaultFaction);
+                int regionTroops = adjacentRegionFactions
+                    .SelectMany(rf => rf.LandedSquads)
+                    .Sum(s => s.Members.Count);
+                if (regionTroops > 0 && regionTroops < minTroopCount)
+                {
+                    minTroopCount = regionTroops;
+                    targetRegion = adjacentRegion;
+                }
             }
-            if (RNG.GetLinearDouble() < newPop % 1)
+            if (minTroopCount * 2 > spareTroops)
             {
-                newPop++;
+                troopCount = 0;
+                return null;
             }
-            regionFaction.Population += (int)newPop;
-            UpdateRegionFactionForces(regionFaction, pdfRatio, newPop);
+            troopCount = minTroopCount;
+            return targetRegion;
         }
 
         private void CheckForPlanetaryRevolt(Planet planet)
@@ -703,5 +593,155 @@ namespace OnlyWar.Helpers
 
             return newPop;
         }
+
+        private void UpdateIntelligence(IEnumerable<Planet> planets)
+        {
+            foreach (Planet planet in planets)
+            {
+                foreach (Region region in planet.Regions)
+                {
+                    // 25% chance of unexecuted special missions being removed
+                    foreach (Mission mission in region.SpecialMissions)
+                    {
+                        if (RNG.GetIntBelowMax(0, 4) == 0)
+                        {
+                            // TODO: add to the end of turn log that the intelligence grew stale
+                            region.SpecialMissions.Remove(mission);
+                        }
+                    }
+                    if (region.IntelligenceLevel > 0)
+                    {
+                        foreach (RegionFaction regionFaction in region.RegionFactionMap.Values)
+                        {
+                            if (regionFaction.PlanetFaction.Faction.IsPlayerFaction || regionFaction.PlanetFaction.Faction.IsDefaultFaction)
+                            {
+                                continue;
+                            }
+                            if (regionFaction.IsPublic)
+                            {
+                                HandlePublicFactionIntelligence(regionFaction);
+                            }
+                            else
+                            {
+                                HandleHiddenFactionIntelligence(regionFaction);
+                            }
+                        }
+
+                        // reduce intelligence level by 25%
+                        region.IntelligenceLevel *= 0.75f;
+                    }
+                }
+            }
+        }
+
+        public void HandlePublicFactionIntelligence(RegionFaction enemyRegionFaction)
+        {
+            // see if any intelligence gets spent in exchange for special mission opportunities
+            float specMissionChance = (float)Math.Log(enemyRegionFaction.Region.IntelligenceLevel, 2) + 1;
+            // subtract one for each special mission already identified
+            specMissionChance -= enemyRegionFaction.Region.SpecialMissions.Count;
+            for (int i = 0; i < specMissionChance; i++)
+            {
+                double chance = RNG.NextRandomZValue();
+                if (chance >= 2)
+                {
+                    GenerateAssassinationMission(enemyRegionFaction);
+                }
+                else if (chance >= 1)
+                {
+                    // sabotage
+                    // add up the amount of entrenchment, detection, and antiair in this region
+                    int defenseTotal = enemyRegionFaction.Entrenchment + enemyRegionFaction.Detection + enemyRegionFaction.AntiAir;
+                    if (defenseTotal == 0)
+                    {
+                        GenerateAmbushMission(enemyRegionFaction);
+                    }
+                    else
+                    {
+                        GenerateSabotageMission(enemyRegionFaction, defenseTotal);
+                    }
+                }
+                else if (chance >= 0)
+                {
+                    GenerateAmbushMission(enemyRegionFaction);
+
+                }
+            }
+        }
+
+        public void HandleHiddenFactionIntelligence(RegionFaction enemyRegionFaction)
+        {
+            // determine whether the faction can hide among the population
+            float popRatio = (float)enemyRegionFaction.Population / (float)enemyRegionFaction.Region.Population;
+            float zScore = GaussianCalculator.ApproximateInverseNormalCDF(popRatio);
+            zScore += enemyRegionFaction.Region.IntelligenceLevel / 10.0f;
+            double chance = RNG.NextRandomZValue();
+            if (chance < zScore)
+            {
+                int size = Math.Max((int)(zScore - chance), 1);
+                // found a hidden faction cell
+                enemyRegionFaction.Region.SpecialMissions.Add(new Mission(MissionType.Extermination, enemyRegionFaction, size));
+            }
+        }
+
+        private void GenerateAmbushMission(RegionFaction enemyRegionFaction)
+        {
+            //make it an ambush, instead
+            double maxSize = Math.Log10(enemyRegionFaction.Garrison);
+            int size = Math.Min(Math.Max((int)RNG.NextRandomZValue() + 1, 1), (int)maxSize);
+            Mission ambush = new Mission(MissionType.Ambush, enemyRegionFaction, size);
+            enemyRegionFaction.Region.SpecialMissions.Add(ambush);
+            SpecialMissions.Add(ambush);
+        }
+
+        private void GenerateSabotageMission(RegionFaction enemyRegionFaction, int defenseTotal)
+        {
+            int roll = RNG.GetIntBelowMax(0, defenseTotal);
+            if (roll <= enemyRegionFaction.Entrenchment)
+            {
+                // saborage the entrenchments
+                int size = Math.Min(Math.Max((int)RNG.NextRandomZValue() + 1, 1), enemyRegionFaction.Entrenchment);
+                SabotageMission sabotage = new SabotageMission(0, DefenseType.Entrenchment, size, enemyRegionFaction);
+                enemyRegionFaction.Region.SpecialMissions.Add(sabotage);
+                SpecialMissions.Add(sabotage);
+            }
+            else
+            {
+                roll -= enemyRegionFaction.Entrenchment;
+                if (roll <= enemyRegionFaction.Detection)
+                {
+                    // sabotage the detection
+                    int size = Math.Min(Math.Max((int)RNG.NextRandomZValue() + 1, 1), enemyRegionFaction.Detection);
+                    SabotageMission sabotage = new SabotageMission(0, DefenseType.Detection, size, enemyRegionFaction);
+                    enemyRegionFaction.Region.SpecialMissions.Add(sabotage);
+                    SpecialMissions.Add(sabotage);
+                }
+                else
+                {
+                    // sabotage the antiair
+                    int size = Math.Min(Math.Max((int)RNG.NextRandomZValue() + 1, 1), enemyRegionFaction.AntiAir);
+                    SabotageMission sabotage = new SabotageMission(0, DefenseType.AntiAir, size, enemyRegionFaction);
+                    enemyRegionFaction.Region.SpecialMissions.Add(sabotage);
+                    SpecialMissions.Add(sabotage);
+                }
+            }
+        }
+
+        private void GenerateAssassinationMission(RegionFaction enemyRegionFaction)
+        {
+            // assassination
+            // assume that each degree of magnitude of population increases the "size" of the highest leader
+            // for example, with Tyranids, this could be
+            // 1-10: Prime
+            // 11-100: Broodlord
+            // 101-1000: Zoenthope?
+            // 1001-10000: Hive Tyrant
+            int max = (int)Math.Log10(enemyRegionFaction.Population);
+            int size = Math.Min(Math.Max((int)RNG.NextRandomZValue() + 1, 1), max);
+            Mission ass = new Mission(0, MissionType.Assassination, enemyRegionFaction, size);
+            enemyRegionFaction.Region.SpecialMissions.Add(ass);
+            SpecialMissions.Add(ass);
+        }
+
     }
 }
