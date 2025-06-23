@@ -5,6 +5,7 @@ using OnlyWar.Models;
 using OnlyWar.Models.Missions;
 using OnlyWar.Models.Orders;
 using OnlyWar.Models.Planets;
+using OnlyWar.Models.Squads;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -26,16 +27,25 @@ namespace OnlyWar.Helpers
         {
             MissionContexts.Clear();
             SpecialMissions.Clear();
-            ProcessMissions(sector);
-            // TODO: what can we move into a thread that can run while the player is interacting with the UI?
+
+            // --- 1. Strategic Planning Phase ---
+            List<Order> allOrdersThisTurn = sector.Orders.Values.ToList();
+            ProcessFactionStrategy(sector, allOrdersThisTurn);
+
+            // --- 2. Mission Execution Phase ---
+            ProcessMissions(allOrdersThisTurn);
+
+            // --- 3. Planetary Simulation & Resolution Phase ---
+            ApplyMissionResults();
             UpdatePlanets(sector.Planets.Values);
             UpdateIntelligence(sector.Planets.Values);
         }
 
-        private void ProcessMissions(Sector sector)
+        private void ProcessMissions(IEnumerable<Order> allOrders)
         {
-            foreach (Order order in sector.Orders.Values)
+            foreach (Order order in allOrders)
             {
+                /*
                 if (order.Mission.MissionType == MissionType.Advance)
                 {
                     // move these squads to the new region
@@ -54,10 +64,36 @@ namespace OnlyWar.Helpers
                     MissionStepOrchestrator.GetStartingStep(context).ExecuteMissionStep(context, 0, null);
                     MissionContexts.Add(context);
                 }
-            }
+             */
+                List<BattleSquad> involvedSquads;
+                bool isPlayerOrder = order.AssignedSquads.Any(s => s.Faction.IsPlayerFaction);
 
+                if (isPlayerOrder)
+                {
+                    involvedSquads = order.AssignedSquads.Select(s => new BattleSquad(true, s)).ToList();
+                }
+                else
+                {
+                    // This is an NPC order, generate forces on-the-fly
+                    var enemyFaction = order.Mission.RegionFaction.PlanetFaction.Faction;
+                    var enemyArmy = TempArmyBuilder.GenerateArmy(enemyFaction); // This needs to be smarter
+                                                                                // TODO: Refine TempArmyBuilder to generate a force of a specific size (from order.Mission.MissionSize)
+                    involvedSquads = enemyArmy.GetAllSquads().Select(s => new BattleSquad(false, s)).ToList();
+                }
+
+                if (involvedSquads.Count == 0) continue;
+
+                MissionContext context = new MissionContext(order, involvedSquads, new List<BattleSquad>());
+                MissionStepOrchestrator.GetStartingStep(context).ExecuteMissionStep(context, 0, null);
+                MissionContexts.Add(context);
+            }
+        }
+
+        private void ApplyMissionResults()
+        {
             foreach (MissionContext context in MissionContexts)
             {
+                // This logic is moved from the old ProcessMissions method
                 RegionFaction regionFaction = context.Order.Mission.RegionFaction;
                 switch (context.Order.Mission.MissionType)
                 {
@@ -99,17 +135,13 @@ namespace OnlyWar.Helpers
                         }
                         break;
                 }
-                // modify population reduction by entrenchment,
-                // as a poor way to simulate defenses
-                // until we get around to making cover, terrain, and fortifications
                 int enemiesKilled = context.EnemiesKilled;
-                if(regionFaction.Entrenchment > 0)
+                if (regionFaction.Entrenchment > 0)
                 {
                     float ratio = 1.0f - Math.Min(regionFaction.Entrenchment / 10.0f, 1.0f);
-                    
                     enemiesKilled = (int)(enemiesKilled * ratio);
                 }
-                regionFaction.Population -= context.EnemiesKilled;
+                regionFaction.Population -= enemiesKilled;
                 if (regionFaction.Population < 0)
                 {
                     regionFaction.Population = 0;
@@ -339,6 +371,75 @@ namespace OnlyWar.Helpers
             return totalTroops;
         }
 
+        private void ProcessFactionStrategy(Sector sector, List<Order> allOrders)
+        {
+            // Iterate through each faction, except the player's.
+            var factions = GameDataSingleton.Instance.GameRulesData.Factions.Where(f => !f.IsPlayerFaction && !f.IsDefaultFaction);
+            foreach (Faction faction in factions)
+            {
+                // Identify all potential offensives for this faction.
+                List<PotentialOffensive> potentialOffensives = IdentifyPotentialOffensives(faction, sector);
+
+                if (potentialOffensives.Count > 0)
+                {
+                    // For now, let's have the AI launch its most promising attack.
+                    // We can add more complex logic later (e.g., launching multiple smaller attacks).
+                    PotentialOffensive chosenOffensive = ChooseBestOffensive(potentialOffensives);
+                    if (chosenOffensive != null)
+                    {
+                        GenerateOffensiveOrder(chosenOffensive, allOrders);
+                    }
+                }
+            }
+        }
+
+        // Placeholder for future faction disposition system.
+        private bool AreFactionsEnemies(Faction f1, Faction f2)
+        {
+            // For now, any non-player, non-default faction is an enemy of the player and default factions.
+            // This can be replaced with a diplomacy matrix later.
+            bool f1IsImperial = f1.IsPlayerFaction || f1.IsDefaultFaction;
+            bool f2IsImperial = f2.IsPlayerFaction || f2.IsDefaultFaction;
+            return f1IsImperial != f2IsImperial;
+        }
+
+        private List<PotentialOffensive> IdentifyPotentialOffensives(Faction attackingFaction, Sector sector)
+        {
+            var potentialOffensives = new List<PotentialOffensive>();
+            var enemyRegions = sector.Planets.Values.SelectMany(p => p.Regions)
+                                            .Where(r => r.RegionFactionMap.Values.Any(rf => AreFactionsEnemies(attackingFaction, rf.PlanetFaction.Faction)))
+                                            .ToList();
+
+            foreach (var targetRegion in enemyRegions)
+            {
+                var offensive = new PotentialOffensive
+                {
+                    TargetRegion = targetRegion,
+                    TargetFaction = targetRegion.RegionFactionMap.Values.First(rf => AreFactionsEnemies(attackingFaction, rf.PlanetFaction.Faction))
+                };
+
+                // Find all of this faction's regions that are adjacent to the target
+                var adjacentAttackingRegions = targetRegion.GetAdjacentRegions()
+                                                           .Where(r => r.RegionFactionMap.ContainsKey(attackingFaction.Id))
+                                                           .Select(r => r.RegionFactionMap[attackingFaction.Id])
+                                                           .ToList();
+
+                if (adjacentAttackingRegions.Any())
+                {
+                    offensive.AttackingFactions.AddRange(adjacentAttackingRegions);
+                    offensive.CombinedAttackingForce = adjacentAttackingRegions.Sum(rf => rf.Garrison);
+                    potentialOffensives.Add(offensive);
+                }
+            }
+            return potentialOffensives;
+        }
+
+        private PotentialOffensive ChooseBestOffensive(List<PotentialOffensive> offensives)
+        {
+            // Simple logic: choose the attack with the best force ratio.
+            return offensives.OrderByDescending(o => o.CombinedAttackingForce / (float)(o.TargetFaction.Garrison + 1)).FirstOrDefault();
+        }
+
         private Region GetAdjacentPlayerAlignedTarget(Region region, long spareTroops, out int troopCount)
         {
             Region targetRegion = null;
@@ -362,6 +463,42 @@ namespace OnlyWar.Helpers
             }
             troopCount = minTroopCount;
             return targetRegion;
+        }
+
+        private void GenerateOffensiveOrder(PotentialOffensive offensive, List<Order> allOrders)
+        {
+            // Use the strategic context to decide the mission type.
+            long defenderStrength = offensive.TargetFaction.Garrison + offensive.TargetFaction.LandedSquads.Sum(s => s.Members.Count);
+            MissionType missionType;
+
+            if (offensive.CombinedAttackingForce > defenderStrength * 1.5)
+            {
+                missionType = MissionType.Advance;
+            }
+            else
+            {
+                // If not overwhelmingly superior, just perform a Recon to gather intel.
+                // This can be expanded with Sabotage, etc., later.
+                missionType = MissionType.Recon;
+            }
+
+            // Commit troops from the garrisons.
+            long attackForceSize = (long)(offensive.CombinedAttackingForce * (RNG.GetLinearDouble() * 0.25 + 0.5)); // Commit 50-75% of available garrison
+            foreach (var attackingRegionFaction in offensive.AttackingFactions)
+            {
+                // Deduct proportionally from each attacking region.
+                long contribution = (long)(attackForceSize * (attackingRegionFaction.Garrison / (float)offensive.CombinedAttackingForce));
+                attackingRegionFaction.Garrison -= (int)contribution;
+            }
+
+            // Create the mission and order.
+            // Note: The 'MissionSize' here will be used by the execution step to generate the temp army.
+            Mission newMission = new Mission(missionType, offensive.TargetFaction, (int)attackForceSize);
+
+            // NPC orders don't need a persistent list of squads. The size is stored in the mission.
+            Order newOrder = new Order(new List<Squad>(), Disposition.Mobile, false, true, Aggression.Normal, newMission);
+
+            allOrders.Add(newOrder);
         }
 
         private void CheckForPlanetaryRevolt(Planet planet)
