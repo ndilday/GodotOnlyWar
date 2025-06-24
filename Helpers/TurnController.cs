@@ -41,7 +41,11 @@ namespace OnlyWar.Helpers
             }
 
             // --- 2. Mission Execution Phase ---
-            ProcessMissions(allOrdersThisTurn);
+            var combatOrders = allOrdersThisTurn.Where(o => o.AssignedSquads.Any());
+            ProcessCombatMissions(combatOrders);
+
+            var constructionOrders = allOrdersThisTurn.Where(o => !o.AssignedSquads.Any());
+            ProcessConstructionOrders(constructionOrders);
 
             // --- 3. Planetary Simulation & Resolution Phase ---
             ApplyMissionResults();
@@ -49,25 +53,46 @@ namespace OnlyWar.Helpers
             UpdateIntelligence(sector.Planets.Values);
         }
 
-        private void ProcessMissions(IEnumerable<Order> allOrders)
+        private void ProcessCombatMissions(IEnumerable<Order> combatOrders)
         {
-            foreach (Order order in allOrders)
+            foreach (Order order in combatOrders)
             {
-                // Skip orders with no squads, which can happen if a player creates an empty order.
-                if (order.AssignedSquads.Count == 0) continue;
-
-                // The logic is now identical for player and NPC orders.
-                // We just need to know if it's the player's for the BattleSquad wrapper.
                 bool isPlayerOrder = order.AssignedSquads.First().Faction.IsPlayerFaction;
 
                 List<BattleSquad> involvedBattleSquads = order.AssignedSquads
                                                               .Select(s => new BattleSquad(isPlayerOrder, s))
                                                               .ToList();
 
-                // The rest of the execution flow remains the same.
                 MissionContext context = new MissionContext(order, involvedBattleSquads, new List<BattleSquad>());
                 MissionStepOrchestrator.GetStartingStep(context).ExecuteMissionStep(context, 0, null);
                 MissionContexts.Add(context);
+            }
+        }
+
+        private void ProcessConstructionOrders(IEnumerable<Order> constructionOrders)
+        {
+            // these orders resolve instantly and don't create a context
+            foreach (var order in constructionOrders)
+            {
+                if (order.Mission is ConstructionMission mission)
+                {
+                    switch (mission.ConstructionType)
+                    {
+                        case DefenseType.Entrenchment:
+                            mission.RegionFaction.Entrenchment += mission.MissionSize;
+                            break;
+                        case DefenseType.Detection:
+                            mission.RegionFaction.Detection += mission.MissionSize;
+                            break;
+                        case DefenseType.AntiAir:
+                            mission.RegionFaction.AntiAir += mission.MissionSize;
+                            break;
+                        case DefenseType.Organization:
+                            mission.RegionFaction.Organization += mission.MissionSize;
+                            if (mission.RegionFaction.Organization > 100) mission.RegionFaction.Organization = 100;
+                            break;
+                    }
+                }
             }
         }
 
@@ -230,136 +255,6 @@ namespace OnlyWar.Helpers
                     regionFaction.AntiAir = 1;
                 }
             }
-        }
-
-        private void ApplyPublicFactionWarActivities(RegionFaction publicFaction)
-        {
-            // determine the forces available
-            long organizedTroops = (int)(publicFaction.Population * publicFaction.Organization / 100);
-            long disorganizedTroops = publicFaction.Population - organizedTroops;
-            int garrisonRequirements = GetAdjacentPlayerAlignedTroops(publicFaction.Region);
-            // we need to garrison at least as many enemies as there are nearby
-            int structurePoints = publicFaction.Detection + publicFaction.Entrenchment + publicFaction.AntiAir;
-            if (structurePoints == 0 && garrisonRequirements > organizedTroops)
-            {
-                // if there are no defenses and not enough organized troops to defend
-                // remaining troops go into hiding
-                publicFaction.IsPublic = false;
-            }
-            else if (garrisonRequirements < organizedTroops)
-            {
-                // there are spare troops for other activities
-                long spareTroops = organizedTroops - garrisonRequirements;
-                int defendingTroops;
-                Region targetRegion = GetAdjacentPlayerAlignedTarget(publicFaction.Region, spareTroops, out defendingTroops);
-                if(targetRegion != null)
-                {
-                    // send an attack
-                    int attackSize = Math.Min((int)((RNG.GetLinearDouble() + 2.0f) * defendingTroops), (int)spareTroops);
-                    spareTroops -= attackSize;
-                    // 
-                }
-                long buildPointsAvailable = (spareTroops) / 100;
-                int extraTroops = (int)((spareTroops) % 100);
-                // if the organization is below some threshold, need to devote labor to improving that
-                int orgInvests = 0, detInvests = 0, entInvests = 0, aaInvests = 0;
-                while (buildPointsAvailable > 0)
-                {
-                    int orgCost;
-                    // find the cheapest investment
-                    if (publicFaction.Organization + orgInvests == 100)
-                    {
-                        orgCost = int.MaxValue;
-                    }
-                    else
-                    {
-                        orgCost = (int)(Math.Pow(2, orgInvests + 1) * (publicFaction.Population / 100));
-                    }
-                    int detCost = (int)Math.Pow(2, publicFaction.Detection + detInvests + 1);
-                    int entCost = (int)Math.Pow(2, publicFaction.Entrenchment + entInvests + 1);
-                    int aaCost = (int)Math.Pow(2, publicFaction.AntiAir + aaInvests + 1);
-                    // find the cheapest investment
-                    int minCost = Math.Min(orgCost, Math.Min(detCost, Math.Min(entCost, aaCost)));
-                    if (minCost <= buildPointsAvailable)
-                    {
-                        if (minCost == orgCost)
-                        {
-                            orgInvests++;
-                        }
-                        else if (minCost == entCost)
-                        {
-                            entInvests++;
-
-                        }
-                        else if (minCost == detCost)
-                        {
-                            detInvests++;
-                        }
-                        else if (minCost == aaCost)
-                        {
-                            aaInvests++;
-                        }
-                        buildPointsAvailable -= minCost;
-                    }
-                    else
-                    {
-                        // no more investments can be made
-                        break;
-                    }
-                }
-                publicFaction.Organization += orgInvests;
-                publicFaction.Detection += detInvests;
-                publicFaction.Entrenchment += entInvests;
-                publicFaction.AntiAir += aaInvests;
-                publicFaction.Garrison = (int)(organizedTroops % 100 + garrisonRequirements + buildPointsAvailable * 100);
-                if (disorganizedTroops > 0)
-                {
-                    // some disorganized troops are part of the garrisoning forces by happenstance
-                    float unOrganizedPortion = GaussianCalculator.ApproximateNormalCDF((float)RNG.NextRandomZValue()) + 0.5f;
-                    publicFaction.Garrison += (int)(disorganizedTroops * unOrganizedPortion);
-                }
-            }
-        }
-
-        private int GetAdjacentPlayerAlignedTroops(Region region)
-        {
-            int totalTroops = 0;
-            foreach (Region adjacentRegion in region.GetSelfAndAdjacentRegions())
-            {
-                int regionTroops = adjacentRegion.RegionFactionMap.Values.Where(rf => rf.PlanetFaction.Faction.IsPlayerFaction || rf.PlanetFaction.Faction.IsDefaultFaction)
-                    .SelectMany(rf => rf.LandedSquads)
-                    .Sum(s => s.Members.Count);
-                if (regionTroops > totalTroops)
-                {
-                    totalTroops = regionTroops;
-                }
-            }
-            return totalTroops;
-        }   
-
-        private Region GetAdjacentPlayerAlignedTarget(Region region, long spareTroops, out int troopCount)
-        {
-            Region targetRegion = null;
-            int minTroopCount = int.MaxValue;
-            foreach (Region adjacentRegion in region.GetSelfAndAdjacentRegions())
-            {
-                var adjacentRegionFactions = adjacentRegion.RegionFactionMap.Values.Where(rf => rf.PlanetFaction.Faction.IsPlayerFaction || rf.PlanetFaction.Faction.IsDefaultFaction);
-                int regionTroops = adjacentRegionFactions
-                    .SelectMany(rf => rf.LandedSquads)
-                    .Sum(s => s.Members.Count);
-                if (regionTroops > 0 && regionTroops < minTroopCount)
-                {
-                    minTroopCount = regionTroops;
-                    targetRegion = adjacentRegion;
-                }
-            }
-            if (minTroopCount * 2 > spareTroops)
-            {
-                troopCount = 0;
-                return null;
-            }
-            troopCount = minTroopCount;
-            return targetRegion;
         }
 
         private void CheckForPlanetaryRevolt(Planet planet)
@@ -699,7 +594,7 @@ namespace OnlyWar.Helpers
             {
                 // saborage the entrenchments
                 int size = Math.Min(Math.Max((int)RNG.NextRandomZValue() + 1, 1), enemyRegionFaction.Entrenchment);
-                SabotageMission sabotage = new SabotageMission(0, DefenseType.Entrenchment, size, enemyRegionFaction);
+                SabotageMission sabotage = new SabotageMission(DefenseType.Entrenchment, size, enemyRegionFaction);
                 enemyRegionFaction.Region.SpecialMissions.Add(sabotage);
                 SpecialMissions.Add(sabotage);
             }
@@ -710,7 +605,7 @@ namespace OnlyWar.Helpers
                 {
                     // sabotage the detection
                     int size = Math.Min(Math.Max((int)RNG.NextRandomZValue() + 1, 1), enemyRegionFaction.Detection);
-                    SabotageMission sabotage = new SabotageMission(0, DefenseType.Detection, size, enemyRegionFaction);
+                    SabotageMission sabotage = new SabotageMission(DefenseType.Detection, size, enemyRegionFaction);
                     enemyRegionFaction.Region.SpecialMissions.Add(sabotage);
                     SpecialMissions.Add(sabotage);
                 }
@@ -718,7 +613,7 @@ namespace OnlyWar.Helpers
                 {
                     // sabotage the antiair
                     int size = Math.Min(Math.Max((int)RNG.NextRandomZValue() + 1, 1), enemyRegionFaction.AntiAir);
-                    SabotageMission sabotage = new SabotageMission(0, DefenseType.AntiAir, size, enemyRegionFaction);
+                    SabotageMission sabotage = new SabotageMission(DefenseType.AntiAir, size, enemyRegionFaction);
                     enemyRegionFaction.Region.SpecialMissions.Add(sabotage);
                     SpecialMissions.Add(sabotage);
                 }
@@ -736,7 +631,7 @@ namespace OnlyWar.Helpers
             // 1001-10000: Hive Tyrant
             int max = (int)Math.Log10(enemyRegionFaction.Population);
             int size = Math.Min(Math.Max((int)RNG.NextRandomZValue() + 1, 1), max);
-            Mission ass = new Mission(0, MissionType.Assassination, enemyRegionFaction, size);
+            Mission ass = new Mission(MissionType.Assassination, enemyRegionFaction, size);
             enemyRegionFaction.Region.SpecialMissions.Add(ass);
             SpecialMissions.Add(ass);
         }

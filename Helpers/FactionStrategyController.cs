@@ -6,6 +6,7 @@ using OnlyWar.Models.Missions;
 using OnlyWar.Models.Orders;
 using OnlyWar.Models.Planets;
 using OnlyWar.Models.Squads;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 
@@ -22,9 +23,27 @@ public class FactionStrategyController
     // Public entry point for this controller
     public List<Order> GenerateFactionOrders(Faction faction, Sector sector)
     {
-        var orders = new List<Order>();
+        var allNewOrders = new List<Order>();
+        var factionRegions = sector.Planets.Values.SelectMany(p => p.Regions)
+                                                   .SelectMany(r => r.RegionFactionMap.Values)
+                                                   .Where(rf => rf.PlanetFaction.Faction == faction)
+                                                   .ToList();
 
-        // For now, AI launches one major offensive per turn if viable.
+        // Generate development and garrison orders for each region
+        foreach (var regionFaction in factionRegions)
+        {
+            GenerateDevelopmentOrders(regionFaction, allNewOrders);
+        }
+
+        // Generate offensive orders based on strategic situation
+        GenerateOffensiveOrders(faction, sector, allNewOrders);
+
+        return allNewOrders;
+    }
+
+    private void GenerateOffensiveOrders(Faction faction, Sector sector, List<Order> allOrders)
+    {
+        // This is adapted from the existing logic to find a single, best offensive.
         List<PotentialOffensive> potentialOffensives = IdentifyPotentialOffensives(faction, sector);
 
         if (potentialOffensives.Count > 0)
@@ -32,10 +51,79 @@ public class FactionStrategyController
             PotentialOffensive chosenOffensive = ChooseBestOffensive(potentialOffensives);
             if (chosenOffensive != null)
             {
-                GenerateOffensiveOrder(chosenOffensive, orders);
+                GenerateOffensiveOrder(chosenOffensive, allOrders);
             }
         }
-        return orders;
+    }
+
+    private void GenerateDevelopmentOrders(RegionFaction publicFaction, List<Order> allOrders)
+    {
+        // This is the new home for the logic you described.
+        long organizedTroops = (long)(publicFaction.Population * publicFaction.Organization / 100.0f);
+        long garrisonRequirements = CalculateRequiredGarrison(publicFaction.Region);
+
+        // If not enough organized troops to even garrison, the faction might go to ground.
+        if (publicFaction.Detection + publicFaction.Entrenchment + publicFaction.AntiAir == 0
+            && garrisonRequirements > organizedTroops)
+        {
+            publicFaction.IsPublic = false;
+            // In a full implementation, we might issue a "Go To Ground" order.
+            return;
+        }
+
+        if (garrisonRequirements >= organizedTroops)
+        {
+            // Not enough troops for development.
+            return;
+        }
+
+        long spareTroops = organizedTroops - garrisonRequirements;
+        long buildPointsAvailable = spareTroops / 100;
+
+        while (buildPointsAvailable > 0)
+        {
+            int orgCost = (publicFaction.Organization < 100)
+                        ? (int)(Math.Pow(2, publicFaction.Organization / 10) * (publicFaction.Population / 10000.0f)) + 1
+                        : int.MaxValue;
+            int detCost = (int)Math.Pow(2, publicFaction.Detection + 1);
+            int entCost = (int)Math.Pow(2, publicFaction.Entrenchment + 1);
+            int aaCost = (int)Math.Pow(2, publicFaction.AntiAir + 1);
+
+            int minCost = Math.Min(orgCost, Math.Min(detCost, Math.Min(entCost, aaCost)));
+
+            if (minCost > buildPointsAvailable || minCost == int.MaxValue)
+            {
+                break; // Can't afford any more improvements.
+            }
+
+            ConstructionMission mission = null;
+            if (minCost == orgCost)
+            {
+                mission = new ConstructionMission(DefenseType.Organization, 1, publicFaction);
+                publicFaction.Organization++; // Increment here to affect next cost calculation in loop
+            }
+            else if (minCost == entCost)
+            {
+                mission = new ConstructionMission(DefenseType.Entrenchment, 1, publicFaction);
+                publicFaction.Entrenchment++;
+            }
+            else if (minCost == detCost)
+            {
+                mission = new ConstructionMission(DefenseType.Detection, 1, publicFaction);
+                publicFaction.Detection++;
+            }
+            else // aaCost
+            {
+                mission = new ConstructionMission(DefenseType.AntiAir, 1, publicFaction);
+                publicFaction.AntiAir++;
+            }
+
+            // Create a squad-less order to represent this background activity
+            Order devOrder = new Order(new List<Squad>(), Disposition.DugIn, true, false, Aggression.Avoid, mission);
+            allOrders.Add(devOrder);
+
+            buildPointsAvailable -= minCost;
+        }
     }
 
     private void GenerateOffensiveOrder(PotentialOffensive offensive, List<Order> allOrders)
@@ -87,7 +175,6 @@ public class FactionStrategyController
 
     private List<PotentialOffensive> IdentifyPotentialOffensives(Faction attackingFaction, Sector sector)
     {
-        // ... (this method remains largely the same as before, but now calls CalculateRequiredGarrison)
         var potentialOffensives = new List<PotentialOffensive>();
         var allEnemyRegionFactions = sector.Planets.Values.SelectMany(p => p.Regions)
                                         .SelectMany(r => r.RegionFactionMap.Values)

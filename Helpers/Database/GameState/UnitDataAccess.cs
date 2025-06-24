@@ -78,7 +78,6 @@ namespace OnlyWar.Helpers.Database.GameState
 
             using (var command = connection.CreateCommand())
             {
-                int maxOrderId = 0;
                 command.CommandText = "SELECT * FROM OrderSquad";
                 var reader = command.ExecuteReader();
                 while (reader.Read())

@@ -366,7 +366,6 @@ namespace OnlyWar.Helpers.Database.GameRules
                     int defaultWeaponSetId = reader.GetInt32(4);
                     int squadType = reader.GetInt32(5);
                     int battleValue = reader.GetInt32(6);
-                    int bodyguardSquadId = -1;
                     if (reader[7].GetType() != typeof(DBNull))
                     {
                         bodyguardMap[id] = reader.GetInt32(7);

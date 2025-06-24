@@ -109,6 +109,7 @@ namespace OnlyWar.Helpers.Database.GameState
                     Region region = regionMap[regionId];
                     RegionFaction regionFaction = region.RegionFactionMap[factionId];
                     Mission mission;
+                    // TODO: handle construction missions
                     if (defenseType == null)
                     {
                         mission = new Mission(id, missionType, regionFaction, missionSize);

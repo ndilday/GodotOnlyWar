@@ -8,7 +8,8 @@ namespace OnlyWar.Models.Missions
     {
         Entrenchment = 0,
         Detection = 1,
-        AntiAir = 2
+        AntiAir = 2,
+        Organization = 3
     }
 
     public class Mission
@@ -36,6 +37,26 @@ namespace OnlyWar.Models.Missions
         public SabotageMission(int id, DefenseType defenseType, int size, RegionFaction regionFaction) : base(id, MissionType.Sabotage, regionFaction, size)
         {
             DefenseType = defenseType;
+        }
+
+        public SabotageMission(DefenseType defenseType, int size, RegionFaction regionFaction) : base(MissionType.Sabotage, regionFaction, size)
+        {
+            DefenseType = defenseType;
+        }
+    }
+
+    public class ConstructionMission : Mission
+    {
+        public DefenseType ConstructionType { get; private set; }
+
+        public ConstructionMission(int id, DefenseType defenseType, int size, RegionFaction regionFaction) : base(id, MissionType.Construction, regionFaction, size)
+        {
+            ConstructionType = defenseType;
+        }
+
+        public ConstructionMission(DefenseType defenseType, int size, RegionFaction regionFaction) : base(MissionType.Construction, regionFaction, size)
+        {
+            ConstructionType = defenseType;
         }
     }
 }

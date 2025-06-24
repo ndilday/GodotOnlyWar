@@ -20,6 +20,7 @@ namespace OnlyWar.Models.Missions
         Sabotage,
         Ambush,
         Extermination,
-        Training
+        Training,
+        Construction
     }
 }
