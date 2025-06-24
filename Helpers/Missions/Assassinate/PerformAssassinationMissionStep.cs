@@ -25,8 +25,16 @@ namespace OnlyWar.Helpers.Missions.Assassinate
             float difficulty = enemyFaction.Entrenchment + enemyFaction.Detection + (float)Math.Log10(enemyFaction.Garrison);
             LeaderMissionTest missionTest = new LeaderMissionTest(tactics, difficulty);
             float margin = missionTest.RunMissionCheck(context.PlayerSquads);
-            // my current data design doesn't handle HQ+Bodyguard in a single squad very well, so for now, I should come up with a way to associate each HQ with a particular separate bodyguard squad
-            GenerateTargetSquad(context, enemyFaction, margin <= 0);
+            
+            // TODO: my current data design doesn't handle HQ+Bodyguard in a single squad very well, so for now, I should come up with a way to associate each HQ with a particular separate bodyguard squad
+            var request = new ForceGenerationRequest
+            {
+                Faction = context.Order.Mission.RegionFaction.PlanetFaction.Faction,
+                TargetBattleValue = (int)margin,
+                Profile = ForceCompositionProfile.SpecialHQTarget,
+                Tier = context.Order.Mission.MissionSize
+            };
+            context.OpposingForces = ForceGenerator.GenerateForce(request).Select(s => new BattleSquad(false, s)).ToList();
 
             context.Log.Add($"Day {context.DaysElapsed}: Force has located the assassination target");
 
@@ -46,24 +54,6 @@ namespace OnlyWar.Helpers.Missions.Assassinate
             else
             {
                 new ReconStealthMissionStep().ExecuteMissionStep(context, marginOfSuccess, this);
-            }
-        }
-
-        private static void GenerateTargetSquad(MissionContext context, RegionFaction enemyFaction, bool addBodyguard)
-        {
-            var sortedHqSquads = enemyFaction.PlanetFaction.Faction.SquadTemplates.Values
-                                .Where(st => (st.SquadType & SquadTypes.HQ) == SquadTypes.HQ)
-                                .OrderBy(st => st.BattleValue)
-                                .ToList();
-            int index = Math.Min(context.Order.Mission.MissionSize, sortedHqSquads.Count) - 1;
-            SquadTemplate targetSquadTemplate = sortedHqSquads[index];
-            Squad squad = SquadFactory.GenerateSquad(targetSquadTemplate, $"{enemyFaction.PlanetFaction.Faction.Name} {context.Order.Mission.RegionFaction.Region.Name} HQ Squad");
-            context.OpposingForces.Clear();
-            context.OpposingForces.Add(new BattleSquad(false, squad));
-            if (addBodyguard && targetSquadTemplate.BodyguardSquadTemplate != null)
-            {
-                squad = SquadFactory.GenerateSquad(targetSquadTemplate.BodyguardSquadTemplate, $"{enemyFaction.PlanetFaction.Faction.Name} {context.Order.Mission.RegionFaction.Region.Name} Bodyguard Squad");
-                context.OpposingForces.Add(new BattleSquad(false, squad));
             }
         }
     }
