@@ -21,10 +21,10 @@ namespace OnlyWar.Helpers.Missions.Sabotage
             difficulty += (float)Math.Log10(enemyFaction.Garrison);
             LeaderMissionTest missionTest = new LeaderMissionTest(tactics, difficulty);
 
-            Order order = context.PlayerSquads.First().Squad.CurrentOrders;
+            Order order = context.MissionSquads.First().Squad.CurrentOrders;
 
             context.Log.Add($"Day {context.DaysElapsed}: Force plants explosives in {context.Order.Mission.RegionFaction.Region.Name}");
-            float margin = missionTest.RunMissionCheck(context.PlayerSquads);
+            float margin = missionTest.RunMissionCheck(context.MissionSquads);
             if(margin > 0)
             {
                 context.Impact += margin;
@@ -33,7 +33,7 @@ namespace OnlyWar.Helpers.Missions.Sabotage
             if (context.DaysElapsed >= 6)
             {
                 // time to go home
-                if (context.Order.Mission.RegionFaction.Region != context.PlayerSquads.First().Squad.CurrentRegion)
+                if (context.Order.Mission.RegionFaction.Region != context.MissionSquads.First().Squad.CurrentRegion)
                 {
                     new ExfiltrateMissionStep().ExecuteMissionStep(context, 0.0f, this);
                 }

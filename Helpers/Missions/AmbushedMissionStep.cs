@@ -18,12 +18,12 @@ namespace OnlyWar.Helpers.Missions
             // set up Ambush battle with OpFor attacker and context.Squad defender
             BattleGridManager bgm = new BattleGridManager();
             AmbushPlacer placer = new AmbushPlacer(bgm, range);
-            var squadPostionMap = placer.PlaceSquads(context.PlayerSquads, context.OpposingForces);
-            int oppForSize = context.OpposingForces.Sum(s => s.AbleSoldiers.Count);
-            string log = $"Day {context.DaysElapsed}: Force was ambushed by {oppForSize} {context.OpposingForces.First().Squad.Faction.Name}\n";
+            var squadPostionMap = placer.PlaceSquads(context.MissionSquads, context.OpposingSquads);
+            int oppForSize = context.OpposingSquads.Sum(s => s.AbleSoldiers.Count);
+            string log = $"Day {context.DaysElapsed}: Force was ambushed by {oppForSize} {context.OpposingSquads.First().Squad.Faction.Name}\n";
             context.Log.Add(log);
             // run the battle
-            BattleTurnResolver resolver = new BattleTurnResolver(bgm, context.PlayerSquads, context.OpposingForces, context.Order.Mission.RegionFaction.Region);
+            BattleTurnResolver resolver = new BattleTurnResolver(bgm, context.MissionSquads, context.OpposingSquads, context.Order.Mission.RegionFaction.Region);
             bool battleDone = false;
             resolver.OnBattleComplete += (sender, e) => { battleDone = true; };
             while (!battleDone)

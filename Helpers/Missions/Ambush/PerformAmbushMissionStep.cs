@@ -29,13 +29,13 @@ namespace OnlyWar.Helpers.Missions.Ambush
             RegionFaction enemyFaction = context.Order.Mission.RegionFaction;
             float difficulty = enemyFaction.Detection;
             // every degree of magnitude of troops adds one to the difficulty
-            difficulty += (float)Math.Log(context.PlayerSquads.Sum(s => s.AbleSoldiers.Count), 10);
+            difficulty += (float)Math.Log(context.MissionSquads.Sum(s => s.AbleSoldiers.Count), 10);
             // intelligence makes it easier to find a stealthy route
             difficulty -= context.Order.Mission.RegionFaction.Region.IntelligenceLevel;
             SquadMissionTest missionTest = new SquadMissionTest(stealth, difficulty);
 
             context.DaysElapsed++;
-            float margin = missionTest.RunMissionCheck(context.PlayerSquads);
+            float margin = missionTest.RunMissionCheck(context.MissionSquads);
             if (margin > 0.0f)
             {
                 // every point of margin of success modifies the starting range by 20 yards
@@ -44,12 +44,12 @@ namespace OnlyWar.Helpers.Missions.Ambush
                 // set up Ambush battle with OpFor attacker and context.Squad defender
                 BattleGridManager bgm = new BattleGridManager();
                 AmbushPlacer placer = new AmbushPlacer(bgm, range);
-                var squadPostionMap = placer.PlaceSquads(context.OpposingForces, context.PlayerSquads);
-                int oppForSize = context.OpposingForces.Sum(s => s.AbleSoldiers.Count);
-                string log = $"Day {context.DaysElapsed}: Force ambushed {oppForSize} {context.OpposingForces.First().Squad.Faction.Name}\n";
+                var squadPostionMap = placer.PlaceSquads(context.OpposingSquads, context.MissionSquads);
+                int oppForSize = context.OpposingSquads.Sum(s => s.AbleSoldiers.Count);
+                string log = $"Day {context.DaysElapsed}: Force ambushed {oppForSize} {context.OpposingSquads.First().Squad.Faction.Name}\n";
                 context.Log.Add(log);
                 // run the battle
-                BattleTurnResolver resolver = new BattleTurnResolver(bgm, context.PlayerSquads, context.OpposingForces, context.Order.Mission.RegionFaction.Region);
+                BattleTurnResolver resolver = new BattleTurnResolver(bgm, context.MissionSquads, context.OpposingSquads, context.Order.Mission.RegionFaction.Region);
                 bool battleDone = false;
                 resolver.OnBattleComplete += (sender, e) => { battleDone = true; };
                 while (!battleDone)

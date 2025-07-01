@@ -9,9 +9,9 @@ namespace OnlyWar.Models.Missions
     public class MissionContext
     {
         public Order Order { get; }
-        public List<BattleSquad> PlayerSquads { get; }
+        public List<BattleSquad> MissionSquads { get; }
         public ushort DaysElapsed { get; set; }
-        public List<BattleSquad> OpposingForces { get; set; }
+        public List<BattleSquad> OpposingSquads { get; set; }
         public List<string> Log { get; private set; }
 
         public List<Mission> MissionsToAdd { get; }
@@ -22,8 +22,8 @@ namespace OnlyWar.Models.Missions
         public MissionContext(Order order, List<BattleSquad> playerSquads, List<BattleSquad> opposingForces)
         {
             Order = order;
-            PlayerSquads = playerSquads;
-            OpposingForces = opposingForces;
+            MissionSquads = playerSquads;
+            OpposingSquads = opposingForces;
             DaysElapsed = 0;
             MissionsToAdd = new List<Mission>();
             MissionsToRemove = new List<Mission>();

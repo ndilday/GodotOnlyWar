@@ -20,7 +20,7 @@ namespace OnlyWar.Helpers.Missions.Recon
             LeaderMissionTest missionTest = new LeaderMissionTest(tactics, 10.0f);
             // move the generation of new missions to the turn controller, rather than the individual mission steps
             context.Log.Add($"Day {context.DaysElapsed}: Force performs reconnisance in {context.Order.Mission.RegionFaction.Region.Name}");
-            float margin = missionTest.RunMissionCheck(context.PlayerSquads);
+            float margin = missionTest.RunMissionCheck(context.MissionSquads);
             // a particularly bad result means bad intel
             if(margin > 0 || margin < -0.5f)
             {
@@ -30,7 +30,7 @@ namespace OnlyWar.Helpers.Missions.Recon
             if (context.DaysElapsed >= 6)
             {
                 // time to go home
-                if (context.Order.Mission.RegionFaction.Region != context.PlayerSquads.First().Squad.CurrentRegion)
+                if (context.Order.Mission.RegionFaction.Region != context.MissionSquads.First().Squad.CurrentRegion)
                 {
                     new ExfiltrateMissionStep().ExecuteMissionStep(context, 0.0f, this);
                 }

@@ -21,10 +21,10 @@ namespace OnlyWar.Helpers.Missions.Recon
             BaseSkill tactics = GameDataSingleton.Instance.GameRulesData.BaseSkillMap.Values.First(s => s.Name == "Tactics");
             // adjust for size of detecting force
             float difficulty = 10.0f;
-            difficulty += (float)Math.Log(context.OpposingForces.Sum(s => s.AbleSoldiers.Count), 10);
+            difficulty += (float)Math.Log(context.OpposingSquads.Sum(s => s.AbleSoldiers.Count), 10);
             LeaderMissionTest missionTest = new LeaderMissionTest(tactics, difficulty);
             // build OpFor, size increases the lower the MoS, and pushes engagement range in favor of the OpFor
-            int numberOfOpposingSquads = context.PlayerSquads.Count - (ushort)marginOfSuccess;
+            int numberOfOpposingSquads = context.MissionSquads.Count - (ushort)marginOfSuccess;
             // any fractional value of margin of Success is treated as the probability of an additional squad being added.
             float fraction = Math.Abs(marginOfSuccess - (ushort)marginOfSuccess);
             if (RNG.GetLinearDouble() < fraction)
@@ -42,9 +42,9 @@ namespace OnlyWar.Helpers.Missions.Recon
                 Profile = ForceCompositionProfile.ScoutPatrol,
                 Tier = numberOfOpposingSquads
             };
-            context.OpposingForces = ForceGenerator.GenerateForce(request).Select(s => new BattleSquad(false, s)).ToList();
+            context.OpposingSquads = ForceGenerator.GenerateForce(request).Select(s => new BattleSquad(false, s)).ToList();
 
-            float margin = missionTest.RunMissionCheck(context.PlayerSquads);
+            float margin = missionTest.RunMissionCheck(context.MissionSquads);
             if (margin > 0.0f)
             {
                 new CrossDetectionMissionStep().ExecuteMissionStep(context, margin, returnStep);
