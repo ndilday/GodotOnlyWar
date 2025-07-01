@@ -57,6 +57,9 @@ namespace OnlyWar.Helpers
         {
             foreach (Order order in combatOrders)
             {
+                if(order.Mission.MissionType == MissionType.DefenseInDepth) continue;
+                // TODO: decide how to handle patrol orders
+
                 bool isPlayerOrder = order.AssignedSquads.First().Faction.IsPlayerFaction;
 
                 List<BattleSquad> involvedBattleSquads = order.AssignedSquads
