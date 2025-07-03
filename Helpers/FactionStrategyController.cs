@@ -22,13 +22,13 @@ public class FactionStrategyController
 
     private class RegionForceState
     {
-        public RegionFaction FactionInfo { get; }
+        public RegionFaction RegionFaction { get; }
         public long RequiredGarrison { get; }
         public long SpareTroops { get; set; }
 
         public RegionForceState(RegionFaction factionInfo, long requiredGarrison, long spareTroops)
         {
-            FactionInfo = factionInfo;
+            RegionFaction = factionInfo;
             RequiredGarrison = requiredGarrison;
             SpareTroops = spareTroops;
         }
@@ -64,7 +64,7 @@ public class FactionStrategyController
             GenerateDevelopmentOrders(regionalForceStates, allNewOrders);
 
             // PRIORITY 4: PLAN RECON MISSIONS
-            PlanReconMissionsOnPlanet(faction, planet, regionalForceStates, allNewOrders);
+            PlanPatrolMissionsOnPlanet(faction, planet, regionalForceStates, allNewOrders);
         }
 
         return allNewOrders;
@@ -99,7 +99,7 @@ public class FactionStrategyController
         // Commit troops and deduct from the spare pool
         foreach (var region in chosenOffensive.AttackingRegions)
         {
-            var contributingState = regionalForceStates.First(s => s.FactionInfo.Region == region);
+            var contributingState = regionalForceStates.First(s => s.RegionFaction.Region == region);
             long contribution = (long)(manpowerCost * (contributingState.SpareTroops / (float)totalAvailableForAttack));
             contributingState.SpareTroops -= contribution;
             region.RegionFactionMap[faction.Id].Garrison -= (int)contribution;
@@ -120,20 +120,20 @@ public class FactionStrategyController
 
             while (buildPointsAvailable > 0)
             {
-                int orgCost = (state.FactionInfo.Organization < 100) ? (int)(Math.Pow(2, state.FactionInfo.Organization / 10) * (state.FactionInfo.Population / 10000.0f)) + 1 : int.MaxValue;
-                int detCost = (int)Math.Pow(2, state.FactionInfo.Detection + 1);
-                int entCost = (int)Math.Pow(2, state.FactionInfo.Entrenchment + 1);
-                int aaCost = (int)Math.Pow(2, state.FactionInfo.AntiAir + 1);
+                int orgCost = (state.RegionFaction.Organization < 100) ? (int)(Math.Pow(2, state.RegionFaction.Organization / 10) * (state.RegionFaction.Population / 10000.0f)) + 1 : int.MaxValue;
+                int detCost = (int)Math.Pow(2, state.RegionFaction.Detection + 1);
+                int entCost = (int)Math.Pow(2, state.RegionFaction.Entrenchment + 1);
+                int aaCost = (int)Math.Pow(2, state.RegionFaction.AntiAir + 1);
 
                 int minCost = Math.Min(orgCost, Math.Min(detCost, Math.Min(entCost, aaCost)));
 
                 if (minCost > buildPointsAvailable || minCost == int.MaxValue) break;
 
                 ConstructionMission mission;
-                if (minCost == orgCost) mission = new ConstructionMission(DefenseType.Organization, 1, state.FactionInfo);
-                else if (minCost == entCost) mission = new ConstructionMission(DefenseType.Entrenchment, 1, state.FactionInfo);
-                else if (minCost == detCost) mission = new ConstructionMission(DefenseType.Detection, 1, state.FactionInfo);
-                else mission = new ConstructionMission(DefenseType.AntiAir, 1, state.FactionInfo);
+                if (minCost == orgCost) mission = new ConstructionMission(DefenseType.Organization, 1, state.RegionFaction);
+                else if (minCost == entCost) mission = new ConstructionMission(DefenseType.Entrenchment, 1, state.RegionFaction);
+                else if (minCost == detCost) mission = new ConstructionMission(DefenseType.Detection, 1, state.RegionFaction);
+                else mission = new ConstructionMission(DefenseType.AntiAir, 1, state.RegionFaction);
 
                 Order devOrder = new Order(new List<Squad>(), Disposition.DugIn, true, false, Aggression.Avoid, mission);
                 allOrders.Add(devOrder);
@@ -145,21 +145,22 @@ public class FactionStrategyController
         }
     }
 
-    private void PlanReconMissionsOnPlanet(Faction faction, Planet planet, List<RegionForceState> regionalForceStates, List<Order> allOrders)
+    private void PlanPatrolMissionsOnPlanet(Faction faction, Planet planet, List<RegionForceState> regionalForceStates, List<Order> allOrders)
     {
         // This is a new method that runs last, using only the final remaining spare troops.
         foreach (var state in regionalForceStates)
         {
             if (state.SpareTroops <= 0) continue;
 
+            // TODO: do we want to only patrol if adjacent to an enemy force?
             // Check if this region borders an enemy. If not, no need to recon from here.
-            var enemyNeighbors = state.FactionInfo.Region.GetAdjacentRegions()
+            /*var enemyNeighbors = state.FactionInfo.Region.GetAdjacentRegions()
                                     .Where(r => r.RegionFactionMap.Values.Any(rf => AreFactionsEnemies(faction, rf.PlanetFaction.Faction) && rf.IsPublic))
                                     .ToList();
 
-            if (!enemyNeighbors.Any()) continue;
+            if (!enemyNeighbors.Any()) continue;*/
 
-            // Use the remaining spare troops to form a small recon force.
+            // Use the remaining spare troops to form a small patrol force.
             // BattleValue is roughly 10 per troop.
             int forceBattleValue = (int)state.SpareTroops * 10;
             if (forceBattleValue <= 0) continue;
@@ -176,17 +177,14 @@ public class FactionStrategyController
 
             // The cost is already "paid" by using up all spare troops, so no further deduction needed.
             // Just create the order. Target the weakest adjacent enemy.
-            var target = enemyNeighbors.OrderBy(n => n.RegionFactionMap.Values.First(rf => AreFactionsEnemies(faction, rf.PlanetFaction.Faction)).Garrison)
-                                       .First();
-            var targetFaction = target.RegionFactionMap.Values.First(rf => AreFactionsEnemies(faction, rf.PlanetFaction.Faction));
+            var target = state.RegionFaction.Region;
+            var targetFaction = target.RegionFactionMap.Values.FirstOrDefault(rf => AreFactionsEnemies(faction, rf.PlanetFaction.Faction));
 
-            Mission newMission = new Mission(MissionType.Recon, targetFaction, 0);
+            Mission newMission = new Mission(MissionType.Patrol, targetFaction, 0);
             Order newOrder = new Order(generatedSquads, Disposition.Mobile, true, false, Aggression.Cautious, newMission);
             allOrders.Add(newOrder);
         }
     }
-
-    // Unchanged helper methods below this point
 
     private List<PotentialOffensive> IdentifyPotentialOffensivesOnPlanet(Faction attackingFaction, Planet planet, List<RegionForceState> regionalForceStates)
     {
@@ -202,7 +200,7 @@ public class FactionStrategyController
             if (adjacentAttackingRegions.Any())
             {
                 long availableForce = adjacentAttackingRegions
-                    .Select(r => regionalForceStates.FirstOrDefault(s => s.FactionInfo.Region == r)?.SpareTroops ?? 0)
+                    .Select(r => regionalForceStates.FirstOrDefault(s => s.RegionFaction.Region == r)?.SpareTroops ?? 0)
                     .Sum();
 
                 if (availableForce > 0)
