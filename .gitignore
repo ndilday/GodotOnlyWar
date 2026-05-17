@@ -2,3 +2,6 @@
 *.import
 /.vs
 *.uid
+bin/
+obj/
+*.bak-*

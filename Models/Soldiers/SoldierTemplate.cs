@@ -13,10 +13,12 @@ namespace OnlyWar.Models.Soldiers
         public byte Subrank { get; }
         public Species Species { get; }
         public IReadOnlyCollection<Tuple<BaseSkill, float>> MosTraining { get; } 
+        public TrainingProfile WorkExperienceTrainingProfile { get; }
 
         public SoldierTemplate(int id, Species species, string name, byte rank, byte subrank,
                                bool isSquadLeader, byte specialistType, 
-                               IReadOnlyCollection<Tuple<BaseSkill, float>> mosTraining)
+                               IReadOnlyCollection<Tuple<BaseSkill, float>> mosTraining,
+                               TrainingProfile workExperienceTrainingProfile = null)
         {
             Id = id;
             Species = species;
@@ -26,6 +28,7 @@ namespace OnlyWar.Models.Soldiers
             Rank = rank;
             Subrank = subrank;
             MosTraining = mosTraining;
+            WorkExperienceTrainingProfile = workExperienceTrainingProfile;
         }
     }
 }

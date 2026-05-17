@@ -70,7 +70,7 @@ namespace OnlyWar.Helpers
 
             double z = t - (c0 + c1 * t + c2 * t * t) / (1 + d1 * t + d2 * t * t + d3 * t * t * t);
 
-            if (probability > 0.5)
+            if (probability < 0.5)
             {
                 z = -z;
             }

@@ -41,7 +41,7 @@ namespace OnlyWar.Builders
             }
 
             Date trainingStartDate = new Date(currentDate.Millenium, currentDate.Year - 4, 1);
-            ISoldierTrainingService trainingService = new SoldierTrainingCalculator(data.BaseSkillMap.Values);
+            ISoldierTrainingService trainingService = new SoldierTrainingCalculator(data.BaseSkillMap.Values, data.TrainingProfiles.Values);
             PlayerForce playerForce = NewChapterBuilder.CreateChapter(data, trainingService, trainingStartDate, currentDate);
             FoundTakebackPlanet(playerForce, planetList, forceList);
             //Planet chapterPlanet = FoundChapterPlanet(planetList, data.PlayerFaction);

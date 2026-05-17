@@ -39,6 +39,7 @@ namespace OnlyWar.Models
         public IReadOnlyDictionary<int, RangedWeaponTemplate> RangedWeaponTemplates { get; }
         public IReadOnlyDictionary<int, MeleeWeaponTemplate> MeleeWeaponTemplates { get; }
         public IReadOnlyDictionary<int, WeaponSet> WeaponSets { get; }
+        public IReadOnlyDictionary<int, TrainingProfile> TrainingProfiles { get; }
 
         public GameRulesData()
         {
@@ -59,6 +60,7 @@ namespace OnlyWar.Models
             RangedWeaponTemplates = gameBlob.RangedWeaponTemplates;
             MeleeWeaponTemplates = gameBlob.MeleeWeaponTemplates;
             WeaponSets = gameBlob.WeaponSets;
+            TrainingProfiles = gameBlob.TrainingProfiles;
             PlayerFaction = _factions.First(f => f.IsPlayerFaction);
             DefaultFaction = _factions.First(f => f.IsDefaultFaction);
         }

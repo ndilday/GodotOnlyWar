@@ -30,10 +30,14 @@ namespace OnlyWar.Helpers
     public class SoldierTrainingCalculator : ISoldierTrainingService
     {
         private readonly IReadOnlyDictionary<string, BaseSkill> _skillsByName;
+        private readonly IReadOnlyDictionary<string, TrainingProfile> _trainingProfilesByName;
 
-        public SoldierTrainingCalculator(IEnumerable<BaseSkill> baseSkills)
+        public SoldierTrainingCalculator(IEnumerable<BaseSkill> baseSkills,
+                                         IEnumerable<TrainingProfile> trainingProfiles = null)
         {
             _skillsByName = baseSkills.ToDictionary(bs => bs.Name);
+            _trainingProfilesByName = trainingProfiles?.ToDictionary(tp => tp.Name)
+                ?? new Dictionary<string, TrainingProfile>();
         }
 
         public void UpdateRatings(Date date, PlayerSoldier soldier)
@@ -141,162 +145,32 @@ namespace OnlyWar.Helpers
 
         public void ApplyMarineWorkExperienceByType(ISoldier soldier, float points)
         {
-            switch(soldier.Template.Name)
-            {
-                case "Chapter Master":
-                case "Captain":
-                case "Sergeant":
-                    break;
-                case "Master of the Apothecarion":
-                case "Apothecary":
-                    break;
-                case "Master of the Forge":
-                case "Master Techmarine":
-                case "TechMarine":
-                    break;
-                case "Master of the Librarium":
-                case "Epistolary":
-                case "Codiciers":
-                case "Lexicanium":
-                    break;
-                case "Master of Sanctity":
-                case "Reclusiarch":
-                case "Chaplain":
-                    break;
-                case "Ancient":
-                    break;
-                case "Champion":
-                    break;
-                case "Veteran":
-                    ApplyVeteranWorkExperience(soldier, points);
-                    break;
-                case "Tactical Marine":
-                    ApplyTacticalWorkExperience(soldier, points);
-                    break;
-                case "Assault Marine":
-                    ApplyAssaultWorkExperience(soldier, points);
-                    break;
-                case "Devastator Marine":
-                    ApplyDevastatorWorkExperience(soldier, points);
-                    break;
-                case "Scout Marine":
-                    // scouts are handled via the recruitment controller
-                    break;
-            }
+            ApplyTrainingProfile(soldier, soldier.Template.WorkExperienceTrainingProfile, points);
         }
 
         public void ApplyVeteranWorkExperience(ISoldier soldier, float points)
         {
-            float pointShare = points / 7.0f;
-            soldier.AddSkillPoints(_skillsByName["Marine"], pointShare);
-            soldier.AddSkillPoints(_skillsByName["Power Armor"], pointShare);
-            soldier.AddSkillPoints(_skillsByName["Armory (Small Arms)"], pointShare);
-            soldier.AddSkillPoints(_skillsByName["Drive (Bike)"], pointShare);
-            soldier.AddSkillPoints(_skillsByName["Jump Pack"], pointShare);
-            if (soldier.Template.IsSquadLeader)
-            {
-                soldier.AddSkillPoints(_skillsByName["Tactics"], pointShare);
-                soldier.AddSkillPoints(_skillsByName["Leadership"], pointShare);
-            }
-            else
-            {
-                soldier.AddSkillPoints(_skillsByName["Gun (Bolter)"], pointShare);
-                soldier.AddSkillPoints(_skillsByName["Sword"], pointShare);
-            }
+            ApplyTrainingProfile(soldier, soldier.Template.WorkExperienceTrainingProfile, points);
         }
 
         public void ApplyTacticalWorkExperience(ISoldier soldier, float points)
         {
-            float pointShare = points / 9.0f;
-            soldier.AddSkillPoints(_skillsByName["Marine"], pointShare);
-            soldier.AddSkillPoints(_skillsByName["Power Armor"], pointShare);
-            soldier.AddSkillPoints(_skillsByName["Armory (Small Arms)"], pointShare);
-            soldier.AddSkillPoints(_skillsByName["Gun (Bolter)"], pointShare);
-            soldier.AddSkillPoints(_skillsByName["Sword"], pointShare);
-
-            if (soldier.Template.IsSquadLeader)
-            {
-                soldier.AddSkillPoints(_skillsByName["Tactics"], pointShare * 2);
-                soldier.AddSkillPoints(_skillsByName["Leadership"], pointShare * 2);
-            }
-            else
-            {
-                soldier.AddSkillPoints(_skillsByName["Gunnery (Rocket)"], pointShare);
-                soldier.AddSkillPoints(_skillsByName["Gunnery (Bolter)"], pointShare);
-                soldier.AddSkillPoints(_skillsByName["Gun (Plasma)"], pointShare);
-                soldier.AddSkillPoints(_skillsByName["Gun (Flamer)"], pointShare);
-            }
+            ApplyTrainingProfile(soldier, soldier.Template.WorkExperienceTrainingProfile, points);
         }
 
         public void ApplyAssaultWorkExperience(ISoldier soldier, float points)
         {
-            float pointShare = points / 9.0f;
-            soldier.AddSkillPoints(_skillsByName["Marine"], pointShare);
-            soldier.AddSkillPoints(_skillsByName["Power Armor"], pointShare);
-            soldier.AddSkillPoints(_skillsByName["Armory (Small Arms)"], pointShare);
-            soldier.AddSkillPoints(_skillsByName["Drive (Bike)"], pointShare);
-            soldier.AddSkillPoints(_skillsByName["Jump Pack"], pointShare);
-            soldier.AddSkillPoints(_skillsByName["Gun (Bolter)"], pointShare);
-            soldier.AddSkillPoints(_skillsByName["Sword"], pointShare);
-
-            if (soldier.Template.IsSquadLeader)
-            {
-                soldier.AddSkillPoints(_skillsByName["Tactics"], pointShare);
-                soldier.AddSkillPoints(_skillsByName["Leadership"], pointShare);
-            }
-            else
-            {
-                soldier.AddSkillPoints(_skillsByName["Gun (Bolter)"], pointShare);
-                soldier.AddSkillPoints(_skillsByName["Sword"], pointShare);
-            }
+            ApplyTrainingProfile(soldier, soldier.Template.WorkExperienceTrainingProfile, points);
         }
 
         public void ApplyDevastatorWorkExperience(ISoldier soldier, float points)
         {
-            float pointShare = points / 9.0f;
-            soldier.AddSkillPoints(_skillsByName["Marine"], pointShare);
-            soldier.AddSkillPoints(_skillsByName["Power Armor"], pointShare);
-            soldier.AddSkillPoints(_skillsByName["Armory (Small Arms)"], pointShare);
-            soldier.AddSkillPoints(_skillsByName["Gun (Bolter)"], pointShare);
-            soldier.AddSkillPoints(_skillsByName["Gunnery (Bolter)"], pointShare);
-
-            if (soldier.Template.IsSquadLeader)
-            {
-                soldier.AddSkillPoints(_skillsByName["Tactics"], pointShare * 2);
-                soldier.AddSkillPoints(_skillsByName["Leadership"], pointShare * 2);
-            }
-            else
-            {
-                soldier.AddSkillPoints(_skillsByName["Gun (Plasma)"], pointShare);
-                soldier.AddSkillPoints(_skillsByName["Gun (Flamer)"], pointShare);
-                soldier.AddSkillPoints(_skillsByName["Gunnery (Rocket)"], pointShare);
-                soldier.AddSkillPoints(_skillsByName["Gunnery (Laser)"], pointShare);
-            }
+            ApplyTrainingProfile(soldier, soldier.Template.WorkExperienceTrainingProfile, points);
         }
 
         public void ApplyScoutWorkExperience(ISoldier soldier, float points)
         {
-            // scouts in reserve get training, not work experience
-            float pointShare = points / 9.0f;
-            soldier.AddSkillPoints(_skillsByName["Marine"], pointShare);
-            soldier.AddSkillPoints(_skillsByName["Power Armor"], pointShare);
-            soldier.AddSkillPoints(_skillsByName["Armory (Small Arms)"], pointShare);
-            soldier.AddSkillPoints(_skillsByName["Gun (Bolter)"], pointShare);
-            soldier.AddSkillPoints(_skillsByName["Gunnery (Bolter)"], pointShare);
-            soldier.AddSkillPoints(_skillsByName["Stealth"], pointShare);
-
-            if (soldier.Template.IsSquadLeader)
-            {
-                soldier.AddSkillPoints(_skillsByName["Tactics"], pointShare);
-                soldier.AddSkillPoints(_skillsByName["Leadership"], pointShare);
-                soldier.AddSkillPoints(_skillsByName["Teaching"], pointShare);
-            }
-            else
-            {
-                soldier.AddSkillPoints(_skillsByName["Gun (Sniper)"], pointShare);
-                soldier.AddSkillPoints(_skillsByName["Gun (Shotgun)"], pointShare);
-                soldier.AddSkillPoints(_skillsByName["Gunnery (Bolter)"], pointShare);
-            }
+            ApplyTrainingProfile(soldier, soldier.Template.WorkExperienceTrainingProfile, points);
         }
 
         public void TrainScouts(IEnumerable<Squad> scoutSquads, Dictionary<int, TrainingFocuses> squadFocusMap)
@@ -335,19 +209,19 @@ namespace OnlyWar.Helpers
                     {
                         if ((focuses & TrainingFocuses.Melee) != TrainingFocuses.None)
                         {
-                            TrainMelee(soldier, baseLearning / numberOfAreas);
+                            ApplyNamedTrainingProfile(soldier, "scout_focus_melee", baseLearning / numberOfAreas);
                         }
                         if ((focuses & TrainingFocuses.Physical) != TrainingFocuses.None)
                         {
-                            TrainPhysical(soldier, baseLearning / numberOfAreas);
+                            ApplyNamedTrainingProfile(soldier, "scout_focus_physical", baseLearning / numberOfAreas);
                         }
                         if ((focuses & TrainingFocuses.Ranged) != TrainingFocuses.None)
                         {
-                            TrainRanged(soldier, baseLearning / numberOfAreas);
+                            ApplyNamedTrainingProfile(soldier, "scout_focus_ranged", baseLearning / numberOfAreas);
                         }
                         if ((focuses & TrainingFocuses.Vehicles) != TrainingFocuses.None)
                         {
-                            TrainVehicles(soldier, baseLearning / numberOfAreas);
+                            ApplyNamedTrainingProfile(soldier, "scout_focus_vehicles", baseLearning / numberOfAreas);
                         }
                     }
                 }
@@ -356,41 +230,49 @@ namespace OnlyWar.Helpers
 
         private void TrainMelee(ISoldier soldier, float points)
         {
-            float pointShare = points / 4;
-            soldier.AddSkillPoints(_skillsByName["Sword"], pointShare);
-            soldier.AddSkillPoints(_skillsByName["Shield"], pointShare);
-            soldier.AddSkillPoints(_skillsByName["Axe"], pointShare);
-            soldier.AddSkillPoints(_skillsByName["Fist"], pointShare);
+            ApplyNamedTrainingProfile(soldier, "scout_focus_melee", points);
         }
 
         private void TrainPhysical(ISoldier soldier, float points)
         {
-            // Traits are 10 for 11, 20 for 12, 40 for 13, 80 for 14, 160 for 15, 320 for 16
-            // y = (2^(x-11))*10
-            // y = 
-            float pointShare = points / 3;
-            soldier.AddAttributePoints(Models.Soldiers.Attribute.Strength, pointShare);
-            soldier.AddAttributePoints(Models.Soldiers.Attribute.Dexterity, pointShare);
-            soldier.AddAttributePoints(Models.Soldiers.Attribute.Constitution, pointShare);
+            ApplyNamedTrainingProfile(soldier, "scout_focus_physical", points);
         }
 
         private void TrainRanged(ISoldier soldier, float points)
         {
-            float pointShare = points / 5;
-            soldier.AddSkillPoints(_skillsByName["Gun (Bolter)"], pointShare);
-            soldier.AddSkillPoints(_skillsByName["Gunnery (Laser)"], pointShare);
-            soldier.AddSkillPoints(_skillsByName["Gun (Flamer)"], pointShare);
-            soldier.AddSkillPoints(_skillsByName["Gun (Sniper)"], pointShare);
-            soldier.AddSkillPoints(_skillsByName["Gun (Shotgun)"], pointShare);
+            ApplyNamedTrainingProfile(soldier, "scout_focus_ranged", points);
         }
 
         private void TrainVehicles(ISoldier soldier, float points)
         {
-            float pointShare = points / 4;
-            soldier.AddSkillPoints(_skillsByName["Drive (Bike)"], pointShare);
-            soldier.AddSkillPoints(_skillsByName["Pilot (Land Speeder)"], pointShare);
-            soldier.AddSkillPoints(_skillsByName["Drive (Rhino)"], pointShare);
-            soldier.AddSkillPoints(_skillsByName["Gunnery (Bolter)"], pointShare);
+            ApplyNamedTrainingProfile(soldier, "scout_focus_vehicles", points);
+        }
+
+        private void ApplyNamedTrainingProfile(ISoldier soldier, string profileName, float points)
+        {
+            if (!_trainingProfilesByName.ContainsKey(profileName)) return;
+            ApplyTrainingProfile(soldier, _trainingProfilesByName[profileName], points);
+        }
+
+        private void ApplyTrainingProfile(ISoldier soldier, TrainingProfile trainingProfile, float points)
+        {
+            if (trainingProfile == null || trainingProfile.Entries.Count == 0 || points <= 0) return;
+
+            float totalWeight = trainingProfile.Entries.Sum(entry => entry.Weight);
+            if (totalWeight <= 0) return;
+
+            foreach (TrainingProfileEntry entry in trainingProfile.Entries)
+            {
+                float awardedPoints = points * entry.Weight / totalWeight;
+                if (entry.TargetType == TrainingTargetType.Skill)
+                {
+                    soldier.AddSkillPoints(entry.Skill, awardedPoints);
+                }
+                else if (entry.Attribute.HasValue)
+                {
+                    soldier.AddAttributePoints(entry.Attribute.Value, awardedPoints);
+                }
+            }
         }
     }
 }
