@@ -66,10 +66,14 @@ namespace OnlyWar.Helpers
         private void TrainNonDeployedPlayerForces(Sector sector)
         {
             ISoldierTrainingService trainingService = _trainingService ?? CreateTrainingService();
-            IEnumerable<Squad> squads = sector.PlayerForce?.Army?.OrderOfBattle?.GetAllSquads()
-                ?? Enumerable.Empty<Squad>();
+            List<Squad> squads = (sector.PlayerForce?.Army?.OrderOfBattle?.GetAllSquads()
+                ?? Enumerable.Empty<Squad>()).ToList();
 
-            foreach (Squad squad in squads)
+            List<Squad> scoutSquads = squads.Where(IsScoutSquad).ToList();
+            Dictionary<int, TrainingFocuses> scoutFocusMap = scoutSquads.ToDictionary(s => s.Id, s => s.TrainingFocus);
+            trainingService.TrainScouts(scoutSquads, scoutFocusMap);
+
+            foreach (Squad squad in squads.Where(s => !IsScoutSquad(s)))
             {
                 if (squad.CurrentOrders != null) continue;
 
@@ -78,6 +82,11 @@ namespace OnlyWar.Helpers
                     trainingService.ApplySoldierWorkExperience(soldier, WeeklyTrainingPoints);
                 }
             }
+        }
+
+        private static bool IsScoutSquad(Squad squad)
+        {
+            return (squad.SquadTemplate.SquadType & SquadTypes.Scout) == SquadTypes.Scout;
         }
 
         private static ISoldierTrainingService CreateTrainingService()

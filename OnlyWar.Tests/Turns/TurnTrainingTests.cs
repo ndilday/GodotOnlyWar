@@ -58,6 +58,22 @@ public class TurnTrainingTests
         Assert.Equal(0, GetSkillPoints(soldier, TestSkills.Ranged));
     }
 
+    [Fact]
+    public void ProcessTurn_TrainsScoutSquadsThroughScoutTraining()
+    {
+        TurnTrainingFixture fixture = TurnTrainingFixture.Create();
+        Squad squad = fixture.CreatePlayerScoutSquad("Scout Squad", out ISoldier scout);
+        fixture.LandSquad(squad);
+        squad.TrainingFocus = TrainingFocuses.Ranged;
+
+        fixture.ProcessTurn();
+
+        Assert.Contains(squad, fixture.TrainingService.ScoutTrainingSquads);
+        Assert.Equal(TrainingFocuses.Ranged, fixture.TrainingService.ScoutFocusMap[squad.Id]);
+        Assert.DoesNotContain(scout, fixture.TrainingService.WorkExperienceSoldiers);
+        Assert.True(GetSkillPoints(scout, TestSkills.Stealth) > 0);
+    }
+
     private static float GetSkillPoints(ISoldier soldier, BaseSkill skill)
     {
         return soldier.Skills.SingleOrDefault(s => s.BaseSkill == skill)?.PointsInvested ?? 0;
@@ -73,6 +89,7 @@ public class TurnTrainingTests
         public Region Region { get; }
         public RegionFaction RegionFaction { get; }
         public SquadTemplate SquadTemplate { get; }
+        public SquadTemplate ScoutSquadTemplate { get; }
         public SoldierTemplate SoldierTemplate { get; }
         public TestTrainingService TrainingService { get; }
 
@@ -82,6 +99,7 @@ public class TurnTrainingTests
             Region region,
             RegionFaction regionFaction,
             SquadTemplate squadTemplate,
+            SquadTemplate scoutSquadTemplate,
             SoldierTemplate soldierTemplate,
             TestTrainingService trainingService)
         {
@@ -90,6 +108,7 @@ public class TurnTrainingTests
             Region = region;
             RegionFaction = regionFaction;
             SquadTemplate = squadTemplate;
+            ScoutSquadTemplate = scoutSquadTemplate;
             SoldierTemplate = soldierTemplate;
             TrainingService = trainingService;
         }
@@ -101,7 +120,8 @@ public class TurnTrainingTests
             Faction playerFaction = CreatePlayerFaction();
             SoldierTemplate soldierTemplate = CreateTrainingSoldierTemplate();
             SquadTemplate squadTemplate = CreateSquadTemplate(playerFaction);
-            UnitTemplate unitTemplate = new(1, "Training Test Unit", true, [squadTemplate], []);
+            SquadTemplate scoutSquadTemplate = CreateScoutSquadTemplate(playerFaction);
+            UnitTemplate unitTemplate = new(1, "Training Test Unit", true, [squadTemplate, scoutSquadTemplate], []);
             unitTemplate.Faction = playerFaction;
             Unit orderOfBattle = new(1, "Training Test Force", unitTemplate, []);
             Fleet fleet = new("Training Test Fleet", null, null);
@@ -136,6 +156,7 @@ public class TurnTrainingTests
                 region,
                 regionFaction,
                 squadTemplate,
+                scoutSquadTemplate,
                 soldierTemplate,
                 new TestTrainingService());
         }
@@ -150,6 +171,23 @@ public class TurnTrainingTests
             _soldiers.Add(playerSoldier);
             _squads.Add(squad);
             soldier = playerSoldier;
+            return squad;
+        }
+
+        public Squad CreatePlayerScoutSquad(string name, out ISoldier scout)
+        {
+            Soldier leaderBaseSoldier = TestModelFactory.CreateSoldier(TestModelFactory.SergeantTemplate);
+            PlayerSoldier leader = new(leaderBaseSoldier, name + " Sergeant");
+            Soldier scoutBaseSoldier = TestModelFactory.CreateSoldier(SoldierTemplate);
+            PlayerSoldier playerScout = new(scoutBaseSoldier, name + " Scout");
+            Squad squad = new(name, Sector.PlayerForce.Army.OrderOfBattle, ScoutSquadTemplate);
+            squad.AddSquadMember(leader);
+            squad.AddSquadMember(playerScout);
+            Sector.PlayerForce.Army.OrderOfBattle.AddSquad(squad);
+            _soldiers.Add(leader);
+            _soldiers.Add(playerScout);
+            _squads.Add(squad);
+            scout = playerScout;
             return squad;
         }
 
@@ -206,6 +244,21 @@ public class TurnTrainingTests
             return squadTemplate;
         }
 
+        private static SquadTemplate CreateScoutSquadTemplate(Faction playerFaction)
+        {
+            SquadTemplate squadTemplate = new(
+                2,
+                "Turn Training Scout Squad",
+                TestModelFactory.DefaultWeapons,
+                [],
+                TestModelFactory.TestArmor,
+                [new SquadTemplateElement(TestModelFactory.SergeantTemplate, 1, 1), new SquadTemplateElement(TestModelFactory.MarineTemplate, 1, 10)],
+                SquadTypes.Scout,
+                10);
+            squadTemplate.Faction = playerFaction;
+            return squadTemplate;
+        }
+
         private static Faction CreatePlayerFaction()
         {
             return new Faction(
@@ -253,6 +306,10 @@ public class TurnTrainingTests
 
     private sealed class TestTrainingService : ISoldierTrainingService
     {
+        public List<ISoldier> WorkExperienceSoldiers { get; } = [];
+        public List<Squad> ScoutTrainingSquads { get; } = [];
+        public Dictionary<int, TrainingFocuses> ScoutFocusMap { get; private set; } = [];
+
         public void UpdateRatings(Date date, PlayerSoldier soldier)
         {
         }
@@ -267,11 +324,18 @@ public class TurnTrainingTests
 
         public void ApplySoldierWorkExperience(ISoldier soldier, float points)
         {
+            WorkExperienceSoldiers.Add(soldier);
             soldier.AddSkillPoints(TestSkills.Ranged, points);
         }
 
         public void TrainScouts(IEnumerable<Squad> scoutSquads, Dictionary<int, TrainingFocuses> squadFocusMap)
         {
+            ScoutFocusMap = squadFocusMap;
+            ScoutTrainingSquads.AddRange(scoutSquads);
+            foreach (ISoldier soldier in scoutSquads.SelectMany(s => s.Members))
+            {
+                soldier.AddSkillPoints(TestSkills.Stealth, 0.2f);
+            }
         }
     }
 }

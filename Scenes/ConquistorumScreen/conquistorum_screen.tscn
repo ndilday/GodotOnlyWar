@@ -70,7 +70,7 @@ anchor_right = 1.0
 anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
-text = "Scout Squads"
+text = "10th Company"
 horizontal_alignment = 1
 vertical_alignment = 1
 
@@ -113,9 +113,28 @@ anchor_right = 1.0
 anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
-text = "Scout Readiness Report"
+text = "10th Company Readiness Report"
 horizontal_alignment = 1
 vertical_alignment = 1
+
+[node name="FocusHBox" type="HBoxContainer" parent="ConquistorumScreenView/SquadReportPanel"]
+layout_mode = 1
+anchors_preset = -1
+anchor_right = 1.0
+offset_left = 5.0
+offset_top = 55.0
+offset_right = -5.0
+offset_bottom = 90.0
+
+[node name="FocusLabel" type="Label" parent="ConquistorumScreenView/SquadReportPanel/FocusHBox"]
+layout_mode = 2
+custom_minimum_size = Vector2(110, 0)
+text = "Training Focus"
+vertical_alignment = 1
+
+[node name="FocusOption" type="OptionButton" parent="ConquistorumScreenView/SquadReportPanel/FocusHBox"]
+layout_mode = 2
+size_flags_horizontal = 3
 
 [node name="RichTextLabel" type="RichTextLabel" parent="ConquistorumScreenView/SquadReportPanel"]
 custom_minimum_size = Vector2(200, 100)
@@ -124,7 +143,7 @@ anchors_preset = -1
 anchor_right = 1.0
 anchor_bottom = 1.0
 offset_left = 5.0
-offset_top = 50.0
+offset_top = 95.0
 offset_right = -5.0
 offset_bottom = -5.0
 grow_horizontal = 2

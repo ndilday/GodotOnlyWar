@@ -35,6 +35,7 @@ namespace OnlyWar.Models.Squads
         public Region CurrentRegion { get; set; }
         public Ship BoardedLocation { get; set; }
         public Order CurrentOrders { get; set; }
+        public TrainingFocuses TrainingFocus { get; set; }
         //public List<int> AssignedVehicles;
         public Squad(string name, Unit parentUnit, SquadTemplate template)
         {

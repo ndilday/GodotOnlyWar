@@ -10,6 +10,7 @@ using OnlyWar.Models.Soldiers;
 public partial class ConquistorumScreenController : Control
 {
     private ConquistorumScreenView _view;
+    private Squad _selectedSquad;
 
     public event EventHandler CloseButtonPressed;
     public event EventHandler<int> SoldierLinkClicked;
@@ -20,25 +21,23 @@ public partial class ConquistorumScreenController : Control
         _view.CloseButtonPressed += (object sender, EventArgs e) => CloseButtonPressed?.Invoke(this, e);
         _view.LinkClicked += OnLinkClicked;
         _view.SquadButtonPressed += OnSquadButtonPressed;
-        PopulateScountSquadList();
+        _view.TrainingFocusSelected += OnTrainingFocusSelected;
+        PopulateScoutSquadList();
     }
 
-    private void PopulateScountSquadList()
+    private void PopulateScoutSquadList()
     {
-        // TODO: stop assuming a single scout company
-        Unit company = GameDataSingleton.Instance.Sector.PlayerForce.Army.OrderOfBattle.ChildUnits.Find(c => c.UnitTemplate.Name == "Scout Company");
-        // get squad data
-        List<Tuple<int, string>> squadList = [];
-        foreach (Squad squad in company.Squads)
-        {
-            squadList.Add(new Tuple<int, string>(squad.Id, $"{squad.Name}"));
-        }
+        List<Tuple<int, string>> squadList = GetScoutSquads()
+            .Select(squad => new Tuple<int, string>(squad.Id, $"{squad.Name} ({GetTrainingFocusName(squad.TrainingFocus)})"))
+            .ToList();
         _view.PopulateSquadList(squadList);
     }
 
     private void OnSquadButtonPressed(object sender, int squadId)
     {
-        Squad squad = GameDataSingleton.Instance.Sector.PlayerForce.Army.OrderOfBattle.GetAllSquads().First(s => s.Id == squadId);
+        Squad squad = GetScoutSquads().First(s => s.Id == squadId);
+        _selectedSquad = squad;
+        _view.SelectTrainingFocus(squad.TrainingFocus);
         string squadReport = "";
 
         // should we ignore the SGT here or not?
@@ -62,6 +61,33 @@ public partial class ConquistorumScreenController : Control
             }
         }
         _view.PopulateSquadReadinessReport(squadReport);
+    }
+
+    private void OnTrainingFocusSelected(object sender, TrainingFocuses focus)
+    {
+        if (_selectedSquad == null) return;
+
+        _selectedSquad.TrainingFocus = focus;
+        PopulateScoutSquadList();
+    }
+
+    private static List<Squad> GetScoutSquads()
+    {
+        return GameDataSingleton.Instance.Sector.PlayerForce.Army.OrderOfBattle.GetAllSquads()
+            .Where(squad => (squad.SquadTemplate.SquadType & SquadTypes.Scout) == SquadTypes.Scout)
+            .ToList();
+    }
+
+    private static string GetTrainingFocusName(TrainingFocuses focus)
+    {
+        return focus switch
+        {
+            TrainingFocuses.Physical => "Physical",
+            TrainingFocuses.Vehicles => "Vehicles",
+            TrainingFocuses.Melee => "Melee",
+            TrainingFocuses.Ranged => "Ranged",
+            _ => "Balanced"
+        };
     }
 
     private string GetSergeantDescription(int id, string name, SoldierEvaluation evaluation)

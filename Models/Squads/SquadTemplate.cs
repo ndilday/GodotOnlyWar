@@ -17,6 +17,16 @@ namespace OnlyWar.Models.Squads
         Bodyguard = 0x20
     }
 
+    [Flags]
+    public enum TrainingFocuses
+    {
+        None = 0,
+        Physical = 0x1,
+        Vehicles = 0x2,
+        Melee = 0x4,
+        Ranged = 0x8
+    }
+
     public class SquadWeaponOption
     {
         public string Name { get; private set; }
