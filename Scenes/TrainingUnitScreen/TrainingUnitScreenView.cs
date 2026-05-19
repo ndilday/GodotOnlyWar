@@ -3,7 +3,7 @@ using OnlyWar.Models.Squads;
 using System;
 using System.Collections.Generic;
 
-public partial class ConquistorumScreenView : Control
+public partial class TrainingUnitScreenView : Control
 {
     private Button _closeButton;
     private OptionButton _focusOption;

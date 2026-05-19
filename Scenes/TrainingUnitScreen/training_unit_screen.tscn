@@ -1,14 +1,14 @@
 [gd_scene load_steps=5 format=3 uid="uid://bhdybqce8onb2"]
 
-[ext_resource type="Script" uid="uid://by6msr45s7bpx" path="res://Scenes/ConquistorumScreen/ConquistorumScreenController.cs" id="1_bgnhv"]
-[ext_resource type="Script" uid="uid://dyctsfk8xqt0c" path="res://Scenes/ConquistorumScreen/ConquistorumScreenView.cs" id="2_kwxid"]
+[ext_resource type="Script" uid="uid://by6msr45s7bpx" path="res://Scenes/TrainingUnitScreen/TrainingUnitScreenController.cs" id="1_bgnhv"]
+[ext_resource type="Script" uid="uid://dyctsfk8xqt0c" path="res://Scenes/TrainingUnitScreen/TrainingUnitScreenView.cs" id="2_kwxid"]
 [ext_resource type="FontFile" uid="uid://caltl8x5gfsdo" path="res://Fonts/sui generis rg.otf" id="3_kwxid"]
 
 [sub_resource type="Theme" id="Theme_rathx"]
 default_font = ExtResource("3_kwxid")
 default_font_size = 12
 
-[node name="ConquistorumScreenController" type="Control"]
+[node name="TrainingUnitScreenController" type="Control"]
 layout_mode = 3
 anchors_preset = 15
 anchor_right = 1.0
@@ -17,7 +17,7 @@ grow_horizontal = 2
 grow_vertical = 2
 script = ExtResource("1_bgnhv")
 
-[node name="ConquistorumScreenView" type="Control" parent="."]
+[node name="TrainingUnitScreenView" type="Control" parent="."]
 layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
@@ -26,7 +26,7 @@ grow_horizontal = 2
 grow_vertical = 2
 script = ExtResource("2_kwxid")
 
-[node name="Background" type="Panel" parent="ConquistorumScreenView"]
+[node name="Background" type="Panel" parent="TrainingUnitScreenView"]
 layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
@@ -34,7 +34,7 @@ anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
 
-[node name="CloseButton" type="Button" parent="ConquistorumScreenView"]
+[node name="CloseButton" type="Button" parent="TrainingUnitScreenView"]
 layout_mode = 1
 anchors_preset = -1
 anchor_left = 1.0
@@ -45,7 +45,7 @@ offset_right = -10.0
 offset_bottom = 50.0
 text = "X"
 
-[node name="SquadList" type="Panel" parent="ConquistorumScreenView"]
+[node name="SquadList" type="Panel" parent="TrainingUnitScreenView"]
 layout_mode = 1
 anchors_preset = -1
 anchor_right = 0.5
@@ -55,7 +55,7 @@ offset_top = 55.0
 offset_right = -5.0
 offset_bottom = -10.0
 
-[node name="Header" type="Panel" parent="ConquistorumScreenView/SquadList"]
+[node name="Header" type="Panel" parent="TrainingUnitScreenView/SquadList"]
 custom_minimum_size = Vector2(0, 30)
 layout_mode = 1
 anchors_preset = 10
@@ -63,7 +63,7 @@ anchor_right = 1.0
 offset_bottom = 50.0
 grow_horizontal = 2
 
-[node name="Label" type="Label" parent="ConquistorumScreenView/SquadList/Header"]
+[node name="Label" type="Label" parent="TrainingUnitScreenView/SquadList/Header"]
 layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
@@ -74,7 +74,7 @@ text = "10th Company"
 horizontal_alignment = 1
 vertical_alignment = 1
 
-[node name="ScrollContainer" type="ScrollContainer" parent="ConquistorumScreenView/SquadList"]
+[node name="ScrollContainer" type="ScrollContainer" parent="TrainingUnitScreenView/SquadList"]
 layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
@@ -83,11 +83,11 @@ offset_top = 50.0
 grow_horizontal = 2
 grow_vertical = 2
 
-[node name="VBoxContainer" type="VBoxContainer" parent="ConquistorumScreenView/SquadList/ScrollContainer"]
+[node name="VBoxContainer" type="VBoxContainer" parent="TrainingUnitScreenView/SquadList/ScrollContainer"]
 layout_mode = 2
 size_flags_horizontal = 3
 
-[node name="SquadReportPanel" type="Panel" parent="ConquistorumScreenView"]
+[node name="SquadReportPanel" type="Panel" parent="TrainingUnitScreenView"]
 layout_mode = 1
 anchors_preset = -1
 anchor_left = 0.5
@@ -98,7 +98,7 @@ offset_top = 55.0
 offset_right = -10.0
 offset_bottom = -10.0
 
-[node name="Header" type="Panel" parent="ConquistorumScreenView/SquadReportPanel"]
+[node name="Header" type="Panel" parent="TrainingUnitScreenView/SquadReportPanel"]
 custom_minimum_size = Vector2(0, 30)
 layout_mode = 1
 anchors_preset = 10
@@ -106,7 +106,7 @@ anchor_right = 1.0
 offset_bottom = 50.0
 grow_horizontal = 2
 
-[node name="Label" type="Label" parent="ConquistorumScreenView/SquadReportPanel/Header"]
+[node name="Label" type="Label" parent="TrainingUnitScreenView/SquadReportPanel/Header"]
 layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
@@ -117,7 +117,7 @@ text = "10th Company Readiness Report"
 horizontal_alignment = 1
 vertical_alignment = 1
 
-[node name="FocusHBox" type="HBoxContainer" parent="ConquistorumScreenView/SquadReportPanel"]
+[node name="FocusHBox" type="HBoxContainer" parent="TrainingUnitScreenView/SquadReportPanel"]
 layout_mode = 1
 anchors_preset = -1
 anchor_right = 1.0
@@ -126,17 +126,17 @@ offset_top = 55.0
 offset_right = -5.0
 offset_bottom = 90.0
 
-[node name="FocusLabel" type="Label" parent="ConquistorumScreenView/SquadReportPanel/FocusHBox"]
+[node name="FocusLabel" type="Label" parent="TrainingUnitScreenView/SquadReportPanel/FocusHBox"]
 layout_mode = 2
 custom_minimum_size = Vector2(110, 0)
 text = "Training Focus"
 vertical_alignment = 1
 
-[node name="FocusOption" type="OptionButton" parent="ConquistorumScreenView/SquadReportPanel/FocusHBox"]
+[node name="FocusOption" type="OptionButton" parent="TrainingUnitScreenView/SquadReportPanel/FocusHBox"]
 layout_mode = 2
 size_flags_horizontal = 3
 
-[node name="RichTextLabel" type="RichTextLabel" parent="ConquistorumScreenView/SquadReportPanel"]
+[node name="RichTextLabel" type="RichTextLabel" parent="TrainingUnitScreenView/SquadReportPanel"]
 custom_minimum_size = Vector2(200, 100)
 layout_mode = 1
 anchors_preset = -1

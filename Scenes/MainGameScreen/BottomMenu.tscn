@@ -63,7 +63,7 @@ layout_mode = 2
 disabled = true
 text = "Armamentarium"
 
-[node name="ConquistorumButton" type="Button" parent="Panel/MarginContainer/HBoxContainer"]
+[node name="TrainingUnitButton" type="Button" parent="Panel/MarginContainer/HBoxContainer"]
 layout_mode = 2
 text = "10th Company"
 

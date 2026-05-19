@@ -7,9 +7,9 @@ using OnlyWar.Models.Units;
 using System.Collections.Generic;
 using OnlyWar.Models.Soldiers;
 
-public partial class ConquistorumScreenController : Control
+public partial class TrainingUnitScreenController : Control
 {
-    private ConquistorumScreenView _view;
+    private TrainingUnitScreenView _view;
     private Squad _selectedSquad;
 
     public event EventHandler CloseButtonPressed;
@@ -17,7 +17,7 @@ public partial class ConquistorumScreenController : Control
 
     public override void _Ready()
     {
-        _view = GetNode<ConquistorumScreenView>("ConquistorumScreenView");
+        _view = GetNode<TrainingUnitScreenView>("TrainingUnitScreenView");
         _view.CloseButtonPressed += (object sender, EventArgs e) => CloseButtonPressed?.Invoke(this, e);
         _view.LinkClicked += OnLinkClicked;
         _view.SquadButtonPressed += OnSquadButtonPressed;

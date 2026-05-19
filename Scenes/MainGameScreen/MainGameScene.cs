@@ -16,7 +16,7 @@ public partial class MainGameScene : Control
     private SectorMap _sectorMap;
     private ChapterController _chapterScreen;
     private ApothecariumScreenController _apothecariumScreen;
-    private ConquistorumScreenController _conquistorumScreen;
+    private TrainingUnitScreenController _trainingUnitScreen;
     private SoldierController _soldierScreen;
     private SquadScreenController _squadScreen;
     private SoldierView _soldierView;
@@ -34,7 +34,7 @@ public partial class MainGameScene : Control
         _topMenu.SaveButtonPressed += OnSaveButtonPressed;
         _bottomMenu.ChapterButtonPressed += OnChapterButtonPressed;
         _bottomMenu.ApothecariumButtonPressed += OnApothecariumButtonPressed;
-        _bottomMenu.ConquistorumButtonPressed += OnConquistorumButtonPressed;
+        _bottomMenu.TrainingUnitButtonPressed += OnTrainingUnitButtonPressed;
         _bottomMenu.EndTurnButtonPressed += OnEndTurnButtonPressed;
         _sectorMap = GetNode<SectorMap>("SectorMap");
         _sectorMap.PlanetClicked += OnPlanetClicked;
@@ -56,9 +56,9 @@ public partial class MainGameScene : Control
             {
                 OnCloseScreen(_apothecariumScreen, EventArgs.Empty);
             }
-            else if(_conquistorumScreen.Visible)
+            else if(_trainingUnitScreen.Visible)
             {
-                OnCloseScreen(_conquistorumScreen, EventArgs.Empty);
+                OnCloseScreen(_trainingUnitScreen, EventArgs.Empty);
             }
             else if (_soldierScreen.Visible)
             {
@@ -168,18 +168,17 @@ public partial class MainGameScene : Control
         SetMainScreenVisibility(false);
     }
 
-    private void OnConquistorumButtonPressed(object sender, EventArgs e)
+    private void OnTrainingUnitButtonPressed(object sender, EventArgs e)
     {
-        // open the Conquistorum screen
-        if (_conquistorumScreen == null)
+        if (_trainingUnitScreen == null)
         {
-            PackedScene conquistorumScene = GD.Load<PackedScene>("res://Scenes/ConquistorumScreen/conquistorum_screen.tscn");
-            _conquistorumScreen = (ConquistorumScreenController)conquistorumScene.Instantiate();
-            _conquistorumScreen.CloseButtonPressed += OnCloseScreen;
-            _conquistorumScreen.SoldierLinkClicked += OnSoldierSelectedForDisplay;
-            _mainUILayer.AddChild(_conquistorumScreen);
+            PackedScene trainingUnitScene = GD.Load<PackedScene>("res://Scenes/TrainingUnitScreen/training_unit_screen.tscn");
+            _trainingUnitScreen = (TrainingUnitScreenController)trainingUnitScene.Instantiate();
+            _trainingUnitScreen.CloseButtonPressed += OnCloseScreen;
+            _trainingUnitScreen.SoldierLinkClicked += OnSoldierSelectedForDisplay;
+            _mainUILayer.AddChild(_trainingUnitScreen);
         }
-        _conquistorumScreen.Visible = true;
+        _trainingUnitScreen.Visible = true;
         SetMainScreenVisibility(false);
     }
 

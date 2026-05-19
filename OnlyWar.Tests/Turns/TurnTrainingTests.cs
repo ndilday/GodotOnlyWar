@@ -74,6 +74,21 @@ public class TurnTrainingTests
         Assert.True(GetSkillPoints(scout, TestSkills.Stealth) > 0);
     }
 
+    [Fact]
+    public void ProcessTurn_DoesNotTrainScoutSquadsAssignedToMissions()
+    {
+        TurnTrainingFixture fixture = TurnTrainingFixture.Create();
+        Squad squad = fixture.CreatePlayerScoutSquad("Deployed Scout Squad", out ISoldier scout);
+        fixture.LandSquad(squad);
+        fixture.AssignDefensiveMission(squad);
+
+        fixture.ProcessTurn();
+
+        Assert.Contains(squad, fixture.TrainingService.ScoutTrainingSquads);
+        Assert.DoesNotContain(scout, fixture.TrainingService.WorkExperienceSoldiers);
+        Assert.Equal(0, GetSkillPoints(scout, TestSkills.Stealth));
+    }
+
     private static float GetSkillPoints(ISoldier soldier, BaseSkill skill)
     {
         return soldier.Skills.SingleOrDefault(s => s.BaseSkill == skill)?.PointsInvested ?? 0;
@@ -332,7 +347,7 @@ public class TurnTrainingTests
         {
             ScoutFocusMap = squadFocusMap;
             ScoutTrainingSquads.AddRange(scoutSquads);
-            foreach (ISoldier soldier in scoutSquads.SelectMany(s => s.Members))
+            foreach (ISoldier soldier in scoutSquads.Where(s => s.CurrentOrders == null).SelectMany(s => s.Members))
             {
                 soldier.AddSkillPoints(TestSkills.Stealth, 0.2f);
             }
