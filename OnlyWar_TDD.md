@@ -155,10 +155,32 @@ Read-only SQLite file loaded once at application start. Accessed via `GameRulesD
 - `BaseSkill`, `SkillTemplate`
 - `HitLocationTemplate` (grouped into body types)
 - `RangedWeaponTemplate`, `MeleeWeaponTemplate`, `WeaponSet`, `WeaponSetEntry`
+- `TrainingProfile`, `TrainingProfileEntry` for data-driven skill and attribute training distributions
 - `PlanetTemplate`
 - `ShipTemplate`, `BoatTemplate`, `FleetTemplate`, `FleetShipTemplate`
 
-Load order matters: skills → hit locations → weapon templates → soldier/squad templates → unit templates → planet templates → fleet templates → factions.
+Load order matters: skills → hit locations → weapon templates → training profiles → soldier/squad templates → unit templates → planet templates → fleet templates → factions.
+
+Rules-data display names are not intended to be stable code contracts. Any code path that needs a specific skill, faction, template, weapon, hit location, chapter role, or rating definition should eventually resolve that dependency through a stable key, a semantic flag, or a validated registry loaded at startup. Startup validation should fail fast with a clear error when required rules data is missing, rather than allowing a later `First(...)` or dictionary lookup failure during play.
+
+### 4.1.1 Data-Driven Rule Profiles
+
+Training distributions are the first candidate for moving tunable rules out of C# and into the rules database. The long-term pattern is:
+
+- Code owns the algorithm for applying a profile.
+- Rules data owns which skills or attributes a role trains, and at what relative weights.
+- `SoldierTemplate` records the work-experience training profile for that soldier type.
+- Scout focus modes use training profiles rather than hardcoded skill lists.
+
+Future profile/definition candidates:
+
+- Mission skill requirements, e.g. stealth checks and tactical planning checks.
+- Default battle resources, e.g. unarmed melee weapon/skill.
+- Chapter-generation role bindings, e.g. Chapter Master, Scout Company, Armory, Apothecarion.
+- Sector-generation faction roles, e.g. primary hidden infiltrator and invasion faction.
+- Soldier rating formulas and award thresholds.
+
+Rating formulas require a constrained evaluator rather than arbitrary script execution. The proposed model is to store `RatingDefinition`, `RatingComponent`, and `RatingNormalizationFactor` rows, with a small fixed set of component types such as attribute value, skill total, best skill bonus in category, and best skill total in category. This keeps formulas tunable without embedding a general-purpose expression language.
 
 ### 4.2 Save State Database
 
@@ -690,6 +712,10 @@ Skills and templates are frequently looked up by name string (e.g., `s.Name == "
 
 **Fix:** Introduce constants or a validated by-name lookup dictionary populated at rules-DB load time. Ideally, the load step asserts that all expected named entries are present and fails fast if any are missing, rather than producing a null reference at runtime.
 
+**Update:** The initial training-profile migration moved work-experience training distributions and scout focus distributions into rules data. This reduces hardcoded skill-list coupling in `SoldierTrainingCalculator`, but does not close the broader issue. Remaining examples include rating formulas that reference named skills, mission steps that reference Stealth and Tactics, battle defaults that reference Fist and Face/Torso, sector generation that references Genestealer Cult and Tyranids, and chapter generation that references named soldier templates, squad templates, companies, and support squads.
+
+**Long-term direction:** Introduce stable rules keys and semantic flags where appropriate, plus validated registries populated at rules-DB load time. For tunable behavior, prefer data-driven definitions over constants. Candidate migrations include mission skill requirement definitions, sector generation faction roles, chapter organization role bindings, default battle resource definitions, and rating formula definitions. The load step should assert that all required entries are present and fail fast with clear diagnostics.
+
 ### 8.4 Dual Clone Paths on Battle Types — Low
 
 **Location:** `BattleSquad`, `BattleSoldier`
@@ -748,7 +774,7 @@ No test project currently exists. The following is a recommended approach for in
 
 ### 9.1 Setup
 
-Add a separate `.csproj` (e.g., `OnlyWar.Tests`) using `xUnit` or `NUnit`. Reference only the non-Godot portions of the main project. Systems with Godot node dependencies cannot be unit tested without a Godot runtime; focus the test project on pure domain and helper logic.
+A separate `OnlyWar.Tests` xUnit project now exists. Keep expanding it around pure domain and helper logic first. Systems with Godot node dependencies cannot be unit tested without a Godot runtime; focus the test project on pure domain and helper logic.
 
 Make `RNG` injectable: introduce an `IRNG` interface and a `SeededRNG` implementation so tests can run with a fixed seed for deterministic results.
 
@@ -765,6 +791,21 @@ Listed in recommended implementation order, from lowest to highest setup cost:
 7. **`FactionStrategyController`** — Requires constructed `Planet`/`Region`/`RegionFaction` model objects. Refactor to remove the `GameDataSingleton` read before testing.
 8. **`BattleSoldier` clone round-trip** — Construct a fully populated `BattleSoldier`, clone it, and assert field-by-field equality. Catches 8.4 above.
 
+### 9.2.1 Next Test Targets
+
+Initial coverage now exists for wounds, skill math, Gaussian math, mission checks, force generation, subsector generation, battle-soldier cloning, rules database validation, and training profile application. The next recommended targets are:
+
+1. **Save/load round-trip tests** — Build a small sector fixture with planets, regions, factions, squads, soldiers, wounds, orders, requests, fleet state, and battle history. Save to a temporary SQLite file, load it back, and assert equivalent state.
+2. **Mission save duplication regression** — Specifically cover the duplicate special-mission save risk in Section 8.1. The test should fail if a region with one special mission reloads with two.
+3. **Rules DB schema validation** — Validate new rules tables such as `TrainingProfile` and future rating/mission-definition tables. Required rows should be checked by stable key or semantic role once those are introduced.
+4. **Turn training flow** — Verify that non-deployed marines receive training during end-of-turn processing, deployed marines do not, deployed scouts are excluded from weekly scout training, and squad focus profiles affect the expected skills/attributes.
+5. **`FactionStrategyController`** — Requires constructed `Planet`/`Region`/`RegionFaction` model objects. Refactor to remove the `GameDataSingleton` read before testing.
+6. **`SectorEntityLogic`** — Cover logistic growth, conversion growth, hidden-faction reveal thresholds, intelligence decay, special mission expiration, and governor request generation with deterministic RNG.
+7. **`BattleGridManager` and `WoundResolver`** — Cover occupancy, multi-cell movement, armor reduction, wound severity application, crippling, severing, and vital-location death.
+8. **Rating formula evaluator** — Once rating formulas move into rules data, add tests that seeded DB-defined formulas reproduce the current melee, ranged, leadership, ancient, medical, tech, and piety ratings.
+9. **Seeded multi-turn smoke test** — Generate or hand-build a compact sector, run several turns with fixed RNG, and assert high-level summary values such as date, population totals, public/hidden faction state, request count, battle count, and casualties.
+10. **New game smoke test** — Generate a new campaign from rules data and assert chapter, fleet, sector, subsector, planet, faction, and squad invariants without requiring the Godot UI.
+
 ### 9.3 Regression Risk Areas
 
 These areas are particularly likely to produce hard-to-detect bugs as features are added:
@@ -772,5 +813,6 @@ These areas are particularly likely to produce hard-to-detect bugs as features a
 - Changing the `WoundLevel` bitmask layout or adding new severity tiers.
 - Adding new fields to `BattleSoldier` without updating both the copy constructor and `Clone()`.
 - Adding new tables to the save schema without updating both `SaveData` and `GetData` in `GameStateDataAccess`.
-- Changing skill or template names in the rules database without updating hardcoded string lookups (see 8.3).
+- Changing skill or template names in the rules database without updating hardcoded string lookups or validated registries (see 8.3).
 - Changing the `Wounds.WeeksToHeal` nibble-offset encoding without updating all dependent healing logic.
+- Adding new data-driven rules tables without adding rules-load validation and regression tests.

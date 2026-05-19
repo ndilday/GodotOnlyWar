@@ -594,7 +594,9 @@ Documented for planning purposes; not scheduled:
 
 **Living Universe:** Imperial Guard movement and inter-planet logistics (Phase 4); Character personality development over time (Phase 5).
 
-**Infrastructure:** Full mod support (XML data, moddable factions, name lists, planet data, chapter generation); Graphics overhaul; Full UX pass.
+**Infrastructure:** Full mod support (XML data, moddable factions, name lists, planet data, chapter generation); data-layer decoupling to replace hardcoded rules-data display-name references with stable keys, validated registries, and data-driven rule profiles; Graphics overhaul; Full UX pass.
+
+**Rules Data / Modding:** Move tunable simulation rules out of code where practical. Priority candidates include soldier work-experience training profiles, scout training focus profiles, mission skill requirements, sector-generation faction selection, chapter organization roles, and soldier rating formulas. The goal is that renaming a displayed skill, faction, template, or unit does not break game logic.
 
 ---
 

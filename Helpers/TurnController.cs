@@ -5,6 +5,8 @@ using OnlyWar.Models;
 using OnlyWar.Models.Missions;
 using OnlyWar.Models.Orders;
 using OnlyWar.Models.Planets;
+using OnlyWar.Models.Soldiers;
+using OnlyWar.Models.Squads;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -17,12 +19,19 @@ namespace OnlyWar.Helpers
         public List<Mission> SpecialMissions { get; private set; }
 
         private readonly FactionStrategyController _npcStrategyController;
+        private readonly ISoldierTrainingService _trainingService;
+        private const float WeeklyTrainingPoints = 0.2f;
 
-        public TurnController()
+        public TurnController() : this(null)
+        {
+        }
+
+        public TurnController(ISoldierTrainingService trainingService)
         {
             MissionContexts = new List<MissionContext>();
             SpecialMissions = new List<Mission>();
             _npcStrategyController = new FactionStrategyController();
+            _trainingService = trainingService;
         }
 
         public void ProcessTurn(Sector sector)
@@ -49,8 +58,32 @@ namespace OnlyWar.Helpers
 
             // --- 3. Planetary Simulation & Resolution Phase ---
             ApplyMissionResults();
+            TrainNonDeployedPlayerForces(sector);
             UpdatePlanets(sector.Planets.Values);
             UpdateIntelligence(sector.Planets.Values);
+        }
+
+        private void TrainNonDeployedPlayerForces(Sector sector)
+        {
+            ISoldierTrainingService trainingService = _trainingService ?? CreateTrainingService();
+            IEnumerable<Squad> squads = sector.PlayerForce?.Army?.OrderOfBattle?.GetAllSquads()
+                ?? Enumerable.Empty<Squad>();
+
+            foreach (Squad squad in squads)
+            {
+                if (squad.CurrentOrders != null) continue;
+
+                foreach (ISoldier soldier in squad.Members)
+                {
+                    trainingService.ApplySoldierWorkExperience(soldier, WeeklyTrainingPoints);
+                }
+            }
+        }
+
+        private static ISoldierTrainingService CreateTrainingService()
+        {
+            GameRulesData rules = GameDataSingleton.Instance.GameRulesData;
+            return new SoldierTrainingCalculator(rules.BaseSkillMap.Values, rules.TrainingProfiles.Values);
         }
 
         private void ProcessCombatMissions(IEnumerable<Order> combatOrders)
