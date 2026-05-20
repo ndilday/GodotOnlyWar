@@ -30,9 +30,10 @@ public partial class SectorMap : Node2D
 			GameDataSingleton.Instance.GameRulesData.SectorCellSize.Item2);
 
 	public Vector2I HalfCellSize { get; private set; }
-	public ushort[] SectorIds { get; private set; }
-	public bool[] HasPlanet { get; private set; }
+    public ushort[] SectorIds { get; private set; }
+    public bool[] HasPlanet { get; private set; }
     private Camera2D _camera;
+    private readonly List<Node> _fleetSprites = [];
 	
 	private Dictionary<ushort, List<Vector2I>> _subsectorVertexListMap;
 
@@ -44,7 +45,7 @@ public partial class SectorMap : Node2D
 		SectorIds = new ushort[GridDimensions.X * GridDimensions.Y];
 		HasPlanet = new bool[GridDimensions.X * GridDimensions.Y];
 		PlacePlanets();
-		PlaceFleets();
+		RefreshFleets();
 		List<Subsector> subsectors = SubsectorBuilder.BuildSubsectors(GameDataSingleton.Instance.Sector.Planets.Values, GridDimensions);
         foreach(Subsector subsector in subsectors)
         {
@@ -54,8 +55,14 @@ public partial class SectorMap : Node2D
             }
         }
         _subsectorVertexListMap = DetermineSubsectorBorderPoints(subsectors);
-        Planet centerPlanet = GameDataSingleton.Instance.Sector.PlayerForce.Fleet.TaskForces[0].Planet;
-        Vector2I gridPosition = new Vector2I(centerPlanet.Position.Item1, centerPlanet.Position.Item2);
+        TaskForce centerFleet = GameDataSingleton.Instance.Sector.PlayerForce.Fleet.TaskForces.FirstOrDefault();
+        Tuple<ushort, ushort> centerPosition = centerFleet?.Planet?.Position ?? centerFleet?.Position;
+        if (centerPosition == null)
+        {
+            centerPosition = GameDataSingleton.Instance.Sector.Planets.Values.First().Position;
+        }
+
+        Vector2I gridPosition = new Vector2I(centerPosition.Item1, centerPosition.Item2);
         Vector2I mapPosition = CalculateMapPosition(gridPosition);
         _camera.ZoomTo(1, mapPosition);
     }
@@ -117,6 +124,17 @@ public partial class SectorMap : Node2D
 		}
 	}
 
+	public void RefreshFleets()
+	{
+		foreach (Node fleetSprite in _fleetSprites)
+		{
+			RemoveChild(fleetSprite);
+			fleetSprite.QueueFree();
+		}
+		_fleetSprites.Clear();
+		PlaceFleets();
+	}
+
 	private void PlaceFleets()
 	{
 		var shipTexture = GD.Load<AtlasTexture>(("res://Assets/shipAtlasTexture.tres"));
@@ -124,9 +142,12 @@ public partial class SectorMap : Node2D
 		foreach(var taskForceKvp in GameDataSingleton.Instance.Sector.Fleets)
 		{
             TaskForce taskForce = taskForceKvp.Value;
+			if (!IsFleetVisibleOnMap(taskForce)) continue;
 
             // Determine the position for the fleet's sprite
             Vector2I gridPosition;
+            bool isRealspaceTransit = taskForce.TravelPhase == FleetTravelPhase.OutboundSystemTransit
+                || taskForce.TravelPhase == FleetTravelPhase.InboundSystemTransit;
             if (taskForce.Planet != null)
             {
                 // Fleet is in orbit around a planet
@@ -135,6 +156,10 @@ public partial class SectorMap : Node2D
                 // You'll need to implement GetPlanetSpritePosition or similar
                 gridPosition = new(taskForce.Planet.Position.Item1, taskForce.Planet.Position.Item2);
             }
+            else if (isRealspaceTransit && GetTransitAnchorPosition(taskForce) is Tuple<ushort, ushort> transitPosition)
+            {
+                gridPosition = new Vector2I(transitPosition.Item1, transitPosition.Item2);
+            }
             else
             {
                 // Fleet is in space, use its map coordinates
@@ -142,10 +167,29 @@ public partial class SectorMap : Node2D
             }
 
 			// Make sure you are the owner of the new node, or it will not save properly
-			ClickableSprite2D fleet = DrawTexture(shipTexture, shipTextureScale, gridPosition, Color.Color8(255, 255, 255), 2, true);
+			Vector2I fleetOffset = isRealspaceTransit
+				? new Vector2I(1, 1)
+				: new Vector2I(1, -1);
+			ClickableSprite2D fleet = DrawTexture(shipTexture, shipTextureScale, gridPosition, Color.Color8(255, 255, 255), 2, fleetOffset);
             fleet.Pressed += (object sender, EventArgs e) => FleetClicked.Invoke(fleet, taskForceKvp.Key);
+			_fleetSprites.Add(fleet);
         }
     }
+
+	private static Tuple<ushort, ushort> GetTransitAnchorPosition(TaskForce taskForce)
+	{
+		return taskForce.TravelPhase switch
+		{
+			FleetTravelPhase.OutboundSystemTransit => taskForce.Origin?.Position ?? taskForce.Position,
+			FleetTravelPhase.InboundSystemTransit => taskForce.Destination?.Position ?? taskForce.Position,
+			_ => taskForce.Position
+		};
+	}
+
+	private static bool IsFleetVisibleOnMap(TaskForce taskForce)
+	{
+		return taskForce.TravelPhase != FleetTravelPhase.InWarp;
+	}
 
     private void Fleet_Pressed(object sender, EventArgs e)
     {
@@ -306,13 +350,19 @@ public partial class SectorMap : Node2D
 
     private ClickableSprite2D DrawTexture(Texture2D texture, Vector2 scale, Vector2I gridPosition, Color color, int zIndex = 1, bool offset=false)
 	{
+		Vector2I spriteOffset = offset ? new Vector2I(1, -1) : Vector2I.Zero;
+		return DrawTexture(texture, scale, gridPosition, color, zIndex, spriteOffset);
+	}
+
+    private ClickableSprite2D DrawTexture(Texture2D texture, Vector2 scale, Vector2I gridPosition, Color color, int zIndex, Vector2I offset)
+	{
 		ClickableSprite2D newSprite = new ClickableSprite2D();
 		this.AddChild(newSprite);
         newSprite.Owner = this;
 		Vector2I mapPosition = CalculateMapPosition(gridPosition);
-		if(offset)
+		if(offset != Vector2I.Zero)
 		{
-			mapPosition += HalfCellSize * new Vector2I( 1,-1);
+			mapPosition += HalfCellSize * offset;
 		}
         newSprite.GlobalPosition = mapPosition;
         newSprite.Texture = texture;

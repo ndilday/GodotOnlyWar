@@ -17,6 +17,7 @@ public partial class MainGameScene : Control
     private ChapterController _chapterScreen;
     private ApothecariumScreenController _apothecariumScreen;
     private TrainingUnitScreenController _trainingUnitScreen;
+    private FleetScreenController _fleetScreen;
     private SoldierController _soldierScreen;
     private SquadScreenController _squadScreen;
     private SoldierView _soldierView;
@@ -35,6 +36,7 @@ public partial class MainGameScene : Control
         _bottomMenu.ChapterButtonPressed += OnChapterButtonPressed;
         _bottomMenu.ApothecariumButtonPressed += OnApothecariumButtonPressed;
         _bottomMenu.TrainingUnitButtonPressed += OnTrainingUnitButtonPressed;
+        _bottomMenu.FleetButtonPressed += OnFleetButtonPressed;
         _bottomMenu.EndTurnButtonPressed += OnEndTurnButtonPressed;
         _sectorMap = GetNode<SectorMap>("SectorMap");
         _sectorMap.PlanetClicked += OnPlanetClicked;
@@ -59,6 +61,10 @@ public partial class MainGameScene : Control
             else if(_trainingUnitScreen.Visible)
             {
                 OnCloseScreen(_trainingUnitScreen, EventArgs.Empty);
+            }
+            else if(_fleetScreen != null && _fleetScreen.Visible)
+            {
+                OnCloseScreen(_fleetScreen, EventArgs.Empty);
             }
             else if (_soldierScreen.Visible)
             {
@@ -182,6 +188,20 @@ public partial class MainGameScene : Control
         SetMainScreenVisibility(false);
     }
 
+    private void OnFleetButtonPressed(object sender, EventArgs e)
+    {
+        if (_fleetScreen == null)
+        {
+            PackedScene fleetScene = GD.Load<PackedScene>("res://Scenes/FleetScreen/fleet_screen.tscn");
+            _fleetScreen = (FleetScreenController)fleetScene.Instantiate();
+            _fleetScreen.CloseButtonPressed += OnCloseScreen;
+            _mainUILayer.AddChild(_fleetScreen);
+        }
+        _fleetScreen.PopulateFleetData();
+        _fleetScreen.Visible = true;
+        SetMainScreenVisibility(false);
+    }
+
     private void OnPlanetClicked(object sender, int planetId)
     {
         Planet planet = GameDataSingleton.Instance.Sector.Planets[planetId];
@@ -231,6 +251,7 @@ public partial class MainGameScene : Control
     {
         // handle squad orders
         _turnController.ProcessTurn(GameDataSingleton.Instance.Sector);
+        _sectorMap.RefreshFleets();
         if(_endOfTurnDialog == null)
         {
             PackedScene endOfTurnScene = GD.Load<PackedScene>("res://Scenes/EndOfTurnDialog.tscn");

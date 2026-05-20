@@ -69,7 +69,6 @@ text = "10th Company"
 
 [node name="FleetButton" type="Button" parent="Panel/MarginContainer/HBoxContainer"]
 layout_mode = 2
-disabled = true
 text = "Classis"
 
 [node name="DiplomacyButton" type="Button" parent="Panel/MarginContainer/HBoxContainer"]
