@@ -51,9 +51,11 @@ namespace OnlyWar.Helpers.Database.GameState
                 {
                     int id = reader.GetInt32(0);
                     int factionId = reader.GetInt32(1);
-                    float x = (float)reader[2];
-                    float y = (float)reader[3];
-
+                    float x = Convert.ToSingle(reader[2]);
+                    float y = Convert.ToSingle(reader[3]);
+                    int travelWeeksRemaining = reader.FieldCount > 5 && reader[5].GetType() != typeof(DBNull)
+                        ? reader.GetInt32(5)
+                        : 0;
                     Planet destination;
                     if (reader[4].GetType() != typeof(DBNull))
                     {
@@ -64,23 +66,56 @@ namespace OnlyWar.Helpers.Database.GameState
                         destination = null;
                     }
 
+                    Planet origin = GetPlanetById(reader, 6, planetList);
+                    FleetTravelPhase travelPhase = reader.FieldCount > 7 && reader[7].GetType() != typeof(DBNull)
+                        ? (FleetTravelPhase)reader.GetInt32(7)
+                        : destination == null ? FleetTravelPhase.InOrbit : FleetTravelPhase.InWarp;
+                    int currentPhaseWeeksRemaining = reader.FieldCount > 8 && reader[8].GetType() != typeof(DBNull)
+                        ? reader.GetInt32(8)
+                        : travelWeeksRemaining;
+                    double warpSubjectiveWeeks = reader.FieldCount > 9 && reader[9].GetType() != typeof(DBNull)
+                        ? reader.GetDouble(9)
+                        : 0;
+                    double warpObjectiveWeeks = reader.FieldCount > 10 && reader[10].GetType() != typeof(DBNull)
+                        ? reader.GetDouble(10)
+                        : travelWeeksRemaining;
+                    bool warpSubjectiveTrainingApplied = reader.FieldCount <= 11
+                        || reader[11].GetType() == typeof(DBNull)
+                        || reader.GetBoolean(11);
+
                     // see if the position is a planet
                     Tuple<ushort, ushort> location = new((ushort)x, (ushort)y);
-                    Planet planet = planetList.FirstOrDefault(p => p.Position == location);
+                    bool isInTransit = destination != null && travelWeeksRemaining > 0;
+                    Planet planet = isInTransit
+                        ? null
+                        : planetList.FirstOrDefault(p => p.Position.Equals(location));
 
                     TaskForce fleet = new TaskForce(id, factionMap[factionId], location, planet,
-                                            destination, fleetShipMap[id]);
+                                            destination, fleetShipMap[id], travelWeeksRemaining,
+                                            origin, travelPhase, currentPhaseWeeksRemaining,
+                                            warpSubjectiveWeeks, warpObjectiveWeeks,
+                                            warpSubjectiveTrainingApplied);
                     fleetList.Add(fleet);
                 }
             }
             return fleetList;
         }
 
+        private static Planet GetPlanetById(IDataRecord reader, int ordinal, IReadOnlyList<Planet> planetList)
+        {
+            if (reader.FieldCount <= ordinal || reader[ordinal].GetType() == typeof(DBNull)) return null;
+            return planetList.First(p => p.Id == reader.GetInt32(ordinal));
+        }
+
         public void SaveFleet(IDbTransaction transaction, TaskForce fleet)
         {
             string destination = fleet.Destination == null ? "null" : fleet.Destination.Id.ToString();
+            string origin = fleet.Origin == null ? "null" : fleet.Origin.Id.ToString();
+            int warpSubjectiveTrainingApplied = fleet.WarpSubjectiveTrainingApplied ? 1 : 0;
             string insert = $@"INSERT INTO Fleet VALUES ({fleet.Id}, {fleet.Faction.Id}, 
-                {fleet.Position.Item1}, {fleet.Position.Item2}, {destination});";
+                {fleet.Position.Item1}, {fleet.Position.Item2}, {destination}, {fleet.TravelWeeksRemaining},
+                {origin}, {(int)fleet.TravelPhase}, {fleet.CurrentPhaseWeeksRemaining},
+                {fleet.WarpSubjectiveWeeks}, {fleet.WarpObjectiveWeeks}, {warpSubjectiveTrainingApplied});";
             using (var command = transaction.Connection.CreateCommand())
             {
                 command.CommandText = insert;

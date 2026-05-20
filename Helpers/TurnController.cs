@@ -2,6 +2,7 @@
 using OnlyWar.Helpers.Battles;
 using OnlyWar.Helpers.Extensions;
 using OnlyWar.Models;
+using OnlyWar.Models.Fleets;
 using OnlyWar.Models.Missions;
 using OnlyWar.Models.Orders;
 using OnlyWar.Models.Planets;
@@ -59,8 +60,22 @@ namespace OnlyWar.Helpers
             // --- 3. Planetary Simulation & Resolution Phase ---
             ApplyMissionResults();
             TrainNonDeployedPlayerForces(sector);
+            AdvanceFleetMovement(sector);
             UpdatePlanets(sector.Planets.Values);
             UpdateIntelligence(sector.Planets.Values);
+        }
+
+        private void AdvanceFleetMovement(Sector sector)
+        {
+            foreach (TaskForce taskForce in sector.Fleets.Values)
+            {
+                FleetTravelAdvanceResult result = taskForce.AdvanceTravelOneWeek();
+                if (result.ExitedWarp)
+                {
+                    ApplyWarpSubjectiveTraining(taskForce, result.WarpSubjectiveWeeksElapsed);
+                    taskForce.WarpSubjectiveTrainingApplied = true;
+                }
+            }
         }
 
         private void TrainNonDeployedPlayerForces(Sector sector)
@@ -69,11 +84,11 @@ namespace OnlyWar.Helpers
             List<Squad> squads = (sector.PlayerForce?.Army?.OrderOfBattle?.GetAllSquads()
                 ?? Enumerable.Empty<Squad>()).ToList();
 
-            List<Squad> scoutSquads = squads.Where(IsScoutSquad).ToList();
+            List<Squad> scoutSquads = squads.Where(s => IsScoutSquad(s) && CanTrainThisCampaignWeek(s)).ToList();
             Dictionary<int, TrainingFocuses> scoutFocusMap = scoutSquads.ToDictionary(s => s.Id, s => s.TrainingFocus);
-            trainingService.TrainScouts(scoutSquads, scoutFocusMap);
+            trainingService.TrainScouts(scoutSquads, scoutFocusMap, WeeklyTrainingPoints);
 
-            foreach (Squad squad in squads.Where(s => !IsScoutSquad(s)))
+            foreach (Squad squad in squads.Where(s => !IsScoutSquad(s) && CanTrainThisCampaignWeek(s)))
             {
                 if (squad.CurrentOrders != null) continue;
 
@@ -82,6 +97,35 @@ namespace OnlyWar.Helpers
                     trainingService.ApplySoldierWorkExperience(soldier, WeeklyTrainingPoints);
                 }
             }
+        }
+
+        private void ApplyWarpSubjectiveTraining(TaskForce taskForce, double subjectiveWeeks)
+        {
+            if (subjectiveWeeks <= 0) return;
+
+            ISoldierTrainingService trainingService = _trainingService ?? CreateTrainingService();
+            List<Squad> embarkedSquads = taskForce.Ships
+                .SelectMany(ship => ship.LoadedSquads)
+                .Where(squad => squad.CurrentOrders == null)
+                .ToList();
+            float points = (float)(WeeklyTrainingPoints * subjectiveWeeks);
+
+            List<Squad> scoutSquads = embarkedSquads.Where(IsScoutSquad).ToList();
+            Dictionary<int, TrainingFocuses> scoutFocusMap = scoutSquads.ToDictionary(s => s.Id, s => s.TrainingFocus);
+            trainingService.TrainScouts(scoutSquads, scoutFocusMap, points);
+
+            foreach (Squad squad in embarkedSquads.Where(squad => !IsScoutSquad(squad)))
+            {
+                foreach (ISoldier soldier in squad.Members)
+                {
+                    trainingService.ApplySoldierWorkExperience(soldier, points);
+                }
+            }
+        }
+
+        private static bool CanTrainThisCampaignWeek(Squad squad)
+        {
+            return squad.BoardedLocation?.Fleet?.TravelPhase != FleetTravelPhase.InWarp;
         }
 
         private static bool IsScoutSquad(Squad squad)

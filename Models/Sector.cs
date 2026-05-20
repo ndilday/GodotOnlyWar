@@ -65,12 +65,12 @@ namespace OnlyWar.Models
 
         public Planet GetPlanetByPosition(Tuple<ushort, ushort> worldPosition)
         {
-            return Planets.Values.Where(p => p.Position != null && p.Position == worldPosition).SingleOrDefault();
+            return Planets.Values.Where(p => p.Position != null && p.Position.Equals(worldPosition)).SingleOrDefault();
         }
 
         public IEnumerable<TaskForce> GetFleetsByPosition(Tuple<ushort, ushort> worldPosition)
         {
-            return Fleets.Values.Where(f => f.Position == worldPosition);
+            return Fleets.Values.Where(f => f.Position != null && f.Position.Equals(worldPosition));
         }
 
         public void AddNewFleet(TaskForce newFleet)

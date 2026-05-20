@@ -493,7 +493,7 @@ PresenceRequest : IRequest
 6. Advance `GameDataSingleton.Instance.Date` by one week.
 7. Return collected contexts and missions for display in the End of Turn Dialog.
 
-Training for non-deployed soldiers is not yet wired into this flow. It is the sole remaining committed item for 0.7.
+Training is now wired into this flow. Non-deployed non-Scout marines receive weekly work-experience training through `ApplySoldierWorkExperience`; Scout squads are routed through `TrainScouts` with each squad's selected `TrainingFocus`. Scout squads assigned to missions are excluded from weekly Scout training.
 
 ### 6.2 Faction Strategy
 
@@ -646,7 +646,21 @@ Strength after armor reduction is compared against wound thresholds to determine
 
 `SubsectorBuilder.BuildSubsectors(planets, gridDimensions)` clusters planets using a greedy merge. The sector grid is 200×200 light years with each grid unit representing 1×1 light year. A subsector has a maximum diameter of 20 light years (10 light year radius), typically containing 2–8 star systems.
 
-Warp lane generation (0.7 addition): after subsector clustering, the highest-population planet in each subsector is designated its capital. A warp lane is established from each capital to every other planet in its subsector, and between each capital and the capitals of adjacent subsectors. The resulting lane graph is used by fleet movement routing (Dijkstra shortest path, weighted by Euclidean hop distance) to compute multi-hop lane routes for comparison against direct routes.
+Warp lane generation (0.7 addition): after subsector clustering, the highest-population planet in each subsector is designated its capital. A warp lane is established from each capital to every other planet in its subsector, and between each capital and the capitals of adjacent subsectors. The resulting lane graph is used by fleet movement routing (Dijkstra shortest path, weighted by Euclidean hop distance) to compute known multi-hop lane routes. Travel duration is determined by subsector relationship and Gaussian subjective/objective time multipliers rather than by Euclidean distance alone.
+
+`FleetRouteCalculator` computes route topology and timing:
+
+- `FleetRouteScope.SameSubsector`: 1 expected subjective warp week.
+- `FleetRouteScope.AdjacentSubsector`: 3 expected subjective warp weeks.
+- `FleetRouteScope.DistantSubsector`: 7 expected subjective warp weeks.
+- Every journey adds 4 fixed subjective/objective weeks for in-system travel to and from warp translation points.
+- Subjective warp multiplier: z = 0 maps to 1x, +0.5/-0.5 maps to 1/2x/2x, +1/-1 maps to 1/3x/3x.
+- Objective warp multiplier: z = 0 maps to 1x, +5 maps to 1/10x, -5 maps to 10x.
+- `FleetRoute.BaseTurns` is the objective total weeks rounded up for campaign turn processing.
+- `TaskForce` stores resolved travel state rather than the full route graph: origin, destination, `FleetTravelPhase`, total and current-phase objective weeks remaining, rolled subjective warp weeks, rolled objective warp weeks, and a one-time subjective-training-applied flag.
+- Route-based movement advances through `OutboundSystemTransit`, `InWarp`, `InboundSystemTransit`, and `InOrbit`. Legacy fixed-week movement remains a simple countdown path for tests and older callers.
+- Turn training excludes embarked squads while their fleet is `InWarp`; when `AdvanceTravelOneWeek` reports warp exit, `TurnController` applies `WeeklyTrainingPoints * WarpSubjectiveWeeks` to embarked idle squads.
+- Navigator quality modifying either Gaussian roll is a TODO for a later pass.
 
 1. Assign each planet its own subsector.
 2. Compute pairwise longest-distance between all subsector pairs.
@@ -793,18 +807,17 @@ Listed in recommended implementation order, from lowest to highest setup cost:
 
 ### 9.2.1 Next Test Targets
 
-Initial coverage now exists for wounds, skill math, Gaussian math, mission checks, force generation, subsector generation, battle-soldier cloning, rules database validation, and training profile application. The next recommended targets are:
+Initial coverage now exists for wounds, skill math, Gaussian math, mission checks, force generation, subsector generation, battle-soldier cloning, rules database validation, training profile application, and turn training flow. The next recommended targets are:
 
 1. **Save/load round-trip tests** — Build a small sector fixture with planets, regions, factions, squads, soldiers, wounds, orders, requests, fleet state, and battle history. Save to a temporary SQLite file, load it back, and assert equivalent state.
 2. **Mission save duplication regression** — Specifically cover the duplicate special-mission save risk in Section 8.1. The test should fail if a region with one special mission reloads with two.
 3. **Rules DB schema validation** — Validate new rules tables such as `TrainingProfile` and future rating/mission-definition tables. Required rows should be checked by stable key or semantic role once those are introduced.
-4. **Turn training flow** — Verify that non-deployed marines receive training during end-of-turn processing, deployed marines do not, deployed scouts are excluded from weekly scout training, and squad focus profiles affect the expected skills/attributes.
-5. **`FactionStrategyController`** — Requires constructed `Planet`/`Region`/`RegionFaction` model objects. Refactor to remove the `GameDataSingleton` read before testing.
-6. **`SectorEntityLogic`** — Cover logistic growth, conversion growth, hidden-faction reveal thresholds, intelligence decay, special mission expiration, and governor request generation with deterministic RNG.
-7. **`BattleGridManager` and `WoundResolver`** — Cover occupancy, multi-cell movement, armor reduction, wound severity application, crippling, severing, and vital-location death.
-8. **Rating formula evaluator** — Once rating formulas move into rules data, add tests that seeded DB-defined formulas reproduce the current melee, ranged, leadership, ancient, medical, tech, and piety ratings.
-9. **Seeded multi-turn smoke test** — Generate or hand-build a compact sector, run several turns with fixed RNG, and assert high-level summary values such as date, population totals, public/hidden faction state, request count, battle count, and casualties.
-10. **New game smoke test** — Generate a new campaign from rules data and assert chapter, fleet, sector, subsector, planet, faction, and squad invariants without requiring the Godot UI.
+4. **`FactionStrategyController`** — Requires constructed `Planet`/`Region`/`RegionFaction` model objects. Refactor to remove the `GameDataSingleton` read before testing.
+5. **`SectorEntityLogic`** — Cover logistic growth, conversion growth, hidden-faction reveal thresholds, intelligence decay, special mission expiration, and governor request generation with deterministic RNG.
+6. **`BattleGridManager` and `WoundResolver`** — Cover occupancy, multi-cell movement, armor reduction, wound severity application, crippling, severing, and vital-location death.
+7. **Rating formula evaluator** — Once rating formulas move into rules data, add tests that seeded DB-defined formulas reproduce the current melee, ranged, leadership, ancient, medical, tech, and piety ratings.
+8. **Seeded multi-turn smoke test** — Generate or hand-build a compact sector, run several turns with fixed RNG, and assert high-level summary values such as date, population totals, public/hidden faction state, request count, battle count, and casualties.
+9. **New game smoke test** — Generate a new campaign from rules data and assert chapter, fleet, sector, subsector, planet, faction, and squad invariants without requiring the Godot UI.
 
 ### 9.3 Regression Risk Areas
 

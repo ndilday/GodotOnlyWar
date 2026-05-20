@@ -14,7 +14,7 @@ namespace OnlyWar.Helpers
         public void EvaluateSoldier(PlayerSoldier soldier, Date trainingFinishedYear);
         public void AwardSoldier(PlayerSoldier soldier, Date awardDate, string awardName, string type, ushort level);
         public void ApplySoldierWorkExperience(ISoldier soldier, float points);
-        public void TrainScouts(IEnumerable<Squad> scoutSquads, Dictionary<int, TrainingFocuses> squadFocusMap);
+        public void TrainScouts(IEnumerable<Squad> scoutSquads, Dictionary<int, TrainingFocuses> squadFocusMap, float points = 0.2f);
     }
 
     public class SoldierTrainingCalculator : ISoldierTrainingService
@@ -163,7 +163,7 @@ namespace OnlyWar.Helpers
             ApplyTrainingProfile(soldier, soldier.Template.WorkExperienceTrainingProfile, points);
         }
 
-        public void TrainScouts(IEnumerable<Squad> scoutSquads, Dictionary<int, TrainingFocuses> squadFocusMap)
+        public void TrainScouts(IEnumerable<Squad> scoutSquads, Dictionary<int, TrainingFocuses> squadFocusMap, float points = 0.2f)
         {
             foreach (Squad squad in scoutSquads)
             {
@@ -183,9 +183,8 @@ namespace OnlyWar.Helpers
                         numberOfAreas = 4;
                         focuses = TrainingFocuses.Melee | TrainingFocuses.Physical | TrainingFocuses.Ranged | TrainingFocuses.Vehicles;
                     }
-                    // 200 hours per point means about 5 weeks, so about 1/5 point per week
-                    float baseLearning = 0.2f;
-                    squad.SquadLeader.AddSkillPoints(_skillsByName["Teaching"], 0.05f);
+                    float baseLearning = points;
+                    squad.SquadLeader.AddSkillPoints(_skillsByName["Teaching"], points * 0.25f);
                     if (squad.SquadLeader.GetTotalSkillValue(_skillsByName["Teaching"]) >= 12.0f)
                     {
                         goodTeacher = true;

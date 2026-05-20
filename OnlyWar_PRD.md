@@ -238,8 +238,6 @@ Each feature is described as a behavioral specification: what the system does, a
 **Acceptance Criteria (Implemented):**
 - Displays all Scout squads with their current members.
 - Indicates which scouts are ready to advance to full Battle Brother status, based on their training evaluations.
-
-**Acceptance Criteria (Planned — 0.7 To-Do):**
 - Scouts who are currently deployed on a mission are excluded from training progress that week.
 - The player can designate a focus for a given Scout squad's training (e.g., prioritizing ranged skill vs. melee skill vs. leadership), which affects which skills accumulate points faster during that week.
 
@@ -552,6 +550,7 @@ Each feature is described as a behavioral specification: what the system does, a
 The following must ship in 0.7:
 
 - **Training for non-deployed forces:** Non-deployed marines accumulate training skill points each turn.
+- **Recruiter Screen Phase 2:** Deployed scouts excluded from training; squad-specific training focus.
 - **Game Start Phase 1:** Complete new game setup screen and flow.
 - **Planet View Phase 4 completion:** Governor aging and replacement; visible opinion signal on planet screen; request fulfillment requiring meaningful engagement.
 - **Diplomacy/Requests display:** Active governor requests visible in a dedicated screen or panel.
@@ -562,7 +561,6 @@ The following must ship in 0.7:
 Targeted for 0.7, not yet committed:
 
 - **Battle screen visual overhaul:** Updated visual presentation of the battle UI.
-- **Recruiter Screen Phase 2:** Deployed scouts excluded from training; squad-specific training focus.
 - **Strategic Layer Phase 2:**
   - Population growth relative to planet carrying capacity (faster growth when underpopulated, slower when near capacity).
   - Garrison attrition (0.1% of garrison retires per week, requiring replacement from population growth).
@@ -781,32 +779,40 @@ The full design of the recruitment screen and its trade-off options is deferred 
 - Warp lanes are generated as part of sector generation.
 
 **Transit Time Formula**
-- Distance between two planets is computed as Euclidean distance in light years from their grid coordinates.
-- Base transit time per lane hop: `max(1, round(sqrt(hopDistanceInLightYears) × 0.5))`
-- Two routes are always computed and compared:
-  1. **Lane route:** The shortest path through the warp lane graph (Dijkstra weighted by hop distance). Total base time is the sum of per-hop base times.
-  2. **Direct route:** Straight Euclidean distance from origin to destination using the same formula, but treated as a single uncharted hop.
-- The route with the lower total base time is selected automatically in 0.7. Player agency over route selection is a post-0.7 refinement.
-- Variance is applied to the selected route after comparison:
-  - Lane route: ±1 turn (uniform)
-  - Direct route: -1 to +5 turns (skewed toward longer outcomes), with a 10% chance of 2–3× the base time representing a severely disrupted passage
-- The player is shown an estimated arrival range derived from the selected route's variance band rather than a guaranteed date.
-
-This routing model produces correct behavior naturally: same-subsector planets are usually reached faster by direct route (skipping the capital hop); cross-subsector journeys through well-connected capitals usually favor the lane route.
+- The campaign layer tracks objective real-space travel time in one-week turns. Subjective time aboard ship is calculated separately for future crew experience, healing, and event hooks.
+- Every interstellar trip has a fixed 4-week subjective and objective base cost representing roughly two weeks to reach the warp translation point and two weeks to return from the destination translation point.
+- Warp passage base time is determined by subsector relationship:
+  - Same subsector: 1 week of expected subjective warp time.
+  - Adjacent subsectors: 3 weeks of expected subjective warp time.
+  - Non-adjacent subsectors within the sector: 7 weeks of expected subjective warp time.
+- Subjective warp time is multiplied by a Gaussian-derived factor inspired by the Rogue Trader subjective duration table:
+  - z = 0: 1× expected time.
+  - z = +0.5 / -0.5: 1/2× / 2× expected time.
+  - z = +1 / -1: 1/3× / 3× expected time, continuing by the same pattern.
+- Objective warp time is then multiplied by a second Gaussian-derived factor:
+  - z = 0: 1× subjective warp time.
+  - z = +5: 1/10× subjective warp time.
+  - z = -5: 10× subjective warp time.
+- Total objective travel time is `4 weeks + objective warp time`, rounded up to whole campaign turns for arrival.
+- Fleet movement is tracked in three travel phases: 2 objective weeks of outbound system transit, the rolled objective warp duration, and 2 objective weeks of inbound system transit. Fleets are visible and communicable during system transit, but not while `InWarp`.
+- The resolved journey state is saved with the fleet: origin, destination, current travel phase, remaining phase/total objective weeks, rolled subjective warp weeks, rolled objective warp weeks, and whether the subjective warp training payout has already been applied.
+- Embarked soldiers do not receive ordinary weekly training while their fleet is `InWarp`. When the fleet exits warp into inbound system transit, embarked idle squads receive one training payout based on the rolled subjective warp weeks.
+- Warp lanes are still used to determine known route topology. The lane route is the shortest path through the warp lane graph using Dijkstra weighted by hop distance; if no lane path exists, the journey is treated as a direct/charted route. Player agency over route selection is a post-0.7 refinement.
+- Navigators modifying the subjective/objective Gaussian rolls are a post-0.7 refinement.
 
 Example ranges for reference:
 
 | Journey type | Typical base turns | Equivalent days | Canonical target |
 |---|---|---|---|
-| Same subsector, direct (≤20 ly) | 1–2 | 7–14 days | 5–10 days |
-| Adjacent subsector via capitals (~2–3 hops) | 2–4 | 14–28 days | 12–30 days |
-| Cross-sector via lane graph | 4–8 | 28–56 days | 33–60 days |
+| Same subsector | 5 before variance | 35 days | 5–10 days warp passage, plus in/out-system travel |
+| Adjacent subsector | 7 before variance | 49 days | 12–30 days warp passage, plus in/out-system travel |
+| Non-adjacent in-sector | 11 before variance | 77 days | 30–60 days warp passage, plus in/out-system travel |
 
-- Transit time represents warp time (crew experience). Crew aboard ships in transit accumulate training and healing at the same rate as those on the ground.
-- Real-space time elapsed during transit is not tracked separately. The end-of-turn simulation runs normally each week regardless of ship position.
+- Crew aboard ships in transit accumulate training and healing at the same rate as those on the ground unless a later event system interrupts them.
+- The end-of-turn simulation runs normally each week regardless of ship position.
 
 **Orbit-to-Jump-Point Transit**
-- The ~2-week transit from planetary orbit to the Warp jump point (and vice versa) is folded into the overall travel time and not modeled separately in 0.7. This may be revisited as a post-0.7 addition for additional strategic depth.
+- The ~2-week transit from planetary orbit to the Warp jump point and the equivalent destination-system transit are modeled as the fixed 4-week base cost in 0.7. Ship-class-specific acceleration may replace this fixed value post-0.7.
 
 **Warp Storms**
 - Deferred post-0.7. The direct route long-tail variance covers disrupted passages for now.

@@ -89,6 +89,36 @@ public class TurnTrainingTests
         Assert.Equal(0, GetSkillPoints(scout, TestSkills.Stealth));
     }
 
+    [Fact]
+    public void ProcessTurn_DoesNotApplyWeeklyTrainingWhileSquadIsInWarp()
+    {
+        TurnTrainingFixture fixture = TurnTrainingFixture.Create();
+        Squad squad = fixture.CreatePlayerSquad("Warp Squad", out ISoldier soldier);
+        fixture.Ship.LoadSquad(squad);
+        squad.BoardedLocation = fixture.Ship;
+        fixture.PutTaskForceInWarp(currentPhaseWeeksRemaining: 2, subjectiveWarpWeeks: 3);
+
+        fixture.ProcessTurn();
+
+        Assert.Equal(0, GetSkillPoints(soldier, TestSkills.Ranged));
+    }
+
+    [Fact]
+    public void ProcessTurn_AppliesSubjectiveWarpTrainingWhenFleetExitsWarp()
+    {
+        TurnTrainingFixture fixture = TurnTrainingFixture.Create();
+        Squad squad = fixture.CreatePlayerSquad("Emerging Warp Squad", out ISoldier soldier);
+        fixture.Ship.LoadSquad(squad);
+        squad.BoardedLocation = fixture.Ship;
+        fixture.PutTaskForceInWarp(currentPhaseWeeksRemaining: 1, subjectiveWarpWeeks: 3);
+
+        fixture.ProcessTurn();
+
+        Assert.Equal(0.6f, GetSkillPoints(soldier, TestSkills.Ranged), precision: 6);
+        Assert.True(fixture.TaskForce.WarpSubjectiveTrainingApplied);
+        Assert.Equal(FleetTravelPhase.InboundSystemTransit, fixture.TaskForce.TravelPhase);
+    }
+
     private static float GetSkillPoints(ISoldier soldier, BaseSkill skill)
     {
         return soldier.Skills.SingleOrDefault(s => s.BaseSkill == skill)?.PointsInvested ?? 0;
@@ -101,6 +131,7 @@ public class TurnTrainingTests
 
         public Sector Sector { get; }
         public Ship Ship { get; }
+        public TaskForce TaskForce { get; }
         public Region Region { get; }
         public RegionFaction RegionFaction { get; }
         public SquadTemplate SquadTemplate { get; }
@@ -111,6 +142,7 @@ public class TurnTrainingTests
         private TurnTrainingFixture(
             Sector sector,
             Ship ship,
+            TaskForce taskForce,
             Region region,
             RegionFaction regionFaction,
             SquadTemplate squadTemplate,
@@ -120,6 +152,7 @@ public class TurnTrainingTests
         {
             Sector = sector;
             Ship = ship;
+            TaskForce = taskForce;
             Region = region;
             RegionFaction = regionFaction;
             SquadTemplate = squadTemplate;
@@ -168,6 +201,7 @@ public class TurnTrainingTests
             return new TurnTrainingFixture(
                 sector,
                 ship,
+                taskForce,
                 region,
                 regionFaction,
                 squadTemplate,
@@ -218,6 +252,21 @@ public class TurnTrainingTests
             Order order = new([squad], Disposition.DugIn, true, false, Aggression.Avoid, mission);
             squad.CurrentOrders = order;
             Sector.AddNewOrder(order);
+        }
+
+        public void PutTaskForceInWarp(int currentPhaseWeeksRemaining, double subjectiveWarpWeeks)
+        {
+            Planet destination = new(2, "Training Destination", new Tuple<ushort, ushort>(2, 1), 1, null, 1, 0);
+            TaskForce.Origin = TaskForce.Planet;
+            TaskForce.Destination = destination;
+            TaskForce.Planet.OrbitingTaskForceList.Remove(TaskForce);
+            TaskForce.Planet = null;
+            TaskForce.TravelPhase = FleetTravelPhase.InWarp;
+            TaskForce.CurrentPhaseWeeksRemaining = currentPhaseWeeksRemaining;
+            TaskForce.TravelWeeksRemaining = currentPhaseWeeksRemaining + OnlyWar.Models.Fleets.TaskForce.SystemTransitWeeksPerEnd;
+            TaskForce.WarpSubjectiveWeeks = subjectiveWarpWeeks;
+            TaskForce.WarpObjectiveWeeks = currentPhaseWeeksRemaining;
+            TaskForce.WarpSubjectiveTrainingApplied = false;
         }
 
         public void ProcessTurn()
@@ -343,13 +392,13 @@ public class TurnTrainingTests
             soldier.AddSkillPoints(TestSkills.Ranged, points);
         }
 
-        public void TrainScouts(IEnumerable<Squad> scoutSquads, Dictionary<int, TrainingFocuses> squadFocusMap)
+        public void TrainScouts(IEnumerable<Squad> scoutSquads, Dictionary<int, TrainingFocuses> squadFocusMap, float points = 0.2f)
         {
             ScoutFocusMap = squadFocusMap;
             ScoutTrainingSquads.AddRange(scoutSquads);
             foreach (ISoldier soldier in scoutSquads.Where(s => s.CurrentOrders == null).SelectMany(s => s.Members))
             {
-                soldier.AddSkillPoints(TestSkills.Stealth, 0.2f);
+                soldier.AddSkillPoints(TestSkills.Stealth, points);
             }
         }
     }
