@@ -31,31 +31,36 @@ public partial class FleetScreenController : DialogController
 
     private static TreeNode CreateFleetNode(TaskForce taskForce)
     {
-        string destinationName = taskForce.Destination?.Name ?? taskForce.Planet?.Name ?? "Unknown";
+        // A task force in the Warp is out of contact: it, its ships, and the marines
+        // aboard are listed for accounting but cannot be selected or inspected.
+        bool isInWarp = taskForce.TravelPhase == FleetTravelPhase.InWarp;
         string status = GetFleetStatus(taskForce);
         List<TreeNode> shipNodes = taskForce.Ships
             .Select(ship =>
             {
                 string shipText = $"{ship.Name} ({ship.LoadedSoldierCount}/{ship.Template.SoldierCapacity})";
-                List<TreeNode> squadNodes = ship.LoadedSquads
-                    .Where(squad => squad.Members.Count > 0)
-                    .Select(squad => new TreeNode(squad.Id, squad.Name, []))
-                    .ToList();
-                return new TreeNode(ship.Id, shipText, squadNodes);
+                List<TreeNode> squadNodes = isInWarp
+                    ? []
+                    : ship.LoadedSquads
+                        .Where(squad => squad.Members.Count > 0)
+                        .Select(squad => new TreeNode(squad.Id, squad.Name, []))
+                        .ToList();
+                return new TreeNode(ship.Id, shipText, squadNodes, selectable: !isInWarp);
             })
             .ToList();
 
-        return new TreeNode(taskForce.Id, $"Task Force {taskForce.Id}: {status} - {destinationName}", shipNodes);
+        return new TreeNode(taskForce.Id, $"Task Force {taskForce.Id}: {status}", shipNodes, selectable: !isInWarp);
     }
 
     private static string GetFleetStatus(TaskForce taskForce)
     {
+        string destinationName = taskForce.Destination?.Name ?? "Unknown";
         return taskForce.TravelPhase switch
         {
-            FleetTravelPhase.OutboundSystemTransit => $"Departing ({taskForce.CurrentPhaseWeeksRemaining}w to warp translation)",
-            FleetTravelPhase.InWarp => $"In the Warp ({taskForce.TravelWeeksRemaining}w projected)",
-            FleetTravelPhase.InboundSystemTransit => $"Arriving ({taskForce.CurrentPhaseWeeksRemaining}w to orbit)",
-            _ => taskForce.Planet == null ? "In transit" : "In orbit"
+            FleetTravelPhase.OutboundSystemTransit => $"Departing for {destinationName} ({taskForce.CurrentPhaseWeeksRemaining}w to warp translation)",
+            FleetTravelPhase.InWarp => $"In Warp to {destinationName}",
+            FleetTravelPhase.InboundSystemTransit => $"Arriving at {destinationName} ({taskForce.CurrentPhaseWeeksRemaining}w to orbit)",
+            _ => taskForce.Planet != null ? $"In orbit at {taskForce.Planet.Name}" : "In transit"
         };
     }
 }

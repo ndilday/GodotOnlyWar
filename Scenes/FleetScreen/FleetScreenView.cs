@@ -25,6 +25,7 @@ public partial class FleetScreenView : DialogView
         {
             TreeItem childItem = _fleetTree.CreateItem(parentItem);
             childItem.SetText(0, childNode.Name);
+            childItem.SetSelectable(0, childNode.Selectable);
             if (childNode.Children?.Count > 0)
             {
                 AddTreeChildren(childItem, childNode.Children);

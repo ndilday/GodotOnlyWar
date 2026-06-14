@@ -505,12 +505,19 @@ Each feature is described as a behavioral specification: what the system does, a
 **Acceptance Criteria (Planned — 0.7 To-Do):**
 - Ships can be ordered to move between planets via the task force menu in the Galaxy View.
 - The movement dialog presents available warp lane routes to the destination. If no established lane connects the origin to the destination directly, the route is composed of lane hops through intermediate planets.
-- Where a direct route would bypass the established warp lane network and likely be faster in distance terms, the dialog additionally offers a "Chart Direct Route (Risky)" option. This option carries higher transit time variance than lane travel.
-- A task force in transit is displayed on the Galaxy View at a position along its route, with a line connecting it to the destination planet.
+- *Deferred (post-0.7):* A player-selectable "Chart Direct Route (Risky)" option that bypasses the lane network for a shorter-distance but higher-variance passage. This is deferred because the current transit-time model derives base time from subsector scope rather than raw distance, and applies the same variance regardless of route type — so a direct route is presently neither faster nor riskier than a lane route between the same two planets. Implementing the option meaningfully requires first making route type mechanically distinct (distance-aware base time and/or wider variance for direct routes). Until then, a direct route is used only as an automatic fallback when the lane network cannot connect two planets, and no risky-route choice is shown to the player.
+- A task force is displayed on the Galaxy View while it is in realspace — in orbit or in system transit (the outbound and inbound legs of a journey) — anchored to its origin or destination system.
+- A task force in the Warp is not displayed on the Galaxy View. Ships in the Warp are out of contact and cannot be communicated with, selected, or interacted with from any map view until they translate back into realspace.
 - Transit time is variable. The player is shown an estimated arrival range when plotting a course, not a guaranteed date.
 - A task force in transit cannot be loaded or unloaded until it arrives.
 - On arrival, the task force's position is updated to the destination planet.
 - Fleet positions are saved and restored correctly across save/load.
+
+**Fleet Screen (sector-wide).** The Fleet Screen lists all of the chapter's task forces and their ships regardless of location, including those in the Warp, so the player always has an accounting of the whole fleet.
+
+- Each task force shows its current status: in orbit at a named planet, in system transit, or "In Warp to {Destination}".
+- A task force in the Warp, its ships, and the marines aboard those ships are listed for visibility but are **not selectable** and expose no actions. They cannot be reorganized, re-tasked, or inspected at the individual-soldier level while out of contact.
+- Task forces and ships in realspace (in orbit or system transit) remain selectable subject to the normal in-transit restrictions (e.g., a task force in transit still cannot be loaded or unloaded).
 
 ---
 
@@ -568,7 +575,7 @@ Targeted for 0.7, not yet committed:
   - Diversion missions.
   - Player-constructable fortifications (Entrenchments, Listening Posts, Anti-Air batteries).
   - Burrowing and camouflage as ambush tactics.
-- **Subsector warp lanes:** Each subsector has a capital world, determined by an importance score (population size and strategic classification). The capital has established warp lanes to all other planets in the subsector. Cross-subsector lanes connect primarily between subsector capitals. Lanes are generated during sector creation. The fleet movement dialog routes along lanes by default and offers a "Chart Direct Route (Risky)" option where applicable.
+- **Subsector warp lanes:** *(Implemented.)* Each subsector has a capital world, determined by an importance score (population size for 0.7; strategic classification post-0.7). The capital has established warp lanes to all other planets in the subsector. Cross-subsector lanes connect the capitals of adjoining subsectors, with a spanning tree guaranteeing the whole sector is reachable. Lanes are derived deterministically from planet positions during sector creation (and rebuilt on load) rather than persisted. The fleet movement dialog routes along lanes by default. The "Chart Direct Route (Risky)" option is deferred post-0.7 (see 4.17).
 - **Tyranid Infiltration Units:** Lictor and Ravener content data.
 
 ### 5.4 Alpha 0.7 — Stretch

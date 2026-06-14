@@ -60,7 +60,7 @@ public partial class FleetMoveDialogController : DialogController
 
     private static string BuildRouteDescription(Planet destination, FleetRoute route)
     {
-        string routeType = route.RouteType == FleetRouteType.WarpLane ? "Warp Lane" : "Direct (uncharted)";
+        string routeType = route.RouteType == FleetRouteType.WarpLane ? "Warp Lane" : "Direct";
         string scope = route.Scope switch
         {
             FleetRouteScope.SameSubsector => "Same subsector",

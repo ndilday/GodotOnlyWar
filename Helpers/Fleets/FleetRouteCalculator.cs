@@ -29,6 +29,13 @@ namespace OnlyWar.Helpers.Fleets
             if (destination == null) throw new ArgumentNullException(nameof(destination));
             if (origin == destination) throw new InvalidOperationException("Origin and destination must be different planets.");
 
+            // A direct route is only used as an automatic fallback when the lane network
+            // cannot connect the two planets. The PRD's player-selectable "Chart Direct
+            // Route (Risky)" option is deferred post-0.7: route type does not yet influence
+            // transit time or variance (base time is scope-driven, see CreateRoute), so a
+            // direct route is currently no faster and no riskier than a lane route between
+            // the same planets. Offering the choice would be meaningless until the time
+            // model differentiates the two. See PRD 4.17 / 6.11.
             FleetRoute laneRoute = CreateLaneRoute(origin, destination, warpLanes ?? Enumerable.Empty<WarpLane>(), scope, subjectiveZ, objectiveZ);
             if (laneRoute != null) return laneRoute;
 
