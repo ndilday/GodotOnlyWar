@@ -221,18 +221,22 @@ namespace OnlyWar.Helpers.Database.GameState
                 while (reader.Read())
                 {
                     int id = reader.GetInt32(0);
-                    float investigation = (float)reader[1];
-                    float paranoia = (float)reader[2];
-                    float neediness = (float)reader[3];
-                    float patience = (float)reader[4];
-                    float appreciation = (float)reader[5];
-                    float influence = (float)reader[6];
-                    int factionId = reader.GetInt32(7);
-                    float opinionOfPlayer = (float)reader[8];
+                    string name = reader.GetString(1);
+                    int age = reader.GetInt32(2);
+                    float investigation = (float)reader[3];
+                    float paranoia = (float)reader[4];
+                    float neediness = (float)reader[5];
+                    float patience = (float)reader[6];
+                    float appreciation = (float)reader[7];
+                    float influence = (float)reader[8];
+                    int factionId = reader.GetInt32(9);
+                    float opinionOfPlayer = (float)reader[10];
 
                     Character character = new Character()
                     {
                         Id = id,
+                        Name = name,
+                        Age = age,
                         Appreciation = appreciation,
                         Influence = influence,
                         Investigation = investigation,
@@ -271,10 +275,11 @@ namespace OnlyWar.Helpers.Database.GameState
 
         public void SaveCharacter(IDbTransaction transaction, Character character)
         {
-            string insert = $@"INSERT INTO Character 
-                (Id, Investigation, Paranoia, Neediness, Patience, Appreciation, 
-                Influence, LoyalFactionId, OpinionOfPlayer) VALUES 
-                ({character.Id}, {character.Investigation}, '{character.Paranoia}', 
+            string insert = $@"INSERT INTO Character
+                (Id, Name, Age, Investigation, Paranoia, Neediness, Patience, Appreciation,
+                Influence, LoyalFactionId, OpinionOfPlayer) VALUES
+                ({character.Id}, '{character.Name.Replace("\'", "\'\'")}', {character.Age},
+                {character.Investigation}, {character.Paranoia},
                 {character.Neediness}, {character.Patience}, {character.Appreciation},
                 {character.Influence}, {character.Loyalty.Id}, {character.OpinionOfPlayerForce});";
             using (var command = transaction.Connection.CreateCommand())

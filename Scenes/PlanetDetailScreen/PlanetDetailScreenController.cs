@@ -123,9 +123,16 @@ public partial class PlanetDetailScreenController : DialogController
             lines.Add(new Tuple<string, string>("PDF Size", planet.PlanetaryDefenseForces.ToString()));
             lines.Add(new Tuple<string, string>("Aestimare", ConvertImportanceToString(planet.Importance)));
             lines.Add(new Tuple<string, string>("Tithe Grade", ConvertTaxRangeToString(planet.TaxLevel)));
-            if (planet.PlanetFactionMap[controllingFaction.Id].Leader?.ActiveRequest != null)
+            Character governor = planet.PlanetFactionMap[controllingFaction.Id].Leader;
+            if (governor != null)
             {
-                lines.Add(new Tuple<string, string>("The planetary governor has requested our assistance", ""));
+                lines.Add(new Tuple<string, string>("Governor", governor.Name));
+                lines.Add(new Tuple<string, string>("Governor's Age", governor.Age.ToString()));
+                lines.Add(new Tuple<string, string>("Governor's Opinion", ConvertOpinionToString(governor.OpinionOfPlayerForce)));
+                if (governor.ActiveRequest != null)
+                {
+                    lines.Add(new Tuple<string, string>("The planetary governor has requested our assistance", ""));
+                }
             }
         }
         else
@@ -133,6 +140,20 @@ public partial class PlanetDetailScreenController : DialogController
             lines.Add(new Tuple<string, string>("Xenos Present", controllingFaction.Name));
         }
         _view.PopulatePlanetData(lines);
+    }
+
+    private string ConvertOpinionToString(float opinion)
+    {
+        // three equal bands across the [-1, 1] opinion range
+        if (opinion < -1f / 3f)
+        {
+            return "Hostile";
+        }
+        if (opinion > 1f / 3f)
+        {
+            return "Friendly";
+        }
+        return "Neutral";
     }
 
     private string ConvertImportanceToString(int importance)

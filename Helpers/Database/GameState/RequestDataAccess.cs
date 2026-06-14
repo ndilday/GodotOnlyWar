@@ -10,6 +10,7 @@ namespace OnlyWar.Helpers.Database.GameState
     {
         public List<IRequest> GetRequests(IDbConnection connection,
                                           IReadOnlyDictionary<int, Character> characterMap,
+                                          IReadOnlyDictionary<int, Faction> factionMap,
                                           List<Planet> planetList)
         {
             List<IRequest> requests = [];
@@ -22,19 +23,21 @@ namespace OnlyWar.Helpers.Database.GameState
                     int id = reader.GetInt32(0);
                     int characterId = reader.GetInt32(1);
                     int planetId = reader.GetInt32(2);
-                    int requestDate = reader.GetInt32(3);
+                    Faction threatFaction = reader[3].GetType() != typeof(DBNull) ?
+                        factionMap[reader.GetInt32(3)] : null;
+                    int requestDate = reader.GetInt32(4);
                     Date fulfillDate;
-                    if (reader[4].GetType() != typeof(DBNull))
+                    if (reader[5].GetType() != typeof(DBNull))
                     {
-                        fulfillDate = new Date(reader.GetInt32(4));
+                        fulfillDate = new Date(reader.GetInt32(5));
                     }
                     else
                     {
                         fulfillDate = null;
                     }
                     PresenceRequest request =
-                        new PresenceRequest(id, planetList[planetId], characterMap[characterId], 
-                                            new Date(requestDate), fulfillDate);
+                        new PresenceRequest(id, planetList[planetId], characterMap[characterId],
+                                            threatFaction, new Date(requestDate), fulfillDate);
                     requests.Add(request);
                     if(request.DateRequestFulfilled == null)
                     {
@@ -50,9 +53,12 @@ namespace OnlyWar.Helpers.Database.GameState
             object fulfillDate = request.DateRequestFulfilled != null ?
                     (object)request.DateRequestFulfilled.GetTotalWeeks() :
                     "null";
-            string insert = $@"INSERT INTO Request 
-                (Id, CharacterId, PlanetId, RequestDate, FulfillmentDate) VALUES 
-                ({request.Id}, {request.Requester.Id}, {request.TargetPlanet.Id}, 
+            object threatFactionId = request.ThreatFaction != null ?
+                    (object)request.ThreatFaction.Id :
+                    "null";
+            string insert = $@"INSERT INTO Request
+                (Id, CharacterId, PlanetId, ThreatFactionId, RequestDate, FulfillmentDate) VALUES
+                ({request.Id}, {request.Requester.Id}, {request.TargetPlanet.Id}, {threatFactionId},
                 {request.DateRequestMade.GetTotalWeeks()}, {fulfillDate});";
             using (var command = transaction.Connection.CreateCommand())
             {

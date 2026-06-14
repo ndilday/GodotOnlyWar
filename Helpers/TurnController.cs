@@ -266,6 +266,7 @@ namespace OnlyWar.Helpers
                 }
 
                 CheckForPlanetaryRevolt(planet);
+                CheckForRevoltSuppression(planet);
 
                 foreach (PlanetFaction planetFaction in planet.PlanetFactionMap.Values)
                 {
@@ -461,15 +462,72 @@ namespace OnlyWar.Helpers
             }
         }
 
+        private void CheckForRevoltSuppression(Planet planet)
+        {
+            // mirror of CheckForPlanetaryRevolt: a faction that has gone public stays in
+            // open war until its garrison is beaten well back below the controlling faction's,
+            // at which point it retreats into hiding again. The 0.7 factor (vs. the 1.0 revolt
+            // threshold) provides hysteresis so a faction doesn't flap between states.
+            Faction controllingFaction = planet.GetControllingFaction();
+            if (controllingFaction.IsPlayerFaction) return;
+            PlanetFaction controllingPlanetFaction = planet.PlanetFactionMap[controllingFaction.Id];
+
+            foreach (PlanetFaction planetFaction in planet.PlanetFactionMap.Values)
+            {
+                if (!planetFaction.IsPublic
+                    || planetFaction == controllingPlanetFaction
+                    || planetFaction.Faction.IsDefaultFaction
+                    || planetFaction.Faction.IsPlayerFaction)
+                {
+                    continue;
+                }
+
+                int hostileGarrison = SumGarrison(planet, planetFaction);
+                int controllingGarrison = SumGarrison(planet, controllingPlanetFaction);
+                if (hostileGarrison < 0.7f * controllingGarrison)
+                {
+                    // the revolt has been put down; the faction goes back underground
+                    planetFaction.IsPublic = false;
+                    foreach (Region region in planet.Regions)
+                    {
+                        if (region.RegionFactionMap.TryGetValue(planetFaction.Faction.Id, out RegionFaction rf))
+                        {
+                            rf.IsPublic = false;
+                        }
+                    }
+                }
+            }
+        }
+
+        private static int SumGarrison(Planet planet, PlanetFaction planetFaction)
+        {
+            int garrison = 0;
+            foreach (Region region in planet.Regions)
+            {
+                if (region.RegionFactionMap.TryGetValue(planetFaction.Faction.Id, out RegionFaction rf))
+                {
+                    garrison += rf.Garrison;
+                }
+            }
+            return garrison;
+        }
+
         private void EndOfTurnLeaderUpdate(Planet planet, PlanetFaction planetFaction)
         {
-            // TODO: see if this leader dies
+            // governors age and eventually die; if this one dies, a successor takes over and
+            // the rest of the leader update is skipped this week
+            if (AgeAndCheckForDeath(planet, planetFaction))
+            {
+                return;
+            }
+
             if (planetFaction.Leader.ActiveRequest != null)
             {
                 // see if the request has been fulfilled
                 if (planetFaction.Leader.ActiveRequest.IsRequestCompleted())
                 {
                     // remove the active request
+                    GameDataSingleton.Instance.Sector.PlayerForce.Requests.Remove(planetFaction.Leader.ActiveRequest);
                     planetFaction.Leader.ActiveRequest = null;
                     // improve leader opinion of player
                     planetFaction.Leader.OpinionOfPlayerForce +=
@@ -489,65 +547,94 @@ namespace OnlyWar.Helpers
             }
         }
 
+        private bool AgeAndCheckForDeath(Planet planet, PlanetFaction planetFaction)
+        {
+            Character leader = planetFaction.Leader;
+            // age the governor once per year, at the turn of the year
+            if (GameDataSingleton.Instance.Date.Week == 1)
+            {
+                leader.Age++;
+            }
+
+            // weekly death roll: chance rises with age and falls with the planet's importance
+            // (more important worlds afford their governors better rejuvenat care).
+            float ageFactor = Math.Max(0, leader.Age - 50) / 50f;
+            float importanceFactor = 1f - (Math.Min(planet.Importance, 6000) / 12000f);
+            float weeklyDeathChance = ageFactor * 0.002f * importanceFactor;
+            if (RNG.GetLinearDouble() >= weeklyDeathChance)
+            {
+                return false;
+            }
+
+            // the governor has died; cancel any active request and install a successor.
+            // The successor is generated with random traits/opinion for now; tying the
+            // starting opinion to the predecessor and sector reputation is deferred (PRD 4.16).
+            if (leader.ActiveRequest != null)
+            {
+                GameDataSingleton.Instance.Sector.PlayerForce.Requests.Remove(leader.ActiveRequest);
+                leader.ActiveRequest = null;
+            }
+            List<Character> characters = GameDataSingleton.Instance.Sector.Characters;
+            characters.Remove(leader);
+            int newId = characters.Count == 0 ? 0 : characters.Max(c => c.Id) + 1;
+            Character successor = CharacterBuilder.GenerateCharacter(newId, planetFaction.Faction);
+            characters.Add(successor);
+            planetFaction.Leader = successor;
+            return true;
+        }
+
         private void GenerateRequests(Planet planet, PlanetFaction planetFaction)
         {
-            bool found = false;
-            bool evidenceFound = false;
-            if (planet.PlanetFactionMap.Count > 1)
-            {
-                // there are other factions on planet
-                foreach (PlanetFaction planetOtherFaction in planet.PlanetFactionMap.Values)
-                {
+            // Astartes are a strategic asset; governors call on them for open warfare, not for
+            // rooting out hidden cults. A request is raised for a faction in open revolt (public).
+            Faction threatFaction = FindPublicHostileFaction(planet, planetFaction);
+            bool generate = false;
 
-                    // make sure this is a different faction and that there isn't already a request about it
-                    if (planetOtherFaction.Faction.Id != planetFaction.Faction.Id)
-                    {
-                        if (!planetOtherFaction.IsPublic)
-                        {
-                            // see if the leader detects this faction
-                            float popRatio = planetOtherFaction.Population / (float)planet.Population;
-                            float chance = popRatio * planetFaction.Leader.Investigation;
-                            double roll = RNG.GetLinearDouble();
-                            if (roll < chance)
-                            {
-                                found = true;
-                                evidenceFound = roll < chance / 10.0;
-                                break;
-                            }
-                        }
-                        else
-                        {
-                            found = true;
-                            evidenceFound = true;
-                            break;
-                        }
-                    }
+            if (threatFaction != null)
+            {
+                // Investigation acts as early warning: it gates how quickly the governor
+                // recognizes the open threat and decides to act on it.
+                if (RNG.GetLinearDouble() < planetFaction.Leader.Investigation)
+                {
+                    generate = true;
                 }
             }
-            if (!found)
+            else
             {
-                // no real threats, see if the leader is paranoid enough to see a threat anyway
-                double roll = RNG.GetLinearDouble();
-                if (roll < planetFaction.Leader.Paranoia)
+                // no real open threat; a paranoid governor may imagine an invasion (false alarm)
+                if (RNG.GetLinearDouble() < planetFaction.Leader.Paranoia)
                 {
-                    found = true;
-                    evidenceFound = roll < planetFaction.Leader.Paranoia / 10.0;
+                    generate = true;
                 }
             }
 
-            if (found)
+            if (generate)
             {
-                // determine if the leader wants to turn this finding into a request
+                // determine if the leader actually wants to call on the player
                 float chance = planetFaction.Leader.Neediness * planetFaction.Leader.OpinionOfPlayerForce;
-                double roll = RNG.GetLinearDouble();
-                if (roll < chance)
+                if (RNG.GetLinearDouble() < chance)
                 {
-                    // generate a new request
-                    IRequest request = RequestFactory.Instance.GenerateNewRequest(planet, planetFaction.Leader, GameDataSingleton.Instance.Date);
+                    IRequest request = RequestFactory.Instance.GenerateNewRequest(
+                        planet, planetFaction.Leader, threatFaction, GameDataSingleton.Instance.Date);
                     planetFaction.Leader.ActiveRequest = request;
                     GameDataSingleton.Instance.Sector.PlayerForce.Requests.Add(request);
                 }
             }
+        }
+
+        private static Faction FindPublicHostileFaction(Planet planet, PlanetFaction planetFaction)
+        {
+            foreach (PlanetFaction other in planet.PlanetFactionMap.Values)
+            {
+                if (other.Faction.Id != planetFaction.Faction.Id
+                    && other.IsPublic
+                    && !other.Faction.IsDefaultFaction
+                    && !other.Faction.IsPlayerFaction)
+                {
+                    return other.Faction;
+                }
+            }
+            return null;
         }
 
         private float ConvertPopulation(Region region, RegionFaction regionFaction, float newPop)

@@ -25,10 +25,10 @@ namespace OnlyWar.Builders
             _nextId = highestId + 1;
         }
 
-        public IRequest GenerateNewRequest(Planet planet, Character requester, 
+        public IRequest GenerateNewRequest(Planet planet, Character requester, Faction threatFaction,
                                            Date dateRequestMade, Date fulfilledDate = null)
         {
-            return new PresenceRequest(_nextId++, planet, requester, 
+            return new PresenceRequest(_nextId++, planet, requester, threatFaction,
                                        dateRequestMade, fulfilledDate);
         }
     }

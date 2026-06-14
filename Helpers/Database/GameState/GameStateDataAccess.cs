@@ -83,7 +83,7 @@ namespace OnlyWar.Helpers.Database.GameState
             var planets = _planetDataAccess.GetPlanets(dbCon, factionMap, characterMap, 
                                                        planetTemplateMap);
             var regions = _planetDataAccess.GetRegions(dbCon, factionMap, planets);
-            var requests = _requestDataAccess.GetRequests(dbCon, characterMap, planets);
+            var requests = _requestDataAccess.GetRequests(dbCon, characterMap, factionMap, planets);
             var ships = _fleetDataAccess.GetShipsByFleetId(dbCon, shipTemplateMap);
             var shipMap = ships.Values.SelectMany(s => s).ToDictionary(ship => ship.Id);
             var fleets = _fleetDataAccess.GetFleetsByFactionId(dbCon, ships, factionMap, planets);
