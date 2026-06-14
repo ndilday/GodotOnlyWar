@@ -47,7 +47,23 @@ namespace OnlyWar.Builders
             //Planet chapterPlanet = FoundChapterPlanet(planetList, data.PlayerFaction);
             //PlaceStartingForces(chapterPlanet, playerForce, forceList);
 
-            return new Sector(playerForce, characterList, planetList, forceList);
+            Sector sector = new Sector(playerForce, characterList, planetList, forceList);
+            GenerateWarpNetwork(sector, data);
+            return sector;
+        }
+
+        /// <summary>
+        /// Builds the subsector layout and warp-lane network for a sector. Both are
+        /// deterministic functions of the planet positions, so this is run for freshly
+        /// generated sectors and for sectors restored from a save alike, rather than
+        /// being persisted.
+        /// </summary>
+        public static void GenerateWarpNetwork(Sector sector, GameRulesData data)
+        {
+            Godot.Vector2I gridDimensions = new(data.SectorSize.Item1, data.SectorSize.Item2);
+            List<Subsector> subsectors = SubsectorBuilder.BuildSubsectors(sector.Planets.Values, gridDimensions);
+            List<WarpLane> warpLanes = WarpLaneBuilder.BuildWarpLanes(subsectors, data.MaxSubsectorCellDiameter * 2.5);
+            sector.InitializeWarpNetwork(subsectors, warpLanes);
         }
 
         private static Planet GeneratePlanet(Tuple<ushort, ushort> position, GameRulesData data)

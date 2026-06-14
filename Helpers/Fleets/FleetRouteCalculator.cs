@@ -161,6 +161,21 @@ namespace OnlyWar.Helpers.Fleets
             return Math.Sqrt((x * x) + (y * y));
         }
 
+        public static FleetRouteScope DetermineScope(Planet origin, Planet destination, double maxSubsectorDiameter)
+        {
+            if (origin == null) throw new ArgumentNullException(nameof(origin));
+            if (destination == null) throw new ArgumentNullException(nameof(destination));
+
+            // Subsector wiring and warp-lane topology are not yet generated, so scope is
+            // approximated from raw inter-planet distance against the maximum subsector
+            // diameter. This is a placeholder for true subsector-relationship scoping,
+            // which is a post-lane-generation refinement (PRD 6.11).
+            double distance = CalculateDistance(origin, destination);
+            if (distance <= maxSubsectorDiameter) return FleetRouteScope.SameSubsector;
+            if (distance <= maxSubsectorDiameter * 2.5) return FleetRouteScope.AdjacentSubsector;
+            return FleetRouteScope.DistantSubsector;
+        }
+
         public static int CalculateBaseWarpWeeks(FleetRouteScope scope)
         {
             return scope switch

@@ -74,6 +74,9 @@ public partial class StartMenu : Control
         Sector sector = new Sector(playerForce, gameState.Characters, gameState.Planets, gameState.Fleets);
 
         GameDataSingleton.Instance.LoadGameDataFromBlob(gameRulesData, gameState.CurrentDate, sector);
+        // Subsectors and warp lanes are derived deterministically from planet positions
+        // rather than persisted, so rebuild them after the sector is loaded.
+        SectorBuilder.GenerateWarpNetwork(sector, gameRulesData);
         // Load other game state data into GameDataSingleton.Instance.Sector, etc.
         // Potentially pass loaded data to mainGameSceneInstance if needed for UI setup
     }

@@ -2,6 +2,7 @@ using Godot;
 using OnlyWar.Helpers;
 using OnlyWar.Helpers.Database.GameState;
 using OnlyWar.Models;
+using OnlyWar.Models.Fleets;
 using OnlyWar.Models.Planets;
 using OnlyWar.Models.Soldiers;
 using OnlyWar.Models.Squads;
@@ -18,6 +19,11 @@ public partial class MainGameScene : Control
     private ApothecariumScreenController _apothecariumScreen;
     private TrainingUnitScreenController _trainingUnitScreen;
     private FleetScreenController _fleetScreen;
+    private FleetMoveDialogController _fleetMoveDialog;
+    private FleetDivideDialogController _fleetDivideDialog;
+    private FleetMergeDialogController _fleetMergeDialog;
+    private PopupMenu _fleetContextMenu;
+    private int _contextFleetId;
     private SoldierController _soldierScreen;
     private SquadScreenController _squadScreen;
     private SoldierView _soldierView;
@@ -243,8 +249,103 @@ public partial class MainGameScene : Control
         GD.Print($"Planet {planet.Id} Clicked");
     }
 
-    private void OnFleetClicked(object sender, int fleetId) 
-    { 
+    private const int FleetMenuPlotCourse = 0;
+    private const int FleetMenuDivide = 1;
+    private const int FleetMenuMerge = 2;
+
+    private void OnFleetClicked(object sender, int fleetId)
+    {
+        TaskForce taskForce = GameDataSingleton.Instance.Sector.Fleets[fleetId];
+        // Only player task forces sitting in orbit can be re-tasked; a fleet already
+        // in transit cannot change course or be reorganized until it arrives.
+        if (taskForce.Faction != GameDataSingleton.Instance.Sector.PlayerForce.Faction) return;
+        if (taskForce.TravelPhase != FleetTravelPhase.InOrbit || taskForce.Planet == null) return;
+
+        _contextFleetId = fleetId;
+
+        if (_fleetContextMenu == null)
+        {
+            _fleetContextMenu = new PopupMenu();
+            _fleetContextMenu.AddItem("Plot Course", FleetMenuPlotCourse);
+            _fleetContextMenu.AddItem("Divide Task Force", FleetMenuDivide);
+            _fleetContextMenu.AddItem("Merge Task Force", FleetMenuMerge);
+            _fleetContextMenu.IdPressed += OnFleetContextMenuIdPressed;
+            _mainUILayer.AddChild(_fleetContextMenu);
+        }
+
+        bool canDivide = taskForce.Ships.Count > 1;
+        bool canMerge = FleetMergeDialogController.GetMergeCandidates(taskForce).Any();
+        _fleetContextMenu.SetItemDisabled(_fleetContextMenu.GetItemIndex(FleetMenuDivide), !canDivide);
+        _fleetContextMenu.SetItemDisabled(_fleetContextMenu.GetItemIndex(FleetMenuMerge), !canMerge);
+
+        _fleetContextMenu.Position = (Vector2I)GetViewport().GetMousePosition();
+        _fleetContextMenu.ResetSize();
+        _fleetContextMenu.Popup();
+    }
+
+    private void OnFleetContextMenuIdPressed(long id)
+    {
+        TaskForce taskForce = GameDataSingleton.Instance.Sector.Fleets[_contextFleetId];
+        switch ((int)id)
+        {
+            case FleetMenuPlotCourse:
+                OpenFleetMoveDialog(taskForce);
+                break;
+            case FleetMenuDivide:
+                OpenFleetDivideDialog(taskForce);
+                break;
+            case FleetMenuMerge:
+                OpenFleetMergeDialog(taskForce);
+                break;
+        }
+    }
+
+    private void OpenFleetMoveDialog(TaskForce taskForce)
+    {
+        if (_fleetMoveDialog == null)
+        {
+            PackedScene fleetMoveScene = GD.Load<PackedScene>("res://Scenes/FleetScreen/fleet_move_dialog.tscn");
+            _fleetMoveDialog = (FleetMoveDialogController)fleetMoveScene.Instantiate();
+            _fleetMoveDialog.CloseButtonPressed += (s, e) => _fleetMoveDialog.Visible = false;
+            _fleetMoveDialog.CoursePlotted += OnFleetActionCompleted;
+            _mainUILayer.AddChild(_fleetMoveDialog);
+        }
+        _fleetMoveDialog.SetTaskForce(taskForce);
+        _fleetMoveDialog.Visible = true;
+    }
+
+    private void OpenFleetDivideDialog(TaskForce taskForce)
+    {
+        if (_fleetDivideDialog == null)
+        {
+            PackedScene fleetDivideScene = GD.Load<PackedScene>("res://Scenes/FleetScreen/fleet_divide_dialog.tscn");
+            _fleetDivideDialog = (FleetDivideDialogController)fleetDivideScene.Instantiate();
+            _fleetDivideDialog.CloseButtonPressed += (s, e) => _fleetDivideDialog.Visible = false;
+            _fleetDivideDialog.FleetDivided += OnFleetActionCompleted;
+            _mainUILayer.AddChild(_fleetDivideDialog);
+        }
+        _fleetDivideDialog.SetTaskForce(taskForce);
+        _fleetDivideDialog.Visible = true;
+    }
+
+    private void OpenFleetMergeDialog(TaskForce taskForce)
+    {
+        if (_fleetMergeDialog == null)
+        {
+            PackedScene fleetMergeScene = GD.Load<PackedScene>("res://Scenes/FleetScreen/fleet_merge_dialog.tscn");
+            _fleetMergeDialog = (FleetMergeDialogController)fleetMergeScene.Instantiate();
+            _fleetMergeDialog.CloseButtonPressed += (s, e) => _fleetMergeDialog.Visible = false;
+            _fleetMergeDialog.FleetsMerged += OnFleetActionCompleted;
+            _mainUILayer.AddChild(_fleetMergeDialog);
+        }
+        _fleetMergeDialog.SetTaskForce(taskForce);
+        _fleetMergeDialog.Visible = true;
+    }
+
+    private void OnFleetActionCompleted(object sender, EventArgs e)
+    {
+        ((Control)sender).Visible = false;
+        _sectorMap.RefreshFleets();
     }
 
     private void OnEndTurnButtonPressed(object sender, EventArgs e)

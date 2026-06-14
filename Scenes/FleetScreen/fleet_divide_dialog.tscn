@@ -1,0 +1,122 @@
+[gd_scene load_steps=4 format=3]
+
+[ext_resource type="Theme" path="res://Scenes/OnlyWarTheme.tres" id="1_theme"]
+[ext_resource type="Script" path="res://Scenes/FleetScreen/FleetDivideDialogController.cs" id="2_controller"]
+[ext_resource type="Script" path="res://Scenes/FleetScreen/FleetDivideDialogView.cs" id="3_view"]
+
+[node name="FleetDivideDialogController" type="Control"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+script = ExtResource("2_controller")
+
+[node name="FleetDivideDialogView" type="Control" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+theme = ExtResource("1_theme")
+script = ExtResource("3_view")
+
+[node name="Background" type="ColorRect" parent="FleetDivideDialogView"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+color = Color(0, 0, 0, 0.5)
+
+[node name="Panel" type="Panel" parent="FleetDivideDialogView"]
+layout_mode = 1
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -260.0
+offset_top = -210.0
+offset_right = 260.0
+offset_bottom = 210.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="Header" type="Panel" parent="FleetDivideDialogView/Panel"]
+custom_minimum_size = Vector2(0, 40)
+layout_mode = 1
+anchors_preset = 10
+anchor_right = 1.0
+offset_bottom = 40.0
+grow_horizontal = 2
+
+[node name="Label" type="Label" parent="FleetDivideDialogView/Panel/Header"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+text = "Divide Task Force"
+horizontal_alignment = 1
+vertical_alignment = 1
+
+[node name="ShipList" type="ItemList" parent="FleetDivideDialogView/Panel"]
+layout_mode = 1
+anchors_preset = -1
+anchor_top = 0.0
+anchor_bottom = 1.0
+offset_left = 10.0
+offset_top = 50.0
+offset_right = 250.0
+offset_bottom = -60.0
+grow_vertical = 2
+select_mode = 1
+
+[node name="DetailLabel" type="Label" parent="FleetDivideDialogView/Panel"]
+layout_mode = 1
+anchors_preset = -1
+anchor_left = 0.0
+anchor_top = 0.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = 260.0
+offset_top = 50.0
+offset_right = -10.0
+offset_bottom = -60.0
+grow_vertical = 2
+text = "Select the ships to peel off into a new task force."
+vertical_alignment = 0
+autowrap_mode = 2
+
+[node name="DivideButton" type="Button" parent="FleetDivideDialogView/Panel"]
+layout_mode = 1
+anchors_preset = -1
+anchor_left = 1.0
+anchor_top = 1.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = -160.0
+offset_top = -50.0
+offset_right = -10.0
+offset_bottom = -10.0
+grow_horizontal = 0
+grow_vertical = 0
+text = "Create New Task Force"
+
+[node name="CloseButton" type="Button" parent="FleetDivideDialogView"]
+layout_mode = 1
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = 230.0
+offset_top = -205.0
+offset_right = 255.0
+offset_bottom = -180.0
+text = "X"

@@ -135,6 +135,22 @@ public class FleetRouteCalculatorTests
         Assert.Equal(64, route.BaseTurns);
     }
 
+    [Theory]
+    [InlineData(20, 0, FleetRouteScope.SameSubsector)]      // distance 20, within one diameter
+    [InlineData(30, 0, FleetRouteScope.AdjacentSubsector)]  // distance 30, within 2.5 diameters
+    [InlineData(120, 0, FleetRouteScope.DistantSubsector)]  // distance 120, beyond 2.5 diameters
+    public void DetermineScope_ClassifiesByDistanceAgainstMaxSubsectorDiameter(
+        ushort destinationX, ushort destinationY, FleetRouteScope expectedScope)
+    {
+        const double maxSubsectorDiameter = 20;
+        Planet origin = CreatePlanet(1, 0, 0);
+        Planet destination = CreatePlanet(2, destinationX, destinationY);
+
+        FleetRouteScope scope = FleetRouteCalculator.DetermineScope(origin, destination, maxSubsectorDiameter);
+
+        Assert.Equal(expectedScope, scope);
+    }
+
     private static Planet CreatePlanet(int id, ushort x, ushort y)
     {
         return new Planet(id, $"Planet {id}", new Tuple<ushort, ushort>(x, y), 1, null, 1, 0);

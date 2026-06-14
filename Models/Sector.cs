@@ -14,13 +14,17 @@ namespace OnlyWar.Models
         private readonly Dictionary<int, Planet> _planets;
         private readonly Dictionary<ushort, List<Tuple<ushort, ushort>>> _subsectorPlanetMap;
         private readonly Dictionary<ushort, Tuple<ushort, ushort>> _subsectorCenterMap;
+        private readonly List<Subsector> _subsectors;
+        private readonly List<WarpLane> _warpLanes;
         private readonly List<Character> _characters;
         private readonly Dictionary<int, Order> _orders;
-        
+
         public List<Character> Characters { get => _characters; }
         public IReadOnlyDictionary<int, Planet> Planets { get => _planets; }
         public IReadOnlyDictionary<ushort, List<Tuple<ushort, ushort>>> SubsectorPlanetMap { get => _subsectorPlanetMap; }
         public IReadOnlyDictionary<ushort, Tuple<ushort, ushort>> SubsectorCenterMap { get => _subsectorCenterMap; }
+        public IReadOnlyList<Subsector> Subsectors { get => _subsectors; }
+        public IReadOnlyList<WarpLane> WarpLanes { get => _warpLanes; }
         public IReadOnlyDictionary<int, TaskForce> Fleets { get => _fleets; }
         public IReadOnlyDictionary<int, Order> Orders { get => _orders; }
         public PlayerForce PlayerForce { get; }
@@ -34,6 +38,8 @@ namespace OnlyWar.Models
             _fleets = [];
             _subsectorPlanetMap = [];
             _subsectorCenterMap = [];
+            _subsectors = [];
+            _warpLanes = [];
             _orders = [];
         }
 
@@ -56,6 +62,14 @@ namespace OnlyWar.Models
                     fleet.Planet.OrbitingTaskForceList.Add(fleet);
                 }
             }
+        }
+
+        public void InitializeWarpNetwork(IEnumerable<Subsector> subsectors, IEnumerable<WarpLane> warpLanes)
+        {
+            _subsectors.Clear();
+            _subsectors.AddRange(subsectors);
+            _warpLanes.Clear();
+            _warpLanes.AddRange(warpLanes);
         }
 
         public Planet GetPlanet(int planetId)
@@ -98,7 +112,7 @@ namespace OnlyWar.Models
         public void CombineFleets(TaskForce remainingFleet, TaskForce mergingFleet)
         {
             if (mergingFleet.Planet != remainingFleet.Planet
-                || mergingFleet.Position != remainingFleet.Position
+                || !Equals(mergingFleet.Position, remainingFleet.Position)
                 || mergingFleet.Faction.Id != remainingFleet.Faction.Id)
             {
                 throw new InvalidOperationException("The two fleets cannot be merged");
