@@ -137,6 +137,18 @@ public partial class MainGameScene : Control
             return;
         }
 
+        if (actionKey == "zoom_in")
+        {
+            _sectorMap.ZoomIn();
+            return;
+        }
+
+        if (actionKey == "zoom_out")
+        {
+            _sectorMap.ZoomOut();
+            return;
+        }
+
         _topMenu.SetDebugText(actionKey);
     }
 

@@ -38,7 +38,11 @@ namespace OnlyWar.Models.Planets
         {
             get
             {
-                return RegionFactionMap.Sum(rfm => rfm.Value.Garrison);
+                // PDF is only the garrison maintained by the default (Imperial) faction;
+                // other factions' Garrison values represent their own defending forces.
+                return RegionFactionMap.Values
+                    .Where(rf => rf.PlanetFaction.Faction.IsDefaultFaction)
+                    .Sum(rf => rf.Garrison);
             }
         }
 

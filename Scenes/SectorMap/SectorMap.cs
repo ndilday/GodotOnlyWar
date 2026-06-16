@@ -108,6 +108,16 @@ public partial class SectorMap : Node2D
         QueueRedraw();
     }
 
+    public void ZoomIn()
+    {
+        _camera.ZoomIn(null);
+    }
+
+    public void ZoomOut()
+    {
+        _camera.ZoomOut(null);
+    }
+
     public void CenterOnSelectedPlanet()
     {
         if (!_selectedPlanetId.HasValue) return;

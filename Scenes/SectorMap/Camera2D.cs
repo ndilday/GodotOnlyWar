@@ -10,6 +10,16 @@ public partial class Camera2D : Godot.Camera2D
 	SectorMap _sectorMap;
     [Export]
     float MaxZoom = 10;
+    // Screen-space pixels occluded by the floating UI panels on each edge. The
+    // map is kept reachable within the unoccluded gap between them.
+    [Export]
+    float LeftUiInset = 218;
+    [Export]
+    float RightUiInset = 334;
+    [Export]
+    float TopUiInset = 64;
+    [Export]
+    float BottomUiInset = 72;
 	Vector2I _mapPixelDimensions;
 	// Called when the node enters the scene tree for the first time.
 	public override void _Ready()
@@ -51,35 +61,64 @@ public partial class Camera2D : Godot.Camera2D
         else if (@event is InputEventMouseMotion emm && emm.ButtonMask == MouseButtonMask.Right)
 		{
             Position -= emm.Relative;
-
+            ClampCamera();
         }
 	}
 
-    /*private void ClampCameraPosition(Vector2 moveVector)
+    // Returns the most zoomed-out level allowed: the smallest zoom at which the
+    // map (including its border) still covers the unoccluded gap between the
+    // floating UI panels on both axes.
+    private float GetMinZoom()
     {
-        // Get the current viewport size and zoom
-        Vector2 viewportSize = GetViewportRect().Size;
-        Vector2 currentZoom = Zoom;
+        Vector2 viewportSize = GetViewport().GetVisibleRect().Size;
+        float gapWidth = viewportSize.X - LeftUiInset - RightUiInset;
+        float gapHeight = viewportSize.Y - TopUiInset - BottomUiInset;
+        return Math.Max(gapWidth / _mapPixelDimensions.X,
+                        gapHeight / _mapPixelDimensions.Y);
+    }
 
-        // Calculate the edges of the viewable area in world coordinates
-        // The offsets here ensure that the camera stops at the edge of the border
-        float leftEdge = -MapBorderPixels * currentZoom.X;
-        float topEdge = -MapBorderPixels * currentZoom.Y;
-        float rightEdge = (_mapPixelDimensions.X + MapBorderPixels) * currentZoom.X;
-        float bottomEdge = (_mapPixelDimensions.Y + MapBorderPixels) * currentZoom.Y;
+    // Enforces the zoom range and keeps the map covering (or centered within) the
+    // unoccluded gap between the UI panels, so its edges stay reachable.
+    private void ClampCamera()
+    {
+        Vector2 viewportSize = GetViewport().GetVisibleRect().Size;
 
-        // Calculate the new position
-        Vector2 newPosition = Position + moveVector;
+        float clampedZoom = Math.Clamp(Zoom.X, GetMinZoom(), MaxZoom);
+        if (clampedZoom != Zoom.X)
+        {
+            Zoom = new Vector2(clampedZoom, clampedZoom);
+        }
 
-        // Clamp the new position within the calculated bounds
-        newPosition.X = Mathf.Clamp(newPosition.X, leftEdge - viewportSize.X / 2, rightEdge - viewportSize.X / 2);
-        newPosition.Y = Mathf.Clamp(newPosition.Y, bottomEdge - viewportSize.Y / 2, topEdge - viewportSize.Y / 2);
+        Vector2 mapMin = new(-MapBorderPixels, -MapBorderPixels);
+        Vector2 mapSize = _mapPixelDimensions;
 
-        // Update the camera position
-        Position = newPosition;
-    }*/
+        Vector2 pos = Position;
+        pos.X = ClampAxis(pos.X, viewportSize.X, LeftUiInset, RightUiInset, clampedZoom, mapMin.X, mapSize.X);
+        pos.Y = ClampAxis(pos.Y, viewportSize.Y, TopUiInset, BottomUiInset, clampedZoom, mapMin.Y, mapSize.Y);
+        Position = pos;
+    }
 
-    private void ZoomIn(Vector2? zoomCenter)
+    // anchor_mode is FixedTopLeft, so Position is the world coordinate at the
+    // viewport's top-left. We constrain the *unoccluded* gap (the part of the
+    // viewport not hidden by panels) to stay within the map bounds.
+    private static float ClampAxis(float pos, float viewportExtent, float lowInset, float highInset,
+                                   float zoom, float mapMin, float mapExtent)
+    {
+        // World-space extent of the visible gap, and world offset from the
+        // viewport edge to where that gap begins.
+        float gapExtent = (viewportExtent - lowInset - highInset) / zoom;
+        float lowOffset = lowInset / zoom;
+
+        // If the map is smaller than the gap, center the map within the gap.
+        if (mapExtent <= gapExtent)
+        {
+            return mapMin - (gapExtent - mapExtent) / 2f - lowOffset;
+        }
+        // Otherwise keep the gap's edges within the map.
+        return Math.Clamp(pos, mapMin - lowOffset, mapMin + mapExtent - gapExtent - lowOffset);
+    }
+
+    public void ZoomIn(Vector2? zoomCenter)
 	{
         if (!zoomCenter.HasValue)
         {
@@ -89,33 +128,27 @@ public partial class Camera2D : Godot.Camera2D
         float newZoom = Math.Min(1.5f * Zoom.X, MaxZoom);
         ZoomTo(newZoom, zoomCenter.Value);
 	}
-	private void ZoomOut(Vector2? zoomCenter)
+	public void ZoomOut(Vector2? zoomCenter)
 	{
         if (!zoomCenter.HasValue)
         {
             // If no zoom center is provided, use the center of the viewport
             zoomCenter = Position + GetViewport().GetVisibleRect().Size / (2 * Zoom.X);
         }
-        Vector2 screenSize = GetViewport().GetVisibleRect().Size;
-		float minZoomX = screenSize.X / _mapPixelDimensions.X;
-		float minZoomY = screenSize.Y / _mapPixelDimensions.Y;
-		float minZoom = Math.Min(minZoomX, minZoomY);
-		float newZoom = Math.Max(2 * Zoom.X / 3, minZoom);
+		float newZoom = Math.Max(2 * Zoom.X / 3, GetMinZoom());
         ZoomTo(newZoom, zoomCenter.Value);
 	}
 
     public void ZoomTo(float zoomLevel, Vector2 zoomCenter)
     {
         // zoom and then adjust
+        zoomLevel = Math.Clamp(zoomLevel, GetMinZoom(), MaxZoom);
         Zoom = new Vector2(zoomLevel, zoomLevel);
-        GD.Print($"zoomCenter: {zoomCenter.X},{zoomCenter.Y}");
 
         // Calculate the new center after zooming
         Vector2 newCenter = Position + GetViewport().GetVisibleRect().Size / (2 * zoomLevel);
-        GD.Print($"current Position: {Position.X},{Position.Y}");
-        GD.Print($"newCenter: {newCenter.X},{newCenter.Y}");
         // Adjust the position to keep the zoom center fixed
         Position += zoomCenter - newCenter;
-        GD.Print($"new Position: {Position.X},{Position.Y}");
+        ClampCamera();
     }
 }

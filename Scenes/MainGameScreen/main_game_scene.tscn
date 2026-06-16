@@ -17,7 +17,6 @@ grow_vertical = 2
 script = ExtResource("1_g3hiw")
 
 [node name="SectorMap" parent="." instance=ExtResource("2_lvld5")]
-position = Vector2(0, 64)
 
 [node name="UILayer" type="CanvasLayer" parent="."]
 
