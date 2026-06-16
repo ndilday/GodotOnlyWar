@@ -45,6 +45,13 @@ public partial class MainGameScene : Control
         _systemInspector = GetNode<SystemInspector>("UILayer/SystemInspector");
         _topMenu.SaveButtonPressed += OnSaveButtonPressed;
         _leftMapTools.MapToolPressed += OnMapToolPressed;
+        _systemInspector.OpenSystemPressed += OnInspectorOpenSystemPressed;
+        _systemInspector.PlotCoursePressed += OnInspectorPlotCoursePressed;
+        _systemInspector.DivideFleetPressed += OnInspectorDivideFleetPressed;
+        _systemInspector.MergeFleetPressed += OnInspectorMergeFleetPressed;
+        _systemInspector.LandSquadsPressed += OnInspectorOpenFleetPlanetPressed;
+        _systemInspector.LoadSquadsPressed += OnInspectorOpenFleetPlanetPressed;
+        _systemInspector.ManageFleetsPressed += OnFleetButtonPressed;
         _bottomMenu.ChapterButtonPressed += OnChapterButtonPressed;
         _bottomMenu.ApothecariumButtonPressed += OnApothecariumButtonPressed;
         _bottomMenu.TrainingUnitButtonPressed += OnTrainingUnitButtonPressed;
@@ -53,11 +60,14 @@ public partial class MainGameScene : Control
         _bottomMenu.EndTurnButtonPressed += OnEndTurnButtonPressed;
         _sectorMap = GetNode<SectorMap>("SectorMap");
         _sectorMap.PlanetClicked += OnPlanetClicked;
+        _sectorMap.PlanetDoubleClicked += OnPlanetDoubleClicked;
         _sectorMap.FleetClicked += OnFleetClicked;
         _mainUILayer = GetNode<CanvasLayer>("UILayer");
         _turnController = new TurnController();
         _previousScreenStack = new Stack<Control>();
-        _systemInspector.DisplayPlanet(GameDataSingleton.Instance.Sector.Planets.Values.FirstOrDefault());
+        Planet initialPlanet = GameDataSingleton.Instance.Sector.Planets.Values.FirstOrDefault();
+        _sectorMap.SetSelectedPlanet(initialPlanet?.Id);
+        _systemInspector.DisplayPlanet(initialPlanet);
     }
 
     public override void _UnhandledInput(InputEvent @event)
@@ -118,6 +128,12 @@ public partial class MainGameScene : Control
 
     private void OnMapToolPressed(object sender, string actionKey)
     {
+        if (actionKey == "focus")
+        {
+            _sectorMap.CenterOnSelectedPlanet();
+            return;
+        }
+
         _topMenu.SetDebugText(actionKey);
     }
 
@@ -244,9 +260,21 @@ public partial class MainGameScene : Control
     private void OnPlanetClicked(object sender, int planetId)
     {
         Planet planet = GameDataSingleton.Instance.Sector.Planets[planetId];
-        _systemInspector.DisplayPlanet(planet);
+        SelectPlanet(planet);
+    }
+
+    private void OnPlanetDoubleClicked(object sender, int planetId)
+    {
+        Planet planet = GameDataSingleton.Instance.Sector.Planets[planetId];
+        SelectPlanet(planet);
         //LoadPlanetDetailScreen(planet);
         LoadPlanetTacticalScreen(planet);
+    }
+
+    private void SelectPlanet(Planet planet, int? selectedFleetId = null)
+    {
+        _sectorMap.SetSelectedPlanet(planet?.Id);
+        _systemInspector.DisplayPlanet(planet, selectedFleetId);
     }
 
     private void LoadPlanetDetailScreen(Planet planet)
@@ -290,6 +318,12 @@ public partial class MainGameScene : Control
     private void OnFleetClicked(object sender, int fleetId)
     {
         TaskForce taskForce = GameDataSingleton.Instance.Sector.Fleets[fleetId];
+        Planet contextPlanet = taskForce.Planet ?? taskForce.Origin ?? taskForce.Destination;
+        if (contextPlanet != null)
+        {
+            SelectPlanet(contextPlanet, fleetId);
+        }
+
         // Only player task forces sitting in orbit can be re-tasked; a fleet already
         // in transit cannot change course or be reorganized until it arrives.
         if (taskForce.Faction != GameDataSingleton.Instance.Sector.PlayerForce.Faction) return;
@@ -315,6 +349,50 @@ public partial class MainGameScene : Control
         _fleetContextMenu.Position = (Vector2I)GetViewport().GetMousePosition();
         _fleetContextMenu.ResetSize();
         _fleetContextMenu.Popup();
+    }
+
+    private void OnInspectorOpenSystemPressed(object sender, int planetId)
+    {
+        if (!GameDataSingleton.Instance.Sector.Planets.TryGetValue(planetId, out Planet planet)) return;
+
+        SelectPlanet(planet);
+        LoadPlanetTacticalScreen(planet);
+    }
+
+    private void OnInspectorPlotCoursePressed(object sender, int fleetId)
+    {
+        if (!TryGetActionableFleet(fleetId, out TaskForce taskForce)) return;
+        OpenFleetMoveDialog(taskForce);
+    }
+
+    private void OnInspectorDivideFleetPressed(object sender, int fleetId)
+    {
+        if (!TryGetActionableFleet(fleetId, out TaskForce taskForce)) return;
+        OpenFleetDivideDialog(taskForce);
+    }
+
+    private void OnInspectorMergeFleetPressed(object sender, int fleetId)
+    {
+        if (!TryGetActionableFleet(fleetId, out TaskForce taskForce)) return;
+        OpenFleetMergeDialog(taskForce);
+    }
+
+    private void OnInspectorOpenFleetPlanetPressed(object sender, int fleetId)
+    {
+        if (!TryGetActionableFleet(fleetId, out TaskForce taskForce)) return;
+        SelectPlanet(taskForce.Planet, fleetId);
+        LoadPlanetTacticalScreen(taskForce.Planet);
+    }
+
+    private bool TryGetActionableFleet(int fleetId, out TaskForce taskForce)
+    {
+        taskForce = null;
+        if (!GameDataSingleton.Instance.Sector.Fleets.TryGetValue(fleetId, out TaskForce foundFleet)) return false;
+        if (foundFleet.Faction != GameDataSingleton.Instance.Sector.PlayerForce.Faction) return false;
+        if (foundFleet.TravelPhase != FleetTravelPhase.InOrbit || foundFleet.Planet == null) return false;
+
+        taskForce = foundFleet;
+        return true;
     }
 
     private void OnFleetContextMenuIdPressed(long id)

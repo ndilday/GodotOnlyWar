@@ -6,6 +6,7 @@ namespace OnlyWar.Scenes.MainGameScreen
     public partial class ClickableSprite2D: Sprite2D
     {
         public event EventHandler Pressed;
+        public event EventHandler DoublePressed;
 
         public override void _Input(InputEvent @event)
         {
@@ -13,7 +14,14 @@ namespace OnlyWar.Scenes.MainGameScreen
             {
                 if (emb.ButtonIndex == MouseButton.Left && emb.IsPressed() && IsPixelOpaque(GetLocalMousePosition()))
                 {
-                    Pressed.Invoke(this, EventArgs.Empty);
+                    if (emb.DoubleClick)
+                    {
+                        DoublePressed?.Invoke(this, EventArgs.Empty);
+                    }
+                    else
+                    {
+                        Pressed?.Invoke(this, EventArgs.Empty);
+                    }
                     GetViewport().SetInputAsHandled();
                 }
             }

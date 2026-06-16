@@ -87,6 +87,13 @@ layout_mode = 2
 text = "Orbital task forces will appear here."
 autowrap_mode = 2
 
+[node name="FleetList" type="ItemList" parent="Panel/MarginContainer/VBoxContainer/OrbitSection"]
+custom_minimum_size = Vector2(0, 116)
+layout_mode = 2
+auto_height = true
+icon_mode = 0
+fixed_icon_size = Vector2i(22, 22)
+
 [node name="RequestSection" type="VBoxContainer" parent="Panel/MarginContainer/VBoxContainer"]
 layout_mode = 2
 theme_override_constants/separation = 4
@@ -104,12 +111,37 @@ autowrap_mode = 2
 layout_mode = 2
 theme_override_constants/separation = 6
 
+[node name="OpenSystemButton" type="Button" parent="Panel/MarginContainer/VBoxContainer/ActionSection"]
+custom_minimum_size = Vector2(0, 34)
+layout_mode = 2
+text = "Open System"
+
 [node name="PlotCourseButton" type="Button" parent="Panel/MarginContainer/VBoxContainer/ActionSection"]
-custom_minimum_size = Vector2(0, 38)
+custom_minimum_size = Vector2(0, 34)
 layout_mode = 2
 text = "Plot Course"
 
+[node name="DivideButton" type="Button" parent="Panel/MarginContainer/VBoxContainer/ActionSection"]
+custom_minimum_size = Vector2(0, 34)
+layout_mode = 2
+text = "Divide"
+
+[node name="MergeButton" type="Button" parent="Panel/MarginContainer/VBoxContainer/ActionSection"]
+custom_minimum_size = Vector2(0, 34)
+layout_mode = 2
+text = "Merge"
+
+[node name="LandSquadsButton" type="Button" parent="Panel/MarginContainer/VBoxContainer/ActionSection"]
+custom_minimum_size = Vector2(0, 34)
+layout_mode = 2
+text = "Land Squads"
+
+[node name="LoadSquadsButton" type="Button" parent="Panel/MarginContainer/VBoxContainer/ActionSection"]
+custom_minimum_size = Vector2(0, 34)
+layout_mode = 2
+text = "Load Squads"
+
 [node name="ManageFleetsButton" type="Button" parent="Panel/MarginContainer/VBoxContainer/ActionSection"]
-custom_minimum_size = Vector2(0, 38)
+custom_minimum_size = Vector2(0, 34)
 layout_mode = 2
 text = "Manage Fleets"
