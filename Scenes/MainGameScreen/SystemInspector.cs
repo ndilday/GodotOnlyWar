@@ -23,6 +23,7 @@ public partial class SystemInspector : Control
     private Label _planetDetailLabel;
     private Label _orbitDetailLabel;
     private Label _requestDetailLabel;
+    private Label _selectedFleetDetailLabel;
     private ItemList _fleetList;
     private Button _openSystemButton;
     private Button _plotCourseButton;
@@ -34,6 +35,7 @@ public partial class SystemInspector : Control
     private Planet _selectedPlanet;
     private readonly List<TaskForce> _orbitingFleets = [];
     private int? _selectedFleetId;
+    private bool _isRefreshingFleetList;
 
     public override void _Ready()
     {
@@ -43,6 +45,7 @@ public partial class SystemInspector : Control
         _orbitDetailLabel = GetNode<Label>("Panel/MarginContainer/VBoxContainer/OrbitSection/OrbitDetailLabel");
         _requestDetailLabel = GetNode<Label>("Panel/MarginContainer/VBoxContainer/RequestSection/RequestDetailLabel");
         _fleetList = GetNode<ItemList>("Panel/MarginContainer/VBoxContainer/OrbitSection/FleetList");
+        _selectedFleetDetailLabel = GetNode<Label>("Panel/MarginContainer/VBoxContainer/OrbitSection/SelectedFleetDetailLabel");
         _openSystemButton = GetNode<Button>("Panel/MarginContainer/VBoxContainer/ActionSection/OpenSystemButton");
         _plotCourseButton = GetNode<Button>("Panel/MarginContainer/VBoxContainer/ActionSection/PlotCourseButton");
         _divideButton = GetNode<Button>("Panel/MarginContainer/VBoxContainer/ActionSection/DivideButton");
@@ -98,12 +101,20 @@ public partial class SystemInspector : Control
         _planetDetailLabel.Text = $"{planet.Template.Name} | Pop {FormatPopulation(planet.Population)} | PDF {planet.PlanetaryDefenseForces:N0}";
         _orbitDetailLabel.Text = _orbitingFleets.Count == 1 ? "1 task force in orbit" : $"{_orbitingFleets.Count} task forces in orbit";
         _requestDetailLabel.Text = openRequests == 1 ? "1 active request" : $"{openRequests} active requests";
-        PopulateFleetList();
-        SelectFleetListRow();
+
+        if (_selectedFleetId.HasValue && !_orbitingFleets.Any(fleet => fleet.Id == _selectedFleetId.Value))
+        {
+            _selectedFleetId = null;
+        }
         if (!_selectedFleetId.HasValue)
         {
-            SelectFirstActionableFleet();
+            _selectedFleetId = _orbitingFleets.FirstOrDefault(IsActionablePlayerFleet)?.Id;
         }
+
+        _isRefreshingFleetList = true;
+        PopulateFleetList();
+        SelectFleetListRow();
+        _isRefreshingFleetList = false;
         RefreshActionState();
     }
 
@@ -117,6 +128,7 @@ public partial class SystemInspector : Control
         _planetDetailLabel.Text = "Planet data will appear here.";
         _orbitDetailLabel.Text = "Orbital task forces will appear here.";
         _requestDetailLabel.Text = "Active requests will appear here.";
+        if (_selectedFleetDetailLabel != null) _selectedFleetDetailLabel.Text = "Select a task force for fleet actions.";
         _fleetList?.Clear();
         RefreshActionState();
     }
@@ -129,21 +141,13 @@ public partial class SystemInspector : Control
             string ownership = fleet.Faction == GameDataSingleton.Instance.Sector.PlayerForce.Faction ? "Chapter" : fleet.Faction.Name;
             string shipText = fleet.Ships.Count == 1 ? "1 ship" : $"{fleet.Ships.Count} ships";
             int capacity = fleet.Ships.Sum(ship => ship.Template.SoldierCapacity);
-            int index = _fleetList.AddItem($"TF {fleet.Id} | {ownership} | {shipText} | Cap {capacity}", IconAtlas.GetIcon("fleet"), true);
+            string prefix = fleet.Id == _selectedFleetId ? "> " : "";
+            int index = _fleetList.AddItem($"{prefix}TF {fleet.Id} | {ownership} | {shipText} | Cap {capacity}", IconAtlas.GetIcon("fleet"), true);
             _fleetList.SetItemMetadata(index, fleet.Id);
-        }
-    }
-
-    private void SelectFirstActionableFleet()
-    {
-        TaskForce firstPlayerFleet = _orbitingFleets.FirstOrDefault(IsActionablePlayerFleet);
-        if (firstPlayerFleet == null) return;
-
-        _selectedFleetId = firstPlayerFleet.Id;
-        int index = _orbitingFleets.FindIndex(fleet => fleet.Id == firstPlayerFleet.Id);
-        if (index >= 0)
-        {
-            _fleetList.Select(index);
+            if (fleet.Faction != GameDataSingleton.Instance.Sector.PlayerForce.Faction)
+            {
+                _fleetList.SetItemCustomFgColor(index, Color.Color8(204, 83, 71));
+            }
         }
     }
 
@@ -164,6 +168,8 @@ public partial class SystemInspector : Control
 
     private void OnFleetListItemSelected(long index)
     {
+        if (_isRefreshingFleetList) return;
+
         if (index < 0 || index >= _fleetList.ItemCount)
         {
             _selectedFleetId = null;
@@ -173,6 +179,10 @@ public partial class SystemInspector : Control
             _selectedFleetId = _fleetList.GetItemMetadata((int)index).AsInt32();
         }
 
+        _isRefreshingFleetList = true;
+        PopulateFleetList();
+        SelectFleetListRow();
+        _isRefreshingFleetList = false;
         RefreshActionState();
     }
 
@@ -181,14 +191,19 @@ public partial class SystemInspector : Control
         TaskForce selectedFleet = GetSelectedFleet();
         bool hasPlanet = _selectedPlanet != null;
         bool hasActionableFleet = selectedFleet != null && IsActionablePlayerFleet(selectedFleet);
+        bool canDivide = hasActionableFleet && selectedFleet.Ships.Count > 1;
+        bool canMerge = hasActionableFleet && FleetMergeDialogController.GetMergeCandidates(selectedFleet).Any();
 
         if (_openSystemButton != null) _openSystemButton.Disabled = !hasPlanet;
         if (_plotCourseButton != null) _plotCourseButton.Disabled = !hasActionableFleet;
-        if (_divideButton != null) _divideButton.Disabled = !hasActionableFleet || selectedFleet.Ships.Count <= 1;
-        if (_mergeButton != null) _mergeButton.Disabled = !hasActionableFleet || !FleetMergeDialogController.GetMergeCandidates(selectedFleet).Any();
+        if (_divideButton != null) _divideButton.Disabled = !canDivide;
+        if (_mergeButton != null) _mergeButton.Disabled = !canMerge;
         if (_landSquadsButton != null) _landSquadsButton.Disabled = !hasActionableFleet;
         if (_loadSquadsButton != null) _loadSquadsButton.Disabled = !hasActionableFleet;
         if (_manageFleetsButton != null) _manageFleetsButton.Disabled = false;
+
+        RefreshSelectedFleetDetail(selectedFleet, hasActionableFleet, canDivide, canMerge);
+        RefreshActionTooltips(selectedFleet, hasPlanet, hasActionableFleet, canDivide, canMerge);
     }
 
     private TaskForce GetSelectedFleet()
@@ -210,6 +225,49 @@ public partial class SystemInspector : Control
         TaskForce fleet = GetSelectedFleet();
         if (!IsActionablePlayerFleet(fleet)) return;
         handler?.Invoke(this, fleet.Id);
+    }
+
+    private void RefreshSelectedFleetDetail(TaskForce selectedFleet, bool hasActionableFleet, bool canDivide, bool canMerge)
+    {
+        if (_selectedFleetDetailLabel == null) return;
+
+        if (selectedFleet == null)
+        {
+            _selectedFleetDetailLabel.Text = _orbitingFleets.Count == 0
+                ? "No task forces are in orbit."
+                : "Select a task force for fleet actions.";
+            return;
+        }
+
+        string ownership = selectedFleet.Faction == GameDataSingleton.Instance.Sector.PlayerForce.Faction
+            ? "Chapter fleet"
+            : selectedFleet.Faction.Name;
+        int capacity = selectedFleet.Ships.Sum(ship => ship.Template.SoldierCapacity);
+        int loaded = selectedFleet.Ships.Sum(ship => ship.LoadedSoldierCount);
+        string commandState = hasActionableFleet
+            ? $"Ready | Divide {(canDivide ? "yes" : "no")} | Merge {(canMerge ? "yes" : "no")}"
+            : "Not commandable from this system";
+
+        _selectedFleetDetailLabel.Text =
+            $"TF {selectedFleet.Id} | {ownership} | {selectedFleet.Ships.Count} ships | {loaded}/{capacity} aboard\n{commandState}";
+    }
+
+    private void RefreshActionTooltips(TaskForce selectedFleet, bool hasPlanet, bool hasActionableFleet, bool canDivide, bool canMerge)
+    {
+        string noSystem = "Select a star system first.";
+        string noFleet = selectedFleet == null
+            ? "Select one of your task forces in orbit first."
+            : "Only chapter task forces in orbit can receive orders here.";
+
+        _openSystemButton.TooltipText = hasPlanet ? "Open the selected system's tactical screen." : noSystem;
+        _plotCourseButton.TooltipText = hasActionableFleet ? "Plot a warp route for the selected task force." : noFleet;
+        _divideButton.TooltipText = canDivide ? "Split ships out of the selected task force." :
+            hasActionableFleet ? "This task force needs more than one ship to divide." : noFleet;
+        _mergeButton.TooltipText = canMerge ? "Merge this task force with another compatible force in orbit." :
+            hasActionableFleet ? "No compatible merge candidates are in orbit." : noFleet;
+        _landSquadsButton.TooltipText = hasActionableFleet ? "Open the tactical screen to land squads." : noFleet;
+        _loadSquadsButton.TooltipText = hasActionableFleet ? "Open the tactical screen to load squads." : noFleet;
+        _manageFleetsButton.TooltipText = "Open the sector-wide fleet roster.";
     }
 
     private static string FormatPopulation(long populationInThousands)

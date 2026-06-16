@@ -37,6 +37,8 @@ public partial class MainGameScene : Control
     private CanvasLayer _mainUILayer;
     private TurnController _turnController;
     private EndOfTurnDialogController _endOfTurnDialog;
+    private int? _selectedPlanetId;
+    private int? _selectedFleetId;
     public override void _Ready()
     {
         _bottomMenu = GetNode<BottomMenu>("UILayer/BottomMenu");
@@ -62,6 +64,7 @@ public partial class MainGameScene : Control
         _sectorMap.PlanetClicked += OnPlanetClicked;
         _sectorMap.PlanetDoubleClicked += OnPlanetDoubleClicked;
         _sectorMap.FleetClicked += OnFleetClicked;
+        _sectorMap.FleetRightClicked += OnFleetRightClicked;
         _mainUILayer = GetNode<CanvasLayer>("UILayer");
         _turnController = new TurnController();
         _previousScreenStack = new Stack<Control>();
@@ -273,8 +276,27 @@ public partial class MainGameScene : Control
 
     private void SelectPlanet(Planet planet, int? selectedFleetId = null)
     {
+        _selectedPlanetId = planet?.Id;
+        _selectedFleetId = selectedFleetId;
         _sectorMap.SetSelectedPlanet(planet?.Id);
         _systemInspector.DisplayPlanet(planet, selectedFleetId);
+    }
+
+    private void RefreshSelectedSystemInspector()
+    {
+        if (!_selectedPlanetId.HasValue)
+        {
+            _systemInspector.DisplayEmptyState();
+            return;
+        }
+
+        if (!GameDataSingleton.Instance.Sector.Planets.TryGetValue(_selectedPlanetId.Value, out Planet planet))
+        {
+            SelectPlanet(null);
+            return;
+        }
+
+        _systemInspector.DisplayPlanet(planet, _selectedFleetId);
     }
 
     private void LoadPlanetDetailScreen(Planet planet)
@@ -323,13 +345,28 @@ public partial class MainGameScene : Control
         {
             SelectPlanet(contextPlanet, fleetId);
         }
+    }
 
+    private void OnFleetRightClicked(object sender, int fleetId)
+    {
+        TaskForce taskForce = GameDataSingleton.Instance.Sector.Fleets[fleetId];
+        Planet contextPlanet = taskForce.Planet ?? taskForce.Origin ?? taskForce.Destination;
+        if (contextPlanet != null)
+        {
+            SelectPlanet(contextPlanet, fleetId);
+        }
+
+        ShowFleetContextMenu(taskForce);
+    }
+
+    private void ShowFleetContextMenu(TaskForce taskForce)
+    {
         // Only player task forces sitting in orbit can be re-tasked; a fleet already
         // in transit cannot change course or be reorganized until it arrives.
         if (taskForce.Faction != GameDataSingleton.Instance.Sector.PlayerForce.Faction) return;
         if (taskForce.TravelPhase != FleetTravelPhase.InOrbit || taskForce.Planet == null) return;
 
-        _contextFleetId = fleetId;
+        _contextFleetId = taskForce.Id;
 
         if (_fleetContextMenu == null)
         {
@@ -458,6 +495,7 @@ public partial class MainGameScene : Control
     {
         ((Control)sender).Visible = false;
         _sectorMap.RefreshFleets();
+        RefreshSelectedSystemInspector();
     }
 
     private void OnEndTurnButtonPressed(object sender, EventArgs e)
@@ -465,6 +503,7 @@ public partial class MainGameScene : Control
         // handle squad orders
         _turnController.ProcessTurn(GameDataSingleton.Instance.Sector);
         _sectorMap.RefreshFleets();
+        RefreshSelectedSystemInspector();
         if(_endOfTurnDialog == null)
         {
             PackedScene endOfTurnScene = GD.Load<PackedScene>("res://Scenes/EndOfTurnDialog.tscn");

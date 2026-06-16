@@ -32,6 +32,7 @@ public partial class SectorMap : Node2D
     public event EventHandler<int> PlanetClicked;
     public event EventHandler<int> PlanetDoubleClicked;
     public event EventHandler<int> FleetClicked;
+    public event EventHandler<int> FleetRightClicked;
 
     public Vector2I GridDimensions =
 		new(GameDataSingleton.Instance.GameRulesData.SectorSize.X,
@@ -461,6 +462,7 @@ public partial class SectorMap : Node2D
 				: new Vector2I(1, -1);
 			ClickableSprite2D fleet = DrawTexture(shipTexture, shipTextureScale, gridPosition, Color.Color8(255, 255, 255), 2, fleetOffset);
             fleet.Pressed += (object sender, EventArgs e) => FleetClicked?.Invoke(fleet, taskForceKvp.Key);
+            fleet.RightPressed += (object sender, EventArgs e) => FleetRightClicked?.Invoke(fleet, taskForceKvp.Key);
 			_fleetSprites.Add(fleet);
         }
     }
