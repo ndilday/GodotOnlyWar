@@ -16,11 +16,11 @@ namespace OnlyWar.Models
         public Sector Sector { get; private set; }
         public Date Date { get; set; }
 
-        public void InitializeNewGameData(GameRulesData gameRulesData, Date date)
+        public void InitializeNewGameData(GameRulesData gameRulesData, Date date, string chapterName = null, int seed = 1)
         {
             GameRulesData = gameRulesData;
             Date = date;
-            Sector = SectorBuilder.GenerateSector(1, gameRulesData, date); // New sector generation
+            Sector = SectorBuilder.GenerateSector(seed, gameRulesData, date, chapterName); // New sector generation
         }
         public void LoadGameDataFromBlob(GameRulesData gameRulesData, Date date, Sector sector)
         {

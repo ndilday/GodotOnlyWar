@@ -12,7 +12,7 @@ namespace OnlyWar.Builders
 {
     internal static class SectorBuilder
     {
-        public static Sector GenerateSector(int seed, GameRulesData data, Date currentDate)
+        public static Sector GenerateSector(int seed, GameRulesData data, Date currentDate, string chapterName = null)
         {
             List<Planet> planetList = [];
             List<Character> characterList = [];
@@ -42,7 +42,7 @@ namespace OnlyWar.Builders
 
             Date trainingStartDate = new Date(currentDate.Millenium, currentDate.Year - 4, 1);
             ISoldierTrainingService trainingService = new SoldierTrainingCalculator(data.BaseSkillMap.Values, data.TrainingProfiles.Values);
-            PlayerForce playerForce = NewChapterBuilder.CreateChapter(data, trainingService, trainingStartDate, currentDate);
+            PlayerForce playerForce = NewChapterBuilder.CreateChapter(data, trainingService, trainingStartDate, currentDate, chapterName);
             FoundTakebackPlanet(playerForce, planetList, forceList);
             //Planet chapterPlanet = FoundChapterPlanet(planetList, data.PlayerFaction);
             //PlaceStartingForces(chapterPlanet, playerForce, forceList);

@@ -10,45 +10,61 @@ using System.Threading.Tasks;
 public partial class StartMenu : Control
 {
 
+	private NewGameSetupController _setupScreen;
+
 	public void OnNewGameButtonPressed()
 	{
-		LoadMainGameScene(false);
+		ShowNewGameSetup();
 	}
 
 	public void OnLoadGameButtonPressed()
 	{
-		LoadMainGameScene(true);
+		LoadGameData();
+		LaunchMainGameScene();
 	}
 
-    private async void LoadMainGameScene(bool loadGame)
+    private void ShowNewGameSetup()
     {
-        // Initialize Game Data (New or Load) BEFORE adding MainGameScene to tree
-        if (loadGame)
-        {
-            LoadGameData(); // Pass MainGameScene instance if needed later
-        }
-        else
-        {
-            InitializeNewGame(); // Pass MainGameScene instance if needed later
-        }
+        SetMenuButtonsVisible(false);
+        PackedScene setupScene = GD.Load<PackedScene>("res://Scenes/StartMenu/new_game_setup.tscn");
+        _setupScreen = setupScene.Instantiate<NewGameSetupController>();
+        _setupScreen.CampaignConfirmed += OnCampaignConfirmed;
+        _setupScreen.Cancelled += OnSetupCancelled;
+        AddChild(_setupScreen);
+    }
 
+    private void OnSetupCancelled(object sender, EventArgs e)
+    {
+        _setupScreen.QueueFree();
+        _setupScreen = null;
+        SetMenuButtonsVisible(true);
+    }
+
+    private void OnCampaignConfirmed(object sender, NewGameSettings settings)
+    {
+        GameDataSingleton.Instance.InitializeNewGameData(
+            new GameRulesData(),
+            new Date(39, 500, 1),
+            settings.ChapterName,
+            settings.Seed);
+        LaunchMainGameScene();
+    }
+
+    private void SetMenuButtonsVisible(bool isVisible)
+    {
+        GetNode<Button>("NewGameButton").Visible = isVisible;
+        GetNode<Button>("LoadGameButton").Visible = isVisible;
+    }
+
+    private async void LaunchMainGameScene()
+    {
         // Replace StartMenu with MainGameScene
-        // Instantiate MainGameScene
         PackedScene mainGameSceneScene = GD.Load<PackedScene>("res://Scenes/MainGameScreen/main_game_scene.tscn");
         MainGameScene mainGameSceneInstance = mainGameSceneScene.Instantiate<MainGameScene>();
         QueueFree(); // StartMenu removes itself
         GetParent().AddChild(mainGameSceneInstance); // Add MainGameScene to the *parent* of StartMenu
 
         await Task.Delay(1); // Small delay to ensure MainGameScene is fully in tree before _Ready()
-        // Signal MainGameScene that loading is complete (if needed)
-        // mainGameSceneInstance.GameWorldLoaded(); // Example signal - implement if needed in MainGameScene
-    }
-
-    private void InitializeNewGame()
-    {
-        GameDataSingleton.Instance.InitializeNewGameData(
-            new GameRulesData(),
-            new Date(39, 500, 1));
     }
 
     private void LoadGameData()

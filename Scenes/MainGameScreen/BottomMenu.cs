@@ -7,6 +7,7 @@ public partial class BottomMenu : Control
     public event EventHandler ApothecariumButtonPressed;
     public event EventHandler TrainingUnitButtonPressed;
     public event EventHandler FleetButtonPressed;
+    public event EventHandler DiplomacyButtonPressed;
     public event EventHandler EndTurnButtonPressed;
 
     public override void _Ready()
@@ -19,6 +20,8 @@ public partial class BottomMenu : Control
         trainingUnitButton.Pressed += () => TrainingUnitButtonPressed?.Invoke(this, EventArgs.Empty);
         Button fleetButton = GetNode<Button>("Panel/MarginContainer/HBoxContainer/FleetButton");
         fleetButton.Pressed += () => FleetButtonPressed?.Invoke(this, EventArgs.Empty);
+        Button diplomacyButton = GetNode<Button>("Panel/MarginContainer/HBoxContainer/DiplomacyButton");
+        diplomacyButton.Pressed += () => DiplomacyButtonPressed?.Invoke(this, EventArgs.Empty);
         Button endTurnButton = GetNode<Button>("Panel/MarginContainer/HBoxContainer/EndTurnButton");
         endTurnButton.Pressed += () => EndTurnButtonPressed?.Invoke(this, EventArgs.Empty);
     }

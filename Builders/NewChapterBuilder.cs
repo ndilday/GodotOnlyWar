@@ -21,13 +21,15 @@ namespace OnlyWar.Builders
         internal static PlayerForce CreateChapter(GameRulesData data,
                                                   ISoldierTrainingService trainingService,
                                                   Date trainingStartDate,
-                                                  Date date)
+                                                  Date date,
+                                                  string chapterName = null)
         {
+            chapterName = string.IsNullOrWhiteSpace(chapterName) ? "Heart of the Emperor" : chapterName.Trim();
             Date trainingEndDate =
                 new Date(trainingStartDate.GetTotalWeeks() + INITIAL_TRAINING_DURATION_WEEKS);
             List<PlayerSoldier> soldiers = GenerateInitialSoldiers(data, trainingService, trainingStartDate, date, trainingEndDate);
 
-            PlayerForce chapter = BuildChapterStructure(data, trainingEndDate, soldiers);
+            PlayerForce chapter = BuildChapterStructure(data, trainingEndDate, soldiers, chapterName);
             foreach (PlayerSoldier soldier in soldiers)
             {
                 ApplySoldierTypeTraining(soldier);
@@ -39,18 +41,19 @@ namespace OnlyWar.Builders
             chapter.Fleet.TaskForces.Add(new TaskForce(data.PlayerFaction, data.PlayerFaction.FleetTemplates.First().Value));
             List<string> foundingHistoryEntries = new List<string>
             {
-                $"{data.PlayerFaction.UnitTemplates.First().Value.Name} officially forms with its first 1,000 battle brothers."
+                $"The {chapterName} officially forms with its first 1,000 battle brothers."
             };
             chapter.AddToBattleHistory(date, "Chapter Founding", foundingHistoryEntries);
             return chapter;
         }
 
-        private static PlayerForce BuildChapterStructure(GameRulesData data, Date trainingEndDate, List<PlayerSoldier> soldiers)
+        private static PlayerForce BuildChapterStructure(GameRulesData data, Date trainingEndDate, List<PlayerSoldier> soldiers, string chapterName)
         {
             Dictionary<int, PlayerSoldier> unassignedSoldierMap = soldiers.ToDictionary(s => s.Id);
             PlayerForce chapter = BuildChapterFromUnitTemplate(data.PlayerFaction,
                                                                            data.PlayerFaction.UnitTemplates.Values.First(ut => ut.IsTopLevelUnit),
-                                                                           soldiers);
+                                                                           soldiers,
+                                                                           chapterName);
             PopulateOrderOfBattle(trainingEndDate.ToString(), unassignedSoldierMap, chapter.Army.OrderOfBattle, data.PlayerFaction);
             chapter.Army.PopulateSquadMap();
             return chapter;
@@ -136,11 +139,11 @@ namespace OnlyWar.Builders
             AssignExcessToScouts(unassignedSoldierMap, oob, year, faction);
         }
 
-        private static PlayerForce BuildChapterFromUnitTemplate(Faction faction, UnitTemplate rootTemplate, IEnumerable<PlayerSoldier> soldiers)
+        private static PlayerForce BuildChapterFromUnitTemplate(Faction faction, UnitTemplate rootTemplate, IEnumerable<PlayerSoldier> soldiers, string chapterName)
         {
-            Unit unit = rootTemplate.GenerateUnitFromTemplateWithoutChildren("Heart of the Emperor");
-            Army army = new Army("Heart of the Emperor Ground Forces", null, null, unit, soldiers);
-            Fleet fleet = new Fleet("Heart of the Emperor Fleet", null, null);
+            Unit unit = rootTemplate.GenerateUnitFromTemplateWithoutChildren(chapterName);
+            Army army = new Army($"{chapterName} Ground Forces", null, null, unit, soldiers);
+            Fleet fleet = new Fleet($"{chapterName} Fleet", null, null);
             PlayerForce chapter = new PlayerForce(faction, army, fleet);
             BuildUnitTreeHelper(chapter.Army.OrderOfBattle, rootTemplate);
             return chapter;

@@ -85,6 +85,7 @@ Each feature is described as a behavioral specification: what the system does, a
 
 - The player can start a new game from the main menu.
 - The player can load an existing save from the main menu.
+- Starting a new game opens a setup screen where the player names their Chapter and sets (or randomizes) a sector seed before founding. The setup validates input and presents a confirmation/summary step before the campaign launches. The chapter name is applied to the chapter's unit, army, and fleet and recorded in its founding history; the seed deterministically drives sector generation (re-using a seed reproduces the same sector).
 - On new game creation, a sector is generated with a configurable or default number of planets distributed across subsectors.
 - Planets begin in a variety of states: some are fully imperial-controlled, some are held entirely by hostile factions, some are actively contested between factions, and some are uninhabited or unknown. Not every planet will have an imperial presence at game start.
 - A portion of imperial-held planets contain hidden Genestealer Cult populations at game start.
@@ -485,9 +486,10 @@ Each feature is described as a behavioral specification: what the system does, a
 - Ignoring a request degrades the governor's opinion over time according to their Patience trait.
 
 **Governor Replacement**
-- Governor replacement is not yet implemented.
-- When implemented: governors age each year and are replaced upon reaching an advanced age.
-- Currently, newly generated governors are assigned a random initial opinion of the chapter. This is a placeholder; the intended long-term behavior (post-0.7) is that a new governor's starting opinion should be informed by the previous governor's final opinion of the chapter and the chapter's general reputation in the sector, rather than being independent of history.
+- Governors age one year at the turn of each year. Each week they face a chance of death that rises with age and is reduced on higher-importance worlds (representing better rejuvenat care). On death, the governor is removed and a successor is generated to lead the planet.
+- When a governor dies, any active request they had is cancelled.
+- The successor's current opinion of the chapter is shown on the Planet Detail Screen like any other governor's.
+- *Post-0.7:* A newly generated successor is currently assigned a random initial opinion of the chapter. This is a placeholder; the intended long-term behavior is that a new governor's starting opinion should be informed by the previous governor's final opinion of the chapter and the chapter's general reputation in the sector, rather than being independent of history.
 
 ---
 
@@ -554,14 +556,14 @@ Each feature is described as a behavioral specification: what the system does, a
 
 ### 5.2 Alpha 0.7 — Committed
 
-The following must ship in 0.7:
+The following must ship in 0.7. Status reflects the current codebase (✅ done · ◐ partial · ⬜ not started):
 
-- **Training for non-deployed forces:** Non-deployed marines accumulate training skill points each turn.
-- **Recruiter Screen Phase 2:** Deployed scouts excluded from training; squad-specific training focus.
-- **Game Start Phase 1:** Complete new game setup screen and flow.
-- **Planet View Phase 4 completion:** Governor aging and replacement; visible opinion signal on planet screen; request fulfillment requiring meaningful engagement.
-- **Diplomacy/Requests display:** Active governor requests visible in a dedicated screen or panel.
-- **Fleet movement:** Ships can be ordered to move between planets; transit time applies.
+- ✅ **Training for non-deployed forces:** Non-deployed marines accumulate training skill points each turn. *(Implemented.)*
+- ✅ **Recruiter Screen Phase 2:** Deployed scouts excluded from training; squad-specific training focus. *(Implemented; the screen now displays the 10th Company / TrainingUnit.)*
+- ✅ **Game Start Phase 1:** Complete new game setup screen and flow. *(Implemented — New Game opens a styled setup screen where the player names their Chapter and sets (or randomizes) a sector seed, with validation and a confirm/summary step before the campaign launches. Deeper chapter customization remains post-0.7.)*
+- ✅ **Planet View Phase 4 completion:** Governor aging and replacement; visible opinion signal on planet screen; request fulfillment requiring meaningful engagement. *(Implemented — governors now age, die, and are replaced; opinion shows on the Planet Screen.)*
+- ✅ **Diplomacy/Requests display:** Active governor requests visible in a dedicated screen or panel. *(Implemented — the footer Diplomacy button opens a Sector Requests screen listing every active governor request with its planet, concern, date, and engagement status; requests also still surface on the Planet Screen.)*
+- ✅ **Fleet movement:** Ships can be ordered to move between planets; transit time applies. *(Implemented — task-force context menu with plot-course / divide / merge, phased warp travel with variable transit and estimated arrival range, warp-lane routing, and in-warp fleets hidden and out of contact. The "Chart Direct Route (Risky)" option is deferred post-0.7, see 4.17.)*
 
 ### 5.3 Alpha 0.7 — To-Do
 

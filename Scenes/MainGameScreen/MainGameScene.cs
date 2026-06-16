@@ -19,6 +19,7 @@ public partial class MainGameScene : Control
     private ApothecariumScreenController _apothecariumScreen;
     private TrainingUnitScreenController _trainingUnitScreen;
     private FleetScreenController _fleetScreen;
+    private DiplomacyScreenController _diplomacyScreen;
     private FleetMoveDialogController _fleetMoveDialog;
     private FleetDivideDialogController _fleetDivideDialog;
     private FleetMergeDialogController _fleetMergeDialog;
@@ -43,6 +44,7 @@ public partial class MainGameScene : Control
         _bottomMenu.ApothecariumButtonPressed += OnApothecariumButtonPressed;
         _bottomMenu.TrainingUnitButtonPressed += OnTrainingUnitButtonPressed;
         _bottomMenu.FleetButtonPressed += OnFleetButtonPressed;
+        _bottomMenu.DiplomacyButtonPressed += OnDiplomacyButtonPressed;
         _bottomMenu.EndTurnButtonPressed += OnEndTurnButtonPressed;
         _sectorMap = GetNode<SectorMap>("SectorMap");
         _sectorMap.PlanetClicked += OnPlanetClicked;
@@ -71,6 +73,10 @@ public partial class MainGameScene : Control
             else if(_fleetScreen != null && _fleetScreen.Visible)
             {
                 OnCloseScreen(_fleetScreen, EventArgs.Empty);
+            }
+            else if(_diplomacyScreen != null && _diplomacyScreen.Visible)
+            {
+                OnCloseScreen(_diplomacyScreen, EventArgs.Empty);
             }
             else if (_soldierScreen.Visible)
             {
@@ -205,6 +211,20 @@ public partial class MainGameScene : Control
         }
         _fleetScreen.PopulateFleetData();
         _fleetScreen.Visible = true;
+        SetMainScreenVisibility(false);
+    }
+
+    private void OnDiplomacyButtonPressed(object sender, EventArgs e)
+    {
+        if (_diplomacyScreen == null)
+        {
+            PackedScene diplomacyScene = GD.Load<PackedScene>("res://Scenes/DiplomacyScreen/diplomacy_screen.tscn");
+            _diplomacyScreen = (DiplomacyScreenController)diplomacyScene.Instantiate();
+            _diplomacyScreen.CloseButtonPressed += OnCloseScreen;
+            _mainUILayer.AddChild(_diplomacyScreen);
+        }
+        _diplomacyScreen.PopulateRequestData();
+        _diplomacyScreen.Visible = true;
         SetMainScreenVisibility(false);
     }
 
