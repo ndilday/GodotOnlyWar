@@ -1,0 +1,106 @@
+[gd_scene load_steps=3 format=3 uid="uid://b0g3xsci3r5mb"]
+
+[ext_resource type="Theme" uid="uid://ylp8bk1nhedq" path="res://Scenes/OnlyWarTheme.tres" id="1_theme"]
+[ext_resource type="Script" path="res://Scenes/MainGameScreen/LeftMapTools.cs" id="2_script"]
+
+[node name="LeftMapTools" type="Control"]
+anchors_preset = -1
+anchor_top = 0.0
+anchor_bottom = 1.0
+offset_left = 16.0
+offset_top = 84.0
+offset_right = 218.0
+offset_bottom = -92.0
+theme = ExtResource("1_theme")
+script = ExtResource("2_script")
+
+[node name="Panel" type="Panel" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="MarginContainer" type="MarginContainer" parent="Panel"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_constants/margin_left = 10
+theme_override_constants/margin_top = 10
+theme_override_constants/margin_right = 10
+theme_override_constants/margin_bottom = 10
+
+[node name="VBoxContainer" type="VBoxContainer" parent="Panel/MarginContainer"]
+layout_mode = 2
+theme_override_constants/separation = 10
+
+[node name="TitleLabel" type="Label" parent="Panel/MarginContainer/VBoxContainer"]
+layout_mode = 2
+text = "SECTOR: KORVUS"
+
+[node name="ScaleLabel" type="Label" parent="Panel/MarginContainer/VBoxContainer"]
+layout_mode = 2
+text = "200 x 200 LY"
+
+[node name="Separator" type="HSeparator" parent="Panel/MarginContainer/VBoxContainer"]
+layout_mode = 2
+
+[node name="LegendTitle" type="Label" parent="Panel/MarginContainer/VBoxContainer"]
+layout_mode = 2
+text = "LEGEND"
+
+[node name="ControlledLabel" type="Label" parent="Panel/MarginContainer/VBoxContainer"]
+layout_mode = 2
+text = "Controlled"
+
+[node name="AlliedLabel" type="Label" parent="Panel/MarginContainer/VBoxContainer"]
+layout_mode = 2
+text = "Allied"
+
+[node name="NeutralLabel" type="Label" parent="Panel/MarginContainer/VBoxContainer"]
+layout_mode = 2
+text = "Neutral"
+
+[node name="HostileLabel" type="Label" parent="Panel/MarginContainer/VBoxContainer"]
+layout_mode = 2
+text = "Hostile"
+
+[node name="WarpLaneLabel" type="Label" parent="Panel/MarginContainer/VBoxContainer"]
+layout_mode = 2
+text = "Warp Lane"
+
+[node name="ToolSeparator" type="HSeparator" parent="Panel/MarginContainer/VBoxContainer"]
+layout_mode = 2
+
+[node name="ToolButtons" type="VBoxContainer" parent="Panel/MarginContainer/VBoxContainer"]
+layout_mode = 2
+theme_override_constants/separation = 6
+
+[node name="FocusButton" type="Button" parent="Panel/MarginContainer/VBoxContainer/ToolButtons"]
+custom_minimum_size = Vector2(0, 36)
+layout_mode = 2
+text = "Center"
+
+[node name="ZoomInButton" type="Button" parent="Panel/MarginContainer/VBoxContainer/ToolButtons"]
+custom_minimum_size = Vector2(0, 36)
+layout_mode = 2
+text = "Zoom In"
+
+[node name="ZoomOutButton" type="Button" parent="Panel/MarginContainer/VBoxContainer/ToolButtons"]
+custom_minimum_size = Vector2(0, 36)
+layout_mode = 2
+text = "Zoom Out"
+
+[node name="LayersButton" type="Button" parent="Panel/MarginContainer/VBoxContainer/ToolButtons"]
+custom_minimum_size = Vector2(0, 36)
+layout_mode = 2
+text = "Layers"
+
+[node name="FilterButton" type="Button" parent="Panel/MarginContainer/VBoxContainer/ToolButtons"]
+custom_minimum_size = Vector2(0, 36)
+layout_mode = 2
+text = "Filters"

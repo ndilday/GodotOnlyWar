@@ -9,7 +9,7 @@ anchors_preset = 12
 anchor_top = 1.0
 anchor_right = 1.0
 anchor_bottom = 1.0
-offset_top = -50.0
+offset_top = -72.0
 grow_horizontal = 2
 grow_vertical = 0
 theme = ExtResource("1_ea6pw")
@@ -31,52 +31,67 @@ anchor_right = 1.0
 anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
-theme_override_constants/margin_left = 10
+theme_override_constants/margin_left = 8
+theme_override_constants/margin_top = 8
+theme_override_constants/margin_right = 8
+theme_override_constants/margin_bottom = 8
 
 [node name="HBoxContainer" type="HBoxContainer" parent="Panel/MarginContainer"]
 layout_mode = 2
+theme_override_constants/separation = 5
+alignment = 1
 
 [node name="ChapterButton" type="Button" parent="Panel/MarginContainer/HBoxContainer"]
+custom_minimum_size = Vector2(92, 0)
 layout_mode = 2
 text = "Chapter"
 
 [node name="ApothecariumButton" type="Button" parent="Panel/MarginContainer/HBoxContainer"]
+custom_minimum_size = Vector2(96, 0)
 layout_mode = 2
-text = "Apothecarium"
+text = "Apoth."
 
 [node name="ReclusiumButton" type="Button" parent="Panel/MarginContainer/HBoxContainer"]
+custom_minimum_size = Vector2(92, 0)
 layout_mode = 2
 disabled = true
-text = "Reclusium"
+text = "Reclus."
 
 [node name="LibraryButton" type="Button" parent="Panel/MarginContainer/HBoxContainer"]
+custom_minimum_size = Vector2(92, 0)
 layout_mode = 2
 disabled = true
-text = "Librarium"
+text = "Library"
 
 [node name="ArmoryButton" type="Button" parent="Panel/MarginContainer/HBoxContainer"]
+custom_minimum_size = Vector2(94, 0)
 layout_mode = 2
 disabled = true
-text = "Armamentarium"
+text = "Armory"
 
 [node name="TrainingUnitButton" type="Button" parent="Panel/MarginContainer/HBoxContainer"]
+custom_minimum_size = Vector2(96, 0)
 layout_mode = 2
-text = "10th Company"
+text = "10th Co."
 
 [node name="FleetButton" type="Button" parent="Panel/MarginContainer/HBoxContainer"]
+custom_minimum_size = Vector2(92, 0)
 layout_mode = 2
 text = "Classis"
 
 [node name="DiplomacyButton" type="Button" parent="Panel/MarginContainer/HBoxContainer"]
+custom_minimum_size = Vector2(96, 0)
 layout_mode = 2
 disabled = true
-text = "Diplomacy"
+text = "Diplom."
 
 [node name="ArchiveButton" type="Button" parent="Panel/MarginContainer/HBoxContainer"]
+custom_minimum_size = Vector2(92, 0)
 layout_mode = 2
 disabled = true
 text = "Archive"
 
 [node name="EndTurnButton" type="Button" parent="Panel/MarginContainer/HBoxContainer"]
+custom_minimum_size = Vector2(110, 0)
 layout_mode = 2
 text = "End Turn"

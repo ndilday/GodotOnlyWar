@@ -14,6 +14,8 @@ public partial class MainGameScene : Control
 {
     private BottomMenu _bottomMenu;
     private TopMenu _topMenu;
+    private LeftMapTools _leftMapTools;
+    private SystemInspector _systemInspector;
     private SectorMap _sectorMap;
     private ChapterController _chapterScreen;
     private ApothecariumScreenController _apothecariumScreen;
@@ -39,7 +41,10 @@ public partial class MainGameScene : Control
     {
         _bottomMenu = GetNode<BottomMenu>("UILayer/BottomMenu");
         _topMenu = GetNode<TopMenu>("UILayer/TopMenu");
+        _leftMapTools = GetNode<LeftMapTools>("UILayer/LeftMapTools");
+        _systemInspector = GetNode<SystemInspector>("UILayer/SystemInspector");
         _topMenu.SaveButtonPressed += OnSaveButtonPressed;
+        _leftMapTools.MapToolPressed += OnMapToolPressed;
         _bottomMenu.ChapterButtonPressed += OnChapterButtonPressed;
         _bottomMenu.ApothecariumButtonPressed += OnApothecariumButtonPressed;
         _bottomMenu.TrainingUnitButtonPressed += OnTrainingUnitButtonPressed;
@@ -52,6 +57,7 @@ public partial class MainGameScene : Control
         _mainUILayer = GetNode<CanvasLayer>("UILayer");
         _turnController = new TurnController();
         _previousScreenStack = new Stack<Control>();
+        _systemInspector.DisplayPlanet(GameDataSingleton.Instance.Sector.Planets.Values.FirstOrDefault());
     }
 
     public override void _UnhandledInput(InputEvent @event)
@@ -105,7 +111,14 @@ public partial class MainGameScene : Control
         _sectorMap.Visible = isVisible;
         _sectorMap.SetProcessInput(isVisible);
         _topMenu.Visible = isVisible;
+        _leftMapTools.Visible = isVisible;
+        _systemInspector.Visible = isVisible;
         _bottomMenu.Visible = isVisible;
+    }
+
+    private void OnMapToolPressed(object sender, string actionKey)
+    {
+        _topMenu.SetDebugText(actionKey);
     }
 
     private async void OnSaveButtonPressed(object sender, EventArgs e)
@@ -231,6 +244,7 @@ public partial class MainGameScene : Control
     private void OnPlanetClicked(object sender, int planetId)
     {
         Planet planet = GameDataSingleton.Instance.Sector.Planets[planetId];
+        _systemInspector.DisplayPlanet(planet);
         //LoadPlanetDetailScreen(planet);
         LoadPlanetTacticalScreen(planet);
     }
