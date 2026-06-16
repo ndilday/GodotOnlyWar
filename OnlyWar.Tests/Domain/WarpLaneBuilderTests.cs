@@ -1,3 +1,4 @@
+using OnlyWar.Models;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -89,10 +90,10 @@ public class WarpLaneBuilderTests
     {
         // Population is 0 for every planet here (regions carry no factions), so capital
         // selection falls through to the Importance tie-break that these tests drive.
-        Planet planet = new(id, $"Planet {id}", new Tuple<ushort, ushort>(x, y), 1, null, importance, 0);
+        Planet planet = new(id, $"Planet {id}", new Coordinate(x, y), 1, null, importance, 0);
         for (int i = 0; i < planet.Regions.Length; i++)
         {
-            planet.Regions[i] = new Region(i + (id * 100), planet, 0, $"Region {i}", new Tuple<int, int>(0, 0), 0);
+            planet.Regions[i] = new Region(i + (id * 100), planet, 0, $"Region {i}", new RegionCoordinate(0, 0), 0);
         }
         return planet;
     }

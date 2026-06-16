@@ -1,3 +1,4 @@
+using OnlyWar.Models;
 ﻿using System;
 using System.Collections.Generic;
 
@@ -5,6 +6,6 @@ namespace OnlyWar.Helpers.Battles.Placers
 {
     interface IArmyPlacer
     {
-        Dictionary<BattleSquad, Tuple<ushort, ushort>> PlaceSquads(IEnumerable<BattleSquad> squads);
+        Dictionary<BattleSquad, Coordinate> PlaceSquads(IEnumerable<BattleSquad> squads);
     }
 }

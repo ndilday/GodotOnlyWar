@@ -1,3 +1,4 @@
+using OnlyWar.Models;
 ﻿using System;
 using System.Collections.Generic;
 
@@ -35,14 +36,14 @@ namespace OnlyWar.Helpers.Battles.Placers
             ushort rightLimit = xMid;
             foreach (BattleSquad squad in squads)
             {
-                Tuple<ushort, ushort> squadSize = squad.GetSquadBoxSize();
-                ushort left = (ushort)(xMid - squadSize.Item1 / 2);
-                ushort right = (ushort)(xMid + squadSize.Item1 - squadSize.Item1 / 2);
-                bottomLimit = (ushort)(topLimit - squadSize.Item2);
+                Coordinate squadSize = squad.GetSquadBoxSize();
+                ushort left = (ushort)(xMid - squadSize.X / 2);
+                ushort right = (ushort)(xMid + squadSize.X - squadSize.X / 2);
+                bottomLimit = (ushort)(topLimit - squadSize.Y);
                 squadPositionMap[squad] = new Tuple<int, int>(left, bottomLimit);
                 BattleSquadPlacer.PlaceBattleSquad(_grid, squad, new Tuple<int, int>(left, bottomLimit), true);
 
-                topLimit -= (ushort)(squadSize.Item2 + 1);
+                topLimit -= (ushort)(squadSize.Y + 1);
 
                 if (left < leftLimit)
                 {
@@ -68,12 +69,12 @@ namespace OnlyWar.Helpers.Battles.Placers
             int iteration = 0;
             foreach (BattleSquad squad in ambushingSquads)
             {
-                Tuple<ushort, ushort> squadSize = squad.GetSquadBoxSize();
+                Coordinate squadSize = squad.GetSquadBoxSize();
                 if (onLeft)
                 {
                     // start at top left of killzone, fill downward
-                    currentY -= squadSize.Item1;
-                    int left = currentX - squadSize.Item2;
+                    currentY -= squadSize.X;
+                    int left = currentX - squadSize.Y;
                     BattleSquadPlacer.PlaceBattleSquad(_grid, squad, new Tuple<int, int>(left, currentY), false);
                     if(currentY <= bottomLimit)
                     {
@@ -87,7 +88,7 @@ namespace OnlyWar.Helpers.Battles.Placers
                     // start at top left of killzone, fill right
                     squadPositionMap[squad] = new Tuple<int, int>(currentX, currentY);
                     BattleSquadPlacer.PlaceBattleSquad(_grid, squad, new Tuple<int, int>(currentX, currentY), true);
-                    currentX += squadSize.Item1;
+                    currentX += squadSize.X;
                     if(currentX >= rightLimit)
                     {
                         onLeft = true;

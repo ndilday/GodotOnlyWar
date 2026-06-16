@@ -10,7 +10,7 @@ namespace OnlyWar.Models.Planets
         public readonly int Id;
         public readonly Planet Planet;
         public readonly string Name;
-        public readonly Tuple<int, int> Coordinates;
+        public readonly RegionCoordinate Coordinates;
         public float IntelligenceLevel { get; set; }
         public List<Mission> SpecialMissions { get; }
         // territory is diamond-shaped
@@ -58,7 +58,7 @@ namespace OnlyWar.Models.Planets
             }
         }
 
-        public Region(int id, Planet planet, int regionType, string name, Tuple<int, int> coordinates, float intelligenceLevel)
+        public Region(int id, Planet planet, int regionType, string name, RegionCoordinate coordinates, float intelligenceLevel)
         {
             Id = id;
             Planet = planet;

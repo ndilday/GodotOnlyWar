@@ -408,7 +408,7 @@ Fleet (player-force level)
 TaskForce
   ├─ Faction : Faction
   ├─ Ships : List<Ship>
-  ├─ Position : Tuple<ushort, ushort>
+  ├─ Position : Coordinate?           (null if in transit)
   ├─ CurrentPlanet : Planet          (null if in transit)
   └─ Destination : Planet            (null if stationary)
 

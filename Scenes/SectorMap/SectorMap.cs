@@ -23,11 +23,11 @@ public partial class SectorMap : Node2D
     public event EventHandler<int> FleetClicked;
 
     public Vector2I GridDimensions =
-		new(GameDataSingleton.Instance.GameRulesData.SectorSize.Item1,
-			GameDataSingleton.Instance.GameRulesData.SectorSize.Item2);
-	public Vector2I CellSize = 
-		new(GameDataSingleton.Instance.GameRulesData.SectorCellSize.Item1,
-			GameDataSingleton.Instance.GameRulesData.SectorCellSize.Item2);
+		new(GameDataSingleton.Instance.GameRulesData.SectorSize.X,
+			GameDataSingleton.Instance.GameRulesData.SectorSize.Y);
+	public Vector2I CellSize =
+		new(GameDataSingleton.Instance.GameRulesData.SectorCellSize.X,
+			GameDataSingleton.Instance.GameRulesData.SectorCellSize.Y);
 
 	public Vector2I HalfCellSize { get; private set; }
     public ushort[] SectorIds { get; private set; }
@@ -56,13 +56,13 @@ public partial class SectorMap : Node2D
         }
         _subsectorVertexListMap = DetermineSubsectorBorderPoints(subsectors);
         TaskForce centerFleet = GameDataSingleton.Instance.Sector.PlayerForce.Fleet.TaskForces.FirstOrDefault();
-        Tuple<ushort, ushort> centerPosition = centerFleet?.Planet?.Position ?? centerFleet?.Position;
+        Coordinate? centerPosition = centerFleet?.Planet?.Position ?? centerFleet?.Position;
         if (centerPosition == null)
         {
             centerPosition = GameDataSingleton.Instance.Sector.Planets.Values.First().Position;
         }
 
-        Vector2I gridPosition = new Vector2I(centerPosition.Item1, centerPosition.Item2);
+        Vector2I gridPosition = new Vector2I(centerPosition.Value.X, centerPosition.Value.Y);
         Vector2I mapPosition = CalculateMapPosition(gridPosition);
         _camera.ZoomTo(1, mapPosition);
     }
@@ -115,7 +115,7 @@ public partial class SectorMap : Node2D
 		Random rand = new Random();
 		foreach(var kvp in GameDataSingleton.Instance.Sector.Planets)
 		{
-			Vector2I gridPosition = new(kvp.Value.Position.Item1, kvp.Value.Position.Item2);
+			Vector2I gridPosition = new(kvp.Value.Position.X, kvp.Value.Position.Y);
 			int index = GridPositionToIndex(gridPosition);
 			HasPlanet[index] = true;
             var color = kvp.Value.GetControllingFaction().Color;
@@ -154,16 +154,16 @@ public partial class SectorMap : Node2D
 
                 // Assuming you have a way to get the planet's position
                 // You'll need to implement GetPlanetSpritePosition or similar
-                gridPosition = new(taskForce.Planet.Position.Item1, taskForce.Planet.Position.Item2);
+                gridPosition = new(taskForce.Planet.Position.X, taskForce.Planet.Position.Y);
             }
-            else if (isRealspaceTransit && GetTransitAnchorPosition(taskForce) is Tuple<ushort, ushort> transitPosition)
+            else if (isRealspaceTransit && GetTransitAnchorPosition(taskForce) is Coordinate transitPosition)
             {
-                gridPosition = new Vector2I(transitPosition.Item1, transitPosition.Item2);
+                gridPosition = new Vector2I(transitPosition.X, transitPosition.Y);
             }
             else
             {
                 // Fleet is in space, use its map coordinates
-                gridPosition = new Vector2I(taskForce.Position.Item1, taskForce.Position.Item2);
+                gridPosition = new Vector2I(taskForce.Position.Value.X, taskForce.Position.Value.Y);
             }
 
 			// Make sure you are the owner of the new node, or it will not save properly
@@ -176,7 +176,7 @@ public partial class SectorMap : Node2D
         }
     }
 
-	private static Tuple<ushort, ushort> GetTransitAnchorPosition(TaskForce taskForce)
+	private static Coordinate? GetTransitAnchorPosition(TaskForce taskForce)
 	{
 		return taskForce.TravelPhase switch
 		{

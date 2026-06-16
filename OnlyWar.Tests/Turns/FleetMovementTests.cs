@@ -202,7 +202,7 @@ public class FleetMovementTests
 
         private static Planet CreatePlanet(int id, string name, ushort x, ushort y, Faction faction)
         {
-            Planet planet = new(id, name, new Tuple<ushort, ushort>(x, y), 1, null, 1, 0);
+            Planet planet = new(id, name, new Coordinate(x, y), 1, null, 1, 0);
             PlanetFaction planetFaction = new(faction);
             planet.PlanetFactionMap[faction.Id] = planetFaction;
             for (int i = 0; i < planet.Regions.Length; i++)

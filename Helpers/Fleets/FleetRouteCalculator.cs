@@ -163,8 +163,8 @@ namespace OnlyWar.Helpers.Fleets
 
         public static double CalculateDistance(Planet origin, Planet destination)
         {
-            double x = origin.Position.Item1 - destination.Position.Item1;
-            double y = origin.Position.Item2 - destination.Position.Item2;
+            double x = origin.Position.X - destination.Position.X;
+            double y = origin.Position.Y - destination.Position.Y;
             return Math.Sqrt((x * x) + (y * y));
         }
 

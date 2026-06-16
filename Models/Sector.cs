@@ -12,8 +12,8 @@ namespace OnlyWar.Models
     {
         private readonly Dictionary<int, TaskForce> _fleets;
         private readonly Dictionary<int, Planet> _planets;
-        private readonly Dictionary<ushort, List<Tuple<ushort, ushort>>> _subsectorPlanetMap;
-        private readonly Dictionary<ushort, Tuple<ushort, ushort>> _subsectorCenterMap;
+        private readonly Dictionary<ushort, List<Coordinate>> _subsectorPlanetMap;
+        private readonly Dictionary<ushort, Coordinate> _subsectorCenterMap;
         private readonly List<Subsector> _subsectors;
         private readonly List<WarpLane> _warpLanes;
         private readonly List<Character> _characters;
@@ -21,8 +21,8 @@ namespace OnlyWar.Models
 
         public List<Character> Characters { get => _characters; }
         public IReadOnlyDictionary<int, Planet> Planets { get => _planets; }
-        public IReadOnlyDictionary<ushort, List<Tuple<ushort, ushort>>> SubsectorPlanetMap { get => _subsectorPlanetMap; }
-        public IReadOnlyDictionary<ushort, Tuple<ushort, ushort>> SubsectorCenterMap { get => _subsectorCenterMap; }
+        public IReadOnlyDictionary<ushort, List<Coordinate>> SubsectorPlanetMap { get => _subsectorPlanetMap; }
+        public IReadOnlyDictionary<ushort, Coordinate> SubsectorCenterMap { get => _subsectorCenterMap; }
         public IReadOnlyList<Subsector> Subsectors { get => _subsectors; }
         public IReadOnlyList<WarpLane> WarpLanes { get => _warpLanes; }
         public IReadOnlyDictionary<int, TaskForce> Fleets { get => _fleets; }
@@ -77,14 +77,14 @@ namespace OnlyWar.Models
             return Planets[planetId];
         }
 
-        public Planet GetPlanetByPosition(Tuple<ushort, ushort> worldPosition)
+        public Planet GetPlanetByPosition(Coordinate worldPosition)
         {
-            return Planets.Values.Where(p => p.Position != null && p.Position.Equals(worldPosition)).SingleOrDefault();
+            return Planets.Values.Where(p => p.Position.Equals(worldPosition)).SingleOrDefault();
         }
 
-        public IEnumerable<TaskForce> GetFleetsByPosition(Tuple<ushort, ushort> worldPosition)
+        public IEnumerable<TaskForce> GetFleetsByPosition(Coordinate worldPosition)
         {
-            return Fleets.Values.Where(f => f.Position != null && f.Position.Equals(worldPosition));
+            return Fleets.Values.Where(f => f.Position != null && f.Position.Value.Equals(worldPosition));
         }
 
         public void AddNewFleet(TaskForce newFleet)

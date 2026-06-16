@@ -37,7 +37,7 @@ namespace OnlyWar.Helpers.Database.GameState
                     int taxLevel = reader.GetInt32(6);
                     var template = planetTemplateMap[planetTemplateId];
                     // for now, we're hard coding all planets to be size 16
-                    Planet planet = new Planet(id, name, new Tuple<ushort, ushort>((ushort)x, (ushort)y), 16, template, importance, taxLevel);
+                    Planet planet = new Planet(id, name, new Coordinate((ushort)x, (ushort)y), 16, template, importance, taxLevel);
 
                     // set up region adjacency
                     foreach (PlanetFaction planetFaction in planetFactions[id])
@@ -260,7 +260,7 @@ namespace OnlyWar.Helpers.Database.GameState
                 (Id, PlanetTemplateId, Name, x, y, 
                 Importance, TaxLevel) VALUES 
                 ({planet.Id}, {planet.Template.Id}, '{planet.Name.Replace("\'", "\'\'")}', 
-                {planet.Position.Item1}, {planet.Position.Item2},
+                {planet.Position.X}, {planet.Position.Y},
                 {planet.Importance}, {planet.TaxLevel});";
             using (var command = transaction.Connection.CreateCommand())
             {

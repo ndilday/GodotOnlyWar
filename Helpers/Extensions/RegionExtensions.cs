@@ -7,45 +7,29 @@ namespace OnlyWar.Helpers.Extensions
 {
     public static class RegionExtensions
     {
-        public static Tuple<int, int> GetCoordinatesFromRegionNumber(int regionNumber)
+        public static RegionCoordinate GetCoordinatesFromRegionNumber(int regionNumber)
         {
-            switch (regionNumber)
+            return regionNumber switch
             {
-                case 0:
-                    return new Tuple<int, int>(0, 0);
-                case 1:
-                    return new Tuple<int, int>(1, 0);
-                case 2:
-                    return new Tuple<int, int>(1, 1);
-                case 3:
-                    return new Tuple<int, int>(2, 0);
-                case 4:
-                    return new Tuple<int, int>(2, 1);
-                case 5:
-                    return new Tuple<int, int>(2, 2);
-                case 6:
-                    return new Tuple<int, int>(3, 0);
-                case 7:
-                    return new Tuple<int, int>(3, 1);
-                case 8:
-                    return new Tuple<int, int>(3, 2);
-                case 9:
-                    return new Tuple<int, int>(3, 3);
-                case 10:
-                    return new Tuple<int, int>(4, 1);
-                case 11:
-                    return new Tuple<int, int>(4, 2);
-                case 12:
-                    return new Tuple<int, int>(4, 3);
-                case 13:
-                    return new Tuple<int, int>(5, 2);
-                case 14:
-                    return new Tuple<int, int>(5, 3);
-                case 15:
-                    return new Tuple<int, int>(6, 3);
-                default:
-                    return null;
-            }
+                0 => new RegionCoordinate(0, 0),
+                1 => new RegionCoordinate(1, 0),
+                2 => new RegionCoordinate(1, 1),
+                3 => new RegionCoordinate(2, 0),
+                4 => new RegionCoordinate(2, 1),
+                5 => new RegionCoordinate(2, 2),
+                6 => new RegionCoordinate(3, 0),
+                7 => new RegionCoordinate(3, 1),
+                8 => new RegionCoordinate(3, 2),
+                9 => new RegionCoordinate(3, 3),
+                10 => new RegionCoordinate(4, 1),
+                11 => new RegionCoordinate(4, 2),
+                12 => new RegionCoordinate(4, 3),
+                13 => new RegionCoordinate(5, 2),
+                14 => new RegionCoordinate(5, 3),
+                15 => new RegionCoordinate(6, 3),
+                _ => throw new ArgumentOutOfRangeException(nameof(regionNumber), regionNumber,
+                    "Region number must be in the range 0-15."),
+            };
         }
 
         public static List<Region> GetSelfAndAdjacentRegions(this Region region)
@@ -58,14 +42,14 @@ namespace OnlyWar.Helpers.Extensions
             List<Region> adjacentRegions = new List<Region>();
             foreach (Region r in region.Planet.Regions)
             {
-                if ((r.Coordinates.Item1 == region.Coordinates.Item1 - 1 ||
-                    r.Coordinates.Item1 == region.Coordinates.Item1 ||
-                    r.Coordinates.Item1 == region.Coordinates.Item1 + 1) &&
-                   (r.Coordinates.Item2 == region.Coordinates.Item2 - 1 ||
-                    r.Coordinates.Item2 == region.Coordinates.Item2 ||
-                    r.Coordinates.Item2 == region.Coordinates.Item2 + 1) &&
-                   (r.Coordinates.Item1 != region.Coordinates.Item1 ||
-                    r.Coordinates.Item2 != region.Coordinates.Item2))
+                if ((r.Coordinates.X == region.Coordinates.X - 1 ||
+                    r.Coordinates.X == region.Coordinates.X ||
+                    r.Coordinates.X == region.Coordinates.X + 1) &&
+                   (r.Coordinates.Y == region.Coordinates.Y - 1 ||
+                    r.Coordinates.Y == region.Coordinates.Y ||
+                    r.Coordinates.Y == region.Coordinates.Y + 1) &&
+                   (r.Coordinates.X != region.Coordinates.X ||
+                    r.Coordinates.Y != region.Coordinates.Y))
                 {
                     adjacentRegions.Add(r);
                 }

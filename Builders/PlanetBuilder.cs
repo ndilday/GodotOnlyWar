@@ -30,7 +30,7 @@ namespace OnlyWar.Builders
         private static int _nextLeaderId = 0;
 
         public Planet GenerateNewPlanet(IReadOnlyDictionary<int, PlanetTemplate> planetTemplateMap, 
-                                        Tuple<ushort, ushort> position, Faction controllingFaction, Faction infiltratingFaction)
+                                        Coordinate position, Faction controllingFaction, Faction infiltratingFaction)
         {
             PlanetTemplate template = DeterminePlanetTemplate(planetTemplateMap);
             Faction leaderFaction = controllingFaction;

@@ -256,7 +256,7 @@ public class TurnTrainingTests
 
         public void PutTaskForceInWarp(int currentPhaseWeeksRemaining, double subjectiveWarpWeeks)
         {
-            Planet destination = new(2, "Training Destination", new Tuple<ushort, ushort>(2, 1), 1, null, 1, 0);
+            Planet destination = new(2, "Training Destination", new Coordinate(2, 1), 1, null, 1, 0);
             TaskForce.Origin = TaskForce.Planet;
             TaskForce.Destination = destination;
             TaskForce.Planet.OrbitingTaskForceList.Remove(TaskForce);
@@ -351,7 +351,7 @@ public class TurnTrainingTests
                 new NormalizedValueTemplate { BaseValue = 1000, StandardDeviation = 0 },
                 new NormalizedValueTemplate { BaseValue = 1, StandardDeviation = 0 },
                 new LinearValueTemplate { MinValue = 0, MaxValue = 0 });
-            Planet planet = new(1, "Training Test World", new Tuple<ushort, ushort>(1, 1), 1, template, 1, 0);
+            Planet planet = new(1, "Training Test World", new Coordinate(1, 1), 1, template, 1, 0);
 
             for (int i = 0; i < planet.Regions.Length; i++)
             {

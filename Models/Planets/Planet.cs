@@ -10,7 +10,7 @@ namespace OnlyWar.Models.Planets
     {
         public readonly int Id;
         public readonly string Name;
-        public readonly Tuple<ushort, ushort> Position;
+        public readonly Coordinate Position;
         public readonly PlanetTemplate Template;
         public readonly int Importance;
         public readonly int TaxLevel;
@@ -47,7 +47,7 @@ namespace OnlyWar.Models.Planets
             }
         }
 
-        public Planet(int id, string name, Tuple<ushort, ushort> position, int size, 
+        public Planet(int id, string name, Coordinate position, int size,
             PlanetTemplate template, int importance, int taxLevel)
         {
             Id = id;

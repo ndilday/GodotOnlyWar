@@ -274,8 +274,8 @@ public partial class SquadScreenController : DialogController
         // **based on the relative positions or relationships of `currentRegion` and `neighbourRegion`.**
 
         // **Example (Conceptual -  you'll need to adapt this to your Region/Grid system):**
-        int dx = neighbourRegion.Coordinates.Item1 - currentRegion.Coordinates.Item1; // Example: Grid coordinates
-        int dy = neighbourRegion.Coordinates.Item2 - currentRegion.Coordinates.Item2;
+        int dx = neighbourRegion.Coordinates.X - currentRegion.Coordinates.X; // Example: Grid coordinates
+        int dy = neighbourRegion.Coordinates.Y - currentRegion.Coordinates.Y;
 
         if (dy == 1 && dx == 0) return "N";
         if (dy == 1 && dx == 1) return "NE";

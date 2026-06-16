@@ -20,14 +20,14 @@ namespace OnlyWar.Builders
 
             RNG.Reset(seed);
 
-            for (ushort j = 0; j < data.SectorSize.Item2; j++)
+            for (ushort j = 0; j < data.SectorSize.Y; j++)
             {
-                for (ushort i = 0; i < data.SectorSize.Item1; i++)
+                for (ushort i = 0; i < data.SectorSize.X; i++)
                 {
                     double random = RNG.GetLinearDouble();
                     if (random <= data.PlanetChance)
                     {
-                        Planet planet = GeneratePlanet(new Tuple<ushort, ushort>(i, j), data);
+                        Planet planet = GeneratePlanet(new Coordinate(i, j), data);
                         planetList.Add(planet);
 
                         if (planet.PlanetFactionMap[planet.GetControllingFaction().Id].Leader != null)
@@ -60,13 +60,13 @@ namespace OnlyWar.Builders
         /// </summary>
         public static void GenerateWarpNetwork(Sector sector, GameRulesData data)
         {
-            Godot.Vector2I gridDimensions = new(data.SectorSize.Item1, data.SectorSize.Item2);
+            Godot.Vector2I gridDimensions = new(data.SectorSize.X, data.SectorSize.Y);
             List<Subsector> subsectors = SubsectorBuilder.BuildSubsectors(sector.Planets.Values, gridDimensions);
             List<WarpLane> warpLanes = WarpLaneBuilder.BuildWarpLanes(subsectors, data.MaxSubsectorCellDiameter * 2.5);
             sector.InitializeWarpNetwork(subsectors, warpLanes);
         }
 
-        private static Planet GeneratePlanet(Tuple<ushort, ushort> position, GameRulesData data)
+        private static Planet GeneratePlanet(Coordinate position, GameRulesData data)
         {
             // TODO: There should be game start config settings for planet ownership by specific factions
             // TODO: Once genericized, move into planet factory

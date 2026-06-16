@@ -85,7 +85,7 @@ public partial class RegionScreenController : DialogController
         {
             new Tuple<string, string>("Region Name", _currentRegion.Name),
             new Tuple<string, string>("Planet", _currentRegion.Planet.Name),
-            new Tuple<string, string>("Coordinates", $"({_currentRegion.Coordinates.Item1}, {_currentRegion.Coordinates.Item2})")
+            new Tuple<string, string>("Coordinates", $"({_currentRegion.Coordinates.X}, {_currentRegion.Coordinates.Y})")
             // Add more details as needed (e.g., Terrain Type, Intelligence Level)
         };
 
@@ -380,8 +380,8 @@ public partial class RegionScreenController : DialogController
 
     private string GetDirectionFromCurrentToNeighbour(Region currentRegion, Region neighbourRegion)
     {
-        int dx = neighbourRegion.Coordinates.Item1 - currentRegion.Coordinates.Item1;
-        int dy = neighbourRegion.Coordinates.Item2 - currentRegion.Coordinates.Item2;
+        int dx = neighbourRegion.Coordinates.X - currentRegion.Coordinates.X;
+        int dy = neighbourRegion.Coordinates.Y - currentRegion.Coordinates.Y;
 
         if (dx == 0 && dy > 0) return "N";    // Higher Y is North in many grid systems
         if (dx > 0 && dy > 0) return "NE";

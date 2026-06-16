@@ -84,7 +84,7 @@ namespace OnlyWar.Helpers.Database.GameState
                         || reader.GetBoolean(11);
 
                     // see if the position is a planet
-                    Tuple<ushort, ushort> location = new((ushort)x, (ushort)y);
+                    Coordinate location = new((ushort)x, (ushort)y);
                     bool isInTransit = destination != null && travelWeeksRemaining > 0;
                     Planet planet = isInTransit
                         ? null
@@ -113,7 +113,7 @@ namespace OnlyWar.Helpers.Database.GameState
             string origin = fleet.Origin == null ? "null" : fleet.Origin.Id.ToString();
             int warpSubjectiveTrainingApplied = fleet.WarpSubjectiveTrainingApplied ? 1 : 0;
             string insert = $@"INSERT INTO Fleet VALUES ({fleet.Id}, {fleet.Faction.Id}, 
-                {fleet.Position.Item1}, {fleet.Position.Item2}, {destination}, {fleet.TravelWeeksRemaining},
+                {fleet.Position.Value.X}, {fleet.Position.Value.Y}, {destination}, {fleet.TravelWeeksRemaining},
                 {origin}, {(int)fleet.TravelPhase}, {fleet.CurrentPhaseWeeksRemaining},
                 {fleet.WarpSubjectiveWeeks}, {fleet.WarpObjectiveWeeks}, {warpSubjectiveTrainingApplied});";
             using (var command = transaction.Connection.CreateCommand())

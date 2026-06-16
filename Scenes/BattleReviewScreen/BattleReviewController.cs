@@ -29,7 +29,7 @@ public partial class BattleReviewController : DialogController
         _view = GetNode<BattleReviewView>("DialogView");
         _view.PreviousTurnPressed += (object sender, EventArgs e) => OnPreviousTurn();
         _view.NextTurnPressed += (object sender, EventArgs e) => OnNextTurn();
-        _pixelsPerGrid = new(GameDataSingleton.Instance.GameRulesData.BattleCellSize.Item1, GameDataSingleton.Instance.GameRulesData.BattleCellSize.Item2);
+        _pixelsPerGrid = new(GameDataSingleton.Instance.GameRulesData.BattleCellSize.X, GameDataSingleton.Instance.GameRulesData.BattleCellSize.Y);
         _soldierTexture = (Texture2D)GD.Load("res://Assets/helmet.png");
         Vector2 floatingVector = new Vector2(_pixelsPerGrid.X, _pixelsPerGrid.Y);
         _soldierTextureScale = (floatingVector - GRID_BORDER_SIZE) / _soldierTexture.GetSize();

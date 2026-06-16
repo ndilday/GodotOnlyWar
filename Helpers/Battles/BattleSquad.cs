@@ -1,3 +1,4 @@
+using OnlyWar.Models;
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -65,7 +66,7 @@ namespace OnlyWar.Helpers.Battles
             return new BattleSquad(this);
         }
 
-        public Tuple<ushort, ushort> GetSquadBoxSize()
+        public Coordinate GetSquadBoxSize()
         {
             int numberOfRows = 1;
             if (AbleSoldiers.Count >= 30)
@@ -78,7 +79,7 @@ namespace OnlyWar.Helpers.Battles
             }
             // membersPerRow is how many soldiers are in each row (back row may be smaller)
             ushort membersPerRow = (ushort)Math.Ceiling((float)(AbleSoldiers.Count) / (float)(numberOfRows));
-            return new Tuple<ushort, ushort>((ushort)(membersPerRow * AbleSoldiers[0].Soldier.Template.Species.Width), 
+            return new Coordinate((ushort)(membersPerRow * AbleSoldiers[0].Soldier.Template.Species.Width), 
                                              (ushort)(numberOfRows * AbleSoldiers[0].Soldier.Template.Species.Depth));
         }
 

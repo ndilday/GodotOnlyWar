@@ -41,7 +41,7 @@ public class FleetReorganizationTests
         TaskForce merging = new(fixture.Faction)
         {
             Planet = fixture.Planet,
-            Position = new Tuple<ushort, ushort>(fixture.Planet.Position.Item1, fixture.Planet.Position.Item2)
+            Position = new Coordinate(fixture.Planet.Position.X, fixture.Planet.Position.Y)
         };
         merging.Ships.Add(CreateShip(99, merging));
         fixture.Sector.AddNewFleet(merging);
@@ -78,7 +78,7 @@ public class FleetReorganizationTests
         public static Fixture Create(int shipCount)
         {
             Faction faction = CreateFaction();
-            Planet planet = new(1, "Origin", new Tuple<ushort, ushort>(10, 10), 1, null, 1, 0);
+            Planet planet = new(1, "Origin", new Coordinate(10, 10), 1, null, 1, 0);
             TaskForce taskForce = new(faction)
             {
                 Planet = planet,

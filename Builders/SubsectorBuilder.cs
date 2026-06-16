@@ -27,7 +27,7 @@ namespace OnlyWar.Builders
             foreach(Planet planet in planets)
             {
                 // assign each planet its own subsector to start
-                Vector2I gridPosition = new Vector2I((int)planet.Position.Item1, (int)planet.Position.Item2);
+                Vector2I gridPosition = new Vector2I((int)planet.Position.X, (int)planet.Position.Y);
                 subsectorPlanetMap[subsectorId] = [planet];
                 subsectorId++;
             }
@@ -202,7 +202,7 @@ namespace OnlyWar.Builders
             Dictionary<ushort, Circle> circles = [];
             foreach (var subsectorPlanetList in subsectorPlanetMap)
             {
-                List<Vector2> points = subsectorPlanetList.Value.Select(p => new Vector2(p.Position.Item1, p.Position.Item2)).ToList();
+                List<Vector2> points = subsectorPlanetList.Value.Select(p => new Vector2(p.Position.X, p.Position.Y)).ToList();
                 circles[subsectorPlanetList.Key] = FindMinimumEnclosingCircle(points, new List<Vector2>());
             }
             return circles;
@@ -316,8 +316,8 @@ namespace OnlyWar.Builders
             {
                 foreach (var planet2 in planets2)
                 {
-                    int distance = (planet1.Position.Item1 - planet2.Position.Item1) * (planet1.Position.Item1 - planet2.Position.Item1) + 
-                        (planet1.Position.Item2 - planet2.Position.Item2) * (planet1.Position.Item2 - planet2.Position.Item2);
+                    int distance = (planet1.Position.X - planet2.Position.X) * (planet1.Position.X - planet2.Position.X) +
+                        (planet1.Position.Y - planet2.Position.Y) * (planet1.Position.Y - planet2.Position.Y);
                     if (distance > longestPlanetaryDistance)
                     {
                         longestPlanetaryDistance = distance;

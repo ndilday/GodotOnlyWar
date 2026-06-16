@@ -1,3 +1,4 @@
+using OnlyWar.Models;
 using OnlyWar.Helpers.Fleets;
 using OnlyWar.Models.Fleets;
 using OnlyWar.Models.Planets;
@@ -153,6 +154,6 @@ public class FleetRouteCalculatorTests
 
     private static Planet CreatePlanet(int id, ushort x, ushort y)
     {
-        return new Planet(id, $"Planet {id}", new Tuple<ushort, ushort>(x, y), 1, null, 1, 0);
+        return new Planet(id, $"Planet {id}", new Coordinate(x, y), 1, null, 1, 0);
     }
 }

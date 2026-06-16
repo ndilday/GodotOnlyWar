@@ -113,8 +113,8 @@ namespace OnlyWar.Builders
 
         private static double DistanceSquared(Planet a, Planet b)
         {
-            double x = a.Position.Item1 - b.Position.Item1;
-            double y = a.Position.Item2 - b.Position.Item2;
+            double x = a.Position.X - b.Position.X;
+            double y = a.Position.Y - b.Position.Y;
             return (x * x) + (y * y);
         }
     }

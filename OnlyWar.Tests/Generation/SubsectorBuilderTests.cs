@@ -75,6 +75,6 @@ public class SubsectorBuilderTests
 
     private static Planet CreatePlanet(int id, ushort x, ushort y)
     {
-        return new Planet(id, $"Planet {id}", new Tuple<ushort, ushort>(x, y), 1, null, 1, 1);
+        return new Planet(id, $"Planet {id}", new Coordinate(x, y), 1, null, 1, 1);
     }
 }

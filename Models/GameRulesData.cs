@@ -13,15 +13,15 @@ namespace OnlyWar.Models
         public bool DebugMode { get; private set; }
         // Sector Data
         // Measured in light years
-        public Tuple<ushort, ushort> SectorSize { get; private set; }
+        public Coordinate SectorSize { get; private set; }
         // measured in pixels
-        public Tuple<ushort, ushort> SectorCellSize { get; private set; }
+        public Coordinate SectorCellSize { get; private set; }
         // in RAW, 20 light years is the maximum subsector diameter
         public ushort MaxSubsectorCellDiameter { get; private set; }
         // percent chance of a planet in a sector cell
         public float PlanetChance { get; private set; }
         // Battle Data
-        public Tuple<ushort, ushort> BattleCellSize { get; private set; }
+        public Coordinate BattleCellSize { get; private set; }
 
         // Mod Data
         private readonly IReadOnlyList<Faction> _factions;

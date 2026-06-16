@@ -26,7 +26,7 @@ namespace OnlyWar.Models.Fleets
         private static int _nextTaskForceId = 0;
         public int Id { get; set; }
         public Faction Faction { get; }
-        public Tuple<ushort, ushort> Position { get; set; }
+        public Coordinate? Position { get; set; }
         public Planet Origin { get; set; }
         public Planet Destination { get; set; }
         public Planet Planet { get; set; }
@@ -38,7 +38,7 @@ namespace OnlyWar.Models.Fleets
         public bool WarpSubjectiveTrainingApplied { get; set; }
         public List<Ship> Ships { get; }
 
-        public TaskForce(int id, Faction faction, Tuple<ushort, ushort> position, 
+        public TaskForce(int id, Faction faction, Coordinate? position,
                      Planet location, Planet destination, List<Ship> ships, int travelWeeksRemaining = 0,
                      Planet origin = null, FleetTravelPhase travelPhase = FleetTravelPhase.InOrbit,
                      int currentPhaseWeeksRemaining = 0, double warpSubjectiveWeeks = 0,
