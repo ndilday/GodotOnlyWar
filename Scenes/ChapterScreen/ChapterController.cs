@@ -9,8 +9,7 @@ using System.Linq;
 
 public partial class ChapterController : Control
 {
-    private readonly ChapterBrowserPath _path = new();
-    private ChapterBrowserItemEvent _selectedItem;
+    private readonly ChapterBrowserNavigator _navigator = new();
 
     public ChapterView ChapterView { get; set; }
 
@@ -28,8 +27,8 @@ public partial class ChapterController : Control
         ChapterView.BrowserItemSelected += OnBrowserItemSelected;
         ChapterView.BrowserItemDrillRequested += OnBrowserItemDrillRequested;
         ChapterView.BreadcrumbPressed += OnBreadcrumbPressed;
+        ChapterView.DetailPrimaryActionPressed += OnDetailPrimaryActionPressed;
 
-        _selectedItem = null;
         RenderCurrentPath();
     }
 
@@ -44,12 +43,12 @@ public partial class ChapterController : Control
         ChapterView.BrowserItemSelected -= OnBrowserItemSelected;
         ChapterView.BrowserItemDrillRequested -= OnBrowserItemDrillRequested;
         ChapterView.BreadcrumbPressed -= OnBreadcrumbPressed;
+        ChapterView.DetailPrimaryActionPressed -= OnDetailPrimaryActionPressed;
     }
 
     public void PopulateCompanyList()
     {
-        _path.TrimTo(ChapterBrowserLevel.Chapter);
-        _selectedItem = null;
+        _navigator.ResetToChapter();
         RenderCurrentPath();
     }
 
@@ -60,72 +59,103 @@ public partial class ChapterController : Control
 
     private void OnBrowserItemSelected(object sender, ChapterBrowserItemEvent item)
     {
-        _selectedItem = item;
-        RenderCurrentPath();
-
-        if (item.Level == ChapterBrowserLevel.Soldier)
+        if (item.Level == ChapterBrowserLevel.Soldier &&
+            _navigator.Path.Level == ChapterBrowserLevel.Soldier)
         {
-            SoldierSelectedForDisplay?.Invoke(this, item.Id);
+            _navigator.DrillInto(item);
         }
+        else
+        {
+            _navigator.Select(item);
+        }
+        RenderCurrentPath();
     }
 
     private void OnBrowserItemDrillRequested(object sender, ChapterBrowserItemEvent item)
     {
-        switch (item.Level)
-        {
-            case ChapterBrowserLevel.Company:
-                _path.CompanyId = item.Id;
-                _path.SquadId = null;
-                _path.SoldierId = null;
-                _selectedItem = null;
-                break;
-            case ChapterBrowserLevel.Squad:
-                _path.SquadId = item.Id;
-                _path.SoldierId = null;
-                _selectedItem = null;
-                break;
-            case ChapterBrowserLevel.Soldier:
-                _path.SoldierId = item.Id;
-                _selectedItem = item;
-                SoldierSelectedForDisplay?.Invoke(this, item.Id);
-                break;
-        }
-
+        _navigator.DrillInto(item);
         RenderCurrentPath();
     }
 
     private void OnBreadcrumbPressed(object sender, ChapterBrowserLevel level)
     {
-        _path.TrimTo(level);
-        _selectedItem = null;
+        _navigator.MoveToBreadcrumb(level);
         RenderCurrentPath();
+    }
+
+    private void OnDetailPrimaryActionPressed(object sender, EventArgs e)
+    {
+        ISoldier soldier = TryGetCurrentDetailSoldier();
+        if (soldier != null)
+        {
+            SoldierSelectedForDisplay?.Invoke(this, soldier.Id);
+        }
     }
 
     private void RenderCurrentPath()
     {
-        Unit chapter = GetChapter();
+        Unit chapter = TryGetChapter();
+        if (chapter == null)
+        {
+            RenderNoChapterData();
+            return;
+        }
+
         ChapterView.SetBreadcrumbs(BuildBreadcrumbs(chapter));
 
-        switch (_path.Level)
+        switch (_navigator.Path.Level)
         {
             case ChapterBrowserLevel.Chapter:
                 RenderChapterLevel(chapter);
                 break;
             case ChapterBrowserLevel.Company:
-                RenderCompanyLevel(GetCompany(_path.CompanyId.Value));
+                RenderCompanyLevel(GetCompany(_navigator.Path.CompanyId.Value));
                 break;
             case ChapterBrowserLevel.Squad:
-                RenderSquadLevel(GetSquad(_path.SquadId.Value));
+                RenderSquadLevel(GetSquad(_navigator.Path.SquadId.Value));
                 break;
             case ChapterBrowserLevel.Soldier:
-                RenderSoldierLevel(GetSoldier(_path.SoldierId.Value));
+                RenderSoldierLevel(GetSoldier(_navigator.Path.SoldierId.Value));
                 break;
         }
     }
 
+    private void RenderNoChapterData()
+    {
+        ChapterView.SetBreadcrumbs(
+        [
+            new ChapterBreadcrumbItem(ChapterBrowserLevel.Chapter, "Chapter", "chapter")
+        ]);
+        ChapterView.SetLeftMenu("Companies", "No chapter loaded", []);
+        ChapterView.SetDetail(new ChapterBrowserDetail(
+            "chapter",
+            "No Chapter Data",
+            "Chapter data will appear here once a game is loaded.",
+            [
+                new ChapterBrowserMetric("0", "Soldiers"),
+                new ChapterBrowserMetric("0", "Squads"),
+                new ChapterBrowserMetric("0", "Wounded")
+            ],
+            [
+                new ChapterBrowserDetailCard("archive", "Awaiting Game Data", "No active chapter", "Open this screen through the main game flow to browse companies, squads, and soldiers.")
+            ]));
+    }
+
     private void RenderChapterLevel(Unit chapter)
     {
-        List<ChapterBrowserMenuItem> companies = chapter.ChildUnits
+        List<ChapterBrowserMenuItem> chapterItems = chapter.Squads
+            .Select(squad => new ChapterBrowserMenuItem(
+                ChapterBrowserLevel.Squad,
+                squad.Id,
+                GetSquadIconKey(squad),
+                squad.Name,
+                $"{squad.SquadTemplate.Name} - {squad.Members.Count} soldiers",
+                true,
+                IsSelected(ChapterBrowserLevel.Squad, squad.Id),
+                ">"))
+            .ToList();
+
+        chapterItems.AddRange(chapter.ChildUnits
             .Select(company => new ChapterBrowserMenuItem(
                 ChapterBrowserLevel.Company,
                 company.Id,
@@ -133,13 +163,20 @@ public partial class ChapterController : Control
                 company.Name,
                 $"{company.Squads.Count} squads - {company.GetAllMembers().Count()} soldiers",
                 true,
-                IsSelected(ChapterBrowserLevel.Company, company.Id)))
-            .ToList();
+                IsSelected(ChapterBrowserLevel.Company, company.Id),
+                ">"))
+            .ToList());
 
-        ChapterView.SetLeftMenu("Companies", "Select previews; drill opens squads", companies);
+        ChapterView.SetLeftMenu("Chapter Command", "Select / drill", chapterItems);
 
-        Unit selectedCompany = TryGetSelectedCompany() ?? chapter.ChildUnits.FirstOrDefault();
-        ChapterView.SetDetail(BuildChapterDetail(chapter, selectedCompany));
+        Unit selectedCompany = TryGetSelectedCompany();
+        Squad selectedSquad = TryGetSelectedSquad();
+        if (selectedCompany == null && selectedSquad == null)
+        {
+            selectedSquad = chapter.Squads.FirstOrDefault();
+            selectedCompany = selectedSquad == null ? chapter.ChildUnits.FirstOrDefault() : null;
+        }
+        ChapterView.SetDetail(BuildChapterDetail(chapter, selectedCompany, selectedSquad));
     }
 
     private void RenderCompanyLevel(Unit company)
@@ -152,10 +189,11 @@ public partial class ChapterController : Control
                 squad.Name,
                 $"{squad.SquadTemplate.Name} - {squad.Members.Count} soldiers",
                 true,
-                IsSelected(ChapterBrowserLevel.Squad, squad.Id)))
+                IsSelected(ChapterBrowserLevel.Squad, squad.Id),
+                ">"))
             .ToList();
 
-        ChapterView.SetLeftMenu($"{company.Name} Squads", "Select previews; drill opens soldiers", squads);
+        ChapterView.SetLeftMenu($"{company.Name} Squads", "Select / drill", squads);
 
         Squad selectedSquad = TryGetSelectedSquad() ?? company.Squads.FirstOrDefault();
         ChapterView.SetDetail(BuildCompanyDetail(company, selectedSquad));
@@ -170,14 +208,15 @@ public partial class ChapterController : Control
                 GetSoldierIconKey(soldier),
                 $"{soldier.Template.Name} {soldier.Name}",
                 soldier.CanFight ? "Available" : "Wounded or impaired",
-                false,
-                IsSelected(ChapterBrowserLevel.Soldier, soldier.Id)))
+                true,
+                IsSelected(ChapterBrowserLevel.Soldier, soldier.Id),
+                "i"))
             .ToList();
 
-        ChapterView.SetLeftMenu("Battle Brothers", "Select a soldier for details", soldiers);
+        ChapterView.SetLeftMenu("Battle Brothers", "Select / profile", soldiers);
 
         ISoldier selectedSoldier = TryGetSelectedSoldier() ?? squad.Members.FirstOrDefault();
-        ChapterView.SetDetail(BuildSquadDetail(squad, selectedSoldier));
+        ChapterView.SetDetail(selectedSoldier == null ? BuildSquadDetail(squad, null) : BuildSoldierDetail(selectedSoldier));
     }
 
     private void RenderSoldierLevel(ISoldier soldier)
@@ -190,8 +229,9 @@ public partial class ChapterController : Control
                 GetSoldierIconKey(squadMember),
                 $"{squadMember.Template.Name} {squadMember.Name}",
                 squadMember.CanFight ? "Available" : "Wounded or impaired",
-                false,
-                squadMember.Id == soldier.Id))
+                true,
+                squadMember.Id == soldier.Id,
+                "i"))
             .ToList();
 
         ChapterView.SetLeftMenu("Battle Brothers", "Selected soldier", soldiers);
@@ -205,28 +245,28 @@ public partial class ChapterController : Control
             new ChapterBreadcrumbItem(ChapterBrowserLevel.Chapter, "Chapter", "chapter")
         ];
 
-        if (_path.CompanyId.HasValue)
+        if (_navigator.Path.CompanyId.HasValue)
         {
-            Unit company = GetCompany(_path.CompanyId.Value);
+            Unit company = GetCompany(_navigator.Path.CompanyId.Value);
             breadcrumbs.Add(new ChapterBreadcrumbItem(ChapterBrowserLevel.Company, company.Name, GetCompanyIconKey(company)));
         }
 
-        if (_path.SquadId.HasValue)
+        if (_navigator.Path.SquadId.HasValue)
         {
-            Squad squad = GetSquad(_path.SquadId.Value);
+            Squad squad = GetSquad(_navigator.Path.SquadId.Value);
             breadcrumbs.Add(new ChapterBreadcrumbItem(ChapterBrowserLevel.Squad, squad.Name, GetSquadIconKey(squad)));
         }
 
-        if (_path.SoldierId.HasValue)
+        if (_navigator.Path.SoldierId.HasValue)
         {
-            ISoldier soldier = GetSoldier(_path.SoldierId.Value);
+            ISoldier soldier = GetSoldier(_navigator.Path.SoldierId.Value);
             breadcrumbs.Add(new ChapterBreadcrumbItem(ChapterBrowserLevel.Soldier, soldier.Name, GetSoldierIconKey(soldier)));
         }
 
         return breadcrumbs;
     }
 
-    private ChapterBrowserDetail BuildChapterDetail(Unit chapter, Unit selectedCompany)
+    private ChapterBrowserDetail BuildChapterDetail(Unit chapter, Unit selectedCompany, Squad selectedSquad)
     {
         int soldierCount = chapter.GetAllMembers().Count();
         int squadCount = chapter.GetAllSquads().Count();
@@ -248,10 +288,19 @@ public partial class ChapterController : Control
                 $"{selectedCompany.Squads.Count} squads, {selectedCompany.GetAllMembers().Count()} soldiers."));
         }
 
+        if (selectedSquad != null)
+        {
+            cards.Insert(0, new ChapterBrowserDetailCard(
+                GetSquadIconKey(selectedSquad),
+                $"Selected: {selectedSquad.Name}",
+                selectedSquad.SquadTemplate.Name,
+                $"{selectedSquad.Members.Count} soldiers. Drill in to inspect individual battle brothers."));
+        }
+
         return new ChapterBrowserDetail(
             "chapter",
             chapter.Name,
-            "Chapter-level overview. Select a company for a preview; drill into it to manage squads.",
+            "Chapter-level overview. Select command squads or companies for a preview; drill into either to manage their roster.",
             [
                 new ChapterBrowserMetric(soldierCount.ToString(), "Soldiers"),
                 new ChapterBrowserMetric(squadCount.ToString(), "Squads"),
@@ -340,44 +389,74 @@ public partial class ChapterController : Control
                 new ChapterBrowserDetailCard(GetSoldierIconKey(soldier), "Profile", soldier.Template.Name, $"Assigned to {soldier.AssignedSquad?.Name ?? "no squad"}."),
                 new ChapterBrowserDetailCard("medical", "Condition", soldier.CanFight ? "Ready" : "Wounded", $"Functioning hands: {soldier.FunctioningHands}."),
                 new ChapterBrowserDetailCard("archive", "Record", "Chronicle", "Detailed battle history can be connected in a later implementation slice.")
-            ]);
+            ],
+            "Open Full Record",
+            "archive");
     }
 
     private bool IsSelected(ChapterBrowserLevel level, int id)
     {
-        return _selectedItem != null && _selectedItem.Level == level && _selectedItem.Id == id;
+        if (_navigator.Path.Level == level)
+        {
+            return level switch
+            {
+                ChapterBrowserLevel.Company => _navigator.Path.CompanyId == id,
+                ChapterBrowserLevel.Squad => _navigator.Path.SquadId == id,
+                ChapterBrowserLevel.Soldier => _navigator.Path.SoldierId == id,
+                _ => false
+            };
+        }
+
+        return _navigator.SelectedItem != null &&
+            _navigator.SelectedItem.Level == level &&
+            _navigator.SelectedItem.Id == id;
     }
 
     private Unit TryGetSelectedCompany()
     {
-        if (_selectedItem == null || _selectedItem.Level != ChapterBrowserLevel.Company)
+        if (_navigator.SelectedItem == null || _navigator.SelectedItem.Level != ChapterBrowserLevel.Company)
         {
             return null;
         }
-        return GetChapter().ChildUnits.FirstOrDefault(company => company.Id == _selectedItem.Id);
+        return GetChapter().ChildUnits.FirstOrDefault(company => company.Id == _navigator.SelectedItem.Id);
     }
 
     private Squad TryGetSelectedSquad()
     {
-        if (_selectedItem == null || _selectedItem.Level != ChapterBrowserLevel.Squad)
+        if (_navigator.SelectedItem == null || _navigator.SelectedItem.Level != ChapterBrowserLevel.Squad)
         {
             return null;
         }
-        return GetChapter().GetAllSquads().FirstOrDefault(squad => squad.Id == _selectedItem.Id);
+        return GetChapter().GetAllSquads().FirstOrDefault(squad => squad.Id == _navigator.SelectedItem.Id);
     }
 
     private ISoldier TryGetSelectedSoldier()
     {
-        if (_selectedItem == null || _selectedItem.Level != ChapterBrowserLevel.Soldier)
+        if (_navigator.SelectedItem == null || _navigator.SelectedItem.Level != ChapterBrowserLevel.Soldier)
         {
             return null;
         }
-        return GetChapter().GetAllMembers().FirstOrDefault(soldier => soldier.Id == _selectedItem.Id);
+        return GetChapter().GetAllMembers().FirstOrDefault(soldier => soldier.Id == _navigator.SelectedItem.Id);
+    }
+
+    private ISoldier TryGetCurrentDetailSoldier()
+    {
+        if (_navigator.Path.SoldierId.HasValue)
+        {
+            return GetSoldier(_navigator.Path.SoldierId.Value);
+        }
+
+        return TryGetSelectedSoldier();
     }
 
     private Unit GetChapter()
     {
-        return GameDataSingleton.Instance.Sector.PlayerForce.Army.OrderOfBattle;
+        return TryGetChapter();
+    }
+
+    private Unit TryGetChapter()
+    {
+        return GameDataSingleton.Instance?.Sector?.PlayerForce?.Army?.OrderOfBattle;
     }
 
     private Unit GetCompany(int companyId)
@@ -400,12 +479,12 @@ public partial class ChapterController : Control
         return company.UnitTemplate.Name switch
         {
             "Veteran Company" => "elite",
-            "Battle Company" => "tactical",
-            "Tactical Company" => "tactical",
-            "Assault Company" => "assault",
-            "Devastator Company" => "devastator",
+            "Battle Company" => "default",
+            "Tactical Company" => "default",
+            "Assault Company" => "fast",
+            "Devastator Company" => "heavy",
             "Scout Company" => "scout",
-            _ => "hq"
+            _ => "chapter"
         };
     }
 
@@ -414,15 +493,7 @@ public partial class ChapterController : Control
         SquadTypes type = squad.SquadTemplate.SquadType;
         if ((type & SquadTypes.HQ) > 0)
         {
-            return "hq";
-        }
-        if ((type & SquadTypes.Bodyguard) > 0)
-        {
-            return "bodyguard";
-        }
-        if ((type & SquadTypes.Scout) > 0)
-        {
-            return "scout";
+            return "chapter";
         }
         if ((type & SquadTypes.Elite) > 0)
         {
@@ -430,14 +501,18 @@ public partial class ChapterController : Control
         }
         if ((type & SquadTypes.Fast) > 0)
         {
-            return "assault";
+            return "fast";
         }
         if ((type & SquadTypes.Heavy) > 0)
         {
-            return "devastator";
+            return "heavy";
+        }
+        if ((type & SquadTypes.Scout) > 0)
+        {
+            return "scout";
         }
 
-        return "tactical";
+        return "default";
     }
 
     private static string GetSoldierIconKey(ISoldier soldier)

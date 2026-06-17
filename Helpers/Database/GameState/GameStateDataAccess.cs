@@ -38,7 +38,7 @@ namespace OnlyWar.Helpers.Database.GameState
         private readonly GlobalDataAccess _globalDataAccess;
         private readonly PlayerFactionEventDataAccess _playerFactionEventDataAccess;
         private readonly string CREATE_TABLE_FILE =
-            $"/GameData/SaveStructure.sql";
+            Godot.ProjectSettings.GlobalizePath("res://Database/SaveStructure.sql");
         private static GameStateDataAccess _instance;
         public static GameStateDataAccess Instance
         {

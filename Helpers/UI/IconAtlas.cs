@@ -5,8 +5,8 @@ namespace OnlyWar.Helpers.UI
 {
     public static class IconAtlas
     {
-        private const string AtlasPath = "res://Assets/UI/Icons/icon_atlas.svg";
-        private const int CellSize = 64;
+        private const string AtlasPath = "res://Assets/UI/Icons/icon_atlas.png";
+        private const int CellSize = 128;
         private static Texture2D _atlasTexture;
 
         private static readonly Dictionary<string, Vector2I> IconCells = new()
@@ -44,6 +44,8 @@ namespace OnlyWar.Helpers.UI
             ["request"] = new Vector2I(6, 3),
             ["threat"] = new Vector2I(7, 3),
             ["resource"] = new Vector2I(0, 4),
+            ["population"] = new Vector2I(0, 6),
+            ["fleet_strength"] = new Vector2I(1, 6),
             ["construction"] = new Vector2I(1, 4),
             ["plot_course"] = new Vector2I(2, 4),
             ["divide"] = new Vector2I(3, 4),
@@ -51,9 +53,12 @@ namespace OnlyWar.Helpers.UI
             ["land_squads"] = new Vector2I(5, 4),
             ["load_squads"] = new Vector2I(6, 4),
             ["in_orbit"] = new Vector2I(7, 4),
-            ["hq"] = new Vector2I(0, 5),
+            ["hq"] = new Vector2I(1, 0),
             ["scout"] = new Vector2I(1, 5),
             ["elite"] = new Vector2I(2, 5),
+            ["default"] = new Vector2I(3, 5),
+            ["fast"] = new Vector2I(4, 5),
+            ["heavy"] = new Vector2I(5, 5),
             ["tactical"] = new Vector2I(3, 5),
             ["assault"] = new Vector2I(4, 5),
             ["devastator"] = new Vector2I(5, 5),
@@ -104,7 +109,7 @@ namespace OnlyWar.Helpers.UI
             button.Icon = GetIcon(key);
             button.IconAlignment = HorizontalAlignment.Left;
             button.ExpandIcon = false;
-            button.AddThemeConstantOverride("icon_max_width", 22);
+            button.AddThemeConstantOverride("icon_max_width", 48);
             button.AddThemeConstantOverride("h_separation", 6);
             if (minWidth > 0)
             {

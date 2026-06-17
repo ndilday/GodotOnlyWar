@@ -1,7 +1,7 @@
 [gd_scene load_steps=4 format=3 uid="uid://cpn7evxbnfpou"]
 
-[ext_resource type="Script" uid="uid://cbsf677ytdwpu" path="res://Scenes/ChapterScreen/ChapterView.cs" id="1_view"]
-[ext_resource type="Script" uid="uid://dnabalq7a1gh" path="res://Scenes/ChapterScreen/ChapterController.cs" id="2_controller"]
+[ext_resource type="Script" path="res://Scenes/ChapterScreen/ChapterView.cs" id="1_view"]
+[ext_resource type="Script" path="res://Scenes/ChapterScreen/ChapterController.cs" id="2_controller"]
 [ext_resource type="Theme" uid="uid://ylp8bk1nhedq" path="res://Scenes/OnlyWarTheme.tres" id="3_theme"]
 
 [node name="ChapterController" type="Control"]
@@ -99,19 +99,6 @@ layout_mode = 2
 text = "998.M41.15"
 horizontal_alignment = 1
 
-[node name="CloseButton" type="Button" parent="ChapterView/TopBar"]
-custom_minimum_size = Vector2(40, 40)
-layout_mode = 1
-anchors_preset = -1
-anchor_left = 1.0
-anchor_right = 1.0
-offset_left = -52.0
-offset_top = 12.0
-offset_right = -12.0
-offset_bottom = 52.0
-grow_horizontal = 0
-text = "X"
-
 [node name="Content" type="Control" parent="ChapterView"]
 layout_mode = 1
 anchors_preset = 15
@@ -129,9 +116,22 @@ custom_minimum_size = Vector2(0, 38)
 layout_mode = 1
 anchors_preset = 10
 anchor_right = 1.0
+offset_right = -52.0
 offset_bottom = 38.0
 grow_horizontal = 2
 theme_override_constants/separation = 7
+
+[node name="CloseButton" type="Button" parent="ChapterView/Content"]
+custom_minimum_size = Vector2(40, 40)
+layout_mode = 1
+anchors_preset = -1
+anchor_left = 1.0
+anchor_right = 1.0
+offset_left = -40.0
+offset_right = 0.0
+offset_bottom = 40.0
+grow_horizontal = 0
+text = "X"
 
 [node name="MainLayout" type="HBoxContainer" parent="ChapterView/Content"]
 layout_mode = 1
@@ -144,7 +144,7 @@ grow_vertical = 2
 theme_override_constants/separation = 10
 
 [node name="LeftMenu" type="Control" parent="ChapterView/Content/MainLayout"]
-custom_minimum_size = Vector2(304, 0)
+custom_minimum_size = Vector2(328, 0)
 layout_mode = 2
 
 [node name="Panel" type="Panel" parent="ChapterView/Content/MainLayout/LeftMenu"]
@@ -182,7 +182,7 @@ text = "Companies"
 vertical_alignment = 1
 
 [node name="HintLabel" type="Label" parent="ChapterView/Content/MainLayout/LeftMenu/Panel/MarginContainer/MenuStack/Header"]
-custom_minimum_size = Vector2(120, 0)
+custom_minimum_size = Vector2(92, 0)
 layout_mode = 2
 text = "Drill opens children"
 horizontal_alignment = 2
@@ -231,8 +231,9 @@ layout_mode = 2
 theme_override_constants/separation = 12
 
 [node name="DetailIcon" type="TextureRect" parent="ChapterView/Content/MainLayout/DetailPanel/Panel/MarginContainer/DetailStack/Hero"]
-custom_minimum_size = Vector2(42, 42)
+custom_minimum_size = Vector2(48, 48)
 layout_mode = 2
+expand_mode = 1
 stretch_mode = 5
 
 [node name="TitleStack" type="VBoxContainer" parent="ChapterView/Content/MainLayout/DetailPanel/Panel/MarginContainer/DetailStack/Hero"]
@@ -255,7 +256,19 @@ custom_minimum_size = Vector2(340, 0)
 layout_mode = 2
 columns = 3
 
-[node name="DetailCardGrid" type="GridContainer" parent="ChapterView/Content/MainLayout/DetailPanel/Panel/MarginContainer/DetailStack"]
+[node name="DetailScroll" type="ScrollContainer" parent="ChapterView/Content/MainLayout/DetailPanel/Panel/MarginContainer/DetailStack"]
 layout_mode = 2
 size_flags_vertical = 3
+
+[node name="DetailCardGrid" type="GridContainer" parent="ChapterView/Content/MainLayout/DetailPanel/Panel/MarginContainer/DetailStack/DetailScroll"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/h_separation = 8
+theme_override_constants/v_separation = 8
 columns = 3
+
+[node name="DetailActionButton" type="Button" parent="ChapterView/Content/MainLayout/DetailPanel/Panel/MarginContainer/DetailStack"]
+custom_minimum_size = Vector2(0, 36)
+layout_mode = 2
+visible = false
+text = "Open Full Record"

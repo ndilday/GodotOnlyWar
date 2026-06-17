@@ -13,10 +13,10 @@ public enum CompanyType
     Scout
 }
 
-public sealed record ChapterBrowserItemEvent(ChapterBrowserLevel Level, int Id);
-
 public partial class ChapterView : Control
 {
+    private const int ChapterIconSize = 48;
+
     private HBoxContainer _breadcrumbBar;
     private Label _leftTitleLabel;
     private Label _leftHintLabel;
@@ -26,11 +26,13 @@ public partial class ChapterView : Control
     private Label _detailSubtitleLabel;
     private GridContainer _metricGrid;
     private GridContainer _detailCardGrid;
+    private Button _detailActionButton;
     private Button _closeButton;
 
     public event EventHandler<ChapterBrowserItemEvent> BrowserItemSelected;
     public event EventHandler<ChapterBrowserItemEvent> BrowserItemDrillRequested;
     public event EventHandler<ChapterBrowserLevel> BreadcrumbPressed;
+    public event EventHandler DetailPrimaryActionPressed;
     public event EventHandler CloseButtonPressed;
 
     public override void _Ready()
@@ -43,12 +45,18 @@ public partial class ChapterView : Control
         _detailTitleLabel = GetNode<Label>("Content/MainLayout/DetailPanel/Panel/MarginContainer/DetailStack/Hero/TitleStack/TitleLabel");
         _detailSubtitleLabel = GetNode<Label>("Content/MainLayout/DetailPanel/Panel/MarginContainer/DetailStack/Hero/TitleStack/SubtitleLabel");
         _metricGrid = GetNode<GridContainer>("Content/MainLayout/DetailPanel/Panel/MarginContainer/DetailStack/Hero/MetricGrid");
-        _detailCardGrid = GetNode<GridContainer>("Content/MainLayout/DetailPanel/Panel/MarginContainer/DetailStack/DetailCardGrid");
-        _closeButton = GetNode<Button>("TopBar/CloseButton");
+        _detailCardGrid = GetNode<GridContainer>("Content/MainLayout/DetailPanel/Panel/MarginContainer/DetailStack/DetailScroll/DetailCardGrid");
+        _detailActionButton = GetNode<Button>("Content/MainLayout/DetailPanel/Panel/MarginContainer/DetailStack/DetailActionButton");
+        _closeButton = GetNode<Button>("Content/CloseButton");
 
+        ConfigureHeaderLabel(_leftTitleLabel);
+        ConfigureHeaderLabel(_leftHintLabel);
+        _detailIcon.CustomMinimumSize = new Vector2(ChapterIconSize, ChapterIconSize);
+        _detailIcon.ExpandMode = TextureRect.ExpandModeEnum.IgnoreSize;
         IconAtlas.Apply(_closeButton, "close", 40);
         _closeButton.Text = "";
         _closeButton.Pressed += () => CloseButtonPressed?.Invoke(this, EventArgs.Empty);
+        _detailActionButton.Pressed += () => DetailPrimaryActionPressed?.Invoke(this, EventArgs.Empty);
     }
 
     public void SetBreadcrumbs(IReadOnlyList<ChapterBreadcrumbItem> breadcrumbs)
@@ -73,11 +81,24 @@ public partial class ChapterView : Control
     {
         _leftTitleLabel.Text = title;
         _leftHintLabel.Text = hint;
+        _leftTitleLabel.TooltipText = title;
+        _leftHintLabel.TooltipText = hint;
         ClearContainer(_leftMenuVBox);
 
         foreach (ChapterBrowserMenuItem item in items)
         {
             _leftMenuVBox.AddChild(CreateMenuRow(item));
+        }
+
+        if (items.Count == 0)
+        {
+            Label emptyLabel = new Label
+            {
+                Text = "No records at this level.",
+                AutowrapMode = TextServer.AutowrapMode.WordSmart
+            };
+            emptyLabel.AddThemeColorOverride("font_color", new Color(0.66f, 0.60f, 0.49f));
+            _leftMenuVBox.AddChild(emptyLabel);
         }
     }
 
@@ -97,6 +118,15 @@ public partial class ChapterView : Control
         foreach (ChapterBrowserDetailCard card in detail.Cards)
         {
             _detailCardGrid.AddChild(CreateDetailCard(card));
+        }
+
+        bool hasAction = !string.IsNullOrWhiteSpace(detail.PrimaryActionText);
+        _detailActionButton.Visible = hasAction;
+        _detailActionButton.Disabled = !hasAction;
+        if (hasAction)
+        {
+            _detailActionButton.Text = detail.PrimaryActionText;
+            IconAtlas.Apply(_detailActionButton, detail.PrimaryActionIconKey ?? "archive");
         }
     }
 
@@ -133,12 +163,7 @@ public partial class ChapterView : Control
         rowContent.AddThemeConstantOverride("separation", 8);
         row.AddChild(rowContent);
 
-        TextureRect icon = new TextureRect
-        {
-            Texture = IconAtlas.GetIcon(item.IconKey),
-            CustomMinimumSize = new Vector2(22, 22),
-            StretchMode = TextureRect.StretchModeEnum.KeepAspectCentered
-        };
+        TextureRect icon = CreateIconRect(item.IconKey, ChapterIconSize);
         rowContent.AddChild(icon);
 
         VBoxContainer textStack = new VBoxContainer
@@ -152,7 +177,8 @@ public partial class ChapterView : Control
         {
             Text = item.Title,
             ClipText = true,
-            TextOverrunBehavior = TextServer.OverrunBehavior.TrimEllipsis
+            TextOverrunBehavior = TextServer.OverrunBehavior.TrimEllipsis,
+            TooltipText = item.Title
         };
         textStack.AddChild(title);
 
@@ -160,7 +186,8 @@ public partial class ChapterView : Control
         {
             Text = item.Subtitle,
             ClipText = true,
-            TextOverrunBehavior = TextServer.OverrunBehavior.TrimEllipsis
+            TextOverrunBehavior = TextServer.OverrunBehavior.TrimEllipsis,
+            TooltipText = item.Subtitle
         };
         subtitle.AddThemeColorOverride("font_color", new Color(0.66f, 0.60f, 0.49f));
         subtitle.AddThemeFontSizeOverride("font_size", 12);
@@ -168,10 +195,11 @@ public partial class ChapterView : Control
 
         Button drillButton = new Button
         {
-            Text = item.CanDrill ? ">" : "i",
+            Text = item.CanDrill ? item.DrillText : "i",
             CustomMinimumSize = new Vector2(32, 32),
             MouseDefaultCursorShape = CursorShape.PointingHand,
-            TooltipText = item.CanDrill ? "Drill into this item" : "Show details"
+            TooltipText = item.CanDrill ? "Drill into this item" : "Show details",
+            Disabled = !item.CanDrill && item.Level != ChapterBrowserLevel.Soldier
         };
         drillButton.Pressed += () =>
         {
@@ -231,12 +259,7 @@ public partial class ChapterView : Control
         heading.AddThemeConstantOverride("separation", 8);
         stack.AddChild(heading);
 
-        TextureRect icon = new TextureRect
-        {
-            Texture = IconAtlas.GetIcon(card.IconKey),
-            CustomMinimumSize = new Vector2(22, 22),
-            StretchMode = TextureRect.StretchModeEnum.KeepAspectCentered
-        };
+        TextureRect icon = CreateIconRect(card.IconKey, ChapterIconSize);
         heading.AddChild(icon);
 
         VBoxContainer titleStack = new VBoxContainer
@@ -294,6 +317,25 @@ public partial class ChapterView : Control
             ContentMarginRight = 9,
             ContentMarginBottom = 7
         };
+    }
+
+    private static TextureRect CreateIconRect(string iconKey, int size)
+    {
+        return new TextureRect
+        {
+            Texture = IconAtlas.GetIcon(iconKey),
+            CustomMinimumSize = new Vector2(size, size),
+            StretchMode = TextureRect.StretchModeEnum.KeepAspectCentered,
+            ExpandMode = TextureRect.ExpandModeEnum.IgnoreSize,
+            SizeFlagsHorizontal = SizeFlags.ShrinkCenter,
+            SizeFlagsVertical = SizeFlags.ShrinkCenter
+        };
+    }
+
+    private static void ConfigureHeaderLabel(Label label)
+    {
+        label.ClipText = true;
+        label.TextOverrunBehavior = TextServer.OverrunBehavior.TrimEllipsis;
     }
 
     private static StyleBoxFlat CreateInsetStyle()

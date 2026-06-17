@@ -1,80 +1,492 @@
 {
-  "atlas": "res://Assets/UI/Icons/icon_atlas.svg",
-  "cellSize": 64,
+  "atlas": "res://Assets/UI/Icons/icon_atlas.png",
+  "cellSize": 128,
   "columns": 8,
   "rows": 8,
   "icons": {
-    "sector": { "x": 0, "y": 0, "w": 64, "h": 64, "group": "footer" },
-    "chapter": { "x": 64, "y": 0, "w": 64, "h": 64, "group": "footer" },
-    "apothecarium": { "x": 128, "y": 0, "w": 64, "h": 64, "group": "footer" },
-    "reclusium": { "x": 192, "y": 0, "w": 64, "h": 64, "group": "footer" },
-    "librarium": { "x": 256, "y": 0, "w": 64, "h": 64, "group": "footer" },
-    "armamentarium": { "x": 320, "y": 0, "w": 64, "h": 64, "group": "footer" },
-    "training_unit": { "x": 384, "y": 0, "w": 64, "h": 64, "group": "footer" },
-    "fleet": { "x": 448, "y": 0, "w": 64, "h": 64, "group": "footer" },
-
-    "diplomacy": { "x": 0, "y": 64, "w": 64, "h": 64, "group": "footer" },
-    "archive": { "x": 64, "y": 64, "w": 64, "h": 64, "group": "footer" },
-    "end_turn": { "x": 128, "y": 64, "w": 64, "h": 64, "group": "footer" },
-    "save": { "x": 192, "y": 64, "w": 64, "h": 64, "group": "action" },
-    "settings": { "x": 256, "y": 64, "w": 64, "h": 64, "group": "action" },
-    "menu": { "x": 320, "y": 64, "w": 64, "h": 64, "group": "action" },
-    "close": { "x": 384, "y": 64, "w": 64, "h": 64, "group": "action" },
-    "alert": { "x": 448, "y": 64, "w": 64, "h": 64, "group": "status" },
-
-    "zoom_in": { "x": 0, "y": 128, "w": 64, "h": 64, "group": "map_tool" },
-    "zoom_out": { "x": 64, "y": 128, "w": 64, "h": 64, "group": "map_tool" },
-    "focus": { "x": 128, "y": 128, "w": 64, "h": 64, "group": "map_tool" },
-    "layers": { "x": 192, "y": 128, "w": 64, "h": 64, "group": "map_tool" },
-    "filter": { "x": 256, "y": 128, "w": 64, "h": 64, "group": "map_tool" },
-    "route": { "x": 320, "y": 128, "w": 64, "h": 64, "group": "map_tool" },
-    "warp_lane": { "x": 384, "y": 128, "w": 64, "h": 64, "group": "map_tool" },
-    "map_pin": { "x": 448, "y": 128, "w": 64, "h": 64, "group": "map_tool" },
-
-    "star": { "x": 0, "y": 192, "w": 64, "h": 64, "group": "map_entity" },
-    "planet": { "x": 64, "y": 192, "w": 64, "h": 64, "group": "map_entity" },
-    "controlled": { "x": 128, "y": 192, "w": 64, "h": 64, "group": "map_state" },
-    "allied": { "x": 192, "y": 192, "w": 64, "h": 64, "group": "map_state" },
-    "neutral": { "x": 256, "y": 192, "w": 64, "h": 64, "group": "map_state" },
-    "hostile": { "x": 320, "y": 192, "w": 64, "h": 64, "group": "map_state" },
-    "request": { "x": 384, "y": 192, "w": 64, "h": 64, "group": "status" },
-    "threat": { "x": 448, "y": 192, "w": 64, "h": 64, "group": "status" },
-
-    "resource": { "x": 0, "y": 256, "w": 64, "h": 64, "group": "status" },
-    "construction": { "x": 64, "y": 256, "w": 64, "h": 64, "group": "status" },
-    "plot_course": { "x": 128, "y": 256, "w": 64, "h": 64, "group": "fleet_action" },
-    "divide": { "x": 192, "y": 256, "w": 64, "h": 64, "group": "fleet_action" },
-    "merge": { "x": 256, "y": 256, "w": 64, "h": 64, "group": "fleet_action" },
-    "land_squads": { "x": 320, "y": 256, "w": 64, "h": 64, "group": "planet_action" },
-    "load_squads": { "x": 384, "y": 256, "w": 64, "h": 64, "group": "planet_action" },
-    "in_orbit": { "x": 448, "y": 256, "w": 64, "h": 64, "group": "fleet_state" },
-
-    "hq": { "x": 0, "y": 320, "w": 64, "h": 64, "group": "squad_type" },
-    "scout": { "x": 64, "y": 320, "w": 64, "h": 64, "group": "squad_type" },
-    "elite": { "x": 128, "y": 320, "w": 64, "h": 64, "group": "squad_type" },
-    "tactical": { "x": 192, "y": 320, "w": 64, "h": 64, "group": "squad_type" },
-    "assault": { "x": 256, "y": 320, "w": 64, "h": 64, "group": "squad_type" },
-    "devastator": { "x": 320, "y": 320, "w": 64, "h": 64, "group": "squad_type" },
-    "bodyguard": { "x": 384, "y": 320, "w": 64, "h": 64, "group": "squad_type" },
-    "vehicle": { "x": 448, "y": 320, "w": 64, "h": 64, "group": "unit_type" },
-
-    "infantry": { "x": 0, "y": 384, "w": 64, "h": 64, "group": "unit_type" },
-    "ship": { "x": 64, "y": 384, "w": 64, "h": 64, "group": "unit_type" },
-    "objective": { "x": 128, "y": 384, "w": 64, "h": 64, "group": "battle" },
-    "wounded": { "x": 192, "y": 384, "w": 64, "h": 64, "group": "soldier_state" },
-    "medical": { "x": 256, "y": 384, "w": 64, "h": 64, "group": "soldier_state" },
-    "training": { "x": 320, "y": 384, "w": 64, "h": 64, "group": "soldier_state" },
-    "locked": { "x": 384, "y": 384, "w": 64, "h": 64, "group": "status" },
-    "in_transit": { "x": 448, "y": 384, "w": 64, "h": 64, "group": "fleet_state" },
-
-    "rank_initiate": { "x": 0, "y": 448, "w": 64, "h": 64, "group": "rank" },
-    "rank_battle_brother": { "x": 64, "y": 448, "w": 64, "h": 64, "group": "rank" },
-    "rank_veteran": { "x": 128, "y": 448, "w": 64, "h": 64, "group": "rank" },
-    "rank_sergeant": { "x": 192, "y": 448, "w": 64, "h": 64, "group": "rank" },
-    "rank_captain": { "x": 256, "y": 448, "w": 64, "h": 64, "group": "rank" },
-    "rank_commander": { "x": 320, "y": 448, "w": 64, "h": 64, "group": "rank" },
-    "award": { "x": 384, "y": 448, "w": 64, "h": 64, "group": "rank" },
-    "in_warp": { "x": 448, "y": 448, "w": 64, "h": 64, "group": "fleet_state" }
+    "sector": {
+      "x": 0,
+      "y": 0,
+      "w": 128,
+      "h": 128,
+      "group": "footer"
+    },
+    "chapter": {
+      "x": 128,
+      "y": 0,
+      "w": 128,
+      "h": 128,
+      "group": "footer"
+    },
+    "apothecarium": {
+      "x": 256,
+      "y": 0,
+      "w": 128,
+      "h": 128,
+      "group": "footer"
+    },
+    "reclusium": {
+      "x": 384,
+      "y": 0,
+      "w": 128,
+      "h": 128,
+      "group": "footer"
+    },
+    "librarium": {
+      "x": 512,
+      "y": 0,
+      "w": 128,
+      "h": 128,
+      "group": "footer"
+    },
+    "armamentarium": {
+      "x": 640,
+      "y": 0,
+      "w": 128,
+      "h": 128,
+      "group": "footer"
+    },
+    "training_unit": {
+      "x": 768,
+      "y": 0,
+      "w": 128,
+      "h": 128,
+      "group": "footer"
+    },
+    "fleet": {
+      "x": 896,
+      "y": 0,
+      "w": 128,
+      "h": 128,
+      "group": "footer"
+    },
+    "diplomacy": {
+      "x": 0,
+      "y": 128,
+      "w": 128,
+      "h": 128,
+      "group": "footer"
+    },
+    "archive": {
+      "x": 128,
+      "y": 128,
+      "w": 128,
+      "h": 128,
+      "group": "footer"
+    },
+    "end_turn": {
+      "x": 256,
+      "y": 128,
+      "w": 128,
+      "h": 128,
+      "group": "footer"
+    },
+    "save": {
+      "x": 384,
+      "y": 128,
+      "w": 128,
+      "h": 128,
+      "group": "action"
+    },
+    "settings": {
+      "x": 512,
+      "y": 128,
+      "w": 128,
+      "h": 128,
+      "group": "action"
+    },
+    "menu": {
+      "x": 640,
+      "y": 128,
+      "w": 128,
+      "h": 128,
+      "group": "action"
+    },
+    "close": {
+      "x": 768,
+      "y": 128,
+      "w": 128,
+      "h": 128,
+      "group": "action"
+    },
+    "alert": {
+      "x": 896,
+      "y": 128,
+      "w": 128,
+      "h": 128,
+      "group": "status"
+    },
+    "zoom_in": {
+      "x": 0,
+      "y": 256,
+      "w": 128,
+      "h": 128,
+      "group": "map_tool"
+    },
+    "zoom_out": {
+      "x": 128,
+      "y": 256,
+      "w": 128,
+      "h": 128,
+      "group": "map_tool"
+    },
+    "focus": {
+      "x": 256,
+      "y": 256,
+      "w": 128,
+      "h": 128,
+      "group": "map_tool"
+    },
+    "layers": {
+      "x": 384,
+      "y": 256,
+      "w": 128,
+      "h": 128,
+      "group": "map_tool"
+    },
+    "filter": {
+      "x": 512,
+      "y": 256,
+      "w": 128,
+      "h": 128,
+      "group": "map_tool"
+    },
+    "route": {
+      "x": 640,
+      "y": 256,
+      "w": 128,
+      "h": 128,
+      "group": "map_tool"
+    },
+    "warp_lane": {
+      "x": 768,
+      "y": 256,
+      "w": 128,
+      "h": 128,
+      "group": "map_tool"
+    },
+    "map_pin": {
+      "x": 896,
+      "y": 256,
+      "w": 128,
+      "h": 128,
+      "group": "map_tool"
+    },
+    "star": {
+      "x": 0,
+      "y": 384,
+      "w": 128,
+      "h": 128,
+      "group": "map_entity"
+    },
+    "planet": {
+      "x": 128,
+      "y": 384,
+      "w": 128,
+      "h": 128,
+      "group": "map_entity"
+    },
+    "controlled": {
+      "x": 256,
+      "y": 384,
+      "w": 128,
+      "h": 128,
+      "group": "map_state"
+    },
+    "allied": {
+      "x": 384,
+      "y": 384,
+      "w": 128,
+      "h": 128,
+      "group": "map_state"
+    },
+    "neutral": {
+      "x": 512,
+      "y": 384,
+      "w": 128,
+      "h": 128,
+      "group": "map_state"
+    },
+    "hostile": {
+      "x": 640,
+      "y": 384,
+      "w": 128,
+      "h": 128,
+      "group": "map_state"
+    },
+    "request": {
+      "x": 768,
+      "y": 384,
+      "w": 128,
+      "h": 128,
+      "group": "status"
+    },
+    "threat": {
+      "x": 896,
+      "y": 384,
+      "w": 128,
+      "h": 128,
+      "group": "status"
+    },
+    "resource": {
+      "x": 0,
+      "y": 512,
+      "w": 128,
+      "h": 128,
+      "group": "status"
+    },
+    "population": {
+      "x": 0,
+      "y": 768,
+      "w": 128,
+      "h": 128,
+      "group": "status"
+    },
+    "fleet_strength": {
+      "x": 128,
+      "y": 768,
+      "w": 128,
+      "h": 128,
+      "group": "status"
+    },
+    "construction": {
+      "x": 128,
+      "y": 512,
+      "w": 128,
+      "h": 128,
+      "group": "status"
+    },
+    "plot_course": {
+      "x": 256,
+      "y": 512,
+      "w": 128,
+      "h": 128,
+      "group": "fleet_action"
+    },
+    "divide": {
+      "x": 384,
+      "y": 512,
+      "w": 128,
+      "h": 128,
+      "group": "fleet_action"
+    },
+    "merge": {
+      "x": 512,
+      "y": 512,
+      "w": 128,
+      "h": 128,
+      "group": "fleet_action"
+    },
+    "land_squads": {
+      "x": 640,
+      "y": 512,
+      "w": 128,
+      "h": 128,
+      "group": "planet_action"
+    },
+    "load_squads": {
+      "x": 768,
+      "y": 512,
+      "w": 128,
+      "h": 128,
+      "group": "planet_action"
+    },
+    "in_orbit": {
+      "x": 896,
+      "y": 512,
+      "w": 128,
+      "h": 128,
+      "group": "fleet_state"
+    },
+    "hq": {
+      "x": 128,
+      "y": 0,
+      "w": 128,
+      "h": 128,
+      "group": "squad_type"
+    },
+    "scout": {
+      "x": 128,
+      "y": 640,
+      "w": 128,
+      "h": 128,
+      "group": "squad_type"
+    },
+    "elite": {
+      "x": 256,
+      "y": 640,
+      "w": 128,
+      "h": 128,
+      "group": "squad_type"
+    },
+    "default": {
+      "x": 384,
+      "y": 640,
+      "w": 128,
+      "h": 128,
+      "group": "squad_type"
+    },
+    "fast": {
+      "x": 512,
+      "y": 640,
+      "w": 128,
+      "h": 128,
+      "group": "squad_type"
+    },
+    "heavy": {
+      "x": 640,
+      "y": 640,
+      "w": 128,
+      "h": 128,
+      "group": "squad_type"
+    },
+    "tactical": {
+      "x": 384,
+      "y": 640,
+      "w": 128,
+      "h": 128,
+      "group": "squad_type"
+    },
+    "assault": {
+      "x": 512,
+      "y": 640,
+      "w": 128,
+      "h": 128,
+      "group": "squad_type"
+    },
+    "devastator": {
+      "x": 640,
+      "y": 640,
+      "w": 128,
+      "h": 128,
+      "group": "squad_type"
+    },
+    "bodyguard": {
+      "x": 768,
+      "y": 640,
+      "w": 128,
+      "h": 128,
+      "group": "squad_type"
+    },
+    "vehicle": {
+      "x": 896,
+      "y": 640,
+      "w": 128,
+      "h": 128,
+      "group": "unit_type"
+    },
+    "infantry": {
+      "x": 0,
+      "y": 768,
+      "w": 128,
+      "h": 128,
+      "group": "unit_type"
+    },
+    "ship": {
+      "x": 128,
+      "y": 768,
+      "w": 128,
+      "h": 128,
+      "group": "unit_type"
+    },
+    "objective": {
+      "x": 256,
+      "y": 768,
+      "w": 128,
+      "h": 128,
+      "group": "battle"
+    },
+    "wounded": {
+      "x": 384,
+      "y": 768,
+      "w": 128,
+      "h": 128,
+      "group": "soldier_state"
+    },
+    "medical": {
+      "x": 512,
+      "y": 768,
+      "w": 128,
+      "h": 128,
+      "group": "soldier_state"
+    },
+    "training": {
+      "x": 640,
+      "y": 768,
+      "w": 128,
+      "h": 128,
+      "group": "soldier_state"
+    },
+    "locked": {
+      "x": 768,
+      "y": 768,
+      "w": 128,
+      "h": 128,
+      "group": "status"
+    },
+    "in_transit": {
+      "x": 896,
+      "y": 768,
+      "w": 128,
+      "h": 128,
+      "group": "fleet_state"
+    },
+    "rank_initiate": {
+      "x": 0,
+      "y": 896,
+      "w": 128,
+      "h": 128,
+      "group": "rank"
+    },
+    "rank_battle_brother": {
+      "x": 128,
+      "y": 896,
+      "w": 128,
+      "h": 128,
+      "group": "rank"
+    },
+    "rank_veteran": {
+      "x": 256,
+      "y": 896,
+      "w": 128,
+      "h": 128,
+      "group": "rank"
+    },
+    "rank_sergeant": {
+      "x": 384,
+      "y": 896,
+      "w": 128,
+      "h": 128,
+      "group": "rank"
+    },
+    "rank_captain": {
+      "x": 512,
+      "y": 896,
+      "w": 128,
+      "h": 128,
+      "group": "rank"
+    },
+    "rank_commander": {
+      "x": 640,
+      "y": 896,
+      "w": 128,
+      "h": 128,
+      "group": "rank"
+    },
+    "award": {
+      "x": 768,
+      "y": 896,
+      "w": 128,
+      "h": 128,
+      "group": "rank"
+    },
+    "in_warp": {
+      "x": 896,
+      "y": 896,
+      "w": 128,
+      "h": 128,
+      "group": "fleet_state"
+    }
   },
   "recommendedNextIcons": [
     "skill_melee",

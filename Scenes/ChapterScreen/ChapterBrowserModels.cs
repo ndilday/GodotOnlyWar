@@ -53,6 +53,53 @@ public sealed class ChapterBrowserPath
 
 public sealed record ChapterBreadcrumbItem(ChapterBrowserLevel Level, string Text, string IconKey);
 
+public sealed record ChapterBrowserItemEvent(ChapterBrowserLevel Level, int Id);
+
+public sealed class ChapterBrowserNavigator
+{
+    public ChapterBrowserPath Path { get; } = new();
+    public ChapterBrowserItemEvent SelectedItem { get; private set; }
+
+    public void ResetToChapter()
+    {
+        Path.TrimTo(ChapterBrowserLevel.Chapter);
+        SelectedItem = null;
+    }
+
+    public void Select(ChapterBrowserItemEvent item)
+    {
+        SelectedItem = item;
+    }
+
+    public void DrillInto(ChapterBrowserItemEvent item)
+    {
+        switch (item.Level)
+        {
+            case ChapterBrowserLevel.Company:
+                Path.CompanyId = item.Id;
+                Path.SquadId = null;
+                Path.SoldierId = null;
+                SelectedItem = null;
+                break;
+            case ChapterBrowserLevel.Squad:
+                Path.SquadId = item.Id;
+                Path.SoldierId = null;
+                SelectedItem = null;
+                break;
+            case ChapterBrowserLevel.Soldier:
+                Path.SoldierId = item.Id;
+                SelectedItem = item;
+                break;
+        }
+    }
+
+    public void MoveToBreadcrumb(ChapterBrowserLevel level)
+    {
+        Path.TrimTo(level);
+        SelectedItem = null;
+    }
+}
+
 public sealed record ChapterBrowserMenuItem(
     ChapterBrowserLevel Level,
     int Id,
@@ -60,7 +107,8 @@ public sealed record ChapterBrowserMenuItem(
     string Title,
     string Subtitle,
     bool CanDrill,
-    bool IsSelected);
+    bool IsSelected,
+    string DrillText = ">");
 
 public sealed record ChapterBrowserMetric(string Value, string Label);
 
@@ -71,4 +119,6 @@ public sealed record ChapterBrowserDetail(
     string Title,
     string Subtitle,
     IReadOnlyList<ChapterBrowserMetric> Metrics,
-    IReadOnlyList<ChapterBrowserDetailCard> Cards);
+    IReadOnlyList<ChapterBrowserDetailCard> Cards,
+    string PrimaryActionText = null,
+    string PrimaryActionIconKey = null);
