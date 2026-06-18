@@ -37,116 +37,111 @@ theme_override_constants/margin_top = 12
 theme_override_constants/margin_right = 12
 theme_override_constants/margin_bottom = 12
 
-[node name="VBoxContainer" type="VBoxContainer" parent="Panel/MarginContainer"]
+[node name="ScrollContainer" type="ScrollContainer" parent="Panel/MarginContainer"]
 layout_mode = 2
+horizontal_scroll_mode = 0
+
+[node name="VBoxContainer" type="VBoxContainer" parent="Panel/MarginContainer/ScrollContainer"]
+layout_mode = 2
+size_flags_horizontal = 3
 theme_override_constants/separation = 10
 
-[node name="Header" type="HBoxContainer" parent="Panel/MarginContainer/VBoxContainer"]
+[node name="Header" type="HBoxContainer" parent="Panel/MarginContainer/ScrollContainer/VBoxContainer"]
 layout_mode = 2
 theme_override_constants/separation = 8
 
-[node name="SystemNameLabel" type="Label" parent="Panel/MarginContainer/VBoxContainer/Header"]
+[node name="SystemNameLabel" type="Label" parent="Panel/MarginContainer/ScrollContainer/VBoxContainer/Header"]
 layout_mode = 2
 size_flags_horizontal = 3
 text = "No System Selected"
 vertical_alignment = 1
 
-[node name="SettingsButton" type="Button" parent="Panel/MarginContainer/VBoxContainer/Header"]
-custom_minimum_size = Vector2(36, 36)
-layout_mode = 2
-tooltip_text = "System options"
-
-[node name="ControlLabel" type="Label" parent="Panel/MarginContainer/VBoxContainer"]
+[node name="ControlLabel" type="Label" parent="Panel/MarginContainer/ScrollContainer/VBoxContainer"]
 layout_mode = 2
 text = "Select a star system on the sector map"
 autowrap_mode = 2
 
-[node name="PlanetSection" type="VBoxContainer" parent="Panel/MarginContainer/VBoxContainer"]
+[node name="PlanetSection" type="VBoxContainer" parent="Panel/MarginContainer/ScrollContainer/VBoxContainer"]
 layout_mode = 2
 theme_override_constants/separation = 4
 
-[node name="PlanetHeaderLabel" type="Label" parent="Panel/MarginContainer/VBoxContainer/PlanetSection"]
+[node name="PlanetHeaderLabel" type="Label" parent="Panel/MarginContainer/ScrollContainer/VBoxContainer/PlanetSection"]
 layout_mode = 2
 text = "PLANETS"
 
-[node name="PlanetDetailLabel" type="Label" parent="Panel/MarginContainer/VBoxContainer/PlanetSection"]
+[node name="PlanetDetailLabel" type="Label" parent="Panel/MarginContainer/ScrollContainer/VBoxContainer/PlanetSection"]
 layout_mode = 2
 text = "Planet data will appear here."
 autowrap_mode = 2
 
-[node name="OrbitSection" type="VBoxContainer" parent="Panel/MarginContainer/VBoxContainer"]
+[node name="OrbitSection" type="VBoxContainer" parent="Panel/MarginContainer/ScrollContainer/VBoxContainer"]
 layout_mode = 2
 theme_override_constants/separation = 4
 
-[node name="OrbitHeaderLabel" type="Label" parent="Panel/MarginContainer/VBoxContainer/OrbitSection"]
+[node name="OrbitHeaderLabel" type="Label" parent="Panel/MarginContainer/ScrollContainer/VBoxContainer/OrbitSection"]
 layout_mode = 2
 text = "IN ORBIT"
 
-[node name="OrbitDetailLabel" type="Label" parent="Panel/MarginContainer/VBoxContainer/OrbitSection"]
+[node name="OrbitDetailLabel" type="Label" parent="Panel/MarginContainer/ScrollContainer/VBoxContainer/OrbitSection"]
 layout_mode = 2
 text = "Orbital task forces will appear here."
 autowrap_mode = 2
 
-[node name="FleetList" type="ItemList" parent="Panel/MarginContainer/VBoxContainer/OrbitSection"]
+[node name="FleetList" type="ItemList" parent="Panel/MarginContainer/ScrollContainer/VBoxContainer/OrbitSection"]
 custom_minimum_size = Vector2(0, 116)
 layout_mode = 2
 auto_height = true
 icon_mode = 0
 fixed_icon_size = Vector2i(22, 22)
 
-[node name="SelectedFleetDetailLabel" type="Label" parent="Panel/MarginContainer/VBoxContainer/OrbitSection"]
+[node name="SelectedFleetDetailLabel" type="Label" parent="Panel/MarginContainer/ScrollContainer/VBoxContainer/OrbitSection"]
 layout_mode = 2
 text = "Select a task force for fleet actions."
 autowrap_mode = 2
 
-[node name="RequestSection" type="VBoxContainer" parent="Panel/MarginContainer/VBoxContainer"]
+[node name="RequestSection" type="VBoxContainer" parent="Panel/MarginContainer/ScrollContainer/VBoxContainer"]
 layout_mode = 2
 theme_override_constants/separation = 4
 
-[node name="RequestHeaderLabel" type="Label" parent="Panel/MarginContainer/VBoxContainer/RequestSection"]
+[node name="RequestHeaderLabel" type="Label" parent="Panel/MarginContainer/ScrollContainer/VBoxContainer/RequestSection"]
 layout_mode = 2
 text = "REQUESTS"
 
-[node name="RequestDetailLabel" type="Label" parent="Panel/MarginContainer/VBoxContainer/RequestSection"]
+[node name="RequestDetailLabel" type="Label" parent="Panel/MarginContainer/ScrollContainer/VBoxContainer/RequestSection"]
 layout_mode = 2
 text = "Active requests will appear here."
 autowrap_mode = 2
 
-[node name="ActionSection" type="VBoxContainer" parent="Panel/MarginContainer/VBoxContainer"]
+[node name="ActionSection" type="VBoxContainer" parent="Panel/MarginContainer/ScrollContainer/VBoxContainer"]
 layout_mode = 2
 theme_override_constants/separation = 6
 
-[node name="OpenSystemButton" type="Button" parent="Panel/MarginContainer/VBoxContainer/ActionSection"]
+[node name="OpenSystemButton" type="Button" parent="Panel/MarginContainer/ScrollContainer/VBoxContainer/ActionSection"]
 custom_minimum_size = Vector2(0, 34)
 layout_mode = 2
 text = "Open System"
 
-[node name="PlotCourseButton" type="Button" parent="Panel/MarginContainer/VBoxContainer/ActionSection"]
+[node name="PlotCourseButton" type="Button" parent="Panel/MarginContainer/ScrollContainer/VBoxContainer/ActionSection"]
 custom_minimum_size = Vector2(0, 34)
 layout_mode = 2
 text = "Plot Course"
 
-[node name="DivideButton" type="Button" parent="Panel/MarginContainer/VBoxContainer/ActionSection"]
+[node name="DivideButton" type="Button" parent="Panel/MarginContainer/ScrollContainer/VBoxContainer/ActionSection"]
 custom_minimum_size = Vector2(0, 34)
 layout_mode = 2
 text = "Divide"
 
-[node name="MergeButton" type="Button" parent="Panel/MarginContainer/VBoxContainer/ActionSection"]
+[node name="MergeButton" type="Button" parent="Panel/MarginContainer/ScrollContainer/VBoxContainer/ActionSection"]
 custom_minimum_size = Vector2(0, 34)
 layout_mode = 2
 text = "Merge"
 
-[node name="LandSquadsButton" type="Button" parent="Panel/MarginContainer/VBoxContainer/ActionSection"]
+[node name="LandSquadsButton" type="Button" parent="Panel/MarginContainer/ScrollContainer/VBoxContainer/ActionSection"]
 custom_minimum_size = Vector2(0, 34)
 layout_mode = 2
 text = "Land Squads"
 
-[node name="LoadSquadsButton" type="Button" parent="Panel/MarginContainer/VBoxContainer/ActionSection"]
+[node name="LoadSquadsButton" type="Button" parent="Panel/MarginContainer/ScrollContainer/VBoxContainer/ActionSection"]
 custom_minimum_size = Vector2(0, 34)
 layout_mode = 2
 text = "Load Squads"
-
-[node name="ManageFleetsButton" type="Button" parent="Panel/MarginContainer/VBoxContainer/ActionSection"]
-custom_minimum_size = Vector2(0, 34)
-layout_mode = 2
-text = "Manage Fleets"

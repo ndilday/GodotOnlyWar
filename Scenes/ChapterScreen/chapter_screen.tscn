@@ -9,6 +9,7 @@ layout_mode = 3
 anchors_preset = 15
 anchor_right = 1.0
 anchor_bottom = 1.0
+offset_top = 64.0
 grow_horizontal = 2
 grow_vertical = 2
 theme = ExtResource("3_theme")
@@ -32,80 +33,13 @@ anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
 
-[node name="TopBar" type="Panel" parent="ChapterView"]
-custom_minimum_size = Vector2(0, 64)
-layout_mode = 1
-anchors_preset = 10
-anchor_right = 1.0
-offset_bottom = 64.0
-grow_horizontal = 2
-
-[node name="MarginContainer" type="MarginContainer" parent="ChapterView/TopBar"]
-layout_mode = 1
-anchors_preset = 15
-anchor_right = 1.0
-anchor_bottom = 1.0
-grow_horizontal = 2
-grow_vertical = 2
-theme_override_constants/margin_left = 12
-theme_override_constants/margin_top = 8
-theme_override_constants/margin_right = 12
-theme_override_constants/margin_bottom = 8
-
-[node name="CommandRow" type="HBoxContainer" parent="ChapterView/TopBar/MarginContainer"]
-layout_mode = 2
-theme_override_constants/separation = 10
-
-[node name="TitleGroup" type="VBoxContainer" parent="ChapterView/TopBar/MarginContainer/CommandRow"]
-custom_minimum_size = Vector2(170, 0)
-layout_mode = 2
-theme_override_constants/separation = 0
-
-[node name="TitleLabel" type="Label" parent="ChapterView/TopBar/MarginContainer/CommandRow/TitleGroup"]
-layout_mode = 2
-text = "CHAPTER"
-
-[node name="SubtitleLabel" type="Label" parent="ChapterView/TopBar/MarginContainer/CommandRow/TitleGroup"]
-layout_mode = 2
-text = "Command Path Browser"
-
-[node name="ResourceGroup" type="HBoxContainer" parent="ChapterView/TopBar/MarginContainer/CommandRow"]
-layout_mode = 2
-size_flags_horizontal = 3
-theme_override_constants/separation = 14
-
-[node name="StrengthLabel" type="Label" parent="ChapterView/TopBar/MarginContainer/CommandRow/ResourceGroup"]
-layout_mode = 2
-text = "Chapter Roster"
-vertical_alignment = 1
-
-[node name="HintLabel" type="Label" parent="ChapterView/TopBar/MarginContainer/CommandRow/ResourceGroup"]
-layout_mode = 2
-text = "Select previews, drill opens children"
-vertical_alignment = 1
-
-[node name="DateGroup" type="VBoxContainer" parent="ChapterView/TopBar/MarginContainer/CommandRow"]
-custom_minimum_size = Vector2(118, 0)
-layout_mode = 2
-theme_override_constants/separation = 0
-
-[node name="DateCaption" type="Label" parent="ChapterView/TopBar/MarginContainer/CommandRow/DateGroup"]
-layout_mode = 2
-text = "DATE"
-horizontal_alignment = 1
-
-[node name="DateLabel" type="Label" parent="ChapterView/TopBar/MarginContainer/CommandRow/DateGroup"]
-layout_mode = 2
-text = "998.M41.15"
-horizontal_alignment = 1
-
 [node name="Content" type="Control" parent="ChapterView"]
 layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
 anchor_bottom = 1.0
 offset_left = 16.0
-offset_top = 84.0
+offset_top = 16.0
 offset_right = -16.0
 offset_bottom = -16.0
 grow_horizontal = 2
@@ -128,8 +62,9 @@ anchors_preset = -1
 anchor_left = 1.0
 anchor_right = 1.0
 offset_left = -40.0
+offset_top = -4.0
 offset_right = 0.0
-offset_bottom = 40.0
+offset_bottom = 36.0
 grow_horizontal = 0
 text = "X"
 
@@ -141,7 +76,7 @@ anchor_bottom = 1.0
 offset_top = 48.0
 grow_horizontal = 2
 grow_vertical = 2
-theme_override_constants/separation = 10
+theme_override_constants/separation = 0
 
 [node name="LeftMenu" type="Control" parent="ChapterView/Content/MainLayout"]
 custom_minimum_size = Vector2(328, 0)

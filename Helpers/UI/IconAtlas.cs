@@ -118,5 +118,17 @@ namespace OnlyWar.Helpers.UI
                 button.CustomMinimumSize = minimumSize;
             }
         }
+
+        public static void ApplyIconButton(Button button, string key, int size = 36, int iconMaxWidth = 28)
+        {
+            button.Text = "";
+            button.Icon = GetIcon(key);
+            button.IconAlignment = HorizontalAlignment.Center;
+            button.ExpandIcon = false;
+            button.CustomMinimumSize = new Vector2(size, size);
+            button.SizeFlagsVertical = Control.SizeFlags.ShrinkCenter;
+            button.AddThemeConstantOverride("icon_max_width", iconMaxWidth);
+            button.AddThemeConstantOverride("h_separation", 0);
+        }
     }
 }

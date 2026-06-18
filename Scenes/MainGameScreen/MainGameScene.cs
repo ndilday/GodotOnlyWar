@@ -53,7 +53,6 @@ public partial class MainGameScene : Control
         _systemInspector.MergeFleetPressed += OnInspectorMergeFleetPressed;
         _systemInspector.LandSquadsPressed += OnInspectorOpenFleetPlanetPressed;
         _systemInspector.LoadSquadsPressed += OnInspectorOpenFleetPlanetPressed;
-        _systemInspector.ManageFleetsPressed += OnFleetButtonPressed;
         _bottomMenu.ChapterButtonPressed += OnChapterButtonPressed;
         _bottomMenu.ApothecariumButtonPressed += OnApothecariumButtonPressed;
         _bottomMenu.TrainingUnitButtonPressed += OnTrainingUnitButtonPressed;
@@ -119,11 +118,11 @@ public partial class MainGameScene : Control
         }*/
     }
 
-    private void SetMainScreenVisibility(bool isVisible)
+    private void SetMainScreenVisibility(bool isVisible, bool keepTopMenuVisible = false)
     {
         _sectorMap.Visible = isVisible;
         _sectorMap.SetProcessInput(isVisible);
-        _topMenu.Visible = isVisible;
+        _topMenu.Visible = isVisible || keepTopMenuVisible;
         _leftMapTools.Visible = isVisible;
         _systemInspector.Visible = isVisible;
         _bottomMenu.Visible = isVisible;
@@ -199,7 +198,8 @@ public partial class MainGameScene : Control
             _mainUILayer.AddChild(_chapterScreen);
         }
         _chapterScreen.Visible = true;
-        SetMainScreenVisibility(false);
+        _topMenu.SetScreenText("Chapter Overview");
+        SetMainScreenVisibility(false, keepTopMenuVisible: true);
     }
 
     private void OnCloseScreen(object sender, EventArgs e)
@@ -208,9 +208,15 @@ public partial class MainGameScene : Control
         {
             Control control = _previousScreenStack.Pop();
             control.Visible = true;
+            if (control == _chapterScreen)
+            {
+                _topMenu.SetScreenText("Chapter Overview");
+                _topMenu.Visible = true;
+            }
         }
         else
         {
+            _topMenu.SetScreenText("Sector Map");
             SetMainScreenVisibility(true);
         }
         ((Control)(sender)).Visible = false;
@@ -538,6 +544,7 @@ public partial class MainGameScene : Control
             PackedScene soldierScene = GD.Load<PackedScene>("res://Scenes/SoldierScreen/soldier_screen.tscn");
             _soldierScreen = (SoldierController)soldierScene.Instantiate();
             _mainUILayer.AddChild(_soldierScreen);
+            _soldierScreen.SoldierTransferred += OnSoldierTransferred;
             _soldierView = _soldierScreen.GetNode<SoldierView>("SoldierView");
             _soldierView.CloseButtonPressed += OnSoldierViewCloseButtonPressed;
         }
@@ -551,12 +558,12 @@ public partial class MainGameScene : Control
 
     private void OnSoldierViewCloseButtonPressed(object sender, EventArgs e)
     {
-        if (_soldierScreen.FinalizeSoldierTransfer())
-        // reset the company list to reflect the transfer
-        {
-            _chapterScreen.PopulateCompanyList();
-        }
         OnCloseScreen(_soldierScreen, e);
+    }
+
+    private void OnSoldierTransferred(object sender, EventArgs e)
+    {
+        _chapterScreen?.PopulateCompanyList();
     }
 
     private void OnRegionDoubleClicked(object sender, Region region)

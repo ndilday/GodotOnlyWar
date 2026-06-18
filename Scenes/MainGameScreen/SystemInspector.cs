@@ -16,7 +16,6 @@ public partial class SystemInspector : Control
     public event EventHandler<int> MergeFleetPressed;
     public event EventHandler<int> LandSquadsPressed;
     public event EventHandler<int> LoadSquadsPressed;
-    public event EventHandler ManageFleetsPressed;
 
     private Label _nameLabel;
     private Label _controlLabel;
@@ -31,7 +30,6 @@ public partial class SystemInspector : Control
     private Button _mergeButton;
     private Button _landSquadsButton;
     private Button _loadSquadsButton;
-    private Button _manageFleetsButton;
     private Planet _selectedPlanet;
     private readonly List<TaskForce> _orbitingFleets = [];
     private int? _selectedFleetId;
@@ -39,28 +37,25 @@ public partial class SystemInspector : Control
 
     public override void _Ready()
     {
-        _nameLabel = GetNode<Label>("Panel/MarginContainer/VBoxContainer/Header/SystemNameLabel");
-        _controlLabel = GetNode<Label>("Panel/MarginContainer/VBoxContainer/ControlLabel");
-        _planetDetailLabel = GetNode<Label>("Panel/MarginContainer/VBoxContainer/PlanetSection/PlanetDetailLabel");
-        _orbitDetailLabel = GetNode<Label>("Panel/MarginContainer/VBoxContainer/OrbitSection/OrbitDetailLabel");
-        _requestDetailLabel = GetNode<Label>("Panel/MarginContainer/VBoxContainer/RequestSection/RequestDetailLabel");
-        _fleetList = GetNode<ItemList>("Panel/MarginContainer/VBoxContainer/OrbitSection/FleetList");
-        _selectedFleetDetailLabel = GetNode<Label>("Panel/MarginContainer/VBoxContainer/OrbitSection/SelectedFleetDetailLabel");
-        _openSystemButton = GetNode<Button>("Panel/MarginContainer/VBoxContainer/ActionSection/OpenSystemButton");
-        _plotCourseButton = GetNode<Button>("Panel/MarginContainer/VBoxContainer/ActionSection/PlotCourseButton");
-        _divideButton = GetNode<Button>("Panel/MarginContainer/VBoxContainer/ActionSection/DivideButton");
-        _mergeButton = GetNode<Button>("Panel/MarginContainer/VBoxContainer/ActionSection/MergeButton");
-        _landSquadsButton = GetNode<Button>("Panel/MarginContainer/VBoxContainer/ActionSection/LandSquadsButton");
-        _loadSquadsButton = GetNode<Button>("Panel/MarginContainer/VBoxContainer/ActionSection/LoadSquadsButton");
-        _manageFleetsButton = GetNode<Button>("Panel/MarginContainer/VBoxContainer/ActionSection/ManageFleetsButton");
-        IconAtlas.Apply(GetNode<Button>("Panel/MarginContainer/VBoxContainer/Header/SettingsButton"), "settings");
+        _nameLabel = GetNode<Label>("Panel/MarginContainer/ScrollContainer/VBoxContainer/Header/SystemNameLabel");
+        _controlLabel = GetNode<Label>("Panel/MarginContainer/ScrollContainer/VBoxContainer/ControlLabel");
+        _planetDetailLabel = GetNode<Label>("Panel/MarginContainer/ScrollContainer/VBoxContainer/PlanetSection/PlanetDetailLabel");
+        _orbitDetailLabel = GetNode<Label>("Panel/MarginContainer/ScrollContainer/VBoxContainer/OrbitSection/OrbitDetailLabel");
+        _requestDetailLabel = GetNode<Label>("Panel/MarginContainer/ScrollContainer/VBoxContainer/RequestSection/RequestDetailLabel");
+        _fleetList = GetNode<ItemList>("Panel/MarginContainer/ScrollContainer/VBoxContainer/OrbitSection/FleetList");
+        _selectedFleetDetailLabel = GetNode<Label>("Panel/MarginContainer/ScrollContainer/VBoxContainer/OrbitSection/SelectedFleetDetailLabel");
+        _openSystemButton = GetNode<Button>("Panel/MarginContainer/ScrollContainer/VBoxContainer/ActionSection/OpenSystemButton");
+        _plotCourseButton = GetNode<Button>("Panel/MarginContainer/ScrollContainer/VBoxContainer/ActionSection/PlotCourseButton");
+        _divideButton = GetNode<Button>("Panel/MarginContainer/ScrollContainer/VBoxContainer/ActionSection/DivideButton");
+        _mergeButton = GetNode<Button>("Panel/MarginContainer/ScrollContainer/VBoxContainer/ActionSection/MergeButton");
+        _landSquadsButton = GetNode<Button>("Panel/MarginContainer/ScrollContainer/VBoxContainer/ActionSection/LandSquadsButton");
+        _loadSquadsButton = GetNode<Button>("Panel/MarginContainer/ScrollContainer/VBoxContainer/ActionSection/LoadSquadsButton");
         IconAtlas.Apply(_openSystemButton, "planet");
         IconAtlas.Apply(_plotCourseButton, "plot_course");
         IconAtlas.Apply(_divideButton, "divide");
         IconAtlas.Apply(_mergeButton, "merge");
         IconAtlas.Apply(_landSquadsButton, "land_squads");
         IconAtlas.Apply(_loadSquadsButton, "load_squads");
-        IconAtlas.Apply(_manageFleetsButton, "fleet");
         _fleetList.ItemSelected += OnFleetListItemSelected;
         _openSystemButton.Pressed += () =>
         {
@@ -71,7 +66,6 @@ public partial class SystemInspector : Control
         _mergeButton.Pressed += () => InvokeSelectedFleetAction(MergeFleetPressed);
         _landSquadsButton.Pressed += () => InvokeSelectedFleetAction(LandSquadsPressed);
         _loadSquadsButton.Pressed += () => InvokeSelectedFleetAction(LoadSquadsPressed);
-        _manageFleetsButton.Pressed += () => ManageFleetsPressed?.Invoke(this, EventArgs.Empty);
         DisplayEmptyState();
     }
 
@@ -200,7 +194,6 @@ public partial class SystemInspector : Control
         if (_mergeButton != null) _mergeButton.Disabled = !canMerge;
         if (_landSquadsButton != null) _landSquadsButton.Disabled = !hasActionableFleet;
         if (_loadSquadsButton != null) _loadSquadsButton.Disabled = !hasActionableFleet;
-        if (_manageFleetsButton != null) _manageFleetsButton.Disabled = false;
 
         RefreshSelectedFleetDetail(selectedFleet, hasActionableFleet, canDivide, canMerge);
         RefreshActionTooltips(selectedFleet, hasPlanet, hasActionableFleet, canDivide, canMerge);
@@ -267,7 +260,6 @@ public partial class SystemInspector : Control
             hasActionableFleet ? "No compatible merge candidates are in orbit." : noFleet;
         _landSquadsButton.TooltipText = hasActionableFleet ? "Open the tactical screen to land squads." : noFleet;
         _loadSquadsButton.TooltipText = hasActionableFleet ? "Open the tactical screen to load squads." : noFleet;
-        _manageFleetsButton.TooltipText = "Open the sector-wide fleet roster.";
     }
 
     private static string FormatPopulation(long populationInThousands)
