@@ -1,8 +1,7 @@
 using Godot;
+using OnlyWar.Helpers;
 using OnlyWar.Models;
 using OnlyWar.Models.Soldiers;
-using OnlyWar.Models.Squads;
-using OnlyWar.Models.Units;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -10,9 +9,10 @@ using System.Linq;
 public partial class SoldierController : Control
 {
     public SoldierView SoldierView { get; set; }
+    private readonly SoldierTransferService _transferService = new();
     private PlayerSoldier _selectedSoldier;
-    private List<Tuple<int, SoldierTemplate, string>> _openings;
-    private Tuple<int, SoldierTemplate, string> _selectedTransfer;
+    private List<SoldierTransferOption> _openings;
+    private SoldierTransferOption _selectedTransfer;
 
     public override void _Ready()
     {
@@ -34,7 +34,7 @@ public partial class SoldierController : Control
             _selectedTransfer = _openings[index];
             // we want to update the soldier view as if this transfer is finalized,
             // but don't actually finalize until screen closes
-            PopulateSoldierHistory(_selectedSoldier, _selectedTransfer);
+            PopulateSoldierHistory(_selectedSoldier);
         }
         
     }
@@ -54,64 +54,16 @@ public partial class SoldierController : Control
     {
         if (_selectedTransfer != null)
         {
-            Squad currentSquad = _selectedSoldier.AssignedSquad;
-            // move soldier to his new role
-            currentSquad.RemoveSquadMember(_selectedSoldier);
-            if (_selectedSoldier.Template.IsSquadLeader
-                && (currentSquad.SquadTemplate.SquadType & SquadTypes.HQ) == 0)
-            {
-                // if soldier is squad leader and its not an HQ Squad, change name
-                currentSquad.Name = currentSquad.SquadTemplate.Name;
-            }
-            Squad newSquad = GameDataSingleton.Instance.Sector.PlayerForce.Army.SquadMap[_selectedTransfer.Item1];
-            newSquad.AddSquadMember(_selectedSoldier);
-
-            UpdateSquadLocations(currentSquad, newSquad);
-
-            Date date = GameDataSingleton.Instance.Date;
-            if (_selectedSoldier.Template != _selectedTransfer.Item2)
-            {
-                _selectedSoldier.AddEntryToHistory($"{date}: promoted to {_selectedTransfer.Item2.Name}");
-                _selectedSoldier.Template = _selectedTransfer.Item2;
-            }
-            if (_selectedSoldier.Template.IsSquadLeader
-                && (newSquad.SquadTemplate.SquadType & SquadTypes.HQ) == 0)
-            {
-                // if soldier is squad leader and its not an HQ Squad, change name
-                newSquad.Name = _selectedSoldier.Name.Split(' ')[1] + " Squad";
-            }
-            
-            if (currentSquad.Members.Count == 0 &&
-               (currentSquad.SquadTemplate.SquadType & SquadTypes.Scout) == SquadTypes.Scout)
-            {
-                // delete scout squads when they're emptied out
-                Unit parentUnit = currentSquad.ParentUnit;
-                parentUnit.RemoveSquad(currentSquad);
-                GameDataSingleton.Instance.Sector.PlayerForce.Army.SquadMap.Remove(currentSquad.Id);
-            }
-            if (currentSquad != newSquad)
-            {
-                _selectedSoldier.AddEntryToHistory($"{date}: transferred to {_selectedTransfer.Item3}");
-            }
+            GameDataSingleton.Instance.Sector.PlayerForce.Army.PopulateSquadMap();
+            _transferService.ApplyTransfer(
+                _selectedSoldier,
+                _selectedTransfer,
+                GameDataSingleton.Instance.Sector.PlayerForce.Army.SquadMap,
+                GameDataSingleton.Instance.Date);
             _selectedTransfer = null;
             return true;
         }
         return false;
-    }
-
-    private void UpdateSquadLocations(Squad oldSquad, Squad newSquad)
-    {
-        if (newSquad.Members.Count == 1)
-        {
-            // make the location of the new squad the same as the old one
-            newSquad.CurrentRegion = oldSquad.CurrentRegion;
-            newSquad.BoardedLocation = oldSquad.BoardedLocation;
-        }
-        if (oldSquad.Members.Count == 0)
-        {
-            oldSquad.CurrentRegion = null;
-            oldSquad.BoardedLocation = null;
-        }
     }
 
     private void PopulateSoldierData(PlayerSoldier soldier)
@@ -130,26 +82,9 @@ public partial class SoldierController : Control
         SoldierView.PopulateSoldierData(soldierData);
     }
 
-    private void PopulateSoldierHistory(PlayerSoldier soldier, Tuple<int, SoldierTemplate, string> newRole = null)
+    private void PopulateSoldierHistory(PlayerSoldier soldier)
     {
-        List<string> soldierHistory = new List<string>();
-        foreach (var entry in soldier.SoldierHistory)
-        {
-            soldierHistory.Add(entry);
-        }
-        if(newRole != null)
-        {
-            Date date = GameDataSingleton.Instance.Date;
-            if (_selectedSoldier.Template != newRole.Item2)
-            {
-                soldierHistory.Add($"{date}: promoted to {newRole.Item2.Name}");
-            }
-            if (soldier.AssignedSquad.Id != newRole.Item1)
-            {
-                _selectedSoldier.AddEntryToHistory($"{date}: transferred to {_selectedTransfer.Item3}");
-            }
-        }
-        SoldierView.PopulateSoldierHistory(soldierHistory);
+        SoldierView.PopulateSoldierHistory(_transferService.PreviewHistory(soldier, _selectedTransfer, GameDataSingleton.Instance.Date));
     }
 
     private void PopulateSoldierAwards(PlayerSoldier soldier)
@@ -177,11 +112,11 @@ public partial class SoldierController : Control
 
     private void PopulateTransferOptions(PlayerSoldier soldier)
     {
-        _openings = GetOpeningsInUnit(GameDataSingleton.Instance.Sector.PlayerForce.Army.OrderOfBattle, soldier.AssignedSquad, soldier.Template);
-        // insert current assignment at top
-        _openings.Insert(0, new Tuple<int, SoldierTemplate, string>(soldier.AssignedSquad.Id, soldier.Template,
-            $"{soldier.Template.Name}, {soldier.AssignedSquad.Name}, {soldier.AssignedSquad.ParentUnit.Name}"));
-        SoldierView.PopulateTransferOptions(_openings.Select(o => o.Item3).ToList());
+        _openings = _transferService.GetTransferOptions(
+            GameDataSingleton.Instance.Sector.PlayerForce.Army.OrderOfBattle,
+            soldier,
+            true);
+        SoldierView.PopulateTransferOptions(_openings.Select(o => o.DisplayName).ToList());
     }
 
     private string GetSergeantDescription(string name, SoldierEvaluation evaluation, string squadType)
@@ -264,70 +199,6 @@ public partial class SoldierController : Control
         {
             return "I have no opinion on future assignments for " + name + ".";
         }
-    }
-
-    private List<Tuple<int, SoldierTemplate, string>> GetOpeningsInUnit(Unit unit, Squad currentSquad,
-                                                                            SoldierTemplate soldierTemplate)
-    {
-        List<Tuple<int, SoldierTemplate, string>> openSlots =
-            new List<Tuple<int, SoldierTemplate, string>>();
-        IEnumerable<SoldierTemplate> squadSlots;
-        foreach (Squad squad in unit.Squads)
-        {
-            squadSlots = GetOpeningsInSquad(squad, currentSquad, soldierTemplate);
-            if (squadSlots.Count() > 0)
-            {
-                foreach (SoldierTemplate template in squadSlots)
-                {
-                    openSlots.Add(new Tuple<int, SoldierTemplate, string>(squad.Id, template,
-                        $"{template.Name}, {squad.Name}, {unit.Name}"));
-                }
-            }
-        }
-        foreach (Unit childUnit in unit.ChildUnits ?? Enumerable.Empty<Unit>())
-        {
-            openSlots.AddRange(GetOpeningsInUnit(childUnit, currentSquad, soldierTemplate));
-        }
-        return openSlots;
-    }
-
-    private IEnumerable<SoldierTemplate> GetOpeningsInSquad(Squad squad, Squad currentSquad,
-                                                            SoldierTemplate soldierTemplate)
-    {
-        List<SoldierTemplate> openSpots = new List<SoldierTemplate>();
-        bool hasSquadLeader = squad.SquadLeader != null;
-        // get the count of each soldier type in the squad
-        // compare to the max count of each type
-        Dictionary<SoldierTemplate, int> typeCountMap =
-            squad.Members.GroupBy(s => s.Template)
-                         .ToDictionary(g => g.Key, g => g.Count());
-        foreach (SquadTemplateElement element in squad.SquadTemplate.Elements)
-        {
-            // if the squad has no squad leader, only squad leader elements can be added now
-            if (!hasSquadLeader && !element.SoldierTemplate.IsSquadLeader)
-            {
-                continue;
-            }
-            if (currentSquad == squad && element.SoldierTemplate == soldierTemplate)
-            {
-                continue;
-            }
-            if (element.SoldierTemplate.Rank < soldierTemplate.Rank
-                || element.SoldierTemplate.Rank > soldierTemplate.Rank + 1)
-            {
-                continue;
-            }
-            int existingHeadcount = 0;
-            if (typeCountMap.ContainsKey(element.SoldierTemplate))
-            {
-                existingHeadcount += typeCountMap[element.SoldierTemplate];
-            }
-            if (existingHeadcount < element.MaximumNumber)
-            {
-                openSpots.Add(element.SoldierTemplate);
-            }
-        }
-        return openSpots;
     }
 
     private string GenerateSoldierInjurySummary(ISoldier selectedSoldier)

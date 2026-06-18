@@ -27,12 +27,14 @@ public partial class ChapterView : Control
     private GridContainer _metricGrid;
     private GridContainer _detailCardGrid;
     private Button _detailActionButton;
+    private MenuButton _transferButton;
     private Button _closeButton;
 
     public event EventHandler<ChapterBrowserItemEvent> BrowserItemSelected;
     public event EventHandler<ChapterBrowserItemEvent> BrowserItemDrillRequested;
     public event EventHandler<ChapterBrowserLevel> BreadcrumbPressed;
     public event EventHandler DetailPrimaryActionPressed;
+    public event EventHandler<int> TransferTargetSelected;
     public event EventHandler CloseButtonPressed;
 
     public override void _Ready()
@@ -47,6 +49,7 @@ public partial class ChapterView : Control
         _metricGrid = GetNode<GridContainer>("Content/MainLayout/DetailPanel/Panel/MarginContainer/DetailStack/Hero/MetricGrid");
         _detailCardGrid = GetNode<GridContainer>("Content/MainLayout/DetailPanel/Panel/MarginContainer/DetailStack/DetailScroll/DetailCardGrid");
         _detailActionButton = GetNode<Button>("Content/MainLayout/DetailPanel/Panel/MarginContainer/DetailStack/DetailActionButton");
+        _transferButton = GetNode<MenuButton>("Content/MainLayout/DetailPanel/Panel/MarginContainer/DetailStack/TransferButton");
         _closeButton = GetNode<Button>("Content/CloseButton");
 
         ConfigureHeaderLabel(_leftTitleLabel);
@@ -57,6 +60,7 @@ public partial class ChapterView : Control
         _closeButton.Text = "";
         _closeButton.Pressed += () => CloseButtonPressed?.Invoke(this, EventArgs.Empty);
         _detailActionButton.Pressed += () => DetailPrimaryActionPressed?.Invoke(this, EventArgs.Empty);
+        _transferButton.GetPopup().IndexPressed += index => TransferTargetSelected?.Invoke(this, (int)index);
     }
 
     public void SetBreadcrumbs(IReadOnlyList<ChapterBreadcrumbItem> breadcrumbs)
@@ -123,10 +127,31 @@ public partial class ChapterView : Control
         bool hasAction = !string.IsNullOrWhiteSpace(detail.PrimaryActionText);
         _detailActionButton.Visible = hasAction;
         _detailActionButton.Disabled = !hasAction;
+        _transferButton.Visible = false;
+        _transferButton.Disabled = true;
+        _transferButton.GetPopup().Clear();
         if (hasAction)
         {
             _detailActionButton.Text = detail.PrimaryActionText;
             IconAtlas.Apply(_detailActionButton, detail.PrimaryActionIconKey ?? "archive");
+        }
+    }
+
+    public void SetTransferOptions(IReadOnlyList<string> options)
+    {
+        _transferButton.GetPopup().Clear();
+        foreach (string option in options)
+        {
+            _transferButton.GetPopup().AddItem(option);
+        }
+
+        bool hasOptions = options.Count > 0;
+        _transferButton.Visible = hasOptions;
+        _transferButton.Disabled = !hasOptions;
+        _transferButton.Text = hasOptions ? "Transfer" : "No Transfers Available";
+        if (hasOptions)
+        {
+            IconAtlas.Apply(_transferButton, "chapter");
         }
     }
 

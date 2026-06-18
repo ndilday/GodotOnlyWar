@@ -1,4 +1,5 @@
 using Godot;
+using OnlyWar.Helpers;
 using OnlyWar.Models;
 using OnlyWar.Models.Soldiers;
 using OnlyWar.Models.Squads;
@@ -10,6 +11,12 @@ using System.Linq;
 public partial class ChapterController : Control
 {
     private readonly ChapterBrowserNavigator _navigator = new();
+    private readonly SoldierTransferService _transferService = new();
+    private List<SoldierTransferOption> _transferOptions = [];
+    private SoldierTransferOption _pendingTransferOption;
+    private int? _pendingTransferSoldierId;
+    private int? _currentDetailSoldierId;
+    private ConfirmationDialog _transferConfirmationDialog;
 
     public ChapterView ChapterView { get; set; }
 
@@ -28,6 +35,14 @@ public partial class ChapterController : Control
         ChapterView.BrowserItemDrillRequested += OnBrowserItemDrillRequested;
         ChapterView.BreadcrumbPressed += OnBreadcrumbPressed;
         ChapterView.DetailPrimaryActionPressed += OnDetailPrimaryActionPressed;
+        ChapterView.TransferTargetSelected += OnTransferTargetSelected;
+
+        _transferConfirmationDialog = new ConfirmationDialog
+        {
+            Title = "Confirm Transfer"
+        };
+        _transferConfirmationDialog.Confirmed += OnTransferConfirmed;
+        AddChild(_transferConfirmationDialog);
 
         RenderCurrentPath();
     }
@@ -44,6 +59,11 @@ public partial class ChapterController : Control
         ChapterView.BrowserItemDrillRequested -= OnBrowserItemDrillRequested;
         ChapterView.BreadcrumbPressed -= OnBreadcrumbPressed;
         ChapterView.DetailPrimaryActionPressed -= OnDetailPrimaryActionPressed;
+        ChapterView.TransferTargetSelected -= OnTransferTargetSelected;
+        if (_transferConfirmationDialog != null)
+        {
+            _transferConfirmationDialog.Confirmed -= OnTransferConfirmed;
+        }
     }
 
     public void PopulateCompanyList()
@@ -92,6 +112,60 @@ public partial class ChapterController : Control
         }
     }
 
+    private void OnTransferTargetSelected(object sender, int index)
+    {
+        if (index < 0 || index >= _transferOptions.Count)
+        {
+            return;
+        }
+
+        if (TryGetCurrentDetailSoldier() is not PlayerSoldier soldier)
+        {
+            return;
+        }
+
+        _pendingTransferOption = _transferOptions[index];
+        _pendingTransferSoldierId = soldier.Id;
+        _transferConfirmationDialog.DialogText =
+            $"Transfer {soldier.Template.Name} {soldier.Name} to {_pendingTransferOption.DisplayName}?";
+        _transferConfirmationDialog.PopupCentered();
+    }
+
+    private void OnTransferConfirmed()
+    {
+        if (_pendingTransferOption == null || !_pendingTransferSoldierId.HasValue)
+        {
+            return;
+        }
+
+        if (GetSoldier(_pendingTransferSoldierId.Value) is not PlayerSoldier soldier)
+        {
+            ClearPendingTransfer();
+            return;
+        }
+
+        GameDataSingleton.Instance.Sector.PlayerForce.Army.PopulateSquadMap();
+        bool didTransfer = _transferService.ApplyTransfer(
+            soldier,
+            _pendingTransferOption,
+            GameDataSingleton.Instance.Sector.PlayerForce.Army.SquadMap,
+            GameDataSingleton.Instance.Date);
+
+        if (didTransfer)
+        {
+            NavigateToSoldier(soldier);
+        }
+
+        ClearPendingTransfer();
+        RenderCurrentPath();
+    }
+
+    private void ClearPendingTransfer()
+    {
+        _pendingTransferOption = null;
+        _pendingTransferSoldierId = null;
+    }
+
     private void RenderCurrentPath()
     {
         Unit chapter = TryGetChapter();
@@ -102,6 +176,8 @@ public partial class ChapterController : Control
         }
 
         ChapterView.SetBreadcrumbs(BuildBreadcrumbs(chapter));
+        _currentDetailSoldierId = null;
+        _transferOptions = [];
 
         switch (_navigator.Path.Level)
         {
@@ -122,6 +198,8 @@ public partial class ChapterController : Control
 
     private void RenderNoChapterData()
     {
+        _currentDetailSoldierId = null;
+        _transferOptions = [];
         ChapterView.SetBreadcrumbs(
         [
             new ChapterBreadcrumbItem(ChapterBrowserLevel.Chapter, "Chapter", "chapter")
@@ -216,7 +294,14 @@ public partial class ChapterController : Control
         ChapterView.SetLeftMenu("Battle Brothers", "Select / profile", soldiers);
 
         ISoldier selectedSoldier = TryGetSelectedSoldier() ?? squad.Members.FirstOrDefault();
-        ChapterView.SetDetail(selectedSoldier == null ? BuildSquadDetail(squad, null) : BuildSoldierDetail(selectedSoldier));
+        if (selectedSoldier == null)
+        {
+            ChapterView.SetDetail(BuildSquadDetail(squad, null));
+        }
+        else
+        {
+            SetSoldierDetail(selectedSoldier);
+        }
     }
 
     private void RenderSoldierLevel(ISoldier soldier)
@@ -235,7 +320,35 @@ public partial class ChapterController : Control
             .ToList();
 
         ChapterView.SetLeftMenu("Battle Brothers", "Selected soldier", soldiers);
+        SetSoldierDetail(soldier);
+    }
+
+    private void SetSoldierDetail(ISoldier soldier)
+    {
+        _currentDetailSoldierId = soldier.Id;
         ChapterView.SetDetail(BuildSoldierDetail(soldier));
+        if (soldier is PlayerSoldier playerSoldier)
+        {
+            _transferOptions = _transferService.GetTransferOptions(
+                GameDataSingleton.Instance.Sector.PlayerForce.Army.OrderOfBattle,
+                playerSoldier);
+            ChapterView.SetTransferOptions(_transferOptions.Select(option => option.DisplayName).ToList());
+        }
+        else
+        {
+            _transferOptions = [];
+            ChapterView.SetTransferOptions([]);
+        }
+    }
+
+    private void NavigateToSoldier(ISoldier soldier)
+    {
+        Unit chapter = GetChapter();
+        Squad squad = soldier.AssignedSquad;
+        _navigator.Path.CompanyId = chapter.ChildUnits.FirstOrDefault(company => company.Id == squad.ParentUnit?.Id)?.Id;
+        _navigator.Path.SquadId = squad.Id;
+        _navigator.Path.SoldierId = soldier.Id;
+        _navigator.Select(new ChapterBrowserItemEvent(ChapterBrowserLevel.Soldier, soldier.Id));
     }
 
     private IReadOnlyList<ChapterBreadcrumbItem> BuildBreadcrumbs(Unit chapter)
@@ -441,6 +554,10 @@ public partial class ChapterController : Control
 
     private ISoldier TryGetCurrentDetailSoldier()
     {
+        if (_currentDetailSoldierId.HasValue)
+        {
+            return GetSoldier(_currentDetailSoldierId.Value);
+        }
         if (_navigator.Path.SoldierId.HasValue)
         {
             return GetSoldier(_navigator.Path.SoldierId.Value);

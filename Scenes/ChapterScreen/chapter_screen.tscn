@@ -272,3 +272,9 @@ custom_minimum_size = Vector2(0, 36)
 layout_mode = 2
 visible = false
 text = "Open Full Record"
+
+[node name="TransferButton" type="MenuButton" parent="ChapterView/Content/MainLayout/DetailPanel/Panel/MarginContainer/DetailStack"]
+custom_minimum_size = Vector2(0, 36)
+layout_mode = 2
+visible = false
+text = "Transfer"
