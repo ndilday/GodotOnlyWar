@@ -1,12 +1,19 @@
-[gd_scene load_steps=3 format=3 uid="uid://ck5vq6a7t604p"]
+[gd_scene format=3 uid="uid://ck5vq6a7t604p"]
 
-[ext_resource type="Script" uid="uid://blj3k4e13p7kj" path="res://Scenes/SectorMap/SectorMap.cs" id="1_6knhr"]
-[ext_resource type="Script" uid="uid://bf2k36bi4isky" path="res://Scenes/SectorMap/Camera2D.cs" id="2_u2h2t"]
+[ext_resource type="Script" uid="uid://c546ktqo4gdqq" path="res://Scenes/SectorMap/SectorMap.cs" id="1_6knhr"]
+[ext_resource type="Script" uid="uid://dqvcwskda1r7e" path="res://Scenes/SectorMap/Camera2D.cs" id="2_u2h2t"]
+[ext_resource type="Texture2D" uid="uid://btw8he727amfl" path="res://Assets/SectorMap/sector_map_stellar_background_8192.png" id="3_l4fwm"]
 
-[node name="SectorMap" type="Node2D"]
+[node name="SectorMap" type="Node2D" unique_id=291905396]
 script = ExtResource("1_6knhr")
 
-[node name="Camera2D" type="Camera2D" parent="." node_paths=PackedStringArray("_sectorMap")]
+[node name="Background" type="Sprite2D" parent="." unique_id=1581012305]
+z_index = -100
+position = Vector2(807, 474)
+scale = Vector2(0.2, 0.2)
+texture = ExtResource("3_l4fwm")
+
+[node name="Camera2D" type="Camera2D" parent="." unique_id=2067324221 node_paths=PackedStringArray("_sectorMap")]
 anchor_mode = 0
 ignore_rotation = false
 limit_left = -20000

@@ -41,10 +41,11 @@ public partial class SectorMap : Node2D
 		new(GameDataSingleton.Instance.GameRulesData.SectorCellSize.X,
 			GameDataSingleton.Instance.GameRulesData.SectorCellSize.Y);
 
-	public Vector2I HalfCellSize { get; private set; }
+    public Vector2I HalfCellSize { get; private set; }
     public ushort[] SectorIds { get; private set; }
     public bool[] HasPlanet { get; private set; }
     private Camera2D _camera;
+    private Sprite2D _background;
     private readonly List<Node> _fleetSprites = [];
 	
 	private Dictionary<ushort, List<Vector2I>> _subsectorVertexListMap;
@@ -56,7 +57,9 @@ public partial class SectorMap : Node2D
 	public override void _Ready()
 	{
         _camera = GetNode<Camera2D>("Camera2D");
+        _background = GetNodeOrNull<Sprite2D>("Background");
 		HalfCellSize = CellSize / 2;
+        LayoutBackground();
 		SectorIds = new ushort[GridDimensions.X * GridDimensions.Y];
 		HasPlanet = new bool[GridDimensions.X * GridDimensions.Y];
 		PlacePlanets();
@@ -83,6 +86,17 @@ public partial class SectorMap : Node2D
         Vector2I gridPosition = new Vector2I(centerPosition.Value.X, centerPosition.Value.Y);
         Vector2I mapPosition = CalculateMapPosition(gridPosition);
         _camera.ZoomTo(1, mapPosition);
+    }
+
+    private void LayoutBackground()
+    {
+        if (_background?.Texture == null) return;
+
+        Vector2 mapSize = new(GridDimensions.X * CellSize.X, GridDimensions.Y * CellSize.Y);
+        Vector2 backgroundSize = mapSize + Vector2.One * (2 * _camera.MapBorderPixels);
+
+        _background.Position = mapSize / 2.0f;
+        _background.Scale = backgroundSize / _background.Texture.GetSize();
     }
 
 	public override void _Draw()

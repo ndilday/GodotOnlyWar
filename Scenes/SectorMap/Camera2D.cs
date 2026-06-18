@@ -5,7 +5,7 @@ using System.Runtime.CompilerServices;
 public partial class Camera2D : Godot.Camera2D
 {
     [Export(PropertyHint.Range, "10, 100, 5")]
-    int MapBorderPixels = 100;
+    public int MapBorderPixels { get; set; } = 100;
     [Export]
 	SectorMap _sectorMap;
     [Export]
