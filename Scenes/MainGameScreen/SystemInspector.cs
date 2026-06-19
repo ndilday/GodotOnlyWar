@@ -88,7 +88,7 @@ public partial class SystemInspector : Control
         int openRequests = GameDataSingleton.Instance.Sector.PlayerForce.Requests
             .Count(request => request.TargetPlanet == planet && request.DateRequestFulfilled == null);
 
-        _nameLabel.Text = planet.Name;
+        _nameLabel.Text = BuildSystemNameLabel(planet);
         _controlLabel.Text = controllingFaction != null
             ? $"Controlled by {controllingFaction.Name}"
             : "Control unknown";
@@ -110,6 +110,24 @@ public partial class SystemInspector : Control
         SelectFleetListRow();
         _isRefreshingFleetList = false;
         RefreshActionState();
+    }
+
+    private static string BuildSystemNameLabel(Planet planet)
+    {
+        Subsector subsector = GameDataSingleton.Instance.Sector.Subsectors
+            .FirstOrDefault(s => s.Planets.Contains(planet));
+        if (subsector == null)
+        {
+            return planet.Name;
+        }
+        // The subsector capital is the most important planet in the subsector (PRD 6.11:
+        // population drives capital selection, matching WarpLaneBuilder.SelectCapital).
+        Planet capital = subsector.Planets
+            .OrderByDescending(p => p.Population)
+            .ThenByDescending(p => p.Importance)
+            .ThenBy(p => p.Id)
+            .First();
+        return $"{planet.Name}, Subsector {capital.Name}";
     }
 
     public void DisplayEmptyState()
