@@ -24,6 +24,14 @@ public partial class Camera2D : Godot.Camera2D
 	// Called when the node enters the scene tree for the first time.
 	public override void _Ready()
 	{
+        if (_sectorMap == null || !_sectorMap.EnsureMapMetricsInitialized())
+        {
+            GD.PushError("SectorMap Camera2D requires initialized sector map data before the scene is readied.");
+            SetProcessInput(false);
+            _mapPixelDimensions = Vector2I.One;
+            return;
+        }
+
         _mapPixelDimensions = new(_sectorMap.GridDimensions.X * _sectorMap.CellSize.X + 2 * MapBorderPixels, 
 								  _sectorMap.GridDimensions.Y * _sectorMap.CellSize.Y + 2 * MapBorderPixels);
     }

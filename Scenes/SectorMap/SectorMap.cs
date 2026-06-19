@@ -19,27 +19,76 @@ struct BorderPoint
 
 public partial class SectorMap : Node2D
 {
+    private readonly struct EdgeKey : IEquatable<EdgeKey>
+    {
+        public readonly Vector2I A;
+        public readonly Vector2I B;
+
+        public EdgeKey(Vector2I a, Vector2I b)
+        {
+            if (ComparePoints(a, b) <= 0)
+            {
+                A = a;
+                B = b;
+            }
+            else
+            {
+                A = b;
+                B = a;
+            }
+        }
+
+        public bool Equals(EdgeKey other)
+        {
+            return A == other.A && B == other.B;
+        }
+
+        public override bool Equals(object obj)
+        {
+            return obj is EdgeKey other && Equals(other);
+        }
+
+        public override int GetHashCode()
+        {
+            return HashCode.Combine(A, B);
+        }
+
+        private static int ComparePoints(Vector2I left, Vector2I right)
+        {
+            int xCompare = left.X.CompareTo(right.X);
+            return xCompare != 0 ? xCompare : left.Y.CompareTo(right.Y);
+        }
+    }
+
     private static readonly Color[] SubsectorPalette =
     [
-        Color.Color8(84, 190, 214),
-        Color.Color8(222, 174, 80),
-        Color.Color8(113, 187, 101),
-        Color.Color8(204, 83, 71),
-        Color.Color8(111, 142, 218),
-        Color.Color8(200, 132, 62)
+        Color.Color8(118, 28, 46),
+        Color.Color8(22, 102, 106),
+        Color.Color8(86, 55, 132),
+        Color.Color8(36, 68, 128),
+        Color.Color8(78, 112, 62),
+        Color.Color8(125, 88, 42)
     ];
+    private static readonly Color SubsectorBorderColor = Color.Color8(176, 132, 66);
+    private static readonly Color SubsectorBorderGlowColor = Color.Color8(218, 177, 94);
+    private static readonly Color SubsectorBorderShadowColor = Color.Color8(7, 6, 5);
+    private const float SubsectorGridFillAlpha = 0.08f;
+    private const float SubsectorGlassFillAlpha = 0.24f;
+    private const float SubsectorInnerStainAlpha = 0.08f;
+    private const float PolygonSimplificationToleranceCellFraction = 1.1f;
+    private const float PolygonSimplificationMaxBridgeCellFraction = 4.5f;
+    private const int PolygonSmoothingPasses = 2;
+    private const float SeamSimplificationToleranceCellFraction = 2.4f;
+    private const float SeamSimplificationMaxBridgeCellFraction = 8.0f;
+    private const int SeamCurveSamplesPerSegment = 10;
 
     public event EventHandler<int> PlanetClicked;
     public event EventHandler<int> PlanetDoubleClicked;
     public event EventHandler<int> FleetClicked;
     public event EventHandler<int> FleetRightClicked;
 
-    public Vector2I GridDimensions =
-		new(GameDataSingleton.Instance.GameRulesData.SectorSize.X,
-			GameDataSingleton.Instance.GameRulesData.SectorSize.Y);
-	public Vector2I CellSize =
-		new(GameDataSingleton.Instance.GameRulesData.SectorCellSize.X,
-			GameDataSingleton.Instance.GameRulesData.SectorCellSize.Y);
+    public Vector2I GridDimensions { get; private set; }
+	public Vector2I CellSize { get; private set; }
 
     public Vector2I HalfCellSize { get; private set; }
     public ushort[] SectorIds { get; private set; }
@@ -48,17 +97,43 @@ public partial class SectorMap : Node2D
     private Sprite2D _background;
     private readonly List<Node> _fleetSprites = [];
 	
-	private Dictionary<ushort, List<Vector2I>> _subsectorVertexListMap;
-	private Dictionary<ushort, HashSet<ushort>> _subsectorAdjacencyMap;
-	private Dictionary<ushort, int> _subsectorColorIndexMap;
+	private Dictionary<ushort, List<Vector2I>> _subsectorVertexListMap = [];
+    private List<Vector2[]> _subsectorBoundaryPaths = [];
+	private Dictionary<ushort, HashSet<ushort>> _subsectorAdjacencyMap = [];
+	private Dictionary<ushort, int> _subsectorColorIndexMap = [];
     private int? _selectedPlanetId;
 
-	// Called when the node enters the scene tree for the first time.
+    public override void _EnterTree()
+    {
+        EnsureMapMetricsInitialized();
+    }
+
+    public bool EnsureMapMetricsInitialized()
+    {
+        if (GridDimensions != Vector2I.Zero && CellSize != Vector2I.Zero) return true;
+        if (!GameDataSingleton.Instance.IsInitialized) return false;
+
+        GridDimensions = new(
+            GameDataSingleton.Instance.GameRulesData.SectorSize.X,
+            GameDataSingleton.Instance.GameRulesData.SectorSize.Y);
+        CellSize = new(
+            GameDataSingleton.Instance.GameRulesData.SectorCellSize.X,
+            GameDataSingleton.Instance.GameRulesData.SectorCellSize.Y);
+        HalfCellSize = CellSize / 2;
+        return true;
+    }
+
+    // Called when the node enters the scene tree for the first time.
 	public override void _Ready()
 	{
         _camera = GetNode<Camera2D>("Camera2D");
         _background = GetNodeOrNull<Sprite2D>("Background");
-		HalfCellSize = CellSize / 2;
+        if (!EnsureMapMetricsInitialized())
+        {
+            GD.PushError("SectorMap requires initialized game data before the scene is readied.");
+            return;
+        }
+
         LayoutBackground();
 		SectorIds = new ushort[GridDimensions.X * GridDimensions.Y];
 		HasPlanet = new bool[GridDimensions.X * GridDimensions.Y];
@@ -76,6 +151,7 @@ public partial class SectorMap : Node2D
         _subsectorColorIndexMap = AssignSubsectorColorIndexes(_subsectorAdjacencyMap);
         ValidateSubsectorColoring(_subsectorAdjacencyMap, _subsectorColorIndexMap);
         _subsectorVertexListMap = DetermineSubsectorBorderPoints(subsectors);
+        _subsectorBoundaryPaths = DetermineSubsectorBoundaryPaths();
         TaskForce centerFleet = GameDataSingleton.Instance.Sector.PlayerForce.Fleet.TaskForces.FirstOrDefault();
         Coordinate? centerPosition = centerFleet?.Planet?.Position ?? centerFleet?.Position;
         if (centerPosition == null)
@@ -102,17 +178,17 @@ public partial class SectorMap : Node2D
 	public override void _Draw()
 	{
 		base._Draw();
+        if (!GameDataSingleton.Instance.IsInitialized || _subsectorVertexListMap.Count == 0) return;
+
 		foreach (var kvp in _subsectorVertexListMap.OrderBy(kvp => kvp.Key))
 		{
             Vector2[] polygonPoints = kvp.Value.Select(vector => new Vector2(vector.X, vector.Y)).ToArray();
-            Vector2[] closedPolygonPoints = ClosePolygon(polygonPoints);
-            Vector2[] visualBoundaryPoints = BuildJitteredBoundary(kvp.Key, closedPolygonPoints);
+            Vector2[] smoothedPolygonPoints = BuildSmoothedPolygon(polygonPoints);
             Color baseColor = GetSubsectorColor(kvp.Key);
-            DrawColoredPolygon(polygonPoints, WithAlpha(baseColor, 0.12f));
-            DrawPolyline(visualBoundaryPoints, WithAlpha(baseColor, 0.12f), 8.0f, true);
-            DrawDistressedBoundary(visualBoundaryPoints, baseColor, kvp.Key);
-            DrawPolyline(visualBoundaryPoints, WithAlpha(baseColor, 0.42f), 1.4f, true);
+
+            DrawSubsectorFill(kvp.Key, polygonPoints, smoothedPolygonPoints, baseColor);
 		}
+        DrawSubsectorBoundaries();
         DrawSelectedSystemOverlay();
 	}
 
@@ -259,6 +335,71 @@ public partial class SectorMap : Node2D
         return new Color(color.R, color.G, color.B, alpha);
     }
 
+    private void DrawSubsectorFill(ushort subsectorId, Vector2[] polygonPoints, Vector2[] smoothedPolygonPoints, Color baseColor)
+    {
+        DrawColoredPolygon(polygonPoints, WithAlpha(baseColor, SubsectorGridFillAlpha));
+        DrawColoredPolygon(smoothedPolygonPoints, WithAlpha(baseColor, SubsectorGlassFillAlpha));
+
+        Vector2 centroid = CalculateCentroid(smoothedPolygonPoints);
+        float inset = 0.78f + 0.08f * Noise01(subsectorId, 17);
+        Vector2[] innerStainPoints = ScalePolygon(smoothedPolygonPoints, centroid, inset);
+        Color stainColor = TintSubsectorColor(baseColor, 1.18f);
+        DrawColoredPolygon(innerStainPoints, WithAlpha(stainColor, SubsectorInnerStainAlpha));
+
+        float secondInset = 0.48f + 0.08f * Noise01(subsectorId, 29);
+        Vector2 offset = new(
+            (Noise01(subsectorId, 31) - 0.5f) * CellSize.X * 1.6f,
+            (Noise01(subsectorId, 37) - 0.5f) * CellSize.Y * 1.6f);
+        Vector2[] shadowStainPoints = ScalePolygon(smoothedPolygonPoints, centroid + offset, secondInset);
+        Color shadowColor = TintSubsectorColor(baseColor, 0.72f);
+        DrawColoredPolygon(shadowStainPoints, WithAlpha(shadowColor, SubsectorInnerStainAlpha * 0.8f));
+    }
+
+    private void DrawSubsectorBoundaries()
+    {
+        foreach (Vector2[] boundaryPath in _subsectorBoundaryPaths)
+        {
+            if (boundaryPath.Length < 2) continue;
+
+            DrawPolyline(boundaryPath, WithAlpha(SubsectorBorderShadowColor, 0.82f), 4.2f, true);
+            DrawPolyline(boundaryPath, WithAlpha(SubsectorBorderGlowColor, 0.20f), 2.8f, true);
+            DrawPolyline(boundaryPath, WithAlpha(SubsectorBorderColor, 0.88f), 1.35f, true);
+        }
+    }
+
+    private static Color TintSubsectorColor(Color color, float multiplier)
+    {
+        return new Color(
+            Mathf.Clamp(color.R * multiplier, 0.0f, 1.0f),
+            Mathf.Clamp(color.G * multiplier, 0.0f, 1.0f),
+            Mathf.Clamp(color.B * multiplier, 0.0f, 1.0f),
+            color.A);
+    }
+
+    private static Vector2 CalculateCentroid(Vector2[] polygonPoints)
+    {
+        if (polygonPoints.Length == 0) return Vector2.Zero;
+
+        Vector2 sum = Vector2.Zero;
+        foreach (Vector2 point in polygonPoints)
+        {
+            sum += point;
+        }
+
+        return sum / polygonPoints.Length;
+    }
+
+    private static Vector2[] ScalePolygon(Vector2[] polygonPoints, Vector2 center, float scale)
+    {
+        Vector2[] scaledPoints = new Vector2[polygonPoints.Length];
+        for (int i = 0; i < polygonPoints.Length; i++)
+        {
+            scaledPoints[i] = center + (polygonPoints[i] - center) * scale;
+        }
+
+        return scaledPoints;
+    }
+
     private static Vector2[] ClosePolygon(Vector2[] polygonPoints)
     {
         if (polygonPoints.Length == 0) return polygonPoints;
@@ -269,92 +410,234 @@ public partial class SectorMap : Node2D
         return closedPolygonPoints;
     }
 
-    private Vector2[] BuildJitteredBoundary(ushort subsectorId, Vector2[] closedPolygonPoints)
+    private Vector2[] BuildSmoothedPolygon(Vector2[] polygonPoints)
     {
-        if (closedPolygonPoints.Length == 0) return closedPolygonPoints;
+        if (polygonPoints.Length < 3) return polygonPoints;
 
-        Vector2[] visualBoundaryPoints = new Vector2[closedPolygonPoints.Length];
-        for (int i = 0; i < closedPolygonPoints.Length - 1; i++)
+        Vector2[] simplifiedPoints = SimplifyClosedPolygon(
+            polygonPoints,
+            PolygonSimplificationToleranceCellFraction,
+            PolygonSimplificationMaxBridgeCellFraction);
+        if (simplifiedPoints.Length < 3) return polygonPoints;
+
+        return SmoothClosedPolygon(simplifiedPoints, PolygonSmoothingPasses);
+    }
+
+    private Vector2[] SimplifyClosedPolygon(Vector2[] polygonPoints, float toleranceCellFraction, float maxBridgeCellFraction)
+    {
+        List<Vector2> simplifiedPoints = polygonPoints.ToList();
+        float cellSize = Mathf.Min(CellSize.X, CellSize.Y);
+        float tolerance = cellSize * toleranceCellFraction;
+        float maxBridgeLengthSquared = Mathf.Pow(cellSize * maxBridgeCellFraction, 2);
+
+        for (int pass = 0; pass < 4 && simplifiedPoints.Count > 3; pass++)
         {
-            visualBoundaryPoints[i] = JitterBoundaryPoint(closedPolygonPoints[i], subsectorId, i);
+            bool removedAny = false;
+
+            for (int i = 0; i < simplifiedPoints.Count && simplifiedPoints.Count > 3; i++)
+            {
+                Vector2 previous = simplifiedPoints[(i - 1 + simplifiedPoints.Count) % simplifiedPoints.Count];
+                Vector2 current = simplifiedPoints[i];
+                Vector2 next = simplifiedPoints[(i + 1) % simplifiedPoints.Count];
+                float bridgeLengthSquared = previous.DistanceSquaredTo(next);
+                float distanceFromBridge = DistanceToSegment(current, previous, next);
+
+                if (distanceFromBridge <= 0.1f || (distanceFromBridge <= tolerance && bridgeLengthSquared <= maxBridgeLengthSquared))
+                {
+                    simplifiedPoints.RemoveAt(i);
+                    removedAny = true;
+                    i--;
+                }
+            }
+
+            if (!removedAny) break;
         }
 
-        visualBoundaryPoints[^1] = visualBoundaryPoints[0];
-        return visualBoundaryPoints;
+        return simplifiedPoints.ToArray();
     }
 
-    private Vector2 JitterBoundaryPoint(Vector2 point, ushort subsectorId, int index)
+    private static Vector2[] SmoothClosedPolygon(Vector2[] polygonPoints, int passes)
     {
-        float maxJitter = Mathf.Min(CellSize.X, CellSize.Y) * 0.12f;
-        float x = (Noise01(subsectorId, index, 11) - 0.5f) * maxJitter;
-        float y = (Noise01(subsectorId, index, 23) - 0.5f) * maxJitter;
-        return point + new Vector2(x, y);
-    }
+        Vector2[] smoothedPoints = polygonPoints;
 
-    private void DrawDistressedBoundary(Vector2[] boundaryPoints, Color baseColor, ushort subsectorId)
-    {
-        if (boundaryPoints.Length < 2) return;
-
-        for (int i = 0; i < boundaryPoints.Length - 1; i++)
+        for (int pass = 0; pass < passes && smoothedPoints.Length >= 3; pass++)
         {
-            Vector2 start = boundaryPoints[i];
-            Vector2 end = boundaryPoints[i + 1];
-            float segmentAlpha = 0.26f + 0.26f * Noise01(subsectorId, i, 37);
-            float segmentWidth = 1.0f + 1.2f * Noise01(subsectorId, i, 41);
+            Vector2[] nextPoints = new Vector2[smoothedPoints.Length * 2];
 
-            DrawBrokenSegment(start, end, WithAlpha(baseColor, segmentAlpha), segmentWidth, subsectorId, i);
-
-            if (Noise01(subsectorId, i, 53) > 0.72f)
+            for (int i = 0; i < smoothedPoints.Length; i++)
             {
-                DrawBoundaryTick(start, end, baseColor, subsectorId, i);
+                Vector2 current = smoothedPoints[i];
+                Vector2 next = smoothedPoints[(i + 1) % smoothedPoints.Length];
+                nextPoints[i * 2] = current.Lerp(next, 0.25f);
+                nextPoints[i * 2 + 1] = current.Lerp(next, 0.75f);
+            }
+
+            smoothedPoints = nextPoints;
+        }
+
+        return smoothedPoints;
+    }
+
+    private Vector2[] BuildSmoothedBoundaryPath(Vector2[] boundaryPoints)
+    {
+        if (boundaryPoints.Length < 3) return boundaryPoints;
+
+        bool isClosed = boundaryPoints[0] == boundaryPoints[^1];
+        Vector2[] points = isClosed ? boundaryPoints.Take(boundaryPoints.Length - 1).ToArray() : boundaryPoints;
+        Vector2[] simplifiedPoints = isClosed
+            ? SimplifyClosedPolygon(points, SeamSimplificationToleranceCellFraction, SeamSimplificationMaxBridgeCellFraction)
+            : SimplifyOpenPolyline(points, SeamSimplificationToleranceCellFraction, SeamSimplificationMaxBridgeCellFraction);
+
+        if (simplifiedPoints.Length < 2) return boundaryPoints;
+
+        Vector2[] smoothedPoints = isClosed
+            ? BuildClosedCatmullRomCurve(simplifiedPoints, SeamCurveSamplesPerSegment)
+            : BuildOpenCatmullRomCurve(simplifiedPoints, SeamCurveSamplesPerSegment);
+
+        return isClosed ? ClosePolygon(smoothedPoints) : smoothedPoints;
+    }
+
+    private Vector2[] SimplifyOpenPolyline(Vector2[] polylinePoints, float toleranceCellFraction, float maxBridgeCellFraction)
+    {
+        if (polylinePoints.Length < 3) return polylinePoints;
+
+        float cellSize = Mathf.Min(CellSize.X, CellSize.Y);
+        float tolerance = cellSize * toleranceCellFraction;
+        Vector2[] simplifiedPoints = SimplifyPolylineDouglasPeucker(polylinePoints, tolerance);
+        if (simplifiedPoints.Length < 3) return simplifiedPoints;
+
+        List<Vector2> locallySmoothedPoints = simplifiedPoints.ToList();
+        float maxBridgeLengthSquared = Mathf.Pow(cellSize * maxBridgeCellFraction, 2);
+
+        for (int pass = 0; pass < 2 && locallySmoothedPoints.Count > 2; pass++)
+        {
+            bool removedAny = false;
+            for (int i = 1; i < locallySmoothedPoints.Count - 1 && locallySmoothedPoints.Count > 2; i++)
+            {
+                Vector2 previous = locallySmoothedPoints[i - 1];
+                Vector2 current = locallySmoothedPoints[i];
+                Vector2 next = locallySmoothedPoints[i + 1];
+                float bridgeLengthSquared = previous.DistanceSquaredTo(next);
+                float distanceFromBridge = DistanceToSegment(current, previous, next);
+
+                if (distanceFromBridge <= 0.1f || (distanceFromBridge <= tolerance && bridgeLengthSquared <= maxBridgeLengthSquared))
+                {
+                    locallySmoothedPoints.RemoveAt(i);
+                    removedAny = true;
+                    i--;
+                }
+            }
+
+            if (!removedAny) break;
+        }
+
+        return locallySmoothedPoints.ToArray();
+    }
+
+    private static Vector2[] SimplifyPolylineDouglasPeucker(Vector2[] points, float tolerance)
+    {
+        if (points.Length < 3) return points;
+
+        bool[] keep = new bool[points.Length];
+        keep[0] = true;
+        keep[^1] = true;
+        MarkDouglasPeuckerPoints(points, 0, points.Length - 1, tolerance, keep);
+
+        List<Vector2> simplifiedPoints = [];
+        for (int i = 0; i < points.Length; i++)
+        {
+            if (keep[i])
+            {
+                simplifiedPoints.Add(points[i]);
             }
         }
+
+        return simplifiedPoints.ToArray();
     }
 
-    private void DrawBrokenSegment(Vector2 start, Vector2 end, Color color, float width, ushort subsectorId, int segmentIndex)
+    private static void MarkDouglasPeuckerPoints(Vector2[] points, int startIndex, int endIndex, float tolerance, bool[] keep)
     {
-        float length = start.DistanceTo(end);
-        if (length <= 0.001f) return;
+        if (endIndex <= startIndex + 1) return;
 
-        int pieces = Mathf.Max(2, (int)Mathf.Ceil(length / 18.0f));
-        for (int i = 0; i < pieces; i++)
+        float maxDistance = 0.0f;
+        int farthestIndex = -1;
+        Vector2 start = points[startIndex];
+        Vector2 end = points[endIndex];
+
+        for (int i = startIndex + 1; i < endIndex; i++)
         {
-            if (Noise01(subsectorId, segmentIndex * 31 + i, 67) < 0.18f) continue;
-
-            float t0 = i / (float)pieces;
-            float t1 = (i + 0.72f + 0.18f * Noise01(subsectorId, segmentIndex * 31 + i, 71)) / pieces;
-            t1 = Mathf.Min(t1, 1.0f);
-            Vector2 pieceStart = start.Lerp(end, t0);
-            Vector2 pieceEnd = start.Lerp(end, t1);
-            DrawLine(pieceStart, pieceEnd, color, width, true);
-        }
-    }
-
-    private void DrawBoundaryTick(Vector2 start, Vector2 end, Color baseColor, ushort subsectorId, int segmentIndex)
-    {
-        Vector2 segment = end - start;
-        if (segment.LengthSquared() <= 0.001f) return;
-
-        Vector2 midpoint = start.Lerp(end, 0.35f + 0.3f * Noise01(subsectorId, segmentIndex, 79));
-        Vector2 normal = new Vector2(-segment.Y, segment.X).Normalized();
-        float tickLength = Mathf.Min(CellSize.X, CellSize.Y) * (0.08f + 0.08f * Noise01(subsectorId, segmentIndex, 83));
-        if (Noise01(subsectorId, segmentIndex, 89) > 0.5f)
-        {
-            normal = -normal;
+            float distance = DistanceToSegment(points[i], start, end);
+            if (distance > maxDistance)
+            {
+                maxDistance = distance;
+                farthestIndex = i;
+            }
         }
 
-        DrawLine(midpoint - normal * tickLength * 0.5f,
-            midpoint + normal * tickLength * 0.5f,
-            WithAlpha(baseColor, 0.24f),
-            1.0f,
-            true);
+        if (farthestIndex == -1 || maxDistance <= tolerance) return;
+
+        keep[farthestIndex] = true;
+        MarkDouglasPeuckerPoints(points, startIndex, farthestIndex, tolerance, keep);
+        MarkDouglasPeuckerPoints(points, farthestIndex, endIndex, tolerance, keep);
     }
 
-    private static float Noise01(ushort subsectorId, int index, uint salt)
+    private static Vector2[] BuildOpenCatmullRomCurve(Vector2[] points, int samplesPerSegment)
     {
-        uint value = (uint)subsectorId * 73856093u
-            ^ (uint)(index + 1) * 19349663u
-            ^ salt * 83492791u;
+        if (points.Length < 3) return points;
+
+        List<Vector2> curvePoints = [points[0]];
+        for (int i = 0; i < points.Length - 1; i++)
+        {
+            Vector2 p0 = points[Math.Max(i - 1, 0)];
+            Vector2 p1 = points[i];
+            Vector2 p2 = points[i + 1];
+            Vector2 p3 = points[Math.Min(i + 2, points.Length - 1)];
+            for (int sample = 1; sample <= samplesPerSegment; sample++)
+            {
+                float t = sample / (float)samplesPerSegment;
+                curvePoints.Add(CatmullRom(p0, p1, p2, p3, t));
+            }
+        }
+
+        return curvePoints.ToArray();
+    }
+
+    private static Vector2[] BuildClosedCatmullRomCurve(Vector2[] points, int samplesPerSegment)
+    {
+        if (points.Length < 3) return points;
+
+        List<Vector2> curvePoints = [];
+        for (int i = 0; i < points.Length; i++)
+        {
+            Vector2 p0 = points[(i - 1 + points.Length) % points.Length];
+            Vector2 p1 = points[i];
+            Vector2 p2 = points[(i + 1) % points.Length];
+            Vector2 p3 = points[(i + 2) % points.Length];
+            for (int sample = 0; sample < samplesPerSegment; sample++)
+            {
+                float t = sample / (float)samplesPerSegment;
+                curvePoints.Add(CatmullRom(p0, p1, p2, p3, t));
+            }
+        }
+
+        return curvePoints.ToArray();
+    }
+
+    private static Vector2 CatmullRom(Vector2 p0, Vector2 p1, Vector2 p2, Vector2 p3, float t)
+    {
+        float t2 = t * t;
+        float t3 = t2 * t;
+        return 0.5f * (
+            (2.0f * p1)
+            + (-p0 + p2) * t
+            + (2.0f * p0 - 5.0f * p1 + 4.0f * p2 - p3) * t2
+            + (-p0 + 3.0f * p1 - 3.0f * p2 + p3) * t3);
+    }
+
+    private static float Noise01(ushort seed, int salt)
+    {
+        uint value = (uint)seed * 73856093u
+            ^ (uint)(salt + 1) * 19349663u;
 
         value ^= value >> 16;
         value *= 2246822519u;
@@ -363,6 +646,16 @@ public partial class SectorMap : Node2D
         value ^= value >> 16;
 
         return (value & 0x00FFFFFF) / 16777215.0f;
+    }
+
+    private static float DistanceToSegment(Vector2 point, Vector2 start, Vector2 end)
+    {
+        Vector2 segment = end - start;
+        float segmentLengthSquared = segment.LengthSquared();
+        if (segmentLengthSquared <= 0.001f) return point.DistanceTo(start);
+
+        float t = Mathf.Clamp((point - start).Dot(segment) / segmentLengthSquared, 0.0f, 1.0f);
+        return point.DistanceTo(start + segment * t);
     }
 
     private void DrawSelectedSystemOverlay()
@@ -509,6 +802,154 @@ public partial class SectorMap : Node2D
     private void Fleet_Pressed(object sender, EventArgs e)
     {
         throw new NotImplementedException();
+    }
+
+    private List<Vector2[]> DetermineSubsectorBoundaryPaths()
+    {
+        Dictionary<(ushort, ushort), HashSet<EdgeKey>> edgeSetsBySubsectorPair = [];
+
+        for (int y = 0; y < GridDimensions.Y; y++)
+        {
+            for (int x = 0; x < GridDimensions.X; x++)
+            {
+                Vector2I cell = new(x, y);
+                ushort currentId = SectorIds[GridPositionToIndex(cell)];
+                if (currentId == 0) continue;
+
+                AddBoundaryEdgeIfNeeded(edgeSetsBySubsectorPair, cell, Vector2I.Up);
+                AddBoundaryEdgeIfNeeded(edgeSetsBySubsectorPair, cell, Vector2I.Right);
+                AddBoundaryEdgeIfNeeded(edgeSetsBySubsectorPair, cell, Vector2I.Down);
+                AddBoundaryEdgeIfNeeded(edgeSetsBySubsectorPair, cell, Vector2I.Left);
+            }
+        }
+
+        List<Vector2[]> boundaryPaths = [];
+        foreach (var kvp in edgeSetsBySubsectorPair.OrderBy(kvp => kvp.Key.Item1).ThenBy(kvp => kvp.Key.Item2))
+        {
+            Dictionary<Vector2I, HashSet<Vector2I>> adjacencyMap = BuildBoundaryAdjacencyMap(kvp.Value);
+            boundaryPaths.AddRange(ChainBoundaryEdges(adjacencyMap, kvp.Value)
+                .Select(BuildSmoothedBoundaryPath)
+                .Where(path => path.Length >= 2));
+        }
+
+        return boundaryPaths;
+    }
+
+    private void AddBoundaryEdgeIfNeeded(
+        Dictionary<(ushort, ushort), HashSet<EdgeKey>> edgeSetsBySubsectorPair,
+        Vector2I cell,
+        Vector2I direction)
+    {
+        ushort currentId = SectorIds[GridPositionToIndex(cell)];
+        Vector2I neighborCell = cell + direction;
+        ushort neighborId = IsWithinBounds(neighborCell) ? SectorIds[GridPositionToIndex(neighborCell)] : (ushort)0;
+        if (neighborId == currentId) return;
+
+        (Vector2I start, Vector2I end) = GetCellEdgeMapPoints(cell, direction);
+        EdgeKey edgeKey = new(start, end);
+        (ushort, ushort) subsectorPair = currentId < neighborId
+            ? (currentId, neighborId)
+            : (neighborId, currentId);
+
+        if (!edgeSetsBySubsectorPair.TryGetValue(subsectorPair, out HashSet<EdgeKey> edgeSet))
+        {
+            edgeSet = [];
+            edgeSetsBySubsectorPair[subsectorPair] = edgeSet;
+        }
+
+        edgeSet.Add(edgeKey);
+    }
+
+    private static Dictionary<Vector2I, HashSet<Vector2I>> BuildBoundaryAdjacencyMap(HashSet<EdgeKey> edgeSet)
+    {
+        Dictionary<Vector2I, HashSet<Vector2I>> adjacencyMap = [];
+        foreach (EdgeKey edgeKey in edgeSet)
+        {
+            AddBoundaryAdjacency(adjacencyMap, edgeKey);
+        }
+
+        return adjacencyMap;
+    }
+
+    private static void AddBoundaryAdjacency(Dictionary<Vector2I, HashSet<Vector2I>> adjacencyMap, EdgeKey edgeKey)
+    {
+        if (!adjacencyMap.TryGetValue(edgeKey.A, out HashSet<Vector2I> aNeighbors))
+        {
+            aNeighbors = [];
+            adjacencyMap[edgeKey.A] = aNeighbors;
+        }
+        if (!adjacencyMap.TryGetValue(edgeKey.B, out HashSet<Vector2I> bNeighbors))
+        {
+            bNeighbors = [];
+            adjacencyMap[edgeKey.B] = bNeighbors;
+        }
+
+        aNeighbors.Add(edgeKey.B);
+        bNeighbors.Add(edgeKey.A);
+    }
+
+    private (Vector2I Start, Vector2I End) GetCellEdgeMapPoints(Vector2I cell, Vector2I direction)
+    {
+        Vector2I cellCenterPosition = CalculateMapPosition(cell);
+        Vector2I topLeft = cellCenterPosition - HalfCellSize;
+        Vector2I topRight = topLeft + new Vector2I(CellSize.X, 0);
+        Vector2I bottomRight = topLeft + CellSize;
+        Vector2I bottomLeft = topLeft + new Vector2I(0, CellSize.Y);
+
+        if (direction == Vector2I.Up) return (topLeft, topRight);
+        if (direction == Vector2I.Right) return (topRight, bottomRight);
+        if (direction == Vector2I.Down) return (bottomLeft, bottomRight);
+        return (topLeft, bottomLeft);
+    }
+
+    private static List<Vector2[]> ChainBoundaryEdges(
+        Dictionary<Vector2I, HashSet<Vector2I>> adjacencyMap,
+        HashSet<EdgeKey> edgeSet)
+    {
+        List<Vector2[]> paths = [];
+        HashSet<EdgeKey> visitedEdges = [];
+
+        foreach (EdgeKey edge in edgeSet.OrderBy(edge => edge.A.X).ThenBy(edge => edge.A.Y).ThenBy(edge => edge.B.X).ThenBy(edge => edge.B.Y))
+        {
+            if (visitedEdges.Contains(edge)) continue;
+
+            Vector2I start = adjacencyMap[edge.A].Count != 2 ? edge.A : edge.B;
+            Vector2I current = start;
+            Vector2I next = start == edge.A ? edge.B : edge.A;
+            List<Vector2I> path = [start];
+
+            while (true)
+            {
+                EdgeKey currentEdge = new(current, next);
+                if (!visitedEdges.Add(currentEdge)) break;
+
+                path.Add(next);
+                if (next == start) break;
+                if (adjacencyMap[next].Count != 2) break;
+
+                Vector2I previous = current;
+                current = next;
+                Vector2I? nextCandidate = null;
+                foreach (Vector2I candidate in adjacencyMap[current])
+                {
+                    if (candidate == previous) continue;
+                    if (visitedEdges.Contains(new EdgeKey(current, candidate))) continue;
+
+                    nextCandidate = candidate;
+                    break;
+                }
+
+                if (!nextCandidate.HasValue) break;
+                next = nextCandidate.Value;
+            }
+
+            if (path.Count >= 2)
+            {
+                paths.Add(path.Select(point => new Vector2(point.X, point.Y)).ToArray());
+            }
+        }
+
+        return paths;
     }
 
     private Dictionary<ushort, List<Vector2I>> DetermineSubsectorBorderPoints(IEnumerable<Subsector> subsectors)

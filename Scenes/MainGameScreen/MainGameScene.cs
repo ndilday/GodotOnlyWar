@@ -41,6 +41,14 @@ public partial class MainGameScene : Control
     private int? _selectedFleetId;
     public override void _Ready()
     {
+        if (!GameDataSingleton.Instance.IsInitialized)
+        {
+            GD.PushError("MainGameScene requires initialized game data. Use StartMenu or Scenes/Debug/main_game_preview_bootstrap.tscn.");
+            SetProcess(false);
+            SetProcessInput(false);
+            return;
+        }
+
         _bottomMenu = GetNode<BottomMenu>("UILayer/BottomMenu");
         _topMenu = GetNode<TopMenu>("UILayer/TopMenu");
         _leftMapTools = GetNode<LeftMapTools>("UILayer/LeftMapTools");

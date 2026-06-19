@@ -15,6 +15,7 @@ namespace OnlyWar.Models
         public GameRulesData GameRulesData { get; private set; }
         public Sector Sector { get; private set; }
         public Date Date { get; set; }
+        public bool IsInitialized => GameRulesData != null && Sector != null && Date != null;
 
         public void InitializeNewGameData(GameRulesData gameRulesData, Date date, string chapterName = null, int seed = 1)
         {
