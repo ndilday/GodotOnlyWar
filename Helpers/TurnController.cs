@@ -255,7 +255,8 @@ namespace OnlyWar.Helpers
                 foreach (Region region in planet.Regions)
                 {
                     float pdfRatio = region.PlanetaryDefenseForces / (float)region.Population;
-                    foreach (RegionFaction regionFaction in region.RegionFactionMap.Values)
+                    // snapshot the values: depopulated factions are removed from the map below
+                    foreach (RegionFaction regionFaction in region.RegionFactionMap.Values.ToList())
                     {
                         if(regionFaction.Population <= 0)
                         {
@@ -271,10 +272,17 @@ namespace OnlyWar.Helpers
                 CheckForPlanetaryRevolt(planet);
                 CheckForRevoltSuppression(planet);
 
-                foreach (PlanetFaction planetFaction in planet.PlanetFactionMap.Values)
+                // snapshot the values: depopulated factions are removed from the map below
+                foreach (PlanetFaction planetFaction in planet.PlanetFactionMap.Values.ToList())
                 {
+                    // PlanetFaction has no population of its own, so derive the
+                    // faction's planet-wide population from its region factions here.
+                    long planetFactionPopulation = planet.Regions.Sum(
+                        r => r.RegionFactionMap.TryGetValue(planetFaction.Faction.Id, out RegionFaction rf)
+                            ? rf.Population
+                            : 0);
                     // if the planetFaction no longer has any population on the planet, remove it
-                    if (planetFaction.Population <= 0)
+                    if (planetFactionPopulation <= 0)
                     {
                         planet.PlanetFactionMap.Remove(planetFaction.Faction.Id);
                     }
@@ -673,7 +681,8 @@ namespace OnlyWar.Helpers
                 foreach (Region region in planet.Regions)
                 {
                     // 25% chance of unexecuted special missions being removed
-                    foreach (Mission mission in region.SpecialMissions)
+                    // snapshot the list: expired missions are removed from it below
+                    foreach (Mission mission in region.SpecialMissions.ToList())
                     {
                         if (RNG.GetIntBelowMax(0, 4) == 0)
                         {

@@ -7,8 +7,6 @@ namespace OnlyWar.Models.Planets
     {
         public Faction Faction { get; }
         public bool IsPublic { get; set; }
-        public long Population { get; }
-        public int PDFMembers { get; }
         public float PlayerReputation { get; set; }
         public int PlanetaryControl { get; set; }
         public Character Leader { get; set; }
@@ -17,8 +15,6 @@ namespace OnlyWar.Models.Planets
         {
             Faction = faction;
             IsPublic = true;
-            Population = 0;
-            PDFMembers = 0;
             PlayerReputation = 0;
             PlanetaryControl = 0;
         }

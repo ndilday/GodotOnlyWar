@@ -789,7 +789,7 @@ A separate `Date.CompareTo` bug (used reference equality, so it returned non-zer
 
 Mutated from multiple controllers without coordination. Acceptable in a single-threaded context, but makes unit testing difficult because any test touching a logic system that reads from the singleton must set up the full singleton first.
 
-**Fix:** No immediate action required. If a test suite is introduced, refactor pure-logic systems (battle resolution, mission checks, faction AI) to accept their inputs as method parameters rather than reading from the singleton. This enables isolated unit testing without the full singleton overhead.
+**Fix:** No immediate action required. The preferred direction is to refactor pure-logic systems (battle resolution, mission checks, faction AI) to accept their inputs as method parameters rather than reading from the singleton, enabling isolated unit testing without the full singleton overhead. Progress so far: `FactionStrategyController` already takes `(faction, sector)` and is tested with no singleton at all (§9.2.1 #4), and `RatingCalculator` takes its `IRNG` by injection. `TurnController` still reads the singleton (`Date`, `Sector.PlayerForce`, `GameRulesData.Factions`), so its end-of-turn tests (§9.2.1 #5, #8) seed a hand-built sector into the singleton via `LoadGameDataFromBlob`; assembly-wide disabled parallelization keeps that safe.
 
 ### 8.7 IdGenerator Is Not Thread-Safe — Low
 
@@ -833,22 +833,33 @@ Sector generation left a region with a `RegionFaction` whose faction had no corr
 
 **Resolution:** Added `PlanetBuilder.Reset()` (clears the name set and resets the id counters) and call it at the start of `SectorBuilder.GenerateSector`, alongside the existing `RNG.Reset(seed)`.
 
+### 8.12 End-of-Turn Resolution Bugs — RESOLVED
+
+**Location:** `Helpers/TurnController.cs` (`UpdatePlanets`, `UpdateIntelligence`)
+
+Surfaced while writing the `SectorEntityLogic` / multi-turn coverage (§9.2.1 #5, #8):
+
+- **Collection-modified-during-iteration.** Three end-of-turn loops removed elements from the very collection they were iterating: depopulated `RegionFaction`s (over `RegionFactionMap.Values`), depopulated `PlanetFaction`s (over `PlanetFactionMap.Values`), and expired special missions (over `Region.SpecialMissions`). Any actual removal threw `InvalidOperationException`, so mission expiration and faction cleanup could crash a turn. Each loop now iterates a snapshot (`.ToList()`).
+- **Governor logic was dead code.** `PlanetFaction.Population` is a get-only property hardcoded to `0` and never maintained, so the end-of-turn leader update was gated behind `planetFaction.Population <= 0` — always true. Every `PlanetFaction` was therefore stripped from the map each turn and `EndOfTurnLeaderUpdate` (governor aging, request fulfilment, and **request generation**) never ran. `UpdatePlanets` now derives the faction's planet-wide population by summing its `RegionFaction.Population` across the planet's regions, restoring the governor-request feature. (Removing the vestigial `PlanetFaction.Population` property is left as a follow-up.)
+
+Covered by `SectorEntityLogicTests` and `MultiTurnSmokeTests`.
+
 
 ---
 
 ## 9. Testing Strategy
 
-No test project currently exists. The following is a recommended approach for introducing tests incrementally without a full refactor.
+The `OnlyWar.Tests` xUnit project covers the pure domain and helper logic incrementally, without a full refactor. The sections below record the approach and the coverage to date.
 
 ### 9.1 Setup
 
-A separate `OnlyWar.Tests` xUnit project now exists. Keep expanding it around pure domain and helper logic first. Systems with Godot node dependencies cannot be unit tested without a Godot runtime; focus the test project on pure domain and helper logic.
+The `OnlyWar.Tests` xUnit project references the game assembly and runs against the shipped rules database. Keep expanding it around pure domain and helper logic first. Systems with Godot node dependencies cannot be unit tested without a Godot runtime; focus the test project on pure domain and helper logic. Test parallelization is disabled assembly-wide (`[assembly: CollectionBehavior(DisableTestParallelization = true)]`) so suites that load the shared `GameDataSingleton` do not interfere.
 
 Make `RNG` injectable: introduce an `IRNG` interface and a `SeededRNG` implementation so tests can run with a fixed seed for deterministic results. *(Implemented — `Helpers/IRNG.cs` with `StaticRNG` (production adapter over the global `RNG`), `SeededRNG` (own seeded instance), and a `FixedRNG` test double. `RatingCalculator` is the first consumer to take `IRNG` by injection.)*
 
 ### 9.2 Priority Test Targets
 
-Listed in recommended implementation order, from lowest to highest setup cost:
+All of the targets below are now implemented; they are retained as a record of the initial test build-out, listed in the original recommended implementation order (lowest to highest setup cost). Ongoing work is tracked in §9.2.1.
 
 1. **`Wounds` struct arithmetic** — Severity threshold transitions, `WeeksToHeal` computation, healing progress. Pure value logic, zero dependencies.
 2. **`Skill.SkillBonus` and `Soldier.GetTotalSkillValue`** — Single-function math, no dependencies.
@@ -856,8 +867,8 @@ Listed in recommended implementation order, from lowest to highest setup cost:
 4. **`IMissionCheck` implementations** — Requires a minimal `BattleSquad` mock with a soldier list. No game state needed.
 5. **`ForceGenerator`** — Requires a `Faction` object with squad templates. No Godot dependencies.
 6. **`SubsectorBuilder`** — Pure spatial algorithm. Provide a list of positioned planets and assert subsector membership.
-7. **`FactionStrategyController`** — Requires constructed `Planet`/`Region`/`RegionFaction` model objects. Refactor to remove the `GameDataSingleton` read before testing.
-8. **`BattleSoldier` clone round-trip** — Construct a fully populated `BattleSoldier`, clone it, and assert field-by-field equality. Catches 8.4 above.
+7. **`FactionStrategyController`** — Requires constructed `Planet`/`Region`/`RegionFaction` model objects. *(Implemented — `FactionStrategyControllerTests`; the controller takes `(faction, sector)` and reads no `GameDataSingleton` state, so no refactor was needed — see §9.2.1 #4.)*
+8. **`BattleSoldier` clone round-trip** — Construct a fully populated `BattleSoldier`, clone it, and assert field-by-field equality. Catches 8.4 above. *(Implemented — `BattleSoldierCloneTests`.)*
 
 ### 9.2.1 Next Test Targets
 
@@ -865,12 +876,12 @@ Initial coverage now exists for wounds, skill math, Gaussian math, mission check
 
 1. **Save/load round-trip tests** — *(Implemented — `SaveLoadRoundTripTests`.)* Generates a real new-game sector via `SectorBuilder.GenerateSector`, saves it through `GameStateDataAccess.SaveData` to a temporary SQLite file, reads it back through `GetData`, and asserts high-level state survives (date, planet/character/request/ship/squad/soldier counts, total population). This also serves as the new-game smoke test (target #9 below) and is the regression guard for schema drift: any schema change not propagated to both `SaveData` and `GetData` fails here. Surfacing and fixing the provider-compatibility cluster in §8.5.1 was driven entirely by getting this test to pass.
 2. **Mission save duplication regression** — *(Implemented — `MissionSaveTests`.)* Drives `PlanetDataAccess.SavePlanet` against a freshly created save schema and asserts the `Mission` table holds exactly one row for a region with one special mission, plus field round-trip and null-`DefenseType` cases. Covers §8.1.
-3. **Rules DB schema validation** — Validate new rules tables such as `TrainingProfile` and future rating/mission-definition tables. Required rows should be checked by stable key or semantic role once those are introduced.
-4. **`FactionStrategyController`** — Requires constructed `Planet`/`Region`/`RegionFaction` model objects. Refactor to remove the `GameDataSingleton` read before testing.
-5. **`SectorEntityLogic`** — Cover logistic growth, conversion growth, hidden-faction reveal thresholds, intelligence decay, special mission expiration, and governor request generation with deterministic RNG.
-6. **`BattleGridManager` and `WoundResolver`** — Cover occupancy, multi-cell movement, armor reduction, wound severity application, crippling, severing, and vital-location death.
+3. **Rules DB schema validation** — *(Implemented — `RulesDatabaseValidationTests`.)* In addition to the existing `TrainingProfile` coverage, the suite now constructs `GameRulesData` against the shipped database (exercising the fail-fast load-time validation for the data-driven rating/training tables and the validated registries) and directly asserts rating-table referential integrity (every award tier references a defined rating; every `SkillTotal` rating component resolves to a real base skill). Mission-definition tables remain future work (§4.1.1) and will get the same treatment when introduced.
+4. **`FactionStrategyController`** — *(Implemented — `FactionStrategyControllerTests`.)* The controller already takes `(faction, sector)` and reads no `GameDataSingleton` state, so no refactor was needed; tests build `Planet`/`Region`/`RegionFaction` graphs and cover the empty-result cases (faction absent, hidden regions, no spare troops) and the development-construction path (spare troops spent on `ConstructionMission` orders).
+5. **`SectorEntityLogic`** — *(Implemented — `SectorEntityLogicTests`.)* The end-of-turn logic lives in `TurnController`; driven through `ProcessTurn` with a seeded global `RNG` (`RNG.Reset`) over a compact hand-built sector (`SectorSimulationFixture`). Covers logistic growth, conversion growth (one default member converted per week), intelligence decay (×0.75/turn), stale special-mission expiration, and governor request generation against a public threat. Surfaced and fixed three latent bugs (see §8.12).
+6. **`BattleGridManager` and `WoundResolver`** — *(Implemented — `BattleGridManagerTests`, `WoundResolverTests`.)* Grid tests cover placement/occupancy/reservation conflicts, movement (free-old/occupy-new and collision), removal, nearest-enemy/distance queries, open-adjacency selection, and clone fidelity. Wound tests cover the damage-ratio severity ladder, natural-armor subtraction, wound-multiplier scaling, already-severed short-circuit, and the vital-location-death / motive-location-fall event paths.
 7. **Rating formula evaluator** — *(Implemented — `RatingCalculatorTests`, `RatingDefinitionDataTests`.)* Rating formulas and award thresholds are data-driven (§4.1.1); tests assert the evaluator's aggregation/normalization structure with a fixed `IRNG`, that the migrated definitions match the documented formulas, and that award tiers fire correctly (highest-tier-only, best-skill-in-category name interpolation, history flags).
-8. **Seeded multi-turn smoke test** — Generate or hand-build a compact sector, run several turns with fixed RNG, and assert high-level summary values such as date, population totals, public/hidden faction state, request count, battle count, and casualties.
+8. **Seeded multi-turn smoke test** — *(Implemented — `MultiTurnSmokeTests`.)* Builds a compact single-planet sector (`SectorSimulationFixture`) with a conversion cult, a public rival controller, a governor, and a high-intelligence region, then runs twelve `ProcessTurn` cycles under a fixed seed and asserts high-level invariants survive: planet stays populated with no negative region populations, the default faction persists, the cult steadily recruits, intelligence decays toward zero, and the governor's aid request persists.
 9. **New game smoke test** — Generate a new campaign from rules data and assert chapter, fleet, sector, subsector, planet, faction, and squad invariants without requiring the Godot UI.
 
 ### 9.3 Regression Risk Areas

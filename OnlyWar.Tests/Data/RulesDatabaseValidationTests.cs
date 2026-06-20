@@ -1,5 +1,8 @@
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
+using OnlyWar.Models;
+using OnlyWar.Models.Soldiers.Ratings;
 using OnlyWar.Models.Squads;
 using OnlyWar.Tests.Fixtures;
 using Xunit;
@@ -8,6 +11,52 @@ namespace OnlyWar.Tests.Data;
 
 public class RulesDatabaseValidationTests
 {
+    [Fact]
+    public void GameRulesData_ConstructsFromShippedDatabaseWithoutThrowing()
+    {
+        // GameRulesData's constructor runs the fail-fast load-time validation for the
+        // newer data-driven tables (training skills, rating definitions/award tiers) and
+        // builds the validated registries. Constructing it against the shipped DB proves
+        // those tables are schema-consistent end to end.
+        Directory.SetCurrentDirectory(RulesDatabaseFixture.RepositoryRoot);
+
+        GameRulesData rules = new();
+
+        Assert.NotEmpty(rules.RatingDefinitions);
+        Assert.NotEmpty(rules.RatingAwardTiers);
+        Assert.NotEmpty(rules.TrainingProfiles);
+        Assert.NotNull(rules.PlayerFaction);
+        Assert.NotNull(rules.DefaultFaction);
+    }
+
+    [Fact]
+    public void RatingAwardTiers_AllReferenceADefinedRating()
+    {
+        var rules = RulesDatabaseFixture.LoadRules();
+        HashSet<string> definedKeys = rules.RatingDefinitions.Select(d => d.Key).ToHashSet();
+
+        Assert.All(rules.RatingAwardTiers, tier => Assert.Contains(tier.RatingKey, definedKeys));
+    }
+
+    [Fact]
+    public void RatingDefinitions_HaveComponentsAndResolveSkillTotalTargets()
+    {
+        var rules = RulesDatabaseFixture.LoadRules();
+
+        Assert.All(rules.RatingDefinitions, definition =>
+        {
+            Assert.NotEmpty(definition.Components);
+            foreach (RatingComponent component in definition.Components)
+            {
+                if (component.ComponentType == RatingComponentType.SkillTotal)
+                {
+                    Assert.True(rules.BaseSkills.ContainsKey(component.TargetId),
+                        $"Rating '{definition.Key}' references missing base skill id {component.TargetId}.");
+                }
+            }
+        });
+    }
+
     [Fact]
     public void RulesDatabase_LoadsCoreData()
     {
