@@ -52,17 +52,22 @@ namespace OnlyWar.Helpers.Database.GameState
         {
             object fulfillDate = request.DateRequestFulfilled != null ?
                     (object)request.DateRequestFulfilled.GetTotalWeeks() :
-                    "null";
+                    null;
             object threatFactionId = request.ThreatFaction != null ?
                     (object)request.ThreatFaction.Id :
-                    "null";
-            string insert = $@"INSERT INTO Request
-                (Id, CharacterId, PlanetId, ThreatFactionId, RequestDate, FulfillmentDate) VALUES
-                ({request.Id}, {request.Requester.Id}, {request.TargetPlanet.Id}, {threatFactionId},
-                {request.DateRequestMade.GetTotalWeeks()}, {fulfillDate});";
+                    null;
             using (var command = transaction.Connection.CreateCommand())
             {
-                command.CommandText = insert;
+                command.Transaction = transaction;
+                command.CommandText = @"INSERT INTO Request
+                    (Id, CharacterId, PlanetId, ThreatFactionId, RequestDate, FulfillmentDate) VALUES
+                    (@id, @characterId, @planetId, @threatFactionId, @requestDate, @fulfillmentDate);";
+                command.AddParam("@id", request.Id);
+                command.AddParam("@characterId", request.Requester.Id);
+                command.AddParam("@planetId", request.TargetPlanet.Id);
+                command.AddParam("@threatFactionId", threatFactionId);
+                command.AddParam("@requestDate", request.DateRequestMade.GetTotalWeeks());
+                command.AddParam("@fulfillmentDate", fulfillDate);
                 command.ExecuteNonQuery();
             }
         }

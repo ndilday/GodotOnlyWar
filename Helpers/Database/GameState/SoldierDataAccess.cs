@@ -23,37 +23,58 @@ namespace OnlyWar.Helpers.Database.GameState
 
         public void SaveSoldier(IDbTransaction transaction, ISoldier soldier)
         {
-            string safeName = soldier.Name.Replace("\'", "\'\'");
-            string insert = $@"INSERT INTO Soldier VALUES ({soldier.Id}, 
-                {soldier.Template.Id}, {soldier.AssignedSquad.Id}, '{safeName}',
-                {soldier.Strength}, {soldier.Dexterity}, {soldier.Constitution},
-                {soldier.Intelligence},{soldier.Perception}, {soldier.Ego}, {soldier.Charisma}, 
-                {soldier.PsychicPower},{soldier.AttackSpeed}, {soldier.Size}, {soldier.MoveSpeed});";
             using (var command = transaction.Connection.CreateCommand())
             {
-                command.CommandText = insert;
+                command.Transaction = transaction;
+                command.CommandText = @"INSERT INTO Soldier VALUES
+                    (@id, @templateId, @squadId, @name,
+                     @strength, @dexterity, @constitution, @intelligence, @perception,
+                     @ego, @charisma, @psychicPower, @attackSpeed, @size, @moveSpeed);";
+                command.AddParam("@id", soldier.Id);
+                command.AddParam("@templateId", soldier.Template.Id);
+                command.AddParam("@squadId", soldier.AssignedSquad.Id);
+                command.AddParam("@name", soldier.Name);
+                command.AddParam("@strength", soldier.Strength);
+                command.AddParam("@dexterity", soldier.Dexterity);
+                command.AddParam("@constitution", soldier.Constitution);
+                command.AddParam("@intelligence", soldier.Intelligence);
+                command.AddParam("@perception", soldier.Perception);
+                command.AddParam("@ego", soldier.Ego);
+                command.AddParam("@charisma", soldier.Charisma);
+                command.AddParam("@psychicPower", soldier.PsychicPower);
+                command.AddParam("@attackSpeed", soldier.AttackSpeed);
+                command.AddParam("@size", soldier.Size);
+                command.AddParam("@moveSpeed", soldier.MoveSpeed);
                 command.ExecuteNonQuery();
             }
 
             foreach (Skill skill in soldier.Skills)
             {
-                insert = $@"INSERT INTO SoldierSkill VALUES ({soldier.Id}, 
-                    {skill.BaseSkill.Id}, {skill.PointsInvested});";
                 using (var command = transaction.Connection.CreateCommand())
                 {
-                    command.CommandText = insert;
+                    command.Transaction = transaction;
+                    command.CommandText = @"INSERT INTO SoldierSkill VALUES
+                        (@soldierId, @baseSkillId, @pointsInvested);";
+                    command.AddParam("@soldierId", soldier.Id);
+                    command.AddParam("@baseSkillId", skill.BaseSkill.Id);
+                    command.AddParam("@pointsInvested", skill.PointsInvested);
                     command.ExecuteNonQuery();
                 }
             }
 
             foreach (HitLocation hitLocation in soldier.Body.HitLocations)
             {
-                insert = $@"INSERT INTO HitLocation VALUES ({soldier.Id}, 
-                    {hitLocation.Template.Id}, {hitLocation.IsCybernetic}, {hitLocation.Armor}, 
-                    {hitLocation.Wounds.WoundTotal}, {hitLocation.Wounds.WeeksOfHealing});";
                 using (var command = transaction.Connection.CreateCommand())
                 {
-                    command.CommandText = insert;
+                    command.Transaction = transaction;
+                    command.CommandText = @"INSERT INTO HitLocation VALUES
+                        (@soldierId, @templateId, @isCybernetic, @armor, @woundTotal, @weeksOfHealing);";
+                    command.AddParam("@soldierId", soldier.Id);
+                    command.AddParam("@templateId", hitLocation.Template.Id);
+                    command.AddParam("@isCybernetic", hitLocation.IsCybernetic);
+                    command.AddParam("@armor", hitLocation.Armor);
+                    command.AddParam("@woundTotal", hitLocation.Wounds.WoundTotal);
+                    command.AddParam("@weeksOfHealing", hitLocation.Wounds.WeeksOfHealing);
                     command.ExecuteNonQuery();
                 }
             }

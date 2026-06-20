@@ -23,80 +23,110 @@ namespace OnlyWar.Helpers.Database.GameState
 
         public void SavePlayerSoldier(IDbTransaction transaction, PlayerSoldier playerSoldier)
         {
-            string insert = $@"INSERT INTO PlayerSoldier VALUES ({playerSoldier.Id}, 
-                {playerSoldier.ProgenoidImplantDate.Millenium},
-                {playerSoldier.ProgenoidImplantDate.Year},{playerSoldier.ProgenoidImplantDate.Week});";
             using (var command = transaction.Connection.CreateCommand())
             {
-                command.CommandText = insert;
+                command.Transaction = transaction;
+                command.CommandText = @"INSERT INTO PlayerSoldier VALUES
+                    (@id, @millenium, @year, @week);";
+                command.AddParam("@id", playerSoldier.Id);
+                command.AddParam("@millenium", playerSoldier.ProgenoidImplantDate.Millenium);
+                command.AddParam("@year", playerSoldier.ProgenoidImplantDate.Year);
+                command.AddParam("@week", playerSoldier.ProgenoidImplantDate.Week);
                 command.ExecuteNonQuery();
             }
 
             foreach (KeyValuePair<int, ushort> weaponCasualtyCount in playerSoldier.RangedWeaponCasualtyCountMap)
             {
-                insert = $@"INSERT INTO PlayerSoldierRangedWeaponCasualtyCount VALUES ({playerSoldier.Id},
-                    {weaponCasualtyCount.Key}, {weaponCasualtyCount.Value});";
                 using (var command = transaction.Connection.CreateCommand())
                 {
-                    command.CommandText = insert;
+                    command.Transaction = transaction;
+                    command.CommandText = @"INSERT INTO PlayerSoldierRangedWeaponCasualtyCount VALUES
+                        (@soldierId, @weaponTemplateId, @count);";
+                    command.AddParam("@soldierId", playerSoldier.Id);
+                    command.AddParam("@weaponTemplateId", weaponCasualtyCount.Key);
+                    command.AddParam("@count", weaponCasualtyCount.Value);
                     command.ExecuteNonQuery();
                 }
             }
 
             foreach (KeyValuePair<int, ushort> weaponCasualtyCount in playerSoldier.MeleeWeaponCasualtyCountMap)
             {
-                insert = $@"INSERT INTO PlayerSoldierMeleeWeaponCasualtyCount VALUES ({playerSoldier.Id}, 
-                    {weaponCasualtyCount.Key}, {weaponCasualtyCount.Value});";
                 using (var command = transaction.Connection.CreateCommand())
                 {
-                    command.CommandText = insert;
+                    command.Transaction = transaction;
+                    command.CommandText = @"INSERT INTO PlayerSoldierMeleeWeaponCasualtyCount VALUES
+                        (@soldierId, @weaponTemplateId, @count);";
+                    command.AddParam("@soldierId", playerSoldier.Id);
+                    command.AddParam("@weaponTemplateId", weaponCasualtyCount.Key);
+                    command.AddParam("@count", weaponCasualtyCount.Value);
                     command.ExecuteNonQuery();
                 }
             }
 
             foreach (KeyValuePair<int, ushort> factionCasualtyCount in playerSoldier.FactionCasualtyCountMap)
             {
-                insert = $@"INSERT INTO PlayerSoldierFactionCasualtyCount VALUES ({playerSoldier.Id}, 
-                    {factionCasualtyCount.Key}, {factionCasualtyCount.Value});";
                 using (var command = transaction.Connection.CreateCommand())
                 {
-                    command.CommandText = insert;
+                    command.Transaction = transaction;
+                    command.CommandText = @"INSERT INTO PlayerSoldierFactionCasualtyCount VALUES
+                        (@soldierId, @factionId, @count);";
+                    command.AddParam("@soldierId", playerSoldier.Id);
+                    command.AddParam("@factionId", factionCasualtyCount.Key);
+                    command.AddParam("@count", factionCasualtyCount.Value);
                     command.ExecuteNonQuery();
                 }
             }
 
             foreach (string entry in playerSoldier.SoldierHistory)
             {
-                string safeEntry = entry.Replace("\'", "\'\'");
-                insert = $@"INSERT INTO PlayerSoldierHistory VALUES ({playerSoldier.Id}, '{safeEntry}');";
                 using (var command = transaction.Connection.CreateCommand())
                 {
-                    command.CommandText = insert;
+                    command.Transaction = transaction;
+                    command.CommandText = @"INSERT INTO PlayerSoldierHistory VALUES
+                        (@soldierId, @entry);";
+                    command.AddParam("@soldierId", playerSoldier.Id);
+                    command.AddParam("@entry", entry);
                     command.ExecuteNonQuery();
                 }
             }
 
             foreach(SoldierEvaluation evaluation in playerSoldier.SoldierEvaluationHistory)
             {
-                insert = $@"INSERT INTO SoldierEvaluation VALUES ({playerSoldier.Id}, 
-                {evaluation.EvaluationDate.Millenium}, {evaluation.EvaluationDate.Year}, {evaluation.EvaluationDate.Week},
-                {evaluation.MeleeRating}, {evaluation.RangedRating}, {evaluation.LeadershipRating},
-                {evaluation.MedicalRating}, {evaluation.TechRating}, {evaluation.PietyRating}, {evaluation.AncientRating})";
                 using (var command = transaction.Connection.CreateCommand())
                 {
-                    command.CommandText = insert;
+                    command.Transaction = transaction;
+                    command.CommandText = @"INSERT INTO SoldierEvaluation VALUES
+                        (@soldierId, @millenium, @year, @week,
+                         @melee, @ranged, @leadership, @medical, @tech, @piety, @ancient);";
+                    command.AddParam("@soldierId", playerSoldier.Id);
+                    command.AddParam("@millenium", evaluation.EvaluationDate.Millenium);
+                    command.AddParam("@year", evaluation.EvaluationDate.Year);
+                    command.AddParam("@week", evaluation.EvaluationDate.Week);
+                    command.AddParam("@melee", evaluation.MeleeRating);
+                    command.AddParam("@ranged", evaluation.RangedRating);
+                    command.AddParam("@leadership", evaluation.LeadershipRating);
+                    command.AddParam("@medical", evaluation.MedicalRating);
+                    command.AddParam("@tech", evaluation.TechRating);
+                    command.AddParam("@piety", evaluation.PietyRating);
+                    command.AddParam("@ancient", evaluation.AncientRating);
                     command.ExecuteNonQuery();
                 }
             }
 
             foreach (SoldierAward award in playerSoldier.SoldierAwards)
             {
-                insert = $@"INSERT INTO SoldierAward VALUES ({playerSoldier.Id},
-                {award.DateAwarded.Millenium}, {award.DateAwarded.Year}, {award.DateAwarded.Week},
-                '{award.Name.Replace("\'", "\'\'")}', '{award.Type.Replace("\'", "\'\'")}', {award.Level})";
                 using (var command = transaction.Connection.CreateCommand())
                 {
-                    command.CommandText = insert;
+                    command.Transaction = transaction;
+                    command.CommandText = @"INSERT INTO SoldierAward VALUES
+                        (@soldierId, @millenium, @year, @week, @name, @type, @level);";
+                    command.AddParam("@soldierId", playerSoldier.Id);
+                    command.AddParam("@millenium", award.DateAwarded.Millenium);
+                    command.AddParam("@year", award.DateAwarded.Year);
+                    command.AddParam("@week", award.DateAwarded.Week);
+                    command.AddParam("@name", award.Name);
+                    command.AddParam("@type", award.Type);
+                    command.AddParam("@level", award.Level);
                     command.ExecuteNonQuery();
                 }
             }

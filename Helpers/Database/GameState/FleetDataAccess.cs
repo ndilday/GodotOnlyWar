@@ -109,27 +109,43 @@ namespace OnlyWar.Helpers.Database.GameState
 
         public void SaveFleet(IDbTransaction transaction, TaskForce fleet)
         {
-            string destination = fleet.Destination == null ? "null" : fleet.Destination.Id.ToString();
-            string origin = fleet.Origin == null ? "null" : fleet.Origin.Id.ToString();
+            object destination = fleet.Destination == null ? null : (object)fleet.Destination.Id;
+            object origin = fleet.Origin == null ? null : (object)fleet.Origin.Id;
             int warpSubjectiveTrainingApplied = fleet.WarpSubjectiveTrainingApplied ? 1 : 0;
-            string insert = $@"INSERT INTO Fleet VALUES ({fleet.Id}, {fleet.Faction.Id}, 
-                {fleet.Position.Value.X}, {fleet.Position.Value.Y}, {destination}, {fleet.TravelWeeksRemaining},
-                {origin}, {(int)fleet.TravelPhase}, {fleet.CurrentPhaseWeeksRemaining},
-                {fleet.WarpSubjectiveWeeks}, {fleet.WarpObjectiveWeeks}, {warpSubjectiveTrainingApplied});";
             using (var command = transaction.Connection.CreateCommand())
             {
-                command.CommandText = insert;
+                command.Transaction = transaction;
+                command.CommandText = @"INSERT INTO Fleet VALUES
+                    (@id, @factionId, @x, @y, @destination, @travelWeeksRemaining,
+                     @origin, @travelPhase, @currentPhaseWeeksRemaining,
+                     @warpSubjectiveWeeks, @warpObjectiveWeeks, @warpSubjectiveTrainingApplied);";
+                command.AddParam("@id", fleet.Id);
+                command.AddParam("@factionId", fleet.Faction.Id);
+                command.AddParam("@x", fleet.Position.Value.X);
+                command.AddParam("@y", fleet.Position.Value.Y);
+                command.AddParam("@destination", destination);
+                command.AddParam("@travelWeeksRemaining", fleet.TravelWeeksRemaining);
+                command.AddParam("@origin", origin);
+                command.AddParam("@travelPhase", (int)fleet.TravelPhase);
+                command.AddParam("@currentPhaseWeeksRemaining", fleet.CurrentPhaseWeeksRemaining);
+                command.AddParam("@warpSubjectiveWeeks", fleet.WarpSubjectiveWeeks);
+                command.AddParam("@warpObjectiveWeeks", fleet.WarpObjectiveWeeks);
+                command.AddParam("@warpSubjectiveTrainingApplied", warpSubjectiveTrainingApplied);
                 command.ExecuteNonQuery();
             }
         }
 
         public void SaveShip(IDbTransaction transaction, Ship ship)
         {
-            string insert = $@"INSERT INTO Ship VALUES ({ship.Id}, {ship.Template.Id}, 
-                {ship.Fleet.Id}, '{ship.Name}');";
             using (var command = transaction.Connection.CreateCommand())
             {
-                command.CommandText = insert;
+                command.Transaction = transaction;
+                command.CommandText = @"INSERT INTO Ship VALUES
+                    (@id, @templateId, @fleetId, @name);";
+                command.AddParam("@id", ship.Id);
+                command.AddParam("@templateId", ship.Template.Id);
+                command.AddParam("@fleetId", ship.Fleet.Id);
+                command.AddParam("@name", ship.Name);
                 command.ExecuteNonQuery();
             }
         }

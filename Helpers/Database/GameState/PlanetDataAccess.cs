@@ -263,15 +263,19 @@ namespace OnlyWar.Helpers.Database.GameState
         public void SavePlanet(IDbTransaction transaction, Planet planet)
         {
 
-            string insert = $@"INSERT INTO Planet 
-                (Id, PlanetTemplateId, Name, x, y, 
-                Importance, TaxLevel) VALUES 
-                ({planet.Id}, {planet.Template.Id}, '{planet.Name.Replace("\'", "\'\'")}', 
-                {planet.Position.X}, {planet.Position.Y},
-                {planet.Importance}, {planet.TaxLevel});";
             using (var command = transaction.Connection.CreateCommand())
             {
-                command.CommandText = insert;
+                command.Transaction = transaction;
+                command.CommandText = @"INSERT INTO Planet
+                    (Id, PlanetTemplateId, Name, x, y, Importance, TaxLevel) VALUES
+                    (@id, @templateId, @name, @x, @y, @importance, @taxLevel);";
+                command.AddParam("@id", planet.Id);
+                command.AddParam("@templateId", planet.Template.Id);
+                command.AddParam("@name", planet.Name);
+                command.AddParam("@x", planet.Position.X);
+                command.AddParam("@y", planet.Position.Y);
+                command.AddParam("@importance", planet.Importance);
+                command.AddParam("@taxLevel", planet.TaxLevel);
                 command.ExecuteNonQuery();
             }
             SavePlanetFactions(transaction, planet.Id, planet.PlanetFactionMap);
@@ -282,16 +286,25 @@ namespace OnlyWar.Helpers.Database.GameState
 
         public void SaveCharacter(IDbTransaction transaction, Character character)
         {
-            string insert = $@"INSERT INTO Character
-                (Id, Name, Age, Investigation, Paranoia, Neediness, Patience, Appreciation,
-                Influence, LoyalFactionId, OpinionOfPlayer) VALUES
-                ({character.Id}, '{character.Name.Replace("\'", "\'\'")}', {character.Age},
-                {character.Investigation}, {character.Paranoia},
-                {character.Neediness}, {character.Patience}, {character.Appreciation},
-                {character.Influence}, {character.Loyalty.Id}, {character.OpinionOfPlayerForce});";
             using (var command = transaction.Connection.CreateCommand())
             {
-                command.CommandText = insert;
+                command.Transaction = transaction;
+                command.CommandText = @"INSERT INTO Character
+                    (Id, Name, Age, Investigation, Paranoia, Neediness, Patience, Appreciation,
+                     Influence, LoyalFactionId, OpinionOfPlayer) VALUES
+                    (@id, @name, @age, @investigation, @paranoia, @neediness, @patience,
+                     @appreciation, @influence, @loyalFactionId, @opinionOfPlayer);";
+                command.AddParam("@id", character.Id);
+                command.AddParam("@name", character.Name);
+                command.AddParam("@age", character.Age);
+                command.AddParam("@investigation", character.Investigation);
+                command.AddParam("@paranoia", character.Paranoia);
+                command.AddParam("@neediness", character.Neediness);
+                command.AddParam("@patience", character.Patience);
+                command.AddParam("@appreciation", character.Appreciation);
+                command.AddParam("@influence", character.Influence);
+                command.AddParam("@loyalFactionId", character.Loyalty.Id);
+                command.AddParam("@opinionOfPlayer", character.OpinionOfPlayerForce);
                 command.ExecuteNonQuery();
             }
         }
@@ -301,17 +314,20 @@ namespace OnlyWar.Helpers.Database.GameState
             foreach(KeyValuePair<int, PlanetFaction> planetFaction in planetFactions)
             {
                 object leaderId = planetFaction.Value.Leader != null ?
-                    (object)planetFaction.Value.Leader.Id : 
-                    "null";
-                string insert = $@"INSERT INTO PlanetFaction
-                    (PlanetId, FactionId, IsPublic,
-                    PlanetaryControl, PlayerReputation, LeaderId) VALUES
-                    ({planetId}, {planetFaction.Key}, {(planetFaction.Value.IsPublic ? 1 : 0)},
-                    {planetFaction.Value.PlanetaryControl},
-                    {planetFaction.Value.PlayerReputation}, {leaderId});";
+                    (object)planetFaction.Value.Leader.Id :
+                    null;
                 using (var command = transaction.Connection.CreateCommand())
                 {
-                    command.CommandText = insert;
+                    command.Transaction = transaction;
+                    command.CommandText = @"INSERT INTO PlanetFaction
+                        (PlanetId, FactionId, IsPublic, PlanetaryControl, PlayerReputation, LeaderId) VALUES
+                        (@planetId, @factionId, @isPublic, @planetaryControl, @playerReputation, @leaderId);";
+                    command.AddParam("@planetId", planetId);
+                    command.AddParam("@factionId", planetFaction.Key);
+                    command.AddParam("@isPublic", planetFaction.Value.IsPublic ? 1 : 0);
+                    command.AddParam("@planetaryControl", planetFaction.Value.PlanetaryControl);
+                    command.AddParam("@playerReputation", planetFaction.Value.PlayerReputation);
+                    command.AddParam("@leaderId", leaderId);
                     command.ExecuteNonQuery();
                 }
             }
@@ -321,12 +337,17 @@ namespace OnlyWar.Helpers.Database.GameState
         {
             for(int i = 0; i < regions.Length; i++)
             {
-                string insert = $@"INSERT INTO Region
-                    (Id, PlanetId, RegionNumber, RegionName, RegionType, IsUnderAssault, IntelligenceLevel) VALUES
-                    ({regions[i].Id}, {planetId}, {i}, '{regions[i].Name.Replace("\'", "\'\'")}', 0, 0, {regions[i].IntelligenceLevel});";
                 using (var command = transaction.Connection.CreateCommand())
                 {
-                    command.CommandText = insert;
+                    command.Transaction = transaction;
+                    command.CommandText = @"INSERT INTO Region
+                        (Id, PlanetId, RegionNumber, RegionName, RegionType, IsUnderAssault, IntelligenceLevel) VALUES
+                        (@id, @planetId, @regionNumber, @regionName, 0, 0, @intelligenceLevel);";
+                    command.AddParam("@id", regions[i].Id);
+                    command.AddParam("@planetId", planetId);
+                    command.AddParam("@regionNumber", i);
+                    command.AddParam("@regionName", regions[i].Name);
+                    command.AddParam("@intelligenceLevel", regions[i].IntelligenceLevel);
                     command.ExecuteNonQuery();
                 }
                 // Special missions are persisted by SaveMissions, called separately
@@ -340,14 +361,21 @@ namespace OnlyWar.Helpers.Database.GameState
             {
                 foreach (RegionFaction regionFaction in region.RegionFactionMap.Values)
                 {
-                    string insert = $@"INSERT INTO RegionFaction
-                    (RegionId, FactionId, IsPublic, Population, Garrison, Organization, Entrenchment, Detection, AntiAir) VALUES 
-                    ({region.Id}, {regionFaction.PlanetFaction.Faction.Id}, {regionFaction.IsPublic}, 
-                     {regionFaction.Population}, {regionFaction.Garrison}, 
-                     {regionFaction.Organization}, {regionFaction.Entrenchment}, {regionFaction.Detection}, {regionFaction.AntiAir});";
                     using (var command = transaction.Connection.CreateCommand())
                     {
-                        command.CommandText = insert;
+                        command.Transaction = transaction;
+                        command.CommandText = @"INSERT INTO RegionFaction
+                            (RegionId, FactionId, IsPublic, Population, Garrison, Organization, Entrenchment, Detection, AntiAir) VALUES
+                            (@regionId, @factionId, @isPublic, @population, @garrison, @organization, @entrenchment, @detection, @antiAir);";
+                        command.AddParam("@regionId", region.Id);
+                        command.AddParam("@factionId", regionFaction.PlanetFaction.Faction.Id);
+                        command.AddParam("@isPublic", regionFaction.IsPublic ? 1 : 0);
+                        command.AddParam("@population", regionFaction.Population);
+                        command.AddParam("@garrison", regionFaction.Garrison);
+                        command.AddParam("@organization", regionFaction.Organization);
+                        command.AddParam("@entrenchment", regionFaction.Entrenchment);
+                        command.AddParam("@detection", regionFaction.Detection);
+                        command.AddParam("@antiAir", regionFaction.AntiAir);
                         command.ExecuteNonQuery();
                     }
                 }
@@ -362,12 +390,19 @@ namespace OnlyWar.Helpers.Database.GameState
                 {
                     object defenseType = mission is SabotageMission sabotage
                         ? (int)sabotage.DefenseType
-                        : "null";
-                    string insert = $@"INSERT INTO Mission (Id, MissionType, RegionId, FactionId, MissionSize, DefenseTypeId) VALUES
-                        ({mission.Id}, {(int)mission.MissionType}, {region.Id}, {mission.RegionFaction.PlanetFaction.Faction.Id}, {mission.MissionSize}, {defenseType})";
+                        : null;
                     using (var command = transaction.Connection.CreateCommand())
                     {
-                        command.CommandText = insert;
+                        command.Transaction = transaction;
+                        command.CommandText = @"INSERT INTO Mission
+                            (Id, MissionType, RegionId, FactionId, MissionSize, DefenseTypeId) VALUES
+                            (@id, @missionType, @regionId, @factionId, @missionSize, @defenseType);";
+                        command.AddParam("@id", mission.Id);
+                        command.AddParam("@missionType", (int)mission.MissionType);
+                        command.AddParam("@regionId", region.Id);
+                        command.AddParam("@factionId", mission.RegionFaction.PlanetFaction.Faction.Id);
+                        command.AddParam("@missionSize", mission.MissionSize);
+                        command.AddParam("@defenseType", defenseType);
                         command.ExecuteNonQuery();
                     }
                 }

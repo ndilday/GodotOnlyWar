@@ -219,26 +219,37 @@ namespace OnlyWar.Helpers.Database.GameState
 
         public void SaveUnit(IDbTransaction transaction, Unit unit)
         {
-            string parent = unit.ParentUnit == null ? "null" : unit.ParentUnit.Id.ToString();
-            string insert = $@"INSERT INTO Unit VALUES ({unit.Id}, {unit.UnitTemplate.Faction.Id}, 
-                {unit.UnitTemplate.Id}, {parent}, '{unit.Name}');";
+            object parent = unit.ParentUnit == null ? null : (object)unit.ParentUnit.Id;
             using (var command = transaction.Connection.CreateCommand())
             {
-                command.CommandText = insert;
+                command.Transaction = transaction;
+                command.CommandText = @"INSERT INTO Unit VALUES
+                    (@id, @factionId, @templateId, @parentId, @name);";
+                command.AddParam("@id", unit.Id);
+                command.AddParam("@factionId", unit.UnitTemplate.Faction.Id);
+                command.AddParam("@templateId", unit.UnitTemplate.Id);
+                command.AddParam("@parentId", parent);
+                command.AddParam("@name", unit.Name);
                 command.ExecuteNonQuery();
             }
         }
 
         public void SaveSquad(IDbTransaction transaction, Squad squad)
         {
-            string safeName = squad.Name.Replace("\'", "\'\'");
-            string ship = squad.BoardedLocation == null ? "null" : squad.BoardedLocation.Id.ToString();
-            string region = squad.CurrentRegion == null ? "null" : squad.CurrentRegion.Id.ToString();
-            string insert = $@"INSERT INTO Squad VALUES ({squad.Id}, {squad.SquadTemplate.Id}, 
-                {squad.ParentUnit.Id}, '{safeName}', {ship}, {region}, {(int)squad.TrainingFocus});";
+            object ship = squad.BoardedLocation == null ? null : (object)squad.BoardedLocation.Id;
+            object region = squad.CurrentRegion == null ? null : (object)squad.CurrentRegion.Id;
             using (var command = transaction.Connection.CreateCommand())
             {
-                command.CommandText = insert;
+                command.Transaction = transaction;
+                command.CommandText = @"INSERT INTO Squad VALUES
+                    (@id, @templateId, @parentUnitId, @name, @ship, @region, @trainingFocus);";
+                command.AddParam("@id", squad.Id);
+                command.AddParam("@templateId", squad.SquadTemplate.Id);
+                command.AddParam("@parentUnitId", squad.ParentUnit.Id);
+                command.AddParam("@name", squad.Name);
+                command.AddParam("@ship", ship);
+                command.AddParam("@region", region);
+                command.AddParam("@trainingFocus", (int)squad.TrainingFocus);
                 command.ExecuteNonQuery();
             }
 
@@ -252,11 +263,13 @@ namespace OnlyWar.Helpers.Database.GameState
         {
             foreach(WeaponSet weaponSet in squad.Loadout)
             {
-                string insert = $@"INSERT INTO SquadWeaponSet VALUES 
-                    ({squad.Id}, {weaponSet.Id});";
                 using (var command = transaction.Connection.CreateCommand())
                 {
-                    command.CommandText = insert;
+                    command.Transaction = transaction;
+                    command.CommandText = @"INSERT INTO SquadWeaponSet VALUES
+                        (@squadId, @weaponSetId);";
+                    command.AddParam("@squadId", squad.Id);
+                    command.AddParam("@weaponSetId", weaponSet.Id);
                     command.ExecuteNonQuery();
                 }
             }
@@ -265,22 +278,28 @@ namespace OnlyWar.Helpers.Database.GameState
         public void SaveOrder(IDbTransaction transaction, Order order)
         {
             // CREATE TABLE Assignment (Id INTEGER PRIMARY KEY UNIQUE NOT NULL, MissionId INTEGER NOT NULL REFERENCES Mission (Id), Disposition INTEGER NOT NULL, IsQuiet BOOLEAN NOT NULL, IsActivelyEngaging BOOLEAN NOT NULL, Aggression INTEGER NOT NULL);
-            string insert = $@"INSERT INTO Assignment VALUES
-            ({order.Id}, {order.Mission.Id},
-                {(int)order.Disposition}, {(order.IsQuiet ? 1 : 0)}, {(order.IsActivelyEngaging ? 1 : 0)},
-                {(int)order.LevelOfAggression});";
             using (var command = transaction.Connection.CreateCommand())
             {
-                command.CommandText = insert;
+                command.Transaction = transaction;
+                command.CommandText = @"INSERT INTO Assignment VALUES
+                    (@id, @missionId, @disposition, @isQuiet, @isActivelyEngaging, @aggression);";
+                command.AddParam("@id", order.Id);
+                command.AddParam("@missionId", order.Mission.Id);
+                command.AddParam("@disposition", (int)order.Disposition);
+                command.AddParam("@isQuiet", order.IsQuiet ? 1 : 0);
+                command.AddParam("@isActivelyEngaging", order.IsActivelyEngaging ? 1 : 0);
+                command.AddParam("@aggression", (int)order.LevelOfAggression);
                 command.ExecuteNonQuery();
             }
             foreach(Squad squad in order.AssignedSquads)
             {
-                insert = $@"INSERT INTO OrderSquad VALUES
-                ({order.Id}, {squad.Id});";
                 using (var command = transaction.Connection.CreateCommand())
                 {
-                    command.CommandText = insert;
+                    command.Transaction = transaction;
+                    command.CommandText = @"INSERT INTO OrderSquad VALUES
+                        (@orderId, @squadId);";
+                    command.AddParam("@orderId", order.Id);
+                    command.AddParam("@squadId", squad.Id);
                     command.ExecuteNonQuery();
                 }
             }

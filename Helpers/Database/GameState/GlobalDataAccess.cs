@@ -26,11 +26,14 @@ namespace OnlyWar.Helpers.Database.GameState
 
         public void SaveDate(IDbTransaction transaction, Date currentDate)
         {
-            string insert = $@"INSERT INTO GlobalData VALUES ({currentDate.Millenium}, 
-                {currentDate.Year}, {currentDate.Week}, 1);";
             using (var command = transaction.Connection.CreateCommand())
             {
-                command.CommandText = insert;
+                command.Transaction = transaction;
+                command.CommandText = @"INSERT INTO GlobalData VALUES
+                    (@millenium, @year, @week, 1);";
+                command.AddParam("@millenium", currentDate.Millenium);
+                command.AddParam("@year", currentDate.Year);
+                command.AddParam("@week", currentDate.Week);
                 command.ExecuteNonQuery();
             }
         }

@@ -70,21 +70,27 @@ namespace OnlyWar.Helpers.Database.GameState
             {
                 foreach(EventHistory entry in kvp.Value)
                 {
-                    string insert = $@"INSERT INTO PlayerFactionEvent VALUES ({i}, 
-                        {kvp.Key.Millenium}, {kvp.Key.Year}, {kvp.Key.Week}, 
-                        '{entry.EventTitle}');";
                     using (var command = transaction.Connection.CreateCommand())
                     {
-                        command.CommandText = insert;
+                        command.Transaction = transaction;
+                        command.CommandText = @"INSERT INTO PlayerFactionEvent VALUES
+                            (@id, @millenium, @year, @week, @title);";
+                        command.AddParam("@id", i);
+                        command.AddParam("@millenium", kvp.Key.Millenium);
+                        command.AddParam("@year", kvp.Key.Year);
+                        command.AddParam("@week", kvp.Key.Week);
+                        command.AddParam("@title", entry.EventTitle);
                         command.ExecuteNonQuery();
                     }
                     foreach (string subentry in entry.SubEvents)
                     {
-                        insert = $@"INSERT INTO PlayerFactionSubEvent VALUES 
-                            ({i}, '{subentry}');";
                         using (var command = transaction.Connection.CreateCommand())
                         {
-                            command.CommandText = insert;
+                            command.Transaction = transaction;
+                            command.CommandText = @"INSERT INTO PlayerFactionSubEvent VALUES
+                                (@id, @subentry);";
+                            command.AddParam("@id", i);
+                            command.AddParam("@subentry", subentry);
                             command.ExecuteNonQuery();
                         }
                     }
