@@ -4,7 +4,7 @@ using Microsoft.Data.Sqlite;
 
 if (args.Length < 2)
 {
-    Console.Error.WriteLine("Usage: RulesDbTool <schema|training-source|migrate-training> <db-path>");
+    Console.Error.WriteLine("Usage: RulesDbTool <schema|training-source|migrate-training|migrate-progenoid|migrate-ratings> <db-path>");
     return 1;
 }
 
@@ -13,7 +13,7 @@ string dbPath = args[1];
 string connectionString = new SqliteConnectionStringBuilder
 {
     DataSource = dbPath,
-    Mode = command == "migrate-training" ? SqliteOpenMode.ReadWriteCreate : SqliteOpenMode.ReadOnly
+    Mode = command is "migrate-training" or "migrate-progenoid" or "migrate-ratings" ? SqliteOpenMode.ReadWriteCreate : SqliteOpenMode.ReadOnly
 }.ToString();
 
 using SqliteConnection connection = new(connectionString);
@@ -29,6 +29,12 @@ switch (command)
         break;
     case "migrate-training":
         MigrateTrainingProfiles(connection);
+        break;
+    case "migrate-progenoid":
+        MigrateProgenoidLocations(connection);
+        break;
+    case "migrate-ratings":
+        MigrateRatings(connection);
         break;
     default:
         Console.Error.WriteLine($"Unknown command: {command}");
@@ -231,6 +237,176 @@ static void MigrateTrainingProfiles(SqliteConnection connection)
 
     transaction.Commit();
     Console.WriteLine("Training profile migration complete.");
+}
+
+static void MigrateProgenoidLocations(SqliteConnection connection)
+{
+    using SqliteTransaction transaction = connection.BeginTransaction();
+
+    // Semantic flag replacing the hardcoded "Face"/"Torso" name checks in
+    // BattleTurnResolver's geneseed-status logic (TDD §8.3). A hit location that
+    // holds a progenoid gland destroys the soldier's geneseed when severed.
+    EnsureColumn(connection, transaction, "HitLocationTemplate", "HoldsProgenoid", "INTEGER NOT NULL DEFAULT 0");
+
+    Execute(connection, transaction,
+        "UPDATE HitLocationTemplate SET HoldsProgenoid = 1 WHERE Name IN ('Face', 'Torso')");
+
+    int updated = ExecuteScalarInt(connection, transaction,
+        "SELECT COUNT(*) FROM HitLocationTemplate WHERE HoldsProgenoid = 1");
+
+    transaction.Commit();
+    Console.WriteLine($"Progenoid migration complete. {updated} hit-location rows flagged.");
+}
+
+static void MigrateRatings(SqliteConnection connection)
+{
+    using SqliteTransaction transaction = connection.BeginTransaction();
+
+    Execute(connection, transaction, """
+        CREATE TABLE IF NOT EXISTS RatingDefinition (
+            Id          INTEGER PRIMARY KEY,
+            RatingKey   TEXT NOT NULL UNIQUE,
+            DisplayName TEXT NOT NULL,
+            Aggregation INTEGER NOT NULL
+        );
+        """);
+    Execute(connection, transaction, """
+        CREATE TABLE IF NOT EXISTS RatingComponent (
+            Id                 INTEGER PRIMARY KEY,
+            RatingDefinitionId INTEGER NOT NULL REFERENCES RatingDefinition(Id),
+            Ordinal            INTEGER NOT NULL,
+            ComponentType      INTEGER NOT NULL,
+            TargetId           INTEGER NOT NULL
+        );
+        """);
+    Execute(connection, transaction, """
+        CREATE TABLE IF NOT EXISTS RatingNormalizationFactor (
+            Id                 INTEGER PRIMARY KEY,
+            RatingDefinitionId INTEGER NOT NULL REFERENCES RatingDefinition(Id),
+            Ordinal            INTEGER NOT NULL,
+            Low                REAL NOT NULL,
+            High               REAL NOT NULL
+        );
+        """);
+    Execute(connection, transaction, """
+        CREATE TABLE IF NOT EXISTS RatingAwardTier (
+            Id                 INTEGER PRIMARY KEY,
+            RatingDefinitionId INTEGER NOT NULL REFERENCES RatingDefinition(Id),
+            Level              INTEGER NOT NULL,
+            Threshold          REAL NOT NULL,
+            EffectType         INTEGER NOT NULL,
+            AwardType          TEXT,
+            NameTemplate       TEXT NOT NULL
+        );
+        """);
+
+    // Idempotent: clear and re-seed (rules data, not user data).
+    Execute(connection, transaction, "DELETE FROM RatingAwardTier");
+    Execute(connection, transaction, "DELETE FROM RatingNormalizationFactor");
+    Execute(connection, transaction, "DELETE FROM RatingComponent");
+    Execute(connection, transaction, "DELETE FROM RatingDefinition");
+
+    Dictionary<string, int> skill = LoadIds(connection, transaction, "BaseSkill");
+
+    // Attribute enum values (Models.Soldiers.Attribute).
+    const int Strength = 1, Dexterity = 2, Constitution = 3, Ego = 6;
+    // SkillCategory enum values.
+    const int RangedCategory = 1;
+    // RatingComponentType enum values.
+    const int AttributeValue = 0, SkillTotal = 1, BestSkillBonusInCategory = 2;
+    // RatingAggregation enum values.
+    const int Product = 0, Sum = 1;
+    // RatingAwardEffect enum values.
+    const int AwardEffect = 0, HistoryFlag = 1;
+
+    int componentId = 1, factorId = 1, tierId = 1;
+
+    void Component(int defId, int ordinal, int type, int targetId) => Execute(connection, transaction,
+        "INSERT INTO RatingComponent (Id, RatingDefinitionId, Ordinal, ComponentType, TargetId) VALUES ($id,$d,$o,$t,$tg)",
+        ("$id", componentId++), ("$d", defId), ("$o", ordinal), ("$t", type), ("$tg", targetId));
+
+    void Factor(int defId, int ordinal, double low, double high) => Execute(connection, transaction,
+        "INSERT INTO RatingNormalizationFactor (Id, RatingDefinitionId, Ordinal, Low, High) VALUES ($id,$d,$o,$l,$h)",
+        ("$id", factorId++), ("$d", defId), ("$o", ordinal), ("$l", low), ("$h", high));
+
+    void Definition(int id, string key, string display, int aggregation) => Execute(connection, transaction,
+        "INSERT INTO RatingDefinition (Id, RatingKey, DisplayName, Aggregation) VALUES ($id,$k,$n,$a)",
+        ("$id", id), ("$k", key), ("$n", display), ("$a", aggregation));
+
+    void Tier(int defId, int level, double threshold, int effect, string awardType, string name) => Execute(connection, transaction,
+        "INSERT INTO RatingAwardTier (Id, RatingDefinitionId, Level, Threshold, EffectType, AwardType, NameTemplate) VALUES ($id,$d,$l,$t,$e,$at,$n)",
+        ("$id", tierId++), ("$d", defId), ("$l", level), ("$t", threshold), ("$e", effect),
+        ("$at", (object)awardType ?? DBNull.Value), ("$n", name));
+
+    // 1. melee = STR * skillTotal(Sword)
+    Definition(1, "melee", "Melee", Product);
+    Component(1, 0, AttributeValue, Strength);
+    Component(1, 1, SkillTotal, skill["Sword"]);
+    Factor(1, 0, 1.44, 1.76);
+    Factor(1, 1, 1.44, 1.76);
+    Tier(1, 4, 115, AwardEffect, "Sword", "Adamantium Sword of the Emperor");
+    Tier(1, 3, 105, AwardEffect, "Sword", "Gold Sword of the Emperor");
+    Tier(1, 2, 99, AwardEffect, "Sword", "Silver Sword of the Emperor");
+    Tier(1, 1, 90, AwardEffect, "Sword", "Bronze Sword of the Emperor");
+
+    // 2. ranged = DEX + bestBonusInCategory(Ranged)
+    Definition(2, "ranged", "Ranged", Sum);
+    Component(2, 0, AttributeValue, Dexterity);
+    Component(2, 1, BestSkillBonusInCategory, RangedCategory);
+    Factor(2, 0, 0.144, 0.176);
+    Tier(2, 4, 120, AwardEffect, "Gun", "Adamantium {bestSkillInCategory} of the Emperor");
+    Tier(2, 3, 115, AwardEffect, "Gun", "Gold {bestSkillInCategory} of the Emperor");
+    Tier(2, 2, 110, AwardEffect, "Gun", "Silver {bestSkillInCategory} of the Emperor");
+    Tier(2, 1, 105, AwardEffect, "Gun", "Bronze {bestSkillInCategory} of the Emperor");
+
+    // 3. leadership = EGO * skillTotal(Leadership) * skillTotal(Tactics)
+    Definition(3, "leadership", "Leadership", Product);
+    Component(3, 0, AttributeValue, Ego);
+    Component(3, 1, SkillTotal, skill["Leadership"]);
+    Component(3, 2, SkillTotal, skill["Tactics"]);
+    Factor(3, 0, 12.6, 15.4);
+    Factor(3, 1, 1.26, 1.54);
+    Factor(3, 2, 1.26, 1.54);
+    Tier(3, 4, 95, AwardEffect, "Voice", "Adamantium Voice of the Emperor");
+    Tier(3, 3, 65, AwardEffect, "Voice", "Gold Voice of the Emperor");
+    Tier(3, 2, 55, AwardEffect, "Voice", "Silver Voice of the Emperor");
+    Tier(3, 1, 50, AwardEffect, "Voice", "Bronze Voice of the Emperor");
+
+    // 4. ancient = EGO * CON
+    Definition(4, "ancient", "Ancient", Product);
+    Component(4, 0, AttributeValue, Ego);
+    Component(4, 1, AttributeValue, Constitution);
+    Factor(4, 0, 1.26, 1.54);
+    Factor(4, 1, 2.88, 3.52);
+    Tier(4, 4, 112, AwardEffect, "Banner", "Adamantium Banner of the Emperor");
+    Tier(4, 3, 100, AwardEffect, "Banner", "Gold Banner of the Emperor");
+    Tier(4, 2, 95, AwardEffect, "Banner", "Silver Banner of the Emperor");
+    Tier(4, 1, 85, AwardEffect, "Banner", "Bronze Banner of the Emperor");
+
+    // 5. medical = skillTotal(Diagnosis) * skillTotal(First Aid)
+    Definition(5, "medical", "Medical", Product);
+    Component(5, 0, SkillTotal, skill["Diagnosis"]);
+    Component(5, 1, SkillTotal, skill["First Aid"]);
+    Factor(5, 0, 0.99, 1.21);
+    Factor(5, 1, 1.17, 1.43);
+    Tier(5, 1, 115, HistoryFlag, null, "Flagged for potential training as Apothecary");
+
+    // 6. tech = skillTotal(Armory (Small Arms)) * skillTotal(Armory (Vehicle))
+    Definition(6, "tech", "Tech", Product);
+    Component(6, 0, SkillTotal, skill["Armory (Small Arms)"]);
+    Component(6, 1, SkillTotal, skill["Armory (Vehicle)"]);
+    Factor(6, 0, 1.17, 1.43);
+    Factor(6, 1, 1.17, 1.43);
+    Tier(6, 1, 80, HistoryFlag, null, "Flagged for potential training as Techmarine");
+
+    // 7. piety = skillTotal(Theology (Emperor of Man))
+    Definition(7, "piety", "Piety", Product);
+    Component(7, 0, SkillTotal, skill["Theology (Emperor of Man)"]);
+    Factor(7, 0, 0.108, 0.132);
+    Tier(7, 1, 50, HistoryFlag, null, "Awarded Devout badge and declared a Novice");
+
+    transaction.Commit();
+    Console.WriteLine("Rating definitions migration complete.");
 }
 
 static TrainingEntry Skill(Dictionary<string, int> skillIds, string name, float weight)

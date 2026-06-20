@@ -1,4 +1,4 @@
-﻿
+
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
@@ -54,7 +54,7 @@ namespace OnlyWar.Builders
                                                                            data.PlayerFaction.UnitTemplates.Values.First(ut => ut.IsTopLevelUnit),
                                                                            soldiers,
                                                                            chapterName);
-            PopulateOrderOfBattle(trainingEndDate.ToString(), unassignedSoldierMap, chapter.Army.OrderOfBattle, data.PlayerFaction);
+            PopulateOrderOfBattle(trainingEndDate.ToString(), unassignedSoldierMap, chapter.Army.OrderOfBattle, data.ChapterTemplates);
             chapter.Army.PopulateSquadMap();
             return chapter;
         }
@@ -96,47 +96,43 @@ namespace OnlyWar.Builders
             return csv;
         }
 
-        private static void PopulateOrderOfBattle(string year, 
-                                                  Dictionary<int, PlayerSoldier> unassignedSoldierMap, 
-                                                  Unit oob, Faction faction)
+        private static void PopulateOrderOfBattle(string year,
+                                                  Dictionary<int, PlayerSoldier> unassignedSoldierMap,
+                                                  Unit oob, ChapterGenerationTemplates templates)
         {
             // first, assign the Librarians
-            AssignLibrarians(unassignedSoldierMap, oob, year, faction);
+            AssignLibrarians(unassignedSoldierMap, oob, year, templates);
             // then, assign up to the top 50 as Techmarines
-            AssignTechMarines(unassignedSoldierMap, oob, year, faction);
+            AssignTechMarines(unassignedSoldierMap, oob, year, templates);
             // then, assign the top leader as Chapter Master
-            AssignChapterMaster(unassignedSoldierMap, oob, year, faction);
+            AssignChapterMaster(unassignedSoldierMap, oob, year, templates);
             // then, assign Captains
-            AssignCaptains(unassignedSoldierMap, oob, year, faction);
+            AssignCaptains(unassignedSoldierMap, oob, year, templates);
             // then, assigned twenty apothecaries
-            AssignApothecaries(unassignedSoldierMap, oob, year, faction);
+            AssignApothecaries(unassignedSoldierMap, oob, year, templates);
             // then, assign twenty Chaplains
-            AssignChaplains(unassignedSoldierMap, oob, year, faction);
+            AssignChaplains(unassignedSoldierMap, oob, year, templates);
             // any dual gold awards are assigned to the first company
-            AssignVeterans(unassignedSoldierMap, oob, year, faction);
+            AssignVeterans(unassignedSoldierMap, oob, year, templates);
 
             // assign Champtions to the CM and each Company
             List<PlayerSoldier> champions = unassignedSoldierMap.Values
                                                 .OrderByDescending(s => s.SoldierEvaluationHistory[0].MeleeRating)
                                                 .ToList();
-            SoldierTemplate championType = faction.SoldierTemplates
-                                              .Values
-                                              .First(st => st.Name == "Champion");
+            SoldierTemplate championType = templates.Champion;
             AssignSpecialistsToUnit(unassignedSoldierMap, oob, year, championType, champions);
 
             // assign Ancients to the CM and each Company
             List<PlayerSoldier> ancients = unassignedSoldierMap.Values
                                                .OrderByDescending(s => s.SoldierEvaluationHistory[0].AncientRating)
                                                .ToList();
-            SoldierTemplate ancientType = faction.SoldierTemplates
-                                             .Values
-                                             .First(st => st.Name == "Ancient");
+            SoldierTemplate ancientType = templates.Ancient;
             AssignSpecialistsToUnit(unassignedSoldierMap, oob, year, ancientType, ancients);
 
             // assign all other soldiers who got at least bronze in one skill, starting with the second company
-            AssignMarines(unassignedSoldierMap, oob, year, faction);
+            AssignMarines(unassignedSoldierMap, oob, year, templates);
             //Assign excess to scouts
-            AssignExcessToScouts(unassignedSoldierMap, oob, year, faction);
+            AssignExcessToScouts(unassignedSoldierMap, oob, year, templates);
         }
 
         private static PlayerForce BuildChapterFromUnitTemplate(Faction faction, UnitTemplate rootTemplate, IEnumerable<PlayerSoldier> soldiers, string chapterName)
@@ -174,20 +170,20 @@ namespace OnlyWar.Builders
         }
 
         private static void AssignChapterMaster(Dictionary<int, PlayerSoldier> unassignedSoldierMap, 
-                                                Unit chapter, string year, Faction faction)
+                                                Unit chapter, string year, ChapterGenerationTemplates templates)
         {
             PlayerSoldier master = unassignedSoldierMap.Values.OrderByDescending(s => s.SoldierEvaluationHistory[0].LeadershipRating).First();
-            master.Template = faction.SoldierTemplates.Values.First(st => st.Name == "Chapter Master");
+            master.Template = templates.ChapterMaster;
             chapter.HQSquad.AddSquadMember(master);
             master.AddEntryToHistory(year + ": voted by the chapter to become the first Chapter Master");
             unassignedSoldierMap.Remove(master.Id);
         }
 
         private static void AssignLibrarians(Dictionary<int, PlayerSoldier> unassignedSoldierMap, 
-                                             Unit chapter, string year, Faction faction)
+                                             Unit chapter, string year, ChapterGenerationTemplates templates)
         {
             // assume for now that there's a single unit to hold all of the Librarians as a squad on the chapter
-            Squad library = chapter.Squads.First(s => s.Name == "Librarius");
+            Squad library = chapter.Squads.First(s => s.SquadTemplate == templates.Librarius);
             IOrderedEnumerable<PlayerSoldier> psychers = 
                 unassignedSoldierMap.Values.Where(s => s.PsychicPower > 0).OrderByDescending(s => s.Ego);
             // TODO: add 24 points
@@ -197,16 +193,16 @@ namespace OnlyWar.Builders
                 {
                     if (library.SquadLeader == null)
                     {
-                        soldier.Template = faction.SoldierTemplates.Values.First(st => st.Name == "Master of the Librarium");
+                        soldier.Template = templates.MasterOfTheLibrarium;
                     }
                     else
                     {
-                        soldier.Template = faction.SoldierTemplates.Values.First(st => st.Name == "Codiciers");
+                        soldier.Template = templates.Codicier;
                     }
                 }
                 else
                 {
-                    soldier.Template = faction.SoldierTemplates.Values.First(st => st.Name == "Lexicanium");
+                    soldier.Template = templates.Lexicanium;
                 }
                 library.AddSquadMember(soldier);
                 soldier.AddEntryToHistory(year + ": Promoted to " + soldier.Template.Name + " and assigned to " + soldier.AssignedSquad.Name);
@@ -215,21 +211,21 @@ namespace OnlyWar.Builders
         }
 
         private static void AssignTechMarines(Dictionary<int, PlayerSoldier> unassignedSoldierMap, 
-                                              Unit chapter, string year, Faction faction)
+                                              Unit chapter, string year, ChapterGenerationTemplates templates)
         {
             IEnumerable<PlayerSoldier> techMarines = 
                 unassignedSoldierMap.Values.Where(s => s.SoldierEvaluationHistory[0].TechRating > 75).OrderByDescending(s => s.SoldierEvaluationHistory[0].TechRating).Take(50);
             // assume for now that there's a single unit to hold all of the Techmarines
-            Squad armory = chapter.Squads.First(s => s.Name == "Armory");
+            Squad armory = chapter.Squads.First(s => s.SquadTemplate == templates.Armory);
             foreach (PlayerSoldier soldier in techMarines)
             {
                 if (armory.SquadLeader == null && soldier.SoldierEvaluationHistory[0].TechRating > 100 && soldier.SoldierEvaluationHistory[0].LeadershipRating > 60)
                 {
-                    soldier.Template = faction.SoldierTemplates.Values.First(st => st.Name == "Master of the Forge");
+                    soldier.Template = templates.MasterOfTheForge;
                 }
                 else
                 {
-                    soldier.Template = faction.SoldierTemplates.Values.First(st => st.Name == "Techmarine");
+                    soldier.Template = templates.Techmarine;
                 }
                 armory.AddSquadMember(soldier);
                 soldier.AddEntryToHistory(year + ": Returned from Mars, promoted to " 
@@ -239,23 +235,23 @@ namespace OnlyWar.Builders
         }
 
         private static void AssignApothecaries(Dictionary<int, PlayerSoldier> unassignedSoldierMap, 
-                                               Unit chapter, string year, Faction faction)
+                                               Unit chapter, string year, ChapterGenerationTemplates templates)
         {
             IEnumerable<PlayerSoldier> apothecaries = unassignedSoldierMap.Values
                                                    .Where(s => s.SoldierEvaluationHistory[0].MedicalRating > 115)
                                                    .OrderByDescending(s => s.SoldierEvaluationHistory[0].MedicalRating)
                                                    .Take(20);
             // assume for now that there's a single unit to hold all of the Techmarines
-            Squad apo = chapter.Squads.First(s => s.Name == "Apothecarion");
+            Squad apo = chapter.Squads.First(s => s.SquadTemplate == templates.Apothecarion);
             foreach (PlayerSoldier soldier in apothecaries)
             {
                 if (apo.SquadLeader == null && soldier.SoldierEvaluationHistory[0].MedicalRating > 135 && soldier.SoldierEvaluationHistory[0].LeadershipRating > 60)
                 {
-                    soldier.Template = faction.SoldierTemplates.Values.First(st => st.Name == "Master of the Apothecarion");
+                    soldier.Template = templates.MasterOfTheApothecarion;
                 }
                 else
                 {
-                    soldier.Template = faction.SoldierTemplates.Values.First(st => st.Name == "Apothecary");
+                    soldier.Template = templates.Apothecary;
                 }
                 apo.AddSquadMember(soldier);
                 soldier.AddEntryToHistory(year + ": finished medical and genetic training, promoted to " 
@@ -265,22 +261,22 @@ namespace OnlyWar.Builders
         }
 
         private static void AssignChaplains(Dictionary<int, PlayerSoldier> unassignedSoldierMap, 
-                                            Unit chapter, string year, Faction faction)
+                                            Unit chapter, string year, ChapterGenerationTemplates templates)
         {
             IEnumerable<PlayerSoldier> chaplains = unassignedSoldierMap.Values.Where(s => s.SoldierEvaluationHistory[0].PietyRating > 50)
                                                     .OrderByDescending(s => s.SoldierEvaluationHistory[0].PietyRating)
                                                     .Take(20);
             // assume for now that there's a single unit to hold all of the Techmarines
-            Squad reclusium = chapter.Squads.First(s => s.Name == "Reclusium");
+            Squad reclusium = chapter.Squads.First(s => s.SquadTemplate == templates.Reclusium);
             foreach (PlayerSoldier soldier in chaplains)
             {
                 if (reclusium.SquadLeader == null && soldier.SoldierEvaluationHistory[0].PietyRating > 65 && soldier.SoldierEvaluationHistory[0].LeadershipRating > 60)
                 {
-                    soldier.Template = faction.SoldierTemplates.Values.First(st => st.Name == "Master of Sanctity");
+                    soldier.Template = templates.MasterOfSanctity;
                 }
                 else
                 {
-                    soldier.Template = faction.SoldierTemplates.Values.First(st => st.Name == "Chaplain");
+                    soldier.Template = templates.Chaplain;
                 }
                 reclusium.AddSquadMember(soldier);
                 soldier.AddEntryToHistory(year + ": promoted to " + soldier.Template.Name 
@@ -290,7 +286,7 @@ namespace OnlyWar.Builders
         }
 
         private static void AssignCaptains(Dictionary<int, PlayerSoldier> unassignedSoldierMap, 
-                                           Unit chapter, string year, Faction faction)
+                                           Unit chapter, string year, ChapterGenerationTemplates templates)
         {
             // see if there is an impressive enough leader to be the Veteran Captain
             List<PlayerSoldier> veteranLeaders = 
@@ -300,30 +296,30 @@ namespace OnlyWar.Builders
                                     .ToList();
             if (veteranLeaders.Count > 0)
             {
-                Unit firstCompany = chapter.ChildUnits.First(u => u.Name == "First Company");
+                Unit firstCompany = chapter.ChildUnits.First(u => u.UnitTemplate == templates.VeteranCompany);
                 AssignSoldier(unassignedSoldierMap, veteranLeaders, firstCompany.HQSquad,
-                    faction.SoldierTemplates.Values.First(st => st.Name == "Captain"), year);
+                    templates.Captain, year);
             }
             List<PlayerSoldier> leaders = unassignedSoldierMap.Values.OrderByDescending(s => s.SoldierEvaluationHistory[0].LeadershipRating).Take(20).ToList();
             // assign Recruitment Captain next
             // assuming Tenth Company for now
-            Unit tenthCompany = chapter.ChildUnits.First(u => u.Name == "Tenth Company");
+            Unit tenthCompany = chapter.ChildUnits.First(u => u.UnitTemplate == templates.ScoutCompany);
             AssignSoldier(unassignedSoldierMap, leaders, tenthCompany.HQSquad,
-                faction.SoldierTemplates.Values.First(st => st.Name == "Captain"), year);
+                templates.Captain, year);
 
             foreach (Unit company in chapter.ChildUnits)
             {
-                if (company.HQSquad.SquadLeader == null && company.Name != "First Company" )
+                if (company.HQSquad.SquadLeader == null && company.UnitTemplate != templates.VeteranCompany)
                 {
                     // is a true company, needs a captain
                     AssignSoldier(unassignedSoldierMap, leaders, company.HQSquad,
-                        faction.SoldierTemplates.Values.First(st => st.Name == "Captain"), year);
+                        templates.Captain, year);
                 }
             }
         }
     
         private static void AssignVeterans(Dictionary<int, PlayerSoldier> unassignedSoldierMap, 
-                                           Unit chapter, string year, Faction faction)
+                                           Unit chapter, string year, ChapterGenerationTemplates templates)
         {
             IEnumerable<PlayerSoldier> veterans = unassignedSoldierMap.Values.Where(s => s.SoldierEvaluationHistory[0].MeleeRating > 95 && s.SoldierEvaluationHistory[0].RangedRating > 105);
             List<PlayerSoldier> veteranLeaders = veterans.Where(s => s.SoldierEvaluationHistory[0].LeadershipRating > 60).OrderByDescending(s => s.SoldierEvaluationHistory[0].LeadershipRating).ToList();
@@ -356,12 +352,12 @@ namespace OnlyWar.Builders
                         // assign sgt to squad
                         squad.Name = veteranLeaders[0].Name.Split(' ')[1] + " Squad";
                         AssignSoldier(unassignedSoldierMap, veteranLeaders, squad,
-                            faction.SoldierTemplates.Values.First(st => st.Name == "Sergeant"), year);
+                            templates.TacticalSergeant, year);
 
                         while (squad.Members.Count < squadSize && vetList.Count > 0)
                         {
                             AssignSoldier(unassignedSoldierMap, vetList, squad,
-                                faction.SoldierTemplates.Values.First(st => st.Name == "Veteran"), year);
+                                templates.Veteran, year);
                         }
                     }
                 }
@@ -369,7 +365,7 @@ namespace OnlyWar.Builders
         }
 
         private static void AssignExcessToScouts(Dictionary<int, PlayerSoldier> unassignedSoldierMap, 
-                                                 Unit chapter, string year, Faction faction)
+                                                 Unit chapter, string year, ChapterGenerationTemplates templates)
         {
             int sgtNeed = ((unassignedSoldierMap.Count - 1) / 10) + 1;
             List<PlayerSoldier> leaderList = unassignedSoldierMap.Values.OrderByDescending(s => s.SoldierEvaluationHistory[0].LeadershipRating).Take(sgtNeed).ToList();
@@ -377,9 +373,9 @@ namespace OnlyWar.Builders
             Unit lastCompany = null;
             Squad lastSquad = null;
             SoldierTemplate scoutSgt = 
-                faction.SoldierTemplates.Values.First(st => st.Name == "Scout Sergeant");
+                templates.ScoutSergeant;
             SoldierTemplate scout =
-                faction.SoldierTemplates.Values.First(st => st.Name == "Scout Marine");
+                templates.ScoutMarine;
             foreach (Unit company in chapter.ChildUnits)
             {
                 lastCompany = company;
@@ -406,7 +402,7 @@ namespace OnlyWar.Builders
                     int id = lastSquad.Id + 1;
                     // add a new Scout Squad to the company
                     Squad squad = new Squad("Scout Squad", lastCompany,
-                        faction.SquadTemplates.Values.First(st => st.Name == "Scout Squad"));
+                        templates.ScoutSquad);
                     lastCompany.AddSquad(squad);
                     id++;
                     lastSquad = squad;
@@ -438,9 +434,9 @@ namespace OnlyWar.Builders
             }
             foreach (Unit company in chapter.ChildUnits)
             {
-                AssignSpecialistsToSquad(unassignedSoldierMap, company.HQSquad, 
+                AssignSpecialistsToSquad(unassignedSoldierMap, company.HQSquad,
                                          year, specialistType, sortedCandidates);
-                foreach (Squad squad in chapter.Squads)
+                foreach (Squad squad in company.Squads)
                 {
                     AssignSpecialistsToSquad(unassignedSoldierMap, squad, year, 
                                              specialistType, sortedCandidates);
@@ -474,7 +470,7 @@ namespace OnlyWar.Builders
         }
 
         private static void AssignMarines(Dictionary<int, PlayerSoldier> unassignedSoldierMap, 
-                                          Unit chapter, string year, Faction faction)
+                                          Unit chapter, string year, ChapterGenerationTemplates templates)
         {
             List<PlayerSoldier> devList = unassignedSoldierMap.Values.Where(s => s.SoldierEvaluationHistory[0].MeleeRating > 80 
                                                               && s.SoldierEvaluationHistory[0].MeleeRating < 90
@@ -516,26 +512,26 @@ namespace OnlyWar.Builders
                                                          .ToList();
 
             BalanceLists(assList, devList, tactList, assSgtList, devSgtList, tactSgtList);
-            AssignTacticalMarines(unassignedSoldierMap, chapter, year, faction, tactList, tactSgtList);
+            AssignTacticalMarines(unassignedSoldierMap, chapter, year, templates, tactList, tactSgtList);
             assList.AddRange(tactList);
-            AssignAssaultMarines(unassignedSoldierMap, chapter, year, faction, assList, assSgtList);
+            AssignAssaultMarines(unassignedSoldierMap, chapter, year, templates, assList, assSgtList);
             if (assList.Count > 0)
             {
                 devList.AddRange(assList.Where(a => a.SoldierEvaluationHistory[0].RangedRating > 80));
                 devList = devList.OrderByDescending(s => s.SoldierEvaluationHistory[0].RangedRating).ToList();
             }
-            AssignDevastatorMarines(unassignedSoldierMap, chapter, year, faction, devList, devSgtList);
+            AssignDevastatorMarines(unassignedSoldierMap, chapter, year, templates, devList, devSgtList);
         }
 
         private static void AssignDevastatorMarines(Dictionary<int, PlayerSoldier> unassignedSoldierMap, 
-                                                    Unit chapter, string year, Faction faction,
+                                                    Unit chapter, string year, ChapterGenerationTemplates templates,
                                                     List<PlayerSoldier> devList, 
                                                     List<PlayerSoldier> devSgtList)
         {
             SoldierTemplate devType = 
-                faction.SoldierTemplates.Values.First(st => st.Name == "Devastator Marine");
+                templates.DevastatorMarine;
             SoldierTemplate devSgtType =
-                faction.SoldierTemplates.Values.First(st => st.Name == "Sergeant (D)");
+                templates.DevastatorSergeant;
             // since Devastators are assigned last, make sure the dev to sgt list is reasonable
             while (devSgtList.Count() * 9 >= devList.Count())
             {
@@ -555,7 +551,7 @@ namespace OnlyWar.Builders
 
                         }
                     }*/
-                    if (squad.SquadTemplate.Name == "Devastator Squad")
+                    if (squad.SquadTemplate == templates.DevastatorSquad)
                     {
                         if (devSgtList.Count > 0)
                         {
@@ -574,19 +570,19 @@ namespace OnlyWar.Builders
         }
 
         private static void AssignAssaultMarines(Dictionary<int, PlayerSoldier> unassignedSoldierMap, 
-                                                 Unit chapter, string year, Faction faction,
+                                                 Unit chapter, string year, ChapterGenerationTemplates templates,
                                                  List<PlayerSoldier> assList, 
                                                  List<PlayerSoldier> assSgtList)
         {
             SoldierTemplate assType = 
-                faction.SoldierTemplates.Values.First(st => st.Name == "Assault Marine");
+                templates.AssaultMarine;
             SoldierTemplate assSgtType =
-                faction.SoldierTemplates.Values.First(st => st.Name == "Sergeant (A)");
+                templates.AssaultSergeant;
             foreach (Unit company in chapter.ChildUnits)
             {
                 foreach (Squad squad in company.Squads)
                 {
-                    if (squad.SquadTemplate.Name == "Assault Squad")
+                    if (squad.SquadTemplate == templates.AssaultSquad)
                     {
                         if (assSgtList.Count > 0)
                         {
@@ -605,19 +601,19 @@ namespace OnlyWar.Builders
         }
 
         private static void AssignTacticalMarines(Dictionary<int, PlayerSoldier> unassignedSoldierMap, 
-                                                  Unit chapter, string year, Faction faction,
+                                                  Unit chapter, string year, ChapterGenerationTemplates templates,
                                                   List<PlayerSoldier> tactList, 
                                                   List<PlayerSoldier> tactSgtList)
         {
             SoldierTemplate tactType =
-                faction.SoldierTemplates.Values.First(st => st.Name == "Tactical Marine");
+                templates.TacticalMarine;
             SoldierTemplate tactSgtType =
-                faction.SoldierTemplates.Values.First(st => st.Name == "Sergeant");
+                templates.TacticalSergeant;
             foreach (Unit company in chapter.ChildUnits)
             {
                 foreach (Squad squad in company.Squads)
                 {
-                    if (squad.SquadTemplate.Name == "Tactical Squad")
+                    if (squad.SquadTemplate == templates.TacticalSquad)
                     {
                         if (tactSgtList.Count > 0)
                         {

@@ -240,6 +240,8 @@ namespace OnlyWar.Models.Soldiers
         public bool IsRangedWeaponHolder;
         public bool IsMeleeWeaponHolder;
         public bool IsVital;
+        // A location holding a progenoid gland destroys the soldier's geneseed when severed.
+        public bool HoldsProgenoid;
         public int[] HitProbabilityMap;
     }
 
@@ -399,7 +401,8 @@ namespace OnlyWar.Models.Soldiers
                     IsMotive = false,
                     IsRangedWeaponHolder = false,
                     IsMeleeWeaponHolder = false,
-                    IsVital = true
+                    IsVital = true,
+                    HoldsProgenoid = true
                 },
 
                 new HitLocationTemplate
@@ -414,7 +417,8 @@ namespace OnlyWar.Models.Soldiers
                     IsMotive = false,
                     IsRangedWeaponHolder = false,
                     IsMeleeWeaponHolder = false,
-                    IsVital = true
+                    IsVital = true,
+                    HoldsProgenoid = true
                 },
 
                 new HitLocationTemplate
@@ -616,7 +620,8 @@ namespace OnlyWar.Models.Soldiers
                     IsMotive = false,
                     IsRangedWeaponHolder = false,
                     IsMeleeWeaponHolder = false,
-                    IsVital = true
+                    IsVital = true,
+                    HoldsProgenoid = true
                 },
 
                 new HitLocationTemplate
@@ -631,7 +636,8 @@ namespace OnlyWar.Models.Soldiers
                     IsMotive = false,
                     IsRangedWeaponHolder = false,
                     IsMeleeWeaponHolder = false,
-                    IsVital = true
+                    IsVital = true,
+                    HoldsProgenoid = true
                 },
 
                 new HitLocationTemplate

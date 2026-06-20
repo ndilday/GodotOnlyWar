@@ -96,20 +96,27 @@ namespace OnlyWar.Helpers.Database.GameState
                 {
                     command.Transaction = transaction;
                     command.CommandText = @"INSERT INTO SoldierEvaluation VALUES
-                        (@soldierId, @millenium, @year, @week,
-                         @melee, @ranged, @leadership, @medical, @tech, @piety, @ancient);";
+                        (@soldierId, @millenium, @year, @week);";
                     command.AddParam("@soldierId", playerSoldier.Id);
                     command.AddParam("@millenium", evaluation.EvaluationDate.Millenium);
                     command.AddParam("@year", evaluation.EvaluationDate.Year);
                     command.AddParam("@week", evaluation.EvaluationDate.Week);
-                    command.AddParam("@melee", evaluation.MeleeRating);
-                    command.AddParam("@ranged", evaluation.RangedRating);
-                    command.AddParam("@leadership", evaluation.LeadershipRating);
-                    command.AddParam("@medical", evaluation.MedicalRating);
-                    command.AddParam("@tech", evaluation.TechRating);
-                    command.AddParam("@piety", evaluation.PietyRating);
-                    command.AddParam("@ancient", evaluation.AncientRating);
                     command.ExecuteNonQuery();
+                }
+
+                foreach (KeyValuePair<string, float> rating in evaluation.Ratings)
+                {
+                    using var ratingCommand = transaction.Connection.CreateCommand();
+                    ratingCommand.Transaction = transaction;
+                    ratingCommand.CommandText = @"INSERT INTO SoldierEvaluationRating VALUES
+                        (@soldierId, @millenium, @year, @week, @ratingKey, @value);";
+                    ratingCommand.AddParam("@soldierId", playerSoldier.Id);
+                    ratingCommand.AddParam("@millenium", evaluation.EvaluationDate.Millenium);
+                    ratingCommand.AddParam("@year", evaluation.EvaluationDate.Year);
+                    ratingCommand.AddParam("@week", evaluation.EvaluationDate.Week);
+                    ratingCommand.AddParam("@ratingKey", rating.Key);
+                    ratingCommand.AddParam("@value", rating.Value);
+                    ratingCommand.ExecuteNonQuery();
                 }
             }
 
@@ -232,6 +239,9 @@ namespace OnlyWar.Helpers.Database.GameState
 
         private Dictionary<int, List<SoldierEvaluation>> GetEvaluationsBySoldierId(IDbConnection connection)
         {
+            Dictionary<(int, int, int, int), Dictionary<string, float>> ratingsByEvaluation =
+                GetEvaluationRatings(connection);
+
             Dictionary<int, List<SoldierEvaluation>> soldierEvalListMap = [];
             using (var command = connection.CreateCommand())
             {
@@ -245,15 +255,11 @@ namespace OnlyWar.Helpers.Database.GameState
                     int week = reader.GetInt32(3);
 
                     Date date = new Date(millenium, year, week);
-                    float melee = reader.GetFloat(4);
-                    float ranged = reader.GetFloat(5);
-                    float leadership = reader.GetFloat(6);
-                    float medical = reader.GetFloat(7);
-                    float tech = reader.GetFloat(8);
-                    float piety = reader.GetFloat(9);
-                    float ancient = reader.GetFloat(10);
+                    Dictionary<string, float> ratings =
+                        ratingsByEvaluation.TryGetValue((soldierId, millenium, year, week), out var r)
+                            ? r : [];
 
-                    SoldierEvaluation entry = new SoldierEvaluation(date, melee, ranged, leadership, medical, tech, piety, ancient);
+                    SoldierEvaluation entry = new SoldierEvaluation(date, ratings);
 
                     if (!soldierEvalListMap.ContainsKey(soldierId))
                     {
@@ -263,6 +269,27 @@ namespace OnlyWar.Helpers.Database.GameState
                 }
             }
             return soldierEvalListMap;
+        }
+
+        private Dictionary<(int, int, int, int), Dictionary<string, float>> GetEvaluationRatings(IDbConnection connection)
+        {
+            Dictionary<(int, int, int, int), Dictionary<string, float>> map = [];
+            using var command = connection.CreateCommand();
+            command.CommandText = "SELECT SoldierId, Millenium, Year, Week, RatingKey, Value FROM SoldierEvaluationRating";
+            var reader = command.ExecuteReader();
+            while (reader.Read())
+            {
+                var key = (reader.GetInt32(0), reader.GetInt32(1), reader.GetInt32(2), reader.GetInt32(3));
+                string ratingKey = reader.GetString(4);
+                float value = System.Convert.ToSingle(reader[5]);
+                if (!map.TryGetValue(key, out var ratings))
+                {
+                    ratings = [];
+                    map[key] = ratings;
+                }
+                ratings[ratingKey] = value;
+            }
+            return map;
         }
 
         private Dictionary<int, List<SoldierAward>> GetAwardsBySoldierId(IDbConnection connection)

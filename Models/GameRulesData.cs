@@ -1,7 +1,9 @@
-﻿using OnlyWar.Helpers.Database.GameRules;
+﻿using OnlyWar.Helpers;
+using OnlyWar.Helpers.Database.GameRules;
 using OnlyWar.Models.Equippables;
 using OnlyWar.Models.Planets;
 using OnlyWar.Models.Soldiers;
+using OnlyWar.Models.Soldiers.Ratings;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -40,6 +42,26 @@ namespace OnlyWar.Models
         public IReadOnlyDictionary<int, MeleeWeaponTemplate> MeleeWeaponTemplates { get; }
         public IReadOnlyDictionary<int, WeaponSet> WeaponSets { get; }
         public IReadOnlyDictionary<int, TrainingProfile> TrainingProfiles { get; }
+        public IReadOnlyList<RatingDefinition> RatingDefinitions { get; }
+        public IReadOnlyList<RatingAwardTier> RatingAwardTiers { get; }
+
+        // Validated registry of base skills that game logic references by name
+        // (see TDD §8.3). Resolved and validated at load; fails fast if missing.
+        public NamedSkillRegistry Skills { get; }
+
+        // Validated registry of the player-faction soldier/squad templates that
+        // chapter generation references by name (see TDD §8.3). Resolved and
+        // validated at load; fails fast if missing.
+        public ChapterGenerationTemplates ChapterTemplates { get; }
+
+        // Validated registry of the non-player factions that sector generation
+        // places by name (see TDD §8.3 / §4.1.1). Resolved and validated at load;
+        // fails fast if missing.
+        public SectorGenerationFactions SectorFactions { get; }
+
+        // Validated registry of default battle resources referenced by name
+        // (see TDD §8.3 / §4.1.1). Resolved and validated at load; fails fast if missing.
+        public BattleDefaults BattleDefaults { get; }
 
         public GameRulesData()
         {
@@ -61,8 +83,82 @@ namespace OnlyWar.Models
             MeleeWeaponTemplates = gameBlob.MeleeWeaponTemplates;
             WeaponSets = gameBlob.WeaponSets;
             TrainingProfiles = gameBlob.TrainingProfiles;
+            RatingDefinitions = gameBlob.RatingDefinitions;
+            RatingAwardTiers = gameBlob.RatingAwardTiers;
             PlayerFaction = _factions.First(f => f.IsPlayerFaction);
             DefaultFaction = _factions.First(f => f.IsDefaultFaction);
+            Skills = new NamedSkillRegistry(_baseSkillMap);
+            ChapterTemplates = new ChapterGenerationTemplates(PlayerFaction);
+            SectorFactions = new SectorGenerationFactions(_factions);
+            BattleDefaults = new BattleDefaults(MeleeWeaponTemplates, Skills);
+            ValidateTrainingSkills();
+            ValidateRatingDefinitions();
+        }
+
+        // Fail fast at load if the rules database is missing any base skill the training
+        // logic still references by name (work-experience / scout training); see TDD §8.3.
+        private void ValidateTrainingSkills()
+        {
+            HashSet<string> skillNames = _baseSkillMap.Values.Select(s => s.Name).ToHashSet();
+            List<string> missing = SoldierTrainingCalculator.RequiredSkillNames
+                .Where(name => !skillNames.Contains(name))
+                .ToList();
+            if (missing.Count > 0)
+            {
+                throw new InvalidOperationException(
+                    "Rules database is missing base skills required by the training logic: "
+                    + string.Join(", ", missing) + ".");
+            }
+        }
+
+        // Fail fast at load if a data-driven rating definition is malformed: every
+        // required rating key must be present, each definition must have at least one
+        // component, every skill-total component must reference a real base skill, and
+        // every award tier must reference an existing rating (Design/DataDrivenRatings.md).
+        private void ValidateRatingDefinitions()
+        {
+            string[] requiredKeys =
+            {
+                RatingKeys.Melee, RatingKeys.Ranged, RatingKeys.Leadership, RatingKeys.Ancient,
+                RatingKeys.Medical, RatingKeys.Tech, RatingKeys.Piety
+            };
+            HashSet<string> presentKeys = RatingDefinitions.Select(d => d.Key).ToHashSet();
+            List<string> missingKeys = requiredKeys.Where(k => !presentKeys.Contains(k)).ToList();
+            if (missingKeys.Count > 0)
+            {
+                throw new InvalidOperationException(
+                    "Rules database is missing required rating definitions: "
+                    + string.Join(", ", missingKeys) + ".");
+            }
+
+            foreach (RatingDefinition definition in RatingDefinitions)
+            {
+                if (definition.Components.Count == 0)
+                {
+                    throw new InvalidOperationException(
+                        $"Rating definition '{definition.Key}' has no components.");
+                }
+                foreach (RatingComponent component in definition.Components)
+                {
+                    if (component.ComponentType == RatingComponentType.SkillTotal
+                        && !_baseSkillMap.ContainsKey(component.TargetId))
+                    {
+                        throw new InvalidOperationException(
+                            $"Rating definition '{definition.Key}' references base skill id "
+                            + $"{component.TargetId}, which is not in the rules database.");
+                    }
+                }
+            }
+
+            foreach (RatingAwardTier tier in RatingAwardTiers)
+            {
+                if (!presentKeys.Contains(tier.RatingKey))
+                {
+                    throw new InvalidOperationException(
+                        $"Rating award tier {tier.Id} references rating '{tier.RatingKey}', "
+                        + "which has no definition.");
+                }
+            }
         }
 
         public IReadOnlyList<Faction> GetNonPlayerFactions()

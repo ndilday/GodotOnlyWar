@@ -206,6 +206,21 @@ public class RulesDatabaseValidationTests
     }
 
     [Fact]
+    public void HitLocationTemplates_FlagProgenoidLocationsByNameForGeneseedLogic()
+    {
+        var rules = RulesDatabaseFixture.LoadRules();
+        var allHitLocations = rules.BodyTemplates.Values.SelectMany(hl => hl).ToList();
+
+        // The geneseed-status logic relies on HoldsProgenoid rather than hardcoded
+        // "Face"/"Torso" name checks; the flag must be set on exactly those locations.
+        Assert.Contains(allHitLocations, hl => hl.HoldsProgenoid);
+        Assert.All(allHitLocations.Where(hl => hl.HoldsProgenoid),
+            hl => Assert.Contains(hl.Name, new[] { "Face", "Torso" }));
+        Assert.All(allHitLocations.Where(hl => hl.Name is "Face" or "Torso"),
+            hl => Assert.True(hl.HoldsProgenoid, $"Expected '{hl.Name}' to hold a progenoid."));
+    }
+
+    [Fact]
     public void BodyTemplates_DefineHitProbabilitiesForEveryStance()
     {
         var rules = RulesDatabaseFixture.LoadRules();

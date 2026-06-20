@@ -29,6 +29,7 @@ namespace OnlyWar.Helpers.Database.GameRules
                     bool isRanged = Convert.ToBoolean(reader[8]);
                     bool isMelee = Convert.ToBoolean(reader[9]);
                     bool isVital = Convert.ToBoolean(reader[10]);
+                    bool holdsProgenoid = Convert.ToBoolean(reader["HoldsProgenoid"]);
                     int[] hitProbabilityMap = stanceProbabilityMap[id];
                     HitLocationTemplate hitLocationTemplate =
                         new HitLocationTemplate
@@ -43,6 +44,7 @@ namespace OnlyWar.Helpers.Database.GameRules
                             IsRangedWeaponHolder = isRanged,
                             IsMeleeWeaponHolder = isMelee,
                             IsVital = isVital,
+                            HoldsProgenoid = holdsProgenoid,
                             HitProbabilityMap = hitProbabilityMap
                         };
                     if (!hitLocationTemplateMap.ContainsKey(bodyId))

@@ -1,4 +1,4 @@
-﻿using OnlyWar.Builders;
+using OnlyWar.Builders;
 using OnlyWar.Helpers.Battles;
 using OnlyWar.Models;
 using OnlyWar.Models.Missions;
@@ -18,7 +18,7 @@ namespace OnlyWar.Helpers.Missions.Recon
 
         public void ExecuteMissionStep(MissionContext context, float marginOfSuccess, IMissionStep returnStep)
         {
-            BaseSkill tactics = GameDataSingleton.Instance.GameRulesData.BaseSkillMap.Values.First(s => s.Name == "Tactics");
+            BaseSkill tactics = GameDataSingleton.Instance.GameRulesData.Skills.Tactics;
             // adjust for size of detecting force
             float difficulty = 10.0f;
             difficulty += (float)Math.Log(context.OpposingSquads.Sum(s => s.AbleSoldiers.Count), 10);

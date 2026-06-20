@@ -12,7 +12,6 @@ namespace OnlyWar.Helpers
     {
         public void UpdateRatings(Date date, PlayerSoldier soldier);
         public void EvaluateSoldier(PlayerSoldier soldier, Date trainingFinishedYear);
-        public void AwardSoldier(PlayerSoldier soldier, Date awardDate, string awardName, string type, ushort level);
         public void ApplySoldierWorkExperience(ISoldier soldier, float points);
         public void TrainScouts(IEnumerable<Squad> scoutSquads, Dictionary<int, TrainingFocuses> squadFocusMap, float points = 0.2f);
     }
@@ -21,95 +20,49 @@ namespace OnlyWar.Helpers
     {
         private readonly IReadOnlyDictionary<string, BaseSkill> _skillsByName;
         private readonly IReadOnlyDictionary<string, TrainingProfile> _trainingProfilesByName;
+        private readonly RatingCalculator _ratingCalculator;
+
+        // Base skills this calculator still references by name directly (work-experience
+        // and scout training). Rating-formula skills are now validated through the
+        // data-driven rating definitions instead (see Design/DataDrivenRatings.md).
+        // Exposed so the rules-DB load step can fail fast if any is missing (TDD §8.3).
+        public static readonly string[] RequiredSkillNames =
+        [
+            "Power Armor", "Teaching"
+        ];
 
         public SoldierTrainingCalculator(IEnumerable<BaseSkill> baseSkills,
-                                         IEnumerable<TrainingProfile> trainingProfiles = null)
+                                         IEnumerable<TrainingProfile> trainingProfiles = null,
+                                         RatingCalculator ratingCalculator = null)
         {
             _skillsByName = baseSkills.ToDictionary(bs => bs.Name);
             _trainingProfilesByName = trainingProfiles?.ToDictionary(tp => tp.Name)
                 ?? new Dictionary<string, TrainingProfile>();
+            _ratingCalculator = ratingCalculator;
         }
 
         public void UpdateRatings(Date date, PlayerSoldier soldier)
         {
-            // Melee score = (STR * Melee)
-            // Expected score = 16 * 16 * 15.5/8 = 1000
-            // low-end = 15 * 15 * 14/8 = 850
-            // high-end = 17 * 17 * 16/8 = 578
-            float meleeRating = 
-                soldier.Strength * soldier.GetTotalSkillValue(_skillsByName["Sword"]) 
-                / (float)(RNG.GetDoubleInRange(1.44f, 1.76f) * RNG.GetDoubleInRange(1.44f, 1.76f));
-            // marksman, sharpshooter, sniper
-            // Ranged Score = PER * Ranged
-            Skill bestRanged = soldier.GetBestSkillInCategory(SkillCategory.Ranged);
-            float rangedRating =
-                    (soldier.Dexterity + bestRanged.SkillBonus)
-                    / (float)RNG.GetDoubleInRange(0.144f, 0.176f); 
-            // Leadership Score = CHA * Leadership * Tactics
-            float leadershipRating = soldier.Ego
-                * soldier.GetTotalSkillValue(_skillsByName["Leadership"])
-                * soldier.GetTotalSkillValue(_skillsByName["Tactics"])
-                / (float)(RNG.GetDoubleInRange(12.6f, 15.4f) * RNG.GetDoubleInRange(1.26f, 1.54f) * RNG.GetDoubleInRange(1.26f, 1.54f));
-            // Ancient Score = EGO * BOD
-            float ancientRating = soldier.Ego * soldier.Constitution
-                / (float)(RNG.GetDoubleInRange(1.26f, 1.54f) * RNG.GetDoubleInRange(2.88f, 3.52f));
-            // Medical Score = INT * Medicine
-            float medicalRating = 
-                soldier.GetTotalSkillValue(_skillsByName["Diagnosis"])
-                * soldier.GetTotalSkillValue(_skillsByName["First Aid"])
-                / (float)(RNG.GetDoubleInRange(0.99f, 1.21f) * RNG.GetDoubleInRange(1.17f, 1.43f));
-            // Tech Score =  INT * TechRapair
-            float techRating = 
-                soldier.GetTotalSkillValue(_skillsByName["Armory (Small Arms)"])
-                * soldier.GetTotalSkillValue(_skillsByName["Armory (Vehicle)"])
-                / (float)(RNG.GetDoubleInRange(1.17f, 1.43f) * RNG.GetDoubleInRange(1.17f, 1.43f));
-            // Piety Score = Piety * Ritual * Persuade
-            float pietyRating = 
-                soldier.GetTotalSkillValue(_skillsByName["Theology (Emperor of Man)"])
-                / (float)RNG.GetDoubleInRange(0.108f, 0.132f);
-
-            SoldierEvaluation eval = new(date, meleeRating, rangedRating, leadershipRating, ancientRating, medicalRating, techRating, pietyRating);
+            RequireRatingCalculator();
+            SoldierEvaluation eval = _ratingCalculator.Evaluate(soldier, date);
             soldier.AddEvaluation(eval);
         }
 
         public void EvaluateSoldier(PlayerSoldier soldier, Date trainingFinishedYear)
         {
+            RequireRatingCalculator();
             UpdateRatings(trainingFinishedYear, soldier);
             SoldierEvaluation eval = soldier.SoldierEvaluationHistory.Last();
-
-            if (eval.MeleeRating > 115) AwardSoldier(soldier, trainingFinishedYear, "Adamantium Sword of the Emperor", "Sword", 4);
-            else if (eval.MeleeRating > 105) AwardSoldier(soldier, trainingFinishedYear, "Gold Sword of the Emperor", "Sword", 3);
-            else if (eval.MeleeRating > 99) AwardSoldier(soldier, trainingFinishedYear, "Silver Sword of the Emperor", "Sword", 2);
-            else if (eval.MeleeRating > 90) AwardSoldier(soldier, trainingFinishedYear, "Bronze Sword of the Emperor", "Sword", 1);
-
-            if (eval.RangedRating > 120) AwardSoldier(soldier, trainingFinishedYear, $"Adamantium {soldier.GetBestSkillInCategory(SkillCategory.Ranged).BaseSkill.Name} of the Emperor", "Gun", 4);
-            else if (eval.RangedRating > 115) AwardSoldier(soldier, trainingFinishedYear, $"Gold {soldier.GetBestSkillInCategory(SkillCategory.Ranged).BaseSkill.Name} of the Emperor", "Gun", 3);
-            else if (eval.RangedRating > 110) AwardSoldier(soldier, trainingFinishedYear, $"Silver {soldier.GetBestSkillInCategory(SkillCategory.Ranged).BaseSkill.Name} of the Emperor", "Gun", 2);
-            else if (eval.RangedRating > 105) AwardSoldier(soldier, trainingFinishedYear, $"Bronze {soldier.GetBestSkillInCategory(SkillCategory.Ranged).BaseSkill.Name} of the Emperor", "Gun", 1);
-
-            if(eval.LeadershipRating > 95) AwardSoldier(soldier, trainingFinishedYear, "Adamantium Voice of the Emperor", "Voice", 4);
-            else if (eval.LeadershipRating > 65) AwardSoldier(soldier, trainingFinishedYear, "Gold Voice of the Emperor", "Voice", 3);
-            else if (eval.LeadershipRating > 55) AwardSoldier(soldier, trainingFinishedYear, "Silver Voice of the Emperor", "Voice", 2);
-            else if (eval.LeadershipRating > 50) AwardSoldier(soldier, trainingFinishedYear, "Bronze Voice of the Emperor", "Voice", 1);
-
-            if(eval.AncientRating > 112) AwardSoldier(soldier, trainingFinishedYear, "Admantium Banner of the Emperor", "Banner", 4);
-            if (eval.AncientRating > 100) AwardSoldier(soldier, trainingFinishedYear, "Gold Banner of the Emperor", "Banner", 3);
-            else if (eval.AncientRating > 95) AwardSoldier(soldier, trainingFinishedYear, "Silver Banner of the Emperor", "Banner", 2);
-            else if (eval.AncientRating > 85) AwardSoldier(soldier, trainingFinishedYear, "Bronze Banner of the Emperor", "Banner", 1);
-
-            if (eval.MedicalRating > 115) soldier.AddEntryToHistory(trainingFinishedYear.ToString() + ": Flagged for potential training as Apothecary");
-
-            if (eval.TechRating > 80) soldier.AddEntryToHistory(trainingFinishedYear.ToString() + ": Flagged for potential training as Techmarine");
-
-            if (eval.PietyRating > 50) soldier.AddEntryToHistory(trainingFinishedYear.ToString() + ": Awarded Devout badge and declared a Novice");
+            _ratingCalculator.ApplyAwards(soldier, eval, trainingFinishedYear);
         }
 
-        public void AwardSoldier(PlayerSoldier soldier, Date awardDate, string awardName, string type, ushort level)
+        private void RequireRatingCalculator()
         {
-            if(!soldier.SoldierAwards.Any(a => a.Type == type && a.Level >= level))
+            if (_ratingCalculator == null)
             {
-                soldier.AddEntryToHistory(awardDate.ToString() + ": Awarded " + awardName);
-                soldier.AddAward(new SoldierAward(awardDate, awardName, type, level));
+                throw new InvalidOperationException(
+                    "This SoldierTrainingCalculator was constructed without a RatingCalculator; "
+                    + "rating evaluation and awards are unavailable.");
             }
         }
 

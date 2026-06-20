@@ -136,7 +136,10 @@ namespace OnlyWar.Helpers
         private static ISoldierTrainingService CreateTrainingService()
         {
             GameRulesData rules = GameDataSingleton.Instance.GameRulesData;
-            return new SoldierTrainingCalculator(rules.BaseSkillMap.Values, rules.TrainingProfiles.Values);
+            RatingCalculator ratingCalculator = new(rules.RatingDefinitions, rules.RatingAwardTiers,
+                                                    rules.BaseSkillMap, StaticRNG.Instance);
+            return new SoldierTrainingCalculator(rules.BaseSkillMap.Values, rules.TrainingProfiles.Values,
+                                                 ratingCalculator);
         }
 
         private void ProcessCombatMissions(IEnumerable<Order> combatOrders)

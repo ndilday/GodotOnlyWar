@@ -1,4 +1,4 @@
-﻿using OnlyWar.Helpers.Missions.Recon;
+using OnlyWar.Helpers.Missions.Recon;
 using OnlyWar.Models.Missions;
 using OnlyWar.Models.Planets;
 using OnlyWar.Models.Soldiers;
@@ -20,7 +20,7 @@ namespace OnlyWar.Helpers.Missions.Sabotage
             // mod for terrain
             // mod for enemy recon focus
             // mod for equipment
-            BaseSkill stealth = GameDataSingleton.Instance.GameRulesData.BaseSkillMap.Values.First(s => s.Name == "Stealth");
+            BaseSkill stealth = GameDataSingleton.Instance.GameRulesData.Skills.Stealth;
             RegionFaction enemyFaction = context.Order.Mission.RegionFaction;
             float difficulty = enemyFaction.Detection;
             // every degree of magnitude of troops adds one to the difficulty

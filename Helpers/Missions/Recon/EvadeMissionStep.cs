@@ -1,4 +1,4 @@
-﻿using OnlyWar.Models.Missions;
+using OnlyWar.Models.Missions;
 using OnlyWar.Models.Orders;
 using OnlyWar.Models.Soldiers;
 using OnlyWar.Models;
@@ -17,7 +17,7 @@ namespace OnlyWar.Helpers.Missions.Recon
             context.Log.Add($"Day {context.DaysElapsed}: Force attempting to escape enemy force");
             // modify by speeds of each side
             // TODO: increase difficulty based on enemy force size?
-            BaseSkill tactics = GameDataSingleton.Instance.GameRulesData.BaseSkillMap.Values.First(s => s.Name == "Tactics");
+            BaseSkill tactics = GameDataSingleton.Instance.GameRulesData.Skills.Tactics;
             float enemySpeed = context.OpposingSquads.Average(s => s.GetSquadMove());
             float playerSpeed = context.MissionSquads.Average(s => s.GetSquadMove());
             float difficulty = 10f - playerSpeed + enemySpeed + marginOfSuccess;

@@ -382,10 +382,6 @@ public class TurnTrainingTests
         {
         }
 
-        public void AwardSoldier(PlayerSoldier soldier, Date awardDate, string awardName, string type, ushort level)
-        {
-        }
-
         public void ApplySoldierWorkExperience(ISoldier soldier, float points)
         {
             WorkExperienceSoldiers.Add(soldier);

@@ -71,6 +71,9 @@ public class NewChapterBuilderTests
 
     private ISoldierTrainingService CreateTrainingService()
     {
-        return new SoldierTrainingCalculator(_data.BaseSkillMap.Values, _data.TrainingProfiles.Values);
+        RatingCalculator ratingCalculator = new(_data.RatingDefinitions, _data.RatingAwardTiers,
+                                                _data.BaseSkillMap, StaticRNG.Instance);
+        return new SoldierTrainingCalculator(_data.BaseSkillMap.Values, _data.TrainingProfiles.Values,
+                                             ratingCalculator);
     }
 }

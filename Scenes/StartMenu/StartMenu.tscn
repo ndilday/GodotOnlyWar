@@ -1,11 +1,11 @@
-[gd_scene load_steps=4 format=3 uid="uid://b5sny34jdvj4p"]
+[gd_scene format=3 uid="uid://b5sny34jdvj4p"]
 
-[ext_resource type="Script" uid="uid://o0v21k1awlev" path="res://Scenes/StartMenu/StartMenu.cs" id="1_k7bfn"]
-[ext_resource type="Texture2D" uid="uid://drpw28d377tlh" path="res://Scenes/StartMenu/burningBuilding.jpg" id="1_vpgy8"]
+[ext_resource type="Script" uid="uid://b5nqptg3a5lk0" path="res://Scenes/StartMenu/StartMenu.cs" id="1_k7bfn"]
+[ext_resource type="Texture2D" uid="uid://ctmlrbe1rvbf1" path="res://Scenes/StartMenu/burningBuilding.jpg" id="1_vpgy8"]
 
 [sub_resource type="Theme" id="Theme_hbxc8"]
 
-[node name="StartMenu" type="Control"]
+[node name="StartMenu" type="Control" unique_id=812985460]
 layout_mode = 3
 anchors_preset = 15
 anchor_right = 1.0
@@ -14,7 +14,7 @@ grow_horizontal = 2
 grow_vertical = 2
 script = ExtResource("1_k7bfn")
 
-[node name="BackgroundImage" type="TextureRect" parent="."]
+[node name="BackgroundImage" type="TextureRect" parent="." unique_id=799331754]
 layout_mode = 0
 offset_left = -150.0
 offset_right = 2850.0
@@ -22,7 +22,7 @@ offset_bottom = 1993.0
 scale = Vector2(0.39, 0.39)
 texture = ExtResource("1_vpgy8")
 
-[node name="TitleLabel" type="RichTextLabel" parent="."]
+[node name="TitleLabel" type="RichTextLabel" parent="." unique_id=1807327503]
 layout_mode = 1
 anchors_preset = 5
 anchor_left = 0.5
@@ -37,7 +37,7 @@ text = "ONLY WAR"
 scroll_active = false
 tab_size = 3
 
-[node name="NewGameButton" type="Button" parent="."]
+[node name="NewGameButton" type="Button" parent="." unique_id=192776018]
 layout_mode = 0
 offset_left = 474.0
 offset_top = 426.0
@@ -45,7 +45,7 @@ offset_right = 567.0
 offset_bottom = 457.0
 text = "New Game"
 
-[node name="LoadGameButton" type="Button" parent="."]
+[node name="LoadGameButton" type="Button" parent="." unique_id=646845223]
 layout_mode = 0
 offset_left = 474.0
 offset_top = 468.0

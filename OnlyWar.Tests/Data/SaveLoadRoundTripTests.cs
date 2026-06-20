@@ -6,6 +6,8 @@ using OnlyWar.Builders;
 using OnlyWar.Helpers;
 using OnlyWar.Helpers.Database.GameState;
 using OnlyWar.Models;
+using OnlyWar.Models.Soldiers;
+using OnlyWar.Models.Soldiers.Ratings;
 using OnlyWar.Models.Squads;
 using OnlyWar.Models.Units;
 using OnlyWar.Tests.Fixtures;
@@ -63,6 +65,18 @@ public class SaveLoadRoundTripTests
             Assert.Equal(CountSoldiers(originalUnits), CountSoldiers(loaded.Units));
             Assert.Equal(CountSquads(originalUnits), CountSquads(loaded.Units));
             Assert.Equal(TotalPopulation(sector.Planets.Values), TotalPopulation(loaded.Planets));
+
+            // Open-ended evaluation ratings survive the round trip (the SoldierEvaluation
+            // / SoldierEvaluationRating split). Every loaded evaluation carries its keyed
+            // rating values.
+            List<SoldierEvaluation> loadedEvaluations = loaded.Units
+                .SelectMany(u => u.GetAllSquads())
+                .SelectMany(s => s.Members)
+                .OfType<PlayerSoldier>()
+                .SelectMany(ps => ps.SoldierEvaluationHistory)
+                .ToList();
+            Assert.NotEmpty(loadedEvaluations);
+            Assert.All(loadedEvaluations, e => Assert.Contains(RatingKeys.Melee, e.Ratings.Keys));
         }
         finally
         {

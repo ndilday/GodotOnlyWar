@@ -42,7 +42,10 @@ namespace OnlyWar.Builders
             }
 
             Date trainingStartDate = new Date(currentDate.Millenium, currentDate.Year - 4, 1);
-            ISoldierTrainingService trainingService = new SoldierTrainingCalculator(data.BaseSkillMap.Values, data.TrainingProfiles.Values);
+            RatingCalculator ratingCalculator = new(data.RatingDefinitions, data.RatingAwardTiers,
+                                                    data.BaseSkillMap, StaticRNG.Instance);
+            ISoldierTrainingService trainingService = new SoldierTrainingCalculator(
+                data.BaseSkillMap.Values, data.TrainingProfiles.Values, ratingCalculator);
             PlayerForce playerForce = NewChapterBuilder.CreateChapter(data, trainingService, trainingStartDate, currentDate, chapterName);
             FoundTakebackPlanet(playerForce, planetList, forceList);
             //Planet chapterPlanet = FoundChapterPlanet(planetList, data.PlayerFaction);
@@ -75,19 +78,19 @@ namespace OnlyWar.Builders
             Faction controllingFaction, infiltratingFaction;
             if (random <= 0.05f)
             {
-                controllingFaction = data.Factions.First(f => f.Name == "Genestealer Cult");
+                controllingFaction = data.SectorFactions.Infiltrator;
                 infiltratingFaction = null;
             }
             else if (random <= 0.25f)
             {
-                controllingFaction = data.Factions.First(f => f.Name == "Tyranids");
+                controllingFaction = data.SectorFactions.Invader;
                 infiltratingFaction = null;
             }
             else
             {
                 controllingFaction = data.DefaultFaction;
                 random = RNG.GetLinearDouble();
-                infiltratingFaction = random <= 0.1 ? data.Factions.First(f => f.Name == "Genestealer Cult") : null;
+                infiltratingFaction = random <= 0.1 ? data.SectorFactions.Infiltrator : null;
             }
 
             return PlanetBuilder.Instance.GenerateNewPlanet(data.PlanetTemplateMap, position, controllingFaction, infiltratingFaction);

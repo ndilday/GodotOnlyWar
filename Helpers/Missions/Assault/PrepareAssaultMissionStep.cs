@@ -1,4 +1,4 @@
-﻿using OnlyWar.Builders;
+using OnlyWar.Builders;
 using OnlyWar.Helpers.Battles;
 using OnlyWar.Models;
 using OnlyWar.Models.Missions;
@@ -17,7 +17,7 @@ namespace OnlyWar.Helpers.Missions.Assault
         public void ExecuteMissionStep(MissionContext context, float marginOfSuccess, IMissionStep returnStep)
         {
             // The attacker's preparation check remains the same
-            BaseSkill tactics = GameDataSingleton.Instance.GameRulesData.BaseSkillMap.Values.First(s => s.Name == "Tactics");
+            BaseSkill tactics = GameDataSingleton.Instance.GameRulesData.Skills.Tactics;
             LeaderMissionTest missionTest = new LeaderMissionTest(tactics, 10.0f);
             context.Log.Add($"Day {context.DaysElapsed}: Force prepares to assault {context.Order.Mission.RegionFaction.Region.Name}");
             float margin = missionTest.RunMissionCheck(context.MissionSquads);

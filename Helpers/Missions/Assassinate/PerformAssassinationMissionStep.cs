@@ -1,4 +1,4 @@
-﻿using OnlyWar.Helpers.Missions.Recon;
+using OnlyWar.Helpers.Missions.Recon;
 using OnlyWar.Models.Missions;
 using OnlyWar.Models.Planets;
 using OnlyWar.Models.Soldiers;
@@ -17,7 +17,7 @@ namespace OnlyWar.Helpers.Missions.Assassinate
 
         public void ExecuteMissionStep(MissionContext context, float marginOfSuccess, IMissionStep returnStep)
         {
-            BaseSkill tactics = GameDataSingleton.Instance.GameRulesData.BaseSkillMap.Values.First(s => s.Name == "Tactics");
+            BaseSkill tactics = GameDataSingleton.Instance.GameRulesData.Skills.Tactics;
             // size 1: Prime
             // size 2: Broodlord
             // size 3: Hive Tyrant

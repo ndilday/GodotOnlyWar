@@ -40,7 +40,10 @@ CREATE TABLE PlayerFactionEvent (Id INTEGER PRIMARY KEY UNIQUE NOT NULL, Milleni
 CREATE TABLE PlayerSoldier (SoldierId INTEGER PRIMARY KEY REFERENCES Soldier (Id) UNIQUE NOT NULL, ImplantMillenium INTEGER NOT NULL, ImplantYear INTEGER NOT NULL, ImplantWeek INTEGER NOT NULL);
 
 -- Table: SoldierEvaluation
-CREATE TABLE SoldierEvaluation (SoldierId INTEGER NOT NULL REFERENCES Soldier (Id), Millenium INTEGER NOT NULL, Year INTEGER NOT NULL, Week INTEGER NOT NULL, MeleeRating REAL, RangedRating REAL, LeadershipRating REAL, MedicalRating REAL, TechRating REAL, PietyRating REAL, AncientRating REAL);
+CREATE TABLE SoldierEvaluation (SoldierId INTEGER NOT NULL REFERENCES Soldier (Id), Millenium INTEGER NOT NULL, Year INTEGER NOT NULL, Week INTEGER NOT NULL);
+
+-- Table: SoldierEvaluationRating (open-ended: one row per rating value)
+CREATE TABLE SoldierEvaluationRating (SoldierId INTEGER NOT NULL REFERENCES Soldier (Id), Millenium INTEGER NOT NULL, Year INTEGER NOT NULL, Week INTEGER NOT NULL, RatingKey STRING NOT NULL, Value REAL NOT NULL);
 
 -- Table: SoldierAward
 CREATE TABLE SoldierAward (SoldierId INTEGER NOT NULL REFERENCES Soldier (Id), Millenium INTEGER NOT NULL, Year INTEGER NOT NULL, Week INTEGER NOT NULL, Name STRING NOT NULL, Type STRING NOT NULL, Level INTEGER NOT NULL);

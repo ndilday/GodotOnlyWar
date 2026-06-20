@@ -1,4 +1,4 @@
-﻿using OnlyWar.Helpers.Missions.Recon;
+using OnlyWar.Helpers.Missions.Recon;
 using OnlyWar.Models;
 using OnlyWar.Models.Missions;
 using OnlyWar.Models.Orders;
@@ -15,7 +15,7 @@ namespace OnlyWar.Helpers.Missions.Sabotage
 
         public void ExecuteMissionStep(MissionContext context, float marginOfSuccess, IMissionStep returnStep)
         {
-            BaseSkill tactics = GameDataSingleton.Instance.GameRulesData.BaseSkillMap.Values.First(s => s.Name == "Tactics");
+            BaseSkill tactics = GameDataSingleton.Instance.GameRulesData.Skills.Tactics;
             RegionFaction enemyFaction = context.Order.Mission.RegionFaction;
             float difficulty = enemyFaction.Entrenchment;
             difficulty += (float)Math.Log10(enemyFaction.Garrison);

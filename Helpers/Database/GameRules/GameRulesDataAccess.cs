@@ -26,6 +26,8 @@ namespace OnlyWar.Helpers.Database.GameRules
         public IReadOnlyDictionary<int, MeleeWeaponTemplate> MeleeWeaponTemplates { get; set; }
         public IReadOnlyDictionary<int, WeaponSet> WeaponSets { get; set; }
         public IReadOnlyDictionary<int, TrainingProfile> TrainingProfiles { get; set; }
+        public IReadOnlyList<Models.Soldiers.Ratings.RatingDefinition> RatingDefinitions { get; set; }
+        public IReadOnlyList<Models.Soldiers.Ratings.RatingAwardTier> RatingAwardTiers { get; set; }
 
     }
 
@@ -36,6 +38,7 @@ namespace OnlyWar.Helpers.Database.GameRules
         private readonly FleetDataAccess _fleetDataAccess;
         private readonly PlanetTemplateDataAccess _planetDataAccess;
         private readonly SquadTemplateDataAccess _squadDataAccess;
+        private readonly RatingDataAccess _ratingDataAccess;
 
         private static GameRulesDataAccess _instance;
 
@@ -46,6 +49,7 @@ namespace OnlyWar.Helpers.Database.GameRules
             _fleetDataAccess = new FleetDataAccess();
             _planetDataAccess = new PlanetTemplateDataAccess();
             _squadDataAccess = new SquadTemplateDataAccess();
+            _ratingDataAccess = new RatingDataAccess();
         }
 
         public static GameRulesDataAccess Instance
@@ -88,6 +92,8 @@ namespace OnlyWar.Helpers.Database.GameRules
                                                fleetDataBlob.BoatTemplates, 
                                                fleetDataBlob.ShipTemplates, 
                                                fleetDataBlob.FleetTemplates);
+            var ratingDefinitions = _ratingDataAccess.GetRatingDefinitions(dbCon);
+            var ratingAwardTiers = _ratingDataAccess.GetRatingAwardTiers(dbCon);
             dbCon.Close();
             return new GameRulesBlob
             {
@@ -99,7 +105,9 @@ namespace OnlyWar.Helpers.Database.GameRules
                 RangedWeaponTemplates = squadDataBlob.RangedWeaponTemplateMap,
                 MeleeWeaponTemplates = squadDataBlob.MeleeWeaponTemplateMap,
                 WeaponSets = squadDataBlob.WeaponSetMap,
-                TrainingProfiles = squadDataBlob.TrainingProfilesById
+                TrainingProfiles = squadDataBlob.TrainingProfilesById,
+                RatingDefinitions = ratingDefinitions,
+                RatingAwardTiers = ratingAwardTiers
             };
         }
 

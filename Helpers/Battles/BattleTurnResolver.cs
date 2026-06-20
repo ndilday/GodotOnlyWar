@@ -1,4 +1,4 @@
-﻿using Godot;
+using Godot;
 using OnlyWar.Helpers.Battles.Actions;
 using OnlyWar.Helpers.Battles.Resolutions;
 using OnlyWar.Models;
@@ -136,16 +136,20 @@ namespace OnlyWar.Helpers.Battles
             // use the thread pool to handle the BattleSquadPlanner classes;
             // these look at the current game state to figure out the actions each soldier should take
             // the planners populate the actionBag with what they want to do
-            MeleeWeapon defaultWeapon = new MeleeWeapon(
-                GameDataSingleton.Instance.GameRulesData.MeleeWeaponTemplates.Values
-                    .First(mwt => mwt.Name == "Fist"));
+            // Unarmed soldiers fall back to a default "Fist". The player (Space Marines)
+            // uses the Imperial Fist keyed to the "Fist" skill; non-Imperial opponents use
+            // the Fist keyed to the catch-all "Generic Melee" skill. Both are resolved and
+            // validated at load via the BattleDefaults registry (see TDD §8.3).
+            BattleDefaults battleDefaults = GameDataSingleton.Instance.GameRulesData.BattleDefaults;
+            MeleeWeapon playerDefaultWeapon = new MeleeWeapon(battleDefaults.ImperialUnarmedWeapon);
+            MeleeWeapon opposingDefaultWeapon = new MeleeWeapon(battleDefaults.GenericUnarmedWeapon);
             //Parallel.ForEach(_playerSquads.Values, (squad) =>
             foreach (BattleSquad squad in _currentState.PlayerSquads.Values)
             {
                 BattleSquadPlanner planner = new BattleSquadPlanner(_grid, _currentState.Soldiers,
                                                                     shootSegmentActions, moveSegmentActions,
                                                                     meleeSegmentActions,
-                                                                    log, defaultWeapon);
+                                                                    log, playerDefaultWeapon);
                 planner.PrepareActions(squad);
             };
             //Parallel.ForEach(_opposingSquads.Values, (squad) =>
@@ -154,7 +158,7 @@ namespace OnlyWar.Helpers.Battles
                 BattleSquadPlanner planner = new BattleSquadPlanner(_grid, _currentState.Soldiers,
                                                                     shootSegmentActions, moveSegmentActions,
                                                                     meleeSegmentActions,
-                                                                    log, defaultWeapon);
+                                                                    log, opposingDefaultWeapon);
                 planner.PrepareActions(squad);
             };
         }
@@ -392,7 +396,7 @@ namespace OnlyWar.Helpers.Battles
                         }
                         else
                         {
-                            BaseSkill baseMeleeSkill = GameDataSingleton.Instance.GameRulesData.BaseSkillMap.Values.First(bs => bs.Name == "Fist");
+                            BaseSkill baseMeleeSkill = GameDataSingleton.Instance.GameRulesData.Skills.Fist;
                             soldier.Soldier.AddSkillPoints(baseMeleeSkill, soldier.TurnsSwinging * 0.0005f);
                         }
                         soldier.Soldier.AddAttributePoints(Models.Soldiers.Attribute.Strength, soldier.TurnsSwinging * 0.0005f);
@@ -447,11 +451,11 @@ namespace OnlyWar.Helpers.Battles
 
         private string GetGeneseedStatusDescription(PlayerSoldier soldier)
         {
-            if (soldier.Body.HitLocations.First(hl => hl.Template.Name == "Face").IsSevered)
-            {
-                return "Destroyed";
-            }
-            else if (soldier.Body.HitLocations.First(hl => hl.Template.Name == "Torso").IsSevered)
+            // The progenoid glands are destroyed (and the geneseed lost) if any
+            // progenoid-bearing location is severed. Which locations carry a
+            // progenoid is rules data (HitLocationTemplate.HoldsProgenoid), not a
+            // hardcoded name (TDD §8.3).
+            if (soldier.Body.HitLocations.Any(hl => hl.Template.HoldsProgenoid && hl.IsSevered))
             {
                 return "Destroyed";
             }
