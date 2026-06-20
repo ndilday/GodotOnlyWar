@@ -34,7 +34,7 @@ namespace OnlyWar.Helpers.Database.GameState
 
             foreach (KeyValuePair<int, ushort> weaponCasualtyCount in playerSoldier.RangedWeaponCasualtyCountMap)
             {
-                insert = $@"INSERT INTO PlayerSoldierRamgedWeaponCasualtyCount VALUES ({playerSoldier.Id}, 
+                insert = $@"INSERT INTO PlayerSoldierRangedWeaponCasualtyCount VALUES ({playerSoldier.Id},
                     {weaponCasualtyCount.Key}, {weaponCasualtyCount.Value});";
                 using (var command = transaction.Connection.CreateCommand())
                 {
@@ -91,9 +91,9 @@ namespace OnlyWar.Helpers.Database.GameState
 
             foreach (SoldierAward award in playerSoldier.SoldierAwards)
             {
-                insert = $@"INSERT INTO SoldierAward VALUES ({playerSoldier.Id}, 
+                insert = $@"INSERT INTO SoldierAward VALUES ({playerSoldier.Id},
                 {award.DateAwarded.Millenium}, {award.DateAwarded.Year}, {award.DateAwarded.Week},
-                {award.Name}, {award.Type}, {award.Level})";
+                '{award.Name.Replace("\'", "\'\'")}', '{award.Type.Replace("\'", "\'\'")}', {award.Level})";
                 using (var command = transaction.Connection.CreateCommand())
                 {
                     command.CommandText = insert;

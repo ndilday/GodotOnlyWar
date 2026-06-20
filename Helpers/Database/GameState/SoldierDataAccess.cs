@@ -1,5 +1,6 @@
 ﻿using OnlyWar.Models.Soldiers;
 using OnlyWar.Models.Squads;
+using System;
 using System.Collections.Generic;
 using System.Data;
 
@@ -71,7 +72,7 @@ namespace OnlyWar.Helpers.Database.GameState
                     int soldierId = reader.GetInt32(0);
                     int hitLocationTemplateId = reader.GetInt32(1);
                     bool isCybernetic = reader.GetBoolean(2);
-                    float armor = (float)reader[3];
+                    float armor = Convert.ToSingle(reader[3]);
                     int woundTotal = reader.GetInt32(4);
                     int weeksOfHealing = reader.GetInt32(5);
                     HitLocation hitLocation =
@@ -100,7 +101,7 @@ namespace OnlyWar.Helpers.Database.GameState
                 {
                     int soldierId = reader.GetInt32(0);
                     int baseSkillId = reader.GetInt32(1);
-                    float points = (float)reader[2];
+                    float points = Convert.ToSingle(reader[2]);
                     BaseSkill baseSkill = baseSkillMap[baseSkillId];
 
                     Skill skill = new Skill(baseSkill, points);
@@ -132,17 +133,17 @@ namespace OnlyWar.Helpers.Database.GameState
                     int soldierTemplateId = reader.GetInt32(1);
                     int squadId = reader.GetInt32(2);
                     string name = reader[3].ToString();
-                    float strength = (float)reader[4];
-                    float dexterity = (float)reader[5];
-                    float constitution = (float)reader[6];
-                    float intelligence = (float)reader[7];
-                    float perception = (float)reader[8];
-                    float ego = (float)reader[9];
-                    float charisma = (float)reader[10];
-                    float psychic = (float)reader[11];
-                    float attack = (float)reader[12];
-                    float size = (float)reader[13];
-                    float move = (float)reader[14];
+                    float strength = Convert.ToSingle(reader[4]);
+                    float dexterity = Convert.ToSingle(reader[5]);
+                    float constitution = Convert.ToSingle(reader[6]);
+                    float intelligence = Convert.ToSingle(reader[7]);
+                    float perception = Convert.ToSingle(reader[8]);
+                    float ego = Convert.ToSingle(reader[9]);
+                    float charisma = Convert.ToSingle(reader[10]);
+                    float psychic = Convert.ToSingle(reader[11]);
+                    float attack = Convert.ToSingle(reader[12]);
+                    float size = Convert.ToSingle(reader[13]);
+                    float move = Convert.ToSingle(reader[14]);
 
 
                     Soldier soldier = new Soldier(hitLocationMap[id], skillMap[id])

@@ -265,10 +265,10 @@ namespace OnlyWar.Helpers.Database.GameState
         public void SaveOrder(IDbTransaction transaction, Order order)
         {
             // CREATE TABLE Assignment (Id INTEGER PRIMARY KEY UNIQUE NOT NULL, MissionId INTEGER NOT NULL REFERENCES Mission (Id), Disposition INTEGER NOT NULL, IsQuiet BOOLEAN NOT NULL, IsActivelyEngaging BOOLEAN NOT NULL, Aggression INTEGER NOT NULL);
-            string insert = $@"INSERT INTO Assignment VALUES 
-            ({ order.Id}, {order.Mission.Id}, {order.Mission.RegionFaction.Region.Id}, 
-                {order.Disposition}, {order.IsQuiet}, {order.IsActivelyEngaging}, 
-                {order.LevelOfAggression});";
+            string insert = $@"INSERT INTO Assignment VALUES
+            ({order.Id}, {order.Mission.Id},
+                {(int)order.Disposition}, {(order.IsQuiet ? 1 : 0)}, {(order.IsActivelyEngaging ? 1 : 0)},
+                {(int)order.LevelOfAggression});";
             using (var command = transaction.Connection.CreateCommand())
             {
                 command.CommandText = insert;

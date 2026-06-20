@@ -82,6 +82,10 @@ public partial class SectorMap : Node2D
     private const float SeamSimplificationMaxBridgeCellFraction = 8.0f;
     private const int SeamCurveSamplesPerSegment = 10;
 
+    // PROTOTYPE: when true, subsector regions are drawn from a constrained Voronoi
+    // tessellation (VoronoiSubsectorMapper) instead of the grid-traced/smoothed polygons.
+    private const bool UseVoronoiBorders = true;
+
     public event EventHandler<int> PlanetClicked;
     public event EventHandler<int> PlanetDoubleClicked;
     public event EventHandler<int> FleetClicked;
@@ -99,6 +103,7 @@ public partial class SectorMap : Node2D
 	
 	private Dictionary<ushort, List<Vector2I>> _subsectorVertexListMap = [];
     private List<Vector2[]> _subsectorBoundaryPaths = [];
+    private Dictionary<ushort, List<Vector2[]>> _voronoiSubsectorLoops = [];
 	private Dictionary<ushort, HashSet<ushort>> _subsectorAdjacencyMap = [];
 	private Dictionary<ushort, int> _subsectorColorIndexMap = [];
     private int? _selectedPlanetId;
@@ -152,6 +157,23 @@ public partial class SectorMap : Node2D
         ValidateSubsectorColoring(_subsectorAdjacencyMap, _subsectorColorIndexMap);
         _subsectorVertexListMap = DetermineSubsectorBorderPoints(subsectors);
         _subsectorBoundaryPaths = DetermineSubsectorBoundaryPaths();
+        if (UseVoronoiBorders)
+        {
+            Dictionary<ushort, List<Planet>> subsectorPlanetMap =
+                subsectors.ToDictionary(subsector => subsector.Id, subsector => subsector.Planets);
+            var voronoiBorders = OnlyWar.Helpers.VoronoiSubsectorMapper.BuildSubsectorLoops(
+                subsectorPlanetMap,
+                GridDimensions,
+                GameDataSingleton.Instance.GameRulesData.MaxSubsectorCellDiameter);
+            _voronoiSubsectorLoops = voronoiBorders.Loops;
+
+            // Recolor from the Voronoi adjacency (shared border edges) so that
+            // neighboring subsectors never share a palette color.
+            EnsureAdjacencyEntries(voronoiBorders.Adjacency, subsectors.Select(subsector => subsector.Id));
+            _subsectorAdjacencyMap = voronoiBorders.Adjacency;
+            _subsectorColorIndexMap = AssignSubsectorColorIndexes(_subsectorAdjacencyMap);
+            ValidateSubsectorColoring(_subsectorAdjacencyMap, _subsectorColorIndexMap);
+        }
         TaskForce centerFleet = GameDataSingleton.Instance.Sector.PlayerForce.Fleet.TaskForces.FirstOrDefault();
         Coordinate? centerPosition = centerFleet?.Planet?.Position ?? centerFleet?.Position;
         if (centerPosition == null)
@@ -178,7 +200,16 @@ public partial class SectorMap : Node2D
 	public override void _Draw()
 	{
 		base._Draw();
-        if (!GameDataSingleton.Instance.IsInitialized || _subsectorVertexListMap.Count == 0) return;
+        if (!GameDataSingleton.Instance.IsInitialized) return;
+
+        if (UseVoronoiBorders && _voronoiSubsectorLoops.Count > 0)
+        {
+            DrawVoronoiSubsectors();
+            DrawSelectedSystemOverlay();
+            return;
+        }
+
+        if (_subsectorVertexListMap.Count == 0) return;
 
 		foreach (var kvp in _subsectorVertexListMap.OrderBy(kvp => kvp.Key))
 		{
@@ -320,6 +351,17 @@ public partial class SectorMap : Node2D
         }
     }
 
+    private static void EnsureAdjacencyEntries(Dictionary<ushort, HashSet<ushort>> adjacencyMap, IEnumerable<ushort> subsectorIds)
+    {
+        foreach (ushort subsectorId in subsectorIds)
+        {
+            if (!adjacencyMap.ContainsKey(subsectorId))
+            {
+                adjacencyMap[subsectorId] = [];
+            }
+        }
+    }
+
     private Color GetSubsectorColor(ushort subsectorId)
     {
         if (!_subsectorColorIndexMap.TryGetValue(subsectorId, out int colorIndex))
@@ -353,6 +395,41 @@ public partial class SectorMap : Node2D
         Vector2[] shadowStainPoints = ScalePolygon(smoothedPolygonPoints, centroid + offset, secondInset);
         Color shadowColor = TintSubsectorColor(baseColor, 0.72f);
         DrawColoredPolygon(shadowStainPoints, WithAlpha(shadowColor, SubsectorInnerStainAlpha * 0.8f));
+    }
+
+    private Vector2 GridToPixel(Vector2 gridPoint)
+    {
+        return new Vector2(
+            gridPoint.X * CellSize.X + HalfCellSize.X,
+            gridPoint.Y * CellSize.Y + HalfCellSize.Y);
+    }
+
+    private void DrawVoronoiSubsectors()
+    {
+        // Fills first, so the border strokes sit cleanly on top of every region.
+        foreach (var kvp in _voronoiSubsectorLoops.OrderBy(entry => entry.Key))
+        {
+            Color baseColor = GetSubsectorColor(kvp.Key);
+            foreach (Vector2[] loop in kvp.Value)
+            {
+                if (loop.Length < 3) continue;
+                Vector2[] pixelLoop = loop.Select(GridToPixel).ToArray();
+                DrawColoredPolygon(pixelLoop, WithAlpha(baseColor, SubsectorGlassFillAlpha));
+            }
+        }
+
+        foreach (var kvp in _voronoiSubsectorLoops.OrderBy(entry => entry.Key))
+        {
+            foreach (Vector2[] loop in kvp.Value)
+            {
+                if (loop.Length < 2) continue;
+                Vector2[] pixelLoop = loop.Select(GridToPixel).ToArray();
+                Vector2[] closedLoop = ClosePolygon(pixelLoop);
+                DrawPolyline(closedLoop, WithAlpha(SubsectorBorderShadowColor, 0.82f), 4.2f, true);
+                DrawPolyline(closedLoop, WithAlpha(SubsectorBorderGlowColor, 0.20f), 2.8f, true);
+                DrawPolyline(closedLoop, WithAlpha(SubsectorBorderColor, 0.88f), 1.35f, true);
+            }
+        }
     }
 
     private void DrawSubsectorBoundaries()

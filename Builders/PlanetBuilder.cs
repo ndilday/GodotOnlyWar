@@ -29,6 +29,18 @@ namespace OnlyWar.Builders
         private static int _nextPlanetId = 0;
         private static int _nextLeaderId = 0;
 
+        // Clears the per-sector generation state. Planet names are drawn without
+        // replacement from a finite list and the id counters accumulate, so this must
+        // be called at the start of each sector generation. Without it, generating more
+        // than one sector in a single process eventually exhausts the name pool and the
+        // name-selection loop in GenerateNewPlanet spins forever.
+        public void Reset()
+        {
+            _usedPlanetNameIndexes.Clear();
+            _nextPlanetId = 0;
+            _nextLeaderId = 0;
+        }
+
         public Planet GenerateNewPlanet(IReadOnlyDictionary<int, PlanetTemplate> planetTemplateMap, 
                                         Coordinate position, Faction controllingFaction, Faction infiltratingFaction)
         {

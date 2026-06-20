@@ -21,7 +21,6 @@ namespace OnlyWar.Helpers.Database.GameState
                 GetPlanetFactions(connection, factionMap, characterMap);
             
             List<Planet> planetList = [];
-            Dictionary<int, Region> regionMap = [];
             using (var command = connection.CreateCommand())
             {
                 command.CommandText = "SELECT * FROM Planet";
@@ -48,10 +47,9 @@ namespace OnlyWar.Helpers.Database.GameState
                 }
             }
 
-            // Fetch data from the RegionFaction table
-            PopulateRegionFactions(connection, factionMap, regionMap);
-            PopulateRegionMissions(connection, regionMap);
-
+            // Region factions and missions are populated separately, after GetRegions
+            // has loaded the Region rows (see GetData). They cannot be populated here
+            // because the regions do not exist yet at this point.
             return planetList;
         }
 
@@ -145,7 +143,7 @@ namespace OnlyWar.Helpers.Database.GameState
                     int factionId = reader.GetInt32(1);
                     bool isPublic = reader.GetBoolean(2);
                     int planetaryControl = reader.GetInt32(3);
-                    float playerReputation = (float)reader[4];
+                    float playerReputation = Convert.ToSingle(reader[4]);
                     if (reader[5].GetType() != typeof(DBNull))
                     {
                         leaderId = reader.GetInt32(5);
@@ -169,7 +167,7 @@ namespace OnlyWar.Helpers.Database.GameState
             return planetPlanetFactionMap;
         }
 
-        private static void PopulateRegionFactions(IDbConnection connection,
+        public static void PopulateRegionFactions(IDbConnection connection,
                                                                        IReadOnlyDictionary<int, Faction> factionMap,
                                                                        IReadOnlyDictionary<int, Region> regionMap)
         {
@@ -184,7 +182,7 @@ namespace OnlyWar.Helpers.Database.GameState
                     int regionId = reader.GetInt32(0);
                     int factionId = reader.GetInt32(1);
                     bool isPublic = reader.GetBoolean(2);
-                    int population = reader.GetInt32(3);
+                    long population = reader.GetInt64(3);
                     int garrison = reader.GetInt32(4);
                     int organization = reader.GetInt32(5);
                     int entrenchment = reader.GetInt32(6);
@@ -192,7 +190,16 @@ namespace OnlyWar.Helpers.Database.GameState
                     int antiAir = reader.GetInt32(8);
 
                     Region region = regionMap[regionId];
-                    PlanetFaction planetFaction = region.Planet.PlanetFactionMap[factionId];
+                    if (!region.Planet.PlanetFactionMap.TryGetValue(factionId, out PlanetFaction planetFaction))
+                    {
+                        // Defensive: a saved RegionFaction referenced a faction that has no
+                        // PlanetFaction on this planet. Sector generation can currently leave
+                        // such an orphan region faction (a known data inconsistency), and the
+                        // RegionFaction model requires a backing PlanetFaction. Reconstruct a
+                        // minimal one rather than failing the entire load.
+                        planetFaction = new PlanetFaction(factionMap[factionId]) { IsPublic = isPublic };
+                        region.Planet.PlanetFactionMap[factionId] = planetFaction;
+                    }
                     RegionFaction regionFaction =
                         new(planetFaction, region)
                         {
@@ -223,14 +230,14 @@ namespace OnlyWar.Helpers.Database.GameState
                     int id = reader.GetInt32(0);
                     string name = reader.GetString(1);
                     int age = reader.GetInt32(2);
-                    float investigation = (float)reader[3];
-                    float paranoia = (float)reader[4];
-                    float neediness = (float)reader[5];
-                    float patience = (float)reader[6];
-                    float appreciation = (float)reader[7];
-                    float influence = (float)reader[8];
+                    float investigation = Convert.ToSingle(reader[3]);
+                    float paranoia = Convert.ToSingle(reader[4]);
+                    float neediness = Convert.ToSingle(reader[5]);
+                    float patience = Convert.ToSingle(reader[6]);
+                    float appreciation = Convert.ToSingle(reader[7]);
+                    float influence = Convert.ToSingle(reader[8]);
                     int factionId = reader.GetInt32(9);
-                    float opinionOfPlayer = (float)reader[10];
+                    float opinionOfPlayer = Convert.ToSingle(reader[10]);
 
                     Character character = new Character()
                     {
@@ -296,12 +303,11 @@ namespace OnlyWar.Helpers.Database.GameState
                 object leaderId = planetFaction.Value.Leader != null ?
                     (object)planetFaction.Value.Leader.Id : 
                     "null";
-                string insert = $@"INSERT INTO PlanetFaction 
-                    (PlanetId, FactionId, IsPublic, Population, 
-                    PDFMembers, PlanetaryControl, PlayerReputation, LeaderId) VALUES 
-                    ({planetId}, {planetFaction.Key}, {planetFaction.Value.IsPublic}, 
-                    {planetFaction.Value.Population}, {planetFaction.Value.PDFMembers}, 
-                    {planetFaction.Value.PlanetaryControl}, 
+                string insert = $@"INSERT INTO PlanetFaction
+                    (PlanetId, FactionId, IsPublic,
+                    PlanetaryControl, PlayerReputation, LeaderId) VALUES
+                    ({planetId}, {planetFaction.Key}, {(planetFaction.Value.IsPublic ? 1 : 0)},
+                    {planetFaction.Value.PlanetaryControl},
                     {planetFaction.Value.PlayerReputation}, {leaderId});";
                 using (var command = transaction.Connection.CreateCommand())
                 {
@@ -315,29 +321,16 @@ namespace OnlyWar.Helpers.Database.GameState
         {
             for(int i = 0; i < regions.Length; i++)
             {
-                string insert = $@"INSERT INTO Region 
-                    (Id, PlanetId, RegionNumber, RegionName, RegionType, IsUnderAssault, IntelligenceLevel) VALUES 
-                    ({regions[i].Id}, {planetId}, {i}, {regions[i].Name}, 0, 0, {regions[i].IntelligenceLevel});";
+                string insert = $@"INSERT INTO Region
+                    (Id, PlanetId, RegionNumber, RegionName, RegionType, IsUnderAssault, IntelligenceLevel) VALUES
+                    ({regions[i].Id}, {planetId}, {i}, '{regions[i].Name.Replace("\'", "\'\'")}', 0, 0, {regions[i].IntelligenceLevel});";
                 using (var command = transaction.Connection.CreateCommand())
                 {
                     command.CommandText = insert;
                     command.ExecuteNonQuery();
                 }
-                foreach (Mission mission in regions[i].SpecialMissions)
-                {
-                    DefenseType? defenseType = null;
-                    if (mission.GetType() == typeof(SabotageMission))
-                    {
-                        defenseType = ((SabotageMission)(mission)).DefenseType;
-                    }
-                    insert = $@"INSERT INTO Mission (Id, MissionType, RegionId, MissionSize, DefenseTypeId) VALUES
-                        ({mission.Id}, {mission.MissionType}, {regions[i].Id}, {mission.MissionSize}, {defenseType})";
-                    using (var command = transaction.Connection.CreateCommand())
-                    {
-                        command.CommandText = insert;
-                        command.ExecuteNonQuery();
-                    }
-                }
+                // Special missions are persisted by SaveMissions, called separately
+                // from SavePlanet. Do not insert them here as well (see TDD 8.1).
             }
         }
 
@@ -367,13 +360,11 @@ namespace OnlyWar.Helpers.Database.GameState
             {
                 foreach (Mission mission in region.SpecialMissions)
                 {
-                    DefenseType? defenseType = null;
-                    if (mission.GetType() == typeof(SabotageMission))
-                    {
-                        defenseType = ((SabotageMission)(mission)).DefenseType;
-                    }
+                    object defenseType = mission is SabotageMission sabotage
+                        ? (int)sabotage.DefenseType
+                        : "null";
                     string insert = $@"INSERT INTO Mission (Id, MissionType, RegionId, FactionId, MissionSize, DefenseTypeId) VALUES
-                        ({mission.Id}, {mission.MissionType}, {region.Id}, {mission.RegionFaction.PlanetFaction.Faction.Id}, {mission.MissionSize}, {defenseType})";
+                        ({mission.Id}, {(int)mission.MissionType}, {region.Id}, {mission.RegionFaction.PlanetFaction.Faction.Id}, {mission.MissionSize}, {defenseType})";
                     using (var command = transaction.Connection.CreateCommand())
                     {
                         command.CommandText = insert;

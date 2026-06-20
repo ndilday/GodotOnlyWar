@@ -82,7 +82,7 @@ namespace OnlyWar.Models
             {
                 throw new ArgumentException("Object is not a Date");
             }
-            if (this == otherDate) return 0;
+            if (Equals(otherDate)) return 0;
             if (this.IsBeforeOrEqual(otherDate)) return -1;
             return 1;
         }
@@ -97,6 +97,11 @@ namespace OnlyWar.Models
             return Millenium == otherDate.Millenium
                 && Year == otherDate.Year
                 && Week == otherDate.Week;
+        }
+
+        public override int GetHashCode()
+        {
+            return HashCode.Combine(Millenium, Year, Week);
         }
 
         public int GetWeeksDifference(Date otherDate)

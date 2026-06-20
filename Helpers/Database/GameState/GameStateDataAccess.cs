@@ -37,8 +37,6 @@ namespace OnlyWar.Helpers.Database.GameState
         private readonly PlayerSoldierDataAccess _playerSoldierDataAccess;
         private readonly GlobalDataAccess _globalDataAccess;
         private readonly PlayerFactionEventDataAccess _playerFactionEventDataAccess;
-        private readonly string CREATE_TABLE_FILE =
-            Godot.ProjectSettings.GlobalizePath("res://Database/SaveStructure.sql");
         private static GameStateDataAccess _instance;
         public static GameStateDataAccess Instance
         {
@@ -75,14 +73,16 @@ namespace OnlyWar.Helpers.Database.GameState
                             IReadOnlyDictionary<int, BaseSkill> baseSkillMap, 
                             IReadOnlyDictionary<int, SoldierTemplate> soldierTemplateMap)
         {
-            string connection = $"URI=file:{filePath}";
+            string connection = BuildConnectionString(filePath);
             IDbConnection dbCon = new SqliteConnection(connection);
             dbCon.Open();
             var characterMap = _planetDataAccess.GetCharacterMap(dbCon, factionMap);
             //var regionData = _planetDataAccess.Get
-            var planets = _planetDataAccess.GetPlanets(dbCon, factionMap, characterMap, 
+            var planets = _planetDataAccess.GetPlanets(dbCon, factionMap, characterMap,
                                                        planetTemplateMap);
             var regions = _planetDataAccess.GetRegions(dbCon, factionMap, planets);
+            PlanetDataAccess.PopulateRegionFactions(dbCon, factionMap, regions);
+            _planetDataAccess.PopulateRegionMissions(dbCon, regions);
             var requests = _requestDataAccess.GetRequests(dbCon, characterMap, factionMap, planets);
             var ships = _fleetDataAccess.GetShipsByFleetId(dbCon, shipTemplateMap);
             var shipMap = ships.Values.SelectMany(s => s).ToDictionary(ship => ship.Id);
@@ -111,26 +111,26 @@ namespace OnlyWar.Helpers.Database.GameState
             };
         }
 
-        public void SaveData(string filePath, 
+        public void SaveData(string filePath,
                              Date currentDate,
                              IEnumerable<Character> characters,
                              IEnumerable<IRequest> requests,
-                             IEnumerable<Planet> planets, 
+                             IEnumerable<Planet> planets,
                              IEnumerable<TaskForce> fleets,
                              IEnumerable<Unit> units,
                              IEnumerable<PlayerSoldier> playerSoldiers,
-                             IReadOnlyDictionary<Date, List<EventHistory>> history)
+                             IReadOnlyDictionary<Date, List<EventHistory>> history,
+                             string schemaFilePath = null)
         {
-            
+
             if(File.Exists(filePath))
             {
                 File.Delete(filePath);
             }
-            GenerateTables(filePath);
+            GenerateTables(filePath, schemaFilePath ?? DefaultSchemaFilePath());
             var squads = units.SelectMany(u => u.GetAllSquads());
             var ships = fleets.SelectMany(f => f.Ships);
-            string connection = 
-                $"URI=file:{filePath}";
+            string connection = BuildConnectionString(filePath);
             IDbConnection dbCon = new SqliteConnection(connection);
             dbCon.Open();
             using (var transaction = dbCon.BeginTransaction())
@@ -179,7 +179,9 @@ namespace OnlyWar.Helpers.Database.GameState
                             _soldierDataAccess.SaveSoldier(transaction, soldier);
                         }
                     }
-                    var orders = squads.Select(s => s.CurrentOrders).Distinct();
+                    var orders = squads.Select(s => s.CurrentOrders)
+                                       .Where(o => o != null && o.Mission != null)
+                                       .Distinct();
                     foreach(Order order in orders)
                     {
                         _unitDataAccess.SaveOrder(transaction, order);
@@ -202,10 +204,27 @@ namespace OnlyWar.Helpers.Database.GameState
             }
         }
 
-        private void GenerateTables(string filePath)
+        private static string DefaultSchemaFilePath()
         {
-            string cmdText = File.ReadAllText(CREATE_TABLE_FILE);
-            string connection = $"URI=file:{filePath}";
+            return Godot.ProjectSettings.GlobalizePath("res://Database/SaveStructure.sql");
+        }
+
+        private static string BuildConnectionString(string filePath)
+        {
+            // Foreign key enforcement is enabled. The save schema is FK-valid (every
+            // reference resolves to a table in the save file) and the save routines
+            // insert parent rows before the rows that reference them.
+            return new SqliteConnectionStringBuilder
+            {
+                DataSource = filePath,
+                ForeignKeys = true
+            }.ToString();
+        }
+
+        private void GenerateTables(string filePath, string schemaFilePath)
+        {
+            string cmdText = File.ReadAllText(schemaFilePath);
+            string connection = BuildConnectionString(filePath);
             IDbConnection dbCon = new SqliteConnection(connection);
             dbCon.Open();
             using (var command = dbCon.CreateCommand())
