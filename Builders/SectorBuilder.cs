@@ -100,7 +100,16 @@ namespace OnlyWar.Builders
             // find the region with the lowest population, and set it to the player faction
             Region regionToInvade = planetToInvade.Regions.OrderBy(r => r.RegionFactionMap[planetToInvade.GetControllingFaction().Id].Population).First();
             regionToInvade.RegionFactionMap.Clear();
-            RegionFaction playerRegionFaction = new RegionFaction(new PlanetFaction(playerForce.Faction), regionToInvade);
+            // Ensure the planet has a backing PlanetFaction for the player before
+            // attaching a player RegionFaction to one of its regions; otherwise the
+            // region holds a RegionFaction whose PlanetFaction isn't registered on the
+            // planet, which leaves the save in an inconsistent state.
+            if (!planetToInvade.PlanetFactionMap.TryGetValue(playerForce.Faction.Id, out PlanetFaction playerPlanetFaction))
+            {
+                playerPlanetFaction = new PlanetFaction(playerForce.Faction);
+                planetToInvade.PlanetFactionMap[playerForce.Faction.Id] = playerPlanetFaction;
+            }
+            RegionFaction playerRegionFaction = new RegionFaction(playerPlanetFaction, regionToInvade);
             regionToInvade.RegionFactionMap[playerForce.Faction.Id] = playerRegionFaction;
 
             playerRegionFaction.LandedSquads.AddRange(playerForce.Army.SquadMap.Values);
