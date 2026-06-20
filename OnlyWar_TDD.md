@@ -733,23 +733,21 @@ Skills and templates are frequently looked up by name string (e.g., `s.Name == "
 
 **Long-term direction:** Introduce stable rules keys and semantic flags where appropriate, plus validated registries populated at rules-DB load time. For tunable behavior, prefer data-driven definitions over constants. Candidate migrations include mission skill requirement definitions, sector generation faction roles, chapter organization role bindings, default battle resource definitions, and rating formula definitions. The load step should assert that all required entries are present and fail fast with clear diagnostics.
 
-### 8.4 Dual Clone Paths on Battle Types — Low
+### 8.4 Dual Clone Paths on Battle Types — RESOLVED
 
 **Location:** `BattleSquad`, `BattleSoldier`
 
-Both implement `ICloneable` but also have copy constructors. The `Clone()` method and the copy constructor are maintained separately. A new field added to one path but not the other will cause silent state corruption in the Battle Review replay. `ICloneable` also requires a cast at every call site.
+`BattleSoldier` previously had both a copy constructor and a separately-maintained `Clone()` method, which had already silently diverged: `Clone()` deep-cloned the underlying `ISoldier`, while the copy constructor shared it. Production only ever used the copy-constructor path (via `BattleSquad.Clone()` → `BattleState`); `BattleSoldier.Clone()` was exercised only by a test, whose assertion locked in the unused deep-clone behavior — exactly the dual-maintenance hazard predicted here.
 
-**Fix:** Enforce a single copy path. Remove either `Clone()` or the copy constructor and use only one. Add a regression test (see Section 9) that round-trips a `BattleSoldier` and asserts field equality.
+**Resolution:** Removed `BattleSoldier.Clone()` and its `ICloneable` implementation; the copy constructor is now the single copy path (it sets the cloned-squad back-reference that a parameterless `Clone()` cannot). The underlying `ISoldier` is shared by design — replay reads per-snapshot battle fields and the action log, not an independent body — and this is now documented on the copy constructor. `BattleSquad` retains `ICloneable` (required by `BattleState`); its `Clone()` already delegates to its single copy constructor. The regression test (`BattleSoldierCloneTests`) now exercises the copy constructor and asserts both the copied battle fields and the shared-soldier contract.
 
-### 8.5 String-Interpolated SQL — Medium (Partially Addressed)
+### 8.5 String-Interpolated SQL — RESOLVED
 
-**Location:** Most `DataAccess` classes
+**Location:** `DataAccess` classes (GameState)
 
-Most SQL is built via string interpolation. Any string value containing a single quote will break the insert; string columns are escaped inconsistently with manual `Replace("'", "''")` calls. Float locale issues are also a latent risk on non-English systems.
+Save SQL was previously built via string interpolation, which broke on single quotes (escaped inconsistently with manual `Replace("'", "''")` calls) and risked float-locale issues on non-English systems.
 
-**Progress:** `SoldierDataAccess.SaveSoldier` (and its `SoldierSkill` / `HitLocation` inserts) now use parameterized queries via `SqliteCommand.Parameters`. The remaining `DataAccess` save methods still interpolate.
-
-**Fix:** Continue migrating the remaining save methods to parameterized queries. This also removes the SQL injection surface area (low concern in single-player, but good hygiene).
+**Resolution:** All GameState `DataAccess` save/update statements now use parameterized queries via `SqliteCommand.Parameters` (no interpolation or manual escaping remains). This also removes the SQL injection surface area.
 
 ### 8.5.1 Save/Load Provider Compatibility — RESOLVED
 
@@ -782,31 +780,31 @@ Flagged in a TODO comment. Static fields `_nextOrderId` and `_nextMissionId` are
 
 **Fix:** If async turn processing is ever introduced, switch to `Interlocked.Increment`. Until then, no action.
 
-### 8.8 Dead Code: BattleMissionTemplate and OrbitalRaidMission — Low
+### 8.8 Dead Code: BattleMissionTemplate and OrbitalRaidMission — RESOLVED
 
-**Location:** `Models/Battles/BattleMissionTemplate.cs`
+**Location:** (removed) `Models/Battles/BattleMissionTemplate.cs`
 
-These classes represent an earlier design pass for a data-driven mission template system. All `IBattleMissionStepChallenge` implementations return `true` hardcoded. `OrbitalRaidMission.RunMission` computes an opposing force but never places or resolves the battle. Nothing in the current codebase calls these classes.
+These classes (`BattleMissionTemplate`, `OrbitalRaidMission`, the `IBattleMissionStepChallenge` stubs) were an earlier design pass for a data-driven mission template system, with hardcoded `true` challenge results and an `OrbitalRaidMission.RunMission` that never placed or resolved a battle. Nothing in the codebase referenced them.
 
-**Fix:** Delete these files, or clearly mark them as exploratory stubs with a comment. Leaving them silently in place creates confusion during code review.
+**Resolution:** Deleted `Models/Battles/BattleMissionTemplate.cs`. Its only dependency, `Builders/TempArmyBuilder.cs`, was deleted with it (see 8.9).
 
-### 8.9 TempNameGenerator Naming — Cosmetic
+### 8.9 TempNameGenerator Naming — RESOLVED
 
-**Location:** `Helpers/TempNameGenerator.cs`, `Builders/TempArmyBuilder.cs`
+**Location:** `Models/Soldiers/NameGenerator.cs` (was `TempNameGenerator.cs`)
 
-The "Temp" prefix implies placeholder status, but `TempNameGenerator` is used in production code paths for all soldier and character naming. `TempArmyBuilder` is only called from `OrbitalRaidMission` (dead code — see 8.8).
+The "Temp" prefix implied placeholder status, but the generator is used in production code paths for all soldier and character naming.
 
-**Fix:** Rename `TempNameGenerator` to `NameGenerator`. Remove or stub `TempArmyBuilder` once `OrbitalRaidMission` is cleaned up.
+**Resolution:** Renamed `TempNameGenerator` to `NameGenerator` (file and class), updated its callers in `CharacterBuilder` and `NewChapterBuilder`. `TempArmyBuilder` — only ever called from the now-deleted `OrbitalRaidMission` — was deleted.
 
-### 8.10 Orphan Region Faction in Sector Generation — Bug (Medium)
+### 8.10 Orphan Region Faction in Sector Generation — RESOLVED
 
-**Location:** Sector generation (`SectorBuilder` / `PlanetBuilder`)
+**Location:** `SectorBuilder.FoundTakebackPlanet`
 
-Sector generation can leave a region with a `RegionFaction` whose faction has no corresponding `PlanetFaction` on that planet — observed as a stray Space Marines (player) region presence on a hostile, Genestealer-Cult-controlled world, in a single region rather than the whole planet. Because the model constructs every `RegionFaction` with a backing `PlanetFaction`, the orphan exists in memory but is never registered in `planet.PlanetFactionMap`, so it is not saved and cannot be reconstructed on load.
+Sector generation left a region with a `RegionFaction` whose faction had no corresponding `PlanetFaction` on that planet — observed as a stray Space Marines (player) region presence on a hostile, Genestealer-Cult-controlled world, in a single region. `FoundTakebackPlanet` constructed the player `RegionFaction` with an inline `new PlanetFaction(playerForce.Faction)` that was never registered in `planet.PlanetFactionMap`, so the orphan existed in memory but could not be saved or reconstructed on load.
 
-**Mitigation in place:** `PlanetDataAccess.PopulateRegionFactions` is defensive — if a saved `RegionFaction` references a faction with no `PlanetFaction` on the planet, it reconstructs a minimal one rather than failing the load. This masks the symptom for save/load but does not fix the generation bug.
+**Resolution:** `FoundTakebackPlanet` now registers a player `PlanetFaction` on the planet (reusing an existing one if present) before attaching the player `RegionFaction` to a region.
 
-**Fix:** Find where a non-controlling-faction region presence is created without registering its `PlanetFaction`, and either register it or stop creating the orphan.
+**Note:** `PlanetDataAccess.PopulateRegionFactions` retains a defensive fallback — if a saved `RegionFaction` references a faction with no `PlanetFaction` on the planet, it reconstructs a minimal one rather than failing the load. With the generation fix in place this is now belt-and-suspenders rather than a required mitigation.
 
 ### 8.11 PlanetBuilder Static Generation State — RESOLVED
 

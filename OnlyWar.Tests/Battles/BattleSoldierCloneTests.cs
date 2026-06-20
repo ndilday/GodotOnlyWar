@@ -9,7 +9,7 @@ namespace OnlyWar.Tests.Battles;
 public class BattleSoldierCloneTests
 {
     [Fact]
-    public void Clone_CopiesBattleState()
+    public void CopyConstructor_CopiesBattleState()
     {
         BattleSquad squad = new(true, TestModelFactory.CreateSquad(
             "Test Squad",
@@ -29,10 +29,12 @@ public class BattleSoldierCloneTests
         source.EnemiesTakenDown = 7;
         source.TargetId = 42;
 
-        BattleSoldier clone = (BattleSoldier)source.Clone();
+        BattleSoldier clone = new BattleSoldier(source, squad);
 
         Assert.NotSame(source, clone);
-        Assert.NotSame(source.Soldier, clone.Soldier);
+        // The copy constructor is the single copy path; it shares the underlying
+        // ISoldier by design (see BattleSoldier copy ctor comment).
+        Assert.Same(source.Soldier, clone.Soldier);
         Assert.Equal(source.TopLeft, clone.TopLeft);
         Assert.Equal(source.Orientation, clone.Orientation);
         Assert.Equal(source.IsInMelee, clone.IsInMelee);

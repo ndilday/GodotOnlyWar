@@ -7,7 +7,7 @@ using OnlyWar.Models.Soldiers;
 
 namespace OnlyWar.Helpers.Battles
 {
-    public class BattleSoldier : ICloneable
+    public class BattleSoldier
     {
         public ISoldier Soldier { get; private set; }
 
@@ -108,6 +108,12 @@ namespace OnlyWar.Helpers.Battles
         }
 
 
+        // Copy constructor — the single copy path for BattleSoldier. Used by
+        // BattleSquad's copy constructor to snapshot battle state for BattleHistory
+        // replay. The underlying ISoldier is shared by design: the replay reads
+        // per-snapshot battle fields (position, stance, wounds taken, etc.) and the
+        // action log, not an independent body, and the squad back-reference must be
+        // set to the cloned squad, which a parameterless Clone() cannot do.
         public BattleSoldier(BattleSoldier soldier, BattleSquad squad)
         {
             Soldier = soldier.Soldier;
@@ -132,31 +138,6 @@ namespace OnlyWar.Helpers.Battles
             RangedWeapons = soldier.RangedWeapons;
             TargetId = soldier.TargetId;
         }
-        public object Clone()
-        {
-            BattleSoldier newSoldier = new BattleSoldier((ISoldier)Soldier.Clone(), BattleSquad);
-            newSoldier.TopLeft = new Tuple<int, int>(TopLeft.Item1, TopLeft.Item2);
-            newSoldier.Orientation = Orientation;
-            newSoldier.Armor = Armor;
-            newSoldier.IsInMelee = IsInMelee;
-            newSoldier.ReloadingPhase = ReloadingPhase;
-            newSoldier.Stance = Stance;
-            newSoldier.CurrentSpeed = CurrentSpeed;
-            newSoldier.TurnsRunning = TurnsRunning;
-            newSoldier.TurnsShooting = TurnsShooting;
-            newSoldier.TurnsSwinging = TurnsSwinging;
-            newSoldier.TurnsAiming = TurnsAiming;
-            newSoldier.WoundsTaken = WoundsTaken;
-            newSoldier.EnemiesTakenDown = EnemiesTakenDown;
-            newSoldier.Aim = this.Aim == null ? null : new Tuple<int, RangedWeapon, int>(Aim.Item1, Aim.Item2, Aim.Item3);
-            newSoldier.EquippedMeleeWeapons = EquippedMeleeWeapons.ToList();
-            newSoldier.EquippedRangedWeapons = EquippedRangedWeapons.ToList();
-            newSoldier.MeleeWeapons = MeleeWeapons;
-            newSoldier.RangedWeapons = RangedWeapons;
-            newSoldier.TargetId = TargetId;
-            return newSoldier;
-        }
-
         public bool CanFight
         {
             get

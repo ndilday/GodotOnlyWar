@@ -2,7 +2,7 @@
 
 namespace OnlyWar
 {
-    public static class TempNameGenerator
+    public static class NameGenerator
     {
         private static readonly string[] _names =
         {

@@ -67,7 +67,7 @@ namespace OnlyWar.Builders
                     1000,
                     soldierTemplate.Species,
                     data.SkillTemplateList)
-                .Select(s => new PlayerSoldier(s, $"{TempNameGenerator.GetName()} {TempNameGenerator.GetName()}"))
+                .Select(s => new PlayerSoldier(s, $"{NameGenerator.GetName()} {NameGenerator.GetName()}"))
                 .ToList();
 
             foreach (PlayerSoldier soldier in soldiers)
