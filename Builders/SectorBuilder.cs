@@ -139,7 +139,7 @@ namespace OnlyWar.Builders
                     enemyRegionFaction.Entrenchment = 1;
                     enemyRegionFaction.Detection = 1;
                     enemyRegionFaction.AntiAir = 1;
-                    enemyRegionFaction.Garrison = (int)enemyRegionFaction.Population;
+                    enemyRegionFaction.Garrison = enemyRegionFaction.Population;
 
                 }
             }

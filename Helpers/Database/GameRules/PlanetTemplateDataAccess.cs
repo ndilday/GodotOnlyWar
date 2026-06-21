@@ -21,18 +21,25 @@ namespace OnlyWar.Helpers.Database.GameRules
                     int id = reader.GetInt32(0);
                     string name = reader[1].ToString();
                     int probability = reader.GetInt32(2);
-                    long popBase = reader.GetInt64(3);
-                    float popStdDev = Convert.ToSingle(reader[4]);
+                    long popFloor = reader.GetInt64(3);
+                    float popScale = Convert.ToSingle(reader[4]);
                     int importanceBase = reader.GetInt32(5);
                     float importanceStdDev = Convert.ToSingle(reader[6]);
                     int taxMin = reader.GetInt32(7);
                     int taxMax = reader.GetInt32(8);
+                    long capacityFloor = reader.GetInt64(9);
+                    float capacityScale = Convert.ToSingle(reader[10]);
 
                     PlanetTemplate template = new PlanetTemplate(id, name, probability,
-                        new NormalizedValueTemplate
+                        new LogNormalValueTemplate
                         {
-                            BaseValue = popBase,
-                            StandardDeviation = popStdDev
+                            Floor = popFloor,
+                            Scale = popScale
+                        },
+                        new LogNormalValueTemplate
+                        {
+                            Floor = capacityFloor,
+                            Scale = capacityScale
                         },
                         new NormalizedValueTemplate
                         {

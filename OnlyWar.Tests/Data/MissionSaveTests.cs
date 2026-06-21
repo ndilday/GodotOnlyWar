@@ -110,7 +110,8 @@ public class MissionSaveTests
             CREATE TABLE PlanetFaction (PlanetId INTEGER NOT NULL, FactionId INTEGER NOT NULL, IsPublic BOOLEAN NOT NULL,
                 PlanetaryControl INTEGER NOT NULL, PlayerReputation REAL NOT NULL, LeaderId INTEGER);
             CREATE TABLE Region (Id INTEGER PRIMARY KEY UNIQUE NOT NULL, PlanetId INTEGER NOT NULL, RegionNumber INTEGER NOT NULL,
-                RegionName STRING NOT NULL, RegionType INTEGER NOT NULL, IsUnderAssault BOOLEAN NOT NULL, IntelligenceLevel REAL NOT NULL);
+                RegionName STRING NOT NULL, RegionType INTEGER NOT NULL, IsUnderAssault BOOLEAN NOT NULL, IntelligenceLevel REAL NOT NULL,
+                CarryingCapacity BIGINT NOT NULL);
             CREATE TABLE RegionFaction (RegionId INTEGER NOT NULL, FactionId INTEGER NOT NULL, IsPublic BOOLEAN NOT NULL,
                 Population BIGINT NOT NULL, Garrison INTEGER NOT NULL, Organization INTEGER NOT NULL, Entrenchment INTEGER NOT NULL,
                 Detection INTEGER NOT NULL, AntiAir INTEGER NOT NULL);
@@ -136,7 +137,7 @@ public class MissionSaveTests
 
     private static Planet CreatePlanet(Faction faction)
     {
-        PlanetTemplate template = new(1, "Test World", 0, null, null, null);
+        PlanetTemplate template = new(1, "Test World", 0, null, null, null, null);
         Planet planet = new(1, "Testus Prime", new Coordinate(10, 20), 16, template, 5, 1);
         PlanetFaction planetFaction = new(faction) { IsPublic = true };
         planet.PlanetFactionMap[faction.Id] = planetFaction;

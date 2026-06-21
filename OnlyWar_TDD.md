@@ -203,7 +203,7 @@ Planet               (Id, PlanetTemplateId, Name, x, y, Importance, TaxLevel)
 PlanetFaction        (PlanetId, FactionId, IsPublic, Population, PlanetaryControl,
                       PlayerReputation, LeaderId→Character)
 Region               (Id, PlanetId, RegionNumber, RegionName, RegionType,
-                      IsUnderAssault, IntelligenceLevel)
+                      IsUnderAssault, IntelligenceLevel, CarryingCapacity)
 RegionFaction        (RegionId, FactionId, IsPublic, Population, Garrison,
                       Organization, Entrenchment, Detection, AntiAir)
 Mission              (Id, MissionType, RegionId, FactionId, MissionSize, DefenseTypeId)
@@ -514,9 +514,13 @@ Training is now wired into this flow. Non-deployed non-Scout marines receive wee
 
 `SectorEntityLogic` runs after all orders are resolved. It handles:
 
+**Population & carrying-capacity scales.** Population is a raw headcount (the `// in thousands` comments were stale). Per-type population and carrying capacity are each described by a `LogNormalValueTemplate { Floor, Scale }`: a roll is `Floor + 10^z · Scale` (z standard-normal), so `Floor` is a hard minimum, `Scale` is the median of the variable part, and the distribution is right-skewed (mean ≈ `Floor + 3.77·Scale`). These are distinct from the normal `NormalizedValueTemplate { BaseValue, StandardDeviation }` still used for Importance. The rules-DB columns are `PopulationFloor`/`PopulationScale` and `CarryingCapacityFloor`/`CarryingCapacityScale` (renamed from the misleading `*Base`/`*StandardDeviation`). Values are canon-grounded per world type (Hive ~80B typical down to Death ~310K), with carrying capacity = population scale × a per-type headroom (Hive 1.3 … Feral 5.0). Because hive/forge populations reach billions, `Garrison` and `PlanetaryDefenseForces` are `long`.
+
 **Population Growth (per region, per faction):**
-- `Logistic` growth: `newPop = currentPop × growthRate × (1 − currentPop / carryingCapacity)`.
-- `Conversion` growth: one default-faction member is converted per week. At population > 100, additional 0.2%/week organic growth. The garrison-to-population ratio determines whether a garrison member is also converted.
+- Carrying capacity is a per-region value (`Region.CarryingCapacity`). It is an absolute, per-type quantity rolled at sector generation from `PlanetTemplate.CarryingCapacityRange`, distributed across the planet's regions by the same power law used for population, and persisted in the save's `Region` table. Starting population is seeded as a fraction of each region's capacity, so no region begins above capacity.
+- `Logistic` and baseline (`None`) growth are scaled by a logistic crowding factor: `newPop = factionPop × growthRate × (1 − regionPop / carryingCapacity)`, where `regionPop` is the region's combined population across all factions. The factor is near-maximal when the region is sparse, zero at capacity, and gently negative above capacity (so an overfull region drifts back toward capacity). A carrying capacity of 0 is treated as uncapped (legacy behavior).
+- `growthRate` is the maximum (uncrowded) rate: `LogisticGrowthRate = 0.0006`, `BaselineGrowthRate = 0.0004`. These are tuned so a world at a typical fill (~50–75% of capacity) still roughly doubles per century, matching the canon "population doubles every ~100 Terran years" — not just ultra-underpopulated worlds.
+- `Conversion` growth: one default-faction member is converted per week. At population > 100, additional 0.2%/week organic growth. The garrison-to-population ratio determines whether a garrison member is also converted. (Conversion is not subject to the carrying-capacity factor.)
 
 **Going Public:**
 - If a hidden faction's population exceeds the configured threshold, `IsPublic` is set to `true`, making it visible and triggering conflict resolution in subsequent turns.
@@ -627,7 +631,7 @@ Strength after armor reduction is compared against wound thresholds to determine
 
 `ForceGenerator.GenerateForce(ForceGenerationRequest)` dispatches by `ForceCompositionProfile`:
 
-- **Generic (Garrison, AssaultForce, AmbushForce):** Sorts available non-HQ squad templates by `BattleValue` descending; fills the budget greedily until no single remaining template fits.
+- **Generic (Garrison, AssaultForce, AmbushForce):** Sorts available non-HQ squad templates by `BattleValue` descending; fills the budget greedily until no single remaining template fits. `TargetBattleValue` is a `long` (region garrisons can reach billions on hive/forge worlds). When generating a region's *defending* force, `PrepareAssaultMissionStep` caps the mobilized garrison at `MaxMobilizedGarrison` (10,000 troopers) so battles stay tabletop-scale; very large garrisons act as a deterrent to direct assault, to be engaged at scale by future bombardment/war-machine mechanics.
 - **SpecialHQTarget:** Selects an HQ template by tier index from sorted HQ templates. Adds a bodyguard squad if `TargetBattleValue ≤ 0` and a `BodyguardSquadTemplate` is defined.
 - **ScoutPatrol:** Randomly selects from Scout-flagged templates, generating `Tier` squads.
 

@@ -571,7 +571,7 @@ Targeted for 0.7, not yet committed:
 
 - **Battle screen visual overhaul:** Updated visual presentation of the battle UI.
 - **Strategic Layer Phase 2:**
-  - Population growth relative to planet carrying capacity (faster growth when underpopulated, slower when near capacity).
+  - ✅ Population growth relative to planet carrying capacity (faster growth when underpopulated, slower when near capacity). *(Implemented — carrying capacity is an absolute, per-type value rolled from new `PlanetTemplate` columns (`CarryingCapacityBase`/`CarryingCapacityStandardDeviation`), distributed across a planet's regions and persisted per region. Starting population is seeded as a fraction of each region's capacity so no world begins above capacity; dense biomes (Hive, Forge) start nearly full while sparse ones (Agri, Feral) have room to grow. Per-type population and capacity scales are canon-grounded (Hive ~80B typical down to Death ~310K) and stored as log-normal `Floor`/`Scale` values. Each turn, organic (logistic and baseline) growth is scaled by a `1 - regionPop/capacity` crowding factor — near-maximal when sparse, zero at capacity, and gently negative above capacity so an overfull region drifts back down.)*
   - Garrison attrition (0.1% of garrison retires per week, requiring replacement from population growth).
   - OpFor fog of war, recon orders, and special missions.
   - Diversion missions.

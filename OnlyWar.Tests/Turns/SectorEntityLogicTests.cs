@@ -17,12 +17,44 @@ public class SectorEntityLogicTests
     {
         RNG.Reset(1);
         SectorSimulationFixture fixture = SectorSimulationFixture.Create();
-        // pop chosen so growth (pop * 0.00015) is a whole number => deterministic, no rounding draw
+        // pop chosen so growth (pop * 0.0006) is a whole number => deterministic, no rounding draw.
+        // region capacity is 0 here (uncapped), so the crowding factor does not apply.
         RegionFaction cult = fixture.AddHiddenFaction(0, GrowthType.Logistic, population: 20000);
 
         fixture.ProcessTurn();
 
-        Assert.Equal(20003, cult.Population); // 20000 * 0.00015 = 3
+        Assert.Equal(20012, cult.Population); // 20000 * 0.0006 = 12
+    }
+
+    [Fact]
+    public void ProcessTurn_HaltsLogisticGrowthWhenRegionAtCarryingCapacity()
+    {
+        RNG.Reset(1);
+        SectorSimulationFixture fixture = SectorSimulationFixture.Create();
+        RegionFaction cult = fixture.AddHiddenFaction(0, GrowthType.Logistic, population: 20000);
+        // region 0 holds the default faction (20000) plus the cult (20000); capacity equals
+        // that combined total, so the crowding factor is 0 and no organic growth occurs
+        fixture.Planet.Regions[0].CarryingCapacity = 40000;
+
+        fixture.ProcessTurn();
+
+        Assert.Equal(20000, cult.Population);
+    }
+
+    [Fact]
+    public void ProcessTurn_DeclinesGentlyWhenRegionAboveCarryingCapacity()
+    {
+        RNG.Reset(1);
+        SectorSimulationFixture fixture = SectorSimulationFixture.Create();
+        RegionFaction cult = fixture.AddHiddenFaction(0, GrowthType.Logistic, population: 20000);
+        // region 0 holds the default faction (20000) plus the cult (20000) = 40000 total,
+        // against a capacity of 20000: crowding is 1 - 40000/20000 = -1, so the cult's
+        // logistic growth (20000 * 0.0006 = 12) is negated into a decline of 12
+        fixture.Planet.Regions[0].CarryingCapacity = 20000;
+
+        fixture.ProcessTurn();
+
+        Assert.Equal(19988, cult.Population);
     }
 
     [Fact]

@@ -11,7 +11,7 @@ namespace OnlyWar.Models.Planets
         public readonly List<Squad> LandedSquads;
         public long Population { get; set; }
         // Garrison represents PDF forces for the default faction, and forces actively defending for other non-player factions
-        public int Garrison { get; set; }
+        public long Garrison { get; set; }
         public bool IsPublic { get; set; }
         // Entrenchment provides bonsues against attacks
         public int Entrenchment { get; set; }

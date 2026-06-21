@@ -28,7 +28,7 @@ namespace OnlyWar.Models.Planets
             }
         }
         
-        // planetary population is in thousands
+        // population is a raw headcount (summed across the planet's regions)
         public long Population
         {
             get
@@ -39,7 +39,7 @@ namespace OnlyWar.Models.Planets
 
         // I suspect I'm going to change my mind regularly on the scale for this value
         // for now, let's be simple, and let it be headcount
-        public int PlanetaryDefenseForces
+        public long PlanetaryDefenseForces
         {
             get
             {

@@ -12,6 +12,10 @@ namespace OnlyWar.Models.Planets
         public readonly string Name;
         public readonly RegionCoordinate Coordinates;
         public float IntelligenceLevel { get; set; }
+        // The total population (in thousands) the region's land can sustain across all
+        // factions. Organic growth slows as the region's combined population approaches
+        // this value. A value of 0 (or less) is treated as uncapped.
+        public long CarryingCapacity { get; set; }
         public List<Mission> SpecialMissions { get; }
         // territory is diamond-shaped
         // 1
@@ -23,7 +27,7 @@ namespace OnlyWar.Models.Planets
         // 16
         public readonly Dictionary<int, RegionFaction> RegionFactionMap;
 
-        // planetary population is in thousands
+        // population is a raw headcount (summed across this region's factions)
         public long Population
         {
             get
@@ -34,7 +38,7 @@ namespace OnlyWar.Models.Planets
 
         // I suspect I'm going to change my mind regularly on the scale for this value
         // for now, let's be simple, and let it be headcount
-        public int PlanetaryDefenseForces
+        public long PlanetaryDefenseForces
         {
             get
             {
@@ -62,7 +66,7 @@ namespace OnlyWar.Models.Planets
             }
         }
 
-        public Region(int id, Planet planet, int regionType, string name, RegionCoordinate coordinates, float intelligenceLevel)
+        public Region(int id, Planet planet, int regionType, string name, RegionCoordinate coordinates, float intelligenceLevel, long carryingCapacity = 0)
         {
             Id = id;
             Planet = planet;
@@ -70,6 +74,7 @@ namespace OnlyWar.Models.Planets
             Name = name;
             Coordinates = coordinates;
             IntelligenceLevel = intelligenceLevel;
+            CarryingCapacity = carryingCapacity;
             SpecialMissions = new List<Mission>();
         }
 

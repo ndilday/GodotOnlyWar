@@ -102,7 +102,7 @@ public class FactionStrategyController
             var contributingState = regionalForceStates.First(s => s.RegionFaction.Region == region);
             long contribution = (long)(manpowerCost * (contributingState.SpareTroops / (float)totalAvailableForAttack));
             contributingState.SpareTroops -= contribution;
-            region.RegionFactionMap[faction.Id].Garrison -= (int)contribution;
+            region.RegionFactionMap[faction.Id].Garrison -= contribution;
         }
 
         Mission newMission = new Mission(MissionType.Advance, chosenOffensive.TargetFaction, 0);
@@ -218,15 +218,15 @@ public class FactionStrategyController
         return potentialOffensives;
     }
 
-    private int CalculateRequiredGarrison(Region region)
+    private long CalculateRequiredGarrison(Region region)
     {
-        int highestThreat = 0;
+        long highestThreat = 0;
         foreach (var adjacentRegion in region.GetAdjacentRegions())
         {
             var controllingFaction = region.ControllingFaction;
             if (controllingFaction == null) continue; // No one controls this region, no garrison needed against ghosts.
 
-            int adjacentThreat = adjacentRegion.RegionFactionMap.Values
+            long adjacentThreat = adjacentRegion.RegionFactionMap.Values
                 .Where(rf => AreFactionsEnemies(controllingFaction.PlanetFaction.Faction, rf.PlanetFaction.Faction))
                 .Sum(rf => rf.Garrison + rf.LandedSquads.Sum(s => s.Members.Count));
 

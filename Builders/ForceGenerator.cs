@@ -20,7 +20,7 @@ namespace OnlyWar.Builders
     public struct ForceGenerationRequest
     {
         public Faction Faction;
-        public int TargetBattleValue;
+        public long TargetBattleValue;
         public ForceCompositionProfile Profile;
         public int Tier; // Optional, for things like Assassination target level
     }
@@ -55,7 +55,7 @@ namespace OnlyWar.Builders
 
             if (!availableTemplates.Any()) return new List<Squad>();
 
-            int remainingValue = request.TargetBattleValue;
+            long remainingValue = request.TargetBattleValue;
 
             while (remainingValue > 0)
             {

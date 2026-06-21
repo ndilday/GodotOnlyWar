@@ -99,7 +99,7 @@ namespace OnlyWar.Builders
             {
                 RegionFaction owningRegionFaction = region.RegionFactionMap.First().Value;
                 long infiltrationPopulation = (long)(region.Population * infiltrationRate);
-                int infiltrationPdf = (int)(infiltrationPopulation / 33);
+                long infiltrationPdf = infiltrationPopulation / 33;
                 RegionFaction regionFaction = new RegionFaction(infiltration, region);
                 regionFaction.Population = infiltrationPopulation;
                 regionFaction.Garrison = infiltrationPdf;
@@ -117,24 +117,45 @@ namespace OnlyWar.Builders
                 planet.Regions[i] = new Region(regionId, planet, 0, GetRegionName(planet, i), RegionExtensions.GetCoordinatesFromRegionNumber(i), 0);
             }
 
-            long popToDistribute = (long)(template.PopulationRange.BaseValue)
-                + (long)(Math.Pow(10, RNG.NextRandomZValue()) * template.PopulationRange.StandardDeviation);
-
-            // Distribute population using power law with wiggle
+            // Distribute carrying capacity (an absolute, per-type value) across regions using
+            // a power law with wiggle. Population is then seeded as a fraction of each region's
+            // capacity, so a world never starts above its carrying capacity. The fill fraction
+            // emerges from the two type distributions: dense biomes (Hive/Forge) have capacity
+            // close to their population and start nearly full, while sparse ones (Agri/Feral)
+            // have ample headroom to grow.
             float alpha = 1.5f; // Experiment with this value (1.0 to 3.0 are common)
             float wiggleFactor = 0.2f; // Experiment with this value (0.0 to 0.5 are reasonable)
 
-            List<long> regionPopulations = DistributePopulationPowerLaw(popToDistribute, 16, alpha, wiggleFactor);
+            long capacityToDistribute = (long)(template.CarryingCapacityRange.Floor)
+                + (long)(Math.Pow(10, RNG.NextRandomZValue()) * template.CarryingCapacityRange.Scale);
+            long popToDistribute = (long)(template.PopulationRange.Floor)
+                + (long)(Math.Pow(10, RNG.NextRandomZValue()) * template.PopulationRange.Scale);
+
+            List<long> regionCapacities = DistributePopulationPowerLaw(capacityToDistribute, 16, alpha, wiggleFactor);
+
+            // Global fill: what fraction of the planet's capacity is currently inhabited.
+            // Clamped to 1 so an unusually large population roll saturates the world rather
+            // than overfilling it.
+            double globalFill = capacityToDistribute <= 0
+                ? 0
+                : Math.Min(1.0, popToDistribute / (double)capacityToDistribute);
 
             foreach (Region region in planet.Regions)
             {
-                int randomIndex = RNG.GetIntBelowMax(0, regionPopulations.Count - 1);
-                long regionPopulation = regionPopulations[randomIndex];
-                regionPopulations.RemoveAt(randomIndex);
+                int randomIndex = RNG.GetIntBelowMax(0, regionCapacities.Count - 1);
+                long regionCapacity = regionCapacities[randomIndex];
+                regionCapacities.RemoveAt(randomIndex);
+                region.CarryingCapacity = regionCapacity;
+
+                // seed population as the global fill of this region's capacity, with wiggle,
+                // never exceeding the region's capacity
+                float regionWiggle = 1 + (float)RNG.GetLinearDouble() * wiggleFactor * (RNG.GetIntBelowMax(0, 2) == 0 ? -1 : 1);
+                long regionPopulation = (long)(regionCapacity * globalFill * regionWiggle);
+                regionPopulation = Math.Clamp(regionPopulation, 0, regionCapacity);
 
                 RegionFaction regionFaction = new RegionFaction(planetFaction, region);
                 regionFaction.Population = regionPopulation;
-                regionFaction.Garrison = (int)(regionFaction.Population / 33);
+                regionFaction.Garrison = regionFaction.Population / 33;
                 region.RegionFactionMap[planetFaction.Faction.Id] = regionFaction;
             }
         }

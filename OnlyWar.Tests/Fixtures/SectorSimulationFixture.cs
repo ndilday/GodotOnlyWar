@@ -128,7 +128,8 @@ internal sealed class SectorSimulationFixture
             1,
             "Sector Test World",
             1,
-            new NormalizedValueTemplate { BaseValue = 1000, StandardDeviation = 0 },
+            new LogNormalValueTemplate { Floor = 1000, Scale = 0 },
+            new LogNormalValueTemplate { Floor = 2000, Scale = 0 },
             new NormalizedValueTemplate { BaseValue = 1, StandardDeviation = 0 },
             new LinearValueTemplate { MinValue = 0, MaxValue = 0 });
         Planet planet = new(1, "Sector Test World", new Coordinate(1, 1), 1, template, 1, 0);

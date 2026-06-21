@@ -66,6 +66,15 @@ public class SaveLoadRoundTripTests
             Assert.Equal(CountSquads(originalUnits), CountSquads(loaded.Units));
             Assert.Equal(TotalPopulation(sector.Planets.Values), TotalPopulation(loaded.Planets));
 
+            // Carrying capacity is generated, persisted, and restored per region; and no
+            // region is generated above its carrying capacity (PRD Strategic Layer Phase 2).
+            Assert.Equal(TotalCarryingCapacity(sector.Planets.Values), TotalCarryingCapacity(loaded.Planets));
+            Assert.True(sector.Planets.Values.Sum(p => p.Regions.Length) > 0);
+            Assert.All(
+                sector.Planets.Values.SelectMany(p => p.Regions),
+                r => Assert.True(r.Population <= r.CarryingCapacity,
+                    $"Region {r.Id} population {r.Population} exceeds capacity {r.CarryingCapacity}"));
+
             // Open-ended evaluation ratings survive the round trip (the SoldierEvaluation
             // / SoldierEvaluationRating split). Every loaded evaluation carries its keyed
             // rating values.
@@ -148,6 +157,11 @@ public class SaveLoadRoundTripTests
     private static int CountSquads(IEnumerable<Unit> rootUnits)
     {
         return rootUnits.Sum(u => u.GetAllSquads().Count());
+    }
+
+    private static long TotalCarryingCapacity(IEnumerable<Models.Planets.Planet> planets)
+    {
+        return planets.Sum(p => p.Regions.Sum(r => r.CarryingCapacity));
     }
 
     private static long TotalPopulation(IEnumerable<Models.Planets.Planet> planets)

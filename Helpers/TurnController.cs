@@ -22,6 +22,12 @@ namespace OnlyWar.Helpers
         private readonly FactionStrategyController _npcStrategyController;
         private readonly ISoldierTrainingService _trainingService;
         private const float WeeklyTrainingPoints = 0.2f;
+        // Maximum (uncrowded) weekly population growth rates. Realized growth is scaled down
+        // by the carrying-capacity crowding factor (see ApplyCarryingCapacity). These are set
+        // so that a world at a typical fill (~50-75% of capacity) still roughly doubles its
+        // population per century, matching the canon "doubles every ~100 Terran years."
+        private const float LogisticGrowthRate = 0.0006f;
+        private const float BaselineGrowthRate = 0.0004f;
 
         public TurnController() : this(null)
         {
@@ -303,7 +309,7 @@ namespace OnlyWar.Helpers
             switch (regionFaction.PlanetFaction.Faction.GrowthType)
             {
                 case GrowthType.Logistic:
-                    newPop = regionFaction.Population * 0.00015f;
+                    newPop = ApplyCarryingCapacity(regionFaction.Population * LogisticGrowthRate, regionFaction.Region);
                     break;
                 case GrowthType.Conversion:
                     newPop = ConvertPopulation(regionFaction.Region, regionFaction, newPop);
@@ -314,15 +320,39 @@ namespace OnlyWar.Helpers
                     }
                     break;
                 default:
-                    newPop = regionFaction.Population * 0.0001f;
+                    newPop = ApplyCarryingCapacity(regionFaction.Population * BaselineGrowthRate, regionFaction.Region);
                     break;
             }
-            if (RNG.GetLinearDouble() < newPop % 1)
+            // probabilistic rounding of the fractional remainder, handling both growth
+            // (positive) and over-capacity decline (negative)
+            float whole = (float)Math.Truncate(newPop);
+            float fraction = newPop - whole;
+            if (RNG.GetLinearDouble() < Math.Abs(fraction))
             {
-                newPop++;
+                whole += Math.Sign(fraction);
             }
-            regionFaction.Population += (int)newPop;
+            regionFaction.Population += (long)whole;
+            if (regionFaction.Population < 0)
+            {
+                regionFaction.Population = 0;
+            }
             UpdateRegionFactionForces(regionFaction, pdfRatio, newPop);
+        }
+
+        // Scales organic population change by a logistic crowding factor (1 - pop/capacity):
+        // near-maximal growth when the region is sparsely populated, tapering to zero at
+        // capacity, and turning gently negative above capacity so an overfull region drifts
+        // back down. A carrying capacity of 0 (or less) is treated as uncapped, leaving the
+        // base growth unchanged.
+        private static float ApplyCarryingCapacity(float baseGrowth, Region region)
+        {
+            long capacity = region.CarryingCapacity;
+            if (capacity <= 0)
+            {
+                return baseGrowth;
+            }
+            float crowding = 1f - (region.Population / (float)capacity);
+            return baseGrowth * crowding;
         }
 
         private void UpdateRegionFactionForces(RegionFaction regionFaction, float pdfRatio, float newPop)
@@ -337,11 +367,11 @@ namespace OnlyWar.Helpers
                 // additionally, secret factions love to infiltrate the PDF
                 if (pdfRatio < 0.03f || !regionFaction.IsPublic)
                 {
-                    regionFaction.Garrison += (int)(newPop * 0.05f);
+                    regionFaction.Garrison += (long)(newPop * 0.05f);
                 }
                 else
                 {
-                    regionFaction.Garrison += (int)(newPop * 0.025f);
+                    regionFaction.Garrison += (long)(newPop * 0.025f);
                 }
             }
             if (planet.IsUnderAssault())
@@ -379,9 +409,9 @@ namespace OnlyWar.Helpers
             // If no hidden faction, no revolt possible
             if (hiddenPlanetFaction != null)
             {
-                int hiddenFactionGarrison = 0;
+                long hiddenFactionGarrison = 0;
                 long hiddenFactionPopulation = 0;
-                int controllingFactionGarrison = 0;
+                long controllingFactionGarrison = 0;
                 long controllingFactionPopulation = 0;
 
                 foreach (Region region in planet.Regions)
@@ -493,8 +523,8 @@ namespace OnlyWar.Helpers
                     continue;
                 }
 
-                int hostileGarrison = SumGarrison(planet, planetFaction);
-                int controllingGarrison = SumGarrison(planet, controllingPlanetFaction);
+                long hostileGarrison = SumGarrison(planet, planetFaction);
+                long controllingGarrison = SumGarrison(planet, controllingPlanetFaction);
                 if (hostileGarrison < 0.7f * controllingGarrison)
                 {
                     // the revolt has been put down; the faction goes back underground
@@ -510,9 +540,9 @@ namespace OnlyWar.Helpers
             }
         }
 
-        private static int SumGarrison(Planet planet, PlanetFaction planetFaction)
+        private static long SumGarrison(Planet planet, PlanetFaction planetFaction)
         {
-            int garrison = 0;
+            long garrison = 0;
             foreach (Region region in planet.Regions)
             {
                 if (region.RegionFactionMap.TryGetValue(planetFaction.Faction.Id, out RegionFaction rf))

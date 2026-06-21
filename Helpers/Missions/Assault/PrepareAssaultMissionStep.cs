@@ -12,6 +12,13 @@ namespace OnlyWar.Helpers.Missions.Assault
 {
     public class PrepareAssaultMissionStep : IMissionStep
     {
+        // Tabletop-scale ceiling on how many garrison troopers can be drawn into a single
+        // regional assault. Larger garrisons (e.g. hive cities holding millions) act as a
+        // deterrent to direct ground assault; engaging them at scale is intended to require
+        // bombardment, war machines, etc. (future work). This cap also keeps ForceGenerator
+        // from being handed an enormous battle-value budget.
+        private const long MaxMobilizedGarrison = 10_000;
+
         public string Description { get { return "Prepare Assault"; } }
 
         public void ExecuteMissionStep(MissionContext context, float marginOfSuccess, IMissionStep returnStep)
@@ -59,12 +66,13 @@ namespace OnlyWar.Helpers.Missions.Assault
                 // Attacker's success in preparation reduces the effectiveness of the garrison mobilization
                 float cdf = GaussianCalculator.ApproximateNormalCDF(attackerMarginOfSuccess);
                 float multiplier = (float)Math.Pow(2, 1 - (2 * cdf));
-                int effectiveGarrison = (int)(defendingRegionFaction.Garrison * multiplier);
+                long effectiveGarrison = (long)(defendingRegionFaction.Garrison * multiplier);
+                effectiveGarrison = Math.Min(effectiveGarrison, MaxMobilizedGarrison);
 
                 var request = new ForceGenerationRequest
                 {
                     Faction = defendingRegionFaction.PlanetFaction.Faction,
-                    TargetBattleValue = effectiveGarrison * 10, // Assuming 10 BV per garrison trooper
+                    TargetBattleValue = effectiveGarrison * 10L, // Assuming 10 BV per garrison trooper
                     Profile = ForceCompositionProfile.Garrison
                 };
                 var garrisonSquads = ForceGenerator.GenerateForce(request);
