@@ -81,7 +81,14 @@ public class FactionStrategyController
         long defenderStrength = chosenOffensive.TargetFaction.Garrison + chosenOffensive.TargetFaction.LandedSquads.Sum(s => s.Members.Count);
 
         // This method ONLY handles major attacks. The force ratio check determines if it proceeds.
-        if (chosenOffensive.AvailableAttackingForce <= defenderStrength * 1.5)
+        // A successful diversion baits the commander into accepting worse odds: each point of
+        // provocation shaves the force-ratio edge it normally insists on (down to parity).
+        double ratioThreshold = 1.5;
+        if (chosenOffensive.TargetFaction.ProvocationLevel > 0)
+        {
+            ratioThreshold = Math.Max(1.0, 1.5 - chosenOffensive.TargetFaction.ProvocationLevel * 0.1);
+        }
+        if (chosenOffensive.AvailableAttackingForce <= defenderStrength * ratioThreshold)
         {
             return; // Not strong enough for a major attack, so do nothing in this step.
         }
@@ -232,12 +239,26 @@ public class FactionStrategyController
 
             if (adjacentThreat > highestThreat) highestThreat = adjacentThreat;
         }
+
+        // A diversion feinting against this region inflates the threat its defender believes it
+        // faces, causing it to hold a larger garrison than the real enemy force would warrant.
+        var defender = region.ControllingFaction;
+        if (defender != null && defender.PerceivedThreatBonus > 0)
+        {
+            highestThreat += (long)defender.PerceivedThreatBonus;
+        }
+
         return highestThreat;
     }
 
     private PotentialOffensive ChooseBestOffensive(List<PotentialOffensive> offensives)
     {
-        return offensives.OrderByDescending(o => o.AvailableAttackingForce / (float)(o.TargetFaction.Garrison + 1)).FirstOrDefault();
+        // Provocation from a diversion makes its region a more tempting target, biasing the
+        // commander toward attacking the feinting force over a more sensible objective.
+        return offensives
+            .OrderByDescending(o => (o.AvailableAttackingForce / (float)(o.TargetFaction.Garrison + 1))
+                                    * (1.0f + o.TargetFaction.ProvocationLevel * 0.1f))
+            .FirstOrDefault();
     }
 
     private bool AreFactionsEnemies(Faction f1, Faction f2)

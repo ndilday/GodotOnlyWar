@@ -22,6 +22,17 @@ namespace OnlyWar.Models.Planets
         // Organization determins how much of the enemy force can be effectively deployed
         public int Organization { get; set; }
 
+        // Transient, within-turn diversion state. Set by a diversion mission's pre-planning
+        // resolution and consumed by FactionStrategyController when it generates orders that
+        // same turn, then cleared. Never persists across a turn, so it is not saved/loaded.
+        //
+        // PerceivedThreatBonus: extra apparent enemy threat (in troop-equivalents) that a feint
+        // projects onto this region, inflating the garrison its controller feels it must hold.
+        public float PerceivedThreatBonus { get; set; }
+        // ProvocationLevel: how strongly enemies are baited into attacking the force standing in
+        // this region (i.e. the feinting force's own region), drawing a counterattack.
+        public float ProvocationLevel { get; set; }
+
         public RegionFaction(PlanetFaction planetFaction, Region region)
         {
             LandedSquads = new List<Squad>();

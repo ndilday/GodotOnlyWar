@@ -33,6 +33,11 @@ namespace OnlyWar.Helpers
         // divisor converting a fortifying squad's summed engineering skill into a per-turn
         // defensive increment; tuned so a full, trained squad raises a defense by ~1-2/turn
         private const float EngineeringBuildDivisor = 100f;
+        // Superlinear scale for how convincing a diversion feint is. The apparent size of the
+        // feinting force grows with the square of (1 + impact / this), so a high-margin
+        // demonstration can make a force look several times larger than it is while a weak one
+        // barely exceeds its real strength. Larger values make feints harder to sell.
+        private const float DiversionThreatScale = 4.0f;
 
         public TurnController() : this(null)
         {
@@ -51,15 +56,24 @@ namespace OnlyWar.Helpers
             MissionContexts.Clear();
             SpecialMissions.Clear();
 
-            // --- 1. Strategic Planning Phase ---
+            // --- 0. Shaping Phase ---
+            // Diversion missions resolve before strategic planning so the feint they project is
+            // already in place when factions decide where to garrison and attack this turn. This
+            // is what lets a diversion pull enemy attention away from the player's other forces.
             List<Order> allOrdersThisTurn = sector.Orders.Values.ToList();
+            ProcessDiversionMissions(allOrdersThisTurn.Where(o => o.Mission.MissionType == MissionType.Diversion && o.AssignedSquads.Any()));
 
+            // --- 1. Strategic Planning Phase ---
             // Let each NPC faction generate its orders
             var enemyFactions = GameDataSingleton.Instance.GameRulesData.Factions.Where(f => !f.IsPlayerFaction && !f.IsDefaultFaction);
             foreach (var faction in enemyFactions)
             {
                 allOrdersThisTurn.AddRange(_npcStrategyController.GenerateFactionOrders(faction, sector));
             }
+
+            // The diversion effect is consumed entirely by the planning above; clear it so it
+            // never lingers past the turn that produced it.
+            ClearDiversionEffects(sector.Planets.Values);
 
             // --- 2. Mission Execution Phase ---
             var combatOrders = allOrdersThisTurn.Where(o => o.AssignedSquads.Any());
@@ -158,6 +172,10 @@ namespace OnlyWar.Helpers
             foreach (Order order in combatOrders)
             {
                 if(order.Mission.MissionType == MissionType.DefenseInDepth) continue;
+                // Diversions already resolved in the pre-planning shaping phase; their squads
+                // remain on the map only to defend (see AssembleDefendingForce) if the feint
+                // draws a counterattack this turn.
+                if(order.Mission.MissionType == MissionType.Diversion) continue;
                 // TODO: decide how to handle patrol orders
 
                 // A construction order with an assigned squad is the player (or any faction)
@@ -177,6 +195,75 @@ namespace OnlyWar.Helpers
                 MissionContext context = new MissionContext(order, involvedBattleSquads, new List<BattleSquad>());
                 MissionStepOrchestrator.GetStartingStep(context).ExecuteMissionStep(context, 0, null);
                 MissionContexts.Add(context);
+            }
+        }
+
+        // Diversions resolve in the pre-planning shaping phase: each runs its overt demonstration
+        // to accumulate Impact, then projects a perceived-threat (and, if aggressive, provocation)
+        // effect that the factions read when generating orders this same turn.
+        private void ProcessDiversionMissions(IEnumerable<Order> diversionOrders)
+        {
+            foreach (Order order in diversionOrders)
+            {
+                bool isPlayerOrder = order.AssignedSquads.First().Faction.IsPlayerFaction;
+                List<BattleSquad> involvedBattleSquads = order.AssignedSquads
+                                                              .Select(s => new BattleSquad(isPlayerOrder, s))
+                                                              .ToList();
+
+                MissionContext context = new MissionContext(order, involvedBattleSquads, new List<BattleSquad>());
+                MissionStepOrchestrator.GetStartingStep(context).ExecuteMissionStep(context, 0, null);
+                MissionContexts.Add(context);
+                ApplyDiversionEffect(order, context);
+            }
+        }
+
+        private void ApplyDiversionEffect(Order order, MissionContext context)
+        {
+            Mission mission = order.Mission;
+            RegionFaction targetFaction = mission.RegionFaction;
+            long actualManpower = order.AssignedSquads.Sum(s => s.Members.Count);
+            if (actualManpower <= 0) return;
+
+            // MissionSize, when set, caps how convincing the feint can be.
+            float clampedImpact = mission.MissionSize > 0
+                ? Math.Min(context.Impact, mission.MissionSize)
+                : context.Impact;
+            if (clampedImpact <= 0) return;
+
+            float multiplier = (float)Math.Pow(1 + clampedImpact / DiversionThreatScale, 2);
+            float apparentThreat = actualManpower * multiplier;
+            // The real force is already counted in the enemy's threat assessment via its landed
+            // squads, so only the phantom remainder is the feint's contribution.
+            targetFaction.PerceivedThreatBonus += apparentThreat - actualManpower;
+
+            // At Normal aggression or higher the feint is loud enough to bait the enemy into
+            // committing a counterattack toward the feinting force's own region.
+            if (order.LevelOfAggression >= Aggression.Normal)
+            {
+                Squad feintSquad = order.AssignedSquads.First();
+                Region feintRegion = feintSquad.CurrentRegion;
+                if (feintRegion != null
+                    && feintRegion.RegionFactionMap.TryGetValue(feintSquad.Faction.Id, out RegionFaction feintFaction))
+                {
+                    feintFaction.ProvocationLevel += clampedImpact;
+                }
+            }
+        }
+
+        // Clears the transient diversion effect after the factions have generated their orders for
+        // the turn, so a feint never influences more than the single turn that produced it.
+        private void ClearDiversionEffects(IEnumerable<Planet> planets)
+        {
+            foreach (Planet planet in planets)
+            {
+                foreach (Region region in planet.Regions)
+                {
+                    foreach (RegionFaction regionFaction in region.RegionFactionMap.Values)
+                    {
+                        regionFaction.PerceivedThreatBonus = 0;
+                        regionFaction.ProvocationLevel = 0;
+                    }
+                }
             }
         }
 

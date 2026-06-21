@@ -50,9 +50,12 @@ namespace OnlyWar.Helpers.Missions.Assault
             var defendingForce = new List<BattleSquad>();
             bool defenderIsPlayer = defendingRegionFaction.PlanetFaction.Faction.IsPlayerFaction;
 
-            // 1. Get all landed squads in the region with defensive orders
+            // 1. Get all landed squads in the region with defensive orders. A diversion force is
+            // deliberately in the open, so it too is caught up in the fighting if its feint draws
+            // a counterattack into the region it is standing in.
             var defendingSquads = defendingRegionFaction.LandedSquads
-                                                        .Where(s => s.CurrentOrders?.Mission.MissionType == MissionType.DefenseInDepth)
+                                                        .Where(s => s.CurrentOrders?.Mission.MissionType == MissionType.DefenseInDepth
+                                                                 || s.CurrentOrders?.Mission.MissionType == MissionType.Diversion)
                                                         .ToList();
 
             if (defendingSquads.Any())

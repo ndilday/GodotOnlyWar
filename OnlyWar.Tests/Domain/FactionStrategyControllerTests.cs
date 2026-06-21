@@ -68,6 +68,23 @@ public class FactionStrategyControllerTests
         Assert.All(orders, o => Assert.Empty(o.AssignedSquads));
     }
 
+    [Fact]
+    public void GenerateFactionOrders_PerceivedThreatBonusPinsGarrisonAndSuppressesActivity()
+    {
+        Faction enemy = CreateNonPlayerFaction();
+        // Org 100, pop 1000 => 1000 organized troops, and no adjacent enemy, so normally the full
+        // force is spare and the faction builds defenses. A diversion's perceived-threat bonus that
+        // exceeds the organized force should make the region feel it must hold everything as
+        // garrison, leaving nothing spare and producing no orders.
+        Sector sector = BuildSectorWithSingleRegionFaction(enemy, population: 1000, organization: 100, isPublic: true);
+        RegionFaction regionFaction = sector.Planets.Values.First().Regions[0].RegionFactionMap[enemy.Id];
+        regionFaction.PerceivedThreatBonus = 2000;
+
+        List<Order> orders = new FactionStrategyController().GenerateFactionOrders(enemy, sector);
+
+        Assert.Empty(orders);
+    }
+
     private static Sector BuildSectorWithSingleRegionFaction(
         Faction faction, long population, int organization, bool isPublic)
     {

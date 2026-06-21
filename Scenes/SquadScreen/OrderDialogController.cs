@@ -83,6 +83,7 @@ public partial class OrderDialogController : Control
         else if(_currentlySelectedRegion.RegionFactionMap.Values.Any(rf => !rf.PlanetFaction.Faction.IsDefaultFaction && !rf.PlanetFaction.Faction.IsPlayerFaction))
         {
             missionOptions.Add(new Tuple<string, int>("Attack", -2));
+            missionOptions.Add(new Tuple<string, int>("Diversion", -8));
         }
         else
         {
@@ -131,6 +132,10 @@ public partial class OrderDialogController : Control
         {
             missionType = MissionType.Construction;
         }
+        else if(e == -8)
+        {
+            missionType = MissionType.Diversion;
+        }
         else
         {
             missionType = _currentlySelectedRegion.SpecialMissions.First(m => m.Id == e).MissionType;
@@ -148,6 +153,9 @@ public partial class OrderDialogController : Control
                 break;
             case MissionType.DefenseInDepth:
                 text = "Defend the region from attacks by enemy forces";
+                break;
+            case MissionType.Diversion:
+                text = "Make an overt show of force against this region to draw the enemy's attention. A convincing feint makes our force look far larger than it is, pinning the enemy's garrison in place—and, if we press aggressively, baiting them into committing to a counterattack—leaving their other regions exposed to our real strike. The feinting force fights in the open, so it risks being caught by the very counterattack it provokes.";
                 break;
             case MissionType.Extermination:
                 text = "We have identified a hidden enemy cell that we can take out.";
@@ -242,6 +250,14 @@ public partial class OrderDialogController : Control
                 _ => DefenseType.AntiAir
             };
             mission = new ConstructionMission(defenseType, 0, GetOrCreatePlayerRegionFaction(selectedRegion));
+        }
+        else if (args.Item2 == -8)
+        {
+            // Diversion: feint against an enemy-held region while the squad stays in its own
+            // region (it demonstrates from adjacent territory rather than entering the target).
+            RegionFaction enemyRegionFaction = selectedRegion.RegionFactionMap.Values
+                .First(rf => !rf.PlanetFaction.Faction.IsPlayerFaction && !rf.PlanetFaction.Faction.IsDefaultFaction);
+            mission = new Mission(MissionType.Diversion, enemyRegionFaction, 0);
         }
         else
         {

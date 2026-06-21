@@ -19,6 +19,7 @@ namespace OnlyWar.Models.Missions
         ObjectiveRaid,
         Sabotage,
         Ambush,
+        Diversion,
         Extermination,
         Training,
         Construction

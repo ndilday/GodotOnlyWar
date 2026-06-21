@@ -2,6 +2,7 @@
 using OnlyWar.Helpers.Missions.Ambush;
 using OnlyWar.Helpers.Missions.Assassinate;
 using OnlyWar.Helpers.Missions.Assault;
+using OnlyWar.Helpers.Missions.Diversion;
 using OnlyWar.Helpers.Missions.Recon;
 using OnlyWar.Helpers.Missions.Sabotage;
 using OnlyWar.Models.Missions;
@@ -13,6 +14,12 @@ namespace OnlyWar.Builders
     {
         public static IMissionStep GetStartingStep(MissionContext context)
         {
+            // A diversion is overt and demonstrates from an adjacent region by design, so it
+            // never infiltrates the target.
+            if (context.Order.Mission.MissionType == MissionType.Diversion)
+            {
+                return GetMainInitialStep(context);
+            }
             if (context.Order.Mission.RegionFaction.Region != context.MissionSquads.First().Squad.CurrentRegion)
             {
                 return new InfiltrateMissionStep();
@@ -30,6 +37,8 @@ namespace OnlyWar.Builders
                     return new PositionAmbushMissionStep();
                 case MissionType.Assassination:
                     return new AssassinateStealthMissionStep();
+                case MissionType.Diversion:
+                    return new DemonstrateForceMissionStep();
                 case MissionType.Extermination:
                     return new PositionAmbushMissionStep();
                 case MissionType.Recon:
