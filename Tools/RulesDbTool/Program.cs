@@ -4,7 +4,7 @@ using Microsoft.Data.Sqlite;
 
 if (args.Length < 2)
 {
-    Console.Error.WriteLine("Usage: RulesDbTool <schema|training-source|migrate-training|migrate-progenoid|migrate-ratings|migrate-planet-scales|migrate-fortification> <db-path>");
+    Console.Error.WriteLine("Usage: RulesDbTool <schema|training-source|migrate-training|migrate-progenoid|migrate-ratings|migrate-planet-scales|migrate-fortification|migrate-tyranids|migrate-tyranid-squads> <db-path>");
     return 1;
 }
 
@@ -13,7 +13,7 @@ string dbPath = args[1];
 string connectionString = new SqliteConnectionStringBuilder
 {
     DataSource = dbPath,
-    Mode = command is "migrate-training" or "migrate-progenoid" or "migrate-ratings" or "migrate-planet-scales" or "migrate-fortification" ? SqliteOpenMode.ReadWriteCreate : SqliteOpenMode.ReadOnly
+    Mode = command is "migrate-training" or "migrate-progenoid" or "migrate-ratings" or "migrate-planet-scales" or "migrate-fortification" or "migrate-tyranids" or "migrate-tyranid-squads" ? SqliteOpenMode.ReadWriteCreate : SqliteOpenMode.ReadOnly
 }.ToString();
 
 using SqliteConnection connection = new(connectionString);
@@ -41,6 +41,12 @@ switch (command)
         break;
     case "migrate-fortification":
         MigrateFortificationSkill(connection);
+        break;
+    case "migrate-tyranids":
+        MigrateTyranids(connection);
+        break;
+    case "migrate-tyranid-squads":
+        MigrateTyranidSquads(connection);
         break;
     default:
         Console.Error.WriteLine($"Unknown command: {command}");
@@ -506,6 +512,161 @@ static void MigrateFortificationSkill(SqliteConnection connection)
 
     transaction.Commit();
     Console.WriteLine($"Fortification skill migration complete (skill id {skillId}).");
+}
+
+static void MigrateTyranids(SqliteConnection connection)
+{
+    using SqliteTransaction transaction = connection.BeginTransaction();
+
+    // Idempotency guard: bail if the Lictor species already exists.
+    int existing = ExecuteScalarInt(connection, transaction, "SELECT COUNT(*) FROM Species WHERE Name = 'Lictor'");
+    if (existing > 0)
+    {
+        Console.WriteLine("Tyranid migration already applied; nothing to do.");
+        return;
+    }
+
+    const int Tyranids = 2;        // Faction.Id
+    const int TyranidBody = 1;     // BodyType shared by Warriors/gaunts/Genestealers
+
+    // Two attribute values the existing AttributeTemplate table doesn't cover.
+    // BaseValue / StandardDeviation follow the ~10% spread the other rows use.
+    int dexTpl = ExecuteScalarInt(connection, transaction, "SELECT COALESCE(MAX(Id), 0) + 1 FROM AttributeTemplate");
+    Execute(connection, transaction,
+        "INSERT INTO AttributeTemplate (Id, BaseValue, StandardDeviation) VALUES ($id, 18.0, 1.8)", ("$id", dexTpl)); // Lictor Dex (BS3-ish; WS6 carried by Melee skill)
+    int conTpl = dexTpl + 1;
+    Execute(connection, transaction,
+        "INSERT INTO AttributeTemplate (Id, BaseValue, StandardDeviation) VALUES ($id, 80.0, 8.0)", ("$id", conTpl)); // Ravener Con (T x W x 4 = 80)
+
+    // Existing AttributeTemplate Ids referenced below (value in comment):
+    // 21=24  25=120  20=20  19=16  16=12  14=10  10=8  2=0(psychic)
+    // 27=40  24=60(atkspd)  11=8(move)  7=3.06(size)  6=2.6(size)
+    int lictorSpecies = ExecuteScalarInt(connection, transaction, "SELECT COALESCE(MAX(Id), 0) + 1 FROM Species");
+    InsertSpecies(connection, transaction, lictorSpecies, Tyranids, TyranidBody, "Lictor",
+        str: 21, dex: dexTpl, con: 25, intel: 16, per: 20, ego: 20, cha: 16, psy: 2,
+        atkSpd: 24, moveSpd: 11, size: 7, width: 1, depth: 1);
+    int ravenerSpecies = lictorSpecies + 1;
+    InsertSpecies(connection, transaction, ravenerSpecies, Tyranids, TyranidBody, "Ravener",
+        str: 20, dex: 19, con: conTpl, intel: 10, per: 16, ego: 10, cha: 10, psy: 2,
+        atkSpd: 27, moveSpd: 16, size: 6, width: 1, depth: 2);
+
+    // SoldierTemplates. Rank slots them between Genestealer (20) and Warrior (50):
+    // the Lictor as an elite vanguard, the Ravener as fast attack.
+    int lictorSoldier = ExecuteScalarInt(connection, transaction, "SELECT COALESCE(MAX(Id), 0) + 1 FROM SoldierTemplate");
+    InsertSoldierTemplate(connection, transaction, lictorSoldier, Tyranids, lictorSpecies, "Lictor", rank: 45);
+    int ravenerSoldier = lictorSoldier + 1;
+    InsertSoldierTemplate(connection, transaction, ravenerSoldier, Tyranids, ravenerSpecies, "Ravener", rank: 30);
+
+    // Skill training. 47 = Generic Melee, 48 = Generic Ranged, 11 = Stealth.
+    // Generic Melee is tiered in the existing data (16 = major threat, 8 = medium).
+    const int GenericMelee = 47, GenericRanged = 48, Stealth = 11;
+    InsertMosTraining(connection, transaction, lictorSoldier, GenericMelee, 16);   // top-tier melee; WS6 lives here, not in Dex
+    InsertMosTraining(connection, transaction, lictorSoldier, GenericRanged, 1);   // flesh hooks
+    InsertMosTraining(connection, transaction, lictorSoldier, Stealth, 8);         // chameleonic ambush signature
+    InsertMosTraining(connection, transaction, ravenerSoldier, GenericMelee, 8);   // medium melee threat, like a Genestealer
+    InsertMosTraining(connection, transaction, ravenerSoldier, GenericRanged, 1);
+
+    transaction.Commit();
+    Console.WriteLine($"Tyranid migration complete. Added Lictor (species {lictorSpecies}, soldier {lictorSoldier}) and Ravener (species {ravenerSpecies}, soldier {ravenerSoldier}).");
+}
+
+static void MigrateTyranidSquads(SqliteConnection connection)
+{
+    using SqliteTransaction transaction = connection.BeginTransaction();
+
+    int existing = ExecuteScalarInt(connection, transaction, "SELECT COUNT(*) FROM SquadTemplate WHERE Name = 'Lictor'");
+    if (existing > 0)
+    {
+        Console.WriteLine("Tyranid squad migration already applied; nothing to do.");
+        return;
+    }
+
+    // SoldierTemplate Ids created by migrate-tyranids (look up by name so this stays
+    // independent of the exact ids that pass produced).
+    int lictorSoldier = ExecuteScalarInt(connection, transaction, "SELECT Id FROM SoldierTemplate WHERE Name = 'Lictor' AND FactionId = 2");
+    int ravenerSoldier = ExecuteScalarInt(connection, transaction, "SELECT Id FROM SoldierTemplate WHERE Name = 'Ravener' AND FactionId = 2");
+    if (lictorSoldier == 0 || ravenerSoldier == 0)
+    {
+        throw new InvalidOperationException("Run migrate-tyranids first; Lictor/Ravener SoldierTemplates are missing.");
+    }
+
+    const int Tyranids = 2;
+    // SquadTypes flags: Scout = 0x2, Elite = 0x4.
+    const int Scout = 0x2, Elite = 0x4;
+    // Existing Tyranid rules data referenced below:
+    const int Chitin15mm = 5;       // ArmorTemplate Id
+    const int ScythingTalons = 17;  // WeaponSet Id (melee-only)
+
+    // Lictor: solo elite ambusher. Scout (infiltrates like a Genestealer) + Elite ("Veteran"
+    // slot). Tougher chitin than the Genestealer to match its T5 statline.
+    int lictorSquad = ExecuteScalarInt(connection, transaction, "SELECT COALESCE(MAX(Id), 0) + 1 FROM SquadTemplate");
+    InsertSquadTemplate(connection, transaction, lictorSquad, Tyranids, "Lictor",
+        defaultArmorId: Chitin15mm, defaultWeaponSetId: ScythingTalons,
+        squadType: Scout | Elite, battleValue: 90);
+    InsertSquadElement(connection, transaction, lictorSquad, lictorSoldier, min: 1, max: 1);
+
+    // Ravener: fast-attack pack of 5, no separate leader statline. Scout.
+    int ravenerSquad = lictorSquad + 1;
+    InsertSquadTemplate(connection, transaction, ravenerSquad, Tyranids, "Ravener Pack",
+        defaultArmorId: Chitin15mm, defaultWeaponSetId: ScythingTalons,
+        squadType: Scout, battleValue: 175);
+    InsertSquadElement(connection, transaction, ravenerSquad, ravenerSoldier, min: 5, max: 5);
+
+    transaction.Commit();
+    Console.WriteLine($"Tyranid squad migration complete. Added Lictor (squad {lictorSquad}, solo) and Ravener Pack (squad {ravenerSquad}, x5).");
+}
+
+static void InsertSquadTemplate(SqliteConnection connection, SqliteTransaction transaction, int id, int factionId,
+                                string name, int defaultArmorId, int defaultWeaponSetId, int squadType, int battleValue)
+{
+    Execute(connection, transaction,
+        @"INSERT INTO SquadTemplate
+            (Id, FactionId, Name, DefaultArmorId, DefaultWeaponSetId, SquadType, BattleValue, BodyguardSquadTemplateId)
+          VALUES ($id, $f, $n, $a, $w, $t, $bv, NULL)",
+        ("$id", id), ("$f", factionId), ("$n", name), ("$a", defaultArmorId),
+        ("$w", defaultWeaponSetId), ("$t", squadType), ("$bv", battleValue));
+}
+
+static void InsertSquadElement(SqliteConnection connection, SqliteTransaction transaction, int squadTemplateId,
+                               int soldierTemplateId, int min, int max)
+{
+    int id = ExecuteScalarInt(connection, transaction, "SELECT COALESCE(MAX(Id), 0) + 1 FROM SquadTemplateElement");
+    Execute(connection, transaction,
+        @"INSERT INTO SquadTemplateElement (Id, SquadTemplateId, SoldierTemplateId, MinimumRequired, MaximumAllowed)
+          VALUES ($id, $sq, $so, $min, $max)",
+        ("$id", id), ("$sq", squadTemplateId), ("$so", soldierTemplateId), ("$min", min), ("$max", max));
+}
+
+static void InsertSpecies(SqliteConnection connection, SqliteTransaction transaction, int id, int factionId, int bodyTypeId,
+                          string name, int str, int dex, int con, int intel, int per, int ego, int cha, int psy,
+                          int atkSpd, int moveSpd, int size, int width, int depth)
+{
+    Execute(connection, transaction,
+        @"INSERT INTO Species
+            (Id, FactionId, BodyTypeId, Name, StrengthTemplateId, DexterityTemplateId, ConstitutionTemplateId,
+             IntelligenceTemplateId, PerceptionTemplateId, EgoTemplateId, CharismaTemplateId, PsychicTemplateId,
+             AttackSpeedTemplateId, MoveSpeedTemplateId, SizeTemplateId, Width, Depth)
+          VALUES ($id, $f, $b, $n, $str, $dex, $con, $int, $per, $ego, $cha, $psy, $atk, $move, $size, $w, $d)",
+        ("$id", id), ("$f", factionId), ("$b", bodyTypeId), ("$n", name),
+        ("$str", str), ("$dex", dex), ("$con", con), ("$int", intel), ("$per", per), ("$ego", ego),
+        ("$cha", cha), ("$psy", psy), ("$atk", atkSpd), ("$move", moveSpd), ("$size", size), ("$w", width), ("$d", depth));
+}
+
+static void InsertSoldierTemplate(SqliteConnection connection, SqliteTransaction transaction, int id, int factionId,
+                                  int speciesId, string name, int rank)
+{
+    Execute(connection, transaction,
+        @"INSERT INTO SoldierTemplate
+            (Id, FactionId, SpeciesId, Name, Rank, SubRank, IsSquadLeader, SpecialistType, WorkExperienceTrainingProfileId)
+          VALUES ($id, $f, $s, $n, $rank, 1, 0, 0, NULL)",
+        ("$id", id), ("$f", factionId), ("$s", speciesId), ("$n", name), ("$rank", rank));
+}
+
+static void InsertMosTraining(SqliteConnection connection, SqliteTransaction transaction, int soldierTemplateId, int baseSkillId, double points)
+{
+    Execute(connection, transaction,
+        "INSERT INTO SoldierMosTraining (SoldierTemplateId, BaseSkillId, PointsAdded) VALUES ($s, $sk, $p)",
+        ("$s", soldierTemplateId), ("$sk", baseSkillId), ("$p", points));
 }
 
 static void RenameOrAddColumn(SqliteConnection connection, SqliteTransaction transaction,
