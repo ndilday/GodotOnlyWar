@@ -206,7 +206,8 @@ Region               (Id, PlanetId, RegionNumber, RegionName, RegionType,
                       IsUnderAssault, IntelligenceLevel, CarryingCapacity)
 RegionFaction        (RegionId, FactionId, IsPublic, Population, Garrison,
                       Organization, Entrenchment, Detection, AntiAir)
-Mission              (Id, MissionType, RegionId, FactionId, MissionSize, DefenseTypeId)
+Mission              (Id, MissionType, RegionId, FactionId, MissionSize, DefenseTypeId,
+                      IsRegionMission)                     -- 1 = region special mission, 0 = order-attached
 
 Character            (Id, Investigation, Paranoia, Neediness, Patience,
                       Appreciation, Influence, LoyalFactionId, OpinionOfPlayer)
@@ -441,8 +442,7 @@ SabotageMission : Mission
   └─ DefenseType : DefenseType       (Organization, Detection, Entrenchment, AntiAir)
 
 ConstructionMission : Mission
-  ├─ DefenseType : DefenseType
-  └─ Amount : int
+  └─ ConstructionType : DefenseType  (Organization, Detection, Entrenchment, AntiAir)
 
 Order
   ├─ Squads : List<Squad>
@@ -510,6 +510,8 @@ Training is now wired into this flow. Non-deployed non-Scout marines receive wee
 3. **Construction:** Convert remaining `SpareTroops / 100` to build points. Spend greedily on the cheapest upgrade among Organization, Entrenchment, Detection, Anti-Air (costs scale as `2^currentLevel`).
 4. **Patrol:** Any remaining `SpareTroops × 10` become a `ScoutPatrol` order.
 
+**Player construction (squad-driven fortification).** The player can order a squad in its own region to build a defense (Entrenchment / Detection / Anti-Air), creating a `ConstructionMission` targeting the player's `RegionFaction`. Unlike the NPC squad-less construction (resolved at a flat `MissionSize` in `ProcessConstructionOrders`), a construction order that carries a squad is routed in `ProcessCombatMissions` to `ResolveSquadConstruction`: every able soldier contributes its `Engineering (Fortification)` skill value, the sum is divided by `EngineeringBuildDivisor` (100) and floored (minimum 1), and the result is applied via the shared `ApplyConstruction`. The order persists, so the squad accumulates defenses over successive turns. `Engineering (Fortification)` is an Intelligence-based Tech skill trained by all combat marines at low weight.
+
 ### 6.3 Sector Entity Logic
 
 `SectorEntityLogic` runs after all orders are resolved. It handles:
@@ -529,6 +531,8 @@ Training is now wired into this flow. Non-deployed non-Scout marines receive wee
 - Regions with `IntelligenceLevel > 0` have it multiplied by 0.75 each turn.
 - While intelligence remains, hidden faction cells may be revealed as `Extermination` missions; public faction intelligence may generate `Ambush`, `Sabotage`, or `Assassination` special missions.
 - Each unconsumed special mission has a 25% chance of expiring each turn.
+
+**Fog of War (UI gating).** Enemy visibility on the planet-tactical and region screens is gated by `Region.IntelligenceLevel` (raised by Recon orders, decayed each turn). Hidden (non-public) factions are concealed on every screen — their population is folded into the civilian count and they are discovered only through the intelligence/special-mission system. For a public enemy, `RegionFactionExtensions.GetPopulationDescription` grades the population by intelligence ("Unknown" at 0 → power-of-10 fuzzing → exact at ≥6), and defenses (Entrenchment/Detection/Anti-Air) are shown only when `IntelligenceLevel > 1` and only as fuzzy descriptions via `GetDefenseLevelDescription`, never as raw integers.
 
 **Governor Requests:**
 - For each planetary leader with positive opinion of the player: check for a real threat via Investigation vs. hidden faction population ratio; check for a false alarm via Paranoia.
@@ -719,6 +723,14 @@ See Section 3.1. All events flow View → Controller → Model → Controller �
 `SavePlanetRegions` contained an inline loop that inserted rows into the `Mission` table; `SaveMissions` was then called immediately after from `SavePlanet` and inserted the same rows again. (`Mission.Id` already carries a `PRIMARY KEY UNIQUE` constraint, so the second insert was a latent hard failure that only escaped notice because `SpecialMissions` is typically empty.)
 
 **Resolution:** Removed the mission insert loop from `SavePlanetRegions`; `SaveMissions` is now the single persistence path. While reconciling this, two latent encoding bugs shared by both copies were also fixed: enum values were interpolated by name into INTEGER columns (now cast to `(int)`), and a null `DefenseType` interpolated to an empty string (now emits `null`). Covered by `MissionSaveTests` (see Section 9).
+
+### 8.1.1 Order-Mission Persistence — Bug (High) — RESOLVED
+
+**Location:** `GameStateDataAccess.SaveData` / `PlanetDataAccess.PopulateRegionMissions` / `UnitDataAccess`.
+
+An `Order`'s `Mission` was only persisted if it happened to be in a region's `SpecialMissions` (the only source `SaveMissions` wrote and the only source the loader read into its mission map). Player-issued order missions (Recon, Advance, and the new Construction/Fortify) are created on the order and never enter `SpecialMissions`, so saving with any such order active wrote an `Assignment` row whose `MissionId` referenced an unsaved mission — `missionMap[missionId]` then threw `KeyNotFoundException` on load. Separately, the loader constructed `Order` objects but never assigned them to `Squad.CurrentOrders`, so even resolvable orders were silently dropped.
+
+**Resolution:** The `Mission` table gained an `IsRegionMission` flag. `SaveData` now also persists each order's mission (with `IsRegionMission = 0`) when it isn't already saved as a region special mission, deduplicated by id. `PopulateRegionMissions` returns the full mission map (all rows) for order resolution and only re-adds rows with `IsRegionMission = 1` to `Region.SpecialMissions`. `UnitDataAccess` resolves orders against that full map and reattaches each loaded order to its squads' `CurrentOrders`. Covered by `SaveLoadRoundTripTests.SaveThenLoad_PlayerOrderWithNonSpecialMission_SurvivesRoundTrip`.
 
 ### 8.2 Specialist Assignment Bug — RESOLVED
 

@@ -19,11 +19,11 @@ namespace OnlyWar.Helpers.Database.GameState
                                                                IReadOnlyDictionary<int, SquadTemplate> squadTemplateMap,
                                                                IReadOnlyDictionary<int, List<WeaponSet>> squadWeaponSetMap,
                                                                IReadOnlyDictionary<int, Ship> shipMap,
-                                                               IReadOnlyDictionary<int, Region> regionMap)
+                                                               IReadOnlyDictionary<int, Region> regionMap,
+                                                               IReadOnlyDictionary<int, Mission> missionMap)
         {
             Dictionary<int, List<Squad>> squadMap = [];
             Dictionary<int, Squad> squadByIdMap = [];
-            var missionMap = regionMap.Values.SelectMany(r => r.SpecialMissions).ToDictionary(m => m.Id, m => m);
             using (var command = connection.CreateCommand())
             {
                 command.CommandText = "SELECT * FROM Squad";
@@ -119,6 +119,12 @@ namespace OnlyWar.Helpers.Database.GameState
                     Disposition disp = (Disposition)disposition;
                     Aggression agg = (Aggression)aggression;
                     Order order = new Order(orderId, orderSquadMap[orderId], disp, isQuiet, isActivelyEngaging, agg, missionMap[missionId]);
+                    // reattach the loaded order to its squads so it is actually restored
+                    // (the Order constructor does not set Squad.CurrentOrders)
+                    foreach (Squad squad in order.AssignedSquads)
+                    {
+                        squad.CurrentOrders = order;
+                    }
                     if(orderId > maxOrderId)
                     {
                         maxOrderId = orderId;

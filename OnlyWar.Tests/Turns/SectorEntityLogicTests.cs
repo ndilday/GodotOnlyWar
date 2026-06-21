@@ -42,6 +42,22 @@ public class SectorEntityLogicTests
     }
 
     [Fact]
+    public void ProcessTurn_RetiresFractionOfGarrisonEachWeek()
+    {
+        RNG.Reset(1);
+        SectorSimulationFixture fixture = SectorSimulationFixture.Create();
+        RegionFaction pdf = fixture.DefaultRegionFaction(0);
+        pdf.Garrison = 100000;
+        // capacity equals the region's population (20000), so crowding is 0 and no new
+        // garrison is recruited this week; only the 0.1%/week attrition applies
+        fixture.Planet.Regions[0].CarryingCapacity = 20000;
+
+        fixture.ProcessTurn();
+
+        Assert.Equal(99900, pdf.Garrison); // 100000 - 100000 * 0.001
+    }
+
+    [Fact]
     public void ProcessTurn_DeclinesGentlyWhenRegionAboveCarryingCapacity()
     {
         RNG.Reset(1);

@@ -83,9 +83,14 @@ namespace OnlyWar.Helpers.Database.GameState
             return regionMap;
         }
 
-        public void PopulateRegionMissions(IDbConnection connection,
+        // Loads every persisted mission and returns them keyed by id. Region "special"
+        // missions (intelligence-discovered opportunities) are added back to their region's
+        // SpecialMissions list; order-attached missions (IsRegionMission = 0) are not, but are
+        // still returned in the map so order loading can resolve them by id.
+        public Dictionary<int, Mission> PopulateRegionMissions(IDbConnection connection,
                                            IReadOnlyDictionary<int, Region> regionMap)
         {
+            Dictionary<int, Mission> missionMap = [];
             using (var command = connection.CreateCommand())
             {
                 command.CommandText = "SELECT * FROM Mission";
@@ -104,27 +109,39 @@ namespace OnlyWar.Helpers.Database.GameState
                     {
                         defenseType = (DefenseType)reader.GetInt32(5);
                     }
+                    bool isRegionMission = reader.GetBoolean(6);
 
                     Region region = regionMap[regionId];
                     RegionFaction regionFaction = region.RegionFactionMap[factionId];
                     Mission mission;
-                    // TODO: handle construction missions
+                    // Both SabotageMission and ConstructionMission carry a DefenseType; distinguish
+                    // them by MissionType so a saved construction mission does not load back as a
+                    // sabotage mission.
                     if (defenseType == null)
                     {
                         mission = new Mission(id, missionType, regionFaction, missionSize);
+                    }
+                    else if (missionType == MissionType.Construction)
+                    {
+                        mission = new ConstructionMission(id, (DefenseType)defenseType, missionSize, regionFaction);
                     }
                     else
                     {
                         mission = new SabotageMission(id, (DefenseType)defenseType, missionSize, regionFaction);
                     }
-                    region.SpecialMissions.Add(mission);
+                    missionMap[id] = mission;
+                    if (isRegionMission)
+                    {
+                        region.SpecialMissions.Add(mission);
+                    }
                     if(id > maxId)
-                    { 
-                        maxId = id; 
+                    {
+                        maxId = id;
                     }
                 }
                 IdGenerator.SetNextMissionId(maxId + 1);
             }
+            return missionMap;
         }
 
         private Dictionary<int, List<PlanetFaction>> GetPlanetFactions(IDbConnection connection,
@@ -390,24 +407,37 @@ namespace OnlyWar.Helpers.Database.GameState
             {
                 foreach (Mission mission in region.SpecialMissions)
                 {
-                    object defenseType = mission is SabotageMission sabotage
-                        ? (int)sabotage.DefenseType
-                        : null;
-                    using (var command = transaction.Connection.CreateCommand())
-                    {
-                        command.Transaction = transaction;
-                        command.CommandText = @"INSERT INTO Mission
-                            (Id, MissionType, RegionId, FactionId, MissionSize, DefenseTypeId) VALUES
-                            (@id, @missionType, @regionId, @factionId, @missionSize, @defenseType);";
-                        command.AddParam("@id", mission.Id);
-                        command.AddParam("@missionType", (int)mission.MissionType);
-                        command.AddParam("@regionId", region.Id);
-                        command.AddParam("@factionId", mission.RegionFaction.PlanetFaction.Faction.Id);
-                        command.AddParam("@missionSize", mission.MissionSize);
-                        command.AddParam("@defenseType", defenseType);
-                        command.ExecuteNonQuery();
-                    }
+                    SaveMission(transaction, mission, isRegionMission: true);
                 }
+            }
+        }
+
+        // Persists a single mission row. Region special missions pass isRegionMission: true;
+        // missions that exist only because an order references them pass false (see
+        // GameStateDataAccess.SaveData), so the loader can keep them out of the region's
+        // SpecialMissions list while still resolving them for orders.
+        public static void SaveMission(IDbTransaction transaction, Mission mission, bool isRegionMission)
+        {
+            object defenseType = mission switch
+            {
+                SabotageMission sabotage => (int)sabotage.DefenseType,
+                ConstructionMission construction => (int)construction.ConstructionType,
+                _ => null
+            };
+            using (var command = transaction.Connection.CreateCommand())
+            {
+                command.Transaction = transaction;
+                command.CommandText = @"INSERT INTO Mission
+                    (Id, MissionType, RegionId, FactionId, MissionSize, DefenseTypeId, IsRegionMission) VALUES
+                    (@id, @missionType, @regionId, @factionId, @missionSize, @defenseType, @isRegionMission);";
+                command.AddParam("@id", mission.Id);
+                command.AddParam("@missionType", (int)mission.MissionType);
+                command.AddParam("@regionId", mission.RegionFaction.Region.Id);
+                command.AddParam("@factionId", mission.RegionFaction.PlanetFaction.Faction.Id);
+                command.AddParam("@missionSize", mission.MissionSize);
+                command.AddParam("@defenseType", defenseType);
+                command.AddParam("@isRegionMission", isRegionMission ? 1 : 0);
+                command.ExecuteNonQuery();
             }
         }
     }

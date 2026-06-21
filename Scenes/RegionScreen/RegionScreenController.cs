@@ -102,16 +102,19 @@ public partial class RegionScreenController : DialogController
         details.Add(new Tuple<string, string>("Civilian Population", civilianPop > 0 ? civilianPop.ToString("N0") : "None"));
 
 
-        if (enemyFaction != null)
+        // Fog of war: hidden factions are concealed entirely (their population is folded into
+        // the civilian count above, and they are discovered only via the intelligence/special-
+        // mission system). Only a public enemy is shown here, and its strength is gated by the
+        // region's intelligence level, consistent with the planet tactical screen.
+        if (enemyFaction != null && enemyFaction.IsPublic)
         {
-            details.Add(new Tuple<string, string>("Enemy Faction", enemyFaction.PlanetFaction.Faction.Name + (enemyFaction.IsPublic ? "" : " (Hidden)")));
-            if (enemyFaction.IsPublic)
+            details.Add(new Tuple<string, string>("Enemy Faction", enemyFaction.PlanetFaction.Faction.Name));
+            details.Add(new Tuple<string, string>("Enemy Population", enemyFaction.GetPopulationDescription())); // intelligence-graded
+            if (_currentRegion.IntelligenceLevel > 1)
             {
-                details.Add(new Tuple<string, string>("Enemy Population", enemyFaction.GetPopulationDescription())); // Uses the extension method
-                details.Add(new Tuple<string, string>("Enemy Garrison", enemyFaction.Garrison.ToString("N0")));
-                details.Add(new Tuple<string, string>("Enemy Entrenchment", enemyFaction.Entrenchment.ToString()));
-                details.Add(new Tuple<string, string>("Enemy Detection", enemyFaction.Detection.ToString()));
-                details.Add(new Tuple<string, string>("Enemy Anti-Air", enemyFaction.AntiAir.ToString()));
+                details.Add(new Tuple<string, string>("Enemy Entrenchment", RegionFactionExtensions.GetDefenseLevelDescription(enemyFaction.Entrenchment)));
+                details.Add(new Tuple<string, string>("Enemy Detection", RegionFactionExtensions.GetDefenseLevelDescription(enemyFaction.Detection)));
+                details.Add(new Tuple<string, string>("Enemy Anti-Air", RegionFactionExtensions.GetDefenseLevelDescription(enemyFaction.AntiAir)));
             }
         }
         else

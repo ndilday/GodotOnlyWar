@@ -28,6 +28,11 @@ namespace OnlyWar.Helpers
         // population per century, matching the canon "doubles every ~100 Terran years."
         private const float LogisticGrowthRate = 0.0006f;
         private const float BaselineGrowthRate = 0.0004f;
+        // fraction of a standing garrison that retires each week (PRD Strategic Layer Phase 2)
+        private const float GarrisonAttritionRate = 0.001f;
+        // divisor converting a fortifying squad's summed engineering skill into a per-turn
+        // defensive increment; tuned so a full, trained squad raises a defense by ~1-2/turn
+        private const float EngineeringBuildDivisor = 100f;
 
         public TurnController() : this(null)
         {
@@ -155,6 +160,14 @@ namespace OnlyWar.Helpers
                 if(order.Mission.MissionType == MissionType.DefenseInDepth) continue;
                 // TODO: decide how to handle patrol orders
 
+                // A construction order with an assigned squad is the player (or any faction)
+                // fortifying a region: the squad spends the turn building rather than fighting.
+                if (order.Mission is ConstructionMission constructionMission)
+                {
+                    ResolveSquadConstruction(order, constructionMission);
+                    continue;
+                }
+
                 bool isPlayerOrder = order.AssignedSquads.First().Faction.IsPlayerFaction;
 
                 List<BattleSquad> involvedBattleSquads = order.AssignedSquads
@@ -169,28 +182,48 @@ namespace OnlyWar.Helpers
 
         private void ProcessConstructionOrders(IEnumerable<Order> constructionOrders)
         {
-            // these orders resolve instantly and don't create a context
+            // squad-less construction orders (NPC faction development) resolve instantly at a
+            // fixed mission size and don't create a context
             foreach (var order in constructionOrders)
             {
                 if (order.Mission is ConstructionMission mission)
                 {
-                    switch (mission.ConstructionType)
-                    {
-                        case DefenseType.Entrenchment:
-                            mission.RegionFaction.Entrenchment += mission.MissionSize;
-                            break;
-                        case DefenseType.Detection:
-                            mission.RegionFaction.Detection += mission.MissionSize;
-                            break;
-                        case DefenseType.AntiAir:
-                            mission.RegionFaction.AntiAir += mission.MissionSize;
-                            break;
-                        case DefenseType.Organization:
-                            mission.RegionFaction.Organization += mission.MissionSize;
-                            if (mission.RegionFaction.Organization > 100) mission.RegionFaction.Organization = 100;
-                            break;
-                    }
+                    ApplyConstruction(mission, mission.MissionSize);
                 }
+            }
+        }
+
+        // Resolves a construction order carried out by an assigned squad (e.g. the player
+        // fortifying a region). The amount built scales with both squad size and engineering
+        // skill: every able soldier contributes its Engineering (Fortification) skill value,
+        // and the summed contribution is divided down to a defensive increment (minimum 1 so
+        // an assigned squad always makes some progress).
+        private void ResolveSquadConstruction(Order order, ConstructionMission mission)
+        {
+            BaseSkill engineering = GameDataSingleton.Instance.GameRulesData.Skills.EngineeringFortification;
+            float totalSkill = order.AssignedSquads
+                .SelectMany(s => s.Members)
+                .Sum(soldier => soldier.GetTotalSkillValue(engineering));
+            int amount = Math.Max(1, (int)(totalSkill / EngineeringBuildDivisor));
+            ApplyConstruction(mission, amount);
+        }
+
+        private static void ApplyConstruction(ConstructionMission mission, int amount)
+        {
+            switch (mission.ConstructionType)
+            {
+                case DefenseType.Entrenchment:
+                    mission.RegionFaction.Entrenchment += amount;
+                    break;
+                case DefenseType.Detection:
+                    mission.RegionFaction.Detection += amount;
+                    break;
+                case DefenseType.AntiAir:
+                    mission.RegionFaction.AntiAir += amount;
+                    break;
+                case DefenseType.Organization:
+                    mission.RegionFaction.Organization = Math.Min(100, mission.RegionFaction.Organization + amount);
+                    break;
             }
         }
 
@@ -363,6 +396,10 @@ namespace OnlyWar.Helpers
 
             if (isDefaultFaction || isPlayerFaction || !regionFaction.IsPublic)
             {
+                // garrison attrition: a fraction of the standing garrison retires each week and
+                // must be replaced by fresh recruitment from population growth below
+                regionFaction.Garrison -= (long)(regionFaction.Garrison * GarrisonAttritionRate);
+
                 // if the pdf is less than three percent of the population, more people are drafted
                 // additionally, secret factions love to infiltrate the PDF
                 if (pdfRatio < 0.03f || !regionFaction.IsPublic)

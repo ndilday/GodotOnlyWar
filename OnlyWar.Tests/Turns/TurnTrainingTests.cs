@@ -46,6 +46,24 @@ public class TurnTrainingTests
     }
 
     [Fact]
+    public void ProcessTurn_FortifyingSquadRaisesRegionDefense()
+    {
+        TurnTrainingFixture fixture = TurnTrainingFixture.Create();
+        Squad squad = fixture.CreatePlayerSquad("Engineer Squad", out _);
+        fixture.LandSquad(squad);
+        fixture.RegionFaction.Entrenchment = 0;
+        fixture.AssignFortifyMission(squad, DefenseType.Entrenchment);
+
+        fixture.ProcessTurn();
+
+        // the squad spends the turn building; even an untrained squad makes minimal progress,
+        // and the construction targets only the chosen defense type
+        Assert.True(fixture.RegionFaction.Entrenchment >= 1);
+        Assert.Equal(0, fixture.RegionFaction.Detection);
+        Assert.Equal(0, fixture.RegionFaction.AntiAir);
+    }
+
+    [Fact]
     public void ProcessTurn_DoesNotTrainSoldiersAssignedToMissions()
     {
         TurnTrainingFixture fixture = TurnTrainingFixture.Create();
@@ -249,6 +267,14 @@ public class TurnTrainingTests
         public void AssignDefensiveMission(Squad squad)
         {
             Mission mission = new(MissionType.DefenseInDepth, RegionFaction, 0);
+            Order order = new([squad], Disposition.DugIn, true, false, Aggression.Avoid, mission);
+            squad.CurrentOrders = order;
+            Sector.AddNewOrder(order);
+        }
+
+        public void AssignFortifyMission(Squad squad, DefenseType defenseType)
+        {
+            ConstructionMission mission = new(defenseType, 0, RegionFaction);
             Order order = new([squad], Disposition.DugIn, true, false, Aggression.Avoid, mission);
             squad.CurrentOrders = order;
             Sector.AddNewOrder(order);

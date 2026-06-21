@@ -85,7 +85,7 @@ CREATE TABLE Unit (Id INTEGER PRIMARY KEY UNIQUE NOT NULL, FactionId INTEGER NOT
 -- FactionId has no foreign key: factions live in the read-only rules database, not
 -- in the save file, and are matched by id at load time. A cross-database reference
 -- cannot be a real SQLite foreign key.
-CREATE TABLE Mission (Id INTEGER PRIMARY KEY UNIQUE NOT NULL, MissionType INTEGER NOT NULL, RegionId INTEGER NOT NULL REFERENCES Region (Id), FactionId INTEGER NOT NULL, MissionSize INTEGER NOT NULL, DefenseTypeId INTEGER);
+CREATE TABLE Mission (Id INTEGER PRIMARY KEY UNIQUE NOT NULL, MissionType INTEGER NOT NULL, RegionId INTEGER NOT NULL REFERENCES Region (Id), FactionId INTEGER NOT NULL, MissionSize INTEGER NOT NULL, DefenseTypeId INTEGER, IsRegionMission BOOLEAN NOT NULL);
 
 -- Table: Order
 CREATE TABLE Assignment (Id INTEGER PRIMARY KEY UNIQUE NOT NULL, MissionId INTEGER NOT NULL REFERENCES Mission (Id), Disposition INTEGER NOT NULL, IsQuiet BOOLEAN NOT NULL, IsActivelyEngaging BOOLEAN NOT NULL, Aggression INTEGER NOT NULL);

@@ -6,6 +6,9 @@ using OnlyWar.Builders;
 using OnlyWar.Helpers;
 using OnlyWar.Helpers.Database.GameState;
 using OnlyWar.Models;
+using OnlyWar.Models.Missions;
+using OnlyWar.Models.Orders;
+using OnlyWar.Models.Planets;
 using OnlyWar.Models.Soldiers;
 using OnlyWar.Models.Soldiers.Ratings;
 using OnlyWar.Models.Squads;
@@ -91,6 +94,65 @@ public class SaveLoadRoundTripTests
         {
             // GameStateDataAccess closes but does not dispose its connections, so the
             // pooled handle keeps the file open; clear the pool before deleting.
+            Microsoft.Data.Sqlite.SqliteConnection.ClearAllPools();
+            try
+            {
+                if (File.Exists(dbPath))
+                {
+                    File.Delete(dbPath);
+                }
+            }
+            catch (IOException)
+            {
+                // Best-effort cleanup of a temp file; ignore if still locked.
+            }
+        }
+    }
+
+    [Fact]
+    public void SaveThenLoad_PlayerOrderWithNonSpecialMission_SurvivesRoundTrip()
+    {
+        Sector sector = SectorBuilder.GenerateSector(1, _data, _date, "Order Round Trip Chapter");
+        GameDataSingleton.Instance.LoadGameDataFromBlob(_data, _date, sector);
+        Unit armyRoot = sector.PlayerForce.Army.OrderOfBattle;
+        if (!_data.PlayerFaction.Units.Contains(armyRoot))
+        {
+            _data.PlayerFaction.Units.Add(armyRoot);
+        }
+
+        // Assign a player squad a Recon order. The mission is created on the order and never
+        // added to any region's SpecialMissions — exactly the case that previously failed to
+        // round-trip (the loader resolved order missions only from SpecialMissions).
+        Squad squad = sector.PlayerForce.Army.OrderOfBattle.GetAllSquads().First();
+        Region region = sector.Planets.Values
+            .SelectMany(p => p.Regions)
+            .First(r => r.RegionFactionMap.Count > 0);
+        RegionFaction target = region.RegionFactionMap.Values.First();
+        Mission mission = new(MissionType.Recon, target, 0);
+        Order order = new([squad], Disposition.Mobile, true, false, Aggression.Normal, mission);
+        squad.CurrentOrders = order;
+        sector.AddNewOrder(order);
+
+        string dbPath = Path.Combine(
+            Path.GetTempPath(), $"onlywar_order_roundtrip_{Guid.NewGuid():N}.s3db");
+        try
+        {
+            Save(sector, dbPath, _data.Factions.SelectMany(f => f.Units).ToList());
+            GameStateDataBlob loaded = Load(dbPath);
+
+            Squad loadedSquad = loaded.Units
+                .SelectMany(u => u.GetAllSquads())
+                .Single(s => s.Id == squad.Id);
+            Assert.NotNull(loadedSquad.CurrentOrders);
+            Assert.Equal(MissionType.Recon, loadedSquad.CurrentOrders.Mission.MissionType);
+
+            // the order's mission must not have leaked into any region's special missions
+            Assert.DoesNotContain(
+                loaded.Planets.SelectMany(p => p.Regions).SelectMany(r => r.SpecialMissions),
+                m => m.Id == mission.Id);
+        }
+        finally
+        {
             Microsoft.Data.Sqlite.SqliteConnection.ClearAllPools();
             try
             {

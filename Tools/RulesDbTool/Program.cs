@@ -4,7 +4,7 @@ using Microsoft.Data.Sqlite;
 
 if (args.Length < 2)
 {
-    Console.Error.WriteLine("Usage: RulesDbTool <schema|training-source|migrate-training|migrate-progenoid|migrate-ratings> <db-path>");
+    Console.Error.WriteLine("Usage: RulesDbTool <schema|training-source|migrate-training|migrate-progenoid|migrate-ratings|migrate-planet-scales|migrate-fortification> <db-path>");
     return 1;
 }
 
@@ -13,7 +13,7 @@ string dbPath = args[1];
 string connectionString = new SqliteConnectionStringBuilder
 {
     DataSource = dbPath,
-    Mode = command is "migrate-training" or "migrate-progenoid" or "migrate-ratings" ? SqliteOpenMode.ReadWriteCreate : SqliteOpenMode.ReadOnly
+    Mode = command is "migrate-training" or "migrate-progenoid" or "migrate-ratings" or "migrate-planet-scales" or "migrate-fortification" ? SqliteOpenMode.ReadWriteCreate : SqliteOpenMode.ReadOnly
 }.ToString();
 
 using SqliteConnection connection = new(connectionString);
@@ -35,6 +35,12 @@ switch (command)
         break;
     case "migrate-ratings":
         MigrateRatings(connection);
+        break;
+    case "migrate-planet-scales":
+        MigratePlanetScales(connection);
+        break;
+    case "migrate-fortification":
+        MigrateFortificationSkill(connection);
         break;
     default:
         Console.Error.WriteLine($"Unknown command: {command}");
@@ -407,6 +413,132 @@ static void MigrateRatings(SqliteConnection connection)
 
     transaction.Commit();
     Console.WriteLine("Rating definitions migration complete.");
+}
+
+static void MigratePlanetScales(SqliteConnection connection)
+{
+    using SqliteTransaction transaction = connection.BeginTransaction();
+
+    // The Population and CarryingCapacity columns describe a log-normal distribution sitting
+    // on a hard floor (value = Floor + 10^z * Scale), not a normal distribution. Rename the
+    // misleading *Base / *StandardDeviation columns to *Floor / *Scale to match the model
+    // (LogNormalValueTemplate), adding them fresh on a clean DB.
+    RenameOrAddColumn(connection, transaction, "PlanetTemplate", "PopulationBase", "PopulationFloor", "BIGINT NOT NULL DEFAULT 0");
+    RenameOrAddColumn(connection, transaction, "PlanetTemplate", "PopulationStandardDeviation", "PopulationScale", "REAL NOT NULL DEFAULT 0");
+    RenameOrAddColumn(connection, transaction, "PlanetTemplate", "CarryingCapacityBase", "CarryingCapacityFloor", "BIGINT NOT NULL DEFAULT 0");
+    RenameOrAddColumn(connection, transaction, "PlanetTemplate", "CarryingCapacityStandardDeviation", "CarryingCapacityScale", "REAL NOT NULL DEFAULT 0");
+
+    // Canon-grounded per-type values (raw headcount). Floor = minimum, Scale = median of the
+    // variable part; typical world = Floor + Scale, with a long upward tail. Carrying capacity
+    // is the population scale multiplied by a per-type headroom so dense biomes start near full
+    // and sparse ones have room to grow. See PRD Strategic Layer Phase 2.
+    (string Name, long PopFloor, double PopScale, double Headroom)[] types =
+    [
+        ("Hive",      50_000_000_000L, 150_000_000_000d, 1.3),  // 5-20 hives x 10-100B; overcrowded
+        ("Forge",      1_000_000_000L,   2_000_000_000d, 1.1),  // billions; life-support limited
+        ("Civilised",    500_000_000L,   1_500_000_000d, 1.5),  // Earth-like; room to develop
+        ("Agri",          50_000_000L,     150_000_000d, 4.0),  // low density; abundant farmland
+        ("Feudal",        10_000_000L,      40_000_000d, 3.0),  // pre-industrial; land-limited
+        ("Feral",            200_000L,         800_000d, 5.0),  // tribal; vast unused wilderness
+        ("Death",             10_000L,         300_000d, 1.2),  // hostile; near max sustainable
+    ];
+
+    foreach ((string name, long popFloor, double popScale, double headroom) in types)
+    {
+        Execute(connection, transaction,
+            @"UPDATE PlanetTemplate
+              SET PopulationFloor = $pf,
+                  PopulationScale = $ps,
+                  CarryingCapacityFloor = CAST($pf * $h AS INTEGER),
+                  CarryingCapacityScale = $ps * $h
+              WHERE Name = $name",
+            ("$pf", popFloor), ("$ps", popScale), ("$h", headroom), ("$name", name));
+    }
+
+    transaction.Commit();
+    Console.WriteLine("Planet population/capacity scale migration complete.");
+}
+
+static void MigrateFortificationSkill(SqliteConnection connection)
+{
+    using SqliteTransaction transaction = connection.BeginTransaction();
+
+    // New combat-engineering skill used to build regional fortifications (PRD Strategic Layer
+    // Phase 2 player-constructable defenses). Mirrors the existing "Engineering (Cybernetics)"
+    // entry: Tech category (7), Intelligence attribute (4), difficulty 2.
+    const string skillName = "Engineering (Fortification)";
+    int skillId = ExecuteScalarInt(connection, transaction, "SELECT Id FROM BaseSkill WHERE Name = $n", ("$n", skillName));
+    if (skillId == 0)
+    {
+        skillId = ExecuteScalarInt(connection, transaction, "SELECT COALESCE(MAX(Id), 0) + 1 FROM BaseSkill");
+        Execute(connection, transaction,
+            "INSERT INTO BaseSkill (Id, Name, SkillCategory, Attribute, Difficulty) VALUES ($id, $n, 7, 4, 2)",
+            ("$id", skillId), ("$n", skillName));
+    }
+
+    // Every combat marine trains it at a low weight so any squad can fortify, slowly.
+    string[] combatProfiles =
+    [
+        "veteran_work", "tactical_marine_work", "tactical_sergeant_work",
+        "assault_marine_work", "assault_sergeant_work",
+        "devastator_marine_work", "devastator_sergeant_work",
+        "scout_marine_work", "scout_sergeant_work"
+    ];
+
+    foreach (string profileName in combatProfiles)
+    {
+        int profileId = ExecuteScalarInt(connection, transaction, "SELECT Id FROM TrainingProfile WHERE Name = $n", ("$n", profileName));
+        if (profileId == 0)
+        {
+            continue;
+        }
+        // TargetType 1 = skill (matches the training-profile migration). Idempotent insert.
+        int existing = ExecuteScalarInt(connection, transaction,
+            "SELECT COUNT(*) FROM TrainingProfileEntry WHERE TrainingProfileId = $p AND TargetType = 1 AND TargetId = $s",
+            ("$p", profileId), ("$s", skillId));
+        if (existing == 0)
+        {
+            Execute(connection, transaction,
+                "INSERT INTO TrainingProfileEntry (TrainingProfileId, TargetType, TargetId, Weight) VALUES ($p, 1, $s, 1)",
+                ("$p", profileId), ("$s", skillId));
+        }
+    }
+
+    transaction.Commit();
+    Console.WriteLine($"Fortification skill migration complete (skill id {skillId}).");
+}
+
+static void RenameOrAddColumn(SqliteConnection connection, SqliteTransaction transaction,
+                              string table, string oldName, string newName, string addDefinition)
+{
+    if (ColumnExists(connection, transaction, table, newName))
+    {
+        return;
+    }
+    if (ColumnExists(connection, transaction, table, oldName))
+    {
+        Execute(connection, transaction, $"ALTER TABLE {table} RENAME COLUMN {oldName} TO {newName}");
+    }
+    else
+    {
+        Execute(connection, transaction, $"ALTER TABLE {table} ADD COLUMN {newName} {addDefinition}");
+    }
+}
+
+static bool ColumnExists(SqliteConnection connection, SqliteTransaction transaction, string table, string column)
+{
+    using SqliteCommand pragma = connection.CreateCommand();
+    pragma.Transaction = transaction;
+    pragma.CommandText = $"PRAGMA table_info({table})";
+    using SqliteDataReader reader = pragma.ExecuteReader();
+    while (reader.Read())
+    {
+        if (reader.GetString(1).Equals(column, StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+    }
+    return false;
 }
 
 static TrainingEntry Skill(Dictionary<string, int> skillIds, string name, float weight)

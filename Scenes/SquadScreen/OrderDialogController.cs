@@ -75,6 +75,10 @@ public partial class OrderDialogController : Control
         {
             missionOptions.Add(new Tuple<string, int>("Defend", -3));
             missionOptions.Add(new Tuple<string, int>("Patrol", -4));
+            // Fortification: the squad spends the turn building defenses in its own region.
+            missionOptions.Add(new Tuple<string, int>("Fortify (Entrenchment)", -5));
+            missionOptions.Add(new Tuple<string, int>("Build Listening Post", -6));
+            missionOptions.Add(new Tuple<string, int>("Build Anti-Air", -7));
         }
         else if(_currentlySelectedRegion.RegionFactionMap.Values.Any(rf => !rf.PlanetFaction.Faction.IsDefaultFaction && !rf.PlanetFaction.Faction.IsPlayerFaction))
         {
@@ -123,6 +127,10 @@ public partial class OrderDialogController : Control
         {
             missionType = MissionType.Patrol;
         }
+        else if(e <= -5 && e >= -7)
+        {
+            missionType = MissionType.Construction;
+        }
         else
         {
             missionType = _currentlySelectedRegion.SpecialMissions.First(m => m.Id == e).MissionType;
@@ -149,6 +157,9 @@ public partial class OrderDialogController : Control
                 break;
             case MissionType.Recon:
                 text = "Probe the area to find hidden enemy forces and opportunities for special missions";
+                break;
+            case MissionType.Construction:
+                text = "The squad will spend the turn fortifying this region. Progress scales with squad size and engineering skill; defenses accumulate over successive turns.";
                 break;
                 case MissionType.Sabotage:
                 text = "We have identified a target that, if destroyed, will greatly reduce the enemy's ability to wage war in this region. We will need to get in and out quickly, as the enemy will likely be on high alert.";
@@ -222,6 +233,16 @@ public partial class OrderDialogController : Control
             }
             mission = new Mission(MissionType.Advance, enemyRegionFaction, 0);
         }
+        else if (args.Item2 <= -5 && args.Item2 >= -7)
+        {
+            DefenseType defenseType = args.Item2 switch
+            {
+                -5 => DefenseType.Entrenchment,
+                -6 => DefenseType.Detection,
+                _ => DefenseType.AntiAir
+            };
+            mission = new ConstructionMission(defenseType, 0, GetOrCreatePlayerRegionFaction(selectedRegion));
+        }
         else
         {
             mission = selectedRegion.SpecialMissions.First(m => m.Id == args.Item2);
@@ -235,5 +256,19 @@ public partial class OrderDialogController : Control
     private void OnCanceled(object sender, EventArgs e)
     {
         Visible = false;
+    }
+
+    // Returns the player's RegionFaction in the given region, creating (and registering) one
+    // if the player does not yet have a presence there. Player-built fortifications are stored
+    // on this region faction. Mirrors the on-demand creation used for Advance orders.
+    private static RegionFaction GetOrCreatePlayerRegionFaction(Region region)
+    {
+        Faction playerFaction = GameDataSingleton.Instance.Sector.PlayerForce.Faction;
+        if (!region.RegionFactionMap.TryGetValue(playerFaction.Id, out RegionFaction playerRegionFaction))
+        {
+            playerRegionFaction = new RegionFaction(region.Planet.PlanetFactionMap[playerFaction.Id], region);
+            region.RegionFactionMap[playerFaction.Id] = playerRegionFaction;
+        }
+        return playerRegionFaction;
     }
 }

@@ -82,14 +82,14 @@ namespace OnlyWar.Helpers.Database.GameState
                                                        planetTemplateMap);
             var regions = _planetDataAccess.GetRegions(dbCon, factionMap, planets);
             PlanetDataAccess.PopulateRegionFactions(dbCon, factionMap, regions);
-            _planetDataAccess.PopulateRegionMissions(dbCon, regions);
+            var missionMap = _planetDataAccess.PopulateRegionMissions(dbCon, regions);
             var requests = _requestDataAccess.GetRequests(dbCon, characterMap, factionMap, planets);
             var ships = _fleetDataAccess.GetShipsByFleetId(dbCon, shipTemplateMap);
             var shipMap = ships.Values.SelectMany(s => s).ToDictionary(ship => ship.Id);
             var fleets = _fleetDataAccess.GetFleetsByFactionId(dbCon, ships, factionMap, planets);
             var loadouts = _unitDataAccess.GetSquadWeaponSets(dbCon, weaponSets);
-            var squads = _unitDataAccess.GetSquadsByUnitId(dbCon, squadTemplates, loadouts, 
-                                                           shipMap, regions);
+            var squads = _unitDataAccess.GetSquadsByUnitId(dbCon, squadTemplates, loadouts,
+                                                           shipMap, regions, missionMap);
             var units = _unitDataAccess.GetUnits(dbCon, unitTemplateMap, squads);
             var squadMap = squads.Values.SelectMany(s => s).ToDictionary(s => s.Id);
             var soldiers = _soldierDataAccess.GetData(dbCon, hitLocationTemplates, baseSkillMap,
@@ -179,11 +179,25 @@ namespace OnlyWar.Helpers.Database.GameState
                             _soldierDataAccess.SaveSoldier(transaction, soldier);
                         }
                     }
+                    // missions already written as region special missions, so order missions
+                    // that reuse one are not inserted twice (primary-key conflict)
+                    HashSet<int> savedMissionIds = planets
+                        .SelectMany(p => p.Regions)
+                        .SelectMany(r => r.SpecialMissions)
+                        .Select(m => m.Id)
+                        .ToHashSet();
                     var orders = squads.Select(s => s.CurrentOrders)
                                        .Where(o => o != null && o.Mission != null)
                                        .Distinct();
                     foreach(Order order in orders)
                     {
+                        // an order's mission may not be a region special mission (e.g. a
+                        // player Recon/Advance/Fortify order); persist it so the order can be
+                        // restored on load
+                        if (savedMissionIds.Add(order.Mission.Id))
+                        {
+                            PlanetDataAccess.SaveMission(transaction, order.Mission, isRegionMission: false);
+                        }
                         _unitDataAccess.SaveOrder(transaction, order);
                     }
 

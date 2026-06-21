@@ -37,5 +37,31 @@ namespace OnlyWar.Helpers.Extensions
             }
             return "None";
         }
+
+        // Fuzzy, fog-of-war-friendly description of a defensive value (Entrenchment,
+        // Detection, Anti-Air). Shared by the planet-tactical and region screens so enemy
+        // defenses read consistently and never expose the raw integer to the player.
+        public static string GetDefenseLevelDescription(int level)
+        {
+            switch (level)
+            {
+                case 0:
+                    return "None";
+                case 1:
+                case 2:
+                    return "Minimal";
+                case 3:
+                case 4:
+                    return "Mediocre";
+                case 5:
+                case 6:
+                    return "Moderate";
+                case 7:
+                case 8:
+                    return "Heavy";
+                default:
+                    return "Massive";
+            }
+        }
     }
 }
