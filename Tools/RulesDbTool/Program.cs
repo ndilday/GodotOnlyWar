@@ -605,14 +605,14 @@ static void MigrateTyranidSquads(SqliteConnection connection)
     int lictorSquad = ExecuteScalarInt(connection, transaction, "SELECT COALESCE(MAX(Id), 0) + 1 FROM SquadTemplate");
     InsertSquadTemplate(connection, transaction, lictorSquad, Tyranids, "Lictor",
         defaultArmorId: Chitin15mm, defaultWeaponSetId: ScythingTalons,
-        squadType: Scout | Elite, battleValue: 90);
+        squadType: Scout | Elite, battleValue: 75);
     InsertSquadElement(connection, transaction, lictorSquad, lictorSoldier, min: 1, max: 1);
 
     // Ravener: fast-attack pack of 5, no separate leader statline. Scout.
     int ravenerSquad = lictorSquad + 1;
     InsertSquadTemplate(connection, transaction, ravenerSquad, Tyranids, "Ravener Pack",
         defaultArmorId: Chitin15mm, defaultWeaponSetId: ScythingTalons,
-        squadType: Scout, battleValue: 175);
+        squadType: Scout, battleValue: 225);
     InsertSquadElement(connection, transaction, ravenerSquad, ravenerSoldier, min: 5, max: 5);
 
     transaction.Commit();
@@ -637,9 +637,9 @@ static void MigrateEvasion(SqliteConnection connection)
 
     // Tuning. Scale reference: melee/ranged totals sit on the ~10-point roll scale,
     // so 2-3 is a meaningful dodge and 5+ is nearly untouchable. Marine baseline = 0.
-    SetEvasion(connection, transaction, "Genestealer", meleeEvasion: 3, rangedEvasion: 2, abilities: 0);    // weaving close-combat horror
-    SetEvasion(connection, transaction, "Lictor", meleeEvasion: 2, rangedEvasion: 4, abilities: 0);          // chameleonic — very hard to shoot
-    SetEvasion(connection, transaction, "Ravener", meleeEvasion: 2, rangedEvasion: 3, abilities: Burrow);    // serpentine, fast, tunnels
+    SetEvasion(connection, transaction, "Genestealer", meleeEvasion: 2, rangedEvasion: 2, abilities: 0);    // weaving close-combat horror
+    SetEvasion(connection, transaction, "Lictor", meleeEvasion: 0, rangedEvasion: 3, abilities: 0);          // chameleonic — hard to shoot, melee carried by skill
+    SetEvasion(connection, transaction, "Ravener", meleeEvasion: 2, rangedEvasion: 2, abilities: Burrow);    // serpentine, fast, tunnels
 
     transaction.Commit();
     Console.WriteLine("Evasion migration complete (columns ensured; Genestealer/Lictor/Ravener tuned).");
