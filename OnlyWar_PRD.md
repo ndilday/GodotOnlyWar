@@ -1,7 +1,7 @@
 # OnlyWar — Product Requirements Document
 
 **Version:** Alpha 0.7 (In Development)  
-**Last Updated:** March 2026  
+**Last Updated:** June 2026  
 **Author:** Nathan Dilday  
 
 ---
@@ -230,7 +230,12 @@ Each feature is described as a behavioral specification: what the system does, a
 **Acceptance Criteria (Planned — 0.7 Stretch):**
 - Displays the expected time to recovery alongside each injured soldier on the Squad Screen (not just the Apothecary Screen).
 - When a marine dies, the battle results and death record note whether geneseed was successfully recovered.
-- Cybernetic replacements are available as a treatment option for marines with severed or permanently crippled limbs (requires Techmarine availability and a time cost).
+- **Cybernetic replacements** are available as a treatment option:
+  - *Eligibility:* any hit location that has reached its cripple threshold but not its lethal threshold — limbs (arms, hands, legs, feet) and vital locations (head, torso) at crippling severity.
+  - *Requirements:* both a Techmarine and an Apothecary must be available (present in the chapter and not deployed); both are consumed for the duration of the procedure.
+  - *Cost:* a combination of time (weeks in the Apothecarium) and chapter resources; specific values set during implementation.
+  - *Restored capability:* a cybernetic restores full capability to the replaced location in the current implementation. Granular per-attribute effects and embedded weapon options are a post-0.7 design item.
+  - *Dreadnought interment* (for soldiers with multiple severe/unsurvivable injuries) is the extreme end of this same decision space and should be designed for, though it is out of scope until Dreadnoughts are implemented.
 
 ---
 
@@ -245,7 +250,7 @@ Each feature is described as a behavioral specification: what the system does, a
 - The player can designate a focus for a given Scout squad's training (e.g., prioritizing ranged skill vs. melee skill vs. leadership), which affects which skills accumulate points faster during that week.
 
 **Acceptance Criteria (Planned — Post-0.7):**
-- The Recruiter can report when a Sergeant feels he has nothing further to teach a scout in a given area.
+- **Sergeant training cap.** A Sergeant's own skill level in a category is a hard cap on how far he can train a scout in that category — a scout cannot be trained beyond his instructor's level. Soldier ratings are updated every four turns; each time ratings update and a scout remains at his Sergeant's instructional limit in one or more skills, the Recruiter surfaces a notification. The player then has three options: leave the scout in the squad and accept no further improvement in the capped skill; transfer him to a Scout squad whose Sergeant has a higher level in that area; or promote him to a line squad, where development continues through deployment and combat experience rather than structured training.
 - The player can initiate a new intake of potential recruits from chapter-held worlds.
 - The Armory allows the designation of potential Techmarines to be sent to Mars for training.
 
@@ -254,6 +259,8 @@ Each feature is described as a behavioral specification: what the system does, a
 ### 4.10 Battle Review Screen
 
 **Description.** A post-battle replay screen that allows the player to review the turn-by-turn progression of a completed engagement.
+
+> **Note:** The acceptance criteria below describe the *current* grid-plus-turn-log implementation. A planned **Battle screen visual overhaul** (see §5.3) will replace this layout with a four-region replay/report display (force hierarchy tree, replay viewport with playback controls, selected-formation summary and event chronicle, and a battle timeline / casualties-by-round table). Until that work lands, the criteria here remain the spec of record.
 
 **Acceptance Criteria:**
 - Displays a 2D grid showing the positions of all squads at each turn of the battle.
@@ -340,7 +347,7 @@ Each feature is described as a behavioral specification: what the system does, a
 **Acceptance Criteria:**
 
 **Order Assignment**
-- The player can assign a squad to one of the following mission types: Recon, Advance (assault), Ambush, Assassination, Sabotage, Extermination, Defense, or Patrol.
+- The player can assign a squad to one of the following mission types: Recon, Advance (assault), Ambush, Assassination, Sabotage, Extermination, Defense, Patrol, Construction, or Diversion.
 - The player sets the target (a region and its occupying faction) and the aggression level (Avoid, Cautious, Normal, Attritional, or Aggressive).
 - Multiple squads can be assigned to the same mission, combining their force for resolution.
 
@@ -359,6 +366,8 @@ Each feature is described as a behavioral specification: what the system does, a
 - **Sabotage:** Squad degrades enemy defensive infrastructure (detection, entrenchment, or anti-air). Degree of degradation scales with skill margin and the size of the existing defenses.
 - **Defense:** Squad defends a region against an incoming enemy assault. Defender advantage applies. Outcome affects whether the enemy assault order resolves successfully.
 - **Patrol:** Squad conducts a security sweep, potentially intercepting enemy infiltration or patrol forces.
+- **Construction:** Squad in its own region spends the turn building regional fortifications instead of fighting — Entrenchment (Fortify), Detection (Listening Post), or Anti-Air. Progress scales with squad size and the Engineering (Fortification) skill, accumulating across successive turns and sharing resolution with the NPC development path.
+- **Diversion:** Squad stages an overt feint against an enemy-held region while remaining in its own, skipping infiltration. A daily show of force (a Tactics check whose difficulty rises with the target's Detection and garrison size) accumulates Impact, inflating the garrison the target's controller feels it must hold; at Normal aggression or higher it also baits a counterattack, in which the exposed feint force is pulled in as a defender.
 
 **Aggression and Continuation**
 - A squad's aggression setting determines at what casualty level it withdraws from an engagement.
@@ -391,13 +400,28 @@ Each feature is described as a behavioral specification: what the system does, a
 
 **Turn Structure**
 - Each battle turn, every able soldier selects an action based on their situation and aggression setting.
-- Available actions: move (at current speed toward a destination), fire (accuracy dependent on current speed), aim (stationary only, accumulates accuracy bonus), charge into melee, melee attack, reload, or ready a weapon.
-- A unit always has at least its base move available. Each consecutive turn it moves, its current speed increases by its acceleration value up to its top speed. Stopping decelerates at the same rate.
-- When moving faster than base move, a unit can turn no more than 30 degrees per turn.
-- Ranged accuracy penalties scale with current speed: the existing moving penalty applies at base move; above base move the penalty is 3× weapon bulk, making shooting at sprint speed practically ineffective.
+- Available actions: move (at a chosen movement tier toward a destination), fire, aim (stationary only, accumulates accuracy bonus), charge into melee, melee attack, reload, ready a weapon, or change stance.
+
+**Movement Tiers**
+- Movement is modeled as four discrete tiers, each a fraction of the soldier's `MoveSpeed`. The tier chosen determines which combat actions are available that turn. A soldier may change tier freely each turn with no transition cost, except that a crouching or prone soldier must return to standing before moving.
+
+| Tier | Speed | Aim | Shoot | Melee | Notes |
+|---|---|---|---|---|---|
+| Stationary | 0 | Yes | Yes | Yes | Stance effects apply |
+| Walk | 1/5 MoveSpeed | Yes | Yes | Yes | Aim state is preserved between walk turns |
+| Jog | 1/2 MoveSpeed | No | Yes (no aim bonus) | Yes | Entering jog or faster resets any accumulated aim |
+| Run | Full MoveSpeed | No | No | No | Turning restricted to 30 degrees per turn |
+
+- Shooting while running is not permitted in the initial implementation; a high-penalty shoot-while-running variant may be added later.
+
+**Stance**
+- Stance is only mechanically relevant when a soldier is stationary, and represents body position: Standing, Crouching, or Prone. Stance affects both incoming ranged hit probability and melee effectiveness.
+- Rather than a flat accuracy penalty, stance filters the valid hit locations before the hit location probability roll: locations not exposed in a given stance are excluded. Crouching excludes lower-body locations (legs, feet); prone excludes everything but locations visible from ground level (head, upper torso depending on orientation). The exact excluded sets are defined per body template.
+- In melee, crouching applies an offense penalty and makes the soldier easier to hit; prone doubles both magnitudes. Specific values are set during implementation.
+- Stance transitions each cost one turn: Standing↔Crouching, Crouching↔Prone, and a direct drop to Prone from any stance. Returning from Prone to Standing takes two turns (passing through Crouching). Changing stance and moving in the same turn is not permitted.
 
 **Ranged Combat**
-- Hit probability is derived from the shooter's ranged skill, the target's range, the target's physical size, and the cover modifier of the target's squad.
+- Hit probability is derived from the shooter's ranged skill, the target's range, the target's physical size, the target's per-species evasion value (an elusiveness modifier distinct from physical size), and the cover modifier of the target's squad.
 - A successful hit determines a struck location via the target's hit location probability table.
 - Damage after armor reduction is applied to that location at the appropriate wound severity.
 - Weapons have a rate of fire. Firing multiple times in a turn incurs an accuracy penalty for each shot after the first.
@@ -405,7 +429,7 @@ Each feature is described as a behavioral specification: what the system does, a
 
 **Melee Combat**
 - Squads that close to melee range engage in hand-to-hand combat.
-- Melee hit probability is derived from the attacker's melee skill, the defender's melee skill, and the weapons involved.
+- Melee hit probability is derived from the attacker's melee skill, the defender's melee skill, the defender's per-species evasion value, and the weapons involved.
 - A squad in melee cannot fire two-handed ranged weapons unless it opts to disengage.
 
 **Wounds in Battle**
@@ -420,6 +444,14 @@ Each feature is described as a behavioral specification: what the system does, a
 - After each turn, squads evaluate whether to continue based on their remaining strength relative to their starting strength and their aggression setting.
 - A squad with no able soldiers always withdraws.
 - Battle ends when one side has no squads willing to continue.
+
+**Disengagement — Covered Withdrawal and Rout**
+- A squad leaves an engagement in one of two modes:
+  - **Covered Withdrawal** (player-ordered): the squad moves away from the enemy at jog speed each turn, shooting as it goes. Withdrawal fire uses normal shooting rules and counts toward the pursuer's casualty threshold. The squad remains on the map until it reaches the map edge, then exits.
+  - **Rout** (morale-triggered; morale itself is still open, see §6.2): the squad moves away at run speed each turn with no shooting, remaining on the map until it reaches the edge.
+- **Pursuit:** the non-withdrawing force continues to act normally — moving toward and firing at the fleeing squad according to its own aggression. Pursuit tenacity is governed by the pursuer's aggression using the same casualty thresholds as normal battle continuation: an Aggressive force pursues until it cannot reach or shoot the fleeing squad or its own casualties trigger withdrawal; an Avoid force does not pursue at all. A pursuer that takes sufficient casualties from withdrawal fire may itself begin to withdraw, ending pursuit.
+- Combat ends when the two forces are outside mutual shooting range and at least one side is fully withdrawing or routing; both forces need not exit the map.
+- Units capable of burrowing or flight may disengage immediately, bypassing the normal withdrawal sequence.
 
 **Battle Record**
 - A full record of the battle is stored: all actions taken per turn, soldier positions, wounds inflicted, and outcome.
@@ -466,7 +498,7 @@ Each feature is described as a behavioral specification: what the system does, a
 
 ### 4.16 Turn Simulation — Governor Relations
 
-**Description.** Planetary governors are named characters with personalities that influence how they interact with the chapter. The Inquisition also issues requests to the chapter (see Section 6.10); the mechanics below apply to governor requests specifically.
+**Description.** Planetary governors are named characters with personalities that influence how they interact with the chapter. The Inquisition also issues requests to the chapter (see Section 6.5); the mechanics below apply to governor requests specifically.
 
 **Acceptance Criteria:**
 
@@ -486,9 +518,10 @@ Each feature is described as a behavioral specification: what the system does, a
 - Only one active request per governor is permitted at a time.
 
 **Request Fulfillment**
-- A request is fulfilled when at least one player squad lands on the planet surface, regardless of the squad's assigned orders.
+- For the current `PresenceRequest` type, a request is fulfilled when at least one player squad lands on the planet surface, regardless of the squad's assigned orders or mission target — a squad landing for an entirely unrelated reason satisfies the request.
 - Fulfillment improves the governor's opinion.
 - Ignoring a request degrades the governor's opinion over time according to their Patience trait.
+- Future request types (e.g., investigate a region, eliminate a specific threat) will define their own fulfillment conditions when designed, as part of the broader mission system expansion (backlog).
 
 **Governor Replacement**
 - Governors age one year at the turn of each year. Each week they face a chance of death that rises with age and is reduced on higher-importance worlds (representing better rejuvenat care). On death, the governor is removed and a successor is generated to lead the planet.
@@ -509,16 +542,45 @@ Each feature is described as a behavioral specification: what the system does, a
 - A ship cannot be loaded beyond its capacity.
 - Ship capacity is correctly reduced by the size of squads currently loaded.
 
-**Acceptance Criteria (Planned — 0.7 To-Do):**
+**Acceptance Criteria (Implemented — 0.7):**
 - Ships can be ordered to move between planets via the task force menu in the Galaxy View.
 - The movement dialog presents available warp lane routes to the destination. If no established lane connects the origin to the destination directly, the route is composed of lane hops through intermediate planets.
-- *Deferred (post-0.7):* A player-selectable "Chart Direct Route (Risky)" option that bypasses the lane network for a shorter-distance but higher-variance passage. This is deferred because the current transit-time model derives base time from subsector scope rather than raw distance, and applies the same variance regardless of route type — so a direct route is presently neither faster nor riskier than a lane route between the same two planets. Implementing the option meaningfully requires first making route type mechanically distinct (distance-aware base time and/or wider variance for direct routes). Until then, a direct route is used only as an automatic fallback when the lane network cannot connect two planets, and no risky-route choice is shown to the player.
 - A task force is displayed on the Galaxy View while it is in realspace — in orbit or in system transit (the outbound and inbound legs of a journey) — anchored to its origin or destination system.
 - A task force in the Warp is not displayed on the Galaxy View. Ships in the Warp are out of contact and cannot be communicated with, selected, or interacted with from any map view until they translate back into realspace.
 - Transit time is variable. The player is shown an estimated arrival range when plotting a course, not a guaranteed date.
 - A task force in transit cannot be loaded or unloaded until it arrives.
 - On arrival, the task force's position is updated to the destination planet.
 - Fleet positions are saved and restored correctly across save/load.
+
+**Deferred (Post-0.7):**
+- A player-selectable "Chart Direct Route (Risky)" option that bypasses the lane network for a shorter-distance but higher-variance passage. This is deferred because the current transit-time model derives base time from subsector scope rather than raw distance, and applies the same variance regardless of route type — so a direct route is presently neither faster nor riskier than a lane route between the same two planets. Implementing the option meaningfully requires first making route type mechanically distinct (distance-aware base time and/or wider variance for direct routes). Until then, a direct route is used only as an automatic fallback when the lane network cannot connect two planets, and no risky-route choice is shown to the player.
+
+**Warp Travel Time Model.**
+
+*Sector scale.* The sector grid is 200×200 light years (each grid unit is 1×1 ly). A subsector has a maximum diameter of 20 ly, typically containing 2–8 star systems within a 10 ly radius.
+
+*Warp lanes.* Each subsector has a designated capital world, determined during sector generation by an importance score (population size for 0.7; strategic classification post-0.7). The capital has an established warp lane to every other planet within its subsector. Across subsectors, lanes connect primarily between subsector capitals, with additional cross-subsector lanes possible between high-importance non-capital planets near boundaries. Lanes are derived deterministically during sector generation (and rebuilt on load).
+
+*Transit time formula.* The campaign layer tracks objective real-space travel time in one-week turns; subjective time aboard ship is computed separately for future crew experience, healing, and event hooks.
+- Every interstellar trip carries a fixed 4-week base cost (roughly two weeks out to the warp translation point and two weeks back from the destination point).
+- Warp passage base time is set by subsector relationship: same subsector = 1 week expected subjective warp time; adjacent subsectors = 3 weeks; non-adjacent in-sector = 7 weeks.
+- Subjective warp time is multiplied by a Gaussian-derived factor inspired by the Rogue Trader subjective-duration table (z=0 → 1×; z=±0.5 → ½×/2×; z=±1 → ⅓×/3×; continuing by the same pattern).
+- Objective warp time is then multiplied by a second Gaussian-derived factor (z=0 → 1× subjective; z=+5 → 1/10×; z=−5 → 10×).
+- Total objective travel time is `4 weeks + objective warp time`, rounded up to whole campaign turns for arrival.
+
+*Phases and persistence.* Fleet movement is tracked in three phases: 2 objective weeks outbound system transit, the rolled objective warp duration, and 2 objective weeks inbound system transit. Fleets are visible and communicable during system transit but not while `InWarp`. The resolved journey state is saved with the fleet: origin, destination, current phase, remaining phase/total objective weeks, rolled subjective warp weeks, rolled objective warp weeks, and whether the subjective warp training payout has already been applied.
+
+*Training in transit.* Embarked soldiers do not receive ordinary weekly training while `InWarp`. On exit into inbound system transit, embarked idle squads receive one training payout based on the rolled subjective warp weeks. Crew in system transit accumulate training and healing at the same rate as those on the ground. The end-of-turn simulation runs normally each week regardless of ship position.
+
+*Routing.* Lane topology determines known routes: the lane route is the shortest path through the warp-lane graph (Dijkstra weighted by hop distance). If no lane path exists, the journey is treated as a direct/charted route (also the automatic fallback when the lane network cannot connect two planets). Player-selectable route choice and a distinct risky direct route are a post-0.7 refinement (see the deferred "Chart Direct Route (Risky)" option above). Navigator modifiers to the Gaussian rolls are also post-0.7 (see §6.6). Warp storms are deferred post-0.7; the direct-route long-tail variance covers disrupted passages for now.
+
+Example ranges for reference:
+
+| Journey type | Typical base turns | Equivalent days | Canonical target |
+|---|---|---|---|
+| Same subsector | 5 before variance | 35 days | 5–10 days warp passage, plus in/out-system travel |
+| Adjacent subsector | 7 before variance | 49 days | 12–30 days warp passage, plus in/out-system travel |
+| Non-adjacent in-sector | 11 before variance | 77 days | 30–60 days warp passage, plus in/out-system travel |
 
 **Fleet Screen (sector-wide).** The Fleet Screen lists all of the chapter's task forces and their ships regardless of location, including those in the Warp, so the player always has an accounting of the whole fleet.
 
@@ -544,7 +606,7 @@ Each feature is described as a behavioral specification: what the system does, a
 
 **Description.** OnlyWar is a sandbox whose value is the emergent narrative its simulation produces. The simulation already generates the events — named brothers fight, develop, are maimed, and die; worlds fall or hold; governors plead and the wider Imperium triages. This section specifies how those events are *narrated back to the player*, because in a sandbox the narration is not polish — it is the feature that converts simulation state into a story the player remembers and retells. The player's felt stakes are not "avoid sector failure" (the wider Imperium makes total collapse unlikely) but **relevance and legacy**: did the chapter matter here, and at what cost in irreplaceable brothers?
 
-This is a cross-cutting specification. The per-surface acceptance criteria below govern text generated by the Turn Report (4.11), Soldier Screen (4.7), Death/Apothecary records (4.12, 4.8), Battle Review (4.10), Governor/Inquisition requests (4.16, 6.10), and New Game founding (4.1).
+This is a cross-cutting specification. The per-surface acceptance criteria below govern text generated by the Turn Report (4.11), Soldier Screen (4.7), Death/Apothecary records (4.12, 4.8), Battle Review (4.10), Governor/Inquisition requests (4.16, 6.5), and New Game founding (4.1).
 
 **Authoring Principles (apply to all generated text):**
 
@@ -564,7 +626,7 @@ This is a cross-cutting specification. The per-surface acceptance criteria below
 - **Soldier History Log (4.7):** The event vocabulary is enriched beyond recruitment/promotion/wound to include first blood, survival against odds, instructor/mentor relationships, kill milestones, oaths sworn, and near-death recoveries.
 - **Death & Apothecary Records (4.12, 4.8):** A brother's death produces a eulogy-style record — where and how he fell, his final tally, years served, and whether geneseed was recovered; **lost geneseed is narrated as a compounding loss**, not a silent stat change. Injuries are described with gravity, and recovery is framed as a brother's struggle back to the line.
 - **Battle Review Log (4.10):** Per-turn log entries name their actors and add flavor on critical hits, kills, and last stands, rather than reading as "Soldier 3 fires at Soldier 7."
-- **Governor / Inquisition Requests (4.16, 6.10):** Request text is voiced in character, with tone driven by the requester's personality traits and authority.
+- **Governor / Inquisition Requests (4.16, 6.5):** Request text is voiced in character, with tone driven by the requester's personality traits and authority.
 - **New Game Founding (4.1):** A short founding history / chapter myth is generated at campaign start, seeding the first entry of the chapter's narrative record.
 - **Wider-Imperium Dispatches:** As the uncontrolled Imperial presence grows (per the sandbox reframe), its actions reach the player as voiced dispatches — Battlefleet priorities, other chapters' deeds, Inquisitorial edicts — that texture the sector as a living theater the chapter is one actor within.
 
@@ -604,20 +666,31 @@ The following must ship in 0.7. Status reflects the current codebase (✅ done �
 
 ### 5.3 Alpha 0.7 — To-Do
 
-Targeted for 0.7, not yet committed:
+Targeted for 0.7. These items were not part of the committed 0.7 set (§5.2), but several have since landed. Status reflects the current codebase (✅ done · ◐ partial · ⬜ not started):
 
-- **Battle screen visual overhaul:** Updated visual presentation of the battle UI.
+- ⬜ **Battle screen visual overhaul:** Rework the existing Battle Review Screen from a simple grid-plus-turn-log into an automated battle replay/report display, using the V3 Chronicle Formation Hybrid direction captured in `Design/BattleScreenMockups/battle_screen_mockup_v3_01_chronicle_formation_hybrid.png`. This is not a tactical command surface: battles have already resolved, so the UI should avoid order buttons, bottom command rails, movement previews, and blue/red territory ownership washes. The screen should instead help the player understand what happened in a sizable battle.
+  - Build a battle replay display model between `BattleHistory` and the UI: force hierarchy nodes, selected formation summary, battle event entries, round timeline entries, and casualty-by-round summaries.
+  - Add a summary/analysis service that derives those view models from `BattleHistory`/`BattleTurn`: force tree, current round, losses per force, losses by round, selected formation stats, notable events, and event chronology rows.
+  - Replace the current Battle Review layout with a four-region structure:
+    - Left: collapsible force hierarchy tree with opposing forces, nested companies/squads/vehicles, strength counts, losses, selected row highlighting, and small faction/type icons.
+    - Center: replay viewport showing formations, banners, casualty markers, routed trails, projectile/charge/event callouts, and compact top-center playback controls (previous round, step back, play/pause, step forward, next round, speed).
+    - Right: selected formation summary at the top (commander, starting/current strength, losses, fatigue/morale/ammunition/effects where data exists), with event chronicle below it for timestamped actions, morale checks, routs, volleys, casualties, and phase summaries.
+    - Bottom: informational battle timeline and casualties-by-round table, not a command menu.
+  - Preserve the visual language established by the Sector Map and Chapter Screen: dark panels, antique-gold borders, parchment text, smoky glass, muted cyan/crimson only for unit affiliation markers and row accents, and amber for warnings/notable events.
+  - Upgrade the current previous/next-turn behavior into playback controls. Initial implementation may still step discretely through resolved turns; smooth animation and richer projectile/path interpolation can follow once the structural UI is in place.
+  - Keep the first vertical slice data-driven and robust for large battles: the force hierarchy, event chronicle, selected formation summary, and casualty timeline should remain readable with many units before investing heavily in visual animation.
 - **Strategic Layer Phase 2:**
   - ✅ Population growth relative to planet carrying capacity (faster growth when underpopulated, slower when near capacity). *(Implemented — carrying capacity is an absolute, per-type value rolled from new `PlanetTemplate` columns (`CarryingCapacityBase`/`CarryingCapacityStandardDeviation`), distributed across a planet's regions and persisted per region. Starting population is seeded as a fraction of each region's capacity so no world begins above capacity; dense biomes (Hive, Forge) start nearly full while sparse ones (Agri, Feral) have room to grow. Per-type population and capacity scales are canon-grounded (Hive ~80B typical down to Death ~310K) and stored as log-normal `Floor`/`Scale` values. Each turn, organic (logistic and baseline) growth is scaled by a `1 - regionPop/capacity` crowding factor — near-maximal when sparse, zero at capacity, and gently negative above capacity so an overfull region drifts back down.)*
   - ✅ Garrison attrition (0.1% of garrison retires per week, requiring replacement from population growth). *(Implemented — each week 0.1% of a faction's regional garrison retires before fresh recruitment from population growth is applied, in the same factions that recruit: PDF, player, and hidden/secret factions.)*
   - ✅ OpFor fog of war, recon orders, and special missions. *(Implemented — recon orders raise a region's intelligence and the special-mission/intelligence system already existed; this pass closed the remaining fog-of-war leak in the UI. Hidden factions are now concealed on every screen (folded into the civilian count, discovered only via the intelligence system); public-enemy population is graded by intelligence level ("Unknown" → fuzzed → exact); and enemy defenses appear only once intelligence exceeds a threshold and only as fuzzy descriptions, never raw values. The Region screen previously revealed hidden-faction identity and exact garrison/defense values regardless of intelligence — now consistent with the planet tactical screen.)*
   - ◐ Diversion missions. *(Player-side implemented — a squad can be ordered to run an overt "Diversion" feint against an enemy-held region while remaining in its own. Unlike stealth missions it skips infiltration: a `DemonstrateForceMissionStep` makes a daily show of force (a Tactics check whose difficulty rises with the target's Detection and garrison size), accumulating Impact. Diversions resolve in a new pre-planning "shaping" phase **before** factions generate their turn orders, so the feint shapes enemy decisions that same turn. A successful feint projects a superlinear `apparentThreat = manpower × (1 + impact/scale)²` onto the target's `PerceivedThreatBonus`, inflating the garrison its controller feels it must hold; at Normal aggression or higher it also raises the feinting force's `ProvocationLevel`, which lowers the AI's force-ratio threshold for attacking (toward parity) and biases its target selection — baiting a counterattack. Because the feint force stands in the open, it is pulled into the fight as a defender if it draws that counterattack. Both effects are transient: set during the shaping phase, consumed by faction planning, then cleared the same turn (never saved). **Remaining (Phase 4, see below): enemy AI generating its own diversions.*)*
-  - **Diversion missions Phase 4 — enemy-generated diversions:** Give `FactionStrategyController` the ability to run its own diversions. When the AI wants to take a region but lacks the force-ratio edge for a major offensive, it should consider feinting against a *different* enemy (player) region — pinning the player's garrison or baiting a reaction there — then striking its real objective the following turn(s) against the now-weakened defense. Keep the generation heuristic simple initially (e.g. feint the player's strongest bordering region, then attack the weakened one), reusing the same `PerceivedThreatBonus`/`ProvocationLevel` consumption path the player side already exercises. Deferred from the initial diversion implementation to contain design/test surface for 0.7.
+  - ⬜ **Diversion missions Phase 4 — enemy-generated diversions:** Give `FactionStrategyController` the ability to run its own diversions. When the AI wants to take a region but lacks the force-ratio edge for a major offensive, it should consider feinting against a *different* enemy (player) region — pinning the player's garrison or baiting a reaction there — then striking its real objective the following turn(s) against the now-weakened defense. Keep the generation heuristic simple initially (e.g. feint the player's strongest bordering region, then attack the weakened one), reusing the same `PerceivedThreatBonus`/`ProvocationLevel` consumption path the player side already exercises. Deferred from the initial diversion implementation to contain design/test surface for 0.7.
   - ✅ Player-constructable fortifications (Entrenchments, Listening Posts, Anti-Air batteries). *(Implemented — a squad in its own region can be ordered to Fortify (Entrenchment), Build Listening Post (Detection), or Build Anti-Air; the squad spends the turn building instead of fighting. Progress scales with squad size and a new Intelligence-based "Engineering (Fortification)" skill that all combat marines train, accumulating defenses over successive turns. The construction-mission resolution and save round-trip are shared with the existing NPC development path.)*
-  - Burrowing and camouflage as ambush tactics.
-    - **Evasion / hard-to-hit modifier:** Add a defensive "harder to hit" lever that applies in *melee* as well as ranged, to represent elusive bodies (serpentine Raveners, weaving Genestealers/Lictors). Today the to-hit resolution (`ShootAction`/`MeleeAttackAction` = attacker skill + modifiers − roll) has no target-based defense at all in melee, and the only ranged levers are target Size and movement speed (`CalculateSizeModifier`/`CalculateRangeModifier`). Introduce a per-species evasion value subtracted from the attacker's total in both actions (one new `Species` column, applied in both attack actions), so elusiveness can be modeled without overloading Size (which must keep tracking real bulk for wounds/footprint). Currently the Ravener leans on its high MoveSpeed for ranged evasion only; this closes the melee gap.
-- **Subsector warp lanes:** *(Implemented.)* Each subsector has a capital world, determined by an importance score (population size for 0.7; strategic classification post-0.7). The capital has established warp lanes to all other planets in the subsector. Cross-subsector lanes connect the capitals of adjoining subsectors, with a spanning tree guaranteeing the whole sector is reachable. Lanes are derived deterministically from planet positions during sector creation (and rebuilt on load) rather than persisted. The fleet movement dialog routes along lanes by default. The "Chart Direct Route (Risky)" option is deferred post-0.7 (see 4.17).
-- ◐ **Tyranid Infiltration Units:** Lictor and Ravener content data. *(Species, SoldierTemplate, and skill-training data added via the `migrate-tyranids` rules-DB migration — Lictor as an elite WS6 ambusher (S6, T5/6-wound, Perception-led senses, high Stealth, melee carried by skill rather than Dex) and Ravener as a fast-attack glass cannon (the fastest ground bug, Hormagaunt-level instincts, Warrior-tier body). Squad templates added via `migrate-tyranid-squads` — the Lictor as a solo unit (`Scout | Elite`, 15mm chitin) and the Ravener as a 5-strong leaderless pack (`Scout`), both with 15mm chitin and Scything Talons; both are now eligible for `ForceGenerator` dynamic forces (scout patrols and generic forces). Remaining: adding them to the fixed `UnitTemplate` Tyranid armies if desired, plus the melee-evasion lever above.)*
+  - ◐ Burrowing and camouflage as ambush tactics.
+    - ✅ **Evasion / hard-to-hit modifier:** *(Implemented — a per-species evasion value is now subtracted from the attacker's total in both `ShootAction` and `MeleeAttackAction`, giving elusive bodies (serpentine Raveners, weaving Genestealers/Lictors) a defensive "harder to hit" lever in melee as well as ranged without overloading Size, which still tracks real bulk for wounds/footprint. Melee attacks now also account for the defender's melee skill. Previously the Ravener leaned on its high MoveSpeed for ranged evasion only; this closes the melee gap.)*
+    - Burrowing and camouflage proper (immediate disengagement, concealment-based ambush positioning) remain to-do.
+- ✅ **Subsector warp lanes:** *(Implemented.)* Each subsector has a capital world, determined by an importance score (population size for 0.7; strategic classification post-0.7). The capital has established warp lanes to all other planets in the subsector. Cross-subsector lanes connect the capitals of adjoining subsectors, with a spanning tree guaranteeing the whole sector is reachable. Lanes are derived deterministically from planet positions during sector creation (and rebuilt on load) rather than persisted. The fleet movement dialog routes along lanes by default. The "Chart Direct Route (Risky)" option is deferred post-0.7 (see 4.17).
+- ◐ **Tyranid Infiltration Units:** Lictor and Ravener content data. *(Species, SoldierTemplate, and skill-training data added via the `migrate-tyranids` rules-DB migration — Lictor as an elite WS6 ambusher (S6, T5/6-wound, Perception-led senses, high Stealth, melee carried by skill rather than Dex) and Ravener as a fast-attack glass cannon (the fastest ground bug, Hormagaunt-level instincts, Warrior-tier body). Squad templates added via `migrate-tyranid-squads` — the Lictor as a solo unit (`Scout | Elite`, 15mm chitin) and the Ravener as a 5-strong leaderless pack (`Scout`), both with 15mm chitin and Scything Talons; both are now eligible for `ForceGenerator` dynamic forces (scout patrols and generic forces), and the per-species melee/ranged evasion lever they were designed around is now in place (see above). Remaining: adding them to the fixed `UnitTemplate` Tyranid armies if desired.)*
 
 ### 5.4 Alpha 0.7 — Stretch
 
@@ -671,19 +744,13 @@ Documented for planning purposes; not scheduled:
 
 The following require design decisions before their associated features can be implemented. Resolving these is the expected focus after the initial PRD and TDD drafts are locked.
 
-### 6.1 Governor Request Fulfillment — RESOLVED
-
-For the current `PresenceRequest` type: a request is fulfilled when at least one player squad lands on the planet surface, regardless of the squad's assigned orders or mission target. A squad landing for an entirely unrelated reason satisfies the request.
-
-Future request types (e.g., investigate a region, eliminate a specific threat) will define their own fulfillment conditions when they are designed. This is a backlog item pending the broader mission system expansion.
-
-### 6.2 Aggression Axis Split — DEFERRED
+### 6.1 Aggression Axis Split — DEFERRED
 
 The single `Aggression` axis (Avoid → Cautious → Normal → Attritional → Aggressive) currently conflates two behaviors: willingness to seek contact and willingness to absorb casualties before withdrawing. Splitting into two axes would allow behaviors like "seek contact but withdraw readily on losses" or "avoid contact but hold ground if engaged."
 
 This split is deferred indefinitely. Aggression is a per-order, per-mission setting with no mid-mission adjustment. The AI generates orders with hardcoded aggression values per order type (Normal for assaults, Cautious for patrols, Avoid for construction). No concrete playtesting scenario has been identified where the single axis produces wrong behavior. If such a scenario emerges, the question should be reopened at that time.
 
-### 6.3 Morale
+### 6.2 Morale
 
 **Question:** What triggers a morale check and what are its outcomes?
 
@@ -692,111 +759,9 @@ This split is deferred indefinitely. Aggression is a per-order, per-mission sett
 - Death of the squad leader.
 - Being significantly outnumbered.
 
-**Outcomes to define:** reduced combat effectiveness, forced retreat (covered withdrawal), rout (immediate disorderly exit from the map), or broken (squad cannot be assigned orders for a number of turns after the battle ends).
+**Outcomes to define:** reduced combat effectiveness, forced retreat (covered withdrawal), rout (immediate disorderly exit from the map), or broken (squad cannot be assigned orders for a number of turns after the battle ends). The mechanics of covered withdrawal and rout are themselves resolved and specified under Battle Continuation in §4.14; what remains open here is what *triggers* a morale check and which of these outcomes results.
 
-### 6.4 Retreat Mechanics — RESOLVED
-
-Two distinct retreat modes:
-
-**Covered Withdrawal** (player-ordered):
-- The withdrawing squad moves away from the enemy at jog speed each turn, shooting as it goes.
-- Withdrawal fire uses normal shooting rules and counts toward the pursuer's casualty threshold for the purpose of triggering the pursuer's own withdrawal check.
-- The withdrawing squad remains on the map until it reaches the map edge, at which point it exits.
-
-**Rout** (morale-triggered, see 6.3):
-- The routing squad moves away at run speed each turn with no shooting.
-- The routing squad remains on the map until it reaches the map edge.
-
-**Pursuit:**
-- The non-withdrawing/routing force continues to act normally each turn: moving toward and firing at the fleeing squad according to their own aggression setting.
-- Pursuit tenacity is governed by the pursuing force's aggression setting, using the same casualty thresholds that govern normal battle continuation. An Aggressive force pursues until it cannot reach or shoot the fleeing squad, or until its own casualties trigger its withdrawal threshold. An Avoid force does not pursue at all.
-- Combat ends when the two forces are outside of mutual shooting range and at least one side is fully withdrawing or routing. There is no need for both forces to exit the map.
-
-**Special cases:**
-- Units capable of burrowing or flight may disengage immediately, bypassing the normal withdrawal sequence.
-- Pursuit and withdrawal fire interact with the aggression-based withdrawal check: a pursuer that takes sufficient casualties from withdrawal fire may itself begin to withdraw, ending pursuit.
-
-### 6.5 Movement Tiers and Stance — RESOLVED
-
-This item replaces the earlier momentum-based sprint design. Movement is modeled as four discrete tiers, and stance is a separate tracked state that interacts with both ranged and melee combat.
-
----
-
-**Movement Tiers**
-
-Each tier defines a speed fraction of the soldier's `MoveSpeed` value and determines what combat actions are available that turn.
-
-| Tier | Speed | Aim | Shoot | Melee | Notes |
-|---|---|---|---|---|---|
-| Stationary | 0 | Yes | Yes | Yes | Stance effects apply |
-| Walk | 1/5 MoveSpeed | Yes | Yes | Yes | Aim state is preserved between walk turns |
-| Jog | 1/2 MoveSpeed | No | Yes (no aim bonus) | Yes | Entering jog or faster resets any accumulated aim |
-| Run | Full MoveSpeed | No | No | No | Turning restricted to 30 degrees per turn |
-
-A soldier may change movement tier freely each turn with no transition cost, with the exception that a crouching or prone soldier must return to standing before moving (see Stance below).
-
-Shooting while running is not permitted in the initial implementation. A "shooting at massive penalties while running" variant may be added in a later pass.
-
----
-
-**Stance**
-
-Stance is only mechanically relevant when a soldier is stationary. It represents the soldier's body position and affects both hit probability (ranged) and melee combat effectiveness.
-
-| Stance | Transition Cost | Ranged (incoming) | Melee offense | Melee defense |
-|---|---|---|---|---|
-| Standing | — | Baseline | Baseline | Baseline |
-| Crouching | 1 turn | Reduced | Penalty | Bonus to attacker |
-| Prone | 1 turn from standing | Further reduced | Further penalty | Further bonus to attacker |
-
-**Transition rules:**
-- Standing → Crouching: 1 turn
-- Standing → Prone: 1 turn (can drop directly)
-- Crouching → Standing: 1 turn
-- Crouching → Prone: 1 turn
-- Prone → Crouching: 1 turn (only available transition from prone)
-- Prone → Standing: 2 turns (must pass through crouching)
-
-A crouching or prone soldier must return to standing before they can walk, jog, or run. Changing stance and moving in the same turn is not permitted.
-
-**Ranged modifier implementation:** Rather than a flat accuracy penalty, stance filters the valid hit locations before the hit location probability roll. Locations that are not exposed due to crouch or prone position are excluded from the roll. This ties the defensive benefit directly to the existing hit location system and scales naturally with the target's body template without requiring per-species tuning.
-
-- Crouching: lower body locations (legs, feet) are not valid hit targets.
-- Prone: only locations visible from ground level (head, upper torso depending on orientation) are valid hit targets.
-- The specific location sets to exclude will be defined per body template during implementation.
-
-**Melee modifier implementation:** The specific penalty and bonus values for crouching and prone in melee will be determined during implementation. The magnitude is double for prone relative to crouching (i.e., if crouching carries a -2 melee offense penalty, prone carries -4).
-
----
-
-**Future considerations (not in scope for current implementation):**
-- A prone soldier with a disabled leg or foot automatically transitions to prone and cannot stand until the injury is treated or a cybernetic is fitted.
-- A full-tilt charge as a distinct action that converts accumulated running momentum into a melee bonus.
-- Accidental collisions when a running unit enters a cell occupied by an unexpected obstacle or unit.
-
-### 6.6 Cybernetic Replacements — RESOLVED
-
-**Eligibility:** Any hit location that has reached its cripple threshold but not its lethal threshold is a candidate for cybernetic replacement. This includes limbs (arms, hands, legs, feet) and vital locations (head, torso) at crippling severity.
-
-**Requirements:** Both a Techmarine and an Apothecary must be available (present in the chapter and not deployed) for a cybernetic procedure to be performed. Both are consumed for the duration of the procedure.
-
-**Cost:** A combination of time (weeks in the Apothecarium) and chapter resources. Specific values to be determined during implementation.
-
-**Restored capability:** Cybernetic replacements restore full capability to the replaced location in the current implementation. More granular effects — penalties or bonuses to specific attributes, embedded weapon options — are a post-0.7 design item.
-
-**Dreadnought interment:** For soldiers with multiple severe or unsurvivable injuries, interment in a Dreadnought chassis is an alternative to conventional treatment. This is out of scope until Dreadnoughts are implemented, but the cybernetics system should be designed with this pathway in mind — interment is the extreme end of the same decision space, not a separate system.
-
-### 6.7 Sergeant Training Cap — RESOLVED
-
-**Decided design:**
-- A Sergeant's own skill level in a category acts as a hard cap on how far he can train a scout in that category. A scout cannot be trained beyond his instructor's level.
-- Soldier ratings are updated every four turns (four weeks). The sergeant cap notification surfaces each time ratings are updated and a scout remains at his Sergeant's instructional limit in one or more skills.
-- The player has three options when a scout hits his cap:
-  1. Leave the scout in the squad and accept no further improvement in the capped skill.
-  2. Transfer the scout to a different Scout squad with a Sergeant who has a higher skill level in that area.
-  3. Promote the scout to a line squad, accepting that his development will continue through deployment and combat experience rather than structured training.
-
-### 6.8 New Recruit Intake
+### 6.3 New Recruit Intake
 
 This is a backlog item. The intended design is that the player has access to several different recruitment methods, each with distinct trade-offs:
 
@@ -807,7 +772,7 @@ This is a backlog item. The intended design is that the player has access to sev
 
 The full design of the recruitment screen and its trade-off options is deferred to backlog.
 
-### 6.9 Imperial Guard Interactions
+### 6.4 Imperial Guard Interactions
 
 **Decided design:**
 
@@ -820,7 +785,7 @@ The full design of the recruitment screen and its trade-off options is deferred 
 - What is the request UI flow for IG/PDF support? (Is it a dialog from the planet or region screen, or something triggered through a governor character interaction?)
 - What specific support types can be requested? (Reinforcing a region, providing fire support to a player-led assault, holding a position while the chapter deploys elsewhere.)
 
-### 6.10 Inquisition Role
+### 6.5 Inquisition Role
 
 **Decided design:**
 
@@ -833,62 +798,7 @@ The full design of the recruitment screen and its trade-off options is deferred 
 - What are the consequences of a negative investigation result against the chapter? (Censure, requisition of assets, excommunication as an extreme outcome?)
 - Does the player interact with a specific named Inquisitor character, or is the Inquisition an anonymous institutional force?
 
-### 6.11 Warp Travel Time Model — RESOLVED
-
-**Decided design:**
-
-**Sector Scale**
-- The sector grid is 200×200 light years. Each grid unit is 1×1 light year.
-- A subsector has a maximum diameter of 20 light years, typically containing 2–8 star systems within a 10 light year radius.
-
-**Warp Lanes**
-- Each subsector has a designated capital world, determined during sector generation by an importance score. For 0.7, the score is based on population size alone. Strategic classification (Hive World, Forge World, etc.) will be incorporated as a post-0.7 addition.
-- The capital world has an established warp lane to every other planet within its subsector.
-- Across subsectors, established warp lanes connect primarily between subsector capitals. Additional cross-subsector lanes may exist between high-importance non-capital planets near subsector boundaries.
-- Warp lanes are generated as part of sector generation.
-
-**Transit Time Formula**
-- The campaign layer tracks objective real-space travel time in one-week turns. Subjective time aboard ship is calculated separately for future crew experience, healing, and event hooks.
-- Every interstellar trip has a fixed 4-week subjective and objective base cost representing roughly two weeks to reach the warp translation point and two weeks to return from the destination translation point.
-- Warp passage base time is determined by subsector relationship:
-  - Same subsector: 1 week of expected subjective warp time.
-  - Adjacent subsectors: 3 weeks of expected subjective warp time.
-  - Non-adjacent subsectors within the sector: 7 weeks of expected subjective warp time.
-- Subjective warp time is multiplied by a Gaussian-derived factor inspired by the Rogue Trader subjective duration table:
-  - z = 0: 1× expected time.
-  - z = +0.5 / -0.5: 1/2× / 2× expected time.
-  - z = +1 / -1: 1/3× / 3× expected time, continuing by the same pattern.
-- Objective warp time is then multiplied by a second Gaussian-derived factor:
-  - z = 0: 1× subjective warp time.
-  - z = +5: 1/10× subjective warp time.
-  - z = -5: 10× subjective warp time.
-- Total objective travel time is `4 weeks + objective warp time`, rounded up to whole campaign turns for arrival.
-- Fleet movement is tracked in three travel phases: 2 objective weeks of outbound system transit, the rolled objective warp duration, and 2 objective weeks of inbound system transit. Fleets are visible and communicable during system transit, but not while `InWarp`.
-- The resolved journey state is saved with the fleet: origin, destination, current travel phase, remaining phase/total objective weeks, rolled subjective warp weeks, rolled objective warp weeks, and whether the subjective warp training payout has already been applied.
-- Embarked soldiers do not receive ordinary weekly training while their fleet is `InWarp`. When the fleet exits warp into inbound system transit, embarked idle squads receive one training payout based on the rolled subjective warp weeks.
-- Warp lanes are still used to determine known route topology. The lane route is the shortest path through the warp lane graph using Dijkstra weighted by hop distance; if no lane path exists, the journey is treated as a direct/charted route. Player agency over route selection is a post-0.7 refinement.
-- Navigators modifying the subjective/objective Gaussian rolls are a post-0.7 refinement.
-
-Example ranges for reference:
-
-| Journey type | Typical base turns | Equivalent days | Canonical target |
-|---|---|---|---|
-| Same subsector | 5 before variance | 35 days | 5–10 days warp passage, plus in/out-system travel |
-| Adjacent subsector | 7 before variance | 49 days | 12–30 days warp passage, plus in/out-system travel |
-| Non-adjacent in-sector | 11 before variance | 77 days | 30–60 days warp passage, plus in/out-system travel |
-
-- Crew aboard ships in transit accumulate training and healing at the same rate as those on the ground unless a later event system interrupts them.
-- The end-of-turn simulation runs normally each week regardless of ship position.
-
-**Orbit-to-Jump-Point Transit**
-- The ~2-week transit from planetary orbit to the Warp jump point and the equivalent destination-system transit are modeled as the fixed 4-week base cost in 0.7. Ship-class-specific acceleration may replace this fixed value post-0.7.
-
-**Warp Storms**
-- Deferred post-0.7. The direct route long-tail variance covers disrupted passages for now.
-
----
-
-### 6.12 Navis Nobilite Relations (Post-0.7 Backlog)
+### 6.6 Navis Nobilite Relations (Post-0.7 Backlog)
 
 Space Marine chapters obtain Navigators through formal pacts with the Navis Nobilite, the ancient mutant Navigator houses based on Terra. These pacts are centuries-long relationships, with specific Navigator families assigned to specific chapters across generations.
 
@@ -907,7 +817,7 @@ This is a post-0.7 design item. Navigator quality should be designed as a chapte
 | Chapter | The player's Space Marine organization: nominally 1,000 Battle Brothers organized into ten companies. |
 | Combat Pace | The jog movement tier. The soldier moves at half their MoveSpeed. Shooting is permitted but aiming is not. Entering jog speed or faster resets any accumulated aim state. |
 | Crouching | A stance available to stationary soldiers. Lower body hit locations are excluded from ranged hit rolls. Melee offense is penalized; the soldier is easier to hit in melee. Requires one turn to enter or exit. A crouching soldier must stand before moving. |
-| Disposition | The tactical posture of a squad on an order: Mobile (active operations) or Dug In (defensive). |
+| Disposition | The tactical posture of a squad on an order: Mobile (active operations), Dug In (defensive), or Raiding (moving to engage and then returning). |
 | Faction | Any organized force in the sector: Space Marines, Tyranids, Genestealer Cults, Imperial PDF, etc. |
 | Garrison | The number of troops a faction keeps assigned to defending a specific region, as distinct from troops available for offensive operations. |
 | Genestealer Cult (GC) | A hidden faction that infects and converts a planet's population, growing covertly until strong enough to reveal itself. |
@@ -915,7 +825,7 @@ This is a post-0.7 design item. Navigator quality should be designed as a chapte
 | Governor | A named NPC character who leads an imperial-aligned planet's civilian and military administration. Has personality traits that affect requests and opinion. |
 | Hit Location | A specific body part (head, torso, arm, leg, etc.) that can be individually wounded, crippled, or severed. |
 | Intelligence Level | A per-region value representing current information quality about enemy forces there. Decays over time. |
-| Mission | A specific operational objective assigned to one or more squads: Recon, Advance, Ambush, Assassination, Sabotage, Defense, Patrol, or Construction. |
+| Mission | A specific operational objective assigned to one or more squads: Recon, Advance, Ambush, Assassination, Sabotage, Extermination, Defense, Patrol, Construction, or Diversion. |
 | Movement Tier | One of four discrete movement states available to a soldier each battle turn: Stationary, Walk (1/5 MoveSpeed), Jog (1/2 MoveSpeed), or Run (full MoveSpeed). Tier determines shooting and aiming availability. |
 | Order | The assignment of one or more squads to a Mission, specifying disposition and aggression level. |
 | Order of Battle | The full hierarchical structure of the chapter: Chapter HQ → Companies → Squads → Marines. |
@@ -929,7 +839,7 @@ This is a post-0.7 design item. Navigator quality should be designed as a chapte
 | Squad Template | The definition of a squad type: roles, minimum and maximum member counts, battle value, and permitted weapon options. |
 | Stance | A soldier's body position when stationary: Standing, Crouching, or Prone. Stance affects which hit locations are valid ranged targets and applies melee combat modifiers. Transitions cost one turn each, except dropping prone (one turn from any stance). |
 | Standing | The default upright stance. No ranged or melee modifiers apply. |
-| Subsector Capital | The highest-importance planet in a subsector, determined during sector generation by a score derived from population size and strategic classification. The capital has established warp lanes to all other planets in its subsector. |
+| Subsector Capital | The highest-importance planet in a subsector, determined during sector generation by an importance score (population size for 0.7; strategic classification is a post-0.7 addition to the score). The capital has established warp lanes to all other planets in its subsector. |
 | Task Force | A grouping of ships within the chapter's fleet. |
 | Turn | One in-game week. The smallest unit of strategic time. |
 | Walk | The slowest movement tier above stationary. The soldier moves at 1/5 MoveSpeed. Shooting and aiming are both permitted. Accumulated aim state is preserved between walk turns. |
