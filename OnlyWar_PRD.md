@@ -30,12 +30,14 @@
    - 4.16 [Turn Simulation — Governor Relations](#416-turn-simulation--governor-relations)
    - 4.17 [Fleet Management](#417-fleet-management)
    - 4.18 [Save and Load](#418-save-and-load)
+   - 4.19 [Narrative Voice & Emotional Impact](#419-narrative-voice--emotional-impact)
 5. [Release Scoping](#5-release-scoping)
    - 5.1 [Released (Alpha 0.6 and prior)](#51-released-alpha-06-and-prior)
    - 5.2 [Alpha 0.7 — Committed](#52-alpha-07--committed)
    - 5.3 [Alpha 0.7 — To-Do](#53-alpha-07--to-do)
    - 5.4 [Alpha 0.7 — Stretch](#54-alpha-07--stretch)
-   - 5.5 [Post-0.7 Backlog](#55-post-07-backlog)
+   - 5.5 [Alpha 0.8 — Narrative & Cohesion](#55-alpha-08--narrative--cohesion)
+   - 5.6 [Post-0.7 Backlog](#56-post-07-backlog)
 6. [Open Design Questions](#6-open-design-questions)
 7. [Glossary](#7-glossary)
 
@@ -207,7 +209,7 @@ Each feature is described as a behavioral specification: what the system does, a
 - Displays the marine's name, role, current squad, and time in service.
 - Displays the status of each hit location: healthy, wounded (with severity), crippled, or severed.
 - Displays all skills and their current values.
-- Displays the marine's personal history log: recruitment, training, promotions, notable actions, wounds received, and awards.
+- Displays the marine's personal history log: recruitment, training, promotions, notable actions, wounds received, and awards. The history event vocabulary and its narration follow the Narrative Voice specification (4.19).
 - Displays confirmed kill counts by faction and weapon type.
 - Displays any awards or commendations.
 - Displays geneseed implant date and maturity status.
@@ -256,7 +258,7 @@ Each feature is described as a behavioral specification: what the system does, a
 **Acceptance Criteria:**
 - Displays a 2D grid showing the positions of all squads at each turn of the battle.
 - Player squads are shown with a distinct icon and color; opposing squads with a different icon and their faction color.
-- A text log panel displays all actions taken during the currently displayed turn (movement, shots fired, hits landed, wounds inflicted).
+- A text log panel displays all actions taken during the currently displayed turn (movement, shots fired, hits landed, wounds inflicted). Log entries name their actors and follow the Narrative Voice specification (4.19), adding flavor on critical hits, kills, and last stands.
 - The player can step forward and backward through turns.
 - The Previous Turn button is disabled on the first turn; the Next Turn button is disabled on the last turn.
 
@@ -275,6 +277,7 @@ Each feature is described as a behavioral specification: what the system does, a
 - Governor personality logic runs, potentially generating new requests.
 - A turn report dialog is displayed after resolution, summarizing: battles fought, casualties, mission outcomes, and any notable strategic events.
 - The player can page through turn reports if multiple missions resolved in the same turn.
+- Generated report text follows the Narrative Voice specification (4.19): individuals are named, notable events are surfaced via the notability classifier, and outcomes are framed against the orders the player issued.
 
 *Post-0.7:* Marines who are deployed on a mission but see no combat that turn gain a small amount of experience from the deployment itself (field experience, maintaining readiness).
 
@@ -325,6 +328,8 @@ Each feature is described as a behavioral specification: what the system does, a
 - When a marine's wounds reach a lethal threshold, he is removed from his squad and the chapter roster.
 - His history, kill record, and awards are preserved.
 - Geneseed recovery is attempted and recorded.
+- The death produces a eulogy-style record per the Narrative Voice specification (4.19): where and how he fell, his final tally, years served, and whether geneseed was recovered — with lost geneseed narrated as a compounding loss.
+- **Known discrepancy (to resolve in 0.8):** this spec requires the fallen brother's history, kill record, and awards to be *preserved*, but the current implementation records only a thin death line (`BattleTurnResolver`) and otherwise removes the soldier from the roster without retaining his dossier. Preserving the fallen — so the chapter can remember and honor them — is a prerequisite for the eulogy and Chronicle work and is folded into the 0.8 structured event log task (see 5.5).
 
 ---
 
@@ -535,6 +540,38 @@ Each feature is described as a behavioral specification: what the system does, a
 
 ---
 
+### 4.19 Narrative Voice & Emotional Impact
+
+**Description.** OnlyWar is a sandbox whose value is the emergent narrative its simulation produces. The simulation already generates the events — named brothers fight, develop, are maimed, and die; worlds fall or hold; governors plead and the wider Imperium triages. This section specifies how those events are *narrated back to the player*, because in a sandbox the narration is not polish — it is the feature that converts simulation state into a story the player remembers and retells. The player's felt stakes are not "avoid sector failure" (the wider Imperium makes total collapse unlikely) but **relevance and legacy**: did the chapter matter here, and at what cost in irreplaceable brothers?
+
+This is a cross-cutting specification. The per-surface acceptance criteria below govern text generated by the Turn Report (4.11), Soldier Screen (4.7), Death/Apothecary records (4.12, 4.8), Battle Review (4.10), Governor/Inquisition requests (4.16, 6.10), and New Game founding (4.1).
+
+**Authoring Principles (apply to all generated text):**
+
+1. **Always name the individual.** Never abstract a named soldier into "a marine." The simulation tracks the brother; the text must never lose him. "Brother Kaelan was killed," not "a casualty was sustained."
+2. **Specificity over summary.** State where, by what weapon, against which enemy, and the defining moment ("shielding Scout Aldric as the brood broke the line at Hesperus Gate").
+3. **Continuity and callbacks.** Reference the subject's own recorded history — first kill, instructing sergeant, prior wounds, kill milestones, years in service. A death lands harder when the report remembers the recruitment.
+4. **Tie outcome to player choice.** Frame consequences against the order that produced them ("ordered to hold at Attritional aggression, the squad did not break until two remained").
+5. **In-universe voice.** A formal, liturgical, grimdark Astartes register: duty, honor, sacrifice, the Emperor. External authorities each carry a distinct voice — a paranoid governor *sounds* paranoid; the Inquisition commands rather than requests; Battlefleet dispatches are curt and bureaucratic.
+6. **Restraint and variation.** The simulation supplies the drama; text frames it and never melodramatizes. Each event type draws from a pool of phrasings to avoid repetition fatigue across a long campaign.
+7. **Design for player-authored meaning.** The data model should anticipate the player later eulogizing, honoring, or renaming notable dead, even if the UI for it is deferred.
+
+**Notability Classifier.** A shared rule set determines which events are "notable" — worthy of a callout in the Turn Report and (if adopted, see below) the Chapter Chronicle. Initial notable triggers: a brother's first confirmed kill; crossing a kill milestone; the death of a veteran (above a service/rank threshold); an officer crippled or slain; a last-survivor outcome; a squad that held under orders past a heavy-casualty threshold; first contact with a new faction; a world saved or lost (by the chapter or by the wider Imperium); a hidden cult revealed. Thresholds are tunable and should live in rules data where practical.
+
+**Per-Surface Acceptance Criteria:**
+
+- **Turn Report (4.11):** Casualty and outcome lines name individuals, surface notable events from the classifier, and frame results against the orders the player issued. Kill milestones and acts of heroism are called out rather than buried in aggregate counts.
+- **Soldier History Log (4.7):** The event vocabulary is enriched beyond recruitment/promotion/wound to include first blood, survival against odds, instructor/mentor relationships, kill milestones, oaths sworn, and near-death recoveries.
+- **Death & Apothecary Records (4.12, 4.8):** A brother's death produces a eulogy-style record — where and how he fell, his final tally, years served, and whether geneseed was recovered; **lost geneseed is narrated as a compounding loss**, not a silent stat change. Injuries are described with gravity, and recovery is framed as a brother's struggle back to the line.
+- **Battle Review Log (4.10):** Per-turn log entries name their actors and add flavor on critical hits, kills, and last stands, rather than reading as "Soldier 3 fires at Soldier 7."
+- **Governor / Inquisition Requests (4.16, 6.10):** Request text is voiced in character, with tone driven by the requester's personality traits and authority.
+- **New Game Founding (4.1):** A short founding history / chapter myth is generated at campaign start, seeding the first entry of the chapter's narrative record.
+- **Wider-Imperium Dispatches:** As the uncontrolled Imperial presence grows (per the sandbox reframe), its actions reach the player as voiced dispatches — Battlefleet priorities, other chapters' deeds, Inquisitorial edicts — that texture the sector as a living theater the chapter is one actor within.
+
+**Candidate Feature — Chapter Chronicle (decision pending).** A persistent, sector-level narrative log: the campaign-scale analogue of the per-soldier history log. It would auto-record notable events (per the classifier above) into a single readable saga — founding myth, defining battles, named heroes and their deaths, worlds won and lost, factions revealed — giving the sandbox player one place to relive and retell the campaign. **Decision deferred:** draft the per-surface text improvements above first, then revisit whether a dedicated Chronicle screen/system is warranted or whether the enriched Turn Report and history logs already carry the narrative load.
+
+---
+
 ## 5. Release Scoping
 
 ### 5.1 Released (Alpha 0.6 and prior)
@@ -593,7 +630,28 @@ To be drawn from if capacity allows:
 - **UX Improvement Phase 1:** Drag-and-drop where applicable; squad row redesign; zoom-adaptive planet name labels.
 - **Mission System Expansion:** Talent recruitment missions; IG support missions; Chaos cult investigation; STC hunt; prisoner recovery.
 
-### 5.5 Post-0.7 Backlog
+### 5.5 Alpha 0.8 — Narrative & Cohesion
+
+The connective pass that turns 0.7's broad simulation into a felt sandbox narrative. These items are mostly *connective* work over systems that already exist — making the player feel the consequences the simulation already produces — rather than net-new systems. See Section 4.19 for the governing specification.
+
+**Implementation prerequisite — structured soldier event log.** Soldier history is currently an unstructured `List<string>` of free-text lines, written from only a handful of sites (founding, promotion/transfer, ratings/awards, a per-battle summary, and a thin death line); non-combat missions (recon, sabotage, assassination, infiltration, fortification) record nothing. Before any narration work, replace this with a **structured, queryable event log** — typed events carrying date, location, faction, weapon, magnitude, and related-soldier references — that serves as both the substrate the notability classifier queries and the source the narrator renders to text. Audit findings driving this:
+
+- Continuity callbacks (4.19 Principle 3) and the notability classifier require *querying* the past ("first kill?", "who was his mentor?", "crossed 50 kills?", "survived the battle that killed his sergeant?"), which free-text strings cannot reliably support.
+- Events that are never emitted today and must be added: first blood, kill milestones, last-survivor / survival-against-odds, mentor/instructor relationships, oaths, near-death recoveries, and **all non-combat mission outcomes**.
+- The fallen brother's dossier must be *preserved* on death (see 4.12 known discrepancy) rather than discarded.
+
+Suggested 0.8 sequencing: (1) structured event log + migration of existing call sites and death-record preservation; (2) emit the missing events; (3) notability classifier over the log; (4) narrator/voice pass rendering events and report lines.
+
+- **Narrative Voice baseline:** Apply the 4.19 authoring principles and notability classifier across the Turn Report, Soldier history log, and death/apothecary records — named individuals, specificity, continuity callbacks, and outcomes framed against the player's orders.
+- **Eulogy-style death records:** Where, how, final tally, years served, and geneseed recovered or lost (with lost geneseed narrated as a compounding loss).
+- **Enriched soldier history vocabulary:** First blood, survival against odds, mentor relationships, kill milestones, oaths, near-death recoveries.
+- **Voiced requests:** Governor and Inquisition request text driven by personality and authority.
+- **Founding myth:** Generate a short chapter history at new-game start.
+- **Battle Review log humanization:** Named actors and flavor on criticals, kills, and last stands.
+- **Wider-Imperium dispatches (initial):** Voiced notifications for major uncontrolled-Imperium actions in the sector (Battlefleet priorities, worlds the Imperium addresses without the chapter), establishing the relevance/legacy stakes framing.
+- **Chapter Chronicle (decision pending):** Specify and, if adopted, implement a persistent sector-level narrative log. Decision to be made after the per-surface text improvements above are drafted (see 4.19).
+
+### 5.6 Post-0.7 Backlog
 
 Documented for planning purposes; not scheduled:
 
