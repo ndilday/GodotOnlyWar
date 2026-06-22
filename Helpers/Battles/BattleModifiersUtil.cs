@@ -37,7 +37,7 @@ namespace OnlyWar.Helpers.Battles
                                 weapon.Template.DamageMultiplier;
         }
 
-        public static float CalculateOptimalDistance(BattleSoldier soldier, float targetSize, float targetArmor, float targetCon)
+        public static float CalculateOptimalDistance(BattleSoldier soldier, float targetSize, float targetArmor, float targetCon, float targetRangedEvasion = 0)
         {
             int freeHands = soldier.Soldier.FunctioningHands;
             if (freeHands == 0)
@@ -49,7 +49,7 @@ namespace OnlyWar.Helpers.Battles
             var weapons = soldier.EquippedRangedWeapons.Where(w => (int)w.Template.Location <= freeHands).OrderByDescending(w => w.Template.MaximumRange);
             foreach (RangedWeapon weapon in weapons)
             {
-                float hitRange = EstimateHitDistance(soldier.Soldier, weapon, targetSize, freeHands);
+                float hitRange = EstimateHitDistance(soldier.Soldier, weapon, targetSize, freeHands, targetRangedEvasion);
                 float damRange = EstimateKillDistance(weapon, targetArmor, targetCon);
                 float minVal = Math.Min(hitRange, damRange);
                 if (minVal > range) range = minVal;
@@ -57,7 +57,7 @@ namespace OnlyWar.Helpers.Battles
             return range;
         }
 
-        public static float EstimateHitDistance(ISoldier soldier, RangedWeapon weapon, float targetSize, int freeHands)
+        public static float EstimateHitDistance(ISoldier soldier, RangedWeapon weapon, float targetSize, int freeHands, float targetRangedEvasion = 0)
         {
             float baseTotal = soldier.GetTotalSkillValue(weapon.Template.RelatedSkill);
 
@@ -77,6 +77,10 @@ namespace OnlyWar.Helpers.Battles
             baseTotal = baseTotal + 1 + weapon.Template.Accuracy;
             baseTotal += BattleModifiersUtil.CalculateRateOfFireModifier(weapon.Template.RateOfFire);
             baseTotal += BattleModifiersUtil.CalculateSizeModifier(targetSize);
+            // elusive targets are flatly harder to hit, which pulls the optimal
+            // engagement range closer — keeps the AI from over-estimating its reach
+            // against Raveners/Genestealers. See Design/EvasionBurrowAndAmbush.md.
+            baseTotal -= targetRangedEvasion;
             // if the total doesn't get to 10.5, there will be no range where there's a good chance of hitting, so just keep getting closer
             if (baseTotal < 10.5) return 0;
 

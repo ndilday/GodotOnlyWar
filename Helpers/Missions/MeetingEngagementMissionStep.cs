@@ -21,14 +21,17 @@ namespace OnlyWar.Helpers.Missions
             float rangeModifier = GaussianCalculator.ApproximateNormalCDF(marginOfSuccess);
             BattleSoldier enemySoldier = context.OpposingSquads.First().GetRandomSquadMember();
             BattleSoldier playerSoldier = context.MissionSquads.First().GetRandomSquadMember();
-            double playerRange = context.MissionSquads.Average(s => s.GetPreferredEngagementRange(enemySoldier.Soldier.Size, enemySoldier.Armor.Template.ArmorProvided, enemySoldier.Soldier.Constitution));
-            double enemyRange = context.OpposingSquads.Average(s => s.GetPreferredEngagementRange(playerSoldier.Soldier.Size, playerSoldier.Armor.Template.ArmorProvided, playerSoldier.Soldier.Constitution));
+            double playerRange = context.MissionSquads.Average(s => s.GetPreferredEngagementRange(enemySoldier.Soldier.Size, enemySoldier.Armor.Template.ArmorProvided, enemySoldier.Soldier.Constitution, enemySoldier.Soldier.Template.Species.RangedEvasion));
+            double enemyRange = context.OpposingSquads.Average(s => s.GetPreferredEngagementRange(playerSoldier.Soldier.Size, playerSoldier.Armor.Template.ArmorProvided, playerSoldier.Soldier.Constitution, playerSoldier.Soldier.Template.Species.RangedEvasion));
             double halfway = (playerRange + enemyRange) / 2;
             ushort range = (ushort)(halfway + (playerRange - halfway) * rangeModifier);
             // set up meeting engagement battle
             BattleGridManager bgm = new BattleGridManager();
             AnnihilationPlacer placer = new AnnihilationPlacer(bgm, range);
             var squadPostionMap = placer.PlaceSquads(context.MissionSquads, context.OpposingSquads);
+            // burrow-capable squads (e.g. Raveners) erupt directly into melee instead
+            // of advancing across the gap — see Design/EvasionBurrowAndAmbush.md
+            BurrowPlacer.PlaceBurrowers(bgm, context.MissionSquads.Concat(context.OpposingSquads));
             int oppForSize = context.OpposingSquads.Sum(s => s.AbleSoldiers.Count);
             string log = $"Day {context.DaysElapsed}: Force accepted engagement with {oppForSize} {context.OpposingSquads.First().Squad.Faction.Name}\n";
             context.Log.Add(log);

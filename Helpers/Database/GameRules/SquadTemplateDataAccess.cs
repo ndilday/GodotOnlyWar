@@ -496,6 +496,12 @@ namespace OnlyWar.Helpers.Database.GameRules
                     int sizeTemplateId = reader.GetInt32(14);
                     ushort width = (ushort)reader.GetInt16(15);
                     ushort depth = (ushort)reader.GetInt16(16);
+                    // Columns appended by the migrate-evasion pass (see
+                    // Design/EvasionBurrowAndAmbush.md). Read positionally at the
+                    // end of the row, after Width/Depth.
+                    float meleeEvasion = (float)reader.GetDouble(17);
+                    float rangedEvasion = (float)reader.GetDouble(18);
+                    SpeciesAbilities abilities = (SpeciesAbilities)reader.GetInt32(19);
                     Species species = new Species(id, name,
                                                   attributeMap[strengthTemplateId],
                                                   attributeMap[dexterityTemplateId],
@@ -510,6 +516,9 @@ namespace OnlyWar.Helpers.Database.GameRules
                                                   attributeMap[sizeTemplateId],
                                                   width,
                                                   depth,
+                                                  meleeEvasion,
+                                                  rangedEvasion,
+                                                  abilities,
                                                   new BodyTemplate(hitLocationTemplateMap[bodyId]));
 
                     if (!speciesMap.ContainsKey(factionId))

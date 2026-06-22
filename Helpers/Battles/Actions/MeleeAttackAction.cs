@@ -10,6 +10,12 @@ namespace OnlyWar.Helpers.Battles.Actions
 {
     public class MeleeAttackAction : IAction
     {
+        // Flat defender-advantage constant in the contested melee roll: "it is
+        // easier to avoid a blow than to land one." At equal skill and zero evasion
+        // this yields a ~24% per-swing hit rate. The single most important melee
+        // balance knob — see Design/EvasionBurrowAndAmbush.md.
+        public const float MeleeDefenderAdvantage = 3.0f;
+
         private readonly BattleSoldier _attacker;
         private readonly BattleSoldier _target;
         private readonly MeleeWeapon _weapon;
@@ -39,12 +45,12 @@ namespace OnlyWar.Helpers.Battles.Actions
                     _target.IsInMelee = true;
                     _attacker.BattleSquad.IsInMelee = true;
                     _target.BattleSquad.IsInMelee = true;
-                    float modifier = _weapon.Template.Accuracy + (_didMove ? -2 : 0);
-                    float skill = _attacker.Soldier.GetTotalSkillValue(_weapon.Template.RelatedSkill);
-                    float roll = 10.5f + (3.0f * (float)RNG.NextRandomZValue());
-                    float total = skill + modifier - roll;
+                    float attackSkill = _attacker.Soldier.GetTotalSkillValue(_weapon.Template.RelatedSkill);
+                    bool hit = RollMeleeHit(attackSkill, _weapon.Template.Accuracy, _didMove,
+                                            GetDefenderMeleeSkill(),
+                                            _target.Soldier.Template.Species.MeleeEvasion);
                     _log.Enqueue(_attacker.Soldier.Name + " swings at " + _target.Soldier.ToString());
-                    if (total > 0)
+                    if (hit)
                     {
                         _log.Enqueue(_attacker.Soldier.Name + " strikes " + _target.Soldier.ToString());
                         HandleHit();
@@ -56,6 +62,44 @@ namespace OnlyWar.Helpers.Battles.Actions
             {
                 _log.Enqueue("<color=orange>" + _attacker.Soldier.Name + " did not get close enough to attack</color>");
             }
+        }
+
+        /// <summary>
+        /// Contested melee hit roll. The attacker's skill + weapon accuracy (less a
+        /// movement penalty) is opposed by the defender's melee skill, evasion, and
+        /// the flat <see cref="MeleeDefenderAdvantage"/>; each side carries its own
+        /// random draw. A hit lands when the attacker's total exceeds the defender's.
+        /// At equal skill and zero evasion this yields a ~24% per-swing hit rate.
+        /// Pure but for the RNG, so the rate is unit-testable. See
+        /// Design/EvasionBurrowAndAmbush.md.
+        /// </summary>
+        public static bool RollMeleeHit(float attackSkill, float weaponAccuracy, bool didMove,
+                                        float defenderSkill, float defenderEvasion)
+        {
+            float attackTotal = attackSkill + weaponAccuracy + (didMove ? -2 : 0)
+                                + (3.0f * (float)RNG.NextRandomZValue());
+            float defendTotal = defenderSkill + defenderEvasion + MeleeDefenderAdvantage
+                                + (3.0f * (float)RNG.NextRandomZValue());
+            return attackTotal > defendTotal;
+        }
+
+        private float GetDefenderMeleeSkill()
+        {
+            // The defender parries/dodges with their own melee proficiency. Use the
+            // best of their equipped melee weapons' related skills; if they carry no
+            // melee weapon, fall back to their competence in the attacker's skill so
+            // an unarmed but trained fighter still gets some defense.
+            float best = float.MinValue;
+            foreach (MeleeWeapon weapon in _target.EquippedMeleeWeapons)
+            {
+                float value = _target.Soldier.GetTotalSkillValue(weapon.Template.RelatedSkill);
+                if (value > best) best = value;
+            }
+            if (best == float.MinValue)
+            {
+                best = _target.Soldier.GetTotalSkillValue(_weapon.Template.RelatedSkill);
+            }
+            return best;
         }
 
         private bool IsAdjacentToTarget()

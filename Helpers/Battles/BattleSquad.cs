@@ -5,6 +5,7 @@ using System.Linq;
 
 using OnlyWar.Models.Equippables;
 using OnlyWar.Models.Orders;
+using OnlyWar.Models.Soldiers;
 using OnlyWar.Models.Squads;
 
 namespace OnlyWar.Helpers.Battles
@@ -33,6 +34,19 @@ namespace OnlyWar.Helpers.Battles
             get
             {
                 return AbleSoldiers.FirstOrDefault(s => s.Soldier.Template.IsSquadLeader);
+            }
+        }
+
+        // A squad burrows only if every able member can — burrowing is a whole-unit
+        // tunnelling maneuver, not something a mixed squad does piecemeal. Drives
+        // eruption-into-melee placement (see Design/EvasionBurrowAndAmbush.md).
+        public bool CanBurrow
+        {
+            get
+            {
+                List<BattleSoldier> able = AbleSoldiers;
+                return able.Count > 0
+                    && able.All(s => s.Soldier.Template.Species.Abilities.HasFlag(SpeciesAbilities.Burrow));
             }
         }
 
@@ -116,6 +130,18 @@ namespace OnlyWar.Helpers.Battles
             return runningTotal / squadSize;
         }
 
+        public float GetAverageRangedEvasion()
+        {
+            float squadSize = 0;
+            float runningTotal = 0;
+            foreach (BattleSoldier soldier in AbleSoldiers)
+            {
+                runningTotal += soldier.Soldier.Template.Species.RangedEvasion;
+                squadSize += 1.0f;
+            }
+            return runningTotal / squadSize;
+        }
+
         public float GetAverageConstitution()
         {
             float squadSize = 0;
@@ -184,9 +210,9 @@ namespace OnlyWar.Helpers.Battles
             return Squad.Name;
         }
 
-        public int GetPreferredEngagementRange(float targetSize, float targetArmor, float targetCon)
+        public int GetPreferredEngagementRange(float targetSize, float targetArmor, float targetCon, float targetRangedEvasion = 0)
         {
-            return (int)AbleSoldiers.Average(s => BattleModifiersUtil.CalculateOptimalDistance(s, targetSize, targetArmor, targetCon));
+            return (int)AbleSoldiers.Average(s => BattleModifiersUtil.CalculateOptimalDistance(s, targetSize, targetArmor, targetCon, targetRangedEvasion));
         }
 
         private void AllocateEquipment()

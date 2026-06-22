@@ -19,6 +19,8 @@ namespace OnlyWar.Helpers.Missions
             BattleGridManager bgm = new BattleGridManager();
             AmbushPlacer placer = new AmbushPlacer(bgm, range);
             var squadPostionMap = placer.PlaceSquads(context.MissionSquads, context.OpposingSquads);
+            // burrowing ambushers erupt straight into melee — see Design/EvasionBurrowAndAmbush.md
+            BurrowPlacer.PlaceBurrowers(bgm, context.MissionSquads.Concat(context.OpposingSquads));
             int oppForSize = context.OpposingSquads.Sum(s => s.AbleSoldiers.Count);
             string log = $"Day {context.DaysElapsed}: Force was ambushed by {oppForSize} {context.OpposingSquads.First().Squad.Faction.Name}\n";
             context.Log.Add(log);

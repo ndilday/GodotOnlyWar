@@ -27,15 +27,24 @@ namespace OnlyWar.Models.Soldiers
         public NormalizedValueTemplate Size { get; }
         public ushort Width { get; }
         public ushort Depth { get; }
+
+        // Defensive "harder to hit" levers. Melee evasion is subtracted from the
+        // attacker's total in the contested melee roll; ranged evasion is a flat
+        // subtraction in shooting (and the AI's range-seeking). See
+        // Design/EvasionBurrowAndAmbush.md.
+        public float MeleeEvasion { get; }
+        public float RangedEvasion { get; }
+        public SpeciesAbilities Abilities { get; }
         public BodyTemplate BodyTemplate { get; }
 
         public Species(int id, string name, NormalizedValueTemplate strength,
-                       NormalizedValueTemplate dex, NormalizedValueTemplate con, 
-                       NormalizedValueTemplate intl, NormalizedValueTemplate per, 
+                       NormalizedValueTemplate dex, NormalizedValueTemplate con,
+                       NormalizedValueTemplate intl, NormalizedValueTemplate per,
                        NormalizedValueTemplate ego, NormalizedValueTemplate cha,
-                       NormalizedValueTemplate psy, NormalizedValueTemplate atk, 
+                       NormalizedValueTemplate psy, NormalizedValueTemplate atk,
                        NormalizedValueTemplate mov, NormalizedValueTemplate siz,
-                       ushort width, ushort depth, BodyTemplate bodyTemplate)
+                       ushort width, ushort depth, float meleeEvasion, float rangedEvasion,
+                       SpeciesAbilities abilities, BodyTemplate bodyTemplate)
         {
             Id = id;
             Name = name;
@@ -52,6 +61,9 @@ namespace OnlyWar.Models.Soldiers
             Size = siz;
             Width = width;
             Depth = depth;
+            MeleeEvasion = meleeEvasion;
+            RangedEvasion = rangedEvasion;
+            Abilities = abilities;
             BodyTemplate = bodyTemplate;
         }
     }

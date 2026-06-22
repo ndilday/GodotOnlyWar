@@ -4,7 +4,7 @@ using Microsoft.Data.Sqlite;
 
 if (args.Length < 2)
 {
-    Console.Error.WriteLine("Usage: RulesDbTool <schema|training-source|migrate-training|migrate-progenoid|migrate-ratings|migrate-planet-scales|migrate-fortification|migrate-tyranids|migrate-tyranid-squads> <db-path>");
+    Console.Error.WriteLine("Usage: RulesDbTool <schema|training-source|migrate-training|migrate-progenoid|migrate-ratings|migrate-planet-scales|migrate-fortification|migrate-tyranids|migrate-tyranid-squads|migrate-evasion> <db-path>");
     return 1;
 }
 
@@ -13,7 +13,7 @@ string dbPath = args[1];
 string connectionString = new SqliteConnectionStringBuilder
 {
     DataSource = dbPath,
-    Mode = command is "migrate-training" or "migrate-progenoid" or "migrate-ratings" or "migrate-planet-scales" or "migrate-fortification" or "migrate-tyranids" or "migrate-tyranid-squads" ? SqliteOpenMode.ReadWriteCreate : SqliteOpenMode.ReadOnly
+    Mode = command is "migrate-training" or "migrate-progenoid" or "migrate-ratings" or "migrate-planet-scales" or "migrate-fortification" or "migrate-tyranids" or "migrate-tyranid-squads" or "migrate-evasion" ? SqliteOpenMode.ReadWriteCreate : SqliteOpenMode.ReadOnly
 }.ToString();
 
 using SqliteConnection connection = new(connectionString);
@@ -47,6 +47,9 @@ switch (command)
         break;
     case "migrate-tyranid-squads":
         MigrateTyranidSquads(connection);
+        break;
+    case "migrate-evasion":
+        MigrateEvasion(connection);
         break;
     default:
         Console.Error.WriteLine($"Unknown command: {command}");
@@ -614,6 +617,47 @@ static void MigrateTyranidSquads(SqliteConnection connection)
 
     transaction.Commit();
     Console.WriteLine($"Tyranid squad migration complete. Added Lictor (squad {lictorSquad}, solo) and Ravener Pack (squad {ravenerSquad}, x5).");
+}
+
+static void MigrateEvasion(SqliteConnection connection)
+{
+    using SqliteTransaction transaction = connection.BeginTransaction();
+
+    // Defensive "harder to hit" levers plus engine-interpreted capability flags
+    // (see Design/EvasionBurrowAndAmbush.md). Columns are APPENDED to the end of
+    // the Species table because GetSpeciesByFactionId reads positionally; do not
+    // reorder. Defaults of 0 mean every existing species (marines, etc.) is
+    // unaffected until explicitly tuned.
+    EnsureColumn(connection, transaction, "Species", "MeleeEvasion", "REAL NOT NULL DEFAULT 0");
+    EnsureColumn(connection, transaction, "Species", "RangedEvasion", "REAL NOT NULL DEFAULT 0");
+    EnsureColumn(connection, transaction, "Species", "Abilities", "INTEGER NOT NULL DEFAULT 0");
+
+    // SpeciesAbilities.Burrow = 1 << 0.
+    const int Burrow = 1;
+
+    // Tuning. Scale reference: melee/ranged totals sit on the ~10-point roll scale,
+    // so 2-3 is a meaningful dodge and 5+ is nearly untouchable. Marine baseline = 0.
+    SetEvasion(connection, transaction, "Genestealer", meleeEvasion: 3, rangedEvasion: 2, abilities: 0);    // weaving close-combat horror
+    SetEvasion(connection, transaction, "Lictor", meleeEvasion: 2, rangedEvasion: 4, abilities: 0);          // chameleonic — very hard to shoot
+    SetEvasion(connection, transaction, "Ravener", meleeEvasion: 2, rangedEvasion: 3, abilities: Burrow);    // serpentine, fast, tunnels
+
+    transaction.Commit();
+    Console.WriteLine("Evasion migration complete (columns ensured; Genestealer/Lictor/Ravener tuned).");
+}
+
+static void SetEvasion(SqliteConnection connection, SqliteTransaction transaction, string speciesName,
+                       double meleeEvasion, double rangedEvasion, int abilities)
+{
+    int exists = ExecuteScalarInt(connection, transaction,
+        "SELECT COUNT(*) FROM Species WHERE Name = $n", ("$n", speciesName));
+    if (exists == 0)
+    {
+        Console.WriteLine($"  warning: species '{speciesName}' not found; skipped.");
+        return;
+    }
+    Execute(connection, transaction,
+        "UPDATE Species SET MeleeEvasion = $m, RangedEvasion = $r, Abilities = $a WHERE Name = $n",
+        ("$m", meleeEvasion), ("$r", rangedEvasion), ("$a", abilities), ("$n", speciesName));
 }
 
 static void InsertSquadTemplate(SqliteConnection connection, SqliteTransaction transaction, int id, int factionId,

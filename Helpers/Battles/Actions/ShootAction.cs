@@ -90,6 +90,9 @@ namespace OnlyWar.Helpers.Battles.Actions
             totalModifier += BattleModifiersUtil.CalculateRateOfFireModifier(NumberOfShots);
             totalModifier += BattleModifiersUtil.CalculateSizeModifier(target.Soldier.Size);
             totalModifier += BattleModifiersUtil.CalculateRangeModifier(Range, target.CurrentSpeed);
+            // elusive targets (serpentine Raveners, weaving Genestealers, camo-caped
+            // Scouts) are flatly harder to hit — see Design/EvasionBurrowAndAmbush.md
+            totalModifier -= target.Soldier.Template.Species.RangedEvasion;
 
             return totalModifier;
         }

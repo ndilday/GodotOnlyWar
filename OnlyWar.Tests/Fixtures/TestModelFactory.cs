@@ -24,12 +24,38 @@ internal static class TestModelFactory
         Value(1),
         1,
         1,
+        0f,
+        0f,
+        SpeciesAbilities.None,
         HumanBodyTemplate.Instance);
 
     public static SoldierTemplate MarineTemplate { get; } = new(
         1,
         HumanSpecies,
         "Test Marine",
+        1,
+        1,
+        false,
+        0,
+        Array.Empty<Tuple<BaseSkill, float>>());
+
+    // A 1x1 species that tunnels — used to exercise burrow-arrival placement.
+    public static Species BurrowerSpecies { get; } = new(
+        2,
+        "Test Burrower",
+        Value(10), Value(10), Value(10), Value(10), Value(10), Value(10), Value(10),
+        Value(0), Value(10), Value(6), Value(1),
+        1,
+        1,
+        0f,
+        0f,
+        SpeciesAbilities.Burrow,
+        HumanBodyTemplate.Instance);
+
+    public static SoldierTemplate BurrowerTemplate { get; } = new(
+        3,
+        BurrowerSpecies,
+        "Test Burrower",
         1,
         1,
         false,

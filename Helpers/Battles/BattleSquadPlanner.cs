@@ -80,7 +80,8 @@ namespace OnlyWar.Helpers.Battles
                     float targetSize = closestSquad.GetAverageSize();
                     float targetArmor = closestSquad.GetAverageArmor();
                     float targetCon = closestSquad.GetAverageConstitution();
-                    float preferredHitDistance = BattleModifiersUtil.CalculateOptimalDistance(soldier, targetSize, targetArmor, targetCon);
+                    float targetEvasion = closestSquad.GetAverageRangedEvasion();
+                    float preferredHitDistance = BattleModifiersUtil.CalculateOptimalDistance(soldier, targetSize, targetArmor, targetCon, targetEvasion);
                     if (preferredHitDistance == -1)
                     {
                         // this soldier wants to run
@@ -91,14 +92,15 @@ namespace OnlyWar.Helpers.Battles
                         if (soldier.EquippedRangedWeapons.Count >= 1)
                         {
                             float desperateHitDistance = EstimateArmorPenDistance(soldier.EquippedRangedWeapons[0], targetArmor);
-                            desperateHitDistance = Math.Min(desperateHitDistance, 
-                                                            BattleModifiersUtil.EstimateHitDistance(soldier.Soldier, soldier.EquippedRangedWeapons[0], targetSize, soldier.HandsFree));
+                            desperateHitDistance = Math.Min(desperateHitDistance,
+                                                            BattleModifiersUtil.EstimateHitDistance(soldier.Soldier, soldier.EquippedRangedWeapons[0], targetSize, soldier.HandsFree, targetEvasion));
                             if (desperateHitDistance > 0)
                             {
                                 float targetPreferredDistance = BattleModifiersUtil.CalculateOptimalDistance(closestSquad.GetRandomSquadMember(),
                                                                            soldier.Soldier.Size,
                                                                            soldier.Armor.Template.ArmorProvided,
-                                                                           soldier.Soldier.Constitution);
+                                                                           soldier.Soldier.Constitution,
+                                                                           soldier.Soldier.Template.Species.RangedEvasion);
 
                                 if (desperateHitDistance < targetPreferredDistance)
                                 {
@@ -131,9 +133,10 @@ namespace OnlyWar.Helpers.Battles
                     {
                         float targetPreferredDistance = BattleModifiersUtil.CalculateOptimalDistance(
                             closestSquad.GetRandomSquadMember(),
-                            soldier.Soldier.Size, 
+                            soldier.Soldier.Size,
                             soldier.Armor.Template.ArmorProvided,
-                            soldier.Soldier.Constitution);
+                            soldier.Soldier.Constitution,
+                            soldier.Soldier.Template.Species.RangedEvasion);
 
                         if(preferredHitDistance < targetPreferredDistance)
                         {
