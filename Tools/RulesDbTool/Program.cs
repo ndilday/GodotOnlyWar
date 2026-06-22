@@ -4,7 +4,7 @@ using Microsoft.Data.Sqlite;
 
 if (args.Length < 2)
 {
-    Console.Error.WriteLine("Usage: RulesDbTool <schema|training-source|migrate-training|migrate-progenoid|migrate-ratings|migrate-planet-scales|migrate-fortification|migrate-tyranids|migrate-tyranid-squads|migrate-evasion> <db-path>");
+    Console.Error.WriteLine("Usage: RulesDbTool <schema|training-source|migrate-training|migrate-progenoid|migrate-ratings|migrate-planet-scales|migrate-fortification|migrate-tyranids|migrate-tyranid-squads|migrate-evasion|remove-unused-unit-templates> <db-path>");
     return 1;
 }
 
@@ -13,7 +13,7 @@ string dbPath = args[1];
 string connectionString = new SqliteConnectionStringBuilder
 {
     DataSource = dbPath,
-    Mode = command is "migrate-training" or "migrate-progenoid" or "migrate-ratings" or "migrate-planet-scales" or "migrate-fortification" or "migrate-tyranids" or "migrate-tyranid-squads" or "migrate-evasion" ? SqliteOpenMode.ReadWriteCreate : SqliteOpenMode.ReadOnly
+    Mode = command is "migrate-training" or "migrate-progenoid" or "migrate-ratings" or "migrate-planet-scales" or "migrate-fortification" or "migrate-tyranids" or "migrate-tyranid-squads" or "migrate-evasion" or "remove-unused-unit-templates" ? SqliteOpenMode.ReadWriteCreate : SqliteOpenMode.ReadOnly
 }.ToString();
 
 using SqliteConnection connection = new(connectionString);
@@ -23,6 +23,9 @@ switch (command)
 {
     case "schema":
         PrintSchema(connection);
+        break;
+    case "remove-unused-unit-templates":
+        RemoveUnusedUnitTemplates(connection);
         break;
     case "training-source":
         PrintTrainingSourceData(connection);
@@ -68,6 +71,37 @@ static void PrintSchema(SqliteConnection connection)
         Console.WriteLine($"--- {reader.GetString(0)} ---");
         Console.WriteLine(reader.GetString(1));
     }
+}
+
+static void RemoveUnusedUnitTemplates(SqliteConnection connection)
+{
+    // Only the player faction's UnitTemplate hierarchy is ever instantiated
+    // (NewChapterBuilder builds the Space Marine chapter from its top-level
+    // UnitTemplate). Every non-player faction's fixed UnitTemplate "armies" were
+    // legacy scaffolding that nothing reads — non-player forces are assembled
+    // dynamically from SquadTemplates by ForceGenerator. Drop the dead data.
+    using SqliteTransaction transaction = connection.BeginTransaction();
+
+    const string nonPlayerUnits =
+        "SELECT Id FROM UnitTemplate WHERE FactionId IN (SELECT Id FROM Faction WHERE IsPlayerFaction = 0)";
+
+    int doomed = ExecuteScalarInt(connection, transaction, $"SELECT COUNT(*) FROM ({nonPlayerUnits})");
+    if (doomed == 0)
+    {
+        Console.WriteLine("No non-player UnitTemplates found; nothing to do.");
+        return;
+    }
+
+    int treeRows = Execute(connection, transaction,
+        $"DELETE FROM UnitTemplateTree WHERE ParentUnitTemplateId IN ({nonPlayerUnits}) OR ChildUnitTemplateId IN ({nonPlayerUnits})");
+    int squadRows = Execute(connection, transaction,
+        $"DELETE FROM UnitTemplateSquadTemplate WHERE UnitTemplateId IN ({nonPlayerUnits})");
+    int unitRows = Execute(connection, transaction,
+        "DELETE FROM UnitTemplate WHERE FactionId IN (SELECT Id FROM Faction WHERE IsPlayerFaction = 0)");
+
+    transaction.Commit();
+    Console.WriteLine($"Removed {unitRows} non-player UnitTemplate rows " +
+                      $"({squadRows} UnitTemplateSquadTemplate, {treeRows} UnitTemplateTree links).");
 }
 
 static void PrintTrainingSourceData(SqliteConnection connection)
@@ -842,7 +876,7 @@ static int ExecuteScalarInt(SqliteConnection connection, SqliteTransaction trans
     return result == null || result == DBNull.Value ? 0 : Convert.ToInt32(result);
 }
 
-static void Execute(SqliteConnection connection, SqliteTransaction transaction, string sql, params (string Name, object Value)[] parameters)
+static int Execute(SqliteConnection connection, SqliteTransaction transaction, string sql, params (string Name, object Value)[] parameters)
 {
     using SqliteCommand command = connection.CreateCommand();
     command.Transaction = transaction;
@@ -852,7 +886,7 @@ static void Execute(SqliteConnection connection, SqliteTransaction transaction, 
         command.Parameters.AddWithValue(name, value);
     }
 
-    command.ExecuteNonQuery();
+    return command.ExecuteNonQuery();
 }
 
 internal readonly record struct TrainingEntry(int TargetType, int TargetId, float Weight);
