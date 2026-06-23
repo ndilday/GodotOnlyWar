@@ -31,6 +31,7 @@
    - 4.17 [Fleet Management](#417-fleet-management)
    - 4.18 [Save and Load](#418-save-and-load)
    - 4.19 [Narrative Voice & Emotional Impact](#419-narrative-voice--emotional-impact)
+   - 4.20 [Turn Simulation — Revolt & Civil Stability](#420-turn-simulation--revolt--civil-stability)
 5. [Release Scoping](#5-release-scoping)
    - 5.1 [Released (Alpha 0.6 and prior)](#51-released-alpha-06-and-prior)
    - 5.2 [Alpha 0.7 — Committed](#52-alpha-07--committed)
@@ -503,7 +504,7 @@ Each feature is described as a behavioral specification: what the system does, a
 **Acceptance Criteria:**
 
 **Personality**
-- Each governor has five personality traits: Investigation (likelihood of detecting hidden threats), Paranoia (likelihood of imagining false threats), Neediness (likelihood of requesting chapter aid), Patience (how long they wait before their opinion degrades from an ignored request), and Appreciation (how much their opinion improves when a request is fulfilled).
+- Each governor has six personality traits: Investigation (likelihood of detecting hidden threats), Paranoia (likelihood of imagining false threats), Neediness (likelihood of requesting chapter aid), Patience (how long they wait before their opinion degrades from an ignored request), Appreciation (how much their opinion improves when a request is fulfilled), and Severity (how harshly they respond to civil unrest — see §4.20). Investigation and Paranoia govern detection of civil unrest exactly as they govern detection of hidden factions; Severity governs the *response*.
 
 **Opinion**
 - Each governor has an opinion of the player's chapter, ranging from hostile to highly favorable.
@@ -634,6 +635,72 @@ This is a cross-cutting specification. The per-surface acceptance criteria below
 
 ---
 
+### 4.20 Turn Simulation — Revolt & Civil Stability
+
+**Description.** Imperial-aligned populations are not unconditionally loyal. Overcrowding, war-weariness, hidden corruption, and the temperament of their governor erode a region's contentment; sufficiently discontented populations organize, take up arms, and revolt. A revolt is modeled by reusing the existing converting-faction machinery (the Genestealer Cult path): an **Insurrectionist faction** recruits from the discontented population, contests regions through the normal combat and order-resolution systems, and — if neglected — spreads and can tear a world out of the Imperium's grasp.
+
+This is a behavioral specification for the simulation. It is scoped for **Alpha 0.7 Stretch** (see §5.4) on the **faction-presence model**, deliberately built as a forward-compatible subset of a possible future Pop-based population model (see Open Design Question §6.7).
+
+**Acceptance Criteria:**
+
+**Contentment**
+- Each default-Imperial `RegionFaction` carries a **Contentment** value (a 0–100 scalar), tracked per region. A planet-level figure is presented to the player and the governor as a population-weighted rollup of its regions' contentment.
+- Contentment drifts toward a neutral baseline each turn, modified by inputs the simulation already computes:
+  - **Overcrowding** — derived from the existing carrying-capacity crowding factor; a region at or above capacity loses contentment.
+  - **War-weariness** — battles resolved in the region (player- or NPC-initiated) and active public-enemy presence depress contentment.
+  - **Hidden-faction drain** — an undisclosed converting faction (e.g., a Genestealer Cult) eroding the population also erodes contentment, so a corrupted world "feels wrong" before the threat surfaces.
+  - **Garrison adequacy** — a garrison sized appropriately to the regional population sustains baseline order; a thin garrison drifts contentment down. A garrison used coercively (see Governor Response) sustains short-term order at a long-term contentment cost.
+  - **Governor competence** — a per-governor baseline drift term.
+- Contentment is intended as a forward-compatible proxy for a "loyal share" of the population under a future Pop model; it must not be implemented in a way that contradicts that model (§6.7).
+
+**The Insurrectionist Faction**
+- A single sector-wide **Insurrectionist `Faction`** instance exists (one `Faction` object with `RegionFaction` presences in many regions — the same shape as the Genestealer Cult or Tyranid faction, **not** a per-revolt instance). It is a `Conversion`-growth faction that recruits from the default-Imperial population.
+- At sector generation, a portion of Imperial worlds are seeded with latent discontent and/or a small hidden Insurrectionist presence, parameterized so some worlds begin chronically restive (heavily-tithed, overcrowded, or recently-conquered populations). The system therefore has unrest to act on from turn 1 rather than only in response to player action.
+
+**Revolt Lifecycle** (mirrors the hidden→public arc of a converting faction)
+1. **Latent** — contentment below a threshold; a rising risk meter, no faction presence yet.
+2. **Organizing (hidden)** — a small hidden Insurrectionist `RegionFaction` is seeded, folded into the civilian count and discoverable only through the intelligence/fog-of-war layer, exactly as a hidden cult is. Recruitment rate is a function of `f(contentmentDeficit) × regionCivilianPopulation`, capped so organizing takes several turns — a revolt is a slow burn the player can catch, not a single-turn surprise.
+3. **Open revolt** — when insurgent strength crosses a ratio against the regional garrison (or contentment floors out), the faction becomes public: it seizes organization, contests the region, and can generate assault orders against adjacent Imperial regions through the existing offensive-planning path.
+
+**Armed Defection**
+- Each armed faction has a **loyalty/discipline coefficient** governing how quickly its garrison defects to a co-located public revolt: civilians (highest) > PDF garrison > Imperial Guard > Astartes (immune).
+- Defection transfers garrison from the default-Imperial `RegionFaction` to the Insurrectionist `RegionFaction` in the same region — the same population-and-garrison transfer the conversion code already performs, here targeting the garrison pool rather than only the civilian population. A neglected revolt therefore compounds: the world's own defenders progressively join it.
+
+**Spread**
+- **Intra-planet** — an unsuppressed public revolt projects an accumulating contentment drag onto adjacent regions (a persistent region-level modifier in the spirit of the Diversion shaping modifiers, but persisting and accumulating while the revolt is active rather than being cleared each turn).
+- **Inter-planet** — a revolt that flips a world and survives raises a subsector- (or sector-) level **unrest-climate** scalar that applies a small contentment drag and raises seed probability on other discontented worlds, strongest within the subsector. This is a cheap global/subsector scalar, not explicit contagion pathing.
+
+**Governor Response (imperfect, personality-driven)**
+- A governor detects civil unrest via Investigation (with Paranoia producing false positives), identically to detecting a hidden faction.
+- The governor's **Severity** trait drives response style, and the response is frequently the wrong tool for the situation given the governor's temperament — this imperfection is intentional:
+  - **High Severity → crackdown:** commits PDF garrison to suppression. This slows insurgent growth in the short term but further lowers contentment — an authoritarian spiral in which the response deepens the grievance.
+  - **Low Severity → concession/appeasement:** raises contentment but reads as weakness and can embolden organizing insurgents.
+
+**Evidence-Based Requests**
+- Revolt introduces a request family distinct from the current always-available `PresenceRequest`, gated on real or imagined **evidence** (intelligence on an organizing/insurgent faction, or contentment below a threshold):
+  - **Unrest advisory** (low tier) — fulfilled by a show of force (a squad landing/present), as with the current presence request.
+  - **Suppress rebellion** (escalated) — fulfilled by engaging and defeating the insurgent `RegionFaction`, or by restoring regional contentment above a threshold for a sustained number of turns.
+- Generation continues to flow through Neediness × Opinion, so a proud (low-Neediness) governor under-asks and lets unrest fester while a paranoid governor over-asks on imagined threats.
+- An ignored request may redirect to Imperial Guard / PDF commanders (§6.4), and the wider Imperium may act on a revolt independently of the chapter (per the sandbox reframe); a world's survival never strictly depends on the player.
+
+**Endings**
+- **Military defeat** — the insurgent garrison is reduced to zero across all regions via the existing Extermination/Advance resolution.
+- **Political resolution** — regional contentment held above a threshold for a sustained number of turns dries up recruitment; garrison attrition then bleeds the insurgents out and the presence dissolves.
+- **Revolt victory (failure state)** — insurgents take every Imperial region on the planet; the world flips to a Renegade/Secessionist controller. The wider Imperium may later move against it.
+- **Smoldering stalemate** *(optional)* — a long, unresolved revolt may settle into a persistent low-grade insurgency that acts as an ongoing contentment drag rather than resolving.
+
+**Player Verbs**
+- **Against a revolt:** the existing mission verbs apply unchanged — Extermination/Advance/Patrol against the insurgent faction, show-of-force presence to deter and lift contentment, assassination of revolt leadership (special-target hook), and garrison/fortification support.
+- **For a revolt:** for 0.7, supporting a revolt is limited to **inaction with reputational consequences** — the player may withhold aid and let a world burn, taking governor-opinion and sector-standing penalties. *Active* pro-revolt support (fighting alongside insurgents, flipping a world, the chapter going renegade) is deferred to backlog, as it opens renegade-chapter and Inquisition-investigates-the-chapter design (§6.5).
+
+**Chaos Linkage (design now, implement when Chaos lands)**
+- Secular Insurrectionists and Chaos cults are **separate factions with a light affinity relation**, not parties to a full diplomacy system:
+  - **Shared enemy** — they do not fight one another and may coincidentally assault the same Imperial region.
+  - **Radicalization** — a Chaos cult can convert a festering secular revolt (insurgent population/garrison flips to the cult), modeling the lore truth that neglected secular rebellion is a vector for Chaos. A revolt the player could have quelled cheaply can therefore degrade into a corruption problem.
+- This relation is specified now but its implementation is gated on Chaos troops existing (post-0.7 backlog); Insurrection ships standalone first. Full variable-relations faction diplomacy remains backlog.
+
+---
+
 ## 5. Release Scoping
 
 ### 5.1 Released (Alpha 0.6 and prior)
@@ -696,7 +763,42 @@ Targeted for 0.7. These items were not part of the committed 0.7 set (§5.2), bu
 To be drawn from if capacity allows:
 
 - **Apothecary Phase 2:** Cybernetic replacements; geneseed recovery noted in death records; recovery time displayed on squad screen.
-- **Living Universe Phase 3B — Revolt:** Revolutionary population mechanic; evidence-based requests.
+  - **UI direction:** Rework the Apothecary Screen around the V2 flow captured in `Design/ApothecariumScreenMockups/apothecarium_refresh_v2_01_vault_default.png`, `Design/ApothecariumScreenMockups/apothecarium_refresh_v2_02_soldier_wounds.png`, and `Design/ApothecariumScreenMockups/apothecarium_refresh_v2_03_unit_rollup.png`. The screen should use the same dark-panel, antique-gold, parchment-text, cyan-accent visual language as the current Sector/Chapter UI work.
+  - **Primary layout:** Replace the current two-report layout with a persistent left context panel and a stateful detail panel.
+    - Left panel top: a `Gene Seed Vault` button. This is selected by default when the screen opens.
+    - Left panel body: the player's chapter/unit tree, filtered by default to show only wounded or medically relevant soldiers. The filter should be visible and later toggleable.
+    - Selecting the vault button opens the gene-seed vault panel.
+    - Selecting a soldier opens the soldier medical panel.
+    - Selecting a squad/company/unit opens a rollup panel summarizing healthy, wounded, out-of-action, ready-soon, and average recovery-time counts.
+  - **Implementation path:**
+    - Add structured Apothecary view models, for example `ApothecariumSelectionKind`, `ApothecariumTreeItem`, `GeneSeedVaultSummary`, `MedicalUnitSummary`, `MedicalSoldierSummary`, `WoundLocationSummary`, and `ReplacementOption`. Avoid adding more UI-specific string formatting to the controller.
+    - Add a medical summary/builder service that derives wounded soldiers, serious wounds, out-of-action duration, unit/squad rollups, wound rows, severed body parts, cybernetic state, and gene-seed maturity data from the existing domain model.
+    - Rebuild `apothecarium_screen.tscn` using `OnlyWarTheme.tres`, a real Godot `Tree` for the left hierarchy, and separate right-side containers for vault, unit/squad rollup, and soldier detail states.
+    - Replace `ApothecariumScreenController`'s current text-report behavior with selection state: default to vault, respond to tree selection, and ask the view to render the appropriate detail panel.
+    - Create a custom wound diagram control for the soldier panel. It should draw a stylized Vitruvian-man body and map existing human hit-location names to stable coordinates, coloring locations by wound severity, severed state, crippled state, and cybernetic replacement.
+  - **Vault panel requirements:**
+    - Show mature gene-seed stockpile.
+    - Show purity status once a real purity model exists; until then, treat purity as a placeholder/derived display rather than a persisted rule.
+    - Show mature and immature implanted progenoids derived from `PlayerSoldier.ProgenoidImplantDate`.
+    - Preserve the existing "matures within the next year" logic as a more legible vault metric or row.
+  - **Soldier medical panel requirements:**
+    - Show all wound locations for the selected soldier, including severity and expected recovery time.
+    - Highlight serious wounds and any body part that makes the soldier unable to fight.
+    - Show whether gene-seed-bearing locations are safe, damaged, or lost.
+    - Show cybernetic/vat-grown replacement options for eligible severed or crippled locations.
+    - Cybernetic replacement should be the faster, lower-cost option; vat-grown replacement should be rarer, slower, and more resource-intensive.
+  - **Unit/squad rollup requirements:**
+    - Selecting a squad or unit summarizes its medical readiness before drilling into individual soldiers.
+    - Display counts for healthy, wounded, out-of-action, ready next, and average/maximum recovery time.
+    - List serious wounds with soldier name, wound location, out-of-action duration, and recommended treatment.
+  - **Domain implementation sequencing:**
+    - Milestone 1: UI and derived-state pass only. Show vault, wounded tree, soldier wound detail, and unit/squad rollups using current wound, hit-location, cybernetic, and progenoid date data.
+    - Milestone 2: Add cybernetic and vat-grown assignment UI. Initially this may be non-mutating or confirmation-only while the domain rules are finalized.
+    - Milestone 3: Persist medical procedures. Add a procedure model carrying soldier id, hit-location id, procedure type, weeks remaining, requisition/resource cost, and status.
+    - Milestone 4: Hook procedures into weekly turn processing. Decrement timers, consume resources and staff availability as applicable, and apply the result to the hit location when complete.
+    - Milestone 5: Add or formalize gene-seed purity as a real domain concept if it is intended to affect play; otherwise keep it as a presentation-only status.
+  - **Save/load and rules implications:** Persisted medical procedures require save/load support and tests. Cybernetic completion can use the existing `HitLocation.IsCybernetic` flag; vat-grown completion should restore the location without setting that flag. Exact costs, staff requirements, and recovery times should be centralized rather than hardcoded in UI code.
+- **Living Universe Phase 3B — Revolt:** Revolutionary population mechanic; evidence-based requests. Full behavioral spec in §4.20 — per-region Contentment driving a sector-wide Insurrectionist faction (reusing the converting-faction/Cult machinery), governor Severity-driven response, garrison defection, intra- and inter-planet spread, evidence-gated requests, and "for a revolt" limited to inaction-with-consequences in 0.7. Built on the faction-presence model as a forward-compatible subset of the Pop-model question (§6.7); Chaos radicalization specified but gated on Chaos content.
 - **Battle Logic Phase 4:** Grenades, AoE weapons, flamers, morale, sprint/fire tradeoff, retreat mechanic, post-battle loadout recalculation.
 - **Battle Visuals Phase 3:** Terrain and cover representation; line of sight; elevation-based fire advantage.
 - **UX Improvement Phase 1:** Drag-and-drop where applicable; squad row redesign; zoom-adaptive planet name labels.
@@ -810,6 +912,14 @@ The chapter's relationship with its assigned Navigator house is a candidate for 
 
 This is a post-0.7 design item. Navigator quality should be designed as a chapter-level modifier to the transit time formula rather than as an individually tracked NPC, unless the decision is made to model Navigators as named characters in a future pass.
 
+### 6.7 Pop-Based Population Model (raised by Revolt, §4.20)
+
+**Question:** Should Imperial (and ultimately all) populations be refactored from the current single-number-per-`RegionFaction` representation into a Victoria-3-style **Pop** model — a population subdivided into groups carrying their own loyalty/affiliation (loyal, discontented, revolutionary-sympathizer, chaos-curious, etc.) that drift between states before anyone defects into an armed faction?
+
+**Why it comes up.** A `RegionFaction` is already a population bucketed by faction loyalty, and Genestealer Cult conversion is already "pops shifting loyalty from Imperial to cult" — but with no intermediate latent state (conversion is effectively binary). A Pop model adds that latent distribution and would unify Genestealer Cults, secular revolt (§4.20), Chaos corruption, and PDF/IG disloyalty under a single substrate, replacing what would otherwise be a combinatorial pile of pairwise faction-conversion rules. It is strongly aligned with the Living Galaxy pillar.
+
+**Decision (for now):** **Do not build Pops for 0.7.** The 0.7 Revolt ships on the faction-presence model, with Contentment as a proxy for "loyal share" and the hidden Insurrectionist `RegionFaction` as "pops who have crossed from sympathy into active rebellion." These are deliberately a forward-compatible *subset* of a Pop model: a later refactor would make Contentment a derived readout over the loyalty distribution and reframe the insurgent presence as a loyalty band, without discarding 0.7 work. Whether to commit to that refactor — a multi-phase change touching growth, carrying capacity, recruitment for every faction, save/load, and UI — is the open question, and it outlives the Revolt feature.
+
 ---
 
 ## 7. Glossary
@@ -820,6 +930,7 @@ This is a post-0.7 design item. Navigator quality should be designed as a chapte
 | Battle Value | A numeric score representing the approximate combat power of a squad template. Used to generate balanced opposing forces. |
 | Chapter | The player's Space Marine organization: nominally 1,000 Battle Brothers organized into ten companies. |
 | Combat Pace | The jog movement tier. The soldier moves at half their MoveSpeed. Shooting is permitted but aiming is not. Entering jog speed or faster resets any accumulated aim state. |
+| Contentment | A per-region 0–100 scalar on the default-Imperial RegionFaction representing civilian loyalty/stability. Eroded by overcrowding, war-weariness, hidden-faction drain, thin garrison, and governor temperament; low Contentment drives revolt (§4.20). Presented at planet level as a population-weighted rollup. |
 | Crouching | A stance available to stationary soldiers. Lower body hit locations are excluded from ranged hit rolls. Melee offense is penalized; the soldier is easier to hit in melee. Requires one turn to enter or exit. A crouching soldier must stand before moving. |
 | Disposition | The tactical posture of a squad on an order: Mobile (active operations), Dug In (defensive), or Raiding (moving to engage and then returning). |
 | Faction | Any organized force in the sector: Space Marines, Tyranids, Genestealer Cults, Imperial PDF, etc. |
@@ -828,7 +939,9 @@ This is a post-0.7 design item. Navigator quality should be designed as a chapte
 | Geneseed | The biological material (progenoid glands) harvested from Space Marines. Required to create new initiates. |
 | Governor | A named NPC character who leads an imperial-aligned planet's civilian and military administration. Has personality traits that affect requests and opinion. |
 | Hit Location | A specific body part (head, torso, arm, leg, etc.) that can be individually wounded, crippled, or severed. |
+| Insurrectionist Faction | A single sector-wide Conversion-growth Faction (like the Genestealer Cult faction) that recruits from discontented Imperial populations and contests regions through the normal combat systems. The mechanical embodiment of a revolt (§4.20). |
 | Intelligence Level | A per-region value representing current information quality about enemy forces there. Decays over time. |
+| Pop | (Proposed, §6.7) A subdivision of a region's population carrying its own loyalty/affiliation that drifts over time. Not implemented; raised as the possible long-term substrate unifying conversion, revolt, and corruption. |
 | Mission | A specific operational objective assigned to one or more squads: Recon, Advance, Ambush, Assassination, Sabotage, Extermination, Defense, Patrol, Construction, or Diversion. |
 | Movement Tier | One of four discrete movement states available to a soldier each battle turn: Stationary, Walk (1/5 MoveSpeed), Jog (1/2 MoveSpeed), or Run (full MoveSpeed). Tier determines shooting and aiming availability. |
 | Order | The assignment of one or more squads to a Mission, specifying disposition and aggression level. |
