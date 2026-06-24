@@ -1,13 +1,9 @@
-[gd_scene load_steps=6 format=3 uid="uid://cvre72t8tl3pl"]
+[gd_scene load_steps=5 format=3 uid="uid://cvre72t8tl3pl"]
 
-[ext_resource type="Script" uid="uid://ukh08mw6yysv" path="res://Scenes/ApothecariumScreen/ApothecariumScreenController.cs" id="1_o7ml8"]
-[ext_resource type="Script" uid="uid://c0w6cvt4rtuvf" path="res://Scenes/ApothecariumScreen/ApothecariumScreenView.cs" id="2_3g2m5"]
-[ext_resource type="Texture2D" uid="uid://dxwshfy5utqny" path="res://Assets/Gemini_Apothecary.jpg" id="3_dltn2"]
-[ext_resource type="FontFile" uid="uid://caltl8x5gfsdo" path="res://Fonts/sui generis rg.otf" id="4_rcpph"]
-
-[sub_resource type="Theme" id="Theme_upmh7"]
-default_font = ExtResource("4_rcpph")
-default_font_size = 12
+[ext_resource type="Script" path="res://Scenes/ApothecariumScreen/ApothecariumScreenController.cs" id="1_controller"]
+[ext_resource type="Script" path="res://Scenes/ApothecariumScreen/ApothecariumScreenView.cs" id="2_view"]
+[ext_resource type="Texture2D" path="res://Assets/Gemini_Apothecary.jpg" id="3_background"]
+[ext_resource type="Theme" path="res://Scenes/OnlyWarTheme.tres" id="4_theme"]
 
 [node name="ApothecariumScreenController" type="Control"]
 layout_mode = 3
@@ -16,7 +12,8 @@ anchor_right = 1.0
 anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
-script = ExtResource("1_o7ml8")
+theme = ExtResource("4_theme")
+script = ExtResource("1_controller")
 
 [node name="ApothecariumScreenView" type="Control" parent="."]
 layout_mode = 1
@@ -25,127 +22,30 @@ anchor_right = 1.0
 anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
-script = ExtResource("2_3g2m5")
+theme = ExtResource("4_theme")
+script = ExtResource("2_view")
 
 [node name="TextureRect" type="TextureRect" parent="ApothecariumScreenView"]
-modulate = Color(0.462745, 0.462745, 0.462745, 0.137255)
+modulate = Color(0.36, 0.32, 0.24, 0.18)
 layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
 anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
-texture = ExtResource("3_dltn2")
+texture = ExtResource("3_background")
 expand_mode = 4
+stretch_mode = 6
 
 [node name="CloseButton" type="Button" parent="ApothecariumScreenView"]
+custom_minimum_size = Vector2(40, 40)
 layout_mode = 1
 anchors_preset = -1
 anchor_left = 1.0
 anchor_right = 1.0
-offset_left = -50.0
-offset_top = 10.0
-offset_right = -10.0
-offset_bottom = 50.0
-text = "X"
-
-[node name="GeneseedPanel" type="Panel" parent="ApothecariumScreenView"]
-layout_mode = 1
-anchors_preset = -1
-anchor_right = 0.5
-anchor_bottom = 0.5
-offset_left = 10.0
-offset_top = 55.0
-offset_right = -5.0
-offset_bottom = -5.0
-
-[node name="Header" type="Panel" parent="ApothecariumScreenView/GeneseedPanel"]
-custom_minimum_size = Vector2(0, 30)
-layout_mode = 1
-anchors_preset = 10
-anchor_right = 1.0
-offset_bottom = 50.0
-grow_horizontal = 2
-
-[node name="Label" type="Label" parent="ApothecariumScreenView/GeneseedPanel/Header"]
-layout_mode = 1
-anchors_preset = 15
-anchor_right = 1.0
-anchor_bottom = 1.0
-grow_horizontal = 2
-grow_vertical = 2
-text = "Geneseed Report"
-horizontal_alignment = 1
-vertical_alignment = 1
-
-[node name="RichTextLabel" type="RichTextLabel" parent="ApothecariumScreenView/GeneseedPanel"]
-custom_minimum_size = Vector2(200, 100)
-layout_mode = 1
-anchors_preset = -1
-anchor_right = 1.0
-anchor_bottom = 1.0
-offset_left = 5.0
-offset_top = 50.0
-offset_right = -5.0
-offset_bottom = -5.0
-grow_horizontal = 2
-grow_vertical = 2
-theme = SubResource("Theme_upmh7")
-
-[node name="InjuryReportPanel" type="Panel" parent="ApothecariumScreenView"]
-layout_mode = 1
-anchors_preset = -1
-anchor_left = 0.5
-anchor_right = 1.0
-anchor_bottom = 1.0
-offset_left = 5.0
-offset_top = 55.0
-offset_right = -10.0
-offset_bottom = -10.0
+offset_left = -56.0
+offset_top = 12.0
+offset_right = -16.0
+offset_bottom = 52.0
 grow_horizontal = 0
-grow_vertical = 2
-
-[node name="Header" type="Panel" parent="ApothecariumScreenView/InjuryReportPanel"]
-custom_minimum_size = Vector2(0, 30)
-layout_mode = 1
-anchors_preset = 10
-anchor_right = 1.0
-offset_bottom = 50.0
-grow_horizontal = 2
-
-[node name="Label" type="Label" parent="ApothecariumScreenView/InjuryReportPanel/Header"]
-layout_mode = 1
-anchors_preset = 15
-anchor_right = 1.0
-anchor_bottom = 1.0
-grow_horizontal = 2
-grow_vertical = 2
-text = "Injury Report"
-horizontal_alignment = 1
-vertical_alignment = 1
-
-[node name="ScrollContainer" type="ScrollContainer" parent="ApothecariumScreenView/InjuryReportPanel"]
-layout_mode = 1
-anchors_preset = -1
-anchor_right = 1.0
-anchor_bottom = 0.75
-offset_left = 10.0
-offset_top = 50.0
-offset_bottom = -5.0
-grow_horizontal = 2
-
-[node name="VBoxContainer" type="VBoxContainer" parent="ApothecariumScreenView/InjuryReportPanel/ScrollContainer"]
-layout_mode = 2
-
-[node name="RichTextLabel" type="RichTextLabel" parent="ApothecariumScreenView/InjuryReportPanel"]
-custom_minimum_size = Vector2(200, 100)
-layout_mode = 1
-anchors_preset = -1
-anchor_top = 0.75
-anchor_right = 1.0
-anchor_bottom = 1.0
-offset_left = 10.0
-offset_top = 5.0
-grow_horizontal = 2
-grow_vertical = 0
-theme = SubResource("Theme_upmh7")
+text = "X"

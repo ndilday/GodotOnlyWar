@@ -1,6 +1,6 @@
 [gd_scene format=3 uid="uid://b5sny34jdvj4p"]
 
-[ext_resource type="Script" uid="uid://b5nqptg3a5lk0" path="res://Scenes/StartMenu/StartMenu.cs" id="1_k7bfn"]
+[ext_resource type="Script" uid="uid://hw54lwpq6qao" path="res://Scenes/StartMenu/StartMenu.cs" id="1_k7bfn"]
 [ext_resource type="Texture2D" uid="uid://ctmlrbe1rvbf1" path="res://Scenes/StartMenu/burningBuilding.jpg" id="1_vpgy8"]
 
 [sub_resource type="Theme" id="Theme_hbxc8"]

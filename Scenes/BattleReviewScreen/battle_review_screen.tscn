@@ -1,16 +1,19 @@
-[gd_scene load_steps=4 format=3 uid="uid://dm1xh48xjd3a2"]
+[gd_scene load_steps=5 format=3 uid="uid://dm1xh48xjd3a2"]
 
 [ext_resource type="PackedScene" uid="uid://cadpqoqxtyo0p" path="res://Scenes/Dialog.tscn" id="1_ppieq"]
 [ext_resource type="Script" uid="uid://c5wewkuimf78a" path="res://Scenes/BattleReviewScreen/BattleReviewController.cs" id="2_5ub1w"]
 [ext_resource type="Script" uid="uid://nbfp310chtd7" path="res://Scenes/BattleReviewScreen/BattleReviewView.cs" id="3_vig3w"]
+[ext_resource type="Theme" uid="uid://ylp8bk1nhedq" path="res://Scenes/OnlyWarTheme.tres" id="4_theme"]
 
 [node name="DialogController" instance=ExtResource("1_ppieq")]
+theme = ExtResource("4_theme")
 script = ExtResource("2_5ub1w")
 
 [node name="DialogView" parent="." index="0"]
+theme = ExtResource("4_theme")
 script = ExtResource("3_vig3w")
 
-[node name="DrawPanel" type="Panel" parent="DialogView" index="1"]
+[node name="BackgroundPanel" type="Panel" parent="DialogView" index="1"]
 layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
@@ -18,83 +21,288 @@ anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
 
-[node name="SubViewportContainer" type="SubViewportContainer" parent="DialogView/DrawPanel" index="0"]
+[node name="Layout" type="HBoxContainer" parent="DialogView" index="2"]
 layout_mode = 1
-anchors_preset = -1
-anchor_right = 0.66
+anchors_preset = 15
+anchor_right = 1.0
 anchor_bottom = 1.0
 offset_left = 10.0
-offset_top = 10.0
-offset_right = -5.0
+offset_top = 58.0
+offset_right = -10.0
 offset_bottom = -10.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_constants/separation = 8
+
+[node name="LeftPanel" type="Panel" parent="DialogView/Layout"]
+custom_minimum_size = Vector2(310, 0)
+layout_mode = 2
+
+[node name="LeftMargin" type="MarginContainer" parent="DialogView/Layout/LeftPanel"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_constants/margin_left = 8
+theme_override_constants/margin_top = 8
+theme_override_constants/margin_right = 8
+theme_override_constants/margin_bottom = 8
+
+[node name="LeftStack" type="VBoxContainer" parent="DialogView/Layout/LeftPanel/LeftMargin"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="ForceHeader" type="Label" parent="DialogView/Layout/LeftPanel/LeftMargin/LeftStack"]
+layout_mode = 2
+text = "FORCE HIERARCHY"
+horizontal_alignment = 1
+
+[node name="ForceScroll" type="ScrollContainer" parent="DialogView/Layout/LeftPanel/LeftMargin/LeftStack"]
+layout_mode = 2
+size_flags_vertical = 3
+horizontal_scroll_mode = 0
+
+[node name="ForceTreeVBox" type="VBoxContainer" parent="DialogView/Layout/LeftPanel/LeftMargin/LeftStack/ForceScroll"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/separation = 5
+
+[node name="CenterPanel" type="VBoxContainer" parent="DialogView/Layout"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/separation = 8
+
+[node name="HeaderPanel" type="Panel" parent="DialogView/Layout/CenterPanel"]
+custom_minimum_size = Vector2(0, 88)
+layout_mode = 2
+
+[node name="HeaderMargin" type="MarginContainer" parent="DialogView/Layout/CenterPanel/HeaderPanel"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_constants/margin_left = 10
+theme_override_constants/margin_top = 8
+theme_override_constants/margin_right = 10
+theme_override_constants/margin_bottom = 8
+
+[node name="HeaderStack" type="VBoxContainer" parent="DialogView/Layout/CenterPanel/HeaderPanel/HeaderMargin"]
+layout_mode = 2
+theme_override_constants/separation = 4
+
+[node name="TitleRow" type="HBoxContainer" parent="DialogView/Layout/CenterPanel/HeaderPanel/HeaderMargin/HeaderStack"]
+layout_mode = 2
+theme_override_constants/separation = 12
+
+[node name="BattleTitleLabel" type="Label" parent="DialogView/Layout/CenterPanel/HeaderPanel/HeaderMargin/HeaderStack/TitleRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+text = "BATTLE CHRONICLE"
+
+[node name="RoundLabel" type="Label" parent="DialogView/Layout/CenterPanel/HeaderPanel/HeaderMargin/HeaderStack/TitleRow"]
+custom_minimum_size = Vector2(150, 0)
+layout_mode = 2
+text = "ROUND 0 / 0"
+horizontal_alignment = 1
+
+[node name="PhaseLabel" type="Label" parent="DialogView/Layout/CenterPanel/HeaderPanel/HeaderMargin/HeaderStack/TitleRow"]
+custom_minimum_size = Vector2(150, 0)
+layout_mode = 2
+text = "DEPLOYMENT"
+horizontal_alignment = 1
+
+[node name="ResultLabel" type="Label" parent="DialogView/Layout/CenterPanel/HeaderPanel/HeaderMargin/HeaderStack/TitleRow"]
+custom_minimum_size = Vector2(210, 0)
+layout_mode = 2
+text = "BATTLE UNRESOLVED"
+horizontal_alignment = 2
+
+[node name="PlaybackRow" type="HBoxContainer" parent="DialogView/Layout/CenterPanel/HeaderPanel/HeaderMargin/HeaderStack"]
+layout_mode = 2
+alignment = 1
+theme_override_constants/separation = 6
+
+[node name="PreviousRoundButton" type="Button" parent="DialogView/Layout/CenterPanel/HeaderPanel/HeaderMargin/HeaderStack/PlaybackRow"]
+custom_minimum_size = Vector2(44, 34)
+layout_mode = 2
+text = "|<"
+
+[node name="StepBackButton" type="Button" parent="DialogView/Layout/CenterPanel/HeaderPanel/HeaderMargin/HeaderStack/PlaybackRow"]
+custom_minimum_size = Vector2(44, 34)
+layout_mode = 2
+text = "<"
+
+[node name="PlayPauseButton" type="Button" parent="DialogView/Layout/CenterPanel/HeaderPanel/HeaderMargin/HeaderStack/PlaybackRow"]
+custom_minimum_size = Vector2(58, 34)
+layout_mode = 2
+text = "PLAY"
+
+[node name="StepForwardButton" type="Button" parent="DialogView/Layout/CenterPanel/HeaderPanel/HeaderMargin/HeaderStack/PlaybackRow"]
+custom_minimum_size = Vector2(44, 34)
+layout_mode = 2
+text = ">"
+
+[node name="NextRoundButton" type="Button" parent="DialogView/Layout/CenterPanel/HeaderPanel/HeaderMargin/HeaderStack/PlaybackRow"]
+custom_minimum_size = Vector2(44, 34)
+layout_mode = 2
+text = ">|"
+
+[node name="SpeedButton" type="Button" parent="DialogView/Layout/CenterPanel/HeaderPanel/HeaderMargin/HeaderStack/PlaybackRow"]
+custom_minimum_size = Vector2(54, 34)
+layout_mode = 2
+disabled = true
+text = "1x"
+
+[node name="ReplayPanel" type="Panel" parent="DialogView/Layout/CenterPanel"]
+layout_mode = 2
+size_flags_vertical = 3
+
+[node name="SubViewportContainer" type="SubViewportContainer" parent="DialogView/Layout/CenterPanel/ReplayPanel"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = 8.0
+offset_top = 8.0
+offset_right = -8.0
+offset_bottom = -8.0
+grow_horizontal = 2
 grow_vertical = 2
 stretch = true
 
-[node name="SubViewport" type="SubViewport" parent="DialogView/DrawPanel/SubViewportContainer" index="0"]
+[node name="SubViewport" type="SubViewport" parent="DialogView/Layout/CenterPanel/ReplayPanel/SubViewportContainer"]
 disable_3d = true
 handle_input_locally = false
-size = Vector2i(660, 748)
+size = Vector2i(900, 560)
 render_target_update_mode = 4
 
-[node name="Camera2D" type="Camera2D" parent="DialogView/DrawPanel/SubViewportContainer/SubViewport" index="0"]
+[node name="MapRoot" type="Node2D" parent="DialogView/Layout/CenterPanel/ReplayPanel/SubViewportContainer/SubViewport"]
+
+[node name="Camera2D" type="Camera2D" parent="DialogView/Layout/CenterPanel/ReplayPanel/SubViewportContainer/SubViewport"]
 anchor_mode = 0
 
-[node name="TurnReportPanel" type="Panel" parent="DialogView" index="2"]
-layout_mode = 1
-anchors_preset = -1
-anchor_left = 0.66
-anchor_right = 1.0
-anchor_bottom = 1.0
-offset_left = 5.0
-offset_right = -10.0
-offset_bottom = -10.0
-grow_horizontal = 0
-grow_vertical = 2
-
-[node name="TurnReportLabel" type="RichTextLabel" parent="DialogView/TurnReportPanel" index="0"]
-layout_mode = 1
-anchors_preset = -1
-anchor_right = 1.0
-offset_top = 10.0
-offset_bottom = 50.0
-text = "Battle Report"
-horizontal_alignment = 1
-vertical_alignment = 1
-
-[node name="ScrollContainer" type="ScrollContainer" parent="DialogView/TurnReportPanel" index="1"]
-layout_mode = 1
-anchors_preset = -1
-anchor_right = 1.0
-anchor_bottom = 1.0
-offset_left = 5.0
-offset_top = 50.0
-offset_right = -5.0
-offset_bottom = -45.0
-
-[node name="TurnReportRichText" type="RichTextLabel" parent="DialogView/TurnReportPanel/ScrollContainer" index="0"]
+[node name="BottomPanel" type="Panel" parent="DialogView/Layout/CenterPanel"]
+custom_minimum_size = Vector2(0, 150)
 layout_mode = 2
 
-[node name="PreviousTurnButton" type="Button" parent="DialogView/TurnReportPanel" index="2"]
+[node name="BottomMargin" type="MarginContainer" parent="DialogView/Layout/CenterPanel/BottomPanel"]
 layout_mode = 1
-anchors_preset = -1
-anchor_top = 1.0
-anchor_right = 0.5
-anchor_bottom = 1.0
-offset_left = 5.0
-offset_top = -40.0
-offset_right = -5.0
-text = "Previous Turn"
-
-[node name="NextTurnButton" type="Button" parent="DialogView/TurnReportPanel" index="3"]
-layout_mode = 1
-anchors_preset = -1
-anchor_left = 0.5
-anchor_top = 1.0
+anchors_preset = 15
 anchor_right = 1.0
 anchor_bottom = 1.0
-offset_left = 5.0
-offset_top = -40.0
-offset_right = -5.0
-text = "Next Turn"
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_constants/margin_left = 8
+theme_override_constants/margin_top = 8
+theme_override_constants/margin_right = 8
+theme_override_constants/margin_bottom = 8
 
-[node name="SpriteHolder" type="Node" parent="." index="1"]
+[node name="BottomStack" type="VBoxContainer" parent="DialogView/Layout/CenterPanel/BottomPanel/BottomMargin"]
+layout_mode = 2
+theme_override_constants/separation = 6
+
+[node name="TimelineLabel" type="Label" parent="DialogView/Layout/CenterPanel/BottomPanel/BottomMargin/BottomStack"]
+layout_mode = 2
+text = "BATTLE TIMELINE"
+horizontal_alignment = 1
+
+[node name="TimelineScroll" type="ScrollContainer" parent="DialogView/Layout/CenterPanel/BottomPanel/BottomMargin/BottomStack"]
+custom_minimum_size = Vector2(0, 42)
+layout_mode = 2
+vertical_scroll_mode = 0
+
+[node name="TimelineBox" type="HBoxContainer" parent="DialogView/Layout/CenterPanel/BottomPanel/BottomMargin/BottomStack/TimelineScroll"]
+layout_mode = 2
+theme_override_constants/separation = 5
+
+[node name="CasualtyGrid" type="GridContainer" parent="DialogView/Layout/CenterPanel/BottomPanel/BottomMargin/BottomStack"]
+layout_mode = 2
+columns = 5
+
+[node name="RightPanel" type="VBoxContainer" parent="DialogView/Layout"]
+custom_minimum_size = Vector2(340, 0)
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="SelectedPanel" type="Panel" parent="DialogView/Layout/RightPanel"]
+custom_minimum_size = Vector2(0, 285)
+layout_mode = 2
+
+[node name="SelectedMargin" type="MarginContainer" parent="DialogView/Layout/RightPanel/SelectedPanel"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_constants/margin_left = 8
+theme_override_constants/margin_top = 8
+theme_override_constants/margin_right = 8
+theme_override_constants/margin_bottom = 8
+
+[node name="SelectedStack" type="VBoxContainer" parent="DialogView/Layout/RightPanel/SelectedPanel/SelectedMargin"]
+layout_mode = 2
+theme_override_constants/separation = 6
+
+[node name="SelectedHeaderLabel" type="Label" parent="DialogView/Layout/RightPanel/SelectedPanel/SelectedMargin/SelectedStack"]
+layout_mode = 2
+text = "SELECTED FORMATION"
+horizontal_alignment = 1
+
+[node name="SelectedNameLabel" type="Label" parent="DialogView/Layout/RightPanel/SelectedPanel/SelectedMargin/SelectedStack"]
+layout_mode = 2
+text = "No formation"
+
+[node name="SelectedMetaLabel" type="Label" parent="DialogView/Layout/RightPanel/SelectedPanel/SelectedMargin/SelectedStack"]
+layout_mode = 2
+text = ""
+autowrap_mode = 2
+
+[node name="SelectedStatsLabel" type="RichTextLabel" parent="DialogView/Layout/RightPanel/SelectedPanel/SelectedMargin/SelectedStack"]
+layout_mode = 2
+size_flags_vertical = 3
+bbcode_enabled = true
+fit_content = true
+
+[node name="EffectsVBox" type="VBoxContainer" parent="DialogView/Layout/RightPanel/SelectedPanel/SelectedMargin/SelectedStack"]
+layout_mode = 2
+theme_override_constants/separation = 3
+
+[node name="EventPanel" type="Panel" parent="DialogView/Layout/RightPanel"]
+layout_mode = 2
+size_flags_vertical = 3
+
+[node name="EventMargin" type="MarginContainer" parent="DialogView/Layout/RightPanel/EventPanel"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_constants/margin_left = 8
+theme_override_constants/margin_top = 8
+theme_override_constants/margin_right = 8
+theme_override_constants/margin_bottom = 8
+
+[node name="EventStack" type="VBoxContainer" parent="DialogView/Layout/RightPanel/EventPanel/EventMargin"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="EventHeaderLabel" type="Label" parent="DialogView/Layout/RightPanel/EventPanel/EventMargin/EventStack"]
+layout_mode = 2
+text = "EVENT CHRONICLE"
+horizontal_alignment = 1
+
+[node name="EventScroll" type="ScrollContainer" parent="DialogView/Layout/RightPanel/EventPanel/EventMargin/EventStack"]
+layout_mode = 2
+size_flags_vertical = 3
+horizontal_scroll_mode = 0
+
+[node name="EventListVBox" type="VBoxContainer" parent="DialogView/Layout/RightPanel/EventPanel/EventMargin/EventStack/EventScroll"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/separation = 5

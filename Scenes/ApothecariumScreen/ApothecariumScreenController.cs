@@ -1,141 +1,138 @@
 using Godot;
+using OnlyWar.Helpers;
 using OnlyWar.Models;
 using OnlyWar.Models.Soldiers;
 using OnlyWar.Models.Squads;
+using OnlyWar.Models.Units;
 using System;
-using System.Collections.Generic;
 using System.Linq;
 
 public partial class ApothecariumScreenController : DialogController
 {
-    ApothecariumScreenView _apocView;
-    private const string GENESEED_FORMAT = @"Sir! Currently, we have {0} Geneseed stored.
-Within the next year, we anticipate {1} implanted Progenoid Glands will mature.";
-    private const string SQUAD_FORMAT = @"{0} has {1} wounded members.
-Of those, {2} are unfit for field duty under any circumstances; {3} require cybernetic replacements and will be fitted within the next few days.
-It will require approximately {4} weeks before all marines in the squad (other than those replacing cybernetic replacements) are fully fit.";
+    private readonly ApothecariumMedicalRecordBuilder _recordBuilder = new();
+    private ApothecariumScreenView _apothecariumView;
+    private ApothecariumSelectionKind _selectedKind = ApothecariumSelectionKind.Vault;
+    private int? _selectedId;
 
     public override void _Ready()
     {
-        _apocView = GetNode<ApothecariumScreenView>("ApothecariumScreenView");
-        _apocView.PopulateGeneseedReport(GenerateGeneseedReport());
-        _apocView.PopulateSquadList(GetSquadsWithInjuredSoldiers());
-        _apocView.SquadButtonPressed += OnSquadButtonPressed;
+        base._Ready();
+        _apothecariumView = GetNode<ApothecariumScreenView>("ApothecariumScreenView");
+        _apothecariumView.VaultButtonPressed += OnVaultButtonPressed;
+        _apothecariumView.TreeSelectionChanged += OnTreeSelectionChanged;
+        _apothecariumView.ReplacementOptionPressed += OnReplacementOptionPressed;
+        Render();
     }
 
     public override void _ExitTree()
     {
-        if (_apocView != null)
+        if (_apothecariumView != null)
         {
-            _apocView.SquadButtonPressed -= OnSquadButtonPressed;
+            _apothecariumView.VaultButtonPressed -= OnVaultButtonPressed;
+            _apothecariumView.TreeSelectionChanged -= OnTreeSelectionChanged;
+            _apothecariumView.ReplacementOptionPressed -= OnReplacementOptionPressed;
         }
     }
 
-    private string GenerateGeneseedReport()
+    private void OnVaultButtonPressed(object sender, EventArgs e)
     {
-        ushort currentGeneseed = GameDataSingleton.Instance.Sector.PlayerForce.GeneseedStockpile;
-        Date date = GameDataSingleton.Instance.Date;
-        Date fourYearsAgo = new Date(date.Millenium, date.Year - 4, date.Week);
-        Date fiveYearsAgo = new Date(date.Millenium, date.Year - 5, date.Week);
-        Date nineYearsAgo = new Date(date.Millenium, date.Year - 9, date.Week);
-        Date tenYearsAgo = new Date(date.Millenium, date.Year - 10, date.Week);
-        ushort inAYear = 0;
-        foreach (PlayerSoldier marine in GameDataSingleton.Instance.Sector.PlayerForce.Army.PlayerSoldierMap.Values)
-        {
-            Date implantDate = marine.ProgenoidImplantDate;
-            if (implantDate.IsBetweenInclusive(fiveYearsAgo, fourYearsAgo)
-                || implantDate.IsBetweenInclusive(tenYearsAgo, nineYearsAgo))
-            {
-                inAYear++;
-            }
-        }
-        return string.Format(GENESEED_FORMAT, currentGeneseed, inAYear);
+        _selectedKind = ApothecariumSelectionKind.Vault;
+        _selectedId = null;
+        Render();
     }
 
-    private IReadOnlyList<Tuple<int, string>> GetSquadsWithInjuredSoldiers()
+    private void OnTreeSelectionChanged(object sender, ApothecariumSelection selection)
     {
-        List<Squad> injuredSquads = [];
-        foreach (Squad squad in GameDataSingleton.Instance.Sector.PlayerForce.Army.OrderOfBattle.GetAllSquads())
-        {
-            if (squad.Members.Any(s => s.Body.HitLocations.Any(hl => hl.IsSevered || hl.Wounds.WoundTotal > 0)))
-            {
-                injuredSquads.Add(squad);
-            }
-        }
-        return injuredSquads.Select(s => new Tuple<int, string>(s.Id, GetSquadFullName(s))).ToList();
+        _selectedKind = selection.Kind;
+        _selectedId = selection.Id;
+        Render();
     }
 
-    private string GetSquadFullName(Squad squad)
+    private void OnReplacementOptionPressed(object sender, ReplacementOption option)
     {
-        return $"{squad.Name}, ({squad.ParentUnit.Name})";
+        // First pass is presentation-only. Persisted procedures are the next PRD milestone.
+        GD.Print($"Medical procedure selected: {option.Title} for hit location {option.HitLocationId}.");
     }
 
-    private void OnSquadButtonPressed(object sender, int squadId)
+    private void Render()
     {
-        Squad squad = GameDataSingleton.Instance.Sector.PlayerForce.Army.OrderOfBattle.GetAllSquads().First(s => s.Id == squadId);
-        _apocView.PopulateInjuryDetail(GetSquadInjuryDetail(squad));
+        PlayerForce force = GameDataSingleton.Instance?.Sector?.PlayerForce;
+        Unit chapter = force?.Army?.OrderOfBattle;
+        if (force == null || chapter == null)
+        {
+            return;
+        }
+
+        _apothecariumView.SetVaultSelected(_selectedKind == ApothecariumSelectionKind.Vault);
+        _apothecariumView.SetTree(_recordBuilder.BuildTree(chapter, _selectedKind, _selectedId, woundedOnly: true));
+
+        switch (_selectedKind)
+        {
+            case ApothecariumSelectionKind.Unit:
+                RenderUnit(chapter);
+                break;
+            case ApothecariumSelectionKind.Squad:
+                RenderSquad(chapter);
+                break;
+            case ApothecariumSelectionKind.Soldier:
+                RenderSoldier(chapter);
+                break;
+            default:
+                RenderVault(force);
+                break;
+        }
     }
 
-    private string GetSquadInjuryDetail(Squad squad)
+    private void RenderVault(PlayerForce force)
     {
-        byte woundedSoldiers = 0;
-        byte soldiersMissingBodyParts = 0;
-        byte maxRecoveryTime = 0;
-        byte unfitSoldiers = 0;
-        foreach (ISoldier soldier in squad.Members)
+        _apothecariumView.ShowVault(_recordBuilder.BuildVault(force, GameDataSingleton.Instance.Date));
+    }
+
+    private void RenderUnit(Unit chapter)
+    {
+        Unit unit = chapter.Id == _selectedId ? chapter : chapter.ChildUnits.SelectMany(FlattenUnits).FirstOrDefault(u => u.Id == _selectedId);
+        if (unit == null)
         {
-            bool isWounded = false;
-            bool isMissingParts = false;
-            bool isUnfit = false;
-            byte greatestWoundHealTime = 0;
-            foreach (HitLocation hitLocation in soldier.Body.HitLocations)
+            RenderVault(GameDataSingleton.Instance.Sector.PlayerForce);
+            return;
+        }
+
+        _apothecariumView.ShowRollup(_recordBuilder.BuildUnitSummary(unit));
+    }
+
+    private void RenderSquad(Unit chapter)
+    {
+        Squad squad = chapter.GetAllSquads().FirstOrDefault(s => s.Id == _selectedId);
+        if (squad == null)
+        {
+            RenderVault(GameDataSingleton.Instance.Sector.PlayerForce);
+            return;
+        }
+
+        _apothecariumView.ShowRollup(_recordBuilder.BuildSquadSummary(squad));
+    }
+
+    private void RenderSoldier(Unit chapter)
+    {
+        ISoldier soldier = chapter.GetAllMembers().FirstOrDefault(s => s.Id == _selectedId);
+        if (soldier == null)
+        {
+            RenderVault(GameDataSingleton.Instance.Sector.PlayerForce);
+            return;
+        }
+
+        _apothecariumView.ShowSoldier(_recordBuilder.BuildSoldierSummary(soldier));
+    }
+
+    private static System.Collections.Generic.IEnumerable<Unit> FlattenUnits(Unit unit)
+    {
+        yield return unit;
+        foreach (Unit child in unit.ChildUnits ?? [])
+        {
+            foreach (Unit descendant in FlattenUnits(child))
             {
-                if (!isMissingParts && hitLocation.IsSevered)
-                {
-                    isWounded = true;
-                    isMissingParts = true;
-                    isUnfit = true;
-                }
-                else if (hitLocation.Wounds.WoundTotal > 0)
-                {
-                    isWounded = true;
-                    byte healTime = hitLocation.Wounds.RecoveryTimeLeft();
-                    if (healTime > greatestWoundHealTime)
-                    {
-                        greatestWoundHealTime = healTime;
-                    }
-                    if (hitLocation.IsCrippled)
-                    {
-                        isUnfit = true;
-                    }
-                }
-            }
-            if (isWounded)
-            {
-                woundedSoldiers++;
-            }
-            if (isMissingParts)
-            {
-                soldiersMissingBodyParts++;
-            }
-            if (greatestWoundHealTime > maxRecoveryTime)
-            {
-                maxRecoveryTime = greatestWoundHealTime;
-            }
-            if (isUnfit)
-            {
-                unfitSoldiers++;
+                yield return descendant;
             }
         }
-        if (woundedSoldiers == 0)
-        {
-            return squad.Name + " is entirely fit for duty.";
-        }
-        return string.Format(SQUAD_FORMAT,
-                             squad.Name,
-                             woundedSoldiers,
-                             unfitSoldiers,
-                             soldiersMissingBodyParts,
-                             maxRecoveryTime);
     }
 }

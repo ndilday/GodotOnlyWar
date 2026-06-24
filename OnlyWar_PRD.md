@@ -32,13 +32,16 @@
    - 4.18 [Save and Load](#418-save-and-load)
    - 4.19 [Narrative Voice & Emotional Impact](#419-narrative-voice--emotional-impact)
    - 4.20 [Turn Simulation — Revolt & Civil Stability](#420-turn-simulation--revolt--civil-stability)
+   - 4.21 [Turn Simulation — Faction Relationships & Inter-Faction Intelligence](#421-turn-simulation--faction-relationships--inter-faction-intelligence)
+   - 4.22 [Turn Simulation — Orks & Indelible Infestation](#422-turn-simulation--orks--indelible-infestation)
 5. [Release Scoping](#5-release-scoping)
    - 5.1 [Released (Alpha 0.6 and prior)](#51-released-alpha-06-and-prior)
    - 5.2 [Alpha 0.7 — Committed](#52-alpha-07--committed)
    - 5.3 [Alpha 0.7 — To-Do](#53-alpha-07--to-do)
    - 5.4 [Alpha 0.7 — Stretch](#54-alpha-07--stretch)
    - 5.5 [Alpha 0.8 — Narrative & Cohesion](#55-alpha-08--narrative--cohesion)
-   - 5.6 [Post-0.7 Backlog](#56-post-07-backlog)
+   - 5.6 [Alpha 0.8+ — Cross-Faction Simulation (Relationships, Intel, Orks)](#56-alpha-08--cross-faction-simulation-relationships-intel-orks)
+   - 5.7 [Post-0.7 Backlog](#57-post-07-backlog)
 6. [Open Design Questions](#6-open-design-questions)
 7. [Glossary](#7-glossary)
 
@@ -701,6 +704,92 @@ This is a behavioral specification for the simulation. It is scoped for **Alpha 
 
 ---
 
+### 4.21 Turn Simulation — Faction Relationships & Inter-Faction Intelligence
+
+**Description.** The current simulation determines hostility with a single binary test: a faction is either Imperial-aligned (player or default) or not, and the two sides are enemies (`FactionStrategyController.AreFactionsEnemies`). This is sufficient while every non-Imperial faction is a monolithic "them," but it cannot express a sector with **multiple mutually hostile non-Imperial factions** — Orks that fight everyone including other xenos, a Chaos world that also carries Ork spores, a renegade revolt that is no friend of the Tyranids. This section replaces the binary model with two cross-cutting substrates that several features (Orks §4.22, and retroactively Revolt §4.20 and future Chaos) build on:
+
+1. a **relationship model** — what each faction *feels* about every other; and
+2. an **inter-faction intelligence model** — what each faction *believes it knows* about every other's presence in a region.
+
+These are specified together because they share the same per-faction-pair shape and the same consumers (offensive planning, garrison sizing, the fog-of-war/intelligence UI, governor requests).
+
+This is a behavioral specification. It is scoped as the **substrate prerequisite** for Orks (see §5.6) and is designed so the Revolt and governor systems can adopt it without rework.
+
+**Acceptance Criteria:**
+
+**Faction Relationships**
+- The default posture between any two distinct factions is **Hostile**. Factions are no longer sorted into two Imperial/non-Imperial camps; hostility is a property of the *pair*, not of a side.
+- A relationship store maps an unordered faction pair to a **Stance**: `Hostile | Neutral | Allied`. Only non-default stances need be stored; an absent entry resolves to Hostile.
+- At sector generation the player chapter and the default-Imperial faction are seeded **Allied**. This alliance is itself a tracked value and may later degrade (a renegade arc), so nothing may assume it is permanent.
+- `AreFactionsEnemies` becomes a lookup into this store (Hostile ⇒ enemies; Neutral/Allied ⇒ not), and every consumer that currently relies on the Imperial-vs-non-Imperial test — offensive target selection, required-garrison threat assessment, and patrol targeting in `FactionStrategyController`, plus the intelligence/visibility layer — routes through it.
+- A faction may carry the **`UniversallyHostile`** behavior flag (see the behavior-flag consolidation below): it is Hostile to every *other* faction regardless of stored stance and can never be set Allied or Neutral. This is the mechanical basis for Orks "fighting everyone." (Infighting *within* a single faction is not modeled as region combat; see the feral efficiency penalty in §4.22.)
+
+**Faction Behavior Flags**
+- The ad-hoc booleans on `Faction` are consolidated into a single `[Flags]`-style **`FactionBehavior`** field. `CanInfiltrate` folds into it, joined by `UniversallyHostile`, `Indelible` (§4.22), and room for future behaviors. A faction's identity becomes a *composition* of behaviors rather than a special-cased type — e.g. Orks = `UniversallyHostile | Indelible` over `Logistic` growth — so later factions (Tyranids, Chaos) can reuse individual behaviors.
+
+**Inter-Faction Intelligence (Belief, not ground truth)**
+- Intelligence is modeled as a **belief held by an observer about a target**, keyed `(observer Faction, target Faction, Region)` and carrying a **believed presence/strength** and an **`IntelLevel`**: `None | Rumor | Suspected | Confirmed | Located`. (A v1 implementation may collapse to `None | Suspected | Confirmed`; the enum is defined in full but only the transitions a feature needs are populated.)
+- Crucially, **belief may diverge from reality in both directions**:
+  - *False negative* — a target is present in the region but the observer believes `None` (e.g. undetected feral Orks, an organizing cult).
+  - *False positive* — the observer believes a faction is present where it is not. This is materialized only by an explicit cause: a governor's **Paranoia** trait (§4.16) or deliberate **disinformation** planted by a rival. Intelligence is therefore stored state that ground truth *nudges*, never a pure function of ground truth.
+- The matrix is kept **sparse**: an entry is materialized only when (a) an observer has co-located presence with a real target in the same planet, or (b) something explicitly injects a phantom belief. Everything else resolves to `None` without storage.
+- An observer's `Detection` rating (and recon/intelligence missions) drives the **rate** at which a real co-located target's `IntelLevel` ratchets upward; the target's population and public/expanding status raise the **signal** it emits (a feral camp in a low-`Detection` backwater lingers at `Rumor` for a long time; a public expansion is effectively self-announcing and jumps to `Located`).
+- Consumers act on belief, not truth: a defender will only generate a *targeted* response (e.g. an Ork cull, §4.22) when its `IntelLevel` on the target reaches `Confirmed` or higher — and acting on a Confirmed-but-false belief wastes force chasing a threat that is not there.
+- This generalizes and absorbs the existing governor detection of hidden factions (§4.16) and the OpFor fog-of-war already shipped (§5.3): "what the Imperials know" becomes the special case "what the default-Imperial faction believes about a target in a region."
+
+**Relationship to existing features**
+- Revolt (§4.20): the Insurrectionist faction's hostility and its Chaos-affinity relation are expressible as stance entries rather than bespoke rules; its "light affinity" with Chaos cults becomes a `Neutral`/`Allied` pairing.
+- Governor relations (§4.16): governor Investigation/Paranoia become inputs to the observer = default-Imperial faction's intelligence beliefs, including the false-positive path.
+
+---
+
+### 4.22 Turn Simulation — Orks & Indelible Infestation
+
+**Description.** Orks are a fungal xenos whose biology makes them categorically different from the factions modeled so far: once their spores take root in a region they **cannot be eradicated** by force — exterminating every Ork only resets a decades-long regrowth, never clears the ground. They spend their feral phase fighting amongst themselves, growing but squandering their numbers, until a population coalesces and a Warboss unites it into a WAAAGH! that erupts outward and acts as a beacon drawing yet more Orks across the sector. This section specifies that lifecycle on top of the cross-faction substrate (§4.21), which it requires.
+
+This is a behavioral specification. It depends on §4.21 (relationships + intelligence) and is scoped as the dependent Ork line item in §5.6.
+
+**Acceptance Criteria:**
+
+**Faction Definition & Seeding**
+- The Ork faction is defined by composition over the substrate: `FactionBehavior = UniversallyHostile | Indelible`, with `GrowthType.Logistic`. `UniversallyHostile` makes it an enemy of every other faction (§4.21); `Indelible` drives the no-eradication rules below.
+- At sector generation, a portion of inhabited worlds are seeded with a latent Ork presence — generally **feral and undetected** (low or zero population, not yet public), so the infestation exists to act on from turn 1 rather than only arriving mid-game.
+
+**Indelible Presence (cannot be eradicated)**
+- An Ork `RegionFaction` is **never removed** from a region once it exists. Reducing its population to zero does **not** delete the presence: instead it flips to non-public (`IsPublic = false`) and, the following turn, regrows to a population of 1 and resumes ordinary growth from there. There is no separate dormancy timer — the slowness of logistic growth from a population of 1 *is* the decades-long ramp.
+  - *Design note (math grounding):* at the current `LogisticGrowthRate` (0.0006/week) an empty region's Ork presence grows ~0.0006 individuals/week at population 1 — on the order of decades merely to climb into the hundreds, and roughly two centuries to reach ~1,000 ("real Orks" again) before crowding even matters. The Ork growth multiplier (below) tunes this from "centuries" down to the intended "decades."
+- Because presence is indelible and persistent, the no-eradication property lives on the **`RegionFaction`** (via the faction's `Indelible` behavior) rather than as a separate region-level infestation flag — there is no state in which the infestation exists but the `RegionFaction` object does not.
+
+**Growth — feral inefficiency**
+- Ork growth uses the existing logistic carrying-capacity model (§4.15) with two Ork-specific modifiers:
+  - a **growth multiplier** (Orks breed fast) applied to the base rate, tuned so a *unified* (public) Ork population fills a region in a couple of decades;
+  - a **feral efficiency penalty** applied while the presence is **not** public, representing infighting and cannibalism — feral Orks still grow but waste much of their increase fighting each other, so their effective threat ramps slowly until a Warboss unifies them, at which point the penalty lifts and numbers surge.
+- Note the existing crowding factor uses *total region population*, so feral Orks grow fastest in sparsely populated regions and are suppressed inside dense human regions — Orks naturally fester in the badlands, which dovetails with the amassing behavior below. This interaction is intentional and load-bearing.
+
+**Two-Dimensional State**
+- Ork status is tracked along two independent dimensions rather than a single public/hidden bool:
+  1. **Imperial (observer) awareness** — derived from the §4.21 intelligence model: do the region's defenders *believe* Orks are present, and at what `IntelLevel`? A feral camp may be unnoticed (`None`/`Rumor`) for a long time.
+  2. **Expansion stage** (`IsPublic`) — *feral* (internal only; not a strategic actor) vs. *WAAAGH!* (public; an extra-territorial actor and a beacon).
+- These yield three meaningful states without a third enum: **unnoticed-feral** (growing quietly), **noticed-feral** (defenders aware and able to cull — see below), and **WAAAGH!** (public, expanding, broadcasting).
+
+**Amassing & WAAAGH! Emergence**
+- Each turn a fraction of a region's feral Ork population **migrates toward the adjacent region holding the largest Ork population**, creating a gradient that converges the planet's feral Orks onto a single region over time.
+- The transition to public (`IsPublic = true`) is triggered by **internal scale** — the converged Ork population in a region crossing a threshold — not by relative military strength against the local garrison. The Warboss emerges because there are enough Orks to unite, not merely because they out-muscle the PDF. Emergence therefore occurs in the amassing/convergence region.
+
+**Imperial Cull (defender response to noticed-feral Orks)**
+- When a defender's intelligence on a feral Ork presence reaches `Confirmed`/`Located` (§4.21), and the defender has **spare capacity** (it is not already committed against a revolt, invasion, or other public enemy), it generates culling missions (Extermination/Advance) against the feral Ork `RegionFaction` to keep it suppressed — the canonical "keep the feral Orks down before they get out of hand."
+- The cull is intentionally imperfect: a defender with no spare capacity ignores known feral Orks, and a defender acting on a **false-positive** belief (paranoia/disinformation, §4.21) wastes force culling Orks that are not there while real ones grow elsewhere. Culling can never *clear* a region (indelible), only hold it down.
+
+**WAAAGH! as Beacon (sector-level)**
+- A public Ork presence at sufficient scale acts as a beacon that periodically:
+  - **spawns previously-unmapped Ork worlds** in empty sector tiles. This is physically justified: at solar-neighborhood stellar density (~0.004 stars/ly³; equivalently ~12–13 systems per full-galactic-height column per the 200×200 ly grid), an "empty" tile plausibly contains uncharted systems, so a new Ork world appearing there is honest, not a cheat. Such worlds become known to the player through the §4.2 discovery rules (a WAAAGH! announcing itself), not via player exploration.
+  - **dispatches reinforcing Ork fleets** toward the beacon world. Reinforcements originate from real spawned/existing Ork worlds in the sector rather than from an abstract off-map pressure pool — the spawned worlds *are* the reservoir.
+
+**Endings & Persistence**
+- A WAAAGH! can be broken (its public forces reduced, its regions re-suppressed), reverting affected regions to feral and, where reduced to zero, to the population-1 regrowth path. The world is never "cleansed": the indelible presence guarantees the threat can re-emerge, making Ork worlds a recurring management problem rather than a clearable objective. (Whether Orks can instead *win* a world outright — extinguish its population and hold it as an Ork-controlled terminal state — is an open question, §6.8.)
+
+---
+
 ## 5. Release Scoping
 
 ### 5.1 Released (Alpha 0.6 and prior)
@@ -750,7 +839,7 @@ Targeted for 0.7. These items were not part of the committed 0.7 set (§5.2), bu
   - ✅ Population growth relative to planet carrying capacity (faster growth when underpopulated, slower when near capacity). *(Implemented — carrying capacity is an absolute, per-type value rolled from new `PlanetTemplate` columns (`CarryingCapacityBase`/`CarryingCapacityStandardDeviation`), distributed across a planet's regions and persisted per region. Starting population is seeded as a fraction of each region's capacity so no world begins above capacity; dense biomes (Hive, Forge) start nearly full while sparse ones (Agri, Feral) have room to grow. Per-type population and capacity scales are canon-grounded (Hive ~80B typical down to Death ~310K) and stored as log-normal `Floor`/`Scale` values. Each turn, organic (logistic and baseline) growth is scaled by a `1 - regionPop/capacity` crowding factor — near-maximal when sparse, zero at capacity, and gently negative above capacity so an overfull region drifts back down.)*
   - ✅ Garrison attrition (0.1% of garrison retires per week, requiring replacement from population growth). *(Implemented — each week 0.1% of a faction's regional garrison retires before fresh recruitment from population growth is applied, in the same factions that recruit: PDF, player, and hidden/secret factions.)*
   - ✅ OpFor fog of war, recon orders, and special missions. *(Implemented — recon orders raise a region's intelligence and the special-mission/intelligence system already existed; this pass closed the remaining fog-of-war leak in the UI. Hidden factions are now concealed on every screen (folded into the civilian count, discovered only via the intelligence system); public-enemy population is graded by intelligence level ("Unknown" → fuzzed → exact); and enemy defenses appear only once intelligence exceeds a threshold and only as fuzzy descriptions, never raw values. The Region screen previously revealed hidden-faction identity and exact garrison/defense values regardless of intelligence — now consistent with the planet tactical screen.)*
-  - ✅ Diversion missions. *(Implemented — a squad can be ordered to run an overt "Diversion" feint against an enemy-held region while remaining in its own. Unlike stealth missions it skips infiltration: a `DemonstrateForceMissionStep` makes a daily show of force (a Tactics check whose difficulty rises with the target's Detection and garrison size), accumulating Impact. Diversions resolve in a new pre-planning "shaping" phase **before** factions generate their turn orders, so the feint shapes enemy decisions that same turn. A successful feint projects a superlinear `apparentThreat = manpower × (1 + impact/scale)²` onto the target's `PerceivedThreatBonus`, inflating the garrison its controller feels it must hold; at Normal aggression or higher it also raises the feinting force's `ProvocationLevel`, which lowers the AI's force-ratio threshold for attacking (toward parity) and biases its target selection — baiting a counterattack. Because the feint force stands in the open, it is pulled into the fight as a defender if it draws that counterattack. Both effects are transient: set during the shaping phase, consumed by faction planning, then cleared the same turn (never saved). **Enemy-generated diversions (the AI running its own feints) are deferred post-0.7 — see §5.6.***)*
+  - ✅ Diversion missions. *(Implemented — a squad can be ordered to run an overt "Diversion" feint against an enemy-held region while remaining in its own. Unlike stealth missions it skips infiltration: a `DemonstrateForceMissionStep` makes a daily show of force (a Tactics check whose difficulty rises with the target's Detection and garrison size), accumulating Impact. Diversions resolve in a new pre-planning "shaping" phase **before** factions generate their turn orders, so the feint shapes enemy decisions that same turn. A successful feint projects a superlinear `apparentThreat = manpower × (1 + impact/scale)²` onto the target's `PerceivedThreatBonus`, inflating the garrison its controller feels it must hold; at Normal aggression or higher it also raises the feinting force's `ProvocationLevel`, which lowers the AI's force-ratio threshold for attacking (toward parity) and biases its target selection — baiting a counterattack. Because the feint force stands in the open, it is pulled into the fight as a defender if it draws that counterattack. Both effects are transient: set during the shaping phase, consumed by faction planning, then cleared the same turn (never saved). **Enemy-generated diversions (the AI running its own feints) are deferred post-0.7 — see §5.7.***)*
   - ✅ Player-constructable fortifications (Entrenchments, Listening Posts, Anti-Air batteries). *(Implemented — a squad in its own region can be ordered to Fortify (Entrenchment), Build Listening Post (Detection), or Build Anti-Air; the squad spends the turn building instead of fighting. Progress scales with squad size and a new Intelligence-based "Engineering (Fortification)" skill that all combat marines train, accumulating defenses over successive turns. The construction-mission resolution and save round-trip are shared with the existing NPC development path.)*
   - ✅ Burrowing and camouflage as ambush tactics. *(Implemented.)*
     - ✅ **Evasion / hard-to-hit modifier:** *(Implemented — a per-species evasion value is now subtracted from the attacker's total in both `ShootAction` and `MeleeAttackAction`, giving elusive bodies (serpentine Raveners, weaving Genestealers/Lictors) a defensive "harder to hit" lever in melee as well as ranged without overloading Size, which still tracks real bulk for wounds/footprint. Melee attacks now also account for the defender's melee skill. Previously the Ravener leaned on its high MoveSpeed for ranged evasion only; this closes the melee gap.)*
@@ -825,11 +914,18 @@ Suggested 0.8 sequencing: (1) structured event log + migration of existing call 
 - **Wider-Imperium dispatches (initial):** Voiced notifications for major uncontrolled-Imperium actions in the sector (Battlefleet priorities, worlds the Imperium addresses without the chapter), establishing the relevance/legacy stakes framing.
 - **Chapter Chronicle (decision pending):** Specify and, if adopted, implement a persistent sector-level narrative log. Decision to be made after the per-surface text improvements above are drafted (see 4.19).
 
-### 5.6 Post-0.7 Backlog
+### 5.6 Alpha 0.8+ — Cross-Faction Simulation (Relationships, Intel, Orks)
+
+A simulation expansion that lifts the sector beyond a binary Imperial-vs-everyone model. Sequenced **substrate first**, because the Ork feature depends on it and because the substrate independently benefits Revolt (§4.20) and future Chaos content. Full behavioral specs in §4.21 and §4.22.
+
+- **Substrate (prerequisite): Faction Relationships & Inter-Faction Intelligence** — replace the binary `AreFactionsEnemies` test with a per-faction-pair Stance store (default Hostile; player↔Imperial seeded Allied); consolidate `Faction`'s ad-hoc booleans into a `[Flags] FactionBehavior` field (folding in `CanInfiltrate`, adding `UniversallyHostile` and `Indelible`); and build the per-faction graded **intelligence-as-belief** model (`IntelLevel` ladder, sparse materialization, false positives via paranoia/disinformation), generalizing the existing governor-detection and OpFor fog-of-war as the default-Imperial special case. Spec: §4.21.
+- **Orks & Indelible Infestation** (depends on the substrate) — `UniversallyHostile | Indelible` Ork faction; indelible `RegionFaction` with pop-0 → non-public → regrow-to-1; logistic growth with an Ork multiplier and a feral efficiency penalty; two-dimensional state (awareness × expansion) yielding unnoticed-feral / noticed-feral / WAAAGH!; feral amassing migration and internal-scale WAAAGH! emergence; imperfect Imperial cull of noticed-feral Orks (gated on `Confirmed` intel and spare capacity); and WAAAGH!-as-beacon spawning unmapped Ork worlds in empty tiles plus reinforcing fleets. Spec: §4.22. Open question: terminal Ork-controlled world state (§6.8).
+
+### 5.7 Post-0.7 Backlog
 
 Documented for planning purposes; not scheduled:
 
-**Content:** Dreadnoughts, Chaplains, Psykers, Chaos Troops, Orks, Necrons, Tau, Vehicles, Flying Units, Drop Pods, Fortifications, Relics, Poison Weapons, Geneseed Mutation, Power Armor Variants, The Inquisition.
+**Content:** Dreadnoughts, Chaplains, Psykers, Chaos Troops, Necrons, Tau, Vehicles, Flying Units, Drop Pods, Fortifications, Relics, Poison Weapons, Geneseed Mutation, Power Armor Variants, The Inquisition. *(Orks are now scheduled — see §5.6.)*
 
 **Enemy-generated diversions.** Give `FactionStrategyController` the ability to run its own diversion feints, rather than only being the target of the player's. Deferred from 0.7: it adds little to the 0.7 experience, and player/NPC order-structure symmetry — while desirable — is not blocking. Two distinct problems hide here, and they should be scoped separately:
 
@@ -920,6 +1016,14 @@ This is a post-0.7 design item. Navigator quality should be designed as a chapte
 
 **Decision (for now):** **Do not build Pops for 0.7.** The 0.7 Revolt ships on the faction-presence model, with Contentment as a proxy for "loyal share" and the hidden Insurrectionist `RegionFaction` as "pops who have crossed from sympathy into active rebellion." These are deliberately a forward-compatible *subset* of a Pop model: a later refactor would make Contentment a derived readout over the loyalty distribution and reframe the insurgent presence as a loyalty band, without discarding 0.7 work. Whether to commit to that refactor — a multi-phase change touching growth, carrying capacity, recruitment for every faction, save/load, and UI — is the open question, and it outlives the Revolt feature.
 
+### 6.8 Ork Terminal Control State (raised by Orks, §4.22)
+
+**Question:** Can Orks *win* a world outright — extinguish its inhabited population and hold it as an Ork-controlled world that the player and the wider Imperium treat as a standing objective — or are Orks always a recurring infestation to be managed rather than a faction that can take and keep a world?
+
+**Why it comes up.** The indelible-presence rules (§4.22) deliberately make an Ork world un-cleansable, which frames Orks as a *management* problem. But that is about the floor (you can never reach zero Orks), not the ceiling (whether Orks can become the planet's controller). A WAAAGH! that overruns every region implies a terminal Ork-controlled state with its own downstream questions: does such a world still generate reinforcing fleets, can it ever be retaken, and how does it interact with the discovery and importance-scoring systems.
+
+**Leaning (not yet decided):** allow Orks to seize regional control through the normal combat path (consistent with §4.20's renegade-victory failure state for revolts), but treat a fully Ork-held world as a *persistent beacon* rather than a clean win condition — re-takeable in principle, never cleansable. Decide before implementing the WAAAGH!-beacon spawning in §4.22.
+
 ---
 
 ## 7. Glossary
@@ -934,11 +1038,17 @@ This is a post-0.7 design item. Navigator quality should be designed as a chapte
 | Crouching | A stance available to stationary soldiers. Lower body hit locations are excluded from ranged hit rolls. Melee offense is penalized; the soldier is easier to hit in melee. Requires one turn to enter or exit. A crouching soldier must stand before moving. |
 | Disposition | The tactical posture of a squad on an order: Mobile (active operations), Dug In (defensive), or Raiding (moving to engage and then returning). |
 | Faction | Any organized force in the sector: Space Marines, Tyranids, Genestealer Cults, Imperial PDF, etc. |
+| Faction Behavior | A `[Flags]` field on a Faction composing its special behaviors (e.g. `CanInfiltrate`, `UniversallyHostile`, `Indelible`), replacing the previous ad-hoc booleans. A faction's identity is the composition of its behaviors (§4.21). |
+| Faction Relationship (Stance) | The stored posture between an unordered pair of factions: `Hostile | Neutral | Allied`. Default is Hostile; the player chapter and default-Imperial faction start Allied. Replaces the old binary Imperial-vs-non-Imperial enemy test (§4.21). |
+| Feral (Orks) | The pre-WAAAGH! Ork state: present and growing but not public — fighting internally, not yet an extra-territorial actor. Subject to a growth efficiency penalty representing infighting (§4.22). |
 | Garrison | The number of troops a faction keeps assigned to defending a specific region, as distinct from troops available for offensive operations. |
 | Genestealer Cult (GC) | A hidden faction that infects and converts a planet's population, growing covertly until strong enough to reveal itself. |
 | Geneseed | The biological material (progenoid glands) harvested from Space Marines. Required to create new initiates. |
 | Governor | A named NPC character who leads an imperial-aligned planet's civilian and military administration. Has personality traits that affect requests and opinion. |
 | Hit Location | A specific body part (head, torso, arm, leg, etc.) that can be individually wounded, crippled, or severed. |
+| Indelible Infestation | The property (via the `Indelible` Faction Behavior) that an Ork RegionFaction can never be eradicated: reducing its population to zero flips it non-public and it regrows from 1, rather than the presence being removed (§4.22). |
+| Inter-Faction Intelligence (Belief) | What an observer faction *believes* about a target faction's presence/strength in a region, graded by IntelLevel and allowed to diverge from ground truth in both directions (false negatives; paranoia/disinformation false positives). Stored state nudged by Detection, not a function of truth (§4.21). |
+| IntelLevel | The fidelity of an inter-faction intelligence belief: `None | Rumor | Suspected | Confirmed | Located`. A targeted response (e.g. an Ork cull) requires `Confirmed` or higher (§4.21). |
 | Insurrectionist Faction | A single sector-wide Conversion-growth Faction (like the Genestealer Cult faction) that recruits from discontented Imperial populations and contests regions through the normal combat systems. The mechanical embodiment of a revolt (§4.20). |
 | Intelligence Level | A per-region value representing current information quality about enemy forces there. Decays over time. |
 | Pop | (Proposed, §6.7) A subdivision of a region's population carrying its own loyalty/affiliation that drifts over time. Not implemented; raised as the possible long-term substrate unifying conversion, revolt, and corruption. |
@@ -947,6 +1057,9 @@ This is a post-0.7 design item. Navigator quality should be designed as a chapte
 | Order | The assignment of one or more squads to a Mission, specifying disposition and aggression level. |
 | Order of Battle | The full hierarchical structure of the chapter: Chapter HQ → Companies → Squads → Marines. |
 | OpFor | Opposing Force. Any non-player faction unit encountered in a mission or battle. |
+| Orks | A fungal xenos faction (`UniversallyHostile | Indelible`) that cannot be eradicated from a region, grows inefficiently while feral, and coalesces into a WAAAGH! that erupts outward and draws more Orks to the sector (§4.22). |
+| Universally Hostile | A Faction Behavior marking a faction as Hostile to every other faction regardless of stored stance, and unable to be set Neutral/Allied. Basis for Orks "fighting everyone" (§4.21). |
+| WAAAGH! | The public, expanding Ork state: a Warboss has united a region's amassed Orks into an extra-territorial force that acts as a beacon, spawning unmapped Ork worlds and reinforcing fleets (§4.22). |
 | Prone | A stance available to stationary soldiers. Only head and upper torso hit locations are valid ranged hit targets. Melee offense is heavily penalized; the soldier is significantly easier to hit in melee. A soldier can drop prone in one turn from any stance. Returning to crouching takes one turn; returning to standing takes two turns. A prone soldier cannot move. |
 | Region | A sub-area of a planet. Each region has its own faction presences, garrison counts, intelligence level, and infrastructure ratings. |
 | RegionFaction | The presence of a specific faction in a specific region, with its own population, garrison, organization, detection, entrenchment, and anti-air values. Holds the list of squads of that faction currently landed in the region. |

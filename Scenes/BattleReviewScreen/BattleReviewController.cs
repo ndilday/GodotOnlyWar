@@ -1,12 +1,7 @@
 using Godot;
 using OnlyWar.Helpers.Battles;
-using OnlyWar.Helpers.Battles.Actions;
-using OnlyWar.Helpers.Battles.Resolutions;
-using OnlyWar.Helpers.Extensions;
 using OnlyWar.Models;
 using OnlyWar.Models.Battles;
-using OnlyWar.Models.Soldiers;
-using OnlyWar.Models.Squads;
 using OnlyWar.Scenes.MainGameScreen;
 using System;
 using System.Collections.Generic;
@@ -14,138 +9,237 @@ using System.Linq;
 
 public partial class BattleReviewController : DialogController
 {
+    private static readonly Color PlayerMarkerColor = Color.Color8(78, 190, 212);
+    private static readonly Color OpposingMarkerColor = Color.Color8(206, 72, 58);
+    private static readonly Color SelectedMarkerColor = Color.Color8(244, 216, 133);
+    private static readonly Color GridColor = Color.Color8(124, 102, 59, 55);
+    private static readonly Color BackgroundColor = Color.Color8(10, 12, 13);
+
+    private readonly BattleReplaySummaryBuilder _summaryBuilder = new();
     private BattleReviewView _view;
     private BattleHistory _history;
-    private Texture2D _soldierTexture, _opForTexture;
-    private Node _spriteHolder;
-    private Vector2 _soldierTextureScale, _opForTextureScale;
-    private readonly Vector2I GRID_BORDER_SIZE = Vector2I.One;
-    private Vector2I _pixelsPerGrid;
-    private ushort _currentTurn;
+    private Texture2D _markerTexture;
+    private Vector2 _markerScale;
+    private Vector2I _pixelsPerGrid = new(28, 28);
+    private int _currentTurnIndex;
+    private int? _selectedFormationId;
 
     public override void _Ready()
     {
         base._Ready();
         _view = GetNode<BattleReviewView>("DialogView");
-        _view.PreviousTurnPressed += (object sender, EventArgs e) => OnPreviousTurn();
-        _view.NextTurnPressed += (object sender, EventArgs e) => OnNextTurn();
-        _pixelsPerGrid = new(GameDataSingleton.Instance.GameRulesData.BattleCellSize.X, GameDataSingleton.Instance.GameRulesData.BattleCellSize.Y);
-        _soldierTexture = (Texture2D)GD.Load("res://Assets/helmet.png");
-        Vector2 floatingVector = new Vector2(_pixelsPerGrid.X, _pixelsPerGrid.Y);
-        _soldierTextureScale = (floatingVector - GRID_BORDER_SIZE) / _soldierTexture.GetSize();
-        _opForTexture = (Texture2D)GD.Load("res://Assets/objective_icon.png");
-        _opForTextureScale = (floatingVector - GRID_BORDER_SIZE) / _opForTexture.GetSize();
-        _spriteHolder = GetNode<Node>("SpriteHolder");
+        _view.PreviousRoundPressed += (_, _) => DisplayTurn(0);
+        _view.StepBackPressed += (_, _) => DisplayTurn(_currentTurnIndex - 1);
+        _view.PlayPausePressed += (_, _) => DisplayTurn(_currentTurnIndex + 1);
+        _view.StepForwardPressed += (_, _) => DisplayTurn(_currentTurnIndex + 1);
+        _view.NextRoundPressed += (_, _) => DisplayTurn((_history?.Turns.Count ?? 1) - 1);
+        _view.FormationSelected += (_, formationId) =>
+        {
+            _selectedFormationId = formationId;
+            DisplayTurn(_currentTurnIndex);
+        };
+        _view.TimelineTurnSelected += (_, turnIndex) => DisplayTurn(turnIndex);
+
+        if (GameDataSingleton.Instance?.IsInitialized == true)
+        {
+            _pixelsPerGrid = new(
+                GameDataSingleton.Instance.GameRulesData.BattleCellSize.X,
+                GameDataSingleton.Instance.GameRulesData.BattleCellSize.Y);
+        }
+
+        _markerTexture = GD.Load<Texture2D>("res://Assets/UICircle.png");
+        if (_markerTexture != null)
+        {
+            Vector2 targetSize = new(_pixelsPerGrid.X * 0.62f, _pixelsPerGrid.Y * 0.62f);
+            _markerScale = targetSize / _markerTexture.GetSize();
+        }
     }
 
     public void LoadNewHistory(BattleHistory history)
     {
         _history = history;
+        _selectedFormationId = null;
         DisplayTurn(0);
     }
 
-    private void OnPreviousTurn()
+    private void DisplayTurn(int requestedTurnIndex)
     {
-        if(_currentTurn < 1)
-        {
-            throw new InvalidOperationException("Cannot go back any further.");
-        }
-        DisplayTurn(_currentTurn - 1);
+        if (_history == null || _history.Turns.Count == 0) return;
+
+        _currentTurnIndex = Math.Clamp(requestedTurnIndex, 0, _history.Turns.Count - 1);
+        BattleReplayDisplay display = _summaryBuilder.Build(_history, _currentTurnIndex, _selectedFormationId);
+        _selectedFormationId = display.SelectedFormationId;
+        _view.SetDisplay(display);
+        DrawBattlefield(_history.Turns[_currentTurnIndex].State, display.SelectedFormationId);
     }
 
-    private void OnNextTurn()
+    private void DrawBattlefield(BattleState state, int? selectedFormationId)
     {
-        DisplayTurn(_currentTurn + 1);
+        ClearMap();
+
+        IReadOnlyList<Tuple<int, int>> allPositions = state.SoldierPositionsMap.Values.SelectMany(positions => positions).ToList();
+        if (allPositions.Count == 0) return;
+
+        Vector2I topLeft = GetTopLeftOfPositions(allPositions) - Vector2I.One;
+        Vector2I bottomRight = GetBottomRightOfPositions(allPositions) + Vector2I.One;
+        Vector2 mapSize = new(
+            Math.Max(1, bottomRight.X - topLeft.X + 1) * _pixelsPerGrid.X,
+            Math.Max(1, bottomRight.Y - topLeft.Y + 1) * _pixelsPerGrid.Y);
+
+        DrawBackground(mapSize);
+        DrawGrid(mapSize);
+
+        foreach (BattleSquad squad in state.PlayerSquads.Values.OrderBy(squad => squad.Id))
+        {
+            DrawSquad(squad, topLeft, selectedFormationId == squad.Id);
+        }
+        foreach (BattleSquad squad in state.OpposingSquads.Values.OrderBy(squad => squad.Id))
+        {
+            DrawSquad(squad, topLeft, selectedFormationId == squad.Id);
+        }
+
+        CenterCamera(mapSize);
     }
 
-    private void DisplayTurn(int turn)
+    private void DrawBackground(Vector2 mapSize)
     {
-        _currentTurn = (ushort)turn;
-
-        _view.SetTurnReportLabel("Battle Review: Turn 0");
-        string turnReport = "";
-        foreach(IAction action in _history.Turns[_currentTurn].Actions.OrderByDescending(a => a.ActorId))
+        ColorRect background = new()
         {
-            turnReport += action.Description() + "\n";
-            if (action is ShootAction shootAction)
+            Color = BackgroundColor,
+            Size = mapSize,
+            Position = Vector2.Zero,
+            ZIndex = -10
+        };
+        _view.MapRoot.AddChild(background);
+    }
+
+    private void DrawGrid(Vector2 mapSize)
+    {
+        for (int x = 0; x <= mapSize.X; x += _pixelsPerGrid.X)
+        {
+            DrawLine(new Vector2(x, 0), new Vector2(x, mapSize.Y), GridColor, 1.0f, -8);
+        }
+        for (int y = 0; y <= mapSize.Y; y += _pixelsPerGrid.Y)
+        {
+            DrawLine(new Vector2(0, y), new Vector2(mapSize.X, y), GridColor, 1.0f, -8);
+        }
+    }
+
+    private void DrawLine(Vector2 start, Vector2 end, Color color, float width, int zIndex)
+    {
+        Line2D line = new()
+        {
+            DefaultColor = color,
+            Width = width,
+            ZIndex = zIndex
+        };
+        line.AddPoint(start);
+        line.AddPoint(end);
+        _view.MapRoot.AddChild(line);
+    }
+
+    private void DrawSquad(BattleSquad squad, Vector2I topLeftOffset, bool selected)
+    {
+        List<Vector2> markerPositions = [];
+        foreach (BattleSoldier soldier in squad.AbleSoldiers)
+        {
+            foreach (Tuple<int, int> location in soldier.PositionList)
             {
-                foreach(WoundResolution wound in shootAction.WoundResolutions)
-                {
-                    turnReport += wound.Description + "\n";
-                }
-            }
-            else if (action is MeleeAttackAction meleeAction)
-            {
-                foreach (WoundResolution wound in meleeAction.WoundResolutions)
-                {
-                    turnReport += wound.Description + "\n";
-                }
+                Vector2 position = GridToMapPosition(location, topLeftOffset);
+                markerPositions.Add(position);
+                DrawMarker(position, squad.IsPlayerSquad, selected, squad.Id);
             }
         }
-        _view.SetTurnReportText(turnReport);
-        _view.EnableTurnButtons(turn > 1, turn < _history.Turns.Count);
 
-        foreach (Node child in _spriteHolder.GetChildren())
+        if (markerPositions.Count == 0) return;
+
+        Vector2 centroid = markerPositions.Aggregate(Vector2.Zero, (sum, position) => sum + position) / markerPositions.Count;
+        DrawFormationLabel(squad, centroid, selected);
+    }
+
+    private void DrawMarker(Vector2 position, bool isPlayerForce, bool selected, int formationId)
+    {
+        ClickableSprite2D sprite = new()
         {
-            _spriteHolder.RemoveChild(child);
+            Texture = _markerTexture,
+            Position = position,
+            Scale = selected ? _markerScale * 1.28f : _markerScale,
+            Modulate = selected ? SelectedMarkerColor : isPlayerForce ? PlayerMarkerColor : OpposingMarkerColor,
+            ZIndex = selected ? 4 : 2
+        };
+        sprite.Pressed += (_, _) =>
+        {
+            _selectedFormationId = formationId;
+            DisplayTurn(_currentTurnIndex);
+        };
+        _view.MapRoot.AddChild(sprite);
+
+        if (!selected) return;
+
+        Line2D ring = new()
+        {
+            DefaultColor = SelectedMarkerColor,
+            Width = 2.0f,
+            ZIndex = 3
+        };
+        float radius = Math.Min(_pixelsPerGrid.X, _pixelsPerGrid.Y) * 0.48f;
+        for (int i = 0; i <= 24; i++)
+        {
+            float angle = Mathf.Tau * i / 24.0f;
+            ring.AddPoint(position + new Vector2(Mathf.Cos(angle), Mathf.Sin(angle)) * radius);
+        }
+        _view.MapRoot.AddChild(ring);
+    }
+
+    private void DrawFormationLabel(BattleSquad squad, Vector2 centroid, bool selected)
+    {
+        Label label = new()
+        {
+            Text = $"{squad.Name}  {squad.AbleSoldiers.Count}",
+            Position = centroid + new Vector2(10, -28),
+            ZIndex = selected ? 6 : 5,
+            MouseFilter = Control.MouseFilterEnum.Ignore
+        };
+        label.AddThemeColorOverride("font_color", selected ? SelectedMarkerColor : squad.IsPlayerSquad ? PlayerMarkerColor : OpposingMarkerColor);
+        label.AddThemeFontSizeOverride("font_size", selected ? 14 : 12);
+        _view.MapRoot.AddChild(label);
+    }
+
+    private Vector2 GridToMapPosition(Tuple<int, int> gridPosition, Vector2I topLeftOffset)
+    {
+        Vector2I adjustedPosition = new(gridPosition.Item1 - topLeftOffset.X, gridPosition.Item2 - topLeftOffset.Y);
+        return new Vector2(
+            adjustedPosition.X * _pixelsPerGrid.X + _pixelsPerGrid.X / 2.0f,
+            adjustedPosition.Y * _pixelsPerGrid.Y + _pixelsPerGrid.Y / 2.0f);
+    }
+
+    private void CenterCamera(Vector2 mapSize)
+    {
+        _view.ReplayCamera.Position = mapSize / 2.0f;
+        float zoom = Math.Clamp(Math.Min(900.0f / Math.Max(mapSize.X, 1), 560.0f / Math.Max(mapSize.Y, 1)), 0.45f, 2.0f);
+        _view.ReplayCamera.Zoom = new Vector2(zoom, zoom);
+    }
+
+    private void ClearMap()
+    {
+        foreach (Node child in _view.MapRoot.GetChildren())
+        {
+            _view.MapRoot.RemoveChild(child);
             child.QueueFree();
         }
-
-        Vector2I topLeftOffset = GetTopLeftOfPositions(_history.Turns[0].State.SoldierPositionsMap.Values.SelectMany(x => x).ToList());
-        foreach (BattleSquad squad in _history.Turns[_currentTurn].State.PlayerSquads.Values)
-        {
-            DrawSquad(squad, _history.Turns[_currentTurn].State.SoldierPositionsMap, topLeftOffset, _soldierTexture, _soldierTextureScale, squad.Squad.Faction.Color.ToGodotColor());
-        }
-        foreach (BattleSquad squad in _history.Turns[_currentTurn].State.OpposingSquads.Values)
-        {
-            DrawSquad(squad, _history.Turns[_currentTurn].State.SoldierPositionsMap, topLeftOffset, _opForTexture, _opForTextureScale, squad.Squad.Faction.Color.ToGodotColor());
-        }
-
     }
 
-    public Vector2I GetTopLeftOfPositions(IReadOnlyList<Tuple<int, int>> positions)
+    private static Vector2I GetTopLeftOfPositions(IReadOnlyList<Tuple<int, int>> positions)
     {
-        return new 
-            (
-                positions.Min(x => x.Item1),
-                positions.Min(x => x.Item2)
-            );
+        return new Vector2I(
+            positions.Min(position => position.Item1),
+            positions.Min(position => position.Item2));
     }
 
-    public Vector2I GetBottomRightOfPositions(IList<Tuple<int, int>> positions)
+    private static Vector2I GetBottomRightOfPositions(IReadOnlyList<Tuple<int, int>> positions)
     {
-        return new
-            (
-                positions.Max(x => x.Item1),
-                positions.Max(x => x.Item2)
-            );
-    }
-
-    private void DrawSquad(BattleSquad squad, IReadOnlyDictionary<int, IReadOnlyList<Tuple<int, int>>> soldierLocationMap, Vector2I topLeftOffset, Texture2D soldierTexture, Vector2 soldierTextureScale, Color color)
-    {
-        foreach (ISoldier soldier in squad.AbleSoldiers)
-        {
-            var soldierLocations = soldierLocationMap[soldier.Id];
-            if(soldierLocations.Count == 1)
-            {
-                Vector2I gridPosition = new Vector2I(soldierLocations[0].Item1, soldierLocations[0].Item2);
-                Vector2I adjustedPosition = gridPosition - topLeftOffset + GRID_BORDER_SIZE;
-                Vector2I pixelPosition = (adjustedPosition * _pixelsPerGrid) + GRID_BORDER_SIZE;
-                DrawTexture(soldierTexture, soldierTextureScale, pixelPosition, color);
-            }
-        }
-    }
-
-    private ClickableSprite2D DrawTexture(Texture2D texture, Vector2 scale, Vector2I pixelPosition, Color color, int zIndex = 1, bool offset = false)
-    {
-        ClickableSprite2D newSprite = new ClickableSprite2D();
-        _spriteHolder.AddChild(newSprite);
-        newSprite.Owner = _spriteHolder;
-        newSprite.GlobalPosition = pixelPosition;
-        newSprite.Texture = texture;
-        newSprite.Modulate = color;
-        newSprite.Scale = scale;
-        newSprite.ZIndex = zIndex;
-        return newSprite;
+        return new Vector2I(
+            positions.Max(position => position.Item1),
+            positions.Max(position => position.Item2));
     }
 }
