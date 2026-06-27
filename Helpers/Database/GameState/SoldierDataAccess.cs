@@ -32,7 +32,8 @@ namespace OnlyWar.Helpers.Database.GameState
                      @ego, @charisma, @psychicPower, @attackSpeed, @size, @moveSpeed);";
                 command.AddParam("@id", soldier.Id);
                 command.AddParam("@templateId", soldier.Template.Id);
-                command.AddParam("@squadId", soldier.AssignedSquad.Id);
+                // Fallen brothers belong to no squad; persist a null SquadId for them.
+                command.AddParam("@squadId", (object)soldier.AssignedSquad?.Id ?? DBNull.Value);
                 command.AddParam("@name", soldier.Name);
                 command.AddParam("@strength", soldier.Strength);
                 command.AddParam("@dexterity", soldier.Dexterity);
@@ -152,7 +153,7 @@ namespace OnlyWar.Helpers.Database.GameState
                 {
                     int id = reader.GetInt32(0);
                     int soldierTemplateId = reader.GetInt32(1);
-                    int squadId = reader.GetInt32(2);
+                    int? squadId = reader.IsDBNull(2) ? null : reader.GetInt32(2);
                     string name = reader[3].ToString();
                     float strength = Convert.ToSingle(reader[4]);
                     float dexterity = Convert.ToSingle(reader[5]);
@@ -185,9 +186,14 @@ namespace OnlyWar.Helpers.Database.GameState
                         Template = soldierTemplateMap[soldierTemplateId]
                     };
 
-                    // due to how we handle decorating with PlayerSoldier, we may need to adjust this
-                    squadMap[squadId].AddSquadMember(soldier);
-                    soldier.AssignedSquad = squadMap[squadId];
+                    // due to how we handle decorating with PlayerSoldier, we may need to adjust this.
+                    // Fallen brothers have no squad; they stay squad-less and are routed into
+                    // Army.FallenBrothers after decoration.
+                    if (squadId.HasValue)
+                    {
+                        squadMap[squadId.Value].AddSquadMember(soldier);
+                        soldier.AssignedSquad = squadMap[squadId.Value];
+                    }
                     soldiers[id] = soldier;
                 }
             }

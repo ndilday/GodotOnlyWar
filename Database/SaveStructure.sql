@@ -51,8 +51,11 @@ CREATE TABLE SoldierAward (SoldierId INTEGER NOT NULL REFERENCES Soldier (Id), M
 -- Table: PlayerSoldierFactionCasualtyCount
 CREATE TABLE PlayerSoldierFactionCasualtyCount (PlayerSoldierId INTEGER NOT NULL REFERENCES PlayerSoldier (SoldierId), FactionId INTEGER NOT NULL, Count INTEGER NOT NULL);
 
--- Table: PlayerSoldierHistory
-CREATE TABLE PlayerSoldierHistory (PlayerSoldierId INTEGER NOT NULL REFERENCES PlayerSoldier (SoldierId), Entry STRING NOT NULL);
+-- Table: PlayerSoldierEvent
+-- Structured soldier history. FactionId/WeaponTemplateId are rules-data ids (no save-DB
+-- table), so they carry no foreign key, matching PlayerSoldierFactionCasualtyCount.
+-- RelatedSoldierIds is a CSV reserved for later passes (unused in step 1).
+CREATE TABLE PlayerSoldierEvent (PlayerSoldierId INTEGER NOT NULL REFERENCES PlayerSoldier (SoldierId), Millenium INTEGER NOT NULL, Year INTEGER NOT NULL, Week INTEGER NOT NULL, EventType INTEGER NOT NULL, FactionId INTEGER, WeaponTemplateId INTEGER, Magnitude INTEGER, LocationName STRING, Detail STRING, RelatedSoldierIds STRING);
 
 -- Table: PlayerSoldierMeleeWeaponCasualtyCount
 CREATE TABLE PlayerSoldierMeleeWeaponCasualtyCount (PlayerSoldierId INTEGER REFERENCES PlayerSoldier (SoldierId) NOT NULL, MeleeWeaponTemplateId INTEGER, Count INTEGER NOT NULL);
@@ -67,7 +70,7 @@ CREATE TABLE Request (Id INTEGER PRIMARY KEY UNIQUE NOT NULL, CharacterId INTEGE
 CREATE TABLE Ship (Id INTEGER PRIMARY KEY UNIQUE NOT NULL, ShipTemplateId INTEGER NOT NULL, FleetId INTEGER REFERENCES Fleet (Id) NOT NULL, Name STRING NOT NULL);
 
 -- Table: Soldier
-CREATE TABLE Soldier (Id INTEGER PRIMARY KEY NOT NULL UNIQUE, SoldierTemplateId INTEGER NOT NULL, SquadId INTEGER NOT NULL REFERENCES Squad (Id), Name STRING NOT NULL, Strength REAL NOT NULL, Dexterity REAL NOT NULL, Constitution REAL NOT NULL, Intelligence REAL NOT NULL, Perception REAL NOT NULL, Ego REAL NOT NULL, Charisma REAL NOT NULL, PsychicPower REAL NOT NULL, AttackSpeed REAL NOT NULL, Size REAL NOT NULL, MoveSpeed REAL NOT NULL);
+CREATE TABLE Soldier (Id INTEGER PRIMARY KEY NOT NULL UNIQUE, SoldierTemplateId INTEGER NOT NULL, SquadId INTEGER REFERENCES Squad (Id), Name STRING NOT NULL, Strength REAL NOT NULL, Dexterity REAL NOT NULL, Constitution REAL NOT NULL, Intelligence REAL NOT NULL, Perception REAL NOT NULL, Ego REAL NOT NULL, Charisma REAL NOT NULL, PsychicPower REAL NOT NULL, AttackSpeed REAL NOT NULL, Size REAL NOT NULL, MoveSpeed REAL NOT NULL);
 
 -- Table: SoldierSkill
 CREATE TABLE SoldierSkill (SoldierId INTEGER NOT NULL REFERENCES Soldier (Id), BaseSkillId INTEGER NOT NULL, PointsInvested REAL NOT NULL);

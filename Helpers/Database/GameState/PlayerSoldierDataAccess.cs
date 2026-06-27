@@ -1,7 +1,9 @@
 ﻿using OnlyWar.Models;
 using OnlyWar.Models.Soldiers;
+using System;
 using System.Collections.Generic;
 using System.Data;
+using System.Linq;
 
 namespace OnlyWar.Helpers.Database.GameState
 {
@@ -13,11 +15,11 @@ namespace OnlyWar.Helpers.Database.GameState
             var factionCasualtyMap = GetFactionCasualtiesBySoldierId(dbCon);
             var rangedWeaponCasualtyMap = GetRangedWeaponCasualtiesBySoldierId(dbCon);
             var meleeWeaponCasualtyMap = GetMeleeWeaponCasualtiesBySoldierId(dbCon);
-            var historyMap = GetHistoryBySoldierId(dbCon);
+            var eventMap = GetEventsBySoldierId(dbCon);
             var evaluationMap = GetEvaluationsBySoldierId(dbCon);
             var awardMap = GetAwardsBySoldierId(dbCon);
-            var playerSoldiers = GetPlayerSoldiers(dbCon, soldierMap, factionCasualtyMap, rangedWeaponCasualtyMap, 
-                                                   meleeWeaponCasualtyMap, historyMap, evaluationMap, awardMap);
+            var playerSoldiers = GetPlayerSoldiers(dbCon, soldierMap, factionCasualtyMap, rangedWeaponCasualtyMap,
+                                                   meleeWeaponCasualtyMap, eventMap, evaluationMap, awardMap);
             return playerSoldiers;
         }
 
@@ -77,15 +79,28 @@ namespace OnlyWar.Helpers.Database.GameState
                 }
             }
 
-            foreach (string entry in playerSoldier.SoldierHistory)
+            foreach (SoldierEvent soldierEvent in playerSoldier.SoldierEvents)
             {
                 using (var command = transaction.Connection.CreateCommand())
                 {
                     command.Transaction = transaction;
-                    command.CommandText = @"INSERT INTO PlayerSoldierHistory VALUES
-                        (@soldierId, @entry);";
+                    command.CommandText = @"INSERT INTO PlayerSoldierEvent VALUES
+                        (@soldierId, @millenium, @year, @week, @eventType, @factionId,
+                         @weaponTemplateId, @magnitude, @locationName, @detail, @relatedSoldierIds);";
                     command.AddParam("@soldierId", playerSoldier.Id);
-                    command.AddParam("@entry", entry);
+                    command.AddParam("@millenium", soldierEvent.Date.Millenium);
+                    command.AddParam("@year", soldierEvent.Date.Year);
+                    command.AddParam("@week", soldierEvent.Date.Week);
+                    command.AddParam("@eventType", (int)soldierEvent.Type);
+                    command.AddParam("@factionId", (object)soldierEvent.FactionId ?? DBNull.Value);
+                    command.AddParam("@weaponTemplateId", (object)soldierEvent.WeaponTemplateId ?? DBNull.Value);
+                    command.AddParam("@magnitude", (object)soldierEvent.Magnitude ?? DBNull.Value);
+                    command.AddParam("@locationName", (object)soldierEvent.LocationName ?? DBNull.Value);
+                    command.AddParam("@detail", (object)soldierEvent.Detail ?? DBNull.Value);
+                    command.AddParam("@relatedSoldierIds",
+                        soldierEvent.RelatedSoldierIds.Count > 0
+                            ? string.Join(",", soldierEvent.RelatedSoldierIds)
+                            : (object)DBNull.Value);
                     command.ExecuteNonQuery();
                 }
             }
@@ -214,27 +229,38 @@ namespace OnlyWar.Helpers.Database.GameState
             return soldierWeaponCasualtyMap;
         }
 
-        private Dictionary<int, List<string>> GetHistoryBySoldierId(IDbConnection connection)
+        private Dictionary<int, List<SoldierEvent>> GetEventsBySoldierId(IDbConnection connection)
         {
-            Dictionary<int, List<string>> soldierEntryListMap = [];
+            Dictionary<int, List<SoldierEvent>> soldierEventListMap = [];
             using (var command = connection.CreateCommand())
             {
-                command.CommandText = "SELECT * FROM PlayerSoldierHistory";
+                command.CommandText = "SELECT * FROM PlayerSoldierEvent";
                 var reader = command.ExecuteReader();
                 while (reader.Read())
                 {
                     int soldierId = reader.GetInt32(0);
-                    string entry = reader[1].ToString();
+                    Date date = new Date(reader.GetInt32(1), reader.GetInt32(2), reader.GetInt32(3));
+                    SoldierEventType type = (SoldierEventType)reader.GetInt32(4);
+                    int? factionId = reader.IsDBNull(5) ? null : reader.GetInt32(5);
+                    int? weaponTemplateId = reader.IsDBNull(6) ? null : reader.GetInt32(6);
+                    int? magnitude = reader.IsDBNull(7) ? null : reader.GetInt32(7);
+                    string locationName = reader.IsDBNull(8) ? null : reader.GetString(8);
+                    string detail = reader.IsDBNull(9) ? null : reader.GetString(9);
+                    IEnumerable<int> relatedSoldierIds = reader.IsDBNull(10)
+                        ? null
+                        : reader.GetString(10).Split(',', StringSplitOptions.RemoveEmptyEntries).Select(int.Parse);
 
-                    if (!soldierEntryListMap.ContainsKey(soldierId))
+                    SoldierEvent soldierEvent = new SoldierEvent(date, type, detail, factionId,
+                        weaponTemplateId, magnitude, locationName, relatedSoldierIds);
+
+                    if (!soldierEventListMap.ContainsKey(soldierId))
                     {
-                        soldierEntryListMap[soldierId] = [];
+                        soldierEventListMap[soldierId] = [];
                     }
-                    soldierEntryListMap[soldierId].Add(entry);
-
+                    soldierEventListMap[soldierId].Add(soldierEvent);
                 }
             }
-            return soldierEntryListMap;
+            return soldierEventListMap;
         }
 
         private Dictionary<int, List<SoldierEvaluation>> GetEvaluationsBySoldierId(IDbConnection connection)
@@ -328,7 +354,7 @@ namespace OnlyWar.Helpers.Database.GameState
                                                                  IReadOnlyDictionary<int, Dictionary<int, ushort>> factionCasualtyMap,
                                                                  IReadOnlyDictionary<int, Dictionary<int, ushort>> rangedWeaponCasualtyMap,
                                                                  IReadOnlyDictionary<int, Dictionary<int, ushort>> meleeWeaponCasualtyMap,
-                                                                 IReadOnlyDictionary<int, List<string>> historyMap,
+                                                                 IReadOnlyDictionary<int, List<SoldierEvent>> eventMap,
                                                                  IReadOnlyDictionary<int, List<SoldierEvaluation>> evaluationMap,
                                                                  IReadOnlyDictionary<int, List<SoldierAward>> awardMap)
         {
@@ -346,14 +372,14 @@ namespace OnlyWar.Helpers.Database.GameState
 
                     Date implantDate = new Date(implantMillenium, implantYear, implantWeek);
 
-                    List<string> history;
-                    if (historyMap.ContainsKey(soldierId))
+                    List<SoldierEvent> events;
+                    if (eventMap.ContainsKey(soldierId))
                     {
-                        history = historyMap[soldierId];
+                        events = eventMap[soldierId];
                     }
                     else
                     {
-                        history = [];
+                        events = [];
                     }
 
                     List<SoldierEvaluation> evals;
@@ -407,7 +433,7 @@ namespace OnlyWar.Helpers.Database.GameState
                     }
 
                     PlayerSoldier playerSoldier = new PlayerSoldier(baseSoldierMap[soldierId], evals, awards,
-                                                                    implantDate, history, rangedWeaponCasualties,
+                                                                    implantDate, events, rangedWeaponCasualties,
                                                                     meleeWeaponCasualties, factionCasualties);
 
                     playerSoldierMap[soldierId] = playerSoldier;

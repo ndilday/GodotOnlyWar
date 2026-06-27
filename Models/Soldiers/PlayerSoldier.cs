@@ -10,7 +10,7 @@ namespace OnlyWar.Models.Soldiers
     public class PlayerSoldier : ISoldier
     {
         private readonly Soldier _soldier;
-        private readonly List<string> _soldierHistory;
+        private readonly List<SoldierEvent> _soldierEvents;
         private readonly List<SoldierEvaluation> _soldierEvaluationHistory;
         private readonly List<SoldierAward> _soldierAwards;
         private readonly Dictionary<int, ushort> _rangedWeaponCasualtyCountMap;
@@ -19,7 +19,11 @@ namespace OnlyWar.Models.Soldiers
         private Squad _assignedSquad;
 
         public Date ProgenoidImplantDate { get; set; }
-        public IReadOnlyCollection<string> SoldierHistory { get => _soldierHistory; }
+        public IReadOnlyList<SoldierEvent> SoldierEvents { get => _soldierEvents; }
+        // Display projection over the structured events, preserving the legacy
+        // free-text history surface for callers that still render strings.
+        public IReadOnlyCollection<string> SoldierHistory =>
+            _soldierEvents.Select(e => e.Render()).ToList();
         public IReadOnlyDictionary<int, ushort> RangedWeaponCasualtyCountMap { get => _rangedWeaponCasualtyCountMap; }
         public IReadOnlyDictionary<int, ushort> MeleeWeaponCasualtyCountMap { get => _meleeWeaponCasualtyCountMap; }
         public IReadOnlyDictionary<int, ushort> FactionCasualtyCountMap { get => _factionCasualtyCountMap; }
@@ -118,7 +122,7 @@ namespace OnlyWar.Models.Soldiers
         {
             _soldier = soldier;
             _soldier.Name = name;
-            _soldierHistory = [];
+            _soldierEvents = [];
             _soldierEvaluationHistory = [];
             _soldierAwards = [];
             _rangedWeaponCasualtyCountMap = [];
@@ -133,14 +137,14 @@ namespace OnlyWar.Models.Soldiers
             }
         }
 
-        public PlayerSoldier(Soldier soldier, List<SoldierEvaluation> evaluations, 
-                             List<SoldierAward> awards, Date implantDate, List<string> history,
+        public PlayerSoldier(Soldier soldier, List<SoldierEvaluation> evaluations,
+                             List<SoldierAward> awards, Date implantDate, List<SoldierEvent> events,
                              Dictionary<int, ushort> rangedWeaponCasualties,
                              Dictionary<int, ushort> meleeWeaponCasualties,
                              Dictionary<int, ushort> factionCasualties)
         {
             _soldier = soldier;
-            _soldierHistory = history;
+            _soldierEvents = events;
             _soldierEvaluationHistory = evaluations;
             _soldierAwards = awards;
             ProgenoidImplantDate = implantDate;
@@ -159,15 +163,15 @@ namespace OnlyWar.Models.Soldiers
         public object Clone()
         {
             return new PlayerSoldier((Soldier)_soldier.Clone(), _soldierEvaluationHistory.ToList(),
-                                     _soldierAwards.ToList(), ProgenoidImplantDate, _soldierHistory.ToList(),
+                                     _soldierAwards.ToList(), ProgenoidImplantDate, _soldierEvents.ToList(),
                                      _rangedWeaponCasualtyCountMap.ToDictionary(kvp => kvp.Key, kvp => kvp.Value),
                                      _meleeWeaponCasualtyCountMap.ToDictionary(kvp => kvp.Key, kvp => kvp.Value),
                                      _factionCasualtyCountMap.ToDictionary(kvp => kvp.Key, kvp => kvp.Value));
         }
 
-        public void AddEntryToHistory(string entry)
+        public void AddEvent(SoldierEvent soldierEvent)
         {
-            _soldierHistory.Add(entry);
+            _soldierEvents.Add(soldierEvent);
         }
 
         public void AddEvaluation(SoldierEvaluation evaluation)

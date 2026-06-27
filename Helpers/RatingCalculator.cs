@@ -115,7 +115,7 @@ namespace OnlyWar.Helpers
                 string name = ResolveAwardName(best, tiersForRating.Key, soldier);
                 if (best.Effect == RatingAwardEffect.HistoryFlag)
                 {
-                    soldier.AddEntryToHistory(date + ": " + name);
+                    soldier.AddEvent(new SoldierEvent(date, SoldierEventType.RatingFlag, name));
                 }
                 else
                 {
@@ -156,7 +156,7 @@ namespace OnlyWar.Helpers
         {
             if (!soldier.SoldierAwards.Any(a => a.Type == type && a.Level >= level))
             {
-                soldier.AddEntryToHistory(awardDate.ToString() + ": Awarded " + awardName);
+                soldier.AddEvent(new SoldierEvent(awardDate, SoldierEventType.AwardReceived, "Awarded " + awardName));
                 soldier.AddAward(new SoldierAward(awardDate, awardName, type, (ushort)level));
             }
         }

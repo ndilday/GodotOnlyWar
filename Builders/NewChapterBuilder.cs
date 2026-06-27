@@ -54,7 +54,7 @@ namespace OnlyWar.Builders
                                                                            data.PlayerFaction.UnitTemplates.Values.First(ut => ut.IsTopLevelUnit),
                                                                            soldiers,
                                                                            chapterName);
-            PopulateOrderOfBattle(trainingEndDate.ToString(), unassignedSoldierMap, chapter.Army.OrderOfBattle, data.ChapterTemplates);
+            PopulateOrderOfBattle(trainingEndDate, unassignedSoldierMap, chapter.Army.OrderOfBattle, data.ChapterTemplates);
             chapter.Army.PopulateSquadMap();
             return chapter;
         }
@@ -72,10 +72,12 @@ namespace OnlyWar.Builders
 
             foreach (PlayerSoldier soldier in soldiers)
             {
-                soldier.AddEntryToHistory(trainingStartDate + ": accepted into training");
+                soldier.AddEvent(new SoldierEvent(trainingStartDate, SoldierEventType.AcceptedToTraining,
+                    "accepted into training"));
                 if (soldier.PsychicPower > 0)
                 {
-                    soldier.AddEntryToHistory(trainingStartDate + ": psychic ability detected, acolyte training initiated");
+                    soldier.AddEvent(new SoldierEvent(trainingStartDate, SoldierEventType.PsychicDetected,
+                        "psychic ability detected, acolyte training initiated"));
                     // add psychic specific training here
                 }
                 trainingService.EvaluateSoldier(soldier, trainingEndDate);
@@ -96,7 +98,7 @@ namespace OnlyWar.Builders
             return csv;
         }
 
-        private static void PopulateOrderOfBattle(string year,
+        private static void PopulateOrderOfBattle(Date year,
                                                   Dictionary<int, PlayerSoldier> unassignedSoldierMap,
                                                   Unit oob, ChapterGenerationTemplates templates)
         {
@@ -170,17 +172,18 @@ namespace OnlyWar.Builders
         }
 
         private static void AssignChapterMaster(Dictionary<int, PlayerSoldier> unassignedSoldierMap, 
-                                                Unit chapter, string year, ChapterGenerationTemplates templates)
+                                                Unit chapter, Date year, ChapterGenerationTemplates templates)
         {
             PlayerSoldier master = unassignedSoldierMap.Values.OrderByDescending(s => s.SoldierEvaluationHistory[0].LeadershipRating).First();
             master.Template = templates.ChapterMaster;
             chapter.HQSquad.AddSquadMember(master);
-            master.AddEntryToHistory(year + ": voted by the chapter to become the first Chapter Master");
+            master.AddEvent(new SoldierEvent(year, SoldierEventType.Founding,
+                "voted by the chapter to become the first Chapter Master"));
             unassignedSoldierMap.Remove(master.Id);
         }
 
         private static void AssignLibrarians(Dictionary<int, PlayerSoldier> unassignedSoldierMap, 
-                                             Unit chapter, string year, ChapterGenerationTemplates templates)
+                                             Unit chapter, Date year, ChapterGenerationTemplates templates)
         {
             // assume for now that there's a single unit to hold all of the Librarians as a squad on the chapter
             Squad library = chapter.Squads.First(s => s.SquadTemplate == templates.Librarius);
@@ -205,13 +208,14 @@ namespace OnlyWar.Builders
                     soldier.Template = templates.Lexicanium;
                 }
                 library.AddSquadMember(soldier);
-                soldier.AddEntryToHistory(year + ": Promoted to " + soldier.Template.Name + " and assigned to " + soldier.AssignedSquad.Name);
+                soldier.AddEvent(new SoldierEvent(year, SoldierEventType.Promotion,
+                    "Promoted to " + soldier.Template.Name + " and assigned to " + soldier.AssignedSquad.Name));
                 unassignedSoldierMap.Remove(soldier.Id);
             }
         }
 
         private static void AssignTechMarines(Dictionary<int, PlayerSoldier> unassignedSoldierMap, 
-                                              Unit chapter, string year, ChapterGenerationTemplates templates)
+                                              Unit chapter, Date year, ChapterGenerationTemplates templates)
         {
             IEnumerable<PlayerSoldier> techMarines = 
                 unassignedSoldierMap.Values.Where(s => s.SoldierEvaluationHistory[0].TechRating > 75).OrderByDescending(s => s.SoldierEvaluationHistory[0].TechRating).Take(50);
@@ -228,14 +232,15 @@ namespace OnlyWar.Builders
                     soldier.Template = templates.Techmarine;
                 }
                 armory.AddSquadMember(soldier);
-                soldier.AddEntryToHistory(year + ": Returned from Mars, promoted to " 
-                    + soldier.Template.Name + " and assigned to " + soldier.AssignedSquad.Name);
+                soldier.AddEvent(new SoldierEvent(year, SoldierEventType.Promotion,
+                    "Returned from Mars, promoted to "
+                    + soldier.Template.Name + " and assigned to " + soldier.AssignedSquad.Name));
                 unassignedSoldierMap.Remove(soldier.Id);
             }
         }
 
         private static void AssignApothecaries(Dictionary<int, PlayerSoldier> unassignedSoldierMap, 
-                                               Unit chapter, string year, ChapterGenerationTemplates templates)
+                                               Unit chapter, Date year, ChapterGenerationTemplates templates)
         {
             IEnumerable<PlayerSoldier> apothecaries = unassignedSoldierMap.Values
                                                    .Where(s => s.SoldierEvaluationHistory[0].MedicalRating > 115)
@@ -254,14 +259,15 @@ namespace OnlyWar.Builders
                     soldier.Template = templates.Apothecary;
                 }
                 apo.AddSquadMember(soldier);
-                soldier.AddEntryToHistory(year + ": finished medical and genetic training, promoted to " 
-                    + soldier.Template.Name + " and assigned to " + soldier.AssignedSquad.Name);
+                soldier.AddEvent(new SoldierEvent(year, SoldierEventType.Promotion,
+                    "finished medical and genetic training, promoted to "
+                    + soldier.Template.Name + " and assigned to " + soldier.AssignedSquad.Name));
                 unassignedSoldierMap.Remove(soldier.Id);
             }
         }
 
         private static void AssignChaplains(Dictionary<int, PlayerSoldier> unassignedSoldierMap, 
-                                            Unit chapter, string year, ChapterGenerationTemplates templates)
+                                            Unit chapter, Date year, ChapterGenerationTemplates templates)
         {
             IEnumerable<PlayerSoldier> chaplains = unassignedSoldierMap.Values.Where(s => s.SoldierEvaluationHistory[0].PietyRating > 50)
                                                     .OrderByDescending(s => s.SoldierEvaluationHistory[0].PietyRating)
@@ -279,14 +285,15 @@ namespace OnlyWar.Builders
                     soldier.Template = templates.Chaplain;
                 }
                 reclusium.AddSquadMember(soldier);
-                soldier.AddEntryToHistory(year + ": promoted to " + soldier.Template.Name 
-                    + " and assigned to " + soldier.AssignedSquad.Name);
+                soldier.AddEvent(new SoldierEvent(year, SoldierEventType.Promotion,
+                    "promoted to " + soldier.Template.Name
+                    + " and assigned to " + soldier.AssignedSquad.Name));
                 unassignedSoldierMap.Remove(soldier.Id);
             }
         }
 
         private static void AssignCaptains(Dictionary<int, PlayerSoldier> unassignedSoldierMap, 
-                                           Unit chapter, string year, ChapterGenerationTemplates templates)
+                                           Unit chapter, Date year, ChapterGenerationTemplates templates)
         {
             // see if there is an impressive enough leader to be the Veteran Captain
             List<PlayerSoldier> veteranLeaders = 
@@ -319,7 +326,7 @@ namespace OnlyWar.Builders
         }
     
         private static void AssignVeterans(Dictionary<int, PlayerSoldier> unassignedSoldierMap, 
-                                           Unit chapter, string year, ChapterGenerationTemplates templates)
+                                           Unit chapter, Date year, ChapterGenerationTemplates templates)
         {
             IEnumerable<PlayerSoldier> veterans = unassignedSoldierMap.Values.Where(s => s.SoldierEvaluationHistory[0].MeleeRating > 95 && s.SoldierEvaluationHistory[0].RangedRating > 105);
             List<PlayerSoldier> veteranLeaders = veterans.Where(s => s.SoldierEvaluationHistory[0].LeadershipRating > 60).OrderByDescending(s => s.SoldierEvaluationHistory[0].LeadershipRating).ToList();
@@ -365,7 +372,7 @@ namespace OnlyWar.Builders
         }
 
         private static void AssignExcessToScouts(Dictionary<int, PlayerSoldier> unassignedSoldierMap, 
-                                                 Unit chapter, string year, ChapterGenerationTemplates templates)
+                                                 Unit chapter, Date year, ChapterGenerationTemplates templates)
         {
             int sgtNeed = ((unassignedSoldierMap.Count - 1) / 10) + 1;
             List<PlayerSoldier> leaderList = unassignedSoldierMap.Values.OrderByDescending(s => s.SoldierEvaluationHistory[0].LeadershipRating).Take(sgtNeed).ToList();
@@ -421,7 +428,7 @@ namespace OnlyWar.Builders
 
         private static void AssignSpecialistsToUnit(Dictionary<int, PlayerSoldier> unassignedSoldierMap,
                                              Unit chapter,
-                                             string year,
+                                             Date year,
                                              SoldierTemplate specialistType,
                                              List<PlayerSoldier> sortedCandidates)
         {
@@ -446,7 +453,7 @@ namespace OnlyWar.Builders
 
         private static void AssignSpecialistsToSquad(Dictionary<int, PlayerSoldier> unassignedSoldierMap,
                                                      Squad squad,
-                                                     string year,
+                                                     Date year,
                                                      SoldierTemplate specialistType,
                                                      List<PlayerSoldier> sortedCandidates)
         {
@@ -470,7 +477,7 @@ namespace OnlyWar.Builders
         }
 
         private static void AssignMarines(Dictionary<int, PlayerSoldier> unassignedSoldierMap, 
-                                          Unit chapter, string year, ChapterGenerationTemplates templates)
+                                          Unit chapter, Date year, ChapterGenerationTemplates templates)
         {
             List<PlayerSoldier> devList = unassignedSoldierMap.Values.Where(s => s.SoldierEvaluationHistory[0].MeleeRating > 80 
                                                               && s.SoldierEvaluationHistory[0].MeleeRating < 90
@@ -524,7 +531,7 @@ namespace OnlyWar.Builders
         }
 
         private static void AssignDevastatorMarines(Dictionary<int, PlayerSoldier> unassignedSoldierMap, 
-                                                    Unit chapter, string year, ChapterGenerationTemplates templates,
+                                                    Unit chapter, Date year, ChapterGenerationTemplates templates,
                                                     List<PlayerSoldier> devList, 
                                                     List<PlayerSoldier> devSgtList)
         {
@@ -570,7 +577,7 @@ namespace OnlyWar.Builders
         }
 
         private static void AssignAssaultMarines(Dictionary<int, PlayerSoldier> unassignedSoldierMap, 
-                                                 Unit chapter, string year, ChapterGenerationTemplates templates,
+                                                 Unit chapter, Date year, ChapterGenerationTemplates templates,
                                                  List<PlayerSoldier> assList, 
                                                  List<PlayerSoldier> assSgtList)
         {
@@ -601,7 +608,7 @@ namespace OnlyWar.Builders
         }
 
         private static void AssignTacticalMarines(Dictionary<int, PlayerSoldier> unassignedSoldierMap, 
-                                                  Unit chapter, string year, ChapterGenerationTemplates templates,
+                                                  Unit chapter, Date year, ChapterGenerationTemplates templates,
                                                   List<PlayerSoldier> tactList, 
                                                   List<PlayerSoldier> tactSgtList)
         {
@@ -651,13 +658,14 @@ namespace OnlyWar.Builders
                                                    List<PlayerSoldier> soldierList, 
                                                    Squad squad, 
                                                    SoldierTemplate type, 
-                                                   string year)
+                                                   Date year)
         {
             PlayerSoldier soldier = soldierList[0];
             soldier.Template = type;
             squad.AddSquadMember(soldier);
-            soldier.AddEntryToHistory(year + ": promoted to " + soldier.Template.Name 
-                + " and assigned to " + soldier.AssignedSquad.Name);
+            soldier.AddEvent(new SoldierEvent(year, SoldierEventType.Promotion,
+                "promoted to " + soldier.Template.Name
+                + " and assigned to " + soldier.AssignedSquad.Name));
             unassignedSoldierMap.Remove(soldier.Id);
             soldierList.RemoveAt(0);
         }

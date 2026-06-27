@@ -46,11 +46,16 @@ namespace OnlyWar.Models
         public Unit OrderOfBattle { get; }
         public Dictionary<int, PlayerSoldier> PlayerSoldierMap { get; }
         public Dictionary<int, Squad> SquadMap { get; private set; }
+        // Brothers who have fallen are removed from the active roster but their dossiers
+        // (history, kills, awards) are retained here so the chapter can honor them
+        // (PRD 4.12). These soldiers belong to no squad.
+        public Dictionary<int, PlayerSoldier> FallenBrothers { get; }
 
         public Army(string armyName, Character leader, string title, Unit unit, IEnumerable<PlayerSoldier> soldiers)
             : base(armyName, leader, title)
         {
             PlayerSoldierMap = soldiers.ToDictionary(s => s.Id);
+            FallenBrothers = [];
             OrderOfBattle = unit;
         }
 

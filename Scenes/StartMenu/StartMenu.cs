@@ -78,6 +78,11 @@ public partial class StartMenu : Control
             "Chapter Master",
             gameRulesData.PlayerFaction.Units.First(),
             gameRulesData.PlayerFaction.Units.First().GetAllMembers().Select(m => (PlayerSoldier)m));
+        // Restore the fallen brothers, who belong to no unit and so are carried separately.
+        foreach (PlayerSoldier fallen in gameState.FallenBrothers ?? [])
+        {
+            army.FallenBrothers[fallen.Id] = fallen;
+        }
         Fleet fleet = new Fleet(
             "Chapter Navy",
             null,

@@ -174,6 +174,7 @@ public partial class MainGameScene : Control
                 GameDataSingleton.Instance.Sector.Fleets.Values,
                 units,
                 GameDataSingleton.Instance.Sector.PlayerForce.Army.PlayerSoldierMap.Values,
+                GameDataSingleton.Instance.Sector.PlayerForce.Army.FallenBrothers.Values,
                 GameDataSingleton.Instance.Sector.PlayerForce.BattleHistory);
             message = "SAVED!";
         }

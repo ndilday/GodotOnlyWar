@@ -55,7 +55,12 @@ namespace OnlyWar.Helpers.Battles
                 // add death note to soldier history, though we currently just delete it 
                 // we'll probably want it later
                 PlayerSoldier playerSoldier = wound.Suffererer.Soldier as PlayerSoldier;
-                playerSoldier.AddEntryToHistory($"Killed in battle with the {_opposingFaction.Name} by a {wound.Weapon.Name}");
+                playerSoldier.AddEvent(new SoldierEvent(
+                    GameDataSingleton.Instance.Date,
+                    SoldierEventType.Death,
+                    $"Killed in battle with the {_opposingFaction.Name} by a {wound.Weapon.Name}",
+                    factionId: _opposingFaction.Id,
+                    weaponTemplateId: wound.Weapon.Id));
             }
             else
             {
@@ -330,10 +335,12 @@ namespace OnlyWar.Helpers.Battles
         {
             foreach (BattleSoldier soldier in _startingPlayerBattleSoldiers)
             {
-                string historyEntry = $"{GameDataSingleton.Instance.Date}: Skirmish in {_region.Name}, {_region.Planet.Name}.";
+                // Detail carries the rendered body without the leading date stamp;
+                // Render() restamps it. Structured fields below feed later querying.
+                string detail = $"Skirmish in {_region.Name}, {_region.Planet.Name}.";
                 if (soldier.EnemiesTakenDown > 0)
                 {
-                    historyEntry += $" Felled {soldier.EnemiesTakenDown} {_opposingFaction.Name}.";
+                    detail += $" Felled {soldier.EnemiesTakenDown} {_opposingFaction.Name}.";
                 }
                 if (soldier.WoundsTaken > 0)
                 {
@@ -348,16 +355,22 @@ namespace OnlyWar.Helpers.Battles
                         if (hl.IsSevered)
                         {
                             sever = true;
-                            historyEntry += $" Lost his {hl.Template.Name} in the fighting.";
+                            detail += $" Lost his {hl.Template.Name} in the fighting.";
                         }
                     }
                     if (badWound && !sever)
                     {
-                        historyEntry += $"Was greviously wounded.";
+                        detail += $"Was greviously wounded.";
                     }
                 }
                 PlayerSoldier playerSolider = soldier.Soldier as PlayerSoldier;
-                playerSolider.AddEntryToHistory(historyEntry);
+                playerSolider.AddEvent(new SoldierEvent(
+                    GameDataSingleton.Instance.Date,
+                    SoldierEventType.BattleParticipation,
+                    detail,
+                    factionId: _opposingFaction.Id,
+                    magnitude: soldier.EnemiesTakenDown > 0 ? soldier.EnemiesTakenDown : null,
+                    locationName: $"{_region.Name}, {_region.Planet.Name}"));
             }
 
         }
@@ -418,7 +431,11 @@ namespace OnlyWar.Helpers.Battles
                         PlayerSoldier playerSoldier = soldier.Soldier as PlayerSoldier;
                         dead.Add(playerSoldier);
                         playerSoldier.AssignedSquad.RemoveSquadMember(playerSoldier);
-                        GameDataSingleton.Instance.Sector.PlayerForce.Army.PlayerSoldierMap.Remove(soldier.Soldier.Id);
+                        playerSoldier.AssignedSquad = null;
+                        Army army = GameDataSingleton.Instance.Sector.PlayerForce.Army;
+                        army.PlayerSoldierMap.Remove(soldier.Soldier.Id);
+                        // Retain the fallen brother's dossier rather than discarding it (PRD 4.12).
+                        army.FallenBrothers[playerSoldier.Id] = playerSoldier;
                         break;
                     }
                 }

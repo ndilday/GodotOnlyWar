@@ -19,7 +19,7 @@ public class SoldierDossierServiceTests
         Squad squad = CreateAssignedSquad("Tactical Squad");
         PlayerSoldier soldier = AddPlayerSoldier(squad, "Brother Marius");
         Date date = new(41, 999, 12);
-        soldier.AddEntryToHistory($"{date}: joined Tactical Squad");
+        soldier.AddEvent(new SoldierEvent(date, SoldierEventType.Transfer, "joined Tactical Squad"));
         soldier.AddAward(new SoldierAward(date, "Bronze Sword of the Emperor", "Sword", 1));
         soldier.AddEvaluation(new SoldierEvaluation(date, melee: 100, ranged: 112, lead: 60, med: 0, tech: 0, piety: 0, ancient: 0));
 

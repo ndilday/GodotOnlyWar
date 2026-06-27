@@ -168,6 +168,129 @@ public class SaveLoadRoundTripTests
         }
     }
 
+    [Fact]
+    public void SaveThenLoad_SoldierEvents_SurviveRoundTrip()
+    {
+        Sector sector = SectorBuilder.GenerateSector(1, _data, _date, "Event Round Trip Chapter");
+        GameDataSingleton.Instance.LoadGameDataFromBlob(_data, _date, sector);
+        Unit armyRoot = sector.PlayerForce.Army.OrderOfBattle;
+        if (!_data.PlayerFaction.Units.Contains(armyRoot))
+        {
+            _data.PlayerFaction.Units.Add(armyRoot);
+        }
+
+        // Attach a structured battle event with all the queryable fields populated.
+        PlayerSoldier soldier = armyRoot.GetAllSquads()
+            .SelectMany(s => s.Members)
+            .OfType<PlayerSoldier>()
+            .First();
+        SoldierEvent battleEvent = new(_date, SoldierEventType.BattleParticipation,
+            "Skirmish in the Northern Waste, Test World. Felled 4 Tyranids.",
+            factionId: 7, magnitude: 4, locationName: "Northern Waste, Test World");
+        soldier.AddEvent(battleEvent);
+
+        string dbPath = Path.Combine(
+            Path.GetTempPath(), $"onlywar_events_roundtrip_{Guid.NewGuid():N}.s3db");
+        try
+        {
+            Save(sector, dbPath, _data.Factions.SelectMany(f => f.Units).ToList());
+            GameStateDataBlob loaded = Load(dbPath);
+
+            PlayerSoldier loadedSoldier = loaded.Units
+                .SelectMany(u => u.GetAllSquads())
+                .SelectMany(s => s.Members)
+                .OfType<PlayerSoldier>()
+                .Single(ps => ps.Id == soldier.Id);
+
+            // Generation events (training, promotion) round-trip too, so just isolate ours.
+            SoldierEvent loadedEvent = loadedSoldier.SoldierEvents
+                .Single(e => e.Type == SoldierEventType.BattleParticipation);
+            Assert.Equal(battleEvent.Detail, loadedEvent.Detail);
+            Assert.Equal(_date, loadedEvent.Date);
+            Assert.Equal(7, loadedEvent.FactionId);
+            Assert.Equal(4, loadedEvent.Magnitude);
+            Assert.Equal("Northern Waste, Test World", loadedEvent.LocationName);
+            Assert.Equal(battleEvent.Render(), loadedEvent.Render());
+            // Soldiers always have generation history; confirm it survived too.
+            Assert.True(loadedSoldier.SoldierEvents.Count > 1);
+        }
+        finally
+        {
+            CleanupDb(dbPath);
+        }
+    }
+
+    [Fact]
+    public void SaveThenLoad_FallenBrother_IsPreservedWithDossier()
+    {
+        Sector sector = SectorBuilder.GenerateSector(1, _data, _date, "Fallen Round Trip Chapter");
+        GameDataSingleton.Instance.LoadGameDataFromBlob(_data, _date, sector);
+        Unit armyRoot = sector.PlayerForce.Army.OrderOfBattle;
+        if (!_data.PlayerFaction.Units.Contains(armyRoot))
+        {
+            _data.PlayerFaction.Units.Add(armyRoot);
+        }
+
+        // Simulate the death path (mirrors BattleTurnResolver.RemoveSoldiersKilledInBattle):
+        // record a death event, then move the brother out of his squad and the active roster
+        // into the fallen store.
+        Army army = sector.PlayerForce.Army;
+        PlayerSoldier doomed = army.PlayerSoldierMap.Values.First(s => s.AssignedSquad != null);
+        int doomedId = doomed.Id;
+        string doomedName = doomed.Name;
+        doomed.AddEvent(new SoldierEvent(_date, SoldierEventType.Death,
+            "Killed in battle with the Tyranids by a Scything Talon",
+            factionId: 7, weaponTemplateId: 13));
+        doomed.AssignedSquad.RemoveSquadMember(doomed);
+        doomed.AssignedSquad = null;
+        army.PlayerSoldierMap.Remove(doomedId);
+        army.FallenBrothers[doomedId] = doomed;
+
+        string dbPath = Path.Combine(
+            Path.GetTempPath(), $"onlywar_fallen_roundtrip_{Guid.NewGuid():N}.s3db");
+        try
+        {
+            Save(sector, dbPath, _data.Factions.SelectMany(f => f.Units).ToList());
+            GameStateDataBlob loaded = Load(dbPath);
+
+            PlayerSoldier loadedFallen = Assert.Single(loaded.FallenBrothers);
+            Assert.Equal(doomedId, loadedFallen.Id);
+            Assert.Equal(doomedName, loadedFallen.Name);
+            Assert.Null(loadedFallen.AssignedSquad);
+
+            SoldierEvent death = loadedFallen.SoldierEvents
+                .Single(e => e.Type == SoldierEventType.Death);
+            Assert.Equal(7, death.FactionId);
+            Assert.Equal(13, death.WeaponTemplateId);
+            Assert.Equal("Killed in battle with the Tyranids by a Scything Talon", death.Render());
+
+            // The fallen brother is gone from the active roster reachable through the units.
+            Assert.DoesNotContain(
+                loaded.Units.SelectMany(u => u.GetAllSquads()).SelectMany(s => s.Members),
+                m => m.Id == doomedId);
+        }
+        finally
+        {
+            CleanupDb(dbPath);
+        }
+    }
+
+    private static void CleanupDb(string dbPath)
+    {
+        Microsoft.Data.Sqlite.SqliteConnection.ClearAllPools();
+        try
+        {
+            if (File.Exists(dbPath))
+            {
+                File.Delete(dbPath);
+            }
+        }
+        catch (IOException)
+        {
+            // Best-effort cleanup of a temp file; ignore if still locked.
+        }
+    }
+
     private void Save(Sector sector, string dbPath, IEnumerable<Unit> units)
     {
         string schemaPath = Path.Combine(
@@ -181,6 +304,7 @@ public class SaveLoadRoundTripTests
             sector.Fleets.Values,
             units,
             sector.PlayerForce.Army.PlayerSoldierMap.Values,
+            sector.PlayerForce.Army.FallenBrothers.Values,
             sector.PlayerForce.BattleHistory,
             schemaPath);
     }

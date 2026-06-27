@@ -340,7 +340,7 @@ Each feature is described as a behavioral specification: what the system does, a
 - His history, kill record, and awards are preserved.
 - Geneseed recovery is attempted and recorded.
 - The death produces a eulogy-style record per the Narrative Voice specification (4.19): where and how he fell, his final tally, years served, and whether geneseed was recovered — with lost geneseed narrated as a compounding loss.
-- **Known discrepancy (to resolve in 0.8):** this spec requires the fallen brother's history, kill record, and awards to be *preserved*, but the current implementation records only a thin death line (`BattleTurnResolver`) and otherwise removes the soldier from the roster without retaining his dossier. Preserving the fallen — so the chapter can remember and honor them — is a prerequisite for the eulogy and Chronicle work and is folded into the 0.8 structured event log task (see 5.5).
+- **Preservation (resolved — structured event log step 1):** the fallen brother's history, kill record, and awards are now *preserved* rather than discarded. On death `BattleTurnResolver` records a structured `Death` event (carrying faction and weapon) and moves the brother out of the active roster into `Army.FallenBrothers`, a squad-less dossier store that survives save/load (his base soldier row persists with a null `SquadId` and is rerouted into the fallen store on load). The eulogy-style *narration* of that preserved record (below, and §4.19) remains 0.8 narrative work; the data it draws on is now retained.
 
 ---
 
@@ -877,13 +877,18 @@ To be drawn from if capacity allows:
 
 The connective pass that turns 0.7's broad simulation into a felt sandbox narrative. These items are mostly *connective* work over systems that already exist — making the player feel the consequences the simulation already produces — rather than net-new systems. See Section 4.19 for the governing specification.
 
-**Implementation prerequisite — structured soldier event log.** Soldier history is currently an unstructured `List<string>` of free-text lines, written from only a handful of sites (founding, promotion/transfer, ratings/awards, a per-battle summary, and a thin death line); non-combat missions (recon, sabotage, assassination, infiltration, fortification) record nothing. Before any narration work, replace this with a **structured, queryable event log** — typed events carrying date, location, faction, weapon, magnitude, and related-soldier references — that serves as both the substrate the notability classifier queries and the source the narrator renders to text. Audit findings driving this:
+**Implementation prerequisite — structured soldier event log.** Soldier history was an unstructured `List<string>` of free-text lines, written from only a handful of sites (founding, promotion/transfer, ratings/awards, a per-battle summary, and a thin death line); non-combat missions (recon, sabotage, assassination, infiltration, fortification) recorded nothing. Before any narration work, this is being replaced with a **structured, queryable event log** — typed events carrying date, location, faction, weapon, magnitude, and related-soldier references — that serves as both the substrate the notability classifier queries and the source the narrator renders to text. Audit findings driving this:
 
 - Continuity callbacks (4.19 Principle 3) and the notability classifier require *querying* the past ("first kill?", "who was his mentor?", "crossed 50 kills?", "survived the battle that killed his sergeant?"), which free-text strings cannot reliably support.
 - Events that are never emitted today and must be added: first blood, kill milestones, last-survivor / survival-against-odds, mentor/instructor relationships, oaths, near-death recoveries, and **all non-combat mission outcomes**.
-- The fallen brother's dossier must be *preserved* on death (see 4.12 known discrepancy) rather than discarded.
+- The fallen brother's dossier must be *preserved* on death (see 4.12) rather than discarded.
 
-Suggested 0.8 sequencing: (1) structured event log + migration of existing call sites and death-record preservation; (2) emit the missing events; (3) notability classifier over the log; (4) narrator/voice pass rendering events and report lines.
+0.8 sequencing — status reflects the current codebase (✅ done · ⬜ not started):
+
+- ✅ **(1) Structured event log substrate + migration + death preservation.** *(Implemented.)* Added a typed `SoldierEvent` / `SoldierEventType` model (`Models/Soldiers/SoldierEvent.cs`) carrying date, faction, weapon, magnitude, location, and related-soldier ids, with `Render()` reproducing the legacy display lines so the history surface is unchanged. `PlayerSoldier` now holds a `List<SoldierEvent>` (with a `SoldierHistory` string projection for existing readers); all existing write sites (`NewChapterBuilder`, `RatingCalculator`, `SoldierTransferService`, `BattleTurnResolver`) emit typed events. Persistence moved to a structured `PlayerSoldierEvent` table (old free-text `PlayerSoldierHistory` table dropped; save compatibility intentionally broken). Fallen brothers are preserved in `Army.FallenBrothers` and round-trip through save/load (see 4.12). Covered by unit tests for `Render()` fidelity and save/load round-trips for events and fallen brothers.
+- ⬜ **(2) Emit the missing events** — first blood, kill milestones, last-survivor / survival-against-odds, mentor relationships, oaths, near-death recoveries, and all non-combat mission outcomes (reserved enum values already exist for these).
+- ⬜ **(3) Notability classifier** over the log.
+- ⬜ **(4) Narrator / voice pass** rendering events and report lines.
 
 - **Narrative Voice baseline:** Apply the 4.19 authoring principles and notability classifier across the Turn Report, Soldier history log, and death/apothecary records — named individuals, specificity, continuity callbacks, and outcomes framed against the player's orders.
 - **Eulogy-style death records:** Where, how, final tally, years served, and geneseed recovered or lost (with lost geneseed narrated as a compounding loss).

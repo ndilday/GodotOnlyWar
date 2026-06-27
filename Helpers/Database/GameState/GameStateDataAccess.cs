@@ -25,6 +25,8 @@ namespace OnlyWar.Helpers.Database.GameState
         public List<Unit> Units { get; set; }
         public Date CurrentDate { get; set; }
         public Dictionary<Date, List<EventHistory>> History { get; set; }
+        // Squad-less fallen brothers, retained for their dossiers (PRD 4.12).
+        public List<PlayerSoldier> FallenBrothers { get; set; }
     }
 
     public class GameStateDataAccess
@@ -99,6 +101,11 @@ namespace OnlyWar.Helpers.Database.GameState
             var date = _globalDataAccess.GetGlobalData(dbCon);
             var history = _playerFactionEventDataAccess.GetHistory(dbCon);
             dbCon.Close();
+            // Decorated soldiers with no squad are fallen brothers; the living are reached
+            // through the loaded units, so only the fallen need to ride along in the blob.
+            var fallenBrothers = playerSoldiers.Values
+                .Where(s => s.AssignedSquad == null)
+                .ToList();
             return new GameStateDataBlob
             {
                 Characters = characterMap.Values.ToList(),
@@ -107,7 +114,8 @@ namespace OnlyWar.Helpers.Database.GameState
                 Fleets = fleets,
                 Units = units,
                 CurrentDate = date,
-                History = history
+                History = history,
+                FallenBrothers = fallenBrothers
             };
         }
 
@@ -119,6 +127,7 @@ namespace OnlyWar.Helpers.Database.GameState
                              IEnumerable<TaskForce> fleets,
                              IEnumerable<Unit> units,
                              IEnumerable<PlayerSoldier> playerSoldiers,
+                             IEnumerable<PlayerSoldier> fallenBrothers,
                              IReadOnlyDictionary<Date, List<EventHistory>> history,
                              string schemaFilePath = null)
         {
@@ -179,6 +188,14 @@ namespace OnlyWar.Helpers.Database.GameState
                             _soldierDataAccess.SaveSoldier(transaction, soldier);
                         }
                     }
+
+                    // Fallen brothers belong to no squad, so they are not covered by the
+                    // loop above; persist their base soldier rows (with a null SquadId) here.
+                    List<PlayerSoldier> fallen = fallenBrothers?.ToList() ?? [];
+                    foreach (PlayerSoldier fallenBrother in fallen)
+                    {
+                        _soldierDataAccess.SaveSoldier(transaction, fallenBrother);
+                    }
                     // missions already written as region special missions, so order missions
                     // that reuse one are not inserted twice (primary-key conflict)
                     HashSet<int> savedMissionIds = planets
@@ -201,7 +218,7 @@ namespace OnlyWar.Helpers.Database.GameState
                         _unitDataAccess.SaveOrder(transaction, order);
                     }
 
-                    foreach(PlayerSoldier playerSoldier in playerSoldiers)
+                    foreach(PlayerSoldier playerSoldier in playerSoldiers.Concat(fallen))
                     {
                         _playerSoldierDataAccess.SavePlayerSoldier(transaction, playerSoldier);
                     }

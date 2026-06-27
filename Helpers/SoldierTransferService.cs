@@ -102,7 +102,8 @@ namespace OnlyWar.Helpers
 
             if (soldier.Template != option.SoldierTemplate)
             {
-                soldier.AddEntryToHistory($"{date}: promoted to {option.SoldierTemplate.Name}");
+                soldier.AddEvent(new SoldierEvent(date, SoldierEventType.Promotion,
+                    $"promoted to {option.SoldierTemplate.Name}"));
                 soldier.Template = option.SoldierTemplate;
             }
 
@@ -125,7 +126,8 @@ namespace OnlyWar.Helpers
 
             if (currentSquad != newSquad)
             {
-                soldier.AddEntryToHistory($"{date}: transferred to {option.DisplayName}");
+                soldier.AddEvent(new SoldierEvent(date, SoldierEventType.Transfer,
+                    $"transferred to {option.DisplayName}"));
             }
 
             return true;
