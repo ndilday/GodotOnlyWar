@@ -34,6 +34,7 @@
    - 4.20 [Turn Simulation — Revolt & Civil Stability](#420-turn-simulation--revolt--civil-stability)
    - 4.21 [Turn Simulation — Faction Relationships & Inter-Faction Intelligence](#421-turn-simulation--faction-relationships--inter-faction-intelligence)
    - 4.22 [Turn Simulation — Orks & Indelible Infestation](#422-turn-simulation--orks--indelible-infestation)
+   - 4.23 [Turn Simulation — Supply, Requisition & Pledges](#423-turn-simulation--supply-requisition--pledges)
 5. [Release Scoping](#5-release-scoping)
    - 5.1 [Released (Alpha 0.6 and prior)](#51-released-alpha-06-and-prior)
    - 5.2 [Alpha 0.7 — Committed](#52-alpha-07--committed)
@@ -790,6 +791,57 @@ This is a behavioral specification. It depends on §4.21 (relationships + intell
 
 ---
 
+### 4.23 Turn Simulation — Supply, Requisition & Pledges
+
+**Description.** A Space Marine chapter produces almost none of its own materiel: it sustains itself on the tithes and gifts of the worlds and institutions it serves. This section specifies the supply economy that closes the loop between the request systems (governors §4.16; post-0.7 the Imperial Guard/PDF §6.4 and the Inquisition §6.5) and the chapter's standing need to replace losses and upgrade its forces. Fulfilling a request earns not only opinion but a **pledge** of material support; pledges deliver resources over time along supply lines the Living Galaxy can interdict; and resources are spent to rebuild and improve the chapter.
+
+This is a behavioral specification, delivered in phases. **Phase 1** (0.7 — §5.3) is a minimal Requisition currency: an instant grant on request fulfillment, spent on medical procedures, backing the costs already assumed in §4.8. **Phase 2** (0.7 stretch — §5.4) adds pledges that deliver Requisition over time along source-bound supply lines. The remaining **typed-materiel** layer (world-type-driven wargear / vehicles / ships), the Armory wargear inventory (§6.9), pledge interdiction (§6.10), and Inquisition negative-requisition are **post-0.7** (§5.7), as each depends on a system not present in 0.7.
+
+This is deliberately **not** a survival economy. Consistent with the relevance/legacy stakes framing (§4.19), resources gate the *rate* at which the chapter recovers and upgrades — they never produce a starvation or game-over state. A poorly-supplied chapter rebuilds slowly and fights with what it has.
+
+**Acceptance Criteria:**
+
+**Resource Model (two-tier)**
+- **Requisition** — a single abstract favor/supply-credit pool held by the chapter; the "political capital" design pillar (§3) made concrete. It is the universal currency: earned from most fulfillments and spent flexibly on small or intangible costs.
+- **Materiel pledges** — discrete, typed promises of big-ticket support (a ship hull, a vehicle squadron, a pattern of wargear, recruitment rights, a relic, an intelligence lead). Each is a tracked object with a source, a type, a quantity/payload, and a delivery schedule — not folded into the Requisition number.
+- The model is deliberately a forward-compatible subset of a richer typed economy: additional fungible pools (e.g. ammunition, raw materials) may be added later without discarding this structure — the same approach by which Contentment (§4.20) is a forward-compatible proxy for the Pop model (§6.7).
+
+**Pledge Generation**
+- When the chapter fulfills a request (§4.16; later §6.4 / §6.5), the fulfilling authority generates a pledge in addition to the existing opinion change. Pledge richness scales with the authority's opinion of the chapter and the significance of the request fulfilled.
+- A pledge's possible contents are constrained by the **strategic classification** of the pledging world (a dependency on the post-0.7 classification work noted in §4.1):
+  - **Forge worlds** pledge vehicles and ships (shipyards are treated as a flavor of forge world, not a separate class).
+  - **Civilized worlds** pledge wargear (weapons and armor).
+  - **Hive worlds** pledge recruits/manpower and ammunition.
+  - **Agri / Mining worlds** pledge raw materials (feedstock).
+  - **Any** world may pledge Requisition, recruitment rights, or an intelligence / plot hook.
+
+**Pledge Types**
+- *Standing tithe* — a recurring delivery on a fixed cadence (e.g. a forge world supplying a pattern of bolters each year). Persists until its source is lost or the relationship lapses.
+- *One-off* — a single promised delivery (a frigate; a Land Raider squadron).
+- *Rights* — unlocks an ongoing capability rather than delivering goods (recruitment rights on a world; folds in §6.3).
+- *Intelligence / hook* — a narrative lead that surfaces a mission opportunity (feeding the Mission System Expansion §5.4 and the Inquisition §6.5) rather than crediting a resource.
+
+**Delivery & Supply Lines (hybrid)**
+- Requisition earned from a fulfillment credits immediately.
+- Materiel pledges deliver over subsequent turns: a delivery is scheduled from the pledging world and arrives after a transit interval.
+- A pledge is bound to its source. If the pledging world revolts (§4.20), is overrun, or its governor turns hostile, standing tithes suspend and undelivered one-offs default. Holding a world's loyalty therefore protects its supply, wiring the economy into the Living Galaxy.
+- *(Open — §6.10):* whether in-transit deliveries can be interdicted by hostile factional fleets is gated on factional fleet movement existing (§5.7).
+
+**Expenditure (sinks)**
+- **Medical procedures** — cybernetic and vat-grown replacements consume Requisition (the cost model already assumed in §4.8 and the §5.3 Apothecary second pass).
+- **Recruitment** — recruiting beyond the geneseed constraint draws on manpower pledges and recruitment rights (§6.3); geneseed remains the separate hard constraint (§4.12).
+- **Wargear replacement & upgrade** — re-equipping squads and upgrading loadouts. *Phased:* initially abstracted against Requisition; a later phase introduces a real **Armory inventory** — a finite per-pattern wargear pool, depleted as brothers fall and replenished by wargear pledges — housed in the existing Armory node on the Chapter Screen (§4.5). The commitment to a real inventory model is an open question (§6.9).
+- **Ships & vehicles** — acquisition and repair, fed by forge-world pledges.
+- **Fortification materiel** — supporting the construction missions in §4.13.
+
+**Negative Requisition (Inquisition)**
+- The relationship is two-way for high authorities. The Inquisition may **requisition assets *from*** the chapter — drawing down Requisition or seizing materiel as a censure outcome — realizing the "requisition of assets" consequence raised in §6.5. This mechanic is specified here; its triggers and severity remain part of the open Inquisition questions (§6.5).
+
+**Presentation**
+- The chapter's current Requisition and its outstanding pledges (source, type, cadence, next delivery) are visible to the player. The **Armory** node on the Chapter Screen (§4.5) is the intended home for resource and, later, wargear-inventory management.
+
+---
+
 ## 5. Release Scoping
 
 ### 5.1 Released (Alpha 0.6 and prior)
@@ -847,6 +899,14 @@ Targeted for 0.7. These items were not part of the committed 0.7 set (§5.2), bu
 - ✅ **Subsector warp lanes:** *(Implemented.)* Each subsector has a capital world, determined by an importance score (population size for 0.7; strategic classification post-0.7). The capital has established warp lanes to all other planets in the subsector. Cross-subsector lanes connect the capitals of adjoining subsectors, with a spanning tree guaranteeing the whole sector is reachable. Lanes are derived deterministically from planet positions during sector creation (and rebuilt on load) rather than persisted. The fleet movement dialog routes along lanes by default. The "Chart Direct Route (Risky)" option is deferred post-0.7 (see 4.17).
 - ✅ **Tyranid Infiltration Units:** Lictor and Ravener content data. *(Species, SoldierTemplate, and skill-training data added via the `migrate-tyranids` rules-DB migration — Lictor as an elite WS6 ambusher (S6, T5/6-wound, Perception-led senses, high Stealth, melee carried by skill rather than Dex) and Ravener as a fast-attack glass cannon (the fastest ground bug, Hormagaunt-level instincts, Warrior-tier body). Squad templates added via `migrate-tyranid-squads` — the Lictor as a solo unit (`Scout | Elite`, 15mm chitin) and the Ravener as a 5-strong leaderless pack (`Scout`), both with 15mm chitin and Scything Talons; both are now eligible for `ForceGenerator` dynamic forces (scout patrols and generic forces), and the per-species melee/ranged evasion lever they were designed around is now in place (see above). The fixed `UnitTemplate` armies — legacy scaffolding only the player's Space Marine chapter ever instantiated — were unused for every non-player faction, so the dead Tyranid (and Genestealer Cult) `UnitTemplate` rows were dropped from the rules DB via the `remove-unused-unit-templates` tool command rather than extended.)*
 
+- ⬜ **Game Start Phase 2 — Opening Scenario / "Promised World":** Replace the current "name your chapter, pick a seed, get dropped into a sandbox" launch (§4.1) with a framed, *in-media-res* opening that gives the new player a concrete first objective whose reward is the thing the rest of the game is built around: their Chapter World. The intent is to motivate the Supply & Requisition economy (§4.23) and the governor-request loop (§4.16) before the player understands either, and to use the time spent on the objective to let the rest of the sector advance so there is content waiting when the player looks up.
+  - ⬜ **Founding briefing pop-up.** After founding (chapter naming + seed confirmation, §4.1), present a briefing screen: the newly formed chapter has been assigned to a sector experiencing a Tyranid incursion; a world has been invaded; the Navy has destroyed the splinter fleet but no Astra Militarum forces are available to liberate it; if the chapter retakes the world it has been **promised to them as their Chapter World**. This is the player's clear initial goal.
+  - ⬜ **Generate the briefing through the narrative text system (§5 / §4.1 founding myth), not hardcoded prose**, so the planet name, sector name, and the *named authority who makes the promise* (a Crusade/sector commander or Inquisitor per §6.5) are stitched in. Attributing the promise to a character — rather than "the Imperium" — costs nothing now and leaves room for the promise to later be honored, contested, or reneged on.
+  - ⬜ **Scenario as an override layer on top of normal sector generation, not a fork of the generator.** The seed still deterministically generates the sector (§4.1); the scenario then *stamps* the starting world: Tyranid `RegionFaction` presence confined to a few regions, with the rest of the world default-Imperial. Determinism/reproducibility must be preserved (re-using a seed + scenario reproduces the same opening).
+  - ⬜ **Tune starting chapter strength and Tyranid growth together — this is the load-bearing balance decision.** A freshly founded chapter is plausibly understrength; lean into that (it explains why a Guard-less liberation fell to them specifically, and gives recruitment/buildup immediate purpose once they own the world). Tyranid logistic growth (§4.16) in this scenario should be capped/slowed below the default curve so the objective stays winnable and a dawdling new player is not soft-locked, while still applying enough pressure (regrowth/spread) to create urgency. These two values define whether the first objective is tense-and-winnable versus trivial or impossible.
+  - ⬜ **Let the sector simulate forward during liberation** so governor/Inquisition requests (§4.16, §6.5) have already populated by the time the objective completes — no artificial early-game content lull.
+  - ⬜ **Decide failure/abandonment handling:** what happens if the player ignores the objective, loses the assault, or the world is overrun. At minimum the promise should resolve coherently (lost world, damaged reputation) rather than leaving a dangling goal.
+
 - ◐ **Apothecary Phase 2:** Cybernetic replacements; geneseed recovery noted in death records; recovery time displayed on squad screen. *(Partial — the first presentation/data pass has landed; remaining work is persisted medical procedures, staff/resource rules, death-record geneseed recovery, Squad Screen recovery-time surfacing, and any real geneseed purity simulation.)*
   - ✅ **First pass - UI direction and layout:** Reworked the Apothecary Screen around the V2 flow captured in `Design/ApothecariumScreenMockups/apothecarium_refresh_v2_01_vault_default.png`, `Design/ApothecariumScreenMockups/apothecarium_refresh_v2_02_soldier_wounds.png`, and `Design/ApothecariumScreenMockups/apothecarium_refresh_v2_03_unit_rollup.png`. The first pass replaces the old two-report layout with a persistent left panel containing a default-selected `Gene Seed Vault` button and wounded-filtered chapter/unit tree, plus a stateful detail panel for vault, unit/squad rollup, and soldier medical views.
   - ✅ **First pass - structured view data:** Added structured Apothecary view models and a medical summary builder so the controller renders data instead of formatting large UI strings. The builder derives wounded soldiers, serious wounds, out-of-action duration, unit/squad rollups, wound rows, severed body parts, cybernetic state, and gene-seed maturity data from the existing domain model.
@@ -858,10 +918,17 @@ Targeted for 0.7. These items were not part of the committed 0.7 set (§5.2), bu
   - ⬜ **Second pass - interactive treatment assignment:** Convert the cybernetic/vat-grown replacement options from presentation-only buttons into real assignments. Cybernetic replacement should be the faster, lower-cost option; vat-grown replacement should be rarer, slower, and more resource-intensive.
   - ⬜ **Second pass - persisted medical procedures:** Add a persisted procedure model carrying soldier id, hit-location id, procedure type, weeks remaining, requisition/resource cost, status, and any staff commitments. Add save/load support and tests.
   - ⬜ **Second pass - turn processing:** Hook medical procedures into weekly turn processing. Decrement timers, consume resources and staff availability as applicable, and apply the result to the hit location when complete. Cybernetic completion can use the existing `HitLocation.IsCybernetic` flag; vat-grown completion should restore the location without setting that flag.
-  - ⬜ **Second pass - staff and cost rules:** Centralize exact procedure costs, staff requirements, and recovery times outside UI code. If the Techmarine/Apothecary availability requirements in 4.8 remain in scope, implement availability checks and staff lockout for the procedure duration.
+  - ⬜ **Second pass - staff and cost rules:** Centralize exact procedure costs, staff requirements, and recovery times outside UI code. If the Techmarine/Apothecary availability requirements in 4.8 remain in scope, implement availability checks and staff lockout for the procedure duration. The "requisition cost" these procedures pay is backed by the **minimal Requisition currency** delivered by Supply & Requisition Phase 1 (below), so procedure costs are real rather than hypothetical, ahead of the pledge/supply layer in Phase 2 (§5.4) and the typed-materiel remainder post-0.7.
   - ⬜ **Third pass - cross-screen recovery display:** Surface expected recovery time alongside injured soldiers on the Squad Screen, not only in the Apothecary Screen.
   - ⬜ **Third pass - death records and geneseed recovery:** When a marine dies, battle results and death records must note whether geneseed was successfully recovered. Lost geneseed should be narrated as a compounding loss per the Narrative Voice requirements.
   - ⬜ **Third pass - geneseed purity decision:** Decide whether geneseed purity is a real simulation concept. If yes, add the domain model, persistence, and effects; if not, keep purity as a non-authoritative presentation status or remove it from the final acceptance surface.
+
+- ⬜ **Supply & Requisition Phase 1 — minimal currency:** The faucet-sink-balance spine that makes the Apothecary procedure costs real. Full spec in §4.23.
+  - ⬜ **Requisition pool:** A single abstract **Requisition** integer on the chapter (`Army`), persisted across save/load, with a starting balance seeded at chapter founding.
+  - ⬜ **Faucet (instant grant):** Grant a flat Requisition amount on governor request fulfillment, reusing the existing `PresenceRequest` fulfillment hook that already applies the opinion change — no pledge objects, delivery scheduling, or world-type logic yet (that is Phase 2). This is the real earn→spend loop in miniature.
+  - ⬜ **Sink:** The Apothecary second pass spends Requisition on cybernetic procedures; assignment is rejected when the balance is insufficient. Costs live as centralized rules constants, not UI literals.
+  - ⬜ **Display:** Surface the current Requisition balance on the Apothecary screen, with each procedure's cost shown and the assign action disabled when unaffordable.
+  - ⬜ **Tuning note:** Start the founding balance generous and tune down — easier to verify the loop end-to-end before layering in scarcity.
 
 ### 5.4 Alpha 0.7 — Stretch
 
@@ -872,6 +939,7 @@ To be drawn from if capacity allows:
 - **Battle Visuals Phase 3:** Terrain and cover representation; line of sight; elevation-based fire advantage.
 - **UX Improvement Phase 1:** Drag-and-drop where applicable; squad row redesign; zoom-adaptive planet name labels.
 - **Mission System Expansion:** Talent recruitment missions; IG support missions; Chaos cult investigation; STC hunt; prisoner recovery.
+- **Supply & Requisition Phase 2 — pledges & delivery:** Layer the pledge system onto the Phase 1 currency (§4.23). Fulfilling a request generates a tracked **pledge** — a *standing tithe* (recurring) or *one-off* — that delivers **Requisition over subsequent turns** along a **supply line bound to its source world**: a world that revolts (§4.20) or falls suspends or defaults its pledges, wiring supply into the Living Galaxy. Broaden sinks beyond the Apothecary to other 0.7 systems (e.g. fortification materiel §4.13, recruitment costs). Pledges deliver Requisition only in this phase; **typed materiel** (wargear / vehicles / ships driven by strategic classification §4.1), the **Armory wargear inventory** (§6.9), **pledge interdiction** (§6.10), and **Inquisition negative-requisition** (§6.5) remain post-0.7, each gated on a system not present in 0.7.
 
 ### 5.5 Alpha 0.8 — Narrative & Cohesion
 
@@ -917,7 +985,7 @@ Documented for planning purposes; not scheduled:
 - *NPC-vs-NPC feints* fit the existing turn loop with no changes: both the feinter and the fooled defender resolve within the same turn (shaping phase → faction planning), so this is purely a generation-heuristic addition to `FactionStrategyController`.
 - *NPC-vs-player feints do not fit the current flow.* The diversion mechanic only fools a decision-maker who plans *after* the shaping phase; the player commits orders *before* `ProcessTurn` runs, and nothing consumes `PerceivedThreatBonus` on a player region (the player allocates garrisons by hand). A feint against the player therefore cannot reuse the AI's same-turn planning bonus — it must become a **one-turn-lagged intelligence deception**: the feint inflates the *displayed* enemy-strength estimate in the player's intel layer, persists past `ClearDiversionEffects` (unlike the transient AI bonus), and is acted on by the player the following turn, with the real attack landing then. This also implies an AI planning horizon that pairs a feint with a follow-up assault across turns — beyond the current per-region greedy `GenerateFactionOrders`. Resolve these (effect channel, persistence, what the player sees and when the deception resolves, AI feint+follow-through planning) before implementation.
 
-**Strategic:** Diplomacy system, Space Combat and Boarding, Strategic Planetary Maps (regional types), Factional Fleets with independent movement, Sector Generation Customization (difficulty, era, story threads), Chapter Customization at start (founding legion, perks/disadvantages).
+**Strategic:** Supply economy remainder (§4.23 — the typed **materiel pledges** driven by strategic classification §4.1, the **Armory wargear inventory** §6.9, **pledge interdiction** §6.10, and **Inquisition negative-requisition** §6.5; the Requisition currency and the Requisition-delivering pledge/supply-line layer ship earlier as Phases 1–2 in 0.7 and 0.7 stretch, §5.3/§5.4), Diplomacy system, Space Combat and Boarding, Strategic Planetary Maps (regional types), Factional Fleets with independent movement, Sector Generation Customization (difficulty, era, story threads), Chapter Customization at start (founding legion, perks/disadvantages).
 
 **Living Universe:** Imperial Guard movement and inter-planet logistics (Phase 4); Character personality development over time (Phase 5).
 
@@ -982,7 +1050,7 @@ The full design of the recruitment screen and its trade-off options is deferred 
 
 **Remaining open sub-questions:**
 - What are the consequences of refusing or failing Inquisition requests, versus governor requests? The Inquisition carries considerably more authority.
-- What are the consequences of a negative investigation result against the chapter? (Censure, requisition of assets, excommunication as an extreme outcome?)
+- What are the consequences of a negative investigation result against the chapter? (Censure, requisition of assets, excommunication as an extreme outcome?) The *mechanic* for requisition of assets — the Inquisition drawing down the chapter's Requisition or seizing materiel — is specified under the supply economy (§4.23, "Negative Requisition"); what remains open here is its triggers and severity.
 - Does the player interact with a specific named Inquisitor character, or is the Inquisition an anonymous institutional force?
 
 ### 6.6 Navis Nobilite Relations (Post-0.7 Backlog)
@@ -1009,12 +1077,27 @@ This is a post-0.7 design item. Navigator quality should be designed as a chapte
 
 **Leaning (not yet decided):** allow Orks to seize regional control through the normal combat path (consistent with §4.20's renegade-victory failure state for revolts), but treat a fully Ork-held world as a *persistent beacon* rather than a clean win condition — re-takeable in principle, never cleansable. Decide before implementing the WAAAGH!-beacon spawning in §4.22.
 
+### 6.9 Armory / Wargear Inventory Commitment (raised by Supply, §4.23)
+
+**Question:** Should wargear replacement be modeled as a real **Armory inventory** — a finite, per-pattern pool of weapons and armor that is depleted as brothers fall and is replenished by wargear pledges — or remain permanently abstracted against the Requisition currency?
+
+**Why it comes up.** §4.23 makes "replace losses" a core sink, but "losses" can mean *bodies* (recruitment, already constrained by geneseed) or also *gear*. A real inventory makes a civilized world's wargear tithe tangible and creates meaningful scarcity in re-equipping a depleted company, but it is a substantial new model touching squad loadouts (§4.5), death/maiming resolution (the point at which gear is lost or recovered), save/load, and the Armory UI. The system is designed to ship abstract-first (Requisition only) so this commitment can be deferred without rework.
+
+**Leaning (not yet decided):** ship abstract-first; adopt the inventory model only if playtesting shows wargear scarcity adds a decision the body/geneseed constraint does not already provide.
+
+### 6.10 Pledge Interdiction in Transit (raised by Supply, §4.23)
+
+**Question:** Once factional fleets move independently (§5.7), can a materiel delivery in transit from a pledging world to the chapter be **interdicted** — delayed, reduced, or lost — by a hostile fleet along the route?
+
+**Why it comes up.** §4.23 already binds a pledge to the *fate of its source world* (a world that falls stops paying). Interdiction extends that to the *route*, making supply lines themselves contestable terrain and giving raiders/blockades a strategic purpose. It is gated on factional fleet movement existing and on whether deliveries are modeled as discrete moving objects (like fleet task forces) rather than abstract scheduled credits. Until then, deliveries are treated as guaranteed-on-schedule once pledged.
+
 ---
 
 ## 7. Glossary
 
 | Term | Definition |
 |---|---|
+| Armory Inventory | (Proposed, §4.23/§6.9) A finite, per-pattern pool of weapons and armor held by the chapter, depleted as brothers fall and replenished by wargear pledges. Not yet committed; wargear replacement may instead stay abstracted against Requisition. |
 | Battle Brother | A full Space Marine belonging to the player's chapter. |
 | Battle Value | A numeric score representing the approximate combat power of a squad template. Used to generate balanced opposing forces. |
 | Chapter | The player's Space Marine organization: nominally 1,000 Battle Brothers organized into ten companies. |
@@ -1036,6 +1119,7 @@ This is a post-0.7 design item. Navigator quality should be designed as a chapte
 | IntelLevel | The fidelity of an inter-faction intelligence belief: `None | Rumor | Suspected | Confirmed | Located`. A targeted response (e.g. an Ork cull) requires `Confirmed` or higher (§4.21). |
 | Insurrectionist Faction | A single sector-wide Conversion-growth Faction (like the Genestealer Cult faction) that recruits from discontented Imperial populations and contests regions through the normal combat systems. The mechanical embodiment of a revolt (§4.20). |
 | Intelligence Level | A per-region value representing current information quality about enemy forces there. Decays over time. |
+| Pledge | A promise of material support generated when the chapter fulfills a request, in addition to the opinion change. Carries a source, type (Requisition, wargear, vehicle, ship, recruits, raw materials, recruitment rights, or intelligence hook), payload, and delivery schedule. May be a standing tithe, a one-off, a rights grant, or a hook (§4.23). |
 | Pop | (Proposed, §6.7) A subdivision of a region's population carrying its own loyalty/affiliation that drifts over time. Not implemented; raised as the possible long-term substrate unifying conversion, revolt, and corruption. |
 | Mission | A specific operational objective assigned to one or more squads: Recon, Advance, Ambush, Assassination, Sabotage, Extermination, Defense, Patrol, Construction, or Diversion. |
 | Movement Tier | One of four discrete movement states available to a soldier each battle turn: Stationary, Walk (1/5 MoveSpeed), Jog (1/2 MoveSpeed), or Run (full MoveSpeed). Tier determines shooting and aiming availability. |
@@ -1048,13 +1132,16 @@ This is a post-0.7 design item. Navigator quality should be designed as a chapte
 | Prone | A stance available to stationary soldiers. Only head and upper torso hit locations are valid ranged hit targets. Melee offense is heavily penalized; the soldier is significantly easier to hit in melee. A soldier can drop prone in one turn from any stance. Returning to crouching takes one turn; returning to standing takes two turns. A prone soldier cannot move. |
 | Region | A sub-area of a planet. Each region has its own faction presences, garrison counts, intelligence level, and infrastructure ratings. |
 | RegionFaction | The presence of a specific faction in a specific region, with its own population, garrison, organization, detection, entrenchment, and anti-air values. Holds the list of squads of that faction currently landed in the region. |
+| Requisition | The chapter's abstract favor/supply-credit pool — the universal currency of the supply economy and the "political capital" pillar made concrete. Earned from most request fulfillments and spent on procedures, recruitment, wargear, and repairs (§4.23). |
 | Run | The fastest movement tier. The soldier moves at full MoveSpeed. No shooting or melee is permitted. Turning is restricted to 30 degrees per turn. |
 | Spare Troops | The portion of a faction's organized military force in a region that exceeds the required garrison, available for offensive operations or construction. |
 | Squad | A group of marines operating as a unit, assigned to a specific template that defines their role and composition. |
 | Squad Template | The definition of a squad type: roles, minimum and maximum member counts, battle value, and permitted weapon options. |
 | Stance | A soldier's body position when stationary: Standing, Crouching, or Prone. Stance affects which hit locations are valid ranged targets and applies melee combat modifiers. Transitions cost one turn each, except dropping prone (one turn from any stance). |
 | Standing | The default upright stance. No ranged or melee modifiers apply. |
+| Standing Tithe | A recurring pledge that delivers materiel to the chapter on a fixed cadence (e.g. a forge world's annual wargear quota), persisting until its source world is lost or the relationship lapses (§4.23). |
 | Subsector Capital | The highest-importance planet in a subsector, determined during sector generation by an importance score (population size for 0.7; strategic classification is a post-0.7 addition to the score). The capital has established warp lanes to all other planets in its subsector. |
+| Supply Line | The route along which a pledging world's materiel deliveries reach the chapter. Bound to the fate of its source world (a world that revolts or falls suspends or defaults its pledges) and, post-factional-fleets, potentially interdictable in transit (§4.23, §6.10). |
 | Task Force | A grouping of ships within the chapter's fleet. |
 | Turn | One in-game week. The smallest unit of strategic time. |
 | Walk | The slowest movement tier above stationary. The soldier moves at 1/5 MoveSpeed. Shooting and aiming are both permitted. Accumulated aim state is preserved between walk turns. |
