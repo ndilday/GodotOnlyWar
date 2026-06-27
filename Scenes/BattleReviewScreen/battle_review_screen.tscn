@@ -154,7 +154,6 @@ text = ">|"
 [node name="SpeedButton" type="Button" parent="DialogView/Layout/CenterPanel/HeaderPanel/HeaderMargin/HeaderStack/PlaybackRow"]
 custom_minimum_size = Vector2(54, 34)
 layout_mode = 2
-disabled = true
 text = "1x"
 
 [node name="ReplayPanel" type="Panel" parent="DialogView/Layout/CenterPanel"]

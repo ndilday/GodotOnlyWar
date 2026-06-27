@@ -24,6 +24,7 @@ public partial class BattleReviewView : DialogView
     private Button _playPauseButton;
     private Button _stepForwardButton;
     private Button _nextRoundButton;
+    private Button _speedButton;
     private IReadOnlyList<BattleForceHierarchyNode> _currentForceHierarchy = Array.Empty<BattleForceHierarchyNode>();
     private readonly HashSet<string> _collapsedForceNodes = [];
 
@@ -32,6 +33,7 @@ public partial class BattleReviewView : DialogView
     public event EventHandler PlayPausePressed;
     public event EventHandler StepForwardPressed;
     public event EventHandler NextRoundPressed;
+    public event EventHandler SpeedPressed;
     public event EventHandler<int> FormationSelected;
     public event EventHandler<int> TimelineTurnSelected;
 
@@ -58,6 +60,7 @@ public partial class BattleReviewView : DialogView
         _playPauseButton = GetNode<Button>("Layout/CenterPanel/HeaderPanel/HeaderMargin/HeaderStack/PlaybackRow/PlayPauseButton");
         _stepForwardButton = GetNode<Button>("Layout/CenterPanel/HeaderPanel/HeaderMargin/HeaderStack/PlaybackRow/StepForwardButton");
         _nextRoundButton = GetNode<Button>("Layout/CenterPanel/HeaderPanel/HeaderMargin/HeaderStack/PlaybackRow/NextRoundButton");
+        _speedButton = GetNode<Button>("Layout/CenterPanel/HeaderPanel/HeaderMargin/HeaderStack/PlaybackRow/SpeedButton");
         MapRoot = GetNode<Node2D>("Layout/CenterPanel/ReplayPanel/SubViewportContainer/SubViewport/MapRoot");
         ReplayCamera = GetNode<Godot.Camera2D>("Layout/CenterPanel/ReplayPanel/SubViewportContainer/SubViewport/Camera2D");
 
@@ -66,6 +69,7 @@ public partial class BattleReviewView : DialogView
         _playPauseButton.Pressed += () => PlayPausePressed?.Invoke(this, EventArgs.Empty);
         _stepForwardButton.Pressed += () => StepForwardPressed?.Invoke(this, EventArgs.Empty);
         _nextRoundButton.Pressed += () => NextRoundPressed?.Invoke(this, EventArgs.Empty);
+        _speedButton.Pressed += () => SpeedPressed?.Invoke(this, EventArgs.Empty);
     }
 
     public void SetDisplay(BattleReplayDisplay display)
@@ -74,7 +78,6 @@ public partial class BattleReviewView : DialogView
         _roundLabel.Text = $"ROUND {display.CurrentTurnNumber} / {display.LastTurnNumber}";
         _phaseLabel.Text = display.PhaseLabel.ToUpperInvariant();
         _resultLabel.Text = display.ResultLabel.ToUpperInvariant();
-        SetPlaybackButtons(display.CurrentTurnIndex > 0, display.CurrentTurnIndex < display.Timeline.Count - 1);
         SetForceHierarchy(display.ForceHierarchy);
         SetSelectedFormation(display.SelectedFormation);
         SetEvents(display.CurrentTurnEvents);
@@ -82,13 +85,16 @@ public partial class BattleReviewView : DialogView
         SetCasualties(display.CasualtiesByRound);
     }
 
-    public void SetPlaybackButtons(bool canGoBack, bool canGoForward)
+    public void SetPlaybackButtons(bool canGoBack, bool canGoForward, bool isPlaying, string speedLabel, bool canChangeSpeed)
     {
         _previousRoundButton.Disabled = !canGoBack;
         _stepBackButton.Disabled = !canGoBack;
         _stepForwardButton.Disabled = !canGoForward;
         _nextRoundButton.Disabled = !canGoForward;
-        _playPauseButton.Disabled = !canGoForward;
+        _playPauseButton.Disabled = !canGoForward && !isPlaying;
+        _playPauseButton.Text = isPlaying ? "PAUSE" : "PLAY";
+        _speedButton.Disabled = !canChangeSpeed;
+        _speedButton.Text = speedLabel;
     }
 
     private void SetForceHierarchy(IReadOnlyList<BattleForceHierarchyNode> forceHierarchy)
