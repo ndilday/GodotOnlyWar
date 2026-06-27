@@ -1,5 +1,6 @@
 using Godot;
 using OnlyWar.Helpers.Battles;
+using OnlyWar.Helpers.UI;
 using OnlyWar.Models;
 using OnlyWar.Models.Battles;
 using OnlyWar.Scenes.MainGameScreen;
@@ -9,11 +10,11 @@ using System.Linq;
 
 public partial class BattleReviewController : DialogController
 {
-    private static readonly Color PlayerMarkerColor = Color.Color8(78, 190, 212);
-    private static readonly Color OpposingMarkerColor = Color.Color8(206, 72, 58);
-    private static readonly Color SelectedMarkerColor = Color.Color8(244, 216, 133);
-    private static readonly Color GridColor = Color.Color8(124, 102, 59, 55);
-    private static readonly Color BackgroundColor = Color.Color8(10, 12, 13);
+    private static readonly Color PlayerMarkerColor = OnlyWarStyle.PlayerAccent;
+    private static readonly Color OpposingMarkerColor = OnlyWarStyle.OpposingAccent;
+    private static readonly Color SelectedMarkerColor = OnlyWarStyle.Gold;
+    private static readonly Color GridColor = OnlyWarStyle.MapGrid;
+    private static readonly Color BackgroundColor = OnlyWarStyle.MapBackground;
 
     private readonly BattleReplaySummaryBuilder _summaryBuilder = new();
     private BattleReviewView _view;

@@ -1,5 +1,6 @@
 using OnlyWar.Helpers.Battles.Actions;
 using OnlyWar.Models.Battles;
+using OnlyWar.Models.Squads;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -367,7 +368,18 @@ namespace OnlyWar.Helpers.Battles
 
         private static string GetSquadIconKey(BattleSquad squad)
         {
-            if (squad?.IsPlayerSquad != true) return "hostile";
+            if (squad == null)
+            {
+                return "infantry";
+            }
+
+            SquadTypes type = squad.Squad?.SquadTemplate?.SquadType ?? SquadTypes.None;
+            if ((type & SquadTypes.HQ) != 0) return "hq";
+            if ((type & SquadTypes.Scout) != 0) return "scout";
+            if ((type & SquadTypes.Elite) != 0) return "elite";
+            if ((type & SquadTypes.Fast) != 0) return "fast";
+            if ((type & SquadTypes.Heavy) != 0) return "heavy";
+            if ((type & SquadTypes.Bodyguard) != 0) return "bodyguard";
             return "infantry";
         }
 

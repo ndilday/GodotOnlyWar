@@ -1,9 +1,11 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using OnlyWar.Helpers.Battles;
 using OnlyWar.Helpers.Battles.Actions;
 using OnlyWar.Models.Battles;
 using OnlyWar.Models.Soldiers;
+using OnlyWar.Models.Squads;
 using OnlyWar.Tests.Fixtures;
 using Xunit;
 
@@ -77,6 +79,24 @@ public class BattleReplaySummaryBuilderTests
         Assert.Equal(1, display.CasualtiesByRound[1].OpposingCumulativeLosses);
     }
 
+    [Fact]
+    public void Build_UsesSquadTypeIconForOpposingFormation()
+    {
+        BattleSquad playerSquad = CreateBattleSquad(true, "Alpha", "Sergeant Alpha", "Brother Alpha");
+        BattleSquad opposingSquad = CreateBattleSquad(false, "Heavy Brood", SquadTypes.Heavy, "Heavy One", "Heavy Two");
+        BattleHistory history = CreateHistory(playerSquad, opposingSquad);
+
+        BattleReplayDisplay display = new BattleReplaySummaryBuilder().Build(history, 0, opposingSquad.Id);
+
+        BattleForceHierarchyNode opposingFormation = Assert.Single(
+            display.ForceHierarchy,
+            node => !node.IsPlayerForce)
+            .Children
+            .SelectMany(node => node.Children)
+            .Single(node => node.FormationId == opposingSquad.Id);
+        Assert.Equal("heavy", opposingFormation.IconKey);
+    }
+
     private static BattleHistory CreateHistory(BattleSquad playerSquad, BattleSquad opposingSquad)
     {
         BattleHistory history = new();
@@ -93,6 +113,11 @@ public class BattleReplaySummaryBuilderTests
 
     private static BattleSquad CreateBattleSquad(bool isPlayerSquad, string squadName, params string[] soldierNames)
     {
+        return CreateBattleSquad(isPlayerSquad, squadName, SquadTypes.None, soldierNames);
+    }
+
+    private static BattleSquad CreateBattleSquad(bool isPlayerSquad, string squadName, SquadTypes squadType, params string[] soldierNames)
+    {
         List<Soldier> soldiers = [];
         for (int i = 0; i < soldierNames.Length; i++)
         {
@@ -102,7 +127,22 @@ public class BattleReplaySummaryBuilderTests
             soldiers.Add(soldier);
         }
 
-        BattleSquad squad = new(isPlayerSquad, TestModelFactory.CreateSquad(squadName, soldiers.ToArray()));
+        SquadTemplate squadTemplate = new(
+            TestModelFactory.SquadTemplate.Id,
+            TestModelFactory.SquadTemplate.Name,
+            TestModelFactory.DefaultWeapons,
+            [],
+            TestModelFactory.TestArmor,
+            [new SquadTemplateElement(TestModelFactory.SergeantTemplate, 0, 1), new SquadTemplateElement(TestModelFactory.MarineTemplate, 0, 4)],
+            squadType,
+            TestModelFactory.SquadTemplate.BattleValue);
+        Squad sourceSquad = new(squadName, null, squadTemplate);
+        foreach (Soldier soldier in soldiers)
+        {
+            sourceSquad.AddSquadMember(soldier);
+        }
+
+        BattleSquad squad = new(isPlayerSquad, sourceSquad);
         for (int i = 0; i < squad.Soldiers.Count; i++)
         {
             squad.Soldiers[i].TopLeft = new Tuple<int, int>(i + 1, 2);

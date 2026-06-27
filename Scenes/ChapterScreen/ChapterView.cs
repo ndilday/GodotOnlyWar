@@ -101,7 +101,7 @@ public partial class ChapterView : Control
                 Text = "No records at this level.",
                 AutowrapMode = TextServer.AutowrapMode.WordSmart
             };
-            emptyLabel.AddThemeColorOverride("font_color", new Color(0.66f, 0.60f, 0.49f));
+            emptyLabel.AddThemeColorOverride("font_color", OnlyWarStyle.MutedText);
             _leftMenuVBox.AddChild(emptyLabel);
         }
     }
@@ -162,7 +162,7 @@ public partial class ChapterView : Control
             CustomMinimumSize = new Vector2(0, 58),
             MouseDefaultCursorShape = CursorShape.PointingHand
         };
-        row.AddThemeStyleboxOverride("panel", CreateRowStyle(item.IsSelected));
+        OnlyWarStyle.ApplyListRow(row, item.IsSelected);
         row.GuiInput += inputEvent =>
         {
             if (inputEvent is InputEventMouseButton mouseButton &&
@@ -214,7 +214,7 @@ public partial class ChapterView : Control
             TextOverrunBehavior = TextServer.OverrunBehavior.TrimEllipsis,
             TooltipText = item.Subtitle
         };
-        subtitle.AddThemeColorOverride("font_color", new Color(0.66f, 0.60f, 0.49f));
+        subtitle.AddThemeColorOverride("font_color", OnlyWarStyle.MutedText);
         subtitle.AddThemeFontSizeOverride("font_size", 12);
         textStack.AddChild(subtitle);
 
@@ -248,19 +248,19 @@ public partial class ChapterView : Control
         {
             CustomMinimumSize = new Vector2(110, 58)
         };
-        panel.AddThemeStyleboxOverride("panel", CreateInsetStyle());
+        OnlyWarStyle.ApplyInsetPanel(panel);
 
         VBoxContainer stack = new VBoxContainer();
         stack.AddThemeConstantOverride("separation", 0);
         panel.AddChild(stack);
 
         Label value = new Label { Text = metric.Value };
-        value.AddThemeColorOverride("font_color", new Color(0.96f, 0.84f, 0.52f));
+        value.AddThemeColorOverride("font_color", OnlyWarStyle.Gold);
         value.AddThemeFontSizeOverride("font_size", 18);
         stack.AddChild(value);
 
         Label label = new Label { Text = metric.Label };
-        label.AddThemeColorOverride("font_color", new Color(0.66f, 0.60f, 0.49f));
+        label.AddThemeColorOverride("font_color", OnlyWarStyle.MutedText);
         label.AddThemeFontSizeOverride("font_size", 12);
         stack.AddChild(label);
 
@@ -274,7 +274,7 @@ public partial class ChapterView : Control
             CustomMinimumSize = new Vector2(0, 112),
             SizeFlagsHorizontal = SizeFlags.ExpandFill
         };
-        panel.AddThemeStyleboxOverride("panel", CreateInsetStyle());
+        OnlyWarStyle.ApplyInsetPanel(panel);
 
         VBoxContainer stack = new VBoxContainer();
         stack.AddThemeConstantOverride("separation", 6);
@@ -308,7 +308,7 @@ public partial class ChapterView : Control
             ClipText = true,
             TextOverrunBehavior = TextServer.OverrunBehavior.TrimEllipsis
         };
-        subtitle.AddThemeColorOverride("font_color", new Color(0.66f, 0.60f, 0.49f));
+        subtitle.AddThemeColorOverride("font_color", OnlyWarStyle.MutedText);
         subtitle.AddThemeFontSizeOverride("font_size", 12);
         titleStack.AddChild(subtitle);
 
@@ -321,27 +321,6 @@ public partial class ChapterView : Control
         stack.AddChild(body);
 
         return panel;
-    }
-
-    private static StyleBoxFlat CreateRowStyle(bool selected)
-    {
-        return new StyleBoxFlat
-        {
-            BgColor = selected ? new Color(0.13f, 0.09f, 0.04f, 0.96f) : new Color(0.02f, 0.023f, 0.024f, 0.92f),
-            BorderColor = selected ? new Color(0.96f, 0.84f, 0.52f, 0.95f) : new Color(0.33f, 0.28f, 0.18f, 0.72f),
-            BorderWidthLeft = 1,
-            BorderWidthTop = 1,
-            BorderWidthRight = 1,
-            BorderWidthBottom = 1,
-            CornerRadiusTopLeft = 2,
-            CornerRadiusTopRight = 2,
-            CornerRadiusBottomLeft = 2,
-            CornerRadiusBottomRight = 2,
-            ContentMarginLeft = 9,
-            ContentMarginTop = 7,
-            ContentMarginRight = 9,
-            ContentMarginBottom = 7
-        };
     }
 
     private static TextureRect CreateIconRect(string iconKey, int size)
@@ -361,27 +340,6 @@ public partial class ChapterView : Control
     {
         label.ClipText = true;
         label.TextOverrunBehavior = TextServer.OverrunBehavior.TrimEllipsis;
-    }
-
-    private static StyleBoxFlat CreateInsetStyle()
-    {
-        return new StyleBoxFlat
-        {
-            BgColor = new Color(0.008f, 0.01f, 0.012f, 0.88f),
-            BorderColor = new Color(0.33f, 0.28f, 0.18f, 0.72f),
-            BorderWidthLeft = 1,
-            BorderWidthTop = 1,
-            BorderWidthRight = 1,
-            BorderWidthBottom = 1,
-            CornerRadiusTopLeft = 2,
-            CornerRadiusTopRight = 2,
-            CornerRadiusBottomLeft = 2,
-            CornerRadiusBottomRight = 2,
-            ContentMarginLeft = 10,
-            ContentMarginTop = 8,
-            ContentMarginRight = 10,
-            ContentMarginBottom = 8
-        };
     }
 
     private static void ClearContainer(Container container)

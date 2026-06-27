@@ -1,4 +1,5 @@
 using Godot;
+using OnlyWar.Helpers.UI;
 using OnlyWar.Models.Battles;
 using System;
 using System.Collections.Generic;
@@ -23,6 +24,8 @@ public partial class BattleReviewView : DialogView
     private Button _playPauseButton;
     private Button _stepForwardButton;
     private Button _nextRoundButton;
+    private IReadOnlyList<BattleForceHierarchyNode> _currentForceHierarchy = Array.Empty<BattleForceHierarchyNode>();
+    private readonly HashSet<string> _collapsedForceNodes = [];
 
     public event EventHandler PreviousRoundPressed;
     public event EventHandler StepBackPressed;
@@ -90,46 +93,86 @@ public partial class BattleReviewView : DialogView
 
     private void SetForceHierarchy(IReadOnlyList<BattleForceHierarchyNode> forceHierarchy)
     {
+        _currentForceHierarchy = forceHierarchy ?? Array.Empty<BattleForceHierarchyNode>();
         ClearContainer(_forceTreeVBox);
-        foreach (BattleForceHierarchyNode node in forceHierarchy)
+        foreach (BattleForceHierarchyNode node in _currentForceHierarchy)
         {
-            AddForceNode(node, 0);
+            AddForceNode(node, 0, "");
         }
     }
 
-    private void AddForceNode(BattleForceHierarchyNode node, int depth)
+    private void AddForceNode(BattleForceHierarchyNode node, int depth, string parentKey)
     {
+        string nodeKey = BuildForceNodeKey(node, parentKey);
+        bool hasChildren = node.Children.Count > 0;
+        bool isCollapsed = hasChildren && _collapsedForceNodes.Contains(nodeKey);
         Button row = new()
         {
-            Text = BuildForceRowText(node, depth),
-            TooltipText = $"{node.Title}\n{node.Subtitle}",
-            Disabled = !node.FormationId.HasValue,
+            Text = BuildForceRowText(node, depth, isCollapsed),
+            TooltipText = BuildForceRowTooltip(node, isCollapsed),
             Alignment = HorizontalAlignment.Left,
+            Icon = IconAtlas.GetIcon(node.IconKey),
+            IconAlignment = HorizontalAlignment.Left,
+            ExpandIcon = false,
             CustomMinimumSize = new Vector2(0, node.FormationId.HasValue ? 34 : 30)
         };
-        row.AddThemeStyleboxOverride("normal", CreateRowStyle(node.IsSelected, node.IsPlayerForce, false));
-        row.AddThemeStyleboxOverride("hover", CreateRowStyle(true, node.IsPlayerForce, true));
-        row.AddThemeStyleboxOverride("pressed", CreateRowStyle(true, node.IsPlayerForce, true));
-        row.AddThemeStyleboxOverride("disabled", CreateRowStyle(node.IsSelected, node.IsPlayerForce, false));
-        row.AddThemeColorOverride("font_disabled_color", node.IsPlayerForce ? Color.Color8(106, 205, 222) : Color.Color8(212, 94, 82));
-        if (node.FormationId.HasValue)
+        row.AddThemeConstantOverride("icon_max_width", node.FormationId.HasValue ? 22 : 20);
+        row.AddThemeConstantOverride("h_separation", 6);
+        Color accent = node.IsPlayerForce ? OnlyWarStyle.PlayerAccent : OnlyWarStyle.OpposingAccent;
+        OnlyWarStyle.ApplyAccentButtonRow(row, node.IsSelected, accent);
+        row.AddThemeColorOverride("font_color", accent);
+        row.AddThemeColorOverride("font_hover_color", OnlyWarStyle.WithAlpha(accent.Lightened(0.28f), 1.0f));
+        row.AddThemeColorOverride("font_pressed_color", OnlyWarStyle.Gold);
+        if (hasChildren)
+        {
+            row.Pressed += () =>
+            {
+                if (!_collapsedForceNodes.Add(nodeKey))
+                {
+                    _collapsedForceNodes.Remove(nodeKey);
+                }
+                SetForceHierarchy(_currentForceHierarchy);
+            };
+        }
+        else if (node.FormationId.HasValue)
         {
             int formationId = node.FormationId.Value;
             row.Pressed += () => FormationSelected?.Invoke(this, formationId);
         }
         _forceTreeVBox.AddChild(row);
 
+        if (isCollapsed)
+        {
+            return;
+        }
+
         foreach (BattleForceHierarchyNode child in node.Children)
         {
-            AddForceNode(child, depth + 1);
+            AddForceNode(child, depth + 1, nodeKey);
         }
     }
 
-    private static string BuildForceRowText(BattleForceHierarchyNode node, int depth)
+    private static string BuildForceRowText(BattleForceHierarchyNode node, int depth, bool isCollapsed)
     {
         string indent = new(' ', depth * 3);
-        string marker = node.Children.Count > 0 ? "▸" : "•";
-        return $"{indent}{marker} {node.Title}  {node.CurrentStrength}/{node.StartingStrength}  Losses {Math.Max(0, node.Losses)}";
+        string disclosure = node.Children.Count == 0 ? "   " : isCollapsed ? "[+] " : "[-] ";
+        return $"{indent}{disclosure}{node.Title}  {node.CurrentStrength}/{node.StartingStrength}  Losses {Math.Max(0, node.Losses)}";
+    }
+
+    private static string BuildForceRowTooltip(BattleForceHierarchyNode node, bool isCollapsed)
+    {
+        string action = node.Children.Count == 0
+            ? "Click to select formation"
+            : isCollapsed ? "Click to expand" : "Click to collapse";
+        return $"{node.Title}\n{node.Subtitle}\n{action}";
+    }
+
+    private static string BuildForceNodeKey(BattleForceHierarchyNode node, string parentKey)
+    {
+        string localKey = node.FormationId.HasValue
+            ? $"formation:{node.FormationId.Value}"
+            : $"{(node.IsPlayerForce ? "player" : "opposing")}:{node.Title}";
+        return string.IsNullOrEmpty(parentKey) ? localKey : $"{parentKey}/{localKey}";
     }
 
     private void SetSelectedFormation(BattleFormationSummary summary)
@@ -161,7 +204,7 @@ public partial class BattleReviewView : DialogView
                 AutowrapMode = TextServer.AutowrapMode.WordSmart
             };
             label.AddThemeFontSizeOverride("font_size", 12);
-            label.AddThemeColorOverride("font_color", Color.Color8(212, 188, 130));
+            label.AddThemeColorOverride("font_color", OnlyWarStyle.MutedText);
             _effectsVBox.AddChild(label);
         }
     }
@@ -172,7 +215,7 @@ public partial class BattleReviewView : DialogView
         foreach (BattleEventEntry entry in events)
         {
             PanelContainer panel = new();
-            panel.AddThemeStyleboxOverride("panel", CreateEventStyle(entry.Severity));
+            OnlyWarStyle.ApplyEventPanel(panel, GetEventTone(entry.Severity));
             VBoxContainer stack = new();
             stack.AddThemeConstantOverride("separation", 2);
             panel.AddChild(stack);
@@ -194,7 +237,7 @@ public partial class BattleReviewView : DialogView
                 TextOverrunBehavior = TextServer.OverrunBehavior.TrimEllipsis
             };
             actor.AddThemeFontSizeOverride("font_size", 12);
-            actor.AddThemeColorOverride("font_color", Color.Color8(150, 212, 222));
+            actor.AddThemeColorOverride("font_color", OnlyWarStyle.PlayerAccent);
             stack.AddChild(actor);
 
             Label body = new()
@@ -219,8 +262,7 @@ public partial class BattleReviewView : DialogView
                 TooltipText = entry.Summary,
                 CustomMinimumSize = new Vector2(54, 32)
             };
-            button.AddThemeStyleboxOverride("normal", CreateRowStyle(entry.IsSelected, true, false));
-            button.AddThemeStyleboxOverride("hover", CreateRowStyle(true, true, true));
+            OnlyWarStyle.ApplyAccentButtonRow(button, entry.IsSelected, OnlyWarStyle.PlayerAccent);
             int turnIndex = entry.TurnIndex;
             button.Pressed += () => TimelineTurnSelected?.Invoke(this, turnIndex);
             _timelineBox.AddChild(button);
@@ -257,64 +299,28 @@ public partial class BattleReviewView : DialogView
         label.AddThemeFontSizeOverride("font_size", isHeader ? 12 : 11);
         if (isHeader)
         {
-            label.AddThemeColorOverride("font_color", Color.Color8(244, 216, 133));
+            label.AddThemeColorOverride("font_color", OnlyWarStyle.Gold);
         }
         _casualtyGrid.AddChild(label);
-    }
-
-    private static StyleBoxFlat CreateRowStyle(bool selected, bool isPlayerForce, bool hover)
-    {
-        Color accent = isPlayerForce ? Color.Color8(68, 183, 205) : Color.Color8(202, 72, 58);
-        return new StyleBoxFlat
-        {
-            BgColor = selected
-                ? new Color(accent.R, accent.G, accent.B, hover ? 0.24f : 0.18f)
-                : new Color(0.01f, 0.012f, 0.014f, hover ? 0.96f : 0.72f),
-            BorderColor = selected ? accent : Color.Color8(84, 72, 46, 170),
-            BorderWidthLeft = 1,
-            BorderWidthTop = 1,
-            BorderWidthRight = 1,
-            BorderWidthBottom = 1,
-            CornerRadiusTopLeft = 2,
-            CornerRadiusTopRight = 2,
-            CornerRadiusBottomLeft = 2,
-            CornerRadiusBottomRight = 2,
-            ContentMarginLeft = 8,
-            ContentMarginTop = 5,
-            ContentMarginRight = 8,
-            ContentMarginBottom = 5
-        };
-    }
-
-    private static StyleBoxFlat CreateEventStyle(BattleEventSeverity severity)
-    {
-        Color border = GetSeverityColor(severity);
-        return new StyleBoxFlat
-        {
-            BgColor = new Color(0.008f, 0.01f, 0.012f, 0.82f),
-            BorderColor = new Color(border.R, border.G, border.B, severity == BattleEventSeverity.Normal ? 0.35f : 0.72f),
-            BorderWidthLeft = 1,
-            BorderWidthTop = 1,
-            BorderWidthRight = 1,
-            BorderWidthBottom = 1,
-            CornerRadiusTopLeft = 2,
-            CornerRadiusTopRight = 2,
-            CornerRadiusBottomLeft = 2,
-            CornerRadiusBottomRight = 2,
-            ContentMarginLeft = 8,
-            ContentMarginTop = 6,
-            ContentMarginRight = 8,
-            ContentMarginBottom = 6
-        };
     }
 
     private static Color GetSeverityColor(BattleEventSeverity severity)
     {
         return severity switch
         {
-            BattleEventSeverity.Critical => Color.Color8(213, 78, 66),
-            BattleEventSeverity.Warning => Color.Color8(226, 171, 74),
-            _ => Color.Color8(143, 128, 91)
+            BattleEventSeverity.Critical => OnlyWarStyle.Critical,
+            BattleEventSeverity.Warning => OnlyWarStyle.MedicalWarning,
+            _ => OnlyWarStyle.MutedText
+        };
+    }
+
+    private static OnlyWarEventTone GetEventTone(BattleEventSeverity severity)
+    {
+        return severity switch
+        {
+            BattleEventSeverity.Critical => OnlyWarEventTone.Critical,
+            BattleEventSeverity.Warning => OnlyWarEventTone.Warning,
+            _ => OnlyWarEventTone.Normal
         };
     }
 

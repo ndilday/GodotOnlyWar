@@ -43,8 +43,7 @@ public partial class ApothecariumScreenView : DialogView
 
     public void SetVaultSelected(bool selected)
     {
-        _vaultButton.AddThemeStyleboxOverride("normal", CreateRowStyle(selected, MedicalSeverity.Stable));
-        _vaultButton.AddThemeStyleboxOverride("hover", CreateRowStyle(true, MedicalSeverity.Stable));
+        OnlyWarStyle.ApplyAccentButtonRow(_vaultButton, selected, OnlyWarStyle.MedicalStable);
     }
 
     public void SetTree(IReadOnlyList<ApothecariumTreeItem> items)
@@ -179,7 +178,7 @@ public partial class ApothecariumScreenView : DialogView
             CustomMinimumSize = new Vector2(374, 0),
             SizeFlagsVertical = SizeFlags.ExpandFill
         };
-        panel.AddThemeStyleboxOverride("panel", CreatePanelStyle());
+        OnlyWarStyle.ApplyContentPanel(panel);
 
         VBoxContainer stack = new() { SizeFlagsVertical = SizeFlags.ExpandFill };
         stack.AddThemeConstantOverride("separation", 10);
@@ -200,7 +199,7 @@ public partial class ApothecariumScreenView : DialogView
         filterRow.AddThemeConstantOverride("separation", 6);
         Label title = new() { Text = "UNIT TREE", SizeFlagsHorizontal = SizeFlags.ExpandFill, VerticalAlignment = VerticalAlignment.Center };
         title.AddThemeFontSizeOverride("font_size", 13);
-        title.AddThemeColorOverride("font_color", new Color(0.66f, 0.60f, 0.49f));
+        title.AddThemeColorOverride("font_color", OnlyWarStyle.MutedText);
         filterRow.AddChild(title);
         filterRow.AddChild(CreateSmallChip("Wounded only", MedicalSeverity.Stable));
         filterRow.AddChild(CreateSmallChip("Out-of-action", MedicalSeverity.Critical));
@@ -320,7 +319,7 @@ public partial class ApothecariumScreenView : DialogView
         titleLabel = new Label { Text = title, AutowrapMode = TextServer.AutowrapMode.WordSmart };
         titleLabel.AddThemeFontSizeOverride("font_size", 28);
         subtitleLabel = new Label { Text = subtitle, AutowrapMode = TextServer.AutowrapMode.WordSmart };
-        subtitleLabel.AddThemeColorOverride("font_color", new Color(0.66f, 0.60f, 0.49f));
+        subtitleLabel.AddThemeColorOverride("font_color", OnlyWarStyle.MutedText);
         titleStack.AddChild(titleLabel);
         titleStack.AddChild(subtitleLabel);
         hero.AddChild(titleStack);
@@ -383,7 +382,7 @@ public partial class ApothecariumScreenView : DialogView
     private Control CreateDataRow(string title, string subtitle, string status, MedicalSeverity severity)
     {
         PanelContainer panel = new() { CustomMinimumSize = new Vector2(0, 58), SizeFlagsHorizontal = SizeFlags.ExpandFill };
-        panel.AddThemeStyleboxOverride("panel", CreateRowStyle(false, severity));
+        OnlyWarStyle.ApplyTintedListRow(panel, false, ColorFor(severity, 0.75f));
         HBoxContainer row = new();
         row.AddThemeConstantOverride("separation", 8);
         panel.AddChild(row);
@@ -392,7 +391,7 @@ public partial class ApothecariumScreenView : DialogView
         Label titleLabel = new() { Text = title, ClipText = true, TextOverrunBehavior = TextServer.OverrunBehavior.TrimEllipsis, TooltipText = title };
         Label subtitleLabel = new() { Text = subtitle, ClipText = true, TextOverrunBehavior = TextServer.OverrunBehavior.TrimEllipsis, TooltipText = subtitle };
         subtitleLabel.AddThemeFontSizeOverride("font_size", 12);
-        subtitleLabel.AddThemeColorOverride("font_color", new Color(0.66f, 0.60f, 0.49f));
+        subtitleLabel.AddThemeColorOverride("font_color", OnlyWarStyle.MutedText);
         textStack.AddChild(titleLabel);
         textStack.AddChild(subtitleLabel);
         row.AddChild(textStack);
@@ -411,7 +410,7 @@ public partial class ApothecariumScreenView : DialogView
     private Control CreateReplacementCard(ReplacementOption option)
     {
         PanelContainer panel = new() { CustomMinimumSize = new Vector2(0, 132), SizeFlagsHorizontal = SizeFlags.ExpandFill };
-        panel.AddThemeStyleboxOverride("panel", CreateRowStyle(false, option.Type == ReplacementType.Cybernetic ? MedicalSeverity.Watch : MedicalSeverity.Critical));
+        OnlyWarStyle.ApplyTintedListRow(panel, false, ColorFor(option.Type == ReplacementType.Cybernetic ? MedicalSeverity.Watch : MedicalSeverity.Critical, 0.75f));
         VBoxContainer stack = new();
         stack.AddThemeConstantOverride("separation", 6);
         panel.AddChild(stack);
@@ -420,7 +419,7 @@ public partial class ApothecariumScreenView : DialogView
         stack.AddChild(title);
         Label description = new() { Text = option.Description, AutowrapMode = TextServer.AutowrapMode.WordSmart };
         description.AddThemeFontSizeOverride("font_size", 13);
-        description.AddThemeColorOverride("font_color", new Color(0.66f, 0.60f, 0.49f));
+        description.AddThemeColorOverride("font_color", OnlyWarStyle.MutedText);
         stack.AddChild(description);
         HBoxContainer actions = new();
         actions.AddThemeConstantOverride("separation", 8);
@@ -450,7 +449,7 @@ public partial class ApothecariumScreenView : DialogView
         };
         label.AddThemeFontSizeOverride("font_size", 12);
         label.AddThemeColorOverride("font_color", ColorFor(severity));
-        label.AddThemeStyleboxOverride("normal", CreateInsetStyle());
+        label.AddThemeStyleboxOverride("normal", OnlyWarStyle.GetInsetPanelStyle());
         return label;
     }
 
@@ -458,14 +457,14 @@ public partial class ApothecariumScreenView : DialogView
     {
         Label label = new() { Text = text.ToUpperInvariant() };
         label.AddThemeFontSizeOverride("font_size", 12);
-        label.AddThemeColorOverride("font_color", new Color(0.66f, 0.60f, 0.49f));
+        label.AddThemeColorOverride("font_color", OnlyWarStyle.MutedText);
         return label;
     }
 
     private Label CreateInfoLabel(string text)
     {
         Label label = new() { Text = text, AutowrapMode = TextServer.AutowrapMode.WordSmart };
-        label.AddThemeColorOverride("font_color", new Color(0.66f, 0.60f, 0.49f));
+        label.AddThemeColorOverride("font_color", OnlyWarStyle.MutedText);
         return label;
     }
 
@@ -478,7 +477,7 @@ public partial class ApothecariumScreenView : DialogView
             SizeFlagsHorizontal = SizeFlags.ExpandFill,
             SizeFlagsVertical = SizeFlags.ExpandFill
         };
-        panel.AddThemeStyleboxOverride("panel", CreatePanelStyle());
+        OnlyWarStyle.ApplyContentPanel(panel);
         return panel;
     }
 
@@ -493,7 +492,7 @@ public partial class ApothecariumScreenView : DialogView
     private PanelContainer CreateInsetPanel()
     {
         PanelContainer panel = new();
-        panel.AddThemeStyleboxOverride("panel", CreateInsetStyle());
+        OnlyWarStyle.ApplyInsetPanel(panel);
         return panel;
     }
 
@@ -559,80 +558,16 @@ public partial class ApothecariumScreenView : DialogView
         }
     }
 
-    private static StyleBoxFlat CreatePanelStyle()
-    {
-        return new StyleBoxFlat
-        {
-            BgColor = new Color(0.016f, 0.019f, 0.020f, 0.94f),
-            BorderColor = new Color(0.55f, 0.43f, 0.25f, 0.82f),
-            BorderWidthLeft = 1,
-            BorderWidthTop = 1,
-            BorderWidthRight = 1,
-            BorderWidthBottom = 1,
-            CornerRadiusTopLeft = 2,
-            CornerRadiusTopRight = 2,
-            CornerRadiusBottomLeft = 2,
-            CornerRadiusBottomRight = 2,
-            ContentMarginLeft = 12,
-            ContentMarginTop = 12,
-            ContentMarginRight = 12,
-            ContentMarginBottom = 12
-        };
-    }
-
-    private static StyleBoxFlat CreateInsetStyle()
-    {
-        return new StyleBoxFlat
-        {
-            BgColor = new Color(0.008f, 0.010f, 0.012f, 0.90f),
-            BorderColor = new Color(0.33f, 0.28f, 0.18f, 0.72f),
-            BorderWidthLeft = 1,
-            BorderWidthTop = 1,
-            BorderWidthRight = 1,
-            BorderWidthBottom = 1,
-            CornerRadiusTopLeft = 2,
-            CornerRadiusTopRight = 2,
-            CornerRadiusBottomLeft = 2,
-            CornerRadiusBottomRight = 2,
-            ContentMarginLeft = 10,
-            ContentMarginTop = 8,
-            ContentMarginRight = 10,
-            ContentMarginBottom = 8
-        };
-    }
-
-    private static StyleBoxFlat CreateRowStyle(bool selected, MedicalSeverity severity)
-    {
-        Color border = selected ? new Color(0.96f, 0.84f, 0.52f, 0.95f) : ColorFor(severity, 0.75f);
-        return new StyleBoxFlat
-        {
-            BgColor = selected ? new Color(0.13f, 0.09f, 0.04f, 0.96f) : new Color(0.02f, 0.023f, 0.024f, 0.92f),
-            BorderColor = border,
-            BorderWidthLeft = 1,
-            BorderWidthTop = 1,
-            BorderWidthRight = 1,
-            BorderWidthBottom = 1,
-            CornerRadiusTopLeft = 2,
-            CornerRadiusTopRight = 2,
-            CornerRadiusBottomLeft = 2,
-            CornerRadiusBottomRight = 2,
-            ContentMarginLeft = 10,
-            ContentMarginTop = 8,
-            ContentMarginRight = 10,
-            ContentMarginBottom = 8
-        };
-    }
-
     private static Color ColorFor(MedicalSeverity severity, float alpha = 1f)
     {
         Color color = severity switch
         {
-            MedicalSeverity.Lost => new Color(0.92f, 0.28f, 0.20f),
-            MedicalSeverity.Critical => new Color(0.92f, 0.28f, 0.20f),
-            MedicalSeverity.Serious => new Color(0.83f, 0.63f, 0.31f),
-            MedicalSeverity.Watch => new Color(0.83f, 0.63f, 0.31f),
-            MedicalSeverity.Stable => new Color(0.34f, 0.64f, 0.37f),
-            _ => new Color(0.84f, 0.80f, 0.71f)
+            MedicalSeverity.Lost => OnlyWarStyle.Critical,
+            MedicalSeverity.Critical => OnlyWarStyle.Critical,
+            MedicalSeverity.Serious => OnlyWarStyle.MedicalWarning,
+            MedicalSeverity.Watch => OnlyWarStyle.MedicalWarning,
+            MedicalSeverity.Stable => OnlyWarStyle.MedicalStable,
+            _ => OnlyWarStyle.BodyText
         };
         color.A = alpha;
         return color;
