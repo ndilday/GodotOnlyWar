@@ -124,10 +124,24 @@ namespace OnlyWar.Models
     {
         public ushort GeneseedStockpile { get; set; }
 
-        public PlayerForce(Faction faction, Army army, Fleet fleet) 
+        // Count-weighted aggregate purity (0..1) of the sealed gene-seed in the vault
+        // (PRD 4.8). Tracked and persisted now; consumed when initiate creation lands
+        // (PRD 4.9, post-0.7). Defaults to pristine; the stockpile starts empty.
+        public float GeneseedPurity { get; set; }
+
+        public PlayerForce(Faction faction, Army army, Fleet fleet)
             : base(faction, null, army, fleet)
         {
             GeneseedStockpile = 0;
+            GeneseedPurity = 1.0f;
+        }
+
+        // Adds one recovered gland of the given purity to the stockpile, folding it into the
+        // count-weighted aggregate purity before incrementing the count.
+        public void AddRecoveredGeneseed(float purity)
+        {
+            GeneseedPurity = (GeneseedPurity * GeneseedStockpile + purity) / (GeneseedStockpile + 1);
+            GeneseedStockpile++;
         }
     }
 }

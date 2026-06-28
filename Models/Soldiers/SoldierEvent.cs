@@ -18,6 +18,9 @@ namespace OnlyWar.Models.Soldiers
         AwardReceived = 6,
         BattleParticipation = 7,
         Death = 8,
+        // Whether a fallen brother's gene-seed was recovered, destroyed, or immature
+        // (PRD 4.8 / 4.12). Recorded at roster removal, distinct from the Death note.
+        GeneseedRecovery = 9,
 
         // Reserved for step 2 (not yet emitted):
         FirstBlood = 100,

@@ -1,5 +1,6 @@
 using Godot;
 using OnlyWar.Helpers.Extensions;
+using OnlyWar.Models;
 using OnlyWar.Models.Equippables;
 using OnlyWar.Models.Orders;
 using OnlyWar.Models.Planets;
@@ -225,7 +226,7 @@ public partial class SquadScreenController : DialogController
 
     private void PopulateSquadMembers()
     {
-        List<Tuple<int, string>> memberList = new List<Tuple<int, string>>();
+        List<SquadMemberRow> memberList = new List<SquadMemberRow>();
         if (_squad?.Members != null)
         {
             // Order members, e.g., leader first, then by rank/name
@@ -235,10 +236,50 @@ public partial class SquadScreenController : DialogController
             {
                 // Use Rank enum if available, otherwise Rank number
                 string rankString = soldier.Template.Rank.ToString(); // Replace with actual rank name if possible
-                memberList.Add(new Tuple<int, string>(soldier.Id, $"{rankString} {soldier.Name}"));
+                (string recovery, bool injured, bool outOfAction) = GetRecoveryStatus(soldier);
+                memberList.Add(new SquadMemberRow(
+                    soldier.Id, $"{rankString} {soldier.Name}", recovery, injured, outOfAction));
             }
         }
         _view.PopulateSquadMembers(memberList);
+    }
+
+    // Surfaces expected recovery time alongside each member, mirroring the Apothecary screen
+    // (PRD 4.6 / 4.8 third pass). Uses the same primitives the Apothecary builder does so the
+    // numbers agree: per-location recovery weeks, replacement eligibility, and any in-progress
+    // medical procedure.
+    private (string status, bool injured, bool outOfAction) GetRecoveryStatus(ISoldier soldier)
+    {
+        MedicalProcedure procedure = GameDataSingleton.Instance.Sector.PlayerForce.Army
+            .MedicalProcedures.FirstOrDefault(p => p.SoldierId == soldier.Id);
+        bool replacementNeeded = soldier.Body.HitLocations.Any(hl => hl.IsReplacementEligible);
+        int recoveryWeeks = soldier.Body.HitLocations
+            .Select(hl => (int)hl.Wounds.RecoveryTimeLeft())
+            .DefaultIfEmpty(0).Max();
+        bool wounded = soldier.Body.HitLocations.Any(hl => hl.Wounds.WoundTotal > 0 || hl.IsSevered);
+        bool canFight = CanFight(soldier);
+
+        if (procedure != null)
+        {
+            return ($"Augmetic surgery: {procedure.WeeksRemaining} wk", true, true);
+        }
+        if (replacementNeeded)
+        {
+            return ("Replacement required", true, true);
+        }
+        if (!canFight)
+        {
+            return (recoveryWeeks > 0 ? $"Out of action: {recoveryWeeks} wk" : "Out of action", true, true);
+        }
+        if (recoveryWeeks > 0)
+        {
+            return ($"Recovering: {recoveryWeeks} wk", true, false);
+        }
+        if (wounded)
+        {
+            return ("Lightly wounded", true, false);
+        }
+        return ("Ready", false, false);
     }
 
     private bool CanFight(ISoldier soldier)

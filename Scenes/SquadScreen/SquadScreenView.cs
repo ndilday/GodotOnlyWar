@@ -2,6 +2,11 @@ using Godot;
 using System;
 using System.Collections.Generic;
 
+// A single squad-roster row: the member's id, rank/name label, a recovery-status clause, and
+// flags driving how injured members are visually distinguished (PRD 4.6).
+public sealed record SquadMemberRow(
+    int SoldierId, string Label, string RecoveryStatus, bool IsInjured, bool IsOutOfAction);
+
 public partial class SquadScreenView : DialogView
 {
     private VBoxContainer _squadDetailsVBox;
@@ -143,7 +148,13 @@ public partial class SquadScreenView : DialogView
         }
     }
 
-    public void PopulateSquadMembers(IReadOnlyList<Tuple<int, string>> members)
+    // Injured members are visually distinguished and carry their expected recovery time
+    // (PRD 4.6): out-of-action brothers in crimson, lighter wounds in amber, healthy in the
+    // default parchment.
+    private static readonly Color OutOfActionColor = new Color("d05a5a");
+    private static readonly Color InjuredColor = new Color("d9a441");
+
+    public void PopulateSquadMembers(IReadOnlyList<SquadMemberRow> members)
     {
         ClearSquadMembers();
         if (members == null || members.Count == 0)
@@ -155,16 +166,23 @@ public partial class SquadScreenView : DialogView
         {
             foreach (var member in members)
             {
+                string text = member.IsInjured
+                    ? $"{member.Label}  —  {member.RecoveryStatus}"
+                    : member.Label;
                 RichTextLabel label = new RichTextLabel
                 {
-                    Text = member.Item2, // Formatted string "{Rank} {Name}"
+                    Text = text,
                     FitContent = true,
                     SizeFlagsHorizontal = SizeFlags.ExpandFill
-                    // Consider adding meta data if click interaction is needed later:
-                    // Meta = Variant.From(member.Item1) // Store soldier ID
                 };
-                // If click interaction needed:
-                // label.MetaClicked += OnMemberLabelClicked;
+                if (member.IsOutOfAction)
+                {
+                    label.Modulate = OutOfActionColor;
+                }
+                else if (member.IsInjured)
+                {
+                    label.Modulate = InjuredColor;
+                }
                 _squadMemberVBox.AddChild(label);
             }
         }

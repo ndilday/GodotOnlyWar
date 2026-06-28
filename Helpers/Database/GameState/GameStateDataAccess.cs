@@ -26,6 +26,10 @@ namespace OnlyWar.Helpers.Database.GameState
         public Date CurrentDate { get; set; }
         // The chapter's Requisition pool (PRD 4.23), restored onto the loaded Army.
         public int Requisition { get; set; }
+        // The chapter's gene-seed stockpile count and aggregate purity (PRD 4.8), restored
+        // onto the loaded PlayerForce.
+        public int GeneseedStockpile { get; set; }
+        public float GeneseedPurity { get; set; }
         // Medical procedures in progress (PRD 4.8 / 5.3), restored onto the loaded Army.
         public List<MedicalProcedure> MedicalProcedures { get; set; }
         public Dictionary<Date, List<EventHistory>> History { get; set; }
@@ -122,6 +126,8 @@ namespace OnlyWar.Helpers.Database.GameState
                 Units = units,
                 CurrentDate = global?.Date,
                 Requisition = global?.Requisition ?? 0,
+                GeneseedStockpile = global?.GeneseedStockpile ?? 0,
+                GeneseedPurity = global?.GeneseedPurity ?? 1.0f,
                 MedicalProcedures = medicalProcedures,
                 History = history,
                 FallenBrothers = fallenBrothers
@@ -131,6 +137,8 @@ namespace OnlyWar.Helpers.Database.GameState
         public void SaveData(string filePath,
                              Date currentDate,
                              int requisition,
+                             int geneseedStockpile,
+                             float geneseedPurity,
                              IEnumerable<MedicalProcedure> medicalProcedures,
                              IEnumerable<Character> characters,
                              IEnumerable<IRequest> requests,
@@ -237,7 +245,8 @@ namespace OnlyWar.Helpers.Database.GameState
                     {
                         _medicalProcedureDataAccess.SaveProcedure(transaction, procedure);
                     }
-                    _globalDataAccess.SaveGlobalData(transaction, currentDate, requisition);
+                    _globalDataAccess.SaveGlobalData(transaction, currentDate, requisition,
+                                                     geneseedStockpile, geneseedPurity);
                     _playerFactionEventDataAccess.SaveData(transaction, history);
                 }
                 catch (Exception e)

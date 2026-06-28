@@ -64,7 +64,7 @@ public partial class ApothecariumScreenView : DialogView
         PopulateMetrics(_vaultMetricGrid, [
             ("Stockpile", summary.Stockpile.ToString(), MedicalSeverity.Stable),
             ("Requisition", summary.Requisition.ToString(), MedicalSeverity.Stable),
-            ("Purity", summary.PurityStatus, summary.AtRiskImplanted > 0 ? MedicalSeverity.Watch : MedicalSeverity.Stable),
+            ("Purity", summary.Stockpile > 0 ? $"{summary.AggregatePurity:P0} ({summary.PurityStatus})" : summary.PurityStatus, summary.PuritySeverity),
             ("Mature Implanted", summary.MatureImplanted.ToString(), MedicalSeverity.Stable),
             ("Immature Implanted", summary.ImmatureImplanted.ToString(), MedicalSeverity.Watch),
             ("At Risk", summary.AtRiskImplanted.ToString(), summary.AtRiskImplanted > 0 ? MedicalSeverity.Critical : MedicalSeverity.Stable)

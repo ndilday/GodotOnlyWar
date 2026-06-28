@@ -169,6 +169,8 @@ public partial class MainGameScene : Control
                 "default.s3db",
                 GameDataSingleton.Instance.Date,
                 GameDataSingleton.Instance.Sector.PlayerForce.Army.Requisition,
+                GameDataSingleton.Instance.Sector.PlayerForce.GeneseedStockpile,
+                GameDataSingleton.Instance.Sector.PlayerForce.GeneseedPurity,
                 GameDataSingleton.Instance.Sector.PlayerForce.Army.MedicalProcedures,
                 GameDataSingleton.Instance.Sector.Characters,
                 GameDataSingleton.Instance.Sector.PlayerForce.Requests,

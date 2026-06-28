@@ -73,6 +73,39 @@ public class ApothecariumMedicalRecordBuilderTests
         Assert.Contains(summary.SeriousWounds, row => row.SoldierName == "Wounded" && row.Wound.Contains("Torso"));
     }
 
+    [Fact]
+    public void BuildVault_SurfacesRealAggregatePurityFromForce()
+    {
+        Date currentDate = new(20_000);
+        PlayerSoldier marine = CreatePlayerSoldier(10, "Pure", currentDate.GetTotalWeeks() - 6 * 52);
+        PlayerForce force = CreateForce(currentDate, marine);
+        force.GeneseedStockpile = 4;
+        force.GeneseedPurity = 0.80f;
+        ApothecariumMedicalRecordBuilder builder = new();
+
+        GeneSeedVaultSummary summary = builder.BuildVault(force, currentDate);
+
+        Assert.Equal(0.80f, summary.AggregatePurity, 3);
+        // 0.80 falls in the Degraded tier (>= 0.70, < 0.85).
+        Assert.Equal("Degraded", summary.PurityStatus);
+        Assert.Contains(summary.Rows, r => r.Title == "Aggregate gene-seed purity");
+    }
+
+    [Fact]
+    public void BuildVault_EmptyStockpileReportsNoMeaningfulPurity()
+    {
+        Date currentDate = new(20_000);
+        PlayerSoldier marine = CreatePlayerSoldier(11, "Fresh", currentDate.GetTotalWeeks() - 6 * 52);
+        PlayerForce force = CreateForce(currentDate, marine);
+        force.GeneseedStockpile = 0;
+        ApothecariumMedicalRecordBuilder builder = new();
+
+        GeneSeedVaultSummary summary = builder.BuildVault(force, currentDate);
+
+        Assert.Equal("No stock", summary.PurityStatus);
+        Assert.Equal(MedicalSeverity.None, summary.PuritySeverity);
+    }
+
     private static PlayerSoldier CreatePlayerSoldier(int id, string name, int implantWeek)
     {
         Soldier soldier = TestModelFactory.CreateSoldier(name: name);

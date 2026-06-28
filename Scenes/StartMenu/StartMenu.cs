@@ -94,6 +94,8 @@ public partial class StartMenu : Control
             gameRulesData.PlayerFaction,
             army,
             fleet);
+        playerForce.GeneseedStockpile = (ushort)gameState.GeneseedStockpile;
+        playerForce.GeneseedPurity = gameState.GeneseedPurity;
         Sector sector = new Sector(playerForce, gameState.Characters, gameState.Planets, gameState.Fleets);
 
         GameDataSingleton.Instance.LoadGameDataFromBlob(gameRulesData, gameState.CurrentDate, sector);

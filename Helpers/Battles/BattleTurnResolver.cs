@@ -418,6 +418,13 @@ namespace OnlyWar.Helpers.Battles
             }
         }
 
+        // The outcome of attempting to reclaim a fallen brother's gene-seed (PRD 4.8 / 4.12).
+        private enum GeneseedRecoveryResult { Recovered, Destroyed, Immature }
+
+        // Records, per fallen brother resolved this battle, what became of his gene-seed, so
+        // both the structured death record and the battle log can read a single outcome.
+        private readonly Dictionary<int, GeneseedRecoveryResult> _geneseedResults = new();
+
         private List<PlayerSoldier> RemoveSoldiersKilledInBattle()
         {
             List<PlayerSoldier> dead = new List<PlayerSoldier>();
@@ -434,6 +441,8 @@ namespace OnlyWar.Helpers.Battles
                         playerSoldier.AssignedSquad = null;
                         Army army = GameDataSingleton.Instance.Sector.PlayerForce.Army;
                         army.PlayerSoldierMap.Remove(soldier.Soldier.Id);
+                        // Resolve and record gene-seed recovery before the dossier is shelved.
+                        RecordGeneseedRecovery(playerSoldier);
                         // Retain the fallen brother's dossier rather than discarding it (PRD 4.12).
                         army.FallenBrothers[playerSoldier.Id] = playerSoldier;
                         break;
@@ -442,6 +451,57 @@ namespace OnlyWar.Helpers.Battles
             }
             return dead;
         }
+
+        // Resolves gene-seed recovery for a fallen brother, folds any recovered gland's purity
+        // into the chapter aggregate, and writes a structured GeneseedRecovery event onto his
+        // preserved dossier (PRD 4.8 / 4.12).
+        private void RecordGeneseedRecovery(PlayerSoldier soldier)
+        {
+            (GeneseedRecoveryResult result, float purity) = ResolveGeneseedRecovery(soldier);
+            _geneseedResults[soldier.Id] = result;
+            soldier.AddEvent(new SoldierEvent(
+                GameDataSingleton.Instance.Date,
+                SoldierEventType.GeneseedRecovery,
+                GetGeneseedRecoveryDetail(result, purity),
+                magnitude: result == GeneseedRecoveryResult.Recovered
+                    ? (int?)(int)System.Math.Round(purity * 100)
+                    : null));
+        }
+
+        private (GeneseedRecoveryResult, float) ResolveGeneseedRecovery(PlayerSoldier soldier)
+        {
+            // The progenoid glands are destroyed (and the gene-seed lost) if any
+            // progenoid-bearing location is severed. Which locations carry a progenoid is
+            // rules data (HitLocationTemplate.HoldsProgenoid), not a hardcoded name (TDD §8.3).
+            if (soldier.Body.HitLocations.Any(hl => hl.Template.HoldsProgenoid && hl.IsSevered))
+            {
+                return (GeneseedRecoveryResult.Destroyed, 0f);
+            }
+            if (GameDataSingleton.Instance.Date.GetWeeksDifference(soldier.ProgenoidImplantDate)
+                < GeneseedRules.ProgenoidMaturityWeeks)
+            {
+                return (GeneseedRecoveryResult.Immature, 0f);
+            }
+            float purity = GeneseedRules.RollRecoveredPurity();
+            GameDataSingleton.Instance.Sector.PlayerForce.AddRecoveredGeneseed(purity);
+            return (GeneseedRecoveryResult.Recovered, purity);
+        }
+
+        private static string GetGeneseedRecoveryDetail(GeneseedRecoveryResult result, float purity) =>
+            result switch
+            {
+                GeneseedRecoveryResult.Recovered => $"Gene-seed recovered (purity {purity:P0}).",
+                GeneseedRecoveryResult.Destroyed => "Gene-seed destroyed with the body.",
+                _ => "Gene-seed immature and unrecoverable.",
+            };
+
+        private static string GetGeneseedStatusLabel(GeneseedRecoveryResult result) =>
+            result switch
+            {
+                GeneseedRecoveryResult.Recovered => "Recovered",
+                GeneseedRecoveryResult.Destroyed => "Destroyed",
+                _ => "Immature, Unrecoverable",
+            };
 
         private void LogBattleToChapterHistory(List<PlayerSoldier> killedInBattle)
         {
@@ -459,32 +519,15 @@ namespace OnlyWar.Helpers.Battles
             battleEvents.Add(marineCount.ToString() + " stood against " + _startingEnemySoldierCount.ToString() + " enemies");
             foreach (PlayerSoldier soldier in killedInBattle)
             {
-                string geneseedStatus = GetGeneseedStatusDescription(soldier);
+                // Recovery was resolved in RemoveSoldiersKilledInBattle; read the outcome here
+                // rather than recomputing (which would double-count the stockpile).
+                string geneseedStatus = _geneseedResults.TryGetValue(soldier.Id, out var result)
+                    ? GetGeneseedStatusLabel(result)
+                    : "Unknown";
                 battleEvents.Add(
                     $"{soldier.Template.Name} {soldier.Name} died in the service of the emperor. Geneseed: {geneseedStatus}.");
             }
             return battleEvents;
-        }
-
-        private string GetGeneseedStatusDescription(PlayerSoldier soldier)
-        {
-            // The progenoid glands are destroyed (and the geneseed lost) if any
-            // progenoid-bearing location is severed. Which locations carry a
-            // progenoid is rules data (HitLocationTemplate.HoldsProgenoid), not a
-            // hardcoded name (TDD §8.3).
-            if (soldier.Body.HitLocations.Any(hl => hl.Template.HoldsProgenoid && hl.IsSevered))
-            {
-                return "Destroyed";
-            }
-            else if (GameDataSingleton.Instance.Date.GetWeeksDifference(soldier.ProgenoidImplantDate) < 260)
-            {
-                return "Immature, Unrecoverable";
-            }
-            else
-            {
-                GameDataSingleton.Instance.Sector.PlayerForce.GeneseedStockpile++;
-                return "Recovered";
-            }
         }
 
         private void CreditSoldierForKill(BattleSoldier inflicter, WeaponTemplate weapon)

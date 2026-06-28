@@ -46,7 +46,10 @@ namespace OnlyWar.Helpers
         IReadOnlyList<GeneSeedVaultRow> Rows,
         IReadOnlyList<GeneSeedFormationSummary> FormationSummaries,
         // The chapter's current Requisition balance (PRD 4.23), surfaced on the vault panel.
-        int Requisition = 0);
+        int Requisition = 0,
+        // The count-weighted aggregate purity (0..1) of the sealed stockpile (PRD 4.8).
+        float AggregatePurity = 1.0f,
+        MedicalSeverity PuritySeverity = MedicalSeverity.Stable);
 
     public sealed record GeneSeedVaultRow(
         string Title,

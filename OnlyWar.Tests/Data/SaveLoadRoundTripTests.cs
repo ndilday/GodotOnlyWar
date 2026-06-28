@@ -45,6 +45,48 @@ public class SaveLoadRoundTripTests
     }
 
     [Fact]
+    public void SaveThenLoad_PreservesGeneseedStockpileAndPurity()
+    {
+        Sector sector = SectorBuilder.GenerateSector(1, _data, _date, "Geneseed Round Trip Chapter");
+        GameDataSingleton.Instance.LoadGameDataFromBlob(_data, _date, sector);
+        Unit armyRoot = sector.PlayerForce.Army.OrderOfBattle;
+        if (!_data.PlayerFaction.Units.Contains(armyRoot))
+        {
+            _data.PlayerFaction.Units.Add(armyRoot);
+        }
+        // Distinctive values so the assertion proves the saved figures round-trip rather
+        // than coincidentally matching a default (PRD 4.8).
+        sector.PlayerForce.GeneseedStockpile = 13;
+        sector.PlayerForce.GeneseedPurity = 0.83f;
+
+        string dbPath = Path.Combine(
+            Path.GetTempPath(), $"onlywar_roundtrip_geneseed_{Guid.NewGuid():N}.s3db");
+        try
+        {
+            Save(sector, dbPath, _data.Factions.SelectMany(f => f.Units).ToList());
+            GameStateDataBlob loaded = Load(dbPath);
+
+            Assert.Equal(13, loaded.GeneseedStockpile);
+            Assert.Equal(0.83f, loaded.GeneseedPurity, 3);
+        }
+        finally
+        {
+            Microsoft.Data.Sqlite.SqliteConnection.ClearAllPools();
+            try
+            {
+                if (File.Exists(dbPath))
+                {
+                    File.Delete(dbPath);
+                }
+            }
+            catch (IOException)
+            {
+                // Best-effort cleanup of a temp file; ignore if still locked.
+            }
+        }
+    }
+
+    [Fact]
     public void SaveThenLoad_PreservesRequisition()
     {
         Sector sector = SectorBuilder.GenerateSector(1, _data, _date, "Requisition Round Trip Chapter");
@@ -393,6 +435,8 @@ public class SaveLoadRoundTripTests
             dbPath,
             _date,
             sector.PlayerForce.Army.Requisition,
+            sector.PlayerForce.GeneseedStockpile,
+            sector.PlayerForce.GeneseedPurity,
             sector.PlayerForce.Army.MedicalProcedures,
             sector.Characters,
             sector.PlayerForce.Requests,

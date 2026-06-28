@@ -51,7 +51,13 @@ namespace OnlyWar.Helpers
             int maturingSoon = soldiers.Sum(soldier => CountMaturingWithinOneYear(soldier, currentDate));
             int atRisk = soldiers.Sum(CountAtRiskProgenoids);
             MedicalSeverity severity = atRisk > 0 ? MedicalSeverity.Watch : MedicalSeverity.Stable;
-            string purityStatus = atRisk > 0 ? "Watch" : "Stable";
+            // Purity is the real aggregate quality of the sealed stockpile (PRD 4.8); the
+            // status label and severity are derived from it. The "at-risk" count is a
+            // separate, wound-driven concern about glands still inside living brothers.
+            float purity = force?.GeneseedPurity ?? 1.0f;
+            int storedCount = force?.GeneseedStockpile ?? 0;
+            MedicalSeverity puritySeverity = GetPuritySeverity(purity, storedCount);
+            string purityStatus = GetPurityLabel(purity, storedCount);
 
             return new GeneSeedVaultSummary(
                 stockpile,
@@ -62,13 +68,16 @@ namespace OnlyWar.Helpers
                 purityStatus,
                 [
                     new GeneSeedVaultRow("Mature sealed progenoids", "Available in the Chapter vault.", stockpile.ToString(), MedicalSeverity.Stable),
+                    new GeneSeedVaultRow("Aggregate gene-seed purity", "Quality of the sealed stockpile.", storedCount > 0 ? purity.ToString("P0") : "--", puritySeverity),
                     new GeneSeedVaultRow("Mature implanted progenoids", "Recoverable from living battle-brothers.", matureImplanted.ToString(), MedicalSeverity.Stable),
                     new GeneSeedVaultRow("Immature implanted progenoids", "Still maturing in active battle-brothers.", immatureImplanted.ToString(), MedicalSeverity.Watch),
                     new GeneSeedVaultRow("Maturing within one year", "Expected to become recoverable soon.", maturingSoon.ToString(), MedicalSeverity.Stable),
                     new GeneSeedVaultRow("At-risk implanted progenoids", "Held in damaged or severed locations.", atRisk.ToString(), severity)
                 ],
                 BuildFormationSummaries(force, currentDate),
-                force?.Army?.Requisition ?? 0);
+                force?.Army?.Requisition ?? 0,
+                purity,
+                puritySeverity);
         }
 
         public MedicalUnitSummary BuildUnitSummary(Unit unit)
@@ -418,6 +427,28 @@ namespace OnlyWar.Helpers
             }
 
             return currentDate.GetWeeksDifference(soldier.ProgenoidImplantDate);
+        }
+
+        // An empty vault has no meaningful purity yet; otherwise grade the aggregate.
+        private static string GetPurityLabel(float purity, int storedCount)
+        {
+            if (storedCount == 0)
+            {
+                return "No stock";
+            }
+            if (purity >= 0.95f) return "Pristine";
+            if (purity >= 0.85f) return "Stable";
+            if (purity >= 0.70f) return "Degraded";
+            return "Corrupt";
+        }
+
+        private static MedicalSeverity GetPuritySeverity(float purity, int storedCount)
+        {
+            if (storedCount == 0) return MedicalSeverity.None;
+            if (purity >= 0.95f) return MedicalSeverity.Stable;
+            if (purity >= 0.85f) return MedicalSeverity.Watch;
+            if (purity >= 0.70f) return MedicalSeverity.Serious;
+            return MedicalSeverity.Critical;
         }
 
         private static int CountAtRiskProgenoids(ISoldier soldier)
