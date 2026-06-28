@@ -38,6 +38,10 @@ namespace OnlyWar.Helpers
         // demonstration can make a force look several times larger than it is while a weak one
         // barely exceeds its real strength. Larger values make feints harder to sell.
         private const float DiversionThreatScale = 4.0f;
+        // Flat Requisition granted to the chapter each time a governor request is fulfilled
+        // (PRD 4.23 / Supply & Requisition Phase 1 faucet). No pledges or delivery scheduling
+        // yet; this is the minimal earn->spend loop backing the Apothecary procedure sink.
+        private const int RequisitionPerRequestFulfilled = 100;
 
         public TurnController() : this(null)
         {
@@ -84,6 +88,7 @@ namespace OnlyWar.Helpers
 
             // --- 3. Planetary Simulation & Resolution Phase ---
             ApplyMissionResults();
+            ProcessMedical(sector);
             TrainNonDeployedPlayerForces(sector);
             AdvanceFleetMovement(sector);
             UpdatePlanets(sector.Planets.Values);
@@ -101,6 +106,21 @@ namespace OnlyWar.Helpers
                     taskForce.WarpSubjectiveTrainingApplied = true;
                 }
             }
+        }
+
+        // Weekly medical resolution: wounds knit closed over time for the whole chapter
+        // (deployed or not — a week passes for everyone), except locations that require a
+        // replacement procedure. This is the substrate the Apothecary recovery countdowns
+        // display and that medical procedures will ride on in a later pass.
+        private void ProcessMedical(Sector sector)
+        {
+            Army army = sector.PlayerForce?.Army;
+            if (army == null)
+            {
+                return;
+            }
+            MedicalTurnProcessor.ApplyWeeklyHealing(army.OrderOfBattle?.GetAllMembers());
+            MedicalTurnProcessor.ResolveProcedures(army.MedicalProcedures, army.PlayerSoldierMap);
         }
 
         private void TrainNonDeployedPlayerForces(Sector sector)
@@ -697,6 +717,8 @@ namespace OnlyWar.Helpers
                     // improve leader opinion of player
                     planetFaction.Leader.OpinionOfPlayerForce +=
                         planetFaction.Leader.Appreciation * (1 - planetFaction.Leader.OpinionOfPlayerForce);
+                    // fulfilling the request also earns a Requisition grant (the supply faucet)
+                    GameDataSingleton.Instance.Sector.PlayerForce.Army.Requisition += RequisitionPerRequestFulfilled;
                 }
                 else
                 {

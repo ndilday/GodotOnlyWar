@@ -1,13 +1,17 @@
-﻿using OnlyWar.Models;
+using OnlyWar.Models;
 using System.Data;
 
 namespace OnlyWar.Helpers.Database.GameState
 {
+    // The single-row GlobalData table holds chapter-wide scalars that aren't owned by any
+    // other aggregate: the current date and the Requisition pool (PRD 4.23).
+    public sealed record GlobalState(Date Date, int Requisition);
+
     public class GlobalDataAccess
     {
-        public Date GetGlobalData(IDbConnection connection)
+        public GlobalState GetGlobalData(IDbConnection connection)
         {
-            Date date = null;
+            GlobalState state = null;
             using (var command = connection.CreateCommand())
             {
                 command.CommandText = "SELECT * FROM GlobalData";
@@ -17,23 +21,26 @@ namespace OnlyWar.Helpers.Database.GameState
                     int millenium = reader.GetInt32(0);
                     int year = reader.GetInt32(1);
                     int week = reader.GetInt32(2);
+                    // index 3 is SaveVersion
+                    int requisition = reader.GetInt32(4);
 
-                    date = new Date(millenium, year, week);
+                    state = new GlobalState(new Date(millenium, year, week), requisition);
                 }
             }
-            return date;
+            return state;
         }
 
-        public void SaveDate(IDbTransaction transaction, Date currentDate)
+        public void SaveGlobalData(IDbTransaction transaction, Date currentDate, int requisition)
         {
             using (var command = transaction.Connection.CreateCommand())
             {
                 command.Transaction = transaction;
                 command.CommandText = @"INSERT INTO GlobalData VALUES
-                    (@millenium, @year, @week, 1);";
+                    (@millenium, @year, @week, 1, @requisition);";
                 command.AddParam("@millenium", currentDate.Millenium);
                 command.AddParam("@year", currentDate.Year);
                 command.AddParam("@week", currentDate.Week);
+                command.AddParam("@requisition", requisition);
                 command.ExecuteNonQuery();
             }
         }

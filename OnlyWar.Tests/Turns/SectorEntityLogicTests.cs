@@ -130,4 +130,25 @@ public class SectorEntityLogicTests
         Assert.NotNull(governor.ActiveRequest);
         Assert.Contains(governor.ActiveRequest, fixture.Sector.PlayerForce.Requests);
     }
+
+    [Fact]
+    public void ProcessTurn_FulfilledRequest_GrantsRequisition()
+    {
+        RNG.Reset(1);
+        SectorSimulationFixture fixture = SectorSimulationFixture.Create();
+        Character governor = fixture.InstallGovernor(investigation: 0f, neediness: 0f, opinion: 1f);
+        // an already-fulfilled request (completed on construction via a non-null fulfilled date)
+        PresenceRequest request = new(
+            1, fixture.Planet, governor, null, new Date(1, 1, 1), new Date(1, 1, 1));
+        governor.ActiveRequest = request;
+        fixture.Sector.PlayerForce.Requests.Add(request);
+        int before = fixture.Sector.PlayerForce.Army.Requisition;
+
+        fixture.ProcessTurn();
+
+        // fulfilling the request fires the Requisition faucet (PRD 4.23) and clears the request
+        Assert.True(fixture.Sector.PlayerForce.Army.Requisition > before);
+        Assert.Null(governor.ActiveRequest);
+        Assert.DoesNotContain(request, fixture.Sector.PlayerForce.Requests);
+    }
 }

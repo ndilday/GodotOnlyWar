@@ -67,7 +67,8 @@ namespace OnlyWar.Helpers
                     new GeneSeedVaultRow("Maturing within one year", "Expected to become recoverable soon.", maturingSoon.ToString(), MedicalSeverity.Stable),
                     new GeneSeedVaultRow("At-risk implanted progenoids", "Held in damaged or severed locations.", atRisk.ToString(), severity)
                 ],
-                BuildFormationSummaries(force, currentDate));
+                BuildFormationSummaries(force, currentDate),
+                force?.Army?.Requisition ?? 0);
         }
 
         public MedicalUnitSummary BuildUnitSummary(Unit unit)
@@ -283,7 +284,7 @@ namespace OnlyWar.Helpers
         private WoundLocationSummary BuildWoundLocationSummary(HitLocation location)
         {
             MedicalSeverity severity = GetSeverity(location);
-            bool needsReplacement = IsReplacementEligible(location);
+            bool needsReplacement = location.IsReplacementEligible;
             string status = GetStatus(location);
             string recovery = needsReplacement
                 ? "Replacement required"
@@ -305,25 +306,26 @@ namespace OnlyWar.Helpers
         private IReadOnlyList<ReplacementOption> BuildReplacementOptions(IEnumerable<HitLocation> locations)
         {
             List<ReplacementOption> options = [];
-            foreach (HitLocation location in locations.Where(IsReplacementEligible))
+            foreach (HitLocation location in locations.Where(l => l.IsReplacementEligible))
             {
+                bool severed = location.IsSevered;
                 options.Add(new ReplacementOption(
                     location.Template.Id,
-                    ReplacementType.Cybernetic,
+                    MedicalProcedureType.Cybernetic,
                     location.Template.Name,
                     $"Cybernetic {location.Template.Name}",
                     "Fastest return to duty; adds an augmetic replacement.",
-                    location.IsSevered ? 6 : 4,
-                    location.IsSevered ? 40 : 25,
+                    MedicalProcedureRules.GetWeeks(MedicalProcedureType.Cybernetic, severed),
+                    MedicalProcedureRules.GetRequisitionCost(MedicalProcedureType.Cybernetic, severed),
                     true));
                 options.Add(new ReplacementOption(
                     location.Template.Id,
-                    ReplacementType.VatGrown,
+                    MedicalProcedureType.VatGrown,
                     location.Template.Name,
                     $"Vat-Grown {location.Template.Name}",
                     "Rare restorative treatment; slower and more resource intensive.",
-                    location.IsSevered ? 14 : 10,
-                    location.IsSevered ? 95 : 70,
+                    MedicalProcedureRules.GetWeeks(MedicalProcedureType.VatGrown, severed),
+                    MedicalProcedureRules.GetRequisitionCost(MedicalProcedureType.VatGrown, severed),
                     true));
             }
 
@@ -533,15 +535,6 @@ namespace OnlyWar.Helpers
             }
 
             return "Clear";
-        }
-
-        private static bool IsReplacementEligible(HitLocation location)
-        {
-            bool canMatterForFunction = location.Template.IsMotive
-                || location.Template.IsRangedWeaponHolder
-                || location.Template.IsMeleeWeaponHolder
-                || location.Template.IsVital;
-            return canMatterForFunction && (location.IsSevered || location.IsCrippled);
         }
 
         private static string BuildGeneSeedStatus(IReadOnlyList<WoundLocationSummary> wounds)

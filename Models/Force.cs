@@ -46,6 +46,12 @@ namespace OnlyWar.Models
         public Unit OrderOfBattle { get; }
         public Dictionary<int, PlayerSoldier> PlayerSoldierMap { get; }
         public Dictionary<int, Squad> SquadMap { get; private set; }
+        // The chapter's abstract supply/favor currency (PRD 4.23): earned from request
+        // fulfillment, spent on medical procedures and (later) other materiel sinks.
+        public int Requisition { get; set; }
+        // Medical procedures in progress in the Apothecarium (PRD 4.8 / 5.3), resolved
+        // each turn until complete.
+        public List<MedicalProcedure> MedicalProcedures { get; }
         // Brothers who have fallen are removed from the active roster but their dossiers
         // (history, kills, awards) are retained here so the chapter can honor them
         // (PRD 4.12). These soldiers belong to no squad.
@@ -56,6 +62,7 @@ namespace OnlyWar.Models
         {
             PlayerSoldierMap = soldiers.ToDictionary(s => s.Id);
             FallenBrothers = [];
+            MedicalProcedures = [];
             OrderOfBattle = unit;
         }
 

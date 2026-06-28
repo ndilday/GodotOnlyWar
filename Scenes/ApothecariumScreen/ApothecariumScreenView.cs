@@ -1,6 +1,7 @@
 using Godot;
 using OnlyWar.Helpers;
 using OnlyWar.Helpers.UI;
+using OnlyWar.Models.Soldiers;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -62,6 +63,7 @@ public partial class ApothecariumScreenView : DialogView
         ShowPanel(_vaultPanel);
         PopulateMetrics(_vaultMetricGrid, [
             ("Stockpile", summary.Stockpile.ToString(), MedicalSeverity.Stable),
+            ("Requisition", summary.Requisition.ToString(), MedicalSeverity.Stable),
             ("Purity", summary.PurityStatus, summary.AtRiskImplanted > 0 ? MedicalSeverity.Watch : MedicalSeverity.Stable),
             ("Mature Implanted", summary.MatureImplanted.ToString(), MedicalSeverity.Stable),
             ("Immature Implanted", summary.ImmatureImplanted.ToString(), MedicalSeverity.Watch),
@@ -410,7 +412,7 @@ public partial class ApothecariumScreenView : DialogView
     private Control CreateReplacementCard(ReplacementOption option)
     {
         PanelContainer panel = new() { CustomMinimumSize = new Vector2(0, 132), SizeFlagsHorizontal = SizeFlags.ExpandFill };
-        OnlyWarStyle.ApplyTintedListRow(panel, false, ColorFor(option.Type == ReplacementType.Cybernetic ? MedicalSeverity.Watch : MedicalSeverity.Critical, 0.75f));
+        OnlyWarStyle.ApplyTintedListRow(panel, false, ColorFor(option.Type == MedicalProcedureType.Cybernetic ? MedicalSeverity.Watch : MedicalSeverity.Critical, 0.75f));
         VBoxContainer stack = new();
         stack.AddThemeConstantOverride("separation", 6);
         panel.AddChild(stack);
@@ -421,14 +423,27 @@ public partial class ApothecariumScreenView : DialogView
         description.AddThemeFontSizeOverride("font_size", 13);
         description.AddThemeColorOverride("font_color", OnlyWarStyle.MutedText);
         stack.AddChild(description);
+        // Every prerequisite is listed explicitly (PRD 4.8): met in green, unmet in red, so
+        // the player can see at a glance both that a procedure is blocked and exactly why.
+        foreach (ProcedureRequisite requisite in option.Requisites ?? [])
+        {
+            Label line = new()
+            {
+                Text = $"{(requisite.IsMet ? "✓" : "✗")} {requisite.Label}"
+            };
+            line.AddThemeFontSizeOverride("font_size", 13);
+            line.AddThemeColorOverride("font_color",
+                ColorFor(requisite.IsMet ? MedicalSeverity.Stable : MedicalSeverity.Critical));
+            stack.AddChild(line);
+        }
         HBoxContainer actions = new();
         actions.AddThemeConstantOverride("separation", 8);
         actions.AddChild(CreateSmallChip($"{option.Weeks} weeks", MedicalSeverity.Watch));
         actions.AddChild(CreateSmallChip($"{option.RequisitionCost} Req", MedicalSeverity.Critical));
         Button assignButton = new()
         {
-            Text = option.Type == ReplacementType.Cybernetic ? "Assign Cybernetic" : "Request Vat Growth",
-            Disabled = !option.IsAvailable,
+            Text = option.Type == MedicalProcedureType.Cybernetic ? "Assign Cybernetic" : "Request Vat Growth",
+            Disabled = !option.CanAssign,
             MouseDefaultCursorShape = CursorShape.PointingHand,
             SizeFlagsHorizontal = SizeFlags.ExpandFill
         };

@@ -16,6 +16,10 @@ namespace OnlyWar.Builders
     internal static class NewChapterBuilder
     {
         private const int INITIAL_TRAINING_DURATION_WEEKS = 104;
+        // Starting Requisition pool seeded at chapter founding (PRD 4.23 / Supply &
+        // Requisition Phase 1). Deliberately generous: the loop is easier to verify
+        // end-to-end before scarcity is tuned in (PRD tuning note).
+        private const int FOUNDING_REQUISITION = 1000;
         private delegate void TrainingFunction(PlayerSoldier playerSoldier);
 
         internal static PlayerForce CreateChapter(GameRulesData data,
@@ -30,6 +34,7 @@ namespace OnlyWar.Builders
             List<PlayerSoldier> soldiers = GenerateInitialSoldiers(data, trainingService, trainingStartDate, date, trainingEndDate);
 
             PlayerForce chapter = BuildChapterStructure(data, trainingEndDate, soldiers, chapterName);
+            chapter.Army.Requisition = FOUNDING_REQUISITION;
             foreach (PlayerSoldier soldier in soldiers)
             {
                 ApplySoldierTypeTraining(soldier);

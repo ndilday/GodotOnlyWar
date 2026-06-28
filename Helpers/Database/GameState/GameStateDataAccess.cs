@@ -24,6 +24,10 @@ namespace OnlyWar.Helpers.Database.GameState
         public List<TaskForce> Fleets { get; set; }
         public List<Unit> Units { get; set; }
         public Date CurrentDate { get; set; }
+        // The chapter's Requisition pool (PRD 4.23), restored onto the loaded Army.
+        public int Requisition { get; set; }
+        // Medical procedures in progress (PRD 4.8 / 5.3), restored onto the loaded Army.
+        public List<MedicalProcedure> MedicalProcedures { get; set; }
         public Dictionary<Date, List<EventHistory>> History { get; set; }
         // Squad-less fallen brothers, retained for their dossiers (PRD 4.12).
         public List<PlayerSoldier> FallenBrothers { get; set; }
@@ -39,6 +43,7 @@ namespace OnlyWar.Helpers.Database.GameState
         private readonly PlayerSoldierDataAccess _playerSoldierDataAccess;
         private readonly GlobalDataAccess _globalDataAccess;
         private readonly PlayerFactionEventDataAccess _playerFactionEventDataAccess;
+        private readonly MedicalProcedureDataAccess _medicalProcedureDataAccess;
         private static GameStateDataAccess _instance;
         public static GameStateDataAccess Instance
         {
@@ -62,6 +67,7 @@ namespace OnlyWar.Helpers.Database.GameState
             _playerSoldierDataAccess = new PlayerSoldierDataAccess();
             _globalDataAccess = new GlobalDataAccess();
             _playerFactionEventDataAccess = new PlayerFactionEventDataAccess();
+            _medicalProcedureDataAccess = new MedicalProcedureDataAccess();
         }
 
         public GameStateDataBlob GetData(string filePath,
@@ -98,7 +104,8 @@ namespace OnlyWar.Helpers.Database.GameState
                                                       soldierTemplateMap, squadMap);
             SoldierFactory.Instance.SetCurrentHighestSoldierId(soldiers.Keys.Max());
             var playerSoldiers = _playerSoldierDataAccess.GetData(dbCon, soldiers);
-            var date = _globalDataAccess.GetGlobalData(dbCon);
+            var global = _globalDataAccess.GetGlobalData(dbCon);
+            var medicalProcedures = _medicalProcedureDataAccess.GetProcedures(dbCon);
             var history = _playerFactionEventDataAccess.GetHistory(dbCon);
             dbCon.Close();
             // Decorated soldiers with no squad are fallen brothers; the living are reached
@@ -113,7 +120,9 @@ namespace OnlyWar.Helpers.Database.GameState
                 Requests = requests,
                 Fleets = fleets,
                 Units = units,
-                CurrentDate = date,
+                CurrentDate = global?.Date,
+                Requisition = global?.Requisition ?? 0,
+                MedicalProcedures = medicalProcedures,
                 History = history,
                 FallenBrothers = fallenBrothers
             };
@@ -121,6 +130,8 @@ namespace OnlyWar.Helpers.Database.GameState
 
         public void SaveData(string filePath,
                              Date currentDate,
+                             int requisition,
+                             IEnumerable<MedicalProcedure> medicalProcedures,
                              IEnumerable<Character> characters,
                              IEnumerable<IRequest> requests,
                              IEnumerable<Planet> planets,
@@ -222,7 +233,11 @@ namespace OnlyWar.Helpers.Database.GameState
                     {
                         _playerSoldierDataAccess.SavePlayerSoldier(transaction, playerSoldier);
                     }
-                    _globalDataAccess.SaveDate(transaction, currentDate);
+                    foreach (MedicalProcedure procedure in medicalProcedures ?? [])
+                    {
+                        _medicalProcedureDataAccess.SaveProcedure(transaction, procedure);
+                    }
+                    _globalDataAccess.SaveGlobalData(transaction, currentDate, requisition);
                     _playerFactionEventDataAccess.SaveData(transaction, history);
                 }
                 catch (Exception e)

@@ -45,8 +45,8 @@ public class ApothecariumMedicalRecordBuilderTests
         MedicalSoldierSummary summary = builder.BuildSoldierSummary(soldier);
 
         Assert.Contains(summary.Wounds, w => w.LocationName == "Left Arm" && w.NeedsReplacement && w.Severity == MedicalSeverity.Lost);
-        Assert.Contains(summary.ReplacementOptions, o => o.LocationName == "Left Arm" && o.Type == ReplacementType.Cybernetic);
-        Assert.Contains(summary.ReplacementOptions, o => o.LocationName == "Left Arm" && o.Type == ReplacementType.VatGrown);
+        Assert.Contains(summary.ReplacementOptions, o => o.LocationName == "Left Arm" && o.Type == MedicalProcedureType.Cybernetic);
+        Assert.Contains(summary.ReplacementOptions, o => o.LocationName == "Left Arm" && o.Type == MedicalProcedureType.VatGrown);
         Assert.Equal("Safe", summary.GeneSeedStatus);
     }
 

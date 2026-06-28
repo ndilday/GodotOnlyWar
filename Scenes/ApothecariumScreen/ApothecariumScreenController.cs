@@ -5,11 +5,13 @@ using OnlyWar.Models.Soldiers;
 using OnlyWar.Models.Squads;
 using OnlyWar.Models.Units;
 using System;
+using System.Collections.Generic;
 using System.Linq;
 
 public partial class ApothecariumScreenController : DialogController
 {
     private readonly ApothecariumMedicalRecordBuilder _recordBuilder = new();
+    private readonly MedicalProcedureService _procedureService = new();
     private ApothecariumScreenView _apothecariumView;
     private ApothecariumSelectionKind _selectedKind = ApothecariumSelectionKind.Vault;
     private int? _selectedId;
@@ -50,8 +52,23 @@ public partial class ApothecariumScreenController : DialogController
 
     private void OnReplacementOptionPressed(object sender, ReplacementOption option)
     {
-        // First pass is presentation-only. Persisted procedures are the next PRD milestone.
-        GD.Print($"Medical procedure selected: {option.Title} for hit location {option.HitLocationId}.");
+        PlayerForce force = GameDataSingleton.Instance?.Sector?.PlayerForce;
+        Unit chapter = force?.Army?.OrderOfBattle;
+        if (force == null || chapter == null)
+        {
+            return;
+        }
+        ISoldier soldier = chapter.GetAllMembers().FirstOrDefault(s => s.Id == _selectedId);
+        if (soldier == null)
+        {
+            return;
+        }
+        if (_procedureService.TryAssign(force, soldier, option))
+        {
+            // The procedure now holds the location; refresh so it drops out of the offered
+            // options, the Requisition spend is reflected, and the soldier reads as in care.
+            Render();
+        }
     }
 
     private void Render()
@@ -121,7 +138,30 @@ public partial class ApothecariumScreenController : DialogController
             return;
         }
 
-        _apothecariumView.ShowSoldier(_recordBuilder.BuildSoldierSummary(soldier));
+        MedicalSoldierSummary summary = _recordBuilder.BuildSoldierSummary(soldier);
+        summary = EnrichWithRequisites(GameDataSingleton.Instance.Sector.PlayerForce, soldier, summary);
+        _apothecariumView.ShowSoldier(summary);
+    }
+
+    // Fills each replacement option's requisite breakdown (rendered green/red by the view)
+    // and drops any location already under an active procedure.
+    private MedicalSoldierSummary EnrichWithRequisites(PlayerForce force, ISoldier soldier, MedicalSoldierSummary summary)
+    {
+        if (summary.ReplacementOptions.Count == 0)
+        {
+            return summary;
+        }
+        List<ReplacementOption> enriched = [];
+        foreach (ReplacementOption option in summary.ReplacementOptions)
+        {
+            if (_procedureService.HasProcedureInProgress(force, soldier.Id, option.HitLocationId))
+            {
+                continue;
+            }
+            IReadOnlyList<ProcedureRequisite> requisites = _procedureService.EvaluateRequisites(force, soldier, option);
+            enriched.Add(option with { Requisites = requisites, CanAssign = requisites.All(r => r.IsMet) });
+        }
+        return summary with { ReplacementOptions = enriched };
     }
 
     private static System.Collections.Generic.IEnumerable<Unit> FlattenUnits(Unit unit)

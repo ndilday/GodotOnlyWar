@@ -168,6 +168,8 @@ public partial class MainGameScene : Control
             GameStateDataAccess.Instance.SaveData(
                 "default.s3db",
                 GameDataSingleton.Instance.Date,
+                GameDataSingleton.Instance.Sector.PlayerForce.Army.Requisition,
+                GameDataSingleton.Instance.Sector.PlayerForce.Army.MedicalProcedures,
                 GameDataSingleton.Instance.Sector.Characters,
                 GameDataSingleton.Instance.Sector.PlayerForce.Requests,
                 GameDataSingleton.Instance.Sector.Planets.Values,

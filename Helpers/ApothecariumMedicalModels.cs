@@ -1,3 +1,4 @@
+using OnlyWar.Models.Soldiers;
 using System.Collections.Generic;
 
 namespace OnlyWar.Helpers
@@ -18,12 +19,6 @@ namespace OnlyWar.Helpers
         Serious = 3,
         Critical = 4,
         Lost = 5
-    }
-
-    public enum ReplacementType
-    {
-        Cybernetic,
-        VatGrown
     }
 
     public sealed record ApothecariumTreeItem(
@@ -49,7 +44,9 @@ namespace OnlyWar.Helpers
         int AtRiskImplanted,
         string PurityStatus,
         IReadOnlyList<GeneSeedVaultRow> Rows,
-        IReadOnlyList<GeneSeedFormationSummary> FormationSummaries);
+        IReadOnlyList<GeneSeedFormationSummary> FormationSummaries,
+        // The chapter's current Requisition balance (PRD 4.23), surfaced on the vault panel.
+        int Requisition = 0);
 
     public sealed record GeneSeedVaultRow(
         string Title,
@@ -110,11 +107,20 @@ namespace OnlyWar.Helpers
 
     public sealed record ReplacementOption(
         int HitLocationId,
-        ReplacementType Type,
+        MedicalProcedureType Type,
         string LocationName,
         string Title,
         string Description,
         int Weeks,
         int RequisitionCost,
-        bool IsAvailable);
+        bool IsAvailable,
+        // Per-requisite breakdown and overall assignability are filled in by the controller
+        // via MedicalProcedureService once the soldier/force context is known; the builder
+        // leaves them at their defaults.
+        IReadOnlyList<ProcedureRequisite> Requisites = null,
+        bool CanAssign = false);
+
+    // A single met/unmet prerequisite for a procedure (PRD 4.8 presentation-of-requisites:
+    // green when met, red when unmet).
+    public sealed record ProcedureRequisite(string Label, bool IsMet);
 }

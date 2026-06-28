@@ -36,6 +36,100 @@ public class SaveLoadRoundTripTests
     }
 
     [Fact]
+    public void GeneratedChapter_SeedsFoundingRequisition()
+    {
+        Sector sector = SectorBuilder.GenerateSector(1, _data, _date, "Requisition Founding Chapter");
+        // The founding seed (PRD 4.23 / Supply & Requisition Phase 1) is a generous,
+        // non-zero starting pool.
+        Assert.True(sector.PlayerForce.Army.Requisition > 0);
+    }
+
+    [Fact]
+    public void SaveThenLoad_PreservesRequisition()
+    {
+        Sector sector = SectorBuilder.GenerateSector(1, _data, _date, "Requisition Round Trip Chapter");
+        GameDataSingleton.Instance.LoadGameDataFromBlob(_data, _date, sector);
+        Unit armyRoot = sector.PlayerForce.Army.OrderOfBattle;
+        if (!_data.PlayerFaction.Units.Contains(armyRoot))
+        {
+            _data.PlayerFaction.Units.Add(armyRoot);
+        }
+        // Set a distinctive value so the assertion proves the saved figure round-trips
+        // rather than coincidentally matching a default.
+        sector.PlayerForce.Army.Requisition = 777;
+
+        string dbPath = Path.Combine(
+            Path.GetTempPath(), $"onlywar_roundtrip_req_{Guid.NewGuid():N}.s3db");
+        try
+        {
+            Save(sector, dbPath, _data.Factions.SelectMany(f => f.Units).ToList());
+            GameStateDataBlob loaded = Load(dbPath);
+
+            Assert.Equal(777, loaded.Requisition);
+        }
+        finally
+        {
+            Microsoft.Data.Sqlite.SqliteConnection.ClearAllPools();
+            try
+            {
+                if (File.Exists(dbPath))
+                {
+                    File.Delete(dbPath);
+                }
+            }
+            catch (IOException)
+            {
+                // Best-effort cleanup of a temp file; ignore if still locked.
+            }
+        }
+    }
+
+    [Fact]
+    public void SaveThenLoad_PreservesMedicalProcedures()
+    {
+        Sector sector = SectorBuilder.GenerateSector(1, _data, _date, "Procedure Round Trip Chapter");
+        GameDataSingleton.Instance.LoadGameDataFromBlob(_data, _date, sector);
+        Unit armyRoot = sector.PlayerForce.Army.OrderOfBattle;
+        if (!_data.PlayerFaction.Units.Contains(armyRoot))
+        {
+            _data.PlayerFaction.Units.Add(armyRoot);
+        }
+        PlayerSoldier subject = armyRoot.GetAllMembers().OfType<PlayerSoldier>().First();
+        MedicalProcedure procedure = new(subject.Id, 4, MedicalProcedureType.Cybernetic, 5, 40);
+        sector.PlayerForce.Army.MedicalProcedures.Add(procedure);
+
+        string dbPath = Path.Combine(
+            Path.GetTempPath(), $"onlywar_roundtrip_proc_{Guid.NewGuid():N}.s3db");
+        try
+        {
+            Save(sector, dbPath, _data.Factions.SelectMany(f => f.Units).ToList());
+            GameStateDataBlob loaded = Load(dbPath);
+
+            MedicalProcedure loadedProcedure = Assert.Single(loaded.MedicalProcedures);
+            Assert.Equal(subject.Id, loadedProcedure.SoldierId);
+            Assert.Equal(4, loadedProcedure.HitLocationTemplateId);
+            Assert.Equal(MedicalProcedureType.Cybernetic, loadedProcedure.ProcedureType);
+            Assert.Equal(5, loadedProcedure.WeeksRemaining);
+            Assert.Equal(40, loadedProcedure.RequisitionCost);
+        }
+        finally
+        {
+            Microsoft.Data.Sqlite.SqliteConnection.ClearAllPools();
+            try
+            {
+                if (File.Exists(dbPath))
+                {
+                    File.Delete(dbPath);
+                }
+            }
+            catch (IOException)
+            {
+                // Best-effort cleanup of a temp file; ignore if still locked.
+            }
+        }
+    }
+
+    [Fact]
     public void SaveThenLoad_GeneratedSector_PreservesHighLevelState()
     {
         Sector sector = SectorBuilder.GenerateSector(1, _data, _date, "Round Trip Chapter");
@@ -298,6 +392,8 @@ public class SaveLoadRoundTripTests
         GameStateDataAccess.Instance.SaveData(
             dbPath,
             _date,
+            sector.PlayerForce.Army.Requisition,
+            sector.PlayerForce.Army.MedicalProcedures,
             sector.Characters,
             sector.PlayerForce.Requests,
             sector.Planets.Values,
