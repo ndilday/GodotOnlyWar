@@ -37,6 +37,8 @@ public partial class MainGameScene : Control
     private CanvasLayer _mainUILayer;
     private TurnController _turnController;
     private EndOfTurnDialogController _endOfTurnDialog;
+    private BriefingDialogController _briefingDialog;
+    private CampaignScenario _pendingBriefingScenario;
     private int? _selectedPlanetId;
     private int? _selectedFleetId;
     public override void _Ready()
@@ -78,6 +80,40 @@ public partial class MainGameScene : Control
         Planet initialPlanet = GameDataSingleton.Instance.Sector.Planets.Values.FirstOrDefault();
         _sectorMap.SetSelectedPlanet(initialPlanet?.Id);
         _systemInspector.DisplayPlanet(initialPlanet);
+
+        // One-shot opening briefing (Design/OpeningScenario.md §5): show on first entry after a
+        // new game and never again. BriefingAcknowledged is persisted, so a freshly stamped
+        // scenario shows it once; a reloaded, acknowledged game does not.
+        CampaignScenario scenario = GameDataSingleton.Instance.Sector.Scenario;
+        if (scenario is { State: ObjectiveState.Pending, BriefingAcknowledged: false })
+        {
+            ShowBriefingDialog(scenario);
+        }
+    }
+
+    private void ShowBriefingDialog(CampaignScenario scenario)
+    {
+        if (_briefingDialog == null)
+        {
+            PackedScene briefingScene = GD.Load<PackedScene>("res://Scenes/MainGameScreen/briefing_dialog.tscn");
+            _briefingDialog = (BriefingDialogController)briefingScene.Instantiate();
+            _briefingDialog.CloseButtonPressed += OnBriefingDialogClosed;
+            _mainUILayer.AddChild(_briefingDialog);
+        }
+        _pendingBriefingScenario = scenario;
+        _briefingDialog.SetBriefing(scenario.BriefingText);
+        _briefingDialog.Visible = true;
+    }
+
+    private void OnBriefingDialogClosed(object sender, EventArgs e)
+    {
+        if (_pendingBriefingScenario != null)
+        {
+            // Persisted on the next save; the guard survives reload (§5).
+            _pendingBriefingScenario.BriefingAcknowledged = true;
+            _pendingBriefingScenario = null;
+        }
+        _briefingDialog.Visible = false;
     }
 
     public override void _UnhandledInput(InputEvent @event)

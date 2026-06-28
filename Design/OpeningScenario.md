@@ -221,9 +221,9 @@ internal static CampaignScenario StampPromisedWorld(
 >   zeroed, population scaled by `ImperialRemnantFraction`) so the region resolves to single
 >   Tyranid control — leaving it public would give the region two public factions and a null
 >   `ControllingFaction`. Tyranid regions get `GrowthMultiplier = TyranidGrowthMultiplier` (0.4).
-> - **Briefing.** A plain-facts placeholder string (no templating); the real `BriefingComposer`
->   and founding-history entry are deferred to the next session (§4). `currentDate` is threaded
->   through now for that follow-up.
+> - **Briefing.** Now composed through `BriefingComposer` with a "The Promised World"
+>   founding-history entry (see the step 3 note in §4); `currentDate` is threaded through for the
+>   history timestamp. (Originally a plain-facts placeholder deferred to the following session.)
 
 ### 3.1 Select the promised world (deterministic)
 
@@ -334,6 +334,25 @@ their capital. For tokens: name the subsector after its capital ("the **{Capital
 or add a light sector/subsector name generator. Minimal path: derive `SubsectorName` from the
 capital planet's name; flag a proper sector-naming pass as a small follow-up.
 
+> **Implemented (step 3).** Landed as `Helpers/Narrative/BriefingComposer.cs`
+> (`ComposePromisedWorldBriefing(BriefingTokens)`), wired into `ScenarioBuilder.StampPromisedWorld`
+> in place of the plain-facts placeholder. Deviations, all minor:
+> - **Tokens.** A `BriefingTokens` readonly struct carries the resolved strings (chapter, planet,
+>   subsector, authority name + title, enemy) plus an `int TemplateSelector`. The composer picks one
+>   of **three** hand-authored BBCode templates via `selector mod 3` (non-negative), so it is a pure
+>   function of its tokens — deterministic and unit-testable without RNG. The caller passes the
+>   promised planet's `Id` as the selector (deterministic per seed), rather than drawing a fresh RNG
+>   value, so `seed + scenario` reproduces the same briefing.
+> - **Title.** Derived from the seat's `GovernanceTier` via `BriefingComposer.GetAuthorityTitle`
+>   ("Lord of the Sector" / "Lord of the Subsector" / "Planetary Governor"). The rare free-standing
+>   fallback commander (§3.4) is titled as `SectorCapital` since no seated rank exists to read.
+> - **Subsector name.** Subsectors carry only an id-string name today, so the token is sourced from
+>   the subsector's `GovernanceSeat` (capital) as "**{Capital} Subsector**", falling back to the
+>   id-name then the planet name. A proper sector/subsector naming pass remains a follow-up.
+> - **Founding history.** A matching `EventHistory` titled **"The Promised World"** is appended via
+>   `playerForce.AddToBattleHistory(currentDate, …)`, so the objective sits beside "Chapter Founding"
+>   on the Chapter screen.
+
 ## 5. Briefing pop-up
 
 A new dialog shown **once**, on first entry into the main game after a *new* game (never on
@@ -356,6 +375,17 @@ if (scenario is { State: ObjectiveState.Pending, BriefingAcknowledged: false })
 `BriefingAcknowledged` is persisted, so the one-shot guard survives reload without a separate
 "is new game" flag: a freshly stamped scenario has it `false`; dismissing sets it `true`; a
 loaded game already has it `true`.
+
+> **Implemented (step 4).** Landed as `Scenes/MainGameScreen/briefing_dialog.tscn` with
+> `BriefingDialogController` / `BriefingDialogView` (following the `DialogController`/`DialogView` /
+> `EndOfTurnDialog` pattern). A BBCode `RichTextLabel` in a `ScrollContainer` renders
+> `CampaignScenario.BriefingText`; the single acknowledge button reuses the base `Dialog` close
+> button, relabelled **"For the Emperor"** and repositioned bottom-centre, so its press flows through
+> the existing `CloseButtonPressed` event. `MainGameScene._Ready` shows it once when
+> `Scenario is { State: Pending, BriefingAcknowledged: false }`; `OnBriefingDialogClosed` sets
+> `BriefingAcknowledged = true` (persisted on the next save) and hides the dialog. Verified by a
+> headless scene-load smoke test (node paths resolve, `SetBriefing` updates the label) and the
+> save/load round-trip test that asserts `BriefingAcknowledged`/`BriefingText` survive reload.
 
 ## 6. Turn-loop integration
 

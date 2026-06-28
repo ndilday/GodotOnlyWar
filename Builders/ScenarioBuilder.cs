@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using System.Linq;
 using OnlyWar.Helpers;
 using OnlyWar.Helpers.Extensions;
+using OnlyWar.Helpers.Narrative;
 using OnlyWar.Models;
 using OnlyWar.Models.Fleets;
 using OnlyWar.Models.Planets;
@@ -30,8 +31,10 @@ namespace OnlyWar.Builders
             Planet promised = SelectPromisedWorld(planetList, data);
             StampTyranidPresence(promised, data);
             PlaceFleetInOrbit(sector, playerForce, promised);
-            Character authority = ResolveAuthority(sector, planetList, characterList, data);
-            string briefingText = ComposePlaceholderBriefing(promised, authority, playerForce);
+            Character authority = ResolveAuthority(sector, planetList, characterList, data,
+                                                   out GovernanceTier authorityTier);
+            string briefingText = ComposeBriefing(sector, promised, authority, authorityTier,
+                                                  playerForce, data, currentDate);
 
             return new CampaignScenario(
                 ScenarioType.PromisedWorld,
@@ -143,41 +146,86 @@ namespace OnlyWar.Builders
         // governor anywhere, then — only if no Imperial governor exists at all — to a generated
         // free-standing commander, so the scenario can never lack an authority.
         private static Character ResolveAuthority(Sector sector, List<Planet> planetList,
-                                                  List<Character> characterList, GameRulesData data)
+                                                  List<Character> characterList, GameRulesData data,
+                                                  out GovernanceTier authorityTier)
         {
-            Character authority = sector.GetSectorLord();
-            if (authority != null)
+            Planet capital = sector.GetSectorCapital();
+            if (capital?.Governor != null)
             {
-                return authority;
+                authorityTier = capital.GovernanceTier;   // SectorCapital on the common path
+                return capital.Governor;
             }
 
-            authority = planetList
+            Planet fallbackSeat = planetList
                 .Where(p => p.GetControllingFaction().IsDefaultFaction && p.Governor != null)
                 .OrderByDescending(p => p.Importance).ThenByDescending(p => p.Population).ThenBy(p => p.Id)
-                .Select(p => p.Governor)
                 .FirstOrDefault();
-            if (authority != null)
+            if (fallbackSeat != null)
             {
-                return authority;
+                authorityTier = fallbackSeat.GovernanceTier;
+                return fallbackSeat.Governor;
             }
 
             // Last resort (the only path that creates a character): a free-standing commander.
+            // Title them as the highest authority, since no seated governor exists to rank.
+            authorityTier = GovernanceTier.SectorCapital;
             int newId = (sector.Characters.Count > 0 ? sector.Characters.Max(c => c.Id) : -1) + 1;
-            authority = CharacterBuilder.GenerateCharacter(newId, data.DefaultFaction);
+            Character authority = CharacterBuilder.GenerateCharacter(newId, data.DefaultFaction);
             sector.Characters.Add(authority);
             characterList.Add(authority);
             return authority;
         }
 
-        // Placeholder briefing (§ deliverable): a simple plain-facts string with no templating.
-        // The real BriefingComposer + founding-history entry land next session.
-        private static string ComposePlaceholderBriefing(Planet promised, Character authority,
-                                                         PlayerForce playerForce)
+        // §4 — compose the briefing through the token-substitution BriefingComposer (a placeholder
+        // for the eventual §4.19 narrator) and record a matching founding-history entry so the
+        // objective sits alongside "Chapter Founding" on the Chapter screen. The authority title is
+        // derived from the rank of the seat they hold; the subsector name is sourced from its
+        // governance capital (subsectors carry no authored name today).
+        private static string ComposeBriefing(Sector sector, Planet promised, Character authority,
+                                              GovernanceTier authorityTier, PlayerForce playerForce,
+                                              GameRulesData data, Date currentDate)
         {
             string chapterName = playerForce.Army.OrderOfBattle.Name;
-            return $"The world of {promised.Name} has been invaded by Tyranids. "
-                + $"{authority.Name} has charged the {chapterName} with its liberation. "
-                + $"Retake {promised.Name} from the swarm and it shall become your Chapter World.";
+            string authorityTitle = BriefingComposer.GetAuthorityTitle(authorityTier);
+            string enemyName = data.SectorFactions.Invader.Name;
+            string subsectorName = ResolveSubsectorName(sector, promised);
+
+            BriefingTokens tokens = new BriefingTokens
+            {
+                ChapterName = chapterName,
+                PlanetName = promised.Name,
+                SubsectorName = subsectorName,
+                AuthorityName = authority.Name,
+                AuthorityTitle = authorityTitle,
+                EnemyName = enemyName,
+                // Stable per-seed selector: the promised planet id is deterministic per seed.
+                TemplateSelector = promised.Id
+            };
+
+            string briefingText = BriefingComposer.ComposePromisedWorldBriefing(tokens);
+
+            playerForce.AddToBattleHistory(currentDate, "The Promised World", new List<string>
+            {
+                $"{authorityTitle} {authority.Name} pledges {promised.Name}, in the {subsectorName}, "
+                + $"to the {chapterName} should the {enemyName} be driven from it — the world to "
+                + "become the Chapter's home."
+            });
+
+            return briefingText;
+        }
+
+        // §4 token sourcing — subsectors have no authored name, so name the promised world's
+        // subsector after its governance capital ("{Capital} Subsector"). Falls back to the
+        // subsector's id-name, then the planet name, if no capital is seated.
+        private static string ResolveSubsectorName(Sector sector, Planet promised)
+        {
+            Subsector subsector = sector.Subsectors.FirstOrDefault(s => s.Planets.Contains(promised));
+            Planet capital = subsector?.GovernanceSeat;
+            if (capital != null)
+            {
+                return $"{capital.Name} Subsector";
+            }
+            return subsector != null ? $"{subsector.Name} Subsector" : promised.Name;
         }
     }
 }
