@@ -48,7 +48,7 @@ namespace OnlyWar.Builders
 
         private static Planet SelectCapital(Subsector subsector)
         {
-            // PRD 6.11: for 0.7 the importance score driving capital selection is population.
+            // PRD §4.1: for 0.7 the importance score driving capital selection is population.
             return subsector.Planets
                 .OrderByDescending(planet => planet.Population)
                 .ThenByDescending(planet => planet.Importance)

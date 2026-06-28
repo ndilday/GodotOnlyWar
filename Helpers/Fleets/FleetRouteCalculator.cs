@@ -35,7 +35,7 @@ namespace OnlyWar.Helpers.Fleets
             // transit time or variance (base time is scope-driven, see CreateRoute), so a
             // direct route is currently no faster and no riskier than a lane route between
             // the same planets. Offering the choice would be meaningless until the time
-            // model differentiates the two. See PRD 4.17 / 6.11.
+            // model differentiates the two. See PRD §4.17.
             FleetRoute laneRoute = CreateLaneRoute(origin, destination, warpLanes ?? Enumerable.Empty<WarpLane>(), scope, subjectiveZ, objectiveZ);
             if (laneRoute != null) return laneRoute;
 
@@ -176,7 +176,7 @@ namespace OnlyWar.Helpers.Fleets
             // Subsector wiring and warp-lane topology are not yet generated, so scope is
             // approximated from raw inter-planet distance against the maximum subsector
             // diameter. This is a placeholder for true subsector-relationship scoping,
-            // which is a post-lane-generation refinement (PRD 6.11).
+            // which is a post-lane-generation refinement (PRD §4.17).
             double distance = CalculateDistance(origin, destination);
             if (distance <= maxSubsectorDiameter) return FleetRouteScope.SameSubsector;
             if (distance <= maxSubsectorDiameter * 2.5) return FleetRouteScope.AdjacentSubsector;

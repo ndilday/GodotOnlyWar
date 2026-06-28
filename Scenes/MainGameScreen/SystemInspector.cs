@@ -120,7 +120,7 @@ public partial class SystemInspector : Control
         {
             return planet.Name;
         }
-        // The subsector capital is the most important planet in the subsector (PRD 6.11:
+        // The subsector capital is the most important planet in the subsector (PRD §4.1:
         // population drives capital selection, matching WarpLaneBuilder.SelectCapital).
         Planet capital = subsector.Planets
             .OrderByDescending(p => p.Population)
