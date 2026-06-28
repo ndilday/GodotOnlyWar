@@ -87,6 +87,136 @@ public class SaveLoadRoundTripTests
     }
 
     [Fact]
+    public void SaveThenLoad_PreservesScenarioAndGrowthMultiplier()
+    {
+        Sector sector = SectorBuilder.GenerateSector(1, _data, _date, "Scenario Round Trip Chapter");
+        GameDataSingleton.Instance.LoadGameDataFromBlob(_data, _date, sector);
+        Unit armyRoot = sector.PlayerForce.Army.OrderOfBattle;
+        if (!_data.PlayerFaction.Units.Contains(armyRoot))
+        {
+            _data.PlayerFaction.Units.Add(armyRoot);
+        }
+
+        // The generated sector carries a stamped Promised World scenario (PRD 5.3 /
+        // Design/OpeningScenario.md §3). Mutate the settable fields to distinctive values so the
+        // assertion proves they round-trip rather than coincidentally matching the defaults.
+        CampaignScenario original = sector.Scenario;
+        Assert.NotNull(original);
+        original.State = ObjectiveState.Won;
+        original.BriefingAcknowledged = true;
+
+        Faction tyranids = _data.Factions.Single(f => f.Name == "Tyranids");
+        Planet promised = sector.GetPlanet(original.PromisedPlanetId);
+        // Sanity: the promised world really is throttled before we save it.
+        Assert.Contains(promised.Regions
+            .SelectMany(r => r.RegionFactionMap.Values)
+            .Where(rf => rf.PlanetFaction.Faction.Id == tyranids.Id),
+            rf => rf.GrowthMultiplier == ScenarioRules.TyranidGrowthMultiplier);
+
+        string dbPath = Path.Combine(
+            Path.GetTempPath(), $"onlywar_roundtrip_scenario_{Guid.NewGuid():N}.s3db");
+        try
+        {
+            Save(sector, dbPath, _data.Factions.SelectMany(f => f.Units).ToList());
+            GameStateDataBlob loaded = Load(dbPath);
+
+            Assert.NotNull(loaded.Scenario);
+            Assert.Equal(ScenarioType.PromisedWorld, loaded.Scenario.Type);
+            Assert.Equal(original.PromisedPlanetId, loaded.Scenario.PromisedPlanetId);
+            Assert.Equal(ObjectiveState.Won, loaded.Scenario.State);
+            Assert.True(loaded.Scenario.BriefingAcknowledged);
+            Assert.Equal(original.BriefingText, loaded.Scenario.BriefingText);
+            Assert.Equal(original.OriginalAuthorityCharacterId,
+                         loaded.Scenario.OriginalAuthorityCharacterId);
+
+            // The growth throttle survives on the promised world's Tyranid regions.
+            Planet loadedPromised = loaded.Planets.Single(p => p.Id == original.PromisedPlanetId);
+            List<RegionFaction> loadedTyranidFactions = loadedPromised.Regions
+                .SelectMany(r => r.RegionFactionMap.Values)
+                .Where(rf => rf.PlanetFaction.Faction.Id == tyranids.Id)
+                .ToList();
+            Assert.NotEmpty(loadedTyranidFactions);
+            Assert.All(loadedTyranidFactions,
+                rf => Assert.Equal(ScenarioRules.TyranidGrowthMultiplier, rf.GrowthMultiplier));
+
+            // Nothing else is throttled: every other region faction keeps the default 1.0.
+            IEnumerable<RegionFaction> others = loaded.Planets
+                .SelectMany(p => p.Regions)
+                .SelectMany(r => r.RegionFactionMap.Values)
+                .Where(rf => rf.PlanetFaction.Faction.Id != tyranids.Id
+                             || rf.Region.Planet.Id != original.PromisedPlanetId);
+            Assert.All(others, rf => Assert.Equal(1.0f, rf.GrowthMultiplier));
+        }
+        finally
+        {
+            CleanupDb(dbPath);
+        }
+    }
+
+    [Fact]
+    public void Load_LegacySave_HasNullScenarioAndDefaultGrowthMultiplier()
+    {
+        Sector sector = SectorBuilder.GenerateSector(1, _data, _date, "Legacy Save Chapter");
+        GameDataSingleton.Instance.LoadGameDataFromBlob(_data, _date, sector);
+        Unit armyRoot = sector.PlayerForce.Army.OrderOfBattle;
+        if (!_data.PlayerFaction.Units.Contains(armyRoot))
+        {
+            _data.PlayerFaction.Units.Add(armyRoot);
+        }
+
+        string dbPath = Path.Combine(
+            Path.GetTempPath(), $"onlywar_roundtrip_legacy_{Guid.NewGuid():N}.s3db");
+        try
+        {
+            Save(sector, dbPath, _data.Factions.SelectMany(f => f.Units).ToList());
+            // Rewrite the save into a pre-scenario ("legacy") shape: a GlobalData row without
+            // the Scenario* columns, and a RegionFaction table without GrowthMultiplier. The
+            // column-count guards in GlobalDataAccess / PlanetDataAccess must then yield a null
+            // scenario and a default 1.0 multiplier (Design/OpeningScenario.md §7).
+            DowngradeToLegacySchema(dbPath);
+
+            GameStateDataBlob loaded = Load(dbPath);
+
+            Assert.Null(loaded.Scenario);
+            IEnumerable<RegionFaction> allRegionFactions = loaded.Planets
+                .SelectMany(p => p.Regions)
+                .SelectMany(r => r.RegionFactionMap.Values);
+            Assert.NotEmpty(allRegionFactions);
+            Assert.All(allRegionFactions, rf => Assert.Equal(1.0f, rf.GrowthMultiplier));
+        }
+        finally
+        {
+            CleanupDb(dbPath);
+        }
+    }
+
+    // Strips the columns added by the Opening Scenario work from an existing save, reproducing a
+    // database written before those columns existed. GlobalData is recreated with its original
+    // 7-column shape; RegionFaction's GrowthMultiplier column is dropped in place.
+    private static void DowngradeToLegacySchema(string dbPath)
+    {
+        var builder = new Microsoft.Data.Sqlite.SqliteConnectionStringBuilder
+        {
+            DataSource = dbPath
+        };
+        using var connection = new Microsoft.Data.Sqlite.SqliteConnection(builder.ToString());
+        connection.Open();
+        using (var command = connection.CreateCommand())
+        {
+            command.CommandText = @"
+                CREATE TABLE GlobalData_legacy (Millenium INTEGER NOT NULL, Year INTEGER NOT NULL, Week INTEGER NOT NULL, SaveVersion INTEGER NOT NULL, Requisition INTEGER NOT NULL DEFAULT 0, GeneseedStockpile INTEGER NOT NULL DEFAULT 0, GeneseedPurity REAL NOT NULL DEFAULT 1.0);
+                INSERT INTO GlobalData_legacy (Millenium, Year, Week, SaveVersion, Requisition, GeneseedStockpile, GeneseedPurity)
+                    SELECT Millenium, Year, Week, SaveVersion, Requisition, GeneseedStockpile, GeneseedPurity FROM GlobalData;
+                DROP TABLE GlobalData;
+                ALTER TABLE GlobalData_legacy RENAME TO GlobalData;
+                ALTER TABLE RegionFaction DROP COLUMN GrowthMultiplier;";
+            command.ExecuteNonQuery();
+        }
+        connection.Close();
+        Microsoft.Data.Sqlite.SqliteConnection.ClearAllPools();
+    }
+
+    [Fact]
     public void SaveThenLoad_PreservesRequisition()
     {
         Sector sector = SectorBuilder.GenerateSector(1, _data, _date, "Requisition Round Trip Chapter");
@@ -437,6 +567,7 @@ public class SaveLoadRoundTripTests
             sector.PlayerForce.Army.Requisition,
             sector.PlayerForce.GeneseedStockpile,
             sector.PlayerForce.GeneseedPurity,
+            sector.Scenario,
             sector.PlayerForce.Army.MedicalProcedures,
             sector.Characters,
             sector.PlayerForce.Requests,

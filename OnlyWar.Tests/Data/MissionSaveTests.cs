@@ -114,7 +114,7 @@ public class MissionSaveTests
                 CarryingCapacity BIGINT NOT NULL);
             CREATE TABLE RegionFaction (RegionId INTEGER NOT NULL, FactionId INTEGER NOT NULL, IsPublic BOOLEAN NOT NULL,
                 Population BIGINT NOT NULL, Garrison INTEGER NOT NULL, Organization INTEGER NOT NULL, Entrenchment INTEGER NOT NULL,
-                Detection INTEGER NOT NULL, AntiAir INTEGER NOT NULL);
+                Detection INTEGER NOT NULL, AntiAir INTEGER NOT NULL, GrowthMultiplier REAL NOT NULL DEFAULT 1.0);
             CREATE TABLE Mission (Id INTEGER PRIMARY KEY UNIQUE NOT NULL, MissionType INTEGER NOT NULL, RegionId INTEGER NOT NULL,
                 FactionId INTEGER NOT NULL, MissionSize INTEGER NOT NULL, DefenseTypeId INTEGER, IsRegionMission BOOLEAN NOT NULL);";
         command.ExecuteNonQuery();

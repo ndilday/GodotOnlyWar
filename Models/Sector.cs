@@ -28,6 +28,11 @@ namespace OnlyWar.Models
         public IReadOnlyDictionary<int, TaskForce> Fleets { get => _fleets; }
         public IReadOnlyDictionary<int, Order> Orders { get => _orders; }
         public PlayerForce PlayerForce { get; }
+
+        // The framed opening scenario stamped onto this sector at generation
+        // (Design/OpeningScenario.md §2.1). Null for legacy saves and plain-sandbox sectors,
+        // in which case the game behaves as it did before the Opening Scenario work.
+        public CampaignScenario Scenario { get; set; }
         
 
         public Sector()

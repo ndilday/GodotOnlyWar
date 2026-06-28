@@ -35,6 +35,9 @@ namespace OnlyWar.Helpers.Database.GameState
         public Dictionary<Date, List<EventHistory>> History { get; set; }
         // Squad-less fallen brothers, retained for their dossiers (PRD 4.12).
         public List<PlayerSoldier> FallenBrothers { get; set; }
+        // The Opening Scenario state (Design/OpeningScenario.md §7), or null for legacy/sandbox
+        // saves; reattached to Sector.Scenario by the load path.
+        public CampaignScenario Scenario { get; set; }
     }
 
     public class GameStateDataAccess
@@ -130,7 +133,8 @@ namespace OnlyWar.Helpers.Database.GameState
                 GeneseedPurity = global?.GeneseedPurity ?? 1.0f,
                 MedicalProcedures = medicalProcedures,
                 History = history,
-                FallenBrothers = fallenBrothers
+                FallenBrothers = fallenBrothers,
+                Scenario = global?.Scenario
             };
         }
 
@@ -139,6 +143,7 @@ namespace OnlyWar.Helpers.Database.GameState
                              int requisition,
                              int geneseedStockpile,
                              float geneseedPurity,
+                             CampaignScenario scenario,
                              IEnumerable<MedicalProcedure> medicalProcedures,
                              IEnumerable<Character> characters,
                              IEnumerable<IRequest> requests,
@@ -246,7 +251,7 @@ namespace OnlyWar.Helpers.Database.GameState
                         _medicalProcedureDataAccess.SaveProcedure(transaction, procedure);
                     }
                     _globalDataAccess.SaveGlobalData(transaction, currentDate, requisition,
-                                                     geneseedStockpile, geneseedPurity);
+                                                     geneseedStockpile, geneseedPurity, scenario);
                     _playerFactionEventDataAccess.SaveData(transaction, history);
                 }
                 catch (Exception e)

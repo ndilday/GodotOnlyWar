@@ -203,6 +203,28 @@ internal static CampaignScenario StampPromisedWorld(
     List<Character> characterList, List<TaskForce> forceList);
 ```
 
+> **Implemented (step 2).** Landed as `Builders/ScenarioBuilder.cs`, with constants in
+> `Helpers/ScenarioRules.cs`. Deviations from the sketch above, all minor:
+> - **Call order / signature.** `GenerateSector` now builds the `Sector` and runs
+>   `GenerateWarpNetwork` (which assigns governance) *before* stamping, because
+>   `StampPromisedWorld` resolves `GetSectorLord()`. The final `forceList` parameter was
+>   dropped: by the time the scenario runs the sector already exists, so the orbiting fleet is
+>   registered via `Sector.AddNewFleet` rather than appended to a list the `Sector` constructor
+>   consumes. `FoundTakebackPlanet` was deleted; `FoundChapterPlanet` /
+>   `ReplaceChapterPlanetFaction` / `PlaceStartingForces` are retained for the reward path (§6).
+> - **Selection (§3.1).** Eligible = default-faction, `GovernanceTier == Planetary` (excludes
+>   sub/sector capitals), population in `[5M, 500M]`, ordered by population then id; the world
+>   at index `count/3` (lower-middle) is chosen. Widen-band and lowest-population-enemy fallbacks
+>   are in place. Selection is order-based (no RNG draw), so it is stable per seed.
+> - **Stamp (§3.2).** `N = 2–3` regions chosen as a contiguous run from an RNG start index
+>   (mod 16). The displaced Imperial remnant is set **non-public** (`IsPublic = false`, garrison
+>   zeroed, population scaled by `ImperialRemnantFraction`) so the region resolves to single
+>   Tyranid control — leaving it public would give the region two public factions and a null
+>   `ControllingFaction`. Tyranid regions get `GrowthMultiplier = TyranidGrowthMultiplier` (0.4).
+> - **Briefing.** A plain-facts placeholder string (no templating); the real `BriefingComposer`
+>   and founding-history entry are deferred to the next session (§4). `currentDate` is threaded
+>   through now for that follow-up.
+
 ### 3.1 Select the promised world (deterministic)
 
 The promised world is **Imperial-habitable but invaded**. We pick a **default-faction
@@ -411,6 +433,18 @@ New persisted state:
   `PlanetFaction` back-reference (flagged as a test, §11).
 
 Legacy saves (no scenario row) load with `Sector.Scenario = null` and behave as today.
+
+> **Implemented (step 6).** The `CampaignScenario` fields are appended to the single `GlobalData`
+> row (`ScenarioType`, `ScenarioPromisedPlanetId`, `ScenarioState`, `ScenarioBriefingAcknowledged`,
+> `ScenarioBriefingText`, `ScenarioOriginalAuthorityCharacterId`), threaded through
+> `GameStateDataAccess.SaveData`/`GetData` and reattached in `StartMenu.LoadGameData`. "No scenario"
+> is represented by `ScenarioType = None (0)`, which `GetData` maps to `Scenario = null`. A
+> genuinely legacy DB that predates the columns is handled by a **column-count guard**
+> (`reader.FieldCount`) in `GlobalDataAccess.GetGlobalData`, so it also loads as `null` rather than
+> throwing. `RegionFaction.GrowthMultiplier` is an appended column with the same `FieldCount` guard
+> in `PlanetDataAccess.PopulateRegionFactions`, defaulting legacy rows to `1.0`. The turn-loop
+> *application* of `GrowthMultiplier` (§6.1) and `ProcessScenario` (§6.2) are out of scope for this
+> session and not yet wired in.
 
 ## 8. Balance — the load-bearing numbers
 

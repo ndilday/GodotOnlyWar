@@ -97,6 +97,9 @@ public partial class StartMenu : Control
         playerForce.GeneseedStockpile = (ushort)gameState.GeneseedStockpile;
         playerForce.GeneseedPurity = gameState.GeneseedPurity;
         Sector sector = new Sector(playerForce, gameState.Characters, gameState.Planets, gameState.Fleets);
+        // Reattach the Opening Scenario state (null for legacy/sandbox saves), which rides on the
+        // GlobalData row rather than being derived (Design/OpeningScenario.md §7).
+        sector.Scenario = gameState.Scenario;
 
         GameDataSingleton.Instance.LoadGameDataFromBlob(gameRulesData, gameState.CurrentDate, sector);
         // Subsectors and warp lanes are derived deterministically from planet positions

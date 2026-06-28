@@ -47,12 +47,14 @@ namespace OnlyWar.Builders
             ISoldierTrainingService trainingService = new SoldierTrainingCalculator(
                 data.BaseSkillMap.Values, data.TrainingProfiles.Values, ratingCalculator);
             PlayerForce playerForce = NewChapterBuilder.CreateChapter(data, trainingService, trainingStartDate, currentDate, chapterName);
-            FoundTakebackPlanet(playerForce, planetList, forceList);
-            //Planet chapterPlanet = FoundChapterPlanet(planetList, data.PlayerFaction);
-            //PlaceStartingForces(chapterPlanet, playerForce, forceList);
 
+            // The scenario stamp resolves the sitting Sector Lord, so the sector and its derived
+            // governance designation must exist first. The fleet starts empty here; the scenario
+            // parks it in orbit via Sector.AddNewFleet (Design/OpeningScenario.md §1, §3).
             Sector sector = new Sector(playerForce, characterList, planetList, forceList);
             GenerateWarpNetwork(sector, data);
+            sector.Scenario = ScenarioBuilder.StampPromisedWorld(
+                sector, data, currentDate, playerForce, planetList, characterList);
             return sector;
         }
 
@@ -147,57 +149,6 @@ namespace OnlyWar.Builders
             }
 
             return PlanetBuilder.Instance.GenerateNewPlanet(data.PlanetTemplateMap, position, controllingFaction, infiltratingFaction);
-        }
-
-        private static Planet FoundTakebackPlanet(PlayerForce playerForce, List<Planet> planetList, List<TaskForce> forceList)
-        {
-            var enemyPlanets = planetList.Where(p => !p.GetControllingFaction().IsDefaultFaction && p.Population >= 16000).OrderBy(p => p.Population);
-            Planet planetToInvade = enemyPlanets.First();
-            // find the region with the lowest population, and set it to the player faction
-            Region regionToInvade = planetToInvade.Regions.OrderBy(r => r.RegionFactionMap[planetToInvade.GetControllingFaction().Id].Population).First();
-            regionToInvade.RegionFactionMap.Clear();
-            // Ensure the planet has a backing PlanetFaction for the player before
-            // attaching a player RegionFaction to one of its regions; otherwise the
-            // region holds a RegionFaction whose PlanetFaction isn't registered on the
-            // planet, which leaves the save in an inconsistent state.
-            if (!planetToInvade.PlanetFactionMap.TryGetValue(playerForce.Faction.Id, out PlanetFaction playerPlanetFaction))
-            {
-                playerPlanetFaction = new PlanetFaction(playerForce.Faction);
-                planetToInvade.PlanetFactionMap[playerForce.Faction.Id] = playerPlanetFaction;
-            }
-            RegionFaction playerRegionFaction = new RegionFaction(playerPlanetFaction, regionToInvade);
-            regionToInvade.RegionFactionMap[playerForce.Faction.Id] = playerRegionFaction;
-
-            playerRegionFaction.LandedSquads.AddRange(playerForce.Army.SquadMap.Values);
-            foreach (Squad squad in playerForce.Army.SquadMap.Values)
-            {
-                if (squad.Members.Count > 0)
-                {
-                    squad.CurrentRegion = regionToInvade;
-                }
-            }
-            foreach (TaskForce taskForce in playerForce.Fleet.TaskForces)
-            {
-                taskForce.Planet = planetToInvade;
-                taskForce.Position = planetToInvade.Position;
-                forceList.Add(taskForce);
-            }
-            foreach(Region region in planetToInvade.Regions)
-            {
-                if (region != regionToInvade)
-                {
-                    RegionFaction enemyRegionFaction = region.RegionFactionMap.Values.First();
-                    enemyRegionFaction.Organization = 1;
-                    enemyRegionFaction.IsPublic = true;
-                    enemyRegionFaction.Entrenchment = 1;
-                    enemyRegionFaction.Detection = 1;
-                    enemyRegionFaction.AntiAir = 1;
-                    enemyRegionFaction.Garrison = enemyRegionFaction.Population;
-
-                }
-            }
-
-            return planetToInvade;
         }
 
         private static Planet FoundChapterPlanet(List<Planet> planetList, Faction playerFaction)

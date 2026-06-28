@@ -178,6 +178,7 @@ public class GovernanceHierarchyTests
             sector.PlayerForce.Army.Requisition,
             sector.PlayerForce.GeneseedStockpile,
             sector.PlayerForce.GeneseedPurity,
+            sector.Scenario,
             sector.PlayerForce.Army.MedicalProcedures,
             sector.Characters,
             sector.PlayerForce.Requests,

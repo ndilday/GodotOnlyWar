@@ -206,6 +206,9 @@ namespace OnlyWar.Helpers.Database.GameState
                     int entrenchment = reader.GetInt32(6);
                     int detection = reader.GetInt32(7);
                     int antiAir = reader.GetInt32(8);
+                    // GrowthMultiplier was appended after AntiAir; legacy rows that predate it
+                    // default to 1.0 (no throttle). See Design/OpeningScenario.md §2.2 / §7.
+                    float growthMultiplier = reader.FieldCount > 9 ? (float)reader.GetDouble(9) : 1.0f;
 
                     Region region = regionMap[regionId];
                     if (!region.Planet.PlanetFactionMap.TryGetValue(factionId, out PlanetFaction planetFaction))
@@ -227,7 +230,8 @@ namespace OnlyWar.Helpers.Database.GameState
                             Organization = organization,
                             Entrenchment = entrenchment,
                             Detection = detection,
-                            AntiAir = antiAir
+                            AntiAir = antiAir,
+                            GrowthMultiplier = growthMultiplier
                         };
                     region.RegionFactionMap[regionFaction.PlanetFaction.Faction.Id] = regionFaction;
                 }
@@ -384,8 +388,8 @@ namespace OnlyWar.Helpers.Database.GameState
                     {
                         command.Transaction = transaction;
                         command.CommandText = @"INSERT INTO RegionFaction
-                            (RegionId, FactionId, IsPublic, Population, Garrison, Organization, Entrenchment, Detection, AntiAir) VALUES
-                            (@regionId, @factionId, @isPublic, @population, @garrison, @organization, @entrenchment, @detection, @antiAir);";
+                            (RegionId, FactionId, IsPublic, Population, Garrison, Organization, Entrenchment, Detection, AntiAir, GrowthMultiplier) VALUES
+                            (@regionId, @factionId, @isPublic, @population, @garrison, @organization, @entrenchment, @detection, @antiAir, @growthMultiplier);";
                         command.AddParam("@regionId", region.Id);
                         command.AddParam("@factionId", regionFaction.PlanetFaction.Faction.Id);
                         command.AddParam("@isPublic", regionFaction.IsPublic ? 1 : 0);
@@ -395,6 +399,7 @@ namespace OnlyWar.Helpers.Database.GameState
                         command.AddParam("@entrenchment", regionFaction.Entrenchment);
                         command.AddParam("@detection", regionFaction.Detection);
                         command.AddParam("@antiAir", regionFaction.AntiAir);
+                        command.AddParam("@growthMultiplier", regionFaction.GrowthMultiplier);
                         command.ExecuteNonQuery();
                     }
                 }
