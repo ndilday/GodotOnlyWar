@@ -77,6 +77,27 @@ namespace OnlyWar.Models
             return Planets[planetId];
         }
 
+        // Governance resolvers over the derived designation set by
+        // SectorBuilder.GenerateWarpNetwork (Design/OpeningScenario.md §2.3).
+
+        // The single SectorCapital-tier world, or null if no Imperial world qualifies.
+        public Planet GetSectorCapital()
+        {
+            return _planets.Values.SingleOrDefault(p => p.GovernanceTier == GovernanceTier.SectorCapital);
+        }
+
+        // The Sector Lord: the governor seated on the sector capital.
+        public Character GetSectorLord()
+        {
+            return GetSectorCapital()?.Governor;
+        }
+
+        // The governor seated on a subsector's seat of government.
+        public Character GetSubsectorGovernor(Subsector subsector)
+        {
+            return subsector?.GovernanceSeat?.Governor;
+        }
+
         public Planet GetPlanetByPosition(Coordinate worldPosition)
         {
             return Planets.Values.Where(p => p.Position.Equals(worldPosition)).SingleOrDefault();

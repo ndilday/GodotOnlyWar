@@ -161,6 +161,16 @@ subsectors are built). For each subsector, pick the governance seat and tag its 
 `WarpLaneBuilder` keeps its own topology capital — or, optionally, is refactored to read
 `Subsector.GovernanceSeat` when that seat exists and fall back to population otherwise.
 
+> **Implemented (step 1a).** Landed as `SectorBuilder.AssignGovernance`, invoked at the end of
+> `GenerateWarpNetwork`. Seat selection orders Imperial-controlled worlds by `Importance`, then
+> `Population`, then `Id` as deterministic tie-breaks (the design specifies Importance only; the
+> Population/Id tie-breaks were added so a seed reproduces an identical, single seat). The same
+> ordering promotes the top subsector seat to `SectorCapital`, so exactly one capital is tagged.
+> The pass first resets every planet to `Planetary` so reruns (load / future end-of-turn
+> refresh) re-derive cleanly. `WarpLaneBuilder` was left unchanged (its population-based warp
+> capital is intentionally distinct from the governance seat). `Planet.Governor` resolves the
+> controlling `PlanetFaction.Leader` via the existing `GetControllingFaction` extension.
+
 **Persistence stance — recompute, don't store.** `GovernanceTier` / `GovernanceSeat` are
 deterministic functions of (population, importance, control), all of which are already
 persisted on the planets. So they are **recomputed at build/load** alongside subsectors and
