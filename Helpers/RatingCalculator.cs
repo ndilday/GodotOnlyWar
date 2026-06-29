@@ -115,7 +115,7 @@ namespace OnlyWar.Helpers
                 string name = ResolveAwardName(best, tiersForRating.Key, soldier);
                 if (best.Effect == RatingAwardEffect.HistoryFlag)
                 {
-                    soldier.AddEvent(new SoldierEvent(date, SoldierEventType.RatingFlag, name));
+                    AddHistoryFlag(soldier, date, name);
                 }
                 else
                 {
@@ -149,6 +149,19 @@ namespace OnlyWar.Helpers
                     $"Award name for rating '{ratingKey}' uses {BestSkillInCategoryPlaceholder} " +
                     "but the rating has no best-skill-in-category component.");
             return (SkillCategory)best.TargetId;
+        }
+
+        // History flags are re-evaluated on every rating pass, but each flag should be
+        // recorded only once (like awards). Suppress it if the soldier already carries a
+        // RatingFlag event with the same text.
+        private static void AddHistoryFlag(PlayerSoldier soldier, Date date, string name)
+        {
+            if (soldier.SoldierEvents.Any(e => e.Type == SoldierEventType.RatingFlag
+                                               && e.Detail == name))
+            {
+                return;
+            }
+            soldier.AddEvent(new SoldierEvent(date, SoldierEventType.RatingFlag, name));
         }
 
         private static void AwardSoldier(PlayerSoldier soldier, Date awardDate, string awardName,

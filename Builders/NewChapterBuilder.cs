@@ -350,29 +350,75 @@ namespace OnlyWar.Builders
                 squadSize = 10;
             }
 
-            // look for Veteran Squads
-            foreach(Unit company in chapter.ChildUnits)
+            // Create veteran (Elite) squads on demand in any company whose template
+            // allows them, up to that company's cap.
+            foreach (Unit company in chapter.ChildUnits)
             {
-                foreach (Squad squad in company.Squads)
+                foreach (SquadTemplateSlot slot in company.UnitTemplate.GetChildSquadSlots())
                 {
-                    if ((squad.SquadTemplate.SquadType & SquadTypes.Elite) > 0)
+                    if ((slot.Template.SquadType & SquadTypes.Elite) > 0)
                     {
-                        if (vetList.Count == 0 || veteranLeaders.Count == 0)
-                        {
-                            break;
-                        }
-                        // assign sgt to squad
-                        squad.Name = veteranLeaders[0].Name.Split(' ')[1] + " Squad";
-                        AssignSoldier(unassignedSoldierMap, veteranLeaders, squad,
-                            templates.TacticalSergeant, year);
-
-                        while (squad.Members.Count < squadSize && vetList.Count > 0)
-                        {
-                            AssignSoldier(unassignedSoldierMap, vetList, squad,
-                                templates.Veteran, year);
-                        }
+                        FillCompanyWithSquads(unassignedSoldierMap, company, slot.Template,
+                            vetList, veteranLeaders, templates.Veteran, templates.TacticalSergeant,
+                            (_, _) => squadSize, year);
                     }
                 }
+            }
+        }
+
+        // Capacity of a company for a given squad template, per its unit template's
+        // SquadTemplateSlot. Companies no longer hold pre-created empty squads, so
+        // generation creates squads up to this cap as soldiers are assigned.
+        private static int GetSquadCap(Unit company, SquadTemplate template)
+        {
+            foreach (SquadTemplateSlot slot in company.UnitTemplate.GetChildSquadSlots())
+            {
+                if (slot.Template == template)
+                {
+                    return slot.MaxCount;
+                }
+            }
+            return 0;
+        }
+
+        // Creates and fills squads of the given template in a company, up to the
+        // company's cap, drawing leaders from sgtList and members from soldierList.
+        // A squad that nothing is available to seed is discarded so no empty squads
+        // are left behind.
+        private static void FillCompanyWithSquads(
+            Dictionary<int, PlayerSoldier> unassignedSoldierMap,
+            Unit company,
+            SquadTemplate squadTemplate,
+            List<PlayerSoldier> soldierList,
+            List<PlayerSoldier> sgtList,
+            SoldierTemplate soldierType,
+            SoldierTemplate sgtType,
+            Func<List<PlayerSoldier>, List<PlayerSoldier>, int> squadSizeFunc,
+            Date year)
+        {
+            int cap = GetSquadCap(company, squadTemplate);
+            int created = 0;
+            while (created < cap && (soldierList.Count > 0 || sgtList.Count > 0))
+            {
+                Squad squad = new Squad(squadTemplate.Name, company, squadTemplate);
+                company.AddSquad(squad);
+                if (sgtList.Count > 0)
+                {
+                    squad.Name = sgtList[0].Name.Split(' ')[1] + " Squad";
+                    AssignSoldier(unassignedSoldierMap, sgtList, squad, sgtType, year);
+                }
+                int squadSize = squadSizeFunc(soldierList, sgtList);
+                while (soldierList.Count > 0 && squad.Members.Count < squadSize)
+                {
+                    AssignSoldier(unassignedSoldierMap, soldierList, squad, soldierType, year);
+                }
+                if (squad.Members.Count == 0)
+                {
+                    // Nothing was available to seed this squad; undo and stop.
+                    company.RemoveSquad(squad);
+                    break;
+                }
+                created++;
             }
         }
 
@@ -382,50 +428,39 @@ namespace OnlyWar.Builders
             int sgtNeed = ((unassignedSoldierMap.Count - 1) / 10) + 1;
             List<PlayerSoldier> leaderList = unassignedSoldierMap.Values.OrderByDescending(s => s.SoldierEvaluationHistory[0].LeadershipRating).Take(sgtNeed).ToList();
             List<PlayerSoldier> scoutList = unassignedSoldierMap.Values.Except(leaderList).ToList();
-            Unit lastCompany = null;
-            Squad lastSquad = null;
-            SoldierTemplate scoutSgt = 
-                templates.ScoutSergeant;
-            SoldierTemplate scout =
-                templates.ScoutMarine;
-            foreach (Unit company in chapter.ChildUnits)
-            {
-                lastCompany = company;
-                foreach (Squad squad in company.Squads)
-                {
-                    if ((squad.SquadTemplate.SquadType & SquadTypes.Scout) > 0)
-                    {
-                        lastSquad = squad;
-                        // assign sgt to squad
-                        squad.Name = leaderList[0].Name.Split(' ')[1] + " Squad";
-                        AssignSoldier(unassignedSoldierMap, leaderList, squad, scoutSgt, year);
+            SoldierTemplate scoutSgt = templates.ScoutSergeant;
+            SoldierTemplate scout = templates.ScoutMarine;
 
-                        while (squad.Members.Count < 10 && scoutList.Count > 0)
-                        {
-                            AssignSoldier(unassignedSoldierMap, scoutList, squad, scout, year);
-                        }
-                    }
-                }
-            }
-            while (scoutList.Count > 0 || leaderList.Count > 0)
+            // Fill every scout-capable company up to its cap first.
+            List<Unit> scoutCompanies = chapter.ChildUnits
+                .Where(c => GetSquadCap(c, templates.ScoutSquad) > 0)
+                .ToList();
+            foreach (Unit company in scoutCompanies)
             {
+                FillCompanyWithSquads(unassignedSoldierMap, company, templates.ScoutSquad,
+                    scoutList, leaderList, scout, scoutSgt, (_, _) => 10, year);
+            }
+
+            // A founding chapter has far more recruits than the scout company's nominal
+            // cap; the remainder overflow into extra scout squads in the scout company.
+            Unit overflowCompany = scoutCompanies.LastOrDefault() ?? chapter.ChildUnits.LastOrDefault();
+            while (overflowCompany != null && (scoutList.Count > 0 || leaderList.Count > 0))
+            {
+                Squad squad = new Squad(templates.ScoutSquad.Name, overflowCompany, templates.ScoutSquad);
+                overflowCompany.AddSquad(squad);
                 if (leaderList.Count > 0)
                 {
-                    int id = lastSquad.Id + 1;
-                    // add a new Scout Squad to the company
-                    Squad squad = new Squad("Scout Squad", lastCompany,
-                        templates.ScoutSquad);
-                    lastCompany.AddSquad(squad);
-                    id++;
-                    lastSquad = squad;
-                    // assign sgt to squad
                     squad.Name = leaderList[0].Name.Split(' ')[1] + " Squad";
                     AssignSoldier(unassignedSoldierMap, leaderList, squad, scoutSgt, year);
                 }
-                while (scoutList.Count > 0 && 
-                      (lastSquad.Members.Count < 10 || leaderList.Count <= 0))
+                while (scoutList.Count > 0 && squad.Members.Count < 10)
                 {
-                    AssignSoldier(unassignedSoldierMap, scoutList, lastSquad, scout, year);
+                    AssignSoldier(unassignedSoldierMap, scoutList, squad, scout, year);
+                }
+                if (squad.Members.Count == 0)
+                {
+                    overflowCompany.RemoveSquad(squad);
+                    break;
                 }
             }
             if (unassignedSoldierMap.Count > 0) Debug.WriteLine("Still did it wrong");
@@ -540,10 +575,6 @@ namespace OnlyWar.Builders
                                                     List<PlayerSoldier> devList, 
                                                     List<PlayerSoldier> devSgtList)
         {
-            SoldierTemplate devType = 
-                templates.DevastatorMarine;
-            SoldierTemplate devSgtType =
-                templates.DevastatorSergeant;
             // since Devastators are assigned last, make sure the dev to sgt list is reasonable
             while (devSgtList.Count() * 9 >= devList.Count())
             {
@@ -554,30 +585,9 @@ namespace OnlyWar.Builders
             }
             foreach (Unit company in chapter.ChildUnits)
             {
-                foreach (Squad squad in company.Squads)
-                {
-                    /*foreach(SquadTemplateElement element in squad.SquadTemplate.Elements)
-                    {
-                        if(element.SoldierType == devType)
-                        {
-
-                        }
-                    }*/
-                    if (squad.SquadTemplate == templates.DevastatorSquad)
-                    {
-                        if (devSgtList.Count > 0)
-                        {
-                            squad.Name = devSgtList[0].Name.Split(' ')[1] + " Squad";
-                            AssignSoldier(unassignedSoldierMap, devSgtList, squad,
-                                devSgtType, year);
-                        }
-                        int devSquadSize = CalculateSquadSize(devList, devSgtList);
-                        while (devList.Count > 0 && squad.Members.Count < devSquadSize)
-                        {
-                            AssignSoldier(unassignedSoldierMap, devList, squad, devType, year);
-                        }
-                    }
-                }
+                FillCompanyWithSquads(unassignedSoldierMap, company, templates.DevastatorSquad,
+                    devList, devSgtList, templates.DevastatorMarine, templates.DevastatorSergeant,
+                    CalculateSquadSize, year);
             }
         }
 
@@ -586,29 +596,11 @@ namespace OnlyWar.Builders
                                                  List<PlayerSoldier> assList, 
                                                  List<PlayerSoldier> assSgtList)
         {
-            SoldierTemplate assType = 
-                templates.AssaultMarine;
-            SoldierTemplate assSgtType =
-                templates.AssaultSergeant;
             foreach (Unit company in chapter.ChildUnits)
             {
-                foreach (Squad squad in company.Squads)
-                {
-                    if (squad.SquadTemplate == templates.AssaultSquad)
-                    {
-                        if (assSgtList.Count > 0)
-                        {
-                            squad.Name = assSgtList[0].Name.Split(' ')[1] + " Squad";
-                            AssignSoldier(unassignedSoldierMap, assSgtList, squad,
-                                assSgtType, year);
-                        }
-                        int assSquadSize = CalculateSquadSize(assList, assSgtList);
-                        while (assList.Count > 0 && squad.Members.Count < assSquadSize)
-                        {
-                            AssignSoldier(unassignedSoldierMap, assList, squad, assType, year);
-                        }
-                    }
-                }
+                FillCompanyWithSquads(unassignedSoldierMap, company, templates.AssaultSquad,
+                    assList, assSgtList, templates.AssaultMarine, templates.AssaultSergeant,
+                    CalculateSquadSize, year);
             }
         }
 
@@ -617,29 +609,11 @@ namespace OnlyWar.Builders
                                                   List<PlayerSoldier> tactList, 
                                                   List<PlayerSoldier> tactSgtList)
         {
-            SoldierTemplate tactType =
-                templates.TacticalMarine;
-            SoldierTemplate tactSgtType =
-                templates.TacticalSergeant;
             foreach (Unit company in chapter.ChildUnits)
             {
-                foreach (Squad squad in company.Squads)
-                {
-                    if (squad.SquadTemplate == templates.TacticalSquad)
-                    {
-                        if (tactSgtList.Count > 0)
-                        {
-                            squad.Name = tactSgtList[0].Name.Split(' ')[1] + " Squad";
-                            AssignSoldier(unassignedSoldierMap, tactSgtList, squad,
-                                tactSgtType, year);
-                        }
-                        int tactSquadSize = CalculateSquadSize(tactList, tactSgtList);
-                        while (tactList.Count > 0 && squad.Members.Count < tactSquadSize)
-                        {
-                            AssignSoldier(unassignedSoldierMap, tactList, squad, tactType, year);
-                        }
-                    }
-                }
+                FillCompanyWithSquads(unassignedSoldierMap, company, templates.TacticalSquad,
+                    tactList, tactSgtList, templates.TacticalMarine, templates.TacticalSergeant,
+                    CalculateSquadSize, year);
             }
         }
 

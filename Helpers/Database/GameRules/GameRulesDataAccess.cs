@@ -214,7 +214,7 @@ namespace OnlyWar.Helpers.Database.GameRules
 
         private Dictionary<int, List<UnitTemplate>> GetUnitTemplatesByFactionId(IDbConnection connection,
                                                                                 Dictionary<int, List<int>> unitTemplateTree,
-                                                                                Dictionary<int, List<SquadTemplate>> unitSquadMap,
+                                                                                Dictionary<int, List<SquadTemplateSlot>> unitSquadMap,
                                                                                 Dictionary<int, SquadTemplate> squadTemplateMap)
         {
             Dictionary<int, List<UnitTemplate>> factionUnitTemplateMap = [];
@@ -243,7 +243,10 @@ namespace OnlyWar.Helpers.Database.GameRules
                     {
                         factionUnitTemplateMap[factionId] = [];
                     }
-                    UnitTemplate unitTemplate = new UnitTemplate(id, name, isTop, hqSquad, unitSquadMap[id]);
+                    List<SquadTemplateSlot> squadSlots = unitSquadMap.TryGetValue(id, out List<SquadTemplateSlot> slots)
+                        ? slots
+                        : [];
+                    UnitTemplate unitTemplate = new UnitTemplate(id, name, isTop, hqSquad, squadSlots);
                     factionUnitTemplateMap[factionId].Add(unitTemplate);
                     unitTemplateMap[id] = unitTemplate;
                 }
@@ -257,24 +260,30 @@ namespace OnlyWar.Helpers.Database.GameRules
             return factionUnitTemplateMap;
         }
 
-        private Dictionary<int, List<SquadTemplate>> GetSquadTemplatesByUnitTemplateId(IDbConnection connection,
+        private Dictionary<int, List<SquadTemplateSlot>> GetSquadTemplatesByUnitTemplateId(IDbConnection connection,
                                                                                        Dictionary<int, SquadTemplate> squadTemplateMap)
         {
-            Dictionary<int, List<SquadTemplate>> unitSquadTemplateMap = [];
+            Dictionary<int, List<SquadTemplateSlot>> unitSquadTemplateMap = [];
             using (var command = connection.CreateCommand())
             {
+                // Columns: Id, UnitTemplateId, SquadTemplateId, MinCount, MaxCount.
+                // MinCount squads are created up front; MaxCount caps how many a
+                // unit may hold (see SquadTemplateSlot / migrate-squad-caps).
                 command.CommandText = "SELECT * FROM UnitTemplateSquadTemplate";
                 var reader = command.ExecuteReader();
                 while (reader.Read())
                 {
                     int unitTemplateId = reader.GetInt32(1);
                     int squadTemplateId = reader.GetInt32(2);
+                    int minCount = reader.GetInt32(3);
+                    int maxCount = reader.GetInt32(4);
 
                     if (!unitSquadTemplateMap.ContainsKey(unitTemplateId))
                     {
                         unitSquadTemplateMap[unitTemplateId] = [];
                     }
-                    unitSquadTemplateMap[unitTemplateId].Add(squadTemplateMap[squadTemplateId]);
+                    unitSquadTemplateMap[unitTemplateId].Add(
+                        new SquadTemplateSlot(squadTemplateMap[squadTemplateId], minCount, maxCount));
                 }
             }
             return unitSquadTemplateMap;

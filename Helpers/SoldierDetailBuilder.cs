@@ -1,5 +1,5 @@
-using Godot;
 using OnlyWar.Helpers;
+using OnlyWar.Models;
 using OnlyWar.Models.Soldiers;
 using System;
 using System.Collections.Generic;
@@ -11,20 +11,23 @@ public class SoldierDetailBuilder
 
     public ChapterBrowserDetail Build(ISoldier soldier, bool includeOpenFullRecordAction)
     {
-        List<ChapterBrowserDetailCard> cards =
-        [
-            new ChapterBrowserDetailCard(GetSoldierIconKey(soldier), "Profile", soldier.Template.Name, $"Assigned to {soldier.AssignedSquad?.Name ?? "no squad"}."),
-            new ChapterBrowserDetailCard("medical", "Condition", soldier.CanFight ? "Ready" : "Wounded", $"Functioning hands: {soldier.FunctioningHands}.")
-        ];
+        List<ChapterBrowserDetailCard> cards = [];
 
         if (soldier is PlayerSoldier playerSoldier)
         {
-            SoldierDossier dossier = _dossierService.BuildDossier(playerSoldier, richTextInjury: false);
-            cards.Add(new ChapterBrowserDetailCard("archive", "Service Record", "Assignment", FormatPairs(dossier.Data)));
-            cards.Add(new ChapterBrowserDetailCard("training", "Sergeant Report", "Recommendation", dossier.SergeantReport));
-            cards.Add(new ChapterBrowserDetailCard("medical", "Injury Report", playerSoldier.CanFight ? "Fit report" : "Recovery report", dossier.InjuryReport));
-            cards.Add(new ChapterBrowserDetailCard("archive", "Battle History", "Recent entries", FormatLines(dossier.History, "No history recorded.", 5)));
+            SoldierDossier dossier = _dossierService.BuildDossier(
+                playerSoldier,
+                richTextInjury: false,
+                currentDate: GameDataSingleton.Instance.Date,
+                sector: GameDataSingleton.Instance.Sector);
+            // Top row
+            cards.Add(new ChapterBrowserDetailCard("map_pin", "Posting", "Assignment", FormatPairs(dossier.Data)));
             cards.Add(new ChapterBrowserDetailCard("award", "Honors", "Awards", FormatLines(dossier.Awards, "No awards recorded.", 5)));
+            cards.Add(new ChapterBrowserDetailCard("threat", "Battle History", "Combat record", FormatPairs(dossier.CombatRecord)));
+            // Second row
+            cards.Add(new ChapterBrowserDetailCard("medical", "Injury Report", playerSoldier.CanFight ? "Fit report" : "Recovery report", dossier.InjuryReport));
+            cards.Add(new ChapterBrowserDetailCard("training", "Sergeant Report", "Recommendation", dossier.SergeantReport));
+            cards.Add(new ChapterBrowserDetailCard("archive", "Service Record", "Recent entries", FormatLines(dossier.History, "No history recorded.", 5)));
         }
         else
         {
@@ -35,11 +38,7 @@ public class SoldierDetailBuilder
             GetSoldierIconKey(soldier),
             $"{soldier.Template.Name} {soldier.Name}",
             soldier.CanFight ? "Available for duty." : "Wounded or impaired.",
-            [
-                new ChapterBrowserMetric(Mathf.RoundToInt(soldier.Strength).ToString(), "Strength"),
-                new ChapterBrowserMetric(Mathf.RoundToInt(soldier.Dexterity).ToString(), "Dexterity"),
-                new ChapterBrowserMetric(Mathf.RoundToInt(soldier.Charisma).ToString(), "Presence")
-            ],
+            [],
             cards,
             includeOpenFullRecordAction ? "Open Full Record" : null,
             includeOpenFullRecordAction ? "archive" : null);

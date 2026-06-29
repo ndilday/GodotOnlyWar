@@ -249,7 +249,6 @@ public partial class MainGameScene : Control
         {
             PackedScene chapterScene = GD.Load<PackedScene>("res://Scenes/ChapterScreen/chapter_screen.tscn");
             _chapterScreen = (ChapterController)chapterScene.Instantiate();
-            _chapterScreen.SoldierSelectedForDisplay += (object s, int soldierId) => OnSoldierSelectedForDisplay(s, soldierId);
             _chapterScreen.CloseButtonPressed += OnCloseScreen;
             _mainUILayer.AddChild(_chapterScreen);
         }

@@ -12,7 +12,13 @@ namespace OnlyWar.Helpers
         int SquadId,
         SoldierTemplate SoldierTemplate,
         string DisplayName,
-        bool IsCurrentAssignment = false);
+        bool IsCurrentAssignment = false,
+        // When IsNewSquad is set, no squad exists yet: ApplyTransfer creates a squad
+        // of TargetSquadTemplate inside TargetUnit (the unit still has room under its
+        // cap) and moves the soldier into it. SquadId is unused in that case.
+        bool IsNewSquad = false,
+        Unit TargetUnit = null,
+        SquadTemplate TargetSquadTemplate = null);
 
     public class SoldierTransferService
     {
@@ -80,7 +86,21 @@ namespace OnlyWar.Helpers
             {
                 throw new InvalidOperationException("Cannot transfer a soldier with no assigned squad.");
             }
-            if (!squadMap.TryGetValue(option.SquadId, out Squad newSquad))
+            Squad newSquad;
+            if (option.IsNewSquad)
+            {
+                if (option.TargetUnit == null || option.TargetSquadTemplate == null)
+                {
+                    throw new InvalidOperationException("New-squad transfer option is missing its target unit or template.");
+                }
+                newSquad = new Squad(option.TargetSquadTemplate.Name, option.TargetUnit, option.TargetSquadTemplate);
+                option.TargetUnit.AddSquad(newSquad);
+                if (squadMap is IDictionary<int, Squad> writableSquadMap)
+                {
+                    writableSquadMap[newSquad.Id] = newSquad;
+                }
+            }
+            else if (!squadMap.TryGetValue(option.SquadId, out newSquad))
             {
                 throw new InvalidOperationException($"Could not find transfer target squad {option.SquadId}.");
             }
@@ -113,8 +133,7 @@ namespace OnlyWar.Helpers
                 soldier.AssignedSquad.Name = soldier.Name.Split(' ')[1] + " Squad";
             }
 
-            if (currentSquad.Members.Count == 0 &&
-                (currentSquad.SquadTemplate.SquadType & SquadTypes.Scout) == SquadTypes.Scout)
+            if (currentSquad.Members.Count == 0 && IsRemovableWhenEmpty(currentSquad))
             {
                 Unit parentUnit = currentSquad.ParentUnit;
                 parentUnit.RemoveSquad(currentSquad);
@@ -164,12 +183,86 @@ namespace OnlyWar.Helpers
                         $"{template.Name}, {squad.Name}, {unit.Name}"));
                 }
             }
+            // New-squad openings: any squad template the unit may still hold more of.
+            // A brand-new squad is empty, so only its leader slot is open — i.e. the
+            // soldier starts the squad by becoming its sergeant.
+            foreach (SquadTemplateSlot slot in
+                     unit.UnitTemplate?.GetChildSquadSlots() ?? Enumerable.Empty<SquadTemplateSlot>())
+            {
+                int existing = unit.Squads.Count(s => s.SquadTemplate == slot.Template);
+                if (existing >= slot.MaxCount)
+                {
+                    continue;
+                }
+                foreach (SoldierTemplate template in GetOpeningsInEmptySquad(slot.Template, soldierTemplate))
+                {
+                    openSlots.Add(new SoldierTransferOption(
+                        0,
+                        template,
+                        $"{template.Name}, New {slot.Template.Name}, {unit.Name}",
+                        IsNewSquad: true,
+                        TargetUnit: unit,
+                        TargetSquadTemplate: slot.Template));
+                }
+            }
+
             foreach (Unit childUnit in unit.ChildUnits ?? Enumerable.Empty<Unit>())
             {
                 openSlots.AddRange(GetOpeningsInUnit(childUnit, currentSquad, soldierTemplate));
             }
 
             return openSlots;
+        }
+
+        private static IEnumerable<SoldierTemplate> GetOpeningsInEmptySquad(
+            SquadTemplate squadTemplate,
+            SoldierTemplate soldierTemplate)
+        {
+            List<SoldierTemplate> openSpots = [];
+            foreach (SquadTemplateElement element in squadTemplate.Elements)
+            {
+                // An empty squad has no leader, so only leader-eligible slots are open.
+                if (!element.SoldierTemplate.IsSquadLeader)
+                {
+                    continue;
+                }
+                if (element.SoldierTemplate.Rank < soldierTemplate.Rank ||
+                    element.SoldierTemplate.Rank > soldierTemplate.Rank + 1)
+                {
+                    continue;
+                }
+                if (element.MaximumNumber > 0)
+                {
+                    openSpots.Add(element.SoldierTemplate);
+                }
+            }
+
+            return openSpots;
+        }
+
+        // A squad is cleaned up when its last member leaves unless it must always
+        // exist: HQ squads and squads whose unit template requires at least one
+        // (MinCount > 0, e.g. the chapter's command squads) are kept. Line squads
+        // (MinCount 0) and ad-hoc squads with no slot are removed so none linger empty.
+        private static bool IsRemovableWhenEmpty(Squad squad)
+        {
+            if ((squad.SquadTemplate.SquadType & SquadTypes.HQ) != 0)
+            {
+                return false;
+            }
+            Unit parent = squad.ParentUnit;
+            if (parent?.UnitTemplate == null)
+            {
+                return true;
+            }
+            foreach (SquadTemplateSlot slot in parent.UnitTemplate.GetChildSquadSlots())
+            {
+                if (slot.Template == squad.SquadTemplate)
+                {
+                    return slot.MinCount == 0;
+                }
+            }
+            return true;
         }
 
         private static IEnumerable<SoldierTemplate> GetOpeningsInSquad(

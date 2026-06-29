@@ -15,8 +15,11 @@ namespace OnlyWar.Models.Units
 
         //private UnitTemplate _parentUnit;
         private IReadOnlyCollection<UnitTemplate> _childUnits;
-        private readonly IReadOnlyCollection<SquadTemplate> _childSquads;
+        private readonly IReadOnlyCollection<SquadTemplateSlot> _childSquadSlots;
 
+        // Convenience constructor (mainly for tests): each squad template becomes a
+        // slot that exists exactly once. An HQ-typed template is pulled out as the
+        // HQ squad, matching the loader's separate HQSquadTemplate handling.
         public UnitTemplate(int id, string name, bool isTopLevel,
                             List<SquadTemplate> childSquads,
                             List<UnitTemplate> childUnits)
@@ -31,17 +34,19 @@ namespace OnlyWar.Models.Units
                 HQSquad = hq;
                 childSquads.Remove(hq);
             }
-            _childSquads = childSquads;
+            _childSquadSlots = childSquads
+                .Select(squad => new SquadTemplateSlot(squad, 1, 1))
+                .ToList();
         }
 
         public UnitTemplate(int id, string name, bool isTopLevel,
                             SquadTemplate hqSquadTemplate,
-                            List<SquadTemplate> childSquads)
+                            List<SquadTemplateSlot> childSquadSlots)
         {
             Id = id;
             Name = name;
             IsTopLevelUnit = isTopLevel;
-            _childSquads = childSquads;
+            _childSquadSlots = childSquadSlots;
             HQSquad = hqSquadTemplate;
         }
 
@@ -55,9 +60,9 @@ namespace OnlyWar.Models.Units
             return _childUnits ?? (IReadOnlyCollection<UnitTemplate>)Enumerable.Empty<UnitTemplate>();
         }
 
-        public IReadOnlyCollection<SquadTemplate> GetChildSquads()
+        public IReadOnlyCollection<SquadTemplateSlot> GetChildSquadSlots()
         {
-            return _childSquads ?? (IReadOnlyCollection<SquadTemplate>)Enumerable.Empty<SquadTemplate>();
+            return _childSquadSlots ?? (IReadOnlyCollection<SquadTemplateSlot>)Enumerable.Empty<SquadTemplateSlot>();
         }
 
         public Unit GenerateUnitFromTemplateWithoutChildren(string name)
@@ -72,9 +77,9 @@ namespace OnlyWar.Models.Units
             {
                 maxSoldierCount += childUnit.GetMaximumSoldierCount();
             }
-            foreach(SquadTemplate childSquad in GetChildSquads())
+            foreach(SquadTemplateSlot slot in GetChildSquadSlots())
             {
-                maxSoldierCount += childSquad.Elements.Sum(e => e.MaximumNumber);
+                maxSoldierCount += slot.Template.Elements.Sum(e => e.MaximumNumber) * slot.MaxCount;
             }
             return maxSoldierCount;
         }

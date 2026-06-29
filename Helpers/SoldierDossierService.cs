@@ -1,3 +1,5 @@
+using OnlyWar.Models;
+using OnlyWar.Models.Planets;
 using OnlyWar.Models.Soldiers;
 using System;
 using System.Collections.Generic;
@@ -11,26 +13,49 @@ namespace OnlyWar.Helpers
         IReadOnlyList<string> History,
         IReadOnlyList<string> Awards,
         string SergeantReport,
-        string InjuryReport);
+        string InjuryReport,
+        IReadOnlyList<Tuple<string, string>> CombatRecord);
 
     public class SoldierDossierService
     {
-        public SoldierDossier BuildDossier(PlayerSoldier soldier, IReadOnlyList<string> history = null, bool richTextInjury = true)
+        public SoldierDossier BuildDossier(PlayerSoldier soldier, IReadOnlyList<string> history = null,
+                                           bool richTextInjury = true, Date currentDate = null, Sector sector = null)
         {
             return new SoldierDossier(
-                BuildSoldierData(soldier),
+                BuildSoldierData(soldier, currentDate, sector),
                 history ?? soldier.SoldierHistory.ToList(),
                 BuildAwardLines(soldier),
                 BuildSergeantReport(soldier),
-                GenerateSoldierInjurySummary(soldier, richTextInjury));
+                GenerateSoldierInjurySummary(soldier, richTextInjury),
+                BuildCombatRecord(soldier));
         }
 
-        public IReadOnlyList<Tuple<string, string>> BuildSoldierData(PlayerSoldier soldier)
+        // The Battle History card surfaces aggregate combat stats rather than the
+        // chronological event log (which now lives under the Service Record card).
+        public IReadOnlyList<Tuple<string, string>> BuildCombatRecord(PlayerSoldier soldier)
+        {
+            int operations = soldier.SoldierEvents
+                .Count(e => e.Type == SoldierEventType.BattleParticipation);
+            int enemiesSlain = soldier.FactionCasualtyCountMap.Values.Sum(count => (int)count);
+            int rangedKills = soldier.RangedWeaponCasualtyCountMap.Values.Sum(count => (int)count);
+            int meleeKills = soldier.MeleeWeaponCasualtyCountMap.Values.Sum(count => (int)count);
+
+            return
+            [
+                new("Operations", operations.ToString()),
+                new("Enemies Slain", enemiesSlain.ToString()),
+                new("Ranged Kills", rangedKills.ToString()),
+                new("Melee Kills", meleeKills.ToString())
+            ];
+        }
+
+        public IReadOnlyList<Tuple<string, string>> BuildSoldierData(PlayerSoldier soldier,
+                                                                     Date currentDate = null, Sector sector = null)
         {
             List<Tuple<string, string>> soldierData =
             [
                 new("Name", soldier.Name),
-                new("Time in Service", "TBD")
+                new("Time in Service", FormatTimeInService(soldier, currentDate))
             ];
 
             if (soldier.AssignedSquad?.BoardedLocation != null)
@@ -39,9 +64,11 @@ namespace OnlyWar.Helpers
             }
             else if (soldier.AssignedSquad?.CurrentRegion != null)
             {
+                Region region = soldier.AssignedSquad.CurrentRegion;
+                string subsectorName = ResolveSubsectorName(sector, region.Planet);
                 soldierData.Add(new Tuple<string, string>(
                     "Location",
-                    $"Region {soldier.AssignedSquad.CurrentRegion.Id}, {soldier.AssignedSquad.CurrentRegion.Planet.Name}, Subsector TBD"));
+                    $"Region {region.Id}, {region.Planet.Name}, {subsectorName}"));
             }
             else
             {
@@ -49,6 +76,37 @@ namespace OnlyWar.Helpers
             }
 
             return soldierData;
+        }
+
+        // Service length measured from the soldier's earliest recorded event (the Founding
+        // note for the Chapter Master, AcceptedToTraining for everyone else) to the current
+        // campaign date. Falls back to "TBD" when either date is unavailable.
+        private static string FormatTimeInService(PlayerSoldier soldier, Date currentDate)
+        {
+            Date enlistment = soldier.SoldierEvents
+                .Select(e => e.Date)
+                .OrderBy(d => d)
+                .FirstOrDefault();
+            if (enlistment == null || currentDate == null)
+            {
+                return "TBD";
+            }
+
+            int weeks = Math.Max(0, currentDate.GetWeeksDifference(enlistment));
+            int years = weeks / 52;
+            string duration = years >= 1
+                ? $"{years} {(years == 1 ? "year" : "years")}' service"
+                : $"{weeks} {(weeks == 1 ? "week" : "weeks")}' service";
+            return $"{duration} (since {enlistment})";
+        }
+
+        // A Planet carries no back-reference to its Subsector, so we resolve it by scanning
+        // the sector's subsectors for the one that owns the world.
+        private static string ResolveSubsectorName(Sector sector, Planet planet)
+        {
+            Subsector subsector = sector?.Subsectors
+                .FirstOrDefault(s => s.Planets.Contains(planet));
+            return subsector?.Name ?? "Subsector TBD";
         }
 
         public IReadOnlyList<string> BuildAwardLines(PlayerSoldier soldier)

@@ -3,6 +3,7 @@ using System.Linq;
 using OnlyWar.Builders;
 using OnlyWar.Helpers;
 using OnlyWar.Models;
+using OnlyWar.Models.Squads;
 using OnlyWar.Tests.Fixtures;
 using Xunit;
 
@@ -56,6 +57,32 @@ public class NewChapterBuilderTests
             _data, CreateTrainingService(), new Date(39, 496, 1), new Date(39, 500, 1), chapterName);
 
         Assert.Equal("Heart of the Emperor", chapter.Army.OrderOfBattle.Name);
+    }
+
+    [Fact]
+    public void CreateChapter_LeavesNoEmptyCompanySquadsAndPlacesEverySoldier()
+    {
+        PlayerForce chapter = NewChapterBuilder.CreateChapter(
+            _data, CreateTrainingService(), new Date(39, 496, 1), new Date(39, 500, 1), "Crimson Sentinels");
+
+        var oob = chapter.Army.OrderOfBattle;
+
+        // Line squads are created on demand, so no empty non-HQ squad should linger
+        // in any company. (HQ squads are always present and may legitimately be empty,
+        // e.g. a Veteran Company HQ with no qualifying captain.)
+        foreach (var company in oob.ChildUnits)
+        {
+            var emptyLineSquads = company.Squads
+                .Where(squad => (squad.SquadTemplate.SquadType & SquadTypes.HQ) == 0)
+                .Where(squad => squad.Members.Count == 0)
+                .ToList();
+            Assert.True(emptyLineSquads.Count == 0,
+                $"{company.Name} has empty line squads: " +
+                string.Join(", ", emptyLineSquads.Select(s => $"{s.Name} ({s.SquadTemplate.Name})")));
+        }
+
+        // No soldier is lost in the create-on-demand assignment.
+        Assert.Equal(1000, oob.GetAllMembers().Count());
     }
 
     [Fact]

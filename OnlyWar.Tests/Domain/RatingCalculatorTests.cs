@@ -125,4 +125,30 @@ public class RatingCalculatorTests
         Assert.Empty(soldier.SoldierAwards);
         Assert.Contains(soldier.SoldierHistory, e => e.Contains("Flagged for potential training as Apothecary"));
     }
+
+    [Fact]
+    public void ApplyAwards_RecordsHistoryFlagOnlyOnceAcrossEvaluations()
+    {
+        // Ratings are re-evaluated every training pass; a flag whose threshold stays
+        // exceeded must not stack a duplicate history entry each time.
+        RatingDefinition medical = new(5, RatingKeys.Medical, "Medical", RatingAggregation.Product,
+            new[] { new RatingComponent(RatingComponentType.AttributeValue, (int)Attribute.Intelligence, 0) },
+            new[] { new RatingNormalizationFactor(1.0, 1.0, 0) });
+        RatingAwardTier[] tiers =
+        {
+            new(1, RatingKeys.Medical, 1, 115, RatingAwardEffect.HistoryFlag, null,
+                "Flagged for potential training as Apothecary")
+        };
+        RatingCalculator calculator = new(new[] { medical }, tiers, new Dictionary<int, BaseSkill>(), new FixedRNG());
+        PlayerSoldier soldier = new(TestModelFactory.CreateSoldier(), "Brother Test");
+        SoldierEvaluation eval = new(Date, new Dictionary<string, float> { [RatingKeys.Medical] = 116f });
+
+        calculator.ApplyAwards(soldier, eval, Date);
+        calculator.ApplyAwards(soldier, eval, Date);
+        calculator.ApplyAwards(soldier, eval, Date);
+
+        Assert.Single(soldier.SoldierEvents,
+            e => e.Type == SoldierEventType.RatingFlag
+                 && e.Detail == "Flagged for potential training as Apothecary");
+    }
 }

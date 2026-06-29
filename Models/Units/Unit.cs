@@ -67,10 +67,16 @@ namespace OnlyWar.Models.Units
                 _squads.Add(new Squad(name + " HQ Squad", this, template.HQSquad));
                 i++;
             }
-            foreach (SquadTemplate squadTemplate in template.GetChildSquads())
+            // Only the always-present squads (MinCount, e.g. the chapter's command
+            // squads) are created up front. Line squads have MinCount 0 and are
+            // created on demand as soldiers are assigned or transferred in.
+            foreach (SquadTemplateSlot slot in template.GetChildSquadSlots())
             {
-                _squads.Add(new Squad(squadTemplate.Name, this, squadTemplate));
-                i++;
+                for (int n = 0; n < slot.MinCount; n++)
+                {
+                    _squads.Add(new Squad(slot.Template.Name, this, slot.Template));
+                    i++;
+                }
             }
         }
         public IEnumerable<ISoldier> GetAllMembers()

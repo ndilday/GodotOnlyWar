@@ -4,7 +4,7 @@ using Microsoft.Data.Sqlite;
 
 if (args.Length < 2)
 {
-    Console.Error.WriteLine("Usage: RulesDbTool <schema|training-source|migrate-training|migrate-progenoid|migrate-ratings|migrate-planet-scales|migrate-fortification|migrate-tyranids|migrate-tyranid-squads|migrate-evasion|remove-unused-unit-templates> <db-path>");
+    Console.Error.WriteLine("Usage: RulesDbTool <schema|training-source|migrate-training|migrate-progenoid|migrate-ratings|migrate-planet-scales|migrate-fortification|migrate-tyranids|migrate-tyranid-squads|migrate-evasion|migrate-squad-caps|remove-unused-unit-templates> <db-path>");
     return 1;
 }
 
@@ -13,7 +13,7 @@ string dbPath = args[1];
 string connectionString = new SqliteConnectionStringBuilder
 {
     DataSource = dbPath,
-    Mode = command is "migrate-training" or "migrate-progenoid" or "migrate-ratings" or "migrate-planet-scales" or "migrate-fortification" or "migrate-tyranids" or "migrate-tyranid-squads" or "migrate-evasion" or "remove-unused-unit-templates" ? SqliteOpenMode.ReadWriteCreate : SqliteOpenMode.ReadOnly
+    Mode = command is "migrate-training" or "migrate-progenoid" or "migrate-ratings" or "migrate-planet-scales" or "migrate-fortification" or "migrate-tyranids" or "migrate-tyranid-squads" or "migrate-evasion" or "migrate-squad-caps" or "remove-unused-unit-templates" ? SqliteOpenMode.ReadWriteCreate : SqliteOpenMode.ReadOnly
 }.ToString();
 
 using SqliteConnection connection = new(connectionString);
@@ -53,6 +53,9 @@ switch (command)
         break;
     case "migrate-evasion":
         MigrateEvasion(connection);
+        break;
+    case "migrate-squad-caps":
+        MigrateSquadCaps(connection);
         break;
     default:
         Console.Error.WriteLine($"Unknown command: {command}");
@@ -677,6 +680,65 @@ static void MigrateEvasion(SqliteConnection connection)
 
     transaction.Commit();
     Console.WriteLine("Evasion migration complete (columns ensured; Genestealer/Lictor/Ravener tuned).");
+}
+
+static void MigrateSquadCaps(SqliteConnection connection)
+{
+    using SqliteTransaction transaction = connection.BeginTransaction();
+
+    // A unit template used to enumerate every squad it must contain as a separate
+    // UnitTemplateSquadTemplate row (multiplicity = row count), which forced the
+    // chapter to be generated full of empty squads. Replace that with an explicit
+    // cap: one row per (unit, squad) carrying MinCount/MaxCount. MinCount squads
+    // are created eagerly (the chapter's command singletons); line squads get
+    // MinCount 0 and are created on demand as soldiers arrive. See SquadTemplateSlot.
+    EnsureColumn(connection, transaction, "UnitTemplateSquadTemplate", "MinCount", "INTEGER NOT NULL DEFAULT 0");
+    EnsureColumn(connection, transaction, "UnitTemplateSquadTemplate", "MaxCount", "INTEGER NOT NULL DEFAULT 1");
+
+    int duplicateGroups = ExecuteScalarInt(connection, transaction,
+        @"SELECT COUNT(*) FROM (
+            SELECT UnitTemplateId, SquadTemplateId FROM UnitTemplateSquadTemplate
+            GROUP BY UnitTemplateId, SquadTemplateId HAVING COUNT(*) > 1)");
+    if (duplicateGroups == 0)
+    {
+        Console.WriteLine("Squad caps already collapsed; nothing to do.");
+        return;
+    }
+
+    // Snapshot the collapsed rows: one per (unit, squad). MaxCount = how many rows
+    // existed; MinCount = MaxCount for a top-level unit's squads (the always-present
+    // command squads), else 0 (line squads created on demand).
+    List<(int UnitId, int SquadId, int Count, int IsTopLevel)> rows = [];
+    using (SqliteCommand command = connection.CreateCommand())
+    {
+        command.Transaction = transaction;
+        command.CommandText =
+            @"SELECT j.UnitTemplateId, j.SquadTemplateId, COUNT(*) AS Cnt, ut.IsTopLevelUnit
+              FROM UnitTemplateSquadTemplate j
+              JOIN UnitTemplate ut ON ut.Id = j.UnitTemplateId
+              GROUP BY j.UnitTemplateId, j.SquadTemplateId";
+        using SqliteDataReader reader = command.ExecuteReader();
+        while (reader.Read())
+        {
+            rows.Add((reader.GetInt32(0), reader.GetInt32(1), reader.GetInt32(2),
+                      Convert.ToInt32(reader.GetValue(3))));
+        }
+    }
+
+    Execute(connection, transaction, "DELETE FROM UnitTemplateSquadTemplate");
+    int nextId = 1;
+    foreach ((int unitId, int squadId, int count, int isTopLevel) in rows)
+    {
+        int maxCount = count;
+        int minCount = isTopLevel != 0 ? count : 0;
+        Execute(connection, transaction,
+            @"INSERT INTO UnitTemplateSquadTemplate (Id, UnitTemplateId, SquadTemplateId, MinCount, MaxCount)
+              VALUES ($id, $u, $s, $min, $max)",
+            ("$id", nextId++), ("$u", unitId), ("$s", squadId), ("$min", minCount), ("$max", maxCount));
+    }
+
+    transaction.Commit();
+    Console.WriteLine($"Squad caps migration complete. Collapsed to {rows.Count} (unit, squad) rows.");
 }
 
 static void SetEvasion(SqliteConnection connection, SqliteTransaction transaction, string speciesName,

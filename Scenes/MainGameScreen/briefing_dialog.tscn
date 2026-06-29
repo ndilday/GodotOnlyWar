@@ -1,4 +1,4 @@
-[gd_scene load_steps=5 format=3 uid="uid://cbrf3scene7c4zv"]
+[gd_scene format=3 uid="uid://bxt1vv1h4sd0n"]
 
 [ext_resource type="PackedScene" uid="uid://cadpqoqxtyo0p" path="res://Scenes/Dialog.tscn" id="1_base"]
 [ext_resource type="Script" uid="uid://cbrf1ctrl9a2xz" path="res://Scenes/MainGameScreen/BriefingDialogController.cs" id="2_ctrl"]

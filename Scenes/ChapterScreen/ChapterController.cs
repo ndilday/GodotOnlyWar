@@ -21,7 +21,6 @@ public partial class ChapterController : Control
 
     public ChapterView ChapterView { get; set; }
 
-    public event EventHandler<int> SoldierSelectedForDisplay;
     public event EventHandler CloseButtonPressed;
 
     public override void _Ready()
@@ -35,7 +34,6 @@ public partial class ChapterController : Control
         ChapterView.BrowserItemSelected += OnBrowserItemSelected;
         ChapterView.BrowserItemDrillRequested += OnBrowserItemDrillRequested;
         ChapterView.BreadcrumbPressed += OnBreadcrumbPressed;
-        ChapterView.DetailPrimaryActionPressed += OnDetailPrimaryActionPressed;
         ChapterView.TransferTargetSelected += OnTransferTargetSelected;
 
         _transferConfirmationDialog = new ConfirmationDialog
@@ -59,7 +57,6 @@ public partial class ChapterController : Control
         ChapterView.BrowserItemSelected -= OnBrowserItemSelected;
         ChapterView.BrowserItemDrillRequested -= OnBrowserItemDrillRequested;
         ChapterView.BreadcrumbPressed -= OnBreadcrumbPressed;
-        ChapterView.DetailPrimaryActionPressed -= OnDetailPrimaryActionPressed;
         ChapterView.TransferTargetSelected -= OnTransferTargetSelected;
         if (_transferConfirmationDialog != null)
         {
@@ -102,15 +99,6 @@ public partial class ChapterController : Control
     {
         _navigator.MoveToBreadcrumb(level);
         RenderCurrentPath();
-    }
-
-    private void OnDetailPrimaryActionPressed(object sender, EventArgs e)
-    {
-        ISoldier soldier = TryGetCurrentDetailSoldier();
-        if (soldier != null)
-        {
-            SoldierSelectedForDisplay?.Invoke(this, soldier.Id);
-        }
     }
 
     private void OnTransferTargetSelected(object sender, int index)
@@ -248,7 +236,7 @@ public partial class ChapterController : Control
                 company.Id,
                 GetCompanyIconKey(company),
                 company.Name,
-                $"{company.Squads.Count} squads - {company.GetAllMembers().Count()} soldiers",
+                $"{FormatCompanySquadCount(company)} squads - {company.GetAllMembers().Count()} soldiers",
                 true,
                 selectedCompany?.Id == company.Id,
                 ">"))
@@ -330,7 +318,7 @@ public partial class ChapterController : Control
     private void SetSoldierDetail(ISoldier soldier)
     {
         _currentDetailSoldierId = soldier.Id;
-        ChapterView.SetDetail(_soldierDetailBuilder.Build(soldier, true));
+        ChapterView.SetDetail(_soldierDetailBuilder.Build(soldier, false));
         if (soldier is PlayerSoldier playerSoldier)
         {
             _transferOptions = _transferService.GetTransferOptions(
@@ -401,7 +389,7 @@ public partial class ChapterController : Control
                 GetCompanyIconKey(selectedCompany),
                 $"Selected: {selectedCompany.Name}",
                 selectedCompany.UnitTemplate.Name,
-                $"{selectedCompany.Squads.Count} squads, {selectedCompany.GetAllMembers().Count()} soldiers."));
+                $"{FormatCompanySquadCount(selectedCompany)} squads, {selectedCompany.GetAllMembers().Count()} soldiers."));
         }
 
         if (selectedSquad != null)
@@ -432,7 +420,7 @@ public partial class ChapterController : Control
 
         List<ChapterBrowserDetailCard> cards =
         [
-            new ChapterBrowserDetailCard(GetCompanyIconKey(company), "Company Strength", company.UnitTemplate.Name, $"{soldierCount} soldiers across {company.Squads.Count} squads."),
+            new ChapterBrowserDetailCard(GetCompanyIconKey(company), "Company Strength", company.UnitTemplate.Name, $"{soldierCount} soldiers across {FormatCompanySquadCount(company)} squads."),
             new ChapterBrowserDetailCard("medical", "Company Recovery", "Readiness impact", $"{woundedCount} soldiers are wounded or impaired."),
             new ChapterBrowserDetailCard("archive", "Company Record", "Chronicle", "Company history and honors can live here as the detail renderer grows.")
         ];
@@ -452,7 +440,7 @@ public partial class ChapterController : Control
             "Company-level overview. Select a squad for a preview; drill into it to manage soldiers.",
             [
                 new ChapterBrowserMetric(soldierCount.ToString(), "Soldiers"),
-                new ChapterBrowserMetric(company.Squads.Count.ToString(), "Squads"),
+                new ChapterBrowserMetric(FormatCompanySquadCount(company), "Squads"),
                 new ChapterBrowserMetric(woundedCount.ToString(), "Wounded")
             ],
             cards);
@@ -554,6 +542,17 @@ public partial class ChapterController : Control
     private ISoldier GetSoldier(int soldierId)
     {
         return GetChapter().GetAllMembers().First(soldier => soldier.Id == soldierId);
+    }
+
+    // Companies always have a single HQ squad plus a variable number of line
+    // squads; surface that as "HQ + N" so the HQ isn't conflated with line strength.
+    private static string FormatCompanySquadCount(Unit company)
+    {
+        int nonHqSquads = company.Squads.Count(
+            squad => (squad.SquadTemplate.SquadType & SquadTypes.HQ) == 0);
+        bool hasHqSquad = company.Squads.Any(
+            squad => (squad.SquadTemplate.SquadType & SquadTypes.HQ) != 0);
+        return hasHqSquad ? $"HQ + {nonHqSquads}" : nonHqSquads.ToString();
     }
 
     private static string GetCompanyIconKey(Unit company)

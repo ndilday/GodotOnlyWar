@@ -154,9 +154,103 @@ public class SoldierTransferServiceTests
         Assert.False(squadMap.ContainsKey(scoutSquad.Id));
     }
 
+    [Fact]
+    public void GetTransferOptions_OffersNewSquadWhenUnitHasCapacity()
+    {
+        SquadTemplate lineTemplate = CreateSquadTemplate(
+            "Line Squad",
+            (TestModelFactory.SergeantTemplate, 0, 1),
+            (TestModelFactory.MarineTemplate, 0, 4));
+        Unit company = CreateUnitWithSlots("Company", new SquadTemplateSlot(lineTemplate, 0, 2));
+        Squad source = AddSquad(company, "Source Squad", lineTemplate);
+        PlayerSoldier soldier = AddPlayerSoldier(source, TestModelFactory.MarineTemplate, "Brother Marius");
+
+        List<SoldierTransferOption> options = _service.GetTransferOptions(company, soldier);
+
+        SoldierTransferOption newSquadOption = options.SingleOrDefault(option => option.IsNewSquad);
+        Assert.NotNull(newSquadOption);
+        // A new squad is empty, so the only opening is its leader slot.
+        Assert.Equal(TestModelFactory.SergeantTemplate, newSquadOption.SoldierTemplate);
+        Assert.Equal(company, newSquadOption.TargetUnit);
+        Assert.Equal(lineTemplate, newSquadOption.TargetSquadTemplate);
+    }
+
+    [Fact]
+    public void GetTransferOptions_DoesNotOfferNewSquadWhenAtCap()
+    {
+        SquadTemplate lineTemplate = CreateSquadTemplate(
+            "Line Squad",
+            (TestModelFactory.SergeantTemplate, 0, 1),
+            (TestModelFactory.MarineTemplate, 0, 4));
+        Unit company = CreateUnitWithSlots("Company", new SquadTemplateSlot(lineTemplate, 0, 1));
+        Squad source = AddSquad(company, "Source Squad", lineTemplate);
+        PlayerSoldier soldier = AddPlayerSoldier(source, TestModelFactory.MarineTemplate, "Brother Marius");
+
+        List<SoldierTransferOption> options = _service.GetTransferOptions(company, soldier);
+
+        Assert.DoesNotContain(options, option => option.IsNewSquad);
+    }
+
+    [Fact]
+    public void ApplyTransfer_CreatesNewSquadAndRemovesEmptiedSource()
+    {
+        SquadTemplate lineTemplate = CreateSquadTemplate(
+            "Line Squad",
+            (TestModelFactory.SergeantTemplate, 0, 1),
+            (TestModelFactory.MarineTemplate, 0, 4));
+        Unit company = CreateUnitWithSlots("Company", new SquadTemplateSlot(lineTemplate, 0, 2));
+        Squad source = AddSquad(company, "Source Squad", lineTemplate);
+        PlayerSoldier soldier = AddPlayerSoldier(source, TestModelFactory.MarineTemplate, "Brother Marius");
+        SoldierTransferOption newSquadOption = _service
+            .GetTransferOptions(company, soldier)
+            .Single(option => option.IsNewSquad);
+        Dictionary<int, Squad> squadMap = company.GetAllSquads().ToDictionary(squad => squad.Id);
+
+        bool didTransfer = _service.ApplyTransfer(soldier, newSquadOption, squadMap, _date);
+
+        Assert.True(didTransfer);
+        Assert.Equal(TestModelFactory.SergeantTemplate, soldier.Template);
+        Squad newSquad = soldier.AssignedSquad;
+        Assert.NotEqual(source.Id, newSquad.Id);
+        Assert.Equal(lineTemplate, newSquad.SquadTemplate);
+        Assert.Contains(newSquad, company.Squads);
+        Assert.True(squadMap.ContainsKey(newSquad.Id));
+        // Moving the only member out empties the source line squad (MinCount 0), so it is removed.
+        Assert.DoesNotContain(source, company.Squads);
+        Assert.False(squadMap.ContainsKey(source.Id));
+    }
+
+    [Fact]
+    public void ApplyTransfer_KeepsEmptiedRequiredSquad()
+    {
+        SquadTemplate commandTemplate = CreateSquadTemplate("Command Squad", (TestModelFactory.MarineTemplate, 0, 4));
+        SquadTemplate lineTemplate = CreateSquadTemplate("Line Squad", (TestModelFactory.MarineTemplate, 0, 4));
+        Unit chapter = CreateUnitWithSlots(
+            "Chapter",
+            new SquadTemplateSlot(commandTemplate, 1, 1),
+            new SquadTemplateSlot(lineTemplate, 0, 2));
+        Squad command = AddSquad(chapter, "Command Squad", commandTemplate);
+        PlayerSoldier soldier = AddPlayerSoldier(command, TestModelFactory.MarineTemplate, "Brother Marius");
+        Squad line = AddSquad(chapter, "Line Squad", lineTemplate);
+        Dictionary<int, Squad> squadMap = chapter.GetAllSquads().ToDictionary(squad => squad.Id);
+        SoldierTransferOption option = new(line.Id, TestModelFactory.MarineTemplate, "Test Marine, Line Squad, Chapter");
+
+        _service.ApplyTransfer(soldier, option, squadMap, _date);
+
+        // The command squad is now empty but its slot requires one (MinCount 1), so it is kept.
+        Assert.Contains(command, chapter.Squads);
+        Assert.True(squadMap.ContainsKey(command.Id));
+    }
+
     private static Unit CreateUnit(string name)
     {
         UnitTemplate template = new(1, $"{name} Template", true, [], []);
+        return new Unit(1, name, template, []);
+    }
+
+    private static Unit CreateUnitWithSlots(string name, params SquadTemplateSlot[] slots)
+    {
+        UnitTemplate template = new(1, $"{name} Template", true, (SquadTemplate)null, slots.ToList());
         return new Unit(1, name, template, []);
     }
 
