@@ -288,9 +288,16 @@ namespace OnlyWar.Helpers
 
                 bool isPlayerOrder = order.AssignedSquads.First().Faction.IsPlayerFaction;
 
+                // A combat order persists across turns (ProcessTurn never clears orders), so once a
+                // squad is wiped or fully incapacitated — dead soldiers are permanently removed from
+                // Squad.Members in BattleTurnResolver — the order would otherwise re-deploy a squad
+                // that has no able soldiers left and crash in BattleSquad construction. A depleted
+                // squad cannot fight, so deploy only squads that still have an able member.
                 List<BattleSquad> involvedBattleSquads = order.AssignedSquads
+                                                              .Where(s => s.Members.Any(m => m.CanFight))
                                                               .Select(s => new BattleSquad(isPlayerOrder, s))
                                                               .ToList();
+                if (involvedBattleSquads.Count == 0) continue;
 
                 MissionContext context = new MissionContext(order, involvedBattleSquads, new List<BattleSquad>());
                 MissionStepOrchestrator.GetStartingStep(context).ExecuteMissionStep(context, 0, null);
@@ -306,9 +313,12 @@ namespace OnlyWar.Helpers
             foreach (Order order in diversionOrders)
             {
                 bool isPlayerOrder = order.AssignedSquads.First().Faction.IsPlayerFaction;
+                // As in ProcessCombatMissions, never construct a BattleSquad from a depleted squad.
                 List<BattleSquad> involvedBattleSquads = order.AssignedSquads
+                                                              .Where(s => s.Members.Any(m => m.CanFight))
                                                               .Select(s => new BattleSquad(isPlayerOrder, s))
                                                               .ToList();
+                if (involvedBattleSquads.Count == 0) continue;
 
                 MissionContext context = new MissionContext(order, involvedBattleSquads, new List<BattleSquad>());
                 MissionStepOrchestrator.GetStartingStep(context).ExecuteMissionStep(context, 0, null);

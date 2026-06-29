@@ -44,6 +44,11 @@ public partial class MainGameScene : Control
     private int? _selectedFleetId;
     public override void _Ready()
     {
+        // Route the headless-safe battle/turn engine log seam to the Godot console. Engine code
+        // under Helpers never calls GD.Print directly so it can run headless (tests, balance
+        // tuning); in-game we wire it here so battle output still reaches the editor output.
+        BattleLog.Sink = GD.Print;
+
         if (!GameDataSingleton.Instance.IsInitialized)
         {
             GD.PushError("MainGameScene requires initialized game data. Use StartMenu or Scenes/Debug/main_game_preview_bootstrap.tscn.");

@@ -27,12 +27,23 @@ namespace OnlyWar.Models.Orders
         public Order(int id, List<Squad> orderedSquads, Disposition disposition, bool isQuiet, bool isActivelyEngaging, Aggression levelOfAggression, Mission mission)
         {
             Id = id;
-            AssignedSquads = orderedSquads; 
+            AssignedSquads = orderedSquads;
             Disposition = disposition;
             IsQuiet = isQuiet;
             IsActivelyEngaging = isActivelyEngaging;
             LevelOfAggression = levelOfAggression;
             Mission = mission;
+            // A squad in an order's AssignedSquads must point back at that order via
+            // CurrentOrders; turn processing (BattleSquad.ShouldContinueMission, OrderProcessor)
+            // reads CurrentOrders for every squad it runs. Establishing the invariant here means
+            // no order-creation site (NPC strategy, player UI, save/load) can forget to set it.
+            if (orderedSquads != null)
+            {
+                foreach (Squad squad in orderedSquads)
+                {
+                    squad.CurrentOrders = this;
+                }
+            }
         }
     }
 

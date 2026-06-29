@@ -218,6 +218,11 @@ namespace OnlyWar.Helpers.Battles
         private void AllocateEquipment()
         {
             List<BattleSoldier> tempSquad = new List<BattleSoldier>(AbleSoldiers);
+            // A squad with no able soldiers (every member wiped or fully incapacitated by prior
+            // combat) has nothing to equip. Callers should avoid deploying such a squad — see
+            // TurnController.ProcessCombatMissions, which skips depleted squads — but guard here so
+            // construction never throws on an empty AbleSoldiers (was: tempSquad[0] below).
+            if (tempSquad.Count == 0) return;
             // order the weapon sets by the strength of the primary weapon
             List<WeaponSet> wsList = Squad.Loadout.OrderByDescending(ws => ws.PrimaryRangedWeapon?.DamageMultiplier ?? ws.PrimaryMeleeWeapon.StrengthMultiplier).ToList();
             // need to allocate weapons from squad weapon sets

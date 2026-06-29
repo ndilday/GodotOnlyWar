@@ -118,13 +118,9 @@ namespace OnlyWar.Helpers.Database.GameState
                     int aggression = reader.GetInt32(5);
                     Disposition disp = (Disposition)disposition;
                     Aggression agg = (Aggression)aggression;
+                    // The Order constructor reattaches the order to each of its squads via
+                    // Squad.CurrentOrders, so the loaded order is restored onto its squads here.
                     Order order = new Order(orderId, orderSquadMap[orderId], disp, isQuiet, isActivelyEngaging, agg, missionMap[missionId]);
-                    // reattach the loaded order to its squads so it is actually restored
-                    // (the Order constructor does not set Squad.CurrentOrders)
-                    foreach (Squad squad in order.AssignedSquads)
-                    {
-                        squad.CurrentOrders = order;
-                    }
                     if(orderId > maxOrderId)
                     {
                         maxOrderId = orderId;

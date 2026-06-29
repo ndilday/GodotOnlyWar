@@ -1,4 +1,3 @@
-using Godot;
 using OnlyWar.Helpers.Battles.Actions;
 using OnlyWar.Helpers.Battles.Resolutions;
 using OnlyWar.Models;
@@ -124,7 +123,7 @@ namespace OnlyWar.Helpers.Battles
         private void ProcessEndOfBattle()
         {
             // we'll be nice to the Marines despite losing the battle... for now
-            GD.Print("Battle completed");
+            BattleLog.Write("Battle completed");
             ProcessSoldierHistoryForBattle();
             ApplySoldierExperienceForBattle();
             List<PlayerSoldier> dead = RemoveSoldiersKilledInBattle();
@@ -316,7 +315,7 @@ namespace OnlyWar.Helpers.Battles
 
         private void Log(bool isMessageVerbose, string text)
         {
-            GD.Print(text);
+            BattleLog.Write(text);
         }
 
         private void RemoveSoldier(BattleSoldier soldier)

@@ -5,7 +5,11 @@ using OnlyWar.Builders;
 using OnlyWar.Helpers;
 using OnlyWar.Helpers.Extensions;
 using OnlyWar.Models;
+using OnlyWar.Models.Missions;
+using OnlyWar.Models.Orders;
 using OnlyWar.Models.Planets;
+using OnlyWar.Models.Soldiers;
+using OnlyWar.Models.Squads;
 using OnlyWar.Tests.Fixtures;
 using Xunit;
 
@@ -179,6 +183,135 @@ public class ScenarioTurnTests
         Assert.False(promised.PlanetFactionMap.ContainsKey(player.Id));
         Assert.Null(controller.ScenarioNotification);
     }
+
+    // Regression (Design/OpeningScenario.md §8 step 7 note / §12): a fully generated sector must
+    // run forward through ProcessTurn without crashing once an order produces a combat/recon
+    // mission with assigned squads. Order creation (FactionStrategyController for NPCs, a directly
+    // constructed Order here) never set Squad.CurrentOrders, so the first turn such a mission ran,
+    // the infiltrate step's BattleSquad.ShouldContinueMission dereferenced a null CurrentOrders and
+    // threw a NullReferenceException. The compact SectorSimulationFixture never exercises real
+    // battles, which is why this slipped through; this test runs a real stamped sector forward with
+    // a genuine combat mission landing on the BattleSquad path every turn.
+    [Fact]
+    public void ProcessTurn_RealSectorRunForward_RunsCombatWithoutCrashing()
+    {
+        RNG.Reset(20250628);
+        Sector sector = SectorBuilder.GenerateSector(7, _data, _date, "Crusade Chapter");
+        // Register the generated sector so turn processing can resolve GameDataSingleton.Instance.Sector.
+        GameDataSingleton.Instance.LoadGameDataFromBlob(_data, _date, sector);
+
+        // A stamped Tyranid region is the standing combat target for the run.
+        Planet promised = sector.GetPlanet(sector.Scenario.PromisedPlanetId);
+        RegionFaction tyranidTarget = promised.Regions
+            .Select(r => r.RegionFactionMap.TryGetValue(Tyranids.Id, out RegionFaction rf) ? rf : null)
+            .First(rf => rf != null);
+
+        // A mission context with assigned squads is produced only by ProcessCombatMissions, i.e.
+        // the BattleSquad path that hosts the regression. Seeing one each turn proves real battles
+        // ran (not just population/growth bookkeeping) and that the run never threw.
+        bool sawCombatWithSquads = false;
+        for (int turn = 0; turn < TurnsToSimulate; turn++)
+        {
+            // Each turn, send a fresh, still-manned squad to recon the Tyranid region. The squad is
+            // embarked (no CurrentRegion), so the orchestrator routes it through InfiltrateMissionStep
+            // — the exact step whose ShouldContinue hit the null CurrentOrders. Building the Order
+            // directly (without manually assigning CurrentOrders) is what reproduces the bug, so this
+            // guards the fix in the Order constructor. A new squad each turn keeps the order off any
+            // squad that prior combat has emptied (constructing a BattleSquad from an unmanned squad
+            // is a separate edge, out of scope here).
+            Squad strikeSquad = sector.PlayerForce.Army.OrderOfBattle.GetAllSquads()
+                .FirstOrDefault(s => s.CurrentOrders == null && s.Members.Any(m => m.CanFight));
+            Order reconOrder = null;
+            if (strikeSquad != null)
+            {
+                Mission reconMission = new Mission(MissionType.Recon, tyranidTarget, 0);
+                reconOrder = new Order(new List<Squad> { strikeSquad }, Disposition.Mobile,
+                                       isQuiet: true, isActivelyEngaging: false, Aggression.Cautious, reconMission);
+                sector.AddNewOrder(reconOrder);
+            }
+
+            TurnController controller = new();
+            controller.ProcessTurn(sector);
+            if (controller.MissionContexts.Any(c => c.Order.AssignedSquads.Any()))
+            {
+                sawCombatWithSquads = true;
+            }
+
+            // Retire this turn's order so it never re-runs against a now-depleted squad next turn.
+            if (reconOrder != null)
+            {
+                sector.RemoveOrder(reconOrder);
+                strikeSquad.CurrentOrders = null;
+            }
+        }
+
+        Assert.True(sawCombatWithSquads,
+            "expected a combat/recon mission with assigned squads to run so the BattleSquad "
+            + "turn-processing path is actually exercised");
+    }
+
+    // Regression (Design/OpeningScenario.md §8/§12): a combat Order persists across turns —
+    // ProcessTurn never clears orders — and dead soldiers are permanently removed from
+    // Squad.Members (BattleTurnResolver.RemoveSoldiersKilledInBattle). So once combat wipes or
+    // fully incapacitates an order's squad, the next turn TurnController.ProcessCombatMissions would
+    // re-construct a BattleSquad from the now-unmanned squad, and BattleSquad.AllocateEquipment threw
+    // ArgumentOutOfRangeException ("tempSquad[0]") because it assumed AbleSoldiers was non-empty.
+    // This blocked long headless forward-sim / balance-tuning runs. The fix skips depleted squads in
+    // ProcessCombatMissions (and guards AllocateEquipment). This test plants a persistent combat
+    // order on a squad, depletes that squad each turn (the "members remain but none can fight" state
+    // combat leaves behind), and runs the real sector forward asserting no crash.
+    [Fact]
+    public void ProcessTurn_PersistentOrderOnDepletedSquad_DoesNotCrash()
+    {
+        RNG.Reset(20250628);
+        Sector sector = SectorBuilder.GenerateSector(11, _data, _date, "Attrition Chapter");
+        GameDataSingleton.Instance.LoadGameDataFromBlob(_data, _date, sector);
+
+        Planet promised = sector.GetPlanet(sector.Scenario.PromisedPlanetId);
+        RegionFaction tyranidTarget = promised.Regions
+            .Select(r => r.RegionFactionMap.TryGetValue(Tyranids.Id, out RegionFaction rf) ? rf : null)
+            .First(rf => rf != null);
+
+        // Plant a single persistent combat order: it is NOT removed between turns, so it re-runs
+        // against the same squad every turn — exactly the path that crashed once the squad emptied.
+        Squad strikeSquad = sector.PlayerForce.Army.OrderOfBattle.GetAllSquads()
+            .First(s => s.Members.Any(m => m.CanFight));
+        Mission reconMission = new Mission(MissionType.Recon, tyranidTarget, 0);
+        Order persistentOrder = new Order(new List<Squad> { strikeSquad }, Disposition.Mobile,
+                                          isQuiet: true, isActivelyEngaging: false, Aggression.Cautious, reconMission);
+        sector.AddNewOrder(persistentOrder);
+
+        for (int turn = 0; turn < TurnsToSimulate; turn++)
+        {
+            // Re-incapacitate every member each turn (the weekly healing pass would otherwise restore
+            // them), so when ProcessCombatMissions runs the order it always finds an unmanned squad.
+            DepleteSquad(strikeSquad);
+            Assert.NotEmpty(strikeSquad.Members);
+            Assert.DoesNotContain(strikeSquad.Members, m => m.CanFight);
+
+            // Before the fix this threw on the first turn the depleted squad reached the BattleSquad
+            // path; the assertion is simply that the full run completes without an exception.
+            new TurnController().ProcessTurn(sector);
+        }
+
+        // The order survives the run (depleted squads are skipped, not disbanded), and the squad is
+        // still depleted — proving the persistent order kept landing on the unmanned-squad path.
+        Assert.Contains(persistentOrder.Id, sector.Orders.Keys);
+        Assert.DoesNotContain(strikeSquad.Members, m => m.CanFight);
+    }
+
+    // Sever a vital hit location on every member so CanFight is false while each soldier remains in
+    // Squad.Members — the depleted-but-not-empty state combat leaves behind.
+    private static void DepleteSquad(Squad squad)
+    {
+        foreach (ISoldier member in squad.Members)
+        {
+            HitLocation vital = member.Body.HitLocations.First(hl => hl.Template.IsVital);
+            vital.Wounds = new Wounds(vital.Template.SeverWound, 0);
+        }
+    }
+
+    private const int TurnsToSimulate = 20;
 
     // The win path surfaces a notification; ProcessTurn clears any stale notification each turn.
     [Fact]
