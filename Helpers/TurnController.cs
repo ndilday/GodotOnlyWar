@@ -18,6 +18,10 @@ namespace OnlyWar.Helpers
     {
         public List<MissionContext> MissionContexts { get; private set; }
         public List<Mission> SpecialMissions { get; private set; }
+        // Set by ProcessScenario when the opening scenario resolves this turn (win or lapse), so
+        // MainGameScene can surface a notification. Null on a turn with no resolution
+        // (Design/OpeningScenario.md §6.2). Cleared at the start of each ProcessTurn.
+        public string ScenarioNotification { get; private set; }
 
         private readonly FactionStrategyController _npcStrategyController;
         private readonly ISoldierTrainingService _trainingService;
@@ -59,6 +63,7 @@ namespace OnlyWar.Helpers
         {
             MissionContexts.Clear();
             SpecialMissions.Clear();
+            ScenarioNotification = null;
 
             // --- 0. Shaping Phase ---
             // Diversion missions resolve before strategic planning so the feint they project is
@@ -93,6 +98,81 @@ namespace OnlyWar.Helpers
             AdvanceFleetMovement(sector);
             UpdatePlanets(sector.Planets.Values);
             UpdateIntelligence(sector.Planets.Values);
+
+            // --- 4. Scenario Resolution Phase ---
+            // Resolve the opening objective after the planet sim has settled this turn, so the
+            // win/lapse checks read the post-combat, post-growth state of the promised world.
+            ProcessScenario(sector);
+        }
+
+        // Resolves the "Promised World" opening objective (Design/OpeningScenario.md §6.2). Runs
+        // only while the scenario is Pending; both outcomes move the *current* Sector Lord's
+        // opinion (resolved on demand so credit/blame lands on whoever holds the seat now) and
+        // surface a notification via ScenarioNotification.
+        //   Win   — no Tyranid presence remains on the promised world: grant it as the Chapter
+        //           World and raise the Sector Lord's opinion.
+        //   Lapse — the world is fully overrun (no Imperial and no player presence left): withdraw
+        //           the promise (no world granted) and lower the Sector Lord's opinion. A vacant
+        //           seat makes the opinion move a no-op, but the lapse still resolves.
+        public void ProcessScenario(Sector sector)
+        {
+            CampaignScenario scenario = sector.Scenario;
+            if (scenario is not { State: ObjectiveState.Pending })
+            {
+                return;
+            }
+
+            GameRulesData data = GameDataSingleton.Instance.GameRulesData;
+            Planet promised = sector.GetPlanet(scenario.PromisedPlanetId);
+            Faction invader = data.SectorFactions.Invader;
+            Faction player = sector.PlayerForce.Faction;
+            Faction imperial = data.DefaultFaction;
+
+            bool tyranidsRemain = HasPresence(promised, invader.Id);
+            if (!tyranidsRemain)
+            {
+                scenario.State = ObjectiveState.Won;
+                // Reward path: install the player as the planet-wide controlling faction.
+                SectorBuilder.ReplaceChapterPlanetFaction(promised, player);
+                Character lord = sector.GetSectorLord();
+                if (lord != null)
+                {
+                    lord.OpinionOfPlayerForce += ScenarioRules.SectorLordOpinionReward;
+                }
+                ScenarioNotification =
+                    $"[b]The Promised World is liberated.[/b]\n\n{promised.Name} is cleared of the "
+                    + "xenos swarm and granted to your Chapter. It is your home now — hold it in the "
+                    + "Emperor's name.";
+                return;
+            }
+
+            bool imperialRemains = HasPresence(promised, imperial.Id);
+            bool playerRemains = HasPresence(promised, player.Id);
+            if (!imperialRemains && !playerRemains)
+            {
+                scenario.State = ObjectiveState.Lapsed;
+                // Promise withdrawn — no world granted. Reputation hit on the current seat; a
+                // vacant seat (the capital itself fell) makes this a no-op without blocking the lapse.
+                Character lord = sector.GetSectorLord();
+                if (lord != null)
+                {
+                    lord.OpinionOfPlayerForce -= ScenarioRules.SectorLordOpinionPenalty;
+                }
+                ScenarioNotification =
+                    $"[b]The Promised World is lost.[/b]\n\n{promised.Name} has fallen wholly to the "
+                    + "swarm. The promise is withdrawn, and your standing with the Sector Lord suffers "
+                    + "for it. The war goes on.";
+            }
+        }
+
+        // A faction has presence on a planet if any region holds a population or a standing
+        // garrison for it. Depopulated factions are already pruned from the region maps in
+        // UpdatePlanets, so this reads the settled post-turn state.
+        private static bool HasPresence(Planet planet, int factionId)
+        {
+            return planet.Regions.Any(r =>
+                r.RegionFactionMap.TryGetValue(factionId, out RegionFaction rf)
+                && (rf.Population > 0 || rf.Garrison > 0));
         }
 
         private void AdvanceFleetMovement(Sector sector)
@@ -446,10 +526,16 @@ namespace OnlyWar.Helpers
             Planet planet = regionFaction.Region.Planet;
             Faction controllingFaction = planet.GetControllingFaction();
             float newPop = 0;
+            // GrowthMultiplier (default 1.0) throttles organic growth; the Opening Scenario sets
+            // it < 1.0 on stamped Tyranid regions so their regrowth cannot outpace a fighting
+            // player (Design/OpeningScenario.md §6.1). Conversion is not organic growth, so it is
+            // left unthrottled.
             switch (regionFaction.PlanetFaction.Faction.GrowthType)
             {
                 case GrowthType.Logistic:
-                    newPop = ApplyCarryingCapacity(regionFaction.Population * LogisticGrowthRate, regionFaction.Region);
+                    newPop = ApplyCarryingCapacity(
+                        regionFaction.Population * LogisticGrowthRate * regionFaction.GrowthMultiplier,
+                        regionFaction.Region);
                     break;
                 case GrowthType.Conversion:
                     newPop = ConvertPopulation(regionFaction.Region, regionFaction, newPop);
@@ -460,7 +546,9 @@ namespace OnlyWar.Helpers
                     }
                     break;
                 default:
-                    newPop = ApplyCarryingCapacity(regionFaction.Population * BaselineGrowthRate, regionFaction.Region);
+                    newPop = ApplyCarryingCapacity(
+                        regionFaction.Population * BaselineGrowthRate * regionFaction.GrowthMultiplier,
+                        regionFaction.Region);
                     break;
             }
             // probabilistic rounding of the fractional remainder, handling both growth

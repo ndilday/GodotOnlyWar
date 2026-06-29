@@ -17,10 +17,18 @@ namespace OnlyWar.Helpers
         public const int MinTyranidRegions = 2;
         public const int MaxTyranidRegions = 3;
 
-        // Tuned starting strength per stamped Tyranid region. Garrison is the load-bearing
-        // balance number (§8); Population seeds the swarm's organic base.
-        public const long TyranidRegionGarrison = 2_000L;
-        public const long TyranidRegionPopulation = 50_000L;
+        // Starting strength per stamped Tyranid region, expressed as a fraction of the promised
+        // world's *average Imperial region* (garrison and population), measured before the stamp
+        // (§8). This is the load-bearing balance number.
+        //
+        // It is relative rather than absolute because the promised world is drawn from a wide
+        // population band ([5M, 500M]); a fixed headcount that is a tense garrison on a 5M world is
+        // a rounding error against a 500M world's multi-million-strong PDF (an early playtest of the
+        // old absolute 2,000-garrison constant found the Tyranids ~1000x too weak to register on
+        // the larger worlds — trivial to clear and unable to press outward). Scaling to the world's
+        // own PDF keeps the fight in the same ballpark across the whole band. < 1 so a single
+        // stamped region is weaker than a full Imperial region, keeping the objective winnable.
+        public const float TyranidStrengthFraction = 0.5f;
 
         // Organic-growth throttle on stamped Tyranid regions (multiplicative, < 1). Felt, but
         // unable to outpace a player who is actually fighting (§8 proposes ~0.3–0.5).
@@ -31,5 +39,11 @@ namespace OnlyWar.Helpers
         // garrison is zeroed (the local PDF was broken) and it is hidden (non-public), so the
         // region resolves to single, Tyranid control.
         public const float ImperialRemnantFraction = 0.1f;
+
+        // Sector Lord opinion swing when the scenario resolves (Design/OpeningScenario.md §6.2).
+        // Applied to the *current* seat-holder's OpinionOfPlayerForce: a promise honored raises it,
+        // a promise lost lowers it. Magnitudes are starting points for playtesting.
+        public const float SectorLordOpinionReward = 0.5f;
+        public const float SectorLordOpinionPenalty = 0.5f;
     }
 }

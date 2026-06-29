@@ -38,6 +38,7 @@ public partial class MainGameScene : Control
     private TurnController _turnController;
     private EndOfTurnDialogController _endOfTurnDialog;
     private BriefingDialogController _briefingDialog;
+    private BriefingDialogController _scenarioNotificationDialog;
     private CampaignScenario _pendingBriefingScenario;
     private int? _selectedPlanetId;
     private int? _selectedFleetId;
@@ -585,6 +586,29 @@ public partial class MainGameScene : Control
         // display end of turn dialog
         _endOfTurnDialog.AddData(_turnController.MissionContexts, _turnController.SpecialMissions);
         _endOfTurnDialog.Visible = true;
+
+        // Surface the opening-scenario resolution (win/lapse) if it fired this turn
+        // (Design/OpeningScenario.md §6.2).
+        if (!string.IsNullOrEmpty(_turnController.ScenarioNotification))
+        {
+            ShowScenarioNotification(_turnController.ScenarioNotification);
+        }
+    }
+
+    // Reuses the briefing dialog scene (a BBCode message + single acknowledge button) as a
+    // generic scenario-resolution notification, on its own instance so its dismissal does not
+    // touch the one-shot opening-briefing guard.
+    private void ShowScenarioNotification(string text)
+    {
+        if (_scenarioNotificationDialog == null)
+        {
+            PackedScene briefingScene = GD.Load<PackedScene>("res://Scenes/MainGameScreen/briefing_dialog.tscn");
+            _scenarioNotificationDialog = (BriefingDialogController)briefingScene.Instantiate();
+            _scenarioNotificationDialog.CloseButtonPressed += (s, e) => _scenarioNotificationDialog.Visible = false;
+            _mainUILayer.AddChild(_scenarioNotificationDialog);
+        }
+        _scenarioNotificationDialog.SetBriefing(text);
+        _scenarioNotificationDialog.Visible = true;
     }
 
     private void OnSoldierSelectedForDisplay(object sender, int soldierId)

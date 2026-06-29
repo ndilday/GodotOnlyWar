@@ -441,6 +441,34 @@ There is no global chapter-reputation scalar in 0.7, so reputation lives on the 
 `Character` (the governing seat) for now. A sector-wide reputation value is post-0.7 (and
 aligns with §6.5 Inquisition consequences).
 
+> **Implemented (step 5).** The throttle (§6.1) is applied in
+> `TurnController.EndOfTurnRegionFactionsUpdate`: the `Logistic` and baseline branches now multiply
+> the organic delta by `regionFaction.GrowthMultiplier` (`Conversion` is left unthrottled — it is
+> not organic growth). `ProcessScenario` (§6.2) runs as a new final phase of `ProcessTurn` and is
+> also `public` so it is unit-testable in isolation; it no-ops unless `Scenario is { State: Pending }`.
+> Deviations, all minor:
+> - **Win grant.** Repurposed `SectorBuilder.ReplaceChapterPlanetFaction` (made `internal`) installs
+>   the player as the planet-wide controlling faction (`PlayerReputation = 1`, all regions public),
+>   inheriting the displaced Imperial garrison/population region by region. It was hardened to resolve
+>   the Imperial faction from the planet's faction map rather than via `GetControllingFaction`,
+>   because a freshly-liberated world can have a cleared region with no public faction (the displaced
+>   civilian remnant is non-public), which the old call would have thrown on.
+> - **Opinion lever.** Win/lapse move `GetSectorLord().OpinionOfPlayerForce` by
+>   `ScenarioRules.SectorLordOpinionReward` / `…Penalty` (±0.5, playtest starting points), resolved at
+>   resolution time; a vacant seat (lapse where the capital itself fell) is a no-op that still resolves
+>   the lapse.
+> - **Notification.** Surfaced via `TurnController.ScenarioNotification` (a string set on resolution,
+>   cleared each `ProcessTurn`). `MainGameScene.OnEndTurnButtonPressed` reads it and shows the message
+>   by reusing the `briefing_dialog` scene on a separate instance (BBCode message + acknowledge), so
+>   the one-shot opening-briefing guard is untouched.
+> - **Turn-loop hardening (discovered).** Running a *real generated* sector forward (which the scenario
+>   now requires every turn) exposed a pre-existing crash: `PlanetExtensions.GetControllingFaction`
+>   dereferenced a null per-region controller whenever a region held ≠1 public faction (transiently
+>   true once factions fight over a region). It now skips contested/vacated regions and falls back to a
+>   public planet faction if none are cleanly controlled. This was never hit before because no test ran
+>   a full generated sector through `ProcessTurn`; it is required for the scenario's "simulate forward"
+>   loop to survive.
+
 ## 7. Persistence
 
 New persisted state:
@@ -502,6 +530,36 @@ These belong in named constants (e.g. a `ScenarioRules` static, mirroring
 literals. A later move into the rules DB is consistent with the PRD's "move tunable rules out
 of code" direction.
 
+> **Implemented (step 7) — partial; key finding below.** All knobs live in `ScenarioRules`. The
+> `GrowthMultiplier` throttle is `0.4`; opinion swings are `±0.5`. The load-bearing strength knob was
+> **redesigned**: the original absolute constants (`TyranidRegionGarrison = 2,000`,
+> `…Population = 50,000`) were replaced by a single **relative** `TyranidStrengthFraction = 0.5` —
+> Tyranid per-region garrison/population is now `0.5 ×` the promised world's *average Imperial region*,
+> measured before the stamp (`ScenarioBuilder.ScaledTyranidStrength`).
+>
+> **Why the redesign.** A headless forward-simulation of a real stamped sector (added as a throwaway
+> diagnostic, since there is no Godot runtime here to playtest in-engine) showed the absolute constants
+> were ~3 orders of magnitude too small: a representative promised world carried **~2.5M of Imperial
+> PDF (~159k/region)**, against which a 2,000-strong Tyranid garrison is a rounding error — trivial for
+> the player to clear and far too weak to ever press into an adjacent region. Sizing the Tyranids to the
+> world's own PDF keeps the fight in the same ballpark across the entire `[5M, 500M]` band. The `0.5`
+> fraction and `0.4` throttle remain **playtest starting points, not final**.
+>
+> **What is *not* yet validated, and why.** The target outcomes — a clean ~6–12 turn win and an
+> idle-player lapse — could **not** be confirmed empirically:
+> 1. *Win window* needs the player's actual combat throughput against the stamped garrison, which means
+>    issuing assault orders through the battle engine (or playing in-engine). No Godot runtime is
+>    available in this environment, so the win pace is an estimate.
+> 2. *Idle lapse* needs the Tyranids to **spread**, which routes NPC offensives through
+>    `FactionStrategyController` → the battle engine. Forward-simulating that surfaced a **pre-existing
+>    NRE** in the battle code (`BattleSquad.ShouldContinueMission`, reached via
+>    `InfiltrateMissionStep.ShouldContinue` during `ProcessCombatMissions`) that crashes any headless
+>    run once real battles occur. The scenario's *resolution* logic (§6.2 win/lapse, opinion, grant) is
+>    fully unit-tested by forcing the board state directly; only its *spread trigger* is gated on that
+>    battle-engine bug, which is **out of scope for this turn-loop session** and flagged as follow-up.
+> Net: the mechanics are correct and green; the numeric tuning of the win/lapse *windows* awaits a
+> playtest pass (and the battle-engine fix that unblocks automated forward-sim).
+
 ## 9. Optional polish (in-scope-if-cheap)
 
 - **Seed an initial governor request** on the promised world at stamp time, so the governor
@@ -527,14 +585,18 @@ of code" direction.
 3. **Narrative** — `BriefingComposer` + token sourcing (subsector naming); founding-history
    entry; store `BriefingText` on the scenario.
 4. **Briefing UI** — `briefing_dialog` scene/controller; one-shot hook in `MainGameScene._Ready`.
-5. **Turn-loop** — apply `GrowthMultiplier` in growth; `ProcessScenario` for win (grant world +
-   rep up) and lapse (withdraw + rep down) + notifications.
+5. **Turn-loop** *(done)* — apply `GrowthMultiplier` in growth; `ProcessScenario` for win (grant world +
+   rep up) and lapse (withdraw + rep down) + notifications. (Plus a required hardening of
+   `GetControllingFaction` so the loop survives forward simulation — see the step 5 note in §6.)
 6. **Persistence** — scenario fields on `GlobalData`; `GrowthMultiplier` column; verify
    planet-less authority `Character` round-trips.
-7. **Balance pass** — tune `ScenarioRules`; verify a clean ~6–12 turn win and an idle-player
-   lapse.
+7. **Balance pass** *(partial — mechanics done; numbers are starting points)* — tunables in
+   `ScenarioRules`; strength redesigned to scale with the world's PDF. The ~6–12 turn win and
+   idle-player lapse *windows* are not empirically validated (no Godot runtime; a pre-existing
+   battle-engine NRE blocks headless forward-sim of combat). See the step 7 note in §8.
 
 Steps 1–4 are independent enough to land before 5; 6 must accompany whatever state 1/2/3 add.
+**Status: steps 1, 1a, 2, 3, 4, 5, 6 implemented; 7 partial (see §8).**
 
 ## 11. Tests
 
@@ -552,6 +614,10 @@ Steps 1–4 are independent enough to land before 5; 6 must accompany whatever s
 - `ProcessScenario`: win path grants the player `PlanetFaction` and raises the **current
   Sector Lord's** opinion; lapse path withdraws and lowers it; a lapse with a vacant seat
   still resolves (no-op reputation); neither fires while `State != Pending`.
+  *(Implemented in `OnlyWar.Tests/Turns/ScenarioTurnTests.cs`, alongside the growth-throttle
+  test — a throttled region grows strictly slower than an identical unthrottled one — and a
+  default-multiplier-unchanged guard. Win/lapse are exercised against a real stamped sector with
+  the board forced to the win/lapse state.)*
 - Save/load round-trip: `CampaignScenario`, `GrowthMultiplier`, and the planet-less authority
   character all survive (extend `SaveLoadRoundTripTests`).
 - Legacy save (no scenario row) loads with `Scenario == null` and no growth change.
@@ -568,5 +634,10 @@ Steps 1–4 are independent enough to land before 5; 6 must accompany whatever s
 - Reducing starting *chapter* strength (vs. expressing understrength through materiel) — left
   for a later balance pass if playtesting shows the full chapter trivializes the objective.
 - Tyranid region-to-region *spread* as an explicit mechanic — handled implicitly by the
-  existing `FactionStrategyController` NPC orders for 0.7.
+  existing `FactionStrategyController` NPC orders for 0.7. **Caveat (discovered in step 7):** the
+  implicit spread routes NPC offensives through the battle engine, which currently throws a
+  pre-existing `NullReferenceException` (`BattleSquad.ShouldContinueMission` via
+  `InfiltrateMissionStep.ShouldContinue`) once real battles run during forward simulation. Until
+  that is fixed, the idle-player lapse cannot actually trigger in play, and headless balance
+  validation of the win/lapse windows is blocked. Tracked as a follow-up battle-engine fix.
 ```

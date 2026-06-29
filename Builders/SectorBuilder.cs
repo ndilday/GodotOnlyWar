@@ -161,25 +161,48 @@ namespace OnlyWar.Builders
             return chapterPlanet;
         }
 
-        private static void ReplaceChapterPlanetFaction(Planet chapterPlanet, Faction playerFaction)
+        // Reward path (Design/OpeningScenario.md §6.2): install the player as the planet-wide
+        // controlling faction, inheriting the displaced Imperial population/garrison region by
+        // region. Repurposed from the dead FoundChapterPlanet helper and now also invoked by
+        // TurnController when the opening scenario is won.
+        //
+        // The Imperial (default) faction is resolved from the planet's faction map rather than via
+        // GetControllingFaction: on a freshly-liberated world a cleared former-Tyranid region can
+        // momentarily have no public faction (the displaced civilian remnant is non-public), which
+        // would make GetControllingFaction's per-region resolution throw. Each region inherits the
+        // Imperial garrison/population if that faction is present there, otherwise it is granted to
+        // the player at zero strength.
+        internal static void ReplaceChapterPlanetFaction(Planet chapterPlanet, Faction playerFaction)
         {
-            Faction defaultFaction = chapterPlanet.GetControllingFaction();
-            
-            PlanetFaction existingPlanetFaction = chapterPlanet.PlanetFactionMap[defaultFaction.Id];
-            PlanetFaction homePlanetFaction = new PlanetFaction(playerFaction);
-            homePlanetFaction.IsPublic = true;
-            homePlanetFaction.Leader = null;
+            PlanetFaction existingPlanetFaction = chapterPlanet.PlanetFactionMap.Values
+                .FirstOrDefault(pf => pf.Faction.IsDefaultFaction);
+            int? existingFactionId = existingPlanetFaction?.Faction.Id;
+
+            PlanetFaction homePlanetFaction = new PlanetFaction(playerFaction)
+            {
+                IsPublic = true,
+                Leader = null,
+                PlayerReputation = 1
+            };
             foreach (Region region in chapterPlanet.Regions)
             {
-                RegionFaction existingPlanetRegionFaction = region.RegionFactionMap[existingPlanetFaction.Faction.Id];
-                RegionFaction homePlanetRegionFaction = new RegionFaction(homePlanetFaction, region);
-                homePlanetRegionFaction.Garrison = existingPlanetRegionFaction.Garrison;
-                homePlanetRegionFaction.Population = existingPlanetRegionFaction.Population;
-                region.RegionFactionMap.Remove(existingPlanetFaction.Faction.Id);
+                RegionFaction homePlanetRegionFaction = new RegionFaction(homePlanetFaction, region)
+                {
+                    IsPublic = true
+                };
+                if (existingFactionId.HasValue
+                    && region.RegionFactionMap.TryGetValue(existingFactionId.Value, out RegionFaction existingRegionFaction))
+                {
+                    homePlanetRegionFaction.Garrison = existingRegionFaction.Garrison;
+                    homePlanetRegionFaction.Population = existingRegionFaction.Population;
+                    region.RegionFactionMap.Remove(existingFactionId.Value);
+                }
                 region.RegionFactionMap[playerFaction.Id] = homePlanetRegionFaction;
             }
-            homePlanetFaction.PlayerReputation = 1;
-            chapterPlanet.PlanetFactionMap.Remove(existingPlanetFaction.Faction.Id);
+            if (existingFactionId.HasValue)
+            {
+                chapterPlanet.PlanetFactionMap.Remove(existingFactionId.Value);
+            }
             chapterPlanet.PlanetFactionMap[homePlanetFaction.Faction.Id] = homePlanetFaction;
         }
 

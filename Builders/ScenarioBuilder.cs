@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using OnlyWar.Helpers;
@@ -97,6 +98,11 @@ namespace OnlyWar.Builders
             // The Navy already identified the incursion; the world is known to be invaded.
             tyranidPlanetFaction.IsPublic = true;
 
+            // Size the Tyranids relative to the world's own PDF (measured before the stamp), so the
+            // fight scales across the wide promised-world population band rather than being fixed by
+            // an absolute headcount that is meaningless on a hive-scale world (§8 / ScenarioRules).
+            (long tyranidGarrison, long tyranidPopulation) = ScaledTyranidStrength(promised, data);
+
             int regionCount = RNG.GetIntBelowMax(
                 ScenarioRules.MinTyranidRegions, ScenarioRules.MaxTyranidRegions + 1);
             int startIndex = RNG.GetIntBelowMax(0, promised.Regions.Length);
@@ -117,8 +123,10 @@ namespace OnlyWar.Builders
                 RegionFaction tyranid = new RegionFaction(tyranidPlanetFaction, region)
                 {
                     IsPublic = true,
-                    Population = ScenarioRules.TyranidRegionPopulation,
-                    Garrison = ScenarioRules.TyranidRegionGarrison,
+                    Population = tyranidPopulation,
+                    Garrison = tyranidGarrison,
+                    // Raiders, not dug-in defenders: low organization (and zero fortification) keeps
+                    // their offensive throughput modest, so spread is gradual rather than runaway.
                     Organization = 1,
                     Entrenchment = 0,
                     Detection = 0,
@@ -127,6 +135,26 @@ namespace OnlyWar.Builders
                 };
                 region.RegionFactionMap[tyranidFaction.Id] = tyranid;
             }
+        }
+
+        // Tyranid per-region garrison/population as a fraction of the promised world's average
+        // Imperial region, measured before any region is overrun (§8). Returns at least 1 of each
+        // so a stamped region is never empty even on a tiny world.
+        private static (long garrison, long population) ScaledTyranidStrength(Planet promised, GameRulesData data)
+        {
+            List<RegionFaction> imperialRegions = promised.Regions
+                .Where(r => r.RegionFactionMap.ContainsKey(data.DefaultFaction.Id))
+                .Select(r => r.RegionFactionMap[data.DefaultFaction.Id])
+                .ToList();
+            if (imperialRegions.Count == 0)
+            {
+                return (1L, 1L);
+            }
+            double avgGarrison = imperialRegions.Average(rf => rf.Garrison);
+            double avgPopulation = imperialRegions.Average(rf => rf.Population);
+            long garrison = Math.Max(1L, (long)(avgGarrison * ScenarioRules.TyranidStrengthFraction));
+            long population = Math.Max(1L, (long)(avgPopulation * ScenarioRules.TyranidStrengthFraction));
+            return (garrison, population);
         }
 
         // §3.3 — park the chapter in orbit. Squads stay embarked (no CurrentRegion, no
