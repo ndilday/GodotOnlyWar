@@ -359,7 +359,7 @@ namespace OnlyWar.Builders
                     if ((slot.Template.SquadType & SquadTypes.Elite) > 0)
                     {
                         FillCompanyWithSquads(unassignedSoldierMap, company, slot.Template,
-                            vetList, veteranLeaders, templates.Veteran, templates.TacticalSergeant,
+                            vetList, veteranLeaders, templates.Veteran, templates.VeteranSergeant,
                             (_, _) => squadSize, year);
                     }
                 }

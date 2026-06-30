@@ -33,6 +33,27 @@ public class SoldierDossierServiceTests
     }
 
     [Fact]
+    public void BuildAwardLines_ShowsOnlyHighestTierPerAwardType()
+    {
+        Squad squad = CreateAssignedSquad("Tactical Squad");
+        PlayerSoldier soldier = AddPlayerSoldier(squad, "Brother Marius");
+        Date bronzeDate = new(41, 998, 5);
+        Date silverDate = new(41, 999, 20);
+        Date marksmanDate = new(41, 999, 30);
+        soldier.AddAward(new SoldierAward(bronzeDate, "Bronze Sword of the Emperor", "Sword", 1));
+        soldier.AddAward(new SoldierAward(silverDate, "Silver Sword of the Emperor", "Sword", 2));
+        soldier.AddAward(new SoldierAward(marksmanDate, "Marksman's Honour", "Marksman", 1));
+
+        var awards = _service.BuildAwardLines(soldier);
+
+        // The Sword type collapses to its highest tier (Silver); other types are unaffected.
+        Assert.Equal(2, awards.Count);
+        Assert.Contains($"{silverDate}: Silver Sword of the Emperor", awards);
+        Assert.Contains($"{marksmanDate}: Marksman's Honour", awards);
+        Assert.DoesNotContain($"{bronzeDate}: Bronze Sword of the Emperor", awards);
+    }
+
+    [Fact]
     public void BuildSergeantReport_ReturnsFallbackWhenNoEvaluationExists()
     {
         Squad squad = CreateAssignedSquad("Tactical Squad");

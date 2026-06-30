@@ -217,7 +217,7 @@ Each feature is described as a behavioral specification: what the system does, a
 - Displays all skills and their current values.
 - Displays the marine's personal history log: recruitment, training, promotions, notable actions, wounds received, and awards. The history event vocabulary and its narration follow the Narrative Voice specification (4.19).
 - Displays confirmed kill counts by faction and weapon type.
-- Displays any awards or commendations.
+- Displays any awards or commendations. For an award type with multiple tiers, only the most recent / highest level the marine has earned is displayed. *(Post-0.7: surface these as icons in the top panel of the screen — see §5.7.)*
 - Displays geneseed implant date and maturity status.
 - Displays estimated weeks to recovery if the marine is currently injured.
 - The player can initiate a squad transfer from this screen (selecting a destination squad).
@@ -993,6 +993,8 @@ Documented for planning purposes; not scheduled:
 **Strategic:** Supply economy remainder (§4.23 — the typed **materiel pledges** driven by strategic classification §4.1, the **Armory wargear inventory** §6.9, **pledge interdiction** §6.10, and **Inquisition negative-requisition** §6.5; the Requisition currency and the Requisition-delivering pledge/supply-line layer ship earlier as Phases 1–2 in 0.7 and 0.7 stretch, §5.3/§5.4), Diplomacy system, Space Combat and Boarding, Strategic Planetary Maps (regional types), Factional Fleets with independent movement, Sector Generation Customization (difficulty, era, story threads), Chapter Customization at start (founding legion, perks/disadvantages).
 
 **Living Universe:** Imperial Guard movement and inter-planet logistics (Phase 4); Character personality development over time (Phase 5).
+
+**Soldier Screen — awards as icons.** Replace the textual awards list on the Soldier Screen (§4.7) with an icon strip in the screen's top panel: one icon per award the marine holds, with the date the award was earned shown as hover text. The existing display rule still applies — for a multi-tier award type, only the most recent / highest tier is shown (one icon, not one per tier). Small UI/presentation item; depends on an icon set for the award types.
 
 **Infrastructure:** Full mod support (XML data, moddable factions, name lists, planet data, chapter generation); data-layer decoupling to replace hardcoded rules-data display-name references with stable keys, validated registries, and data-driven rule profiles; Graphics overhaul; Full UX pass.
 

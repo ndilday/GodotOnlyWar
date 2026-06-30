@@ -127,28 +127,17 @@ namespace OnlyWar.Builders
 
         private static Planet GeneratePlanet(Coordinate position, GameRulesData data)
         {
-            // TODO: There should be game start config settings for planet ownership by specific factions
-            // TODO: Once genericized, move into planet factory
+            // Every generated world starts under Imperial (default-faction) control: no enemy
+            // faction openly holds a planet at game start, so the newly founded Chapter isn't
+            // dropped into a sector already speckled with Tyranid/cult holdings. The only overt
+            // incursion is the Tyranid invasion the opening scenario stamps onto the promised
+            // world (Design/OpeningScenario.md §3). Hidden Genestealer-cult infiltration is still
+            // seeded on a minority of worlds — it's covert, not "in control," and gives the sector
+            // latent threats to surface later.
+            // TODO: reintroduce overt faction-owned worlds via game-start config + hot spots.
             double random = RNG.GetLinearDouble();
-            Faction controllingFaction, infiltratingFaction;
-            if (random <= 0.05f)
-            {
-                controllingFaction = data.SectorFactions.Infiltrator;
-                infiltratingFaction = null;
-            }
-            else if (random <= 0.25f)
-            {
-                controllingFaction = data.SectorFactions.Invader;
-                infiltratingFaction = null;
-            }
-            else
-            {
-                controllingFaction = data.DefaultFaction;
-                random = RNG.GetLinearDouble();
-                infiltratingFaction = random <= 0.1 ? data.SectorFactions.Infiltrator : null;
-            }
-
-            return PlanetBuilder.Instance.GenerateNewPlanet(data.PlanetTemplateMap, position, controllingFaction, infiltratingFaction);
+            Faction infiltratingFaction = random <= 0.1 ? data.SectorFactions.Infiltrator : null;
+            return PlanetBuilder.Instance.GenerateNewPlanet(data.PlanetTemplateMap, position, data.DefaultFaction, infiltratingFaction);
         }
 
         private static Planet FoundChapterPlanet(List<Planet> planetList, Faction playerFaction)

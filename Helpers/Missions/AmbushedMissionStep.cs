@@ -34,6 +34,15 @@ namespace OnlyWar.Helpers.Missions
             }
             context.EnemiesKilled += resolver.BattleHistory.EnemiesKilled;
             context.Log.Add(resolver.BattleHistory.GetBattleLog());
+            // A force left combat-ineffective by the ambush ends its mission here rather than
+            // recursing into steps that assume a manned squad (placement/checks index into
+            // AbleSoldiers and would throw). Mirrors InfiltrateMissionStep.ShouldContinue's
+            // casualty abort, applied at the point the battle actually depletes the squad.
+            if (!context.MissionSquads.Any(s => s.ShouldContinueMission()))
+            {
+                context.Log.Add($"Day {context.DaysElapsed}: Force combat-ineffective; mission ended.");
+                return;
+            }
             if(returnStep == null)
             {
                 return;

@@ -46,9 +46,11 @@ namespace OnlyWar.Builders
 
         // §3.1 — the promised world is Imperial-habitable but invaded. We pick a default-faction
         // world in a tuned population band, excluding governance capitals (too central for a
-        // first objective), deterministically near the lower-middle of the band. Fallbacks widen
-        // the band and, ultimately, reuse the old lowest-population-enemy rule so generation can
-        // never fail.
+        // first objective). Among the band, the world nearest the sector edge is chosen: the
+        // opening invasion sits on the frontier, which both reads correctly (a rimward incursion
+        // the over-stretched Imperium can't spare a regiment for) and keeps the first objective off
+        // the populous sector core. Fallbacks widen the band and, ultimately, reuse the old
+        // lowest-population-enemy rule so generation can never fail.
         private static Planet SelectPromisedWorld(List<Planet> planetList, GameRulesData data)
         {
             List<Planet> eligible = planetList
@@ -56,7 +58,6 @@ namespace OnlyWar.Builders
                             && p.GovernanceTier == GovernanceTier.Planetary
                             && p.Population >= ScenarioRules.MinPromisedWorldPopulation
                             && p.Population <= ScenarioRules.MaxPromisedWorldPopulation)
-                .OrderBy(p => p.Population).ThenBy(p => p.Id)
                 .ToList();
 
             if (eligible.Count == 0)
@@ -65,14 +66,18 @@ namespace OnlyWar.Builders
                 eligible = planetList
                     .Where(p => p.GetControllingFaction().IsDefaultFaction
                                 && p.GovernanceTier == GovernanceTier.Planetary)
-                    .OrderBy(p => p.Population).ThenBy(p => p.Id)
                     .ToList();
             }
 
             if (eligible.Count > 0)
             {
-                // Lower-middle of the ordered band: a worthwhile but not premier world.
-                return eligible[eligible.Count / 3];
+                // Nearest the sector edge wins; population then id are deterministic tie-breaks so
+                // a seed reproduces the same world.
+                return eligible
+                    .OrderBy(p => EdgeDistance(p, data))
+                    .ThenBy(p => p.Population)
+                    .ThenBy(p => p.Id)
+                    .First();
             }
 
             // Ultimate fallback: the old FoundTakebackPlanet rule, so generation cannot fail.
@@ -80,6 +85,17 @@ namespace OnlyWar.Builders
                 .Where(p => !p.GetControllingFaction().IsDefaultFaction)
                 .OrderBy(p => p.Population).ThenBy(p => p.Id)
                 .First();
+        }
+
+        // Chebyshev distance from the planet's grid cell to the nearest sector boundary. Smaller
+        // means closer to the edge; a corner world is 0. Used to bias the opening invasion rimward.
+        private static int EdgeDistance(Planet planet, GameRulesData data)
+        {
+            int maxX = data.SectorSize.X - 1;
+            int maxY = data.SectorSize.Y - 1;
+            int x = planet.Position.X;
+            int y = planet.Position.Y;
+            return Math.Min(Math.Min(x, maxX - x), Math.Min(y, maxY - y));
         }
 
         // §3.2 — confine the Tyranids to a contiguous cluster of N regions, leaving the rest of
@@ -111,6 +127,7 @@ namespace OnlyWar.Builders
             {
                 Region region = promised.Regions[(startIndex + i) % promised.Regions.Length];
 
+                long remnantPopulation = 0;
                 if (region.RegionFactionMap.TryGetValue(data.DefaultFaction.Id, out RegionFaction imperial))
                 {
                     imperial.Garrison = 0;
@@ -118,12 +135,20 @@ namespace OnlyWar.Builders
                     // Displaced remnant: hidden, so the region reads as Tyranid-controlled rather
                     // than as two-public-faction (which has no single controlling faction).
                     imperial.IsPublic = false;
+                    remnantPopulation = imperial.Population;
                 }
+
+                // The world-average-scaled Tyranid population can exceed a specific region's
+                // carrying capacity (regions vary in size); clamp it so the stamped Tyranid plus the
+                // displaced remnant never overpopulate the region — a generation invariant (no region
+                // starts above capacity). Garrison is not population, so it is left unclamped.
+                long regionTyranidPopulation = Math.Max(0L,
+                    Math.Min(tyranidPopulation, region.CarryingCapacity - remnantPopulation));
 
                 RegionFaction tyranid = new RegionFaction(tyranidPlanetFaction, region)
                 {
                     IsPublic = true,
-                    Population = tyranidPopulation,
+                    Population = regionTyranidPopulation,
                     Garrison = tyranidGarrison,
                     // Raiders, not dug-in defenders: low organization (and zero fortification) keeps
                     // their offensive throughput modest, so spread is gradual rather than runaway.

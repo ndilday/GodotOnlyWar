@@ -4,7 +4,7 @@ using Microsoft.Data.Sqlite;
 
 if (args.Length < 2)
 {
-    Console.Error.WriteLine("Usage: RulesDbTool <schema|training-source|migrate-training|migrate-progenoid|migrate-ratings|migrate-planet-scales|migrate-fortification|migrate-tyranids|migrate-tyranid-squads|migrate-evasion|migrate-squad-caps|remove-unused-unit-templates> <db-path>");
+    Console.Error.WriteLine("Usage: RulesDbTool <schema|training-source|migrate-training|migrate-progenoid|migrate-ratings|migrate-planet-scales|migrate-fortification|migrate-tyranids|migrate-tyranid-squads|migrate-evasion|migrate-squad-caps|migrate-veteran-sergeant|migrate-remove-veteran-captain|remove-unused-unit-templates> <db-path>");
     return 1;
 }
 
@@ -13,7 +13,7 @@ string dbPath = args[1];
 string connectionString = new SqliteConnectionStringBuilder
 {
     DataSource = dbPath,
-    Mode = command is "migrate-training" or "migrate-progenoid" or "migrate-ratings" or "migrate-planet-scales" or "migrate-fortification" or "migrate-tyranids" or "migrate-tyranid-squads" or "migrate-evasion" or "migrate-squad-caps" or "remove-unused-unit-templates" ? SqliteOpenMode.ReadWriteCreate : SqliteOpenMode.ReadOnly
+    Mode = command is "migrate-training" or "migrate-progenoid" or "migrate-ratings" or "migrate-planet-scales" or "migrate-fortification" or "migrate-tyranids" or "migrate-tyranid-squads" or "migrate-evasion" or "migrate-squad-caps" or "migrate-veteran-sergeant" or "migrate-remove-veteran-captain" or "remove-unused-unit-templates" ? SqliteOpenMode.ReadWriteCreate : SqliteOpenMode.ReadOnly
 }.ToString();
 
 using SqliteConnection connection = new(connectionString);
@@ -56,6 +56,12 @@ switch (command)
         break;
     case "migrate-squad-caps":
         MigrateSquadCaps(connection);
+        break;
+    case "migrate-veteran-sergeant":
+        MigrateVeteranSergeant(connection);
+        break;
+    case "migrate-remove-veteran-captain":
+        MigrateRemoveVeteranCaptain(connection);
         break;
     default:
         Console.Error.WriteLine($"Unknown command: {command}");
@@ -739,6 +745,106 @@ static void MigrateSquadCaps(SqliteConnection connection)
 
     transaction.Commit();
     Console.WriteLine($"Squad caps migration complete. Collapsed to {rows.Count} (unit, squad) rows.");
+}
+
+static void MigrateVeteranSergeant(SqliteConnection connection)
+{
+    using SqliteTransaction transaction = connection.BeginTransaction();
+
+    const int PlayerFaction = 1;
+
+    // Idempotency guard.
+    if (ExecuteScalarInt(connection, transaction,
+        "SELECT COUNT(*) FROM SoldierTemplate WHERE Name = 'Veteran Sergeant' AND FactionId = 1") > 0)
+    {
+        Console.WriteLine("Veteran Sergeant migration already applied; nothing to do.");
+        return;
+    }
+
+    // The line Veteran (Elite) Squad's leader element pointed at the Veteran Captain,
+    // a company-command rank that belongs only to the Veteran HQ Squad. Because the
+    // line squads are seeded with an ordinary sergeant, that left an unfilled Captain
+    // slot in every First Company squad, which the transfer UI then offered as a
+    // promotion target. Introduce a proper Veteran Sergeant rank to lead the line
+    // veteran squads and repoint the squad's leader slot to it.
+    int sergeantId = ExecuteScalarInt(connection, transaction,
+        "SELECT Id FROM SoldierTemplate WHERE Name = 'Sergeant' AND FactionId = 1");
+    if (sergeantId == 0)
+    {
+        throw new InvalidOperationException("Line 'Sergeant' soldier template is missing; cannot model the Veteran Sergeant on it.");
+    }
+
+    // Model the Veteran Sergeant on the line Sergeant: same species, rank-5 squad
+    // leader, and the sergeant work-experience training profile.
+    int speciesId = ExecuteScalarInt(connection, transaction,
+        "SELECT SpeciesId FROM SoldierTemplate WHERE Id = $id", ("$id", sergeantId));
+    int profileId = ExecuteScalarInt(connection, transaction,
+        "SELECT WorkExperienceTrainingProfileId FROM SoldierTemplate WHERE Id = $id", ("$id", sergeantId));
+
+    int veteranSergeant = ExecuteScalarInt(connection, transaction,
+        "SELECT COALESCE(MAX(Id), 0) + 1 FROM SoldierTemplate");
+    // SubRank 15 keeps it distinct from the existing rank-5 entries (1-14).
+    // IsSquadLeader so Squad.SquadLeader recognizes it as the squad's leader.
+    Execute(connection, transaction,
+        @"INSERT INTO SoldierTemplate
+            (Id, FactionId, SpeciesId, Name, Rank, SubRank, IsSquadLeader, SpecialistType, WorkExperienceTrainingProfileId)
+          VALUES ($id, $f, $s, 'Veteran Sergeant', 5, 15, 1, 0, $p)",
+        ("$id", veteranSergeant), ("$f", PlayerFaction), ("$s", speciesId),
+        ("$p", profileId == 0 ? DBNull.Value : profileId));
+
+    // Mirror the line Sergeant's MOS training (leadership/tactics emphasis).
+    Execute(connection, transaction,
+        @"INSERT INTO SoldierMosTraining (SoldierTemplateId, BaseSkillId, PointsAdded)
+          SELECT $new, BaseSkillId, PointsAdded FROM SoldierMosTraining WHERE SoldierTemplateId = $old",
+        ("$new", veteranSergeant), ("$old", sergeantId));
+
+    // Repoint the line Veteran Squad's leader slot from Veteran Captain to the new rank.
+    int veteranCaptain = ExecuteScalarInt(connection, transaction,
+        "SELECT Id FROM SoldierTemplate WHERE Name = 'Veteran Captain' AND FactionId = 1");
+    int updated = Execute(connection, transaction,
+        @"UPDATE SquadTemplateElement
+          SET SoldierTemplateId = $vs
+          WHERE SoldierTemplateId = $vc
+            AND SquadTemplateId IN (SELECT Id FROM SquadTemplate WHERE Name = 'Veteran Squad' AND FactionId = 1)",
+        ("$vs", veteranSergeant), ("$vc", veteranCaptain));
+
+    transaction.Commit();
+    Console.WriteLine($"Veteran Sergeant migration complete. Added soldier {veteranSergeant}; repointed {updated} Veteran Squad leader element(s).");
+}
+
+static void MigrateRemoveVeteranCaptain(SqliteConnection connection)
+{
+    using SqliteTransaction transaction = connection.BeginTransaction();
+
+    // Every company HQ, including the Veteran Company's, is now led by a plain Captain;
+    // the distinct "Veteran Captain" rank is redundant. Repoint its last reference (the
+    // Veteran HQ Squad leader slot) to the Captain and drop the template. The line
+    // Veteran Squads were already moved off it by migrate-veteran-sergeant.
+    int veteranCaptain = ExecuteScalarInt(connection, transaction,
+        "SELECT Id FROM SoldierTemplate WHERE Name = 'Veteran Captain' AND FactionId = 1");
+    if (veteranCaptain == 0)
+    {
+        Console.WriteLine("Veteran Captain already removed; nothing to do.");
+        return;
+    }
+
+    int captain = ExecuteScalarInt(connection, transaction,
+        "SELECT Id FROM SoldierTemplate WHERE Name = 'Captain' AND FactionId = 1");
+    if (captain == 0)
+    {
+        throw new InvalidOperationException("'Captain' soldier template is missing; cannot retarget Veteran Captain references.");
+    }
+
+    int repointed = Execute(connection, transaction,
+        "UPDATE SquadTemplateElement SET SoldierTemplateId = $c WHERE SoldierTemplateId = $vc",
+        ("$c", captain), ("$vc", veteranCaptain));
+    Execute(connection, transaction,
+        "DELETE FROM SoldierMosTraining WHERE SoldierTemplateId = $vc", ("$vc", veteranCaptain));
+    Execute(connection, transaction,
+        "DELETE FROM SoldierTemplate WHERE Id = $vc", ("$vc", veteranCaptain));
+
+    transaction.Commit();
+    Console.WriteLine($"Removed Veteran Captain (soldier {veteranCaptain}); repointed {repointed} squad element(s) to Captain {captain}.");
 }
 
 static void SetEvasion(SqliteConnection connection, SqliteTransaction transaction, string speciesName,

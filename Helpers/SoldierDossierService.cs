@@ -109,9 +109,18 @@ namespace OnlyWar.Helpers
             return subsector?.Name ?? "Subsector TBD";
         }
 
+        // For an award type with multiple tiers, only the marine's most recent / highest
+        // level is surfaced (one line per type), so a brother who has earned successive
+        // grades of the same honor shows just his current standing rather than every step.
         public IReadOnlyList<string> BuildAwardLines(PlayerSoldier soldier)
         {
             return soldier.SoldierAwards
+                .GroupBy(award => award.Type)
+                .Select(group => group
+                    .OrderByDescending(award => award.Level)
+                    .ThenByDescending(award => award.DateAwarded)
+                    .First())
+                .OrderBy(award => award.DateAwarded)
                 .Select(award => $"{award.DateAwarded}: {award.Name}")
                 .ToList();
         }

@@ -191,6 +191,14 @@ custom_minimum_size = Vector2(340, 0)
 layout_mode = 2
 columns = 3
 
+[node name="TransferButton" type="MenuButton" parent="ChapterView/Content/MainLayout/DetailPanel/Panel/MarginContainer/DetailStack/Hero"]
+custom_minimum_size = Vector2(0, 36)
+layout_mode = 2
+size_flags_vertical = 0
+visible = false
+flat = false
+text = "Transfer"
+
 [node name="DetailScroll" type="ScrollContainer" parent="ChapterView/Content/MainLayout/DetailPanel/Panel/MarginContainer/DetailStack"]
 layout_mode = 2
 size_flags_vertical = 3
@@ -207,9 +215,3 @@ custom_minimum_size = Vector2(0, 36)
 layout_mode = 2
 visible = false
 text = "Open Full Record"
-
-[node name="TransferButton" type="MenuButton" parent="ChapterView/Content/MainLayout/DetailPanel/Panel/MarginContainer/DetailStack"]
-custom_minimum_size = Vector2(0, 36)
-layout_mode = 2
-visible = false
-text = "Transfer"

@@ -46,6 +46,7 @@ namespace OnlyWar.Models
 
         // Line marines and their sergeants
         public SoldierTemplate Veteran { get; }
+        public SoldierTemplate VeteranSergeant { get; }
         public SoldierTemplate TacticalMarine { get; }
         public SoldierTemplate TacticalSergeant { get; }
         public SoldierTemplate AssaultMarine { get; }
@@ -96,6 +97,7 @@ namespace OnlyWar.Models
             Chaplain = ResolveSoldier(faction, "Chaplain");
 
             Veteran = ResolveSoldier(faction, "Veteran");
+            VeteranSergeant = ResolveSoldier(faction, "Veteran Sergeant");
             TacticalMarine = ResolveSoldier(faction, "Tactical Marine");
             TacticalSergeant = ResolveSoldier(faction, "Sergeant");
             AssaultMarine = ResolveSoldier(faction, "Assault Marine");

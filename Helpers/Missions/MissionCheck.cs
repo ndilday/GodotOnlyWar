@@ -13,6 +13,16 @@ namespace OnlyWar.Helpers.Missions
         public float RunMissionCheck(List<BattleSquad> squads);
     }
 
+    // A force that has been emptied of able soldiers (combat can wipe or fully incapacitate an
+    // order's squad mid-mission) cannot attempt a check; rather than averaging/min-ing over an
+    // empty set (which throws), the attempt auto-fails by this many sigma. Modest magnitude so the
+    // downstream margin handling (e.g. DetectedMissionStep's opposing-force sizing) stays in the
+    // same range as an ordinary failed check.
+    internal static class MissionCheckDefaults
+    {
+        public const float NoAbleSoldiersZDisadvantage = -5.0f;
+    }
+
     public class IndividualMissionTest : IMissionCheck
     {
         public BaseSkill SkillUsed { get; }
@@ -36,6 +46,12 @@ namespace OnlyWar.Helpers.Missions
 
         protected float RunCheckInternal(BattleSoldier soldier)
         {
+            // No able soldier to make the attempt: auto-fail rather than dereferencing null.
+            if (soldier == null)
+            {
+                return GaussianCalculator.DetermineMarginOfSuccessZvalue(
+                    MissionCheckDefaults.NoAbleSoldiersZDisadvantage);
+            }
             float zAdvantage = (soldier.Soldier.GetTotalSkillValue(SkillUsed) - _difficulty) / 5.0f;
             return GaussianCalculator.DetermineMarginOfSuccessZvalue(zAdvantage);
         }
@@ -71,7 +87,15 @@ namespace OnlyWar.Helpers.Missions
         }
         public float RunMissionCheck(List<BattleSquad> squads)
         {
-            float totalSkill = squads.SelectMany(s => s.AbleSoldiers).Average(soldier => soldier.Soldier.GetTotalSkillValue(SkillUsed));
+            List<BattleSoldier> ableSoldiers = squads.SelectMany(s => s.AbleSoldiers).ToList();
+            // No able soldiers left to attempt the check: auto-fail rather than averaging over an
+            // empty set (which throws InvalidOperationException).
+            if (ableSoldiers.Count == 0)
+            {
+                return GaussianCalculator.DetermineMarginOfSuccessZvalue(
+                    MissionCheckDefaults.NoAbleSoldiersZDisadvantage);
+            }
+            float totalSkill = ableSoldiers.Average(soldier => soldier.Soldier.GetTotalSkillValue(SkillUsed));
             float zAdvantage = (totalSkill - _difficulty) / 5.0f;
             return GaussianCalculator.DetermineMarginOfSuccessZvalue(zAdvantage);
         }

@@ -3,7 +3,9 @@ using System.Linq;
 using OnlyWar.Builders;
 using OnlyWar.Helpers;
 using OnlyWar.Models;
+using OnlyWar.Models.Soldiers;
 using OnlyWar.Models.Squads;
+using OnlyWar.Models.Units;
 using OnlyWar.Tests.Fixtures;
 using Xunit;
 
@@ -83,6 +85,47 @@ public class NewChapterBuilderTests
 
         // No soldier is lost in the create-on-demand assignment.
         Assert.Equal(1000, oob.GetAllMembers().Count());
+    }
+
+    [Fact]
+    public void CreateChapter_VeteranLineSquadsAreLedByVeteranSergeantsNotCaptains()
+    {
+        PlayerForce chapter = NewChapterBuilder.CreateChapter(
+            _data, CreateTrainingService(), new Date(39, 496, 1), new Date(39, 500, 1), "Crimson Sentinels");
+        Unit oob = chapter.Army.OrderOfBattle;
+
+        Unit veteranCompany = oob.ChildUnits.First(c => c.UnitTemplate.Name == "Veteran Company");
+        var lineVeteranSquads = veteranCompany.Squads
+            .Where(s => (s.SquadTemplate.SquadType & SquadTypes.HQ) == 0)
+            .Where(s => (s.SquadTemplate.SquadType & SquadTypes.Elite) > 0)
+            .Where(s => s.Members.Count > 0)
+            .ToList();
+        Assert.NotEmpty(lineVeteranSquads);
+
+        // Where a line veteran squad has a leader, it is a Veteran Sergeant; the Captain
+        // rank belongs only to the company HQ squad. (A squad may legitimately be
+        // leaderless when too few veterans qualify as sergeants.)
+        var ledSquads = lineVeteranSquads.Where(s => s.SquadLeader != null).ToList();
+        Assert.NotEmpty(ledSquads);
+        foreach (Squad squad in ledSquads)
+        {
+            Assert.Equal("Veteran Sergeant", squad.SquadLeader.Template.Name);
+        }
+
+        // Regression: the transfer dropdown previously offered a captain-rank promotion
+        // in every line veteran squad, because the squad template's leader slot pointed
+        // at a captain. A rank-and-file veteran must not be offered a captain-rank
+        // (rank 6+) promotion into any of the veteran company's line squads; captains
+        // belong only to the HQ squad.
+        var lineSquadIds = lineVeteranSquads.Select(s => s.Id).ToHashSet();
+        PlayerSoldier veteran = lineVeteranSquads
+            .SelectMany(s => s.Members)
+            .OfType<PlayerSoldier>()
+            .First(m => m.Template.Name == "Veteran");
+
+        var options = new SoldierTransferService().GetTransferOptions(oob, veteran);
+        Assert.DoesNotContain(options, option =>
+            option.SoldierTemplate.Rank >= 6 && lineSquadIds.Contains(option.SquadId));
     }
 
     [Fact]
