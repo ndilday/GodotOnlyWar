@@ -70,6 +70,34 @@ public class SoldierTransferServiceTests
     }
 
     [Fact]
+    public void GetTransferOptions_DoesNotOfferLeaderSlotWhenSquadAlreadyHasADifferentLeader()
+    {
+        // The slot's defined leader is a Sergeant, but the squad is actually led by a
+        // different leader template (mirrors an HQ squad whose template names a
+        // "Recruitment Captain" slot while a plain Captain fills it). The leader slot is
+        // conceptually filled and must not be offered, even though no member matches the
+        // slot's exact template.
+        SoldierTemplate altLeader = CreateTemplate(20, "Alternate Leader", 2, isSquadLeader: true);
+        SquadTemplate template = CreateSquadTemplate(
+            "Command Squad",
+            (TestModelFactory.SergeantTemplate, 0, 1),
+            (TestModelFactory.MarineTemplate, 0, 4));
+        Unit chapter = CreateUnit("Chapter");
+        Squad source = AddSquad(chapter, "Source Squad", template);
+        PlayerSoldier soldier = AddPlayerSoldier(source, TestModelFactory.MarineTemplate, "Brother Marius");
+        Squad target = AddSquad(chapter, "Led Squad", template);
+        AddPlayerSoldier(target, altLeader, "Captain Varro");
+
+        List<SoldierTransferOption> targetOptions = _service
+            .GetTransferOptions(chapter, soldier)
+            .Where(option => option.SquadId == target.Id)
+            .ToList();
+
+        Assert.DoesNotContain(targetOptions, option => option.SoldierTemplate == TestModelFactory.SergeantTemplate);
+        Assert.All(targetOptions, option => Assert.False(option.SoldierTemplate.IsSquadLeader));
+    }
+
+    [Fact]
     public void PreviewHistory_DoesNotMutateSoldierHistory()
     {
         SquadTemplate template = CreateSquadTemplate(

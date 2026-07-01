@@ -1,13 +1,12 @@
-[gd_scene format=3 uid="uid://bxt1vv1h4sd0n"]
+[gd_scene load_steps=5 format=3 uid="uid://bxt1vv1h4sd0n"]
 
 [ext_resource type="PackedScene" uid="uid://cadpqoqxtyo0p" path="res://Scenes/Dialog.tscn" id="1_base"]
 [ext_resource type="Script" uid="uid://cbrf1ctrl9a2xz" path="res://Scenes/MainGameScreen/BriefingDialogController.cs" id="2_ctrl"]
 [ext_resource type="Script" uid="uid://cbrf2view8b3yw" path="res://Scenes/MainGameScreen/BriefingDialogView.cs" id="3_view"]
-
-[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_bg"]
-bg_color = Color(0, 0, 0, 1)
+[ext_resource type="Theme" uid="uid://ylp8bk1nhedq" path="res://Scenes/OnlyWarTheme.tres" id="4_theme"]
 
 [node name="DialogController" instance=ExtResource("1_base")]
+theme = ExtResource("4_theme")
 script = ExtResource("2_ctrl")
 
 [node name="DialogView" parent="." index="0"]
@@ -20,7 +19,6 @@ anchor_right = 1.0
 anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
-theme_override_styles/panel = SubResource("StyleBoxFlat_bg")
 
 [node name="MarginContainer" type="MarginContainer" parent="DialogView/Panel" index="0"]
 layout_mode = 1

@@ -52,8 +52,7 @@ public partial class StartMenu : Control
 
     private void SetMenuButtonsVisible(bool isVisible)
     {
-        GetNode<Button>("NewGameButton").Visible = isVisible;
-        GetNode<Button>("LoadGameButton").Visible = isVisible;
+        GetNode<Control>("MenuButtons").Visible = isVisible;
     }
 
     private async void LaunchMainGameScene()

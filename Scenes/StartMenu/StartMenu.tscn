@@ -1,9 +1,8 @@
-[gd_scene format=3 uid="uid://b5sny34jdvj4p"]
+[gd_scene load_steps=4 format=3 uid="uid://b5sny34jdvj4p"]
 
 [ext_resource type="Script" uid="uid://hw54lwpq6qao" path="res://Scenes/StartMenu/StartMenu.cs" id="1_k7bfn"]
 [ext_resource type="Texture2D" uid="uid://ctmlrbe1rvbf1" path="res://Scenes/StartMenu/burningBuilding.jpg" id="1_vpgy8"]
-
-[sub_resource type="Theme" id="Theme_hbxc8"]
+[ext_resource type="Theme" uid="uid://ylp8bk1nhedq" path="res://Scenes/OnlyWarTheme.tres" id="3_theme"]
 
 [node name="StartMenu" type="Control" unique_id=812985460]
 layout_mode = 3
@@ -12,46 +11,59 @@ anchor_right = 1.0
 anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
+theme = ExtResource("3_theme")
 script = ExtResource("1_k7bfn")
 
 [node name="BackgroundImage" type="TextureRect" parent="." unique_id=799331754]
-layout_mode = 0
-offset_left = -150.0
-offset_right = 2850.0
-offset_bottom = 1993.0
-scale = Vector2(0.39, 0.39)
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
 texture = ExtResource("1_vpgy8")
+expand_mode = 1
+stretch_mode = 6
 
 [node name="TitleLabel" type="RichTextLabel" parent="." unique_id=1807327503]
 layout_mode = 1
 anchors_preset = 5
 anchor_left = 0.5
 anchor_right = 0.5
-offset_left = -412.0
+offset_left = -350.0
 offset_top = 100.0
-offset_right = 288.0
-offset_bottom = 300.0
+offset_right = 350.0
+offset_bottom = 200.0
 grow_horizontal = 2
-theme = SubResource("Theme_hbxc8")
-text = "ONLY WAR"
+theme_override_colors/default_color = Color(0.956863, 0.839216, 0.521569, 1)
+theme_override_font_sizes/normal_font_size = 72
+bbcode_enabled = true
+text = "[center]ONLY WAR[/center]"
 scroll_active = false
 tab_size = 3
 
-[node name="NewGameButton" type="Button" parent="." unique_id=192776018]
-layout_mode = 0
-offset_left = 474.0
-offset_top = 426.0
-offset_right = 567.0
-offset_bottom = 457.0
+[node name="MenuButtons" type="VBoxContainer" parent="." unique_id=192776019]
+layout_mode = 1
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -100.0
+offset_top = -38.0
+offset_right = 100.0
+offset_bottom = 38.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_constants/separation = 12
+
+[node name="NewGameButton" type="Button" parent="MenuButtons" unique_id=192776018]
+layout_mode = 2
 text = "New Game"
 
-[node name="LoadGameButton" type="Button" parent="." unique_id=646845223]
-layout_mode = 0
-offset_left = 474.0
-offset_top = 468.0
-offset_right = 570.0
-offset_bottom = 499.0
+[node name="LoadGameButton" type="Button" parent="MenuButtons" unique_id=646845223]
+layout_mode = 2
 text = "Load Game"
 
-[connection signal="pressed" from="NewGameButton" to="." method="OnNewGameButtonPressed"]
-[connection signal="pressed" from="LoadGameButton" to="." method="OnLoadGameButtonPressed"]
+[connection signal="pressed" from="MenuButtons/NewGameButton" to="." method="OnNewGameButtonPressed"]
+[connection signal="pressed" from="MenuButtons/LoadGameButton" to="." method="OnLoadGameButtonPressed"]

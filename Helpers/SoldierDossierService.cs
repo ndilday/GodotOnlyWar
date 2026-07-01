@@ -55,7 +55,9 @@ namespace OnlyWar.Helpers
             List<Tuple<string, string>> soldierData =
             [
                 new("Name", soldier.Name),
-                new("Time in Service", FormatTimeInService(soldier, currentDate))
+                new("Time in Service", FormatDurationSince(GetEnlistmentDate(soldier), currentDate)),
+                new("Time in Rank", FormatTimeSinceLastEvent(soldier, SoldierEventType.Promotion, currentDate)),
+                new("Time in Squad", FormatTimeSinceLastEvent(soldier, SoldierEventType.Transfer, currentDate))
             ];
 
             if (soldier.AssignedSquad?.BoardedLocation != null)
@@ -78,26 +80,83 @@ namespace OnlyWar.Helpers
             return soldierData;
         }
 
-        // Service length measured from the soldier's earliest recorded event (the Founding
-        // note for the Chapter Master, AcceptedToTraining for everyone else) to the current
-        // campaign date. Falls back to "TBD" when either date is unavailable.
-        private static string FormatTimeInService(PlayerSoldier soldier, Date currentDate)
+        // The soldier's earliest recorded event (the Founding note for the Chapter Master,
+        // AcceptedToTraining for everyone else) marks the start of his service, and doubles
+        // as the fallback "since" date for rank and squad when he has never been promoted
+        // or transferred out of his original posting.
+        private static Date GetEnlistmentDate(PlayerSoldier soldier)
         {
-            Date enlistment = soldier.SoldierEvents
+            return soldier.SoldierEvents
                 .Select(e => e.Date)
                 .OrderBy(d => d)
                 .FirstOrDefault();
-            if (enlistment == null || currentDate == null)
+        }
+
+        // Weeks the marine has served since enlistment. Shared source of truth for the
+        // "Time in Service" display and the soldier filter's duration conditions.
+        public static int GetWeeksInService(PlayerSoldier soldier, Date currentDate)
+        {
+            return GetWeeksSince(GetEnlistmentDate(soldier), currentDate);
+        }
+
+        // Weeks since the marine's most recent promotion (or enlistment if never promoted).
+        public static int GetWeeksInRank(PlayerSoldier soldier, Date currentDate)
+        {
+            return GetWeeksSince(GetLastMilestoneDate(soldier, SoldierEventType.Promotion), currentDate);
+        }
+
+        // Weeks since the marine's most recent squad transfer (or enlistment if never moved).
+        public static int GetWeeksInSquad(PlayerSoldier soldier, Date currentDate)
+        {
+            return GetWeeksSince(GetLastMilestoneDate(soldier, SoldierEventType.Transfer), currentDate);
+        }
+
+        // Time in rank (Promotion) / time in squad (Transfer) is anchored to the most recent
+        // milestone of that kind, or to enlistment if the marine has held his current rank /
+        // posting since he first joined.
+        private static Date GetLastMilestoneDate(PlayerSoldier soldier, SoldierEventType milestone)
+        {
+            return soldier.SoldierEvents
+                .Where(e => e.Type == milestone)
+                .Select(e => e.Date)
+                .OrderByDescending(d => d)
+                .FirstOrDefault()
+                ?? GetEnlistmentDate(soldier);
+        }
+
+        private static string FormatTimeSinceLastEvent(PlayerSoldier soldier,
+                                                       SoldierEventType milestone, Date currentDate)
+        {
+            return FormatDurationSince(GetLastMilestoneDate(soldier, milestone), currentDate);
+        }
+
+        // Returns -1 when either endpoint is unavailable so callers can distinguish
+        // "unknown" from a genuine zero-week span.
+        private static int GetWeeksSince(Date since, Date currentDate)
+        {
+            if (since == null || currentDate == null)
+            {
+                return -1;
+            }
+            return Math.Max(0, currentDate.GetWeeksDifference(since));
+        }
+
+        // Renders the span from `since` to the current campaign date as "N years" (once a
+        // full year has elapsed) or "N weeks", tagged with the anchor date. Falls back to
+        // "TBD" when either date is unavailable.
+        private static string FormatDurationSince(Date since, Date currentDate)
+        {
+            int weeks = GetWeeksSince(since, currentDate);
+            if (weeks < 0)
             {
                 return "TBD";
             }
 
-            int weeks = Math.Max(0, currentDate.GetWeeksDifference(enlistment));
             int years = weeks / 52;
             string duration = years >= 1
-                ? $"{years} {(years == 1 ? "year" : "years")}' service"
-                : $"{weeks} {(weeks == 1 ? "week" : "weeks")}' service";
-            return $"{duration} (since {enlistment})";
+                ? $"{years} {(years == 1 ? "year" : "years")}"
+                : $"{weeks} {(weeks == 1 ? "week" : "weeks")}";
+            return $"{duration} (since {since})";
         }
 
         // A Planet carries no back-reference to its Subsector, so we resolve it by scanning

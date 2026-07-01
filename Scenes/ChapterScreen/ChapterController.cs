@@ -13,11 +13,14 @@ public partial class ChapterController : Control
     private readonly ChapterBrowserNavigator _navigator = new();
     private readonly SoldierTransferService _transferService = new();
     private readonly SoldierDetailBuilder _soldierDetailBuilder = new();
+    private readonly SoldierFilterService _filterService = new();
     private List<SoldierTransferOption> _transferOptions = [];
+    private List<SoldierFilterCondition> _activeFilter = [];
     private SoldierTransferOption _pendingTransferOption;
     private int? _pendingTransferSoldierId;
     private int? _currentDetailSoldierId;
     private ConfirmationDialog _transferConfirmationDialog;
+    private ChapterFilterDialog _filterDialog;
 
     public ChapterView ChapterView { get; set; }
 
@@ -35,6 +38,7 @@ public partial class ChapterController : Control
         ChapterView.BrowserItemDrillRequested += OnBrowserItemDrillRequested;
         ChapterView.BreadcrumbPressed += OnBreadcrumbPressed;
         ChapterView.TransferTargetSelected += OnTransferTargetSelected;
+        ChapterView.FilterButtonPressed += OnFilterButtonPressed;
 
         _transferConfirmationDialog = new ConfirmationDialog
         {
@@ -42,6 +46,11 @@ public partial class ChapterController : Control
         };
         _transferConfirmationDialog.Confirmed += OnTransferConfirmed;
         AddChild(_transferConfirmationDialog);
+
+        _filterDialog = new ChapterFilterDialog();
+        _filterDialog.FilterApplied += OnFilterApplied;
+        _filterDialog.FilterCleared += OnFilterCleared;
+        AddChild(_filterDialog);
 
         RenderCurrentPath();
     }
@@ -58,9 +67,15 @@ public partial class ChapterController : Control
         ChapterView.BrowserItemDrillRequested -= OnBrowserItemDrillRequested;
         ChapterView.BreadcrumbPressed -= OnBreadcrumbPressed;
         ChapterView.TransferTargetSelected -= OnTransferTargetSelected;
+        ChapterView.FilterButtonPressed -= OnFilterButtonPressed;
         if (_transferConfirmationDialog != null)
         {
             _transferConfirmationDialog.Confirmed -= OnTransferConfirmed;
+        }
+        if (_filterDialog != null)
+        {
+            _filterDialog.FilterApplied -= OnFilterApplied;
+            _filterDialog.FilterCleared -= OnFilterCleared;
         }
     }
 
@@ -77,7 +92,10 @@ public partial class ChapterController : Control
 
     private void OnBrowserItemSelected(object sender, ChapterBrowserItemEvent item)
     {
-        if (item.Level == ChapterBrowserLevel.Soldier &&
+        // While a filter is active the left menu shows a flat result list; a click just
+        // previews the soldier and never drills, so the results stay put.
+        if (_activeFilter.Count == 0 &&
+            item.Level == ChapterBrowserLevel.Soldier &&
             _navigator.Path.Level == ChapterBrowserLevel.Soldier)
         {
             _navigator.DrillInto(item);
@@ -91,13 +109,43 @@ public partial class ChapterController : Control
 
     private void OnBrowserItemDrillRequested(object sender, ChapterBrowserItemEvent item)
     {
+        // Drilling changes the browse scope, so the current (scope-bound) filter is retired.
+        _activeFilter = [];
         _navigator.DrillInto(item);
         RenderCurrentPath();
     }
 
     private void OnBreadcrumbPressed(object sender, ChapterBrowserLevel level)
     {
+        _activeFilter = [];
         _navigator.MoveToBreadcrumb(level);
+        RenderCurrentPath();
+    }
+
+    private void OnFilterButtonPressed(object sender, EventArgs e)
+    {
+        if (TryGetChapter() == null)
+        {
+            return;
+        }
+
+        List<ISoldier> scope = GetCurrentScopeMembers().ToList();
+        _filterDialog.Populate(
+            _filterService.GetAvailableRoles(scope),
+            _filterService.GetAvailableHonors(scope),
+            _activeFilter);
+        _filterDialog.PopupCentered();
+    }
+
+    private void OnFilterApplied(List<SoldierFilterCondition> conditions)
+    {
+        _activeFilter = conditions ?? [];
+        RenderCurrentPath();
+    }
+
+    private void OnFilterCleared()
+    {
+        _activeFilter = [];
         RenderCurrentPath();
     }
 
@@ -165,8 +213,15 @@ public partial class ChapterController : Control
         }
 
         ChapterView.SetBreadcrumbs(BuildBreadcrumbs(chapter));
+        ChapterView.SetFilterActive(_activeFilter.Count);
         _currentDetailSoldierId = null;
         _transferOptions = [];
+
+        if (_activeFilter.Count > 0)
+        {
+            RenderFilterResults();
+            return;
+        }
 
         switch (_navigator.Path.Level)
         {
@@ -193,7 +248,8 @@ public partial class ChapterController : Control
         [
             new ChapterBreadcrumbItem(ChapterBrowserLevel.Chapter, "Chapter", "chapter")
         ]);
-        ChapterView.SetLeftMenu("Companies", "No chapter loaded", []);
+        ChapterView.SetFilterActive(_activeFilter.Count);
+        ChapterView.SetLeftMenu("Companies", []);
         ChapterView.SetDetail(new ChapterBrowserDetail(
             "chapter",
             "No Chapter Data",
@@ -242,7 +298,7 @@ public partial class ChapterController : Control
                 ">"))
             .ToList());
 
-        ChapterView.SetLeftMenu("Chapter Command", "Select / drill", chapterItems);
+        ChapterView.SetLeftMenu("Chapter Command", chapterItems);
 
         ChapterView.SetDetail(BuildChapterDetail(chapter, selectedCompany, selectedSquad));
     }
@@ -263,7 +319,7 @@ public partial class ChapterController : Control
                 ">"))
             .ToList();
 
-        ChapterView.SetLeftMenu($"{company.Name} Squads", "Select / drill", squads);
+        ChapterView.SetLeftMenu($"{company.Name} Squads", squads);
 
         ChapterView.SetDetail(BuildCompanyDetail(company, selectedSquad));
     }
@@ -284,7 +340,7 @@ public partial class ChapterController : Control
                 "i"))
             .ToList();
 
-        ChapterView.SetLeftMenu("Battle Brothers", "Select / profile", soldiers);
+        ChapterView.SetLeftMenu("Battle Brothers", soldiers);
 
         if (selectedSoldier == null)
         {
@@ -311,7 +367,7 @@ public partial class ChapterController : Control
                 "i"))
             .ToList();
 
-        ChapterView.SetLeftMenu("Battle Brothers", "Selected soldier", soldiers);
+        ChapterView.SetLeftMenu("Battle Brothers", soldiers);
         SetSoldierDetail(soldier);
     }
 
@@ -330,6 +386,68 @@ public partial class ChapterController : Control
         {
             _transferOptions = [];
             ChapterView.SetTransferOptions([]);
+        }
+    }
+
+    // Renders the active filter as a flat, drillable soldier list scoped to the current
+    // browse level. Selecting a result previews it; drilling (or navigating) exits filtering.
+    private void RenderFilterResults()
+    {
+        List<ISoldier> results = _filterService
+            .Apply(GetCurrentScopeMembers(), _activeFilter, GameDataSingleton.Instance.Date)
+            .ToList();
+
+        int? selectedId = _navigator.SelectedItem?.Level == ChapterBrowserLevel.Soldier
+            ? _navigator.SelectedItem.Id
+            : null;
+        ISoldier selected = results.FirstOrDefault(soldier => soldier.Id == selectedId)
+            ?? results.FirstOrDefault();
+
+        List<ChapterBrowserMenuItem> items = results
+            .Select(soldier => new ChapterBrowserMenuItem(
+                ChapterBrowserLevel.Soldier,
+                soldier.Id,
+                GetSoldierIconKey(soldier),
+                $"{soldier.Template.Name} {soldier.Name}",
+                soldier.CanFight ? "Available" : "Wounded or impaired",
+                true,
+                selected?.Id == soldier.Id,
+                "i"))
+            .ToList();
+
+        ChapterView.SetLeftMenu($"Filter Results ({results.Count})", items);
+
+        if (selected == null)
+        {
+            ChapterView.SetDetail(new ChapterBrowserDetail(
+                "archive",
+                "No Matches",
+                "No battle brothers at this level match the current filter.",
+                [],
+                [
+                    new ChapterBrowserDetailCard("archive", "Adjust Filter", "No results",
+                        "Reopen the Filter button to change the conditions, or Clear to resume browsing.")
+                ]));
+        }
+        else
+        {
+            SetSoldierDetail(selected);
+        }
+    }
+
+    // Soldiers the filter searches, bound to the current breadcrumb level.
+    private IEnumerable<ISoldier> GetCurrentScopeMembers()
+    {
+        switch (_navigator.Path.Level)
+        {
+            case ChapterBrowserLevel.Company:
+                return GetCompany(_navigator.Path.CompanyId.Value).GetAllMembers();
+            case ChapterBrowserLevel.Squad:
+                return GetSquad(_navigator.Path.SquadId.Value).Members;
+            case ChapterBrowserLevel.Soldier:
+                return GetSoldier(_navigator.Path.SoldierId.Value).AssignedSquad.Members;
+            default:
+                return GetChapter().GetAllMembers();
         }
     }
 

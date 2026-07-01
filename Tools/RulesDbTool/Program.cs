@@ -4,7 +4,7 @@ using Microsoft.Data.Sqlite;
 
 if (args.Length < 2)
 {
-    Console.Error.WriteLine("Usage: RulesDbTool <schema|training-source|migrate-training|migrate-progenoid|migrate-ratings|migrate-planet-scales|migrate-fortification|migrate-tyranids|migrate-tyranid-squads|migrate-evasion|migrate-squad-caps|migrate-veteran-sergeant|migrate-remove-veteran-captain|remove-unused-unit-templates> <db-path>");
+    Console.Error.WriteLine("Usage: RulesDbTool <schema|training-source|migrate-training|migrate-progenoid|migrate-ratings|migrate-planet-scales|migrate-fortification|migrate-tyranids|migrate-tyranid-squads|migrate-evasion|migrate-squad-caps|migrate-veteran-sergeant|migrate-remove-veteran-captain|migrate-remove-recruitment-captain|remove-unused-unit-templates> <db-path>");
     return 1;
 }
 
@@ -13,7 +13,7 @@ string dbPath = args[1];
 string connectionString = new SqliteConnectionStringBuilder
 {
     DataSource = dbPath,
-    Mode = command is "migrate-training" or "migrate-progenoid" or "migrate-ratings" or "migrate-planet-scales" or "migrate-fortification" or "migrate-tyranids" or "migrate-tyranid-squads" or "migrate-evasion" or "migrate-squad-caps" or "migrate-veteran-sergeant" or "migrate-remove-veteran-captain" or "remove-unused-unit-templates" ? SqliteOpenMode.ReadWriteCreate : SqliteOpenMode.ReadOnly
+    Mode = command is "migrate-training" or "migrate-progenoid" or "migrate-ratings" or "migrate-planet-scales" or "migrate-fortification" or "migrate-tyranids" or "migrate-tyranid-squads" or "migrate-evasion" or "migrate-squad-caps" or "migrate-veteran-sergeant" or "migrate-remove-veteran-captain" or "migrate-remove-recruitment-captain" or "remove-unused-unit-templates" ? SqliteOpenMode.ReadWriteCreate : SqliteOpenMode.ReadOnly
 }.ToString();
 
 using SqliteConnection connection = new(connectionString);
@@ -62,6 +62,9 @@ switch (command)
         break;
     case "migrate-remove-veteran-captain":
         MigrateRemoveVeteranCaptain(connection);
+        break;
+    case "migrate-remove-recruitment-captain":
+        MigrateRemoveRecruitmentCaptain(connection);
         break;
     default:
         Console.Error.WriteLine($"Unknown command: {command}");
@@ -436,10 +439,10 @@ static void MigrateRatings(SqliteConnection connection)
     Component(4, 1, AttributeValue, Constitution);
     Factor(4, 0, 1.26, 1.54);
     Factor(4, 1, 2.88, 3.52);
-    Tier(4, 4, 112, AwardEffect, "Banner", "Adamantium Banner of the Emperor");
-    Tier(4, 3, 100, AwardEffect, "Banner", "Gold Banner of the Emperor");
-    Tier(4, 2, 95, AwardEffect, "Banner", "Silver Banner of the Emperor");
-    Tier(4, 1, 85, AwardEffect, "Banner", "Bronze Banner of the Emperor");
+    Tier(4, 4, 120, AwardEffect, "Banner", "Adamantium Banner of the Emperor");
+    Tier(4, 3, 110, AwardEffect, "Banner", "Gold Banner of the Emperor");
+    Tier(4, 2, 100, AwardEffect, "Banner", "Silver Banner of the Emperor");
+    Tier(4, 1, 95, AwardEffect, "Banner", "Bronze Banner of the Emperor");
 
     // 5. medical = skillTotal(Diagnosis) * skillTotal(First Aid)
     Definition(5, "medical", "Medical", Product);
@@ -812,19 +815,27 @@ static void MigrateVeteranSergeant(SqliteConnection connection)
     Console.WriteLine($"Veteran Sergeant migration complete. Added soldier {veteranSergeant}; repointed {updated} Veteran Squad leader element(s).");
 }
 
-static void MigrateRemoveVeteranCaptain(SqliteConnection connection)
+static void MigrateRemoveVeteranCaptain(SqliteConnection connection) =>
+    RemoveCaptainVariant(connection, "Veteran Captain");
+
+static void MigrateRemoveRecruitmentCaptain(SqliteConnection connection) =>
+    RemoveCaptainVariant(connection, "Recruitment Captain");
+
+static void RemoveCaptainVariant(SqliteConnection connection, string variantName)
 {
     using SqliteTransaction transaction = connection.BeginTransaction();
 
-    // Every company HQ, including the Veteran Company's, is now led by a plain Captain;
-    // the distinct "Veteran Captain" rank is redundant. Repoint its last reference (the
-    // Veteran HQ Squad leader slot) to the Captain and drop the template. The line
-    // Veteran Squads were already moved off it by migrate-veteran-sergeant.
-    int veteranCaptain = ExecuteScalarInt(connection, transaction,
-        "SELECT Id FROM SoldierTemplate WHERE Name = 'Veteran Captain' AND FactionId = 1");
-    if (veteranCaptain == 0)
+    // Every company HQ is led by a plain Captain; the per-company captain variants
+    // (Veteran Captain for the Veteran Company, Recruitment Captain for the Scout
+    // Company) are redundant. Repoint any squad leader slot still pointing at the
+    // variant to the plain Captain and drop the template. A leftover variant slot also
+    // caused the transfer UI to offer an "opening" in an HQ squad that already had a
+    // Captain, because the slot's specific template read as unfilled.
+    int variant = ExecuteScalarInt(connection, transaction,
+        "SELECT Id FROM SoldierTemplate WHERE Name = $n AND FactionId = 1", ("$n", variantName));
+    if (variant == 0)
     {
-        Console.WriteLine("Veteran Captain already removed; nothing to do.");
+        Console.WriteLine($"{variantName} already removed; nothing to do.");
         return;
     }
 
@@ -832,19 +843,19 @@ static void MigrateRemoveVeteranCaptain(SqliteConnection connection)
         "SELECT Id FROM SoldierTemplate WHERE Name = 'Captain' AND FactionId = 1");
     if (captain == 0)
     {
-        throw new InvalidOperationException("'Captain' soldier template is missing; cannot retarget Veteran Captain references.");
+        throw new InvalidOperationException($"'Captain' soldier template is missing; cannot retarget {variantName} references.");
     }
 
     int repointed = Execute(connection, transaction,
-        "UPDATE SquadTemplateElement SET SoldierTemplateId = $c WHERE SoldierTemplateId = $vc",
-        ("$c", captain), ("$vc", veteranCaptain));
+        "UPDATE SquadTemplateElement SET SoldierTemplateId = $c WHERE SoldierTemplateId = $v",
+        ("$c", captain), ("$v", variant));
     Execute(connection, transaction,
-        "DELETE FROM SoldierMosTraining WHERE SoldierTemplateId = $vc", ("$vc", veteranCaptain));
+        "DELETE FROM SoldierMosTraining WHERE SoldierTemplateId = $v", ("$v", variant));
     Execute(connection, transaction,
-        "DELETE FROM SoldierTemplate WHERE Id = $vc", ("$vc", veteranCaptain));
+        "DELETE FROM SoldierTemplate WHERE Id = $v", ("$v", variant));
 
     transaction.Commit();
-    Console.WriteLine($"Removed Veteran Captain (soldier {veteranCaptain}); repointed {repointed} squad element(s) to Captain {captain}.");
+    Console.WriteLine($"Removed {variantName} (soldier {variant}); repointed {repointed} squad element(s) to Captain {captain}.");
 }
 
 static void SetEvasion(SqliteConnection connection, SqliteTransaction transaction, string speciesName,

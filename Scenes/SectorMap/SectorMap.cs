@@ -752,11 +752,16 @@ public partial class SectorMap : Node2D
             .OrderBy(fleet => fleet.Id)
             .ToList();
 
+        // The fleet's ship sprite is placed up-and-to-the-right of the planet by
+        // half a cell (see PlaceFleets), so anchor the highlight there rather than
+        // on an orbit angle, keeping the marker on the actual fleet icon.
+        Vector2 fleetAnchor = center + new Vector2(HalfCellSize.X, -HalfCellSize.Y);
+
         for (int i = 0; i < orbitingFleets.Count; i++)
         {
-            float angle = -Mathf.Pi / 2.0f + Mathf.Tau * i / Mathf.Max(orbitingFleets.Count, 1);
-            float radius = baseRadius * (1.35f + 0.2f * (i % 2));
-            Vector2 fleetPosition = center + new Vector2(Mathf.Cos(angle), Mathf.Sin(angle)) * radius;
+            // Fan multiple orbiting fleets horizontally so their markers don't fully overlap.
+            float fanOffset = (i - (orbitingFleets.Count - 1) / 2.0f) * 7.0f;
+            Vector2 fleetPosition = fleetAnchor + new Vector2(fanOffset, 0.0f);
             bool isPlayerFleet = orbitingFleets[i].Faction == GameDataSingleton.Instance.Sector.PlayerForce.Faction;
             Color fleetColor = isPlayerFleet ? Color.Color8(99, 199, 215) : Color.Color8(204, 83, 71);
             DrawCircle(fleetPosition, 5.0f, WithAlpha(fleetColor, 0.85f), true, -1.0f, true);

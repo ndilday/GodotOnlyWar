@@ -313,8 +313,7 @@ namespace OnlyWar.Builders
                     templates.Captain, year);
             }
             List<PlayerSoldier> leaders = unassignedSoldierMap.Values.OrderByDescending(s => s.SoldierEvaluationHistory[0].LeadershipRating).Take(20).ToList();
-            // assign Recruitment Captain next
-            // assuming Tenth Company for now
+            // assign the Scout Company's Captain next (assuming Tenth Company for now)
             Unit tenthCompany = chapter.ChildUnits.First(u => u.UnitTemplate == templates.ScoutCompany);
             AssignSoldier(unassignedSoldierMap, leaders, tenthCompany.HQSquad,
                 templates.Captain, year);

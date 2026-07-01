@@ -1,8 +1,9 @@
-[gd_scene load_steps=4 format=3]
+[gd_scene load_steps=5 format=3]
 
 [ext_resource type="Script" path="res://Scenes/StartMenu/NewGameSetupController.cs" id="1_controller"]
 [ext_resource type="Theme" path="res://Scenes/OnlyWarTheme.tres" id="2_theme"]
 [ext_resource type="Texture2D" path="res://Scenes/StartMenu/burningBuilding.jpg" id="3_bg"]
+[ext_resource type="FontFile" uid="uid://cvyy7ak4qxfxm" path="res://Fonts/sui generis rg.otf" id="4_display"]
 
 [node name="NewGameSetupController" type="Control"]
 layout_mode = 3
@@ -54,6 +55,9 @@ theme_override_constants/separation = 10
 
 [node name="Title" type="Label" parent="FormPanel/VBox"]
 layout_mode = 2
+theme_override_colors/font_color = Color(0.956863, 0.839216, 0.521569, 1)
+theme_override_fonts/font = ExtResource("4_display")
+theme_override_font_sizes/font_size = 24
 text = "Found a New Chapter"
 horizontal_alignment = 1
 
@@ -133,6 +137,9 @@ theme_override_constants/separation = 10
 
 [node name="Title" type="Label" parent="SummaryPanel/VBox"]
 layout_mode = 2
+theme_override_colors/font_color = Color(0.956863, 0.839216, 0.521569, 1)
+theme_override_fonts/font = ExtResource("4_display")
+theme_override_font_sizes/font_size = 24
 text = "Confirm Founding"
 horizontal_alignment = 1
 

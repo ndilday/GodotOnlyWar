@@ -19,7 +19,7 @@ public partial class ChapterView : Control
 
     private HBoxContainer _breadcrumbBar;
     private Label _leftTitleLabel;
-    private Label _leftHintLabel;
+    private Button _filterButton;
     private VBoxContainer _leftMenuVBox;
     private TextureRect _detailIcon;
     private Label _detailTitleLabel;
@@ -35,13 +35,14 @@ public partial class ChapterView : Control
     public event EventHandler<ChapterBrowserLevel> BreadcrumbPressed;
     public event EventHandler DetailPrimaryActionPressed;
     public event EventHandler<int> TransferTargetSelected;
+    public event EventHandler FilterButtonPressed;
     public event EventHandler CloseButtonPressed;
 
     public override void _Ready()
     {
         _breadcrumbBar = GetNode<HBoxContainer>("Content/BreadcrumbBar");
         _leftTitleLabel = GetNode<Label>("Content/MainLayout/LeftMenu/Panel/MarginContainer/MenuStack/Header/TitleLabel");
-        _leftHintLabel = GetNode<Label>("Content/MainLayout/LeftMenu/Panel/MarginContainer/MenuStack/Header/HintLabel");
+        _filterButton = GetNode<Button>("Content/MainLayout/LeftMenu/Panel/MarginContainer/MenuStack/Header/FilterButton");
         _leftMenuVBox = GetNode<VBoxContainer>("Content/MainLayout/LeftMenu/Panel/MarginContainer/MenuStack/ScrollContainer/LeftMenuVBox");
         _detailIcon = GetNode<TextureRect>("Content/MainLayout/DetailPanel/Panel/MarginContainer/DetailStack/Hero/DetailIcon");
         _detailTitleLabel = GetNode<Label>("Content/MainLayout/DetailPanel/Panel/MarginContainer/DetailStack/Hero/TitleStack/TitleLabel");
@@ -53,7 +54,8 @@ public partial class ChapterView : Control
         _closeButton = GetNode<Button>("Content/CloseButton");
 
         ConfigureHeaderLabel(_leftTitleLabel);
-        ConfigureHeaderLabel(_leftHintLabel);
+        _filterButton.MouseDefaultCursorShape = CursorShape.PointingHand;
+        _filterButton.Pressed += () => FilterButtonPressed?.Invoke(this, EventArgs.Empty);
         _detailIcon.CustomMinimumSize = new Vector2(ChapterIconSize, ChapterIconSize);
         _detailIcon.ExpandMode = TextureRect.ExpandModeEnum.IgnoreSize;
         IconAtlas.Apply(_closeButton, "close", 40);
@@ -81,12 +83,10 @@ public partial class ChapterView : Control
         }
     }
 
-    public void SetLeftMenu(string title, string hint, IReadOnlyList<ChapterBrowserMenuItem> items)
+    public void SetLeftMenu(string title, IReadOnlyList<ChapterBrowserMenuItem> items)
     {
         _leftTitleLabel.Text = title;
-        _leftHintLabel.Text = hint;
         _leftTitleLabel.TooltipText = title;
-        _leftHintLabel.TooltipText = hint;
         ClearContainer(_leftMenuVBox);
 
         foreach (ChapterBrowserMenuItem item in items)
@@ -104,6 +104,13 @@ public partial class ChapterView : Control
             emptyLabel.AddThemeColorOverride("font_color", OnlyWarStyle.MutedText);
             _leftMenuVBox.AddChild(emptyLabel);
         }
+    }
+
+    // Reflects the active filter on the Filter button so the player can see (and clear) it
+    // from the left-menu header. A zero count renders as the plain "Filter" idle label.
+    public void SetFilterActive(int conditionCount)
+    {
+        _filterButton.Text = conditionCount > 0 ? $"Filter ({conditionCount})" : "Filter";
     }
 
     public void SetDetail(ChapterBrowserDetail detail)

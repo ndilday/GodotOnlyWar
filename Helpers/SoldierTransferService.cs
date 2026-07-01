@@ -278,7 +278,13 @@ namespace OnlyWar.Helpers
 
             foreach (SquadTemplateElement element in squad.SquadTemplate.Elements)
             {
-                if (!hasSquadLeader && !element.SoldierTemplate.IsSquadLeader)
+                // A squad has exactly one leader: offer a leader slot only while the
+                // squad is leaderless, and offer rank-and-file slots only once a leader
+                // is in place. Without the leaderful case, a filled leader slot whose
+                // occupant is a different leader template than the slot defines (e.g. a
+                // Captain sitting in a slot the template calls "Recruitment Captain")
+                // would still be offered as an opening.
+                if (element.SoldierTemplate.IsSquadLeader == hasSquadLeader)
                 {
                     continue;
                 }

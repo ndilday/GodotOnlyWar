@@ -33,6 +33,39 @@ public class SoldierDossierServiceTests
     }
 
     [Fact]
+    public void BuildSoldierData_TracksTimeInRankAndSquadFromLatestMilestones()
+    {
+        Squad squad = CreateAssignedSquad("Tactical Squad");
+        PlayerSoldier soldier = AddPlayerSoldier(squad, "Brother Marius");
+        // Enlisted in year 990, promoted in 995, and transferred to his current squad in 998.
+        soldier.AddEvent(new SoldierEvent(new Date(41, 990, 1), SoldierEventType.AcceptedToTraining, "accepted into training"));
+        soldier.AddEvent(new SoldierEvent(new Date(41, 995, 1), SoldierEventType.Promotion, "promoted to Battle-Brother"));
+        soldier.AddEvent(new SoldierEvent(new Date(41, 998, 1), SoldierEventType.Transfer, "transferred to Tactical Squad"));
+        Date currentDate = new(41, 1000, 1);
+
+        var data = _service.BuildSoldierData(soldier, currentDate);
+
+        Assert.Contains(data, pair => pair.Item1 == "Time in Service" && pair.Item2 == "10 years (since 1.990.M41)");
+        Assert.Contains(data, pair => pair.Item1 == "Time in Rank" && pair.Item2 == "5 years (since 1.995.M41)");
+        Assert.Contains(data, pair => pair.Item1 == "Time in Squad" && pair.Item2 == "2 years (since 1.998.M41)");
+    }
+
+    [Fact]
+    public void BuildSoldierData_FallsBackToEnlistmentWhenNeverPromotedOrTransferred()
+    {
+        Squad squad = CreateAssignedSquad("Tactical Squad");
+        PlayerSoldier soldier = AddPlayerSoldier(squad, "Brother Marius");
+        soldier.AddEvent(new SoldierEvent(new Date(41, 995, 1), SoldierEventType.AcceptedToTraining, "accepted into training"));
+        Date currentDate = new(41, 1000, 1);
+
+        var data = _service.BuildSoldierData(soldier, currentDate);
+
+        // With no promotion or transfer on record, rank and squad tenure anchor to enlistment.
+        Assert.Contains(data, pair => pair.Item1 == "Time in Rank" && pair.Item2 == "5 years (since 1.995.M41)");
+        Assert.Contains(data, pair => pair.Item1 == "Time in Squad" && pair.Item2 == "5 years (since 1.995.M41)");
+    }
+
+    [Fact]
     public void BuildAwardLines_ShowsOnlyHighestTierPerAwardType()
     {
         Squad squad = CreateAssignedSquad("Tactical Squad");
