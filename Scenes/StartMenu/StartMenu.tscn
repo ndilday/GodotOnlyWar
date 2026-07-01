@@ -1,7 +1,7 @@
 [gd_scene load_steps=4 format=3 uid="uid://b5sny34jdvj4p"]
 
 [ext_resource type="Script" uid="uid://hw54lwpq6qao" path="res://Scenes/StartMenu/StartMenu.cs" id="1_k7bfn"]
-[ext_resource type="Texture2D" uid="uid://ctmlrbe1rvbf1" path="res://Scenes/StartMenu/burningBuilding.jpg" id="1_vpgy8"]
+[ext_resource type="Texture2D" path="res://Scenes/StartMenu/start_menu_command_sanctum_hive.png" id="1_vpgy8"]
 [ext_resource type="Theme" uid="uid://ylp8bk1nhedq" path="res://Scenes/OnlyWarTheme.tres" id="3_theme"]
 
 [node name="StartMenu" type="Control" unique_id=812985460]

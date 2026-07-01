@@ -32,15 +32,16 @@ theme_override_constants/margin_top = 80
 theme_override_constants/margin_right = 80
 theme_override_constants/margin_bottom = 120
 
-[node name="ScrollContainer" type="ScrollContainer" parent="DialogView/Panel/MarginContainer" index="0"]
+[node name="CenterContainer" type="CenterContainer" parent="DialogView/Panel/MarginContainer" index="0"]
 layout_mode = 2
 
-[node name="BriefingLabel" type="RichTextLabel" parent="DialogView/Panel/MarginContainer/ScrollContainer" index="0"]
+[node name="BriefingLabel" type="RichTextLabel" parent="DialogView/Panel/MarginContainer/CenterContainer" index="0"]
+custom_minimum_size = Vector2(760, 0)
 layout_mode = 2
-size_flags_horizontal = 3
-size_flags_vertical = 3
 bbcode_enabled = true
 fit_content = true
+theme_override_font_sizes/normal_font_size = 30
+theme_override_font_sizes/bold_font_size = 30
 text = "Briefing text."
 
 [node name="CloseButton" parent="DialogView" index="1"]

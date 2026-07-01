@@ -11,7 +11,7 @@ public partial class BriefingDialogView : DialogView
     public override void _Ready()
     {
         base._Ready();
-        _briefingLabel = GetNode<RichTextLabel>("Panel/MarginContainer/ScrollContainer/BriefingLabel");
+        _briefingLabel = GetNode<RichTextLabel>("Panel/MarginContainer/CenterContainer/BriefingLabel");
     }
 
     public void SetBriefingText(string text)

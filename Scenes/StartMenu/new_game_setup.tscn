@@ -2,7 +2,7 @@
 
 [ext_resource type="Script" path="res://Scenes/StartMenu/NewGameSetupController.cs" id="1_controller"]
 [ext_resource type="Theme" path="res://Scenes/OnlyWarTheme.tres" id="2_theme"]
-[ext_resource type="Texture2D" path="res://Scenes/StartMenu/burningBuilding.jpg" id="3_bg"]
+[ext_resource type="Texture2D" path="res://Scenes/StartMenu/start_menu_command_sanctum_hive.png" id="3_bg"]
 [ext_resource type="FontFile" uid="uid://cvyy7ak4qxfxm" path="res://Fonts/sui generis rg.otf" id="4_display"]
 
 [node name="NewGameSetupController" type="Control"]
