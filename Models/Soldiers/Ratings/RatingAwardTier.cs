@@ -17,6 +17,12 @@ namespace OnlyWar.Models.Soldiers.Ratings
     /// </summary>
     public sealed class RatingAwardTier
     {
+        /// <summary>
+        /// Placeholder in <see cref="NameTemplate"/> replaced, when an award is granted, with
+        /// the soldier's best skill name in the rating's category (e.g. a specific weapon).
+        /// </summary>
+        public const string BestSkillInCategoryPlaceholder = "{bestSkillInCategory}";
+
         public int Id { get; }
         public string RatingKey { get; }
         public int Level { get; }

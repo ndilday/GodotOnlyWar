@@ -165,7 +165,7 @@ public partial class ChapterFilterDialog : AcceptDialog
         ];
         private static readonly (SoldierFilterOperator Op, string Label)[] HonorOps =
         [
-            (SoldierFilterOperator.Has, "has"),
+            (SoldierFilterOperator.Has, "has at least"),
             (SoldierFilterOperator.DoesNotHave, "does not have")
         ];
         private static readonly (SoldierFilterOperator Op, string Label)[] DurationOps =

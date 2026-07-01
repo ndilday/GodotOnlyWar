@@ -1,5 +1,6 @@
 using OnlyWar.Models;
 using OnlyWar.Models.Soldiers;
+using OnlyWar.Models.Soldiers.Ratings;
 using System.Collections.Generic;
 using System.Linq;
 
@@ -41,9 +42,16 @@ namespace OnlyWar.Helpers
         }
 
         // Distinct honor tiers earned by anyone in scope. The filter value is Type+Level so
-        // Bronze/Silver/etc. awards of the same type remain separate choices.
-        public IReadOnlyList<SoldierHonorFilterOption> GetAvailableHonors(IEnumerable<ISoldier> soldiers)
+        // Bronze/Silver/etc. awards of the same type remain separate choices. Labels come from
+        // the award tiers' name templates (weapon-agnostic) rather than any one soldier's
+        // resolved award name, so a ranged honor reads the same regardless of which weapon
+        // earned it. See BuildTierLabelLookup.
+        public IReadOnlyList<SoldierHonorFilterOption> GetAvailableHonors(
+            IEnumerable<ISoldier> soldiers,
+            IReadOnlyList<RatingAwardTier> awardTiers = null)
         {
+            Dictionary<(string Type, ushort Level), string> labels = BuildTierLabelLookup(awardTiers);
+
             return soldiers
                 .OfType<PlayerSoldier>()
                 .SelectMany(s => s.SoldierAwards)
@@ -53,8 +61,36 @@ namespace OnlyWar.Helpers
                 .Select(g => new SoldierHonorFilterOption(
                     g.Key.Type,
                     g.Key.Level,
-                    g.OrderByDescending(a => a.DateAwarded).FirstOrDefault()?.Name))
+                    labels.TryGetValue((g.Key.Type, g.Key.Level), out string label)
+                        ? label
+                        : g.OrderByDescending(a => a.DateAwarded).FirstOrDefault()?.Name))
                 .ToList();
+        }
+
+        // Maps each award Type+Level to a display name taken from the tier's NameTemplate with
+        // the {bestSkillInCategory} placeholder swapped for the (generic) award Type, so e.g.
+        // "Gold {bestSkillInCategory} of the Emperor" becomes "Gold Gun of the Emperor" rather
+        // than naming whichever weapon a sample soldier happened to earn it with.
+        private static Dictionary<(string, ushort), string> BuildTierLabelLookup(
+            IReadOnlyList<RatingAwardTier> awardTiers)
+        {
+            Dictionary<(string, ushort), string> labels = [];
+            if (awardTiers == null)
+            {
+                return labels;
+            }
+
+            foreach (RatingAwardTier tier in awardTiers)
+            {
+                var key = (tier.AwardType, (ushort)tier.Level);
+                if (labels.ContainsKey(key))
+                {
+                    continue;
+                }
+                labels[key] = tier.NameTemplate.Replace(
+                    RatingAwardTier.BestSkillInCategoryPlaceholder, tier.AwardType);
+            }
+            return labels;
         }
 
         private static bool Matches(ISoldier soldier, SoldierFilterCondition condition, Date currentDate)
@@ -66,6 +102,8 @@ namespace OnlyWar.Helpers
                     return condition.Operator == SoldierFilterOperator.NotEquals ? !sameRole : sameRole;
 
                 case SoldierFilterField.Honor:
+                    // Has = holds an award of the selected type at or above the selected tier;
+                    // DoesNotHave is its negation.
                     bool hasHonor = soldier is PlayerSoldier player
                         && player.SoldierAwards.Any(a => MatchesHonor(a, condition.TextValue));
                     return condition.Operator == SoldierFilterOperator.DoesNotHave ? !hasHonor : hasHonor;
@@ -82,15 +120,19 @@ namespace OnlyWar.Helpers
 
         private static bool MatchesHonor(SoldierAward award, string filterValue)
         {
-            if (filterValue == SoldierHonorFilterOption.ToValue(award.Type, award.Level))
+            if (!SoldierHonorFilterOption.TryParse(filterValue, out string type, out ushort? level))
             {
-                return true;
+                return false;
             }
 
-            // Tolerate conditions created before honor filters tracked level.
-            return !string.IsNullOrWhiteSpace(filterValue)
-                && !filterValue.Contains('|')
-                && award.Type == filterValue;
+            if (award.Type != type)
+            {
+                return false;
+            }
+
+            // "Has" means "at least this tier": a Gold award satisfies a Silver threshold.
+            // Legacy conditions with no level match any award of the type.
+            return !level.HasValue || award.Level >= level.Value;
         }
 
         private static bool MatchesDuration(ISoldier soldier, SoldierFilterCondition condition, Date currentDate)

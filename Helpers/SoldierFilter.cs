@@ -7,7 +7,7 @@ namespace OnlyWar.Helpers
     public enum SoldierFilterField
     {
         Rank,           // Template.Name; Equals / NotEquals
-        Honor,          // award Type + Level; Has / DoesNotHave
+        Honor,          // award Type + minimum Level; Has (at least) / DoesNotHave
         TimeInService,  // weeks; AtLeast / AtMost
         TimeInRank,     // weeks; AtLeast / AtMost
         TimeInSquad     // weeks; AtLeast / AtMost
@@ -47,6 +47,32 @@ namespace OnlyWar.Helpers
         }
 
         public static string ToValue(string type, ushort level) => $"{type}|{level}";
+
+        // Splits a stored filter value back into its Type and Level. Level is null for
+        // legacy values that predate honor tiers (a bare type name with no "|level").
+        public static bool TryParse(string value, out string type, out ushort? level)
+        {
+            type = null;
+            level = null;
+            if (string.IsNullOrWhiteSpace(value))
+            {
+                return false;
+            }
+
+            int separator = value.IndexOf('|');
+            if (separator < 0)
+            {
+                type = value;
+                return true;
+            }
+
+            type = value.Substring(0, separator);
+            if (ushort.TryParse(value.Substring(separator + 1), out ushort parsed))
+            {
+                level = parsed;
+            }
+            return true;
+        }
     }
 
     // A single filter row: field + operator + value. TextValue carries the role name (Rank)

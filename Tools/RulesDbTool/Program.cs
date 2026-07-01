@@ -459,7 +459,7 @@ static void MigrateRatings(SqliteConnection connection)
     Component(5, 1, SkillTotal, skill["First Aid"]);
     Factor(5, 0, 0.99, 1.21);
     Factor(5, 1, 1.17, 1.43);
-    Tier(5, 1, 115, HistoryFlag, null, "Flagged for potential training as Apothecary");
+    Tier(5, 1, 95, HistoryFlag, null, "Flagged for potential training as Apothecary");
 
     // 6. tech = skillTotal(Armory (Small Arms)) * skillTotal(Armory (Vehicle))
     Definition(6, "tech", "Tech", Product);

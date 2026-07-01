@@ -15,7 +15,8 @@ namespace OnlyWar.Helpers
     /// </summary>
     public sealed class RatingCalculator
     {
-        private const string BestSkillInCategoryPlaceholder = "{bestSkillInCategory}";
+        private const string BestSkillInCategoryPlaceholder =
+            RatingAwardTier.BestSkillInCategoryPlaceholder;
 
         private readonly IReadOnlyList<RatingDefinition> _definitions;
         private readonly IReadOnlyList<RatingAwardTier> _awardTiers;

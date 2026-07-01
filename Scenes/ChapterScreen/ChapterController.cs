@@ -132,7 +132,8 @@ public partial class ChapterController : Control
         List<ISoldier> scope = GetCurrentScopeMembers().ToList();
         _filterDialog.Populate(
             _filterService.GetAvailableRoles(scope),
-            _filterService.GetAvailableHonors(scope),
+            _filterService.GetAvailableHonors(scope,
+                GameDataSingleton.Instance.GameRulesData.RatingAwardTiers),
             _activeFilter);
         _filterDialog.PopupCentered();
     }

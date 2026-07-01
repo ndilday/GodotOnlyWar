@@ -258,14 +258,14 @@ namespace OnlyWar.Builders
                                                Unit chapter, Date year, ChapterGenerationTemplates templates)
         {
             IEnumerable<PlayerSoldier> apothecaries = unassignedSoldierMap.Values
-                                                   .Where(s => s.SoldierEvaluationHistory[0].MedicalRating > 115)
+                                                   .Where(s => s.SoldierEvaluationHistory[0].MedicalRating > 95)
                                                    .OrderByDescending(s => s.SoldierEvaluationHistory[0].MedicalRating)
                                                    .Take(20);
             // assume for now that there's a single unit to hold all of the Techmarines
             Squad apo = chapter.Squads.First(s => s.SquadTemplate == templates.Apothecarion);
             foreach (PlayerSoldier soldier in apothecaries)
             {
-                if (apo.SquadLeader == null && soldier.SoldierEvaluationHistory[0].MedicalRating > 135 && soldier.SoldierEvaluationHistory[0].LeadershipRating > 60)
+                if (apo.SquadLeader == null && soldier.SoldierEvaluationHistory[0].MedicalRating > 115 && soldier.SoldierEvaluationHistory[0].LeadershipRating > 60)
                 {
                     soldier.Template = templates.MasterOfTheApothecarion;
                 }
@@ -690,7 +690,8 @@ namespace OnlyWar.Builders
             squad.AddSquadMember(soldier);
             soldier.AddEvent(new SoldierEvent(year, SoldierEventType.Promotion,
                 "promoted to " + soldier.Template.Name
-                + " and assigned to " + soldier.AssignedSquad.Name));
+                + " and assigned to " + soldier.AssignedSquad.Name
+                + ", " + soldier.AssignedSquad.ParentUnit.Name));
             unassignedSoldierMap.Remove(soldier.Id);
             soldierList.RemoveAt(0);
         }

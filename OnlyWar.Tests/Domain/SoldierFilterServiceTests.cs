@@ -1,6 +1,7 @@
 using OnlyWar.Helpers;
 using OnlyWar.Models;
 using OnlyWar.Models.Soldiers;
+using OnlyWar.Models.Soldiers.Ratings;
 using OnlyWar.Models.Squads;
 using OnlyWar.Models.Units;
 using OnlyWar.Tests.Fixtures;
@@ -65,23 +66,44 @@ public class SoldierFilterServiceTests
     }
 
     [Fact]
-    public void Apply_HonorHasAndDoesNotHave_FiltersByAwardTypeAndLevel()
+    public void Apply_HonorHas_MatchesSelectedTierAndAbove()
     {
         Squad squad = CreateSquad();
-        PlayerSoldier a = BuildVeteran(squad);
-        PlayerSoldier b = BuildRecruit(squad);
+        PlayerSoldier a = BuildVeteran(squad); // Bronze Sword (Level 1)
+        PlayerSoldier b = BuildRecruit(squad); // no honors
         PlayerSoldier c = AddPlayerSoldier(squad, TestModelFactory.MarineTemplate, "Brother Severan");
         c.AddAward(new SoldierAward(new Date(41, 997, 1), "Silver Sword of the Emperor", "Sword", 2));
 
-        var has = _service.Apply([a, b],
+        // "Has at least Silver": the Silver holder qualifies, the Bronze holder does not.
+        var atLeastSilver = _service.Apply([a, b, c],
+            [Condition(SoldierFilterField.Honor, SoldierFilterOperator.Has,
+                text: SoldierHonorFilterOption.ToValue("Sword", 2))], CurrentDate);
+
+        // "Has at least Bronze": both the Bronze and the higher Silver holder qualify.
+        var atLeastBronze = _service.Apply([a, b, c],
             [Condition(SoldierFilterField.Honor, SoldierFilterOperator.Has,
                 text: SoldierHonorFilterOption.ToValue("Sword", 1))], CurrentDate);
-        var lacks = _service.Apply([a, b, c],
-            [Condition(SoldierFilterField.Honor, SoldierFilterOperator.DoesNotHave,
-                text: SoldierHonorFilterOption.ToValue("Sword", 1))], CurrentDate);
 
-        Assert.Equal([a], has);
-        Assert.Equal([b, c], lacks);
+        Assert.Equal([c], atLeastSilver);
+        Assert.Equal([a, c], atLeastBronze);
+    }
+
+    [Fact]
+    public void Apply_HonorDoesNotHave_NegatesTheAtLeastThreshold()
+    {
+        Squad squad = CreateSquad();
+        PlayerSoldier a = BuildVeteran(squad); // Bronze Sword (Level 1)
+        PlayerSoldier b = BuildRecruit(squad); // no honors
+        PlayerSoldier c = AddPlayerSoldier(squad, TestModelFactory.MarineTemplate, "Brother Severan");
+        c.AddAward(new SoldierAward(new Date(41, 997, 1), "Silver Sword of the Emperor", "Sword", 2));
+
+        // "Does not have at least Silver": excludes the Silver holder but keeps the Bronze
+        // holder (Bronze is below the threshold) and the unhonored recruit.
+        var result = _service.Apply([a, b, c],
+            [Condition(SoldierFilterField.Honor, SoldierFilterOperator.DoesNotHave,
+                text: SoldierHonorFilterOption.ToValue("Sword", 2))], CurrentDate);
+
+        Assert.Equal([a, b], result);
     }
 
     [Fact]
@@ -184,6 +206,29 @@ public class SoldierFilterServiceTests
             [SoldierHonorFilterOption.ToValue("Sword", 2), SoldierHonorFilterOption.ToValue("Sword", 1)],
             tieredHonors.Select(option => option.Value));
         Assert.Contains(tieredHonors, option => option.Label == "Silver Sword of the Emperor (Level 2)");
+    }
+
+    [Fact]
+    public void GetAvailableHonors_UsesWeaponAgnosticTemplateLabel_WhenTiersProvided()
+    {
+        Squad squad = CreateSquad();
+        // Two soldiers earned the same ranged tier with different weapons; the label must not
+        // name either weapon.
+        PlayerSoldier a = AddPlayerSoldier(squad, TestModelFactory.MarineTemplate, "Brother Bolt");
+        a.AddAward(new SoldierAward(new Date(41, 997, 1), "Gold Bolter of the Emperor", "Gun", 3));
+        PlayerSoldier b = AddPlayerSoldier(squad, TestModelFactory.MarineTemplate, "Brother Plasma");
+        b.AddAward(new SoldierAward(new Date(41, 998, 1), "Gold Plasma Gun of the Emperor", "Gun", 3));
+
+        RatingAwardTier[] tiers =
+        [
+            new(1, RatingKeys.Ranged, 3, 115, RatingAwardEffect.Award, "Gun",
+                "Gold {bestSkillInCategory} of the Emperor")
+        ];
+
+        var honors = _service.GetAvailableHonors([a, b], tiers);
+
+        var option = Assert.Single(honors);
+        Assert.Equal("Gold Gun of the Emperor (Level 3)", option.Label);
     }
 
     private static SoldierFilterCondition Condition(SoldierFilterField field, SoldierFilterOperator op,
