@@ -211,7 +211,7 @@ public class NewChapterBuilderTests
             soldier.AddEvaluation(evaluation);
         }
 
-        public void ApplySoldierWorkExperience(ISoldier soldier, float points)
+        public void ApplySoldierWorkExperience(ISoldier soldier, Squad squad, float points)
         {
         }
 

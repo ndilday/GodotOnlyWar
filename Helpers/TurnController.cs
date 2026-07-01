@@ -219,7 +219,7 @@ namespace OnlyWar.Helpers
 
                 foreach (ISoldier soldier in squad.Members)
                 {
-                    trainingService.ApplySoldierWorkExperience(soldier, WeeklyTrainingPoints);
+                    trainingService.ApplySoldierWorkExperience(soldier, squad, WeeklyTrainingPoints);
                 }
             }
         }
@@ -243,7 +243,7 @@ namespace OnlyWar.Helpers
             {
                 foreach (ISoldier soldier in squad.Members)
                 {
-                    trainingService.ApplySoldierWorkExperience(soldier, points);
+                    trainingService.ApplySoldierWorkExperience(soldier, squad, points);
                 }
             }
         }

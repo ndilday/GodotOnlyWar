@@ -205,8 +205,6 @@ public class RulesDatabaseValidationTests
             "Scout Marine",
             "Scout Sergeant",
             "Sergeant",
-            "Sergeant (A)",
-            "Sergeant (D)",
             "Tactical Marine",
             "Veteran"
         ];
@@ -214,6 +212,34 @@ public class RulesDatabaseValidationTests
         foreach (string templateName in trainedSoldierTemplates)
         {
             Assert.NotNull(playerFaction.SoldierTemplates.Values.Single(st => st.Name == templateName).WorkExperienceTrainingProfile);
+        }
+    }
+
+    [Fact]
+    public void Sergeant_IsASingleRank_WithSquadTypeDrivenLeaderTraining()
+    {
+        var rules = RulesDatabaseFixture.LoadRules();
+        var playerFaction = rules.Factions.Single(f => f.IsPlayerFaction);
+        HashSet<string> soldierTemplateNames = playerFaction.SoldierTemplates.Values.Select(st => st.Name).ToHashSet();
+
+        // The assault/devastator sergeant variants were folded into the single "Sergeant".
+        Assert.Contains("Sergeant", soldierTemplateNames);
+        Assert.DoesNotContain("Sergeant (A)", soldierTemplateNames);
+        Assert.DoesNotContain("Sergeant (D)", soldierTemplateNames);
+
+        // What a sergeant trains toward now comes from the squad he leads: each line
+        // squad type carries the matching leader work-experience profile.
+        (string Squad, string Profile)[] expected =
+        [
+            ("Tactical Squad", "tactical_sergeant_work"),
+            ("Assault Squad", "assault_sergeant_work"),
+            ("Devastator Squad", "devastator_sergeant_work"),
+        ];
+        foreach ((string squadName, string profileName) in expected)
+        {
+            SquadTemplate squad = playerFaction.SquadTemplates.Values.Single(st => st.Name == squadName);
+            Assert.NotNull(squad.LeaderWorkExperienceProfile);
+            Assert.Equal(profileName, squad.LeaderWorkExperienceProfile.Name);
         }
     }
 

@@ -48,13 +48,13 @@ namespace OnlyWar.Models
         public SoldierTemplate Veteran { get; }
         public SoldierTemplate VeteranSergeant { get; }
         public SoldierTemplate TacticalMarine { get; }
-        public SoldierTemplate TacticalSergeant { get; }
         public SoldierTemplate AssaultMarine { get; }
-        public SoldierTemplate AssaultSergeant { get; }
         public SoldierTemplate DevastatorMarine { get; }
-        public SoldierTemplate DevastatorSergeant { get; }
         public SoldierTemplate ScoutMarine { get; }
         public SoldierTemplate ScoutSergeant { get; }
+        // A single "Sergeant" rank leads every line squad type (tactical/assault/
+        // devastator); what he trains toward comes from the squad, not the template.
+        public SoldierTemplate Sergeant { get; }
 
         // Squad templates
         public SquadTemplate TacticalSquad { get; }
@@ -99,13 +99,11 @@ namespace OnlyWar.Models
             Veteran = ResolveSoldier(faction, "Veteran");
             VeteranSergeant = ResolveSoldier(faction, "Veteran Sergeant");
             TacticalMarine = ResolveSoldier(faction, "Tactical Marine");
-            TacticalSergeant = ResolveSoldier(faction, "Sergeant");
             AssaultMarine = ResolveSoldier(faction, "Assault Marine");
-            AssaultSergeant = ResolveSoldier(faction, "Sergeant (A)");
             DevastatorMarine = ResolveSoldier(faction, "Devastator Marine");
-            DevastatorSergeant = ResolveSoldier(faction, "Sergeant (D)");
             ScoutMarine = ResolveSoldier(faction, "Scout Marine");
             ScoutSergeant = ResolveSoldier(faction, "Scout Sergeant");
+            Sergeant = ResolveSoldier(faction, "Sergeant");
 
             TacticalSquad = ResolveSquad(faction, "Tactical Squad");
             AssaultSquad = ResolveSquad(faction, "Assault Squad");

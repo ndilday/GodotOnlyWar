@@ -12,7 +12,7 @@ namespace OnlyWar.Helpers
     {
         public void UpdateRatings(Date date, PlayerSoldier soldier);
         public void EvaluateSoldier(PlayerSoldier soldier, Date trainingFinishedYear);
-        public void ApplySoldierWorkExperience(ISoldier soldier, float points);
+        public void ApplySoldierWorkExperience(ISoldier soldier, Squad squad, float points);
         public void TrainScouts(IEnumerable<Squad> scoutSquads, Dictionary<int, TrainingFocuses> squadFocusMap, float points = 0.2f);
     }
 
@@ -66,7 +66,7 @@ namespace OnlyWar.Helpers
             }
         }
 
-        public void ApplySoldierWorkExperience(ISoldier soldier, float points)
+        public void ApplySoldierWorkExperience(ISoldier soldier, Squad squad, float points)
         {
             float powerArmorSkill = soldier.GetTotalSkillValue(_skillsByName["Power Armor"]);
             // if any gunnery, ranged, melee, or vehicle skill is below the PA skill, focus on improving PA
@@ -82,36 +82,24 @@ namespace OnlyWar.Helpers
             }
             else
             {
-                ApplyMarineWorkExperienceByType(soldier, points);
+                ApplyTrainingProfile(soldier, ResolveWorkExperienceProfile(soldier, squad), points);
             }
         }
 
+        // A squad leader develops toward the leadership/tactics-plus-combat profile of the
+        // squad type he commands (an assault sergeant trains differently than a devastator
+        // sergeant), so a single "Sergeant" rank grows into its role. Everyone else, and
+        // leaders of squad types that define no leader profile, follow their own template.
+        private static TrainingProfile ResolveWorkExperienceProfile(ISoldier soldier, Squad squad)
+        {
+            if (soldier.Template.IsSquadLeader && squad?.SquadTemplate?.LeaderWorkExperienceProfile != null)
+            {
+                return squad.SquadTemplate.LeaderWorkExperienceProfile;
+            }
+            return soldier.Template.WorkExperienceTrainingProfile;
+        }
+
         public void ApplyMarineWorkExperienceByType(ISoldier soldier, float points)
-        {
-            ApplyTrainingProfile(soldier, soldier.Template.WorkExperienceTrainingProfile, points);
-        }
-
-        public void ApplyVeteranWorkExperience(ISoldier soldier, float points)
-        {
-            ApplyTrainingProfile(soldier, soldier.Template.WorkExperienceTrainingProfile, points);
-        }
-
-        public void ApplyTacticalWorkExperience(ISoldier soldier, float points)
-        {
-            ApplyTrainingProfile(soldier, soldier.Template.WorkExperienceTrainingProfile, points);
-        }
-
-        public void ApplyAssaultWorkExperience(ISoldier soldier, float points)
-        {
-            ApplyTrainingProfile(soldier, soldier.Template.WorkExperienceTrainingProfile, points);
-        }
-
-        public void ApplyDevastatorWorkExperience(ISoldier soldier, float points)
-        {
-            ApplyTrainingProfile(soldier, soldier.Template.WorkExperienceTrainingProfile, points);
-        }
-
-        public void ApplyScoutWorkExperience(ISoldier soldier, float points)
         {
             ApplyTrainingProfile(soldier, soldier.Template.WorkExperienceTrainingProfile, points);
         }

@@ -48,8 +48,8 @@ namespace OnlyWar.Helpers.Database.GameRules
                                                           .SelectMany(st => st)
                                                           .ToDictionary(st => st.Id);
             var squadElements = GetSquadTemplateElementsBySquadId(connection, basicSoldierTemplateMap);
-            var squadTemplates = GetSquadTemplatesById(connection, squadElements, weaponSets, 
-                                                       squadWeaponOptions, armorTemplates);
+            var squadTemplates = GetSquadTemplatesById(connection, squadElements, weaponSets,
+                                                       squadWeaponOptions, armorTemplates, trainingProfiles);
             return new SquadTemplateDataBlob
             {
                 ArmorTemplates = armorTemplates,
@@ -394,7 +394,8 @@ namespace OnlyWar.Helpers.Database.GameRules
             Dictionary<int, List<SquadTemplateElement>> elementMap,
             Dictionary<int, WeaponSet> weaponSetMap,
             Dictionary<int, List<SquadWeaponOption>> squadWeaponOptionMap,
-            Dictionary<int, ArmorTemplate> armorTemplateMap)
+            Dictionary<int, ArmorTemplate> armorTemplateMap,
+            Dictionary<int, TrainingProfile> trainingProfileMap)
         {
             Dictionary<int, SquadTemplate> squadTemplateMap = [];
             Dictionary<int, List<SquadTemplate>> squadTemplatesByFactionId = [];
@@ -420,14 +421,20 @@ namespace OnlyWar.Helpers.Database.GameRules
                     ArmorTemplate defaultArmor = armorTemplateMap[defaultArmorId];
                     List<SquadWeaponOption> options = squadWeaponOptionMap.ContainsKey(id) ?
                         squadWeaponOptionMap[id] : null;
-                    SquadTemplate squadTemplate = new SquadTemplate(id, 
-                                                                    name, 
+                    SquadTemplate squadTemplate = new SquadTemplate(id,
+                                                                    name,
                                                                     weaponSetMap[defaultWeaponSetId],
-                                                                    options, 
+                                                                    options,
                                                                     defaultArmor,
-                                                                    elementMap[id], 
+                                                                    elementMap[id],
                                                                     (SquadTypes)squadType,
                                                                     battleValue);
+                    // Optional leader work-experience profile, appended after
+                    // BodyguardSquadTemplateId by migrate-collapse-sergeants.
+                    if (reader.FieldCount > 8 && reader[8].GetType() != typeof(DBNull))
+                    {
+                        squadTemplate.LeaderWorkExperienceProfile = trainingProfileMap[reader.GetInt32(8)];
+                    }
                     squadTemplateMap[id] = squadTemplate;
                     if (!squadTemplatesByFactionId.ContainsKey(factionId))
                     {

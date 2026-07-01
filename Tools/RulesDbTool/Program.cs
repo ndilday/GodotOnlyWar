@@ -4,7 +4,7 @@ using Microsoft.Data.Sqlite;
 
 if (args.Length < 2)
 {
-    Console.Error.WriteLine("Usage: RulesDbTool <schema|training-source|migrate-training|migrate-progenoid|migrate-ratings|migrate-planet-scales|migrate-fortification|migrate-tyranids|migrate-tyranid-squads|migrate-evasion|migrate-squad-caps|migrate-veteran-sergeant|migrate-remove-veteran-captain|migrate-remove-recruitment-captain|remove-unused-unit-templates> <db-path>");
+    Console.Error.WriteLine("Usage: RulesDbTool <schema|training-source|migrate-training|migrate-progenoid|migrate-ratings|migrate-planet-scales|migrate-fortification|migrate-tyranids|migrate-tyranid-squads|migrate-evasion|migrate-squad-caps|migrate-veteran-sergeant|migrate-collapse-sergeants|migrate-remove-veteran-captain|migrate-remove-recruitment-captain|remove-unused-unit-templates> <db-path>");
     return 1;
 }
 
@@ -13,7 +13,7 @@ string dbPath = args[1];
 string connectionString = new SqliteConnectionStringBuilder
 {
     DataSource = dbPath,
-    Mode = command is "migrate-training" or "migrate-progenoid" or "migrate-ratings" or "migrate-planet-scales" or "migrate-fortification" or "migrate-tyranids" or "migrate-tyranid-squads" or "migrate-evasion" or "migrate-squad-caps" or "migrate-veteran-sergeant" or "migrate-remove-veteran-captain" or "migrate-remove-recruitment-captain" or "remove-unused-unit-templates" ? SqliteOpenMode.ReadWriteCreate : SqliteOpenMode.ReadOnly
+    Mode = command is "migrate-training" or "migrate-progenoid" or "migrate-ratings" or "migrate-planet-scales" or "migrate-fortification" or "migrate-tyranids" or "migrate-tyranid-squads" or "migrate-evasion" or "migrate-squad-caps" or "migrate-veteran-sergeant" or "migrate-collapse-sergeants" or "migrate-remove-veteran-captain" or "migrate-remove-recruitment-captain" or "remove-unused-unit-templates" ? SqliteOpenMode.ReadWriteCreate : SqliteOpenMode.ReadOnly
 }.ToString();
 
 using SqliteConnection connection = new(connectionString);
@@ -59,6 +59,9 @@ switch (command)
         break;
     case "migrate-veteran-sergeant":
         MigrateVeteranSergeant(connection);
+        break;
+    case "migrate-collapse-sergeants":
+        MigrateCollapseSergeants(connection);
         break;
     case "migrate-remove-veteran-captain":
         MigrateRemoveVeteranCaptain(connection);
@@ -813,6 +816,86 @@ static void MigrateVeteranSergeant(SqliteConnection connection)
 
     transaction.Commit();
     Console.WriteLine($"Veteran Sergeant migration complete. Added soldier {veteranSergeant}; repointed {updated} Veteran Squad leader element(s).");
+}
+
+static void MigrateCollapseSergeants(SqliteConnection connection)
+{
+    using SqliteTransaction transaction = connection.BeginTransaction();
+
+    // "Sergeant" is a single rank; the "Sergeant (A)" and "Sergeant (D)" variants only
+    // existed to give assault and devastator squad leaders a different training emphasis.
+    // What a sergeant trains toward is really a function of the squad he leads, not a
+    // distinct soldier template, so we move that leadership/tactics-plus-combat-focus
+    // training onto the squad template (LeaderWorkExperienceProfileId) and fold the two
+    // variants back into the plain Sergeant.
+    int assaultSergeant = ExecuteScalarInt(connection, transaction,
+        "SELECT Id FROM SoldierTemplate WHERE Name = 'Sergeant (A)' AND FactionId = 1");
+    int devastatorSergeant = ExecuteScalarInt(connection, transaction,
+        "SELECT Id FROM SoldierTemplate WHERE Name = 'Sergeant (D)' AND FactionId = 1");
+    if (assaultSergeant == 0 && devastatorSergeant == 0)
+    {
+        Console.WriteLine("Sergeant collapse already applied; nothing to do.");
+        return;
+    }
+
+    int sergeant = ExecuteScalarInt(connection, transaction,
+        "SELECT Id FROM SoldierTemplate WHERE Name = 'Sergeant' AND FactionId = 1");
+    if (sergeant == 0)
+    {
+        throw new InvalidOperationException(
+            "Line 'Sergeant' soldier template is missing; cannot collapse the assault/devastator variants onto it.");
+    }
+
+    EnsureColumn(connection, transaction, "SquadTemplate", "LeaderWorkExperienceProfileId", "INTEGER");
+
+    // The three line-squad sergeant training profiles already exist (migrate-training);
+    // attach each to the squad type whose leader should train that way.
+    SetSquadLeaderProfile(connection, transaction, "Tactical Squad", "tactical_sergeant_work");
+    SetSquadLeaderProfile(connection, transaction, "Assault Squad", "assault_sergeant_work");
+    SetSquadLeaderProfile(connection, transaction, "Devastator Squad", "devastator_sergeant_work");
+
+    // Repoint every squad leader slot pointing at a variant to the plain Sergeant, then
+    // drop the variant and its MOS rows. The TrainingProfile rows themselves are kept:
+    // they are now referenced by the squad templates' leader profiles.
+    int repointed = 0;
+    foreach (int variant in new[] { assaultSergeant, devastatorSergeant })
+    {
+        if (variant == 0)
+        {
+            continue;
+        }
+        repointed += Execute(connection, transaction,
+            "UPDATE SquadTemplateElement SET SoldierTemplateId = $s WHERE SoldierTemplateId = $v",
+            ("$s", sergeant), ("$v", variant));
+        Execute(connection, transaction,
+            "DELETE FROM SoldierMosTraining WHERE SoldierTemplateId = $v", ("$v", variant));
+        Execute(connection, transaction,
+            "DELETE FROM SoldierTemplate WHERE Id = $v", ("$v", variant));
+    }
+
+    transaction.Commit();
+    Console.WriteLine(
+        $"Sergeant collapse complete. Folded (A)/(D) variants into Sergeant {sergeant}; " +
+        $"repointed {repointed} squad element(s); moved leader training profiles onto squad templates.");
+}
+
+static void SetSquadLeaderProfile(SqliteConnection connection, SqliteTransaction transaction,
+                                  string squadName, string profileName)
+{
+    int profileId = ExecuteScalarInt(connection, transaction,
+        "SELECT Id FROM TrainingProfile WHERE Name = $n", ("$n", profileName));
+    if (profileId == 0)
+    {
+        throw new InvalidOperationException(
+            $"Training profile '{profileName}' is missing; run migrate-training before migrate-collapse-sergeants.");
+    }
+    int updated = Execute(connection, transaction,
+        "UPDATE SquadTemplate SET LeaderWorkExperienceProfileId = $p WHERE Name = $n AND FactionId = 1",
+        ("$p", profileId), ("$n", squadName));
+    if (updated == 0)
+    {
+        Console.WriteLine($"  warning: squad template '{squadName}' not found; leader profile not set.");
+    }
 }
 
 static void MigrateRemoveVeteranCaptain(SqliteConnection connection) =>

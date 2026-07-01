@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 
 using OnlyWar.Models.Equippables;
+using OnlyWar.Models.Soldiers;
 
 namespace OnlyWar.Models.Squads
 {
@@ -55,6 +56,11 @@ namespace OnlyWar.Models.Squads
         public int BattleValue { get; }
         public Faction Faction { get; set;  }
         public SquadTemplate BodyguardSquadTemplate { get; set; }
+        // Work-experience training a squad leader develops toward while commanding this
+        // squad type. This lets a single "Sergeant" rank train differently depending on
+        // whether he leads a tactical, assault, or devastator squad. Null falls back to
+        // the leader's own soldier-template profile (see SoldierTrainingCalculator).
+        public TrainingProfile LeaderWorkExperienceProfile { get; set; }
 
         public SquadTemplate(int id, 
                              string name, 

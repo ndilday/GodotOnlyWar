@@ -604,7 +604,7 @@ namespace OnlyWar.Builders
             foreach (Unit company in chapter.ChildUnits)
             {
                 FillCompanyWithSquads(unassignedSoldierMap, company, templates.DevastatorSquad,
-                    devList, devSgtList, templates.DevastatorMarine, templates.DevastatorSergeant,
+                    devList, devSgtList, templates.DevastatorMarine, templates.Sergeant,
                     CalculateSquadSize, year);
             }
         }
@@ -617,7 +617,7 @@ namespace OnlyWar.Builders
             foreach (Unit company in chapter.ChildUnits)
             {
                 FillCompanyWithSquads(unassignedSoldierMap, company, templates.AssaultSquad,
-                    assList, assSgtList, templates.AssaultMarine, templates.AssaultSergeant,
+                    assList, assSgtList, templates.AssaultMarine, templates.Sergeant,
                     CalculateSquadSize, year);
             }
         }
@@ -630,7 +630,7 @@ namespace OnlyWar.Builders
             foreach (Unit company in chapter.ChildUnits)
             {
                 FillCompanyWithSquads(unassignedSoldierMap, company, templates.TacticalSquad,
-                    tactList, tactSgtList, templates.TacticalMarine, templates.TacticalSergeant,
+                    tactList, tactSgtList, templates.TacticalMarine, templates.Sergeant,
                     CalculateSquadSize, year);
             }
         }

@@ -249,7 +249,7 @@ public class FleetMovementTests
         {
         }
 
-        public void ApplySoldierWorkExperience(ISoldier soldier, float points)
+        public void ApplySoldierWorkExperience(ISoldier soldier, Squad squad, float points)
         {
         }
 

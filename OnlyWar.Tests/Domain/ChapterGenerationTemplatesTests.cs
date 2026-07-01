@@ -23,9 +23,7 @@ public class ChapterGenerationTemplatesTests
         // A representative spread across the soldier-template and squad-template sets.
         Assert.Equal("Chapter Master", templates.ChapterMaster.Name);
         Assert.Equal("Codiciers", templates.Codicier.Name);
-        Assert.Equal("Sergeant", templates.TacticalSergeant.Name);
-        Assert.Equal("Sergeant (A)", templates.AssaultSergeant.Name);
-        Assert.Equal("Sergeant (D)", templates.DevastatorSergeant.Name);
+        Assert.Equal("Sergeant", templates.Sergeant.Name);
         Assert.Equal("Scout Marine", templates.ScoutMarine.Name);
         Assert.Equal("Tactical Squad", templates.TacticalSquad.Name);
         Assert.Equal("Scout Squad", templates.ScoutSquad.Name);

@@ -409,7 +409,7 @@ public class TurnTrainingTests
         {
         }
 
-        public void ApplySoldierWorkExperience(ISoldier soldier, float points)
+        public void ApplySoldierWorkExperience(ISoldier soldier, Squad squad, float points)
         {
             WorkExperienceSoldiers.Add(soldier);
             soldier.AddSkillPoints(TestSkills.Ranged, points);
