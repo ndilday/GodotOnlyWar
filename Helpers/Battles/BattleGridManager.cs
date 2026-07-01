@@ -55,9 +55,34 @@ namespace OnlyWar.Helpers.Battles
 
         public void MoveSoldier(BattleSoldier soldier, Tuple<int, int> newTopLeft, ushort newOrientation)
         {
-            List<Tuple<int, int>> newLocation = [];
-            int width, depth;
-            if (newOrientation % 2 == 0)
+            List<Tuple<int, int>> newLocation = GetSoldierFootprint(soldier, newTopLeft, newOrientation);
+            EnsureMoveAvailable(soldier, newLocation);
+
+            _grid.FreeCells(_soldierPositionsMap[soldier.Soldier.Id]);
+            _grid.OccupyCells(newLocation, soldier.Soldier.Id);
+            _soldierPositionsMap[soldier.Soldier.Id] = newLocation;
+        }
+
+        public bool TryMoveSoldier(BattleSoldier soldier, Tuple<int, int> newTopLeft, ushort newOrientation)
+        {
+            List<Tuple<int, int>> newLocation = GetSoldierFootprint(soldier, newTopLeft, newOrientation);
+            if (!CanMoveTo(soldier, newLocation))
+            {
+                return false;
+            }
+
+            _grid.FreeCells(_soldierPositionsMap[soldier.Soldier.Id]);
+            _grid.OccupyCells(newLocation, soldier.Soldier.Id);
+            _soldierPositionsMap[soldier.Soldier.Id] = newLocation;
+            return true;
+        }
+
+        private List<Tuple<int, int>> GetSoldierFootprint(BattleSoldier soldier, Tuple<int, int> topLeft, ushort orientation)
+        {
+            List<Tuple<int, int>> cells = [];
+            int width;
+            int depth;
+            if (orientation % 2 == 0)
             {
                 width = soldier.Soldier.Template.Species.Width;
                 depth = soldier.Soldier.Template.Species.Depth;
@@ -72,19 +97,35 @@ namespace OnlyWar.Helpers.Battles
             {
                 for (int d = 0; d < depth; d++)
                 {
-                    Tuple<int, int> location = new Tuple<int, int>((short)(newTopLeft.Item1 + w), (short)(newTopLeft.Item2 - d));
-                    int? occupier = _grid.GetCellObject(location);
-                    if (occupier != null && occupier != soldier.Soldier.Id)
-                    {
-                        throw new InvalidOperationException($"Soldier {soldier.Soldier.Id} cannot move to {location.Item1},{location.Item2}; already occupied by Soldier {occupier}");
-                    }
-                    newLocation.Add(location);
+                    cells.Add(new Tuple<int, int>((short)(topLeft.Item1 + w), (short)(topLeft.Item2 - d)));
                 }
             }
+            return cells;
+        }
 
-            _grid.FreeCells(_soldierPositionsMap[soldier.Soldier.Id]);
-            _grid.OccupyCells(newLocation, soldier.Soldier.Id);
-            _soldierPositionsMap[soldier.Soldier.Id] = newLocation;
+        private bool CanMoveTo(BattleSoldier soldier, IEnumerable<Tuple<int, int>> cells)
+        {
+            foreach (Tuple<int, int> location in cells)
+            {
+                int? occupier = _grid.GetCellObject(location);
+                if (occupier != null && occupier != soldier.Soldier.Id)
+                {
+                    return false;
+                }
+            }
+            return true;
+        }
+
+        private void EnsureMoveAvailable(BattleSoldier soldier, IEnumerable<Tuple<int, int>> cells)
+        {
+            foreach (Tuple<int, int> location in cells)
+            {
+                int? occupier = _grid.GetCellObject(location);
+                if (occupier != null && occupier != soldier.Soldier.Id)
+                {
+                    throw new InvalidOperationException($"Soldier {soldier.Soldier.Id} cannot move to {location.Item1},{location.Item2}; already occupied by Soldier {occupier}");
+                }
+            }
         }
 
         public void RemoveSoldier(int soldierId)

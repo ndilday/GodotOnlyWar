@@ -156,15 +156,71 @@ namespace OnlyWar.Helpers.Database.GameState
                              string schemaFilePath = null)
         {
 
-            if(File.Exists(filePath))
+            // Write the whole save to a sibling temp file first and only swap it over the
+            // real file once everything has committed. The previous save is left untouched
+            // until the final move, so a failure anywhere below can never destroy it.
+            string fullPath = Path.GetFullPath(filePath);
+            string directory = Path.GetDirectoryName(fullPath);
+            string tempPath = Path.Combine(
+                directory ?? string.Empty,
+                $".{Path.GetFileName(fullPath)}.{Guid.NewGuid():N}.tmp");
+            if (File.Exists(tempPath))
             {
-                File.Delete(filePath);
+                File.Delete(tempPath);
             }
-            GenerateTables(filePath, schemaFilePath ?? DefaultSchemaFilePath());
+
             var squads = units.SelectMany(u => u.GetAllSquads());
             var ships = fleets.SelectMany(f => f.Ships);
+            try
+            {
+                GenerateTables(tempPath, schemaFilePath ?? DefaultSchemaFilePath());
+                WriteSaveData(tempPath, currentDate, requisition, geneseedStockpile,
+                              geneseedPurity, scenario, medicalProcedures, characters, requests,
+                              planets, fleets, playerSoldiers, fallenBrothers, history, squads,
+                              ships, units);
+                // Release the pooled SQLite handles so the temp file can be moved over the
+                // target on Windows (an open handle would block the move).
+                SqliteConnection.ClearAllPools();
+                File.Move(tempPath, fullPath, overwrite: true);
+            }
+            catch
+            {
+                SqliteConnection.ClearAllPools();
+                try
+                {
+                    if (File.Exists(tempPath))
+                    {
+                        File.Delete(tempPath);
+                    }
+                }
+                catch (IOException)
+                {
+                    // Best-effort cleanup of the temp file; ignore if still locked.
+                }
+                throw;
+            }
+        }
+
+        private void WriteSaveData(string filePath,
+                                   Date currentDate,
+                                   int requisition,
+                                   int geneseedStockpile,
+                                   float geneseedPurity,
+                                   CampaignScenario scenario,
+                                   IEnumerable<MedicalProcedure> medicalProcedures,
+                                   IEnumerable<Character> characters,
+                                   IEnumerable<IRequest> requests,
+                                   IEnumerable<Planet> planets,
+                                   IEnumerable<TaskForce> fleets,
+                                   IEnumerable<PlayerSoldier> playerSoldiers,
+                                   IEnumerable<PlayerSoldier> fallenBrothers,
+                                   IReadOnlyDictionary<Date, List<EventHistory>> history,
+                                   IEnumerable<Squad> squads,
+                                   IEnumerable<Ship> ships,
+                                   IEnumerable<Unit> units)
+        {
             string connection = BuildConnectionString(filePath);
-            IDbConnection dbCon = new SqliteConnection(connection);
+            using IDbConnection dbCon = new SqliteConnection(connection);
             dbCon.Open();
             using (var transaction = dbCon.BeginTransaction())
             {
@@ -277,7 +333,8 @@ namespace OnlyWar.Helpers.Database.GameState
             return new SqliteConnectionStringBuilder
             {
                 DataSource = filePath,
-                ForeignKeys = true
+                ForeignKeys = true,
+                Pooling = false
             }.ToString();
         }
 
@@ -285,13 +342,12 @@ namespace OnlyWar.Helpers.Database.GameState
         {
             string cmdText = File.ReadAllText(schemaFilePath);
             string connection = BuildConnectionString(filePath);
-            IDbConnection dbCon = new SqliteConnection(connection);
+            using IDbConnection dbCon = new SqliteConnection(connection);
             dbCon.Open();
             using (var command = dbCon.CreateCommand())
             {
                 command.CommandText = cmdText;
                 command.ExecuteNonQuery();
-                dbCon.Close();
             }
         }
     }

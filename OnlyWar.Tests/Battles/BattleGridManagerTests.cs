@@ -1,6 +1,8 @@
 using System;
 using System.Collections.Generic;
 using OnlyWar.Helpers.Battles;
+using OnlyWar.Helpers.Battles.Placers;
+using OnlyWar.Models;
 using OnlyWar.Models.Soldiers;
 using OnlyWar.Tests.Fixtures;
 using Xunit;
@@ -84,6 +86,39 @@ public class BattleGridManagerTests
 
         Assert.Throws<InvalidOperationException>(
             () => grid.MoveSoldier(mover, new Tuple<int, int>(1, 0), 0));
+    }
+
+    [Fact]
+    public void TryMoveSoldier_ReturnsFalseWhenTargetOccupiedByAnother()
+    {
+        BattleGridManager grid = new();
+        BattleSoldier mover = CreateBattleSoldier(1);
+        grid.PlaceSoldier(mover, true, Cell(0, 0));
+        grid.PlaceSoldier(CreateBattleSoldier(2), false, Cell(1, 0));
+
+        bool moved = grid.TryMoveSoldier(mover, new Tuple<int, int>(1, 0), 0);
+
+        Assert.False(moved);
+        Assert.Equal(new Tuple<int, int>(0, 0), grid.GetSoldierPosition(1)[0]);
+    }
+
+    [Fact]
+    public void PlaceBattleSquad_VerticalPlacementUsesRotatedFootprintForNonSquareSoldiers()
+    {
+        BattleGridManager grid = new();
+        SoldierTemplate template = CreateNonSquareTemplate();
+        Soldier first = TestModelFactory.CreateSoldier(template: template, name: "Ravener One");
+        first.Id = 1;
+        Soldier second = TestModelFactory.CreateSoldier(template: template, name: "Ravener Two");
+        second.Id = 2;
+        BattleSquad squad = new(false, TestModelFactory.CreateSquad("Raveners", first, second));
+
+        BattleSquadPlacer.PlaceBattleSquad(grid, squad, new Tuple<int, int>(0, 0), longHorizontal: false);
+
+        Assert.Equal(new[] { new Tuple<int, int>(1, 0), new Tuple<int, int>(2, 0) },
+            grid.GetSoldierPosition(1));
+        Assert.Equal(new[] { new Tuple<int, int>(1, 1), new Tuple<int, int>(2, 1) },
+            grid.GetSoldierPosition(2));
     }
 
     [Fact]
@@ -171,5 +206,45 @@ public class BattleGridManagerTests
 
         Assert.Equal(new Tuple<int, int>(1, 1), clone.GetSoldierPosition(1)[0]);
         Assert.False(clone.IsSpaceAvailable(new Tuple<int, int>(9, 9)));
+    }
+
+    private static SoldierTemplate CreateNonSquareTemplate()
+    {
+        static NormalizedValueTemplate Value(float value) => new()
+        {
+            BaseValue = value,
+            StandardDeviation = 0
+        };
+
+        Species species = new(
+            99,
+            "Test Non-Square",
+            Value(10),
+            Value(10),
+            Value(10),
+            Value(10),
+            Value(10),
+            Value(10),
+            Value(10),
+            Value(0),
+            Value(10),
+            Value(6),
+            Value(1),
+            width: 1,
+            depth: 2,
+            rangedEvasion: 0f,
+            meleeEvasion: 0f,
+            abilities: SpeciesAbilities.None,
+            bodyTemplate: HumanBodyTemplate.Instance);
+
+        return new SoldierTemplate(
+            99,
+            species,
+            "Test Non-Square",
+            1,
+            1,
+            false,
+            0,
+            Array.Empty<Tuple<BaseSkill, float>>());
     }
 }

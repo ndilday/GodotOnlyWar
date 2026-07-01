@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using OnlyWar.Builders;
@@ -91,7 +92,7 @@ public class NewChapterBuilderTests
     public void CreateChapter_VeteranLineSquadsAreLedByVeteranSergeantsNotCaptains()
     {
         PlayerForce chapter = NewChapterBuilder.CreateChapter(
-            _data, CreateTrainingService(), new Date(39, 496, 1), new Date(39, 500, 1), "Crimson Sentinels");
+            _data, new VeteranCandidateTrainingService(), new Date(39, 496, 1), new Date(39, 500, 1), "Crimson Sentinels");
         Unit oob = chapter.Army.OrderOfBattle;
 
         Unit veteranCompany = oob.ChildUnits.First(c => c.UnitTemplate.Name == "Veteran Company");
@@ -129,6 +130,33 @@ public class NewChapterBuilderTests
     }
 
     [Fact]
+    public void CreateChapter_VeteransRequireTacticalBaselineAndAdamantiumCombatSpike()
+    {
+        PlayerForce chapter = NewChapterBuilder.CreateChapter(
+            _data, new VeteranCandidateTrainingService(), new Date(39, 496, 1), new Date(39, 500, 1), "Crimson Sentinels");
+        Unit oob = chapter.Army.OrderOfBattle;
+
+        var veterans = oob.GetAllMembers()
+            .OfType<PlayerSoldier>()
+            .Where(s => s.Template.Name is "Veteran" or "Veteran Sergeant")
+            .ToList();
+
+        Assert.NotEmpty(veterans);
+        foreach (PlayerSoldier veteran in veterans)
+        {
+            SoldierEvaluation evaluation = veteran.SoldierEvaluationHistory[0];
+            Assert.True(evaluation.MeleeRating > 90, $"{veteran.Name} lacks the Veteran melee baseline.");
+            Assert.True(evaluation.RangedRating > 105, $"{veteran.Name} lacks the Veteran ranged baseline.");
+            Assert.True(evaluation.MeleeRating > 115 || evaluation.RangedRating > 120,
+                $"{veteran.Name} lacks an Adamantium-level melee or ranged spike.");
+            if (veteran.Template.Name == "Veteran Sergeant")
+            {
+                Assert.True(evaluation.LeadershipRating > 60, $"{veteran.Name} lacks Veteran Sergeant leadership.");
+            }
+        }
+    }
+
+    [Fact]
     public void GenerateSector_ThreadsSeedAndChapterNameThroughToAGeneratedSector()
     {
         Sector sector = SectorBuilder.GenerateSector(1, _data, new Date(39, 500, 1), "Storm Knights");
@@ -145,5 +173,50 @@ public class NewChapterBuilderTests
                                                 _data.BaseSkillMap, StaticRNG.Instance);
         return new SoldierTrainingCalculator(_data.BaseSkillMap.Values, _data.TrainingProfiles.Values,
                                              ratingCalculator);
+    }
+
+    private sealed class VeteranCandidateTrainingService : ISoldierTrainingService
+    {
+        private int _initialEvaluationIndex;
+
+        public void UpdateRatings(Date date, PlayerSoldier soldier)
+        {
+            EvaluateSoldier(soldier, date);
+        }
+
+        public void EvaluateSoldier(PlayerSoldier soldier, Date trainingFinishedYear)
+        {
+            if (soldier.SoldierEvaluationHistory.Count > 0)
+            {
+                soldier.AddEvaluation(soldier.SoldierEvaluationHistory[0]);
+                return;
+            }
+
+            int index = _initialEvaluationIndex++;
+            SoldierEvaluation evaluation = index switch
+            {
+                < 50 => new SoldierEvaluation(trainingFinishedYear, melee: 80, ranged: 80, lead: 90,
+                    med: 0, tech: 0, piety: 0, ancient: 0),
+                < 70 => new SoldierEvaluation(trainingFinishedYear, melee: 116, ranged: 106, lead: 61,
+                    med: 0, tech: 0, piety: 0, ancient: 0),
+                < 80 => new SoldierEvaluation(trainingFinishedYear, melee: 91, ranged: 121, lead: 61,
+                    med: 0, tech: 0, piety: 0, ancient: 0),
+                < 100 => new SoldierEvaluation(trainingFinishedYear, melee: 116, ranged: 106, lead: 40,
+                    med: 0, tech: 0, piety: 0, ancient: 0),
+                < 120 => new SoldierEvaluation(trainingFinishedYear, melee: 91, ranged: 121, lead: 40,
+                    med: 0, tech: 0, piety: 0, ancient: 0),
+                _ => new SoldierEvaluation(trainingFinishedYear, melee: 85, ranged: 100, lead: 40,
+                    med: 0, tech: 0, piety: 0, ancient: 0)
+            };
+            soldier.AddEvaluation(evaluation);
+        }
+
+        public void ApplySoldierWorkExperience(ISoldier soldier, float points)
+        {
+        }
+
+        public void TrainScouts(IEnumerable<Squad> scoutSquads, Dictionary<int, TrainingFocuses> squadFocusMap, float points = 0.2f)
+        {
+        }
     }
 }

@@ -181,6 +181,12 @@ public partial class ChapterController : Control
             return;
         }
 
+        // Capture the ordered soldier list of the context we're browsing (filter results
+        // or squad roster) before the transfer, so we can advance to the next soldier in
+        // that same context rather than following this one to its new home.
+        List<int> contextSoldierIds = GetCurrentContextSoldierIds();
+        int transferIndex = contextSoldierIds.IndexOf(soldier.Id);
+
         GameDataSingleton.Instance.Sector.PlayerForce.Army.PopulateSquadMap();
         bool didTransfer = _transferService.ApplyTransfer(
             soldier,
@@ -190,7 +196,7 @@ public partial class ChapterController : Control
 
         if (didTransfer)
         {
-            NavigateToSoldier(soldier);
+            SelectNextInContext(contextSoldierIds, transferIndex);
         }
 
         ClearPendingTransfer();
@@ -451,14 +457,58 @@ public partial class ChapterController : Control
         }
     }
 
-    private void NavigateToSoldier(ISoldier soldier)
+    // The ordered soldier ids currently shown in the left menu, so a transfer can pick the
+    // next one in place. Only soldier-bearing contexts (filter results or a squad roster)
+    // return ids; chapter/company overviews have no soldier list to advance through.
+    private List<int> GetCurrentContextSoldierIds()
     {
-        Unit chapter = GetChapter();
-        Squad squad = soldier.AssignedSquad;
-        _navigator.Path.CompanyId = chapter.ChildUnits.FirstOrDefault(company => company.Id == squad.ParentUnit?.Id)?.Id;
-        _navigator.Path.SquadId = squad.Id;
-        _navigator.Path.SoldierId = soldier.Id;
-        _navigator.Select(new ChapterBrowserItemEvent(ChapterBrowserLevel.Soldier, soldier.Id));
+        if (_activeFilter.Count > 0)
+        {
+            return _filterService
+                .Apply(GetCurrentScopeMembers(), _activeFilter, GameDataSingleton.Instance.Date)
+                .Select(soldier => soldier.Id)
+                .ToList();
+        }
+
+        switch (_navigator.Path.Level)
+        {
+            case ChapterBrowserLevel.Squad:
+                return GetSquad(_navigator.Path.SquadId.Value).Members.Select(soldier => soldier.Id).ToList();
+            case ChapterBrowserLevel.Soldier:
+                return GetSoldier(_navigator.Path.SoldierId.Value).AssignedSquad.Members
+                    .Select(soldier => soldier.Id).ToList();
+            default:
+                return [];
+        }
+    }
+
+    // After a transfer, select the soldier that follows the transferred one in the pre-transfer
+    // context list (or the previous one if it was last), keeping the current browse scope put.
+    private void SelectNextInContext(List<int> contextSoldierIds, int transferIndex)
+    {
+        int? nextId = null;
+        if (transferIndex >= 0)
+        {
+            if (transferIndex + 1 < contextSoldierIds.Count)
+            {
+                nextId = contextSoldierIds[transferIndex + 1];
+            }
+            else if (transferIndex - 1 >= 0)
+            {
+                nextId = contextSoldierIds[transferIndex - 1];
+            }
+        }
+
+        // At soldier-level browsing the detail is driven by the path; retarget it (or drop back
+        // to the squad when nothing remains) so we don't render the transferred soldier's new home.
+        if (_activeFilter.Count == 0 && _navigator.Path.Level == ChapterBrowserLevel.Soldier)
+        {
+            _navigator.Path.SoldierId = nextId;
+        }
+
+        _navigator.Select(nextId.HasValue
+            ? new ChapterBrowserItemEvent(ChapterBrowserLevel.Soldier, nextId.Value)
+            : null);
     }
 
     private IReadOnlyList<ChapterBreadcrumbItem> BuildBreadcrumbs(Unit chapter)

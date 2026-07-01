@@ -40,15 +40,20 @@ namespace OnlyWar.Helpers
                 .ToList();
         }
 
-        // Distinct honor categories (award Type) earned by anyone in scope.
-        public IReadOnlyList<string> GetAvailableHonors(IEnumerable<ISoldier> soldiers)
+        // Distinct honor tiers earned by anyone in scope. The filter value is Type+Level so
+        // Bronze/Silver/etc. awards of the same type remain separate choices.
+        public IReadOnlyList<SoldierHonorFilterOption> GetAvailableHonors(IEnumerable<ISoldier> soldiers)
         {
             return soldiers
                 .OfType<PlayerSoldier>()
                 .SelectMany(s => s.SoldierAwards)
-                .Select(a => a.Type)
-                .Distinct()
-                .OrderBy(type => type)
+                .GroupBy(a => new { a.Type, a.Level })
+                .OrderBy(g => g.Key.Type)
+                .ThenByDescending(g => g.Key.Level)
+                .Select(g => new SoldierHonorFilterOption(
+                    g.Key.Type,
+                    g.Key.Level,
+                    g.OrderByDescending(a => a.DateAwarded).FirstOrDefault()?.Name))
                 .ToList();
         }
 
@@ -62,7 +67,7 @@ namespace OnlyWar.Helpers
 
                 case SoldierFilterField.Honor:
                     bool hasHonor = soldier is PlayerSoldier player
-                        && player.SoldierAwards.Any(a => a.Type == condition.TextValue);
+                        && player.SoldierAwards.Any(a => MatchesHonor(a, condition.TextValue));
                     return condition.Operator == SoldierFilterOperator.DoesNotHave ? !hasHonor : hasHonor;
 
                 case SoldierFilterField.TimeInService:
@@ -73,6 +78,19 @@ namespace OnlyWar.Helpers
                 default:
                     return true;
             }
+        }
+
+        private static bool MatchesHonor(SoldierAward award, string filterValue)
+        {
+            if (filterValue == SoldierHonorFilterOption.ToValue(award.Type, award.Level))
+            {
+                return true;
+            }
+
+            // Tolerate conditions created before honor filters tracked level.
+            return !string.IsNullOrWhiteSpace(filterValue)
+                && !filterValue.Contains('|')
+                && award.Type == filterValue;
         }
 
         private static bool MatchesDuration(ISoldier soldier, SoldierFilterCondition condition, Date currentDate)

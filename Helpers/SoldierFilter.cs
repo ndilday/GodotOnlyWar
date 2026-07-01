@@ -7,7 +7,7 @@ namespace OnlyWar.Helpers
     public enum SoldierFilterField
     {
         Rank,           // Template.Name; Equals / NotEquals
-        Honor,          // award Type; Has / DoesNotHave
+        Honor,          // award Type + Level; Has / DoesNotHave
         TimeInService,  // weeks; AtLeast / AtMost
         TimeInRank,     // weeks; AtLeast / AtMost
         TimeInSquad     // weeks; AtLeast / AtMost
@@ -29,8 +29,28 @@ namespace OnlyWar.Helpers
         Years
     }
 
+    public sealed class SoldierHonorFilterOption
+    {
+        public string Value { get; }
+        public string Label { get; }
+        public string Type { get; }
+        public ushort Level { get; }
+
+        public SoldierHonorFilterOption(string type, ushort level, string sampleName)
+        {
+            Type = type;
+            Level = level;
+            Value = ToValue(type, level);
+            Label = string.IsNullOrWhiteSpace(sampleName)
+                ? $"{type} Level {level}"
+                : $"{sampleName} (Level {level})";
+        }
+
+        public static string ToValue(string type, ushort level) => $"{type}|{level}";
+    }
+
     // A single filter row: field + operator + value. TextValue carries the role name (Rank)
-    // or honor Type (Honor); NumberValue/Unit carry the threshold for duration fields.
+    // or honor Type+Level key (Honor); NumberValue/Unit carry the threshold for duration fields.
     public sealed class SoldierFilterCondition
     {
         public SoldierFilterField Field { get; set; }

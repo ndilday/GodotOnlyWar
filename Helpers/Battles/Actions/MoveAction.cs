@@ -24,10 +24,12 @@ namespace OnlyWar.Helpers.Battles.Actions
         public void Execute(BattleState state)
         {
             //_resultList.Add(new MoveResolution(_soldier, _grid, _newTopLeft, _orientation));
-            _soldier.TopLeft = _newTopLeft;
-            _soldier.Orientation = _newOrientation;
-            _grid.MoveSoldier(_soldier, _newTopLeft, _newOrientation);
-            _soldier.TurnsRunning++;
+            if (_grid.TryMoveSoldier(_soldier, _newTopLeft, _newOrientation))
+            {
+                _soldier.TopLeft = _newTopLeft;
+                _soldier.Orientation = _newOrientation;
+                _soldier.TurnsRunning++;
+            }
         }
 
         public string Description()

@@ -36,7 +36,8 @@ namespace OnlyWar.Helpers.Battles.Placers
                 ushort width = squad.AbleSoldiers[i].Soldier.Template.Species.Width;
                 ushort depth = squad.AbleSoldiers[i].Soldier.Template.Species.Depth;
                 // 0th soldier goes in the coordinate given, then alternate to each side up to membersPerRow, then repeat in additional rows as necessary
-                int yMod = i * depth / squadBoxSize.X * (squad.IsPlayerSquad ? -1 : 1);
+                int rowIndex = (i * width) / squadBoxSize.X;
+                int yMod = rowIndex * depth * (squad.IsPlayerSquad ? -1 : 1);
                 int xMod = (((i * width) % squadBoxSize.X) + 1) / 2 * (i % 2 == 0 ? -1 : 1);
 
                 List<Tuple<int, int>> soldierLocations = [];
@@ -67,13 +68,14 @@ namespace OnlyWar.Helpers.Battles.Placers
             for (int i = 0; i < squad.AbleSoldiers.Count; i++)
             {
                 // 0th soldier goes in the coordinate given, then alternate to each side up to membersPerRow, then repeat in additional rows as necessary
-                int xMod = i * depth / squadBoxSize.X * (squad.IsPlayerSquad ? -1 : 1);
+                int rowIndex = (i * width) / squadBoxSize.X;
+                int xMod = rowIndex * depth * (squad.IsPlayerSquad ? -1 : 1);
                 int yMod = (((i * width) % squadBoxSize.X) + 1) / 2 * (i % 2 == 0 ? -1 : 1);
 
                 List<Tuple<int, int>> soldierLocations = [];
-                for (int w = 0; w < width; w++)
+                for (int w = 0; w < depth; w++)
                 {
-                    for (int d = 0; d < depth; d++)
+                    for (int d = 0; d < width; d++)
                     {
                         Tuple<int, int> location = new Tuple<int, int>((short)(startingLocation.Item1 + xMod + w), (short)(startingLocation.Item2 + yMod + d));
                         soldierLocations.Add(location);

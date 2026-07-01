@@ -65,19 +65,23 @@ public class SoldierFilterServiceTests
     }
 
     [Fact]
-    public void Apply_HonorHasAndDoesNotHave_FiltersByAwardType()
+    public void Apply_HonorHasAndDoesNotHave_FiltersByAwardTypeAndLevel()
     {
         Squad squad = CreateSquad();
         PlayerSoldier a = BuildVeteran(squad);
         PlayerSoldier b = BuildRecruit(squad);
+        PlayerSoldier c = AddPlayerSoldier(squad, TestModelFactory.MarineTemplate, "Brother Severan");
+        c.AddAward(new SoldierAward(new Date(41, 997, 1), "Silver Sword of the Emperor", "Sword", 2));
 
         var has = _service.Apply([a, b],
-            [Condition(SoldierFilterField.Honor, SoldierFilterOperator.Has, text: "Sword")], CurrentDate);
-        var lacks = _service.Apply([a, b],
-            [Condition(SoldierFilterField.Honor, SoldierFilterOperator.DoesNotHave, text: "Sword")], CurrentDate);
+            [Condition(SoldierFilterField.Honor, SoldierFilterOperator.Has,
+                text: SoldierHonorFilterOption.ToValue("Sword", 1))], CurrentDate);
+        var lacks = _service.Apply([a, b, c],
+            [Condition(SoldierFilterField.Honor, SoldierFilterOperator.DoesNotHave,
+                text: SoldierHonorFilterOption.ToValue("Sword", 1))], CurrentDate);
 
         Assert.Equal([a], has);
-        Assert.Equal([b], lacks);
+        Assert.Equal([b, c], lacks);
     }
 
     [Fact]
@@ -164,15 +168,22 @@ public class SoldierFilterServiceTests
     }
 
     [Fact]
-    public void GetAvailableHonors_ReturnsDistinctAwardTypesInScope()
+    public void GetAvailableHonors_ReturnsDistinctAwardTiersInScope()
     {
         Squad squad = CreateSquad();
         PlayerSoldier a = BuildVeteran(squad);
         PlayerSoldier b = BuildRecruit(squad);
+        PlayerSoldier c = AddPlayerSoldier(squad, TestModelFactory.MarineTemplate, "Brother Severan");
+        c.AddAward(new SoldierAward(new Date(41, 997, 1), "Silver Sword of the Emperor", "Sword", 2));
 
         var honors = _service.GetAvailableHonors([a, b]);
+        var tieredHonors = _service.GetAvailableHonors([a, b, c]);
 
-        Assert.Equal(["Sword"], honors);
+        Assert.Equal([SoldierHonorFilterOption.ToValue("Sword", 1)], honors.Select(option => option.Value));
+        Assert.Equal(
+            [SoldierHonorFilterOption.ToValue("Sword", 2), SoldierHonorFilterOption.ToValue("Sword", 1)],
+            tieredHonors.Select(option => option.Value));
+        Assert.Contains(tieredHonors, option => option.Label == "Silver Sword of the Emperor (Level 2)");
     }
 
     private static SoldierFilterCondition Condition(SoldierFilterField field, SoldierFilterOperator op,

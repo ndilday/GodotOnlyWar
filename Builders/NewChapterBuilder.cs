@@ -119,7 +119,7 @@ namespace OnlyWar.Builders
             AssignApothecaries(unassignedSoldierMap, oob, year, templates);
             // then, assign twenty Chaplains
             AssignChaplains(unassignedSoldierMap, oob, year, templates);
-            // any dual gold awards are assigned to the first company
+            // tactical-baseline marines with an Adamantium-level combat spike are assigned to the first company
             AssignVeterans(unassignedSoldierMap, oob, year, templates);
 
             // assign Champtions to the CM and each Company
@@ -149,6 +149,13 @@ namespace OnlyWar.Builders
             Fleet fleet = new Fleet($"{chapterName} Fleet", null, null);
             PlayerForce chapter = new PlayerForce(faction, army, fleet);
             BuildUnitTreeHelper(chapter.Army.OrderOfBattle, rootTemplate);
+            // Register the army's root unit on the faction so it matches the post-load model:
+            // the save path enumerates units via Faction.Units, so a freshly generated chapter
+            // must be registered here or its soldiers are never written (FK failure on save).
+            if (!faction.Units.Contains(unit))
+            {
+                faction.Units.Add(unit);
+            }
             return chapter;
         }
 
@@ -332,8 +339,8 @@ namespace OnlyWar.Builders
         private static void AssignVeterans(Dictionary<int, PlayerSoldier> unassignedSoldierMap, 
                                            Unit chapter, Date year, ChapterGenerationTemplates templates)
         {
-            IEnumerable<PlayerSoldier> veterans = unassignedSoldierMap.Values.Where(s => s.SoldierEvaluationHistory[0].MeleeRating > 95 && s.SoldierEvaluationHistory[0].RangedRating > 105);
-            List<PlayerSoldier> veteranLeaders = veterans.Where(s => s.SoldierEvaluationHistory[0].LeadershipRating > 60).OrderByDescending(s => s.SoldierEvaluationHistory[0].LeadershipRating).ToList();
+            IEnumerable<PlayerSoldier> veterans = unassignedSoldierMap.Values.Where(IsVeteranCandidate);
+            List<PlayerSoldier> veteranLeaders = veterans.Where(IsVeteranSergeantCandidate).OrderByDescending(s => s.SoldierEvaluationHistory[0].LeadershipRating).ToList();
             // if there are no veteran sgts, leave First Company empty for now
             if (veteranLeaders.Count == 0) return;
             List<PlayerSoldier> vetList = veterans.Except(veteranLeaders).OrderByDescending(s => s.SoldierEvaluationHistory[0].MeleeRating).ToList();
@@ -363,6 +370,19 @@ namespace OnlyWar.Builders
                     }
                 }
             }
+        }
+
+        private static bool IsVeteranCandidate(PlayerSoldier soldier)
+        {
+            SoldierEvaluation evaluation = soldier.SoldierEvaluationHistory[0];
+            bool tacticalBaseline = evaluation.MeleeRating > 90 && evaluation.RangedRating > 105;
+            bool adamantiumCombatSpike = evaluation.MeleeRating > 115 || evaluation.RangedRating > 120;
+            return tacticalBaseline && adamantiumCombatSpike;
+        }
+
+        private static bool IsVeteranSergeantCandidate(PlayerSoldier soldier)
+        {
+            return IsVeteranCandidate(soldier) && soldier.SoldierEvaluationHistory[0].LeadershipRating > 60;
         }
 
         // Capacity of a company for a given squad template, per its unit template's

@@ -10,6 +10,9 @@ using System.Linq;
 // populated with the roles / honors available in the current browse scope.
 public partial class ChapterFilterDialog : AcceptDialog
 {
+    private static readonly Vector2I DialogMinimumSize = new(720, 360);
+    private static readonly Vector2 ContentMinimumSize = new(696, 320);
+
     private static readonly SoldierFilterField[] FieldOrder =
     [
         SoldierFilterField.Rank,
@@ -32,7 +35,7 @@ public partial class ChapterFilterDialog : AcceptDialog
     private VBoxContainer _rowsContainer;
     private readonly List<ConditionRow> _rows = [];
     private IReadOnlyList<string> _roles = [];
-    private IReadOnlyList<string> _honors = [];
+    private IReadOnlyList<SoldierHonorFilterOption> _honors = [];
 
     public event Action<List<SoldierFilterCondition>> FilterApplied;
     public event Action FilterCleared;
@@ -41,7 +44,8 @@ public partial class ChapterFilterDialog : AcceptDialog
     {
         Title = "Filter Battle Brothers";
         OkButtonText = "Apply";
-        MinSize = new Vector2I(520, 360);
+        MinSize = DialogMinimumSize;
+        Size = DialogMinimumSize;
         Unresizable = false;
 
         MarginContainer margin = new();
@@ -49,7 +53,7 @@ public partial class ChapterFilterDialog : AcceptDialog
         margin.AddThemeConstantOverride("margin_top", 8);
         margin.AddThemeConstantOverride("margin_right", 12);
         margin.AddThemeConstantOverride("margin_bottom", 8);
-        margin.CustomMinimumSize = new Vector2(496, 320);
+        margin.CustomMinimumSize = ContentMinimumSize;
         AddChild(margin);
 
         VBoxContainer root = new();
@@ -94,7 +98,7 @@ public partial class ChapterFilterDialog : AcceptDialog
 
     // Refreshes the option lists from the current scope and rebuilds the rows to match the
     // active filter (or a single blank row when there is none).
-    public void Populate(IReadOnlyList<string> roles, IReadOnlyList<string> honors,
+    public void Populate(IReadOnlyList<string> roles, IReadOnlyList<SoldierHonorFilterOption> honors,
                          IReadOnlyList<SoldierFilterCondition> existing)
     {
         _roles = roles ?? [];
@@ -171,7 +175,7 @@ public partial class ChapterFilterDialog : AcceptDialog
         ];
 
         private readonly IReadOnlyList<string> _roles;
-        private readonly IReadOnlyList<string> _honors;
+        private readonly IReadOnlyList<SoldierHonorFilterOption> _honors;
 
         private readonly OptionButton _fieldOption = new();
         private readonly OptionButton _operatorOption = new();
@@ -185,7 +189,7 @@ public partial class ChapterFilterDialog : AcceptDialog
 
         public HBoxContainer Root { get; }
 
-        public ConditionRow(IReadOnlyList<string> roles, IReadOnlyList<string> honors,
+        public ConditionRow(IReadOnlyList<string> roles, IReadOnlyList<SoldierHonorFilterOption> honors,
                             SoldierFilterCondition seed, Action<ConditionRow> onRemove)
         {
             _roles = roles;
@@ -272,14 +276,31 @@ public partial class ChapterFilterDialog : AcceptDialog
             {
                 SizeFlagsHorizontal = Control.SizeFlags.ExpandFill
             };
-            IReadOnlyList<string> options = field == SoldierFilterField.Rank ? _roles : _honors;
-            if (options.Count == 0)
+            int optionCount = field == SoldierFilterField.Rank ? _roles.Count : _honors.Count;
+            if (optionCount == 0)
             {
                 _valueOption.AddItem(field == SoldierFilterField.Rank ? "(no roles here)" : "(no honors here)");
                 _valueOption.Disabled = true;
             }
+            else if (field == SoldierFilterField.Honor)
+            {
+                foreach (SoldierHonorFilterOption option in _honors)
+                {
+                    _valueOption.AddItem(option.Label);
+                }
+                if (seed?.TextValue != null)
+                {
+                    int idx = _honors.ToList().FindIndex(option =>
+                        option.Value == seed.TextValue || option.Type == seed.TextValue);
+                    if (idx >= 0)
+                    {
+                        _valueOption.Selected = idx;
+                    }
+                }
+            }
             else
             {
+                IReadOnlyList<string> options = _roles;
                 foreach (string option in options)
                 {
                     _valueOption.AddItem(option);
@@ -344,7 +365,9 @@ public partial class ChapterFilterDialog : AcceptDialog
             {
                 Field = field,
                 Operator = op,
-                TextValue = _valueOption.GetItemText(_valueOption.Selected)
+                TextValue = field == SoldierFilterField.Honor
+                    ? _honors[_valueOption.Selected].Value
+                    : _valueOption.GetItemText(_valueOption.Selected)
             };
         }
     }
