@@ -130,6 +130,66 @@ public class NewChapterBuilderTests
     }
 
     [Fact]
+    public void CreateChapter_AssignsCompanyChaplainsToCaptainedCompaniesAndReclusiumJudiciars()
+    {
+        PlayerForce chapter = NewChapterBuilder.CreateChapter(
+            _data, CreateTrainingService(), new Date(39, 496, 1), new Date(39, 500, 1), "Crimson Sentinels");
+        Unit oob = chapter.Army.OrderOfBattle;
+
+        Squad reclusium = oob.Squads.First(s => s.SquadTemplate.Name == "Reclusium");
+
+        // At most one Master of Sanctity and one Reclusiarch, and both live in the Reclusium.
+        var mastersOfSanctity = oob.GetAllMembers().OfType<PlayerSoldier>()
+            .Where(s => s.Template.Name == "Master of Sanctity").ToList();
+        var reclusiarchs = oob.GetAllMembers().OfType<PlayerSoldier>()
+            .Where(s => s.Template.Name == "Reclusiarch").ToList();
+        Assert.True(mastersOfSanctity.Count <= 1);
+        Assert.True(reclusiarchs.Count <= 1);
+        Assert.All(mastersOfSanctity, s => Assert.Equal(reclusium, s.AssignedSquad));
+        Assert.All(reclusiarchs, s => Assert.Equal(reclusium, s.AssignedSquad));
+
+        // Every Chaplain is seconded to a company HQ squad whose company has a Captain.
+        var chaplains = oob.GetAllMembers().OfType<PlayerSoldier>()
+            .Where(s => s.Template.Name == "Chaplain").ToList();
+        foreach (PlayerSoldier chaplain in chaplains)
+        {
+            Squad hq = chaplain.AssignedSquad;
+            Assert.True((hq.SquadTemplate.SquadType & SquadTypes.HQ) > 0,
+                $"{chaplain.Name} (Chaplain) is not in an HQ squad.");
+            Assert.NotNull(hq.SquadLeader);
+            Assert.Equal("Captain", hq.SquadLeader.Template.Name);
+        }
+        // No more than one Chaplain per company HQ.
+        Assert.All(chaplains.GroupBy(c => c.AssignedSquad.Id), g => Assert.True(g.Count() == 1));
+
+        // Each Judiciar is either seconded to a captained company HQ (at most one per HQ)
+        // or held in the Reclusium as part of the aspirant reserve.
+        var judiciars = oob.GetAllMembers().OfType<PlayerSoldier>()
+            .Where(s => s.Template.Name == "Judiciar").ToList();
+        var companyJudiciars = judiciars.Where(j => j.AssignedSquad != reclusium).ToList();
+        foreach (PlayerSoldier judiciar in companyJudiciars)
+        {
+            Squad hq = judiciar.AssignedSquad;
+            Assert.True((hq.SquadTemplate.SquadType & SquadTypes.HQ) > 0,
+                $"{judiciar.Name} (Judiciar) is not in an HQ squad or the Reclusium.");
+            Assert.NotNull(hq.SquadLeader);
+            Assert.Equal("Captain", hq.SquadLeader.Template.Name);
+        }
+        Assert.All(companyJudiciars.GroupBy(j => j.AssignedSquad.Id), g => Assert.True(g.Count() == 1));
+
+        // A captain-less company HQ receives neither a Chaplain nor a Judiciar.
+        foreach (Unit company in oob.ChildUnits)
+        {
+            Squad hq = company.HQSquad;
+            if (hq != null && hq.SquadLeader == null)
+            {
+                Assert.DoesNotContain(hq.Members.OfType<PlayerSoldier>(),
+                    m => m.Template.Name is "Chaplain" or "Judiciar");
+            }
+        }
+    }
+
+    [Fact]
     public void CreateChapter_VeteransRequireTacticalBaselineAndAdamantiumCombatSpike()
     {
         PlayerForce chapter = NewChapterBuilder.CreateChapter(

@@ -145,7 +145,6 @@ namespace OnlyWar.Builders
             {
                 Region region = promised.Regions[(startIndex + i) % promised.Regions.Length];
 
-                long remnantPopulation = 0;
                 if (region.RegionFactionMap.TryGetValue(data.DefaultFaction.Id, out RegionFaction imperial))
                 {
                     imperial.Garrison = 0;
@@ -153,15 +152,18 @@ namespace OnlyWar.Builders
                     // Displaced remnant: hidden, so the region reads as Tyranid-controlled rather
                     // than as two-public-faction (which has no single controlling faction).
                     imperial.IsPublic = false;
-                    remnantPopulation = imperial.Population;
                 }
 
                 // The world-average-scaled Tyranid population can exceed a specific region's
-                // carrying capacity (regions vary in size); clamp it so the stamped Tyranid plus the
-                // displaced remnant never overpopulate the region — a generation invariant (no region
-                // starts above capacity). Garrison is not population, so it is left unclamped.
+                // carrying capacity (regions vary in size); clamp it so the stamped Tyranid plus every
+                // population already in the region (the displaced Imperial remnant and the hidden
+                // Genestealer Cult seeded by EnsureGenestealerCult) never overpopulate it — a
+                // generation invariant (no region starts above capacity). The Tyranid faction is not
+                // added yet, so region.Population is the current headcount to leave room for. Garrison
+                // is not population, so it is left unclamped.
+                long existingPopulation = region.Population;
                 long regionTyranidPopulation = Math.Max(0L,
-                    Math.Min(tyranidPopulation, region.CarryingCapacity - remnantPopulation));
+                    Math.Min(tyranidPopulation, region.CarryingCapacity - existingPopulation));
 
                 RegionFaction tyranid = new RegionFaction(tyranidPlanetFaction, region)
                 {

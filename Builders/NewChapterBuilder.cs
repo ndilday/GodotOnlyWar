@@ -20,6 +20,9 @@ namespace OnlyWar.Builders
         // Requisition Phase 1). Deliberately generous: the loop is easier to verify
         // end-to-end before scarcity is tuned in (PRD tuning note).
         private const int FOUNDING_REQUISITION = 1000;
+        // Judiciars (chaplains in training) kept in the Reclusium beyond the one seconded to
+        // each captained company, forming the chaplaincy's pool of aspirants.
+        private const int RECLUSIUM_JUDICIAR_RESERVE = 2;
         private delegate void TrainingFunction(PlayerSoldier playerSoldier);
 
         internal static PlayerForce CreateChapter(GameRulesData data,
@@ -278,29 +281,54 @@ namespace OnlyWar.Builders
             }
         }
 
-        private static void AssignChaplains(Dictionary<int, PlayerSoldier> unassignedSoldierMap, 
+        private static void AssignChaplains(Dictionary<int, PlayerSoldier> unassignedSoldierMap,
                                             Unit chapter, Date year, ChapterGenerationTemplates templates)
         {
-            IEnumerable<PlayerSoldier> chaplains = unassignedSoldierMap.Values.Where(s => s.SoldierEvaluationHistory[0].PietyRating > 50)
+            List<PlayerSoldier> chaplains = unassignedSoldierMap.Values.Where(s => s.SoldierEvaluationHistory[0].PietyRating > 50)
                                                     .OrderByDescending(s => s.SoldierEvaluationHistory[0].PietyRating)
-                                                    .Take(20);
-            // assume for now that there's a single unit to hold all of the Techmarines
+                                                    .ToList();
+            // The Reclusium is the chaplaincy's home: it holds the Master of Sanctity, the
+            // Reclusiarch, and a reserve of Judiciars (chaplains in training) beyond the one
+            // seconded to each company.
             Squad reclusium = chapter.Squads.First(s => s.SquadTemplate == templates.Reclusium);
-            foreach (PlayerSoldier soldier in chaplains)
+
+            // The most pious initiate leads the chaplaincy as Master of Sanctity, if he is
+            // also a capable leader; otherwise the chapter founds without one for now.
+            if (chaplains.Count > 0
+                && chaplains[0].SoldierEvaluationHistory[0].PietyRating > 65
+                && chaplains[0].SoldierEvaluationHistory[0].LeadershipRating > 60)
             {
-                if (reclusium.SquadLeader == null && soldier.SoldierEvaluationHistory[0].PietyRating > 65 && soldier.SoldierEvaluationHistory[0].LeadershipRating > 60)
-                {
-                    soldier.Template = templates.MasterOfSanctity;
-                }
-                else
-                {
-                    soldier.Template = templates.Chaplain;
-                }
-                reclusium.AddSquadMember(soldier);
-                soldier.AddEvent(new SoldierEvent(year, SoldierEventType.Promotion,
-                    "promoted to " + soldier.Template.Name
-                    + " and assigned to " + soldier.AssignedSquad.Name));
-                unassignedSoldierMap.Remove(soldier.Id);
+                AssignSoldier(unassignedSoldierMap, chaplains, reclusium, templates.MasterOfSanctity, year);
+            }
+            // The next-most pious becomes the Reclusiarch, the Master of Sanctity's second.
+            if (chaplains.Count > 0)
+            {
+                AssignSoldier(unassignedSoldierMap, chaplains, reclusium, templates.Reclusiarch, year);
+            }
+
+            // A company only has an HQ once it has a Captain, so a Chaplain and his Judiciar
+            // understudy are seconded to each captained company; a company left without a
+            // Captain (e.g. an under-strength First Company) gets neither.
+            List<Squad> captainedHQs = chapter.ChildUnits
+                .Select(company => company.HQSquad)
+                .Where(hq => hq != null && hq.SquadLeader != null)
+                .ToList();
+            foreach (Squad companyHQ in captainedHQs)
+            {
+                if (chaplains.Count == 0) break;
+                AssignSoldier(unassignedSoldierMap, chaplains, companyHQ, templates.Chaplain, year);
+            }
+            foreach (Squad companyHQ in captainedHQs)
+            {
+                if (chaplains.Count == 0) break;
+                AssignSoldier(unassignedSoldierMap, chaplains, companyHQ, templates.Judiciar, year);
+            }
+
+            // Only Judiciars beyond the company slots are kept back in the Reclusium, as the
+            // chaplaincy's pool of aspirants.
+            for (int i = 0; i < RECLUSIUM_JUDICIAR_RESERVE && chaplains.Count > 0; i++)
+            {
+                AssignSoldier(unassignedSoldierMap, chaplains, reclusium, templates.Judiciar, year);
             }
         }
 

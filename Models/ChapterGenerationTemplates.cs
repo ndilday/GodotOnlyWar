@@ -42,7 +42,9 @@ namespace OnlyWar.Models
 
         // Reclusium
         public SoldierTemplate MasterOfSanctity { get; }
+        public SoldierTemplate Reclusiarch { get; }
         public SoldierTemplate Chaplain { get; }
+        public SoldierTemplate Judiciar { get; }
 
         // Line marines and their sergeants
         public SoldierTemplate Veteran { get; }
@@ -94,7 +96,9 @@ namespace OnlyWar.Models
             Apothecary = ResolveSoldier(faction, "Apothecary");
 
             MasterOfSanctity = ResolveSoldier(faction, "Master of Sanctity");
+            Reclusiarch = ResolveSoldier(faction, "Reclusiarch");
             Chaplain = ResolveSoldier(faction, "Chaplain");
+            Judiciar = ResolveSoldier(faction, "Judiciar");
 
             Veteran = ResolveSoldier(faction, "Veteran");
             VeteranSergeant = ResolveSoldier(faction, "Veteran Sergeant");

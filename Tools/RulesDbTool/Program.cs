@@ -4,7 +4,7 @@ using Microsoft.Data.Sqlite;
 
 if (args.Length < 2)
 {
-    Console.Error.WriteLine("Usage: RulesDbTool <schema|training-source|migrate-training|migrate-progenoid|migrate-ratings|migrate-planet-scales|migrate-fortification|migrate-tyranids|migrate-tyranid-squads|migrate-evasion|migrate-squad-caps|migrate-veteran-sergeant|migrate-collapse-sergeants|migrate-remove-veteran-captain|migrate-remove-recruitment-captain|remove-unused-unit-templates> <db-path>");
+    Console.Error.WriteLine("Usage: RulesDbTool <schema|training-source|migrate-training|migrate-progenoid|migrate-ratings|migrate-planet-scales|migrate-fortification|migrate-tyranids|migrate-tyranid-squads|migrate-evasion|migrate-squad-caps|migrate-veteran-sergeant|migrate-collapse-sergeants|migrate-chaplaincy|migrate-company-judiciar|migrate-remove-veteran-captain|migrate-remove-recruitment-captain|remove-unused-unit-templates> <db-path>");
     return 1;
 }
 
@@ -13,7 +13,7 @@ string dbPath = args[1];
 string connectionString = new SqliteConnectionStringBuilder
 {
     DataSource = dbPath,
-    Mode = command is "migrate-training" or "migrate-progenoid" or "migrate-ratings" or "migrate-planet-scales" or "migrate-fortification" or "migrate-tyranids" or "migrate-tyranid-squads" or "migrate-evasion" or "migrate-squad-caps" or "migrate-veteran-sergeant" or "migrate-collapse-sergeants" or "migrate-remove-veteran-captain" or "migrate-remove-recruitment-captain" or "remove-unused-unit-templates" ? SqliteOpenMode.ReadWriteCreate : SqliteOpenMode.ReadOnly
+    Mode = command is "migrate-training" or "migrate-progenoid" or "migrate-ratings" or "migrate-planet-scales" or "migrate-fortification" or "migrate-tyranids" or "migrate-tyranid-squads" or "migrate-evasion" or "migrate-squad-caps" or "migrate-veteran-sergeant" or "migrate-collapse-sergeants" or "migrate-chaplaincy" or "migrate-company-judiciar" or "migrate-remove-veteran-captain" or "migrate-remove-recruitment-captain" or "remove-unused-unit-templates" ? SqliteOpenMode.ReadWriteCreate : SqliteOpenMode.ReadOnly
 }.ToString();
 
 using SqliteConnection connection = new(connectionString);
@@ -62,6 +62,12 @@ switch (command)
         break;
     case "migrate-collapse-sergeants":
         MigrateCollapseSergeants(connection);
+        break;
+    case "migrate-chaplaincy":
+        MigrateChaplaincy(connection);
+        break;
+    case "migrate-company-judiciar":
+        MigrateCompanyJudiciar(connection);
         break;
     case "migrate-remove-veteran-captain":
         MigrateRemoveVeteranCaptain(connection);
@@ -896,6 +902,129 @@ static void SetSquadLeaderProfile(SqliteConnection connection, SqliteTransaction
     {
         Console.WriteLine($"  warning: squad template '{squadName}' not found; leader profile not set.");
     }
+}
+
+// Canonically a Chaplain is seconded to a specific company, so give each company HQ
+// squad a Chaplain slot and (in NewChapterBuilder) assign one Chaplain per company that
+// has a Captain. Chaplaincy initiates who cannot yet fill a company slot are given the
+// Judiciar rank (9th-edition Chaplains-in-training) and kept in the Reclusium, so we add
+// a Judiciar soldier template and a Judiciar slot to the Reclusium alongside the Chaplains.
+static void MigrateChaplaincy(SqliteConnection connection)
+{
+    using SqliteTransaction transaction = connection.BeginTransaction();
+
+    int chaplain = ExecuteScalarInt(connection, transaction,
+        "SELECT Id FROM SoldierTemplate WHERE Name = 'Chaplain' AND FactionId = 1");
+    if (chaplain == 0)
+    {
+        throw new InvalidOperationException(
+            "'Chaplain' soldier template is missing; cannot model the Judiciar on it.");
+    }
+
+    int judiciar = ExecuteScalarInt(connection, transaction,
+        "SELECT Id FROM SoldierTemplate WHERE Name = 'Judiciar' AND FactionId = 1");
+    if (judiciar != 0)
+    {
+        Console.WriteLine("Chaplaincy migration already applied; nothing to do.");
+        return;
+    }
+
+    // Model the Judiciar on the Chaplain: same species and chaplaincy SpecialistType,
+    // not a squad leader. Rank 4 / SubRank 0 keeps it just below the Chaplain (SubRank 2)
+    // as the most junior chaplaincy rank, without renumbering the existing Chaplain.
+    int speciesId = ExecuteScalarInt(connection, transaction,
+        "SELECT SpeciesId FROM SoldierTemplate WHERE Id = $id", ("$id", chaplain));
+    int specialistType = ExecuteScalarInt(connection, transaction,
+        "SELECT SpecialistType FROM SoldierTemplate WHERE Id = $id", ("$id", chaplain));
+
+    judiciar = ExecuteScalarInt(connection, transaction,
+        "SELECT COALESCE(MAX(Id), 0) + 1 FROM SoldierTemplate");
+    Execute(connection, transaction,
+        @"INSERT INTO SoldierTemplate
+            (Id, FactionId, SpeciesId, Name, Rank, SubRank, IsSquadLeader, SpecialistType, WorkExperienceTrainingProfileId)
+          VALUES ($id, 1, $s, 'Judiciar', 4, 0, 0, $sp, NULL)",
+        ("$id", judiciar), ("$s", speciesId), ("$sp", specialistType));
+
+    // Mirror the Chaplain's MOS training (theology/ritual emphasis).
+    Execute(connection, transaction,
+        @"INSERT INTO SoldierMosTraining (SoldierTemplateId, BaseSkillId, PointsAdded)
+          SELECT $new, BaseSkillId, PointsAdded FROM SoldierMosTraining WHERE SoldierTemplateId = $old",
+        ("$new", judiciar), ("$old", chaplain));
+
+    // Give every company HQ squad a single optional Chaplain slot.
+    string[] companyHqSquads = { "Veteran HQ Squad", "HQ Squad", "Scout HQ Squad" };
+    foreach (string squadName in companyHqSquads)
+    {
+        int squadId = ExecuteScalarInt(connection, transaction,
+            "SELECT Id FROM SquadTemplate WHERE Name = $n AND FactionId = 1", ("$n", squadName));
+        if (squadId == 0)
+        {
+            Console.WriteLine($"  warning: squad template '{squadName}' not found; no Chaplain slot added.");
+            continue;
+        }
+        EnsureSquadElement(connection, transaction, squadId, chaplain, 0, 1);
+    }
+
+    // The Reclusium keeps its Chaplain slots and gains room for Judiciars in training.
+    int reclusium = ExecuteScalarInt(connection, transaction,
+        "SELECT Id FROM SquadTemplate WHERE Name = 'Reclusium' AND FactionId = 1");
+    if (reclusium != 0)
+    {
+        EnsureSquadElement(connection, transaction, reclusium, judiciar, 0, 50);
+    }
+
+    transaction.Commit();
+    Console.WriteLine(
+        $"Chaplaincy migration complete. Added Judiciar soldier {judiciar}; " +
+        "added Chaplain slots to company HQ squads and a Judiciar slot to the Reclusium.");
+}
+
+// A Judiciar understudies the company Chaplain, so give each company HQ squad its own
+// Judiciar slot as well (NewChapterBuilder fills it only when the company has a Captain).
+// Only Judiciars beyond these company slots fall back to the Reclusium.
+static void MigrateCompanyJudiciar(SqliteConnection connection)
+{
+    using SqliteTransaction transaction = connection.BeginTransaction();
+
+    int judiciar = ExecuteScalarInt(connection, transaction,
+        "SELECT Id FROM SoldierTemplate WHERE Name = 'Judiciar' AND FactionId = 1");
+    if (judiciar == 0)
+    {
+        throw new InvalidOperationException(
+            "'Judiciar' soldier template is missing; run migrate-chaplaincy before migrate-company-judiciar.");
+    }
+
+    string[] companyHqSquads = { "Veteran HQ Squad", "HQ Squad", "Scout HQ Squad" };
+    foreach (string squadName in companyHqSquads)
+    {
+        int squadId = ExecuteScalarInt(connection, transaction,
+            "SELECT Id FROM SquadTemplate WHERE Name = $n AND FactionId = 1", ("$n", squadName));
+        if (squadId == 0)
+        {
+            Console.WriteLine($"  warning: squad template '{squadName}' not found; no Judiciar slot added.");
+            continue;
+        }
+        EnsureSquadElement(connection, transaction, squadId, judiciar, 0, 1);
+    }
+
+    transaction.Commit();
+    Console.WriteLine("Company Judiciar migration complete. Added a Judiciar slot to each company HQ squad.");
+}
+
+// Inserts a squad element only if the (squad, soldier) pairing does not already exist,
+// so the migration is safe to re-run.
+static void EnsureSquadElement(SqliteConnection connection, SqliteTransaction transaction,
+                               int squadTemplateId, int soldierTemplateId, int min, int max)
+{
+    int existing = ExecuteScalarInt(connection, transaction,
+        @"SELECT COUNT(*) FROM SquadTemplateElement
+          WHERE SquadTemplateId = $sq AND SoldierTemplateId = $so",
+        ("$sq", squadTemplateId), ("$so", soldierTemplateId));
+    if (existing > 0)
+    {
+        return;
+    }
+    InsertSquadElement(connection, transaction, squadTemplateId, soldierTemplateId, min, max);
 }
 
 static void MigrateRemoveVeteranCaptain(SqliteConnection connection) =>
