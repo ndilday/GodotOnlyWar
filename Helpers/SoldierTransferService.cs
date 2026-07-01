@@ -33,14 +33,16 @@ namespace OnlyWar.Helpers
             }
 
             // Present openings by ascending target rank, so lateral transfers come first,
-            // then single-level promotions, then higher jumps. OrderBy is stable, so ties at
-            // the same rank keep the order-of-battle traversal order. The current assignment,
-            // when shown, is pinned to the top regardless.
+            // then single-level promotions, then higher jumps. Subrank breaks ties within a
+            // rank (e.g. a Veteran move sorts ahead of a Veteran Sergeant promotion, both at
+            // Rank 5). OrderBy is stable, so remaining ties keep the order-of-battle traversal
+            // order. The current assignment, when shown, is pinned to the top regardless.
             List<SoldierTransferOption> openings = GetOpeningsInUnit(
                 orderOfBattle,
                 soldier.AssignedSquad,
                 soldier.Template)
                 .OrderBy(option => option.SoldierTemplate.Rank)
+                .ThenBy(option => option.SoldierTemplate.Subrank)
                 .ToList();
 
             if (includeCurrentAssignment)

@@ -460,12 +460,15 @@ public partial class ChapterController : Control
     }
 
     // Rosters and filter results are presented rank-first (most senior at the top), then by
-    // time in rank so the longest-tenured brother within a rank leads. Only PlayerSoldiers
-    // carry the promotion history the tenure sort needs; anyone else sorts as zero weeks.
+    // time in rank so the longest-tenured brother within a rank leads. Subrank breaks the tie
+    // for roles that share a Rank (e.g. a Veteran Sergeant outranks a Veteran at Rank 5), so a
+    // squad leader always sorts above his brothers. Only PlayerSoldiers carry the promotion
+    // history the tenure sort needs; anyone else sorts as zero weeks.
     private static IEnumerable<ISoldier> OrderByRankAndTenure(IEnumerable<ISoldier> soldiers, Date currentDate)
     {
         return soldiers
             .OrderByDescending(soldier => soldier.Template.Rank)
+            .ThenByDescending(soldier => soldier.Template.Subrank)
             .ThenByDescending(soldier => soldier is PlayerSoldier player
                 ? SoldierDossierService.GetWeeksInRank(player, currentDate)
                 : 0);
