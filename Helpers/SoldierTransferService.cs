@@ -214,6 +214,14 @@ namespace OnlyWar.Helpers
             return openSlots;
         }
 
+        // A soldier may fill a slot at their current rank (a lateral transfer) or any
+        // rank above it (a promotion of any number of levels). Slots below the soldier's
+        // current rank are not offered, since transfers never demote.
+        private static bool IsRankEligible(SoldierTemplate slot, SoldierTemplate soldier)
+        {
+            return slot.Rank >= soldier.Rank;
+        }
+
         private static IEnumerable<SoldierTemplate> GetOpeningsInEmptySquad(
             SquadTemplate squadTemplate,
             SoldierTemplate soldierTemplate)
@@ -226,8 +234,7 @@ namespace OnlyWar.Helpers
                 {
                     continue;
                 }
-                if (element.SoldierTemplate.Rank < soldierTemplate.Rank ||
-                    element.SoldierTemplate.Rank > soldierTemplate.Rank + 1)
+                if (!IsRankEligible(element.SoldierTemplate, soldierTemplate))
                 {
                     continue;
                 }
@@ -292,8 +299,7 @@ namespace OnlyWar.Helpers
                 {
                     continue;
                 }
-                if (element.SoldierTemplate.Rank < soldierTemplate.Rank ||
-                    element.SoldierTemplate.Rank > soldierTemplate.Rank + 1)
+                if (!IsRankEligible(element.SoldierTemplate, soldierTemplate))
                 {
                     continue;
                 }

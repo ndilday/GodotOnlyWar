@@ -10,8 +10,8 @@ using System.Linq;
 // populated with the roles / honors available in the current browse scope.
 public partial class ChapterFilterDialog : AcceptDialog
 {
-    private static readonly Vector2I DialogMinimumSize = new(720, 360);
-    private static readonly Vector2 ContentMinimumSize = new(696, 320);
+    private static readonly Vector2I DialogMinimumSize = new(880, 360);
+    private static readonly Vector2 ContentMinimumSize = new(856, 320);
 
     private static readonly SoldierFilterField[] FieldOrder =
     [

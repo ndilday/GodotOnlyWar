@@ -42,9 +42,12 @@ public class SoldierTransferServiceTests
         List<SoldierTransferOption> options = _service.GetTransferOptions(chapter, soldier);
 
         Assert.Contains(options, option => option.SquadId == target.Id && option.SoldierTemplate == TestModelFactory.MarineTemplate);
+        // The target squad already has a leader, so its Sergeant slot is not offered.
         Assert.DoesNotContain(options, option => option.SquadId == target.Id && option.SoldierTemplate == TestModelFactory.SergeantTemplate);
+        // Initiate is a lower rank than the Marine; transfers never demote, so it is excluded.
         Assert.DoesNotContain(options, option => option.SquadId == target.Id && option.SoldierTemplate == initiate);
-        Assert.DoesNotContain(options, option => option.SquadId == target.Id && option.SoldierTemplate == veteran);
+        // Veteran is several ranks above the Marine; promotions may span any number of levels.
+        Assert.Contains(options, option => option.SquadId == target.Id && option.SoldierTemplate == veteran);
         Assert.DoesNotContain(options, option => option.SquadId == full.Id);
     }
 

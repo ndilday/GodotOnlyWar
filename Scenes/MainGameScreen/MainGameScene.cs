@@ -83,6 +83,7 @@ public partial class MainGameScene : Control
 		_mainUILayer = GetNode<CanvasLayer>("UILayer");
 		_turnController = new TurnController();
 		_previousScreenStack = new Stack<Control>();
+		RefreshTopMenuStatus();
 		// Start with the world the chapter fleet is orbiting selected (the promised world at game
 		// start), mirroring the camera's initial centring in SectorMap. Fall back to the first
 		// planet if there's no fleet/orbit (e.g. legacy saves with a fleet in deep space).
@@ -181,6 +182,16 @@ public partial class MainGameScene : Control
 		_leftMapTools.Visible = isVisible;
 		_systemInspector.Visible = isVisible;
 		_bottomMenu.Visible = isVisible;
+		if (_topMenu.Visible)
+		{
+			RefreshTopMenuStatus();
+		}
+	}
+
+	private void RefreshTopMenuStatus()
+	{
+		_topMenu.SetDateText(GameDataSingleton.Instance.Date.ToString());
+		_topMenu.SetRequisitionAmount(GameDataSingleton.Instance.Sector.PlayerForce.Army.Requisition);
 	}
 
 	private void OnMapToolPressed(object sender, string actionKey)
@@ -279,6 +290,7 @@ public partial class MainGameScene : Control
 			_topMenu.SetScreenText("Sector Map");
 			SetMainScreenVisibility(true);
 		}
+		RefreshTopMenuStatus();
 		((Control)(sender)).Visible = false;
 	}
 
@@ -580,6 +592,7 @@ public partial class MainGameScene : Control
 	{
 		// handle squad orders
 		_turnController.ProcessTurn(GameDataSingleton.Instance.Sector);
+		RefreshTopMenuStatus();
 		_sectorMap.RefreshFleets();
 		RefreshSelectedSystemInspector();
 		if(_endOfTurnDialog == null)

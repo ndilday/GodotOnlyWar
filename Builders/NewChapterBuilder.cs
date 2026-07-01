@@ -491,20 +491,19 @@ namespace OnlyWar.Builders
                                              SoldierTemplate specialistType,
                                              List<PlayerSoldier> sortedCandidates)
         {
-            AssignSpecialistsToSquad(unassignedSoldierMap, chapter.HQSquad, year, 
-                                     specialistType, sortedCandidates);
+            // Note: Unit.Squads already includes the HQ squad (HQSquad is just a
+            // computed lookup into the same list), so iterating Squads covers it.
+            // Don't process HQSquad separately or specialists get assigned twice.
             foreach (Squad squad in chapter.Squads)
             {
-                AssignSpecialistsToSquad(unassignedSoldierMap, squad, year, 
+                AssignSpecialistsToSquad(unassignedSoldierMap, squad, year,
                                          specialistType, sortedCandidates);
             }
             foreach (Unit company in chapter.ChildUnits)
             {
-                AssignSpecialistsToSquad(unassignedSoldierMap, company.HQSquad,
-                                         year, specialistType, sortedCandidates);
                 foreach (Squad squad in company.Squads)
                 {
-                    AssignSpecialistsToSquad(unassignedSoldierMap, squad, year, 
+                    AssignSpecialistsToSquad(unassignedSoldierMap, squad, year,
                                              specialistType, sortedCandidates);
                 }
             }
