@@ -118,7 +118,7 @@ namespace OnlyWar.Builders
             AssignChapterMaster(unassignedSoldierMap, oob, year, templates);
             // then, assign Captains
             AssignCaptains(unassignedSoldierMap, oob, year, templates);
-            // then, assigned twenty apothecaries
+            // then, assign an apothecary to each captained company, the rest to the Apothecarion
             AssignApothecaries(unassignedSoldierMap, oob, year, templates);
             // then, assign twenty Chaplains
             AssignChaplains(unassignedSoldierMap, oob, year, templates);
@@ -257,27 +257,41 @@ namespace OnlyWar.Builders
         private static void AssignApothecaries(Dictionary<int, PlayerSoldier> unassignedSoldierMap, 
                                                Unit chapter, Date year, ChapterGenerationTemplates templates)
         {
-            IEnumerable<PlayerSoldier> apothecaries = unassignedSoldierMap.Values
+            List<PlayerSoldier> apothecaries = unassignedSoldierMap.Values
                                                    .Where(s => s.SoldierEvaluationHistory[0].MedicalRating > 95)
                                                    .OrderByDescending(s => s.SoldierEvaluationHistory[0].MedicalRating)
-                                                   .Take(20);
-            // assume for now that there's a single unit to hold all of the Techmarines
+                                                   .ToList();
+            // The Apothecarion is the chapter's home for the medical corps: it holds the
+            // Master of the Apothecarion and any apothecaries beyond the one seconded to
+            // each company.
             Squad apo = chapter.Squads.First(s => s.SquadTemplate == templates.Apothecarion);
-            foreach (PlayerSoldier soldier in apothecaries)
+
+            // The most skilled initiate leads the Apothecarion as Master of the
+            // Apothecarion, if he is also a capable leader; otherwise the chapter founds
+            // without one for now.
+            if (apothecaries.Count > 0
+                && apothecaries[0].SoldierEvaluationHistory[0].MedicalRating > 115
+                && apothecaries[0].SoldierEvaluationHistory[0].LeadershipRating > 60)
             {
-                if (apo.SquadLeader == null && soldier.SoldierEvaluationHistory[0].MedicalRating > 115 && soldier.SoldierEvaluationHistory[0].LeadershipRating > 60)
-                {
-                    soldier.Template = templates.MasterOfTheApothecarion;
-                }
-                else
-                {
-                    soldier.Template = templates.Apothecary;
-                }
-                apo.AddSquadMember(soldier);
-                soldier.AddEvent(new SoldierEvent(year, SoldierEventType.Promotion,
-                    "finished medical and genetic training, promoted to "
-                    + soldier.Template.Name + " and assigned to " + soldier.AssignedSquad.Name));
-                unassignedSoldierMap.Remove(soldier.Id);
+                AssignSoldier(unassignedSoldierMap, apothecaries, apo, templates.MasterOfTheApothecarion, year);
+            }
+
+            // An Apothecary is seconded to each captained company's HQ, mirroring the
+            // Chaplaincy; a company left without a Captain gets none.
+            List<Squad> captainedHQs = chapter.ChildUnits
+                .Select(company => company.HQSquad)
+                .Where(hq => hq != null && hq.SquadLeader != null)
+                .ToList();
+            foreach (Squad companyHQ in captainedHQs)
+            {
+                if (apothecaries.Count == 0) break;
+                AssignSoldier(unassignedSoldierMap, apothecaries, companyHQ, templates.Apothecary, year);
+            }
+
+            // The remainder stay in the Apothecarion.
+            while (apothecaries.Count > 0)
+            {
+                AssignSoldier(unassignedSoldierMap, apothecaries, apo, templates.Apothecary, year);
             }
         }
 

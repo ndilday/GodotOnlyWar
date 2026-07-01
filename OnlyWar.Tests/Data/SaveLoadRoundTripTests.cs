@@ -541,6 +541,52 @@ public class SaveLoadRoundTripTests
         }
     }
 
+    [Fact]
+    public void Load_ReconstructsArmy_WithoutPreSeedingFactionUnits()
+    {
+        // Regression for the load crash: the real load path (StartMenu -> SavedGameLoader)
+        // rebuilds the player's Army from a freshly constructed GameRulesData whose
+        // PlayerFaction.Units is empty, relying on the loaded blob to supply the order of
+        // battle. It previously threw "Sequence contains no elements" because nothing
+        // registered the loaded units onto the faction. Unlike the other round-trip tests,
+        // this deliberately does NOT pre-seed the *reconstruction* faction, reproducing the
+        // real load path; the generation-side faction is still seeded so the save can write.
+        Sector sector = SectorBuilder.GenerateSector(1, _data, _date, "Load Reconstruct Chapter");
+        GameDataSingleton.Instance.LoadGameDataFromBlob(_data, _date, sector);
+        Unit armyRoot = sector.PlayerForce.Army.OrderOfBattle;
+        if (!_data.PlayerFaction.Units.Contains(armyRoot))
+        {
+            _data.PlayerFaction.Units.Add(armyRoot);
+        }
+        int expectedSoldierCount = armyRoot.GetAllMembers().Count();
+
+        string dbPath = Path.Combine(
+            Path.GetTempPath(), $"onlywar_load_reconstruct_{Guid.NewGuid():N}.s3db");
+        try
+        {
+            Save(sector, dbPath, _data.Factions.SelectMany(f => f.Units).ToList());
+            GameStateDataBlob loaded = Load(dbPath);
+
+            // A fresh rules-data instance, exactly as the real load path constructs. Its
+            // player faction starts with no units; the loader must populate them from the blob.
+            GameRulesData freshRules = new();
+            Assert.Empty(freshRules.PlayerFaction.Units);
+
+            Sector rebuilt = SavedGameLoader.BuildSectorFromBlob(loaded, freshRules);
+
+            // The loader registered the loaded order of battle on the previously empty faction,
+            // so both the reconstructed army and any subsequent save (which enumerates units via
+            // Faction.Units) work.
+            Assert.NotEmpty(freshRules.PlayerFaction.Units);
+            Assert.Equal(expectedSoldierCount,
+                rebuilt.PlayerForce.Army.OrderOfBattle.GetAllMembers().Count());
+        }
+        finally
+        {
+            CleanupDb(dbPath);
+        }
+    }
+
     private static void CleanupDb(string dbPath)
     {
         Microsoft.Data.Sqlite.SqliteConnection.ClearAllPools();

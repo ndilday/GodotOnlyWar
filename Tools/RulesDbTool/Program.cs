@@ -4,7 +4,7 @@ using Microsoft.Data.Sqlite;
 
 if (args.Length < 2)
 {
-    Console.Error.WriteLine("Usage: RulesDbTool <schema|training-source|migrate-training|migrate-progenoid|migrate-ratings|migrate-planet-scales|migrate-fortification|migrate-tyranids|migrate-tyranid-squads|migrate-evasion|migrate-squad-caps|migrate-veteran-sergeant|migrate-collapse-sergeants|migrate-chaplaincy|migrate-company-judiciar|migrate-remove-veteran-captain|migrate-remove-recruitment-captain|remove-unused-unit-templates> <db-path>");
+    Console.Error.WriteLine("Usage: RulesDbTool <schema|training-source|migrate-training|migrate-progenoid|migrate-ratings|migrate-planet-scales|migrate-fortification|migrate-tyranids|migrate-tyranid-squads|migrate-evasion|migrate-squad-caps|migrate-veteran-sergeant|migrate-collapse-sergeants|migrate-chaplaincy|migrate-company-judiciar|migrate-company-apothecary|migrate-remove-veteran-captain|migrate-remove-recruitment-captain|remove-unused-unit-templates> <db-path>");
     return 1;
 }
 
@@ -13,7 +13,7 @@ string dbPath = args[1];
 string connectionString = new SqliteConnectionStringBuilder
 {
     DataSource = dbPath,
-    Mode = command is "migrate-training" or "migrate-progenoid" or "migrate-ratings" or "migrate-planet-scales" or "migrate-fortification" or "migrate-tyranids" or "migrate-tyranid-squads" or "migrate-evasion" or "migrate-squad-caps" or "migrate-veteran-sergeant" or "migrate-collapse-sergeants" or "migrate-chaplaincy" or "migrate-company-judiciar" or "migrate-remove-veteran-captain" or "migrate-remove-recruitment-captain" or "remove-unused-unit-templates" ? SqliteOpenMode.ReadWriteCreate : SqliteOpenMode.ReadOnly
+    Mode = command is "migrate-training" or "migrate-progenoid" or "migrate-ratings" or "migrate-planet-scales" or "migrate-fortification" or "migrate-tyranids" or "migrate-tyranid-squads" or "migrate-evasion" or "migrate-squad-caps" or "migrate-veteran-sergeant" or "migrate-collapse-sergeants" or "migrate-chaplaincy" or "migrate-company-judiciar" or "migrate-company-apothecary" or "migrate-remove-veteran-captain" or "migrate-remove-recruitment-captain" or "remove-unused-unit-templates" ? SqliteOpenMode.ReadWriteCreate : SqliteOpenMode.ReadOnly
 }.ToString();
 
 using SqliteConnection connection = new(connectionString);
@@ -68,6 +68,9 @@ switch (command)
         break;
     case "migrate-company-judiciar":
         MigrateCompanyJudiciar(connection);
+        break;
+    case "migrate-company-apothecary":
+        MigrateCompanyApothecary(connection);
         break;
     case "migrate-remove-veteran-captain":
         MigrateRemoveVeteranCaptain(connection);
@@ -1009,6 +1012,40 @@ static void MigrateCompanyJudiciar(SqliteConnection connection)
 
     transaction.Commit();
     Console.WriteLine("Company Judiciar migration complete. Added a Judiciar slot to each company HQ squad.");
+}
+
+// An Apothecary is seconded to each captained company (NewChapterBuilder fills the slot
+// only when the company has a Captain), mirroring the company Chaplain/Judiciar. Give
+// each company HQ squad its own Apothecary slot so the placement is on-template and the
+// transfer UI can move Apothecaries into and out of it. Apothecaries beyond these company
+// slots stay in the chapter Apothecarion.
+static void MigrateCompanyApothecary(SqliteConnection connection)
+{
+    using SqliteTransaction transaction = connection.BeginTransaction();
+
+    int apothecary = ExecuteScalarInt(connection, transaction,
+        "SELECT Id FROM SoldierTemplate WHERE Name = 'Apothecary' AND FactionId = 1");
+    if (apothecary == 0)
+    {
+        throw new InvalidOperationException(
+            "'Apothecary' soldier template is missing; cannot add company Apothecary slots.");
+    }
+
+    string[] companyHqSquads = { "Veteran HQ Squad", "HQ Squad", "Scout HQ Squad" };
+    foreach (string squadName in companyHqSquads)
+    {
+        int squadId = ExecuteScalarInt(connection, transaction,
+            "SELECT Id FROM SquadTemplate WHERE Name = $n AND FactionId = 1", ("$n", squadName));
+        if (squadId == 0)
+        {
+            Console.WriteLine($"  warning: squad template '{squadName}' not found; no Apothecary slot added.");
+            continue;
+        }
+        EnsureSquadElement(connection, transaction, squadId, apothecary, 0, 1);
+    }
+
+    transaction.Commit();
+    Console.WriteLine("Company Apothecary migration complete. Added an Apothecary slot to each company HQ squad.");
 }
 
 // Inserts a squad element only if the (squad, soldier) pairing does not already exist,

@@ -333,9 +333,11 @@ public partial class ChapterController : Control
 
     private void RenderSquadLevel(Squad squad)
     {
-        ISoldier selectedSoldier = TryGetSelectedSoldier() ?? squad.Members.FirstOrDefault();
+        List<ISoldier> orderedMembers =
+            OrderByRankAndTenure(squad.Members, GameDataSingleton.Instance.Date).ToList();
+        ISoldier selectedSoldier = TryGetSelectedSoldier() ?? orderedMembers.FirstOrDefault();
 
-        List<ChapterBrowserMenuItem> soldiers = squad.Members
+        List<ChapterBrowserMenuItem> soldiers = orderedMembers
             .Select(soldier => new ChapterBrowserMenuItem(
                 ChapterBrowserLevel.Soldier,
                 soldier.Id,
@@ -362,7 +364,8 @@ public partial class ChapterController : Control
     private void RenderSoldierLevel(ISoldier soldier)
     {
         Squad squad = soldier.AssignedSquad;
-        List<ChapterBrowserMenuItem> soldiers = squad.Members
+        List<ChapterBrowserMenuItem> soldiers =
+            OrderByRankAndTenure(squad.Members, GameDataSingleton.Instance.Date)
             .Select(squadMember => new ChapterBrowserMenuItem(
                 ChapterBrowserLevel.Soldier,
                 squadMember.Id,
@@ -442,20 +445,30 @@ public partial class ChapterController : Control
         }
     }
 
-    // Soldiers the filter searches, bound to the current breadcrumb level.
+    // Soldiers the filter searches, bound to the current breadcrumb level. Presented in the
+    // same rank-then-tenure order the rosters use, so filter results and squad views agree.
     private IEnumerable<ISoldier> GetCurrentScopeMembers()
     {
-        switch (_navigator.Path.Level)
+        IEnumerable<ISoldier> members = _navigator.Path.Level switch
         {
-            case ChapterBrowserLevel.Company:
-                return GetCompany(_navigator.Path.CompanyId.Value).GetAllMembers();
-            case ChapterBrowserLevel.Squad:
-                return GetSquad(_navigator.Path.SquadId.Value).Members;
-            case ChapterBrowserLevel.Soldier:
-                return GetSoldier(_navigator.Path.SoldierId.Value).AssignedSquad.Members;
-            default:
-                return GetChapter().GetAllMembers();
-        }
+            ChapterBrowserLevel.Company => GetCompany(_navigator.Path.CompanyId.Value).GetAllMembers(),
+            ChapterBrowserLevel.Squad => GetSquad(_navigator.Path.SquadId.Value).Members,
+            ChapterBrowserLevel.Soldier => GetSoldier(_navigator.Path.SoldierId.Value).AssignedSquad.Members,
+            _ => GetChapter().GetAllMembers()
+        };
+        return OrderByRankAndTenure(members, GameDataSingleton.Instance.Date);
+    }
+
+    // Rosters and filter results are presented rank-first (most senior at the top), then by
+    // time in rank so the longest-tenured brother within a rank leads. Only PlayerSoldiers
+    // carry the promotion history the tenure sort needs; anyone else sorts as zero weeks.
+    private static IEnumerable<ISoldier> OrderByRankAndTenure(IEnumerable<ISoldier> soldiers, Date currentDate)
+    {
+        return soldiers
+            .OrderByDescending(soldier => soldier.Template.Rank)
+            .ThenByDescending(soldier => soldier is PlayerSoldier player
+                ? SoldierDossierService.GetWeeksInRank(player, currentDate)
+                : 0);
     }
 
     // The ordered soldier ids currently shown in the left menu, so a transfer can pick the
@@ -471,12 +484,15 @@ public partial class ChapterController : Control
                 .ToList();
         }
 
+        Date currentDate = GameDataSingleton.Instance.Date;
         switch (_navigator.Path.Level)
         {
             case ChapterBrowserLevel.Squad:
-                return GetSquad(_navigator.Path.SquadId.Value).Members.Select(soldier => soldier.Id).ToList();
+                return OrderByRankAndTenure(GetSquad(_navigator.Path.SquadId.Value).Members, currentDate)
+                    .Select(soldier => soldier.Id).ToList();
             case ChapterBrowserLevel.Soldier:
-                return GetSoldier(_navigator.Path.SoldierId.Value).AssignedSquad.Members
+                return OrderByRankAndTenure(
+                        GetSoldier(_navigator.Path.SoldierId.Value).AssignedSquad.Members, currentDate)
                     .Select(soldier => soldier.Id).ToList();
             default:
                 return [];
@@ -546,9 +562,24 @@ public partial class ChapterController : Control
         int squadCount = chapter.GetAllSquads().Count();
         int woundedCount = chapter.GetAllMembers().Count(soldier => !soldier.CanFight);
 
+        // Scouts are neophytes, not yet full battle brothers, so report them separately
+        // from the battle-brother line. Their sergeants are full marines leading them.
+        List<Squad> scoutSquads = chapter.GetAllSquads()
+            .Where(squad => (squad.SquadTemplate.SquadType & SquadTypes.Scout) > 0)
+            .ToList();
+        int neophyteCount = scoutSquads.Sum(squad => squad.Members.Count(m => !m.Template.IsSquadLeader));
+        int scoutSergeantCount = scoutSquads.Count(squad => squad.SquadLeader != null);
+        int battleBrotherCount = soldierCount - neophyteCount - scoutSergeantCount;
+        int battleBrotherSquadCount = squadCount - scoutSquads.Count;
+
+        string strengthText = $"{battleBrotherCount} battle brothers across {battleBrotherSquadCount} squads";
+        strengthText += scoutSergeantCount > 0
+            ? $", and {scoutSergeantCount} Scout Sergeants training {neophyteCount} Neophytes."
+            : ".";
+
         List<ChapterBrowserDetailCard> cards =
         [
-            new ChapterBrowserDetailCard("chapter", "Chapter Strength", chapter.Name, $"{soldierCount} battle brothers across {squadCount} squads."),
+            new ChapterBrowserDetailCard("chapter", "Chapter Strength", chapter.Name, strengthText),
             new ChapterBrowserDetailCard("medical", "Recovery", "Apothecarium demand", $"{woundedCount} soldiers are wounded or impaired.")
         ];
 

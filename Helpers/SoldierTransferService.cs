@@ -32,10 +32,16 @@ namespace OnlyWar.Helpers
                 return [];
             }
 
+            // Present openings by ascending target rank, so lateral transfers come first,
+            // then single-level promotions, then higher jumps. OrderBy is stable, so ties at
+            // the same rank keep the order-of-battle traversal order. The current assignment,
+            // when shown, is pinned to the top regardless.
             List<SoldierTransferOption> openings = GetOpeningsInUnit(
                 orderOfBattle,
                 soldier.AssignedSquad,
-                soldier.Template);
+                soldier.Template)
+                .OrderBy(option => option.SoldierTemplate.Rank)
+                .ToList();
 
             if (includeCurrentAssignment)
             {
@@ -222,6 +228,17 @@ namespace OnlyWar.Helpers
             return slot.Rank >= soldier.Rank;
         }
 
+        // Becoming a specialist is a one-way door. A line/command brother
+        // (SpecialistType 0) may still be drawn into any track — a regular marine can
+        // become a Chaplain, Apothecary, Techmarine, etc. But once a soldier holds a
+        // specialist calling, he may only transfer within that same SpecialistType: he
+        // can never return to the line or cross over to another specialty. This keeps an
+        // Apothecary transferable only to Apothecary roles.
+        private static bool IsSpecialistEligible(SoldierTemplate slot, SoldierTemplate soldier)
+        {
+            return soldier.SpecialistType == 0 || slot.SpecialistType == soldier.SpecialistType;
+        }
+
         private static IEnumerable<SoldierTemplate> GetOpeningsInEmptySquad(
             SquadTemplate squadTemplate,
             SoldierTemplate soldierTemplate)
@@ -235,6 +252,10 @@ namespace OnlyWar.Helpers
                     continue;
                 }
                 if (!IsRankEligible(element.SoldierTemplate, soldierTemplate))
+                {
+                    continue;
+                }
+                if (!IsSpecialistEligible(element.SoldierTemplate, soldierTemplate))
                 {
                     continue;
                 }
@@ -300,6 +321,10 @@ namespace OnlyWar.Helpers
                     continue;
                 }
                 if (!IsRankEligible(element.SoldierTemplate, soldierTemplate))
+                {
+                    continue;
+                }
+                if (!IsSpecialistEligible(element.SoldierTemplate, soldierTemplate))
                 {
                     continue;
                 }

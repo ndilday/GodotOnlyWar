@@ -1,5 +1,6 @@
 using Godot;
 using OnlyWar.Builders;
+using OnlyWar.Helpers;
 using OnlyWar.Helpers.Database.GameState;
 using OnlyWar.Models;
 using OnlyWar.Models.Soldiers;
@@ -71,34 +72,7 @@ public partial class StartMenu : Control
         GameRulesData gameRulesData = new GameRulesData(); // Load Game Rules Data (if needed for loading)
 
         GameStateDataBlob gameState = LoadGameData(gameRulesData);
-        Army army = new Army(
-            "Player Chapter",
-            null,
-            "Chapter Master",
-            gameRulesData.PlayerFaction.Units.First(),
-            gameRulesData.PlayerFaction.Units.First().GetAllMembers().Select(m => (PlayerSoldier)m));
-        army.Requisition = gameState.Requisition;
-        army.MedicalProcedures.AddRange(gameState.MedicalProcedures ?? []);
-        // Restore the fallen brothers, who belong to no unit and so are carried separately.
-        foreach (PlayerSoldier fallen in gameState.FallenBrothers ?? [])
-        {
-            army.FallenBrothers[fallen.Id] = fallen;
-        }
-        Fleet fleet = new Fleet(
-            "Chapter Navy",
-            null,
-            "Chapter Master");
-        fleet.TaskForces.AddRange(gameState.Fleets.Where(f => f.Faction.Id == gameRulesData.PlayerFaction.Id));
-        PlayerForce playerForce = new PlayerForce(
-            gameRulesData.PlayerFaction,
-            army,
-            fleet);
-        playerForce.GeneseedStockpile = (ushort)gameState.GeneseedStockpile;
-        playerForce.GeneseedPurity = gameState.GeneseedPurity;
-        Sector sector = new Sector(playerForce, gameState.Characters, gameState.Planets, gameState.Fleets);
-        // Reattach the Opening Scenario state (null for legacy/sandbox saves), which rides on the
-        // GlobalData row rather than being derived (Design/OpeningScenario.md §7).
-        sector.Scenario = gameState.Scenario;
+        Sector sector = SavedGameLoader.BuildSectorFromBlob(gameState, gameRulesData);
 
         GameDataSingleton.Instance.LoadGameDataFromBlob(gameRulesData, gameState.CurrentDate, sector);
         // Subsectors and warp lanes are derived deterministically from planet positions

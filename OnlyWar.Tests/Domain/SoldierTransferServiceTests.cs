@@ -101,6 +101,64 @@ public class SoldierTransferServiceTests
     }
 
     [Fact]
+    public void GetTransferOptions_OnlyOffersSlotsOfTheSoldiersSpecialistType()
+    {
+        // Apothecary and Chaplain are distinct specialist tracks; a line/command slot has
+        // SpecialistType 0. An Apothecary may only transfer into another Apothecary slot.
+        const byte apothecaryType = 1, chaplainType = 4;
+        SoldierTemplate apothecary = CreateTemplate(30, "Apothecary", 5, false, apothecaryType);
+        SoldierTemplate seniorApothecary = CreateTemplate(31, "Senior Apothecary", 6, false, apothecaryType);
+        SoldierTemplate chaplain = CreateTemplate(32, "Chaplain", 5, false, chaplainType);
+        SquadTemplate hqTemplate = CreateSquadTemplate(
+            "Command Squad",
+            (TestModelFactory.SergeantTemplate, 0, 1),
+            (TestModelFactory.MarineTemplate, 0, 4),
+            (seniorApothecary, 0, 1),
+            (chaplain, 0, 1));
+        Unit chapter = CreateUnit("Chapter");
+        Squad source = AddSquad(chapter, "Source Squad", hqTemplate);
+        PlayerSoldier soldier = AddPlayerSoldier(source, apothecary, "Brother Medicae");
+        Squad target = AddSquad(chapter, "Target Squad", hqTemplate);
+        AddPlayerSoldier(target, TestModelFactory.SergeantTemplate, "Sergeant Titus");
+
+        List<SoldierTransferOption> options = _service.GetTransferOptions(chapter, soldier)
+            .Where(option => option.SquadId == target.Id)
+            .ToList();
+
+        // The matching-type Apothecary slot is offered...
+        Assert.Contains(options, option => option.SoldierTemplate == seniorApothecary);
+        // ...but line, command, and other-specialist (Chaplain) slots are not.
+        Assert.DoesNotContain(options, option => option.SoldierTemplate == TestModelFactory.MarineTemplate);
+        Assert.DoesNotContain(options, option => option.SoldierTemplate == TestModelFactory.SergeantTemplate);
+        Assert.DoesNotContain(options, option => option.SoldierTemplate == chaplain);
+    }
+
+    [Fact]
+    public void GetTransferOptions_OffersSpecialistSlotsToLineBrothers()
+    {
+        // Becoming a specialist is a one-way door in: a regular marine (SpecialistType 0)
+        // may still be drawn into a specialist track (e.g. promoted into a Chaplain slot).
+        const byte chaplainType = 4;
+        SoldierTemplate chaplain = CreateTemplate(33, "Chaplain", 5, false, chaplainType);
+        SquadTemplate hqTemplate = CreateSquadTemplate(
+            "Command Squad",
+            (TestModelFactory.SergeantTemplate, 0, 1),
+            (TestModelFactory.MarineTemplate, 0, 4),
+            (chaplain, 0, 1));
+        Unit chapter = CreateUnit("Chapter");
+        Squad source = AddSquad(chapter, "Source Squad", hqTemplate);
+        PlayerSoldier soldier = AddPlayerSoldier(source, TestModelFactory.MarineTemplate, "Brother Marius");
+        Squad target = AddSquad(chapter, "Target Squad", hqTemplate);
+        AddPlayerSoldier(target, TestModelFactory.SergeantTemplate, "Sergeant Titus");
+
+        List<SoldierTransferOption> options = _service.GetTransferOptions(chapter, soldier)
+            .Where(option => option.SquadId == target.Id)
+            .ToList();
+
+        Assert.Contains(options, option => option.SoldierTemplate == chaplain);
+    }
+
+    [Fact]
     public void PreviewHistory_DoesNotMutateSoldierHistory()
     {
         SquadTemplate template = CreateSquadTemplate(
@@ -299,7 +357,8 @@ public class SoldierTransferServiceTests
         return soldier;
     }
 
-    private static SoldierTemplate CreateTemplate(int id, string name, byte rank, bool isSquadLeader)
+    private static SoldierTemplate CreateTemplate(int id, string name, byte rank, bool isSquadLeader,
+                                                  byte specialistType = 0)
     {
         return new SoldierTemplate(
             id,
@@ -308,7 +367,7 @@ public class SoldierTransferServiceTests
             rank,
             1,
             isSquadLeader,
-            0,
+            specialistType,
             []);
     }
 
