@@ -30,6 +30,7 @@ namespace OnlyWar.Builders
             PlayerForce playerForce, List<Planet> planetList, List<Character> characterList)
         {
             Planet promised = SelectPromisedWorld(planetList, data);
+            EnsureGenestealerCult(promised, data);
             StampTyranidPresence(promised, data);
             PlaceFleetInOrbit(sector, playerForce, promised);
             Character authority = ResolveAuthority(sector, planetList, characterList, data,
@@ -96,6 +97,23 @@ namespace OnlyWar.Builders
             int x = planet.Position.X;
             int y = planet.Position.Y;
             return Math.Min(Math.Min(x, maxX - x), Math.Min(y, maxY - y));
+        }
+
+        // §3.1a — canon: the Tyranid invasion is drawn in by a Genestealer Cult that has already
+        // infiltrated the target world, its psychic beacon calling the hive fleet down. So the
+        // promised world must always harbour a hidden cult, whether or not planet generation
+        // happened to seed one there. If a cult is already present (generation rolled the ~10%
+        // chance), we leave it as-is; otherwise we seed one with the same infiltration logic
+        // generation uses. This runs before StampTyranidPresence so the cult carves its
+        // population out of the intact Imperial regions, not the reduced post-incursion remnant.
+        private static void EnsureGenestealerCult(Planet promised, GameRulesData data)
+        {
+            Faction cultFaction = data.SectorFactions.Infiltrator;
+            if (promised.PlanetFactionMap.ContainsKey(cultFaction.Id))
+            {
+                return;
+            }
+            PlanetBuilder.HandleInfiltratingFaction(cultFaction, promised);
         }
 
         // §3.2 — confine the Tyranids to a contiguous cluster of N regions, leaving the rest of

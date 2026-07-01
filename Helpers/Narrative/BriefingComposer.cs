@@ -31,12 +31,12 @@ namespace OnlyWar.Helpers.Narrative
         // residue regardless of which one is chosen.
         private static readonly string[] Templates =
         {
-            "Brothers of the [b]{ChapterName}[/b], your Chapter is born into war. The world of "
-            + "[b]{PlanetName}[/b], in the [b]{SubsectorName}[/b], has been bled by a {EnemyName} "
-            + "splinter — its defenders broken, its skies cleared by the Navy, but no Guard "
-            + "regiment can be spared to retake the ground. [b]{AuthorityTitle} {AuthorityName}[/b] "
-            + "has marked it for you: take {PlanetName} from the swarm, and it is yours — your "
-            + "Chapter World, in the Emperor's name.",
+            "Brothers of the [b]{ChapterName}[/b], your Chapter Founding has come at an auspicious"
+            + " time. The world of [b]{PlanetName}[/b], in the [b]{SubsectorName}[/b], has been "
+            + "invaded by a {EnemyName} splinter. Its skies have been cleared by the Navy, "
+            + "but its defenders are broken, and no regiment is available to retake the ground. "
+            + "[b]{AuthorityTitle} {AuthorityName}[/b] makes you this offer: take {PlanetName} "
+            + "from the xenos scourge, and it will be your Chapter World, in the Emperor's name.",
 
             "[b]{AuthorityTitle} {AuthorityName}[/b] has called upon the newborn "
             + "[b]{ChapterName}[/b]. A {EnemyName} incursion has fallen upon [b]{PlanetName}[/b] in "

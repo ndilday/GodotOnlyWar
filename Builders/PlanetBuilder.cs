@@ -87,7 +87,11 @@ namespace OnlyWar.Builders
             return planet;
         }
 
-        private static void HandleInfiltratingFaction(Faction infiltratingFaction, Planet planet)
+        // Seeds a hidden infiltrating faction (a Genestealer Cult) across every region of a
+        // world, carving population and PDF out of each region's public owner. Exposed to
+        // ScenarioBuilder so the opening scenario can guarantee a cult on the promised world even
+        // when planet generation didn't roll one there.
+        internal static void HandleInfiltratingFaction(Faction infiltratingFaction, Planet planet)
         {
             PlanetFaction infiltration = new PlanetFaction(infiltratingFaction);
             double infiltrationRate = RNG.GetLinearDouble() / 2.0;
