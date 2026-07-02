@@ -1,7 +1,7 @@
 [gd_scene load_steps=3 format=3 uid="uid://cadpqoqxtyo0p"]
 
-[ext_resource type="Script" uid="uid://coo4r28sbejap" path="res://Scenes/DialogController.cs" id="1_0tpv1"]
-[ext_resource type="Script" uid="uid://cjbhho60pm1do" path="res://Scenes/DialogView.cs" id="2_nm2tb"]
+[ext_resource type="Script" uid="uid://mrtgcvidetjh" path="res://Scenes/DialogController.cs" id="1_0tpv1"]
+[ext_resource type="Script" uid="uid://ca0anb7r8j8f7" path="res://Scenes/DialogView.cs" id="2_nm2tb"]
 
 [node name="DialogController" type="Control"]
 layout_mode = 3

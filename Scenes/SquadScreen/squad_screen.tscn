@@ -1,9 +1,9 @@
 [gd_scene load_steps=6 format=3 uid="uid://dsarfq22dygfx"]
 
 [ext_resource type="PackedScene" uid="uid://cadpqoqxtyo0p" path="res://Scenes/Dialog.tscn" id="1_dvu1q"]
-[ext_resource type="Script" uid="uid://cswadmsuhrvoa" path="res://Scenes/SquadScreen/SquadScreenController.cs" id="2_ti2l8"]
-[ext_resource type="Script" uid="uid://bi4fuirqin5ex" path="res://Scenes/SquadScreen/SquadScreenView.cs" id="3_v5skr"]
-[ext_resource type="Texture2D" uid="uid://cdmukgd7syaa8" path="res://Assets/marines_shooting_jungle.jpg" id="4_v5skr"]
+[ext_resource type="Script" uid="uid://bodpyvfyb5jp6" path="res://Scenes/SquadScreen/SquadScreenController.cs" id="2_ti2l8"]
+[ext_resource type="Script" uid="uid://dx0gnlhupvak" path="res://Scenes/SquadScreen/SquadScreenView.cs" id="3_v5skr"]
+[ext_resource type="Texture2D" uid="uid://c7s8q1a0l08y0" path="res://Assets/marines_shooting_jungle.jpg" id="4_v5skr"]
 [ext_resource type="PackedScene" uid="uid://ctlbf6wo4jcii" path="res://Scenes/SquadScreen/order_dialog.tscn" id="6_p4ihy"]
 
 [node name="SquadScreenController" instance=ExtResource("1_dvu1q")]

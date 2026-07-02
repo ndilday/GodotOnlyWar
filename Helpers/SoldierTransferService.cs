@@ -1,4 +1,6 @@
 using OnlyWar.Models;
+using OnlyWar.Models.Fleets;
+using OnlyWar.Models.Planets;
 using OnlyWar.Models.Soldiers;
 using OnlyWar.Models.Squads;
 using OnlyWar.Models.Units;
@@ -182,6 +184,10 @@ namespace OnlyWar.Helpers
             List<SoldierTransferOption> openSlots = [];
             foreach (Squad squad in unit.Squads)
             {
+                if (!IsTransferLocationAllowed(currentSquad, squad))
+                {
+                    continue;
+                }
                 IEnumerable<SoldierTemplate> squadSlots = GetOpeningsInSquad(squad, currentSquad, soldierTemplate);
                 foreach (SoldierTemplate template in squadSlots)
                 {
@@ -239,6 +245,63 @@ namespace OnlyWar.Helpers
         private static bool IsSpecialistEligible(SoldierTemplate slot, SoldierTemplate soldier)
         {
             return soldier.SpecialistType == 0 || slot.SpecialistType == soldier.SpecialistType;
+        }
+
+        // Gates a transfer on where the two squads are, not just what slots are open.
+        // A squad pinned in an enemy-controlled region is cut off: it may only trade
+        // soldiers with another squad in that exact region, not even a ship in orbit
+        // overhead. Everywhere else (a ship, or a player/allied-controlled region) is
+        // "safe," and safe squads may freely trade as long as they share a planet. A
+        // squad with no location at all (a brand-new squad, or an existing squad that
+        // was emptied out and kept alive) has nothing to be pinned by, so it is always
+        // reachable — mirroring the always-allowed new-squad option.
+        private static bool IsTransferLocationAllowed(Squad source, Squad destination)
+        {
+            if (source == destination)
+            {
+                return true;
+            }
+            bool destinationHasLocation = destination.CurrentRegion != null || destination.BoardedLocation != null;
+            if (!destinationHasLocation)
+            {
+                return true;
+            }
+
+            bool sourceSafe = IsSquadLocationSafe(source);
+            bool destinationSafe = IsSquadLocationSafe(destination);
+            if (!sourceSafe || !destinationSafe)
+            {
+                return source.CurrentRegion != null && source.CurrentRegion == destination.CurrentRegion;
+            }
+
+            return GetSquadPlanet(source) == GetSquadPlanet(destination);
+        }
+
+        private static bool IsSquadLocationSafe(Squad squad)
+        {
+            // Boarded on a ship is always safe: the ship isn't sitting in anyone's
+            // contested territory.
+            return squad.BoardedLocation != null || IsRegionSafe(squad.CurrentRegion);
+        }
+
+        private static bool IsRegionSafe(Region region)
+        {
+            if (region == null)
+            {
+                return false;
+            }
+            RegionFaction controller = region.ControllingFaction;
+            return controller != null &&
+                   (controller.PlanetFaction.Faction.IsPlayerFaction || controller.PlanetFaction.Faction.IsDefaultFaction);
+        }
+
+        private static Planet GetSquadPlanet(Squad squad)
+        {
+            if (squad.CurrentRegion != null)
+            {
+                return squad.CurrentRegion.Planet;
+            }
+            return squad.BoardedLocation?.Fleet?.Planet;
         }
 
         private static IEnumerable<SoldierTemplate> GetOpeningsInEmptySquad(

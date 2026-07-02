@@ -1,12 +1,12 @@
 [gd_scene load_steps=9 format=3 uid="uid://bgmsb5cki6qvk"]
 
-[ext_resource type="Script" uid="uid://rq3hdiyfue35" path="res://Scenes/PlanetDetailScreen/TacticalRegionController.cs" id="1_8al03"]
-[ext_resource type="Texture2D" uid="uid://c7t88wlp8iwc3" path="res://Assets/helmet_icon.png" id="1_io6l3"]
-[ext_resource type="Texture2D" uid="uid://gxdtvsvevutx" path="res://Assets/genestealer_icon.png" id="2_8al03"]
-[ext_resource type="Script" uid="uid://cev0ccpl08qi0" path="res://Scenes/PlanetDetailScreen/TacticalRegionView.cs" id="2_w2nw6"]
-[ext_resource type="Texture2D" uid="uid://b7uvx4nxwrp5i" path="res://Assets/human_icon.png" id="3_mfyr6"]
-[ext_resource type="Texture2D" uid="uid://ci3w8uygstkqn" path="res://Assets/droppod_icon.png" id="4_j7ayy"]
-[ext_resource type="Texture2D" uid="uid://ueej546ootrb" path="res://Assets/objective_icon.png" id="6_rgdv0"]
+[ext_resource type="Script" uid="uid://ca58bpt246rou" path="res://Scenes/PlanetDetailScreen/TacticalRegionController.cs" id="1_8al03"]
+[ext_resource type="Texture2D" uid="uid://bbpta4mu3oo04" path="res://Assets/helmet_icon.png" id="1_io6l3"]
+[ext_resource type="Texture2D" uid="uid://bdlsq2m4rher" path="res://Assets/genestealer_icon.png" id="2_8al03"]
+[ext_resource type="Script" uid="uid://xw0ipxswbfes" path="res://Scenes/PlanetDetailScreen/TacticalRegionView.cs" id="2_w2nw6"]
+[ext_resource type="Texture2D" uid="uid://devmn24a65sjc" path="res://Assets/human_icon.png" id="3_mfyr6"]
+[ext_resource type="Texture2D" uid="uid://chtgvngwqnicb" path="res://Assets/droppod_icon.png" id="4_j7ayy"]
+[ext_resource type="Texture2D" uid="uid://cfsu8hh1micn4" path="res://Assets/objective_icon.png" id="6_rgdv0"]
 
 [sub_resource type="StyleBoxFlat" id="StyleBoxFlat_rgdv0"]
 

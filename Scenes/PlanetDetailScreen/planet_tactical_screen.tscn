@@ -1,11 +1,11 @@
-[gd_scene load_steps=5 format=3 uid="uid://dk4rrs2kymt0v"]
+[gd_scene format=3 uid="uid://dk4rrs2kymt0v"]
 
-[ext_resource type="Script" uid="uid://dx46hy415lpkw" path="res://Scenes/PlanetDetailScreen/PlanetTacticalScreenController.cs" id="1_selu7"]
-[ext_resource type="Texture2D" uid="uid://gpd4k5tpuqes" path="res://Assets/aliens_in_range.png" id="2_utl52"]
-[ext_resource type="Script" uid="uid://dnvnyhgmy0d0h" path="res://Scenes/PlanetDetailScreen/PlanetTacticalScreenView.cs" id="2_xcjox"]
+[ext_resource type="Script" uid="uid://d2at7jxkwbsrh" path="res://Scenes/PlanetDetailScreen/PlanetTacticalScreenController.cs" id="1_selu7"]
+[ext_resource type="Texture2D" uid="uid://pnufw7hg5y5o" path="res://Assets/aliens_in_range.png" id="2_utl52"]
+[ext_resource type="Script" uid="uid://b6uu2mbfxillj" path="res://Scenes/PlanetDetailScreen/PlanetTacticalScreenView.cs" id="2_xcjox"]
 [ext_resource type="PackedScene" uid="uid://bgmsb5cki6qvk" path="res://Scenes/PlanetDetailScreen/tactical_region.tscn" id="3_b2wt2"]
 
-[node name="PlanetTacticalScreenController" type="Control"]
+[node name="PlanetTacticalScreenController" type="Control" unique_id=1373937144]
 layout_mode = 3
 anchors_preset = 15
 anchor_right = 1.0
@@ -14,7 +14,7 @@ grow_horizontal = 2
 grow_vertical = 2
 script = ExtResource("1_selu7")
 
-[node name="PlanetTacticalScreenView" type="Control" parent="."]
+[node name="PlanetTacticalScreenView" type="Control" parent="." unique_id=1046221547]
 layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
@@ -23,7 +23,7 @@ grow_horizontal = 2
 grow_vertical = 2
 script = ExtResource("2_xcjox")
 
-[node name="TextureRect" type="TextureRect" parent="PlanetTacticalScreenView"]
+[node name="TextureRect" type="TextureRect" parent="PlanetTacticalScreenView" unique_id=1956109327]
 modulate = Color(1, 1, 1, 0.25098)
 layout_mode = 1
 anchors_preset = 15
@@ -35,7 +35,7 @@ texture = ExtResource("2_utl52")
 expand_mode = 4
 stretch_mode = 4
 
-[node name="TacticalRegionPanel" type="Panel" parent="PlanetTacticalScreenView"]
+[node name="TacticalRegionPanel" type="Panel" parent="PlanetTacticalScreenView" unique_id=1067761269]
 self_modulate = Color(1, 1, 1, 0)
 layout_mode = 1
 anchors_preset = -1
@@ -43,7 +43,7 @@ anchor_top = 0.01
 anchor_right = 1.0
 anchor_bottom = 0.7
 
-[node name="TacticalRegionController1" parent="PlanetTacticalScreenView/TacticalRegionPanel" instance=ExtResource("3_b2wt2")]
+[node name="TacticalRegionController1" parent="PlanetTacticalScreenView/TacticalRegionPanel" unique_id=5255374 instance=ExtResource("3_b2wt2")]
 z_index = 3
 layout_mode = 1
 anchors_preset = -1
@@ -54,7 +54,7 @@ anchor_bottom = 0.62
 offset_right = 0.0
 offset_bottom = 0.0
 
-[node name="TacticalRegionController2" parent="PlanetTacticalScreenView/TacticalRegionPanel" instance=ExtResource("3_b2wt2")]
+[node name="TacticalRegionController2" parent="PlanetTacticalScreenView/TacticalRegionPanel" unique_id=987253734 instance=ExtResource("3_b2wt2")]
 z_index = 3
 layout_mode = 1
 anchors_preset = -1
@@ -65,7 +65,7 @@ anchor_bottom = 0.75
 offset_right = 0.0
 offset_bottom = 0.0
 
-[node name="TacticalRegionController3" parent="PlanetTacticalScreenView/TacticalRegionPanel" instance=ExtResource("3_b2wt2")]
+[node name="TacticalRegionController3" parent="PlanetTacticalScreenView/TacticalRegionPanel" unique_id=2111101361 instance=ExtResource("3_b2wt2")]
 z_index = 3
 layout_mode = 1
 anchors_preset = -1
@@ -76,7 +76,7 @@ anchor_bottom = 0.5
 offset_right = 0.0
 offset_bottom = 0.0
 
-[node name="TacticalRegionController4" parent="PlanetTacticalScreenView/TacticalRegionPanel" instance=ExtResource("3_b2wt2")]
+[node name="TacticalRegionController4" parent="PlanetTacticalScreenView/TacticalRegionPanel" unique_id=716384319 instance=ExtResource("3_b2wt2")]
 z_index = 3
 layout_mode = 1
 anchors_preset = -1
@@ -87,7 +87,7 @@ anchor_bottom = 0.875
 offset_right = 0.0
 offset_bottom = 0.0
 
-[node name="TacticalRegionController5" parent="PlanetTacticalScreenView/TacticalRegionPanel" instance=ExtResource("3_b2wt2")]
+[node name="TacticalRegionController5" parent="PlanetTacticalScreenView/TacticalRegionPanel" unique_id=2089930769 instance=ExtResource("3_b2wt2")]
 z_index = 3
 layout_mode = 1
 anchors_preset = -1
@@ -98,7 +98,7 @@ anchor_bottom = 0.62
 offset_right = 0.0
 offset_bottom = 0.0
 
-[node name="TacticalRegionController6" parent="PlanetTacticalScreenView/TacticalRegionPanel" instance=ExtResource("3_b2wt2")]
+[node name="TacticalRegionController6" parent="PlanetTacticalScreenView/TacticalRegionPanel" unique_id=2083151215 instance=ExtResource("3_b2wt2")]
 z_index = 3
 layout_mode = 1
 anchors_preset = -1
@@ -109,7 +109,7 @@ anchor_bottom = 0.365
 offset_right = 0.0
 offset_bottom = 0.0
 
-[node name="TacticalRegionController7" parent="PlanetTacticalScreenView/TacticalRegionPanel" instance=ExtResource("3_b2wt2")]
+[node name="TacticalRegionController7" parent="PlanetTacticalScreenView/TacticalRegionPanel" unique_id=535790735 instance=ExtResource("3_b2wt2")]
 z_index = 3
 layout_mode = 1
 anchors_preset = -1
@@ -119,7 +119,7 @@ anchor_right = 0.56
 offset_right = 0.0
 offset_bottom = 0.0
 
-[node name="TacticalRegionController8" parent="PlanetTacticalScreenView/TacticalRegionPanel" instance=ExtResource("3_b2wt2")]
+[node name="TacticalRegionController8" parent="PlanetTacticalScreenView/TacticalRegionPanel" unique_id=180163468 instance=ExtResource("3_b2wt2")]
 z_index = 3
 layout_mode = 1
 anchors_preset = -1
@@ -130,7 +130,7 @@ anchor_bottom = 0.75
 offset_right = 0.0
 offset_bottom = 0.0
 
-[node name="TacticalRegionController9" parent="PlanetTacticalScreenView/TacticalRegionPanel" instance=ExtResource("3_b2wt2")]
+[node name="TacticalRegionController9" parent="PlanetTacticalScreenView/TacticalRegionPanel" unique_id=564814760 instance=ExtResource("3_b2wt2")]
 z_index = 3
 layout_mode = 1
 anchors_preset = -1
@@ -141,7 +141,7 @@ anchor_bottom = 0.5
 offset_right = 6.10352e-05
 offset_bottom = 0.0
 
-[node name="TacticalRegionController10" parent="PlanetTacticalScreenView/TacticalRegionPanel" instance=ExtResource("3_b2wt2")]
+[node name="TacticalRegionController10" parent="PlanetTacticalScreenView/TacticalRegionPanel" unique_id=1272970170 instance=ExtResource("3_b2wt2")]
 z_index = 3
 layout_mode = 1
 anchors_preset = -1
@@ -151,7 +151,7 @@ anchor_bottom = 0.24
 offset_right = 0.0
 offset_bottom = 0.0
 
-[node name="TacticalRegionController11" parent="PlanetTacticalScreenView/TacticalRegionPanel" instance=ExtResource("3_b2wt2")]
+[node name="TacticalRegionController11" parent="PlanetTacticalScreenView/TacticalRegionPanel" unique_id=1320059702 instance=ExtResource("3_b2wt2")]
 z_index = 3
 layout_mode = 1
 anchors_preset = -1
@@ -162,7 +162,7 @@ anchor_bottom = 0.875
 offset_right = 0.0
 offset_bottom = 0.0
 
-[node name="TacticalRegionController12" parent="PlanetTacticalScreenView/TacticalRegionPanel" instance=ExtResource("3_b2wt2")]
+[node name="TacticalRegionController12" parent="PlanetTacticalScreenView/TacticalRegionPanel" unique_id=1685700631 instance=ExtResource("3_b2wt2")]
 z_index = 3
 layout_mode = 1
 anchors_preset = -1
@@ -173,7 +173,7 @@ anchor_bottom = 0.62
 offset_right = 0.0
 offset_bottom = 0.0
 
-[node name="TacticalRegionController13" parent="PlanetTacticalScreenView/TacticalRegionPanel" instance=ExtResource("3_b2wt2")]
+[node name="TacticalRegionController13" parent="PlanetTacticalScreenView/TacticalRegionPanel" unique_id=482880108 instance=ExtResource("3_b2wt2")]
 z_index = 3
 layout_mode = 1
 anchors_preset = -1
@@ -184,7 +184,7 @@ anchor_bottom = 0.365
 offset_right = 0.0
 offset_bottom = 0.0
 
-[node name="TacticalRegionController14" parent="PlanetTacticalScreenView/TacticalRegionPanel" instance=ExtResource("3_b2wt2")]
+[node name="TacticalRegionController14" parent="PlanetTacticalScreenView/TacticalRegionPanel" unique_id=1883576632 instance=ExtResource("3_b2wt2")]
 z_index = 3
 layout_mode = 1
 anchors_preset = -1
@@ -195,7 +195,7 @@ anchor_bottom = 0.75
 offset_right = 0.0
 offset_bottom = 0.0
 
-[node name="TacticalRegionController15" parent="PlanetTacticalScreenView/TacticalRegionPanel" instance=ExtResource("3_b2wt2")]
+[node name="TacticalRegionController15" parent="PlanetTacticalScreenView/TacticalRegionPanel" unique_id=1064427664 instance=ExtResource("3_b2wt2")]
 z_index = 3
 layout_mode = 1
 anchors_preset = -1
@@ -206,7 +206,7 @@ anchor_bottom = 0.5
 offset_right = 0.0
 offset_bottom = 0.0
 
-[node name="TacticalRegionController16" parent="PlanetTacticalScreenView/TacticalRegionPanel" instance=ExtResource("3_b2wt2")]
+[node name="TacticalRegionController16" parent="PlanetTacticalScreenView/TacticalRegionPanel" unique_id=1691147745 instance=ExtResource("3_b2wt2")]
 z_index = 3
 layout_mode = 1
 anchors_preset = -1
@@ -217,7 +217,7 @@ anchor_bottom = 0.62
 offset_right = 0.0
 offset_bottom = 0.0
 
-[node name="CloseButton" type="Button" parent="PlanetTacticalScreenView"]
+[node name="CloseButton" type="Button" parent="PlanetTacticalScreenView" unique_id=471595189]
 layout_mode = 1
 anchors_preset = -1
 anchor_left = 1.0
@@ -228,7 +228,7 @@ offset_right = -10.0
 offset_bottom = 50.0
 text = "X"
 
-[node name="DataPanel" type="Panel" parent="PlanetTacticalScreenView"]
+[node name="DataPanel" type="Panel" parent="PlanetTacticalScreenView" unique_id=1555994191]
 layout_mode = 1
 anchors_preset = -1
 anchor_left = 0.33
@@ -239,7 +239,7 @@ offset_left = 10.0
 offset_right = -5.0
 offset_bottom = -10.0
 
-[node name="Header" type="Panel" parent="PlanetTacticalScreenView/DataPanel"]
+[node name="Header" type="Panel" parent="PlanetTacticalScreenView/DataPanel" unique_id=1869853153]
 custom_minimum_size = Vector2(0, 30)
 layout_mode = 1
 anchors_preset = 10
@@ -247,7 +247,7 @@ anchor_right = 1.0
 offset_bottom = 50.0
 grow_horizontal = 2
 
-[node name="Label" type="Label" parent="PlanetTacticalScreenView/DataPanel/Header"]
+[node name="Label" type="Label" parent="PlanetTacticalScreenView/DataPanel/Header" unique_id=1045890651]
 layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
@@ -258,7 +258,7 @@ text = "Planet Details"
 horizontal_alignment = 1
 vertical_alignment = 1
 
-[node name="VBoxContainer" type="VBoxContainer" parent="PlanetTacticalScreenView/DataPanel"]
+[node name="VBoxContainer" type="VBoxContainer" parent="PlanetTacticalScreenView/DataPanel" unique_id=183135634]
 layout_mode = 1
 anchors_preset = -1
 anchor_right = 1.0
@@ -270,11 +270,11 @@ offset_bottom = -5.0
 grow_horizontal = 2
 grow_vertical = 2
 
-[node name="DataLinePanel" type="Panel" parent="PlanetTacticalScreenView/DataPanel/VBoxContainer"]
+[node name="DataLinePanel" type="Panel" parent="PlanetTacticalScreenView/DataPanel/VBoxContainer" unique_id=1033116015]
 custom_minimum_size = Vector2(0, 20)
 layout_mode = 2
 
-[node name="Label" type="Label" parent="PlanetTacticalScreenView/DataPanel/VBoxContainer/DataLinePanel"]
+[node name="Label" type="Label" parent="PlanetTacticalScreenView/DataPanel/VBoxContainer/DataLinePanel" unique_id=344429096]
 layout_mode = 1
 anchors_preset = 9
 anchor_bottom = 1.0
@@ -282,7 +282,7 @@ offset_right = 117.0
 grow_vertical = 2
 text = "Time in Service"
 
-[node name="Label2" type="Label" parent="PlanetTacticalScreenView/DataPanel/VBoxContainer/DataLinePanel"]
+[node name="Label2" type="Label" parent="PlanetTacticalScreenView/DataPanel/VBoxContainer/DataLinePanel" unique_id=1943887441]
 layout_mode = 1
 anchors_preset = 11
 anchor_left = 1.0
@@ -294,11 +294,11 @@ grow_vertical = 2
 text = "7 years, 3 months"
 horizontal_alignment = 2
 
-[node name="DataLinePanel2" type="Panel" parent="PlanetTacticalScreenView/DataPanel/VBoxContainer"]
+[node name="DataLinePanel2" type="Panel" parent="PlanetTacticalScreenView/DataPanel/VBoxContainer" unique_id=1424251714]
 custom_minimum_size = Vector2(0, 20)
 layout_mode = 2
 
-[node name="Label" type="Label" parent="PlanetTacticalScreenView/DataPanel/VBoxContainer/DataLinePanel2"]
+[node name="Label" type="Label" parent="PlanetTacticalScreenView/DataPanel/VBoxContainer/DataLinePanel2" unique_id=1535888634]
 layout_mode = 1
 anchors_preset = 9
 anchor_bottom = 1.0
@@ -306,7 +306,7 @@ offset_right = 1.0
 grow_vertical = 2
 text = "Unit"
 
-[node name="Label2" type="Label" parent="PlanetTacticalScreenView/DataPanel/VBoxContainer/DataLinePanel2"]
+[node name="Label2" type="Label" parent="PlanetTacticalScreenView/DataPanel/VBoxContainer/DataLinePanel2" unique_id=1026746238]
 layout_mode = 1
 anchors_preset = 11
 anchor_left = 1.0
@@ -317,11 +317,11 @@ grow_horizontal = 0
 grow_vertical = 2
 text = "3rd Company, A Squad"
 
-[node name="DataLinePanel3" type="Panel" parent="PlanetTacticalScreenView/DataPanel/VBoxContainer"]
+[node name="DataLinePanel3" type="Panel" parent="PlanetTacticalScreenView/DataPanel/VBoxContainer" unique_id=1776862246]
 custom_minimum_size = Vector2(0, 20)
 layout_mode = 2
 
-[node name="Label" type="Label" parent="PlanetTacticalScreenView/DataPanel/VBoxContainer/DataLinePanel3"]
+[node name="Label" type="Label" parent="PlanetTacticalScreenView/DataPanel/VBoxContainer/DataLinePanel3" unique_id=867393834]
 layout_mode = 1
 anchors_preset = 9
 anchor_bottom = 1.0
@@ -329,7 +329,7 @@ offset_right = 1.0
 grow_vertical = 2
 text = "Location"
 
-[node name="Label2" type="Label" parent="PlanetTacticalScreenView/DataPanel/VBoxContainer/DataLinePanel3"]
+[node name="Label2" type="Label" parent="PlanetTacticalScreenView/DataPanel/VBoxContainer/DataLinePanel3" unique_id=1643143926]
 layout_mode = 1
 anchors_preset = 11
 anchor_left = 1.0
@@ -340,11 +340,11 @@ grow_horizontal = 0
 grow_vertical = 2
 text = "Aboard Immortal"
 
-[node name="DataLinePanel4" type="Panel" parent="PlanetTacticalScreenView/DataPanel/VBoxContainer"]
+[node name="DataLinePanel4" type="Panel" parent="PlanetTacticalScreenView/DataPanel/VBoxContainer" unique_id=2105496624]
 custom_minimum_size = Vector2(0, 20)
 layout_mode = 2
 
-[node name="Label" type="Label" parent="PlanetTacticalScreenView/DataPanel/VBoxContainer/DataLinePanel4"]
+[node name="Label" type="Label" parent="PlanetTacticalScreenView/DataPanel/VBoxContainer/DataLinePanel4" unique_id=504868032]
 layout_mode = 1
 anchors_preset = 9
 anchor_bottom = 1.0
@@ -352,7 +352,7 @@ offset_right = 1.0
 grow_vertical = 2
 text = "Lorem Ipsem"
 
-[node name="Label2" type="Label" parent="PlanetTacticalScreenView/DataPanel/VBoxContainer/DataLinePanel4"]
+[node name="Label2" type="Label" parent="PlanetTacticalScreenView/DataPanel/VBoxContainer/DataLinePanel4" unique_id=62764499]
 layout_mode = 1
 anchors_preset = 11
 anchor_left = 1.0
@@ -363,11 +363,11 @@ grow_horizontal = 0
 grow_vertical = 2
 text = "Lorem Ipsum"
 
-[node name="DataLinePanel5" type="Panel" parent="PlanetTacticalScreenView/DataPanel/VBoxContainer"]
+[node name="DataLinePanel5" type="Panel" parent="PlanetTacticalScreenView/DataPanel/VBoxContainer" unique_id=301783453]
 custom_minimum_size = Vector2(0, 20)
 layout_mode = 2
 
-[node name="Label" type="Label" parent="PlanetTacticalScreenView/DataPanel/VBoxContainer/DataLinePanel5"]
+[node name="Label" type="Label" parent="PlanetTacticalScreenView/DataPanel/VBoxContainer/DataLinePanel5" unique_id=1493950281]
 layout_mode = 1
 anchors_preset = 9
 anchor_bottom = 1.0
@@ -375,7 +375,7 @@ offset_right = 1.0
 grow_vertical = 2
 text = "Lorem Ipsum"
 
-[node name="Label2" type="Label" parent="PlanetTacticalScreenView/DataPanel/VBoxContainer/DataLinePanel5"]
+[node name="Label2" type="Label" parent="PlanetTacticalScreenView/DataPanel/VBoxContainer/DataLinePanel5" unique_id=1960939541]
 layout_mode = 1
 anchors_preset = 11
 anchor_left = 1.0
@@ -386,7 +386,7 @@ grow_horizontal = 0
 grow_vertical = 2
 text = "Who the Bell Tolls"
 
-[node name="OrbitPanel" type="Panel" parent="PlanetTacticalScreenView"]
+[node name="OrbitPanel" type="Panel" parent="PlanetTacticalScreenView" unique_id=1900093486]
 layout_mode = 1
 anchors_preset = -1
 anchor_top = 0.55
@@ -396,7 +396,7 @@ offset_left = 10.0
 offset_right = -10.0
 offset_bottom = -10.0
 
-[node name="Header" type="Panel" parent="PlanetTacticalScreenView/OrbitPanel"]
+[node name="Header" type="Panel" parent="PlanetTacticalScreenView/OrbitPanel" unique_id=1906491225]
 custom_minimum_size = Vector2(0, 30)
 layout_mode = 1
 anchors_preset = 10
@@ -404,7 +404,7 @@ anchor_right = 1.0
 offset_bottom = 50.0
 grow_horizontal = 2
 
-[node name="Label" type="Label" parent="PlanetTacticalScreenView/OrbitPanel/Header"]
+[node name="Label" type="Label" parent="PlanetTacticalScreenView/OrbitPanel/Header" unique_id=1713028958]
 layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
@@ -415,7 +415,7 @@ text = "Forces In Orbit"
 horizontal_alignment = 1
 vertical_alignment = 1
 
-[node name="VBoxContainer" type="VBoxContainer" parent="PlanetTacticalScreenView/OrbitPanel"]
+[node name="VBoxContainer" type="VBoxContainer" parent="PlanetTacticalScreenView/OrbitPanel" unique_id=2124196622]
 layout_mode = 1
 anchors_preset = -1
 anchor_right = 1.0
@@ -425,7 +425,7 @@ offset_bottom = -5.0
 grow_horizontal = 2
 grow_vertical = 2
 
-[node name="Tree" type="Tree" parent="PlanetTacticalScreenView/OrbitPanel"]
+[node name="Tree" type="Tree" parent="PlanetTacticalScreenView/OrbitPanel" unique_id=2019099795]
 layout_mode = 1
 anchors_preset = -1
 anchor_right = 1.0
@@ -435,7 +435,7 @@ offset_top = 55.0
 offset_right = -5.0
 offset_bottom = -5.0
 
-[node name="ButtonPanel" type="Panel" parent="PlanetTacticalScreenView"]
+[node name="ButtonPanel" type="Panel" parent="PlanetTacticalScreenView" unique_id=1141233214]
 layout_mode = 1
 anchors_preset = -1
 anchor_left = 0.7
@@ -446,7 +446,7 @@ offset_left = 5.0
 offset_right = -10.0
 offset_bottom = -10.0
 
-[node name="VBoxContainer" type="VBoxContainer" parent="PlanetTacticalScreenView/ButtonPanel"]
+[node name="VBoxContainer" type="VBoxContainer" parent="PlanetTacticalScreenView/ButtonPanel" unique_id=1430278900]
 layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
@@ -454,12 +454,12 @@ anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
 
-[node name="AirdropButton" type="Button" parent="PlanetTacticalScreenView/ButtonPanel/VBoxContainer"]
+[node name="AirdropButton" type="Button" parent="PlanetTacticalScreenView/ButtonPanel/VBoxContainer" unique_id=1215090447]
 layout_mode = 2
 disabled = true
 text = "Airdrop Forces Into Region"
 
-[node name="CancelAirdropButton" type="Button" parent="PlanetTacticalScreenView/ButtonPanel/VBoxContainer"]
+[node name="CancelAirdropButton" type="Button" parent="PlanetTacticalScreenView/ButtonPanel/VBoxContainer" unique_id=2038226497]
 layout_mode = 2
 disabled = true
 text = "Cancel Air Assault"

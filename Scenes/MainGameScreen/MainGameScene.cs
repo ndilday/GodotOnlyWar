@@ -174,14 +174,14 @@ public partial class MainGameScene : Control
 		}*/
 	}
 
-	private void SetMainScreenVisibility(bool isVisible, bool keepTopMenuVisible = false)
+	private void SetMainScreenVisibility(bool isVisible, bool keepTopMenuVisible = false, bool keepBottomMenuVisible = false)
 	{
 		_sectorMap.Visible = isVisible;
 		_sectorMap.SetProcessInput(isVisible);
 		_topMenu.Visible = isVisible || keepTopMenuVisible;
 		_leftMapTools.Visible = isVisible;
 		_systemInspector.Visible = isVisible;
-		_bottomMenu.Visible = isVisible;
+		_bottomMenu.Visible = isVisible || keepBottomMenuVisible;
 		if (_topMenu.Visible)
 		{
 			RefreshTopMenuStatus();
@@ -417,10 +417,28 @@ public partial class MainGameScene : Control
 			_planetTacticalScreen.RegionDoubleClicked += OnRegionDoubleClicked;
 			_mainUILayer.AddChild(_planetTacticalScreen);
 		}
+		PlaceMainContentOverlay(_planetTacticalScreen);
 		_planetTacticalScreen.PopulatePlanetData(planet);
 		_planetTacticalScreen.Visible = true;
-		SetMainScreenVisibility(false);
+		_topMenu.SetScreenText(planet.Name);
+		SetMainScreenVisibility(false, keepTopMenuVisible: true, keepBottomMenuVisible: true);
 		GD.Print($"Planet {planet.Id} Clicked");
+	}
+
+	private void PlaceMainContentOverlay(Control overlay)
+	{
+		overlay.AnchorLeft = 0f;
+		overlay.AnchorTop = 0f;
+		overlay.AnchorRight = 1f;
+		overlay.AnchorBottom = 1f;
+		overlay.OffsetLeft = 0f;
+		overlay.OffsetTop = 64f;
+		overlay.OffsetRight = 0f;
+		overlay.OffsetBottom = -72f;
+		overlay.ClipContents = true;
+		_mainUILayer.MoveChild(overlay, 0);
+		_mainUILayer.MoveChild(_bottomMenu, _mainUILayer.GetChildCount() - 1);
+		_mainUILayer.MoveChild(_topMenu, _mainUILayer.GetChildCount() - 1);
 	}
 
 	private const int FleetMenuPlotCourse = 0;
@@ -669,12 +687,20 @@ public partial class MainGameScene : Control
 			PackedScene regionScene = GD.Load<PackedScene>("res://Scenes/RegionScreen/region_screen.tscn");
 			_regionScreen = (RegionScreenController)regionScene.Instantiate();
 			_regionScreen.CloseButtonPressed += OnCloseScreen;
+			_regionScreen.SquadDoubleClicked += OnSquadDoubleClicked;
+			_regionScreen.AdjacentRegionChangeRequested += OnAdjacentRegionChangeRequested;
 			_mainUILayer.AddChild(_regionScreen);
 		}
-		_regionScreen.SquadDoubleClicked += OnSquadDoubleClicked;
+		_regionScreen.DisplayRegion(region);
+		_regionScreen.Visible = true;
 		Control control = (Control)sender;
 		_previousScreenStack.Push(control);
 		control.Visible = false;
+	}
+
+	private void OnAdjacentRegionChangeRequested(object sender, Region region)
+	{
+		_regionScreen?.DisplayRegion(region);
 	}
 
 	private void OnSquadDoubleClicked(object sender, Squad squad)

@@ -1,7 +1,7 @@
 [gd_scene load_steps=3 format=3 uid="uid://ce35p0pqsk045"]
 
 [ext_resource type="Theme" uid="uid://ylp8bk1nhedq" path="res://Scenes/OnlyWarTheme.tres" id="1_b5lk8"]
-[ext_resource type="Script" uid="uid://dphyy23swga8y" path="res://Scenes/MainGameScreen/TopMenu.cs" id="2_qvt33"]
+[ext_resource type="Script" uid="uid://bjde40riaub0q" path="res://Scenes/MainGameScreen/TopMenu.cs" id="2_qvt33"]
 
 [node name="TopMenu" type="Control"]
 layout_mode = 3

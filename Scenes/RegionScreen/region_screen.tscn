@@ -1,9 +1,9 @@
 [gd_scene load_steps=7 format=3 uid="uid://bl61mb634d0tv"]
 
 [ext_resource type="PackedScene" uid="uid://cadpqoqxtyo0p" path="res://Scenes/Dialog.tscn" id="1_xuda3"]
-[ext_resource type="Script" uid="uid://utmxosik71fc" path="res://Scenes/RegionScreen/RegionScreenController.cs" id="2_7t0l2"]
-[ext_resource type="Script" uid="uid://b1yvrdle5ym3s" path="res://Scenes/RegionScreen/RegionScreenView.cs" id="3_pa3jd"]
-[ext_resource type="Texture2D" uid="uid://cdmukgd7syaa8" path="res://Assets/marines_shooting_jungle.jpg" id="4_pwx37"]
+[ext_resource type="Script" uid="uid://dcgjmojk3r18j" path="res://Scenes/RegionScreen/RegionScreenController.cs" id="2_7t0l2"]
+[ext_resource type="Script" uid="uid://co6g6t73yxpl3" path="res://Scenes/RegionScreen/RegionScreenView.cs" id="3_pa3jd"]
+[ext_resource type="Texture2D" uid="uid://c7s8q1a0l08y0" path="res://Assets/marines_shooting_jungle.jpg" id="4_pwx37"]
 [ext_resource type="PackedScene" uid="uid://bgmsb5cki6qvk" path="res://Scenes/PlanetDetailScreen/tactical_region.tscn" id="5_wsr1p"]
 [ext_resource type="PackedScene" uid="uid://ctlbf6wo4jcii" path="res://Scenes/SquadScreen/order_dialog.tscn" id="6_ij0pe"]
 

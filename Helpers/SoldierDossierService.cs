@@ -54,7 +54,6 @@ namespace OnlyWar.Helpers
         {
             List<Tuple<string, string>> soldierData =
             [
-                new("Name", soldier.Name),
                 new("Time in Service", FormatDurationSince(GetEnlistmentDate(soldier), currentDate)),
                 new("Time in Rank", FormatTimeSinceLastEvent(soldier, SoldierEventType.Promotion, currentDate)),
                 new("Time in Squad", FormatTimeSinceLastEvent(soldier, SoldierEventType.Transfer, currentDate))
@@ -195,12 +194,13 @@ namespace OnlyWar.Helpers
             return GetSergeantDescription(
                 soldier.Name,
                 evaluation,
-                soldier.AssignedSquad?.SquadTemplate?.Name ?? "");
+                soldier.AssignedSquad?.SquadTemplate?.Name ?? "",
+                soldier.Template.IsSquadLeader);
         }
 
         public string GenerateSoldierInjurySummary(ISoldier selectedSoldier, bool richText = true)
         {
-            string summary = selectedSoldier.Name + "\n";
+            string summary = "";
             byte recoveryTime = 0;
             bool isSevered = false;
             foreach (HitLocation hl in selectedSoldier.Body.HitLocations)
@@ -221,25 +221,34 @@ namespace OnlyWar.Helpers
             }
             if (isSevered)
             {
-                summary += selectedSoldier.Name +
-                    " will be unable to perform field duties until receiving cybernetic replacements\n";
+                summary += "Will be unable to perform field duties until receiving cybernetic replacements\n";
             }
             else if (recoveryTime > 0)
             {
-                summary += selectedSoldier.Name +
-                    " requires " + recoveryTime + " weeks to be fully fit for duty\n";
+                summary += "Requires " + recoveryTime + " weeks to be fully fit for duty\n";
             }
             else
             {
-                summary += selectedSoldier.Name +
-                    " is fully fit and ready to serve the Emperor\n";
+                summary += "Fully fit and ready to serve the Emperor\n";
             }
 
             return richText ? summary : StripRichTextTags(summary);
         }
 
-        private static string GetSergeantDescription(string name, SoldierEvaluation evaluation, string squadType)
+        private static string GetSergeantDescription(string name, SoldierEvaluation evaluation, string squadType, bool isSquadLeader)
         {
+            if (isSquadLeader)
+            {
+                if (evaluation.LeadershipRating > 55)
+                {
+                    return name + " leads his squad with distinction, and should be considered for greater command responsibilities.";
+                }
+                else
+                {
+                    return name + " is capably fulfilling his duties as a squad leader.";
+                }
+            }
+
             int maxLevel = 0;
             if (evaluation.RangedRating > 105 && evaluation.MeleeRating < 90)
             {

@@ -1,7 +1,7 @@
 [gd_scene load_steps=4 format=3 uid="uid://ctlbf6wo4jcii"]
 
-[ext_resource type="Script" uid="uid://b443rpj6kcnov" path="res://Scenes/SquadScreen/OrderDialogController.cs" id="1_xrp5v"]
-[ext_resource type="Script" uid="uid://bta6v4wkcssf8" path="res://Scenes/SquadScreen/OrderDialogView.cs" id="2_503px"]
+[ext_resource type="Script" uid="uid://b3vgm7pkbr4d7" path="res://Scenes/SquadScreen/OrderDialogController.cs" id="1_xrp5v"]
+[ext_resource type="Script" uid="uid://cciafo7hd51eq" path="res://Scenes/SquadScreen/OrderDialogView.cs" id="2_503px"]
 
 [sub_resource type="StyleBoxFlat" id="StyleBoxFlat_xrp5v"]
 bg_color = Color(0, 0, 0, 1)

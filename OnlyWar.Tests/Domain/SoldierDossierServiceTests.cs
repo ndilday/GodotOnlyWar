@@ -25,11 +25,10 @@ public class SoldierDossierServiceTests
 
         SoldierDossier dossier = _service.BuildDossier(soldier, richTextInjury: false);
 
-        Assert.Contains(dossier.Data, pair => pair.Item1 == "Name" && pair.Item2 == "Brother Marius");
         Assert.Contains($"{date}: joined Tactical Squad", dossier.History);
         Assert.Contains($"{date}: Bronze Sword of the Emperor", dossier.Awards);
         Assert.Contains("candidate for sergeant", dossier.SergeantReport);
-        Assert.Contains("fully fit", dossier.InjuryReport);
+        Assert.Contains("Fully fit", dossier.InjuryReport);
     }
 
     [Fact]
@@ -109,7 +108,7 @@ public class SoldierDossierServiceTests
 
         Assert.Contains("Left Arm: Major", plainSummary);
         Assert.DoesNotContain("<color", plainSummary);
-        Assert.Contains("requires", plainSummary);
+        Assert.Contains("Requires", plainSummary);
     }
 
     private static Squad CreateAssignedSquad(string squadTemplateName)

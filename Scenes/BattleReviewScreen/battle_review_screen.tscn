@@ -1,8 +1,8 @@
 [gd_scene load_steps=5 format=3 uid="uid://dm1xh48xjd3a2"]
 
 [ext_resource type="PackedScene" uid="uid://cadpqoqxtyo0p" path="res://Scenes/Dialog.tscn" id="1_ppieq"]
-[ext_resource type="Script" uid="uid://c5wewkuimf78a" path="res://Scenes/BattleReviewScreen/BattleReviewController.cs" id="2_5ub1w"]
-[ext_resource type="Script" uid="uid://nbfp310chtd7" path="res://Scenes/BattleReviewScreen/BattleReviewView.cs" id="3_vig3w"]
+[ext_resource type="Script" uid="uid://cxf1fgwqq3lkt" path="res://Scenes/BattleReviewScreen/BattleReviewController.cs" id="2_5ub1w"]
+[ext_resource type="Script" uid="uid://b7o6g74tf26yq" path="res://Scenes/BattleReviewScreen/BattleReviewView.cs" id="3_vig3w"]
 [ext_resource type="Theme" uid="uid://ylp8bk1nhedq" path="res://Scenes/OnlyWarTheme.tres" id="4_theme"]
 
 [node name="DialogController" instance=ExtResource("1_ppieq")]

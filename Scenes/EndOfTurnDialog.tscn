@@ -1,8 +1,8 @@
 [gd_scene load_steps=5 format=3 uid="uid://mjk2hlgl8m80"]
 
 [ext_resource type="PackedScene" uid="uid://cadpqoqxtyo0p" path="res://Scenes/Dialog.tscn" id="1_4b3o3"]
-[ext_resource type="Script" uid="uid://bx5f85xitmqn4" path="res://Scenes/EndOfTurnDialogController.cs" id="2_e3mme"]
-[ext_resource type="Script" uid="uid://q42ga0l7iwl3" path="res://Scenes/EndOfTurnDialogView.cs" id="3_ngawf"]
+[ext_resource type="Script" uid="uid://dccc2rigppyje" path="res://Scenes/EndOfTurnDialogController.cs" id="2_e3mme"]
+[ext_resource type="Script" uid="uid://gmdkckjl3s5u" path="res://Scenes/EndOfTurnDialogView.cs" id="3_ngawf"]
 
 [sub_resource type="StyleBoxFlat" id="StyleBoxFlat_e3mme"]
 bg_color = Color(0, 0, 0, 1)

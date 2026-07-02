@@ -1,8 +1,8 @@
 [gd_scene load_steps=5 format=3 uid="uid://bhdybqce8onb2"]
 
-[ext_resource type="Script" uid="uid://by6msr45s7bpx" path="res://Scenes/TrainingUnitScreen/TrainingUnitScreenController.cs" id="1_bgnhv"]
-[ext_resource type="Script" uid="uid://dyctsfk8xqt0c" path="res://Scenes/TrainingUnitScreen/TrainingUnitScreenView.cs" id="2_kwxid"]
-[ext_resource type="FontFile" uid="uid://caltl8x5gfsdo" path="res://Fonts/sui generis rg.otf" id="3_kwxid"]
+[ext_resource type="Script" uid="uid://b5v4kp3bcmotx" path="res://Scenes/TrainingUnitScreen/TrainingUnitScreenController.cs" id="1_bgnhv"]
+[ext_resource type="Script" uid="uid://b6pyq4sxwfroa" path="res://Scenes/TrainingUnitScreen/TrainingUnitScreenView.cs" id="2_kwxid"]
+[ext_resource type="FontFile" uid="uid://cvyy7ak4qxfxm" path="res://Fonts/sui generis rg.otf" id="3_kwxid"]
 
 [sub_resource type="Theme" id="Theme_rathx"]
 default_font = ExtResource("3_kwxid")

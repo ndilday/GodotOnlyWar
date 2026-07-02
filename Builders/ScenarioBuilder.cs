@@ -7,6 +7,7 @@ using OnlyWar.Helpers.Narrative;
 using OnlyWar.Models;
 using OnlyWar.Models.Fleets;
 using OnlyWar.Models.Planets;
+using OnlyWar.Models.Squads;
 
 namespace OnlyWar.Builders
 {
@@ -204,12 +205,28 @@ namespace OnlyWar.Builders
 
         // §3.3 — park the chapter in orbit. Squads stay embarked (no CurrentRegion, no
         // LandedSquads); the player's first action is to land them via the Planet Tactical screen.
+        // "Embarked" is a real ship assignment, not just the absence of a region: the Planet
+        // Tactical screen's landing/loading actions both pivot off a squad's current state
+        // (BoardedLocation to land, a region's LandedSquads to load) and have no path for a
+        // squad that is in neither, so every squad must be placed onto a ship here.
         private static void PlaceFleetInOrbit(Sector sector, PlayerForce playerForce, Planet promised)
         {
+            IEnumerator<Squad> squads = playerForce.Army.SquadMap.Values
+                .Where(s => s.Members.Count > 0).GetEnumerator();
+            bool hasSquad = squads.MoveNext();
             foreach (TaskForce taskForce in playerForce.Fleet.TaskForces)
             {
                 taskForce.Planet = promised;
                 taskForce.Position = promised.Position;
+                foreach (Ship ship in taskForce.Ships)
+                {
+                    while (hasSquad && squads.Current.Members.Count <= ship.AvailableCapacity)
+                    {
+                        ship.LoadSquad(squads.Current);
+                        squads.Current.BoardedLocation = ship;
+                        hasSquad = squads.MoveNext();
+                    }
+                }
                 sector.AddNewFleet(taskForce);
             }
         }
