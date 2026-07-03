@@ -20,6 +20,7 @@ public partial class ChapterController : Control
     private int? _pendingTransferSoldierId;
     private int? _currentDetailSoldierId;
     private ConfirmationDialog _transferConfirmationDialog;
+    private AcceptDialog _transferBlockedDialog;
     private ChapterFilterDialog _filterDialog;
 
     public ChapterView ChapterView { get; set; }
@@ -46,6 +47,12 @@ public partial class ChapterController : Control
         };
         _transferConfirmationDialog.Confirmed += OnTransferConfirmed;
         AddChild(_transferConfirmationDialog);
+
+        _transferBlockedDialog = new AcceptDialog
+        {
+            Title = "Transfer Blocked"
+        };
+        AddChild(_transferBlockedDialog);
 
         _filterDialog = new ChapterFilterDialog();
         _filterDialog.FilterApplied += OnFilterApplied;
@@ -162,7 +169,18 @@ public partial class ChapterController : Control
             return;
         }
 
-        _pendingTransferOption = _transferOptions[index];
+        SoldierTransferOption option = _transferOptions[index];
+        GameDataSingleton.Instance.Sector.PlayerForce.Army.PopulateSquadMap();
+        if (_transferService.WouldExceedShipCapacity(
+                soldier, option, GameDataSingleton.Instance.Sector.PlayerForce.Army.SquadMap))
+        {
+            _transferBlockedDialog.DialogText =
+                $"{option.DisplayName} has no room aboard its ship. Free up space before transferring {soldier.Name} there.";
+            _transferBlockedDialog.PopupCentered();
+            return;
+        }
+
+        _pendingTransferOption = option;
         _pendingTransferSoldierId = soldier.Id;
         _transferConfirmationDialog.DialogText =
             $"Transfer {soldier.Template.Name} {soldier.Name} to {_pendingTransferOption.DisplayName}?";

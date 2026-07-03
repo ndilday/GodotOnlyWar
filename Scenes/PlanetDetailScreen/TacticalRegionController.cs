@@ -1,5 +1,6 @@
 using Godot;
 using OnlyWar.Helpers.Extensions;
+using OnlyWar.Helpers.UI;
 using OnlyWar.Models;
 using OnlyWar.Models.Planets;
 using System;
@@ -20,7 +21,7 @@ public partial class TacticalRegionController : Control
         _button.Pressed += () => TacticalRegionPressed?.Invoke(this, _region);
     }
 
-    public void Populate(Region region, PlanetCommandMode mode = PlanetCommandMode.Overview, bool selected = false)
+    public void Populate(Region region, MapLayer layers = MapLayer.None, bool selected = false)
     {
         _region = region;
         RegionFaction playerRegionFaction = region.RegionFactionMap.Values.FirstOrDefault(rf => rf.PlanetFaction.Faction.IsPlayerFaction);
@@ -35,60 +36,49 @@ public partial class TacticalRegionController : Control
         bool publicEnemy = xenosRegionFaction != null && xenosRegionFaction.IsPublic;
         bool hiddenEnemy = xenosRegionFaction != null && !xenosRegionFaction.IsPublic;
 
-        bool showPlayerPublic = false;
-        bool showPlayerHidden = false;
-        bool showCivilian = false;
-        bool showXenos = false;
-        bool showObjective = false;
-        bool showDropPod = false;
-        string playerPopulation = "";
-        string civilianText = "";
-        string xenosText = "";
-        Color color = MutedMapColor(GetControlColor(region), 0.34f);
+        bool showForces = layers.HasFlag(MapLayer.Forces);
+        bool showOrders = layers.HasFlag(MapLayer.Orders);
+        bool showIntel = layers.HasFlag(MapLayer.Intel);
+        bool showEntrenchment = showIntel && publicEnemy && region.IntelligenceLevel > 1;
 
-        switch (mode)
+        // Layers combine rather than exclude: a tile can show force strength, order
+        // status, and intel simultaneously if all three layers are toggled on.
+        bool showPlayerPublic = (showForces || showOrders) && playerCount > 0;
+        string playerPopulation = showOrders && playerRegionFaction != null
+            ? $"{assignedCount}/{playerRegionFaction.LandedSquads.Count}"
+            : (playerCount > 0 ? playerCount.ToString() : "");
+
+        bool showXenos = (showForces || showIntel) && publicEnemy;
+        string xenosText = showXenos ? xenosRegionFaction.GetPopulationDescription() : "";
+
+        bool showPlayerHidden = (showForces && hiddenEnemy && region.IntelligenceLevel > 0)
+            || (showIntel && hiddenEnemy)
+            || (showOrders && unassignedCount > 0);
+
+        bool showCivilian = showEntrenchment || garrison > 0 || (showForces && civilianPopulation > 0);
+        string civilianText = showEntrenchment
+            ? RegionFactionExtensions.GetDefenseLevelDescription(xenosRegionFaction.Entrenchment)
+            : garrison > 0 ? FormatCompact(garrison) : (showForces ? FormatCompact(civilianPopulation) : "");
+
+        bool showObjective = region.SpecialMissions.Count > 0 || (showOrders && assignedCount > 0);
+        const bool showDropPod = false;
+
+        Color color;
+        if (showOrders && assignedCount > 0)
         {
-            case PlanetCommandMode.Forces:
-                showPlayerPublic = playerCount > 0;
-                playerPopulation = playerCount > 0 ? playerCount.ToString() : "";
-                showCivilian = garrison > 0 || civilianPopulation > 0;
-                civilianText = garrison > 0 ? FormatCompact(garrison) : FormatCompact(civilianPopulation);
-                showXenos = publicEnemy;
-                xenosText = publicEnemy ? xenosRegionFaction.GetPopulationDescription() : "";
-                showPlayerHidden = hiddenEnemy && region.IntelligenceLevel > 0;
-                color = playerCount > 0
-                    ? MutedMapColor(playerRegionFaction.PlanetFaction.Faction.Color.ToGodotColor(), 0.18f)
-                    : publicEnemy ? MutedMapColor(xenosRegionFaction.PlanetFaction.Faction.Color.ToGodotColor(), 0.18f) : MutedMapColor(GetControlColor(region), 0.42f);
-                break;
-            case PlanetCommandMode.Orders:
-                showPlayerPublic = playerCount > 0;
-                playerPopulation = playerCount > 0 ? $"{assignedCount}/{playerRegionFaction.LandedSquads.Count}" : "";
-                showObjective = assignedCount > 0;
-                showPlayerHidden = unassignedCount > 0;
-                color = assignedCount > 0 ? new Color(0.46f, 0.36f, 0.16f) : MutedMapColor(GetControlColor(region), 0.48f);
-                break;
-            case PlanetCommandMode.Logistics:
-                showPlayerPublic = playerCount > 0;
-                playerPopulation = playerCount > 0 ? playerCount.ToString() : "";
-                showDropPod = true;
-                showCivilian = garrison > 0;
-                civilianText = garrison > 0 ? FormatCompact(garrison) : "";
-                color = selected ? new Color(0.10f, 0.42f, 0.47f) : MutedMapColor(GetControlColor(region), 0.46f);
-                break;
-            case PlanetCommandMode.Intel:
-                showXenos = publicEnemy;
-                xenosText = publicEnemy ? xenosRegionFaction.GetPopulationDescription() : "";
-                showPlayerHidden = hiddenEnemy;
-                showCivilian = publicEnemy && region.IntelligenceLevel > 1;
-                civilianText = publicEnemy && region.IntelligenceLevel > 1
-                    ? RegionFactionExtensions.GetDefenseLevelDescription(xenosRegionFaction.Entrenchment)
-                    : "";
-                showObjective = region.SpecialMissions.Count > 0;
-                color = publicEnemy ? MutedMapColor(xenosRegionFaction.PlanetFaction.Faction.Color.ToGodotColor(), 0.16f) : MutedMapColor(GetControlColor(region), 0.56f);
-                break;
-            default:
-                showObjective = region.SpecialMissions.Count > 0;
-                break;
+            color = new Color(0.46f, 0.36f, 0.16f);
+        }
+        else if (playerCount > 0 && (showForces || showOrders))
+        {
+            color = MutedMapColor(playerRegionFaction.PlanetFaction.Faction.Color.ToGodotColor(), 0.18f);
+        }
+        else if (publicEnemy && (showForces || showIntel))
+        {
+            color = MutedMapColor(xenosRegionFaction.PlanetFaction.Faction.Color.ToGodotColor(), 0.18f);
+        }
+        else
+        {
+            color = MutedMapColor(GetControlColor(region), 0.34f);
         }
 
         _view.Populate(

@@ -1,8 +1,8 @@
 using Godot;
 using OnlyWar.Helpers.Extensions;
+using OnlyWar.Helpers.UI;
 using OnlyWar.Models;
 using OnlyWar.Models.Fleets;
-using OnlyWar.Models.Orders;
 using OnlyWar.Models.Planets;
 using OnlyWar.Models.Squads;
 using OnlyWar.Models.Units;
@@ -16,13 +16,32 @@ public partial class PlanetTacticalScreenController : DialogController
     private const string ActionOpenSquad = "open_squad";
     private const string ActionLand = "land";
     private const string ActionLoad = "load";
-    private const string ActionOpenOrders = "open_orders";
+    private const string ActionEditOrders = "edit_orders";
+
+    private static readonly (MapLayer Layer, string Label, string IconKey)[] MapLayerOptions =
+    [
+        (MapLayer.Forces, "Forces", "infantry"),
+        (MapLayer.Orders, "Orders", "objective"),
+        (MapLayer.Intel, "Intel", "threat")
+    ];
+
+    private static readonly (string Key, string Label)[] RosterFilters =
+    [
+        ("all", "All"),
+        ("unassigned", "Unassigned"),
+        ("orbit", "In Orbit"),
+        ("surface", "Surface"),
+        ("injured", "Injured")
+    ];
 
     private PlanetTacticalScreenView _view;
     private TacticalRegionController[] _tacticalRegions;
     private ButtonGroup _buttonGroup;
+    private OrderDialogController _orderDialog;
+
     private Planet _selectedPlanet;
-    private PlanetCommandMode _mode = PlanetCommandMode.Overview;
+    private MapLayer _activeLayers = MapLayer.Forces | MapLayer.Orders;
+    private string _rosterFilter = "all";
     private Region _selectedRegion;
     private Ship _selectedShip;
     private Unit _selectedLoadedUnit;
@@ -38,10 +57,18 @@ public partial class PlanetTacticalScreenController : DialogController
         base._Ready();
         _buttonGroup = new ButtonGroup();
         _view = GetNode<PlanetTacticalScreenView>("PlanetTacticalScreenView");
-        _view.ModeSelected += OnModeSelected;
         _view.SelectionTreeItemSelected += OnSelectionTreeItemSelected;
         _view.SelectionTreeItemActivated += OnSelectionTreeItemActivated;
         _view.CommandPressed += OnCommandPressed;
+        _view.MapLayerToggled += OnMapLayerToggled;
+        _view.RosterFilterSelected += OnRosterFilterSelected;
+        _view.SetMapLayerOptions(MapLayerOptions);
+        _view.SetActiveMapLayers(_activeLayers);
+        _view.SetRosterFilters(RosterFilters);
+        _view.SetActiveRosterFilter(_rosterFilter);
+
+        _orderDialog = GetNode<OrderDialogController>("PlanetTacticalScreenView/OrderDialogController");
+        _orderDialog.OrdersConfirmed += OnOrdersConfirmed;
 
         _tacticalRegions = new TacticalRegionController[16];
         for (int i = 1; i <= 16; i++)
@@ -66,11 +93,17 @@ public partial class PlanetTacticalScreenController : DialogController
         RefreshWorkspace();
     }
 
-    private void OnModeSelected(object sender, PlanetCommandMode mode)
+    private void OnMapLayerToggled(object sender, MapLayer layer)
     {
-        _mode = mode;
-        ClearForceSelections();
-        _view.SetMode(mode);
+        _activeLayers ^= layer;
+        _view.SetActiveMapLayers(_activeLayers);
+        RefreshRegionMap();
+    }
+
+    private void OnRosterFilterSelected(object sender, string key)
+    {
+        _rosterFilter = key;
+        _view.SetActiveRosterFilter(_rosterFilter);
         RefreshWorkspace();
     }
 
@@ -109,7 +142,6 @@ public partial class PlanetTacticalScreenController : DialogController
         switch (key)
         {
             case ActionOpenRegion:
-            case ActionOpenOrders:
                 if (_selectedRegion != null)
                 {
                     RegionDoubleClicked?.Invoke(this, _selectedRegion);
@@ -122,6 +154,9 @@ public partial class PlanetTacticalScreenController : DialogController
                     OrbitalSquadDoubleClicked?.Invoke(this, squad);
                 }
                 break;
+            case ActionEditOrders:
+                OpenOrdersDialog();
+                break;
             case ActionLand:
                 LandSelectedForces();
                 break;
@@ -131,13 +166,43 @@ public partial class PlanetTacticalScreenController : DialogController
         }
     }
 
+    private void OpenOrdersDialog()
+    {
+        if (_selectedLandedSquad == null) return;
+        _orderDialog.PopulateOrderData(_selectedLandedSquad);
+        _orderDialog.Visible = true;
+    }
+
+    private void OnOrdersConfirmed(object sender, EventArgs e)
+    {
+        RefreshWorkspace();
+    }
+
+    public void RefreshFromExternalChange()
+    {
+        if (_selectedPlanet == null) return;
+        RefreshWorkspace();
+    }
+
     private void RefreshWorkspace()
     {
         RefreshRegionMap();
-        _view.SetMode(_mode);
-        _view.SetSelectionTitle(GetSelectionTitle(), GetSelectionHint());
-        _view.PopulateSelectionTree(BuildSelectionTree());
+        _view.SetHeader(_selectedPlanet.Name, GetGovernorBadgeText());
+        _view.SetSelectionTitle("ROSTER", "Select a region, ship, or squad. Land, load, or open its orders from the command bar.");
+        _view.PopulateSelectionTree(BuildRoster());
         RefreshContextAndCommands();
+    }
+
+    private string GetGovernorBadgeText()
+    {
+        Faction controllingFaction = _selectedPlanet.GetControllingFaction();
+        if (controllingFaction == null || (!controllingFaction.IsDefaultFaction && !controllingFaction.IsPlayerFaction))
+        {
+            return null;
+        }
+
+        Character governor = _selectedPlanet.PlanetFactionMap[controllingFaction.Id].Leader;
+        return governor?.ActiveRequest != null ? "Governor request pending" : null;
     }
 
     private void RefreshContextAndCommands()
@@ -147,219 +212,88 @@ public partial class PlanetTacticalScreenController : DialogController
         _view.SetCommands(BuildCommands());
     }
 
-    private string GetSelectionTitle()
+    private IReadOnlyList<CommandTreeNode> BuildRoster()
     {
-        return _mode switch
+        if (_selectedPlanet == null) return Array.Empty<CommandTreeNode>();
+
+        List<CommandTreeNode> roots = [BuildRegionsGroup()];
+        if (_rosterFilter != "surface")
         {
-            PlanetCommandMode.Overview => "REGIONS",
-            PlanetCommandMode.Forces => "FORCE LOCATIONS",
-            PlanetCommandMode.Orders => "ORDERS",
-            PlanetCommandMode.Logistics => "ORBIT / SURFACE",
-            PlanetCommandMode.Intel => "INTEL CONTACTS",
-            _ => "SELECTIONS"
-        };
-    }
-
-    private string GetSelectionHint()
-    {
-        return _mode switch
-        {
-            PlanetCommandMode.Overview => "Select a region on the map or list to inspect it.",
-            PlanetCommandMode.Forces => "Select a force to locate it; double-click squads for detail.",
-            PlanetCommandMode.Orders => "Select an order or squad; open the region screen to edit orders.",
-            PlanetCommandMode.Logistics => "Select a ship and a region or surface squad, then land or load.",
-            PlanetCommandMode.Intel => "Select a region to inspect known enemy strength and defenses.",
-            _ => ""
-        };
-    }
-
-    private IReadOnlyList<PlanetCommandTreeNode> BuildSelectionTree()
-    {
-        if (_selectedPlanet == null) return Array.Empty<PlanetCommandTreeNode>();
-
-        return _mode switch
-        {
-            PlanetCommandMode.Forces => BuildForcesTree(),
-            PlanetCommandMode.Orders => BuildOrdersTree(),
-            PlanetCommandMode.Logistics => BuildLogisticsTree(),
-            PlanetCommandMode.Intel => BuildIntelTree(),
-            _ => BuildRegionTree()
-        };
-    }
-
-    private IReadOnlyList<PlanetCommandTreeNode> BuildRegionTree()
-    {
-        return _selectedPlanet.Regions
-            .Select(region => new PlanetCommandTreeNode(RegionKey(region.Id), $"{region.Name} | {GetRegionControlLabel(region)}"))
-            .ToList();
-    }
-
-    private IReadOnlyList<PlanetCommandTreeNode> BuildForcesTree()
-    {
-        List<PlanetCommandTreeNode> roots = [];
-        roots.Add(new PlanetCommandTreeNode("group:orbit", "In Orbit", BuildOrbitShipNodes(includeEmptyShips: true)));
-
-        List<PlanetCommandTreeNode> regionNodes = [];
-        foreach (Region region in _selectedPlanet.Regions)
-        {
-            List<PlanetCommandTreeNode> children = [];
-            RegionFaction playerRegionFaction = GetPlayerRegionFaction(region);
-            if (playerRegionFaction != null)
-            {
-                foreach (IGrouping<Unit, Squad> group in playerRegionFaction.LandedSquads
-                    .Where(squad => squad.Members.Count > 0)
-                    .GroupBy(squad => squad.ParentUnit))
-                {
-                    children.Add(new PlanetCommandTreeNode(
-                        SurfaceUnitKey(region.Id, group.Key.Id),
-                        $"{group.Key.Name} | {group.Sum(squad => squad.Members.Count)} marines",
-                        group.Select(squad => new PlanetCommandTreeNode(SurfaceSquadKey(region.Id, squad.Id), squad.Name)).ToList()));
-                }
-            }
-
-            foreach (RegionFaction faction in region.RegionFactionMap.Values.Where(rf => rf.IsPublic && !rf.PlanetFaction.Faction.IsPlayerFaction))
-            {
-                string role = faction.PlanetFaction.Faction.IsDefaultFaction ? "Allied/PDF" : "Enemy";
-                string strength = faction.PlanetFaction.Faction.IsDefaultFaction
-                    ? $"{faction.Garrison:N0} garrison"
-                    : faction.GetPopulationDescription();
-                children.Add(new PlanetCommandTreeNode($"presence:{region.Id}:{faction.PlanetFaction.Faction.Id}", $"{role}: {faction.PlanetFaction.Faction.Name} | {strength}"));
-            }
-
-            if (children.Count > 0)
-            {
-                regionNodes.Add(new PlanetCommandTreeNode(RegionKey(region.Id), region.Name, children));
-            }
+            roots.Add(new CommandTreeNode("group:orbit", "In Orbit", BuildOrbitShipNodes()));
         }
-        roots.Add(new PlanetCommandTreeNode("group:surface", "Surface Regions", regionNodes));
+        if (_rosterFilter != "orbit")
+        {
+            roots.Add(new CommandTreeNode("group:surface", "Deployed", BuildSurfaceRegionNodes()));
+        }
         return roots;
     }
 
-    private IReadOnlyList<PlanetCommandTreeNode> BuildOrdersTree()
+    private CommandTreeNode BuildRegionsGroup()
     {
-        List<PlanetCommandTreeNode> ordered = [];
-        List<PlanetCommandTreeNode> unassigned = [];
-        foreach (Region region in _selectedPlanet.Regions)
+        List<CommandTreeNode> regionNodes = _selectedPlanet.Regions.Select(region =>
         {
-            RegionFaction playerRegionFaction = GetPlayerRegionFaction(region);
-            if (playerRegionFaction == null) continue;
-
-            foreach (Squad squad in playerRegionFaction.LandedSquads.Where(squad => squad.Members.Count > 0))
-            {
-                if (squad.CurrentOrders == null)
-                {
-                    unassigned.Add(new PlanetCommandTreeNode(SurfaceSquadKey(region.Id, squad.Id), $"{squad.Name} | {region.Name}"));
-                    continue;
-                }
-
-                Order order = squad.CurrentOrders;
-                string orderKey = $"order:{order.Id}:{region.Id}";
-                PlanetCommandTreeNode existing = ordered.FirstOrDefault(node => node.Key == orderKey);
-                PlanetCommandTreeNode squadNode = new(SurfaceSquadKey(region.Id, squad.Id), $"{squad.Name} | {squad.ParentUnit?.Name ?? "Unknown Unit"}");
-                if (existing == null)
-                {
-                    ordered.Add(new PlanetCommandTreeNode(orderKey, $"{order.Mission.MissionType} | {order.Mission.RegionFaction.Region.Name}", [squadNode]));
-                }
-                else
-                {
-                    List<PlanetCommandTreeNode> children = existing.Children.ToList();
-                    children.Add(squadNode);
-                    ordered[ordered.IndexOf(existing)] = new PlanetCommandTreeNode(existing.Key, existing.Text, children);
-                }
-            }
-        }
-
-        return
-        [
-            new PlanetCommandTreeNode("group:ordered", "Assigned", ordered),
-            new PlanetCommandTreeNode("group:unassigned", "Unassigned", unassigned)
-        ];
+            RegionFaction playerFaction = GetPlayerRegionFaction(region);
+            int total = playerFaction?.LandedSquads.Count ?? 0;
+            string ordersSuffix = total > 0
+                ? $" | {playerFaction.LandedSquads.Count(squad => squad.CurrentOrders != null)}/{total} orders"
+                : "";
+            return new CommandTreeNode(RegionKey(region.Id), $"{region.Name} | {GetRegionControlLabel(region)}{ordersSuffix}");
+        }).ToList();
+        return new CommandTreeNode("group:regions", "Regions", regionNodes);
     }
 
-    private IReadOnlyList<PlanetCommandTreeNode> BuildLogisticsTree()
+    private IReadOnlyList<CommandTreeNode> BuildOrbitShipNodes()
     {
-        return
-        [
-            new PlanetCommandTreeNode("group:orbit", "Orbiting Ships", BuildOrbitShipNodes(includeEmptyShips: true)),
-            new PlanetCommandTreeNode("group:surface", "Surface Regions", BuildSurfaceRegionNodes(includeEmptyRegions: true))
-        ];
-    }
-
-    private IReadOnlyList<PlanetCommandTreeNode> BuildIntelTree()
-    {
-        List<PlanetCommandTreeNode> publicContacts = [];
-        List<PlanetCommandTreeNode> quietRegions = [];
-        foreach (Region region in _selectedPlanet.Regions)
-        {
-            RegionFaction enemyFaction = GetEnemyRegionFaction(region);
-            if (enemyFaction != null && enemyFaction.IsPublic)
-            {
-                publicContacts.Add(new PlanetCommandTreeNode(RegionKey(region.Id), $"{region.Name} | {enemyFaction.GetPopulationDescription()}"));
-            }
-            else
-            {
-                quietRegions.Add(new PlanetCommandTreeNode(RegionKey(region.Id), $"{region.Name} | no public contact"));
-            }
-        }
-
-        return
-        [
-            new PlanetCommandTreeNode("group:contacts", "Public Enemy Contacts", publicContacts),
-            new PlanetCommandTreeNode("group:quiet", "No Public Contact", quietRegions)
-        ];
-    }
-
-    private IReadOnlyList<PlanetCommandTreeNode> BuildOrbitShipNodes(bool includeEmptyShips)
-    {
-        List<PlanetCommandTreeNode> ships = [];
+        List<CommandTreeNode> ships = [];
         Faction playerFaction = GameDataSingleton.Instance.Sector.PlayerForce.Faction;
         foreach (TaskForce taskForce in _selectedPlanet.OrbitingTaskForceList.Where(tf => tf.Faction == playerFaction))
         {
             foreach (Ship ship in taskForce.Ships)
             {
-                if (!includeEmptyShips && !ship.LoadedSquads.Any()) continue;
-
-                List<PlanetCommandTreeNode> units = [];
+                List<CommandTreeNode> units = [];
                 foreach (IGrouping<Unit, Squad> group in ship.LoadedSquads
-                    .Where(squad => squad.Members.Count > 0)
+                    .Where(squad => squad.Members.Count > 0 && RosterFormat.MatchesFilter(squad, _rosterFilter))
                     .GroupBy(squad => squad.ParentUnit))
                 {
-                    units.Add(new PlanetCommandTreeNode(
+                    units.Add(new CommandTreeNode(
                         LoadedUnitKey(ship.Id, group.Key.Id),
                         $"{group.Key.Name} | {group.Sum(squad => squad.Members.Count)} aboard",
-                        group.Select(squad => new PlanetCommandTreeNode(LoadedSquadKey(ship.Id, squad.Id), squad.Name)).ToList()));
+                        group.Select(squad => new CommandTreeNode(LoadedSquadKey(ship.Id, squad.Id), RosterFormat.SquadLabel(squad))).ToList()));
                 }
 
-                ships.Add(new PlanetCommandTreeNode(ShipKey(ship.Id), $"{ship.Name} ({ship.LoadedSoldierCount}/{ship.Template.SoldierCapacity})", units));
+                if (units.Count > 0 || _rosterFilter is "all" or "orbit")
+                {
+                    ships.Add(new CommandTreeNode(ShipKey(ship.Id), $"{ship.Name} ({ship.LoadedSoldierCount}/{ship.Template.SoldierCapacity})", units));
+                }
             }
         }
 
         return ships;
     }
 
-    private IReadOnlyList<PlanetCommandTreeNode> BuildSurfaceRegionNodes(bool includeEmptyRegions)
+    private IReadOnlyList<CommandTreeNode> BuildSurfaceRegionNodes()
     {
-        List<PlanetCommandTreeNode> regions = [];
+        List<CommandTreeNode> regions = [];
         foreach (Region region in _selectedPlanet.Regions)
         {
             RegionFaction playerRegionFaction = GetPlayerRegionFaction(region);
-            List<PlanetCommandTreeNode> units = [];
+            List<CommandTreeNode> units = [];
             if (playerRegionFaction != null)
             {
                 foreach (IGrouping<Unit, Squad> group in playerRegionFaction.LandedSquads
-                    .Where(squad => squad.Members.Count > 0)
+                    .Where(squad => squad.Members.Count > 0 && RosterFormat.MatchesFilter(squad, _rosterFilter))
                     .GroupBy(squad => squad.ParentUnit))
                 {
-                    units.Add(new PlanetCommandTreeNode(
+                    units.Add(new CommandTreeNode(
                         SurfaceUnitKey(region.Id, group.Key.Id),
                         $"{group.Key.Name} | {group.Sum(squad => squad.Members.Count)} on surface",
-                        group.Select(squad => new PlanetCommandTreeNode(SurfaceSquadKey(region.Id, squad.Id), squad.Name)).ToList()));
+                        group.Select(squad => new CommandTreeNode(SurfaceSquadKey(region.Id, squad.Id), RosterFormat.SquadLabel(squad))).ToList()));
                 }
             }
 
-            if (includeEmptyRegions || units.Count > 0)
+            if (units.Count > 0)
             {
-                regions.Add(new PlanetCommandTreeNode(RegionKey(region.Id), region.Name, units));
+                regions.Add(new CommandTreeNode(RegionKey(region.Id), region.Name, units));
             }
         }
 
@@ -370,7 +304,7 @@ public partial class PlanetTacticalScreenController : DialogController
     {
         if (_selectedLoadedSquad != null) return _selectedLoadedSquad.Name;
         if (_selectedLandedSquad != null) return _selectedLandedSquad.Name;
-        if (_selectedShip != null && _mode == PlanetCommandMode.Logistics) return _selectedShip.Name;
+        if (_selectedShip != null) return _selectedShip.Name;
         if (_selectedRegion != null) return _selectedRegion.Name;
         return _selectedPlanet?.Name ?? "Planet Detail";
     }
@@ -379,16 +313,9 @@ public partial class PlanetTacticalScreenController : DialogController
     {
         if (_selectedLoadedSquad != null) return $"Aboard {_selectedLoadedSquad.BoardedLocation?.Name ?? "unknown ship"}";
         if (_selectedLandedSquad != null) return $"Deployed in {_selectedLandedSquad.CurrentRegion?.Name ?? _selectedRegion?.Name ?? "unknown region"}";
-        if (_selectedShip != null && _mode == PlanetCommandMode.Logistics) return "Orbiting transport and combat capacity";
-        return _mode switch
-        {
-            PlanetCommandMode.Overview => "Strategic planet and selected-region summary",
-            PlanetCommandMode.Forces => "Known friendly, allied, and enemy presence",
-            PlanetCommandMode.Orders => "Current mission assignments and order groups",
-            PlanetCommandMode.Logistics => "Move squads between orbiting ships and the selected region",
-            PlanetCommandMode.Intel => "Detected threats, defenses, and intelligence quality",
-            _ => ""
-        };
+        if (_selectedShip != null) return "Orbiting transport and combat capacity";
+        if (_selectedRegion != null) return "Region summary; select a squad for order detail";
+        return "Strategic planet summary";
     }
 
     private IReadOnlyList<Tuple<string, string>> BuildContextRows()
@@ -396,7 +323,7 @@ public partial class PlanetTacticalScreenController : DialogController
         if (_selectedPlanet == null) return Array.Empty<Tuple<string, string>>();
         if (_selectedLoadedSquad != null) return BuildSquadRows(_selectedLoadedSquad);
         if (_selectedLandedSquad != null) return BuildSquadRows(_selectedLandedSquad);
-        if (_selectedShip != null && _mode == PlanetCommandMode.Logistics) return BuildShipRows(_selectedShip);
+        if (_selectedShip != null) return BuildShipRows(_selectedShip);
         if (_selectedRegion != null) return BuildRegionRows(_selectedRegion);
         return BuildPlanetRows(_selectedPlanet);
     }
@@ -496,26 +423,16 @@ public partial class PlanetTacticalScreenController : DialogController
         ];
     }
 
-    private IReadOnlyList<PlanetCommandAction> BuildCommands()
+    private IReadOnlyList<CommandAction> BuildCommands()
     {
-        List<PlanetCommandAction> actions =
+        return
         [
             new(ActionOpenRegion, "Open Region", "map_pin", _selectedRegion != null),
-            new(ActionOpenSquad, "Open Squad", "infantry", GetSelectedSquad() != null)
+            new(ActionOpenSquad, "Open Squad", "infantry", GetSelectedSquad() != null),
+            new(ActionEditOrders, "Edit Orders", "objective", _selectedLandedSquad != null),
+            new(ActionLand, GetLandCommandText(), "land_squads", CanLand()),
+            new(ActionLoad, GetLoadCommandText(), "load_squads", CanLoad())
         ];
-
-        if (_mode == PlanetCommandMode.Orders)
-        {
-            actions.Add(new PlanetCommandAction(ActionOpenOrders, "Open Orders", "objective", _selectedRegion != null));
-        }
-
-        if (_mode == PlanetCommandMode.Logistics)
-        {
-            actions.Add(new PlanetCommandAction(ActionLand, GetLandCommandText(), "land_squads", CanLand()));
-            actions.Add(new PlanetCommandAction(ActionLoad, GetLoadCommandText(), "load_squads", CanLoad()));
-        }
-
-        return actions;
     }
 
     private void ApplySelectionKey(string key)
@@ -554,11 +471,6 @@ public partial class PlanetTacticalScreenController : DialogController
                 _selectedRegion = _selectedPlanet.Regions.FirstOrDefault(region => region.Id == int.Parse(parts[1]));
                 _selectedLandedSquad = GameDataSingleton.Instance.Sector.PlayerForce.Army.SquadMap[int.Parse(parts[2])];
                 _selectedLandedUnit = _selectedLandedSquad.ParentUnit;
-                break;
-            case "order":
-                _selectedRegion = _selectedPlanet.Regions.FirstOrDefault(region => region.Id == int.Parse(parts[2]));
-                _selectedLandedUnit = null;
-                _selectedLandedSquad = null;
                 break;
         }
     }
@@ -684,7 +596,7 @@ public partial class PlanetTacticalScreenController : DialogController
         for (int i = 0; i < _selectedPlanet.Regions.Length; i++)
         {
             Region region = _selectedPlanet.Regions[i];
-            _tacticalRegions[i].Populate(region, _mode, _selectedRegion != null && region.Id == _selectedRegion.Id);
+            _tacticalRegions[i].Populate(region, _activeLayers, _selectedRegion != null && region.Id == _selectedRegion.Id);
         }
     }
 

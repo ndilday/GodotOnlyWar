@@ -82,6 +82,35 @@ namespace OnlyWar.Helpers
             return history;
         }
 
+        // A transfer never changes how many soldiers are aboard a ship if the soldier is
+        // already stationed on that same ship (moving between squads that share a boat is a
+        // lateral reshuffle, not a new arrival). Otherwise, boarding a squad that's out of
+        // room isn't possible until the ship (or the squad's berth) frees up a slot.
+        public bool WouldExceedShipCapacity(
+            PlayerSoldier soldier,
+            SoldierTransferOption option,
+            IReadOnlyDictionary<int, Squad> squadMap)
+        {
+            if (soldier?.AssignedSquad == null || option == null ||
+                option.IsCurrentAssignment || option.IsNewSquad)
+            {
+                return false;
+            }
+            if (squadMap == null || !squadMap.TryGetValue(option.SquadId, out Squad targetSquad) ||
+                targetSquad.BoardedLocation == null)
+            {
+                return false;
+            }
+
+            Ship targetShip = targetSquad.BoardedLocation;
+            if (soldier.AssignedSquad.BoardedLocation == targetShip)
+            {
+                return false;
+            }
+
+            return targetShip.AvailableCapacity <= 0;
+        }
+
         public bool ApplyTransfer(
             PlayerSoldier soldier,
             SoldierTransferOption option,

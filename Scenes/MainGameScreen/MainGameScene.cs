@@ -30,7 +30,6 @@ public partial class MainGameScene : Control
 	private SoldierController _soldierScreen;
 	private SquadScreenController _squadScreen;
 	private SoldierView _soldierView;
-	private PlanetDetailScreenController _planetDetailScreen;
 	private PlanetTacticalScreenController _planetTacticalScreen;
 	private RegionScreenController _regionScreen;
 	private Stack<Control> _previousScreenStack;
@@ -290,6 +289,7 @@ public partial class MainGameScene : Control
 				{
 					_topMenu.SetScreenText(planet.Name);
 				}
+				_planetTacticalScreen.RefreshFromExternalChange();
 				_topMenu.Visible = true;
 				_bottomMenu.Visible = true;
 			}
@@ -369,7 +369,6 @@ public partial class MainGameScene : Control
 	{
 		Planet planet = GameDataSingleton.Instance.Sector.Planets[planetId];
 		SelectPlanet(planet);
-		//LoadPlanetDetailScreen(planet);
 		LoadPlanetTacticalScreen(planet);
 	}
 
@@ -396,22 +395,6 @@ public partial class MainGameScene : Control
 		}
 
 		_systemInspector.DisplayPlanet(planet, _selectedFleetId);
-	}
-
-	private void LoadPlanetDetailScreen(Planet planet)
-	{
-		if (_planetDetailScreen == null)
-		{
-			PackedScene planetScene = GD.Load<PackedScene>("res://Scenes/PlanetDetailScreen/planet_detail_screen.tscn");
-			_planetDetailScreen = (PlanetDetailScreenController)planetScene.Instantiate();
-
-			_planetDetailScreen.CloseButtonPressed += OnCloseScreen;
-			_mainUILayer.AddChild(_planetDetailScreen);
-		}
-		_planetDetailScreen.PopulatePlanetData(planet);
-		_planetDetailScreen.Visible = true;
-		SetMainScreenVisibility(false);
-		GD.Print($"Planet {planet.Id} Clicked");
 	}
 
 	private void LoadPlanetTacticalScreen(Planet planet)

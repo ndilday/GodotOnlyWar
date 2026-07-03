@@ -14,6 +14,7 @@ public partial class SoldierController : Control
     private PlayerSoldier _selectedSoldier;
     private SoldierTransferOption _pendingTransferOption;
     private ConfirmationDialog _transferConfirmationDialog;
+    private AcceptDialog _transferBlockedDialog;
 
     public SoldierView SoldierView { get; set; }
 
@@ -33,6 +34,12 @@ public partial class SoldierController : Control
         };
         _transferConfirmationDialog.Confirmed += OnTransferConfirmed;
         AddChild(_transferConfirmationDialog);
+
+        _transferBlockedDialog = new AcceptDialog
+        {
+            Title = "Transfer Blocked"
+        };
+        AddChild(_transferBlockedDialog);
     }
 
     public override void _ExitTree()
@@ -74,7 +81,18 @@ public partial class SoldierController : Control
             return;
         }
 
-        _pendingTransferOption = _transferOptions[index];
+        SoldierTransferOption option = _transferOptions[index];
+        GameDataSingleton.Instance.Sector.PlayerForce.Army.PopulateSquadMap();
+        if (_transferService.WouldExceedShipCapacity(
+                _selectedSoldier, option, GameDataSingleton.Instance.Sector.PlayerForce.Army.SquadMap))
+        {
+            _transferBlockedDialog.DialogText =
+                $"{option.DisplayName} has no room aboard its ship. Free up space before transferring {_selectedSoldier.Name} there.";
+            _transferBlockedDialog.PopupCentered();
+            return;
+        }
+
+        _pendingTransferOption = option;
         _transferConfirmationDialog.DialogText =
             $"Transfer {_selectedSoldier.Template.Name} {_selectedSoldier.Name} to {_pendingTransferOption.DisplayName}?";
         _transferConfirmationDialog.PopupCentered();
