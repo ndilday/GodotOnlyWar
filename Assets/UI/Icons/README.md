@@ -16,12 +16,14 @@ The first pass is organized around the current UI needs:
   bodyguard, infantry, vehicle, ship
 - status/rank: alert, request, threat, resource, construction, orbit, transit,
   warp, wounded, medical, training, locked, rank markers, award
+- planet and region detail: imperial population, PDF/Astra Militarum forces,
+  landed player forces, Tyranids, Genestealer Cult, Chaos
 
 Recommended next atlas expansion:
 
 - skill icons: melee, ranged, leadership, medical, tech, piety, ancient
 - equipment icons: melee weapon, ranged weapon, armor, ammunition, transport
-- planet detail icons: population, garrison, governor, region, defense,
+- planet detail icons: garrison, governor, region, defense,
   rebellion, compliance
 - mission icons: recon, ambush, sabotage, assassinate, assault, meeting
   engagement, exfiltrate

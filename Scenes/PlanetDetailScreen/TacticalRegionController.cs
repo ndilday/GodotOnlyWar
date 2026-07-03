@@ -62,6 +62,13 @@ public partial class TacticalRegionController : Control
 
         bool showObjective = region.SpecialMissions.Count > 0 || (showOrders && assignedCount > 0);
         const bool showDropPod = false;
+        string xenosIconKey = IconAtlas.GetFactionIconKey(xenosRegionFaction?.PlanetFaction.Faction);
+        string civilianIconKey = showEntrenchment
+            ? xenosIconKey
+            : garrison > 0 ? "pdf_forces" : "imperial_population";
+        bool hiddenEnemyMarker = (showForces && hiddenEnemy && region.IntelligenceLevel > 0)
+            || (showIntel && hiddenEnemy);
+        string hiddenIconKey = hiddenEnemyMarker ? xenosIconKey : "player_forces";
 
         Color color;
         if (showOrders && assignedCount > 0)
@@ -90,6 +97,10 @@ public partial class TacticalRegionController : Control
             showXenos,
             showObjective,
             showDropPod,
+            civilianIconKey,
+            "player_forces",
+            hiddenIconKey,
+            xenosIconKey,
             playerPopulation,
             civilianText,
             xenosText,

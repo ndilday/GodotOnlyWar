@@ -1,4 +1,5 @@
 using Godot;
+using OnlyWar.Models;
 using System.Collections.Generic;
 
 namespace OnlyWar.Helpers.UI
@@ -79,8 +80,27 @@ namespace OnlyWar.Helpers.UI
             ["rank_captain"] = new Vector2I(4, 7),
             ["rank_commander"] = new Vector2I(5, 7),
             ["award"] = new Vector2I(6, 7),
-            ["in_warp"] = new Vector2I(7, 7)
+            ["in_warp"] = new Vector2I(7, 7),
+            ["imperial_population"] = new Vector2I(0, 8),
+            ["pdf_forces"] = new Vector2I(1, 8),
+            ["player_forces"] = new Vector2I(2, 8),
+            ["faction_tyranids"] = new Vector2I(3, 8),
+            ["faction_genestealer_cult"] = new Vector2I(4, 8),
+            ["faction_chaos"] = new Vector2I(5, 8)
         };
+
+        public static string GetFactionIconKey(Faction faction)
+        {
+            if (faction == null) return "hostile";
+            if (faction.IsPlayerFaction) return "player_forces";
+            if (faction.IsDefaultFaction) return "pdf_forces";
+
+            string name = faction.Name?.ToLowerInvariant() ?? "";
+            if (name.Contains("tyranid")) return "faction_tyranids";
+            if (name.Contains("genestealer")) return "faction_genestealer_cult";
+            if (name.Contains("chaos")) return "faction_chaos";
+            return "hostile";
+        }
 
         public static AtlasTexture GetIcon(string key)
         {

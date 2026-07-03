@@ -1,4 +1,5 @@
 using Godot;
+using OnlyWar.Helpers.UI;
 
 public partial class TacticalRegionView : Control
 {
@@ -24,6 +25,8 @@ public partial class TacticalRegionView : Control
 		_playerPopulation = GetNode<RichTextLabel>("Button/PlayerTroopCountLabel");
 		_civilianPopulation = GetNode<RichTextLabel>("Button/CivilianPopulationLabel");
 		_xenosPopulation = GetNode<RichTextLabel>("Button/XenosPopulationLabel");
+		_objective.Texture = IconAtlas.GetIcon("objective");
+		_droppod.Texture = IconAtlas.GetIcon("land_squads");
 		ConfigureText();
 	}
 
@@ -80,12 +83,17 @@ public partial class TacticalRegionView : Control
 	}
 
 	public void Populate(int regionId, string name, bool showPlayerPublic, bool showPlayerHidden, bool showCivilian, bool showXenos, bool showObjective, bool showDropPod,
+		string civilianIconKey, string playerIconKey, string hiddenIconKey, string xenosIconKey,
 		string playerPopulation, string civilianPopulation, string xenosPopulation, Color color, bool selected)
 	{
 		RegionId = regionId;
 		_tileColor = color;
 		_selected = selected;
 		_regionName.Text = name;
+		_civilian.Texture = IconAtlas.GetIcon(civilianIconKey);
+		_playerPublic.Texture = IconAtlas.GetIcon(playerIconKey);
+		_playerHidden.Texture = IconAtlas.GetIcon(hiddenIconKey);
+		_xenos.Texture = IconAtlas.GetIcon(xenosIconKey);
 		_playerPublic.Visible = showPlayerPublic;
 		_playerHidden.Visible = showPlayerHidden;
 		_civilian.Visible = showCivilian;

@@ -2,7 +2,7 @@
   "atlas": "res://Assets/UI/Icons/icon_atlas.png",
   "cellSize": 128,
   "columns": 8,
-  "rows": 8,
+  "rows": 9,
   "icons": {
     "sector": {
       "x": 0,
@@ -486,6 +486,48 @@
       "w": 128,
       "h": 128,
       "group": "fleet_state"
+    },
+    "imperial_population": {
+      "x": 0,
+      "y": 1024,
+      "w": 128,
+      "h": 128,
+      "group": "planet_detail"
+    },
+    "pdf_forces": {
+      "x": 128,
+      "y": 1024,
+      "w": 128,
+      "h": 128,
+      "group": "planet_detail"
+    },
+    "player_forces": {
+      "x": 256,
+      "y": 1024,
+      "w": 128,
+      "h": 128,
+      "group": "planet_detail"
+    },
+    "faction_tyranids": {
+      "x": 384,
+      "y": 1024,
+      "w": 128,
+      "h": 128,
+      "group": "faction"
+    },
+    "faction_genestealer_cult": {
+      "x": 512,
+      "y": 1024,
+      "w": 128,
+      "h": 128,
+      "group": "faction"
+    },
+    "faction_chaos": {
+      "x": 640,
+      "y": 1024,
+      "w": 128,
+      "h": 128,
+      "group": "faction"
     }
   },
   "recommendedNextIcons": [
@@ -499,7 +541,6 @@
     "weapon_melee",
     "weapon_ranged",
     "armor",
-    "population",
     "garrison",
     "governor",
     "mission_recon",

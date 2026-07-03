@@ -20,7 +20,7 @@ public partial class PlanetTacticalScreenController : DialogController
 
     private static readonly (MapLayer Layer, string Label, string IconKey)[] MapLayerOptions =
     [
-        (MapLayer.Forces, "Forces", "infantry"),
+        (MapLayer.Forces, "Forces", "player_forces"),
         (MapLayer.Orders, "Orders", "objective"),
         (MapLayer.Intel, "Intel", "threat")
     ];
@@ -428,7 +428,7 @@ public partial class PlanetTacticalScreenController : DialogController
         return
         [
             new(ActionOpenRegion, "Open Region", "map_pin", _selectedRegion != null),
-            new(ActionOpenSquad, "Open Squad", "infantry", GetSelectedSquad() != null),
+            new(ActionOpenSquad, "Open Squad", "player_forces", GetSelectedSquad() != null),
             new(ActionEditOrders, "Edit Orders", "objective", _selectedLandedSquad != null),
             new(ActionLand, GetLandCommandText(), "land_squads", CanLand()),
             new(ActionLoad, GetLoadCommandText(), "load_squads", CanLoad())
