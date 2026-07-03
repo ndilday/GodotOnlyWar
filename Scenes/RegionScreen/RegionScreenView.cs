@@ -1,18 +1,63 @@
 using Godot;
+using OnlyWar.Helpers.UI;
 using OnlyWar.Models.Planets;
 using System;
 using System.Collections.Generic;
 
+public enum RegionCommandMode
+{
+    Overview,
+    Forces,
+    Orders,
+    Intel
+}
+
+public class RegionCommandTreeNode
+{
+    public string Key { get; }
+    public string Text { get; }
+    public IReadOnlyList<RegionCommandTreeNode> Children { get; }
+
+    public RegionCommandTreeNode(string key, string text, IReadOnlyList<RegionCommandTreeNode> children = null)
+    {
+        Key = key;
+        Text = text;
+        Children = children ?? Array.Empty<RegionCommandTreeNode>();
+    }
+}
+
+public class RegionCommandAction
+{
+    public string Key { get; }
+    public string Text { get; }
+    public string IconKey { get; }
+    public bool Enabled { get; }
+
+    public RegionCommandAction(string key, string text, string iconKey, bool enabled)
+    {
+        Key = key;
+        Text = text;
+        IconKey = iconKey;
+        Enabled = enabled;
+    }
+}
+
 public partial class RegionScreenView : DialogView
 {
-    private VBoxContainer _regionDetailsVBox;
-    private Tree _squadTree;
-    private VBoxContainer _orderDetailsVBox;
-    private Button _unassignButton;
-    private Button _openOrdersButton;
-    private Button _assignToExistingButton;
-    private Button _copyOrdersButton;
-    private Button _pasteOrdersButton;
+    private readonly Dictionary<RegionCommandMode, Button> _modeButtons = [];
+
+    private Panel _legacyDataPanel;
+    private Panel _legacySquadTreePanel;
+    private Panel _legacyOrdersPanel;
+    private Panel _regionPanel;
+    private VBoxContainer _modeButtonStack;
+    private Label _selectionTitleLabel;
+    private Tree _selectionTree;
+    private Label _selectionHintLabel;
+    private Label _contextTitleLabel;
+    private Label _contextSubtitleLabel;
+    private VBoxContainer _contextStack;
+    private HBoxContainer _commandBar;
 
     private TacticalRegionController _centerRegionController;
     private TacticalRegionController _northRegionController;
@@ -22,29 +67,21 @@ public partial class RegionScreenView : DialogView
     private TacticalRegionController _southwestRegionController;
     private TacticalRegionController _northwestRegionController;
 
-    // Signals for Controller
-    public event EventHandler<int> SquadSelected;
-    public event EventHandler<int> SquadDoubleClicked;
-    public event EventHandler<Region> AdjacentRegionClicked; // For clicking on mini-map regions
-    public event EventHandler UnassignButtonClicked;
-    public event EventHandler OpenOrdersButtonClicked;
-    public event EventHandler AssignToExistingButtonClicked;
-    public event EventHandler CopyOrdersButtonClicked;
-    public event EventHandler PasteOrdersButtonClicked;
+    public event EventHandler<RegionCommandMode> ModeSelected;
+    public event EventHandler<string> SelectionTreeItemSelected;
+    public event EventHandler<string> SelectionTreeItemActivated;
+    public event EventHandler<string> CommandPressed;
+    public event EventHandler<Region> AdjacentRegionClicked;
 
     public override void _Ready()
     {
-        base._Ready(); // Call base class _Ready to connect CloseButton
+        base._Ready();
+        ClipContents = true;
 
-        _regionDetailsVBox = GetNode<VBoxContainer>("DataPanel/VBoxContainer");
-        _squadTree = GetNode<Tree>("SquadTreePanel/ScrollContainer/Tree");
-        _orderDetailsVBox = GetNode<VBoxContainer>("OrdersPanel/VBoxContainer");
-
-        _unassignButton = GetNode<Button>("OrdersPanel/ButtonVBox/UnassignButton");
-        _openOrdersButton = GetNode<Button>("OrdersPanel/ButtonVBox/OpenOrdersButton");
-        _assignToExistingButton = GetNode<Button>("OrdersPanel/ButtonVBox/AssignToExistingButton");
-        _copyOrdersButton = GetNode<Button>("OrdersPanel/ButtonVBox/CopyOrdersButton");
-        _pasteOrdersButton = GetNode<Button>("OrdersPanel/ButtonVBox/PasteOrdersButton");
+        _legacyDataPanel = GetNodeOrNull<Panel>("DataPanel");
+        _legacySquadTreePanel = GetNodeOrNull<Panel>("SquadTreePanel");
+        _legacyOrdersPanel = GetNodeOrNull<Panel>("OrdersPanel");
+        _regionPanel = GetNode<Panel>("RegionPanel");
 
         _centerRegionController = GetNode<TacticalRegionController>("RegionPanel/TacticalRegionCenter");
         _northRegionController = GetNode<TacticalRegionController>("RegionPanel/TacticalRegionNorth");
@@ -54,78 +91,83 @@ public partial class RegionScreenView : DialogView
         _southwestRegionController = GetNode<TacticalRegionController>("RegionPanel/TacticalRegionSouthwest");
         _northwestRegionController = GetNode<TacticalRegionController>("RegionPanel/TacticalRegionNorthwest");
 
-        // Connect internal UI signals to handlers that emit public signals
-        _squadTree.ItemSelected += OnSquadTreeItemSelected;
-        _squadTree.ItemActivated += OnSquadTreeItemActivated; // Double click
-
-        _unassignButton.Pressed += () => UnassignButtonClicked?.Invoke(this, EventArgs.Empty);
-        _openOrdersButton.Pressed += () => OpenOrdersButtonClicked?.Invoke(this, EventArgs.Empty);
-        _assignToExistingButton.Pressed += () => AssignToExistingButtonClicked?.Invoke(this, EventArgs.Empty); // You'll need logic for this
-        _copyOrdersButton.Pressed += () => CopyOrdersButtonClicked?.Invoke(this, EventArgs.Empty);
-        _pasteOrdersButton.Pressed += () => PasteOrdersButtonClicked?.Invoke(this, EventArgs.Empty);
-
-        // Connect adjacent region clicks (assuming TacticalRegionController has a signal like 'TacticalRegionPressed')
         ConnectAdjacentRegionSignal(_northRegionController);
         ConnectAdjacentRegionSignal(_northeastRegionController);
         ConnectAdjacentRegionSignal(_southeastRegionController);
         ConnectAdjacentRegionSignal(_southRegionController);
         ConnectAdjacentRegionSignal(_southwestRegionController);
         ConnectAdjacentRegionSignal(_northwestRegionController);
+
+        HideLegacyPanels();
+        ConfigureRegionPanel();
+        BuildWorkspaceShell();
+        SetMode(RegionCommandMode.Overview);
     }
 
-    private void ConnectAdjacentRegionSignal(TacticalRegionController controller)
+    public void SetMode(RegionCommandMode mode)
     {
-        if (controller != null)
+        foreach (KeyValuePair<RegionCommandMode, Button> pair in _modeButtons)
         {
-            // Assuming TacticalRegionController has a signal like this
-            // You might need to adjust the signal name if it's different
-            controller.TacticalRegionPressed += (sender, region) => AdjacentRegionClicked?.Invoke(this, region);
+            pair.Value.ButtonPressed = pair.Key == mode;
+            OnlyWarStyle.ApplyAccentButtonRow(pair.Value, pair.Key == mode, OnlyWarStyle.Gold);
         }
     }
 
-    // --- UI Population Methods ---
-
-    public void PopulateRegionDetails(IReadOnlyList<Tuple<string, string>> details)
+    public void SetSelectionTitle(string title, string hint)
     {
-        ClearContainer(_regionDetailsVBox);
-        foreach (var detail in details)
+        _selectionTitleLabel.Text = title;
+        _selectionHintLabel.Text = hint;
+    }
+
+    public void PopulateSelectionTree(IReadOnlyList<RegionCommandTreeNode> entries)
+    {
+        _selectionTree.Clear();
+        TreeItem root = _selectionTree.CreateItem();
+        _selectionTree.HideRoot = true;
+        AddTreeChildren(_selectionTree, root, entries);
+    }
+
+    public void SetContext(string title, string subtitle, IReadOnlyList<Tuple<string, string>> rows)
+    {
+        _contextTitleLabel.Text = title;
+        _contextSubtitleLabel.Text = subtitle;
+        ClearContainer(_contextStack);
+
+        foreach (Tuple<string, string> row in rows)
         {
-            AddDetailLine(_regionDetailsVBox, detail.Item1, detail.Item2);
+            _contextStack.AddChild(CreateContextRow(row.Item1, row.Item2));
         }
     }
 
-    public void PopulateSquadList(IReadOnlyList<TreeNode> squadNodes)
+    public void SetCommands(IReadOnlyList<RegionCommandAction> actions)
     {
-        _squadTree.Clear();
-        TreeItem root = _squadTree.CreateItem();
-        _squadTree.HideRoot = true;
-        AddTreeChildren(_squadTree, root, squadNodes, 0); // Assuming level 0 for top-level units/squads
-    }
+        ClearContainer(_commandBar);
 
-    public void PopulateOrderDetails(IReadOnlyList<Tuple<string, string>> details, bool hasOrder)
-    {
-        ClearContainer(_orderDetailsVBox);
-        foreach (var detail in details)
+        foreach (RegionCommandAction action in actions)
         {
-            AddDetailLine(_orderDetailsVBox, detail.Item1, detail.Item2);
+            Button button = new()
+            {
+                Text = action.Text,
+                Disabled = !action.Enabled,
+                MouseDefaultCursorShape = CursorShape.PointingHand,
+                CustomMinimumSize = new Vector2(116, 42)
+            };
+            IconAtlas.Apply(button, action.IconKey, 116);
+            button.Pressed += () => CommandPressed?.Invoke(this, action.Key);
+            _commandBar.AddChild(button);
         }
-        // Enable/disable buttons based on whether an order exists for the selected squad
-        _unassignButton.Disabled = !hasOrder;
-        _openOrdersButton.Disabled = false; // Can always open to assign or edit
-        _assignToExistingButton.Disabled = true; // Needs implementation
-        _copyOrdersButton.Disabled = !hasOrder;
     }
 
-    public void PopulateAdjacentRegions(Region centerRegion, Dictionary<string, Region> adjacentRegions)
+    public void PopulateAdjacentRegions(Region centerRegion, Dictionary<string, Region> adjacentRegions, RegionCommandMode mode)
     {
-        _centerRegionController.Populate(centerRegion);
+        PlanetCommandMode mapMode = ToPlanetCommandMode(mode);
+        _centerRegionController.Populate(centerRegion, mapMode, true);
 
-        // Helper to populate or hide adjacent regions
         void SetupAdjacentRegion(TacticalRegionController controller, string direction)
         {
             if (adjacentRegions.TryGetValue(direction, out Region region))
             {
-                controller.Populate(region);
+                controller.Populate(region, mapMode, false);
                 controller.Visible = true;
             }
             else
@@ -142,65 +184,249 @@ public partial class RegionScreenView : DialogView
         SetupAdjacentRegion(_northwestRegionController, "NW");
     }
 
-    public void SetPasteOrdersButtonDisabled(bool disabled)
+    private void HideLegacyPanels()
     {
-        _pasteOrdersButton.Disabled = disabled;
+        if (_legacyDataPanel != null) _legacyDataPanel.Visible = false;
+        if (_legacySquadTreePanel != null) _legacySquadTreePanel.Visible = false;
+        if (_legacyOrdersPanel != null) _legacyOrdersPanel.Visible = false;
     }
 
-    public void SetSelectedSquad(int squadId)
+    private void ConfigureRegionPanel()
     {
-        // Find the tree item corresponding to the squad ID and select it
-        TreeItem item = FindTreeItemById(_squadTree.GetRoot(), squadId, 1); // Start search at level 1 if root is hidden
-        if (item != null)
+        _regionPanel.AnchorLeft = 0.245f;
+        _regionPanel.AnchorTop = 0.08f;
+        _regionPanel.AnchorRight = 0.755f;
+        _regionPanel.AnchorBottom = 0.785f;
+        _regionPanel.OffsetLeft = 0;
+        _regionPanel.OffsetTop = 0;
+        _regionPanel.OffsetRight = 0;
+        _regionPanel.OffsetBottom = 0;
+        _regionPanel.MouseFilter = MouseFilterEnum.Pass;
+
+        StyleBoxFlat mapStyle = new()
         {
-            _squadTree.SetSelected(item, 0);
-            // Ensure visible? _squadTree.ScrollToItem(item);
+            BgColor = new Color(0.005f, 0.006f, 0.007f, 0.74f),
+            BorderColor = new Color(0.45f, 0.35f, 0.18f, 0.86f),
+            BorderWidthLeft = 1,
+            BorderWidthTop = 1,
+            BorderWidthRight = 1,
+            BorderWidthBottom = 1,
+            CornerRadiusTopLeft = 1,
+            CornerRadiusTopRight = 1,
+            CornerRadiusBottomLeft = 1,
+            CornerRadiusBottomRight = 1
+        };
+        _regionPanel.AddThemeStyleboxOverride("panel", mapStyle);
+    }
+
+    private void BuildWorkspaceShell()
+    {
+        PanelContainer leftPanel = CreatePanel("RegionModeAndSelectionPanel", 0.01f, 0.08f, 0.235f, 0.91f);
+        VBoxContainer leftStack = new();
+        leftStack.AddThemeConstantOverride("separation", 8);
+        leftPanel.AddChild(leftStack);
+
+        leftStack.AddChild(CreateCaption("REGION COMMAND"));
+
+        _modeButtonStack = new VBoxContainer();
+        _modeButtonStack.AddThemeConstantOverride("separation", 5);
+        leftStack.AddChild(_modeButtonStack);
+        AddModeButton(RegionCommandMode.Overview, "Overview", "map_pin");
+        AddModeButton(RegionCommandMode.Forces, "Forces", "infantry");
+        AddModeButton(RegionCommandMode.Orders, "Orders", "objective");
+        AddModeButton(RegionCommandMode.Intel, "Intel", "threat");
+
+        _selectionTitleLabel = CreateCaption("SELECTIONS");
+        leftStack.AddChild(_selectionTitleLabel);
+
+        _selectionTree = new Tree
+        {
+            SizeFlagsVertical = SizeFlags.ExpandFill,
+            CustomMinimumSize = new Vector2(0, 290)
+        };
+        _selectionTree.ItemSelected += OnSelectionTreeItemSelected;
+        _selectionTree.ItemActivated += OnSelectionTreeItemActivated;
+        leftStack.AddChild(_selectionTree);
+
+        _selectionHintLabel = new Label
+        {
+            AutowrapMode = TextServer.AutowrapMode.WordSmart,
+            Text = "Select a squad, order, or adjacent region to inspect it."
+        };
+        _selectionHintLabel.AddThemeFontSizeOverride("font_size", 12);
+        _selectionHintLabel.AddThemeColorOverride("font_color", OnlyWarStyle.MutedText);
+        leftStack.AddChild(_selectionHintLabel);
+
+        PanelContainer contextPanel = CreatePanel("RegionContextPanel", 0.765f, 0.08f, 0.99f, 0.785f);
+        VBoxContainer contextOuter = new()
+        {
+            SizeFlagsHorizontal = SizeFlags.ExpandFill,
+            SizeFlagsVertical = SizeFlags.ExpandFill
+        };
+        contextOuter.AddThemeConstantOverride("separation", 8);
+        contextPanel.AddChild(contextOuter);
+
+        _contextTitleLabel = new Label
+        {
+            Text = "Region Detail",
+            ClipText = true,
+            TextOverrunBehavior = TextServer.OverrunBehavior.TrimEllipsis
+        };
+        _contextTitleLabel.AddThemeFontSizeOverride("font_size", 22);
+        _contextTitleLabel.AddThemeFontOverride("font", GetThemeFont("display"));
+        contextOuter.AddChild(_contextTitleLabel);
+
+        _contextSubtitleLabel = new Label
+        {
+            AutowrapMode = TextServer.AutowrapMode.WordSmart
+        };
+        _contextSubtitleLabel.AddThemeColorOverride("font_color", OnlyWarStyle.MutedText);
+        contextOuter.AddChild(_contextSubtitleLabel);
+
+        ScrollContainer contextScroll = new()
+        {
+            SizeFlagsHorizontal = SizeFlags.ExpandFill,
+            SizeFlagsVertical = SizeFlags.ExpandFill,
+            HorizontalScrollMode = ScrollContainer.ScrollMode.Disabled
+        };
+        contextOuter.AddChild(contextScroll);
+
+        _contextStack = new VBoxContainer();
+        _contextStack.AddThemeConstantOverride("separation", 6);
+        _contextStack.SizeFlagsHorizontal = SizeFlags.ExpandFill;
+        contextScroll.AddChild(_contextStack);
+
+        PanelContainer commandPanel = CreatePanel("RegionCommandPanel", 0.245f, 0.805f, 0.755f, 0.91f);
+        _commandBar = new HBoxContainer
+        {
+            Alignment = BoxContainer.AlignmentMode.End,
+            SizeFlagsHorizontal = SizeFlags.ExpandFill
+        };
+        _commandBar.AddThemeConstantOverride("separation", 8);
+        commandPanel.AddChild(_commandBar);
+    }
+
+    private PanelContainer CreatePanel(string name, float left, float top, float right, float bottom)
+    {
+        PanelContainer panel = new()
+        {
+            Name = name,
+            AnchorLeft = left,
+            AnchorTop = top,
+            AnchorRight = right,
+            AnchorBottom = bottom,
+            OffsetLeft = 0,
+            OffsetTop = 0,
+            OffsetRight = 0,
+            OffsetBottom = 0
+        };
+        OnlyWarStyle.ApplyContentPanel(panel);
+        AddChild(panel);
+        return panel;
+    }
+
+    private void AddModeButton(RegionCommandMode mode, string text, string iconKey)
+    {
+        Button button = new()
+        {
+            Text = text,
+            ToggleMode = true,
+            MouseDefaultCursorShape = CursorShape.PointingHand,
+            CustomMinimumSize = new Vector2(0, 40)
+        };
+        IconAtlas.Apply(button, iconKey);
+        button.Pressed += () => ModeSelected?.Invoke(this, mode);
+        _modeButtons[mode] = button;
+        _modeButtonStack.AddChild(button);
+    }
+
+    private static Label CreateCaption(string text)
+    {
+        Label label = new() { Text = text };
+        label.AddThemeFontSizeOverride("font_size", 13);
+        label.AddThemeColorOverride("font_color", OnlyWarStyle.MutedText);
+        return label;
+    }
+
+    private Control CreateContextRow(string labelText, string valueText)
+    {
+        PanelContainer row = new()
+        {
+            CustomMinimumSize = new Vector2(0, 44),
+            SizeFlagsHorizontal = SizeFlags.ExpandFill,
+            SizeFlagsVertical = SizeFlags.ShrinkBegin
+        };
+        OnlyWarStyle.ApplyInsetPanel(row);
+
+        HBoxContainer rowContent = new()
+        {
+            SizeFlagsHorizontal = SizeFlags.ExpandFill
+        };
+        rowContent.AddThemeConstantOverride("separation", 8);
+        row.AddChild(rowContent);
+
+        Label label = new()
+        {
+            Text = labelText,
+            ClipText = true,
+            TextOverrunBehavior = TextServer.OverrunBehavior.TrimEllipsis,
+            CustomMinimumSize = new Vector2(130, 0),
+            SizeFlagsHorizontal = SizeFlags.ExpandFill
+        };
+        label.AddThemeColorOverride("font_color", OnlyWarStyle.MutedText);
+        rowContent.AddChild(label);
+
+        Label value = new()
+        {
+            Text = valueText,
+            HorizontalAlignment = HorizontalAlignment.Right,
+            ClipText = true,
+            TextOverrunBehavior = TextServer.OverrunBehavior.TrimEllipsis,
+            CustomMinimumSize = new Vector2(130, 0),
+            SizeFlagsHorizontal = SizeFlags.ExpandFill
+        };
+        rowContent.AddChild(value);
+
+        return row;
+    }
+
+    private void ConnectAdjacentRegionSignal(TacticalRegionController controller)
+    {
+        if (controller != null)
+        {
+            controller.TacticalRegionPressed += (sender, region) => AdjacentRegionClicked?.Invoke(this, region);
         }
     }
 
-
-    // --- Signal Handlers ---
-
-    private void OnSquadTreeItemSelected()
+    private void OnSelectionTreeItemSelected()
     {
-        TreeItem selected = _squadTree.GetSelected();
-        if (selected != null)
+        TreeItem item = _selectionTree.GetSelected();
+        if (item == null) return;
+        SelectionTreeItemSelected?.Invoke(this, item.GetMetadata(0).AsString());
+    }
+
+    private void OnSelectionTreeItemActivated()
+    {
+        TreeItem item = _selectionTree.GetSelected();
+        if (item == null) return;
+        SelectionTreeItemActivated?.Invoke(this, item.GetMetadata(0).AsString());
+    }
+
+    private static void AddTreeChildren(Tree tree, TreeItem parentItem, IReadOnlyList<RegionCommandTreeNode> nodes)
+    {
+        foreach (RegionCommandTreeNode node in nodes)
         {
-            Vector2I meta = selected.GetMetadata(0).As<Vector2I>();
-            // Only emit if it's a squad (assuming level 1 or deeper indicates a squad/unit)
-            if (meta.X >= 1) // Adjust level check as needed based on your tree structure
+            TreeItem item = tree.CreateItem(parentItem);
+            item.SetText(0, node.Text);
+            item.SetMetadata(0, Variant.From(node.Key));
+            if (node.Children.Count > 0)
             {
-                SquadSelected?.Invoke(this, meta.Y); // Send the ID (meta.Y)
-            }
-            else // deselect order details if unit is selected?
-            {
-                ClearContainer(_orderDetailsVBox);
-                _unassignButton.Disabled = true;
-                _openOrdersButton.Disabled = true;
-                _assignToExistingButton.Disabled = true;
-                _copyOrdersButton.Disabled = true;
-                // _pasteOrdersButton state depends on clipboard
+                AddTreeChildren(tree, item, node.Children);
             }
         }
     }
 
-    private void OnSquadTreeItemActivated() // Double Click
-    {
-        TreeItem selected = _squadTree.GetSelected();
-        if (selected != null)
-        {
-            Vector2I meta = selected.GetMetadata(0).As<Vector2I>();
-            // Only emit if it's a squad (assuming level 1 or deeper)
-            if (meta.X >= 1) // Adjust level check as needed
-            {
-                SquadDoubleClicked?.Invoke(this, meta.Y); // Send the ID (meta.Y)
-            }
-        }
-    }
-
-    // --- Helper Methods ---
-
-    private void ClearContainer(Container container)
+    private static void ClearContainer(Container container)
     {
         foreach (Node child in container.GetChildren())
         {
@@ -209,57 +435,14 @@ public partial class RegionScreenView : DialogView
         }
     }
 
-    private void AddDetailLine(VBoxContainer container, string label, string value)
+    private static PlanetCommandMode ToPlanetCommandMode(RegionCommandMode mode)
     {
-        Panel linePanel = new Panel { CustomMinimumSize = new Vector2(0, 20) };
-        Label labelNode = new Label { Text = label, HorizontalAlignment = HorizontalAlignment.Left, SizeFlagsHorizontal = SizeFlags.ExpandFill };
-        Label valueNode = new Label { Text = value, HorizontalAlignment = HorizontalAlignment.Right, SizeFlagsHorizontal = SizeFlags.ExpandFill };
-        linePanel.AddChild(labelNode);
-        linePanel.AddChild(valueNode);
-        container.AddChild(linePanel);
-    }
-
-    private void AddTreeChildren(Tree tree, TreeItem parentItem, IReadOnlyList<TreeNode> nodes, int level)
-    {
-        if (nodes == null) return;
-        foreach (TreeNode childNode in nodes)
+        return mode switch
         {
-            TreeItem childItem = tree.CreateItem(parentItem);
-            childItem.SetText(0, childNode.Name);
-            Vector2I vector = new Vector2I(level, childNode.Id);
-            Variant meta = Variant.From(vector);
-            childItem.SetMetadata(0, meta);
-            if (childNode.Children?.Count > 0)
-            {
-                AddTreeChildren(tree, childItem, childNode.Children, level + 1);
-            }
-        }
-    }
-
-    private TreeItem FindTreeItemById(TreeItem parent, int id, int targetLevel)
-    {
-        if (parent == null) return null;
-
-        TreeItem current = parent.GetFirstChild();
-        while (current != null)
-        {
-            Vector2I meta = current.GetMetadata(0).As<Vector2I>();
-            if (meta.X == targetLevel && meta.Y == id)
-            {
-                return current;
-            }
-
-            // Recursively search children if this item is not the target level
-            if (meta.X < targetLevel)
-            {
-                TreeItem found = FindTreeItemById(current, id, targetLevel);
-                if (found != null)
-                {
-                    return found;
-                }
-            }
-            current = current.GetNext();
-        }
-        return null;
+            RegionCommandMode.Forces => PlanetCommandMode.Forces,
+            RegionCommandMode.Orders => PlanetCommandMode.Orders,
+            RegionCommandMode.Intel => PlanetCommandMode.Intel,
+            _ => PlanetCommandMode.Overview
+        };
     }
 }

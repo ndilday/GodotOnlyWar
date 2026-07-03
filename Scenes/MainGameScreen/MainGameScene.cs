@@ -284,6 +284,15 @@ public partial class MainGameScene : Control
 				_topMenu.SetScreenText("Chapter Overview");
 				_topMenu.Visible = true;
 			}
+			else if (control == _planetTacticalScreen)
+			{
+				if (_selectedPlanetId.HasValue && GameDataSingleton.Instance.Sector.Planets.TryGetValue(_selectedPlanetId.Value, out Planet planet))
+				{
+					_topMenu.SetScreenText(planet.Name);
+				}
+				_topMenu.Visible = true;
+				_bottomMenu.Visible = true;
+			}
 		}
 		else
 		{
@@ -691,8 +700,10 @@ public partial class MainGameScene : Control
 			_regionScreen.AdjacentRegionChangeRequested += OnAdjacentRegionChangeRequested;
 			_mainUILayer.AddChild(_regionScreen);
 		}
+		PlaceMainContentOverlay(_regionScreen);
 		_regionScreen.DisplayRegion(region);
 		_regionScreen.Visible = true;
+		_topMenu.SetScreenText(region.Name);
 		Control control = (Control)sender;
 		_previousScreenStack.Push(control);
 		control.Visible = false;
@@ -701,6 +712,7 @@ public partial class MainGameScene : Control
 	private void OnAdjacentRegionChangeRequested(object sender, Region region)
 	{
 		_regionScreen?.DisplayRegion(region);
+		_topMenu.SetScreenText(region.Name);
 	}
 
 	private void OnSquadDoubleClicked(object sender, Squad squad)
