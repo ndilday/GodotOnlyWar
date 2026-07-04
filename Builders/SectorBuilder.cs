@@ -6,7 +6,6 @@ using System.Collections.Generic;
 using System.Linq;
 using OnlyWar.Helpers;
 using OnlyWar.Helpers.Extensions;
-using OnlyWar.Models.Squads;
 
 namespace OnlyWar.Builders
 {
@@ -140,20 +139,9 @@ namespace OnlyWar.Builders
             return PlanetBuilder.Instance.GenerateNewPlanet(data.PlanetTemplateMap, position, data.DefaultFaction, infiltratingFaction);
         }
 
-        private static Planet FoundChapterPlanet(List<Planet> planetList, Faction playerFaction)
-        {
-            var emptyPlanets = planetList.Where(p => p.GetControllingFaction().IsDefaultFaction);
-            int max = emptyPlanets.Count();
-            int chapterPlanetIndex = RNG.GetIntBelowMax(0, max);
-            Planet chapterPlanet = emptyPlanets.ElementAt(chapterPlanetIndex);
-            ReplaceChapterPlanetFaction(chapterPlanet, playerFaction);
-            return chapterPlanet;
-        }
-
         // Reward path (Design/OpeningScenario.md §6.2): install the player as the planet-wide
         // controlling faction, inheriting the displaced Imperial population/garrison region by
-        // region. Repurposed from the dead FoundChapterPlanet helper and now also invoked by
-        // TurnController when the opening scenario is won.
+        // region. Invoked by TurnController when the opening scenario is won.
         //
         // The Imperial (default) faction is resolved from the planet's faction map rather than via
         // GetControllingFaction: on a freshly-liberated world a cleared former-Tyranid region can
@@ -193,25 +181,6 @@ namespace OnlyWar.Builders
                 chapterPlanet.PlanetFactionMap.Remove(existingFactionId.Value);
             }
             chapterPlanet.PlanetFactionMap[homePlanetFaction.Faction.Id] = homePlanetFaction;
-        }
-
-        private static void PlaceStartingForces(Planet startingPlanet, PlayerForce playerForce, List<TaskForce> forceList)
-        {
-            startingPlanet.Regions[0].RegionFactionMap[startingPlanet.GetControllingFaction().Id].LandedSquads.AddRange(
-                    playerForce.Army.SquadMap.Values);
-            foreach (Squad squad in playerForce.Army.SquadMap.Values)
-            {
-                if (squad.Members.Count > 0)
-                {
-                    squad.CurrentRegion = startingPlanet.Regions[0];
-                }
-            }
-            foreach (TaskForce taskForce in playerForce.Fleet.TaskForces)
-            {
-                taskForce.Planet = startingPlanet;
-                taskForce.Position = startingPlanet.Position;
-                forceList.Add(taskForce);
-            }
         }
     }
 }

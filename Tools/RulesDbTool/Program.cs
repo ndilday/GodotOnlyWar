@@ -4,7 +4,7 @@ using Microsoft.Data.Sqlite;
 
 if (args.Length < 2)
 {
-    Console.Error.WriteLine("Usage: RulesDbTool <schema|training-source|migrate-training|migrate-progenoid|migrate-ratings|migrate-planet-scales|migrate-fortification|migrate-tyranids|migrate-tyranid-squads|migrate-evasion|migrate-squad-caps|migrate-veteran-sergeant|migrate-collapse-sergeants|migrate-chaplaincy|migrate-company-judiciar|migrate-company-apothecary|migrate-remove-veteran-captain|migrate-remove-recruitment-captain|remove-unused-unit-templates> <db-path>");
+    Console.Error.WriteLine("Usage: RulesDbTool <schema|training-source|migrate-training|migrate-progenoid|migrate-ratings|migrate-planet-scales|migrate-fortification|migrate-tyranids|migrate-tyranid-squads|migrate-evasion|migrate-squad-caps|migrate-veteran-sergeant|migrate-collapse-sergeants|migrate-chaplaincy|migrate-company-judiciar|migrate-company-apothecary|migrate-remove-veteran-captain|migrate-remove-recruitment-captain|migrate-starting-fleet-capacity|remove-unused-unit-templates> <db-path>");
     return 1;
 }
 
@@ -13,7 +13,7 @@ string dbPath = args[1];
 string connectionString = new SqliteConnectionStringBuilder
 {
     DataSource = dbPath,
-    Mode = command is "migrate-training" or "migrate-progenoid" or "migrate-ratings" or "migrate-planet-scales" or "migrate-fortification" or "migrate-tyranids" or "migrate-tyranid-squads" or "migrate-evasion" or "migrate-squad-caps" or "migrate-veteran-sergeant" or "migrate-collapse-sergeants" or "migrate-chaplaincy" or "migrate-company-judiciar" or "migrate-company-apothecary" or "migrate-remove-veteran-captain" or "migrate-remove-recruitment-captain" or "remove-unused-unit-templates" ? SqliteOpenMode.ReadWriteCreate : SqliteOpenMode.ReadOnly
+    Mode = command is "migrate-training" or "migrate-progenoid" or "migrate-ratings" or "migrate-planet-scales" or "migrate-fortification" or "migrate-tyranids" or "migrate-tyranid-squads" or "migrate-evasion" or "migrate-squad-caps" or "migrate-veteran-sergeant" or "migrate-collapse-sergeants" or "migrate-chaplaincy" or "migrate-company-judiciar" or "migrate-company-apothecary" or "migrate-remove-veteran-captain" or "migrate-remove-recruitment-captain" or "migrate-starting-fleet-capacity" or "remove-unused-unit-templates" ? SqliteOpenMode.ReadWriteCreate : SqliteOpenMode.ReadOnly
 }.ToString();
 
 using SqliteConnection connection = new(connectionString);
@@ -77,6 +77,9 @@ switch (command)
         break;
     case "migrate-remove-recruitment-captain":
         MigrateRemoveRecruitmentCaptain(connection);
+        break;
+    case "migrate-starting-fleet-capacity":
+        MigrateStartingFleetCapacity(connection);
         break;
     default:
         Console.Error.WriteLine($"Unknown command: {command}");
@@ -1069,6 +1072,48 @@ static void MigrateRemoveVeteranCaptain(SqliteConnection connection) =>
 
 static void MigrateRemoveRecruitmentCaptain(SqliteConnection connection) =>
     RemoveCaptainVariant(connection, "Recruitment Captain");
+
+static void MigrateStartingFleetCapacity(SqliteConnection connection)
+{
+    using SqliteTransaction transaction = connection.BeginTransaction();
+
+    int fleetTemplateId = ExecuteScalarInt(connection, transaction,
+        "SELECT COALESCE((SELECT Id FROM FleetTemplate WHERE Name = 'Starting Space Marine Fleet' AND FactionId = 1), -1)");
+    int strikeCruiserId = ExecuteScalarInt(connection, transaction,
+        "SELECT COALESCE((SELECT Id FROM ShipTemplate WHERE ClassName = 'Strike Cruiser' AND FactionId = 1), -1)");
+    if (fleetTemplateId < 0 || strikeCruiserId < 0)
+    {
+        throw new InvalidOperationException("Starting fleet or Strike Cruiser template is missing.");
+    }
+
+    const int targetStrikeCruisers = 6;
+    int existingStrikeCruisers = ExecuteScalarInt(connection, transaction, """
+        SELECT COUNT(*)
+        FROM FleetTemplateShipTemplate
+        WHERE FleetTemplateId = $fleetTemplateId AND ShipTemplateId = $strikeCruiserId
+        """,
+        ("$fleetTemplateId", fleetTemplateId),
+        ("$strikeCruiserId", strikeCruiserId));
+
+    int inserted = 0;
+    while (existingStrikeCruisers + inserted < targetStrikeCruisers)
+    {
+        int nextId = ExecuteScalarInt(connection, transaction,
+            "SELECT COALESCE(MAX(Id), -1) + 1 FROM FleetTemplateShipTemplate");
+        Execute(connection, transaction, """
+            INSERT INTO FleetTemplateShipTemplate (Id, FleetTemplateId, ShipTemplateId)
+            VALUES ($id, $fleetTemplateId, $strikeCruiserId)
+            """,
+            ("$id", nextId),
+            ("$fleetTemplateId", fleetTemplateId),
+            ("$strikeCruiserId", strikeCruiserId));
+        inserted++;
+    }
+
+    transaction.Commit();
+    Console.WriteLine(
+        $"Starting fleet capacity migration complete. Added {inserted} Strike Cruiser template link(s).");
+}
 
 static void RemoveCaptainVariant(SqliteConnection connection, string variantName)
 {

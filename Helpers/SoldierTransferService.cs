@@ -290,6 +290,11 @@ namespace OnlyWar.Helpers
             {
                 return true;
             }
+            bool sourceHasLocation = source.CurrentRegion != null || source.BoardedLocation != null;
+            if (!sourceHasLocation)
+            {
+                return true;
+            }
             bool destinationHasLocation = destination.CurrentRegion != null || destination.BoardedLocation != null;
             if (!destinationHasLocation)
             {

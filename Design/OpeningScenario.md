@@ -40,9 +40,9 @@ player **already landed** and stamps the world as **mostly enemy**. The scenario
 **inverts and formalizes** this: a mostly-Imperial world with Tyranids **confined to a few
 regions**, fleet in orbit, plus the briefing / narrative / objective / failure layers.
 
-`FoundTakebackPlanet` is replaced wholesale (see §3). The dead `FoundChapterPlanet` /
-`ReplaceChapterPlanetFaction` / `PlaceStartingForces` helpers are repurposed for the
-*reward* path (granting the world on victory, §6) rather than deleted.
+`FoundTakebackPlanet` is replaced wholesale (see §3). `ReplaceChapterPlanetFaction`
+is retained for the *reward* path (granting the world on victory, §6); the old
+`FoundChapterPlanet` and `PlaceStartingForces` helpers were deleted.
 
 ## 1. Architecture overview
 
@@ -210,8 +210,8 @@ internal static CampaignScenario StampPromisedWorld(
 >   `StampPromisedWorld` resolves `GetSectorLord()`. The final `forceList` parameter was
 >   dropped: by the time the scenario runs the sector already exists, so the orbiting fleet is
 >   registered via `Sector.AddNewFleet` rather than appended to a list the `Sector` constructor
->   consumes. `FoundTakebackPlanet` was deleted; `FoundChapterPlanet` /
->   `ReplaceChapterPlanetFaction` / `PlaceStartingForces` are retained for the reward path (§6).
+>   consumes. `FoundTakebackPlanet`, `FoundChapterPlanet`, and `PlaceStartingForces`
+>   were deleted; `ReplaceChapterPlanetFaction` is retained for the reward path (§6).
 > - **Selection (§3.1).** Eligible = default-faction, `GovernanceTier == Planetary` (excludes
 >   sub/sector capitals), population in `[5M, 500M]`, ordered by population then id; the world
 >   at index `count/3` (lower-middle) is chosen. Widen-band and lowest-population-enemy fallbacks
@@ -414,9 +414,9 @@ after `ProcessTurn`). Operates only when `sector.Scenario is { State: Pending }`
 - **Win** — the promised planet has **no remaining Tyranid presence** (no Tyranid
   `RegionFaction` with `Population > 0` / `Garrison > 0`):
   - `scenario.State = Won`.
-  - **Grant the Chapter World**: repurpose `ReplaceChapterPlanetFaction` to install a player
+  - **Grant the Chapter World**: use `ReplaceChapterPlanetFaction` to install a player
     `PlanetFaction` (`PlayerReputation = 1`, `IsPublic = true`) across the planet — this is
-    the reward path the old dead `FoundChapterPlanet` was written for.
+    the reward path once covered by the old `FoundChapterPlanet` prototype.
   - Move the **current Sector Lord's** `OpinionOfPlayerForce` **up** (promise honored),
     resolved via `sector.GetSectorLord()` at this moment — so the credit lands with whoever
     holds the seat now, even if the original promiser has died.

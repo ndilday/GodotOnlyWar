@@ -1,6 +1,7 @@
 using Godot;
 using OnlyWar.Models;
 using OnlyWar.Models.Fleets;
+using OnlyWar.Models.Units;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -29,7 +30,7 @@ public partial class FleetScreenController : DialogController
         _view.PopulateFleetTree(fleetNodes);
     }
 
-    private static TreeNode CreateFleetNode(TaskForce taskForce)
+    internal static TreeNode CreateFleetNode(TaskForce taskForce)
     {
         // A task force in the Warp is out of contact: it, its ships, and the marines
         // aboard are listed for accounting but cannot be selected or inspected.
@@ -41,15 +42,30 @@ public partial class FleetScreenController : DialogController
                 string shipText = $"{ship.Name} ({ship.LoadedSoldierCount}/{ship.Template.SoldierCapacity})";
                 List<TreeNode> squadNodes = isInWarp
                     ? []
-                    : ship.LoadedSquads
-                        .Where(squad => squad.Members.Count > 0)
-                        .Select(squad => new TreeNode(squad.Id, squad.Name, []))
-                        .ToList();
+                    : CreateLoadedUnitNodes(ship).ToList();
                 return new TreeNode(ship.Id, shipText, squadNodes, selectable: !isInWarp);
             })
             .ToList();
 
         return new TreeNode(taskForce.Id, $"Task Force {taskForce.Id}: {status}", shipNodes, selectable: !isInWarp);
+    }
+
+    internal static IReadOnlyList<TreeNode> CreateLoadedUnitNodes(Ship ship)
+    {
+        return ship.LoadedSquads
+            .Where(squad => squad.Members.Count > 0)
+            .OrderBy(squad => squad.ParentUnit?.Name ?? "")
+            .ThenBy(squad => squad.Name)
+            .GroupBy(squad => squad.ParentUnit)
+            .Select(group =>
+            {
+                Unit unit = group.Key;
+                List<TreeNode> squadNodes = group
+                    .Select(squad => new TreeNode(squad.Id, squad.Name, []))
+                    .ToList();
+                return new TreeNode(unit?.Id ?? 0, unit?.Name ?? "Unassigned Unit", squadNodes, selectable: false);
+            })
+            .ToList();
     }
 
     private static string GetFleetStatus(TaskForce taskForce)

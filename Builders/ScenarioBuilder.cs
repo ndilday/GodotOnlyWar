@@ -229,6 +229,23 @@ namespace OnlyWar.Builders
                 }
                 sector.AddNewFleet(taskForce);
             }
+            if (hasSquad)
+            {
+                int remainingSoldiers = 0;
+                do
+                {
+                    remainingSoldiers += squads.Current.Members.Count;
+                }
+                while (squads.MoveNext());
+
+                int fleetCapacity = playerForce.Fleet.TaskForces
+                    .SelectMany(taskForce => taskForce.Ships)
+                    .Sum(ship => ship.Template.SoldierCapacity);
+                throw new InvalidOperationException(
+                    "Starting fleet capacity is insufficient to embark the chapter. " +
+                    $"{remainingSoldiers} soldiers could not be assigned to a ship " +
+                    $"(fleet capacity {fleetCapacity}).");
+            }
         }
 
         // §3.4 — no character is created on the common path: the authority is the sitting Sector

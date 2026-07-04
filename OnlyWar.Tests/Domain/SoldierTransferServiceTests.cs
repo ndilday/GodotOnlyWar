@@ -223,6 +223,29 @@ public class SoldierTransferServiceTests
     }
 
     [Fact]
+    public void GetTransferOptions_AllowsUnlocatedSourceToReachLocatedOpenSlots()
+    {
+        SoldierTemplate scout = CreateTemplate(40, "Scout Marine", 1, false);
+        SoldierTemplate tacticalMarine = CreateTemplate(41, "Tactical Marine", 2, false);
+        SquadTemplate scoutTemplate = CreateSquadTemplate("Scout Squad", (scout, 0, 9));
+        SquadTemplate lineTemplate = CreateSquadTemplate(
+            "Tactical Squad",
+            (TestModelFactory.SergeantTemplate, 0, 1),
+            (tacticalMarine, 0, 9));
+        Unit chapter = CreateUnit("Chapter");
+        Squad source = AddSquad(chapter, "Unlocated Scout Squad", scoutTemplate);
+        PlayerSoldier soldier = AddPlayerSoldier(source, scout, "Scout Marius");
+        Squad target = AddSquad(chapter, "Located Tactical Squad", lineTemplate);
+        AddPlayerSoldier(target, TestModelFactory.SergeantTemplate, "Sergeant Titus");
+        target.BoardedLocation = new Ship(1, "Test Ship", new ShipTemplate(1, "Test Ship Class", 20, 0, 0));
+
+        List<SoldierTransferOption> options = _service.GetTransferOptions(chapter, soldier);
+
+        Assert.Contains(options, option =>
+            option.SquadId == target.Id && option.SoldierTemplate == tacticalMarine);
+    }
+
+    [Fact]
     public void ApplyTransfer_RemovesEmptyScoutSquad()
     {
         SquadTemplate scoutTemplate = CreateSquadTemplate(

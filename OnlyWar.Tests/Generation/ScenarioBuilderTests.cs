@@ -95,6 +95,8 @@ public class ScenarioBuilderTests
 
         // No squad has landed: none carries a CurrentRegion and no region holds a landed squad.
         Assert.All(sector.PlayerForce.Army.SquadMap.Values, s => Assert.Null(s.CurrentRegion));
+        Assert.All(sector.PlayerForce.Army.SquadMap.Values.Where(s => s.Members.Count > 0),
+            s => Assert.NotNull(s.BoardedLocation));
         IEnumerable<Squad> landed = sector.Planets.Values
             .SelectMany(p => p.Regions)
             .SelectMany(r => r.RegionFactionMap.Values)
