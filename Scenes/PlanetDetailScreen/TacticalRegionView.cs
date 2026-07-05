@@ -56,7 +56,7 @@ public partial class TacticalRegionView : Control
 		];
 
 		Color fill = _selected ? _tileColor.Lightened(0.16f) : _tileColor;
-		fill.A = _selected ? 0.92f : 0.78f;
+		fill.A = _selected ? 0.95f : 0.9f;
 		Color[] fillColors = new Color[points.Length];
 		System.Array.Fill(fillColors, fill);
 		DrawPolygon(points, fillColors);
@@ -84,7 +84,8 @@ public partial class TacticalRegionView : Control
 
 	public void Populate(int regionId, string name, bool showPlayerPublic, bool showPlayerHidden, bool showCivilian, bool showXenos, bool showObjective, bool showDropPod,
 		string civilianIconKey, string playerIconKey, string hiddenIconKey, string xenosIconKey,
-		string playerPopulation, string civilianPopulation, string xenosPopulation, Color color, bool selected)
+		string playerPopulation, string civilianPopulation, string xenosPopulation,
+		string civilianTooltip, string playerTooltip, string xenosTooltip, Color color, bool selected)
 	{
 		RegionId = regionId;
 		_tileColor = color;
@@ -103,9 +104,21 @@ public partial class TacticalRegionView : Control
 		_playerPopulation.Text = playerPopulation;
 		_civilianPopulation.Text = civilianPopulation;
 		_xenosPopulation.Text = xenosPopulation;
+		// Each population icon/number pair carries a tooltip naming exactly what it counts, so the
+		// distinct atlas icons stay unambiguous on hover (e.g. Imperial civilians vs. PDF garrison
+		// vs. a xenos horde) and the compact "1.2M" label can expand to the exact figure.
+		SetSlotTooltip(_civilian, _civilianPopulation, civilianTooltip);
+		SetSlotTooltip(_playerPublic, _playerPopulation, playerTooltip);
+		SetSlotTooltip(_xenos, _xenosPopulation, xenosTooltip);
 		_button.ButtonPressed = selected;
 		QueueRedraw();
     }
+
+	private static void SetSlotTooltip(TextureRect icon, RichTextLabel label, string tooltip)
+	{
+		icon.TooltipText = tooltip;
+		label.TooltipText = tooltip;
+	}
 
 	public void SetRegionBackgroundColor(Color color)
     {

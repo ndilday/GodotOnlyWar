@@ -23,8 +23,11 @@ namespace OnlyWar.Helpers
                 return soldiers.ToList();
             }
 
-            return soldiers
-                .Where(soldier => conditions.All(condition => Matches(soldier, condition, currentDate)))
+            List<ISoldier> soldierList = soldiers.ToList();
+            Dictionary<string, RoleRank> roleRanks = BuildRoleRankLookup(soldierList);
+
+            return soldierList
+                .Where(soldier => conditions.All(condition => Matches(soldier, condition, currentDate, roleRanks)))
                 .ToList();
         }
 
@@ -36,6 +39,7 @@ namespace OnlyWar.Helpers
                 .Select(s => s.Template)
                 .GroupBy(t => t.Name)
                 .OrderByDescending(g => g.Max(t => t.Rank))
+                .ThenByDescending(g => g.Max(t => t.Subrank))
                 .ThenBy(g => g.Key)
                 .Select(g => g.Key)
                 .ToList();
@@ -93,13 +97,13 @@ namespace OnlyWar.Helpers
             return labels;
         }
 
-        private static bool Matches(ISoldier soldier, SoldierFilterCondition condition, Date currentDate)
+        private static bool Matches(ISoldier soldier, SoldierFilterCondition condition, Date currentDate,
+                                    IReadOnlyDictionary<string, RoleRank> roleRanks)
         {
             switch (condition.Field)
             {
                 case SoldierFilterField.Rank:
-                    bool sameRole = soldier.Template.Name == condition.TextValue;
-                    return condition.Operator == SoldierFilterOperator.NotEquals ? !sameRole : sameRole;
+                    return MatchesRank(soldier, condition, roleRanks);
 
                 case SoldierFilterField.Honor:
                     // Has = holds an award of the selected type at or above the selected tier;
@@ -116,6 +120,43 @@ namespace OnlyWar.Helpers
                 default:
                     return true;
             }
+        }
+
+        private static Dictionary<string, RoleRank> BuildRoleRankLookup(IEnumerable<ISoldier> soldiers)
+        {
+            return soldiers
+                .Select(s => s.Template)
+                .GroupBy(t => t.Name)
+                .ToDictionary(
+                    g => g.Key,
+                    g => new RoleRank(g.Max(t => t.Rank), g.Max(t => t.Subrank)));
+        }
+
+        private static bool MatchesRank(ISoldier soldier, SoldierFilterCondition condition,
+                                        IReadOnlyDictionary<string, RoleRank> roleRanks)
+        {
+            bool sameRole = soldier.Template.Name == condition.TextValue;
+            if (condition.Operator == SoldierFilterOperator.Equals)
+            {
+                return sameRole;
+            }
+            if (condition.Operator == SoldierFilterOperator.NotEquals)
+            {
+                return !sameRole;
+            }
+
+            if (!roleRanks.TryGetValue(condition.TextValue, out RoleRank target))
+            {
+                return false;
+            }
+
+            RoleRank actual = new(soldier.Template.Rank, soldier.Template.Subrank);
+            return condition.Operator switch
+            {
+                SoldierFilterOperator.Above => actual.CompareTo(target) > 0,
+                SoldierFilterOperator.Below => actual.CompareTo(target) < 0,
+                _ => false
+            };
         }
 
         private static bool MatchesHonor(SoldierAward award, string filterValue)
@@ -161,6 +202,15 @@ namespace OnlyWar.Helpers
             return condition.Operator == SoldierFilterOperator.AtMost
                 ? weeks <= condition.ThresholdWeeks
                 : weeks >= condition.ThresholdWeeks;
+        }
+
+        private readonly record struct RoleRank(byte Rank, byte Subrank)
+        {
+            public int CompareTo(RoleRank other)
+            {
+                int rankComparison = Rank.CompareTo(other.Rank);
+                return rankComparison != 0 ? rankComparison : Subrank.CompareTo(other.Subrank);
+            }
         }
     }
 }

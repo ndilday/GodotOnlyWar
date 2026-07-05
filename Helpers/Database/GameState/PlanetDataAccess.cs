@@ -73,9 +73,12 @@ namespace OnlyWar.Helpers.Database.GameState
                     bool isUnderAssault = reader.GetBoolean(5);
                     float intelligenceLevel = reader.GetFloat(6);
                     long carryingCapacity = reader.GetInt64(7);
+                    // MaximumCarryingCapacity was appended after CarryingCapacity; legacy rows that
+                    // predate it default to the current capacity (an undegraded region). See PRD §4.24.
+                    long maximumCarryingCapacity = reader.FieldCount > 8 ? reader.GetInt64(8) : carryingCapacity;
 
                     Planet planet = planets.First(p => p.Id == planetId);
-                    Region region = new Region(id, planet, regionType, regionName, RegionExtensions.GetCoordinatesFromRegionNumber(regionNumber), intelligenceLevel, carryingCapacity);
+                    Region region = new Region(id, planet, regionType, regionName, RegionExtensions.GetCoordinatesFromRegionNumber(regionNumber), intelligenceLevel, carryingCapacity, maximumCarryingCapacity);
                     regionMap[id] = region;
                     planet.Regions[regionNumber] = region;
                 }
@@ -363,14 +366,15 @@ namespace OnlyWar.Helpers.Database.GameState
                 {
                     command.Transaction = transaction;
                     command.CommandText = @"INSERT INTO Region
-                        (Id, PlanetId, RegionNumber, RegionName, RegionType, IsUnderAssault, IntelligenceLevel, CarryingCapacity) VALUES
-                        (@id, @planetId, @regionNumber, @regionName, 0, 0, @intelligenceLevel, @carryingCapacity);";
+                        (Id, PlanetId, RegionNumber, RegionName, RegionType, IsUnderAssault, IntelligenceLevel, CarryingCapacity, MaximumCarryingCapacity) VALUES
+                        (@id, @planetId, @regionNumber, @regionName, 0, 0, @intelligenceLevel, @carryingCapacity, @maximumCarryingCapacity);";
                     command.AddParam("@id", regions[i].Id);
                     command.AddParam("@planetId", planetId);
                     command.AddParam("@regionNumber", i);
                     command.AddParam("@regionName", regions[i].Name);
                     command.AddParam("@intelligenceLevel", regions[i].IntelligenceLevel);
                     command.AddParam("@carryingCapacity", regions[i].CarryingCapacity);
+                    command.AddParam("@maximumCarryingCapacity", regions[i].MaximumCarryingCapacity);
                     command.ExecuteNonQuery();
                 }
                 // Special missions are persisted by SaveMissions, called separately

@@ -66,6 +66,32 @@ public class SoldierFilterServiceTests
     }
 
     [Fact]
+    public void Apply_RankBelowAndAbove_CompareRankThenSubrank()
+    {
+        Squad squad = CreateSquad();
+        PlayerSoldier marine = BuildVeteran(squad);
+        PlayerSoldier sergeant = BuildRecruit(squad);
+        SoldierTemplate veteranSergeantTemplate = new(
+            3,
+            TestModelFactory.HumanSpecies,
+            "Test Veteran Sergeant",
+            2,
+            2,
+            true,
+            0,
+            []);
+        PlayerSoldier veteranSergeant = AddPlayerSoldier(squad, veteranSergeantTemplate, "Veteran Sergeant Otho");
+
+        var belowSergeant = _service.Apply([marine, sergeant, veteranSergeant],
+            [Condition(SoldierFilterField.Rank, SoldierFilterOperator.Below, text: "Test Sergeant")], CurrentDate);
+        var aboveSergeant = _service.Apply([marine, sergeant, veteranSergeant],
+            [Condition(SoldierFilterField.Rank, SoldierFilterOperator.Above, text: "Test Sergeant")], CurrentDate);
+
+        Assert.Equal([marine], belowSergeant);
+        Assert.Equal([veteranSergeant], aboveSergeant);
+    }
+
+    [Fact]
     public void Apply_HonorHas_MatchesSelectedTierAndAbove()
     {
         Squad squad = CreateSquad();
@@ -183,10 +209,20 @@ public class SoldierFilterServiceTests
         Squad squad = CreateSquad();
         PlayerSoldier a = BuildVeteran(squad);   // "Test Marine", rank 1
         PlayerSoldier b = BuildRecruit(squad);   // "Test Sergeant", rank 2
+        SoldierTemplate veteranSergeantTemplate = new(
+            3,
+            TestModelFactory.HumanSpecies,
+            "Test Veteran Sergeant",
+            2,
+            2,
+            true,
+            0,
+            []);
+        PlayerSoldier c = AddPlayerSoldier(squad, veteranSergeantTemplate, "Veteran Sergeant Otho");
 
-        var roles = _service.GetAvailableRoles([a, b]);
+        var roles = _service.GetAvailableRoles([a, b, c]);
 
-        Assert.Equal(["Test Sergeant", "Test Marine"], roles);
+        Assert.Equal(["Test Veteran Sergeant", "Test Sergeant", "Test Marine"], roles);
     }
 
     [Fact]

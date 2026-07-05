@@ -102,6 +102,23 @@ internal sealed class SectorSimulationFixture
         return rf;
     }
 
+    // adds a public biomass-consuming faction (Tyranids) to a region alongside its controller
+    public RegionFaction AddConsumptionFaction(int region, long population, int organization)
+    {
+        Faction faction = BuildFaction(_nextFactionId++, "Tyranids", isPlayer: false, isDefault: false, GrowthType.Consumption);
+        PlanetFaction planetFaction = new(faction) { IsPublic = true };
+        Planet.PlanetFactionMap[faction.Id] = planetFaction;
+        RegionFaction rf = new(planetFaction, Planet.Regions[region])
+        {
+            Population = population,
+            IsPublic = true,
+            Garrison = 0,
+            Organization = organization
+        };
+        Planet.Regions[region].RegionFactionMap[faction.Id] = rf;
+        return rf;
+    }
+
     public Character InstallGovernor(float investigation, float neediness, float opinion)
     {
         Character governor = new()

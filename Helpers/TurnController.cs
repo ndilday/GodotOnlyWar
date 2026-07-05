@@ -47,6 +47,29 @@ namespace OnlyWar.Helpers
         // yet; this is the minimal earn->spend loop backing the Apothecary procedure sink.
         private const int RequisitionPerRequestFulfilled = 100;
 
+        // --- Tyranid biomass model (PRD §4.24) ---
+        // A Consumption faction (Tyranids) has no birthrate; it grows only by eating. Its organized
+        // troops split their effort between Predate (killing co-located headcount) and Consume
+        // (stripping the land's carrying capacity), allocated to equalize marginal yield. Predation's
+        // per-troop yield scales with the log of remaining prey — easy to find when abundant, sharply
+        // diminishing as they thin out; consumption's scales with the square root of remaining biomass
+        // — fast to strip a rich region, mildly diminishing. Both are normalized to the same yield at
+        // the reference availability, so the two curves diverge by shape rather than by an arbitrary
+        // scale gap. Half of everything eaten becomes new Tyranid population; the rest is the
+        // inefficiency of rendering raw biomass into finished bioforms. All values are first-pass
+        // tunables. See PRD §4.24 and the Design opening-scenario notes.
+        private const double BiomassReferenceAvailability = 1_000_000.0;
+        private const double BiomassAppetitePerTroop = 0.5;
+        private const double ConsumptionDiminishingExponent = 0.5;
+        private const double BiomassFeedEfficiency = 0.5;
+        private const int BiomassAllocationSteps = 128;
+        // Each week a degraded region heals this fraction of the gap back toward its natural ceiling —
+        // a slow ecological recovery, so a consumed world stays blighted long after liberation.
+        private const float CarryingCapacityRecoveryRate = 0.01f;
+        // Each week this fraction of an overrun (hidden) Imperial remnant flees to adjacent governed
+        // regions, seeking the nearest fortification rather than being slaughtered in place (§4.24).
+        private const double ImperialEmigrationRate = 0.05;
+
         public TurnController() : this(null)
         {
         }
@@ -78,6 +101,16 @@ namespace OnlyWar.Helpers
             foreach (var faction in enemyFactions)
             {
                 allOrdersThisTurn.AddRange(_npcStrategyController.GenerateFactionOrders(faction, sector));
+            }
+
+            // The Imperial PDF (default faction) plans defensively: it fortifies and builds listening
+            // posts to hold worlds under assault, but launches no offensives (PRD §4.24). Without this
+            // the PDF could raise no defenses at all — only enemy factions previously planned.
+            Faction defaultFaction = GameDataSingleton.Instance.GameRulesData.DefaultFaction;
+            if (defaultFaction != null)
+            {
+                allOrdersThisTurn.AddRange(
+                    _npcStrategyController.GenerateFactionOrders(defaultFaction, sector, defensiveOnly: true));
             }
 
             // The diversion effect is consumed entirely by the planning above; clear it so it
@@ -476,11 +509,93 @@ namespace OnlyWar.Helpers
                     float ratio = 1.0f - Math.Min(regionFaction.Entrenchment / 10.0f, 1.0f);
                     enemiesKilled = (int)(enemiesKilled * ratio);
                 }
-                regionFaction.Population -= enemiesKilled;
-                if (regionFaction.Population < 0)
-                {
-                    regionFaction.Population = 0;
-                }
+                // Casualties come out of the defender's fighting strength — its Population for a
+                // horde whose numbers are its army, otherwise its Garrison — never its civilian
+                // population (combat-model correction, PRD §4.24).
+                ApplyMilitaryCasualties(regionFaction, enemiesKilled);
+
+                // A surviving AI offensive no longer evaporates: it withdraws to its staging region
+                // (raid) or seizes the contested ground (invade).
+                ResolveOffensiveSurvivors(context);
+            }
+        }
+
+        // Reduces a region faction's military strength by the given casualties, drawing from the
+        // pool that represents its army: Population for a population-is-military faction (Tyranids,
+        // cults), Garrison otherwise (PRD §4.24 combat-model correction).
+        internal static void ApplyMilitaryCasualties(RegionFaction regionFaction, int casualties)
+        {
+            if (casualties <= 0) return;
+            if (regionFaction.PlanetFaction.Faction.PopulationIsMilitary)
+            {
+                regionFaction.Population = Math.Max(0, regionFaction.Population - casualties);
+            }
+            else
+            {
+                regionFaction.Garrison = Math.Max(0, regionFaction.Garrison - casualties);
+            }
+        }
+
+        // Accounts the survivors of an AI offensive rather than letting them dissolve (PRD §4.24).
+        // On a raid the survivors withdraw to their staging region; on an invasion they remain and
+        // establish (or reinforce) the attacker's presence on the ground they fought over. Player
+        // assaults use persistent roster squads and are handled by the normal squad lifecycle.
+        private static void ResolveOffensiveSurvivors(MissionContext context)
+        {
+            if (context.Order.Mission.MissionType != MissionType.Advance) return;
+            BattleSquad first = context.MissionSquads.FirstOrDefault();
+            if (first == null || first.IsPlayerSquad) return;
+
+            int survivors = context.MissionSquads.Sum(bs => bs.AbleSoldiers.Count);
+            if (survivors <= 0) return; // the offensive was wiped out — nothing returns or holds
+
+            Faction attacker = first.Squad.Faction;
+            if (attacker.InvadesOnVictory)
+            {
+                EstablishInvaderPresence(attacker, context.Order.Mission.RegionFaction.Region, survivors);
+            }
+            else if (first.Squad.CurrentRegion != null
+                     && first.Squad.CurrentRegion.RegionFactionMap.TryGetValue(attacker.Id, out RegionFaction home))
+            {
+                AddMilitaryStrength(home, survivors);
+            }
+        }
+
+        // Establishes or reinforces an invading faction's RegionFaction in a region it has assaulted,
+        // creating the backing PlanetFaction if the faction had no prior foothold on the world.
+        internal static void EstablishInvaderPresence(Faction attacker, Region region, int survivors)
+        {
+            if (region.RegionFactionMap.TryGetValue(attacker.Id, out RegionFaction existing))
+            {
+                AddMilitaryStrength(existing, survivors);
+                return;
+            }
+            Planet planet = region.Planet;
+            if (!planet.PlanetFactionMap.TryGetValue(attacker.Id, out PlanetFaction planetFaction))
+            {
+                planetFaction = new PlanetFaction(attacker) { IsPublic = true };
+                planet.PlanetFactionMap[attacker.Id] = planetFaction;
+            }
+            RegionFaction foothold = new RegionFaction(planetFaction, region)
+            {
+                IsPublic = true,
+                Organization = 100
+            };
+            AddMilitaryStrength(foothold, survivors);
+            region.RegionFactionMap[attacker.Id] = foothold;
+        }
+
+        // Adds fighting strength to the pool that represents the faction's army (mirror of
+        // ApplyMilitaryCasualties): Population for a horde, Garrison otherwise.
+        private static void AddMilitaryStrength(RegionFaction regionFaction, int strength)
+        {
+            if (regionFaction.PlanetFaction.Faction.PopulationIsMilitary)
+            {
+                regionFaction.Population += strength;
+            }
+            else
+            {
+                regionFaction.Garrison += strength;
             }
         }
 
@@ -503,6 +618,24 @@ namespace OnlyWar.Helpers
                             EndOfTurnRegionFactionsUpdate(regionFaction, pdfRatio);
                         }
                     }
+
+                    // Tyranid biomass step: after the week's ordinary growth, the swarm eats
+                    // (predate headcount + consume the land), then the land heals a little back
+                    // toward its natural ceiling (PRD §4.24).
+                    ResolveBiomassConsumption(region);
+                    RecoverCarryingCapacity(region);
+                }
+
+                // Imperial remnant lifecycle (PRD §4.24), in two passes so emigration reads the
+                // finalized hide/unhide states: first surface or hide each region's remnant, then
+                // let the hidden survivors trickle out to adjacent governed regions.
+                foreach (Region region in planet.Regions)
+                {
+                    UpdateImperialRemnantState(region);
+                }
+                foreach (Region region in planet.Regions)
+                {
+                    ProcessImperialEmigration(region);
                 }
 
                 CheckForPlanetaryRevolt(planet);
@@ -531,35 +664,48 @@ namespace OnlyWar.Helpers
             }
         }
 
-        private void EndOfTurnRegionFactionsUpdate(RegionFaction regionFaction, float pdfRatio)
+        internal void EndOfTurnRegionFactionsUpdate(RegionFaction regionFaction, float pdfRatio)
         {
             Planet planet = regionFaction.Region.Planet;
             Faction controllingFaction = planet.GetControllingFaction();
             float newPop = 0;
+            // An overrun Imperial remnant (a hidden default faction — Stage 3 of the hide/unhide
+            // lifecycle, PRD §4.24) is a population gone to ground under a public enemy: it neither
+            // grows organically nor drafts a garrison, so it skips growth resolution entirely.
+            bool isOverrunRemnant = regionFaction.PlanetFaction.Faction.IsDefaultFaction && !regionFaction.IsPublic;
             // GrowthMultiplier (default 1.0) throttles organic growth; the Opening Scenario sets
             // it < 1.0 on stamped Tyranid regions so their regrowth cannot outpace a fighting
             // player (Design/OpeningScenario.md §6.1). Conversion is not organic growth, so it is
             // left unthrottled.
-            switch (regionFaction.PlanetFaction.Faction.GrowthType)
+            if (!isOverrunRemnant)
             {
-                case GrowthType.Logistic:
-                    newPop = ApplyCarryingCapacity(
-                        regionFaction.Population * LogisticGrowthRate * regionFaction.GrowthMultiplier,
-                        regionFaction.Region);
-                    break;
-                case GrowthType.Conversion:
-                    newPop = ConvertPopulation(regionFaction.Region, regionFaction, newPop);
-                    if (regionFaction.PlanetFaction.Faction.Id != controllingFaction.Id &&
-                        planet.PlanetFactionMap[controllingFaction.Id].Leader != null)
-                    {
-                        // TODO: see if the governor notices the converted population
-                    }
-                    break;
-                default:
-                    newPop = ApplyCarryingCapacity(
-                        regionFaction.Population * BaselineGrowthRate * regionFaction.GrowthMultiplier,
-                        regionFaction.Region);
-                    break;
+                switch (regionFaction.PlanetFaction.Faction.GrowthType)
+                {
+                    case GrowthType.Logistic:
+                        newPop = ApplyCarryingCapacity(
+                            regionFaction.Population * LogisticGrowthRate * regionFaction.GrowthMultiplier,
+                            regionFaction.Region);
+                        break;
+                    case GrowthType.Conversion:
+                        newPop = ConvertPopulation(regionFaction.Region, regionFaction, newPop);
+                        if (regionFaction.PlanetFaction.Faction.Id != controllingFaction.Id &&
+                            planet.PlanetFactionMap[controllingFaction.Id].Leader != null)
+                        {
+                            // TODO: see if the governor notices the converted population
+                        }
+                        break;
+                    case GrowthType.Consumption:
+                        // Consumption factions (Tyranids) have no organic birthrate; all their growth
+                        // comes from eating biomass (Predate/Consume), applied in the biomass step
+                        // rather than here (PRD §4.24). Organic growth is therefore zero.
+                        newPop = 0;
+                        break;
+                    default:
+                        newPop = ApplyCarryingCapacity(
+                            regionFaction.Population * BaselineGrowthRate * regionFaction.GrowthMultiplier,
+                            regionFaction.Region);
+                        break;
+                }
             }
             // probabilistic rounding of the fractional remainder, handling both growth
             // (positive) and over-capacity decline (negative)
@@ -577,6 +723,190 @@ namespace OnlyWar.Helpers
             UpdateRegionFactionForces(regionFaction, pdfRatio, newPop);
         }
 
+        // Per-organized-troop marginal predation yield at a given level of remaining prey:
+        // logarithmic (easy to find prey when abundant, sharply diminishing as they thin), and
+        // normalized to BiomassAppetitePerTroop at the reference availability. PRD §4.24.
+        private static double PredationMarginalYield(double preyRemaining)
+        {
+            if (preyRemaining <= 0) return 0;
+            return BiomassAppetitePerTroop * Math.Log(1 + preyRemaining) / Math.Log(1 + BiomassReferenceAvailability);
+        }
+
+        // Per-organized-troop marginal consumption yield at a given level of remaining biomass:
+        // a gentle power (square root) — fast to strip a rich region, mildly diminishing — likewise
+        // normalized to BiomassAppetitePerTroop at the reference availability. PRD §4.24.
+        private static double ConsumptionMarginalYield(double biomassRemaining)
+        {
+            if (biomassRemaining <= 0) return 0;
+            return BiomassAppetitePerTroop * Math.Pow(biomassRemaining / BiomassReferenceAvailability, ConsumptionDiminishingExponent);
+        }
+
+        // The Tyranid biomass step (PRD §4.24): each Consumption faction's organized troops eat the
+        // region, splitting their effort between predation (killing co-located headcount) and
+        // consumption (stripping carrying capacity) to equalize marginal yield, with half of all
+        // biomass eaten becoming new Tyranid population. Capacity recovery is handled separately.
+        internal static void ResolveBiomassConsumption(Region region)
+        {
+            foreach (RegionFaction consumer in region.RegionFactionMap.Values
+                .Where(rf => rf.PlanetFaction.Faction.GrowthType == GrowthType.Consumption).ToList())
+            {
+                // The mobile organized force does the eating; the unorganized remainder is the
+                // gestating brood/feeding pools. In Phase 2 the whole organized force feeds — the
+                // fight/expand allocation that skims it first arrives with the troop AI (PRD §4.24).
+                double troops = consumer.Population * (consumer.Organization / 100.0);
+                if (troops <= 0) continue;
+
+                List<RegionFaction> prey = region.RegionFactionMap.Values
+                    .Where(rf => rf.PlanetFaction.Faction.GrowthType != GrowthType.Consumption && rf.Population > 0)
+                    .ToList();
+                double preyRemaining = prey.Sum(rf => rf.Population);
+                double biomassRemaining = Math.Max(0, region.CarryingCapacity);
+
+                // Water-filling: hand the force out in chunks, each to whichever action currently
+                // yields more per troop, depleting that pool as we go. The stopping point is the
+                // equilibrium where shifting force either way would lower total yield.
+                double predated = 0;
+                double consumed = 0;
+                double chunk = troops / BiomassAllocationSteps;
+                double troopsRemaining = troops;
+                for (int step = 0; step < BiomassAllocationSteps && troopsRemaining > 0; step++)
+                {
+                    double thisChunk = Math.Min(chunk, troopsRemaining);
+                    troopsRemaining -= thisChunk;
+                    double predationYield = PredationMarginalYield(preyRemaining);
+                    double consumptionYield = ConsumptionMarginalYield(biomassRemaining);
+                    if (predationYield <= 0 && consumptionYield <= 0) break;
+                    if (predationYield >= consumptionYield)
+                    {
+                        double kills = Math.Min(preyRemaining, thisChunk * predationYield);
+                        preyRemaining -= kills;
+                        predated += kills;
+                    }
+                    else
+                    {
+                        double eaten = Math.Min(biomassRemaining, thisChunk * consumptionYield);
+                        biomassRemaining -= eaten;
+                        consumed += eaten;
+                    }
+                }
+
+                long killed = (long)predated;
+                long stripped = (long)consumed;
+                ApplyPredationKills(prey, killed);
+                region.CarryingCapacity = Math.Max(0, region.CarryingCapacity - stripped);
+                consumer.Population += (long)((killed + stripped) * BiomassFeedEfficiency);
+            }
+        }
+
+        // Distributes predation kills across the region's prey factions in proportion to their share
+        // of the surviving headcount, so a region that is 90% one faction / 10% another is culled in
+        // that 9:1 ratio (PRD §4.24). The last faction absorbs any rounding remainder.
+        private static void ApplyPredationKills(List<RegionFaction> prey, long totalKilled)
+        {
+            if (totalKilled <= 0) return;
+            long preyTotal = prey.Sum(rf => rf.Population);
+            if (preyTotal <= 0) return;
+            long applied = 0;
+            for (int i = 0; i < prey.Count; i++)
+            {
+                RegionFaction rf = prey[i];
+                long share = i == prey.Count - 1
+                    ? totalKilled - applied
+                    : (long)(totalKilled * (double)rf.Population / preyTotal);
+                share = Math.Clamp(share, 0, rf.Population);
+                rf.Population -= share;
+                applied += share;
+            }
+        }
+
+        // A degraded region heals a small fraction of the gap back toward its natural ceiling each
+        // week. Consumption outpaces this while the swarm feeds; once the swarm is gone the land
+        // slowly recovers. A gap that rounds to zero still heals by one, guaranteeing eventual full
+        // recovery of a liberated world. PRD §4.24.
+        internal static void RecoverCarryingCapacity(Region region)
+        {
+            if (region.CarryingCapacity >= region.MaximumCarryingCapacity) return;
+            long gap = region.MaximumCarryingCapacity - region.CarryingCapacity;
+            long recovered = (long)(gap * CarryingCapacityRecoveryRate);
+            if (recovered <= 0) recovered = 1;
+            region.CarryingCapacity = Math.Min(region.MaximumCarryingCapacity, region.CarryingCapacity + recovered);
+        }
+
+        // Advances the region's default-Imperial faction through the hide/unhide lifecycle (PRD
+        // §4.24), evaluated per region rather than at planet scale like the infiltrator revolt path:
+        //   Besieged  → Overrun  : a governing remnant whose garrison has fallen to zero with a
+        //                          public enemy present goes to ground (IsPublic = false).
+        //   Overrun   → Liberated: a hidden remnant surfaces once the region holds no public enemy,
+        //                          resuming open governance and rebuilding its garrison over time.
+        internal static void UpdateImperialRemnantState(Region region)
+        {
+            RegionFaction defaultFaction = region.RegionFactionMap.Values
+                .FirstOrDefault(rf => rf.PlanetFaction.Faction.IsDefaultFaction);
+            if (defaultFaction == null) return;
+
+            bool publicEnemy = HasPublicEnemy(region);
+            if (defaultFaction.IsPublic)
+            {
+                if (defaultFaction.Garrison <= 0 && publicEnemy)
+                {
+                    defaultFaction.IsPublic = false;
+                }
+            }
+            else if (!publicEnemy)
+            {
+                defaultFaction.IsPublic = true;
+            }
+        }
+
+        // A region holds a public enemy if any non-player, non-default faction is public and still
+        // has a presence (population or garrison). The player's own forces do not count — the
+        // remnant hides from hostile occupiers, not from the relieving Astartes.
+        private static bool HasPublicEnemy(Region region)
+        {
+            return region.RegionFactionMap.Values.Any(rf =>
+                rf.IsPublic
+                && !rf.PlanetFaction.Faction.IsPlayerFaction
+                && !rf.PlanetFaction.Faction.IsDefaultFaction
+                && (rf.Population > 0 || rf.Garrison > 0));
+        }
+
+        // Each week a fraction of an overrun (hidden) remnant flees to adjacent regions the Imperium
+        // still governs, distributed in proportion to each refuge's population (refugees pour toward
+        // the nearest dense fortification). Deliberately unclamped by destination capacity —
+        // overfilling a refuge is intended; the crowding term then models the resulting deprivation
+        // (PRD §4.24). A fully surrounded remnant (no governed neighbour) cannot flee.
+        internal static void ProcessImperialEmigration(Region region)
+        {
+            RegionFaction remnant = region.RegionFactionMap.Values.FirstOrDefault(
+                rf => rf.PlanetFaction.Faction.IsDefaultFaction && !rf.IsPublic);
+            if (remnant == null || remnant.Population <= 0) return;
+
+            List<RegionFaction> refuges = region.GetAdjacentRegions()
+                .Select(r => r.RegionFactionMap.Values.FirstOrDefault(
+                    rf => rf.PlanetFaction.Faction.IsDefaultFaction && rf.IsPublic))
+                .Where(rf => rf != null)
+                .ToList();
+            if (refuges.Count == 0) return;
+
+            long emigrants = (long)(remnant.Population * ImperialEmigrationRate);
+            if (emigrants <= 0) return;
+            remnant.Population -= emigrants;
+
+            long refugeTotal = refuges.Sum(rf => rf.Population);
+            long distributed = 0;
+            for (int i = 0; i < refuges.Count; i++)
+            {
+                // The last refuge absorbs the rounding remainder so the whole cohort is placed.
+                long share = i == refuges.Count - 1
+                    ? emigrants - distributed
+                    : refugeTotal > 0
+                        ? (long)(emigrants * (double)refuges[i].Population / refugeTotal)
+                        : emigrants / refuges.Count; // even split when every refuge is empty
+                refuges[i].Population += share;
+                distributed += share;
+            }
+        }
+
         // Scales organic population change by a logistic crowding factor (1 - pop/capacity):
         // near-maximal growth when the region is sparsely populated, tapering to zero at
         // capacity, and turning gently negative above capacity so an overfull region drifts
@@ -589,7 +919,10 @@ namespace OnlyWar.Helpers
             {
                 return baseGrowth;
             }
-            float crowding = 1f - (region.Population / (float)capacity);
+            // Crowding is measured against the non-consumer population only: Tyranids devour the
+            // land's capacity rather than living off it, so their headcount must not inflate the
+            // crowding that limits ordinary growth (PRD §4.24).
+            float crowding = 1f - (region.NonConsumerPopulation / (float)capacity);
             return baseGrowth * crowding;
         }
 
@@ -598,8 +931,11 @@ namespace OnlyWar.Helpers
             Planet planet = regionFaction.Region.Planet;
             bool isDefaultFaction = regionFaction.PlanetFaction.Faction.IsDefaultFaction;
             bool isPlayerFaction = regionFaction.PlanetFaction.Faction.IsPlayerFaction;
+            // An overrun remnant (hidden default faction) has gone to ground: it drafts no garrison,
+            // unlike a hidden infiltrator, which still quietly builds one (PRD §4.24).
+            bool isOverrunRemnant = isDefaultFaction && !regionFaction.IsPublic;
 
-            if (isDefaultFaction || isPlayerFaction || !regionFaction.IsPublic)
+            if ((isDefaultFaction || isPlayerFaction || !regionFaction.IsPublic) && !isOverrunRemnant)
             {
                 // garrison attrition: a fraction of the standing garrison retires each week and
                 // must be replaced by fresh recruitment from population growth below

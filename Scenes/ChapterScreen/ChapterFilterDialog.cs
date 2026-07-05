@@ -163,6 +163,13 @@ public partial class ChapterFilterDialog : AcceptDialog
             (SoldierFilterOperator.Equals, "is"),
             (SoldierFilterOperator.NotEquals, "is not")
         ];
+        private static readonly (SoldierFilterOperator Op, string Label)[] RankOps =
+        [
+            (SoldierFilterOperator.Equals, "is"),
+            (SoldierFilterOperator.NotEquals, "is not"),
+            (SoldierFilterOperator.Below, "below"),
+            (SoldierFilterOperator.Above, "above")
+        ];
         private static readonly (SoldierFilterOperator Op, string Label)[] HonorOps =
         [
             (SoldierFilterOperator.Has, "has at least"),
@@ -240,7 +247,7 @@ public partial class ChapterFilterDialog : AcceptDialog
 
             _currentOps = field switch
             {
-                SoldierFilterField.Rank => EqualityOps,
+                SoldierFilterField.Rank => RankOps,
                 SoldierFilterField.Honor => HonorOps,
                 _ => DurationOps
             };

@@ -26,7 +26,10 @@ public partial class TacticalRegionController : Control
         _region = region;
         RegionFaction playerRegionFaction = region.RegionFactionMap.Values.FirstOrDefault(rf => rf.PlanetFaction.Faction.IsPlayerFaction);
         RegionFaction defaultFaction = region.RegionFactionMap.Values.FirstOrDefault(rf => rf.PlanetFaction.Faction.IsDefaultFaction);
-        RegionFaction xenosRegionFaction = region.RegionFactionMap.Values.FirstOrDefault(rf => !rf.PlanetFaction.Faction.IsPlayerFaction && !rf.PlanetFaction.Faction.IsDefaultFaction);
+        // Prefer a public enemy over a still-hidden one (a Tyranid incursion can sit on top of a
+        // hidden Genestealer Cult); otherwise the hex would surface the hidden faction and render
+        // its headcount under the Imperial-civilian icon.
+        RegionFaction xenosRegionFaction = region.GetVisibleEnemyRegionFaction();
 
         int playerCount = playerRegionFaction?.LandedSquads.Sum(s => s.Members.Count()) ?? 0;
         int assignedCount = playerRegionFaction?.LandedSquads.Count(s => s.CurrentOrders != null) ?? 0;
@@ -88,6 +91,17 @@ public partial class TacticalRegionController : Control
             color = MutedMapColor(GetControlColor(region), 0.34f);
         }
 
+        string civilianTooltip = showEntrenchment
+            ? $"Enemy Entrenchment: {RegionFactionExtensions.GetDefenseLevelDescription(xenosRegionFaction.Entrenchment)}"
+            : garrison > 0 ? $"PDF Garrison: {garrison:N0}"
+            : $"Imperial Population: {civilianPopulation:N0}";
+        string playerTooltip = showOrders && playerRegionFaction != null
+            ? $"Space Marines: {playerCount} ({assignedCount}/{playerRegionFaction.LandedSquads.Count} squads assigned)"
+            : $"Space Marines: {playerCount}";
+        string xenosTooltip = showXenos
+            ? $"{xenosRegionFaction.PlanetFaction.Faction.Name}: {xenosText}"
+            : "";
+
         _view.Populate(
             region.Id,
             region.Name,
@@ -104,6 +118,9 @@ public partial class TacticalRegionController : Control
             playerPopulation,
             civilianText,
             xenosText,
+            civilianTooltip,
+            playerTooltip,
+            xenosTooltip,
             color,
             selected);
     }

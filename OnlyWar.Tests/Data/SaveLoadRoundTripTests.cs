@@ -338,6 +338,12 @@ public class SaveLoadRoundTripTests
             // Carrying capacity is generated, persisted, and restored per region; and no
             // region is generated above its carrying capacity (PRD Strategic Layer Phase 2).
             Assert.Equal(TotalCarryingCapacity(sector.Planets.Values), TotalCarryingCapacity(loaded.Planets));
+            // MaximumCarryingCapacity (PRD §4.24) is persisted and restored alongside it, and at
+            // generation equals the current capacity (no region starts degraded).
+            Assert.Equal(TotalMaximumCarryingCapacity(sector.Planets.Values), TotalMaximumCarryingCapacity(loaded.Planets));
+            Assert.All(
+                sector.Planets.Values.SelectMany(p => p.Regions),
+                r => Assert.Equal(r.CarryingCapacity, r.MaximumCarryingCapacity));
             Assert.True(sector.Planets.Values.Sum(p => p.Regions.Length) > 0);
             Assert.All(
                 sector.Planets.Values.SelectMany(p => p.Regions),
@@ -665,6 +671,11 @@ public class SaveLoadRoundTripTests
     private static long TotalCarryingCapacity(IEnumerable<Models.Planets.Planet> planets)
     {
         return planets.Sum(p => p.Regions.Sum(r => r.CarryingCapacity));
+    }
+
+    private static long TotalMaximumCarryingCapacity(IEnumerable<Models.Planets.Planet> planets)
+    {
+        return planets.Sum(p => p.Regions.Sum(r => r.MaximumCarryingCapacity));
     }
 
     private static long TotalPopulation(IEnumerable<Models.Planets.Planet> planets)

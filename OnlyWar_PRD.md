@@ -35,6 +35,7 @@
    - 4.21 [Turn Simulation — Faction Relationships & Inter-Faction Intelligence](#421-turn-simulation--faction-relationships--inter-faction-intelligence)
    - 4.22 [Turn Simulation — Orks & Indelible Infestation](#422-turn-simulation--orks--indelible-infestation)
    - 4.23 [Turn Simulation — Supply, Requisition & Pledges](#423-turn-simulation--supply-requisition--pledges)
+   - 4.24 [Turn Simulation — Tyranid Invasion & Biomass Consumption](#424-turn-simulation--tyranid-invasion--biomass-consumption)
 5. [Release Scoping](#5-release-scoping)
    - 5.1 [Released (Alpha 0.6 and prior)](#51-released-alpha-06-and-prior)
    - 5.2 [Alpha 0.7 — Committed](#52-alpha-07--committed)
@@ -845,6 +846,81 @@ This is deliberately **not** a survival economy. Consistent with the relevance/l
 
 ---
 
+### 4.24 Turn Simulation — Tyranid Invasion & Biomass Consumption
+
+**Description.** A Tyranid incursion is not a rival civilization contesting a world; it is an ecological catastrophe that eats the world itself. A splinter of a hive fleet, called down by a Genestealer Cult's psychic beacon, makes planetfall, strips the biomass of every region it reaches, and grows *only* by that consumption. This section specifies the Tyranid faction's growth and behavior, the Imperial population's collapse into hiding beneath it, the Genestealer Cult's doomed uprising, and the opening-scenario sequencing that produces the "Promised World" the chapter is pledged to retake. It builds on the cross-faction substrate (§4.21) and most resembles the Ork growth-faction structure (§4.22).
+
+This is a behavioral specification. It depends on §4.21 (behavior flags, growth types, intelligence-as-belief) and slots alongside the cross-faction simulation work (§5.6). The current `ScenarioBuilder.StampPromisedWorld` static stamp (§4.1) is the shipped subset this enhances.
+
+**Acceptance Criteria:**
+
+**Faction Definition & Growth Type**
+- The Tyranid faction is defined by composition over the substrate (§4.21): `FactionBehavior = UniversallyHostile`, with a new `GrowthType.Consumption`. `Consumption` joins the existing `Logistic` (§4.15) and `Conversion` (Genestealer Cult) growth types; the growth-type dispatch replaces the scattered per-faction checks in the population loop.
+- A Consumption faction has **no organic birthrate**. Every point of population it gains comes from biomass it has eaten (below). Its numbers are therefore bounded by, and drawn from, the biomass actually present on the planet.
+
+**Biomass: Consume vs. Predate (two distinct actions)**
+- Tyranid forces convert biomass to Tyranid population through two separate actions with different targets and different permanence:
+  - **Predate** — hunts *headcount*: the population of co-located non-Consumption factions (Imperial civilians, PDF, Genestealer Cult). Distributed across all edible populations **proportional to their share** of the region's non-Tyranid population — a region that is 90% Imperial / 10% Cult is predated in that 9:1 ratio, with no special-casing. Predation is **recoverable** damage: kill every inhabitant, but if the land's capacity survives, a retaken region can be repopulated.
+  - **Consume** — attacks the *land*: it reduces the region's current `CarryingCapacity` (scouring flora, fauna, and soil into the digestion pools). Consumption is the **deep wound** — it heals only slowly, so a region whose capacity is eaten is a near-dead world even after liberation.
+- Both actions feed the swarm: each point of biomass consumed, headcount or land, adds to Tyranid population. Predation and Consumption together are the Tyranid form of the generic **predation** behavior (a public enemy killing hidden civilians); a non-Consumption enemy (the Cult) only ever performs the killing half, never the land-scouring half.
+
+**Carrying Capacity — Maximum & Recovery**
+- Each region gains a **`MaximumCarryingCapacity`** — a new field on the **save** schema's `Region` table (not the rules DB), initialized equal to `CarryingCapacity` at generation. `CarryingCapacity` becomes the current, degradable value; `MaximumCarryingCapacity` is the natural ceiling it recovers toward.
+- Consumption depresses `CarryingCapacity`; each turn it creeps back toward `MaximumCarryingCapacity` at a slow recovery rate. While Tyranids are present and eating, consumption outpaces recovery and the land stays blighted; once they are cleared, recovery gradually restores it. No explicit "are Tyranids here?" check is needed — the two rates net out on their own.
+- Because the crowding factor (§4.15) turns growth negative above capacity, scouring the land while population is still high *accelerates* the death of the survivors: the ecology collapses under them. Consumption, predation, and crowding all pull the same direction.
+
+**The Biomass Budget (emergent)**
+- Because Consumption growth is bounded by available biomass and each point of growth draws the pool down, the planet has a finite biomass budget the swarm consumes over time. Two properties fall out for free:
+  - **Forced expansion.** Once a region's biomass is exhausted the Tyranids there stop growing and must attack adjacent regions to reach fresh biomass — the spreading tide is emergent, not scripted.
+  - **Winnable by construction.** Combined with the stranded-fleet premise (below), the swarm cannot grow without limit; the campaign is a race to break it before it has drawn down enough of the world to become unstoppable. Longer pre-arrival delays therefore mean both a larger swarm *and* a more blighted world to inherit.
+
+**Tyranid Troop AI**
+- The mobile combat force is the existing `organizedTroops = Population × Organization / 100` (`FactionStrategyController`). The *unorganized* remainder is the abstraction for the swarm's **feeding pools and gestating brood** — immobile, non-combat, and the engine of Consumption growth. Modeling those pools as discrete, strikable structures (a "destroy the birthing pits" objective) is deferred (§6.11); until then `Organization` carries the troop-vs-structure split.
+- Each turn the AI allocates `organizedTroops` by priority:
+  1. **Fight** — commit force to any in-region military threat (a PDF garrison, or a Cult fighting the swarm); the swarm is drawn to resistance first.
+  2. **Expand** — send a share of the remainder to neighbors, biased toward the richest / most-resistant region. The share scales with local **depletion** (`depletion = 1 − ½·(civiliansLeft/civiliansAtStart + capacity/maxCapacity)`): a rich region keeps its forces home to gorge, a stripped one pushes them onward.
+  3. **Predate + Consume** — the remainder strips the current region: predate while headcount remains, consume the land in parallel, shifting fully to consumption once the survivors are gone.
+
+**Genestealer Cult Behavior**
+- The Cult reveals itself (all its hidden `RegionFaction`s across the planet flip public) when the hive fleet is known to be inbound — sowing chaos to cripple the defense, not realizing the swarm will devour it as readily as everything else.
+- A public Cult **fights the local PDF**. When the local Imperial garrison collapses into hiding, the Cult's spare force **relocates to adjacent regions that still hold an active PDF** to keep fighting. Where no neighboring PDF remains, idle Cult forces **predate** — but never consume: they are cultists, not a devouring swarm.
+- **Cult predation does not grow the Cult.** Conversion (implanting genestealer genes) is their growth path; this stage is the slaughter of non-believers as sacrifices to the Star Children — pure killing, no population gain, no land damage.
+- The Cult is prey like any other headcount: Tyranid predation hits it proportional to its population share. Welcoming the hive earns it no protection.
+
+**Imperial Remnant — Hide/Unhide Stages (region-level)**
+- The default-Imperial `RegionFaction` moves through four stages per region, driven by conditions rather than a scripted stamp:
+  1. **Governing** — no public enemy (or garrison holding); normal growth and PDF drafting. `IsPublic = true`.
+  2. **Besieged** — a public enemy is present and grinding the garrison down (strategic combat, below). Still `IsPublic = true`.
+  3. **Overrun / Hidden** — the garrison hits zero **with a public enemy present**; the population goes to ground. `IsPublic = false`. While hidden it accrues **no garrison and no organic growth** (surviving, not drafting), and is subject to emigration and predation.
+  4. **Liberated** — the region's last public enemy is cleared; the remnant returns to `IsPublic = true` and rebuilds a garrison from its survivors. (If the population reached zero, the region is simply held and depopulated.)
+- `IsPublic = false` on the Imperial remnant here means "gone to ground," and this hide/unhide is evaluated **per region** for the default faction — distinct from the existing planet-level `CheckForPlanetaryRevolt` / `CheckForRevoltSuppression`, which exclude the default faction and only surface infiltrators. (Generalizing all going-public transitions to region granularity is an open question — §6.12.)
+
+**Civilian Emigration (Stage 3)**
+- Each turn, ~5% of a hidden remnant's population flees to **adjacent Imperial-controlled regions**, distributed **weighted by the destination's population** (refugees pour toward the nearest dense fortification — the suburb, not the desert). A fully-surrounded remnant (no eligible neighbor) cannot flee and faces predation in place.
+- Emigration is **not** clamped to destination capacity: overfilling a refuge is intended. The crowding term (§4.15) then models the resulting deprivation die-off, and the swollen population makes that region a worse massacre if the swarm reaches it next — a deliberate grimdark feedback loop.
+
+**PDF as a Defensive Actor**
+- For the pre-arrival and invasion simulation to produce believable outcomes (regions where a dug-in PDF drives the Cult back), the default-Imperial faction must become a strategic actor, resolving the standing TODO in `UpdateRegionFactionForces` — today only non-player, non-default factions run through `FactionStrategyController`, so PDFs cannot build defenses.
+- First cut is **defensive only**: the PDF fortifies (Entrenchment), builds listening posts (Detection), and holds — it runs the development/construction slice of `FactionStrategyController` but launches no offensives. It is deliberately **less effective than the Imperial Guard** forces specified later (§6.4): the PDF holds the line and buys time; it does not maneuver or counterattack.
+
+**Strategic Combat Model**
+- PDF ↔ Tyranid ↔ Cult fighting resolves as a lightweight **strategic attrition** step — committed force × effectiveness against defender garrison, modified by the existing `Entrenchment` / `Detection` / `AntiAir` / `Organization` ratings. This is distinct from the tactical Battle engine (§4.14), which is reserved for Astartes engagements; running tactical resolution for every AI skirmish across a multi-turn headless pre-simulation would be far too costly.
+
+**Opening Scenario Application (the Promised World)**
+- The opening scenario sequences the two enemies in time so the Tyranid beachhead stays authored while the Cult war is emergent (extends `ScenarioBuilder.StampPromisedWorld` and the OpeningScenario design doc):
+  1. Seed the hidden Cult across the planet (existing).
+  2. **Cult reveals** — flip the Cult public planet-wide (the beacon lit).
+  3. **Pre-landing simulation** — run ~2–3 headless turns of *this planet only*: the Cult uprising fights the PDF, some cells spreading, others suppressed and driven back underground; defenders weakened.
+  4. **Tyranids make planetfall** — stamp the authored beachhead (a contiguous landing cluster) *after* the pre-sim, fresh and controlled.
+  5. **The Navy destroys the hive fleet** — narrative, plus the mechanical fact that the ground swarm has **no reinforcement** (there is no orbital-drop mechanism today, so "stranded" is largely the default). This is what makes the world winnable and leaves orbit clear for the player to land at will.
+  6. **Post-landing simulation** — run a Gaussian-rolled number of headless turns: `postLandingTurns = max(0, round(4 + z))`, `z` a standard normal (turns are weekly; widen the coefficient if the rare two-month apocalypse should occur more than a ~4σ event). Rarely the player arrives with the Navy to a fresh beachhead; sometimes the swarm has had a month-plus to eat the PDF and citizenry.
+  7. **The player arrives** — the fleet is stamped into orbit (existing) and control passes to the player.
+
+**Endings & Persistence**
+- Unlike Orks (§4.22), Tyranids are **not** indelible: a `RegionFaction` reduced to zero is cleared, and a planet swept of the swarm is genuinely retaken — its blighted regions then recovering capacity toward `MaximumCarryingCapacity` over years. Victory is a drawn-down world slowly healing, not a permanent management problem.
+
+---
+
 ## 5. Release Scoping
 
 ### 5.1 Released (Alpha 0.6 and prior)
@@ -978,6 +1054,7 @@ A simulation expansion that lifts the sector beyond a binary Imperial-vs-everyon
 
 - **Substrate (prerequisite): Faction Relationships & Inter-Faction Intelligence** — replace the binary `AreFactionsEnemies` test with a per-faction-pair Stance store (default Hostile; player↔Imperial seeded Allied); consolidate `Faction`'s ad-hoc booleans into a `[Flags] FactionBehavior` field (folding in `CanInfiltrate`, adding `UniversallyHostile` and `Indelible`); and build the per-faction graded **intelligence-as-belief** model (`IntelLevel` ladder, sparse materialization, false positives via paranoia/disinformation), generalizing the existing governor-detection and OpFor fog-of-war as the default-Imperial special case. Spec: §4.21.
 - **Orks & Indelible Infestation** (depends on the substrate) — `UniversallyHostile | Indelible` Ork faction; indelible `RegionFaction` with pop-0 → non-public → regrow-to-1; logistic growth with an Ork multiplier and a feral efficiency penalty; two-dimensional state (awareness × expansion) yielding unnoticed-feral / noticed-feral / WAAAGH!; feral amassing migration and internal-scale WAAAGH! emergence; imperfect Imperial cull of noticed-feral Orks (gated on `Confirmed` intel and spare capacity); and WAAAGH!-as-beacon spawning unmapped Ork worlds in empty tiles plus reinforcing fleets. Spec: §4.22. Open question: terminal Ork-controlled world state (§6.8).
+- **Tyranid Invasion & Biomass Consumption** (depends on the substrate) — `UniversallyHostile` Tyranid faction on a new `GrowthType.Consumption` (no birthrate; grows only by eating); Predate (proportional headcount kills) vs. Consume (degrade `CarryingCapacity` toward a new `MaximumCarryingCapacity`, slow recovery); depletion-driven troop allocation (fight → expand → predate+consume); doomed Genestealer Cult uprising (reveal-on-inbound, relocate to active-PDF neighbors, sacrificial predation with no growth); region-level Imperial hide/unhide with civilian emigration; the PDF made a defensive strategic actor (fortify/hold, weaker than the Guard §6.4); a strategic attrition combat model distinct from the tactical Battle engine; and the opening-scenario sequencing (cult reveal → pre-landing sim → authored beachhead → Navy strands the swarm → Gaussian post-landing sim → player arrival). Spec: §4.24. Open questions: breeding structures (§6.11), region-level going-public generalization (§6.12).
 
 ### 5.7 Post-0.7 Backlog
 
@@ -1097,6 +1174,18 @@ This is a post-0.7 design item. Navigator quality should be designed as a chapte
 **Question:** Once factional fleets move independently (§5.7), can a materiel delivery in transit from a pledging world to the chapter be **interdicted** — delayed, reduced, or lost — by a hostile fleet along the route?
 
 **Why it comes up.** §4.23 already binds a pledge to the *fate of its source world* (a world that falls stops paying). Interdiction extends that to the *route*, making supply lines themselves contestable terrain and giving raiders/blockades a strategic purpose. It is gated on factional fleet movement existing and on whether deliveries are modeled as discrete moving objects (like fleet task forces) rather than abstract scheduled credits. Until then, deliveries are treated as guaranteed-on-schedule once pledged.
+
+### 6.11 Tyranid Breeding Structures as Strikable Objectives (raised by Tyranids, §4.24)
+
+**Question:** Should a Tyranid region's feeding pools / gestating brood be promoted from the current abstraction (the *unorganized* remainder of population, carried by `Organization` — §4.24) into discrete, immobile, strikable structures the player can target directly?
+
+**Why it comes up.** Discrete breeding structures would give the player a high-value objective — destroy the digestion pools to halt local Consumption growth — richer than attritioning an undifferentiated blob, and they read well as mission targets (a "destroy the birthing pits" special mission). But they require a sub-region unit/structure category, targeting, and battle-resolution hooks that do not exist yet. The system ships abstract-first: the Consumption *rate* stands in for the pools until this is committed.
+
+### 6.12 Region-Level Going-Public Generalization (raised by Tyranids, §4.24)
+
+**Question:** The Tyranid model requires the default-Imperial faction to hide/unhide **per region**, whereas the existing revolt machinery (§4.20) flips factions public/hidden at **planet** granularity and excludes the default faction. Should *all* going-public transitions (Orks §4.22, Revolt §4.20, Cult) be unified at region granularity, or should planet-level be kept for infiltrators with a separate region-level path added only for the Imperial remnant?
+
+**Why it comes up.** Region-level hide/unhide for the Imperial remnant is the committed near-term choice (§4.24), and a region-level model is arguably truer for every faction (a cult can be crushed in one region while holding another). But generalizing touches the Ork amassing/WAAAGH! emergence and the revolt lifecycle, both currently reasoned at planet scale. The broader unification is deferred; the remnant's region-level path is built first as the concrete need.
 
 ---
 

@@ -34,7 +34,11 @@ public class FactionStrategyController
         }
     }
 
-    public List<Order> GenerateFactionOrders(Faction faction, Sector sector)
+    // When defensiveOnly is set (the Imperial PDF / default faction — PRD §4.24), the faction plans
+    // only to dig in: it raises fortifications and listening posts to hold regions under assault,
+    // but launches no offensives and runs no patrols. Massed counterattack is reserved for the
+    // stronger Imperial Guard (§6.4); a bare PDF holds the line and buys time.
+    public List<Order> GenerateFactionOrders(Faction faction, Sector sector, bool defensiveOnly = false)
     {
         var allNewOrders = new List<Order>();
 
@@ -55,6 +59,17 @@ public class FactionStrategyController
                 long organizedTroops = (long)(regionFaction.Population * regionFaction.Organization / 100.0f);
                 long spareTroops = Math.Max(0, organizedTroops - requiredGarrison);
                 regionalForceStates.Add(new RegionForceState(regionFaction, requiredGarrison, spareTroops));
+            }
+
+            if (defensiveOnly)
+            {
+                // Only fortify where actually threatened — no point spending the peacetime PDF's
+                // effort digging in worlds no enemy has reached.
+                if (planet.IsUnderAssault())
+                {
+                    GenerateDevelopmentOrders(regionalForceStates, allNewOrders);
+                }
+                continue;
             }
 
             // PRIORITY 2: PLAN MAJOR OFFENSIVE
@@ -110,6 +125,15 @@ public class FactionStrategyController
             long contribution = (long)(manpowerCost * (contributingState.SpareTroops / (float)totalAvailableForAttack));
             contributingState.SpareTroops -= contribution;
             region.RegionFactionMap[faction.Id].Garrison -= contribution;
+        }
+
+        // Record the staging region on the assault force so its survivors know where to withdraw to
+        // (raid) — see TurnController.ResolveOffensiveSurvivors. The primary contributing region
+        // stands in for the whole staging effort.
+        Region stagingRegion = chosenOffensive.AttackingRegions.First();
+        foreach (Squad squad in generatedSquads)
+        {
+            squad.CurrentRegion = stagingRegion;
         }
 
         Mission newMission = new Mission(MissionType.Advance, chosenOffensive.TargetFaction, 0);

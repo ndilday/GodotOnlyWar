@@ -1,6 +1,7 @@
 using Godot;
 using OnlyWar.Models;
 using OnlyWar.Models.Fleets;
+using OnlyWar.Models.Squads;
 using OnlyWar.Models.Units;
 using System;
 using System.Collections.Generic;
@@ -37,6 +38,10 @@ public partial class FleetScreenController : DialogController
         bool isInWarp = taskForce.TravelPhase == FleetTravelPhase.InWarp;
         string status = GetFleetStatus(taskForce);
         List<TreeNode> shipNodes = taskForce.Ships
+            .OrderByDescending(ship => ship.Template.SoldierCapacity)
+            .ThenBy(ship => ship.Template.Id)
+            .ThenBy(ship => ship.Name)
+            .ThenBy(ship => ship.Id)
             .Select(ship =>
             {
                 string shipText = $"{ship.Name} ({ship.LoadedSoldierCount}/{ship.Template.SoldierCapacity})";
@@ -54,7 +59,8 @@ public partial class FleetScreenController : DialogController
     {
         return ship.LoadedSquads
             .Where(squad => squad.Members.Count > 0)
-            .OrderBy(squad => squad.ParentUnit?.Name ?? "")
+            .OrderBy(squad => GetUnitOrderKey(squad.ParentUnit))
+            .ThenBy(squad => GetSquadOrder(squad))
             .ThenBy(squad => squad.Name)
             .GroupBy(squad => squad.ParentUnit)
             .Select(group =>
@@ -66,6 +72,38 @@ public partial class FleetScreenController : DialogController
                 return new TreeNode(unit?.Id ?? 0, unit?.Name ?? "Unassigned Unit", squadNodes, selectable: false);
             })
             .ToList();
+    }
+
+    private static string GetUnitOrderKey(Unit unit)
+    {
+        if (unit == null) return "zzzzzzzz";
+
+        Stack<string> segments = [];
+        Unit current = unit;
+        while (current != null)
+        {
+            Unit parent = current.ParentUnit;
+            if (parent == null)
+            {
+                segments.Push($"root:{current.Name}:{current.Id:D8}");
+                break;
+            }
+
+            int index = parent.ChildUnits?.IndexOf(current) ?? -1;
+            segments.Push(index >= 0 ? $"{index:D8}" : $"unknown:{current.Name}:{current.Id:D8}");
+            current = parent;
+        }
+
+        return string.Join("/", segments);
+    }
+
+    private static int GetSquadOrder(Squad squad)
+    {
+        if (squad?.ParentUnit?.Squads == null) return int.MaxValue;
+
+        List<Squad> orderedSquads = squad.ParentUnit.Squads.ToList();
+        int index = orderedSquads.IndexOf(squad);
+        return index >= 0 ? index : int.MaxValue;
     }
 
     private static string GetFleetStatus(TaskForce taskForce)

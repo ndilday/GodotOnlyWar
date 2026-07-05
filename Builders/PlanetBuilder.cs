@@ -150,6 +150,9 @@ namespace OnlyWar.Builders
                 long regionCapacity = regionCapacities[randomIndex];
                 regionCapacities.RemoveAt(randomIndex);
                 region.CarryingCapacity = regionCapacity;
+                // The natural ceiling starts equal to the generated capacity; Tyranid Consumption
+                // degrades CarryingCapacity below this later, recovering back toward it (PRD §4.24).
+                region.MaximumCarryingCapacity = regionCapacity;
 
                 // seed population as the global fill of this region's capacity, with wiggle,
                 // never exceeding the region's capacity

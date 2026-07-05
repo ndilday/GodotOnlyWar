@@ -17,6 +17,8 @@ namespace OnlyWar.Helpers
     {
         Equals,
         NotEquals,
+        Below,
+        Above,
         Has,
         DoesNotHave,
         AtLeast,

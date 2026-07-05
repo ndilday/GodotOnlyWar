@@ -111,7 +111,7 @@ public class MissionSaveTests
                 PlanetaryControl INTEGER NOT NULL, PlayerReputation REAL NOT NULL, LeaderId INTEGER);
             CREATE TABLE Region (Id INTEGER PRIMARY KEY UNIQUE NOT NULL, PlanetId INTEGER NOT NULL, RegionNumber INTEGER NOT NULL,
                 RegionName STRING NOT NULL, RegionType INTEGER NOT NULL, IsUnderAssault BOOLEAN NOT NULL, IntelligenceLevel REAL NOT NULL,
-                CarryingCapacity BIGINT NOT NULL);
+                CarryingCapacity BIGINT NOT NULL, MaximumCarryingCapacity BIGINT NOT NULL);
             CREATE TABLE RegionFaction (RegionId INTEGER NOT NULL, FactionId INTEGER NOT NULL, IsPublic BOOLEAN NOT NULL,
                 Population BIGINT NOT NULL, Garrison INTEGER NOT NULL, Organization INTEGER NOT NULL, Entrenchment INTEGER NOT NULL,
                 Detection INTEGER NOT NULL, AntiAir INTEGER NOT NULL, GrowthMultiplier REAL NOT NULL DEFAULT 1.0);

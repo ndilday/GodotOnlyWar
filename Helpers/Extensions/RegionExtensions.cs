@@ -32,6 +32,21 @@ namespace OnlyWar.Helpers.Extensions
             };
         }
 
+        // The enemy the player would see in this region. A region can hold more than one
+        // non-player, non-default faction at once (e.g. a public Tyranid incursion sitting on
+        // top of a still-hidden Genestealer Cult), so a plain FirstOrDefault can return the
+        // hidden faction and make a visibly-invaded region read as empty. Prefer a public enemy;
+        // fall back to a hidden one only when that is all the region has (so a hidden-only region
+        // still reports correctly as undetected).
+        public static RegionFaction GetVisibleEnemyRegionFaction(this Region region)
+        {
+            List<RegionFaction> enemies = region.RegionFactionMap.Values
+                .Where(rf => !rf.PlanetFaction.Faction.IsPlayerFaction
+                             && !rf.PlanetFaction.Faction.IsDefaultFaction)
+                .ToList();
+            return enemies.FirstOrDefault(rf => rf.IsPublic) ?? enemies.FirstOrDefault();
+        }
+
         public static List<Region> GetSelfAndAdjacentRegions(this Region region)
         {
             return new List<Region> { region }.Union(GetAdjacentRegions(region)).ToList();

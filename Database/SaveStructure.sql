@@ -30,7 +30,7 @@ CREATE TABLE MedicalProcedure (SoldierId INTEGER NOT NULL REFERENCES Soldier (Id
 CREATE TABLE Planet (Id INTEGER PRIMARY KEY UNIQUE NOT NULL, PlanetTemplateId INTEGER NOT NULL, Name STRING NOT NULL UNIQUE, x INTEGER NOT NULL, y INTEGER NOT NULL, Importance INTEGER NOT NULL, TaxLevel INTEGER NOT NULL);
 
 -- Table: Region
-CREATE TABLE Region (Id INTEGER PRIMARY KEY UNIQUE NOT NULL, PlanetId INTEGER NOT NULL REFERENCES Planet (Id), RegionNumber INTEGER NOT NULL, RegionName STRING NOT NULL, RegionType INTEGER NOT NULL, IsUnderAssault BOOLEAN NOT NULL, IntelligenceLevel REAL NOT NULL, CarryingCapacity BIGINT NOT NULL);
+CREATE TABLE Region (Id INTEGER PRIMARY KEY UNIQUE NOT NULL, PlanetId INTEGER NOT NULL REFERENCES Planet (Id), RegionNumber INTEGER NOT NULL, RegionName STRING NOT NULL, RegionType INTEGER NOT NULL, IsUnderAssault BOOLEAN NOT NULL, IntelligenceLevel REAL NOT NULL, CarryingCapacity BIGINT NOT NULL, MaximumCarryingCapacity BIGINT NOT NULL);
 
 -- Table: RegionFaction
 -- GrowthMultiplier (default 1.0) throttles organic growth; legacy rows default to 1.0 via a

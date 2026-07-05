@@ -376,6 +376,7 @@ public partial class PlanetTacticalScreenController : DialogController
             civilianPopulation += enemyFaction.Population;
         }
         rows.Add(Row("Civilian Population", civilianPopulation > 0 ? civilianPopulation.ToString("N0") : "None"));
+        rows.Add(Row("PDF Garrison", region.PlanetaryDefenseForces > 0 ? region.PlanetaryDefenseForces.ToString("N0") : "None"));
         rows.Add(Row("Marines", playerRegionFaction?.LandedSquads.Sum(squad => squad.Members.Count).ToString() ?? "0"));
         rows.Add(Row("Assigned Orders", playerRegionFaction?.LandedSquads.Count(squad => squad.CurrentOrders != null).ToString() ?? "0"));
 
@@ -610,7 +611,7 @@ public partial class PlanetTacticalScreenController : DialogController
 
     private static RegionFaction GetEnemyRegionFaction(Region region)
     {
-        return region.RegionFactionMap.Values.FirstOrDefault(rf => !rf.PlanetFaction.Faction.IsPlayerFaction && !rf.PlanetFaction.Faction.IsDefaultFaction);
+        return region.GetVisibleEnemyRegionFaction();
     }
 
     private static string GetRegionControlLabel(Region region)

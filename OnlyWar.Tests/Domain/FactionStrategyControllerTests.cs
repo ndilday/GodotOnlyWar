@@ -85,6 +85,65 @@ public class FactionStrategyControllerTests
         Assert.Empty(orders);
     }
 
+    [Fact]
+    public void GenerateFactionOrders_DefensiveOnly_NotUnderAssault_GeneratesNothing()
+    {
+        // A peaceful Imperial world: the PDF has plenty of spare force but no enemy to fortify
+        // against, so a defensive-only plan produces no orders.
+        Faction pdf = CreateDefaultFaction();
+        Sector sector = BuildSectorWithFactions((pdf, population: 1_000_000, organization: 100, isPublic: true));
+
+        List<Order> orders = new FactionStrategyController()
+            .GenerateFactionOrders(pdf, sector, defensiveOnly: true);
+
+        Assert.Empty(orders);
+    }
+
+    [Fact]
+    public void GenerateFactionOrders_DefensiveOnly_UnderAssault_BuildsDefensesAndNoOffensive()
+    {
+        // Default + a public enemy share the region, so the world is under assault and, with two
+        // public factions, the region has no single controller — no garrison is pinned and the full
+        // PDF force is free to dig in.
+        Faction pdf = CreateDefaultFaction();
+        Faction enemy = CreateNonPlayerFaction();
+        Sector sector = BuildSectorWithFactions(
+            (pdf, population: 1_000_000, organization: 100, isPublic: true),
+            (enemy, population: 1_000, organization: 100, isPublic: true));
+
+        List<Order> orders = new FactionStrategyController()
+            .GenerateFactionOrders(pdf, sector, defensiveOnly: true);
+
+        Assert.NotEmpty(orders);
+        // Defensive only: every order is a fortification / listening-post build, never an offensive.
+        Assert.All(orders, o => Assert.IsType<ConstructionMission>(o.Mission));
+        Assert.All(orders, o => Assert.Empty(o.AssignedSquads));
+    }
+
+    private static Sector BuildSectorWithFactions(
+        params (Faction faction, long population, int organization, bool isPublic)[] factions)
+    {
+        Planet planet = CreatePlanet();
+        foreach ((Faction faction, long population, int organization, bool isPublic) in factions)
+        {
+            PlanetFaction planetFaction = new(faction) { IsPublic = isPublic };
+            planet.PlanetFactionMap[faction.Id] = planetFaction;
+            RegionFaction regionFaction = new(planetFaction, planet.Regions[0])
+            {
+                Population = population,
+                Organization = organization,
+                IsPublic = isPublic
+            };
+            planet.Regions[0].RegionFactionMap[faction.Id] = regionFaction;
+        }
+        return new Sector(CreatePlayerForce(), [], [planet], []);
+    }
+
+    private static Faction CreateDefaultFaction(int id = 3, string name = "Imperium")
+    {
+        return BuildFaction(id, name, isPlayer: false, isDefault: true);
+    }
+
     private static Sector BuildSectorWithSingleRegionFaction(
         Faction faction, long population, int organization, bool isPublic)
     {

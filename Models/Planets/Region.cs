@@ -14,8 +14,12 @@ namespace OnlyWar.Models.Planets
         public float IntelligenceLevel { get; set; }
         // The total population (in thousands) the region's land can sustain across all
         // factions. Organic growth slows as the region's combined population approaches
-        // this value. A value of 0 (or less) is treated as uncapped.
+        // this value. A value of 0 (or less) is treated as uncapped. Tyranid Consumption
+        // temporarily degrades this below MaximumCarryingCapacity (PRD §4.24).
         public long CarryingCapacity { get; set; }
+        // The region's natural (undegraded) carrying capacity — the ceiling CarryingCapacity
+        // recovers toward after biomass consumption. Equal to CarryingCapacity at generation.
+        public long MaximumCarryingCapacity { get; set; }
         public List<Mission> SpecialMissions { get; }
         // territory is diamond-shaped
         // 1
@@ -33,6 +37,21 @@ namespace OnlyWar.Models.Planets
             get
             {
                 return RegionFactionMap.Sum(rfm => rfm.Value.Population);
+            }
+        }
+
+        // The population that competes for the land's carrying capacity: every faction except
+        // biomass-consumers (Tyranids), which neither draw on nor are limited by capacity but
+        // devour it instead (PRD §4.24). This — not the full Population — feeds the growth
+        // crowding factor, so a region swarming with Tyranids does not artificially starve its
+        // remaining inhabitants; they die from the land being consumed, not from Tyranid headcount.
+        public long NonConsumerPopulation
+        {
+            get
+            {
+                return RegionFactionMap.Values
+                    .Where(rf => rf.PlanetFaction.Faction.GrowthType != GrowthType.Consumption)
+                    .Sum(rf => rf.Population);
             }
         }
 
@@ -66,7 +85,7 @@ namespace OnlyWar.Models.Planets
             }
         }
 
-        public Region(int id, Planet planet, int regionType, string name, RegionCoordinate coordinates, float intelligenceLevel, long carryingCapacity = 0)
+        public Region(int id, Planet planet, int regionType, string name, RegionCoordinate coordinates, float intelligenceLevel, long carryingCapacity = 0, long maximumCarryingCapacity = -1)
         {
             Id = id;
             Planet = planet;
@@ -75,6 +94,10 @@ namespace OnlyWar.Models.Planets
             Coordinates = coordinates;
             IntelligenceLevel = intelligenceLevel;
             CarryingCapacity = carryingCapacity;
+            // A negative sentinel means "initialize to the natural ceiling" — the common case at
+            // generation, where the region has not yet been degraded. The load path passes the
+            // persisted maximum explicitly.
+            MaximumCarryingCapacity = maximumCarryingCapacity < 0 ? carryingCapacity : maximumCarryingCapacity;
             SpecialMissions = new List<Mission>();
         }
 
