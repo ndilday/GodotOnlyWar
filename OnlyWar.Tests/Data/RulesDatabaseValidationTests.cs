@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using OnlyWar.Builders;
 using OnlyWar.Models;
 using OnlyWar.Models.Soldiers.Ratings;
 using OnlyWar.Models.Squads;
@@ -168,6 +169,46 @@ public class RulesDatabaseValidationTests
         Assert.Contains("Tactical Squad", squadTemplateNames);
         Assert.Contains("Assault Squad", squadTemplateNames);
         Assert.Contains("Devastator Squad", squadTemplateNames);
+    }
+
+    [Fact]
+    public void DefaultFaction_HasANonHqGarrisonSquadSoItsGarrisonCanDefend()
+    {
+        // The default (PDF) faction previously shipped with no squad templates, so a PDF
+        // garrison mobilised zero squads and every assault on it resolved as unopposed
+        // (PrepareAssaultMissionStep). It now fields a humble infantry squad (PRD §4.24).
+        var rules = RulesDatabaseFixture.LoadRules();
+        var pdf = rules.Factions.Single(f => f.IsDefaultFaction);
+
+        var garrisonSquads = pdf.SquadTemplates.Values
+            .Where(st => (st.SquadType & SquadTypes.HQ) == 0)
+            .ToList();
+        Assert.NotEmpty(garrisonSquads);
+
+        SquadTemplate infantry = pdf.SquadTemplates.Values.Single(st => st.Name == "PDF Infantry Squad");
+        // Battle value is derived from the members, so a positive value proves the trooper
+        // point values (used for pool accounting, §4.24) are populated.
+        Assert.True(infantry.BattleValue > 0);
+        Assert.All(infantry.Elements, e => Assert.True(e.SoldierTemplate.BattleValue > 0));
+    }
+
+    [Fact]
+    public void ForceGenerator_MobilisesADefendingForceForADefaultFactionGarrison()
+    {
+        // The end-to-end path a PDF garrison takes when assaulted: ForceGenerator's Garrison
+        // profile must now produce squads for the default faction.
+        var rules = RulesDatabaseFixture.LoadRules();
+        var pdf = rules.Factions.Single(f => f.IsDefaultFaction);
+
+        List<Squad> force = ForceGenerator.GenerateForce(new ForceGenerationRequest
+        {
+            Faction = pdf,
+            TargetBattleValue = 500,
+            Profile = ForceCompositionProfile.Garrison
+        });
+
+        Assert.NotEmpty(force);
+        Assert.All(force, s => Assert.Equal("PDF Infantry Squad", s.SquadTemplate.Name));
     }
 
     [Fact]

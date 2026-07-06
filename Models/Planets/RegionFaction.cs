@@ -39,13 +39,57 @@ namespace OnlyWar.Models.Planets
         // this region (i.e. the feinting force's own region), drawing a counterattack.
         public float ProvocationLevel { get; set; }
 
+        // Per-observer intelligence belief: how well another faction (keyed by its faction id)
+        // believes it knows THIS region faction's fighting strength. Raised by that faction's
+        // recon missions and consumed by its offensive targeting to shrink the noise on its
+        // strength estimate (PRD §4.24 recon; an early, per-region slice of the intelligence-as-
+        // belief model, §4.21). Persisted per (region, observed faction, observer faction).
+        public readonly Dictionary<int, float> ObserverIntel;
+
         public RegionFaction(PlanetFaction planetFaction, Region region)
         {
             LandedSquads = new List<Squad>();
+            ObserverIntel = new Dictionary<int, float>();
             PlanetFaction = planetFaction;
             Region = region;
             IsPublic = planetFaction.IsPublic;
             Organization = -1;
+        }
+
+        // How well observerFactionId believes it knows this region faction's strength (0 = no intel).
+        public float GetObserverIntel(int observerFactionId) =>
+            ObserverIntel.TryGetValue(observerFactionId, out float level) ? level : 0f;
+
+        // Raises an observer's belief about this region faction (a recon result). Ignores
+        // non-positive amounts so a failed recon never erodes prior knowledge here.
+        public void AddObserverIntel(int observerFactionId, float amount)
+        {
+            if (amount <= 0) return;
+            ObserverIntel[observerFactionId] = GetObserverIntel(observerFactionId) + amount;
+        }
+
+        // Adds/removes fighting strength (in battle-value points) from the pool that represents
+        // this faction's army: Population for a population-is-military horde (Tyranids, cults),
+        // Garrison for a faction with a separate civilian base (the Imperium, Tau) — PRD §4.24.
+        // Amounts are battle value: forces are raised, lost, and returned in the same currency.
+        public void AddMilitaryStrength(long battleValue)
+        {
+            if (battleValue <= 0) return;
+            if (PlanetFaction.Faction.PopulationIsMilitary) Population += battleValue;
+            else Garrison += battleValue;
+        }
+
+        public void RemoveMilitaryStrength(long battleValue)
+        {
+            if (battleValue <= 0) return;
+            if (PlanetFaction.Faction.PopulationIsMilitary)
+            {
+                Population = Population > battleValue ? Population - battleValue : 0;
+            }
+            else
+            {
+                Garrison = Garrison > battleValue ? Garrison - battleValue : 0;
+            }
         }
     }
 }

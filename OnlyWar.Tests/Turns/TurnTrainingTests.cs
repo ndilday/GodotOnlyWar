@@ -328,8 +328,7 @@ public class TurnTrainingTests
                 [],
                 TestModelFactory.TestArmor,
                 [new SquadTemplateElement(TestModelFactory.MarineTemplate, 0, 10)],
-                SquadTypes.None,
-                10);
+                SquadTypes.None);
             squadTemplate.Faction = playerFaction;
             return squadTemplate;
         }
@@ -343,8 +342,7 @@ public class TurnTrainingTests
                 [],
                 TestModelFactory.TestArmor,
                 [new SquadTemplateElement(TestModelFactory.SergeantTemplate, 1, 1), new SquadTemplateElement(TestModelFactory.MarineTemplate, 1, 10)],
-                SquadTypes.Scout,
-                10);
+                SquadTypes.Scout);
             squadTemplate.Faction = playerFaction;
             return squadTemplate;
         }

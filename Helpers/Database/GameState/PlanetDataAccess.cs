@@ -239,6 +239,44 @@ namespace OnlyWar.Helpers.Database.GameState
                     region.RegionFactionMap[regionFaction.PlanetFaction.Faction.Id] = regionFaction;
                 }
             }
+
+            PopulateObserverIntel(connection, regionMap);
+        }
+
+        // Loads per-observer intelligence beliefs onto the already-built region factions. Tolerant
+        // of the table being absent (saves that predate the recon-intel feature) — those simply
+        // load with no prior intel, and the AI re-recons.
+        private static void PopulateObserverIntel(IDbConnection connection,
+                                                  IReadOnlyDictionary<int, Region> regionMap)
+        {
+            using (var tableCheck = connection.CreateCommand())
+            {
+                tableCheck.CommandText =
+                    "SELECT name FROM sqlite_master WHERE type='table' AND name='RegionFactionObserverIntel'";
+                if (tableCheck.ExecuteScalar() == null)
+                {
+                    return;
+                }
+            }
+
+            using (var command = connection.CreateCommand())
+            {
+                command.CommandText = "SELECT RegionId, FactionId, ObserverFactionId, IntelLevel FROM RegionFactionObserverIntel";
+                var reader = command.ExecuteReader();
+                while (reader.Read())
+                {
+                    int regionId = reader.GetInt32(0);
+                    int factionId = reader.GetInt32(1);
+                    int observerFactionId = reader.GetInt32(2);
+                    float intelLevel = (float)reader.GetDouble(3);
+
+                    if (regionMap.TryGetValue(regionId, out Region region)
+                        && region.RegionFactionMap.TryGetValue(factionId, out RegionFaction regionFaction))
+                    {
+                        regionFaction.ObserverIntel[observerFactionId] = intelLevel;
+                    }
+                }
+            }
         }
 
         public Dictionary<int, Character> GetCharacterMap(IDbConnection connection, 
@@ -405,6 +443,19 @@ namespace OnlyWar.Helpers.Database.GameState
                         command.AddParam("@antiAir", regionFaction.AntiAir);
                         command.AddParam("@growthMultiplier", regionFaction.GrowthMultiplier);
                         command.ExecuteNonQuery();
+                    }
+                    foreach (KeyValuePair<int, float> intel in regionFaction.ObserverIntel)
+                    {
+                        using var intelCommand = transaction.Connection.CreateCommand();
+                        intelCommand.Transaction = transaction;
+                        intelCommand.CommandText = @"INSERT INTO RegionFactionObserverIntel
+                            (RegionId, FactionId, ObserverFactionId, IntelLevel) VALUES
+                            (@regionId, @factionId, @observerFactionId, @intelLevel);";
+                        intelCommand.AddParam("@regionId", region.Id);
+                        intelCommand.AddParam("@factionId", regionFaction.PlanetFaction.Faction.Id);
+                        intelCommand.AddParam("@observerFactionId", intel.Key);
+                        intelCommand.AddParam("@intelLevel", intel.Value);
+                        intelCommand.ExecuteNonQuery();
                     }
                 }
             }

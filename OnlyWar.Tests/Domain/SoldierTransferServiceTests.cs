@@ -413,7 +413,6 @@ public class SoldierTransferServiceTests
             [],
             TestModelFactory.TestArmor,
             elements.Select(element => new SquadTemplateElement(element.Template, element.Min, element.Max)).ToList(),
-            squadTypes,
-            10);
+            squadTypes);
     }
 }

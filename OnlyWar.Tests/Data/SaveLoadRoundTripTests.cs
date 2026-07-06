@@ -382,6 +382,56 @@ public class SaveLoadRoundTripTests
     }
 
     [Fact]
+    public void SaveThenLoad_RegionFactionObserverIntel_SurvivesRoundTrip()
+    {
+        Sector sector = SectorBuilder.GenerateSector(1, _data, _date, "Intel Round Trip Chapter");
+        GameDataSingleton.Instance.LoadGameDataFromBlob(_data, _date, sector);
+
+        Region region = sector.Planets.Values
+            .SelectMany(p => p.Regions)
+            .First(r => r.RegionFactionMap.Count > 0);
+        RegionFaction target = region.RegionFactionMap.Values.First();
+        const int observerA = 2;
+        const int observerB = 3;
+        target.AddObserverIntel(observerA, 1.5f);
+        target.AddObserverIntel(observerB, 0.25f);
+
+        string dbPath = Path.Combine(
+            Path.GetTempPath(), $"onlywar_intel_roundtrip_{Guid.NewGuid():N}.s3db");
+        try
+        {
+            Save(sector, dbPath, _data.Factions.SelectMany(f => f.Units).ToList());
+            GameStateDataBlob loaded = Load(dbPath);
+
+            RegionFaction loadedTarget = loaded.Planets
+                .SelectMany(p => p.Regions)
+                .Where(r => r.Id == region.Id)
+                .SelectMany(r => r.RegionFactionMap.Values)
+                .Single(rf => rf.PlanetFaction.Faction.Id == target.PlanetFaction.Faction.Id);
+
+            Assert.Equal(1.5f, loadedTarget.GetObserverIntel(observerA));
+            Assert.Equal(0.25f, loadedTarget.GetObserverIntel(observerB));
+            // An observer with no recorded intel round-trips as zero (no entry).
+            Assert.Equal(0f, loadedTarget.GetObserverIntel(999));
+        }
+        finally
+        {
+            Microsoft.Data.Sqlite.SqliteConnection.ClearAllPools();
+            try
+            {
+                if (File.Exists(dbPath))
+                {
+                    File.Delete(dbPath);
+                }
+            }
+            catch (IOException)
+            {
+                // Best-effort cleanup of a temp file; ignore if still locked.
+            }
+        }
+    }
+
+    [Fact]
     public void SaveThenLoad_PlayerOrderWithNonSpecialMission_SurvivesRoundTrip()
     {
         Sector sector = SectorBuilder.GenerateSector(1, _data, _date, "Order Round Trip Chapter");

@@ -12,6 +12,14 @@ namespace OnlyWar.Tests.Turns;
 public class CombatModelTests
 {
     [Fact]
+    public void SquadBattleValue_IsDerivedFromMemberBattleValues()
+    {
+        // The test squad is one Sergeant (BV 2) plus up to four Marines (BV 2 each) = 10, computed
+        // from the roster rather than stored, so it can never drift from its members (PRD §4.24).
+        Assert.Equal(10, TestModelFactory.SquadTemplate.BattleValue);
+    }
+
+    [Fact]
     public void FactionDefaults_PopulationIsMilitary_OnlyForNpcHordes()
     {
         SectorSimulationFixture fixture = SectorSimulationFixture.Create();
@@ -49,8 +57,8 @@ public class CombatModelTests
         civilian.Population = 20_000;
         civilian.Garrison = 1_000;
 
-        TurnController.ApplyMilitaryCasualties(horde, 3_000);
-        TurnController.ApplyMilitaryCasualties(civilian, 400);
+        horde.RemoveMilitaryStrength(3_000);
+        civilian.RemoveMilitaryStrength(400);
 
         Assert.Equal(7_000, horde.Population);     // a horde bleeds from its population
         Assert.Equal(500, horde.Garrison);         // its garrison is untouched
@@ -64,7 +72,7 @@ public class CombatModelTests
         SectorSimulationFixture fixture = SectorSimulationFixture.Create();
         RegionFaction horde = fixture.AddConsumptionFaction(0, population: 1_000, organization: 100);
 
-        TurnController.ApplyMilitaryCasualties(horde, 5_000);
+        horde.RemoveMilitaryStrength(5_000);
 
         Assert.Equal(0, horde.Population);
     }

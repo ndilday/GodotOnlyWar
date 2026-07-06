@@ -4,7 +4,7 @@ using Microsoft.Data.Sqlite;
 
 if (args.Length < 2)
 {
-    Console.Error.WriteLine("Usage: RulesDbTool <schema|training-source|migrate-training|migrate-progenoid|migrate-ratings|migrate-planet-scales|migrate-fortification|migrate-tyranids|migrate-tyranid-squads|migrate-evasion|migrate-squad-caps|migrate-veteran-sergeant|migrate-collapse-sergeants|migrate-chaplaincy|migrate-company-judiciar|migrate-company-apothecary|migrate-remove-veteran-captain|migrate-remove-recruitment-captain|migrate-starting-fleet-capacity|remove-unused-unit-templates> <db-path>");
+    Console.Error.WriteLine("Usage: RulesDbTool <schema|training-source|migrate-training|migrate-progenoid|migrate-ratings|migrate-planet-scales|migrate-fortification|migrate-tyranids|migrate-tyranid-squads|migrate-evasion|migrate-squad-caps|migrate-veteran-sergeant|migrate-collapse-sergeants|migrate-chaplaincy|migrate-company-judiciar|migrate-company-apothecary|migrate-remove-veteran-captain|migrate-remove-recruitment-captain|migrate-starting-fleet-capacity|migrate-pdf|remove-unused-unit-templates> <db-path>");
     return 1;
 }
 
@@ -13,7 +13,7 @@ string dbPath = args[1];
 string connectionString = new SqliteConnectionStringBuilder
 {
     DataSource = dbPath,
-    Mode = command is "migrate-training" or "migrate-progenoid" or "migrate-ratings" or "migrate-planet-scales" or "migrate-fortification" or "migrate-tyranids" or "migrate-tyranid-squads" or "migrate-evasion" or "migrate-squad-caps" or "migrate-veteran-sergeant" or "migrate-collapse-sergeants" or "migrate-chaplaincy" or "migrate-company-judiciar" or "migrate-company-apothecary" or "migrate-remove-veteran-captain" or "migrate-remove-recruitment-captain" or "migrate-starting-fleet-capacity" or "remove-unused-unit-templates" ? SqliteOpenMode.ReadWriteCreate : SqliteOpenMode.ReadOnly
+    Mode = command is "migrate-training" or "migrate-progenoid" or "migrate-ratings" or "migrate-planet-scales" or "migrate-fortification" or "migrate-tyranids" or "migrate-tyranid-squads" or "migrate-evasion" or "migrate-squad-caps" or "migrate-veteran-sergeant" or "migrate-collapse-sergeants" or "migrate-chaplaincy" or "migrate-company-judiciar" or "migrate-company-apothecary" or "migrate-remove-veteran-captain" or "migrate-remove-recruitment-captain" or "migrate-starting-fleet-capacity" or "migrate-pdf" or "remove-unused-unit-templates" ? SqliteOpenMode.ReadWriteCreate : SqliteOpenMode.ReadOnly
 }.ToString();
 
 using SqliteConnection connection = new(connectionString);
@@ -80,6 +80,9 @@ switch (command)
         break;
     case "migrate-starting-fleet-capacity":
         MigrateStartingFleetCapacity(connection);
+        break;
+    case "migrate-pdf":
+        MigratePdf(connection);
         break;
     default:
         Console.Error.WriteLine($"Unknown command: {command}");
@@ -666,14 +669,14 @@ static void MigrateTyranidSquads(SqliteConnection connection)
     int lictorSquad = ExecuteScalarInt(connection, transaction, "SELECT COALESCE(MAX(Id), 0) + 1 FROM SquadTemplate");
     InsertSquadTemplate(connection, transaction, lictorSquad, Tyranids, "Lictor",
         defaultArmorId: Chitin15mm, defaultWeaponSetId: ScythingTalons,
-        squadType: Scout | Elite, battleValue: 75);
+        squadType: Scout | Elite);
     InsertSquadElement(connection, transaction, lictorSquad, lictorSoldier, min: 1, max: 1);
 
     // Ravener: fast-attack pack of 5, no separate leader statline. Scout.
     int ravenerSquad = lictorSquad + 1;
     InsertSquadTemplate(connection, transaction, ravenerSquad, Tyranids, "Ravener Pack",
         defaultArmorId: Chitin15mm, defaultWeaponSetId: ScythingTalons,
-        squadType: Scout, battleValue: 225);
+        squadType: Scout);
     InsertSquadElement(connection, transaction, ravenerSquad, ravenerSoldier, min: 5, max: 5);
 
     transaction.Commit();
@@ -1115,6 +1118,170 @@ static void MigrateStartingFleetCapacity(SqliteConnection connection)
         $"Starting fleet capacity migration complete. Added {inserted} Strike Cruiser template link(s).");
 }
 
+// The default-Imperial faction (the PDF) shipped with no species, soldier, or squad
+// templates of its own, so its garrison could field no squads and every assault on it
+// resolved as "unopposed" (PrepareAssaultMissionStep). Give it a single humble infantry
+// squad so a PDF garrison can actually defend (PRD §4.24 "PDF as a Defensive Actor").
+//
+// The PDF is deliberately weaker than both the future Imperial Guard and the Genestealer
+// Cult's Brood Brothers (who are themselves ex-PDF): its troopers share the Brood Brother
+// human baseline but with every attribute dropped to base-value 10 (Brood Brothers have
+// base-12 physicals), wear Light Armor instead of Flak Armor, and carry autoguns rather
+// than lasguns, with one heavy stubber per squad for support.
+static void MigratePdf(SqliteConnection connection)
+{
+    using SqliteTransaction transaction = connection.BeginTransaction();
+
+    const int Imperial = 0; // Faction.Id of the default (PDF) faction.
+
+    // Idempotency guard.
+    if (ExecuteScalarInt(connection, transaction,
+        "SELECT COUNT(*) FROM SoldierTemplate WHERE Name = 'PDF Trooper' AND FactionId = 0") > 0)
+    {
+        Console.WriteLine("PDF migration already applied; nothing to do.");
+        return;
+    }
+
+    // Resolve the rules data this depends on by name/value so we are not tied to exact ids.
+    int lightArmorId = RequireId(connection, transaction,
+        "SELECT Id FROM ArmorTemplate WHERE Name = 'Light Armor'", "Light Armor ArmorTemplate");
+    int autogunWeaponId = RequireId(connection, transaction,
+        "SELECT Id FROM RangedWeaponTemplate WHERE Name = 'Autogun'", "Autogun RangedWeaponTemplate");
+    int heavyStubberWeaponId = RequireId(connection, transaction,
+        "SELECT Id FROM RangedWeaponTemplate WHERE Name = 'Heavy Stubber'", "Heavy Stubber RangedWeaponTemplate");
+    // The attribute template whose base value is 10 (Brood Brothers use the base-12 template
+    // for their physical attributes; the PDF drops those to 10).
+    int value10AttrId = RequireId(connection, transaction,
+        "SELECT Id FROM AttributeTemplate WHERE ABS(BaseValue - 10.0) < 0.001 ORDER BY Id LIMIT 1",
+        "base-value-10 AttributeTemplate");
+
+    // Skills used by the PDF MOS training (all global BaseSkill rows).
+    int genericMelee = RequireId(connection, transaction, "SELECT Id FROM BaseSkill WHERE Name = 'Generic Melee'", "Generic Melee skill");
+    int genericRanged = RequireId(connection, transaction, "SELECT Id FROM BaseSkill WHERE Name = 'Generic Ranged'", "Generic Ranged skill");
+    int leadership = RequireId(connection, transaction, "SELECT Id FROM BaseSkill WHERE Name = 'Leadership'", "Leadership skill");
+    int tactics = RequireId(connection, transaction, "SELECT Id FROM BaseSkill WHERE Name = 'Tactics'", "Tactics skill");
+
+    // Clone the Brood Brother human statline (body, senses, movement, size) so the PDF human
+    // is a proven-valid human, then override the three physical attributes down to base-10.
+    // A soldier template's species is resolved within its own faction (SquadTemplateDataAccess),
+    // so the PDF needs its own species row rather than reusing the Cult's Brood Brother.
+    int broodBrotherSpecies = RequireId(connection, transaction,
+        "SELECT Id FROM Species WHERE Name = 'Brood Brother'", "Brood Brother Species (baseline)");
+    (int bodyTypeId, int intel, int per, int ego, int cha, int psy, int atkSpd, int moveSpd, int size, int width, int depth) =
+        ReadHumanBaseline(connection, transaction, broodBrotherSpecies);
+
+    int pdfSpecies = ExecuteScalarInt(connection, transaction, "SELECT COALESCE(MAX(Id), 0) + 1 FROM Species");
+    InsertSpecies(connection, transaction, pdfSpecies, Imperial, bodyTypeId, "PDF Trooper",
+        str: value10AttrId, dex: value10AttrId, con: value10AttrId,
+        intel: intel, per: per, ego: ego, cha: cha, psy: psy,
+        atkSpd: atkSpd, moveSpd: moveSpd, size: size, width: width, depth: depth);
+
+    // Imperial-owned weapon sets. The autogun is the line weapon; the heavy stubber is the
+    // squad's single support weapon (mounted via a weapon option below).
+    int autogunSet = ExecuteScalarInt(connection, transaction, "SELECT COALESCE(MAX(Id), 0) + 1 FROM WeaponSet");
+    InsertRangedWeaponSet(connection, transaction, autogunSet, Imperial, "Autogun", autogunWeaponId);
+    int heavyStubberSet = autogunSet + 1;
+    InsertRangedWeaponSet(connection, transaction, heavyStubberSet, Imperial, "Heavy Stubber", heavyStubberWeaponId);
+
+    // Soldier templates. BattleValue is the point value in force generation and pool
+    // accounting (PRD §4.24): the conscript trooper is 4 (a notch below the Brood Brother's
+    // 5), the sergeant 6.
+    int trooper = ExecuteScalarInt(connection, transaction, "SELECT COALESCE(MAX(Id), 0) + 1 FROM SoldierTemplate");
+    InsertPdfSoldier(connection, transaction, trooper, Imperial, pdfSpecies, "PDF Trooper",
+        rank: 1, isSquadLeader: false, battleValue: 4);
+    int sergeant = trooper + 1;
+    InsertPdfSoldier(connection, transaction, sergeant, Imperial, pdfSpecies, "PDF Sergeant",
+        rank: 3, isSquadLeader: true, battleValue: 6);
+
+    // MOS training: modest generic combat for the conscripts (below the Brood Brothers' 4),
+    // with the sergeant adding a little Leadership/Tactics to justify his premium.
+    InsertMosTraining(connection, transaction, trooper, genericRanged, 3);
+    InsertMosTraining(connection, transaction, trooper, genericMelee, 2);
+    InsertMosTraining(connection, transaction, sergeant, genericRanged, 3);
+    InsertMosTraining(connection, transaction, sergeant, genericMelee, 2);
+    InsertMosTraining(connection, transaction, sergeant, leadership, 2);
+    InsertMosTraining(connection, transaction, sergeant, tactics, 2);
+
+    // A single non-HQ squad so ForceGenerator's Garrison profile can mobilise it: one
+    // sergeant plus nine troopers, all in Light Armor with autoguns, one of whom swaps to a
+    // heavy stubber via the weapon option. SquadType None keeps it out of the HQ filter.
+    const int SquadTypeNone = 0;
+    int squad = ExecuteScalarInt(connection, transaction, "SELECT COALESCE(MAX(Id), 0) + 1 FROM SquadTemplate");
+    InsertSquadTemplate(connection, transaction, squad, Imperial, "PDF Infantry Squad",
+        defaultArmorId: lightArmorId, defaultWeaponSetId: autogunSet, squadType: SquadTypeNone);
+    InsertSquadElement(connection, transaction, squad, sergeant, min: 1, max: 1);
+    InsertSquadElement(connection, transaction, squad, trooper, min: 9, max: 9);
+
+    int weaponOption = ExecuteScalarInt(connection, transaction, "SELECT COALESCE(MAX(Id), 0) + 1 FROM SquadTemplateWeaponOption");
+    Execute(connection, transaction,
+        @"INSERT INTO SquadTemplateWeaponOption (Id, SquadTemplateId, Name, MinimumRequired, MaximumAllowed)
+          VALUES ($id, $sq, 'Support Weapon', 1, 1)",
+        ("$id", weaponOption), ("$sq", squad));
+    int optionLink = ExecuteScalarInt(connection, transaction, "SELECT COALESCE(MAX(Id), 0) + 1 FROM SquadTemplateWeaponOptionWeaponSet");
+    Execute(connection, transaction,
+        @"INSERT INTO SquadTemplateWeaponOptionWeaponSet (Id, WeaponSetId, SquadTemplateWeaponOptionId)
+          VALUES ($id, $ws, $opt)",
+        ("$id", optionLink), ("$ws", heavyStubberSet), ("$opt", weaponOption));
+
+    transaction.Commit();
+    Console.WriteLine(
+        $"PDF migration complete. Added species {pdfSpecies}, soldiers (Trooper {trooper}, Sergeant {sergeant}), " +
+        $"weapon sets (Autogun {autogunSet}, Heavy Stubber {heavyStubberSet}), and PDF Infantry Squad {squad}.");
+}
+
+// Reads the human baseline columns (everything except the physical attributes, which the PDF
+// overrides) from an existing species row.
+static (int bodyTypeId, int intel, int per, int ego, int cha, int psy, int atkSpd, int moveSpd, int size, int width, int depth)
+    ReadHumanBaseline(SqliteConnection connection, SqliteTransaction transaction, int speciesId)
+{
+    using SqliteCommand command = connection.CreateCommand();
+    command.Transaction = transaction;
+    command.CommandText =
+        @"SELECT BodyTypeId, IntelligenceTemplateId, PerceptionTemplateId, EgoTemplateId, CharismaTemplateId,
+                 PsychicTemplateId, AttackSpeedTemplateId, MoveSpeedTemplateId, SizeTemplateId, Width, Depth
+          FROM Species WHERE Id = $id";
+    command.Parameters.AddWithValue("$id", speciesId);
+    using SqliteDataReader reader = command.ExecuteReader();
+    if (!reader.Read())
+    {
+        throw new InvalidOperationException($"Species id {speciesId} not found while reading the human baseline.");
+    }
+    return (reader.GetInt32(0), reader.GetInt32(1), reader.GetInt32(2), reader.GetInt32(3), reader.GetInt32(4),
+            reader.GetInt32(5), reader.GetInt32(6), reader.GetInt32(7), reader.GetInt32(8), reader.GetInt32(9), reader.GetInt32(10));
+}
+
+static void InsertRangedWeaponSet(SqliteConnection connection, SqliteTransaction transaction, int id, int factionId,
+                                  string name, int primaryRangedWeaponId)
+{
+    Execute(connection, transaction,
+        @"INSERT INTO WeaponSet
+            (Id, FactionId, Name, PrimaryRangedWeaponId, SecondaryRangedWeaponId, PrimaryMeleeWeaponId, SecondaryMeleeWeaponId)
+          VALUES ($id, $f, $n, $r, NULL, NULL, NULL)",
+        ("$id", id), ("$f", factionId), ("$n", name), ("$r", primaryRangedWeaponId));
+}
+
+// Like InsertSoldierTemplate, but sets IsSquadLeader and the BattleValue point value.
+static void InsertPdfSoldier(SqliteConnection connection, SqliteTransaction transaction, int id, int factionId,
+                             int speciesId, string name, int rank, bool isSquadLeader, int battleValue)
+{
+    Execute(connection, transaction,
+        @"INSERT INTO SoldierTemplate
+            (Id, FactionId, SpeciesId, Name, Rank, SubRank, IsSquadLeader, SpecialistType, WorkExperienceTrainingProfileId, BattleValue)
+          VALUES ($id, $f, $s, $n, $rank, 1, $leader, 0, NULL, $bv)",
+        ("$id", id), ("$f", factionId), ("$s", speciesId), ("$n", name), ("$rank", rank),
+        ("$leader", isSquadLeader ? 1 : 0), ("$bv", battleValue));
+}
+
+static int RequireId(SqliteConnection connection, SqliteTransaction transaction, string sql, string description)
+{
+    int id = ExecuteScalarInt(connection, transaction, sql);
+    if (id == 0)
+    {
+        throw new InvalidOperationException($"Required rules data not found: {description}.");
+    }
+    return id;
+}
+
 static void RemoveCaptainVariant(SqliteConnection connection, string variantName)
 {
     using SqliteTransaction transaction = connection.BeginTransaction();
@@ -1167,15 +1334,17 @@ static void SetEvasion(SqliteConnection connection, SqliteTransaction transactio
         ("$m", meleeEvasion), ("$r", rangedEvasion), ("$a", abilities), ("$n", speciesName));
 }
 
+// BattleValue is no longer stored on SquadTemplate — it is derived from the members' point values
+// (PRD §4.24), so it is neither a parameter nor a column here.
 static void InsertSquadTemplate(SqliteConnection connection, SqliteTransaction transaction, int id, int factionId,
-                                string name, int defaultArmorId, int defaultWeaponSetId, int squadType, int battleValue)
+                                string name, int defaultArmorId, int defaultWeaponSetId, int squadType)
 {
     Execute(connection, transaction,
         @"INSERT INTO SquadTemplate
-            (Id, FactionId, Name, DefaultArmorId, DefaultWeaponSetId, SquadType, BattleValue, BodyguardSquadTemplateId)
-          VALUES ($id, $f, $n, $a, $w, $t, $bv, NULL)",
+            (Id, FactionId, Name, DefaultArmorId, DefaultWeaponSetId, SquadType, BodyguardSquadTemplateId)
+          VALUES ($id, $f, $n, $a, $w, $t, NULL)",
         ("$id", id), ("$f", factionId), ("$n", name), ("$a", defaultArmorId),
-        ("$w", defaultWeaponSetId), ("$t", squadType), ("$bv", battleValue));
+        ("$w", defaultWeaponSetId), ("$t", squadType));
 }
 
 static void InsertSquadElement(SqliteConnection connection, SqliteTransaction transaction, int squadTemplateId,

@@ -36,6 +36,9 @@ CREATE TABLE Region (Id INTEGER PRIMARY KEY UNIQUE NOT NULL, PlanetId INTEGER NO
 -- GrowthMultiplier (default 1.0) throttles organic growth; legacy rows default to 1.0 via a
 -- column-count guard in PlanetDataAccess.PopulateRegionFactions (Design/OpeningScenario.md §2.2, §7).
 CREATE TABLE RegionFaction (RegionId INTEGER REFERENCES Region (Id) NOT NULL, FactionId INTEGER NOT NULL, IsPublic BOOLEAN NOT NULL, Population BIGINT NOT NULL, Garrison INTEGER NOT NULL, Organization INTEGER NOT NULL, Entrenchment INTEGER NOT NULL, Detection INTEGER NOT NULL, AntiAir INTEGER NOT NULL, GrowthMultiplier REAL NOT NULL DEFAULT 1.0);
+-- Per-observer intelligence belief about a region faction's strength (PRD §4.24 recon). FactionId
+-- is the observed region faction; ObserverFactionId is the faction that holds the belief.
+CREATE TABLE RegionFactionObserverIntel (RegionId INTEGER REFERENCES Region (Id) NOT NULL, FactionId INTEGER NOT NULL, ObserverFactionId INTEGER NOT NULL, IntelLevel REAL NOT NULL);
 
 -- Table: PlanetFaction
 CREATE TABLE PlanetFaction (PlanetId INTEGER REFERENCES Planet (Id) NOT NULL, FactionId INTEGER NOT NULL, IsPublic BOOLEAN NOT NULL, PlanetaryControl INTEGER NOT NULL, PlayerReputation REAL NOT NULL, LeaderId INTEGER REFERENCES Character (Id));

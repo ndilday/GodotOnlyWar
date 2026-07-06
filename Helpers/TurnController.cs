@@ -309,7 +309,11 @@ namespace OnlyWar.Helpers
                 // remain on the map only to defend (see AssembleDefendingForce) if the feint
                 // draws a counterattack this turn.
                 if(order.Mission.MissionType == MissionType.Diversion) continue;
-                // TODO: decide how to handle patrol orders
+                // A patrol is a standing defensive screen, not an active mission: its squads land in
+                // the region and hold (FactionStrategyController.PlanPatrolMissionsOnPlanet), joining
+                // the defence if the region is raided (AssembleDefendingForce) and denying enemy
+                // recon that tries to scout it. The order itself launches nothing this turn.
+                if (order.Mission.MissionType == MissionType.Patrol) continue;
 
                 // A construction order with an assigned squad is the player (or any faction)
                 // fortifying a region: the squad spends the turn building rather than fighting.
@@ -438,6 +442,35 @@ namespace OnlyWar.Helpers
             ApplyConstruction(mission, amount);
         }
 
+        // Intel a completed recon always yields, even on a poor Tactics result: scouts that reach a
+        // region and return learn at least a rough sense of its strength. This guarantees the
+        // recon→assess→assault loop makes progress rather than stalling on unlucky checks.
+        internal const float ReconBaseIntelGain = 0.5f;
+
+        // True when the region faction is screened by a standing patrol of its own
+        // (FactionStrategyController.PlanPatrolMissionsOnPlanet lands patrol squads here), which
+        // intercepts enemy scouts and denies their intelligence.
+        internal static bool IsScreenedByPatrol(RegionFaction regionFaction) =>
+            regionFaction.LandedSquads.Any(s => s.CurrentOrders?.Mission.MissionType == MissionType.Patrol);
+
+        // Applies a resolved recon mission's result. The scouting faction sharpens its own belief
+        // about the reconnoitred region faction's strength — the intelligence its offensive
+        // targeting acts on (FactionStrategyController; PRD §4.24). Only the player/default faction's
+        // recon additionally feeds the shared fog-of-war IntelligenceLevel surfaced in the UI; enemy
+        // recon does not leak into the player's knowledge of the region.
+        internal static void ResolveReconResult(Faction reconningFaction, RegionFaction target, float impact)
+        {
+            if (reconningFaction != null)
+            {
+                // A good check learns more; a poor one still learns the baseline.
+                target.AddObserverIntel(reconningFaction.Id, Math.Max(impact, ReconBaseIntelGain));
+            }
+            if (reconningFaction == null || reconningFaction.IsPlayerFaction || reconningFaction.IsDefaultFaction)
+            {
+                target.Region.IntelligenceLevel += impact;
+            }
+        }
+
         private static void ApplyConstruction(ConstructionMission mission, int amount)
         {
             switch (mission.ConstructionType)
@@ -472,7 +505,13 @@ namespace OnlyWar.Helpers
                         regionFaction.Organization -= Math.Min(orgLost, regionFaction.Organization);
                         break;
                     case MissionType.Recon:
-                        context.Order.Mission.RegionFaction.Region.IntelligenceLevel += context.Impact;
+                        // A standing patrol screening the reconnoitred region intercepts the scouts
+                        // before they can report, so a screened region yields no intelligence (§4.24).
+                        if (!IsScreenedByPatrol(regionFaction))
+                        {
+                            ResolveReconResult(context.Order.AssignedSquads.FirstOrDefault()?.Faction,
+                                               regionFaction, context.Impact);
+                        }
                         break;
                     case MissionType.Sabotage:
                         SabotageMission sabotageMission = (SabotageMission)context.Order.Mission;
@@ -503,16 +542,18 @@ namespace OnlyWar.Helpers
                         }
                         break;
                 }
-                int enemiesKilled = context.EnemiesKilled;
+                // Casualties come out of the defender's fighting strength — Population for a horde
+                // whose numbers are its army, otherwise Garrison — never its civilian population.
+                // Measured in battle value (the fallen defenders' point values) so a few elite
+                // losses weigh more than a mass of conscripts (PRD §4.24). Entrenchment still blunts
+                // the toll a stormed-into region actually suffers.
+                long defenderCasualties = FallenBattleValue(context.OpposingSquads);
                 if (regionFaction.Entrenchment > 0)
                 {
                     float ratio = 1.0f - Math.Min(regionFaction.Entrenchment / 10.0f, 1.0f);
-                    enemiesKilled = (int)(enemiesKilled * ratio);
+                    defenderCasualties = (long)(defenderCasualties * ratio);
                 }
-                // Casualties come out of the defender's fighting strength — its Population for a
-                // horde whose numbers are its army, otherwise its Garrison — never its civilian
-                // population (combat-model correction, PRD §4.24).
-                ApplyMilitaryCasualties(regionFaction, enemiesKilled);
+                regionFaction.RemoveMilitaryStrength(defenderCasualties);
 
                 // A surviving AI offensive no longer evaporates: it withdraws to its staging region
                 // (raid) or seizes the contested ground (invade).
@@ -520,20 +561,25 @@ namespace OnlyWar.Helpers
             }
         }
 
-        // Reduces a region faction's military strength by the given casualties, drawing from the
-        // pool that represents its army: Population for a population-is-military faction (Tyranids,
-        // cults), Garrison otherwise (PRD §4.24 combat-model correction).
-        internal static void ApplyMilitaryCasualties(RegionFaction regionFaction, int casualties)
+        // Total battle value of the soldiers in these squads who were downed in the engagement — the
+        // strategic strength destroyed, in the point currency the pools are kept in (PRD §4.24).
+        private static long FallenBattleValue(IEnumerable<BattleSquad> squads)
         {
-            if (casualties <= 0) return;
-            if (regionFaction.PlanetFaction.Faction.PopulationIsMilitary)
-            {
-                regionFaction.Population = Math.Max(0, regionFaction.Population - casualties);
-            }
-            else
-            {
-                regionFaction.Garrison = Math.Max(0, regionFaction.Garrison - casualties);
-            }
+            if (squads == null) return 0;
+            return squads
+                .SelectMany(squad => squad.Soldiers)
+                .Where(soldier => !soldier.CanFight)
+                .Sum(soldier => (long)soldier.Soldier.Template.BattleValue);
+        }
+
+        // Total battle value of the soldiers in these squads still able to fight — the surviving
+        // strength an offensive brings home (raid) or plants on the ground it takes (invade).
+        private static long AbleBattleValue(IEnumerable<BattleSquad> squads)
+        {
+            if (squads == null) return 0;
+            return squads
+                .SelectMany(squad => squad.AbleSoldiers)
+                .Sum(soldier => (long)soldier.Soldier.Template.BattleValue);
         }
 
         // Accounts the survivors of an AI offensive rather than letting them dissolve (PRD §4.24).
@@ -546,7 +592,7 @@ namespace OnlyWar.Helpers
             BattleSquad first = context.MissionSquads.FirstOrDefault();
             if (first == null || first.IsPlayerSquad) return;
 
-            int survivors = context.MissionSquads.Sum(bs => bs.AbleSoldiers.Count);
+            long survivors = AbleBattleValue(context.MissionSquads);
             if (survivors <= 0) return; // the offensive was wiped out — nothing returns or holds
 
             Faction attacker = first.Squad.Faction;
@@ -557,17 +603,18 @@ namespace OnlyWar.Helpers
             else if (first.Squad.CurrentRegion != null
                      && first.Squad.CurrentRegion.RegionFactionMap.TryGetValue(attacker.Id, out RegionFaction home))
             {
-                AddMilitaryStrength(home, survivors);
+                home.AddMilitaryStrength(survivors);
             }
         }
 
         // Establishes or reinforces an invading faction's RegionFaction in a region it has assaulted,
-        // creating the backing PlanetFaction if the faction had no prior foothold on the world.
-        internal static void EstablishInvaderPresence(Faction attacker, Region region, int survivors)
+        // creating the backing PlanetFaction if the faction had no prior foothold on the world. The
+        // surviving strength is added in battle-value points.
+        internal static void EstablishInvaderPresence(Faction attacker, Region region, long survivors)
         {
             if (region.RegionFactionMap.TryGetValue(attacker.Id, out RegionFaction existing))
             {
-                AddMilitaryStrength(existing, survivors);
+                existing.AddMilitaryStrength(survivors);
                 return;
             }
             Planet planet = region.Planet;
@@ -581,22 +628,8 @@ namespace OnlyWar.Helpers
                 IsPublic = true,
                 Organization = 100
             };
-            AddMilitaryStrength(foothold, survivors);
+            foothold.AddMilitaryStrength(survivors);
             region.RegionFactionMap[attacker.Id] = foothold;
-        }
-
-        // Adds fighting strength to the pool that represents the faction's army (mirror of
-        // ApplyMilitaryCasualties): Population for a horde, Garrison otherwise.
-        private static void AddMilitaryStrength(RegionFaction regionFaction, int strength)
-        {
-            if (regionFaction.PlanetFaction.Faction.PopulationIsMilitary)
-            {
-                regionFaction.Population += strength;
-            }
-            else
-            {
-                regionFaction.Garrison += strength;
-            }
         }
 
         private void UpdatePlanets(IEnumerable<Planet> planets)

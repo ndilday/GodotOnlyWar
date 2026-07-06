@@ -12,12 +12,38 @@ using System;
 
 public class FactionStrategyController
 {
-    private class PotentialOffensive
+    // Reward/risk offensive-targeting tunables (PRD §4.24). Kept here rather than in TurnController
+    // because they govern strategic AI planning, not the biomass turn resolution.
+    // Each point of enemy Entrenchment multiplies the effective cost of assaulting the region.
+    internal const double EntrenchmentRiskFactor = 0.5;
+    // Force-ratio edge the attacker insists on over its (estimated) defender before committing.
+    internal const double OffensiveForceRatioThreshold = 1.5;
+    // 1-sigma error on the attacker's estimate of defender strength with zero intelligence on the
+    // target. It shrinks as the attacker's per-target intelligence (belief, raised by recon) rises
+    // — an interim stand-in for the full per-faction intelligence-as-belief model (PRD §4.21), so
+    // the AI is not omniscient.
+    internal const double BaseDefenderIntelNoise = 0.5;
+    // Intelligence a faction must hold on an adjacent enemy before it will commit to an assault
+    // rather than reconnoitre it first. Below this the estimate is too noisy to stake force on.
+    internal const float ReconIntelThreshold = 1.0f;
+
+    internal class PotentialOffensive
     {
         public Region TargetRegion { get; set; }
         public RegionFaction TargetFaction { get; set; }
         public List<Region> AttackingRegions { get; set; } = new List<Region>();
+        // The attacker's committable force, in battle-value points (spare organized troops drawn
+        // from the staging regions' pools, 1:1 with headcount — §4.24).
         public long AvailableAttackingForce { get; set; }
+        // The biomass the attacker stands to gain from taking the region (target population, plus
+        // the land's carrying capacity for a Consumption swarm that eats the ground itself).
+        public double Reward { get; set; }
+        // True defender strength in battle value (garrison pool + landed squads weighted by their
+        // soldiers' battle value, not raw headcount).
+        public long DefenderBattleValue { get; set; }
+        // What the attacker *believes* the defender is worth, after intel noise; all targeting
+        // decisions run off this rather than the true value.
+        public long EstimatedDefenderBattleValue { get; set; }
     }
 
     private class RegionForceState
@@ -42,6 +68,10 @@ public class FactionStrategyController
     {
         var allNewOrders = new List<Order>();
 
+        // Discard last turn's transient patrol screens before planning this turn's (they are not
+        // persisted roster squads, so they would otherwise pile up in the regions' LandedSquads).
+        ClearStalePatrolSquads(faction, sector);
+
         foreach (var planet in sector.Planets.Values)
         {
             var factionRegionsOnPlanet = planet.Regions
@@ -63,11 +93,18 @@ public class FactionStrategyController
 
             if (defensiveOnly)
             {
-                // Only fortify where actually threatened — no point spending the peacetime PDF's
-                // effort digging in worlds no enemy has reached.
                 if (planet.IsUnderAssault())
                 {
+                    // Under assault: dig in fully — fortifications, listening posts, organization.
                     GenerateDevelopmentOrders(regionalForceStates, allNewOrders);
+                }
+                else
+                {
+                    // Not yet formally under assault, but a PDF facing an enemy massing across a
+                    // border raises listening posts there so it is not blind when the assault lands.
+                    // Sensors only, and only on threatened borders — no fortifying quiet worlds, no
+                    // maneuver (PRD §4.24).
+                    GenerateBorderListeningPosts(faction, regionalForceStates, allNewOrders);
                 }
                 continue;
             }
@@ -85,46 +122,103 @@ public class FactionStrategyController
         return allNewOrders;
     }
 
+    internal enum OffensivePlan { None, Assault, Recon }
+
     private void PlanMajorOffensiveOnPlanet(Faction faction, Planet planet, List<RegionForceState> regionalForceStates, List<Order> allOrders)
     {
         var potentialOffensives = IdentifyPotentialOffensivesOnPlanet(faction, planet, regionalForceStates);
-        if (!potentialOffensives.Any()) return;
+        (OffensivePlan plan, PotentialOffensive target) = DecideOffensivePlan(potentialOffensives, faction.Id);
 
-        PotentialOffensive chosenOffensive = ChooseBestOffensive(potentialOffensives);
-        if (chosenOffensive == null) return;
-
-        long defenderStrength = chosenOffensive.TargetFaction.Garrison + chosenOffensive.TargetFaction.LandedSquads.Sum(s => s.Members.Count);
-
-        // This method ONLY handles major attacks. The force ratio check determines if it proceeds.
-        // A successful diversion baits the commander into accepting worse odds: each point of
-        // provocation shaves the force-ratio edge it normally insists on (down to parity).
-        double ratioThreshold = 1.5;
-        if (chosenOffensive.TargetFaction.ProvocationLevel > 0)
+        switch (plan)
         {
-            ratioThreshold = Math.Max(1.0, 1.5 - chosenOffensive.TargetFaction.ProvocationLevel * 0.1);
+            case OffensivePlan.Assault:
+                LaunchAssault(faction, target, regionalForceStates, allOrders);
+                break;
+            case OffensivePlan.Recon:
+                IssueReconMission(faction, target, allOrders);
+                break;
         }
-        if (chosenOffensive.AvailableAttackingForce <= defenderStrength * ratioThreshold)
+    }
+
+    // The AI commits only to targets it understands: it assaults the best winnable reward-to-risk
+    // objective among the well-reconnoitred targets; failing that, it scouts the most promising
+    // under-known target so a later turn can decide from knowledge rather than a blind guess; if it
+    // neither understands a winnable target nor has anything worth scouting, it holds (PRD §4.24).
+    internal static (OffensivePlan Plan, PotentialOffensive Target) DecideOffensivePlan(
+        List<PotentialOffensive> offensives, int attackerFactionId)
+    {
+        if (offensives == null || offensives.Count == 0) return (OffensivePlan.None, null);
+
+        var wellKnown = offensives.Where(o => IsWellReconnoitred(o, attackerFactionId)).ToList();
+        PotentialOffensive assault = ChooseBestOffensive(wellKnown);
+        if (assault != null) return (OffensivePlan.Assault, assault);
+
+        PotentialOffensive recon = ChooseReconTarget(
+            offensives.Where(o => !IsWellReconnoitred(o, attackerFactionId)).ToList());
+        if (recon != null) return (OffensivePlan.Recon, recon);
+
+        return (OffensivePlan.None, null);
+    }
+
+    // A target is well-reconnoitred once the attacker's intelligence on it clears the threshold;
+    // below that the strength estimate is too noisy to stake an assault on.
+    internal static bool IsWellReconnoitred(PotentialOffensive offensive, int attackerFactionId) =>
+        offensive.TargetFaction.GetObserverIntel(attackerFactionId) >= ReconIntelThreshold;
+
+    // Among under-known targets, scout the richest first — the objective most worth understanding
+    // before committing force.
+    internal static PotentialOffensive ChooseReconTarget(List<PotentialOffensive> underKnown) =>
+        underKnown.OrderByDescending(o => o.Reward).FirstOrDefault();
+
+    // Sends a reconnaissance force to assess an under-known adjacent enemy region; the mission's
+    // result raises this faction's belief about it (TurnController.ApplyMissionResults). The force
+    // is drawn but not debited from the pool (a within-turn scouting sortie, as patrols are), and
+    // recon is mutually exclusive with an assault on the same planet this turn, so the pool is not
+    // double-spent.
+    private void IssueReconMission(Faction faction, PotentialOffensive target, List<Order> allOrders)
+    {
+        var request = new ForceGenerationRequest
         {
-            return; // Not strong enough for a major attack, so do nothing in this step.
+            Faction = faction,
+            TargetBattleValue = target.AvailableAttackingForce,
+            Profile = ForceCompositionProfile.AssaultForce
+        };
+        List<Squad> scouts = ForceGenerator.GenerateForce(request);
+        if (scouts.Count == 0) return;
+
+        Region stagingRegion = target.AttackingRegions.First();
+        foreach (Squad squad in scouts)
+        {
+            squad.CurrentRegion = stagingRegion;
         }
 
+        Mission mission = new Mission(MissionType.Recon, target.TargetFaction, 0);
+        Order order = new Order(scouts, Disposition.Mobile, true, false, Aggression.Cautious, mission);
+        allOrders.Add(order);
+    }
+
+    private void LaunchAssault(Faction faction, PotentialOffensive chosenOffensive, List<RegionForceState> regionalForceStates, List<Order> allOrders)
+    {
         int forceBattleValue = (int)(chosenOffensive.AvailableAttackingForce * (0.5 + (RNG.GetLinearDouble() * 0.25)));
 
         var request = new ForceGenerationRequest { Faction = faction, TargetBattleValue = forceBattleValue, Profile = ForceCompositionProfile.AssaultForce };
         List<Squad> generatedSquads = ForceGenerator.GenerateForce(request);
         if (generatedSquads.Count == 0) return;
 
-        long manpowerCost = generatedSquads.Sum(s => s.Members.Count);
+        // The committed force leaves the staging regions in battle-value points — the same currency
+        // its survivors return or plant on taken ground, and that casualties are counted in (§4.24).
+        long committedBattleValue = generatedSquads.Sum(s => s.Members.Sum(m => m.Template.BattleValue));
         long totalAvailableForAttack = chosenOffensive.AvailableAttackingForce;
         if (totalAvailableForAttack <= 0) return;
 
-        // Commit troops and deduct from the spare pool
+        // Commit the force and draw it from each staging region's military pool (Population for a
+        // horde, Garrison otherwise), split in proportion to what each region contributed.
         foreach (var region in chosenOffensive.AttackingRegions)
         {
             var contributingState = regionalForceStates.First(s => s.RegionFaction.Region == region);
-            long contribution = (long)(manpowerCost * (contributingState.SpareTroops / (float)totalAvailableForAttack));
+            long contribution = (long)(committedBattleValue * (contributingState.SpareTroops / (float)totalAvailableForAttack));
             contributingState.SpareTroops -= contribution;
-            region.RegionFactionMap[faction.Id].Garrison -= contribution;
+            region.RegionFactionMap[faction.Id].RemoveMilitaryStrength(contribution);
         }
 
         // Record the staging region on the assault force so its survivors know where to withdraw to
@@ -176,6 +270,31 @@ public class FactionStrategyController
         }
     }
 
+    // Peacetime PDF posture (PRD §4.24): before a world is formally under assault, a PDF that faces
+    // a public enemy across a border quietly raises listening posts (Detection) so it is not blind
+    // when the assault lands. Sensors only — no fortifications, no maneuver — and only in regions
+    // that actually border an enemy, one level per turn; the exponential build cost then self-limits
+    // how deep peacetime coverage gets.
+    private void GenerateBorderListeningPosts(Faction faction, List<RegionForceState> states, List<Order> allOrders)
+    {
+        foreach (var state in states)
+        {
+            if (state.SpareTroops <= 0) continue;
+
+            bool bordersPublicEnemy = state.RegionFaction.Region.GetAdjacentRegions()
+                .Any(r => r.RegionFactionMap.Values
+                           .Any(rf => rf.IsPublic && AreFactionsEnemies(faction, rf.PlanetFaction.Faction)));
+            if (!bordersPublicEnemy) continue;
+
+            long detCost = (long)Math.Pow(2, state.RegionFaction.Detection + 1);
+            if (detCost * 100L > state.SpareTroops) continue;
+
+            allOrders.Add(new Order(new List<Squad>(), Disposition.DugIn, true, false, Aggression.Avoid,
+                new ConstructionMission(DefenseType.Detection, 1, state.RegionFaction)));
+            state.SpareTroops -= detCost * 100L;
+        }
+    }
+
     private void PlanPatrolMissionsOnPlanet(Faction faction, Planet planet, List<RegionForceState> regionalForceStates, List<Order> allOrders)
     {
         // This is a new method that runs last, using only the final remaining spare troops.
@@ -203,17 +322,41 @@ public class FactionStrategyController
                 Profile = ForceCompositionProfile.ScoutPatrol // Use a more appropriate profile
             };
 
-            List<Squad> generatedSquads = ForceGenerator.GenerateForce(request);
-            if (generatedSquads.Count == 0) continue;
+            List<Squad> patrolSquads = ForceGenerator.GenerateForce(request);
+            if (patrolSquads.Count == 0) continue;
 
-            // The cost is already "paid" by using up all spare troops, so no further deduction needed.
-            // Just create the order. Target the weakest adjacent enemy.
-            var target = state.RegionFaction.Region;
-            var targetFaction = target.RegionFactionMap.Values.FirstOrDefault(rf => AreFactionsEnemies(faction, rf.PlanetFaction.Faction));
+            // The patrol is a standing screen, not a sweep: its squads land in the faction's own
+            // region and hold, joining the defence if the region is raided (AssembleDefendingForce)
+            // and intercepting enemy recon that tries to scout it (TurnController). The order carries
+            // the squads but launches no mission of its own (TurnController skips Patrol orders).
+            // These squads are transient AI forces, cleared at the start of the next planning pass.
+            Mission mission = new Mission(MissionType.Patrol, state.RegionFaction, 0);
+            Order order = new Order(patrolSquads, Disposition.DugIn, true, false, Aggression.Cautious, mission);
+            foreach (Squad squad in patrolSquads)
+            {
+                squad.CurrentRegion = state.RegionFaction.Region;
+                squad.CurrentOrders = order;
+                state.RegionFaction.LandedSquads.Add(squad);
+            }
+            allOrders.Add(order);
+        }
+    }
 
-            Mission newMission = new Mission(MissionType.Patrol, targetFaction, 0);
-            Order newOrder = new Order(generatedSquads, Disposition.Mobile, true, false, Aggression.Cautious, newMission);
-            allOrders.Add(newOrder);
+    // Removes the transient patrol squads this faction landed on a previous turn before it plans
+    // afresh. Patrol forces are AI-generated screens (not persisted roster squads), so they must be
+    // cleared each turn rather than accumulating in the region's LandedSquads.
+    private void ClearStalePatrolSquads(Faction faction, Sector sector)
+    {
+        foreach (var planet in sector.Planets.Values)
+        {
+            foreach (var region in planet.Regions)
+            {
+                if (region.RegionFactionMap.TryGetValue(faction.Id, out RegionFaction regionFaction))
+                {
+                    regionFaction.LandedSquads.RemoveAll(
+                        s => s.CurrentOrders?.Mission.MissionType == MissionType.Patrol);
+                }
+            }
         }
     }
 
@@ -236,12 +379,22 @@ public class FactionStrategyController
 
                 if (availableForce > 0)
                 {
+                    long defenderBattleValue = CalculateDefenderBattleValue(targetFaction);
+                    // The attacker's estimate sharpens with its intelligence on THIS target —
+                    // belief it has built by reconnoitring the region (see PlanMajorOffensiveOnPlanet),
+                    // not blanket sensor coverage.
+                    float intel = targetFaction.GetObserverIntel(attackingFaction.Id);
+
                     potentialOffensives.Add(new PotentialOffensive
                     {
                         TargetRegion = targetFaction.Region,
                         TargetFaction = targetFaction,
                         AttackingRegions = adjacentAttackingRegions,
-                        AvailableAttackingForce = availableForce
+                        AvailableAttackingForce = availableForce,
+                        Reward = CalculateOffensiveReward(targetFaction, attackingFaction),
+                        DefenderBattleValue = defenderBattleValue,
+                        EstimatedDefenderBattleValue =
+                            ApplyIntelNoise(defenderBattleValue, intel, RNG.NextRandomZValue())
                     });
                 }
             }
@@ -275,14 +428,74 @@ public class FactionStrategyController
         return highestThreat;
     }
 
-    private PotentialOffensive ChooseBestOffensive(List<PotentialOffensive> offensives)
+    // Pick the best objective by reward-to-risk among the targets the attacker believes it can
+    // win, rather than the old pure-ease ranking that would pick a single "easiest" target and
+    // then let a downstream strength check veto the whole turn if that one happened to be too
+    // strong — ignoring other winnable targets (PRD §4.24).
+    internal static PotentialOffensive ChooseBestOffensive(List<PotentialOffensive> offensives)
     {
-        // Provocation from a diversion makes its region a more tempting target, biasing the
-        // commander toward attacking the feinting force over a more sensible objective.
         return offensives
-            .OrderByDescending(o => (o.AvailableAttackingForce / (float)(o.TargetFaction.Garrison + 1))
-                                    * (1.0f + o.TargetFaction.ProvocationLevel * 0.1f))
+            .Where(IsWinnable)
+            .OrderByDescending(RewardRiskScore)
             .FirstOrDefault();
+    }
+
+    // Winnable when the attacker's force exceeds its *estimated* defender strength by the required
+    // ratio. A successful diversion baits the commander into accepting worse odds, shaving the
+    // edge it insists on down toward parity.
+    internal static bool IsWinnable(PotentialOffensive offensive)
+    {
+        double ratioThreshold = OffensiveForceRatioThreshold;
+        if (offensive.TargetFaction.ProvocationLevel > 0)
+        {
+            ratioThreshold = Math.Max(1.0, OffensiveForceRatioThreshold - offensive.TargetFaction.ProvocationLevel * 0.1);
+        }
+        return offensive.AvailableAttackingForce > offensive.EstimatedDefenderBattleValue * ratioThreshold;
+    }
+
+    internal static double RewardRiskScore(PotentialOffensive offensive)
+    {
+        // Risk scales with the estimated defender strength and how dug-in it is: a fortified
+        // objective is disproportionately costly to take.
+        double risk = offensive.EstimatedDefenderBattleValue
+                      * (1.0 + offensive.TargetFaction.Entrenchment * EntrenchmentRiskFactor);
+        double score = offensive.Reward / Math.Max(risk, 1.0);
+        // Provocation from a diversion makes the feinting region a more tempting target.
+        return score * (1.0 + offensive.TargetFaction.ProvocationLevel * 0.1);
+    }
+
+    // Battle-value strength of a defending region faction: the garrison pool (already a
+    // battle-value-equivalent, 1:1 with headcount — §4.24) plus its landed squads weighted by
+    // their soldiers' battle value. A landed marine squad is worth far more than its headcount,
+    // so counting bodies here would badly understate an elite garrison.
+    internal static long CalculateDefenderBattleValue(RegionFaction defender)
+    {
+        return defender.Garrison
+             + defender.LandedSquads.Sum(s => s.Members.Sum(m => (long)m.Template.BattleValue));
+    }
+
+    // The biomass the attacker gains by taking the region: the target population (headcount to
+    // kill, convert, or seize) plus — only for a Consumption swarm that devours the land itself —
+    // the region's carrying capacity (PRD §4.24).
+    internal static double CalculateOffensiveReward(RegionFaction targetFaction, Faction attackingFaction)
+    {
+        double reward = targetFaction.Population;
+        if (attackingFaction.GrowthType == GrowthType.Consumption)
+        {
+            reward += targetFaction.Region.CarryingCapacity;
+        }
+        return reward;
+    }
+
+    // Fuzz the true defender strength into what the attacker believes, with a 1-sigma error that
+    // shrinks as its intelligence on the target improves. The z-value is supplied by the caller so
+    // the noise is unit-testable; production passes a standard-normal draw. Interim stand-in for the
+    // per-faction intelligence-as-belief model (§4.21).
+    internal static long ApplyIntelNoise(long trueBattleValue, float intelLevel, double zValue)
+    {
+        double sigma = BaseDefenderIntelNoise / (1.0 + intelLevel);
+        double multiplier = Math.Max(0.1, 1.0 + zValue * sigma); // never estimate a ~zero/negative force
+        return (long)Math.Round(trueBattleValue * multiplier);
     }
 
     private bool AreFactionsEnemies(Faction f1, Faction f2)

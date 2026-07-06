@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Linq;
 
 using OnlyWar.Models.Equippables;
 using OnlyWar.Models.Soldiers;
@@ -53,7 +54,9 @@ namespace OnlyWar.Models.Squads
         public ArmorTemplate Armor { get; }
         public WeaponSet DefaultWeapons { get; }
         public SquadTypes SquadType { get; }
-        public int BattleValue { get; }
+        // A squad's point value is the sum of its members' battle values at full strength (PRD
+        // §4.24). Previously a stored column; now derived so it can never drift from the roster.
+        public int BattleValue => Elements?.Sum(e => e.SoldierTemplate.BattleValue * e.MaximumNumber) ?? 0;
         public Faction Faction { get; set;  }
         public SquadTemplate BodyguardSquadTemplate { get; set; }
         // Work-experience training a squad leader develops toward while commanding this
@@ -68,8 +71,7 @@ namespace OnlyWar.Models.Squads
                              List<SquadWeaponOption> weaponOptions, 
                              ArmorTemplate armor,
                              List<SquadTemplateElement> elements,
-                             SquadTypes squadType,
-                             int battleValue)
+                             SquadTypes squadType)
         {
             Id = id;
             Name = name;
@@ -78,7 +80,6 @@ namespace OnlyWar.Models.Squads
             WeaponOptions = weaponOptions?.AsReadOnly();
             Armor = armor;
             SquadType = squadType;
-            BattleValue = battleValue;
         }
     }
 }

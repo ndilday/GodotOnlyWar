@@ -120,8 +120,7 @@ public class SoldierDossierServiceTests
             [],
             TestModelFactory.TestArmor,
             [new SquadTemplateElement(TestModelFactory.MarineTemplate, 0, 4)],
-            SquadTypes.None,
-            10);
+            SquadTypes.None);
         UnitTemplate unitTemplate = new(1, "Test Unit", true, [template], []);
         Unit unit = new(1, "Test Unit", unitTemplate, []);
         Squad squad = new("Test Squad", unit, template);

@@ -134,8 +134,7 @@ public class BattleReplaySummaryBuilderTests
             [],
             TestModelFactory.TestArmor,
             [new SquadTemplateElement(TestModelFactory.SergeantTemplate, 0, 1), new SquadTemplateElement(TestModelFactory.MarineTemplate, 0, 4)],
-            squadType,
-            TestModelFactory.SquadTemplate.BattleValue);
+            squadType);
         Squad sourceSquad = new(squadName, null, squadTemplate);
         foreach (Soldier soldier in soldiers)
         {

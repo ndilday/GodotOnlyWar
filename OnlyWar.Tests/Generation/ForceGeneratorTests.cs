@@ -88,15 +88,19 @@ public class ForceGeneratorTests
 
     private static SquadTemplate CreateTemplate(int id, string name, SquadTypes squadTypes, byte maxSoldiers, int battleValue)
     {
+        // Squad battle value is now derived from its members, so back it out onto a per-squad
+        // trooper whose value × the member count reproduces the intended squad battle value.
+        SoldierTemplate trooper = new(
+            id, TestModelFactory.HumanSpecies, name + " Trooper",
+            1, 1, false, 0, [], null, battleValue / maxSoldiers);
         return new SquadTemplate(
             id,
             name,
             TestModelFactory.DefaultWeapons,
             [],
             TestModelFactory.TestArmor,
-            [new SquadTemplateElement(TestModelFactory.MarineTemplate, 0, maxSoldiers)],
-            squadTypes,
-            battleValue);
+            [new SquadTemplateElement(trooper, 0, maxSoldiers)],
+            squadTypes);
     }
 
     private static Faction CreateFaction(params SquadTemplate[] squadTemplates)

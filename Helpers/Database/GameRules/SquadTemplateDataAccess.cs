@@ -412,10 +412,12 @@ namespace OnlyWar.Helpers.Database.GameRules
                     int defaultArmorId = reader.GetInt32(3);
                     int defaultWeaponSetId = reader.GetInt32(4);
                     int squadType = reader.GetInt32(5);
-                    int battleValue = reader.GetInt32(6);
-                    if (reader[7].GetType() != typeof(DBNull))
+                    // BattleValue is no longer stored on SquadTemplate — it is derived from the
+                    // members' point values (PRD §4.24). BodyguardSquadTemplateId and the leader
+                    // work-experience profile shift up one column with its removal.
+                    if (reader[6].GetType() != typeof(DBNull))
                     {
-                        bodyguardMap[id] = reader.GetInt32(7);
+                        bodyguardMap[id] = reader.GetInt32(6);
                     }
 
                     ArmorTemplate defaultArmor = armorTemplateMap[defaultArmorId];
@@ -427,13 +429,10 @@ namespace OnlyWar.Helpers.Database.GameRules
                                                                     options,
                                                                     defaultArmor,
                                                                     elementMap[id],
-                                                                    (SquadTypes)squadType,
-                                                                    battleValue);
-                    // Optional leader work-experience profile, appended after
-                    // BodyguardSquadTemplateId by migrate-collapse-sergeants.
-                    if (reader.FieldCount > 8 && reader[8].GetType() != typeof(DBNull))
+                                                                    (SquadTypes)squadType);
+                    if (reader.FieldCount > 7 && reader[7].GetType() != typeof(DBNull))
                     {
-                        squadTemplate.LeaderWorkExperienceProfile = trainingProfileMap[reader.GetInt32(8)];
+                        squadTemplate.LeaderWorkExperienceProfile = trainingProfileMap[reader.GetInt32(7)];
                     }
                     squadTemplateMap[id] = squadTemplate;
                     if (!squadTemplatesByFactionId.ContainsKey(factionId))
@@ -565,6 +564,11 @@ namespace OnlyWar.Helpers.Database.GameRules
                     {
                         workExperienceTrainingProfile = trainingProfileMap[reader.GetInt32(8)];
                     }
+                    // BattleValue was appended after WorkExperienceTrainingProfileId; rows without a
+                    // populated value (e.g. player soldiers, pending a later pass) default to 0.
+                    int battleValue = reader.FieldCount > 9 && reader[9].GetType() != typeof(DBNull)
+                        ? reader.GetInt32(9)
+                        : 0;
                     List<Tuple<BaseSkill, float>> trainingList = null;
                     if (soldierTemplateTrainingMap.ContainsKey(id))
                     {
@@ -574,7 +578,7 @@ namespace OnlyWar.Helpers.Database.GameRules
                     SoldierTemplate soldierTemplate =
                         new SoldierTemplate(id, species, name, (byte)rank, (byte)subrank,
                                             isSquadLeader, (byte)specialistType, trainingList,
-                                            workExperienceTrainingProfile);
+                                            workExperienceTrainingProfile, battleValue);
 
                     if (!soldierTemplatesByFactionId.ContainsKey(factionId))
                     {

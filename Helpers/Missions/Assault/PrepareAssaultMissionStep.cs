@@ -52,10 +52,12 @@ namespace OnlyWar.Helpers.Missions.Assault
 
             // 1. Get all landed squads in the region with defensive orders. A diversion force is
             // deliberately in the open, so it too is caught up in the fighting if its feint draws
-            // a counterattack into the region it is standing in.
+            // a counterattack into the region it is standing in. A standing patrol is likewise a
+            // screen posted to engage raiders — it joins the defence of the region it patrols.
             var defendingSquads = defendingRegionFaction.LandedSquads
                                                         .Where(s => s.CurrentOrders?.Mission.MissionType == MissionType.DefenseInDepth
-                                                                 || s.CurrentOrders?.Mission.MissionType == MissionType.Diversion)
+                                                                 || s.CurrentOrders?.Mission.MissionType == MissionType.Diversion
+                                                                 || s.CurrentOrders?.Mission.MissionType == MissionType.Patrol)
                                                         .ToList();
 
             if (defendingSquads.Any())

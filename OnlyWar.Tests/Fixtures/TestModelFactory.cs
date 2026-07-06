@@ -37,7 +37,8 @@ internal static class TestModelFactory
         1,
         false,
         0,
-        Array.Empty<Tuple<BaseSkill, float>>());
+        Array.Empty<Tuple<BaseSkill, float>>(),
+        battleValue: 2);
 
     // A 1x1 species that tunnels — used to exercise burrow-arrival placement.
     public static Species BurrowerSpecies { get; } = new(
@@ -70,7 +71,8 @@ internal static class TestModelFactory
         1,
         true,
         0,
-        Array.Empty<Tuple<BaseSkill, float>>());
+        Array.Empty<Tuple<BaseSkill, float>>(),
+        battleValue: 2);
 
     public static ArmorTemplate TestArmor { get; } = new(1, "Test Armor", 5, 0);
 
@@ -115,8 +117,7 @@ internal static class TestModelFactory
         [],
         TestArmor,
         [new SquadTemplateElement(SergeantTemplate, 0, 1), new SquadTemplateElement(MarineTemplate, 0, 4)],
-        SquadTypes.None,
-        10);
+        SquadTypes.None);
 
     public static Soldier CreateSoldier(
         SoldierTemplate template = null,
