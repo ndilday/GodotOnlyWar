@@ -69,6 +69,13 @@ namespace OnlyWar.Builders
                 remainingValue -= affordableTemplate.BattleValue;
             }
 
+            // Force-scale trace: one squad is added per unit of BV budget, so a pool-sized budget
+            // (e.g. an NPC committing its whole organized force) yields a huge squad/soldier count —
+            // the input that makes the tactical resolver explode. Log the result so it is visible.
+            GameLog.Debug(() =>
+                $"GenerateGenericForce {request.Faction?.Name} {request.Profile}: budget={request.TargetBattleValue}, "
+                + $"squads={generatedSquads.Count}, soldiers={generatedSquads.Sum(s => s.Members.Count)}");
+
             return generatedSquads;
         }
 

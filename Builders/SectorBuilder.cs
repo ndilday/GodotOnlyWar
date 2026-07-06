@@ -52,6 +52,9 @@ namespace OnlyWar.Builders
             // parks it in orbit via Sector.AddNewFleet (Design/OpeningScenario.md §1, §3).
             Sector sector = new Sector(playerForce, characterList, planetList, forceList);
             GenerateWarpNetwork(sector, data);
+            // Register the in-progress sector so the opening-scenario stamp can run its planet-scoped
+            // simulations (which read GameDataSingleton.Instance.Sector) before generation returns.
+            GameDataSingleton.Instance.SetSectorDuringGeneration(sector);
             sector.Scenario = ScenarioBuilder.StampPromisedWorld(
                 sector, data, currentDate, playerForce, planetList, characterList);
             return sector;
@@ -135,7 +138,9 @@ namespace OnlyWar.Builders
             // latent threats to surface later.
             // TODO: reintroduce overt faction-owned worlds via game-start config + hot spots.
             double random = RNG.GetLinearDouble();
-            Faction infiltratingFaction = random <= 0.1 ? data.SectorFactions.Infiltrator : null;
+            // ~2% of worlds harbour a hidden Genestealer Cult at game start. Kept low so the sector
+            // does not erupt in simultaneous revolts once cults rise on population strength (PRD §4.24).
+            Faction infiltratingFaction = random <= 0.02 ? data.SectorFactions.Infiltrator : null;
             return PlanetBuilder.Instance.GenerateNewPlanet(data.PlanetTemplateMap, position, data.DefaultFaction, infiltratingFaction);
         }
 

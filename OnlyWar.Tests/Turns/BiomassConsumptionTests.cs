@@ -1,5 +1,6 @@
 using System.Linq;
 using OnlyWar.Helpers;
+using OnlyWar.Helpers.Extensions;
 using OnlyWar.Models.Planets;
 using OnlyWar.Tests.Fixtures;
 using Xunit;
@@ -157,5 +158,50 @@ public class BiomassConsumptionTests
         TurnController.RecoverCarryingCapacity(region);
 
         Assert.Equal(100, region.CarryingCapacity);
+    }
+
+    // --- Forced expansion (PRD §4.24 Tyranid Troop AI, step 2) ---
+
+    [Fact]
+    public void ResolveTyranidExpansion_StrippedRegion_PushesForceToARicherNeighbor()
+    {
+        SectorSimulationFixture fixture = SectorSimulationFixture.Create();
+        Region home = fixture.Planet.Regions[0];
+        // Home is bare: no land and no prey left to eat.
+        home.CarryingCapacity = 0;
+        home.MaximumCarryingCapacity = 1_000_000;
+        fixture.DefaultRegionFaction(0).Population = 0;
+
+        Region neighbor = home.GetAdjacentRegions().First();
+        neighbor.CarryingCapacity = 1_000_000; // fresh biomass next door
+        neighbor.MaximumCarryingCapacity = 1_000_000;
+
+        RegionFaction swarm = fixture.AddConsumptionFaction(0, population: 100_000, organization: 100);
+        int swarmFactionId = swarm.PlanetFaction.Faction.Id;
+        long swarmBefore = swarm.Population;
+
+        TurnController.ResolveTyranidExpansion(fixture.Planet);
+
+        long moved = swarmBefore - swarm.Population;
+        Assert.True(moved > 0, "a stripped swarm should spread toward fresh biomass");
+        Assert.True(neighbor.RegionFactionMap.TryGetValue(swarmFactionId, out RegionFaction spread)
+                    && spread.Population == moved,
+            "the force that leaves establishes in the richer neighbor");
+    }
+
+    [Fact]
+    public void ResolveTyranidExpansion_RichRegion_KeepsTheSwarmHomeToGorge()
+    {
+        SectorSimulationFixture fixture = SectorSimulationFixture.Create();
+        Region home = fixture.Planet.Regions[0];
+        // Home is untouched and richer than its (poorer, default) neighbors.
+        home.CarryingCapacity = 1_000_000;
+        home.MaximumCarryingCapacity = 1_000_000;
+        RegionFaction swarm = fixture.AddConsumptionFaction(0, population: 100_000, organization: 100);
+        long swarmBefore = swarm.Population;
+
+        TurnController.ResolveTyranidExpansion(fixture.Planet);
+
+        Assert.Equal(swarmBefore, swarm.Population);
     }
 }

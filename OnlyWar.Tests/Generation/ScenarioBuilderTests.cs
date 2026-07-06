@@ -149,4 +149,80 @@ public class ScenarioBuilderTests
             .Select(r => r.Id).OrderBy(id => id).ToList();
         Assert.Equal(firstStamped, secondStamped);
     }
+
+    // The opening now plays out as a pre-/post-landing simulation during generation (§4.24), so the
+    // promised world's final state is the product of several scoped turns of combat and growth. That
+    // whole sequence must remain deterministic per seed: two generations of the same seed must land
+    // on an identical region-faction population map, not merely the same stamped region set.
+    [Fact]
+    public void Stamp_SimulatedBoardIsDeterministicForSeed()
+    {
+        Sector first = SectorBuilder.GenerateSector(7, _data, _date, "Determinism Chapter");
+        Sector second = SectorBuilder.GenerateSector(7, _data, _date, "Determinism Chapter");
+
+        Assert.Equal(RegionFactionPopulations(first), RegionFactionPopulations(second));
+    }
+
+    // (regionId, factionId) -> population across every region faction on the promised world, sorted
+    // for a stable order-independent comparison.
+    private static List<((int, int), long)> RegionFactionPopulations(Sector sector)
+    {
+        Planet promised = sector.GetPlanet(sector.Scenario.PromisedPlanetId);
+        return promised.Regions
+            .SelectMany(r => r.RegionFactionMap.Values
+                .Select(rf => ((r.Id, rf.PlanetFaction.Faction.Id), rf.Population)))
+            .OrderBy(t => t.Item1.Item1).ThenBy(t => t.Item1.Item2)
+            .ToList();
+    }
+
+    // Regression: the opening now runs a scoped pre-/post-landing simulation during generation
+    // (§4.24), which drives real NPC recon/combat on the promised world. A recon that is detected by
+    // a region with no squads to scramble produced an empty OpFor, and the downstream battle steps
+    // (MeetingEngagement/Ambushed) assumed a non-empty OpposingSquads and threw — so generation
+    // itself crashed for some seeds (seed 3 was the first repro). This runs a spread of seeds end to
+    // end; the assertion is simply that every one generates without an exception.
+    [Theory]
+    [InlineData(1)]
+    [InlineData(2)]
+    [InlineData(3)]
+    [InlineData(4)]
+    [InlineData(5)]
+    [InlineData(7)]
+    [InlineData(11)]
+    public void GenerateSector_RunsScopedSimsWithoutThrowing(int seed)
+    {
+        Sector sector = SectorBuilder.GenerateSector(seed, _data, _date, "Robustness Chapter");
+
+        Assert.NotNull(sector.Scenario);
+        Planet promised = sector.GetPlanet(sector.Scenario.PromisedPlanetId);
+        Assert.True(promised.GetControllingFaction().IsDefaultFaction);
+    }
+
+    // The planet-scoped sim must touch only the target world: a second planet's populations are left
+    // exactly as generated (§4.24 — the pre/post-landing sims are scoped to the promised planet only).
+    [Fact]
+    public void SimulatePlanetForward_LeavesOtherPlanetsUntouched()
+    {
+        Sector sector = SectorBuilder.GenerateSector(7, _data, _date, "Scoped Chapter");
+        GameDataSingleton.Instance.LoadGameDataFromBlob(_data, _date, sector);
+        Planet promised = sector.GetPlanet(sector.Scenario.PromisedPlanetId);
+
+        // A different world to guard against the sim leaking across planets.
+        Planet other = sector.Planets.Values.First(p => p.Id != promised.Id);
+        List<((int, int), long)> before = other.Regions
+            .SelectMany(r => r.RegionFactionMap.Values
+                .Select(rf => ((r.Id, rf.PlanetFaction.Faction.Id), rf.Population)))
+            .OrderBy(t => t.Item1.Item1).ThenBy(t => t.Item1.Item2)
+            .ToList();
+
+        new TurnController().SimulatePlanetForward(sector, promised, turns: 5);
+
+        List<((int, int), long)> after = other.Regions
+            .SelectMany(r => r.RegionFactionMap.Values
+                .Select(rf => ((r.Id, rf.PlanetFaction.Faction.Id), rf.Population)))
+            .OrderBy(t => t.Item1.Item1).ThenBy(t => t.Item1.Item2)
+            .ToList();
+
+        Assert.Equal(before, after);
+    }
 }

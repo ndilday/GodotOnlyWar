@@ -300,6 +300,32 @@ public class ScenarioTurnTests
         Assert.DoesNotContain(strikeSquad.Members, m => m.CanFight);
     }
 
+    // The planet-scoped opening sim runs only the promised world's local turn slice; it must NOT run
+    // the player force's own weekly upkeep (§4.24). A light wound that ProcessTurn's medical pass
+    // would heal in a week stays untouched through several SimulatePlanetForward turns, proving the
+    // sim skips ProcessMedical (and, by the same omission, training and fleet movement).
+    [Fact]
+    public void SimulatePlanetForward_DoesNotHealPlayerForce()
+    {
+        Sector sector = SectorBuilder.GenerateSector(7, _data, _date, "Unhealed Chapter");
+        GameDataSingleton.Instance.LoadGameDataFromBlob(_data, _date, sector);
+        Planet promised = sector.GetPlanet(sector.Scenario.PromisedPlanetId);
+
+        // A light (minor/moderate) wound on a non-vital location: automatically healed by a weekly
+        // medical pass, and not replacement-eligible, so ProcessTurn would clear it in one week.
+        ISoldier soldier = sector.PlayerForce.Army.OrderOfBattle.GetAllMembers().First();
+        HitLocation location = soldier.Body.HitLocations
+            .First(hl => !hl.Template.IsVital && !hl.IsSevered);
+        location.Wounds = new Wounds(0x00000011u, 0);
+        uint woundedTotal = location.Wounds.WoundTotal;
+        Assert.True(woundedTotal > 0);
+
+        new TurnController().SimulatePlanetForward(sector, promised, turns: 5);
+
+        // Untouched: the scoped sim never reached the medical pass that would have healed it.
+        Assert.Equal(woundedTotal, location.Wounds.WoundTotal);
+    }
+
     // Sever a vital hit location on every member so CanFight is false while each soldier remains in
     // Squad.Members — the depleted-but-not-empty state combat leaves behind.
     private static void DepleteSquad(Squad squad)

@@ -64,7 +64,11 @@ public class FactionStrategyController
     // only to dig in: it raises fortifications and listening posts to hold regions under assault,
     // but launches no offensives and runs no patrols. Massed counterattack is reserved for the
     // stronger Imperial Guard (§6.4); a bare PDF holds the line and buys time.
-    public List<Order> GenerateFactionOrders(Faction faction, Sector sector, bool defensiveOnly = false)
+    //
+    // When onlyPlanet is supplied the faction plans for that single world only (the opening-scenario
+    // stamp's planet-scoped simulation — Design/OpeningScenario.md §4.24); otherwise it plans across
+    // every world in the sector as it does each turn.
+    public List<Order> GenerateFactionOrders(Faction faction, Sector sector, Planet onlyPlanet = null, bool defensiveOnly = false)
     {
         var allNewOrders = new List<Order>();
 
@@ -72,54 +76,72 @@ public class FactionStrategyController
         // persisted roster squads, so they would otherwise pile up in the regions' LandedSquads).
         ClearStalePatrolSquads(faction, sector);
 
-        foreach (var planet in sector.Planets.Values)
+        if (onlyPlanet != null)
         {
-            var factionRegionsOnPlanet = planet.Regions
-                                               .SelectMany(r => r.RegionFactionMap.Values)
-                                               .Where(rf => rf.PlanetFaction.Faction == faction && rf.IsPublic)
-                                               .ToList();
-
-            if (!factionRegionsOnPlanet.Any()) continue;
-
-            // PRIORITY 1: ASSESS FORCES AND GARRISON NEEDS
-            var regionalForceStates = new List<RegionForceState>();
-            foreach (var regionFaction in factionRegionsOnPlanet)
+            GeneratePlanetOrders(faction, onlyPlanet, defensiveOnly, allNewOrders);
+        }
+        else
+        {
+            foreach (var planet in sector.Planets.Values)
             {
-                long requiredGarrison = CalculateRequiredGarrison(regionFaction.Region);
-                long organizedTroops = (long)(regionFaction.Population * regionFaction.Organization / 100.0f);
-                long spareTroops = Math.Max(0, organizedTroops - requiredGarrison);
-                regionalForceStates.Add(new RegionForceState(regionFaction, requiredGarrison, spareTroops));
+                GeneratePlanetOrders(faction, planet, defensiveOnly, allNewOrders);
             }
-
-            if (defensiveOnly)
-            {
-                if (planet.IsUnderAssault())
-                {
-                    // Under assault: dig in fully — fortifications, listening posts, organization.
-                    GenerateDevelopmentOrders(regionalForceStates, allNewOrders);
-                }
-                else
-                {
-                    // Not yet formally under assault, but a PDF facing an enemy massing across a
-                    // border raises listening posts there so it is not blind when the assault lands.
-                    // Sensors only, and only on threatened borders — no fortifying quiet worlds, no
-                    // maneuver (PRD §4.24).
-                    GenerateBorderListeningPosts(faction, regionalForceStates, allNewOrders);
-                }
-                continue;
-            }
-
-            // PRIORITY 2: PLAN MAJOR OFFENSIVE
-            PlanMajorOffensiveOnPlanet(faction, planet, regionalForceStates, allNewOrders);
-
-            // PRIORITY 3: PLAN DEVELOPMENT
-            GenerateDevelopmentOrders(regionalForceStates, allNewOrders);
-
-            // PRIORITY 4: PLAN RECON MISSIONS
-            PlanPatrolMissionsOnPlanet(faction, planet, regionalForceStates, allNewOrders);
         }
 
         return allNewOrders;
+    }
+
+    private void GeneratePlanetOrders(Faction faction, Planet planet, bool defensiveOnly, List<Order> allNewOrders)
+    {
+        var factionRegionsOnPlanet = planet.Regions
+                                           .SelectMany(r => r.RegionFactionMap.Values)
+                                           .Where(rf => rf.PlanetFaction.Faction == faction && rf.IsPublic)
+                                           .ToList();
+
+        if (!factionRegionsOnPlanet.Any()) return;
+
+        // PRIORITY 1: ASSESS FORCES AND GARRISON NEEDS
+        var regionalForceStates = new List<RegionForceState>();
+        foreach (var regionFaction in factionRegionsOnPlanet)
+        {
+            long requiredGarrison = CalculateRequiredGarrison(regionFaction.Region);
+            long organizedTroops = (long)(regionFaction.Population * regionFaction.Organization / 100.0f);
+            long spareTroops = Math.Max(0, organizedTroops - requiredGarrison);
+            regionalForceStates.Add(new RegionForceState(regionFaction, requiredGarrison, spareTroops));
+        }
+
+        if (defensiveOnly)
+        {
+            if (planet.IsUnderAssault())
+            {
+                // Under assault: dig in fully — fortifications, listening posts, organization.
+                GenerateDevelopmentOrders(regionalForceStates, allNewOrders);
+            }
+            else
+            {
+                // Not yet formally under assault, but a PDF facing an enemy massing across a
+                // border raises listening posts there so it is not blind when the assault lands.
+                // Sensors only, and only on threatened borders — no fortifying quiet worlds, no
+                // maneuver (PRD §4.24).
+                GenerateBorderListeningPosts(faction, regionalForceStates, allNewOrders);
+            }
+            return;
+        }
+
+        GameLog.Trace(() => $"    plan {faction.Name}/{planet.Name}: {factionRegionsOnPlanet.Count} regions, "
+            + $"spareTroops={regionalForceStates.Sum(s => s.SpareTroops)}");
+
+        // PRIORITY 2: PLAN MAJOR OFFENSIVE
+        PlanMajorOffensiveOnPlanet(faction, planet, regionalForceStates, allNewOrders);
+        GameLog.Trace(() => $"    plan {faction.Name}/{planet.Name}: offensive done ({allNewOrders.Count} orders)");
+
+        // PRIORITY 3: PLAN DEVELOPMENT
+        GenerateDevelopmentOrders(regionalForceStates, allNewOrders);
+        GameLog.Trace(() => $"    plan {faction.Name}/{planet.Name}: development done ({allNewOrders.Count} orders)");
+
+        // PRIORITY 4: PLAN RECON MISSIONS
+        PlanPatrolMissionsOnPlanet(faction, planet, regionalForceStates, allNewOrders);
+        GameLog.Trace(() => $"    plan {faction.Name}/{planet.Name}: patrols done ({allNewOrders.Count} orders)");
     }
 
     internal enum OffensivePlan { None, Assault, Recon }
@@ -243,22 +265,38 @@ public class FactionStrategyController
 
             long buildPointsAvailable = state.SpareTroops / 100;
 
+            // Project each defense's level as we plan this turn's builds. The stats themselves are
+            // only applied later (ProcessConstructionOrders), so without projecting here the per-level
+            // cost stayed constant and the loop poured a region's whole budget into a single defense —
+            // and once a level passed ~30, the old (int)2^(level+1) cost overflowed to a NEGATIVE
+            // value, so `buildPointsAvailable -= minCost` grew the budget and the loop never
+            // terminated (a hang first seen when the opening-scenario sims handed a faction a large
+            // spare pool). Projecting the level makes the exponential cost rise as we plan, which
+            // self-limits how far a region's defenses can climb in one turn; DefenseBuildCost computes
+            // in long and caps out so it can never wrap.
+            int org = state.RegionFaction.Organization;
+            int det = state.RegionFaction.Detection;
+            int ent = state.RegionFaction.Entrenchment;
+            int aa = state.RegionFaction.AntiAir;
+
             while (buildPointsAvailable > 0)
             {
-                int orgCost = (state.RegionFaction.Organization < 100) ? (int)(Math.Pow(2, state.RegionFaction.Organization / 10) * (state.RegionFaction.Population / 10000.0f)) + 1 : int.MaxValue;
-                int detCost = (int)Math.Pow(2, state.RegionFaction.Detection + 1);
-                int entCost = (int)Math.Pow(2, state.RegionFaction.Entrenchment + 1);
-                int aaCost = (int)Math.Pow(2, state.RegionFaction.AntiAir + 1);
+                long orgCost = org < 100
+                    ? (long)(Math.Pow(2, org / 10) * (state.RegionFaction.Population / 10000.0f)) + 1
+                    : long.MaxValue;
+                long detCost = DefenseBuildCost(det);
+                long entCost = DefenseBuildCost(ent);
+                long aaCost = DefenseBuildCost(aa);
 
-                int minCost = Math.Min(orgCost, Math.Min(detCost, Math.Min(entCost, aaCost)));
+                long minCost = Math.Min(orgCost, Math.Min(detCost, Math.Min(entCost, aaCost)));
 
-                if (minCost > buildPointsAvailable || minCost == int.MaxValue) break;
+                if (minCost > buildPointsAvailable) break;
 
                 ConstructionMission mission;
-                if (minCost == orgCost) mission = new ConstructionMission(DefenseType.Organization, 1, state.RegionFaction);
-                else if (minCost == entCost) mission = new ConstructionMission(DefenseType.Entrenchment, 1, state.RegionFaction);
-                else if (minCost == detCost) mission = new ConstructionMission(DefenseType.Detection, 1, state.RegionFaction);
-                else mission = new ConstructionMission(DefenseType.AntiAir, 1, state.RegionFaction);
+                if (minCost == orgCost) { mission = new ConstructionMission(DefenseType.Organization, 1, state.RegionFaction); org++; }
+                else if (minCost == entCost) { mission = new ConstructionMission(DefenseType.Entrenchment, 1, state.RegionFaction); ent++; }
+                else if (minCost == detCost) { mission = new ConstructionMission(DefenseType.Detection, 1, state.RegionFaction); det++; }
+                else { mission = new ConstructionMission(DefenseType.AntiAir, 1, state.RegionFaction); aa++; }
 
                 Order devOrder = new Order(new List<Squad>(), Disposition.DugIn, true, false, Aggression.Avoid, mission);
                 allOrders.Add(devOrder);
@@ -268,6 +306,16 @@ public class FactionStrategyController
                 state.SpareTroops -= minCost * 100;
             }
         }
+    }
+
+    // Exponential build cost 2^(level+1) for a defense stat, computed in long and capped so it can
+    // never overflow: at or past DefenseCostCapLevel the cost is treated as effectively infinite
+    // (unaffordable), which plateaus a defense rather than wrapping to a negative cost and spinning
+    // the development planner forever.
+    private const int DefenseCostCapLevel = 30;
+    private static long DefenseBuildCost(int level)
+    {
+        return level >= DefenseCostCapLevel ? long.MaxValue : 1L << (level + 1);
     }
 
     // Peacetime PDF posture (PRD §4.24): before a world is formally under assault, a PDF that faces
@@ -286,8 +334,8 @@ public class FactionStrategyController
                            .Any(rf => rf.IsPublic && AreFactionsEnemies(faction, rf.PlanetFaction.Faction)));
             if (!bordersPublicEnemy) continue;
 
-            long detCost = (long)Math.Pow(2, state.RegionFaction.Detection + 1);
-            if (detCost * 100L > state.SpareTroops) continue;
+            long detCost = DefenseBuildCost(state.RegionFaction.Detection);
+            if (detCost == long.MaxValue || detCost * 100L > state.SpareTroops) continue;
 
             allOrders.Add(new Order(new List<Squad>(), Disposition.DugIn, true, false, Aggression.Avoid,
                 new ConstructionMission(DefenseType.Detection, 1, state.RegionFaction)));

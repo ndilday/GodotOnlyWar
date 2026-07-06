@@ -119,6 +119,24 @@ internal sealed class SectorSimulationFixture
         return rf;
     }
 
+    // adds a public Genestealer-Cult-style faction (Conversion growth) to a region alongside its
+    // controller, used to exercise the Cult idle-force maneuvers (relocation / sacrificial predation)
+    public RegionFaction AddPublicCult(int region, long population, int organization)
+    {
+        Faction faction = BuildFaction(_nextFactionId++, "Genestealer Cult", isPlayer: false, isDefault: false, GrowthType.Conversion);
+        PlanetFaction planetFaction = new(faction) { IsPublic = true };
+        Planet.PlanetFactionMap[faction.Id] = planetFaction;
+        RegionFaction rf = new(planetFaction, Planet.Regions[region])
+        {
+            Population = population,
+            IsPublic = true,
+            Garrison = 0,
+            Organization = organization
+        };
+        Planet.Regions[region].RegionFactionMap[faction.Id] = rf;
+        return rf;
+    }
+
     public Character InstallGovernor(float investigation, float neediness, float opinion)
     {
         Character governor = new()

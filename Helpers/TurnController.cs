@@ -70,6 +70,21 @@ namespace OnlyWar.Helpers
         // regions, seeking the nearest fortification rather than being slaughtered in place (§4.24).
         private const double ImperialEmigrationRate = 0.05;
 
+        // --- Tyranid forced expansion (PRD §4.24 Tyranid Troop AI, step 2) ---
+        // The share of a swarm's mobile force that spreads to a richer neighbour at full local
+        // depletion (a bare region). Scaled down by the region's actual depletion, so a rich region
+        // barely spreads (it gorges) while a stripped one sends a large fraction onward. First-pass
+        // tunable.
+        private const double TyranidExpansionShare = 0.5;
+
+        // --- Genestealer Cult maneuvers (PRD §4.24) ---
+        // A public Cult grinds the PDF down via cross-border raids (the offensive machinery). This
+        // governs its IDLE force — Cult population in regions with no active Imperial enemy left to
+        // fight nearby: each week this fraction of that pocket's mobile force shifts toward an
+        // adjacent region nearer the fighting; where the fight is wholly out of reach it turns to
+        // sacrificial predation instead. First-pass tunable.
+        private const double CultRelocationRate = 0.25;
+
         public TurnController() : this(null)
         {
         }
@@ -136,6 +151,59 @@ namespace OnlyWar.Helpers
             // Resolve the opening objective after the planet sim has settled this turn, so the
             // win/lapse checks read the post-combat, post-growth state of the promised world.
             ProcessScenario(sector);
+        }
+
+        // Runs a planet-scoped slice of the weekly turn for a single world, for the given number of
+        // weeks. Used by the opening-scenario stamp to let the promised world evolve during
+        // generation before the player arrives — the revealed cult grinds the PDF down, then the
+        // stranded Tyranid swarm feeds and spreads (Design/OpeningScenario.md §4.24, "Opening
+        // Scenario Application"). It deliberately omits everything that is not local to this planet
+        // or that belongs to the player's own upkeep: no player training or medical, no fleet
+        // movement, no other planets, and no scenario resolution (the scenario is not yet assigned
+        // during generation). The date is not advanced, so the Chapter's founding date is unaffected.
+        internal void SimulatePlanetForward(Sector sector, Planet planet, int turns)
+        {
+            GameRulesData data = GameDataSingleton.Instance.GameRulesData;
+            List<Faction> enemyFactions = data.Factions
+                .Where(f => !f.IsPlayerFaction && !f.IsDefaultFaction).ToList();
+            Faction defaultFaction = data.DefaultFaction;
+
+            GameLog.Info(() => $"SimulatePlanetForward '{planet.Name}': {turns} turns");
+            for (int week = 0; week < turns; week++)
+            {
+                System.Diagnostics.Stopwatch weekTimer = System.Diagnostics.Stopwatch.StartNew();
+                MissionContexts.Clear();
+                SpecialMissions.Clear();
+
+                // Strategic planning, scoped to this one planet. Enemy factions plan offensively;
+                // the Imperial PDF plans defensively (fortify/listen only), exactly as ProcessTurn
+                // does sector-wide.
+                List<Order> orders = new List<Order>();
+                foreach (Faction faction in enemyFactions)
+                {
+                    orders.AddRange(_npcStrategyController.GenerateFactionOrders(faction, sector, planet));
+                }
+                if (defaultFaction != null)
+                {
+                    orders.AddRange(_npcStrategyController.GenerateFactionOrders(
+                        defaultFaction, sector, planet, defensiveOnly: true));
+                }
+
+                List<Order> combatOrders = orders.Where(o => o.AssignedSquads.Any()).ToList();
+                GameLog.Debug(() =>
+                    $"  week {week + 1}/{turns} '{planet.Name}': {orders.Count} orders, {combatOrders.Count} combat "
+                    + $"({combatOrders.Sum(o => o.AssignedSquads.Sum(s => s.Members.Count))} soldiers committed)");
+
+                ProcessCombatMissions(combatOrders);
+                ProcessConstructionOrders(orders.Where(o => !o.AssignedSquads.Any()));
+
+                ApplyMissionResults();
+                UpdatePlanet(planet);
+                UpdateIntelligence(planet);
+
+                GameLog.Info(() =>
+                    $"  week {week + 1}/{turns} '{planet.Name}' done in {weekTimer.ElapsedMilliseconds}ms");
+            }
         }
 
         // Resolves the "Promised World" opening objective (Design/OpeningScenario.md §6.2). Runs
@@ -442,28 +510,20 @@ namespace OnlyWar.Helpers
             ApplyConstruction(mission, amount);
         }
 
-        // Intel a completed recon always yields, even on a poor Tactics result: scouts that reach a
-        // region and return learn at least a rough sense of its strength. This guarantees the
-        // recon→assess→assault loop makes progress rather than stalling on unlucky checks.
-        internal const float ReconBaseIntelGain = 0.5f;
-
-        // True when the region faction is screened by a standing patrol of its own
-        // (FactionStrategyController.PlanPatrolMissionsOnPlanet lands patrol squads here), which
-        // intercepts enemy scouts and denies their intelligence.
-        internal static bool IsScreenedByPatrol(RegionFaction regionFaction) =>
-            regionFaction.LandedSquads.Any(s => s.CurrentOrders?.Mission.MissionType == MissionType.Patrol);
-
         // Applies a resolved recon mission's result. The scouting faction sharpens its own belief
         // about the reconnoitred region faction's strength — the intelligence its offensive
-        // targeting acts on (FactionStrategyController; PRD §4.24). Only the player/default faction's
-        // recon additionally feeds the shared fog-of-war IntelligenceLevel surfaced in the UI; enemy
-        // recon does not leak into the player's knowledge of the region.
+        // targeting acts on (FactionStrategyController; PRD §4.24) — by however much the recon
+        // actually learned. A scout detected and driven off by the region's patrol never reaches
+        // PerformReconMissionStep, so its Impact (and thus belief gained) stays ~zero: natural
+        // denial via the contested stealth check, not a flat override. AddObserverIntel ignores
+        // non-positive amounts. Only the player/default faction's recon additionally feeds the
+        // shared fog-of-war IntelligenceLevel surfaced in the UI; enemy recon does not leak into
+        // the player's knowledge of the region.
         internal static void ResolveReconResult(Faction reconningFaction, RegionFaction target, float impact)
         {
             if (reconningFaction != null)
             {
-                // A good check learns more; a poor one still learns the baseline.
-                target.AddObserverIntel(reconningFaction.Id, Math.Max(impact, ReconBaseIntelGain));
+                target.AddObserverIntel(reconningFaction.Id, impact);
             }
             if (reconningFaction == null || reconningFaction.IsPlayerFaction || reconningFaction.IsDefaultFaction)
             {
@@ -505,13 +565,13 @@ namespace OnlyWar.Helpers
                         regionFaction.Organization -= Math.Min(orgLost, regionFaction.Organization);
                         break;
                     case MissionType.Recon:
-                        // A standing patrol screening the reconnoitred region intercepts the scouts
-                        // before they can report, so a screened region yields no intelligence (§4.24).
-                        if (!IsScreenedByPatrol(regionFaction))
-                        {
-                            ResolveReconResult(context.Order.AssignedSquads.FirstOrDefault()?.Faction,
-                                               regionFaction, context.Impact);
-                        }
+                        // Intel gained is whatever the recon actually accomplished: a scout that was
+                        // detected and driven off by the region's patrol before infiltrating never
+                        // reaches PerformReconMissionStep, so its Impact (and thus belief gained)
+                        // stays ~zero. The patrol contests recon via the stealth check difficulty
+                        // (RegionFactionExtensions.GetPatrolStealthPenalty), not a flat override.
+                        ResolveReconResult(context.Order.AssignedSquads.FirstOrDefault()?.Faction,
+                                           regionFaction, context.Impact);
                         break;
                     case MissionType.Sabotage:
                         SabotageMission sabotageMission = (SabotageMission)context.Order.Mission;
@@ -636,6 +696,18 @@ namespace OnlyWar.Helpers
         {
             foreach (Planet planet in planets)
             {
+                UpdatePlanet(planet);
+            }
+        }
+
+        private void UpdatePlanet(Planet planet)
+        {
+            {
+                // Tyranid troop AI step 2 (PRD §4.24): the swarm spreads toward fresh biomass before
+                // it eats, so force that expands is not also counted consuming at home. Fight (step 1)
+                // was already committed and drawn from the pool during strategic planning.
+                ResolveTyranidExpansion(planet);
+
                 foreach (Region region in planet.Regions)
                 {
                     float pdfRatio = region.PlanetaryDefenseForces / (float)region.Population;
@@ -669,6 +741,13 @@ namespace OnlyWar.Helpers
                 foreach (Region region in planet.Regions)
                 {
                     ProcessImperialEmigration(region);
+                }
+
+                // Genestealer Cult idle-force maneuvers, after the remnant hide/unhide is settled so
+                // the "active PDF nearby?" test reads the finalized states (PRD §4.24).
+                foreach (Region region in planet.Regions)
+                {
+                    ResolveCultManeuvers(region);
                 }
 
                 CheckForPlanetaryRevolt(planet);
@@ -774,6 +853,79 @@ namespace OnlyWar.Helpers
             return BiomassAppetitePerTroop * Math.Pow(biomassRemaining / BiomassReferenceAvailability, ConsumptionDiminishingExponent);
         }
 
+        // Tyranid forced expansion (PRD §4.24 Tyranid Troop AI, step 2). After the swarm has committed
+        // force to any fight — the offensive machinery, which already draws that force from its pool
+        // during planning — its remaining organized force spreads to neighbours to reach fresh
+        // biomass, biased by how depleted the home region is: a rich region keeps the swarm home to
+        // gorge, a stripped one pushes it onward toward the richest neighbour. This runs BEFORE
+        // ResolveBiomassConsumption so the force that leaves is not also counted as eating at home —
+        // the "spent twice" reconciliation that completes the fight → expand → consume allocation.
+        internal static void ResolveTyranidExpansion(Planet planet)
+        {
+            // Compute every move from the pre-expansion snapshot so a swarm cannot cascade across the
+            // whole map within one turn.
+            var moves = new List<(RegionFaction Source, Region Destination, long Amount)>();
+            foreach (Region region in planet.Regions)
+            {
+                foreach (RegionFaction swarm in region.RegionFactionMap.Values
+                    .Where(rf => rf.PlanetFaction.Faction.GrowthType == GrowthType.Consumption && rf.Population > 0))
+                {
+                    long organized = (long)(swarm.Population * (Math.Max(swarm.Organization, 0) / 100.0));
+                    if (organized <= 0) continue;
+
+                    double homeBiomass = RegionBiomass(region);
+                    Region richest = region.GetAdjacentRegions().OrderByDescending(RegionBiomass).FirstOrDefault();
+                    // Only spread toward genuinely richer ground; a swarm ringed by equally-stripped
+                    // regions stays and finishes what little is left rather than thrashing.
+                    if (richest == null || RegionBiomass(richest) <= homeBiomass) continue;
+
+                    long movers = Math.Min(swarm.Population,
+                        (long)(organized * RegionDepletion(region) * TyranidExpansionShare));
+                    if (movers > 0)
+                    {
+                        moves.Add((swarm, richest, movers));
+                    }
+                }
+            }
+
+            foreach ((RegionFaction source, Region destination, long amount) in moves)
+            {
+                source.Population -= amount;
+                EstablishInvaderPresence(source.PlanetFaction.Faction, destination, amount);
+                // Propagate any growth throttle (e.g. the Opening Scenario's) so a spreading swarm
+                // cannot outrun it by founding fresh, unthrottled footholds.
+                if (destination.RegionFactionMap.TryGetValue(source.PlanetFaction.Faction.Id, out RegionFaction destSwarm))
+                {
+                    destSwarm.GrowthMultiplier = Math.Min(destSwarm.GrowthMultiplier, source.GrowthMultiplier);
+                }
+            }
+        }
+
+        // Edible biomass currently in a region: the headcount the swarm can predate (all non-Tyranid
+        // population) plus the carrying capacity it can consume.
+        private static double RegionBiomass(Region region)
+        {
+            long prey = region.RegionFactionMap.Values
+                .Where(rf => rf.PlanetFaction.Faction.GrowthType != GrowthType.Consumption)
+                .Sum(rf => rf.Population);
+            return prey + Math.Max(0, region.CarryingCapacity);
+        }
+
+        // How stripped a region is (PRD §4.24), 0 (untouched) to 1 (bare): the average shortfall of
+        // its remaining land (capacity vs. its natural ceiling) and its remaining edible headcount
+        // (vs. that same ceiling, a stand-in for the population it once held). A stripped region
+        // pushes its swarm onward.
+        private static double RegionDepletion(Region region)
+        {
+            double ceiling = Math.Max(1, region.MaximumCarryingCapacity);
+            double capFraction = Math.Clamp(region.CarryingCapacity / ceiling, 0, 1);
+            long prey = region.RegionFactionMap.Values
+                .Where(rf => rf.PlanetFaction.Faction.GrowthType != GrowthType.Consumption)
+                .Sum(rf => rf.Population);
+            double preyFraction = Math.Clamp(prey / ceiling, 0, 1);
+            return 1.0 - 0.5 * (capFraction + preyFraction);
+        }
+
         // The Tyranid biomass step (PRD §4.24): each Consumption faction's organized troops eat the
         // region, splitting their effort between predation (killing co-located headcount) and
         // consumption (stripping carrying capacity) to equalize marginal yield, with half of all
@@ -863,6 +1015,93 @@ namespace OnlyWar.Helpers
             long recovered = (long)(gap * CarryingCapacityRecoveryRate);
             if (recovered <= 0) recovered = 1;
             region.CarryingCapacity = Math.Min(region.MaximumCarryingCapacity, region.CarryingCapacity + recovered);
+        }
+
+        // Genestealer Cult idle-force behavior (PRD §4.24). A public Cult grinds down the PDF through
+        // cross-border raids (the offensive machinery); this pass governs the force in regions with no
+        // active Imperial enemy left to fight nearby. Such a pocket flows toward an adjacent region
+        // nearer the fighting; where the fight is wholly out of reach it falls to sacrificial
+        // predation — slaughtering the local Imperial population as offerings to the Star Children.
+        // That killing does NOT grow the Cult: conversion (resolved in the growth step) is its only
+        // path to numbers.
+        internal static void ResolveCultManeuvers(Region region)
+        {
+            RegionFaction cult = region.RegionFactionMap.Values.FirstOrDefault(
+                rf => rf.IsPublic && rf.PlanetFaction.Faction.GrowthType == GrowthType.Conversion);
+            if (cult == null || cult.Population <= 0) return;
+
+            int organization = Math.Max(cult.Organization, 0);
+            long organized = (long)(cult.Population * (organization / 100.0));
+            if (organized <= 0) return;
+
+            // On the front: an active Imperial enemy in this or an adjacent region is engaged by the
+            // raid machinery, so leave this pocket's force to that fight.
+            if (HasActiveImperialEnemyNearby(region)) return;
+
+            // Idle: flow toward an adjacent region that is itself on the front, consolidating the
+            // swarm toward where PDFs remain.
+            Region frontward = region.GetAdjacentRegions().FirstOrDefault(HasActiveImperialEnemyNearby);
+            if (frontward != null)
+            {
+                RelocateCultForce(cult, frontward, organized);
+                return;
+            }
+
+            // Wholly out of reach of the fight: sacrificial predation of the local Imperial population.
+            SacrificialCultPredation(region, organized);
+        }
+
+        // An active Imperial enemy is a public PDF/player force able to fight back — a standing
+        // garrison or landed player squads. A remnant gone to ground (hidden, no garrison) is not one.
+        private static bool HasActiveImperialEnemyNearby(Region region)
+        {
+            return region.GetSelfAndAdjacentRegions().Any(r => r.RegionFactionMap.Values.Any(rf =>
+                rf.IsPublic
+                && (rf.PlanetFaction.Faction.IsDefaultFaction || rf.PlanetFaction.Faction.IsPlayerFaction)
+                && (rf.Garrison > 0 || rf.LandedSquads.Count > 0)));
+        }
+
+        // Shifts a share of an idle Cult pocket's mobile force into an adjacent region nearer the
+        // fight, establishing or reinforcing the Cult there (its population is its military strength).
+        private static void RelocateCultForce(RegionFaction cult, Region destination, long organized)
+        {
+            long movers = Math.Min(cult.Population, (long)(organized * CultRelocationRate));
+            if (movers <= 0) return;
+            cult.Population -= movers;
+
+            Faction cultFaction = cult.PlanetFaction.Faction;
+            if (!destination.RegionFactionMap.TryGetValue(cultFaction.Id, out RegionFaction destCult))
+            {
+                if (!destination.Planet.PlanetFactionMap.TryGetValue(cultFaction.Id, out PlanetFaction destPlanetFaction))
+                {
+                    destPlanetFaction = new PlanetFaction(cultFaction) { IsPublic = true };
+                    destination.Planet.PlanetFactionMap[cultFaction.Id] = destPlanetFaction;
+                }
+                destCult = new RegionFaction(destPlanetFaction, destination)
+                {
+                    IsPublic = true,
+                    Organization = Math.Max(cult.Organization, 0)
+                };
+                destination.RegionFactionMap[cultFaction.Id] = destCult;
+            }
+            destCult.IsPublic = true;
+            destCult.Population += movers;
+        }
+
+        // The Cult slaughters the local Imperial population (hidden remnant and civilians) as
+        // sacrifices, using the same logarithmic predation yield as the swarm — but it gains nothing:
+        // killing is not the Cult's growth, conversion is (PRD §4.24).
+        private static void SacrificialCultPredation(Region region, long organized)
+        {
+            List<RegionFaction> prey = region.RegionFactionMap.Values
+                .Where(rf => rf.PlanetFaction.Faction.IsDefaultFaction && rf.Population > 0)
+                .ToList();
+            double preyRemaining = prey.Sum(rf => rf.Population);
+            if (preyRemaining <= 0) return;
+
+            long killed = (long)Math.Min(preyRemaining, organized * PredationMarginalYield(preyRemaining));
+            ApplyPredationKills(prey, killed);
+            // Deliberately no Cult population gain.
         }
 
         // Advances the region's default-Imperial faction through the hide/unhide lifecycle (PRD
@@ -1020,10 +1259,11 @@ namespace OnlyWar.Helpers
             // If no hidden faction, no revolt possible
             if (hiddenPlanetFaction != null)
             {
-                long hiddenFactionGarrison = 0;
-                long hiddenFactionPopulation = 0;
-                long controllingFactionGarrison = 0;
-                long controllingFactionPopulation = 0;
+                // Compare fighting strength, not raw garrison: for a horde faction (a cult) the whole
+                // membership rises, so its strength is population (+ its armed cells), whereas the
+                // controlling Imperium fields only its PDF garrison (RegionFaction.MilitaryStrength).
+                long hiddenFactionStrength = 0;
+                long controllingFactionStrength = 0;
 
                 foreach (Region region in planet.Regions)
                 {
@@ -1031,18 +1271,16 @@ namespace OnlyWar.Helpers
                     {
                         if (regionFaction.PlanetFaction == controllingPlanetFaction)
                         {
-                            controllingFactionGarrison += regionFaction.Garrison;
-                            controllingFactionPopulation += regionFaction.Population;
+                            controllingFactionStrength += regionFaction.MilitaryStrength;
                         }
                         else if (regionFaction.PlanetFaction == hiddenPlanetFaction)
                         {
-                            hiddenFactionGarrison += regionFaction.Garrison;
-                            hiddenFactionPopulation += regionFaction.Population;
+                            hiddenFactionStrength += regionFaction.MilitaryStrength;
                         }
                     }
                 }
 
-                if (hiddenFactionGarrison > controllingFactionGarrison)
+                if (hiddenFactionStrength > controllingFactionStrength)
                 {
                     // Revolt triggers!
                     //context.Log.Add($"{hiddenFactionType.Name} forces trigger planetary revolt on {planet.Name}!");
@@ -1052,6 +1290,11 @@ namespace OnlyWar.Helpers
                         {
                             RegionFaction revoltingRegionFaction = region.RegionFactionMap[hiddenFactionType.Id];
                             revoltingRegionFaction.IsPublic = true;
+                            // Going public, the cult's covert armed cells throw off concealment and
+                            // join the open rising: fold the standing garrison into the fighting
+                            // population, leaving no separate hidden garrison behind.
+                            revoltingRegionFaction.Population += revoltingRegionFaction.Garrison;
+                            revoltingRegionFaction.Garrison = 0;
                             // if there are any regional defenses, the revolters claim half (plus/minus random roll)
                             if (region.RegionFactionMap.ContainsKey(controllingFaction.Id))
                             {
@@ -1134,9 +1377,9 @@ namespace OnlyWar.Helpers
                     continue;
                 }
 
-                long hostileGarrison = SumGarrison(planet, planetFaction);
-                long controllingGarrison = SumGarrison(planet, controllingPlanetFaction);
-                if (hostileGarrison < 0.7f * controllingGarrison)
+                long hostileStrength = SumMilitaryStrength(planet, planetFaction);
+                long controllingStrength = SumMilitaryStrength(planet, controllingPlanetFaction);
+                if (hostileStrength < 0.7f * controllingStrength)
                 {
                     // the revolt has been put down; the faction goes back underground
                     planetFaction.IsPublic = false;
@@ -1151,17 +1394,17 @@ namespace OnlyWar.Helpers
             }
         }
 
-        private static long SumGarrison(Planet planet, PlanetFaction planetFaction)
+        private static long SumMilitaryStrength(Planet planet, PlanetFaction planetFaction)
         {
-            long garrison = 0;
+            long strength = 0;
             foreach (Region region in planet.Regions)
             {
                 if (region.RegionFactionMap.TryGetValue(planetFaction.Faction.Id, out RegionFaction rf))
                 {
-                    garrison += rf.Garrison;
+                    strength += rf.MilitaryStrength;
                 }
             }
-            return garrison;
+            return strength;
         }
 
         private void EndOfTurnLeaderUpdate(Planet planet, PlanetFaction planetFaction)
@@ -1320,6 +1563,13 @@ namespace OnlyWar.Helpers
         private void UpdateIntelligence(IEnumerable<Planet> planets)
         {
             foreach (Planet planet in planets)
+            {
+                UpdateIntelligence(planet);
+            }
+        }
+
+        private void UpdateIntelligence(Planet planet)
+        {
             {
                 foreach (Region region in planet.Regions)
                 {

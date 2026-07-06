@@ -349,33 +349,34 @@ public class FactionStrategyControllerTests
     }
 
     [Fact]
-    public void ResolveReconResult_EvenAPoorReconLearnsTheBaseline()
+    public void ResolveReconResult_ADeniedReconGainsNoBelief()
     {
-        // A botched check (zero/negative margin) still yields the baseline intel, so the
-        // recon→assault loop cannot stall on unlucky rolls.
+        // A scout that learns nothing (detected and driven off => zero/negative Impact) raises no
+        // belief — the natural denial that replaces the old flat interception override.
         Faction scout = CreateNonPlayerFaction();
         RegionFaction target = CreateTargetRegionFaction(scout);
 
         TurnController.ResolveReconResult(scout, target, 0f);
 
-        Assert.Equal(TurnController.ReconBaseIntelGain, target.GetObserverIntel(scout.Id));
+        Assert.Equal(0f, target.GetObserverIntel(scout.Id));
     }
 
     // ----- Patrol as a counter-force (PRD §4.24) -----
 
     [Fact]
-    public void IsScreenedByPatrol_TrueOnlyWhenAPatrolSquadIsLanded()
+    public void GetPatrolStealthPenalty_ZeroWhenUnpatrolled_PositiveWhenPatrolled()
     {
         Faction faction = CreateNonPlayerFaction();
         RegionFaction rf = CreateTargetRegionFaction(faction);
-        Assert.False(TurnController.IsScreenedByPatrol(rf));
+        Assert.Equal(0f, rf.GetPatrolStealthPenalty());
 
-        // A non-patrol defensive squad does not constitute a screen against recon.
+        // A non-patrol defensive squad is not an active screen — no stealth penalty.
         rf.LandedSquads.Add(LandedSquadWithOrder(rf, MissionType.DefenseInDepth));
-        Assert.False(TurnController.IsScreenedByPatrol(rf));
+        Assert.Equal(0f, rf.GetPatrolStealthPenalty());
 
+        // A standing patrol makes the region measurably harder to scout unseen.
         rf.LandedSquads.Add(LandedSquadWithOrder(rf, MissionType.Patrol));
-        Assert.True(TurnController.IsScreenedByPatrol(rf));
+        Assert.True(rf.GetPatrolStealthPenalty() >= RegionFactionExtensions.PatrolActiveScreenBonus);
     }
 
     [Fact]

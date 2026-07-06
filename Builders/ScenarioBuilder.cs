@@ -30,9 +30,36 @@ namespace OnlyWar.Builders
             Sector sector, GameRulesData data, Date currentDate,
             PlayerForce playerForce, List<Planet> planetList, List<Character> characterList)
         {
+            // The opening plays out as a timed sequence during generation rather than being stamped
+            // as a static board (Design/OpeningScenario.md §4.24, "Opening Scenario Application"): the
+            // world the player inherits is emergent — sometimes a fresh Tyranid beachhead, sometimes a
+            // month-eaten ruin — from the same simulation that runs during play. All draws come from
+            // the already-seeded RNG stream, so seed + scenario still reproduces the same opening.
             Planet promised = SelectPromisedWorld(planetList, data);
+
+            // Seed the hidden cult, pull it up to landing-site strength (this world was chosen
+            // because its cult is deep and ready), then have it rise in open revolt: its psychic
+            // ascension is the beacon that calls the hive fleet down (§3.1a).
             EnsureGenestealerCult(promised, data);
+            StrengthenPromisedWorldCult(promised, data);
+            RevealGenestealerCult(promised, data);
+
+            // A single TurnController drives both planet-scoped sims (no player upkeep, no other
+            // planets, no scenario resolution — see SimulatePlanetForward).
+            TurnController controller = new TurnController();
+
+            // Pre-landing: the revealed cult wars against the PDF, weakening the defenders the
+            // Tyranids will land into.
+            controller.SimulatePlanetForward(sector, promised, ScenarioRules.PreLandingTurns);
+
+            // The authored beachhead makes planetfall onto the now-weakened board.
             StampTyranidPresence(promised, data);
+
+            // Post-landing: the stranded swarm eats and spreads for a Gaussian-random stretch (the
+            // Navy strands it — no reinforcement mechanism exists) before the player arrives.
+            controller.SimulatePlanetForward(sector, promised, PostLandingTurns());
+
+            // The player arrives last, into whatever state the sims produced.
             PlaceFleetInOrbit(sector, playerForce, promised);
             Character authority = ResolveAuthority(sector, planetList, characterList, data,
                                                    out GovernanceTier authorityTier);
@@ -44,6 +71,80 @@ namespace OnlyWar.Builders
                 promised.Id,
                 briefingText,
                 authority.Id);
+        }
+
+        // Weeks the stranded Tyranid swarm feeds after planetfall before the player arrives:
+        // max(0, round(mean + z)), z ~ N(0,1), so the opening varies from a fresh beachhead to a
+        // deeply consumed world across seeds (Design/OpeningScenario.md §4.24). Drawn from the
+        // seeded RNG so it is deterministic per seed.
+        private static int PostLandingTurns()
+        {
+            double turns = ScenarioRules.PostLandingTurnsMean + RNG.NextRandomZValue();
+            return Math.Max(0, (int)Math.Round(turns));
+        }
+
+        // Pulls the promised world's Genestealer Cult up to landing-site strength: in each region the
+        // cult takes ScenarioRules.PromisedWorldCultStrengthFraction of the combined (cult + Imperial)
+        // population and garrison, carving the increase out of the Imperial owner — the deep
+        // infiltration that hollowed out this world's PDF and drew the swarm (§4.24). Only ever adds
+        // to the cult (a region where a random roll already seeded a larger cult is left alone).
+        private static void StrengthenPromisedWorldCult(Planet promised, GameRulesData data)
+        {
+            Faction cultFaction = data.SectorFactions.Infiltrator;
+            Faction imperialFaction = data.DefaultFaction;
+            float share = ScenarioRules.PromisedWorldCultStrengthFraction;
+            foreach (Region region in promised.Regions)
+            {
+                if (!region.RegionFactionMap.TryGetValue(cultFaction.Id, out RegionFaction cult)
+                    || !region.RegionFactionMap.TryGetValue(imperialFaction.Id, out RegionFaction imperial))
+                {
+                    continue;
+                }
+
+                long targetPopulation = (long)((cult.Population + imperial.Population) * share);
+                if (targetPopulation > cult.Population)
+                {
+                    long delta = targetPopulation - cult.Population;
+                    cult.Population += delta;
+                    imperial.Population -= delta;
+                }
+
+                long targetGarrison = (long)((cult.Garrison + imperial.Garrison) * share);
+                if (targetGarrison > cult.Garrison)
+                {
+                    long delta = targetGarrison - cult.Garrison;
+                    cult.Garrison += delta;
+                    imperial.Garrison -= delta;
+                }
+            }
+        }
+
+        // The infiltrated Genestealer Cult throws off concealment and rises in open revolt, calling
+        // the hive fleet down. Mirrors the reveal in TurnController.CheckForPlanetaryRevolt: flip the
+        // cult's PlanetFaction and each of its RegionFactions public. It has been waiting for this
+        // moment, so its cells are already mobilized — set Organization to 1 (from the seeded -1) so
+        // the cult fields offensive force immediately rather than sitting inert for a turn while the
+        // under-assault initializer would otherwise wake it. Idempotent if no cult is present
+        // (EnsureGenestealerCult always seeds one first).
+        private static void RevealGenestealerCult(Planet promised, GameRulesData data)
+        {
+            Faction cultFaction = data.SectorFactions.Infiltrator;
+            if (!promised.PlanetFactionMap.TryGetValue(cultFaction.Id, out PlanetFaction cultPlanetFaction))
+            {
+                return;
+            }
+            cultPlanetFaction.IsPublic = true;
+            foreach (Region region in promised.Regions)
+            {
+                if (region.RegionFactionMap.TryGetValue(cultFaction.Id, out RegionFaction cultRegionFaction))
+                {
+                    cultRegionFaction.IsPublic = true;
+                    if (cultRegionFaction.Organization < 1)
+                    {
+                        cultRegionFaction.Organization = 1;
+                    }
+                }
+            }
         }
 
         // §3.1 — the promised world is Imperial-habitable but invaded. We pick a default-faction

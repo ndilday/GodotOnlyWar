@@ -44,6 +44,21 @@ namespace OnlyWar.Helpers.Missions.Recon
             };
             context.OpposingSquads = ForceGenerator.GenerateForce(request).Select(s => new BattleSquad(false, s)).ToList();
 
+            // No force may actually materialize to intercept the scout: the region can detect the
+            // intrusion (a listening post over a bare garrison) yet have no squads to scramble, or
+            // the OpFor size can round to zero, or the faction may have no ScoutPatrol composition.
+            // With no OpFor there is nothing to engage, and every downstream battle step assumes a
+            // non-empty OpposingSquads (First()/Average() over it) and would throw. Treat the recon
+            // as uncontested and continue the mission rather than fighting a phantom force.
+            if (context.OpposingSquads.Count == 0)
+            {
+                context.Log.Add(
+                    $"Day {context.DaysElapsed}: Detected in {context.Order.Mission.RegionFaction.Region.Name}, "
+                    + "but no enemy force intercepts; the force presses on.");
+                returnStep?.ExecuteMissionStep(context, marginOfSuccess, returnStep);
+                return;
+            }
+
             float margin = missionTest.RunMissionCheck(context.MissionSquads);
             if (margin > 0.0f)
             {

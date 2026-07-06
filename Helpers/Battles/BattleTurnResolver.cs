@@ -8,6 +8,7 @@ using OnlyWar.Models.Soldiers;
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Linq;
 
 namespace OnlyWar.Helpers.Battles
@@ -23,8 +24,19 @@ namespace OnlyWar.Helpers.Battles
         private readonly Dictionary<int, BattleSoldier> _casualtyMap;
         public BattleHistory BattleHistory { get; private set; }
         private BattleState _currentState;
+        // Wall-clock for the whole battle, so GameLog can flag pathologically long/large fights
+        // (e.g. an NPC-vs-NPC clash fed a pool-sized force). Started at construction.
+        private readonly Stopwatch _stopwatch = Stopwatch.StartNew();
 
         public event EventHandler<BattleHistory> OnBattleComplete;
+
+        // A battle's only natural end is one side's annihilation (see ProcessNextTurn). Two forces
+        // that cannot resolve — stuck out of effective range, or mutually unable to land a killing
+        // blow — would otherwise spin the caller's `while (!battleDone)` loop forever. This caps the
+        // fight so it always terminates. Set generously: real skirmishes resolve in far fewer turns,
+        // so this only trips on genuinely non-terminating engagements (first exposed by the opening-
+        // scenario sims driving NPC-vs-NPC skirmishes, which no prior code path did at volume).
+        private const int MaxBattleTurns = 1000;
 
         public BattleTurnResolver(BattleGridManager grid,
                                   IList<BattleSquad> playerBattleSquads,
@@ -44,6 +56,12 @@ namespace OnlyWar.Helpers.Battles
             _currentState = new BattleState(playerBattleSquads.ToDictionary(bs => bs.Id, bs => bs), opposingBattleSquads.ToDictionary(os => os.Id, os => os));
             BattleHistory = new BattleHistory();
             BattleHistory.Turns.Add(new BattleTurn(_currentState, new List<IAction>()));
+
+            // Battle-scale trace: the state is deep-copied every turn, so cost is ~O(turns x soldiers).
+            // Logging the starting head-counts makes an oversized fight (a pool-sized NPC force) visible.
+            GameLog.Debug(() =>
+                $"Battle start in {_region?.Name}: {_startingPlayerBattleSoldiers.Count} vs "
+                + $"{_startingEnemySoldierCount} soldiers ({playerBattleSquads.Count}+{opposingBattleSquads.Count} squads)");
         }
 
         private void WoundResolver_OnSoldierDeath(WoundResolution wound, WoundLevel woundLevel)
@@ -118,10 +136,25 @@ namespace OnlyWar.Helpers.Battles
                 Log(false, "One side destroyed, battle over");
                 ProcessEndOfBattle();
             }
+            else if (_currentState.TurnNumber >= MaxBattleTurns)
+            {
+                // Neither side could finish the other within the cap: end the fight as an
+                // inconclusive disengagement so the caller's loop can never hang. Both sides keep
+                // their survivors; the strategic layer accounts casualties from the post-battle state.
+                Log(false, $"Battle unresolved after {MaxBattleTurns} turns; forcing disengagement");
+                ProcessEndOfBattle();
+            }
         }
 
         private void ProcessEndOfBattle()
         {
+            _stopwatch.Stop();
+            // Battle-scale trace: turns taken x starting head-count is the ~cost driver; elapsed ms
+            // makes a pathological fight (long AND large) stand out in a turn-processing trace.
+            GameLog.Debug(() =>
+                $"Battle end in {_region?.Name}: {_currentState.TurnNumber} turns, "
+                + $"{_stopwatch.ElapsedMilliseconds}ms, started {_startingPlayerBattleSoldiers.Count} vs "
+                + $"{_startingEnemySoldierCount} soldiers");
             // we'll be nice to the Marines despite losing the battle... for now
             BattleLog.Write("Battle completed");
             ProcessSoldierHistoryForBattle();
@@ -334,6 +367,13 @@ namespace OnlyWar.Helpers.Battles
         {
             foreach (BattleSoldier soldier in _startingPlayerBattleSoldiers)
             {
+                // The "player side" of a battle is only genuinely the player Chapter for a
+                // player-issued order; in an NPC-vs-NPC skirmish (the opening-scenario sims) these
+                // are NPC attackers with no dossier to write history onto, so skip them.
+                if (soldier.Soldier is not PlayerSoldier)
+                {
+                    continue;
+                }
                 // Detail carries the rendered body without the leading date stamp;
                 // Render() restamps it. Structured fields below feed later querying.
                 string detail = $"Skirmish in {_region.Name}, {_region.Planet.Name}.";
@@ -429,6 +469,13 @@ namespace OnlyWar.Helpers.Battles
             List<PlayerSoldier> dead = new List<PlayerSoldier>();
             foreach (BattleSoldier soldier in _startingPlayerBattleSoldiers)
             {
+                // Only player-Chapter soldiers are tracked on the roster / fallen-brothers records;
+                // an NPC on the "player side" (NPC-vs-NPC opening-scenario skirmish) has none of that
+                // bookkeeping and its casualties are handled by the strategic pools, so skip it.
+                if (soldier.Soldier is not PlayerSoldier)
+                {
+                    continue;
+                }
                 foreach (HitLocation hl in soldier.Soldier.Body.HitLocations)
                 {
                     if (hl.Template.IsVital && hl.IsSevered)
@@ -531,8 +578,12 @@ namespace OnlyWar.Helpers.Battles
 
         private void CreditSoldierForKill(BattleSoldier inflicter, WeaponTemplate weapon)
         {
+            if (inflicter == null) return;
             inflicter.EnemiesTakenDown++;
-            PlayerSoldier playerSoldier = inflicter.Soldier as PlayerSoldier;
+            // Per-kill credit (melee/ranged tallies) is recorded on the player dossier only; an NPC
+            // inflicter — the norm in the opening-scenario cult/PDF/Tyranid skirmishes, which run
+            // NPC-vs-NPC through this same resolver — has no such dossier, so stop after the tally.
+            if (inflicter.Soldier is not PlayerSoldier playerSoldier) return;
             if (weapon.RelatedSkill.Category == SkillCategory.Melee)
             {
                 playerSoldier.AddMeleeKill(_opposingFaction.Id, weapon.Id);

@@ -60,10 +60,13 @@ public class CombatModelTests
         horde.RemoveMilitaryStrength(3_000);
         civilian.RemoveMilitaryStrength(400);
 
-        Assert.Equal(7_000, horde.Population);     // a horde bleeds from its population
-        Assert.Equal(500, horde.Garrison);         // its garrison is untouched
-        Assert.Equal(20_000, civilian.Population); // civilians are spared
-        Assert.Equal(600, civilian.Garrison);      // the military pool takes the loss
+        Assert.Equal(7_000, horde.Population);      // a horde bleeds from its population
+        Assert.Equal(500, horde.Garrison);          // its garrison is untouched
+        // A civilian-base faction loses the fallen from BOTH its garrison and the population they
+        // were drawn from (garrison is a sub-value of population); the civilian remainder
+        // (Population - Garrison = 19,000) is unchanged, so civilians are still spared.
+        Assert.Equal(19_600, civilian.Population);
+        Assert.Equal(600, civilian.Garrison);
     }
 
     [Fact]

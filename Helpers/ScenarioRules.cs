@@ -40,6 +40,30 @@ namespace OnlyWar.Helpers
         // region resolves to single, Tyranid control.
         public const float ImperialRemnantFraction = 0.1f;
 
+        // Opening-scenario temporal sequencing (Design/OpeningScenario.md §4.24, "Opening Scenario
+        // Application"). Rather than authoring a static board, the stamp plays the opening out as a
+        // timed sequence during generation: the revealed Genestealer Cult fights the PDF for
+        // PreLandingTurns weeks, the Tyranids then make planetfall, and the stranded swarm feeds for
+        // a Gaussian-random stretch before the player arrives. This produces the varied "Promised
+        // World" states the campaign is built around from the same simulation that runs during play.
+        // All three values below are first-pass tunables flagged for playtesting.
+        //
+        // Weeks the revealed cult wars against the PDF before the Tyranids land, weakening defenders.
+        public const int PreLandingTurns = 2;
+
+        // The promised world is the hive fleet's landing site because a deep, long-established
+        // Genestealer Cult has hollowed out its PDF and its psychic beacon called the swarm down. A
+        // random infiltration roll can leave only a token cult, so on this one world the cult is
+        // pulled up to this share of each region's combined (cult + Imperial) population and garrison,
+        // carving the difference out of the Imperial owner. A cult now rises on its POPULATION vs the
+        // PDF's garrison (PRD §4.24), so even 10% of the world dwarfs the PDF and comfortably sustains
+        // the revolt — a larger share would represent a cult that should have revolted long ago, and
+        // pushes an absurd fraction of the planet into open cult hands. Playtest-pending.
+        public const float PromisedWorldCultStrengthFraction = 0.10f;
+        // Post-landing feeding runs for max(0, round(PostLandingTurnsMean + z)) weeks, z ~ N(0,1):
+        // sometimes the player inherits a fresh beachhead, sometimes a month-eaten ruin.
+        public const double PostLandingTurnsMean = 4.0;
+
         // Sector Lord opinion swing when the scenario resolves (Design/OpeningScenario.md §6.2).
         // Applied to the *current* seat-holder's OpinionOfPlayerForce: a promise honored raises it,
         // a promise lost lowers it. Magnitudes are starting points for playtesting.

@@ -94,7 +94,10 @@ namespace OnlyWar.Builders
         internal static void HandleInfiltratingFaction(Faction infiltratingFaction, Planet planet)
         {
             PlanetFaction infiltration = new PlanetFaction(infiltratingFaction);
-            double infiltrationRate = RNG.GetLinearDouble() / 2.0;
+            // The cult claims a uniform 0-5% of each region's population. Kept small because a cult now
+            // rises on its population strength vs the PDF (PRD §4.24), so a large infiltration would
+            // revolt almost immediately; a cult must grow (conversion) before it can overrun a world.
+            double infiltrationRate = RNG.GetLinearDouble() * 0.05;
             infiltration.PlayerReputation = 0;
             infiltration.IsPublic = false;
             planet.PlanetFactionMap[infiltratingFaction.Id] = infiltration;

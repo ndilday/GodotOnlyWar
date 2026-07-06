@@ -1,3 +1,4 @@
+using OnlyWar.Helpers.Extensions;
 using OnlyWar.Helpers.Missions;
 using OnlyWar.Models;
 using OnlyWar.Models.Missions;
@@ -29,6 +30,8 @@ namespace OnlyWar.Helpers.Missions.Recon
             difficulty += (float)Math.Log(enemyFaction.Garrison, 10);
             // intelligence makes it easier to find a stealthy route
             difficulty -= context.Order.Mission.RegionFaction.Region.IntelligenceLevel;
+            // a standing patrol actively hunting intruders makes the region far harder to scout unseen
+            difficulty += enemyFaction.GetPatrolStealthPenalty();
             SquadMissionTest missionTest = new SquadMissionTest(stealth, difficulty);
 
             context.DaysElapsed++;
