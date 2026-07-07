@@ -141,7 +141,17 @@ namespace OnlyWar.Helpers.Battles
 
         public bool IsAdjacentToEnemy(int soldierId)
         {
-            return false;
+            float distance = GetNearestEnemy(soldierId, out int closestSoldierId);
+            return closestSoldierId != -1 && distance <= 1.001f;
+        }
+
+        public bool GetSoldierSide(int soldierId)
+        {
+            if (!_soldierSideMap.ContainsKey(soldierId))
+            {
+                throw new ArgumentException("Soldier not found");
+            }
+            return _soldierSideMap[soldierId];
         }
 
         public float GetNearestEnemy(int soldierId, out int closestSoldierId)

@@ -34,12 +34,28 @@ namespace OnlyWar.Helpers.Missions
                 context.Log.Add($"Day {context.DaysElapsed}: Contact lost with mission force, assumed dead.");
                 return;
             }
+            // Bound the detect->exfil->detect loop: a force that cannot slip back out within the week
+            // plus a short grace has gone to ground behind enemy lines; end the mission rather than
+            // spinning DaysElapsed indefinitely (see MissionContext.MissionDurationDays).
+            if (context.DaysElapsed >= MissionContext.MissionDurationDays + MissionContext.ExfiltrationGraceDays)
+            {
+                context.Log.Add($"Day {context.DaysElapsed}: Force could not break contact; gone to ground behind enemy lines.");
+                GameLog.Trace(() =>
+                    $"Exfiltrate {context.Order.Mission.RegionFaction.Region.Planet.Name}/"
+                    + $"{context.Order.Mission.RegionFaction.Region.Name} day {context.DaysElapsed}: "
+                    + "grace expired; mission ends (force gone to ground)");
+                return;
+            }
             context.DaysElapsed++;
             context.Log.Add($"Day {context.DaysElapsed}: Force attempting to exfiltrate from {context.Order.Mission.RegionFaction.Region.Name}");
             float margin = missionTest.RunMissionCheck(context.MissionSquads);
             if (margin > 0.0f)
             {
                 context.Log.Add($"Day {context.DaysElapsed}: Force has returned to base.");
+                GameLog.Trace(() =>
+                    $"Exfiltrate {context.Order.Mission.RegionFaction.Region.Planet.Name}/"
+                    + $"{context.Order.Mission.RegionFaction.Region.Name} day {context.DaysElapsed}: "
+                    + $"margin={margin:F2} -> returned to base");
                 return;
             }
             else

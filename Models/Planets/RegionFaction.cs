@@ -84,7 +84,12 @@ namespace OnlyWar.Models.Planets
             PlanetFaction = planetFaction;
             Region = region;
             IsPublic = planetFaction.IsPublic;
-            Organization = 1;
+            // Organization is a 0-100 percentage: it is the share of this faction's population that
+            // can be fielded as effective troops. A newly generated region faction defaults to fully
+            // organized (100%); factions build/lose it from there. (This was previously 1, written
+            // under the mistaken belief that 1 meant "100%"; at the true scale that left every
+            // generated faction fielding only 1% of its population — see the org=100 test fixtures.)
+            Organization = 100;
         }
 
         // How well observerFactionId believes it knows this region faction's strength (0 = no intel).

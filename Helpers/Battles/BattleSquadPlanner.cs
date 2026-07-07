@@ -36,6 +36,18 @@ namespace OnlyWar.Helpers.Battles
 
         public void PrepareActions(BattleSquad squad)
         {
+            // If no living enemy remains on the grid, this squad has nothing to plan against: every
+            // targeting helper below resolves the "nearest enemy" to -1 and then indexes
+            // _soldierMap[-1], which throws. Enemy presence is global to a side, so one probe settles
+            // it — if the opposing side still has anyone on the grid, every per-soldier lookup will
+            // find them. The battle is effectively decided; hold and let the resolver's end-of-turn
+            // check close it out. (Latent since forever; surfaced once fully-organized NPC factions
+            // began actually joining tactical battles at scale.)
+            BattleSoldier probe = squad.AbleSoldiers.FirstOrDefault();
+            if (probe == null) return;
+            _grid.GetNearestEnemy(probe.Soldier.Id, out int anyEnemyId);
+            if (anyEnemyId == -1) return;
+
             if (squad.IsInMelee)
             {
                 // it doesn't really matter what the soldiers want to do, it's time to flee or fight
@@ -317,7 +329,7 @@ namespace OnlyWar.Helpers.Battles
         {
             float moveSpeed = soldier.GetMoveSpeed();
 
-            int newY = (int)(soldierSquad.IsPlayerSquad ? -moveSpeed : moveSpeed);
+            int newY = (int)(_grid.GetSoldierSide(soldier.Soldier.Id) ? -moveSpeed : moveSpeed);
             AddMoveAction(soldier, moveSpeed, new Tuple<int, int>(0, newY));
 
             // determine if soldier will shoot as he falls back

@@ -123,8 +123,8 @@ namespace OnlyWar.Builders
         // The infiltrated Genestealer Cult throws off concealment and rises in open revolt, calling
         // the hive fleet down. Mirrors the reveal in TurnController.CheckForPlanetaryRevolt: flip the
         // cult's PlanetFaction and each of its RegionFactions public. It has been waiting for this
-        // moment, so its cells are already mobilized at Organization 1 and can field offensive force
-        // immediately. Idempotent if no cult is present
+        // moment, so its cells are already fully mobilized (Organization 100 — the whole cell can
+        // field offensive force immediately). Idempotent if no cult is present
         // (EnsureGenestealerCult always seeds one first).
         private static void RevealGenestealerCult(Planet promised, GameRulesData data)
         {
@@ -139,9 +139,9 @@ namespace OnlyWar.Builders
                 if (region.RegionFactionMap.TryGetValue(cultFaction.Id, out RegionFaction cultRegionFaction))
                 {
                     cultRegionFaction.IsPublic = true;
-                    if (cultRegionFaction.Organization < 1)
+                    if (cultRegionFaction.Organization < 100)
                     {
-                        cultRegionFaction.Organization = 1;
+                        cultRegionFaction.Organization = 100;
                     }
                 }
             }
@@ -179,16 +179,19 @@ namespace OnlyWar.Builders
             List<Planet> eligible = planetList
                 .Where(p => p.GetControllingFaction().IsDefaultFaction
                             && p.GovernanceTier == GovernanceTier.Planetary
-                            && p.Population >= ScenarioRules.MinPromisedWorldPopulation
+                            && !ScenarioRules.ExcludedPromisedWorldTypes.Contains(p.Template.Name)
                             && p.Population <= ScenarioRules.MaxPromisedWorldPopulation)
                 .ToList();
 
             if (eligible.Count == 0)
             {
-                // Widen: any non-capital Imperial world, regardless of the population band.
+                // Widen: any non-capital Imperial world of an eligible type, regardless of the
+                // population ceiling. The type exclusion (no Hive/Forge) is a hard rule, so it is
+                // kept even in the fallback — only the size ceiling is relaxed.
                 eligible = planetList
                     .Where(p => p.GetControllingFaction().IsDefaultFaction
-                                && p.GovernanceTier == GovernanceTier.Planetary)
+                                && p.GovernanceTier == GovernanceTier.Planetary
+                                && !ScenarioRules.ExcludedPromisedWorldTypes.Contains(p.Template.Name))
                     .ToList();
             }
 
@@ -292,13 +295,20 @@ namespace OnlyWar.Builders
                     IsPublic = true,
                     Population = regionTyranidPopulation,
                     Garrison = tyranidGarrison,
-                    // Raiders, not dug-in defenders: low organization (and zero fortification) keeps
-                    // their offensive throughput modest, so spread is gradual rather than runaway.
-                    Organization = 1,
+                    // A landed swarm is fully mobilized: Organization is a 0-100 percentage and the
+                    // whole brood feeds and fights, so the beachhead starts at 100. (This was 1,
+                    // written when 1 was mistaken for "100%"; at the true scale that left only 1% of
+                    // the swarm eating/attacking — the cause of the glacial post-landing consumption.)
+                    // Restraint on spread comes from Entrenchment=0 (raiders, not dug-in) and the
+                    // finite stranded biomass budget, not from throttling how much of the swarm acts.
+                    Organization = 100,
                     Entrenchment = 0,
                     Detection = 0,
-                    AntiAir = 0,
-                    GrowthMultiplier = ScenarioRules.TyranidGrowthMultiplier
+                    AntiAir = 0
+                    // No GrowthMultiplier throttle: Tyranids are a Consumption faction with no organic
+                    // birthrate — they grow only by eating biomass (predating headcount and scouring
+                    // carrying capacity), which does not read GrowthMultiplier (PRD §4.24). Winnability
+                    // comes from the finite, stranded biomass budget, not a growth throttle.
                 };
                 region.RegionFactionMap[tyranidFaction.Id] = tyranid;
             }

@@ -18,6 +18,13 @@ public class BattleGridManagerTests
         return new BattleSoldier(soldier, null);
     }
 
+    private static BattleSquad CreateBattleSquad(string name, int id, bool isPlayerSquad = false)
+    {
+        Soldier soldier = TestModelFactory.CreateSoldier(name: name);
+        soldier.Id = id;
+        return new BattleSquad(isPlayerSquad, TestModelFactory.CreateSquad(name, soldier));
+    }
+
     private static List<Tuple<int, int>> Cell(int x, int y) => [new Tuple<int, int>(x, y)];
 
     [Fact]
@@ -157,6 +164,32 @@ public class BattleGridManagerTests
         grid.GetNearestEnemy(1, out int closest);
 
         Assert.Equal(3, closest);
+    }
+
+    [Fact]
+    public void IsAdjacentToEnemy_UsesTacticalSide()
+    {
+        BattleGridManager grid = new();
+        grid.PlaceSoldier(CreateBattleSoldier(1), true, Cell(0, 0));
+        grid.PlaceSoldier(CreateBattleSoldier(2), true, Cell(1, 0));
+        grid.PlaceSoldier(CreateBattleSoldier(3), false, Cell(0, 1));
+
+        Assert.True(grid.IsAdjacentToEnemy(1));
+        Assert.False(grid.IsAdjacentToEnemy(2));
+    }
+
+    [Fact]
+    public void AnnihilationPlacer_PlacesNpcForcesAsOpposingTacticalSides()
+    {
+        BattleGridManager grid = new();
+        BattleSquad attackers = CreateBattleSquad("NPC Attackers", 10, isPlayerSquad: false);
+        BattleSquad defenders = CreateBattleSquad("NPC Defenders", 11, isPlayerSquad: false);
+        AnnihilationPlacer placer = new(grid, range: 10);
+
+        placer.PlaceSquads([attackers], [defenders]);
+        grid.GetNearestEnemy(attackers.Soldiers[0].Soldier.Id, out int closestEnemyId);
+
+        Assert.Equal(defenders.Soldiers[0].Soldier.Id, closestEnemyId);
     }
 
     [Fact]

@@ -237,12 +237,16 @@ namespace OnlyWar.Helpers
 
             GameRulesData data = GameDataSingleton.Instance.GameRulesData;
             Planet promised = sector.GetPlanet(scenario.PromisedPlanetId);
-            Faction invader = data.SectorFactions.Invader;
             Faction player = sector.PlayerForce.Faction;
             Faction imperial = data.DefaultFaction;
 
-            bool tyranidsRemain = HasPresence(promised, invader.Id);
-            if (!tyranidsRemain)
+            // Win requires the world FULLY back in Imperial/player hands — every hostile faction
+            // cleared, not merely the Tyranid swarm. The promised world starts with a revealed
+            // Genestealer Cult as well as the swarm (§3.1a), and driving out the swarm while a cult
+            // still holds ground is not liberation. So the objective completes only when no enemy
+            // (non-default, non-player) faction has any presence left on the planet.
+            bool enemiesRemain = HasEnemyPresence(promised);
+            if (!enemiesRemain)
             {
                 scenario.State = ObjectiveState.Won;
                 // Reward path: install the player as the planet-wide controlling faction.
@@ -253,9 +257,9 @@ namespace OnlyWar.Helpers
                     lord.OpinionOfPlayerForce += ScenarioRules.SectorLordOpinionReward;
                 }
                 ScenarioNotification =
-                    $"[b]The Promised World is liberated.[/b]\n\n{promised.Name} is cleared of the "
-                    + "xenos swarm and granted to your Chapter. It is your home now — hold it in the "
-                    + "Emperor's name.";
+                    $"[b]The Promised World is liberated.[/b]\n\n{promised.Name} is cleansed of the "
+                    + "enemy — swarm and cult alike — and granted to your Chapter. It is your home "
+                    + "now — hold it in the Emperor's name.";
                 return;
             }
 
@@ -272,9 +276,9 @@ namespace OnlyWar.Helpers
                     lord.OpinionOfPlayerForce -= ScenarioRules.SectorLordOpinionPenalty;
                 }
                 ScenarioNotification =
-                    $"[b]The Promised World is lost.[/b]\n\n{promised.Name} has fallen wholly to the "
-                    + "swarm. The promise is withdrawn, and your standing with the Sector Lord suffers "
-                    + "for it. The war goes on.";
+                    $"[b]The Promised World is lost.[/b]\n\n{promised.Name} has fallen — no Imperial "
+                    + "or Astartes presence remains to hold it. The promise is withdrawn, and your "
+                    + "standing with the Sector Lord suffers for it. The war goes on.";
             }
         }
 
@@ -286,6 +290,18 @@ namespace OnlyWar.Helpers
             return planet.Regions.Any(r =>
                 r.RegionFactionMap.TryGetValue(factionId, out RegionFaction rf)
                 && (rf.Population > 0 || rf.Garrison > 0));
+        }
+
+        // Any hostile faction — every faction that is neither the default (Imperial) nor the player —
+        // with population or garrison anywhere on the planet. Used for the liberation check: the world
+        // is retaken only when no enemy of any kind (Tyranid swarm, Genestealer Cult, …) remains.
+        private static bool HasEnemyPresence(Planet planet)
+        {
+            return planet.Regions.Any(r =>
+                r.RegionFactionMap.Values.Any(rf =>
+                    !rf.PlanetFaction.Faction.IsDefaultFaction
+                    && !rf.PlanetFaction.Faction.IsPlayerFaction
+                    && (rf.Population > 0 || rf.Garrison > 0)));
         }
 
         private void AdvanceFleetMovement(Sector sector)
@@ -910,10 +926,11 @@ namespace OnlyWar.Helpers
             // lifecycle, PRD §4.24) is a population gone to ground under a public enemy: it neither
             // grows organically nor drafts a garrison, so it skips growth resolution entirely.
             bool isOverrunRemnant = regionFaction.PlanetFaction.Faction.IsDefaultFaction && !regionFaction.IsPublic;
-            // GrowthMultiplier (default 1.0) throttles organic growth; the Opening Scenario sets
-            // it < 1.0 on stamped Tyranid regions so their regrowth cannot outpace a fighting
-            // player (Design/OpeningScenario.md §6.1). Conversion is not organic growth, so it is
-            // left unthrottled.
+            // GrowthMultiplier (default 1.0) is a general multiplicative throttle on *organic* growth,
+            // available for future tuning of organically-growing factions (e.g. Ork feral penalty,
+            // revolt tuning). It applies only to the Logistic/baseline branches below. Conversion is
+            // not organic growth, and Consumption factions (Tyranids) have no organic birthrate at all
+            // (they grow only by eating biomass — PRD §4.24), so neither reads it.
             if (!isOverrunRemnant)
             {
                 switch (regionFaction.PlanetFaction.Faction.GrowthType)
@@ -924,11 +941,21 @@ namespace OnlyWar.Helpers
                             regionFaction.Region);
                         break;
                     case GrowthType.Conversion:
-                        newPop = ConvertPopulation(regionFaction.Region, regionFaction, newPop);
-                        if (regionFaction.PlanetFaction.Faction.Id != controllingFaction.Id &&
-                            planet.PlanetFactionMap[controllingFaction.Id].Leader != null)
+                        // Conversion factions (Genestealer Cult) grow only while HIDDEN. Converting
+                        // the populace is clandestine — cultists steal individuals away at night to
+                        // be implanted — which depends on cover, opportunity, and a target populace
+                        // still going about its life. Once the cult reveals itself into open warfare
+                        // that all collapses: the front replaces the shadows and there is neither the
+                        // means nor the inclination to keep proselytizing. A public converting faction
+                        // therefore makes no converts and does not grow this turn.
+                        if (!regionFaction.IsPublic)
                         {
-                            // TODO: see if the governor notices the converted population
+                            newPop = ConvertPopulation(regionFaction.Region, regionFaction, newPop);
+                            if (regionFaction.PlanetFaction.Faction.Id != controllingFaction.Id &&
+                                planet.PlanetFactionMap[controllingFaction.Id].Leader != null)
+                            {
+                                // TODO: see if the governor notices the converted population
+                            }
                         }
                         break;
                     case GrowthType.Consumption:
@@ -1015,14 +1042,18 @@ namespace OnlyWar.Helpers
 
             foreach ((RegionFaction source, Region destination, long amount) in moves)
             {
+                long sourceBefore = source.Population;
                 source.Population -= amount;
                 EstablishInvaderPresence(source.PlanetFaction.Faction, destination, amount);
-                // Propagate any growth throttle (e.g. the Opening Scenario's) so a spreading swarm
-                // cannot outrun it by founding fresh, unthrottled footholds.
-                if (destination.RegionFactionMap.TryGetValue(source.PlanetFaction.Faction.Id, out RegionFaction destSwarm))
-                {
-                    destSwarm.GrowthMultiplier = Math.Min(destSwarm.GrowthMultiplier, source.GrowthMultiplier);
-                }
+                // No GrowthMultiplier to propagate: Consumption factions have no organic birthrate
+                // (their growth is the biomass step, which ignores GrowthMultiplier — PRD §4.24), so
+                // a fresh foothold cannot outgrow the parent swarm regardless.
+                GameLog.Trace(() =>
+                    $"Tyranid expansion {source.PlanetFaction.Faction.Name} "
+                    + $"{source.Region.Planet.Name}/{source.Region.Name}->{destination.Name}: "
+                    + $"moved={amount} (sourcePop {sourceBefore}->{source.Population}), "
+                    + $"depletion={RegionDepletion(source.Region):F2}, "
+                    + $"destBiomass={RegionBiomass(destination):F0}");
             }
         }
 
@@ -1102,9 +1133,19 @@ namespace OnlyWar.Helpers
 
                 long killed = (long)predated;
                 long stripped = (long)consumed;
+                long swarmPopBefore = consumer.Population;
+                long capacityBefore = region.CarryingCapacity;
+                int preyFactionCount = prey.Count;
+                long preyBefore = (long)(preyRemaining + predated); // pre-consumption prey headcount
                 ApplyPredationKills(prey, killed);
                 region.CarryingCapacity = Math.Max(0, region.CarryingCapacity - stripped);
-                consumer.Population += (long)((killed + stripped) * BiomassFeedEfficiency);
+                long converted = (long)((killed + stripped) * BiomassFeedEfficiency);
+                consumer.Population += converted;
+                GameLog.Trace(() =>
+                    $"Biomass consume {DescribeRegionFaction(consumer)}: troops={troops:F0}, "
+                    + $"predated={killed} (prey {preyBefore} across {preyFactionCount} factions), "
+                    + $"consumed={stripped} (capacity {capacityBefore}->{region.CarryingCapacity}), "
+                    + $"converted={converted} (swarmPop {swarmPopBefore}->{consumer.Population})");
             }
         }
 
@@ -1139,7 +1180,12 @@ namespace OnlyWar.Helpers
             long gap = region.MaximumCarryingCapacity - region.CarryingCapacity;
             long recovered = (long)(gap * CarryingCapacityRecoveryRate);
             if (recovered <= 0) recovered = 1;
+            long capacityBefore = region.CarryingCapacity;
             region.CarryingCapacity = Math.Min(region.MaximumCarryingCapacity, region.CarryingCapacity + recovered);
+            GameLog.Trace(() =>
+                $"Capacity recovery {region.Planet.Name}/{region.Name}: "
+                + $"{capacityBefore}->{region.CarryingCapacity} (+{region.CarryingCapacity - capacityBefore} "
+                + $"toward ceiling {region.MaximumCarryingCapacity})");
         }
 
         // Genestealer Cult idle-force behavior (PRD §4.24). A public Cult grinds down the PDF through

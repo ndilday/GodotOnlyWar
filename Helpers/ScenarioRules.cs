@@ -7,10 +7,19 @@ namespace OnlyWar.Helpers
     // are a starting point flagged for playtesting (design step 7), not final.
     public static class ScenarioRules
     {
-        // Eligible-promised-world population band (raw headcount): big enough to be a worthwhile
-        // reward, small enough to be a starter rather than a hive world.
-        public const long MinPromisedWorldPopulation = 5_000_000L;
+        // The promised world is constrained by *type* rather than by a population floor. There is no
+        // minimum size: several canon Chapters recruit from feral and death worlds, so a sparse,
+        // low-population world is a perfectly good — even iconic — first home. The upper bound stays
+        // as a soft ceiling so the starter objective is not a multi-billion-population behemoth.
         public const long MaxPromisedWorldPopulation = 500_000_000L;
+
+        // Planet types that can never be the promised world. Hive worlds are ruled out (a hive world
+        // is not a "grant it to your Chapter" starter, and its scale swamps the opening fight); forge
+        // worlds likewise (a Mechanicus holding is not the Sector Lord's to pledge, and they sit at
+        // billions of population). Matched against PlanetTemplate.Name. Everything else — Civilised,
+        // Agri, Feudal, Feral, Death — is eligible.
+        public static readonly System.Collections.Generic.HashSet<string> ExcludedPromisedWorldTypes =
+            new(System.StringComparer.OrdinalIgnoreCase) { "Hive", "Forge" };
 
         // Number of regions stamped with Tyranid presence (a contiguous-ish cluster of the
         // world's 16 regions). Chosen deterministically within this inclusive band.
@@ -29,10 +38,6 @@ namespace OnlyWar.Helpers
         // own PDF keeps the fight in the same ballpark across the whole band. < 1 so a single
         // stamped region is weaker than a full Imperial region, keeping the objective winnable.
         public const float TyranidStrengthFraction = 0.5f;
-
-        // Organic-growth throttle on stamped Tyranid regions (multiplicative, < 1). Felt, but
-        // unable to outpace a player who is actually fighting (§8 proposes ~0.3–0.5).
-        public const float TyranidGrowthMultiplier = 0.4f;
 
         // Fraction of a stamped region's original Imperial civilian population left behind as a
         // displaced remnant, so the region reads as "overrun" rather than empty. The remnant's

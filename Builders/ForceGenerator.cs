@@ -110,6 +110,14 @@ namespace OnlyWar.Builders
             var scoutTemplates = request.Faction.SquadTemplates.Values
                                         .Where(st => (st.SquadType & SquadTypes.Scout) != 0).ToList();
 
+            // NOTE: a faction with no Scout-typed squad templates (currently the Genestealer Cults
+            // and Orks — the Imperial PDF Infantry Squad was flagged Scout by migrate-scout-skills)
+            // fields no interception here, so recon against them runs uncontested. Making the
+            // garrison scramble its *line* squads
+            // instead produced multi-squad (20-50 soldier) interceptors that overwhelmed the scout,
+            // exposed a placement crash in AmbushPlacer for large forces, and slowed the sim sharply.
+            // The right fix is a data pass giving those factions small scout/patrol squad templates
+            // (and Tactics skill), not a line-squad fallback here.
             if (!scoutTemplates.Any()) return opposingForces;
 
             for(int i = request.Tier; i > 0; i--)

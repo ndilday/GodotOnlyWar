@@ -107,11 +107,16 @@ public class SaveLoadRoundTripTests
 
         Faction tyranids = _data.Factions.Single(f => f.Name == "Tyranids");
         Planet promised = sector.GetPlanet(original.PromisedPlanetId);
-        // Sanity: the promised world really is throttled before we save it.
-        Assert.Contains(promised.Regions
+        // GrowthMultiplier is a general primitive the scenario no longer sets (Tyranids grow by
+        // consumption — PRD §4.24), so stamp a distinctive value by hand to prove the *column*
+        // round-trips rather than coincidentally matching the 1.0 default.
+        const float testMultiplier = 0.4f;
+        List<RegionFaction> promisedTyranidFactions = promised.Regions
             .SelectMany(r => r.RegionFactionMap.Values)
-            .Where(rf => rf.PlanetFaction.Faction.Id == tyranids.Id),
-            rf => rf.GrowthMultiplier == ScenarioRules.TyranidGrowthMultiplier);
+            .Where(rf => rf.PlanetFaction.Faction.Id == tyranids.Id)
+            .ToList();
+        Assert.NotEmpty(promisedTyranidFactions);
+        Assert.All(promisedTyranidFactions, rf => rf.GrowthMultiplier = testMultiplier);
 
         string dbPath = Path.Combine(
             Path.GetTempPath(), $"onlywar_roundtrip_scenario_{Guid.NewGuid():N}.s3db");
@@ -129,7 +134,7 @@ public class SaveLoadRoundTripTests
             Assert.Equal(original.OriginalAuthorityCharacterId,
                          loaded.Scenario.OriginalAuthorityCharacterId);
 
-            // The growth throttle survives on the promised world's Tyranid regions.
+            // The hand-set GrowthMultiplier survives on the promised world's Tyranid regions.
             Planet loadedPromised = loaded.Planets.Single(p => p.Id == original.PromisedPlanetId);
             List<RegionFaction> loadedTyranidFactions = loadedPromised.Regions
                 .SelectMany(r => r.RegionFactionMap.Values)
@@ -137,9 +142,9 @@ public class SaveLoadRoundTripTests
                 .ToList();
             Assert.NotEmpty(loadedTyranidFactions);
             Assert.All(loadedTyranidFactions,
-                rf => Assert.Equal(ScenarioRules.TyranidGrowthMultiplier, rf.GrowthMultiplier));
+                rf => Assert.Equal(testMultiplier, rf.GrowthMultiplier));
 
-            // Nothing else is throttled: every other region faction keeps the default 1.0.
+            // Nothing else was altered: every other region faction keeps the default 1.0.
             IEnumerable<RegionFaction> others = loaded.Planets
                 .SelectMany(p => p.Regions)
                 .SelectMany(r => r.RegionFactionMap.Values)
@@ -338,17 +343,30 @@ public class SaveLoadRoundTripTests
             // Carrying capacity is generated, persisted, and restored per region; and no
             // region is generated above its carrying capacity (PRD Strategic Layer Phase 2).
             Assert.Equal(TotalCarryingCapacity(sector.Planets.Values), TotalCarryingCapacity(loaded.Planets));
-            // MaximumCarryingCapacity (PRD §4.24) is persisted and restored alongside it, and at
-            // generation equals the current capacity (no region starts degraded).
+            // MaximumCarryingCapacity (PRD §4.24) is persisted and restored alongside it.
             Assert.Equal(TotalMaximumCarryingCapacity(sector.Planets.Values), TotalMaximumCarryingCapacity(loaded.Planets));
-            Assert.All(
-                sector.Planets.Values.SelectMany(p => p.Regions),
-                r => Assert.Equal(r.CarryingCapacity, r.MaximumCarryingCapacity));
             Assert.True(sector.Planets.Values.Sum(p => p.Regions.Length) > 0);
+            int? promisedId = sector.Scenario?.PromisedPlanetId;
             Assert.All(
                 sector.Planets.Values.SelectMany(p => p.Regions),
-                r => Assert.True(r.Population <= r.CarryingCapacity,
-                    $"Region {r.Id} population {r.Population} exceeds capacity {r.CarryingCapacity}"));
+                r =>
+                {
+                    // No region ever sits above its natural ceiling.
+                    Assert.True(r.CarryingCapacity <= r.MaximumCarryingCapacity,
+                        $"Region {r.Id} capacity {r.CarryingCapacity} exceeds max {r.MaximumCarryingCapacity}");
+                    // Away from the invaded promised world, generation leaves capacity pristine.
+                    // The promised world may start blighted: the opening sim lets the stranded
+                    // Tyranids scour carrying capacity before the player arrives (PRD §4.24).
+                    if (r.Planet.Id != promisedId)
+                    {
+                        Assert.Equal(r.CarryingCapacity, r.MaximumCarryingCapacity);
+                        // No region starts above capacity (Strategic Layer Phase 2); on the
+                        // promised world consumption can transiently leave survivors above the
+                        // scoured capacity, so that world is excluded from this check.
+                        Assert.True(r.Population <= r.CarryingCapacity,
+                            $"Region {r.Id} population {r.Population} exceeds capacity {r.CarryingCapacity}");
+                    }
+                });
 
             // Open-ended evaluation ratings survive the round trip (the SoldierEvaluation
             // / SoldierEvaluationRating split). Every loaded evaluation carries its keyed
@@ -393,6 +411,12 @@ public class SaveLoadRoundTripTests
         RegionFaction target = region.RegionFactionMap.Values.First();
         const int observerA = 2;
         const int observerB = 3;
+        // The picked region faction may already carry seeded observer intel (e.g. a promised-world
+        // Imperial region seeded with the cult's PromisedWorldCultStartingIntel on the cult's faction
+        // id), so assert the round-trip preserves the *added* delta on top of whatever baseline
+        // exists rather than an absolute value — this test is about serialization fidelity.
+        float baseA = target.GetObserverIntel(observerA);
+        float baseB = target.GetObserverIntel(observerB);
         target.AddObserverIntel(observerA, 1.5f);
         target.AddObserverIntel(observerB, 0.25f);
 
@@ -409,8 +433,8 @@ public class SaveLoadRoundTripTests
                 .SelectMany(r => r.RegionFactionMap.Values)
                 .Single(rf => rf.PlanetFaction.Faction.Id == target.PlanetFaction.Faction.Id);
 
-            Assert.Equal(1.5f, loadedTarget.GetObserverIntel(observerA));
-            Assert.Equal(0.25f, loadedTarget.GetObserverIntel(observerB));
+            Assert.Equal(baseA + 1.5f, loadedTarget.GetObserverIntel(observerA));
+            Assert.Equal(baseB + 0.25f, loadedTarget.GetObserverIntel(observerB));
             // An observer with no recorded intel round-trips as zero (no entry).
             Assert.Equal(0f, loadedTarget.GetObserverIntel(999));
         }

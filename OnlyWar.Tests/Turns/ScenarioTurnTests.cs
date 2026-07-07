@@ -16,10 +16,11 @@ using Xunit;
 namespace OnlyWar.Tests.Turns;
 
 // Turn-loop integration for the "Promised World" opening (Design/OpeningScenario.md §6, step 5):
-// the GrowthMultiplier throttle applied in EndOfTurnRegionFactionsUpdate and the ProcessScenario
-// win/lapse resolution. Throttle is exercised through the compact SectorSimulationFixture; the
-// win/lapse paths are exercised against a real stamped sector so they read the actual scenario,
-// Sector Lord, and promised-world state.
+// the general GrowthMultiplier throttle applied to organic growth in EndOfTurnRegionFactionsUpdate,
+// and the ProcessScenario win/lapse resolution. The throttle is exercised on a Logistic faction
+// through the compact SectorSimulationFixture (Tyranids grow by consumption and ignore it — PRD
+// §4.24); the win/lapse paths are exercised against a real stamped sector so they read the actual
+// scenario, Sector Lord, and promised-world state.
 public class ScenarioTurnTests
 {
     private readonly GameRulesData _data;
@@ -48,7 +49,9 @@ public class ScenarioTurnTests
         // region's ~60% reduction keeps it strictly behind over the run.
         RegionFaction unthrottled = fixture.AddHiddenFaction(0, GrowthType.Logistic, population: 20000);
         RegionFaction throttled = fixture.AddHiddenFaction(1, GrowthType.Logistic, population: 20000);
-        throttled.GrowthMultiplier = ScenarioRules.TyranidGrowthMultiplier;
+        // A sub-1 multiplier on an organically-growing (Logistic) faction; the general primitive is
+        // not scenario-specific (Tyranids grow by consumption and ignore it — PRD §4.24).
+        throttled.GrowthMultiplier = 0.4f;
 
         for (int turn = 0; turn < 10; turn++)
         {
@@ -75,8 +78,8 @@ public class ScenarioTurnTests
         Assert.Equal(20012, cult.Population); // 20000 * 0.0006 = 12, exactly as before the throttle
     }
 
-    // §6.2 win — no Tyranid presence left: the world is granted to the player and the current
-    // Sector Lord's opinion rises.
+    // §6.2 win — no enemy presence left (swarm AND cult cleared): the world is granted to the
+    // player and the current Sector Lord's opinion rises.
     [Fact]
     public void ProcessScenario_Win_GrantsWorldAndRaisesSectorLordOpinion()
     {
@@ -87,10 +90,19 @@ public class ScenarioTurnTests
         Assert.NotNull(lord);
         float opinionBefore = lord.OpinionOfPlayerForce;
 
-        // Liberate the world: clear every Tyranid presence from the promised planet.
+        // Liberate the world FULLY: clear every hostile faction (Tyranid swarm, the revealed
+        // Genestealer Cult, anything else) — not just the Tyranids. A surviving cult would keep the
+        // objective Pending.
         foreach (Region region in promised.Regions)
         {
-            region.RegionFactionMap.Remove(Tyranids.Id);
+            foreach (int hostileId in region.RegionFactionMap.Values
+                         .Where(rf => !rf.PlanetFaction.Faction.IsDefaultFaction
+                                      && !rf.PlanetFaction.Faction.IsPlayerFaction)
+                         .Select(rf => rf.PlanetFaction.Faction.Id)
+                         .ToList())
+            {
+                region.RegionFactionMap.Remove(hostileId);
+            }
         }
 
         new TurnController().ProcessScenario(sector);
@@ -104,6 +116,33 @@ public class ScenarioTurnTests
         // The current Sector Lord's opinion rises (resolved at resolution time).
         Assert.Equal(opinionBefore + ScenarioRules.SectorLordOpinionReward,
                      sector.GetSectorLord().OpinionOfPlayerForce, precision: 4);
+    }
+
+    // §6.2 — clearing the Tyranids is NOT enough: while the revealed Genestealer Cult still holds
+    // ground the world is not back in Imperial control, so the objective stays Pending (not Won).
+    [Fact]
+    public void ProcessScenario_TyranidsGoneButCultRemains_StaysPending()
+    {
+        Sector sector = SectorBuilder.GenerateSector(1, _data, _date, "Half-Liberated Chapter");
+        Planet promised = sector.GetPlanet(sector.Scenario.PromisedPlanetId);
+        Faction player = sector.PlayerForce.Faction;
+        Faction cult = _data.SectorFactions.Infiltrator;
+
+        // Remove only the Tyranids; leave the revealed cult holding ground.
+        foreach (Region region in promised.Regions)
+        {
+            region.RegionFactionMap.Remove(Tyranids.Id);
+        }
+        // Sanity: a cult presence really does remain on the world to block the liberation.
+        Assert.Contains(promised.Regions, r =>
+            r.RegionFactionMap.TryGetValue(cult.Id, out RegionFaction rf)
+            && (rf.Population > 0 || rf.Garrison > 0));
+
+        new TurnController().ProcessScenario(sector);
+
+        // Not liberated: no win, no world granted, still the player's live objective.
+        Assert.Equal(ObjectiveState.Pending, sector.Scenario.State);
+        Assert.False(promised.PlanetFactionMap.ContainsKey(player.Id));
     }
 
     // §6.2 lapse — the world is fully overrun (no Imperial and no player presence): the promise is
@@ -345,9 +384,17 @@ public class ScenarioTurnTests
     {
         Sector sector = SectorBuilder.GenerateSector(1, _data, _date, "Notified Chapter");
         Planet promised = sector.GetPlanet(sector.Scenario.PromisedPlanetId);
+        // Full liberation clears every hostile faction, not just the Tyranids.
         foreach (Region region in promised.Regions)
         {
-            region.RegionFactionMap.Remove(Tyranids.Id);
+            foreach (int hostileId in region.RegionFactionMap.Values
+                         .Where(rf => !rf.PlanetFaction.Faction.IsDefaultFaction
+                                      && !rf.PlanetFaction.Faction.IsPlayerFaction)
+                         .Select(rf => rf.PlanetFaction.Faction.Id)
+                         .ToList())
+            {
+                region.RegionFactionMap.Remove(hostileId);
+            }
         }
 
         TurnController controller = new();

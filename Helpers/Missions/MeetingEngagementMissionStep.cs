@@ -16,27 +16,39 @@ namespace OnlyWar.Helpers.Missions
 
         public void ExecuteMissionStep(MissionContext context, float marginOfSuccess, IMissionStep returnStep)
         {
+            List<BattleSquad> missionSquads = context.MissionSquads
+                .Where(squad => squad.AbleSoldiers.Count > 0)
+                .ToList();
+            List<BattleSquad> opposingSquads = context.OpposingSquads
+                .Where(squad => squad.AbleSoldiers.Count > 0)
+                .ToList();
+            if (missionSquads.Count == 0 || opposingSquads.Count == 0)
+            {
+                context.Log.Add($"Day {context.DaysElapsed}: No combat-capable forces remain for engagement.");
+                return;
+            }
+
             // set up meeting engagement with OpFor and context.Squad
             // convert margin of success to a CDF, and use that to adjust the engagement range between the preference of the two sides
             float rangeModifier = GaussianCalculator.ApproximateNormalCDF(marginOfSuccess);
-            BattleSoldier enemySoldier = context.OpposingSquads.First().GetRandomSquadMember();
-            BattleSoldier playerSoldier = context.MissionSquads.First().GetRandomSquadMember();
-            double playerRange = context.MissionSquads.Average(s => s.GetPreferredEngagementRange(enemySoldier.Soldier.Size, enemySoldier.Armor.Template.ArmorProvided, enemySoldier.Soldier.Constitution, enemySoldier.Soldier.Template.Species.RangedEvasion));
-            double enemyRange = context.OpposingSquads.Average(s => s.GetPreferredEngagementRange(playerSoldier.Soldier.Size, playerSoldier.Armor.Template.ArmorProvided, playerSoldier.Soldier.Constitution, playerSoldier.Soldier.Template.Species.RangedEvasion));
+            BattleSoldier enemySoldier = opposingSquads.First().GetRandomSquadMember();
+            BattleSoldier playerSoldier = missionSquads.First().GetRandomSquadMember();
+            double playerRange = missionSquads.Average(s => s.GetPreferredEngagementRange(enemySoldier.Soldier.Size, enemySoldier.Armor.Template.ArmorProvided, enemySoldier.Soldier.Constitution, enemySoldier.Soldier.Template.Species.RangedEvasion));
+            double enemyRange = opposingSquads.Average(s => s.GetPreferredEngagementRange(playerSoldier.Soldier.Size, playerSoldier.Armor.Template.ArmorProvided, playerSoldier.Soldier.Constitution, playerSoldier.Soldier.Template.Species.RangedEvasion));
             double halfway = (playerRange + enemyRange) / 2;
             ushort range = (ushort)(halfway + (playerRange - halfway) * rangeModifier);
             // set up meeting engagement battle
             BattleGridManager bgm = new BattleGridManager();
             AnnihilationPlacer placer = new AnnihilationPlacer(bgm, range);
-            var squadPostionMap = placer.PlaceSquads(context.MissionSquads, context.OpposingSquads);
+            var squadPostionMap = placer.PlaceSquads(missionSquads, opposingSquads);
             // burrow-capable squads (e.g. Raveners) erupt directly into melee instead
             // of advancing across the gap — see Design/EvasionBurrowAndAmbush.md
-            BurrowPlacer.PlaceBurrowers(bgm, context.MissionSquads.Concat(context.OpposingSquads));
-            int oppForSize = context.OpposingSquads.Sum(s => s.AbleSoldiers.Count);
-            string log = $"Day {context.DaysElapsed}: Force accepted engagement with {oppForSize} {context.OpposingSquads.First().Squad.Faction.Name}\n";
+            BurrowPlacer.PlaceBurrowers(bgm, missionSquads.Concat(opposingSquads));
+            int oppForSize = opposingSquads.Sum(s => s.AbleSoldiers.Count);
+            string log = $"Day {context.DaysElapsed}: Force accepted engagement with {oppForSize} {opposingSquads.First().Squad.Faction.Name}\n";
             context.Log.Add(log);
             // run the battle
-            BattleTurnResolver resolver = new BattleTurnResolver(bgm, context.MissionSquads, context.OpposingSquads, context.Order.Mission.RegionFaction.Region);
+            BattleTurnResolver resolver = new BattleTurnResolver(bgm, missionSquads, opposingSquads, context.Order.Mission.RegionFaction.Region);
             bool battleDone = false;
             resolver.OnBattleComplete += (sender, e) => { battleDone = true; };
             while (!battleDone)

@@ -13,19 +13,31 @@ namespace OnlyWar.Helpers.Missions
 
         public void ExecuteMissionStep(MissionContext context, float marginOfSuccess, IMissionStep returnStep)
         {
+            List<BattleSquad> missionSquads = context.MissionSquads
+                .Where(squad => squad.AbleSoldiers.Count > 0)
+                .ToList();
+            List<BattleSquad> opposingSquads = context.OpposingSquads
+                .Where(squad => squad.AbleSoldiers.Count > 0)
+                .ToList();
+            if (missionSquads.Count == 0 || opposingSquads.Count == 0)
+            {
+                context.Log.Add($"Day {context.DaysElapsed}: No combat-capable forces remain for ambush.");
+                return;
+            }
+
             // every point of margin of success modifies the starting range by 20 yards
             ushort range = (ushort)(70 + marginOfSuccess * 20);
             // set up Ambush battle with OpFor attacker and context.Squad defender
             BattleGridManager bgm = new BattleGridManager();
             AmbushPlacer placer = new AmbushPlacer(bgm, range);
-            var squadPostionMap = placer.PlaceSquads(context.MissionSquads, context.OpposingSquads);
+            var squadPostionMap = placer.PlaceSquads(missionSquads, opposingSquads);
             // burrowing ambushers erupt straight into melee — see Design/EvasionBurrowAndAmbush.md
-            BurrowPlacer.PlaceBurrowers(bgm, context.MissionSquads.Concat(context.OpposingSquads));
-            int oppForSize = context.OpposingSquads.Sum(s => s.AbleSoldiers.Count);
-            string log = $"Day {context.DaysElapsed}: Force was ambushed by {oppForSize} {context.OpposingSquads.First().Squad.Faction.Name}\n";
+            BurrowPlacer.PlaceBurrowers(bgm, missionSquads.Concat(opposingSquads));
+            int oppForSize = opposingSquads.Sum(s => s.AbleSoldiers.Count);
+            string log = $"Day {context.DaysElapsed}: Force was ambushed by {oppForSize} {opposingSquads.First().Squad.Faction.Name}\n";
             context.Log.Add(log);
             // run the battle
-            BattleTurnResolver resolver = new BattleTurnResolver(bgm, context.MissionSquads, context.OpposingSquads, context.Order.Mission.RegionFaction.Region);
+            BattleTurnResolver resolver = new BattleTurnResolver(bgm, missionSquads, opposingSquads, context.Order.Mission.RegionFaction.Region);
             bool battleDone = false;
             resolver.OnBattleComplete += (sender, e) => { battleDone = true; };
             while (!battleDone)

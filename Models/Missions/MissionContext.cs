@@ -8,6 +8,14 @@ namespace OnlyWar.Models.Missions
 {
     public class MissionContext
     {
+        // A strategic turn is one week, so a mission plays out over at most this many days. Looping
+        // steps (recon stealth/detect/evade, exfiltration) must honor this cap: previously only a
+        // *successful* recon checked the day count, so a scout stuck failing stealth against a
+        // heavily-garrisoned region could loop far past the week (DaysElapsed observed climbing to
+        // 20+). Exfiltration gets a small grace beyond the week to break contact before it is lost.
+        public const int MissionDurationDays = 7;
+        public const int ExfiltrationGraceDays = 3;
+
         public Order Order { get; }
         public List<BattleSquad> MissionSquads { get; }
         public ushort DaysElapsed { get; set; }

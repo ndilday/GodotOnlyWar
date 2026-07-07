@@ -18,19 +18,21 @@ namespace OnlyWar.Helpers.Missions.Recon
 
         public void ExecuteMissionStep(MissionContext context, float marginOfSuccess, IMissionStep returnStep)
         {
-            BaseSkill tactics = GameDataSingleton.Instance.GameRulesData.Skills.Tactics;
-            // adjust for size of detecting force
-            float difficulty = 10.0f;
-            difficulty += (float)Math.Log(context.OpposingSquads.Sum(s => s.AbleSoldiers.Count), 10);
-            LeaderMissionTest missionTest = new LeaderMissionTest(tactics, difficulty);
-            // build OpFor, size increases the lower the MoS, and pushes engagement range in favor of the OpFor
-            int numberOfOpposingSquads = context.MissionSquads.Count - (ushort)marginOfSuccess;
+            // Build the intercepting OpFor. Its size grows the worse the scout's stealth margin was
+            // (a badly-blown infiltration is met by more defenders). marginOfSuccess is <= 0 here —
+            // this is the detected branch — so subtracting its truncated value ADDS squads. The cast
+            // MUST be to a signed type: the old (ushort) cast turned a negative margin (e.g. -1.7)
+            // into ~65535 and underflowed the count to a garbage negative, so GenerateScoutPatrol's
+            // `for (i = tier; i > 0; i--)` produced zero interceptors and no engagement ever happened.
+            int numberOfOpposingSquads = context.MissionSquads.Count - (short)marginOfSuccess;
             // any fractional value of margin of Success is treated as the probability of an additional squad being added.
-            float fraction = Math.Abs(marginOfSuccess - (ushort)marginOfSuccess);
+            float fraction = Math.Abs(marginOfSuccess - (short)marginOfSuccess);
             if (RNG.GetLinearDouble() < fraction)
             {
                 numberOfOpposingSquads++;
             }
+            // A detected intrusion always draws at least one responding squad.
+            numberOfOpposingSquads = Math.Max(1, numberOfOpposingSquads);
 
             // shouldn't all be the same squad type
             // a flexible, but verbose method would be to define a table in the game rules that maps some concept of "situation" and faction ID to "lottery balls". 
@@ -55,11 +57,29 @@ namespace OnlyWar.Helpers.Missions.Recon
                 context.Log.Add(
                     $"Day {context.DaysElapsed}: Detected in {context.Order.Mission.RegionFaction.Region.Name}, "
                     + "but no enemy force intercepts; the force presses on.");
+                GameLog.Trace(() =>
+                    $"Detected {DescribeRegion(context)} day {context.DaysElapsed}: "
+                    + $"intercept force requested (tier={numberOfOpposingSquads}) but none materialized "
+                    + $"({context.Order.Mission.RegionFaction.PlanetFaction.Faction.Name} fielded no ScoutPatrol); "
+                    + "recon uncontested, presses on");
                 returnStep?.ExecuteMissionStep(context, marginOfSuccess, returnStep);
                 return;
             }
 
+            // The scout's leader now tries to slip past the responders (a Tactics contest); the more
+            // defenders were scrambled, the harder that is. Difficulty reads the ACTUAL generated
+            // OpFor — the old code evaluated this from context.OpposingSquads *before* it was
+            // populated, so it computed Log(0) = -infinity and the scout trivially won every contest.
+            BaseSkill tactics = GameDataSingleton.Instance.GameRulesData.Skills.Tactics;
+            int opForSize = Math.Max(1, context.OpposingSquads.Sum(s => s.AbleSoldiers.Count));
+            float difficulty = 10.0f + (float)Math.Log(opForSize, 10);
+            LeaderMissionTest missionTest = new LeaderMissionTest(tactics, difficulty);
             float margin = missionTest.RunMissionCheck(context.MissionSquads);
+            GameLog.Trace(() =>
+                $"Detected {DescribeRegion(context)} day {context.DaysElapsed}: "
+                + $"intercepted by {context.OpposingSquads.Sum(s => s.AbleSoldiers.Count)} "
+                + $"{context.OpposingSquads.First().Squad.Faction.Name} ({context.OpposingSquads.Count} squads), "
+                + $"tacticsMargin={margin:F2} -> {(margin > 0 ? "outmaneuvered them (cross-detection)" : "AMBUSHED")}");
             if (margin > 0.0f)
             {
                 new CrossDetectionMissionStep().ExecuteMissionStep(context, margin, returnStep);
@@ -68,6 +88,12 @@ namespace OnlyWar.Helpers.Missions.Recon
             {
                 new AmbushedMissionStep().ExecuteMissionStep(context, margin, returnStep);
             }
+        }
+
+        private static string DescribeRegion(MissionContext context)
+        {
+            var target = context.Order.Mission.RegionFaction;
+            return $"{target.Region.Planet.Name}/{target.Region.Name}/{target.PlanetFaction.Faction.Name}";
         }
     }
 }

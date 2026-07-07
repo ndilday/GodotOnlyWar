@@ -56,13 +56,23 @@ GenerateSector(seed, …)
   ├─ normal planet/character/sector generation   (unchanged)
   ├─ NewChapterBuilder.CreateChapter(…)            (unchanged)
   └─ ScenarioBuilder.StampPromisedWorld(sector, data, currentDate, …)   ← replaces FoundTakebackPlanet
-         ├─ select promised planet (deterministic)
-         ├─ stamp Tyranid presence onto a few regions + growth throttle
+         ├─ select promised planet (deterministic; rimward — §3.1)
+         ├─ seed + strengthen + REVEAL the Genestealer Cult (the psychic beacon — §3.1a)
+         ├─ pre-landing sim: cult war weakens the PDF (SimulatePlanetForward — PRD §4.24)
+         ├─ stamp the authored Tyranid beachhead onto the now-evolved board (§3.2)
+         ├─ post-landing sim: the stranded swarm feeds/spreads a Gaussian stretch (PRD §4.24)
          ├─ place fleet in orbit (NOT landed)
          ├─ resolve the Sector Lord (governor of the sector capital) as the promising authority
          ├─ compose the briefing narrative + founding-history entry
          └─ attach CampaignScenario to the sector
 ```
+
+> **Flow note.** The bullet order above (and §3's temporal sequencing) is the current,
+> implemented flow — the opening plays out as a timed sequence during generation (PRD §4.24,
+> "Opening Scenario Application"), not a single static stamp. Several §3 sub-sections below were
+> authored against the earlier static-stamp design and describe the individual *stamp* steps
+> (selection, Tyranid presence, fleet, authority); they remain accurate for those steps, but the
+> **sequencing** that wraps them lives in PRD §4.24 and the inline "Implemented" notes.
 
 All scenario randomness draws from the **already-seeded `RNG` stream** so that
 `seed + scenario` reproduces the same opening (determinism requirement). No `GD.Rand*`.
@@ -106,12 +116,16 @@ it may dangle harmlessly if that character is later removed.
 ### 2.2 `RegionFaction.GrowthMultiplier` (new field)
 
 A per-`RegionFaction` `float GrowthMultiplier` (default `1.0`), applied multiplicatively to
-**organic** population growth. The scenario sets it `< 1.0` on the stamped Tyranid regions
-to throttle them below the default curve (PRD: "capped/slowed below the default curve").
+**organic** population growth (the `Logistic`/baseline branches only).
 
-This is deliberately a **general primitive**, not scenario-specific: it is the same lever
-the post-0.7 Ork "feral efficiency penalty" (§4.22) and revolt tuning will want. Keeping it
-on `RegionFaction` means the turn loop never has to be scenario-aware.
+> **Superseded for Tyranids (PRD §4.24).** The original design throttled the stamped Tyranid
+> regions with this multiplier. Tyranids are now a **`Consumption`** faction with *no organic
+> birthrate* — they grow only by eating biomass (Predate/Consume), which does not read
+> `GrowthMultiplier` — so the scenario no longer sets it on Tyranid regions, and winnability
+> comes from the **finite stranded-biomass budget**, not a growth throttle. `GrowthMultiplier`
+> remains as a general primitive for organically-growing factions (the post-0.7 Ork "feral
+> efficiency penalty" (§4.22) and revolt tuning). Keeping it on `RegionFaction` means the turn
+> loop never has to be scenario-aware.
 
 ```csharp
 // RegionFaction.cs
@@ -213,14 +227,16 @@ internal static CampaignScenario StampPromisedWorld(
 >   consumes. `FoundTakebackPlanet`, `FoundChapterPlanet`, and `PlaceStartingForces`
 >   were deleted; `ReplaceChapterPlanetFaction` is retained for the reward path (§6).
 > - **Selection (§3.1).** Eligible = default-faction, `GovernanceTier == Planetary` (excludes
->   sub/sector capitals), population in `[5M, 500M]`, ordered by population then id; the world
->   at index `count/3` (lower-middle) is chosen. Widen-band and lowest-population-enemy fallbacks
->   are in place. Selection is order-based (no RNG draw), so it is stable per seed.
+>   sub/sector capitals), population in `[5M, 500M]`; the world **nearest the sector edge**
+>   (`EdgeDistance`, then population then id as tie-breaks) is chosen — rimward frontier. Widen-band
+>   and lowest-population-enemy fallbacks are in place. Selection is order-based (no RNG draw), so it
+>   is stable per seed.
 > - **Stamp (§3.2).** `N = 2–3` regions chosen as a contiguous run from an RNG start index
 >   (mod 16). The displaced Imperial remnant is set **non-public** (`IsPublic = false`, garrison
 >   zeroed, population scaled by `ImperialRemnantFraction`) so the region resolves to single
 >   Tyranid control — leaving it public would give the region two public factions and a null
->   `ControllingFaction`. Tyranid regions get `GrowthMultiplier = TyranidGrowthMultiplier` (0.4).
+>   `ControllingFaction`. *(Tyranid regions no longer get a `GrowthMultiplier` throttle: Tyranids
+>   are a `Consumption` faction (PRD §4.24) with no organic growth, so it did nothing — see §2.2/§8.)*
 > - **Briefing.** Now composed through `BriefingComposer` with a "The Promised World"
 >   founding-history entry (see the step 3 note in §4); `currentDate` is threaded through for the
 >   history timestamp. (Originally a plain-facts placeholder deferred to the following session.)
@@ -235,10 +251,55 @@ rules (all on the seeded `RNG` stream):
   worthwhile reward, small enough to be a *starter* — not a hive world). Proposed band:
   `[~5M, ~500M]`, to be tuned. Exclude subsector capitals (too central / too large for a
   first objective).
-- Among eligible worlds, pick deterministically (e.g. ordered by population then id, choose
-  near the lower-middle of the band). Stable for a given seed.
+- Among eligible worlds, pick deterministically: **nearest the sector edge** (Chebyshev
+  `EdgeDistance`), with population then id as tie-breaks. The opening invasion sits on the
+  frontier — a rimward incursion the over-stretched Imperium can't spare a regiment for — which
+  also keeps the first objective off the populous sector core. Stable for a given seed.
+  *(Earlier drafts chose the world at index `count/3` of a population-ordered list; the rimward
+  rule replaced it.)*
 - Fallback: if none qualify, widen the band; ultimate fallback re-uses the old
   "lowest-population enemy world" rule so generation can never fail.
+
+### 3.1a The Genestealer Cult beacon + pre-landing sim (temporal sequencing)
+
+> This section and the pre/post-landing simulation are the **temporal-sequencing** rewrite (PRD
+> §4.24, "Opening Scenario Application"). The opening is not a single static stamp: it plays out as
+> a short headless simulation *during generation* so the world the player inherits is emergent —
+> sometimes a fresh beachhead, sometimes a month-eaten ruin — from the same sim that runs in play.
+> All draws come from the seeded `RNG`, so `seed + scenario` still reproduces the same opening.
+
+Canon: a Tyranid invasion is *drawn in* by a Genestealer Cult whose psychic beacon calls the hive
+fleet down. So the promised world must harbour a cult, and the sequence is:
+
+1. **Ensure a cult** (`EnsureGenestealerCult`) — if planet gen didn't already roll one (~2%), seed
+   one with the same infiltration logic. Runs before the beachhead so the cult carves its numbers
+   out of the *intact* Imperial regions.
+2. **Strengthen to landing-site strength** (`StrengthenPromisedWorldCult`) — pull the cult up to
+   `ScenarioRules.PromisedWorldCultStrengthFraction` (0.10) of each region's combined (cult +
+   Imperial) population/garrison, carving the increase out of the Imperial owner. This is the deep
+   infiltration that hollowed out the PDF and drew the swarm.
+3. **Reveal** (`RevealGenestealerCult`) — flip the cult `PlanetFaction` and its `RegionFaction`s
+   public (the beacon lit), mirroring `CheckForPlanetaryRevolt`. On reveal, a `Conversion` faction
+   **stops converting/growing** (PRD §4.24 — proselytizing is clandestine; open warfare ends it).
+4. **Seed insider intel** (`SeedPromisedWorldCultIntel`) — give the cult strong per-region belief
+   (`PromisedWorldCultStartingIntel`) about every public non-cult force, so its opening decisions
+   model an insider revolt, not a blind invader.
+5. **Pre-landing sim** — `TurnController.SimulatePlanetForward(sector, promised, ScenarioRules.PreLandingTurns)`
+   runs a planet-scoped slice of the weekly turn so the cult uprising fights the PDF and weakens the
+   defenders the Tyranids will land into.
+6. Then **§3.2 stamps the authored beachhead** onto the now-evolved board, followed by a
+   **post-landing sim** of `max(0, round(PostLandingTurnsMean + z))` weeks (`z ~ N(0,1)`) — the
+   stranded swarm feeds and spreads before the player arrives (§8).
+
+> **Pre-landing cult war (now active).** An earlier build left this inert (the revealed cult sat
+> at `Organization = -1` and end-of-turn revolt-suppression re-hid it before it fought). That is
+> fixed: `RevealGenestealerCult` now mobilizes each revealed cell to `Organization = 100` (full
+> mobilization on the 0-100 scale), and
+> `StrengthenPromisedWorldCult` pulls the cult to `PromisedWorldCultStrengthFraction` (0.10) of the
+> populace — and since a cult's `MilitaryStrength` is measured by **population** (`PopulationIsMilitary`),
+> not its vestigial garrison (PRD §4.24), the strengthened cult dwarfs the PDF, so suppression
+> cannot re-hide it. The cult now actually grinds the PDF during the pre-landing sim. Exact
+> organization/strength values remain playtest-pending tuning, not a structural gap.
 
 ### 3.2 Stamp Tyranid presence onto a few regions
 
@@ -252,9 +313,11 @@ For the chosen planet:
   **rest of the world stays default-Imperial.**
 - In each stamped region:
   - Add a Tyranid `RegionFaction` with `IsPublic = true`, a tuned starting `Population` and
-    `Garrison` (the **load-bearing balance number**, §8), `Organization = 1`,
-    `Entrenchment/Detection/AntiAir` low (these are raiders, not dug-in defenders), and
-    `GrowthMultiplier < 1.0`.
+    `Garrison` (the **load-bearing balance number**, §8), `Organization = 100` (fully mobilized
+    on the 0-100 scale — the whole swarm feeds and fights), and
+    `Entrenchment/Detection/AntiAir` low (these are raiders, not dug-in defenders). *(No
+    `GrowthMultiplier` throttle: Tyranids are a `Consumption` faction — PRD §4.24 — and grow
+    only by eating biomass, so the throttle would do nothing; see §2.2.)*
   - Reduce/clear the Imperial `RegionFaction` in that region (the Tyranids have overrun the
     local population). The Imperial civilian remnant may be left at a token level or zeroed;
     proposal: zero the Imperial garrison, keep a small displaced civilian population so the
@@ -263,10 +326,11 @@ For the chosen planet:
   Optionally seed an **initial governor request** on this world (PRD §4.16) so the
   request loop is visible during the very first objective — see §9 (optional).
 
-The "spread / pressure" the PRD asks for needs **no new mechanic**: the existing
-`FactionStrategyController` already generates NPC orders, so the stamped Tyranids will, on
-their own, push into adjacent Imperial regions each turn. The `GrowthMultiplier` throttle is
-what keeps that pressure winnable rather than runaway.
+The "spread / pressure" the PRD asks for needs **no new mechanic**: the `Consumption` biomass
+model (PRD §4.24) makes the stranded swarm push into adjacent regions on its own once a region's
+biomass is exhausted (forced expansion). What keeps that pressure winnable rather than runaway is
+the **finite biomass budget** — the swarm cannot grow without a fresh food source — not a growth
+throttle.
 
 ### 3.3 Place the chapter in orbit (not landed)
 
@@ -389,11 +453,10 @@ loaded game already has it `true`.
 
 ## 6. Turn-loop integration
 
-### 6.1 Apply the growth throttle
+### 6.1 The `GrowthMultiplier` primitive (not a Tyranid throttle)
 
-In `TurnController.EndOfTurnRegionFactionsUpdate` / `ApplyCarryingCapacity`
-([Helpers/TurnController.cs:444](../Helpers/TurnController.cs)), multiply the organic growth
-by `regionFaction.GrowthMultiplier`:
+`TurnController.EndOfTurnRegionFactionsUpdate` multiplies **organic** growth by
+`regionFaction.GrowthMultiplier`:
 
 ```csharp
 case GrowthType.Logistic:
@@ -404,23 +467,35 @@ case GrowthType.Logistic:
 ```
 
 (and the `default`/baseline branch likewise). Because the multiplier defaults to `1.0`, every
-non-scenario region is unaffected. This keeps the turn loop scenario-agnostic.
+region is unaffected unless something sets it, which keeps the turn loop scenario-agnostic.
+
+> **The scenario does *not* use this to pace the Tyranids.** Tyranids are a `Consumption` faction
+> with no organic birthrate (PRD §4.24), so they never touch this branch and `GrowthMultiplier`
+> does nothing to them. The lever survives only as a **general primitive** for organically-growing
+> factions (future Ork/revolt tuning). Tyranid pacing comes from the finite stranded-biomass budget
+> (§8), and the `Consumption` swarm reaches fresh biomass via its own forced-expansion step, not
+> via NPC offensive orders as the earlier draft assumed.
 
 ### 6.2 Resolve the objective (new `ProcessScenario` step)
 
 A new step at the end of `ProcessTurn` (or invoked from `MainGameScene.OnEndTurnButtonPressed`
 after `ProcessTurn`). Operates only when `sector.Scenario is { State: Pending }`:
 
-- **Win** — the promised planet has **no remaining Tyranid presence** (no Tyranid
-  `RegionFaction` with `Population > 0` / `Garrison > 0`):
+- **Win** — the promised planet has **no remaining enemy presence of any kind** — the world is
+  fully back in Imperial/player hands. `HasEnemyPresence` checks every region for any faction that
+  is *neither the default (Imperial) nor the player* holding `Population > 0` / `Garrison > 0`, so
+  it covers the **Tyranid swarm and the revealed Genestealer Cult (§3.1a) alike**. Driving out the
+  swarm while a cult still holds ground is *not* liberation and leaves the objective `Pending`.
   - `scenario.State = Won`.
   - **Grant the Chapter World**: use `ReplaceChapterPlanetFaction` to install a player
     `PlanetFaction` (`PlayerReputation = 1`, `IsPublic = true`) across the planet — this is
-    the reward path once covered by the old `FoundChapterPlanet` prototype.
+    the reward path once covered by the old `FoundChapterPlanet` prototype. (Because win now
+    requires *all* enemies cleared, no cult can survive into the grant.)
   - Move the **current Sector Lord's** `OpinionOfPlayerForce` **up** (promise honored),
     resolved via `sector.GetSectorLord()` at this moment — so the credit lands with whoever
     holds the seat now, even if the original promiser has died.
   - Surface a victory notification (reuse a dialog; or fold into the end-of-turn dialog).
+
 - **Lapse** — the promised planet is **fully overrun** (no Imperial *and* no player presence
   remains; Tyranids hold every region):
   - `scenario.State = Lapsed`.
@@ -431,9 +506,9 @@ after `ProcessTurn`). Operates only when `sector.Scenario is { State: Pending }`
   - Surface a "the world is lost" notification.
   - Game continues as a normal sandbox; the scenario object stays for record/history.
 
-The throttle (6.1) plus the fact that the sim never pauses means liberation is intended to
-take **~6–12 turns**, not one — which is exactly what gives the rest of the sector time to
-generate governor/Inquisition requests ("let the sector simulate forward during liberation").
+The finite biomass budget (§8) plus the fact that the sim never pauses means liberation is
+intended to take **~6–12 turns**, not one — which is exactly what gives the rest of the sector
+time to generate governor/Inquisition requests ("let the sector simulate forward during liberation").
 No artificial early-game lull is needed because nothing is gated; the pacing comes from the
 balance numbers.
 
@@ -507,11 +582,24 @@ Legacy saves (no scenario row) load with `Sector.Scenario = null` and behave as 
 ## 8. Balance — the load-bearing numbers
 
 Per the PRD this is *the* decision that determines whether the first objective is
-"tense-and-winnable" vs. trivial or impossible. The two coupled knobs:
+"tense-and-winnable" vs. trivial or impossible. The knobs:
 
 1. **Tyranid starting strength** on the promised world: starting `Garrison`/`Population`
    summed across the N stamped regions.
-2. **Tyranid growth throttle**: `GrowthMultiplier` on those regions.
+2. **Pre-arrival delay** (`PreLandingTurns` + the Gaussian `PostLandingTurns`): how long the
+   `Consumption` swarm feeds and spreads before the player arrives, which sets both the swarm's
+   size *and* how blighted the world is at game start (PRD §4.24).
+3. **Consumption model rates** (biomass appetite, forced-expansion share, capacity recovery) —
+   these live with the §4.24 model, not the scenario, and govern how fast the swarm grows and
+   spreads on the finite biomass budget.
+
+> **Not a growth throttle.** Earlier drafts of this section proposed a `GrowthMultiplier ≈
+> 0.3–0.5` as the winnability lever. That was superseded when Tyranids became a `Consumption`
+> faction (PRD §4.24): they have no organic birthrate, so a growth multiplier does nothing to
+> them. Winnability is now structural — the swarm is stranded (no reinforcement) on a **finite
+> biomass budget**, so it cannot grow without limit; the race is to break it before it has drawn
+> down enough of the world. A fully idle player still loses the world (the lapse state) as the
+> swarm eats through it.
 
 Proposed starting point (to be playtested, **not** final):
 
@@ -521,17 +609,16 @@ Proposed starting point (to be playtested, **not** final):
   pool (1,000) and a single task force, so it cannot brute-force everything at once.
 - Size the total Tyranid garrison so that committing ~2–3 companies clears the stamped
   regions over **~6–12 turns** given travel/landing/among-region movement.
-- `GrowthMultiplier ≈ 0.3–0.5` so throttled regrowth is felt but cannot outpace a
-  player who is actually fighting; a fully idle player still eventually loses the world
-  (drives the lapse failure state) rather than being soft-locked into an unwinnable one.
 
 These belong in named constants (e.g. a `ScenarioRules` static, mirroring
 `MedicalProcedureRules`/`GeneseedRules`) so they are tunable in one place, not scattered
 literals. A later move into the rules DB is consistent with the PRD's "move tunable rules out
 of code" direction.
 
-> **Implemented (step 7) — partial; key finding below.** All knobs live in `ScenarioRules`. The
-> `GrowthMultiplier` throttle is `0.4`; opinion swings are `±0.5`. The load-bearing strength knob was
+> **Implemented (step 7) — partial; key finding below.** All knobs live in `ScenarioRules`.
+> Opinion swings are `±0.5`. *(Historical: this step also set a `TyranidGrowthMultiplier = 0.4`
+> throttle. That was later removed when the Tyranid faction became `Consumption` — PRD §4.24 —
+> since consumption ignores `GrowthMultiplier`; see §2.2/§6.1/§8-intro.)* The load-bearing strength knob was
 > **redesigned**: the original absolute constants (`TyranidRegionGarrison = 2,000`,
 > `…Population = 50,000`) were replaced by a single **relative** `TyranidStrengthFraction = 0.5` —
 > Tyranid per-region garrison/population is now `0.5 ×` the promised world's *average Imperial region*,
@@ -543,7 +630,8 @@ of code" direction.
 > PDF (~159k/region)**, against which a 2,000-strong Tyranid garrison is a rounding error — trivial for
 > the player to clear and far too weak to ever press into an adjacent region. Sizing the Tyranids to the
 > world's own PDF keeps the fight in the same ballpark across the entire `[5M, 500M]` band. The `0.5`
-> fraction and `0.4` throttle remain **playtest starting points, not final**.
+> fraction remains a **playtest starting point, not final** (as do the §4.24 consumption rates and
+> the pre/post-landing delays, which now govern how fast the swarm grows and spreads).
 >
 > **What is *not* yet validated, and why.** The target outcomes — a clean ~6–12 turn win and an
 > idle-player lapse — could **not** be confirmed empirically:
@@ -581,7 +669,8 @@ of code" direction.
    the scenario depends only on `GetSectorLord()`.
 2. **Stamping** — `ScenarioBuilder.StampPromisedWorld`; remove `FoundTakebackPlanet` from
    `GenerateSector`; place fleet in orbit (not landed); resolve the Sector Lord as authority
-   (with fallback); set growth throttle and tuned strengths via a new `ScenarioRules`.
+   (with fallback); set tuned Tyranid strengths via a new `ScenarioRules`. *(No growth throttle:
+   Tyranids grow by consumption — §2.2/§6.1.)*
 3. **Narrative** — `BriefingComposer` + token sourcing (subsector naming); founding-history
    entry; store `BriefingText` on the scenario.
 4. **Briefing UI** — `briefing_dialog` scene/controller; one-shot hook in `MainGameScene._Ready`.
@@ -607,17 +696,18 @@ Steps 1–4 are independent enough to land before 5; 6 must accompany whatever s
 - `ScenarioBuilder` determinism: same `seed` ⇒ same promised planet, same stamped regions,
   same resolved Sector Lord, same `BriefingText`.
 - Stamp invariants: promised world is majority-Imperial; exactly N Tyranid regions; fleet in
-  orbit with **no** landed squads; `GrowthMultiplier < 1` on Tyranid regions only.
+  orbit with **no** landed squads; Tyranids grow by consumption, so `GrowthMultiplier` stays at
+  the default `1.0` everywhere (the stamp sets no throttle — `StampedTyranids_GrowByConsumption_NotAThrottle`).
 - `BriefingComposer`: all tokens substituted, no leftover placeholders, deterministic choice.
-- Growth: a throttled region grows strictly slower than an identical unthrottled one over a
-  fixed number of turns.
+- Growth: the general `GrowthMultiplier` primitive — a throttled *Logistic* region grows strictly
+  slower than an identical unthrottled one over a fixed number of turns.
 - `ProcessScenario`: win path grants the player `PlanetFaction` and raises the **current
   Sector Lord's** opinion; lapse path withdraws and lowers it; a lapse with a vacant seat
   still resolves (no-op reputation); neither fires while `State != Pending`.
-  *(Implemented in `OnlyWar.Tests/Turns/ScenarioTurnTests.cs`, alongside the growth-throttle
-  test — a throttled region grows strictly slower than an identical unthrottled one — and a
-  default-multiplier-unchanged guard. Win/lapse are exercised against a real stamped sector with
-  the board forced to the win/lapse state.)*
+  *(Implemented in `OnlyWar.Tests/Turns/ScenarioTurnTests.cs`, alongside the general
+  `GrowthMultiplier` throttle test — a throttled Logistic region grows strictly slower than an
+  identical unthrottled one — and a default-multiplier-unchanged guard. Win/lapse are exercised
+  against a real stamped sector with the board forced to the win/lapse state.)*
 - Save/load round-trip: `CampaignScenario`, `GrowthMultiplier`, and the planet-less authority
   character all survive (extend `SaveLoadRoundTripTests`).
 - Legacy save (no scenario row) loads with `Scenario == null` and no growth change.

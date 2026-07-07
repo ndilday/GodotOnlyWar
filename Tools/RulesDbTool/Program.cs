@@ -4,7 +4,7 @@ using Microsoft.Data.Sqlite;
 
 if (args.Length < 2)
 {
-    Console.Error.WriteLine("Usage: RulesDbTool <schema|training-source|migrate-training|migrate-progenoid|migrate-ratings|migrate-planet-scales|migrate-fortification|migrate-tyranids|migrate-tyranid-squads|migrate-evasion|migrate-squad-caps|migrate-veteran-sergeant|migrate-collapse-sergeants|migrate-chaplaincy|migrate-company-judiciar|migrate-company-apothecary|migrate-remove-veteran-captain|migrate-remove-recruitment-captain|migrate-starting-fleet-capacity|migrate-pdf|remove-unused-unit-templates> <db-path>");
+    Console.Error.WriteLine("Usage: RulesDbTool <schema|training-source|migrate-training|migrate-progenoid|migrate-ratings|migrate-planet-scales|migrate-fortification|migrate-tyranids|migrate-tyranid-squads|migrate-tyranid-consumption|migrate-evasion|migrate-squad-caps|migrate-veteran-sergeant|migrate-collapse-sergeants|migrate-chaplaincy|migrate-company-judiciar|migrate-company-apothecary|migrate-remove-veteran-captain|migrate-remove-recruitment-captain|migrate-starting-fleet-capacity|migrate-pdf|migrate-scout-skills|migrate-leader-tactics|remove-unused-unit-templates> <db-path>");
     return 1;
 }
 
@@ -13,7 +13,7 @@ string dbPath = args[1];
 string connectionString = new SqliteConnectionStringBuilder
 {
     DataSource = dbPath,
-    Mode = command is "migrate-training" or "migrate-progenoid" or "migrate-ratings" or "migrate-planet-scales" or "migrate-fortification" or "migrate-tyranids" or "migrate-tyranid-squads" or "migrate-evasion" or "migrate-squad-caps" or "migrate-veteran-sergeant" or "migrate-collapse-sergeants" or "migrate-chaplaincy" or "migrate-company-judiciar" or "migrate-company-apothecary" or "migrate-remove-veteran-captain" or "migrate-remove-recruitment-captain" or "migrate-starting-fleet-capacity" or "migrate-pdf" or "remove-unused-unit-templates" ? SqliteOpenMode.ReadWriteCreate : SqliteOpenMode.ReadOnly
+    Mode = command is "migrate-training" or "migrate-progenoid" or "migrate-ratings" or "migrate-planet-scales" or "migrate-fortification" or "migrate-tyranids" or "migrate-tyranid-squads" or "migrate-tyranid-consumption" or "migrate-evasion" or "migrate-squad-caps" or "migrate-veteran-sergeant" or "migrate-collapse-sergeants" or "migrate-chaplaincy" or "migrate-company-judiciar" or "migrate-company-apothecary" or "migrate-remove-veteran-captain" or "migrate-remove-recruitment-captain" or "migrate-starting-fleet-capacity" or "migrate-pdf" or "migrate-scout-skills" or "migrate-leader-tactics" or "remove-unused-unit-templates" ? SqliteOpenMode.ReadWriteCreate : SqliteOpenMode.ReadOnly
 }.ToString();
 
 using SqliteConnection connection = new(connectionString);
@@ -51,6 +51,9 @@ switch (command)
     case "migrate-tyranid-squads":
         MigrateTyranidSquads(connection);
         break;
+    case "migrate-tyranid-consumption":
+        MigrateTyranidConsumption(connection);
+        break;
     case "migrate-evasion":
         MigrateEvasion(connection);
         break;
@@ -83,6 +86,12 @@ switch (command)
         break;
     case "migrate-pdf":
         MigratePdf(connection);
+        break;
+    case "migrate-scout-skills":
+        MigrateScoutSkills(connection);
+        break;
+    case "migrate-leader-tactics":
+        MigrateLeaderTactics(connection);
         break;
     default:
         Console.Error.WriteLine($"Unknown command: {command}");
@@ -579,6 +588,34 @@ static void MigrateFortificationSkill(SqliteConnection connection)
 
     transaction.Commit();
     Console.WriteLine($"Fortification skill migration complete (skill id {skillId}).");
+}
+
+// Flip the Tyranid faction to GrowthType.Consumption (3). The §4.24 biomass model
+// (Predate/Consume, carrying-capacity scouring, forced expansion) is fully implemented in
+// TurnController but gates on GrowthType == Consumption; the Tyranid faction row was still
+// Logistic (1), so none of it ran and the swarm grew organically instead of by eating. This
+// is the data flip that activates the model. Resolved by name so it is not tied to a Faction.Id.
+static void MigrateTyranidConsumption(SqliteConnection connection)
+{
+    using SqliteTransaction transaction = connection.BeginTransaction();
+
+    const int ConsumptionGrowthType = 3;   // GrowthType.Consumption
+
+    int current = ExecuteScalarInt(connection, transaction,
+        "SELECT GrowthType FROM Faction WHERE Name = 'Tyranids'");
+    Console.WriteLine($"Tyranids current GrowthType = {current}.");
+    if (current == ConsumptionGrowthType)
+    {
+        Console.WriteLine("Tyranid consumption migration already applied; nothing to do.");
+        return;
+    }
+
+    int updated = Execute(connection, transaction,
+        "UPDATE Faction SET GrowthType = @growthType WHERE Name = 'Tyranids'",
+        ("@growthType", ConsumptionGrowthType));
+
+    transaction.Commit();
+    Console.WriteLine($"Set GrowthType = {ConsumptionGrowthType} (Consumption) on {updated} faction row(s).");
 }
 
 static void MigrateTyranids(SqliteConnection connection)
@@ -1227,6 +1264,163 @@ static void MigratePdf(SqliteConnection connection)
     Console.WriteLine(
         $"PDF migration complete. Added species {pdfSpecies}, soldiers (Trooper {trooper}, Sergeant {sergeant}), " +
         $"weapon sets (Autogun {autogunSet}, Heavy Stubber {heavyStubberSet}), and PDF Infantry Squad {squad}.");
+}
+
+// Two data fixes for the recon/scout loop (see the audit note in
+// ForceGenerator.GenerateScoutPatrol and the Stealth mission checks under Helpers/Missions/Recon).
+// The scout-leader Tactics half of this audit now lives in migrate-leader-tactics, which covers
+// every squad's leader — not just the scouts — under one tiering rule.
+//   1. Flag the Imperial PDF Infantry Squad as Scout so the PDF faction can both send it out
+//      to recon (TurnController.IsScoutSquad) and scramble it to intercept enemy scouts
+//      (GenerateScoutPatrol). The Scout bit is purely additive: generic force generation only
+//      ever filters *out* HQ squads (GenerateGenericForce), so the PDF squad stays fully usable
+//      as an ordinary garrison/assault/ambush squad.
+//   2. Give the elite infiltrators (Lictor, Ravener) strong Stealth. Recon/infiltrate roll on
+//      the averaged Stealth of the able soldiers (SquadMissionTest); these two are meant to be
+//      premier ambushers, well above the Scout Marine's 4 (the Lictor was only 8, the Ravener 0).
+static void MigrateScoutSkills(SqliteConnection connection)
+{
+    using SqliteTransaction transaction = connection.BeginTransaction();
+
+    const int Imperial = 0, Tyranids = 2;
+    const int Scout = 0x2; // SquadTypes.Scout
+
+    int stealth = RequireId(connection, transaction, "SELECT Id FROM BaseSkill WHERE Name = 'Stealth'", "Stealth skill");
+
+    // 1. PDF Infantry Squad -> add the Scout flag (idempotent via bitwise OR).
+    int pdfFlagged = Execute(connection, transaction,
+        "UPDATE SquadTemplate SET SquadType = SquadType | $scout WHERE Name = 'PDF Infantry Squad' AND FactionId = $f",
+        ("$scout", Scout), ("$f", Imperial));
+
+    // 2. Strong Stealth for the elite infiltrators. The Lictor is the premier chameleonic
+    //    ambusher (top tier, matching its melee); the burrowing Ravener sits just below it.
+    SetMosTrainingByName(connection, transaction, Tyranids, "Lictor", stealth, 16);
+    SetMosTrainingByName(connection, transaction, Tyranids, "Ravener", stealth, 12);
+
+    transaction.Commit();
+    Console.WriteLine($"Scout skills migration complete. PDF Infantry Squad rows flagged Scout: {pdfFlagged}.");
+}
+
+// Every squad that has a leader (a member whose SoldierTemplate.IsSquadLeader is true) leans on
+// that leader's Tactics when it is detected on a recon sortie and tries to slip its scouts past
+// the responders (DetectedMissionStep via LeaderMissionTest). A leader with no Tactics skill rolls
+// on 0 and auto-fails, so seed every such leader with a baseline by squad tier: 4 for HQ squads,
+// 2 for Elite, 1 otherwise. Leaders that already train Tactics keep their authored value (the sole
+// exception is the deliberately ill-trained PDF Sergeant, knocked from 2 down to the tier-1 floor).
+static void MigrateLeaderTactics(SqliteConnection connection)
+{
+    using SqliteTransaction transaction = connection.BeginTransaction();
+
+    const int Imperial = 0, Tyranids = 2;
+    int tactics = RequireId(connection, transaction, "SELECT Id FROM BaseSkill WHERE Name = 'Tactics'", "Tactics skill");
+
+    // Data-driven pass over every leader SoldierTemplate (IsSquadLeader=1) that does not already
+    // train Tactics. A leader that heads squads of different tiers takes the strongest tier value.
+    // SquadTypes: HQ = 0x1, Elite = 0x4.
+    List<(int SoldierId, int Points)> leaders = [];
+    using (SqliteCommand command = connection.CreateCommand())
+    {
+        command.Transaction = transaction;
+        command.CommandText = @"
+            SELECT sol.Id,
+                   MAX(CASE WHEN (st.SquadType & 1) <> 0 THEN 4
+                            WHEN (st.SquadType & 4) <> 0 THEN 2
+                            ELSE 1 END) AS TierPoints
+            FROM SoldierTemplate sol
+            JOIN SquadTemplateElement ste ON ste.SoldierTemplateId = sol.Id AND sol.IsSquadLeader = 1
+            JOIN SquadTemplate st ON st.Id = ste.SquadTemplateId
+            WHERE NOT EXISTS (SELECT 1 FROM SoldierMosTraining m
+                              WHERE m.SoldierTemplateId = sol.Id AND m.BaseSkillId = $tactics)
+            GROUP BY sol.Id";
+        command.Parameters.AddWithValue("$tactics", tactics);
+        using SqliteDataReader reader = command.ExecuteReader();
+        while (reader.Read())
+        {
+            leaders.Add((reader.GetInt32(0), reader.GetInt32(1)));
+        }
+    }
+    foreach ((int soldierId, int points) in leaders)
+    {
+        SetMosTraining(connection, transaction, soldierId, tactics, points);
+    }
+
+    // Leaderless Elite squads (no IsSquadLeader element, so the mission checks fall back to the
+    // best able soldier) get the Elite tier value of 2 on their member templates — e.g. the
+    // Tyranid Warrior Squad and the Genestealer Cult Aberrant Squad. Only the Elite tier is
+    // extended to leaderless squads; the "other"-tier broods (Termagaunts, Rippers, etc.) stay
+    // at 0. The Scout|Elite Lictor is also covered here, consistent with its scout handling below.
+    List<int> leaderlessElites = [];
+    using (SqliteCommand command = connection.CreateCommand())
+    {
+        command.Transaction = transaction;
+        command.CommandText = @"
+            SELECT DISTINCT sol.Id
+            FROM SquadTemplate st
+            JOIN SquadTemplateElement ste ON ste.SquadTemplateId = st.Id
+            JOIN SoldierTemplate sol ON sol.Id = ste.SoldierTemplateId
+            WHERE (st.SquadType & 4) <> 0
+              AND NOT EXISTS (SELECT 1 FROM SquadTemplateElement lste
+                              JOIN SoldierTemplate l ON l.Id = lste.SoldierTemplateId
+                              WHERE lste.SquadTemplateId = st.Id AND l.IsSquadLeader = 1)
+              AND NOT EXISTS (SELECT 1 FROM SoldierMosTraining m
+                              WHERE m.SoldierTemplateId = sol.Id AND m.BaseSkillId = $tactics)";
+        command.Parameters.AddWithValue("$tactics", tactics);
+        using SqliteDataReader reader = command.ExecuteReader();
+        while (reader.Read())
+        {
+            leaderlessElites.Add(reader.GetInt32(0));
+        }
+    }
+    foreach (int soldierId in leaderlessElites)
+    {
+        SetMosTraining(connection, transaction, soldierId, tactics, 2);
+    }
+
+    // The PDF is deliberately poorly trained: knock its Sergeant's Tactics (2, from migrate-pdf)
+    // down to the "otherwise" tier floor of 1.
+    SetMosTrainingByName(connection, transaction, Imperial, "PDF Sergeant", tactics, 1);
+
+    // The mono-type Tyranid scout squads have no IsSquadLeader element, so the detection contest
+    // falls back to the best able soldier; give that de-facto leader the same tier baseline
+    // (Genestealer/Ravener Pack are Scout=other -> 1, the Lictor squad is Scout|Elite -> 2). This
+    // supersedes the flat Tactics 2 the earlier migrate-scout-skills pass applied to all three.
+    SetMosTrainingByName(connection, transaction, Tyranids, "Genestealer", tactics, 1);
+    SetMosTrainingByName(connection, transaction, Tyranids, "Ravener", tactics, 1);
+    SetMosTrainingByName(connection, transaction, Tyranids, "Lictor", tactics, 2);
+
+    transaction.Commit();
+    Console.WriteLine(
+        $"Leader tactics migration complete. Seeded Tactics on {leaders.Count} leader template(s) and "
+        + $"{leaderlessElites.Count} leaderless-Elite member template(s); set PDF Sergeant to 1 and "
+        + "reconciled the Tyranid scout leaders to their tier.");
+}
+
+// Upsert a soldier template's MOS training entry for a skill to an exact point value.
+static void SetMosTraining(SqliteConnection connection, SqliteTransaction transaction,
+                           int soldierTemplateId, int baseSkillId, double points)
+{
+    int updated = Execute(connection, transaction,
+        "UPDATE SoldierMosTraining SET PointsAdded = $p WHERE SoldierTemplateId = $s AND BaseSkillId = $sk",
+        ("$p", points), ("$s", soldierTemplateId), ("$sk", baseSkillId));
+    if (updated == 0)
+    {
+        Execute(connection, transaction,
+            "INSERT INTO SoldierMosTraining (SoldierTemplateId, BaseSkillId, PointsAdded) VALUES ($s, $sk, $p)",
+            ("$s", soldierTemplateId), ("$sk", baseSkillId), ("$p", points));
+    }
+}
+
+static void SetMosTrainingByName(SqliteConnection connection, SqliteTransaction transaction,
+                                 int factionId, string soldierName, int baseSkillId, double points)
+{
+    int soldierId = ExecuteScalarInt(connection, transaction,
+        "SELECT Id FROM SoldierTemplate WHERE Name = $n AND FactionId = $f", ("$n", soldierName), ("$f", factionId));
+    if (soldierId == 0)
+    {
+        Console.WriteLine($"  warning: soldier template '{soldierName}' (faction {factionId}) not found; skipped skill {baseSkillId}.");
+        return;
+    }
+    SetMosTraining(connection, transaction, soldierId, baseSkillId, points);
 }
 
 // Reads the human baseline columns (everything except the physical attributes, which the PDF

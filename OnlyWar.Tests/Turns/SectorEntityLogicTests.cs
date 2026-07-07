@@ -88,6 +88,22 @@ public class SectorEntityLogicTests
     }
 
     [Fact]
+    public void ProcessTurn_PublicConversionFactionDoesNotConvert()
+    {
+        RNG.Reset(1);
+        SectorSimulationFixture fixture = SectorSimulationFixture.Create();
+        // A revealed (public) cult is in open warfare, not stealing converts at night, so it makes
+        // no new converts and does not grow this turn — unlike the hidden cult above. (An idle
+        // public cult may still sacrificially predate the populace, but that is a separate path
+        // that never adds to the cult's own numbers.)
+        RegionFaction cult = fixture.AddPublicCult(0, population: 50, organization: 1);
+
+        fixture.ProcessTurn();
+
+        Assert.Equal(50, cult.Population);
+    }
+
+    [Fact]
     public void ProcessTurn_DecaysRegionIntelligenceByQuarter()
     {
         RNG.Reset(1);
