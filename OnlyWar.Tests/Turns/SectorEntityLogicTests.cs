@@ -47,10 +47,11 @@ public class SectorEntityLogicTests
         RNG.Reset(1);
         SectorSimulationFixture fixture = SectorSimulationFixture.Create();
         RegionFaction pdf = fixture.DefaultRegionFaction(0);
+        pdf.Population = 100000;
         pdf.Garrison = 100000;
-        // capacity equals the region's population (20000), so crowding is 0 and no new
+        // capacity equals the region's population (100000), so crowding is 0 and no new
         // garrison is recruited this week; only the 0.1%/week attrition applies
-        fixture.Planet.Regions[0].CarryingCapacity = 20000;
+        fixture.Planet.Regions[0].CarryingCapacity = 100000;
 
         fixture.ProcessTurn();
 

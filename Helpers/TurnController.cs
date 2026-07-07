@@ -1,6 +1,7 @@
 ﻿using OnlyWar.Builders;
 using OnlyWar.Helpers.Battles;
 using OnlyWar.Helpers.Extensions;
+using OnlyWar.Helpers.StrategicCombat;
 using OnlyWar.Models;
 using OnlyWar.Models.Fleets;
 using OnlyWar.Models.Missions;
@@ -18,6 +19,7 @@ namespace OnlyWar.Helpers
     {
         public List<MissionContext> MissionContexts { get; private set; }
         public List<Mission> SpecialMissions { get; private set; }
+        public List<StrategicCombatResult> StrategicCombatResults { get; private set; }
         // Set by ProcessScenario when the opening scenario resolves this turn (win or lapse), so
         // MainGameScene can surface a notification. Null on a turn with no resolution
         // (Design/OpeningScenario.md §6.2). Cleared at the start of each ProcessTurn.
@@ -93,6 +95,7 @@ namespace OnlyWar.Helpers
         {
             MissionContexts = new List<MissionContext>();
             SpecialMissions = new List<Mission>();
+            StrategicCombatResults = new List<StrategicCombatResult>();
             _npcStrategyController = new FactionStrategyController();
             _trainingService = trainingService;
         }
@@ -101,6 +104,7 @@ namespace OnlyWar.Helpers
         {
             MissionContexts.Clear();
             SpecialMissions.Clear();
+            StrategicCombatResults.Clear();
             ScenarioNotification = null;
 
             // --- 0. Shaping Phase ---
@@ -133,10 +137,13 @@ namespace OnlyWar.Helpers
             ClearDiversionEffects(sector.Planets.Values);
 
             // --- 2. Mission Execution Phase ---
+            var strategicCombatOrders = allOrdersThisTurn.Where(o => o.Mission is StrategicCombatMission);
+            ProcessStrategicCombatMissions(strategicCombatOrders);
+
             var combatOrders = allOrdersThisTurn.Where(o => o.AssignedSquads.Any());
             ProcessCombatMissions(combatOrders);
 
-            var constructionOrders = allOrdersThisTurn.Where(o => !o.AssignedSquads.Any());
+            var constructionOrders = allOrdersThisTurn.Where(o => !o.AssignedSquads.Any() && o.Mission is ConstructionMission);
             ProcessConstructionOrders(constructionOrders);
 
             // --- 3. Planetary Simulation & Resolution Phase ---
@@ -174,6 +181,7 @@ namespace OnlyWar.Helpers
                 System.Diagnostics.Stopwatch weekTimer = System.Diagnostics.Stopwatch.StartNew();
                 MissionContexts.Clear();
                 SpecialMissions.Clear();
+                StrategicCombatResults.Clear();
 
                 // Strategic planning, scoped to this one planet. Enemy factions plan offensively;
                 // the Imperial PDF plans defensively (fortify/listen only), exactly as ProcessTurn
@@ -189,13 +197,17 @@ namespace OnlyWar.Helpers
                         defaultFaction, sector, planet, defensiveOnly: true));
                 }
 
+                List<Order> strategicCombatOrders = orders.Where(o => o.Mission is StrategicCombatMission).ToList();
+                ProcessStrategicCombatMissions(strategicCombatOrders);
+
                 List<Order> combatOrders = orders.Where(o => o.AssignedSquads.Any()).ToList();
                 GameLog.Debug(() =>
-                    $"  week {week + 1}/{turns} '{planet.Name}': {orders.Count} orders, {combatOrders.Count} combat "
+                    $"  week {week + 1}/{turns} '{planet.Name}': {orders.Count} orders, "
+                    + $"{strategicCombatOrders.Count} strategic, {combatOrders.Count} combat "
                     + $"({combatOrders.Sum(o => o.AssignedSquads.Sum(s => s.Members.Count))} soldiers committed)");
 
                 ProcessCombatMissions(combatOrders);
-                ProcessConstructionOrders(orders.Where(o => !o.AssignedSquads.Any()));
+                ProcessConstructionOrders(orders.Where(o => !o.AssignedSquads.Any() && o.Mission is ConstructionMission));
 
                 ApplyMissionResults();
                 UpdatePlanet(planet);
@@ -368,6 +380,25 @@ namespace OnlyWar.Helpers
                                                  ratingCalculator);
         }
 
+        internal void ProcessStrategicCombatMissions(IEnumerable<Order> strategicCombatOrders)
+        {
+            var resolver = new StrategicCombatResolver();
+            foreach (Order order in strategicCombatOrders)
+            {
+                if (order.Mission is not StrategicCombatMission mission) continue;
+
+                StrategicCombatResult result = resolver.Resolve(mission);
+                StrategicCombatResults.Add(result);
+                GameLog.Debug(() =>
+                    $"Strategic combat {result.Attacker?.Name} -> {DescribeRegionFaction(result.Target)}: "
+                    + $"outcome={result.Outcome}, won={result.AttackerWon}, controlChanged={result.ControlChanged}, "
+                    + $"committed={result.CommittedBattleValue}, defenderBV={result.DefenderBattleValue}, "
+                    + $"effective={result.AttackerEffectiveStrength:F0}/{result.DefenderEffectiveStrength:F0}, "
+                    + $"losses={result.AttackerLosses}/{result.DefenderLosses}, survivors={result.AttackerSurvivors}, "
+                    + $"contributions={DescribeStrategicContributions(mission.Contributions)}");
+            }
+        }
+
         private void ProcessCombatMissions(IEnumerable<Order> combatOrders)
         {
             foreach (Order order in combatOrders)
@@ -404,9 +435,19 @@ namespace OnlyWar.Helpers
                                                               .ToList();
                 if (involvedBattleSquads.Count == 0) continue;
 
+                GameLog.Debug(() =>
+                    $"Combat mission start {order.AssignedSquads.First().Faction.Name} "
+                    + $"{order.Mission.MissionType} -> {DescribeRegionFaction(order.Mission.RegionFaction)}: "
+                    + $"squads={order.AssignedSquads.Count}, soldiers={order.AssignedSquads.Sum(s => s.Members.Count)}, "
+                    + $"battleValue={SquadBattleValue(order.AssignedSquads)}");
                 MissionContext context = new MissionContext(order, involvedBattleSquads, new List<BattleSquad>());
                 MissionStepOrchestrator.GetStartingStep(context).ExecuteMissionStep(context, 0, null);
                 MissionContexts.Add(context);
+                GameLog.Debug(() =>
+                    $"Combat mission result {order.AssignedSquads.First().Faction.Name} "
+                    + $"{order.Mission.MissionType} -> {DescribeRegionFaction(order.Mission.RegionFaction)}: "
+                    + $"impact={context.Impact:F2}, enemiesKilled={context.EnemiesKilled}, days={context.DaysElapsed}, "
+                    + $"logEntries={context.Log.Count}");
             }
         }
 
@@ -486,12 +527,18 @@ namespace OnlyWar.Helpers
         {
             // squad-less construction orders (NPC faction development) resolve instantly at a
             // fixed mission size and don't create a context
-            foreach (var order in constructionOrders)
+            List<Order> orders = constructionOrders.ToList();
+            foreach (var order in orders)
             {
                 if (order.Mission is ConstructionMission mission)
                 {
                     ApplyConstruction(mission, mission.MissionSize);
                 }
+            }
+            if (orders.Count > 0)
+            {
+                GameLog.Debug(() =>
+                    $"Construction resolved: orders={orders.Count}, {SummarizeConstructionOrders(orders)}");
             }
         }
 
@@ -521,6 +568,9 @@ namespace OnlyWar.Helpers
         // the player's knowledge of the region.
         internal static void ResolveReconResult(Faction reconningFaction, RegionFaction target, float impact)
         {
+            if (target == null) return;
+            float observerBefore = reconningFaction == null ? 0f : target.GetObserverIntel(reconningFaction.Id);
+            float sharedBefore = target.Region.IntelligenceLevel;
             if (reconningFaction != null)
             {
                 target.AddObserverIntel(reconningFaction.Id, impact);
@@ -529,10 +579,15 @@ namespace OnlyWar.Helpers
             {
                 target.Region.IntelligenceLevel += impact;
             }
+            GameLog.Debug(() =>
+                $"Recon result {reconningFaction?.Name ?? "Unknown"} -> {DescribeRegionFaction(target)}: "
+                + $"impact={impact:F2}, observerIntel={observerBefore:F2}->{(reconningFaction == null ? 0f : target.GetObserverIntel(reconningFaction.Id)):F2}, "
+                + $"sharedIntel={sharedBefore:F2}->{target.Region.IntelligenceLevel:F2}");
         }
 
         private static void ApplyConstruction(ConstructionMission mission, int amount)
         {
+            int before = GetConstructionLevel(mission);
             switch (mission.ConstructionType)
             {
                 case DefenseType.Entrenchment:
@@ -548,6 +603,65 @@ namespace OnlyWar.Helpers
                     mission.RegionFaction.Organization = Math.Min(100, mission.RegionFaction.Organization + amount);
                     break;
             }
+            int after = GetConstructionLevel(mission);
+            GameLog.Trace(() =>
+                $"Construction applied {DescribeRegionFaction(mission.RegionFaction)}: "
+                + $"{mission.ConstructionType} {before}->{after} (requested +{amount})");
+        }
+
+        private static int GetConstructionLevel(ConstructionMission mission)
+        {
+            return mission.ConstructionType switch
+            {
+                DefenseType.Entrenchment => mission.RegionFaction.Entrenchment,
+                DefenseType.Detection => mission.RegionFaction.Detection,
+                DefenseType.AntiAir => mission.RegionFaction.AntiAir,
+                DefenseType.Organization => mission.RegionFaction.Organization,
+                _ => 0
+            };
+        }
+
+        private static string SummarizeConstructionOrders(IEnumerable<Order> orders)
+        {
+            var missions = orders
+                .Select(o => o.Mission)
+                .OfType<ConstructionMission>()
+                .ToList();
+            if (missions.Count == 0) return "none";
+
+            return string.Join("; ", missions
+                .GroupBy(m => new
+                {
+                    Planet = m.RegionFaction.Region.Planet.Name,
+                    Region = m.RegionFaction.Region.Name,
+                    Faction = m.RegionFaction.PlanetFaction.Faction.Name,
+                    m.ConstructionType
+                })
+                .Select(g =>
+                    $"{g.Key.Faction}/{g.Key.Planet}/{g.Key.Region} {g.Key.ConstructionType}+{g.Sum(m => m.MissionSize)}"));
+        }
+
+        private static string DescribeStrategicContributions(IEnumerable<StrategicCombatContribution> contributions)
+        {
+            var parts = contributions
+                .Where(c => c.BattleValue > 0)
+                .Select(c => $"{c.StagingFaction?.Region.Name ?? "unknown"}:{c.BattleValue}")
+                .ToList();
+            return parts.Count == 0 ? "none" : string.Join(",", parts);
+        }
+
+        private static string DescribeRegionFaction(RegionFaction regionFaction)
+        {
+            if (regionFaction == null) return "unknown";
+            return $"{regionFaction.Region.Planet.Name}/{regionFaction.Region.Name}/"
+                + $"{regionFaction.PlanetFaction.Faction.Name}";
+        }
+
+        private static long SquadBattleValue(IEnumerable<Squad> squads)
+        {
+            return squads
+                .SelectMany(squad => squad.Members)
+                .Sum(member => (long)member.Template.BattleValue);
         }
 
         private void ApplyMissionResults()
@@ -613,7 +727,11 @@ namespace OnlyWar.Helpers
                     float ratio = 1.0f - Math.Min(regionFaction.Entrenchment / 10.0f, 1.0f);
                     defenderCasualties = (long)(defenderCasualties * ratio);
                 }
+                long defenderStrengthBefore = regionFaction.MilitaryStrength;
                 regionFaction.RemoveMilitaryStrength(defenderCasualties);
+                GameLog.Debug(() =>
+                    $"Mission attrition {context.Order.Mission.MissionType} -> {DescribeRegionFaction(regionFaction)}: "
+                    + $"defenderLosses={defenderCasualties}, defenderStrength={defenderStrengthBefore}->{regionFaction.MilitaryStrength}");
 
                 // A surviving AI offensive no longer evaporates: it withdraws to its staging region
                 // (raid) or seizes the contested ground (invade).
@@ -659,11 +777,18 @@ namespace OnlyWar.Helpers
             if (attacker.InvadesOnVictory)
             {
                 EstablishInvaderPresence(attacker, context.Order.Mission.RegionFaction.Region, survivors);
+                GameLog.Debug(() =>
+                    $"Offensive survivors {attacker.Name}: established foothold in "
+                    + $"{context.Order.Mission.RegionFaction.Region.Planet.Name}/"
+                    + $"{context.Order.Mission.RegionFaction.Region.Name}, survivors={survivors}");
             }
             else if (first.Squad.CurrentRegion != null
                      && first.Squad.CurrentRegion.RegionFactionMap.TryGetValue(attacker.Id, out RegionFaction home))
             {
                 home.AddMilitaryStrength(survivors);
+                GameLog.Debug(() =>
+                    $"Offensive survivors {attacker.Name}: returned to "
+                    + $"{home.Region.Planet.Name}/{home.Region.Name}, survivors={survivors}");
             }
         }
 

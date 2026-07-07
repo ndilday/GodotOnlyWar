@@ -3,6 +3,7 @@ using System.Drawing;
 using System.Linq;
 using OnlyWar.Helpers;
 using OnlyWar.Helpers.Extensions;
+using OnlyWar.Helpers.StrategicCombat;
 using OnlyWar.Models;
 using OnlyWar.Models.Fleets;
 using OnlyWar.Models.Missions;
@@ -150,8 +151,8 @@ public class FactionStrategyControllerTests
     [Fact]
     public void CalculateDefenderBattleValue_WeightsLandedSquadsByBattleValueNotHeadcount()
     {
-        Faction defender = CreateNonPlayerFaction();
-        RegionFaction rf = CreateTargetRegionFaction(defender, garrison: 50);
+        Faction defender = CreateDefaultFaction();
+        RegionFaction rf = CreateTargetRegionFaction(defender, population: 1_000, garrison: 50);
         // Three landed soldiers, each worth 2 battle value: 6 points, not 3 bodies.
         rf.LandedSquads.Add(TestModelFactory.CreateSquad("Defenders",
             TestModelFactory.CreateSoldier(TestModelFactory.MarineTemplate),
@@ -159,6 +160,79 @@ public class FactionStrategyControllerTests
             TestModelFactory.CreateSoldier(TestModelFactory.MarineTemplate)));
 
         Assert.Equal(56L, FactionStrategyController.CalculateDefenderBattleValue(rf));
+    }
+
+    [Fact]
+    public void CalculateDefenderBattleValue_UsesMilitaryStrengthForPopulationIsMilitaryDefenders()
+    {
+        Faction defender = CreateNonPlayerFaction();
+        RegionFaction rf = CreateTargetRegionFaction(defender, population: 1_000, garrison: 200);
+
+        Assert.Equal(1_200L, FactionStrategyController.CalculateDefenderBattleValue(rf));
+    }
+
+    [Fact]
+    public void GenerateFactionOrders_LargeNpcAssaultCreatesStrategicMissionWithoutSquads()
+    {
+        RNG.Reset(1234);
+        Faction attacker = BuildFaction(20, "Swarm", isPlayer: false, isDefault: false, GrowthType.Consumption);
+        Faction defender = CreateDefaultFaction();
+        Planet planet = CreatePlanet();
+        Region staging = planet.Regions[0];
+        Region target = staging.GetAdjacentRegions().First();
+
+        AddRegionFaction(planet, staging, attacker, population: 10_000, organization: 100);
+        AddRegionFaction(planet, target, defender, population: 100_000, organization: 100, garrison: 100);
+        RegionFaction targetFaction = target.RegionFactionMap[defender.Id];
+        targetFaction.AddObserverIntel(attacker.Id, FactionStrategyController.ReconIntelThreshold);
+        Sector sector = new(CreatePlayerForce(), [], [planet], []);
+
+        List<Order> orders = new FactionStrategyController().GenerateFactionOrders(attacker, sector);
+
+        Order strategicOrder = Assert.Single(orders, o => o.Mission is StrategicCombatMission);
+        Assert.Empty(strategicOrder.AssignedSquads);
+        StrategicCombatMission mission = Assert.IsType<StrategicCombatMission>(strategicOrder.Mission);
+        Assert.True(mission.CommittedBattleValue >= StrategicCombatRules.MassCombatBattleValueFloor);
+        Assert.True(staging.RegionFactionMap[attacker.Id].MilitaryStrength < 10_000);
+    }
+
+    [Fact]
+    public void GenerateFactionOrders_LargeUnknownTargetReconUsesCappedTacticalForce()
+    {
+        RNG.Reset(1234);
+        Faction attacker = BuildFaction(
+            20,
+            "Swarm",
+            isPlayer: false,
+            isDefault: false,
+            GrowthType.Consumption,
+            new Dictionary<int, SquadTemplate> { [TestModelFactory.SquadTemplate.Id] = TestModelFactory.SquadTemplate });
+        Faction defender = CreateDefaultFaction();
+        Planet planet = CreatePlanet();
+        Region staging = planet.Regions[0];
+        Region target = staging.GetAdjacentRegions().First();
+
+        AddRegionFaction(planet, staging, attacker, population: 100_000, organization: 100);
+        AddRegionFaction(planet, target, defender, population: 100_000, organization: 100, garrison: 100);
+        Sector sector = new(CreatePlayerForce(), [], [planet], []);
+
+        List<Order> orders = new FactionStrategyController().GenerateFactionOrders(attacker, sector);
+
+        Order reconOrder = Assert.Single(orders, o => o.Mission.MissionType == MissionType.Recon);
+        long generatedBattleValue = reconOrder.AssignedSquads
+            .Sum(s => s.Members.Sum(m => (long)m.Template.BattleValue));
+        Assert.InRange(generatedBattleValue, 1, StrategicCombatRules.NpcReconBattleValueCap);
+    }
+
+    [Fact]
+    public void ShouldUseStrategicCombat_PlayerTargetStaysTactical()
+    {
+        Faction attacker = CreateNonPlayerFaction();
+        Faction player = CreatePlayerFaction();
+        RegionFaction target = CreateTargetRegionFaction(player, population: 1_000, garrison: 100);
+        var offensive = Offensive(target, attackForce: 100_000, estimatedDefenderBv: 100, reward: 1_000);
+
+        Assert.False(FactionStrategyController.ShouldUseStrategicCombat(attacker, offensive, committedBattleValue: 100_000));
     }
 
     [Fact]
@@ -573,7 +647,8 @@ public class FactionStrategyControllerTests
     }
 
     private static Faction BuildFaction(int id, string name, bool isPlayer, bool isDefault,
-        GrowthType growthType = GrowthType.Conversion)
+        GrowthType growthType = GrowthType.Conversion,
+        IReadOnlyDictionary<int, SquadTemplate> squadTemplates = null)
     {
         return new Faction(
             id,
@@ -585,7 +660,7 @@ public class FactionStrategyControllerTests
             growthType,
             new Dictionary<int, Species> { [TestModelFactory.HumanSpecies.Id] = TestModelFactory.HumanSpecies },
             new Dictionary<int, SoldierTemplate>(),
-            new Dictionary<int, SquadTemplate>(),
+            squadTemplates ?? new Dictionary<int, SquadTemplate>(),
             new Dictionary<int, UnitTemplate>(),
             new Dictionary<int, BoatTemplate>(),
             new Dictionary<int, ShipTemplate>(),

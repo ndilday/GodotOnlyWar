@@ -635,9 +635,9 @@ Steps 1–4 are independent enough to land before 5; 6 must accompany whatever s
   for a later balance pass if playtesting shows the full chapter trivializes the objective.
 - Tyranid region-to-region *spread* as an explicit mechanic — handled implicitly by the
   existing `FactionStrategyController` NPC orders for 0.7. **Caveat (discovered in step 7):** the
-  implicit spread routes NPC offensives through the battle engine, which currently throws a
-  pre-existing `NullReferenceException` (`BattleSquad.ShouldContinueMission` via
-  `InfiltrateMissionStep.ShouldContinue`) once real battles run during forward simulation. Until
-  that is fixed, the idle-player lapse cannot actually trigger in play, and headless balance
-  validation of the win/lapse windows is blocked. Tracked as a follow-up battle-engine fix.
+  implicit spread currently routes NPC offensives through the battle engine, which is both too
+  expensive for army-scale NPC/PDF/Tyranid fights and fragile once real generated armies enter
+  forward simulation. The follow-up is now scoped as the large-scale NPC combat resolver in
+  `Design/LargeScaleNpcCombat.md`: NPC-only regional assaults above tactical scale resolve in
+  strategic battle-value space, while player/named-squad fights stay tactical.
 ```

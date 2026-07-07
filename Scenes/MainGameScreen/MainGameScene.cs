@@ -49,9 +49,9 @@ public partial class MainGameScene : Control
 		BattleLog.Sink = GD.Print;
 		// Leveled turn/battle trace. Set MinimumLevel higher (Debug/Trace) to diagnose slow turn
 		// processing — per-battle sizes/timings, force generation, per-week costs — without touching
-		// engine code; leave at Info for normal play. Off silences it entirely.
+		// engine code; leave at Debug for strategic diagnostics. Off silences it entirely.
 		GameLog.Sink = (level, message) => GD.Print($"[{level}] {message}");
-		GameLog.MinimumLevel = GameLogLevel.Info;
+		GameLog.MinimumLevel = GameLogLevel.Debug;
 
 		if (!GameDataSingleton.Instance.IsInitialized)
 		{

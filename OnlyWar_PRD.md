@@ -393,6 +393,10 @@ Each feature is described as a behavioral specification: what the system does, a
   2. Remaining spare troops fund construction orders (improving organization, detection, entrenchment, or anti-air in ascending cost order).
   3. Any remaining troops fund a scout patrol order.
 - Non-player faction orders are resolved alongside player orders in the same turn.
+- Large NPC-only `Advance` orders are resolved through the strategic large-scale combat model
+  instead of the tactical battle engine once the committed regional forces exceed the tactical
+  actor/battle-value caps. Tactical resolution remains mandatory for player squads and named
+  player soldiers. See `Design/LargeScaleNpcCombat.md`.
 
 ---
 
@@ -1055,6 +1059,12 @@ A simulation expansion that lifts the sector beyond a binary Imperial-vs-everyon
 - **Substrate (prerequisite): Faction Relationships & Inter-Faction Intelligence** — replace the binary `AreFactionsEnemies` test with a per-faction-pair Stance store (default Hostile; player↔Imperial seeded Allied); consolidate `Faction`'s ad-hoc booleans into a `[Flags] FactionBehavior` field (folding in `CanInfiltrate`, adding `UniversallyHostile` and `Indelible`); and build the per-faction graded **intelligence-as-belief** model (`IntelLevel` ladder, sparse materialization, false positives via paranoia/disinformation), generalizing the existing governor-detection and OpFor fog-of-war as the default-Imperial special case. Spec: §4.21.
 - **Orks & Indelible Infestation** (depends on the substrate) — `UniversallyHostile | Indelible` Ork faction; indelible `RegionFaction` with pop-0 → non-public → regrow-to-1; logistic growth with an Ork multiplier and a feral efficiency penalty; two-dimensional state (awareness × expansion) yielding unnoticed-feral / noticed-feral / WAAAGH!; feral amassing migration and internal-scale WAAAGH! emergence; imperfect Imperial cull of noticed-feral Orks (gated on `Confirmed` intel and spare capacity); and WAAAGH!-as-beacon spawning unmapped Ork worlds in empty tiles plus reinforcing fleets. Spec: §4.22. Open question: terminal Ork-controlled world state (§6.8).
 - **Tyranid Invasion & Biomass Consumption** (depends on the substrate) — `UniversallyHostile` Tyranid faction on a new `GrowthType.Consumption` (no birthrate; grows only by eating); Predate (proportional headcount kills) vs. Consume (degrade `CarryingCapacity` toward a new `MaximumCarryingCapacity`, slow recovery); depletion-driven troop allocation (fight → expand → predate+consume); doomed Genestealer Cult uprising (reveal-on-inbound, relocate to active-PDF neighbors, sacrificial predation with no growth); region-level Imperial hide/unhide with civilian emigration; the PDF made a defensive strategic actor (fortify/hold, weaker than the Guard §6.4); a strategic attrition combat model distinct from the tactical Battle engine; and the opening-scenario sequencing (cult reveal → pre-landing sim → authored beachhead → Navy strands the swarm → Gaussian post-landing sim → player arrival). Spec: §4.24. Open questions: breeding structures (§6.11), region-level going-public generalization (§6.12).
+- **Large-Scale NPC Combat** — NPC-only regional assaults above tactical scale resolve in
+  battle-value space against `RegionFaction.MilitaryStrength`, applying weekly attrition,
+  defender preparation, attacker aggression, and conquest/withdrawal outcomes without
+  generating transient tactical armies. This is the concrete strategic attrition model called
+  for by the Tyranid/PDF opening-scenario work; named player forces remain tactical. Spec:
+  `Design/LargeScaleNpcCombat.md`.
 
 ### 5.7 Post-0.7 Backlog
 

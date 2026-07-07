@@ -1,6 +1,7 @@
 ﻿using OnlyWar.Builders;
 using OnlyWar.Helpers;
 using OnlyWar.Helpers.Extensions;
+using OnlyWar.Helpers.StrategicCombat;
 using OnlyWar.Models;
 using OnlyWar.Models.Missions;
 using OnlyWar.Models.Orders;
@@ -110,8 +111,22 @@ public class FactionStrategyController
             regionalForceStates.Add(new RegionForceState(regionFaction, requiredGarrison, spareTroops));
         }
 
+        long organizedTotal = factionRegionsOnPlanet
+            .Sum(regionFaction => (long)(regionFaction.Population * regionFaction.Organization / 100.0f));
+        GameLog.Debug(() =>
+            $"AI plan {faction.Name}/{planet.Name}: posture={(defensiveOnly ? "defensive" : "offensive")}, "
+            + $"regions={factionRegionsOnPlanet.Count}, organized={organizedTotal}, "
+            + $"requiredGarrison={regionalForceStates.Sum(s => s.RequiredGarrison)}, spare={regionalForceStates.Sum(s => s.SpareTroops)}");
+        GameLog.Trace(() =>
+            $"AI plan {faction.Name}/{planet.Name}: force states "
+            + string.Join("; ", regionalForceStates.Select(s =>
+                $"{s.RegionFaction.Region.Name}:pop={s.RegionFaction.Population},mil={s.RegionFaction.MilitaryStrength},"
+                + $"org={s.RegionFaction.Organization},required={s.RequiredGarrison},spare={s.SpareTroops}")));
+
         if (defensiveOnly)
         {
+            bool underAssault = planet.IsUnderAssault();
+            int beforeOrders = allNewOrders.Count;
             if (planet.IsUnderAssault())
             {
                 // Under assault: dig in fully — fortifications, listening posts, organization.
@@ -125,6 +140,11 @@ public class FactionStrategyController
                 // maneuver (PRD §4.24).
                 GenerateBorderListeningPosts(faction, regionalForceStates, allNewOrders);
             }
+            GameLog.Debug(() =>
+                $"AI plan {faction.Name}/{planet.Name}: defensive choice="
+                + $"{(underAssault ? "under assault; full development" : "border listening posts")}, "
+                + $"ordersAdded={allNewOrders.Count - beforeOrders}, "
+                + $"construction={SummarizeConstructionOrders(allNewOrders.Skip(beforeOrders))}");
             return;
         }
 
@@ -149,7 +169,13 @@ public class FactionStrategyController
     private void PlanMajorOffensiveOnPlanet(Faction faction, Planet planet, List<RegionForceState> regionalForceStates, List<Order> allOrders)
     {
         var potentialOffensives = IdentifyPotentialOffensivesOnPlanet(faction, planet, regionalForceStates);
+        LogPotentialOffensives(faction, planet, potentialOffensives);
         (OffensivePlan plan, PotentialOffensive target) = DecideOffensivePlan(potentialOffensives, faction.Id);
+
+        GameLog.Debug(() =>
+            $"AI plan {faction.Name}/{planet.Name}: offensive choice={plan}"
+            + (target == null ? "" : $", target={DescribeOffensive(target)}, score={RewardRiskScore(target):F2}, "
+                + $"wellKnown={IsWellReconnoitred(target, faction.Id)}, winnable={IsWinnable(target)}"));
 
         switch (plan)
         {
@@ -202,11 +228,17 @@ public class FactionStrategyController
         var request = new ForceGenerationRequest
         {
             Faction = faction,
-            TargetBattleValue = target.AvailableAttackingForce,
+            TargetBattleValue = Math.Min(target.AvailableAttackingForce, StrategicCombatRules.NpcReconBattleValueCap),
             Profile = ForceCompositionProfile.AssaultForce
         };
         List<Squad> scouts = ForceGenerator.GenerateForce(request);
-        if (scouts.Count == 0) return;
+        if (scouts.Count == 0)
+        {
+            GameLog.Debug(() =>
+                $"AI recon {faction.Name}: target={DescribeOffensive(target)}, requestedBV={request.TargetBattleValue}, "
+                + "generated=0; no order created");
+            return;
+        }
 
         Region stagingRegion = target.AttackingRegions.First();
         foreach (Squad squad in scouts)
@@ -217,30 +249,75 @@ public class FactionStrategyController
         Mission mission = new Mission(MissionType.Recon, target.TargetFaction, 0);
         Order order = new Order(scouts, Disposition.Mobile, true, false, Aggression.Cautious, mission);
         allOrders.Add(order);
+        GameLog.Debug(() =>
+            $"AI recon {faction.Name}: target={DescribeOffensive(target)}, staging={stagingRegion.Name}, "
+            + $"requestedBV={request.TargetBattleValue}, generatedSquads={scouts.Count}, "
+            + $"generatedSoldiers={scouts.Sum(s => s.Members.Count)}, generatedBV={SquadBattleValue(scouts)}");
     }
 
     private void LaunchAssault(Faction faction, PotentialOffensive chosenOffensive, List<RegionForceState> regionalForceStates, List<Order> allOrders)
     {
-        int forceBattleValue = (int)(chosenOffensive.AvailableAttackingForce * (0.5 + (RNG.GetLinearDouble() * 0.25)));
-
-        var request = new ForceGenerationRequest { Faction = faction, TargetBattleValue = forceBattleValue, Profile = ForceCompositionProfile.AssaultForce };
-        List<Squad> generatedSquads = ForceGenerator.GenerateForce(request);
-        if (generatedSquads.Count == 0) return;
-
-        // The committed force leaves the staging regions in battle-value points — the same currency
-        // its survivors return or plant on taken ground, and that casualties are counted in (§4.24).
-        long committedBattleValue = generatedSquads.Sum(s => s.Members.Sum(m => m.Template.BattleValue));
+        long intendedBattleValue = (long)(chosenOffensive.AvailableAttackingForce * (0.5 + (RNG.GetLinearDouble() * 0.25)));
         long totalAvailableForAttack = chosenOffensive.AvailableAttackingForce;
-        if (totalAvailableForAttack <= 0) return;
+        if (intendedBattleValue <= 0 || totalAvailableForAttack <= 0)
+        {
+            GameLog.Debug(() =>
+                $"AI assault {faction.Name}: target={DescribeOffensive(chosenOffensive)}, "
+                + $"available={totalAvailableForAttack}, intended={intendedBattleValue}; no order created");
+            return;
+        }
 
         // Commit the force and draw it from each staging region's military pool (Population for a
         // horde, Garrison otherwise), split in proportion to what each region contributed.
-        foreach (var region in chosenOffensive.AttackingRegions)
+        List<StrategicCombatContribution> contributions = CommitAttackingForce(
+            chosenOffensive, regionalForceStates, intendedBattleValue);
+        long committedBattleValue = contributions.Sum(c => c.BattleValue);
+        if (committedBattleValue <= 0)
         {
-            var contributingState = regionalForceStates.First(s => s.RegionFaction.Region == region);
-            long contribution = (long)(committedBattleValue * (contributingState.SpareTroops / (float)totalAvailableForAttack));
-            contributingState.SpareTroops -= contribution;
-            region.RegionFactionMap[faction.Id].RemoveMilitaryStrength(contribution);
+            GameLog.Debug(() =>
+                $"AI assault {faction.Name}: target={DescribeOffensive(chosenOffensive)}, "
+                + $"available={totalAvailableForAttack}, intended={intendedBattleValue}; no force could be committed");
+            return;
+        }
+
+        bool useStrategicCombat = ShouldUseStrategicCombat(faction, chosenOffensive, committedBattleValue);
+        GameLog.Debug(() =>
+            $"AI assault {faction.Name}: target={DescribeOffensive(chosenOffensive)}, "
+            + $"available={totalAvailableForAttack}, intended={intendedBattleValue}, committed={committedBattleValue}, "
+            + $"mode={(useStrategicCombat ? "strategic" : "tactical")}, contributions={DescribeContributions(contributions)}");
+
+        if (useStrategicCombat)
+        {
+            StrategicCombatMission strategicMission = new(
+                chosenOffensive.TargetFaction,
+                faction,
+                committedBattleValue,
+                contributions,
+                Aggression.Normal,
+                faction.InvadesOnVictory);
+            allOrders.Add(new Order(new List<Squad>(), Disposition.Mobile, false, true, Aggression.Normal, strategicMission));
+            return;
+        }
+
+        var request = new ForceGenerationRequest { Faction = faction, TargetBattleValue = committedBattleValue, Profile = ForceCompositionProfile.AssaultForce };
+        List<Squad> generatedSquads = ForceGenerator.GenerateForce(request);
+        if (generatedSquads.Count == 0)
+        {
+            ReturnCommittedForce(contributions);
+            GameLog.Debug(() =>
+                $"AI assault {faction.Name}: target={DescribeOffensive(chosenOffensive)}, tactical generation failed; "
+                + $"returnedCommitted={committedBattleValue}");
+            return;
+        }
+
+        long generatedBattleValue = generatedSquads.Sum(s => s.Members.Sum(m => m.Template.BattleValue));
+        if (generatedBattleValue < committedBattleValue)
+        {
+            ReturnCommittedForceExcess(contributions, committedBattleValue - generatedBattleValue);
+            GameLog.Debug(() =>
+                $"AI assault {faction.Name}: target={DescribeOffensive(chosenOffensive)}, tactical generation shortfall="
+                + $"{committedBattleValue - generatedBattleValue}; generatedBV={generatedBattleValue}");
+            committedBattleValue = generatedBattleValue;
         }
 
         // Record the staging region on the assault force so its survivors know where to withdraw to
@@ -255,6 +332,151 @@ public class FactionStrategyController
         Mission newMission = new Mission(MissionType.Advance, chosenOffensive.TargetFaction, 0);
         Order newOrder = new Order(generatedSquads, Disposition.Mobile, false, true, Aggression.Normal, newMission);
         allOrders.Add(newOrder);
+        GameLog.Debug(() =>
+            $"AI assault {faction.Name}: tactical order created target={DescribeOffensive(chosenOffensive)}, "
+            + $"staging={stagingRegion.Name}, squads={generatedSquads.Count}, soldiers={generatedSquads.Sum(s => s.Members.Count)}, "
+            + $"battleValue={generatedBattleValue}");
+    }
+
+    internal static bool ShouldUseStrategicCombat(Faction attacker, PotentialOffensive offensive, long committedBattleValue)
+    {
+        if (attacker == null || offensive?.TargetFaction == null) return false;
+        if (attacker.IsPlayerFaction || offensive.TargetFaction.PlanetFaction.Faction.IsPlayerFaction) return false;
+        if (offensive.TargetFaction.LandedSquads.Any(s => s.Faction?.IsPlayerFaction == true)) return false;
+
+        long defenderBattleValue = offensive.DefenderBattleValue > 0
+            ? offensive.DefenderBattleValue
+            : CalculateDefenderBattleValue(offensive.TargetFaction);
+
+        if (committedBattleValue + defenderBattleValue >= StrategicCombatRules.MassCombatBattleValueFloor)
+        {
+            return true;
+        }
+
+        int estimatedAttackerSquads = EstimateGeneratedSquadCount(attacker, committedBattleValue);
+        int estimatedActors = EstimateGeneratedActorCount(attacker, committedBattleValue);
+        return estimatedAttackerSquads > StrategicCombatRules.MaxGeneratedSquads
+            || estimatedActors > StrategicCombatRules.MaxTacticalActors;
+    }
+
+    private static List<StrategicCombatContribution> CommitAttackingForce(
+        PotentialOffensive chosenOffensive,
+        List<RegionForceState> regionalForceStates,
+        long committedBattleValue)
+    {
+        var contributions = new List<StrategicCombatContribution>();
+        long totalAvailableForAttack = Math.Max(1, chosenOffensive.AvailableAttackingForce);
+        long remaining = committedBattleValue;
+        List<RegionForceState> contributingStates = chosenOffensive.AttackingRegions
+            .Select(region => regionalForceStates.FirstOrDefault(s => s.RegionFaction.Region == region))
+            .Where(state => state != null && state.SpareTroops > 0)
+            .ToList();
+
+        for (int i = 0; i < contributingStates.Count && remaining > 0; i++)
+        {
+            RegionForceState state = contributingStates[i];
+            long contribution = i == contributingStates.Count - 1
+                ? remaining
+                : (long)Math.Round(committedBattleValue * (state.SpareTroops / (double)totalAvailableForAttack));
+            contribution = Math.Min(contribution, Math.Min(state.SpareTroops, remaining));
+            if (contribution <= 0) continue;
+
+            state.SpareTroops -= contribution;
+            state.RegionFaction.RemoveMilitaryStrength(contribution);
+            contributions.Add(new StrategicCombatContribution(state.RegionFaction, contribution));
+            remaining -= contribution;
+        }
+
+        return contributions;
+    }
+
+    private static void ReturnCommittedForce(IEnumerable<StrategicCombatContribution> contributions)
+    {
+        foreach (StrategicCombatContribution contribution in contributions)
+        {
+            contribution.StagingFaction?.AddMilitaryStrength(contribution.BattleValue);
+        }
+    }
+
+    private static void ReturnCommittedForceExcess(IEnumerable<StrategicCombatContribution> contributions, long excess)
+    {
+        if (excess <= 0) return;
+        StrategicCombatContribution largest = contributions
+            .OrderByDescending(c => c.BattleValue)
+            .FirstOrDefault();
+        largest?.StagingFaction?.AddMilitaryStrength(excess);
+    }
+
+    private static int EstimateGeneratedSquadCount(Faction faction, long targetBattleValue)
+    {
+        int highestTemplateValue = faction.SquadTemplates.Values
+            .Where(t => (t.SquadType & SquadTypes.HQ) == 0)
+            .Select(t => t.BattleValue)
+            .DefaultIfEmpty(0)
+            .Max();
+        if (highestTemplateValue <= 0) return 0;
+        return (int)Math.Ceiling(targetBattleValue / (double)highestTemplateValue);
+    }
+
+    private static int EstimateGeneratedActorCount(Faction faction, long targetBattleValue)
+    {
+        var template = faction.SquadTemplates.Values
+            .Where(t => (t.SquadType & SquadTypes.HQ) == 0)
+            .OrderByDescending(t => t.BattleValue)
+            .FirstOrDefault();
+        if (template == null || template.BattleValue <= 0) return 0;
+        int squadCount = (int)Math.Ceiling(targetBattleValue / (double)template.BattleValue);
+        int actorsPerSquad = template.Elements.Sum(e => e.MaximumNumber);
+        return squadCount * actorsPerSquad;
+    }
+
+    private static void LogPotentialOffensives(Faction faction, Planet planet, List<PotentialOffensive> offensives)
+    {
+        GameLog.Debug(() =>
+            $"AI plan {faction.Name}/{planet.Name}: offensive candidates={offensives.Count}");
+        foreach (PotentialOffensive offensive in offensives)
+        {
+            GameLog.Trace(() =>
+                $"AI candidate {faction.Name}/{planet.Name}: {DescribeOffensive(offensive)}, "
+                + $"reward={offensive.Reward:F0}, score={RewardRiskScore(offensive):F2}, "
+                + $"intel={offensive.TargetFaction.GetObserverIntel(faction.Id):F2}/{ReconIntelThreshold:F2}, "
+                + $"wellKnown={IsWellReconnoitred(offensive, faction.Id)}, winnable={IsWinnable(offensive)}, "
+                + $"staging={string.Join(",", offensive.AttackingRegions.Select(r => r.Name))}");
+        }
+    }
+
+    private static string DescribeOffensive(PotentialOffensive offensive)
+    {
+        if (offensive == null) return "none";
+        return $"{offensive.TargetRegion.Planet.Name}/{offensive.TargetRegion.Name}/"
+            + $"{offensive.TargetFaction.PlanetFaction.Faction.Name} "
+            + $"available={offensive.AvailableAttackingForce}, defenderBV={offensive.DefenderBattleValue}, "
+            + $"estimatedDefenderBV={offensive.EstimatedDefenderBattleValue}";
+    }
+
+    private static string DescribeContributions(IEnumerable<StrategicCombatContribution> contributions)
+    {
+        var parts = contributions
+            .Where(c => c.BattleValue > 0)
+            .Select(c => $"{c.StagingFaction?.Region.Name ?? "unknown"}:{c.BattleValue}")
+            .ToList();
+        return parts.Count == 0 ? "none" : string.Join(",", parts);
+    }
+
+    private static long SquadBattleValue(IEnumerable<Squad> squads) =>
+        squads.Sum(squad => squad.Members.Sum(member => (long)member.Template.BattleValue));
+
+    private static string SummarizeConstructionOrders(IEnumerable<Order> orders)
+    {
+        List<ConstructionMission> missions = orders
+            .Select(o => o.Mission)
+            .OfType<ConstructionMission>()
+            .ToList();
+        if (missions.Count == 0) return "none";
+
+        return string.Join(", ", missions
+            .GroupBy(m => m.ConstructionType)
+            .Select(g => $"{g.Key}+{g.Sum(m => m.MissionSize)} ({g.Count()} orders)"));
     }
 
     private void GenerateDevelopmentOrders(List<RegionForceState> regionalForceStates, List<Order> allOrders)
@@ -304,6 +526,10 @@ public class FactionStrategyController
                 buildPointsAvailable -= minCost;
                 // Deduct the "manpower cost" of this construction from the available pool for this region
                 state.SpareTroops -= minCost * 100;
+                GameLog.Trace(() =>
+                    $"AI construction plan {state.RegionFaction.PlanetFaction.Faction.Name}/"
+                    + $"{state.RegionFaction.Region.Planet.Name}/{state.RegionFaction.Region.Name}: "
+                    + $"{mission.ConstructionType}+1, cost={minCost}, spareRemaining={state.SpareTroops}");
             }
         }
     }
@@ -340,6 +566,9 @@ public class FactionStrategyController
             allOrders.Add(new Order(new List<Squad>(), Disposition.DugIn, true, false, Aggression.Avoid,
                 new ConstructionMission(DefenseType.Detection, 1, state.RegionFaction)));
             state.SpareTroops -= detCost * 100L;
+            GameLog.Trace(() =>
+                $"AI border listening post {faction.Name}/{state.RegionFaction.Region.Planet.Name}/"
+                + $"{state.RegionFaction.Region.Name}: Detection+1, cost={detCost}, spareRemaining={state.SpareTroops}");
         }
     }
 
@@ -387,6 +616,10 @@ public class FactionStrategyController
                 state.RegionFaction.LandedSquads.Add(squad);
             }
             allOrders.Add(order);
+            GameLog.Debug(() =>
+                $"AI patrol {faction.Name}/{planet.Name}/{state.RegionFaction.Region.Name}: "
+                + $"targetBV={forceBattleValue}, squads={patrolSquads.Count}, "
+                + $"soldiers={patrolSquads.Sum(s => s.Members.Count)}, battleValue={SquadBattleValue(patrolSquads)}");
         }
     }
 
@@ -512,13 +745,13 @@ public class FactionStrategyController
         return score * (1.0 + offensive.TargetFaction.ProvocationLevel * 0.1);
     }
 
-    // Battle-value strength of a defending region faction: the garrison pool (already a
-    // battle-value-equivalent, 1:1 with headcount — §4.24) plus its landed squads weighted by
-    // their soldiers' battle value. A landed marine squad is worth far more than its headcount,
-    // so counting bodies here would badly understate an elite garrison.
+    // Battle-value strength of a defending region faction: its strategic military pool
+    // (Population for population-is-military hordes, Garrison for civilian-base factions) plus
+    // landed squads weighted by their soldiers' battle value. A landed marine squad is worth far
+    // more than its headcount, so counting bodies here would badly understate an elite garrison.
     internal static long CalculateDefenderBattleValue(RegionFaction defender)
     {
-        return defender.Garrison
+        return defender.MilitaryStrength
              + defender.LandedSquads.Sum(s => s.Members.Sum(m => (long)m.Template.BattleValue));
     }
 
