@@ -736,12 +736,13 @@ namespace OnlyWar.Helpers
                 // whose numbers are its army, otherwise Garrison — never its civilian population.
                 // Measured in battle value (the fallen defenders' point values) so a few elite
                 // losses weigh more than a mass of conscripts (PRD §4.24). Entrenchment still blunts
-                // the toll a stormed-into region actually suffers.
+                // the toll a stormed-into region actually suffers, with diminishing returns: level 5
+                // halves tactical casualties, and higher levels keep helping asymptotically.
                 long defenderCasualties = FallenBattleValue(context.OpposingSquads);
                 if (regionFaction.Entrenchment > 0)
                 {
-                    float ratio = 1.0f - Math.Min(regionFaction.Entrenchment / 10.0f, 1.0f);
-                    defenderCasualties = (long)(defenderCasualties * ratio);
+                    float casualtyMultiplier = 1.0f / (1.0f + regionFaction.Entrenchment / 5.0f);
+                    defenderCasualties = (long)(defenderCasualties * casualtyMultiplier);
                 }
                 long defenderStrengthBefore = regionFaction.MilitaryStrength;
                 regionFaction.RemoveMilitaryStrength(defenderCasualties);

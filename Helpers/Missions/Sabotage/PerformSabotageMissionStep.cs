@@ -17,7 +17,7 @@ namespace OnlyWar.Helpers.Missions.Sabotage
         {
             BaseSkill tactics = GameDataSingleton.Instance.GameRulesData.Skills.Tactics;
             RegionFaction enemyFaction = context.Order.Mission.RegionFaction;
-            float difficulty = enemyFaction.Entrenchment;
+            float difficulty = enemyFaction.Entrenchment * 0.5f;
             difficulty += (float)Math.Log10(enemyFaction.Garrison);
             LeaderMissionTest missionTest = new LeaderMissionTest(tactics, difficulty);
 

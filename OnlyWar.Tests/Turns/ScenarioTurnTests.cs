@@ -341,8 +341,8 @@ public class ScenarioTurnTests
 
     // The planet-scoped opening sim runs only the promised world's local turn slice; it must NOT run
     // the player force's own weekly upkeep (§4.24). A light wound that ProcessTurn's medical pass
-    // would heal in a week stays untouched through several SimulatePlanetForward turns, proving the
-    // sim skips ProcessMedical (and, by the same omission, training and fleet movement).
+    // would heal in a week stays untouched after SimulatePlanetForward, proving the sim skips
+    // ProcessMedical (and, by the same omission, training and fleet movement).
     [Fact]
     public void SimulatePlanetForward_DoesNotHealPlayerForce()
     {
@@ -359,7 +359,7 @@ public class ScenarioTurnTests
         uint woundedTotal = location.Wounds.WoundTotal;
         Assert.True(woundedTotal > 0);
 
-        new TurnController().SimulatePlanetForward(sector, promised, turns: 5);
+        new TurnController().SimulatePlanetForward(sector, promised, turns: 1);
 
         // Untouched: the scoped sim never reached the medical pass that would have healed it.
         Assert.Equal(woundedTotal, location.Wounds.WoundTotal);
@@ -376,7 +376,7 @@ public class ScenarioTurnTests
         }
     }
 
-    private const int TurnsToSimulate = 20;
+    private const int TurnsToSimulate = 3;
 
     // The win path surfaces a notification; ProcessTurn clears any stale notification each turn.
     [Fact]

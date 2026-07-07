@@ -497,13 +497,9 @@ public class FactionStrategyController
 
             // Project each defense's level as we plan this turn's builds. The stats themselves are
             // only applied later (ProcessConstructionOrders), so without projecting here the per-level
-            // cost stayed constant and the loop poured a region's whole budget into a single defense —
-            // and once a level passed ~30, the old (int)2^(level+1) cost overflowed to a NEGATIVE
-            // value, so `buildPointsAvailable -= minCost` grew the budget and the loop never
-            // terminated (a hang first seen when the opening-scenario sims handed a faction a large
-            // spare pool). Projecting the level makes the exponential cost rise as we plan, which
-            // self-limits how far a region's defenses can climb in one turn; DefenseBuildCost computes
-            // in long and caps out so it can never wrap.
+            // cost stayed constant and the loop poured a region's whole budget into a single defense.
+            // DefenseBuildCost rises by an order of magnitude per level and caps out before overflow,
+            // making high fortification levels rare strategic investments.
             int org = state.RegionFaction.Organization;
             int det = state.RegionFaction.Detection;
             int ent = state.RegionFaction.Entrenchment;
@@ -542,14 +538,24 @@ public class FactionStrategyController
         }
     }
 
-    // Exponential build cost 2^(level+1) for a defense stat, computed in long and capped so it can
-    // never overflow: at or past DefenseCostCapLevel the cost is treated as effectively infinite
-    // (unaffordable), which plateaus a defense rather than wrapping to a negative cost and spinning
-    // the development planner forever.
-    private const int DefenseCostCapLevel = 30;
+    // Exponential build cost for a defense stat: baseCost * 10^currentLevel. Computed in long and
+    // capped so it can never overflow; at or past DefenseCostCapLevel the cost is effectively
+    // infinite, plateauing a defense rather than wrapping negative and spinning the planner.
+    private const long DefenseBaseBuildCost = 2;
+    private const int DefenseCostCapLevel = 19;
     private static long DefenseBuildCost(int level)
     {
-        return level >= DefenseCostCapLevel ? long.MaxValue : 1L << (level + 1);
+        if (level < 0) level = 0;
+        if (level >= DefenseCostCapLevel) return long.MaxValue;
+
+        long cost = DefenseBaseBuildCost;
+        for (int i = 0; i < level; i++)
+        {
+            if (cost > long.MaxValue / 10) return long.MaxValue;
+            cost *= 10;
+        }
+
+        return cost;
     }
 
     // Peacetime PDF posture (PRD §4.24): before a world is formally under assault, a PDF that faces

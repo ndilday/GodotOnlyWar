@@ -40,7 +40,7 @@ namespace OnlyWar.Helpers.Missions.Recon
             // mod for equipment
             BaseSkill stealth = GameDataSingleton.Instance.GameRulesData.Skills.Stealth;
             RegionFaction enemyFaction = context.Order.Mission.RegionFaction;
-            float detection = enemyFaction.Detection;
+            float detection = enemyFaction.Detection * 0.5f;
             // every degree of magnitude of troops adds one to the difficulty
             float ownTroopMod = (float)Math.Log(context.MissionSquads.Sum(s => s.AbleSoldiers.Count), 10);
             // every degree of magnitude of enemy troops garrisoning the region adds to the difficulty
@@ -63,7 +63,7 @@ namespace OnlyWar.Helpers.Missions.Recon
             float margin = missionTest.RunMissionCheck(context.MissionSquads);
             GameLog.Trace(() =>
                 $"Recon stealth {DescribeFaction(context)} -> {DescribeTarget(context)} day {context.DaysElapsed}: "
-                + $"difficulty={difficulty:F2} (detection={detection:F0}, +ownTroops={ownTroopMod:F2}, "
+                + $"difficulty={difficulty:F2} (detection={detection:F2}, +ownTroops={ownTroopMod:F2}, "
                 + $"+garrison={garrisonMod:F2}, -intel={intelMod:F2}, +patrol={patrolMod:F2}), "
                 + $"bestStealthSkill={bestStealth:F2}, margin={margin:F2} -> {(margin > 0 ? "SLIPPED IN" : "DETECTED")}");
             if (margin > 0.0f)

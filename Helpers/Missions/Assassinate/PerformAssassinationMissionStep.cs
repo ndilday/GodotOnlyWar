@@ -22,7 +22,8 @@ namespace OnlyWar.Helpers.Missions.Assassinate
             // size 2: Broodlord
             // size 3: Hive Tyrant
             RegionFaction enemyFaction = context.Order.Mission.RegionFaction;
-            float difficulty = enemyFaction.Entrenchment + enemyFaction.Detection + (float)Math.Log10(enemyFaction.Garrison);
+            float difficulty = (enemyFaction.Entrenchment + enemyFaction.Detection) * 0.5f
+                + (float)Math.Log10(enemyFaction.Garrison);
             LeaderMissionTest missionTest = new LeaderMissionTest(tactics, difficulty);
             float margin = missionTest.RunMissionCheck(context.MissionSquads);
             
