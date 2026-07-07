@@ -5,3 +5,5 @@
 bin/
 obj/
 *.bak-*
+TestResults
+/default.s3db
