@@ -1349,18 +1349,6 @@ namespace OnlyWar.Helpers
                     regionFaction.Garrison += (long)(newPop * 0.025f);
                 }
             }
-            if (planet.IsUnderAssault())
-            {
-                // TODO: generalize this so that Imperial PDFs can build defenses as well
-                if (regionFaction.Organization == -1)
-                {
-                    // initialize the region faction
-                    regionFaction.Organization = 100;
-                    regionFaction.Detection = 1;
-                    regionFaction.Entrenchment = 1;
-                    regionFaction.AntiAir = 1;
-                }
-            }
         }
 
         private void CheckForPlanetaryRevolt(Planet planet)

@@ -205,7 +205,7 @@ namespace OnlyWar.Helpers.Database.GameState
                     bool isPublic = reader.GetBoolean(2);
                     long population = reader.GetInt64(3);
                     long garrison = reader.GetInt64(4);
-                    int organization = reader.GetInt32(5);
+                    int organization = Math.Max(1, reader.GetInt32(5));
                     int entrenchment = reader.GetInt32(6);
                     int detection = reader.GetInt32(7);
                     int antiAir = reader.GetInt32(8);

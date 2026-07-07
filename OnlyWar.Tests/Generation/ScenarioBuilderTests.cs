@@ -130,6 +130,24 @@ public class ScenarioBuilderTests
     }
 
     [Fact]
+    public void PromisedWorldCult_StartsWithHighIntelOnImperialRegions()
+    {
+        Sector sector = SectorBuilder.GenerateSector(1, _data, _date, "Informed Chapter");
+        Planet promised = sector.GetPlanet(sector.Scenario.PromisedPlanetId);
+        Faction cult = _data.SectorFactions.Infiltrator;
+        Faction imperial = _data.DefaultFaction;
+
+        List<RegionFaction> imperialRegions = promised.Regions
+            .Where(region => region.RegionFactionMap.ContainsKey(imperial.Id))
+            .Select(region => region.RegionFactionMap[imperial.Id])
+            .ToList();
+
+        Assert.NotEmpty(imperialRegions);
+        Assert.All(imperialRegions, regionFaction =>
+            Assert.True(regionFaction.GetObserverIntel(cult.Id) >= ScenarioRules.PromisedWorldCultStartingIntel));
+    }
+
+    [Fact]
     public void Stamp_IsDeterministicForSeed()
     {
         Sector first = SectorBuilder.GenerateSector(7, _data, _date, "Deterministic Chapter");

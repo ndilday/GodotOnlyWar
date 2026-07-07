@@ -156,8 +156,16 @@ public class FactionStrategyController
         GameLog.Trace(() => $"    plan {faction.Name}/{planet.Name}: offensive done ({allNewOrders.Count} orders)");
 
         // PRIORITY 3: PLAN DEVELOPMENT
-        GenerateDevelopmentOrders(regionalForceStates, allNewOrders);
-        GameLog.Trace(() => $"    plan {faction.Name}/{planet.Name}: development done ({allNewOrders.Count} orders)");
+        if (HasPublicEnemyOnPlanet(faction, planet))
+        {
+            GenerateDevelopmentOrders(regionalForceStates, allNewOrders);
+            GameLog.Trace(() => $"    plan {faction.Name}/{planet.Name}: development done ({allNewOrders.Count} orders)");
+        }
+        else
+        {
+            GameLog.Debug(() =>
+                $"AI plan {faction.Name}/{planet.Name}: development skipped; no public enemy threat on planet");
+        }
 
         // PRIORITY 4: PLAN RECON MISSIONS
         PlanPatrolMissionsOnPlanet(faction, planet, regionalForceStates, allNewOrders);
@@ -570,6 +578,14 @@ public class FactionStrategyController
                 $"AI border listening post {faction.Name}/{state.RegionFaction.Region.Planet.Name}/"
                 + $"{state.RegionFaction.Region.Name}: Detection+1, cost={detCost}, spareRemaining={state.SpareTroops}");
         }
+    }
+
+    private bool HasPublicEnemyOnPlanet(Faction faction, Planet planet)
+    {
+        return planet.Regions
+            .SelectMany(region => region.RegionFactionMap.Values)
+            .Any(regionFaction => regionFaction.IsPublic
+                                  && AreFactionsEnemies(faction, regionFaction.PlanetFaction.Faction));
     }
 
     private void PlanPatrolMissionsOnPlanet(Faction faction, Planet planet, List<RegionForceState> regionalForceStates, List<Order> allOrders)

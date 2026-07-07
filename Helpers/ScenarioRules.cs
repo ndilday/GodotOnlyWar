@@ -60,6 +60,12 @@ namespace OnlyWar.Helpers
         // the revolt — a larger share would represent a cult that should have revolted long ago, and
         // pushes an absurd fraction of the planet into open cult hands. Playtest-pending.
         public const float PromisedWorldCultStrengthFraction = 0.10f;
+
+        // The promised world's Cult has infiltrated the PDF and government before it rises, so it
+        // starts with enough per-region belief to choose assaults from knowledge rather than spending
+        // the opening sim repeatedly scouting what its agents should already understand.
+        public const float PromisedWorldCultStartingIntel = 3.0f;
+
         // Post-landing feeding runs for max(0, round(PostLandingTurnsMean + z)) weeks, z ~ N(0,1):
         // sometimes the player inherits a fresh beachhead, sometimes a month-eaten ruin.
         public const double PostLandingTurnsMean = 4.0;

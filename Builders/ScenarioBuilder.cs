@@ -43,6 +43,7 @@ namespace OnlyWar.Builders
             EnsureGenestealerCult(promised, data);
             StrengthenPromisedWorldCult(promised, data);
             RevealGenestealerCult(promised, data);
+            SeedPromisedWorldCultIntel(promised, data);
 
             // A single TurnController drives both planet-scoped sims (no player upkeep, no other
             // planets, no scenario resolution — see SimulatePlanetForward).
@@ -122,9 +123,8 @@ namespace OnlyWar.Builders
         // The infiltrated Genestealer Cult throws off concealment and rises in open revolt, calling
         // the hive fleet down. Mirrors the reveal in TurnController.CheckForPlanetaryRevolt: flip the
         // cult's PlanetFaction and each of its RegionFactions public. It has been waiting for this
-        // moment, so its cells are already mobilized — set Organization to 1 (from the seeded -1) so
-        // the cult fields offensive force immediately rather than sitting inert for a turn while the
-        // under-assault initializer would otherwise wake it. Idempotent if no cult is present
+        // moment, so its cells are already mobilized at Organization 1 and can field offensive force
+        // immediately. Idempotent if no cult is present
         // (EnsureGenestealerCult always seeds one first).
         private static void RevealGenestealerCult(Planet promised, GameRulesData data)
         {
@@ -154,6 +154,26 @@ namespace OnlyWar.Builders
         // the over-stretched Imperium can't spare a regiment for) and keeps the first objective off
         // the populous sector core. Fallbacks widen the band and, ultimately, reuse the old
         // lowest-population-enemy rule so generation can never fail.
+        // The promised-world cult has already infiltrated local government and PDF command. Give it
+        // strong per-region belief about every public non-cult force on the planet so its opening
+        // decisions model an insider revolt rather than a blind invader scouting from scratch.
+        private static void SeedPromisedWorldCultIntel(Planet promised, GameRulesData data)
+        {
+            Faction cultFaction = data.SectorFactions.Infiltrator;
+            if (!promised.PlanetFactionMap.ContainsKey(cultFaction.Id))
+            {
+                return;
+            }
+
+            foreach (RegionFaction regionFaction in promised.Regions
+                         .SelectMany(region => region.RegionFactionMap.Values)
+                         .Where(regionFaction => regionFaction.PlanetFaction.Faction.Id != cultFaction.Id
+                                                 && regionFaction.IsPublic))
+            {
+                regionFaction.AddObserverIntel(cultFaction.Id, ScenarioRules.PromisedWorldCultStartingIntel);
+            }
+        }
+
         private static Planet SelectPromisedWorld(List<Planet> planetList, GameRulesData data)
         {
             List<Planet> eligible = planetList

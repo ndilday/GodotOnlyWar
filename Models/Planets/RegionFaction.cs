@@ -84,7 +84,7 @@ namespace OnlyWar.Models.Planets
             PlanetFaction = planetFaction;
             Region = region;
             IsPublic = planetFaction.IsPublic;
-            Organization = -1;
+            Organization = 1;
         }
 
         // How well observerFactionId believes it knows this region faction's strength (0 = no intel).

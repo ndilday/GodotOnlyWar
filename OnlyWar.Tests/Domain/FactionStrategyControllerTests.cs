@@ -55,12 +55,26 @@ public class FactionStrategyControllerTests
     }
 
     [Fact]
-    public void GenerateFactionOrders_SpendsSpareTroopsOnDefensiveConstruction()
+    public void GenerateFactionOrders_PeacefulNpcDoesNotConstruct()
     {
         Faction enemy = CreateNonPlayerFaction();
-        // No adjacent enemy => zero required garrison => the full organized force is spare.
-        // The faction has no squad templates, so the only achievable orders are construction.
+        // No public enemy on the planet: the faction has spare force, but should not spend it on
+        // defenses when there is no active threat.
         Sector sector = BuildSectorWithSingleRegionFaction(enemy, population: 1000, organization: 100, isPublic: true);
+
+        List<Order> orders = new FactionStrategyController().GenerateFactionOrders(enemy, sector);
+
+        Assert.Empty(orders);
+    }
+
+    [Fact]
+    public void GenerateFactionOrders_ThreatenedNpcSpendsSpareTroopsOnDefensiveConstruction()
+    {
+        Faction enemy = CreateNonPlayerFaction();
+        Faction pdf = CreateDefaultFaction();
+        Sector sector = BuildSectorWithFactions(
+            (enemy, population: 1000, organization: 100, isPublic: true),
+            (pdf, population: 1000, organization: 100, isPublic: true));
 
         List<Order> orders = new FactionStrategyController().GenerateFactionOrders(enemy, sector);
 
@@ -73,8 +87,7 @@ public class FactionStrategyControllerTests
     public void GenerateFactionOrders_PerceivedThreatBonusPinsGarrisonAndSuppressesActivity()
     {
         Faction enemy = CreateNonPlayerFaction();
-        // Org 100, pop 1000 => 1000 organized troops, and no adjacent enemy, so normally the full
-        // force is spare and the faction builds defenses. A diversion's perceived-threat bonus that
+        // Org 100, pop 1000 => 1000 organized troops. A diversion's perceived-threat bonus that
         // exceeds the organized force should make the region feel it must hold everything as
         // garrison, leaving nothing spare and producing no orders.
         Sector sector = BuildSectorWithSingleRegionFaction(enemy, population: 1000, organization: 100, isPublic: true);
