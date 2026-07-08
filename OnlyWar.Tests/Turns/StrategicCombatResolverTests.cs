@@ -69,6 +69,38 @@ public class StrategicCombatResolverTests
     }
 
     [Fact]
+    public void Resolve_LightningRaidVictoryNeverEstablishesFoothold()
+    {
+        SectorSimulationFixture fixture = SectorSimulationFixture.Create();
+        RegionFaction staging = fixture.AddConsumptionFaction(0, population: 10_000, organization: 100);
+        Faction attacker = staging.PlanetFaction.Faction;
+        RegionFaction target = fixture.DefaultRegionFaction(1);
+        target.Garrison = 100;
+        long committed = 5_000;
+        long originalStaging = staging.MilitaryStrength;
+        staging.RemoveMilitaryStrength(committed);
+
+        StrategicCombatMission mission = new(
+            target,
+            attacker,
+            committed,
+            [new StrategicCombatContribution(staging, committed)],
+            Aggression.Cautious,
+            invadesOnVictory: true,
+            missionType: MissionType.LightningRaid);
+
+        StrategicCombatResult result = new StrategicCombatResolver(new FixedRNG()).Resolve(mission);
+
+        Assert.Equal(MissionType.LightningRaid, mission.MissionType);
+        Assert.Equal(StrategicCombatOutcome.Raided, result.Outcome);
+        Assert.True(result.AttackerWon);
+        Assert.False(result.ControlChanged);
+        Assert.False(target.Region.RegionFactionMap.ContainsKey(attacker.Id));
+        Assert.True(target.MilitaryStrength < 100);
+        Assert.Equal(originalStaging - result.AttackerLosses, staging.MilitaryStrength);
+    }
+
+    [Fact]
     public void Resolve_DefenderHoldReturnsSurvivorsToStaging()
     {
         SectorSimulationFixture fixture = SectorSimulationFixture.Create();

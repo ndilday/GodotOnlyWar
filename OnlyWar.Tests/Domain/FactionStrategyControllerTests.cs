@@ -1,8 +1,10 @@
 using System.Collections.Generic;
 using System.Drawing;
 using System.Linq;
+using OnlyWar.Builders;
 using OnlyWar.Helpers;
 using OnlyWar.Helpers.Extensions;
+using OnlyWar.Helpers.Missions.Raid;
 using OnlyWar.Helpers.StrategicCombat;
 using OnlyWar.Models;
 using OnlyWar.Models.Fleets;
@@ -68,7 +70,7 @@ public class FactionStrategyControllerTests
     }
 
     [Fact]
-    public void GenerateFactionOrders_ThreatenedNpcSpendsSpareTroopsOnDefensiveConstruction()
+    public void GenerateFactionOrders_ThreatenedNpcStillSpendsSpareTroopsOnDefensiveConstruction()
     {
         Faction enemy = CreateNonPlayerFaction();
         Faction pdf = CreateDefaultFaction();
@@ -79,8 +81,7 @@ public class FactionStrategyControllerTests
         List<Order> orders = new FactionStrategyController().GenerateFactionOrders(enemy, sector);
 
         Assert.NotEmpty(orders);
-        Assert.All(orders, o => Assert.IsType<ConstructionMission>(o.Mission));
-        Assert.All(orders, o => Assert.Empty(o.AssignedSquads));
+        Assert.Contains(orders, o => o.Mission is ConstructionMission && !o.AssignedSquads.Any());
     }
 
     [Fact]
@@ -296,6 +297,131 @@ public class FactionStrategyControllerTests
         long generatedBattleValue = reconOrder.AssignedSquads
             .Sum(s => s.Members.Sum(m => (long)m.Template.BattleValue));
         Assert.InRange(generatedBattleValue, 1, StrategicCombatRules.NpcReconBattleValueCap);
+    }
+
+    [Fact]
+    public void MissionStepOrchestrator_LightningRaidUsesRaidStep()
+    {
+        RegionFaction target = CreateTargetRegionFaction(CreateDefaultFaction(), population: 1_000, garrison: 100);
+        Squad squad = TestModelFactory.CreateSquad("Raiders",
+            TestModelFactory.CreateSoldier(TestModelFactory.MarineTemplate));
+        squad.CurrentRegion = target.Region;
+        Order order = new([squad], Disposition.Mobile, true, true, Aggression.Cautious,
+            new Mission(MissionType.LightningRaid, target, 0));
+        MissionContext context = new(order, [], []);
+
+        Assert.IsType<LightningRaidMissionStep>(MissionStepOrchestrator.GetMainInitialStep(context));
+    }
+
+    [Fact]
+    public void GenerateFactionOrders_CanCreateMultipleStrategicOffensivesOnOnePlanet()
+    {
+        RNG.Reset(1234);
+        Faction attacker = BuildFaction(20, "Swarm", isPlayer: false, isDefault: false, GrowthType.Consumption);
+        Faction defender = CreateDefaultFaction();
+        Planet planet = CreatePlanet();
+
+        Region stagingA = planet.Regions[0];
+        Region targetA = stagingA.GetAdjacentRegions().First();
+        Region stagingB = planet.Regions
+            .First(region => region != stagingA
+                             && region != targetA
+                             && region.GetAdjacentRegions().Any(adjacent => adjacent != stagingA && adjacent != targetA));
+        Region targetB = stagingB.GetAdjacentRegions().First(adjacent => adjacent != stagingA && adjacent != targetA);
+
+        AddRegionFaction(planet, stagingA, attacker, population: 10_000, organization: 100);
+        AddRegionFaction(planet, stagingB, attacker, population: 10_000, organization: 100);
+        AddRegionFaction(planet, targetA, defender, population: 100_000, organization: 100, garrison: 100);
+        AddRegionFaction(planet, targetB, defender, population: 100_000, organization: 100, garrison: 100);
+        planet.PlanetFactionMap[attacker.Id].SetRegionIntel(targetA, FactionStrategyController.ReconIntelThreshold);
+        planet.PlanetFactionMap[attacker.Id].SetRegionIntel(targetB, FactionStrategyController.ReconIntelThreshold);
+        Sector sector = new(CreatePlayerForce(), [], [planet], []);
+
+        List<Order> orders = new FactionStrategyController().GenerateFactionOrders(attacker, sector);
+
+        List<StrategicCombatMission> offensives = orders
+            .Select(order => order.Mission)
+            .OfType<StrategicCombatMission>()
+            .Where(mission => mission.MissionType == MissionType.Advance)
+            .ToList();
+        Assert.True(offensives.Count >= 2);
+        Assert.Contains(offensives, mission => mission.RegionFaction.Region == targetA);
+        Assert.Contains(offensives, mission => mission.RegionFaction.Region == targetB);
+    }
+
+    [Fact]
+    public void GenerateFactionOrders_KnownTooStrongTargetCreatesLightningRaid()
+    {
+        RNG.Reset(1234);
+        Faction attacker = BuildFaction(20, "Cult", isPlayer: false, isDefault: false, GrowthType.Conversion);
+        Faction defender = CreateDefaultFaction();
+        Planet planet = CreatePlanet();
+        Region staging = planet.Regions[0];
+        Region target = staging.GetAdjacentRegions().First();
+
+        AddRegionFaction(planet, staging, attacker, population: 10_000, organization: 100);
+        AddRegionFaction(planet, target, defender, population: 100_000, organization: 100, garrison: 10_000);
+        planet.PlanetFactionMap[attacker.Id].SetRegionIntel(target, FactionStrategyController.ReconIntelThreshold);
+        Sector sector = new(CreatePlayerForce(), [], [planet], []);
+
+        List<Order> orders = new FactionStrategyController().GenerateFactionOrders(attacker, sector);
+
+        StrategicCombatMission raid = Assert.Single(orders
+            .Select(order => order.Mission)
+            .OfType<StrategicCombatMission>(),
+            mission => mission.MissionType == MissionType.LightningRaid);
+        Assert.Same(target.RegionFactionMap[defender.Id], raid.RegionFaction);
+        Assert.False(raid.InvadesOnVictory);
+    }
+
+    [Fact]
+    public void GenerateFactionOrders_PullsFromLeastFlexibleAdjacentSourceFirst()
+    {
+        RNG.Reset(1234);
+        Faction attacker = BuildFaction(20, "Swarm", isPlayer: false, isDefault: false, GrowthType.Consumption);
+        Faction defender = CreateDefaultFaction();
+        Planet planet = CreatePlanet();
+        Region target = planet.Regions.First(region => region.GetAdjacentRegions().Count >= 2);
+        Region focusedSource = target.GetAdjacentRegions().First();
+        Region flexibleSource = target.GetAdjacentRegions().Skip(1).First();
+        Region extraTarget = flexibleSource.GetAdjacentRegions().First(region => region != target && region != focusedSource);
+
+        AddRegionFaction(planet, focusedSource, attacker, population: 5_000, organization: 100);
+        AddRegionFaction(planet, flexibleSource, attacker, population: 5_000, organization: 100);
+        AddRegionFaction(planet, target, defender, population: 1_000_000, organization: 100, garrison: 100);
+        AddRegionFaction(planet, extraTarget, defender, population: 1_000, organization: 100, garrison: 100);
+        planet.PlanetFactionMap[attacker.Id].SetRegionIntel(target, FactionStrategyController.ReconIntelThreshold);
+        planet.PlanetFactionMap[attacker.Id].SetRegionIntel(extraTarget, FactionStrategyController.ReconIntelThreshold);
+        Sector sector = new(CreatePlayerForce(), [], [planet], []);
+
+        new FactionStrategyController().GenerateFactionOrders(attacker, sector);
+
+        long focusedRemaining = focusedSource.RegionFactionMap[attacker.Id].MilitaryStrength;
+        long flexibleRemaining = flexibleSource.RegionFactionMap[attacker.Id].MilitaryStrength;
+        Assert.True(focusedRemaining < flexibleRemaining);
+    }
+
+    [Fact]
+    public void GenerateFactionOrders_CivilianOnlyEnemyRegionReinforcesAdjacentFront()
+    {
+        Faction attacker = BuildFaction(20, "Cult", isPlayer: false, isDefault: false, GrowthType.Conversion);
+        Faction defender = CreateDefaultFaction();
+        Planet planet = CreatePlanet();
+        Region source = planet.Regions[0];
+        Region destination = source.GetAdjacentRegions().First();
+        Region enemyFront = destination.GetAdjacentRegions().First(region => region != source);
+
+        AddRegionFaction(planet, source, attacker, population: 10_000, organization: 100);
+        AddRegionFaction(planet, destination, attacker, population: 1_000, organization: 100);
+        AddRegionFaction(planet, source, defender, population: 5_000, organization: 100, garrison: 0);
+        AddRegionFaction(planet, enemyFront, defender, population: 100_000, organization: 100, garrison: 10_000);
+        long destinationBefore = destination.RegionFactionMap[attacker.Id].MilitaryStrength;
+        Sector sector = new(CreatePlayerForce(), [], [planet], []);
+
+        new FactionStrategyController().GenerateFactionOrders(attacker, sector);
+
+        Assert.True(source.RegionFactionMap[attacker.Id].MilitaryStrength < 10_000);
+        Assert.True(destination.RegionFactionMap[attacker.Id].MilitaryStrength > destinationBefore);
     }
 
     [Fact]

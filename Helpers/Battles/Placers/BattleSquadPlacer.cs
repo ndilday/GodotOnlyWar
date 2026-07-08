@@ -1,6 +1,7 @@
 using OnlyWar.Models;
 ﻿using System;
 using System.Collections.Generic;
+using System.Linq;
 
 namespace OnlyWar.Helpers.Battles.Placers
 {
@@ -45,15 +46,18 @@ namespace OnlyWar.Helpers.Battles.Placers
         {
             Tuple<int, int> startingLocation = new Tuple<int, int>((short)(bottomLeft.Item1 + ((squadBoxSize.X - 1) / 2)),
                                                                            (short)(bottomLeft.Item2 + squadBoxSize.Y - 1));
+            int cellWidth = squad.AbleSoldiers.Max(s => s.Soldier.Template.Species.Width);
+            int cellDepth = squad.AbleSoldiers.Max(s => s.Soldier.Template.Species.Depth);
             for (int i = 0; i < squad.AbleSoldiers.Count; i++)
             {
                 ushort width = squad.AbleSoldiers[i].Soldier.Template.Species.Width;
                 ushort depth = squad.AbleSoldiers[i].Soldier.Template.Species.Depth;
-                int membersPerRow = Math.Max(1, squadBoxSize.X / width);
+                int membersPerRow = Math.Max(1, squadBoxSize.X / cellWidth);
                 int rowIndex = i / membersPerRow;
                 int columnIndex = i % membersPerRow;
-                int yMod = rowIndex * depth * (formationSide ? -1 : 1);
-                int xMod = (columnIndex * width) - ((squadBoxSize.X - width) / 2);
+                int yMod = rowIndex * cellDepth * (formationSide ? -1 : 1);
+                int xMod = (columnIndex * cellWidth) - ((squadBoxSize.X - cellWidth) / 2)
+                           + ((cellWidth - width) / 2);
 
                 List<Tuple<int, int>> soldierLocations = [];
                 for (int w = 0; w < width; w++)
@@ -80,15 +84,18 @@ namespace OnlyWar.Helpers.Battles.Placers
         {
             Tuple<int, int> startingLocation = new Tuple<int, int>((short)(bottomLeft.Item1 + squadBoxSize.Y - 1),
                                                                    (short)(bottomLeft.Item2 + ((squadBoxSize.X - 1) / 2)));
-            ushort width = squad.AbleSoldiers[0].Soldier.Template.Species.Width;
-            ushort depth = squad.AbleSoldiers[0].Soldier.Template.Species.Depth;
+            int cellWidth = squad.AbleSoldiers.Max(s => s.Soldier.Template.Species.Depth);
+            int cellDepth = squad.AbleSoldiers.Max(s => s.Soldier.Template.Species.Width);
             for (int i = 0; i < squad.AbleSoldiers.Count; i++)
             {
-                int membersPerColumn = Math.Max(1, squadBoxSize.X / width);
+                ushort width = squad.AbleSoldiers[i].Soldier.Template.Species.Width;
+                ushort depth = squad.AbleSoldiers[i].Soldier.Template.Species.Depth;
+                int membersPerColumn = Math.Max(1, squadBoxSize.X / cellDepth);
                 int rowIndex = i / membersPerColumn;
                 int columnIndex = i % membersPerColumn;
-                int xMod = rowIndex * depth * (formationSide ? -1 : 1);
-                int yMod = (columnIndex * width) - ((squadBoxSize.X - width) / 2);
+                int xMod = rowIndex * cellWidth * (formationSide ? -1 : 1);
+                int yMod = (columnIndex * cellDepth) - ((squadBoxSize.X - cellDepth) / 2)
+                           + ((cellDepth - width) / 2);
 
                 List<Tuple<int, int>> soldierLocations = [];
                 for (int w = 0; w < depth; w++)

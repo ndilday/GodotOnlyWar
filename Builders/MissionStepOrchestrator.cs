@@ -3,6 +3,7 @@ using OnlyWar.Helpers.Missions.Ambush;
 using OnlyWar.Helpers.Missions.Assassinate;
 using OnlyWar.Helpers.Missions.Assault;
 using OnlyWar.Helpers.Missions.Diversion;
+using OnlyWar.Helpers.Missions.Raid;
 using OnlyWar.Helpers.Missions.Recon;
 using OnlyWar.Helpers.Missions.Sabotage;
 using OnlyWar.Models.Missions;
@@ -33,6 +34,8 @@ namespace OnlyWar.Builders
             {
                 case MissionType.Advance:
                     return new PrepareAssaultMissionStep();
+                case MissionType.LightningRaid:
+                    return new LightningRaidMissionStep();
                 case MissionType.Ambush:
                     return new PositionAmbushMissionStep();
                 case MissionType.Assassination:

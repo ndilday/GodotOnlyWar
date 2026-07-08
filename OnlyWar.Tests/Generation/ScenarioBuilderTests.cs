@@ -13,10 +13,10 @@ using Xunit;
 
 namespace OnlyWar.Tests.Generation;
 
-// Coverage for the "Promised World" generation override (Design/OpeningScenario.md §3, step 2):
-// ScenarioBuilder.StampPromisedWorld, invoked from SectorBuilder.GenerateSector in place of the
-// old FoundTakebackPlanet prototype. The stamp invariants and full per-seed determinism are the
-// load-bearing guarantees for the opening.
+// Coverage for the "Promised World" generation override (Design/OpeningScenario.md section 3,
+// step 2): ScenarioBuilder.StampPromisedWorld, invoked from SectorBuilder.GenerateSector in place
+// of the old FoundTakebackPlanet prototype. The stamp invariants and full per-seed determinism are
+// the load-bearing guarantees for the opening.
 public class ScenarioBuilderTests
 {
     private readonly GameRulesData _data;
@@ -39,9 +39,13 @@ public class ScenarioBuilderTests
     }
 
     [Fact]
-    public void GenerateSector_StampsPromisedWorldScenario()
+    public void GenerateSector_Seed1ProducesPlayablePromisedWorldInvariants()
     {
         Sector sector = SectorBuilder.GenerateSector(1, _data, _date, "Promise Chapter");
+        Planet promised = sector.GetPlanet(sector.Scenario.PromisedPlanetId);
+        Faction tyranids = Tyranids;
+        Faction cult = _data.SectorFactions.Infiltrator;
+        Faction imperial = _data.DefaultFaction;
 
         Assert.NotNull(sector.Scenario);
         Assert.Equal(ScenarioType.PromisedWorld, sector.Scenario.Type);
@@ -51,19 +55,14 @@ public class ScenarioBuilderTests
         // The recorded authority is the sitting Sector Lord (the common path; seed 1 has a
         // sector capital with a governor).
         Assert.Equal(sector.GetSectorLord().Id, sector.Scenario.OriginalAuthorityCharacterId);
-    }
 
-    [Fact]
-    public void PromisedWorld_IsMajorityImperial()
-    {
-        Sector sector = SectorBuilder.GenerateSector(1, _data, _date, "Imperial Chapter");
-        Planet promised = sector.GetPlanet(sector.Scenario.PromisedPlanetId);
-        Faction imperial = _data.DefaultFaction;
+        // The founding seed (PRD 4.23 / Supply & Requisition Phase 1) is a generous,
+        // non-zero starting pool.
+        Assert.True(sector.PlayerForce.Army.Requisition > 0);
 
         // The world is invaded but not conquered: the Imperial populace still overwhelmingly
-        // outnumbers every invader on the planet. (Region-plurality is not used here — once the cult
-        // rises publicly it co-occupies the Imperial regions, so every region reads as contested;
-        // population is the durable "not yet conquered" measure.)
+        // outnumbers every invader on the planet. Region-plurality is not used here; once the cult
+        // rises publicly it co-occupies the Imperial regions, so every region reads as contested.
         long imperialPop = promised.Regions
             .Where(r => r.RegionFactionMap.ContainsKey(imperial.Id))
             .Sum(r => r.RegionFactionMap[imperial.Id].Population);
@@ -77,31 +76,18 @@ public class ScenarioBuilderTests
 
         Assert.True(imperialPop > largestInvaderPop,
             $"expected Imperial population {imperialPop} to exceed the largest invader's {largestInvaderPop}");
-    }
-
-    [Fact]
-    public void PromisedWorld_HasBoundedTyranidPresence()
-    {
-        Sector sector = SectorBuilder.GenerateSector(1, _data, _date, "Swarm Chapter");
-        Planet promised = sector.GetPlanet(sector.Scenario.PromisedPlanetId);
 
         // The stamp seeds MinTyranidRegions..MaxTyranidRegions regions, but generation then runs the
-        // post-landing sim, during which a now-fully-organized swarm (Organization = 100) actually
-        // spreads to fresh biomass — so the final count can exceed the stamped band. The invariants
-        // that must hold at hand-off: the swarm holds at least the stamp's floor, and it has not
-        // consumed the entire world (the player is handed a fight, not a lost cause).
-        int tyranidRegionCount = TyranidRegions(promised, Tyranids).Count;
-        Assert.True(tyranidRegionCount >= ScenarioRules.MinTyranidRegions,
-            $"expected at least {ScenarioRules.MinTyranidRegions} Tyranid regions, got {tyranidRegionCount}");
-        Assert.True(tyranidRegionCount < promised.Regions.Length,
+        // post-landing sim, during which a now-fully-organized swarm can spread to fresh biomass.
+        // The hand-off invariants: the swarm holds at least the stamp floor and not the whole world.
+        List<RegionFaction> tyranidFactions = TyranidRegions(promised, tyranids)
+            .Select(r => r.RegionFactionMap[tyranids.Id])
+            .ToList();
+        Assert.NotEmpty(tyranidFactions);
+        Assert.True(tyranidFactions.Count >= ScenarioRules.MinTyranidRegions,
+            $"expected at least {ScenarioRules.MinTyranidRegions} Tyranid regions, got {tyranidFactions.Count}");
+        Assert.True(tyranidFactions.Count < promised.Regions.Length,
             "the swarm should not hold the entire world at hand-off");
-    }
-
-    [Fact]
-    public void Fleet_StartsInOrbit_WithNoLandedSquads()
-    {
-        Sector sector = SectorBuilder.GenerateSector(1, _data, _date, "Orbit Chapter");
-        Planet promised = sector.GetPlanet(sector.Scenario.PromisedPlanetId);
 
         // Every player task force is in orbit over the promised world.
         List<TaskForce> playerForces = sector.PlayerForce.Fleet.TaskForces;
@@ -122,38 +108,14 @@ public class ScenarioBuilderTests
             .SelectMany(r => r.RegionFactionMap.Values)
             .SelectMany(rf => rf.LandedSquads);
         Assert.Empty(landed);
-    }
-
-    [Fact]
-    public void StampedTyranids_GrowByConsumption_NotAThrottle()
-    {
-        Sector sector = SectorBuilder.GenerateSector(1, _data, _date, "Consumption Chapter");
-        Planet promised = sector.GetPlanet(sector.Scenario.PromisedPlanetId);
-        Faction tyranids = Tyranids;
 
         // Tyranids are a Consumption faction: no organic birthrate, so the scenario applies no
-        // growth throttle (winnability comes from the finite stranded biomass budget — PRD §4.24).
+        // growth throttle. Winnability comes from the finite stranded biomass budget.
         Assert.Equal(GrowthType.Consumption, tyranids.GrowthType);
-        List<RegionFaction> tyranidFactions = TyranidRegions(promised, tyranids)
-            .Select(r => r.RegionFactionMap[tyranids.Id])
-            .ToList();
-        Assert.NotEmpty(tyranidFactions);
-
-        // The stamp leaves GrowthMultiplier at its default 1.0 everywhere — nothing in the sector
-        // is throttled (the general primitive stays available for organic-growth factions).
         IEnumerable<RegionFaction> allRegionFactions = sector.Planets.Values
             .SelectMany(p => p.Regions)
             .SelectMany(r => r.RegionFactionMap.Values);
         Assert.All(allRegionFactions, rf => Assert.Equal(1.0f, rf.GrowthMultiplier));
-    }
-
-    [Fact]
-    public void PromisedWorldCult_StartsWithHighIntelOnImperialRegions()
-    {
-        Sector sector = SectorBuilder.GenerateSector(1, _data, _date, "Informed Chapter");
-        Planet promised = sector.GetPlanet(sector.Scenario.PromisedPlanetId);
-        Faction cult = _data.SectorFactions.Infiltrator;
-        Faction imperial = _data.DefaultFaction;
 
         PlanetFaction cultPlanetFaction = promised.PlanetFactionMap[cult.Id];
         List<Region> imperialRegions = promised.Regions
@@ -162,13 +124,16 @@ public class ScenarioBuilderTests
 
         Assert.NotEmpty(imperialRegions);
         // The cult knows its home ground: it starts with strong awareness of every region holding a
-        // public Imperial force. (Seeded at reveal, before the pre-landing sim decays it a little.)
+        // public Imperial force. Seeded at reveal, before the pre-landing sim decays it a little.
         Assert.Contains(imperialRegions, region =>
             cultPlanetFaction.GetRegionIntel(region) > 0f);
     }
 
+    // The opening now plays out as a pre-/post-landing simulation during generation, so the promised
+    // world's final state is the product of several scoped turns of combat and growth. This guards
+    // both the stamped metadata and the final simulated board for deterministic replay.
     [Fact]
-    public void Stamp_IsDeterministicForSeed()
+    public void Stamp_AndSimulatedBoard_AreDeterministicForSeed()
     {
         Sector first = SectorBuilder.GenerateSector(7, _data, _date, "Deterministic Chapter");
         Sector second = SectorBuilder.GenerateSector(7, _data, _date, "Deterministic Chapter");
@@ -186,18 +151,6 @@ public class ScenarioBuilderTests
                 second.GetPlanet(second.Scenario.PromisedPlanetId), tyranids)
             .Select(r => r.Id).OrderBy(id => id).ToList();
         Assert.Equal(firstStamped, secondStamped);
-    }
-
-    // The opening now plays out as a pre-/post-landing simulation during generation (§4.24), so the
-    // promised world's final state is the product of several scoped turns of combat and growth. That
-    // whole sequence must remain deterministic per seed: two generations of the same seed must land
-    // on an identical region-faction population map, not merely the same stamped region set.
-    [Fact]
-    public void Stamp_SimulatedBoardIsDeterministicForSeed()
-    {
-        Sector first = SectorBuilder.GenerateSector(7, _data, _date, "Determinism Chapter");
-        Sector second = SectorBuilder.GenerateSector(7, _data, _date, "Determinism Chapter");
-
         Assert.Equal(RegionFactionPopulations(first), RegionFactionPopulations(second));
     }
 
@@ -213,17 +166,12 @@ public class ScenarioBuilderTests
             .ToList();
     }
 
-    // Regression: the opening now runs a scoped pre-/post-landing simulation during generation
-    // (§4.24), which drives real NPC recon/combat on the promised world. A recon that is detected by
-    // a region with no squads to scramble produced an empty OpFor, and the downstream battle steps
-    // (MeetingEngagement/Ambushed) assumed a non-empty OpposingSquads and threw — so generation
-    // itself crashed for some seeds (seed 3 was the first repro). This runs a spread of seeds end to
-    // end; the assertion is simply that every one generates a valid, pending scenario without an
-    // exception. NOTE: whether the promised world is still majority-Imperial at hand-off is now
-    // seed-dependent — with fully-mobilized enemies (Organization = 100) the sim is aggressive enough
-    // that some seeds tip the world out of Imperial control before the player arrives (a balance-
-    // tuning concern, playtest-pending — §8). The majority-Imperial guarantee is asserted separately
-    // for a known-good seed by PromisedWorld_IsMajorityImperial, not here.
+    // Regression: the opening now runs a scoped pre-/post-landing simulation during generation,
+    // which drives real NPC recon/combat on the promised world. A recon that is detected by a region
+    // with no squads to scramble produced an empty OpFor, and the downstream battle steps assumed a
+    // non-empty OpposingSquads and threw, so generation itself crashed for some seeds (seed 3 was
+    // the first repro). This broad seed spread remains intact for now; slow-test splitting is a
+    // separate follow-up.
     [Theory]
     [InlineData(1)]
     [InlineData(2)]
@@ -238,12 +186,12 @@ public class ScenarioBuilderTests
 
         Assert.NotNull(sector.Scenario);
         Assert.Equal(ObjectiveState.Pending, sector.Scenario.State);
-        // A valid, playable promised world exists (control is seed-dependent — see note above).
+        // A valid, playable promised world exists. Control is seed-dependent.
         Assert.NotNull(sector.GetPlanet(sector.Scenario.PromisedPlanetId));
     }
 
     // The planet-scoped sim must touch only the target world: a second planet's populations are left
-    // exactly as generated (§4.24 — the pre/post-landing sims are scoped to the promised planet only).
+    // exactly as generated.
     [Fact]
     public void SimulatePlanetForward_LeavesOtherPlanetsUntouched()
     {

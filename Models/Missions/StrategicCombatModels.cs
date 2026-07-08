@@ -39,8 +39,9 @@ namespace OnlyWar.Models.Missions
             long committedBattleValue,
             IEnumerable<StrategicCombatContribution> contributions,
             Aggression aggression,
-            bool invadesOnVictory)
-            : base(MissionType.Advance, target, 0)
+            bool invadesOnVictory,
+            MissionType missionType = MissionType.Advance)
+            : base(missionType, target, 0)
         {
             Attacker = attacker;
             CommittedBattleValue = committedBattleValue < 0 ? 0 : committedBattleValue;
@@ -49,7 +50,7 @@ namespace OnlyWar.Models.Missions
                 .ToList()
                 .AsReadOnly();
             Aggression = aggression;
-            InvadesOnVictory = invadesOnVictory;
+            InvadesOnVictory = missionType == MissionType.LightningRaid ? false : invadesOnVictory;
         }
     }
 

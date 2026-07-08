@@ -1,6 +1,7 @@
 using OnlyWar.Models;
 ﻿using System;
 using System.Collections.Generic;
+using System.Linq;
 
 namespace OnlyWar.Helpers.Battles.Placers
 {
@@ -18,9 +19,14 @@ namespace OnlyWar.Helpers.Battles.Placers
                                                             IEnumerable<BattleSquad> topSquads)
         {
             Dictionary<BattleSquad, Tuple<int, int>> result = [];
+            List<BattleSquad> bottom = bottomSquads.ToList();
+            List<BattleSquad> top = topSquads.ToList();
+            int bottomDepth = bottom.Select(s => (int)s.GetSquadBoxSize().Y).DefaultIfEmpty(0).Max();
+            int topDepth = top.Select(s => (int)s.GetSquadBoxSize().Y).DefaultIfEmpty(0).Max();
+            ushort effectiveRange = (ushort)Math.Max(_range, bottomDepth + topDepth + 1);
 
-            PlaceSquads(bottomSquads, new Coordinate(0, 0), false, true, result);
-            PlaceSquads(topSquads, new Coordinate(0, _range), true, false, result);
+            PlaceSquads(bottom, new Coordinate(0, 0), false, true, result);
+            PlaceSquads(top, new Coordinate(0, effectiveRange), true, false, result);
 
             
             return result;
@@ -44,12 +50,12 @@ namespace OnlyWar.Helpers.Battles.Placers
                     // if isTop, then we are placing the squad above the starting point
                     if (isTop)
                     {
-                        BattleSquadPlacer.PlaceBattleSquad(_grid, squad, new Tuple<int, int>(leftLimit, verticalLimit), true, tacticalSide);
+                        int bottom = verticalLimit - squadSize.Y + 1;
+                        BattleSquadPlacer.PlaceBattleSquad(_grid, squad, new Tuple<int, int>(leftLimit, bottom), true, tacticalSide, true);
                     }
                     else
                     {
-                        ushort bottom = (ushort)(verticalLimit - squadSize.Y);
-                        BattleSquadPlacer.PlaceBattleSquad(_grid, squad, new Tuple<int, int>(leftLimit, bottom), true, tacticalSide);
+                        BattleSquadPlacer.PlaceBattleSquad(_grid, squad, new Tuple<int, int>(leftLimit, verticalLimit), true, tacticalSide, false);
 
                     }
                 }
@@ -59,12 +65,12 @@ namespace OnlyWar.Helpers.Battles.Placers
                     rightLimit += 1;
                     if (isTop)
                     {
-                        BattleSquadPlacer.PlaceBattleSquad(_grid, squad, new Tuple<int, int>(rightLimit, verticalLimit), true, tacticalSide);
+                        int bottom = verticalLimit - squadSize.Y + 1;
+                        BattleSquadPlacer.PlaceBattleSquad(_grid, squad, new Tuple<int, int>(rightLimit, bottom), true, tacticalSide, true);
                     }
                     else
                     {
-                        ushort bottom = (ushort)(verticalLimit - squadSize.Y);
-                        BattleSquadPlacer.PlaceBattleSquad(_grid, squad, new Tuple<int, int>(rightLimit, bottom), true, tacticalSide);
+                        BattleSquadPlacer.PlaceBattleSquad(_grid, squad, new Tuple<int, int>(rightLimit, verticalLimit), true, tacticalSide, false);
                     }
                 }
             }

@@ -7,7 +7,6 @@ using OnlyWar.Helpers.Database.GameState;
 using OnlyWar.Helpers.Extensions;
 using OnlyWar.Models;
 using OnlyWar.Models.Planets;
-using OnlyWar.Models.Units;
 using OnlyWar.Tests.Fixtures;
 using Xunit;
 
@@ -21,12 +20,14 @@ public class GovernanceHierarchyTests
 {
     private readonly GameRulesData _data;
     private readonly Date _date = new(39, 500, 1);
+    private readonly GameStateRoundTripFixture _roundTrip;
 
     public GovernanceHierarchyTests()
     {
         Directory.SetCurrentDirectory(RulesDatabaseFixture.RepositoryRoot);
         _data = new GameRulesData();
         GameDataSingleton.Instance.LoadGameDataFromBlob(_data, _date, null);
+        _roundTrip = new GameStateRoundTripFixture(_data, _date);
     }
 
     [Fact]
@@ -120,21 +121,16 @@ public class GovernanceHierarchyTests
     {
         Sector sector = SectorBuilder.GenerateSector(1, _data, _date, "Round Trip Governance Chapter");
         GameDataSingleton.Instance.LoadGameDataFromBlob(_data, _date, sector);
-        Unit armyRoot = sector.PlayerForce.Army.OrderOfBattle;
-        if (!_data.PlayerFaction.Units.Contains(armyRoot))
-        {
-            _data.PlayerFaction.Units.Add(armyRoot);
-        }
+        _roundTrip.RegisterPlayerArmy(sector);
 
         int originalCapitalId = sector.GetSectorCapital().Id;
         int originalLordId = sector.GetSectorLord().Id;
 
-        string dbPath = Path.Combine(
-            Path.GetTempPath(), $"onlywar_governance_roundtrip_{Guid.NewGuid():N}.s3db");
+        string dbPath = GameStateRoundTripFixture.CreateTempDbPath("onlywar_governance_roundtrip");
         try
         {
-            Save(sector, dbPath, _data.Factions.SelectMany(f => f.Units).ToList());
-            GameStateDataBlob loaded = Load(dbPath);
+            _roundTrip.Save(sector, dbPath, _roundTrip.CurrentUnits);
+            GameStateDataBlob loaded = _roundTrip.Load(dbPath);
 
             // Reconstruct the sector exactly as StartMenu.LoadGameData does, then rebuild
             // the derived warp network + governance designation from the persisted planets.
@@ -153,67 +149,7 @@ public class GovernanceHierarchyTests
         }
         finally
         {
-            Microsoft.Data.Sqlite.SqliteConnection.ClearAllPools();
-            try
-            {
-                if (File.Exists(dbPath))
-                {
-                    File.Delete(dbPath);
-                }
-            }
-            catch (IOException)
-            {
-                // Best-effort cleanup of a temp file; ignore if still locked.
-            }
+            GameStateRoundTripFixture.CleanupDb(dbPath);
         }
-    }
-
-    private void Save(Sector sector, string dbPath, IEnumerable<Unit> units)
-    {
-        string schemaPath = Path.Combine(
-            RulesDatabaseFixture.RepositoryRoot, "Database", "SaveStructure.sql");
-        GameStateDataAccess.Instance.SaveData(
-            dbPath,
-            _date,
-            sector.PlayerForce.Army.Requisition,
-            sector.PlayerForce.GeneseedStockpile,
-            sector.PlayerForce.GeneseedPurity,
-            sector.Scenario,
-            sector.PlayerForce.Army.MedicalProcedures,
-            sector.Characters,
-            sector.PlayerForce.Requests,
-            sector.Planets.Values,
-            sector.Fleets.Values,
-            units,
-            sector.PlayerForce.Army.PlayerSoldierMap.Values,
-            sector.PlayerForce.Army.FallenBrothers.Values,
-            sector.PlayerForce.BattleHistory,
-            schemaPath);
-    }
-
-    private GameStateDataBlob Load(string dbPath)
-    {
-        var shipTemplateMap = _data.Factions.Where(f => f.ShipTemplates != null)
-            .SelectMany(f => f.ShipTemplates.Values).ToDictionary(s => s.Id);
-        var unitTemplateMap = _data.Factions.Where(f => f.UnitTemplates != null)
-            .SelectMany(f => f.UnitTemplates.Values).ToDictionary(u => u.Id);
-        var squadTemplateMap = _data.Factions.Where(f => f.SquadTemplates != null)
-            .SelectMany(f => f.SquadTemplates.Values).ToDictionary(s => s.Id);
-        var hitLocations = _data.BodyHitLocationTemplateMap.Values.SelectMany(hl => hl)
-            .Distinct().ToDictionary(hl => hl.Id);
-        var soldierTypeMap = _data.Factions.Where(f => f.SoldierTemplates != null)
-            .SelectMany(f => f.SoldierTemplates.Values).ToDictionary(st => st.Id);
-
-        return GameStateDataAccess.Instance.GetData(
-            dbPath,
-            _data.Factions.ToDictionary(f => f.Id),
-            _data.PlanetTemplateMap,
-            shipTemplateMap,
-            unitTemplateMap,
-            squadTemplateMap,
-            _data.WeaponSets,
-            hitLocations,
-            _data.BaseSkillMap,
-            soldierTypeMap);
     }
 }

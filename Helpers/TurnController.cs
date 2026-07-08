@@ -812,7 +812,11 @@ namespace OnlyWar.Helpers
         // assaults use persistent roster squads and are handled by the normal squad lifecycle.
         private static void ResolveOffensiveSurvivors(MissionContext context)
         {
-            if (context.Order.Mission.MissionType != MissionType.Advance) return;
+            if (context.Order.Mission.MissionType != MissionType.Advance
+                && context.Order.Mission.MissionType != MissionType.LightningRaid)
+            {
+                return;
+            }
             BattleSquad first = context.MissionSquads.FirstOrDefault();
             if (first == null || first.IsPlayerSquad) return;
 
@@ -820,7 +824,7 @@ namespace OnlyWar.Helpers
             if (survivors <= 0) return; // the offensive was wiped out — nothing returns or holds
 
             Faction attacker = first.Squad.Faction;
-            if (attacker.InvadesOnVictory)
+            if (context.Order.Mission.MissionType == MissionType.Advance && attacker.InvadesOnVictory)
             {
                 EstablishInvaderPresence(attacker, context.Order.Mission.RegionFaction.Region, survivors);
                 GameLog.Debug(() =>
@@ -1682,7 +1686,8 @@ namespace OnlyWar.Helpers
                 if (!planetFaction.IsPublic
                     || planetFaction == controllingPlanetFaction
                     || planetFaction.Faction.IsDefaultFaction
-                    || planetFaction.Faction.IsPlayerFaction)
+                    || planetFaction.Faction.IsPlayerFaction
+                    || planetFaction.Faction.GrowthType != GrowthType.Conversion)
                 {
                     continue;
                 }

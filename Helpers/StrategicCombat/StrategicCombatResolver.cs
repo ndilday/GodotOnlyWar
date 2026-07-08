@@ -26,7 +26,7 @@ namespace OnlyWar.Helpers.StrategicCombat
             RegionFaction target = mission.RegionFaction;
             Faction attacker = mission.Attacker;
             long committed = Math.Max(0, mission.CommittedBattleValue);
-            long defenderBattleValue = CalculateDefenderBattleValue(target);
+            long defenderBattleValue = CalculateEngagedDefenderBattleValue(mission, target);
 
             // Surprise from the attacker/defender awareness differential (StrategicCombatRules): a
             // faction attacking a region it understands better than the defender sees its own ground
@@ -134,6 +134,24 @@ namespace OnlyWar.Helpers.StrategicCombat
                 .Sum(soldier => (long)soldier.Template.BattleValue);
 
             return defender.MilitaryStrength + landedNpcBattleValue;
+        }
+
+        private static long CalculateEngagedDefenderBattleValue(StrategicCombatMission mission, RegionFaction target)
+        {
+            long fullDefenderBattleValue = CalculateDefenderBattleValue(target);
+            if (mission.MissionType != MissionType.LightningRaid || fullDefenderBattleValue <= 0)
+            {
+                return fullDefenderBattleValue;
+            }
+
+            double attackerIntel = target.Region.GetFactionRegionIntel(mission.Attacker);
+            double defenderIntel = target.GetOwnRegionIntel();
+            double intelEdge = Math.Clamp(attackerIntel - defenderIntel, -2.0, 4.0);
+            double exposedShare = Math.Clamp(0.40 + intelEdge * 0.08, 0.25, 0.75);
+            long exposedDefenders = (long)Math.Round(fullDefenderBattleValue * exposedShare);
+            long manageableDefenders = (long)Math.Round(mission.CommittedBattleValue * 1.25);
+
+            return Math.Max(1, Math.Min(fullDefenderBattleValue, Math.Min(exposedDefenders, manageableDefenders)));
         }
 
         public static double CalculateAttackerEffectiveStrength(StrategicCombatMission mission)
