@@ -246,7 +246,7 @@ public partial class OrderDialogController : Control
             DefenseType defenseType = args.Item2 switch
             {
                 -5 => DefenseType.Entrenchment,
-                -6 => DefenseType.Detection,
+                -6 => DefenseType.ListeningPost,
                 _ => DefenseType.AntiAir
             };
             mission = new ConstructionMission(defenseType, 0, GetOrCreatePlayerRegionFaction(selectedRegion));

@@ -1,3 +1,4 @@
+using OnlyWar.Helpers.Extensions;
 using OnlyWar.Helpers.Missions.Recon;
 using OnlyWar.Models;
 using OnlyWar.Models.Missions;
@@ -23,7 +24,7 @@ namespace OnlyWar.Helpers.Missions
             // mod for equipment
             BaseSkill stealth = GameDataSingleton.Instance.GameRulesData.Skills.Stealth;
             RegionFaction enemyFaction = context.Order.Mission.RegionFaction;
-            float difficulty = enemyFaction.Detection * 0.5f;
+            float difficulty = enemyFaction.GetOwnRegionIntel() * 0.5f;
             // every degree of magnitude of troops adds one to the difficulty
             difficulty += (float)Math.Log(context.MissionSquads.Sum(s => s.AbleSoldiers.Count), 10);
             // every degree of magnitude of enemy troops garrisoning the region adds to the difficulty

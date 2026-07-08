@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using OnlyWar.Helpers.Extensions;
 using OnlyWar.Models;
 using OnlyWar.Models.Missions;
 using OnlyWar.Models.Planets;
@@ -25,7 +26,17 @@ namespace OnlyWar.Helpers.StrategicCombat
             long committed = Math.Max(0, mission.CommittedBattleValue);
             long defenderBattleValue = CalculateDefenderBattleValue(target);
 
-            double attackerEffective = CalculateAttackerEffectiveStrength(mission);
+            // Surprise from the attacker/defender awareness differential (StrategicCombatRules): a
+            // faction attacking a region it understands better than the defender sees its own ground
+            // strikes with an edge — the "attacking from within" advantage of a freshly-risen cult
+            // against a blind PDF. It fades as the defender builds awareness (listening posts, patrols,
+            // recon). Applied to the attacker's effective strength so it shifts both the win check and
+            // the casualty exchange.
+            double attackerIntel = target.Region.GetFactionRegionIntel(attacker);
+            double defenderIntel = target.GetOwnRegionIntel();
+            double surprise = StrategicCombatRules.AmbushSurpriseMultiplier(attackerIntel, defenderIntel);
+
+            double attackerEffective = CalculateAttackerEffectiveStrength(mission) * surprise;
             double defenderEffective = CalculateDefenderEffectiveStrength(target, defenderBattleValue);
 
             double attackerRoll = attackerEffective * Math.Exp(_rng.NextRandomZValue() * StrategicCombatRules.CombatSigma);
@@ -71,6 +82,22 @@ namespace OnlyWar.Helpers.StrategicCombat
                 outcome = attackerWon ? StrategicCombatOutcome.Raided : StrategicCombatOutcome.DefenderHeld;
             }
 
+            // Reactive awareness: a defender that survives the assault learns which regions the enemy
+            // staged from, so a previously-blind neighbour can be garrisoned next turn even without a
+            // deliberate recon (FactionStrategyController.CalculateRequiredGarrison).
+            if (!controlChanged && mission.Contributions != null)
+            {
+                foreach (StrategicCombatContribution contribution in mission.Contributions)
+                {
+                    Region stagingRegion = contribution.StagingFaction?.Region;
+                    if (stagingRegion != null)
+                    {
+                        target.PlanetFaction.AddRegionIntel(
+                            stagingRegion, StrategicCombatRules.IntelGainedFromBeingAttacked);
+                    }
+                }
+            }
+
             return new StrategicCombatResult(
                 target,
                 attacker,
@@ -111,8 +138,7 @@ namespace OnlyWar.Helpers.StrategicCombat
             return defenderBattleValue
                 * StrategicCombatRules.DefenderReadiness(defender.Organization)
                 * StrategicCombatRules.FactionQuality(defender.PlanetFaction.Faction)
-                * StrategicCombatRules.EntrenchmentMultiplier(defender.Entrenchment)
-                * StrategicCombatRules.DetectionMultiplier(defender.Detection);
+                * StrategicCombatRules.EntrenchmentMultiplier(defender.Entrenchment);
         }
 
         private static long ClampLoss(long calculatedLoss, long availableStrength, double opposingEffectiveStrength)

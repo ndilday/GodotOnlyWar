@@ -1,3 +1,4 @@
+using OnlyWar.Helpers.Extensions;
 using OnlyWar.Helpers.Missions.Recon;
 using OnlyWar.Models.Missions;
 using OnlyWar.Models.Planets;
@@ -22,13 +23,14 @@ namespace OnlyWar.Helpers.Missions.Assassinate
             // mod for equipment
             BaseSkill stealth = GameDataSingleton.Instance.GameRulesData.Skills.Stealth;
             RegionFaction enemyFaction = context.Order.Mission.RegionFaction;
-            float difficulty = enemyFaction.Detection * 0.5f;
+            float difficulty = enemyFaction.GetOwnRegionIntel() * 0.5f;
             // every degree of magnitude of troops adds one to the difficulty
             difficulty += (float)Math.Log(context.MissionSquads.Sum(s => s.AbleSoldiers.Count), 10);
             // every degree of magnitude of enemy troops garrisoning the region adds to the difficulty
             difficulty += (float)Math.Log(enemyFaction.Garrison, 10);
-            // intelligence makes it easier to find a good ambush spot
-            difficulty -= context.Order.Mission.RegionFaction.Region.IntelligenceLevel;
+            // the attacker's own knowledge of the region makes it easier to find a good ambush spot
+            Faction attacker = context.MissionSquads.FirstOrDefault()?.Squad.Faction;
+            if (attacker != null) difficulty -= enemyFaction.Region.GetFactionRegionIntel(attacker);
             SquadMissionTest missionTest = new SquadMissionTest(stealth, difficulty);
 
             context.DaysElapsed++;

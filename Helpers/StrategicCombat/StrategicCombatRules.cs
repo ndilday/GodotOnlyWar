@@ -50,8 +50,24 @@ namespace OnlyWar.Helpers.StrategicCombat
         public static double EntrenchmentMultiplier(int entrenchment) =>
             Math.Min(3.0, 1.0 + Math.Max(0, entrenchment) * 0.10);
 
-        public static double DetectionMultiplier(int detection) =>
-            Math.Min(1.5, 1.0 + Math.Max(0, detection) * 0.02);
+        // Per point of intel advantage the attacker holds over the defender, and the cap on the
+        // resulting surprise bonus. This replaces the old flat defender DetectionMultiplier: a
+        // defender's awareness no longer makes it intrinsically stronger, it only denies the attacker
+        // surprise. When the attacker understands the battlespace better than the defender sees its
+        // own ground (a cult rising from within a blind PDF region), the attacker strikes with an
+        // edge that fades as the defender builds awareness via listening posts, patrols, and recon.
+        public const double AmbushSurprisePerIntel = 0.10;
+        public const double MaxAmbushSurprise = 0.50;
+
+        // Awareness a defender gains of each region an attack staged from, purely by being hit from
+        // there: the blow itself reveals where the enemy is massing. This is the reactive path that
+        // lets a previously-blind defender size a garrison against a neighbour the following turn
+        // (FactionStrategyController.CalculateRequiredGarrison) even with no listening posts or recon.
+        public const float IntelGainedFromBeingAttacked = 2.0f;
+
+        public static double AmbushSurpriseMultiplier(double attackerIntel, double defenderIntel) =>
+            1.0 + Math.Min(MaxAmbushSurprise,
+                           Math.Max(0.0, attackerIntel - defenderIntel) * AmbushSurprisePerIntel);
 
         public static double DefenderProtection(int entrenchment) =>
             Math.Max(1.0 / (1.0 + Math.Max(0, entrenchment) * 0.08), 0.35);

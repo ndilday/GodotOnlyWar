@@ -46,8 +46,11 @@ namespace OnlyWar.Models.Planets
         public bool IsPublic { get; set; }
         // Entrenchment provides bonsues against attacks
         public int Entrenchment { get; set; }
-        // Detection provides bonuses to detecting enemy forces in the region
-        public int Detection { get; set; }
+        // ListeningPost is a buildable/sabotageable sensor structure (like Entrenchment/AntiAir). It
+        // no longer directly provides an awareness bonus; instead it passively feeds this faction's
+        // situational awareness of the region each turn (PlanetFaction.RegionIntel). Its awareness
+        // role moved to the unified per-(faction, region) intel value.
+        public int ListeningPost { get; set; }
         // AntiAir provides bonuses against air atacks and air assaults
         public int AntiAir { get; set; }
         // Organization determins how much of the enemy force can be effectively deployed
@@ -70,17 +73,9 @@ namespace OnlyWar.Models.Planets
         // this region (i.e. the feinting force's own region), drawing a counterattack.
         public float ProvocationLevel { get; set; }
 
-        // Per-observer intelligence belief: how well another faction (keyed by its faction id)
-        // believes it knows THIS region faction's fighting strength. Raised by that faction's
-        // recon missions and consumed by its offensive targeting to shrink the noise on its
-        // strength estimate (PRD §4.24 recon; an early, per-region slice of the intelligence-as-
-        // belief model, §4.21). Persisted per (region, observed faction, observer faction).
-        public readonly Dictionary<int, float> ObserverIntel;
-
         public RegionFaction(PlanetFaction planetFaction, Region region)
         {
             LandedSquads = new List<Squad>();
-            ObserverIntel = new Dictionary<int, float>();
             PlanetFaction = planetFaction;
             Region = region;
             IsPublic = planetFaction.IsPublic;
@@ -90,18 +85,6 @@ namespace OnlyWar.Models.Planets
             // under the mistaken belief that 1 meant "100%"; at the true scale that left every
             // generated faction fielding only 1% of its population — see the org=100 test fixtures.)
             Organization = 100;
-        }
-
-        // How well observerFactionId believes it knows this region faction's strength (0 = no intel).
-        public float GetObserverIntel(int observerFactionId) =>
-            ObserverIntel.TryGetValue(observerFactionId, out float level) ? level : 0f;
-
-        // Raises an observer's belief about this region faction (a recon result). Ignores
-        // non-positive amounts so a failed recon never erodes prior knowledge here.
-        public void AddObserverIntel(int observerFactionId, float amount)
-        {
-            if (amount <= 0) return;
-            ObserverIntel[observerFactionId] = GetObserverIntel(observerFactionId) + amount;
         }
 
         // Adds/removes fighting strength (in battle-value points) from the pool that represents

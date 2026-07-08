@@ -7,7 +7,8 @@ namespace OnlyWar.Models.Missions
     public enum DefenseType
     {
         Entrenchment = 0,
-        Detection = 1,
+        // Sensor structure (formerly "Detection"). Persisted int value stays 1 for save compatibility.
+        ListeningPost = 1,
         AntiAir = 2,
         Organization = 3
     }

@@ -39,11 +39,12 @@ namespace OnlyWar.Helpers.Missions.Ambush
             // mod for equipment
             BaseSkill stealth = GameDataSingleton.Instance.GameRulesData.Skills.Stealth;
             RegionFaction enemyFaction = context.Order.Mission.RegionFaction;
-            float difficulty = enemyFaction.Detection * 0.5f;
+            float difficulty = enemyFaction.GetOwnRegionIntel() * 0.5f;
             // every degree of magnitude of troops adds one to the difficulty
             difficulty += (float)Math.Log(missionSquads.Sum(s => s.AbleSoldiers.Count), 10);
-            // intelligence makes it easier to find a stealthy route
-            difficulty -= context.Order.Mission.RegionFaction.Region.IntelligenceLevel;
+            // the attacker's own knowledge of the region makes it easier to find a stealthy route
+            Faction attacker = missionSquads.FirstOrDefault()?.Squad.Faction;
+            if (attacker != null) difficulty -= enemyFaction.Region.GetFactionRegionIntel(attacker);
             SquadMissionTest missionTest = new SquadMissionTest(stealth, difficulty);
 
             context.DaysElapsed++;

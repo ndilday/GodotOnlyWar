@@ -33,7 +33,7 @@ rough prototype of this scenario, already wired into `GenerateSector`:
 - Converts that planet's **weakest region** to the player faction.
 - **Lands all squads** into that region (squads get `CurrentRegion` set).
 - Parks the fleet in orbit.
-- Fortifies every *other* region (sets `Organization/IsPublic/Entrenchment/Detection/AntiAir = 1`, `Garrison = Population`).
+- Fortifies every *other* region (sets `Organization/IsPublic/Entrenchment/ListeningPost/AntiAir = 1`, `Garrison = Population`).
 
 It has no briefing, no narrative, no balance tuning, no failure handling, and it starts the
 player **already landed** and stamps the world as **mostly enemy**. The scenario work
@@ -315,7 +315,7 @@ For the chosen planet:
   - Add a Tyranid `RegionFaction` with `IsPublic = true`, a tuned starting `Population` and
     `Garrison` (the **load-bearing balance number**, §8), `Organization = 100` (fully mobilized
     on the 0-100 scale — the whole swarm feeds and fights), and
-    `Entrenchment/Detection/AntiAir` low (these are raiders, not dug-in defenders). *(No
+    `Entrenchment/ListeningPost/AntiAir` low (these are raiders, not dug-in defenders). *(No
     `GrowthMultiplier` throttle: Tyranids are a `Consumption` faction — PRD §4.24 — and grow
     only by eating biomass, so the throttle would do nothing; see §2.2.)*
   - Reduce/clear the Imperial `RegionFaction` in that region (the Tyranids have overrun the

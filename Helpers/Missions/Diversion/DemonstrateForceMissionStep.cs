@@ -1,3 +1,4 @@
+using OnlyWar.Helpers.Extensions;
 using OnlyWar.Models;
 using OnlyWar.Models.Missions;
 using OnlyWar.Models.Planets;
@@ -20,7 +21,7 @@ namespace OnlyWar.Helpers.Missions.Diversion
             RegionFaction enemyFaction = context.Order.Mission.RegionFaction;
             // The harder the enemy is to bluff (better detection, larger garrison able to
             // appraise the threat), the harder it is to project a convincing feint.
-            float difficulty = enemyFaction.Detection * 0.5f;
+            float difficulty = enemyFaction.GetOwnRegionIntel() * 0.5f;
             difficulty += (float)Math.Log10(Math.Max(enemyFaction.Garrison, 1));
             LeaderMissionTest missionTest = new LeaderMissionTest(tactics, difficulty);
 

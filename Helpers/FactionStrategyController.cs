@@ -27,6 +27,19 @@ public class FactionStrategyController
     // Intelligence a faction must hold on an adjacent enemy before it will commit to an assault
     // rather than reconnoitre it first. Below this the estimate is too noisy to stake force on.
     internal const float ReconIntelThreshold = 1.0f;
+    // Caution under uncertainty: rather than betting the go/no-go on a single noisy draw, the AI
+    // plans against a pessimistic (upper-confidence) estimate of defender strength — expected value
+    // inflated by this many sigma of remaining uncertainty. When it knows little (large sigma) it
+    // assumes the defender could be much stronger and demands a bigger margin or scouts first; as its
+    // intel sharpens (sigma -> 0) the estimate converges on the truth. ~1 sigma ≈ 84th percentile.
+    internal const double DefenderEstimateCautionZ = 1.0;
+    // Defender awareness of an adjacent enemy region at which it perceives that region's full threat
+    // when sizing its garrison. Below it, a blind defender under-garrisons — until an attack (which
+    // grants it intel of the attacker's staging regions) or a deliberate recon opens its eyes.
+    internal const float GarrisonFullSightIntel = 2.0f;
+    // Fraction of a region's leftover spare troops committed as a standing patrol screen (the rest
+    // stays available). Pools are 1:1 with battle value now, so this is a direct share, not a ×N.
+    internal const double PatrolForceFraction = 0.1;
 
     internal class PotentialOffensive
     {
@@ -105,9 +118,19 @@ public class FactionStrategyController
         var regionalForceStates = new List<RegionForceState>();
         foreach (var regionFaction in factionRegionsOnPlanet)
         {
-            long requiredGarrison = CalculateRequiredGarrison(regionFaction.Region);
+            long requiredGarrison = CalculateRequiredGarrison(regionFaction);
             long organizedTroops = (long)(regionFaction.Population * regionFaction.Organization / 100.0f);
             long spareTroops = Math.Max(0, organizedTroops - requiredGarrison);
+            // Mobilise a civilian-base faction (the PDF) to the garrison its perceived threat warrants:
+            // for such a faction MilitaryStrength IS its Garrison, so arming the populace to this level
+            // is what actually raises its defensive battle value in combat. This is the payoff of the
+            // reactive garrison — a region that has been attacked (and thereby learned where the enemy
+            // masses) now stands up real defenders, not just a planning reservation. Population-is-
+            // military hordes (Tyranids/cults) already field their whole population and are skipped.
+            if (!regionFaction.PlanetFaction.Faction.PopulationIsMilitary && requiredGarrison > 0)
+            {
+                regionFaction.Garrison = Math.Min(requiredGarrison, organizedTroops);
+            }
             regionalForceStates.Add(new RegionForceState(regionFaction, requiredGarrison, spareTroops));
         }
 
@@ -129,8 +152,13 @@ public class FactionStrategyController
             int beforeOrders = allNewOrders.Count;
             if (planet.IsUnderAssault())
             {
-                // Under assault: dig in fully — fortifications, listening posts, organization.
+                // Under assault: dig in fully — fortifications, listening posts, organization —
+                // then post standing patrols (which also sweep their own ground for awareness) and
+                // scout the enemy regions pressing the border so the PDF fights informed rather than
+                // blind. A defensive posture still never launches an assault of its own.
                 GenerateDevelopmentOrders(regionalForceStates, allNewOrders);
+                PlanDefensiveReconOnPlanet(faction, planet, regionalForceStates, allNewOrders);
+                PlanPatrolMissionsOnPlanet(faction, planet, regionalForceStates, allNewOrders);
             }
             else
             {
@@ -170,6 +198,21 @@ public class FactionStrategyController
         // PRIORITY 4: PLAN RECON MISSIONS
         PlanPatrolMissionsOnPlanet(faction, planet, regionalForceStates, allNewOrders);
         GameLog.Trace(() => $"    plan {faction.Name}/{planet.Name}: patrols done ({allNewOrders.Count} orders)");
+    }
+
+    // Defensive reconnaissance: a purely-defensive faction (the PDF under assault) never assaults,
+    // but it does scout the enemy regions massing on its borders — the recon-only slice of the same
+    // targeting machinery. The intel it gains sharpens its garrison sizing against those neighbours
+    // (CalculateRequiredGarrison) and denies attackers the from-within surprise edge.
+    private void PlanDefensiveReconOnPlanet(Faction faction, Planet planet, List<RegionForceState> states, List<Order> allOrders)
+    {
+        List<PotentialOffensive> potentialTargets = IdentifyPotentialOffensivesOnPlanet(faction, planet, states);
+        PotentialOffensive reconTarget = ChooseReconTarget(
+            potentialTargets.Where(o => !IsWellReconnoitred(o, faction.Id)).ToList());
+        if (reconTarget != null)
+        {
+            IssueReconMission(faction, reconTarget, allOrders);
+        }
     }
 
     internal enum OffensivePlan { None, Assault, Recon }
@@ -219,7 +262,7 @@ public class FactionStrategyController
     // A target is well-reconnoitred once the attacker's intelligence on it clears the threshold;
     // below that the strength estimate is too noisy to stake an assault on.
     internal static bool IsWellReconnoitred(PotentialOffensive offensive, int attackerFactionId) =>
-        offensive.TargetFaction.GetObserverIntel(attackerFactionId) >= ReconIntelThreshold;
+        offensive.TargetRegion.GetFactionRegionIntel(attackerFactionId) >= ReconIntelThreshold;
 
     // Among under-known targets, scout the richest first — the objective most worth understanding
     // before committing force.
@@ -447,7 +490,7 @@ public class FactionStrategyController
             GameLog.Trace(() =>
                 $"AI candidate {faction.Name}/{planet.Name}: {DescribeOffensive(offensive)}, "
                 + $"reward={offensive.Reward:F0}, score={RewardRiskScore(offensive):F2}, "
-                + $"intel={offensive.TargetFaction.GetObserverIntel(faction.Id):F2}/{ReconIntelThreshold:F2}, "
+                + $"intel={offensive.TargetRegion.GetFactionRegionIntel(faction.Id):F2}/{ReconIntelThreshold:F2}, "
                 + $"wellKnown={IsWellReconnoitred(offensive, faction.Id)}, winnable={IsWinnable(offensive)}, "
                 + $"staging={string.Join(",", offensive.AttackingRegions.Select(r => r.Name))}");
         }
@@ -501,7 +544,7 @@ public class FactionStrategyController
             // DefenseBuildCost rises by an order of magnitude per level and caps out before overflow,
             // making high fortification levels rare strategic investments.
             int org = state.RegionFaction.Organization;
-            int det = state.RegionFaction.Detection;
+            int det = state.RegionFaction.ListeningPost;
             int ent = state.RegionFaction.Entrenchment;
             int aa = state.RegionFaction.AntiAir;
 
@@ -521,7 +564,7 @@ public class FactionStrategyController
                 ConstructionMission mission;
                 if (minCost == orgCost) { mission = new ConstructionMission(DefenseType.Organization, 1, state.RegionFaction); org++; }
                 else if (minCost == entCost) { mission = new ConstructionMission(DefenseType.Entrenchment, 1, state.RegionFaction); ent++; }
-                else if (minCost == detCost) { mission = new ConstructionMission(DefenseType.Detection, 1, state.RegionFaction); det++; }
+                else if (minCost == detCost) { mission = new ConstructionMission(DefenseType.ListeningPost, 1, state.RegionFaction); det++; }
                 else { mission = new ConstructionMission(DefenseType.AntiAir, 1, state.RegionFaction); aa++; }
 
                 Order devOrder = new Order(new List<Squad>(), Disposition.DugIn, true, false, Aggression.Avoid, mission);
@@ -574,11 +617,11 @@ public class FactionStrategyController
                            .Any(rf => rf.IsPublic && AreFactionsEnemies(faction, rf.PlanetFaction.Faction)));
             if (!bordersPublicEnemy) continue;
 
-            long detCost = DefenseBuildCost(state.RegionFaction.Detection);
+            long detCost = DefenseBuildCost(state.RegionFaction.ListeningPost);
             if (detCost == long.MaxValue || detCost * 100L > state.SpareTroops) continue;
 
             allOrders.Add(new Order(new List<Squad>(), Disposition.DugIn, true, false, Aggression.Avoid,
-                new ConstructionMission(DefenseType.Detection, 1, state.RegionFaction)));
+                new ConstructionMission(DefenseType.ListeningPost, 1, state.RegionFaction)));
             state.SpareTroops -= detCost * 100L;
             GameLog.Trace(() =>
                 $"AI border listening post {faction.Name}/{state.RegionFaction.Region.Planet.Name}/"
@@ -609,9 +652,11 @@ public class FactionStrategyController
 
             if (!enemyNeighbors.Any()) continue;*/
 
-            // Use the remaining spare troops to form a small patrol force.
-            // BattleValue is roughly 10 per troop.
-            int forceBattleValue = (int)state.SpareTroops * 10;
+            // Commit a modest slice of the remaining spare troops as a standing patrol screen. Force
+            // pools are now 1:1 with battle value (the BV refactor), so the old "×10 troops-to-BV"
+            // conversion over-raised the screen tenfold; a patrol is a fraction of what's left, not
+            // the whole reserve.
+            int forceBattleValue = (int)(state.SpareTroops * PatrolForceFraction);
             if (forceBattleValue <= 0) continue;
 
             var request = new ForceGenerationRequest
@@ -683,10 +728,9 @@ public class FactionStrategyController
                 if (availableForce > 0)
                 {
                     long defenderBattleValue = CalculateDefenderBattleValue(targetFaction);
-                    // The attacker's estimate sharpens with its intelligence on THIS target —
-                    // belief it has built by reconnoitring the region (see PlanMajorOffensiveOnPlanet),
-                    // not blanket sensor coverage.
-                    float intel = targetFaction.GetObserverIntel(attackingFaction.Id);
+                    // The attacker's estimate sharpens with its awareness of the target region —
+                    // built by reconnoitring it (see PlanMajorOffensiveOnPlanet), not blanket coverage.
+                    float intel = targetFaction.Region.GetFactionRegionIntel(attackingFaction.Id);
 
                     potentialOffensives.Add(new PotentialOffensive
                     {
@@ -697,7 +741,7 @@ public class FactionStrategyController
                         Reward = CalculateOffensiveReward(targetFaction, attackingFaction),
                         DefenderBattleValue = defenderBattleValue,
                         EstimatedDefenderBattleValue =
-                            ApplyIntelNoise(defenderBattleValue, intel, RNG.NextRandomZValue())
+                            CautiousDefenderEstimate(defenderBattleValue, intel)
                     });
                 }
             }
@@ -705,25 +749,38 @@ public class FactionStrategyController
         return potentialOffensives;
     }
 
-    private long CalculateRequiredGarrison(Region region)
+    private long CalculateRequiredGarrison(RegionFaction defender)
     {
-        long highestThreat = 0;
-        foreach (var adjacentRegion in region.GetAdjacentRegions())
-        {
-            var controllingFaction = region.ControllingFaction;
-            if (controllingFaction == null) continue; // No one controls this region, no garrison needed against ghosts.
+        Faction defenderFaction = defender.PlanetFaction.Faction;
+        Region region = defender.Region;
 
+        long highestThreat = 0;
+        foreach (Region adjacentRegion in region.GetAdjacentRegions())
+        {
+            // The defender's awareness of the adjacent enemy region gates how much of that region's
+            // threat it perceives: a blind defender under-garrisons because it cannot see what is
+            // massing next door. Awareness is opened either by a deliberate recon or — the reactive
+            // path — by being attacked from there, which grants intel of the attacker's staging
+            // regions (StrategicCombatResolver), so a region that got hit last turn now garrisons.
+            float sight = Math.Min(1.0f,
+                adjacentRegion.GetFactionRegionIntel(defenderFaction.Id) / GarrisonFullSightIntel);
+            if (sight <= 0f) continue;
+
+            // Threat measured in battle value (MilitaryStrength — Population for a horde/cult, Garrison
+            // for a civilian-base faction — plus landed squads by their soldiers' BV), NOT raw garrison
+            // headcount. The old headcount rule read zero for a population-is-military cult (its strength
+            // is its Population, with no standing Garrison), so a PDF perceived no threat from a massing
+            // uprising next door and held nothing back.
             long adjacentThreat = adjacentRegion.RegionFactionMap.Values
-                .Where(rf => AreFactionsEnemies(controllingFaction.PlanetFaction.Faction, rf.PlanetFaction.Faction))
-                .Sum(rf => rf.Garrison + rf.LandedSquads.Sum(s => s.Members.Count));
+                .Where(rf => AreFactionsEnemies(defenderFaction, rf.PlanetFaction.Faction))
+                .Sum(rf => (long)(CalculateDefenderBattleValue(rf) * sight));
 
             if (adjacentThreat > highestThreat) highestThreat = adjacentThreat;
         }
 
         // A diversion feinting against this region inflates the threat its defender believes it
         // faces, causing it to hold a larger garrison than the real enemy force would warrant.
-        var defender = region.ControllingFaction;
-        if (defender != null && defender.PerceivedThreatBonus > 0)
+        if (defender.PerceivedThreatBonus > 0)
         {
             highestThreat += (long)defender.PerceivedThreatBonus;
         }
@@ -790,14 +847,15 @@ public class FactionStrategyController
         return reward;
     }
 
-    // Fuzz the true defender strength into what the attacker believes, with a 1-sigma error that
-    // shrinks as its intelligence on the target improves. The z-value is supplied by the caller so
-    // the noise is unit-testable; production passes a standard-normal draw. Interim stand-in for the
-    // per-faction intelligence-as-belief model (§4.21).
-    internal static long ApplyIntelNoise(long trueBattleValue, float intelLevel, double zValue)
+    // The defender strength the attacker plans against: not a single noisy draw, but a pessimistic
+    // upper-confidence estimate. Expected value is the truth; the AI inflates it by DefenderEstimateCautionZ
+    // sigma of the remaining uncertainty, where sigma shrinks as its intel on the target rises. So a
+    // blind attacker assumes the worst (and either demands a big margin or scouts first), while a
+    // well-informed one trusts the number. Deterministic — the go/no-go no longer hinges on one roll.
+    internal static long CautiousDefenderEstimate(long trueBattleValue, float intelLevel)
     {
         double sigma = BaseDefenderIntelNoise / (1.0 + intelLevel);
-        double multiplier = Math.Max(0.1, 1.0 + zValue * sigma); // never estimate a ~zero/negative force
+        double multiplier = 1.0 + DefenderEstimateCautionZ * sigma;
         return (long)Math.Round(trueBattleValue * multiplier);
     }
 

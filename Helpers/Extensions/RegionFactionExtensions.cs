@@ -1,4 +1,5 @@
-﻿using OnlyWar.Models.Missions;
+﻿using OnlyWar.Models;
+using OnlyWar.Models.Missions;
 using OnlyWar.Models.Planets;
 using System;
 using System.Collections.Generic;
@@ -10,26 +11,23 @@ namespace OnlyWar.Helpers.Extensions
 {
     public static class RegionFactionExtensions
     {
-        // Flat stealth-difficulty penalty an actively-patrolled region imposes on any force trying
-        // to infiltrate or scout it unseen, on top of a log-scale term for the patrol's size. A
-        // standing patrol is hunting intruders, so it is a serious deterrent to reconnaissance
-        // (PRD §4.24). Playtest-pending tuning.
-        public const float PatrolActiveScreenBonus = 2.0f;
+        // This faction's situational awareness of its OWN region — the defensive face of the unified
+        // per-(faction, region) intel value (replaces the old Detection stat). Fed by listening posts,
+        // patrols, and recon; consumed by strategic combat and stealth-check difficulty. A patrol now
+        // raises this directly (recon of one's own ground), so an actively-patrolled region is harder
+        // to infiltrate as an emergent consequence rather than via a bolted-on penalty.
+        public static float GetOwnRegionIntel(this RegionFaction regionFaction) =>
+            regionFaction.PlanetFaction.GetRegionIntel(regionFaction.Region);
 
-        // Extra stealth difficulty this region faction's standing patrol adds to an infiltrator's or
-        // scout's check (see InfiltrateMissionStep / ReconStealthMissionStep). Zero when unpatrolled,
-        // so an un-screened region is no harder to scout than before.
-        public static float GetPatrolStealthPenalty(this RegionFaction regionFaction)
-        {
-            int patrolStrength = regionFaction.LandedSquads
-                .Where(s => s.CurrentOrders?.Mission.MissionType == MissionType.Patrol)
-                .Sum(s => s.Members.Count);
-            if (patrolStrength <= 0)
-            {
-                return 0f;
-            }
-            return PatrolActiveScreenBonus + (float)Math.Log(patrolStrength, 10);
-        }
+        // How well an arbitrary faction understands this region (0 if it has no presence/awareness).
+        // The offensive face of the same value: what an attacker believes about a region it may hit.
+        public static float GetFactionRegionIntel(this Region region, Faction faction) =>
+            region.GetFactionRegionIntel(faction.Id);
+
+        public static float GetFactionRegionIntel(this Region region, int factionId) =>
+            region.Planet.PlanetFactionMap.TryGetValue(factionId, out PlanetFaction planetFaction)
+                ? planetFaction.GetRegionIntel(region)
+                : 0f;
 
         public static string GetPopulationDescription(this RegionFaction regionFaction)
         {

@@ -40,16 +40,17 @@ namespace OnlyWar.Helpers.Missions.Recon
             // mod for equipment
             BaseSkill stealth = GameDataSingleton.Instance.GameRulesData.Skills.Stealth;
             RegionFaction enemyFaction = context.Order.Mission.RegionFaction;
-            float detection = enemyFaction.Detection * 0.5f;
+            // The defender's awareness of its own ground (unified intel; a patrol sweeping the region
+            // raises this directly, so a patrolled region is intrinsically harder to scout unseen).
+            float detection = enemyFaction.GetOwnRegionIntel() * 0.5f;
             // every degree of magnitude of troops adds one to the difficulty
             float ownTroopMod = (float)Math.Log(context.MissionSquads.Sum(s => s.AbleSoldiers.Count), 10);
             // every degree of magnitude of enemy troops garrisoning the region adds to the difficulty
             float garrisonMod = (float)Math.Log(enemyFaction.Garrison, 10);
-            // intelligence makes it easier to find a stealthy route
-            float intelMod = context.Order.Mission.RegionFaction.Region.IntelligenceLevel;
-            // a standing patrol actively hunting intruders makes the region far harder to scout unseen
-            float patrolMod = enemyFaction.GetPatrolStealthPenalty();
-            float difficulty = detection + ownTroopMod + garrisonMod - intelMod + patrolMod;
+            // the scout's own knowledge of the region makes it easier to find a stealthy route
+            Faction scout = context.MissionSquads.FirstOrDefault()?.Squad.Faction;
+            float intelMod = scout == null ? 0f : enemyFaction.Region.GetFactionRegionIntel(scout);
+            float difficulty = detection + ownTroopMod + garrisonMod - intelMod;
             SquadMissionTest missionTest = new SquadMissionTest(stealth, difficulty);
 
             context.DaysElapsed++;
@@ -64,7 +65,7 @@ namespace OnlyWar.Helpers.Missions.Recon
             GameLog.Trace(() =>
                 $"Recon stealth {DescribeFaction(context)} -> {DescribeTarget(context)} day {context.DaysElapsed}: "
                 + $"difficulty={difficulty:F2} (detection={detection:F2}, +ownTroops={ownTroopMod:F2}, "
-                + $"+garrison={garrisonMod:F2}, -intel={intelMod:F2}, +patrol={patrolMod:F2}), "
+                + $"+garrison={garrisonMod:F2}, -intel={intelMod:F2}), "
                 + $"bestStealthSkill={bestStealth:F2}, margin={margin:F2} -> {(margin > 0 ? "SLIPPED IN" : "DETECTED")}");
             if (margin > 0.0f)
             {

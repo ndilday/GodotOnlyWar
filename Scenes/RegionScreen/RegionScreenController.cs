@@ -295,7 +295,7 @@ public partial class RegionScreenController : DialogController
             if (region.IntelligenceLevel > 1)
             {
                 rows.Add(Row("Enemy Entrenchment", RegionFactionExtensions.GetDefenseLevelDescription(enemyFaction.Entrenchment)));
-                rows.Add(Row("Enemy Detection", RegionFactionExtensions.GetDefenseLevelDescription(enemyFaction.Detection)));
+                rows.Add(Row("Enemy Listening Posts", RegionFactionExtensions.GetDefenseLevelDescription(enemyFaction.ListeningPost)));
                 rows.Add(Row("Enemy Anti-Air", RegionFactionExtensions.GetDefenseLevelDescription(enemyFaction.AntiAir)));
             }
         }

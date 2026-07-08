@@ -137,28 +137,22 @@ public class FactionStrategyControllerTests
     // ----- Q2: reward/risk offensive targeting (PRD §4.24) -----
 
     [Fact]
-    public void ApplyIntelNoise_WithZeroDeviation_ReturnsTrueStrength()
+    public void CautiousDefenderEstimate_BlindAttackerAssumesAStrongerDefender()
     {
-        Assert.Equal(1000L, FactionStrategyController.ApplyIntelNoise(1000, intelLevel: 0f, zValue: 0.0));
+        // With no intel (sigma 0.5) the AI plans against ~1 sigma above the truth, not the truth
+        // itself — it hedges against what it cannot see rather than betting on a lucky-low draw.
+        Assert.Equal(1500L, FactionStrategyController.CautiousDefenderEstimate(1000, intelLevel: 0f));
     }
 
     [Fact]
-    public void ApplyIntelNoise_BetterIntelTightensTheEstimate()
+    public void CautiousDefenderEstimate_BetterIntelConvergesTowardTheTruth()
     {
-        // Same over-estimate (z = +1), but more intel on the target shrinks the 1-sigma error.
-        long blindGuess = FactionStrategyController.ApplyIntelNoise(1000, intelLevel: 0f, zValue: 1.0); // sigma 0.5 -> 1500
-        long scoutedGuess = FactionStrategyController.ApplyIntelNoise(1000, intelLevel: 4f, zValue: 1.0); // sigma 0.1 -> 1100
+        long blindGuess = FactionStrategyController.CautiousDefenderEstimate(1000, intelLevel: 0f);   // sigma 0.5 -> 1500
+        long scoutedGuess = FactionStrategyController.CautiousDefenderEstimate(1000, intelLevel: 4f); // sigma 0.1 -> 1100
 
         Assert.Equal(1500L, blindGuess);
         Assert.Equal(1100L, scoutedGuess);
         Assert.True(scoutedGuess < blindGuess);
-    }
-
-    [Fact]
-    public void ApplyIntelNoise_ClampsToANonZeroFloor()
-    {
-        // A wild under-estimate must not drive the believed strength to zero or negative.
-        Assert.Equal(100L, FactionStrategyController.ApplyIntelNoise(1000, intelLevel: 0f, zValue: -10.0));
     }
 
     [Fact]
@@ -197,7 +191,7 @@ public class FactionStrategyControllerTests
         AddRegionFaction(planet, staging, attacker, population: 10_000, organization: 100);
         AddRegionFaction(planet, target, defender, population: 100_000, organization: 100, garrison: 100);
         RegionFaction targetFaction = target.RegionFactionMap[defender.Id];
-        targetFaction.AddObserverIntel(attacker.Id, FactionStrategyController.ReconIntelThreshold);
+        planet.PlanetFactionMap[attacker.Id].AddRegionIntel(target, FactionStrategyController.ReconIntelThreshold);
         Sector sector = new(CreatePlayerForce(), [], [planet], []);
 
         List<Order> orders = new FactionStrategyController().GenerateFactionOrders(attacker, sector);
@@ -340,7 +334,7 @@ public class FactionStrategyControllerTests
     {
         Faction attacker = CreateNonPlayerFaction();
         RegionFaction known = CreateTargetRegionFaction(attacker);
-        known.AddObserverIntel(attacker.Id, FactionStrategyController.ReconIntelThreshold);
+        known.PlanetFaction.AddRegionIntel(known.Region, FactionStrategyController.ReconIntelThreshold);
         var target = Offensive(known, attackForce: 1000, estimatedDefenderBv: 100, reward: 5000);
 
         var (plan, chosen) = FactionStrategyController.DecideOffensivePlan([target], attacker.Id);
@@ -354,7 +348,7 @@ public class FactionStrategyControllerTests
     {
         Faction attacker = CreateNonPlayerFaction();
         RegionFaction known = CreateTargetRegionFaction(attacker);
-        known.AddObserverIntel(attacker.Id, FactionStrategyController.ReconIntelThreshold);
+        known.PlanetFaction.AddRegionIntel(known.Region, FactionStrategyController.ReconIntelThreshold);
         var tooStrong = Offensive(known, attackForce: 100, estimatedDefenderBv: 1000, reward: 9000);
         var unknownRich = Offensive(CreateTargetRegionFaction(attacker), attackForce: 1000, estimatedDefenderBv: 100, reward: 4000);
 
@@ -369,7 +363,7 @@ public class FactionStrategyControllerTests
     {
         Faction attacker = CreateNonPlayerFaction();
         RegionFaction known = CreateTargetRegionFaction(attacker);
-        known.AddObserverIntel(attacker.Id, FactionStrategyController.ReconIntelThreshold);
+        known.PlanetFaction.AddRegionIntel(known.Region, FactionStrategyController.ReconIntelThreshold);
         var tooStrong = Offensive(known, attackForce: 100, estimatedDefenderBv: 1000, reward: 9000);
 
         var (plan, chosen) = FactionStrategyController.DecideOffensivePlan([tooStrong], attacker.Id);
@@ -405,7 +399,7 @@ public class FactionStrategyControllerTests
         var offensive = Offensive(rf, attackForce: 1, estimatedDefenderBv: 1, reward: 1);
 
         Assert.False(FactionStrategyController.IsWellReconnoitred(offensive, attacker.Id));
-        rf.AddObserverIntel(attacker.Id, FactionStrategyController.ReconIntelThreshold);
+        rf.PlanetFaction.AddRegionIntel(rf.Region, FactionStrategyController.ReconIntelThreshold);
         Assert.True(FactionStrategyController.IsWellReconnoitred(offensive, attacker.Id));
     }
 
@@ -418,7 +412,7 @@ public class FactionStrategyControllerTests
 
         TurnController.ResolveReconResult(scout, target, 1.5f);
 
-        Assert.Equal(1.5f, target.GetObserverIntel(scout.Id));
+        Assert.Equal(1.5f, target.PlanetFaction.GetRegionIntel(target.Region));
         // Enemy recon does not raise the shared fog-of-war level the player sees.
         Assert.Equal(intelBefore, target.Region.IntelligenceLevel);
     }
@@ -445,26 +439,10 @@ public class FactionStrategyControllerTests
 
         TurnController.ResolveReconResult(scout, target, 0f);
 
-        Assert.Equal(0f, target.GetObserverIntel(scout.Id));
+        Assert.Equal(0f, target.PlanetFaction.GetRegionIntel(target.Region));
     }
 
     // ----- Patrol as a counter-force (PRD §4.24) -----
-
-    [Fact]
-    public void GetPatrolStealthPenalty_ZeroWhenUnpatrolled_PositiveWhenPatrolled()
-    {
-        Faction faction = CreateNonPlayerFaction();
-        RegionFaction rf = CreateTargetRegionFaction(faction);
-        Assert.Equal(0f, rf.GetPatrolStealthPenalty());
-
-        // A non-patrol defensive squad is not an active screen — no stealth penalty.
-        rf.LandedSquads.Add(LandedSquadWithOrder(rf, MissionType.DefenseInDepth));
-        Assert.Equal(0f, rf.GetPatrolStealthPenalty());
-
-        // A standing patrol makes the region measurably harder to scout unseen.
-        rf.LandedSquads.Add(LandedSquadWithOrder(rf, MissionType.Patrol));
-        Assert.True(rf.GetPatrolStealthPenalty() >= RegionFactionExtensions.PatrolActiveScreenBonus);
-    }
 
     [Fact]
     public void GenerateFactionOrders_ClearsPreviousTurnsPatrolSquads_ButKeepsOtherLandedSquads()
@@ -519,7 +497,7 @@ public class FactionStrategyControllerTests
 
         Assert.NotEmpty(orders);
         Assert.All(orders, o => Assert.Empty(o.AssignedSquads));
-        Assert.All(orders, o => Assert.Equal(DefenseType.Detection, Assert.IsType<ConstructionMission>(o.Mission).ConstructionType));
+        Assert.All(orders, o => Assert.Equal(DefenseType.ListeningPost, Assert.IsType<ConstructionMission>(o.Mission).ConstructionType));
     }
 
     private static void AddRegionFaction(Planet planet, Region region, Faction faction,

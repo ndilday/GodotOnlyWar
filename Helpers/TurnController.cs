@@ -87,6 +87,18 @@ namespace OnlyWar.Helpers
         // sacrificial predation instead. First-pass tunable.
         private const double CultRelocationRate = 0.25;
 
+        // --- Situational awareness / intel (unified per-(faction, region) model) ---
+        // Each turn a faction's awareness of a region decays toward zero (active knowledge from
+        // patrols/recon goes stale), then is topped up by its standing sources. A standing listening
+        // post contributes IntelPerListeningPostLevel per level per turn; with the decay rate below,
+        // the geometric steady state of a level-L post is exactly L (so the old +2%/level strategic
+        // bonus and stealth difficulty carry over at equilibrium while now ramping in and decaying
+        // out). A patrol is recon of one's own ground: it adds a flat base plus a log term in the
+        // patrol's headcount. All playtest-pending.
+        private const float IntelDecayRate = 0.8f;
+        private const float IntelPerListeningPostLevel = 0.2f;
+        private const float IntelPatrolBaseGain = 1.0f;
+
         public TurnController() : this(null)
         {
         }
@@ -585,19 +597,21 @@ namespace OnlyWar.Helpers
         internal static void ResolveReconResult(Faction reconningFaction, RegionFaction target, float impact)
         {
             if (target == null) return;
-            float observerBefore = reconningFaction == null ? 0f : target.GetObserverIntel(reconningFaction.Id);
+            PlanetFaction reconningPlanetFaction =
+                reconningFaction != null
+                && target.Region.Planet.PlanetFactionMap.TryGetValue(reconningFaction.Id, out PlanetFaction pf)
+                    ? pf
+                    : null;
+            float observerBefore = reconningPlanetFaction?.GetRegionIntel(target.Region) ?? 0f;
             float sharedBefore = target.Region.IntelligenceLevel;
-            if (reconningFaction != null)
-            {
-                target.AddObserverIntel(reconningFaction.Id, impact);
-            }
+            reconningPlanetFaction?.AddRegionIntel(target.Region, impact);
             if (reconningFaction == null || reconningFaction.IsPlayerFaction || reconningFaction.IsDefaultFaction)
             {
                 target.Region.IntelligenceLevel += impact;
             }
             GameLog.Debug(() =>
                 $"Recon result {reconningFaction?.Name ?? "Unknown"} -> {DescribeRegionFaction(target)}: "
-                + $"impact={impact:F2}, observerIntel={observerBefore:F2}->{(reconningFaction == null ? 0f : target.GetObserverIntel(reconningFaction.Id)):F2}, "
+                + $"impact={impact:F2}, regionIntel={observerBefore:F2}->{(reconningPlanetFaction?.GetRegionIntel(target.Region) ?? 0f):F2}, "
                 + $"sharedIntel={sharedBefore:F2}->{target.Region.IntelligenceLevel:F2}");
         }
 
@@ -609,8 +623,8 @@ namespace OnlyWar.Helpers
                 case DefenseType.Entrenchment:
                     mission.RegionFaction.Entrenchment += amount;
                     break;
-                case DefenseType.Detection:
-                    mission.RegionFaction.Detection += amount;
+                case DefenseType.ListeningPost:
+                    mission.RegionFaction.ListeningPost += amount;
                     break;
                 case DefenseType.AntiAir:
                     mission.RegionFaction.AntiAir += amount;
@@ -630,7 +644,7 @@ namespace OnlyWar.Helpers
             return mission.ConstructionType switch
             {
                 DefenseType.Entrenchment => mission.RegionFaction.Entrenchment,
-                DefenseType.Detection => mission.RegionFaction.Detection,
+                DefenseType.ListeningPost => mission.RegionFaction.ListeningPost,
                 DefenseType.AntiAir => mission.RegionFaction.AntiAir,
                 DefenseType.Organization => mission.RegionFaction.Organization,
                 _ => 0
@@ -698,8 +712,8 @@ namespace OnlyWar.Helpers
                         // Intel gained is whatever the recon actually accomplished: a scout that was
                         // detected and driven off by the region's patrol before infiltrating never
                         // reaches PerformReconMissionStep, so its Impact (and thus belief gained)
-                        // stays ~zero. The patrol contests recon via the stealth check difficulty
-                        // (RegionFactionExtensions.GetPatrolStealthPenalty), not a flat override.
+                        // stays ~zero. A patrol contests recon by raising the defender's own-region
+                        // intel, which lifts the stealth-check difficulty — not a flat override.
                         ResolveReconResult(context.Order.AssignedSquads.FirstOrDefault()?.Faction,
                                            regionFaction, context.Impact);
                         break;
@@ -715,11 +729,11 @@ namespace OnlyWar.Helpers
                                     regionFaction.Entrenchment = 0;
                                 }
                                 break;
-                            case DefenseType.Detection:
-                                regionFaction.Detection -= impact;
-                                if (regionFaction.Detection < 0)
+                            case DefenseType.ListeningPost:
+                                regionFaction.ListeningPost -= impact;
+                                if (regionFaction.ListeningPost < 0)
                                 {
-                                    regionFaction.Detection = 0;
+                                    regionFaction.ListeningPost = 0;
                                 }
                                 break;
                             case DefenseType.AntiAir:
@@ -842,6 +856,39 @@ namespace OnlyWar.Helpers
             }
         }
 
+        // Advances every faction's per-region situational awareness on the planet by one turn:
+        // first decays all held beliefs (patrol/recon knowledge going stale), then tops up each held
+        // region from its standing sources — the passive listening-post sensor floor and any active
+        // patrol sweeping its own ground. Offensive beliefs about enemy regions (held on the
+        // observing PlanetFaction but with no local structure/patrol) therefore simply fade unless
+        // refreshed by a fresh recon (ResolveReconResult).
+        private void UpdateRegionIntel(Planet planet)
+        {
+            foreach (PlanetFaction planetFaction in planet.PlanetFactionMap.Values)
+            {
+                foreach (Region region in planetFaction.RegionIntel.Keys.ToList())
+                {
+                    planetFaction.SetRegionIntel(region, planetFaction.GetRegionIntel(region) * IntelDecayRate);
+                }
+            }
+
+            foreach (Region region in planet.Regions)
+            {
+                foreach (RegionFaction regionFaction in region.RegionFactionMap.Values)
+                {
+                    float gain = regionFaction.ListeningPost * IntelPerListeningPostLevel;
+                    int patrolStrength = regionFaction.LandedSquads
+                        .Where(s => s.CurrentOrders?.Mission.MissionType == MissionType.Patrol)
+                        .Sum(s => s.Members.Count);
+                    if (patrolStrength > 0)
+                    {
+                        gain += IntelPatrolBaseGain + (float)Math.Log10(patrolStrength);
+                    }
+                    regionFaction.PlanetFaction.AddRegionIntel(region, gain);
+                }
+            }
+        }
+
         private void UpdatePlanet(Planet planet)
         {
             {
@@ -915,6 +962,11 @@ namespace OnlyWar.Helpers
                         EndOfTurnLeaderUpdate(planet, planetFaction);
                     }
                 }
+
+                // End-of-turn situational awareness: decay every faction's beliefs, then refresh
+                // from standing listening posts and patrols. Runs after depopulated factions are
+                // pruned so dead beliefs are not carried forward.
+                UpdateRegionIntel(planet);
             }
         }
 
@@ -1459,20 +1511,20 @@ namespace OnlyWar.Helpers
                             if (region.RegionFactionMap.ContainsKey(controllingFaction.Id))
                             {
                                 RegionFaction controllingRegionFaction = region.RegionFactionMap[controllingFaction.Id];
-                                if (controllingRegionFaction.Detection > 0)
+                                if (controllingRegionFaction.ListeningPost > 0)
                                 {
-                                    int revoltShare = controllingRegionFaction.Detection / 2;
+                                    int revoltShare = controllingRegionFaction.ListeningPost / 2;
                                     revoltShare += (int)RNG.NextRandomZValue();
-                                    if (revoltShare > controllingRegionFaction.Detection)
+                                    if (revoltShare > controllingRegionFaction.ListeningPost)
                                     {
-                                        revoltShare = controllingRegionFaction.Detection;
+                                        revoltShare = controllingRegionFaction.ListeningPost;
                                     }
                                     if (revoltShare < 0)
                                     {
                                         revoltShare = 0;
                                     }
-                                    controllingRegionFaction.Detection -= revoltShare;
-                                    revoltingRegionFaction.Detection += revoltShare;
+                                    controllingRegionFaction.ListeningPost -= revoltShare;
+                                    revoltingRegionFaction.ListeningPost += revoltShare;
                                 }
                                 if (controllingRegionFaction.AntiAir > 0)
                                 {
@@ -1785,7 +1837,7 @@ namespace OnlyWar.Helpers
                 {
                     // sabotage
                     // add up the amount of entrenchment, detection, and antiair in this region
-                    int defenseTotal = enemyRegionFaction.Entrenchment + enemyRegionFaction.Detection + enemyRegionFaction.AntiAir;
+                    int defenseTotal = enemyRegionFaction.Entrenchment + enemyRegionFaction.ListeningPost + enemyRegionFaction.AntiAir;
                     if (defenseTotal == 0)
                     {
                         GenerateAmbushMission(enemyRegionFaction);
@@ -1805,8 +1857,13 @@ namespace OnlyWar.Helpers
 
         public void HandleHiddenFactionIntelligence(RegionFaction enemyRegionFaction)
         {
-            // determine whether the faction can hide among the population
-            float popRatio = (float)enemyRegionFaction.Population / (float)enemyRegionFaction.Region.Population;
+            // determine whether the faction can hide among the population. The ratio can reach (or
+            // exceed) 1 when a hidden faction has grown to dominate a region's populace, so clamp it
+            // to the open (0,1) interval the inverse-normal CDF requires — a faction that is nearly
+            // the whole population is effectively impossible to keep concealed (large positive zScore).
+            long regionPopulation = Math.Max(1, enemyRegionFaction.Region.Population);
+            float popRatio = Math.Clamp(
+                (float)enemyRegionFaction.Population / regionPopulation, 0.0001f, 0.9999f);
             float zScore = GaussianCalculator.ApproximateInverseNormalCDF(popRatio);
             zScore += enemyRegionFaction.Region.IntelligenceLevel / 10.0f;
             double chance = RNG.NextRandomZValue();
@@ -1842,11 +1899,11 @@ namespace OnlyWar.Helpers
             else
             {
                 roll -= enemyRegionFaction.Entrenchment;
-                if (roll <= enemyRegionFaction.Detection)
+                if (roll <= enemyRegionFaction.ListeningPost)
                 {
-                    // sabotage the detection
-                    int size = Math.Min(Math.Max((int)RNG.NextRandomZValue() + 1, 1), enemyRegionFaction.Detection);
-                    SabotageMission sabotage = new SabotageMission(DefenseType.Detection, size, enemyRegionFaction);
+                    // sabotage the listening posts
+                    int size = Math.Min(Math.Max((int)RNG.NextRandomZValue() + 1, 1), enemyRegionFaction.ListeningPost);
+                    SabotageMission sabotage = new SabotageMission(DefenseType.ListeningPost, size, enemyRegionFaction);
                     enemyRegionFaction.Region.SpecialMissions.Add(sabotage);
                     SpecialMissions.Add(sabotage);
                 }

@@ -400,43 +400,36 @@ public class SaveLoadRoundTripTests
     }
 
     [Fact]
-    public void SaveThenLoad_RegionFactionObserverIntel_SurvivesRoundTrip()
+    public void SaveThenLoad_PlanetFactionRegionIntel_SurvivesRoundTrip()
     {
-        Sector sector = SectorBuilder.GenerateSector(1, _data, _date, "Intel Round Trip Chapter");
+        Sector sector = SectorBuilder.GenerateSector(1, _data, _date, "RegionIntel Round Trip Chapter");
         GameDataSingleton.Instance.LoadGameDataFromBlob(_data, _date, sector);
 
-        Region region = sector.Planets.Values
-            .SelectMany(p => p.Regions)
-            .First(r => r.RegionFactionMap.Count > 0);
-        RegionFaction target = region.RegionFactionMap.Values.First();
-        const int observerA = 2;
-        const int observerB = 3;
-        // The picked region faction may already carry seeded observer intel (e.g. a promised-world
-        // Imperial region seeded with the cult's PromisedWorldCultStartingIntel on the cult's faction
-        // id), so assert the round-trip preserves the *added* delta on top of whatever baseline
-        // exists rather than an absolute value — this test is about serialization fidelity.
-        float baseA = target.GetObserverIntel(observerA);
-        float baseB = target.GetObserverIntel(observerB);
-        target.AddObserverIntel(observerA, 1.5f);
-        target.AddObserverIntel(observerB, 0.25f);
+        Planet planet = sector.Planets.Values
+            .First(p => p.PlanetFactionMap.Count > 0 && p.Regions.Any(r => r != null));
+        PlanetFaction planetFaction = planet.PlanetFactionMap.Values.First();
+        Region regionA = planet.Regions.First(r => r != null);
+        Region regionB = planet.Regions.Last(r => r != null);
+
+        float baseA = planetFaction.GetRegionIntel(regionA);
+        float baseB = planetFaction.GetRegionIntel(regionB);
+        planetFaction.AddRegionIntel(regionA, 2.25f);
+        planetFaction.AddRegionIntel(regionB, 0.5f);
 
         string dbPath = Path.Combine(
-            Path.GetTempPath(), $"onlywar_intel_roundtrip_{Guid.NewGuid():N}.s3db");
+            Path.GetTempPath(), $"onlywar_regionintel_roundtrip_{Guid.NewGuid():N}.s3db");
         try
         {
             Save(sector, dbPath, _data.Factions.SelectMany(f => f.Units).ToList());
             GameStateDataBlob loaded = Load(dbPath);
 
-            RegionFaction loadedTarget = loaded.Planets
-                .SelectMany(p => p.Regions)
-                .Where(r => r.Id == region.Id)
-                .SelectMany(r => r.RegionFactionMap.Values)
-                .Single(rf => rf.PlanetFaction.Faction.Id == target.PlanetFaction.Faction.Id);
+            Planet loadedPlanet = loaded.Planets.Single(p => p.Id == planet.Id);
+            PlanetFaction loadedFaction = loadedPlanet.PlanetFactionMap[planetFaction.Faction.Id];
+            Region loadedA = loadedPlanet.Regions.Single(r => r != null && r.Id == regionA.Id);
+            Region loadedB = loadedPlanet.Regions.Single(r => r != null && r.Id == regionB.Id);
 
-            Assert.Equal(baseA + 1.5f, loadedTarget.GetObserverIntel(observerA));
-            Assert.Equal(baseB + 0.25f, loadedTarget.GetObserverIntel(observerB));
-            // An observer with no recorded intel round-trips as zero (no entry).
-            Assert.Equal(0f, loadedTarget.GetObserverIntel(999));
+            Assert.Equal(baseA + 2.25f, loadedFaction.GetRegionIntel(loadedA), 3);
+            Assert.Equal(baseB + 0.5f, loadedFaction.GetRegionIntel(loadedB), 3);
         }
         finally
         {

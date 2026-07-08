@@ -28,7 +28,7 @@ public class MissionSaveTests
         Planet planet = CreatePlanet(faction);
         RegionFaction targetFaction = planet.Regions[0].RegionFactionMap[faction.Id];
         planet.Regions[0].SpecialMissions.Add(
-            new SabotageMission(42, DefenseType.Detection, 3, targetFaction));
+            new SabotageMission(42, DefenseType.ListeningPost, 3, targetFaction));
 
         using SqliteConnection connection = CreateSaveDatabase();
         SavePlanet(connection, planet);
@@ -43,7 +43,7 @@ public class MissionSaveTests
         Planet planet = CreatePlanet(faction);
         RegionFaction targetFaction = planet.Regions[0].RegionFactionMap[faction.Id];
         planet.Regions[0].SpecialMissions.Add(
-            new SabotageMission(42, DefenseType.Detection, 3, targetFaction));
+            new SabotageMission(42, DefenseType.ListeningPost, 3, targetFaction));
 
         using SqliteConnection connection = CreateSaveDatabase();
         SavePlanet(connection, planet);
@@ -58,7 +58,7 @@ public class MissionSaveTests
         Assert.Equal(planet.Regions[0].Id, reader.GetInt32(2));
         Assert.Equal(faction.Id, reader.GetInt32(3));
         Assert.Equal(3, reader.GetInt32(4));
-        Assert.Equal((int)DefenseType.Detection, reader.GetInt32(5));
+        Assert.Equal((int)DefenseType.ListeningPost, reader.GetInt32(5));
         Assert.False(reader.Read());
     }
 
@@ -114,7 +114,9 @@ public class MissionSaveTests
                 CarryingCapacity BIGINT NOT NULL, MaximumCarryingCapacity BIGINT NOT NULL);
             CREATE TABLE RegionFaction (RegionId INTEGER NOT NULL, FactionId INTEGER NOT NULL, IsPublic BOOLEAN NOT NULL,
                 Population BIGINT NOT NULL, Garrison INTEGER NOT NULL, Organization INTEGER NOT NULL, Entrenchment INTEGER NOT NULL,
-                Detection INTEGER NOT NULL, AntiAir INTEGER NOT NULL, GrowthMultiplier REAL NOT NULL DEFAULT 1.0);
+                ListeningPost INTEGER NOT NULL, AntiAir INTEGER NOT NULL, GrowthMultiplier REAL NOT NULL DEFAULT 1.0);
+            CREATE TABLE PlanetFactionRegionIntel (PlanetId INTEGER NOT NULL, FactionId INTEGER NOT NULL, RegionId INTEGER NOT NULL,
+                IntelLevel REAL NOT NULL);
             CREATE TABLE Mission (Id INTEGER PRIMARY KEY UNIQUE NOT NULL, MissionType INTEGER NOT NULL, RegionId INTEGER NOT NULL,
                 FactionId INTEGER NOT NULL, MissionSize INTEGER NOT NULL, DefenseTypeId INTEGER, IsRegionMission BOOLEAN NOT NULL);";
         command.ExecuteNonQuery();

@@ -160,17 +160,21 @@ namespace OnlyWar.Builders
         private static void SeedPromisedWorldCultIntel(Planet promised, GameRulesData data)
         {
             Faction cultFaction = data.SectorFactions.Infiltrator;
-            if (!promised.PlanetFactionMap.ContainsKey(cultFaction.Id))
+            if (!promised.PlanetFactionMap.TryGetValue(cultFaction.Id, out PlanetFaction cultPlanetFaction))
             {
                 return;
             }
 
-            foreach (RegionFaction regionFaction in promised.Regions
-                         .SelectMany(region => region.RegionFactionMap.Values)
-                         .Where(regionFaction => regionFaction.PlanetFaction.Faction.Id != cultFaction.Id
-                                                 && regionFaction.IsPublic))
+            // The cult knows its home ground intimately: give it strong awareness of every region
+            // holding a public non-cult force, so its opening decisions — and the strategic ambush
+            // edge it enjoys attacking from within (the attacker-vs-defender intel differential in
+            // StrategicCombatResolver) — model an insider revolt rather than a blind invader. The PDF,
+            // having built no listening posts, starts blind to these same regions.
+            foreach (Region region in promised.Regions
+                         .Where(region => region.RegionFactionMap.Values
+                             .Any(rf => rf.PlanetFaction.Faction.Id != cultFaction.Id && rf.IsPublic)))
             {
-                regionFaction.AddObserverIntel(cultFaction.Id, ScenarioRules.PromisedWorldCultStartingIntel);
+                cultPlanetFaction.AddRegionIntel(region, ScenarioRules.PromisedWorldCultStartingIntel);
             }
         }
 
@@ -303,7 +307,7 @@ namespace OnlyWar.Builders
                     // finite stranded biomass budget, not from throttling how much of the swarm acts.
                     Organization = 100,
                     Entrenchment = 0,
-                    Detection = 0,
+                    ListeningPost = 0,
                     AntiAir = 0
                     // No GrowthMultiplier throttle: Tyranids are a Consumption faction with no organic
                     // birthrate — they grow only by eating biomass (predating headcount and scouring

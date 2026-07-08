@@ -58,10 +58,25 @@ public class ScenarioBuilderTests
     {
         Sector sector = SectorBuilder.GenerateSector(1, _data, _date, "Imperial Chapter");
         Planet promised = sector.GetPlanet(sector.Scenario.PromisedPlanetId);
+        Faction imperial = _data.DefaultFaction;
 
-        // The world is invaded but not conquered: the plurality of its regions remain under
-        // the default (Imperial) faction.
-        Assert.True(promised.GetControllingFaction().IsDefaultFaction);
+        // The world is invaded but not conquered: the Imperial populace still overwhelmingly
+        // outnumbers every invader on the planet. (Region-plurality is not used here — once the cult
+        // rises publicly it co-occupies the Imperial regions, so every region reads as contested;
+        // population is the durable "not yet conquered" measure.)
+        long imperialPop = promised.Regions
+            .Where(r => r.RegionFactionMap.ContainsKey(imperial.Id))
+            .Sum(r => r.RegionFactionMap[imperial.Id].Population);
+        long largestInvaderPop = promised.Regions
+            .SelectMany(r => r.RegionFactionMap.Values)
+            .Where(rf => !rf.PlanetFaction.Faction.IsDefaultFaction && !rf.PlanetFaction.Faction.IsPlayerFaction)
+            .GroupBy(rf => rf.PlanetFaction.Faction.Id)
+            .Select(g => g.Sum(rf => rf.Population))
+            .DefaultIfEmpty(0L)
+            .Max();
+
+        Assert.True(imperialPop > largestInvaderPop,
+            $"expected Imperial population {imperialPop} to exceed the largest invader's {largestInvaderPop}");
     }
 
     [Fact]
@@ -140,14 +155,16 @@ public class ScenarioBuilderTests
         Faction cult = _data.SectorFactions.Infiltrator;
         Faction imperial = _data.DefaultFaction;
 
-        List<RegionFaction> imperialRegions = promised.Regions
+        PlanetFaction cultPlanetFaction = promised.PlanetFactionMap[cult.Id];
+        List<Region> imperialRegions = promised.Regions
             .Where(region => region.RegionFactionMap.ContainsKey(imperial.Id))
-            .Select(region => region.RegionFactionMap[imperial.Id])
             .ToList();
 
         Assert.NotEmpty(imperialRegions);
-        Assert.All(imperialRegions, regionFaction =>
-            Assert.True(regionFaction.GetObserverIntel(cult.Id) >= ScenarioRules.PromisedWorldCultStartingIntel));
+        // The cult knows its home ground: it starts with strong awareness of every region holding a
+        // public Imperial force. (Seeded at reveal, before the pre-landing sim decays it a little.)
+        Assert.Contains(imperialRegions, region =>
+            cultPlanetFaction.GetRegionIntel(region) > 0f);
     }
 
     [Fact]

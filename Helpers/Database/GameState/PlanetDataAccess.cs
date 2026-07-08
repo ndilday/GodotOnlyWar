@@ -207,7 +207,7 @@ namespace OnlyWar.Helpers.Database.GameState
                     long garrison = reader.GetInt64(4);
                     int organization = Math.Max(1, reader.GetInt32(5));
                     int entrenchment = reader.GetInt32(6);
-                    int detection = reader.GetInt32(7);
+                    int listeningPost = reader.GetInt32(7);
                     int antiAir = reader.GetInt32(8);
                     // GrowthMultiplier was appended after AntiAir; legacy rows that predate it
                     // default to 1.0 (no throttle). See Design/OpeningScenario.md §2.2 / §7.
@@ -232,7 +232,7 @@ namespace OnlyWar.Helpers.Database.GameState
                             Garrison = garrison,
                             Organization = organization,
                             Entrenchment = entrenchment,
-                            Detection = detection,
+                            ListeningPost = listeningPost,
                             AntiAir = antiAir,
                             GrowthMultiplier = growthMultiplier
                         };
@@ -240,19 +240,19 @@ namespace OnlyWar.Helpers.Database.GameState
                 }
             }
 
-            PopulateObserverIntel(connection, regionMap);
+            PopulateRegionIntel(connection, regionMap);
         }
 
-        // Loads per-observer intelligence beliefs onto the already-built region factions. Tolerant
-        // of the table being absent (saves that predate the recon-intel feature) — those simply
-        // load with no prior intel, and the AI re-recons.
-        private static void PopulateObserverIntel(IDbConnection connection,
-                                                  IReadOnlyDictionary<int, Region> regionMap)
+        // Loads each planet faction's per-region awareness onto its RegionIntel map. Tolerant of the
+        // table being absent (saves that predate the unified-intel model) — those load with no prior
+        // awareness and rebuild it from listening posts/patrols/recon over the first turns.
+        private static void PopulateRegionIntel(IDbConnection connection,
+                                                IReadOnlyDictionary<int, Region> regionMap)
         {
             using (var tableCheck = connection.CreateCommand())
             {
                 tableCheck.CommandText =
-                    "SELECT name FROM sqlite_master WHERE type='table' AND name='RegionFactionObserverIntel'";
+                    "SELECT name FROM sqlite_master WHERE type='table' AND name='PlanetFactionRegionIntel'";
                 if (tableCheck.ExecuteScalar() == null)
                 {
                     return;
@@ -261,23 +261,23 @@ namespace OnlyWar.Helpers.Database.GameState
 
             using (var command = connection.CreateCommand())
             {
-                command.CommandText = "SELECT RegionId, FactionId, ObserverFactionId, IntelLevel FROM RegionFactionObserverIntel";
+                command.CommandText = "SELECT PlanetId, FactionId, RegionId, IntelLevel FROM PlanetFactionRegionIntel";
                 var reader = command.ExecuteReader();
                 while (reader.Read())
                 {
-                    int regionId = reader.GetInt32(0);
                     int factionId = reader.GetInt32(1);
-                    int observerFactionId = reader.GetInt32(2);
+                    int regionId = reader.GetInt32(2);
                     float intelLevel = (float)reader.GetDouble(3);
 
                     if (regionMap.TryGetValue(regionId, out Region region)
-                        && region.RegionFactionMap.TryGetValue(factionId, out RegionFaction regionFaction))
+                        && region.Planet.PlanetFactionMap.TryGetValue(factionId, out PlanetFaction planetFaction))
                     {
-                        regionFaction.ObserverIntel[observerFactionId] = intelLevel;
+                        planetFaction.SetRegionIntel(region, intelLevel);
                     }
                 }
             }
         }
+
 
         public Dictionary<int, Character> GetCharacterMap(IDbConnection connection, 
                                                            IReadOnlyDictionary<int, Faction> factionMap)
@@ -344,6 +344,7 @@ namespace OnlyWar.Helpers.Database.GameState
             SavePlanetFactions(transaction, planet.Id, planet.PlanetFactionMap);
             SavePlanetRegions(transaction, planet.Id, planet.Regions);
             SaveRegionFactions(transaction, planet.Regions);
+            SavePlanetFactionRegionIntel(transaction, planet);
             SaveMissions(transaction, planet.Regions);
         }
 
@@ -430,8 +431,8 @@ namespace OnlyWar.Helpers.Database.GameState
                     {
                         command.Transaction = transaction;
                         command.CommandText = @"INSERT INTO RegionFaction
-                            (RegionId, FactionId, IsPublic, Population, Garrison, Organization, Entrenchment, Detection, AntiAir, GrowthMultiplier) VALUES
-                            (@regionId, @factionId, @isPublic, @population, @garrison, @organization, @entrenchment, @detection, @antiAir, @growthMultiplier);";
+                            (RegionId, FactionId, IsPublic, Population, Garrison, Organization, Entrenchment, ListeningPost, AntiAir, GrowthMultiplier) VALUES
+                            (@regionId, @factionId, @isPublic, @population, @garrison, @organization, @entrenchment, @listeningPost, @antiAir, @growthMultiplier);";
                         command.AddParam("@regionId", region.Id);
                         command.AddParam("@factionId", regionFaction.PlanetFaction.Faction.Id);
                         command.AddParam("@isPublic", regionFaction.IsPublic ? 1 : 0);
@@ -439,24 +440,35 @@ namespace OnlyWar.Helpers.Database.GameState
                         command.AddParam("@garrison", regionFaction.Garrison);
                         command.AddParam("@organization", regionFaction.Organization);
                         command.AddParam("@entrenchment", regionFaction.Entrenchment);
-                        command.AddParam("@detection", regionFaction.Detection);
+                        command.AddParam("@listeningPost", regionFaction.ListeningPost);
                         command.AddParam("@antiAir", regionFaction.AntiAir);
                         command.AddParam("@growthMultiplier", regionFaction.GrowthMultiplier);
                         command.ExecuteNonQuery();
                     }
-                    foreach (KeyValuePair<int, float> intel in regionFaction.ObserverIntel)
-                    {
-                        using var intelCommand = transaction.Connection.CreateCommand();
-                        intelCommand.Transaction = transaction;
-                        intelCommand.CommandText = @"INSERT INTO RegionFactionObserverIntel
-                            (RegionId, FactionId, ObserverFactionId, IntelLevel) VALUES
-                            (@regionId, @factionId, @observerFactionId, @intelLevel);";
-                        intelCommand.AddParam("@regionId", region.Id);
-                        intelCommand.AddParam("@factionId", regionFaction.PlanetFaction.Faction.Id);
-                        intelCommand.AddParam("@observerFactionId", intel.Key);
-                        intelCommand.AddParam("@intelLevel", intel.Value);
-                        intelCommand.ExecuteNonQuery();
-                    }
+                }
+            }
+        }
+
+        // Persists each planet faction's per-region intelligence beliefs. Stored faction-centric
+        // (keyed by the observing faction + region) so a faction's awareness of regions it does NOT
+        // occupy is captured alongside its sight of its own ground.
+        private static void SavePlanetFactionRegionIntel(IDbTransaction transaction, Planet planet)
+        {
+            foreach (KeyValuePair<int, PlanetFaction> planetFaction in planet.PlanetFactionMap)
+            {
+                foreach (KeyValuePair<Region, float> intel in planetFaction.Value.RegionIntel)
+                {
+                    if (intel.Value <= 0) continue;
+                    using var command = transaction.Connection.CreateCommand();
+                    command.Transaction = transaction;
+                    command.CommandText = @"INSERT INTO PlanetFactionRegionIntel
+                        (PlanetId, FactionId, RegionId, IntelLevel) VALUES
+                        (@planetId, @factionId, @regionId, @intelLevel);";
+                    command.AddParam("@planetId", planet.Id);
+                    command.AddParam("@factionId", planetFaction.Key);
+                    command.AddParam("@regionId", intel.Key.Id);
+                    command.AddParam("@intelLevel", intel.Value);
+                    command.ExecuteNonQuery();
                 }
             }
         }
