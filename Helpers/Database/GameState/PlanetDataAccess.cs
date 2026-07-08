@@ -523,9 +523,23 @@ namespace OnlyWar.Helpers.Database.GameState
             {
                 foreach (Mission mission in region.SpecialMissions)
                 {
+                    if (!IsValidRegionMission(region, mission)) continue;
                     SaveMission(transaction, mission, isRegionMission: true);
                 }
             }
+        }
+
+        private static bool IsValidRegionMission(Region region, Mission mission)
+        {
+            RegionFaction target = mission.RegionFaction;
+            if (target?.PlanetFaction?.Faction == null) return false;
+            if (!ReferenceEquals(target.Region, region)) return false;
+            if (!region.RegionFactionMap.TryGetValue(target.PlanetFaction.Faction.Id, out RegionFaction current))
+            {
+                return false;
+            }
+
+            return ReferenceEquals(current, target);
         }
 
         // Persists a single mission row. Region special missions pass isRegionMission: true;

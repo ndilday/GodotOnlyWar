@@ -109,7 +109,7 @@ public class FactionStrategyControllerTests
         Planet planet = CreatePlanet();
         Region pdfRegion = planet.Regions[0];
         Region enemyRegion = pdfRegion.GetAdjacentRegions().First();
-        AddRegionFaction(planet, pdfRegion, pdf, population: 1_000_000, organization: 100, garrison: 10);
+        AddRegionFaction(planet, pdfRegion, pdf, population: 1_000_000, organization: 100, garrison: 2_000);
         AddRegionFaction(planet, enemyRegion, enemy, population: 1_000, organization: 100);
         planet.PlanetFactionMap[pdf.Id].SetRegionIntel(enemyRegion, FactionStrategyController.GarrisonFullSightIntel);
         Sector sector = new(CreatePlayerForce(), [], [planet], []);
@@ -118,7 +118,7 @@ public class FactionStrategyControllerTests
             .GenerateFactionOrders(pdf, sector, defensiveOnly: true);
 
         Assert.NotEmpty(orders);
-        Assert.Equal(10, pdfRegion.RegionFactionMap[pdf.Id].Garrison);
+        Assert.Equal(2_000, pdfRegion.RegionFactionMap[pdf.Id].Garrison);
     }
 
     [Fact]
@@ -137,20 +137,22 @@ public class FactionStrategyControllerTests
         Region adjacentRegion = planet.Regions[1];
         localRegion.RegionFactionMap[attacker.Id] = new RegionFaction(attackerPlanetFaction, localRegion)
         {
-            Population = 10_000,
+            Population = 50_000,
             Organization = 100,
             IsPublic = true
         };
         RegionFaction localTarget = new(imperialPlanetFaction, localRegion)
         {
-            Population = 100,
+            Population = 5_000,
+            Garrison = 5_000,
             Organization = 100,
             IsPublic = true
         };
         localRegion.RegionFactionMap[imperial.Id] = localTarget;
         RegionFaction adjacentTarget = new(imperialPlanetFaction, adjacentRegion)
         {
-            Population = 1_000_000,
+            Population = 1_000,
+            Garrison = 1_000,
             Organization = 100,
             IsPublic = true
         };
@@ -189,9 +191,11 @@ public class FactionStrategyControllerTests
         // PDF force is free to dig in.
         Faction pdf = CreateDefaultFaction();
         Faction enemy = CreateNonPlayerFaction();
-        Sector sector = BuildSectorWithFactions(
-            (pdf, population: 1_000_000, organization: 100, isPublic: true),
-            (enemy, population: 1_000, organization: 100, isPublic: true));
+        Planet planet = CreatePlanet();
+        Region region = planet.Regions[0];
+        AddRegionFaction(planet, region, pdf, population: 1_000_000, organization: 100, garrison: 2_000);
+        AddRegionFaction(planet, region, enemy, population: 1_000, organization: 100);
+        Sector sector = new(CreatePlayerForce(), [], [planet], []);
 
         List<Order> orders = new FactionStrategyController()
             .GenerateFactionOrders(pdf, sector, defensiveOnly: true);
@@ -256,8 +260,8 @@ public class FactionStrategyControllerTests
         Region staging = planet.Regions[0];
         Region target = staging.GetAdjacentRegions().First();
 
-        AddRegionFaction(planet, staging, attacker, population: 10_000, organization: 100);
-        AddRegionFaction(planet, target, defender, population: 100_000, organization: 100, garrison: 100);
+        AddRegionFaction(planet, staging, attacker, population: 50_000, organization: 100);
+        AddRegionFaction(planet, target, defender, population: 10_000, organization: 100, garrison: 10_000);
         RegionFaction targetFaction = target.RegionFactionMap[defender.Id];
         planet.PlanetFactionMap[attacker.Id].AddRegionIntel(target, FactionStrategyController.ReconIntelThreshold);
         Sector sector = new(CreatePlayerForce(), [], [planet], []);
@@ -268,7 +272,7 @@ public class FactionStrategyControllerTests
         Assert.Empty(strategicOrder.AssignedSquads);
         StrategicCombatMission mission = Assert.IsType<StrategicCombatMission>(strategicOrder.Mission);
         Assert.True(mission.CommittedBattleValue >= StrategicCombatRules.MassCombatBattleValueFloor);
-        Assert.True(staging.RegionFactionMap[attacker.Id].MilitaryStrength < 10_000);
+        Assert.True(staging.RegionFactionMap[attacker.Id].MilitaryStrength < 50_000);
     }
 
     [Fact]
@@ -329,10 +333,10 @@ public class FactionStrategyControllerTests
                              && region.GetAdjacentRegions().Any(adjacent => adjacent != stagingA && adjacent != targetA));
         Region targetB = stagingB.GetAdjacentRegions().First(adjacent => adjacent != stagingA && adjacent != targetA);
 
-        AddRegionFaction(planet, stagingA, attacker, population: 10_000, organization: 100);
-        AddRegionFaction(planet, stagingB, attacker, population: 10_000, organization: 100);
-        AddRegionFaction(planet, targetA, defender, population: 100_000, organization: 100, garrison: 100);
-        AddRegionFaction(planet, targetB, defender, population: 100_000, organization: 100, garrison: 100);
+        AddRegionFaction(planet, stagingA, attacker, population: 50_000, organization: 100);
+        AddRegionFaction(planet, stagingB, attacker, population: 50_000, organization: 100);
+        AddRegionFaction(planet, targetA, defender, population: 10_000, organization: 100, garrison: 10_000);
+        AddRegionFaction(planet, targetB, defender, population: 10_000, organization: 100, garrison: 10_000);
         planet.PlanetFactionMap[attacker.Id].SetRegionIntel(targetA, FactionStrategyController.ReconIntelThreshold);
         planet.PlanetFactionMap[attacker.Id].SetRegionIntel(targetB, FactionStrategyController.ReconIntelThreshold);
         Sector sector = new(CreatePlayerForce(), [], [planet], []);
@@ -386,12 +390,11 @@ public class FactionStrategyControllerTests
         Region flexibleSource = target.GetAdjacentRegions().Skip(1).First();
         Region extraTarget = flexibleSource.GetAdjacentRegions().First(region => region != target && region != focusedSource);
 
-        AddRegionFaction(planet, focusedSource, attacker, population: 5_000, organization: 100);
-        AddRegionFaction(planet, flexibleSource, attacker, population: 5_000, organization: 100);
-        AddRegionFaction(planet, target, defender, population: 1_000_000, organization: 100, garrison: 100);
+        AddRegionFaction(planet, focusedSource, attacker, population: 50_000, organization: 100);
+        AddRegionFaction(planet, flexibleSource, attacker, population: 50_000, organization: 100);
+        AddRegionFaction(planet, target, defender, population: 10_000, organization: 100, garrison: 10_000);
         AddRegionFaction(planet, extraTarget, defender, population: 1_000, organization: 100, garrison: 100);
         planet.PlanetFactionMap[attacker.Id].SetRegionIntel(target, FactionStrategyController.ReconIntelThreshold);
-        planet.PlanetFactionMap[attacker.Id].SetRegionIntel(extraTarget, FactionStrategyController.ReconIntelThreshold);
         Sector sector = new(CreatePlayerForce(), [], [planet], []);
 
         new FactionStrategyController().GenerateFactionOrders(attacker, sector);
@@ -640,7 +643,7 @@ public class FactionStrategyControllerTests
         Planet planet = CreatePlanet();
         Region pdfRegion = planet.Regions[0];
         Region enemyRegion = pdfRegion.GetAdjacentRegions().First();
-        AddRegionFaction(planet, pdfRegion, pdf, population: 1_000_000, organization: 100);
+        AddRegionFaction(planet, pdfRegion, pdf, population: 1_000_000, organization: 100, garrison: 2_000);
         AddRegionFaction(planet, enemyRegion, enemy, population: 1_000, organization: 100);
         Sector sector = new(CreatePlayerForce(), [], [planet], []);
 

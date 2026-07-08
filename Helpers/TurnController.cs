@@ -128,7 +128,8 @@ namespace OnlyWar.Helpers
             // Diversion missions resolve before strategic planning so the feint they project is
             // already in place when factions decide where to garrison and attack this turn. This
             // is what lets a diversion pull enemy attention away from the player's other forces.
-            List<Order> allOrdersThisTurn = sector.Orders.Values.ToList();
+            List<Order> playerOrdersThisTurn = sector.Orders.Values.ToList();
+            List<Order> allOrdersThisTurn = playerOrdersThisTurn.ToList();
             ProcessDiversionMissions(allOrdersThisTurn.Where(o => o.Mission.MissionType == MissionType.Diversion && o.AssignedSquads.Any()));
 
             // --- 1. Strategic Planning Phase ---
@@ -162,6 +163,7 @@ namespace OnlyWar.Helpers
 
             var constructionOrders = allOrdersThisTurn.Where(o => !o.AssignedSquads.Any() && o.Mission is ConstructionMission);
             ProcessConstructionOrders(constructionOrders);
+            RemoveConsumedSpecialMissions(playerOrdersThisTurn);
 
             // --- 3. Planetary Simulation & Resolution Phase ---
             ApplyMissionResults();
@@ -169,12 +171,14 @@ namespace OnlyWar.Helpers
             TrainNonDeployedPlayerForces(sector);
             AdvanceFleetMovement(sector);
             UpdatePlanets(sector.Planets.Values);
+            PruneInvalidSpecialMissions(sector.Planets.Values);
             UpdateIntelligence(sector.Planets.Values);
 
             // --- 4. Scenario Resolution Phase ---
             // Resolve the opening objective after the planet sim has settled this turn, so the
             // win/lapse checks read the post-combat, post-growth state of the promised world.
             ProcessScenario(sector);
+            CleanupResolvedPlayerOrders(sector, playerOrdersThisTurn);
         }
 
         // Runs a planet-scoped slice of the weekly turn for a single world, for the given number of
@@ -229,6 +233,7 @@ namespace OnlyWar.Helpers
 
                 ApplyMissionResults();
                 UpdatePlanet(planet);
+                PruneInvalidSpecialMissions(new[] { planet });
                 UpdateIntelligence(planet);
 
                 GameLog.Info(() =>
@@ -458,11 +463,10 @@ namespace OnlyWar.Helpers
 
                 bool isPlayerOrder = order.AssignedSquads.First().Faction.IsPlayerFaction;
 
-                // A combat order persists across turns (ProcessTurn never clears orders), so once a
-                // squad is wiped or fully incapacitated — dead soldiers are permanently removed from
-                // Squad.Members in BattleTurnResolver — the order would otherwise re-deploy a squad
-                // that has no able soldiers left and crash in BattleSquad construction. A depleted
-                // squad cannot fight, so deploy only squads that still have an able member.
+                // A depleted squad cannot fight, so deploy only squads that still have an able
+                // member. Player non-construction orders are cleared at the end of ProcessTurn, but
+                // this also protects transient NPC orders and edge cases where a squad was wiped
+                // earlier in the same resolution pass.
                 List<BattleSquad> involvedBattleSquads = order.AssignedSquads
                                                               .Where(s => s.Members.Any(m => m.CanFight))
                                                               .Select(s => new BattleSquad(isPlayerOrder, s))
@@ -573,6 +577,60 @@ namespace OnlyWar.Helpers
             {
                 GameLog.Debug(() =>
                     $"Construction resolved: orders={orders.Count}, {SummarizeConstructionOrders(orders)}");
+            }
+        }
+
+        private void RemoveConsumedSpecialMissions(IEnumerable<Order> playerOrdersThisTurn)
+        {
+            foreach (Order order in playerOrdersThisTurn.Where(o => !ShouldPersistPlayerOrder(o)))
+            {
+                Mission mission = order.Mission;
+                mission.RegionFaction?.Region?.SpecialMissions.Remove(mission);
+            }
+        }
+
+        private void CleanupResolvedPlayerOrders(Sector sector, IEnumerable<Order> playerOrdersThisTurn)
+        {
+            foreach (Order order in playerOrdersThisTurn.ToList())
+            {
+                if (ShouldPersistPlayerOrder(order)) continue;
+
+                sector.RemoveOrder(order);
+                foreach (Squad squad in order.AssignedSquads)
+                {
+                    if (ReferenceEquals(squad.CurrentOrders, order))
+                    {
+                        squad.CurrentOrders = null;
+                    }
+                }
+            }
+        }
+
+        private static bool ShouldPersistPlayerOrder(Order order)
+        {
+            return order.Mission is ConstructionMission
+                && order.AssignedSquads.Any(s => s.Faction?.IsPlayerFaction == true);
+        }
+
+        private static void PruneInvalidSpecialMissions(IEnumerable<Planet> planets)
+        {
+            foreach (Planet planet in planets)
+            {
+                foreach (Region region in planet.Regions)
+                {
+                    region.SpecialMissions.RemoveAll(mission =>
+                    {
+                        RegionFaction target = mission.RegionFaction;
+                        if (target?.PlanetFaction?.Faction == null) return true;
+                        if (!ReferenceEquals(target.Region, region)) return true;
+                        if (!region.RegionFactionMap.TryGetValue(target.PlanetFaction.Faction.Id, out RegionFaction current))
+                        {
+                            return true;
+                        }
+
+                        return !ReferenceEquals(current, target);
+                    });
+                }
             }
         }
 

@@ -179,6 +179,22 @@ public class SectorEntityLogicTests
     }
 
     [Fact]
+    public void ProcessTurn_PrunesSpecialMissionsForRemovedRegionFactions()
+    {
+        RNG.Reset(98765);
+        SectorSimulationFixture fixture = SectorSimulationFixture.Create();
+        RegionFaction cult = fixture.AddHiddenFaction(0, GrowthType.Logistic, population: 20000);
+        Region region = fixture.Planet.Regions[0];
+        Mission staleMission = new(MissionType.Ambush, cult, 1);
+        region.SpecialMissions.Add(staleMission);
+        region.RegionFactionMap.Remove(cult.PlanetFaction.Faction.Id);
+
+        fixture.ProcessTurn();
+
+        Assert.DoesNotContain(staleMission, region.SpecialMissions);
+    }
+
+    [Fact]
     public void ProcessTurn_GeneratesGovernorRequestAgainstPublicThreat()
     {
         RNG.Reset(1);

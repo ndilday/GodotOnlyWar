@@ -276,11 +276,10 @@ public class ScenarioTurnTests
                 sawCombatWithSquads = true;
             }
 
-            // Retire this turn's order so it never re-runs against a now-depleted squad next turn.
             if (reconOrder != null)
             {
-                sector.RemoveOrder(reconOrder);
-                strikeSquad.CurrentOrders = null;
+                Assert.DoesNotContain(reconOrder.Id, sector.Orders.Keys);
+                Assert.Null(strikeSquad.CurrentOrders);
             }
         }
 
@@ -300,7 +299,7 @@ public class ScenarioTurnTests
     // order on a squad, depletes that squad each turn (the "members remain but none can fight" state
     // combat leaves behind), and runs the real sector forward asserting no crash.
     [Fact]
-    public void ProcessTurn_PersistentOrderOnDepletedSquad_DoesNotCrash()
+    public void ProcessTurn_NonConstructionPlayerOrderOnDepletedSquadClearsAfterTurn()
     {
         RNG.Reset(20250628);
         Sector sector = SectorBuilder.GenerateSector(11, _data, _date, "Attrition Chapter");
@@ -316,9 +315,9 @@ public class ScenarioTurnTests
         Squad strikeSquad = sector.PlayerForce.Army.OrderOfBattle.GetAllSquads()
             .First(s => s.Members.Any(m => m.CanFight));
         Mission reconMission = new Mission(MissionType.Recon, tyranidTarget, 0);
-        Order persistentOrder = new Order(new List<Squad> { strikeSquad }, Disposition.Mobile,
-                                          isQuiet: true, isActivelyEngaging: false, Aggression.Cautious, reconMission);
-        sector.AddNewOrder(persistentOrder);
+        Order reconOrder = new(new List<Squad> { strikeSquad }, Disposition.Mobile,
+                               isQuiet: true, isActivelyEngaging: false, Aggression.Cautious, reconMission);
+        sector.AddNewOrder(reconOrder);
 
         for (int turn = 0; turn < TurnsToSimulate; turn++)
         {
@@ -335,8 +334,66 @@ public class ScenarioTurnTests
 
         // The order survives the run (depleted squads are skipped, not disbanded), and the squad is
         // still depleted — proving the persistent order kept landing on the unmanned-squad path.
-        Assert.Contains(persistentOrder.Id, sector.Orders.Keys);
+        Assert.DoesNotContain(reconOrder.Id, sector.Orders.Keys);
+        Assert.Null(strikeSquad.CurrentOrders);
         Assert.DoesNotContain(strikeSquad.Members, m => m.CanFight);
+    }
+
+    [Fact]
+    public void ProcessTurn_PlayerConstructionOrderPersistsAfterTurn()
+    {
+        RNG.Reset(20250628);
+        Sector sector = SectorBuilder.GenerateSector(12, _data, _date, "Mason Chapter");
+        GameDataSingleton.Instance.LoadGameDataFromBlob(_data, _date, sector);
+
+        Planet promised = sector.GetPlanet(sector.Scenario.PromisedPlanetId);
+        Region region = promised.Regions.First();
+        RegionFaction playerRegionFaction = AddPlayerRegionFaction(sector, promised, region);
+
+        Squad squad = sector.PlayerForce.Army.OrderOfBattle.GetAllSquads()
+            .First(s => s.Members.Any(m => m.CanFight));
+        squad.CurrentRegion = region;
+        playerRegionFaction.LandedSquads.Add(squad);
+
+        ConstructionMission mission = new(DefenseType.Entrenchment, 0, playerRegionFaction);
+        Order constructionOrder = new(new List<Squad> { squad }, Disposition.DugIn,
+                                      isQuiet: false, isActivelyEngaging: false,
+                                      Aggression.Cautious, mission);
+        sector.AddNewOrder(constructionOrder);
+
+        new TurnController().ProcessTurn(sector);
+
+        Assert.Contains(constructionOrder.Id, sector.Orders.Keys);
+        Assert.Same(constructionOrder, squad.CurrentOrders);
+        Assert.True(playerRegionFaction.Entrenchment > 0);
+    }
+
+    [Fact]
+    public void ProcessTurn_ExecutedSpecialMissionIsRemovedAfterTurn()
+    {
+        RNG.Reset(20250628);
+        Sector sector = SectorBuilder.GenerateSector(13, _data, _date, "Vanishing Chapter");
+        GameDataSingleton.Instance.LoadGameDataFromBlob(_data, _date, sector);
+
+        Planet promised = sector.GetPlanet(sector.Scenario.PromisedPlanetId);
+        RegionFaction tyranidTarget = promised.Regions
+            .Select(r => r.RegionFactionMap.TryGetValue(Tyranids.Id, out RegionFaction rf) ? rf : null)
+            .First(rf => rf != null);
+        Mission specialMission = new(MissionType.Recon, tyranidTarget, 0);
+        tyranidTarget.Region.SpecialMissions.Add(specialMission);
+
+        Squad squad = sector.PlayerForce.Army.OrderOfBattle.GetAllSquads()
+            .First(s => s.Members.Any(m => m.CanFight));
+        Order order = new(new List<Squad> { squad }, Disposition.Mobile,
+                          isQuiet: true, isActivelyEngaging: false,
+                          Aggression.Cautious, specialMission);
+        sector.AddNewOrder(order);
+
+        new TurnController().ProcessTurn(sector);
+
+        Assert.DoesNotContain(specialMission, tyranidTarget.Region.SpecialMissions);
+        Assert.DoesNotContain(order.Id, sector.Orders.Keys);
+        Assert.Null(squad.CurrentOrders);
     }
 
     // The planet-scoped opening sim runs only the promised world's local turn slice; it must NOT run
@@ -367,6 +424,26 @@ public class ScenarioTurnTests
 
     // Sever a vital hit location on every member so CanFight is false while each soldier remains in
     // Squad.Members — the depleted-but-not-empty state combat leaves behind.
+    private static RegionFaction AddPlayerRegionFaction(Sector sector, Planet planet, Region region)
+    {
+        Faction playerFaction = sector.PlayerForce.Faction;
+        if (!planet.PlanetFactionMap.TryGetValue(playerFaction.Id, out PlanetFaction playerPlanetFaction))
+        {
+            playerPlanetFaction = new PlanetFaction(playerFaction) { IsPublic = true };
+            planet.PlanetFactionMap[playerFaction.Id] = playerPlanetFaction;
+        }
+
+        RegionFaction playerRegionFaction = new(playerPlanetFaction, region)
+        {
+            Population = 1,
+            Garrison = 1,
+            IsPublic = true,
+            Organization = 100
+        };
+        region.RegionFactionMap[playerFaction.Id] = playerRegionFaction;
+        return playerRegionFaction;
+    }
+
     private static void DepleteSquad(Squad squad)
     {
         foreach (ISoldier member in squad.Members)
