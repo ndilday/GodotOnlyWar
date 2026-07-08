@@ -24,7 +24,7 @@ public class StrategicCombatResolverTests
         long battleValue = StrategicCombatResolver.CalculateDefenderBattleValue(horde);
 
         Assert.Equal(horde.MilitaryStrength, battleValue);
-        Assert.Equal(1_200, battleValue);
+        Assert.Equal(1_000, battleValue);
     }
 
     [Fact]

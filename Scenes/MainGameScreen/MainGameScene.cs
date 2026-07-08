@@ -43,15 +43,8 @@ public partial class MainGameScene : Control
 	private int? _selectedFleetId;
 	public override void _Ready()
 	{
-		// Route the headless-safe battle/turn engine log seams to the Godot console. Engine code
-		// under Helpers never calls GD.Print directly so it can run headless (tests, balance
-		// tuning); in-game we wire them here so output still reaches the editor output.
-		BattleLog.Sink = GD.Print;
-		// Leveled turn/battle trace. Set MinimumLevel higher (Debug/Trace) to diagnose slow turn
-		// processing — per-battle sizes/timings, force generation, per-week costs — without touching
-		// engine code; leave at Debug for strategic diagnostics. Off silences it entirely.
-		GameLog.Sink = (level, message) => GD.Print($"[{level}] {message}");
-		GameLog.MinimumLevel = GameLogLevel.Debug;
+		// The engine log seams (BattleLog/GameLog) are wired to the Godot console by the
+		// GodotLogBridge autoload, which runs before any scene so generation logging is captured too.
 
 		if (!GameDataSingleton.Instance.IsInitialized)
 		{

@@ -243,7 +243,7 @@ public class FactionStrategyControllerTests
         Faction defender = CreateNonPlayerFaction();
         RegionFaction rf = CreateTargetRegionFaction(defender, population: 1_000, garrison: 200);
 
-        Assert.Equal(1_200L, FactionStrategyController.CalculateDefenderBattleValue(rf));
+        Assert.Equal(1_000L, FactionStrategyController.CalculateDefenderBattleValue(rf));
     }
 
     [Fact]
@@ -425,6 +425,35 @@ public class FactionStrategyControllerTests
     }
 
     [Fact]
+    public void GenerateFactionOrders_SpareTroopsReinforceAdjacentGarrisonShortfall()
+    {
+        // A rear region flush with spare troops shores up an adjacent friendly region that faces a
+        // strong enemy front it cannot self-garrison, before any spare force is spent on offensives.
+        Faction attacker = BuildFaction(20, "Cult", isPlayer: false, isDefault: false, GrowthType.Conversion);
+        Faction defender = CreateDefaultFaction();
+        Planet planet = CreatePlanet();
+        Region rear = planet.Regions[0];
+        Region needy = rear.GetAdjacentRegions().First();
+        Region enemyFront = needy.GetAdjacentRegions().First(region => region != rear);
+
+        // Rear holds a large spare pool with no adjacent enemy; the needy region is thinly held and
+        // pressed by a strong enemy garrison next door, leaving it far below its required garrison.
+        AddRegionFaction(planet, rear, attacker, population: 10_000, organization: 100);
+        AddRegionFaction(planet, needy, attacker, population: 500, organization: 100);
+        AddRegionFaction(planet, enemyFront, defender, population: 100_000, organization: 100, garrison: 5_000);
+        // The attacker must see the enemy front to perceive the threat that sizes needy's garrison.
+        planet.PlanetFactionMap[attacker.Id].SetRegionIntel(
+            enemyFront, FactionStrategyController.GarrisonFullSightIntel);
+        Sector sector = new(CreatePlayerForce(), [], [planet], []);
+
+        new FactionStrategyController().GenerateFactionOrders(attacker, sector);
+
+        // Needy is topped up to exactly its required garrison (5,000) and the rear paid for it.
+        Assert.Equal(5_000, needy.RegionFactionMap[attacker.Id].MilitaryStrength);
+        Assert.True(rear.RegionFactionMap[attacker.Id].MilitaryStrength < 10_000);
+    }
+
+    [Fact]
     public void ShouldUseStrategicCombat_PlayerTargetStaysTactical()
     {
         Faction attacker = CreateNonPlayerFaction();
@@ -443,8 +472,8 @@ public class FactionStrategyControllerTests
         RegionFaction target = CreateTargetRegionFaction(raider, population: 1000, carryingCapacity: 5000);
 
         // A devouring swarm counts the carrying capacity it will eat; a non-consumer only the population.
-        Assert.Equal(6000.0, FactionStrategyController.CalculateOffensiveReward(target, consumer));
-        Assert.Equal(1000.0, FactionStrategyController.CalculateOffensiveReward(target, raider));
+        Assert.Equal(6000.0, FactionStrategyController.CalculateOffensiveReward(target, consumer, 1, 1));
+        Assert.Equal(1000.0, FactionStrategyController.CalculateOffensiveReward(target, raider, 1, 1));
     }
 
     [Fact]
@@ -508,71 +537,6 @@ public class FactionStrategyControllerTests
     }
 
     // ----- Recon-before-invade: DecideOffensivePlan (PRD §4.24) -----
-
-    [Fact]
-    public void DecideOffensivePlan_WinnableButUnknownTarget_ReconsBeforeCommitting()
-    {
-        Faction attacker = CreateNonPlayerFaction();
-        // Winnable on paper, but the attacker has no intelligence on it, so it scouts first.
-        var target = Offensive(CreateTargetRegionFaction(attacker), attackForce: 1000, estimatedDefenderBv: 100, reward: 5000);
-
-        var (plan, chosen) = FactionStrategyController.DecideOffensivePlan([target], attacker.Id);
-
-        Assert.Equal(FactionStrategyController.OffensivePlan.Recon, plan);
-        Assert.Same(target, chosen);
-    }
-
-    [Fact]
-    public void DecideOffensivePlan_WellReconnoitredWinnableTarget_Assaults()
-    {
-        Faction attacker = CreateNonPlayerFaction();
-        RegionFaction known = CreateTargetRegionFaction(attacker);
-        known.PlanetFaction.AddRegionIntel(known.Region, FactionStrategyController.ReconIntelThreshold);
-        var target = Offensive(known, attackForce: 1000, estimatedDefenderBv: 100, reward: 5000);
-
-        var (plan, chosen) = FactionStrategyController.DecideOffensivePlan([target], attacker.Id);
-
-        Assert.Equal(FactionStrategyController.OffensivePlan.Assault, plan);
-        Assert.Same(target, chosen);
-    }
-
-    [Fact]
-    public void DecideOffensivePlan_KnownTargetTooStrong_ReconsAPromisingUnknownInstead()
-    {
-        Faction attacker = CreateNonPlayerFaction();
-        RegionFaction known = CreateTargetRegionFaction(attacker);
-        known.PlanetFaction.AddRegionIntel(known.Region, FactionStrategyController.ReconIntelThreshold);
-        var tooStrong = Offensive(known, attackForce: 100, estimatedDefenderBv: 1000, reward: 9000);
-        var unknownRich = Offensive(CreateTargetRegionFaction(attacker), attackForce: 1000, estimatedDefenderBv: 100, reward: 4000);
-
-        var (plan, chosen) = FactionStrategyController.DecideOffensivePlan([tooStrong, unknownRich], attacker.Id);
-
-        Assert.Equal(FactionStrategyController.OffensivePlan.Recon, plan);
-        Assert.Same(unknownRich, chosen);
-    }
-
-    [Fact]
-    public void DecideOffensivePlan_OnlyKnownUnwinnableTargets_Holds()
-    {
-        Faction attacker = CreateNonPlayerFaction();
-        RegionFaction known = CreateTargetRegionFaction(attacker);
-        known.PlanetFaction.AddRegionIntel(known.Region, FactionStrategyController.ReconIntelThreshold);
-        var tooStrong = Offensive(known, attackForce: 100, estimatedDefenderBv: 1000, reward: 9000);
-
-        var (plan, chosen) = FactionStrategyController.DecideOffensivePlan([tooStrong], attacker.Id);
-
-        Assert.Equal(FactionStrategyController.OffensivePlan.None, plan);
-        Assert.Null(chosen);
-    }
-
-    [Fact]
-    public void DecideOffensivePlan_NoOffensives_Holds()
-    {
-        var (plan, chosen) = FactionStrategyController.DecideOffensivePlan([], attackerFactionId: 2);
-
-        Assert.Equal(FactionStrategyController.OffensivePlan.None, plan);
-        Assert.Null(chosen);
-    }
 
     [Fact]
     public void ChooseReconTarget_ScoutsTheRichestUnknown()

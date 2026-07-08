@@ -37,12 +37,12 @@ namespace OnlyWar.Models.Planets
         }
 
         // This faction's fighting strength in the region: its whole population for a horde whose
-        // numbers are its army (PopulationIsMilitary — Tyranids, cults), plus any standing garrison;
+        // numbers are its army (PopulationIsMilitary — Tyranids, cults);
         // for a civilian-base faction (the Imperium) only its garrison fields as troops. The
         // revolt/suppression checks read this rather than raw garrison, so a hidden cult is measured
         // by the members who would actually rise, not its vestigial armed cells (PRD §4.24).
         public long MilitaryStrength =>
-            PlanetFaction.Faction.PopulationIsMilitary ? Population + Garrison : Garrison;
+            PlanetFaction.Faction.PopulationIsMilitary ? Population : Garrison;
         public bool IsPublic { get; set; }
         // Entrenchment provides bonsues against attacks
         public int Entrenchment { get; set; }

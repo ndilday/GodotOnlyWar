@@ -48,23 +48,64 @@ namespace OnlyWar.Builders
         private static List<Squad> GenerateGenericForce(ForceGenerationRequest request)
         {
             var generatedSquads = new List<Squad>();
-            var availableTemplates = request.Faction.SquadTemplates.Values
-                                            .Where(st => (st.SquadType & SquadTypes.HQ) == 0) // Exclude HQs from generic forces
-                                            .OrderByDescending(st => st.BattleValue)
+            var usableTemplates = request.Faction.SquadTemplates.Values
+                                             .Where(st => st.BattleValue > 0)
+                                             .OrderBy(st => st.Id)
+                                             .ToList();
+            var availableTemplates = usableTemplates
+                                            .Where(st => (st.SquadType & SquadTypes.HQ) == 0)
+                                            .ToList();
+            var hqTemplates = usableTemplates
+                                            .Where(st => (st.SquadType & SquadTypes.HQ) == SquadTypes.HQ)
                                             .ToList();
 
             if (!availableTemplates.Any()) return new List<Squad>();
 
             long remainingValue = request.TargetBattleValue;
+            Squad hqSquad = GenerateGenericHqSquad(hqTemplates, availableTemplates, remainingValue);
+            if (hqSquad != null)
+            {
+                generatedSquads.Add(hqSquad);
+                remainingValue -= SquadBattleValue(hqSquad);
+            }
+
+            HashSet<int> usedTemplateIds = [];
 
             while (remainingValue > 0)
             {
-                var affordableTemplate = availableTemplates.FirstOrDefault(t => t.BattleValue <= remainingValue);
-                if (affordableTemplate == null)
+                List<SquadTemplate> affordableTemplates = availableTemplates
+                    .Where(t => t.BattleValue <= remainingValue)
+                    .ToList();
+                if (!affordableTemplates.Any())
                 {
-                    // No single squad can fit the remaining budget, so we stop.
+                    Squad partialSquad = GeneratePartialRemainderSquad(availableTemplates, remainingValue);
+                    if (partialSquad != null)
+                    {
+                        generatedSquads.Add(partialSquad);
+                        remainingValue -= SquadBattleValue(partialSquad);
+                    }
                     break;
                 }
+
+                List<SquadTemplate> viableTemplates = affordableTemplates
+                    .Where(t => LeavesUsableRemainder(availableTemplates, remainingValue - t.BattleValue))
+                    .ToList();
+                if (viableTemplates.Any())
+                {
+                    affordableTemplates = viableTemplates;
+                }
+
+                List<SquadTemplate> unusedTemplates = affordableTemplates
+                    .Where(t => !usedTemplateIds.Contains(t.Id))
+                    .ToList();
+                if (!unusedTemplates.Any())
+                {
+                    usedTemplateIds.Clear();
+                    unusedTemplates = affordableTemplates;
+                }
+
+                SquadTemplate affordableTemplate = unusedTemplates[RNG.GetIntBelowMax(0, unusedTemplates.Count)];
+                usedTemplateIds.Add(affordableTemplate.Id);
                 generatedSquads.Add(SquadFactory.GenerateSquad(affordableTemplate));
                 remainingValue -= affordableTemplate.BattleValue;
             }
@@ -78,6 +119,63 @@ namespace OnlyWar.Builders
 
             return generatedSquads;
         }
+
+        private static Squad GenerateGenericHqSquad(
+            IEnumerable<SquadTemplate> hqTemplates,
+            IEnumerable<SquadTemplate> availableNonHqTemplates,
+            long budget)
+        {
+            List<SquadTemplate> viableHqTemplates = hqTemplates
+                .Where(hq => hq.BattleValue <= budget)
+                .Where(hq => CanAffordFullSquadCount(availableNonHqTemplates, budget - hq.BattleValue, 3))
+                .ToList();
+
+            if (!viableHqTemplates.Any()) return null;
+
+            SquadTemplate template = viableHqTemplates[RNG.GetIntBelowMax(0, viableHqTemplates.Count)];
+            return SquadFactory.GenerateSquad(template);
+        }
+
+        private static bool CanAffordFullSquadCount(
+            IEnumerable<SquadTemplate> availableTemplates,
+            long budget,
+            int squadCount)
+        {
+            int cheapestBattleValue = availableTemplates.Min(t => t.BattleValue);
+            return budget >= (long)cheapestBattleValue * squadCount;
+        }
+
+        private static Squad GeneratePartialRemainderSquad(IEnumerable<SquadTemplate> availableTemplates, long remainingValue)
+        {
+            SquadTemplate template = availableTemplates
+                .Select(t => new
+                {
+                    Template = t,
+                    BattleValue = SquadFactory.CalculateSquadBattleValueWithinBudget(t, remainingValue)
+                })
+                .Where(t => t.BattleValue > 0)
+                .OrderByDescending(t => t.BattleValue)
+                .ThenBy(t => t.Template.Id)
+                .Select(t => t.Template)
+                .FirstOrDefault();
+
+            if (template != null)
+            {
+                return SquadFactory.GenerateSquadWithinBudget(template, remainingValue);
+            }
+
+            return null;
+        }
+
+        private static bool LeavesUsableRemainder(IEnumerable<SquadTemplate> availableTemplates, long remainingValue)
+        {
+            if (remainingValue == 0) return true;
+            return availableTemplates.Any(t => t.BattleValue <= remainingValue)
+                || availableTemplates.Any(t => SquadFactory.CalculateSquadBattleValueWithinBudget(t, remainingValue) > 0);
+        }
+
+        private static long SquadBattleValue(Squad squad) =>
+            squad.Members.Sum(member => (long)member.Template.BattleValue);
 
         private static List<Squad> GenerateHqEncounter(ForceGenerationRequest request)
         {

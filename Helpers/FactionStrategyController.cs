@@ -40,7 +40,7 @@ public class FactionStrategyController
     // Fraction of a region's leftover spare troops committed as a standing patrol screen (the rest
     // stays available). Pools are 1:1 with battle value now, so this is a direct share, not a ×N.
     internal const double PatrolForceFraction = 0.1;
-    internal const double RaidForceRatioThreshold = 0.35;
+    internal const double RaidForceRatioThreshold = 0.25;
     private const double RaidCommitFraction = 0.35;
     private const long MinimumRaidBattleValue = 100;
     private const int MaxMissionPlanningIterations = 24;
@@ -69,12 +69,17 @@ public class FactionStrategyController
         public RegionFaction RegionFaction { get; }
         public long RequiredGarrison { get; }
         public long SpareTroops { get; set; }
+        // How far this region's organized troops fall short of its required garrison (0 when the
+        // minimum is met). Tracked alongside SpareTroops so garrison reinforcement can whittle the
+        // deficit down as neighbours relocate troops in, rather than recomputing it each transfer.
+        public long GarrisonShortfall { get; set; }
 
-        public RegionForceState(RegionFaction factionInfo, long requiredGarrison, long spareTroops)
+        public RegionForceState(RegionFaction factionInfo, long requiredGarrison, long spareTroops, long garrisonShortfall)
         {
             RegionFaction = factionInfo;
             RequiredGarrison = requiredGarrison;
             SpareTroops = spareTroops;
+            GarrisonShortfall = garrisonShortfall;
         }
     }
 
@@ -123,13 +128,14 @@ public class FactionStrategyController
         foreach (var regionFaction in factionRegionsOnPlanet)
         {
             long requiredGarrison = CalculateRequiredGarrison(regionFaction);
-            long organizedTroops = (long)(regionFaction.Population * regionFaction.Organization / 100.0f);
+            long organizedTroops = (long)(regionFaction.MilitaryStrength * regionFaction.Organization / 100.0f);
             long spareTroops = Math.Max(0, organizedTroops - requiredGarrison);
-            regionalForceStates.Add(new RegionForceState(regionFaction, requiredGarrison, spareTroops));
+            long garrisonShortfall = Math.Max(0, requiredGarrison - organizedTroops);
+            regionalForceStates.Add(new RegionForceState(regionFaction, requiredGarrison, spareTroops, garrisonShortfall));
         }
 
         long organizedTotal = factionRegionsOnPlanet
-            .Sum(regionFaction => (long)(regionFaction.Population * regionFaction.Organization / 100.0f));
+            .Sum(regionFaction => (long)(regionFaction.MilitaryStrength * regionFaction.Organization / 100.0f));
         GameLog.Debug(() =>
             $"AI plan {faction.Name}/{planet.Name}: posture={(defensiveOnly ? "defensive" : "offensive")}, "
             + $"regions={factionRegionsOnPlanet.Count}, organized={organizedTotal}, "
@@ -217,6 +223,7 @@ public class FactionStrategyController
         List<RegionForceState> regionalForceStates,
         List<Order> allOrders)
     {
+        PlanGarrisonReinforcement(faction, planet, regionalForceStates);
         PlanFrontReinforcement(faction, planet, regionalForceStates);
         HashSet<string> plannedTargets = new();
 
@@ -238,7 +245,7 @@ public class FactionStrategyController
             };
 
             if (!issued) break;
-            plannedTargets.Add(MissionTargetKey(candidate.Plan, candidate.Offensive));
+            plannedTargets.Add(MissionTargetKey(candidate.Offensive));
         }
     }
 
@@ -256,13 +263,17 @@ public class FactionStrategyController
     {
         return offensives
             .SelectMany(offensive => BuildMissionCandidates(faction, offensive))
-            .Where(candidate => !plannedTargets.Contains(MissionTargetKey(candidate.Plan, candidate.Offensive)))
+            .Where(candidate => !plannedTargets.Contains(MissionTargetKey(candidate.Offensive)))
             .OrderByDescending(candidate => candidate.Score)
             .FirstOrDefault();
     }
 
-    private static string MissionTargetKey(OffensivePlan plan, PotentialOffensive offensive) =>
-        $"{plan}:{offensive.TargetRegion.Id}:{offensive.TargetFaction.PlanetFaction.Faction.Id}";
+    // Dedup key is the target alone, deliberately not the plan: once any mission (assault, raid, or
+    // recon) commits against a region this planning pass, that region is off the table. Keying on the
+    // plan too would let an already-assaulted target draw a follow-up raid once its shrinking
+    // AvailableAttackingForce dropped below winnable but stayed raid-viable — a duplicate commitment.
+    private static string MissionTargetKey(PotentialOffensive offensive) =>
+        $"{offensive.TargetRegion.Id}:{offensive.TargetFaction.PlanetFaction.Faction.Id}";
 
     private IEnumerable<MissionCandidate> BuildMissionCandidates(Faction faction, PotentialOffensive offensive)
     {
@@ -326,48 +337,6 @@ public class FactionStrategyController
         double risk = Math.Max(1.0, offensive.EstimatedDefenderBattleValue
             * (1.0 + offensive.TargetFaction.Entrenchment * EntrenchmentRiskFactor));
         return (offensive.Reward * 0.25 + expectedDamage) / risk;
-    }
-
-    private void PlanMajorOffensiveOnPlanet(Faction faction, Planet planet, List<RegionForceState> regionalForceStates, List<Order> allOrders)
-    {
-        var potentialOffensives = IdentifyPotentialOffensivesOnPlanet(faction, planet, regionalForceStates);
-        LogPotentialOffensives(faction, planet, potentialOffensives);
-        (OffensivePlan plan, PotentialOffensive target) = DecideOffensivePlan(potentialOffensives, faction.Id);
-
-        GameLog.Debug(() =>
-            $"AI plan {faction.Name}/{planet.Name}: offensive choice={plan}"
-            + (target == null ? "" : $", target={DescribeOffensive(target)}, score={RewardRiskScore(target):F2}, "
-                + $"wellKnown={IsWellReconnoitred(target, faction.Id)}, winnable={IsWinnable(target)}"));
-
-        switch (plan)
-        {
-            case OffensivePlan.Assault:
-                LaunchAssault(faction, target, regionalForceStates, allOrders);
-                break;
-            case OffensivePlan.Recon:
-                IssueReconMission(faction, target, allOrders);
-                break;
-        }
-    }
-
-    // The AI commits only to targets it understands: it assaults the best winnable reward-to-risk
-    // objective among the well-reconnoitred targets; failing that, it scouts the most promising
-    // under-known target so a later turn can decide from knowledge rather than a blind guess; if it
-    // neither understands a winnable target nor has anything worth scouting, it holds (PRD §4.24).
-    internal static (OffensivePlan Plan, PotentialOffensive Target) DecideOffensivePlan(
-        List<PotentialOffensive> offensives, int attackerFactionId)
-    {
-        if (offensives == null || offensives.Count == 0) return (OffensivePlan.None, null);
-
-        var wellKnown = offensives.Where(o => IsWellReconnoitred(o, attackerFactionId)).ToList();
-        PotentialOffensive assault = ChooseBestOffensive(wellKnown);
-        if (assault != null) return (OffensivePlan.Assault, assault);
-
-        PotentialOffensive recon = ChooseReconTarget(
-            offensives.Where(o => !IsWellReconnoitred(o, attackerFactionId)).ToList());
-        if (recon != null) return (OffensivePlan.Recon, recon);
-
-        return (OffensivePlan.None, null);
     }
 
     // A target is well-reconnoitred once the attacker's intelligence on it clears the threshold;
@@ -442,7 +411,7 @@ public class FactionStrategyController
 
     private bool LaunchAssault(Faction faction, PotentialOffensive chosenOffensive, List<RegionForceState> regionalForceStates, List<Order> allOrders)
     {
-        long intendedBattleValue = (long)(chosenOffensive.AvailableAttackingForce * (0.5 + (RNG.GetLinearDouble() * 0.25)));
+        long intendedBattleValue = (long)(chosenOffensive.DefenderBattleValue * 2);
         return LaunchOffensive(faction, chosenOffensive, regionalForceStates, allOrders,
             intendedBattleValue, MissionType.Advance, Aggression.Normal);
     }
@@ -934,6 +903,45 @@ public class FactionStrategyController
                                   && AreFactionsEnemies(faction, regionFaction.PlanetFaction.Faction));
     }
 
+    // Before spare troops are spent on offensives, shore up the line: a region with spare force
+    // looks to adjacent friendly regions that cannot meet their own required garrison and relocates
+    // troops to cover the shortfall. A region that can't self-garrison is a breach an attacker walks
+    // through, so plugging it takes priority over opportunistic attacks (PRD §4.24). A donor only
+    // ever gives away what it holds above its own minimum, so it never opens a breach to fill one.
+    private void PlanGarrisonReinforcement(Faction faction, Planet planet, List<RegionForceState> states)
+    {
+        foreach (RegionForceState source in states)
+        {
+            if (source.SpareTroops <= 0) continue;
+
+            // Adjacent friendly regions still short of their garrison minimum, neediest first.
+            List<RegionForceState> needy = source.RegionFaction.Region.GetAdjacentRegions()
+                .Select(region => states.FirstOrDefault(s => s.RegionFaction.Region == region))
+                .Where(state => state != null && state.GarrisonShortfall > 0)
+                .OrderByDescending(state => state.GarrisonShortfall)
+                .ToList();
+
+            foreach (RegionForceState destination in needy)
+            {
+                if (source.SpareTroops <= 0) break;
+
+                long transfer = Math.Min(source.SpareTroops, destination.GarrisonShortfall);
+                if (transfer <= 0) continue;
+
+                source.RegionFaction.RemoveMilitaryStrength(transfer);
+                destination.RegionFaction.AddMilitaryStrength(transfer);
+                source.SpareTroops -= transfer;
+                destination.GarrisonShortfall -= transfer;
+
+                GameLog.Debug(() =>
+                    $"AI garrison reinforce {faction.Name}/{planet.Name}: "
+                    + $"{source.RegionFaction.Region.Name}->{destination.RegionFaction.Region.Name}, "
+                    + $"transfer={transfer}, sourceSpare={source.SpareTroops}, "
+                    + $"destShortfall={destination.GarrisonShortfall}");
+            }
+        }
+    }
+
     private void PlanFrontReinforcement(Faction faction, Planet planet, List<RegionForceState> states)
     {
         foreach (RegionForceState source in states.ToList())
@@ -1130,7 +1138,7 @@ public class FactionStrategyController
             TargetFaction = targetFaction,
             AttackingRegions = attackingRegions,
             AvailableAttackingForce = availableForce,
-            Reward = CalculateOffensiveReward(targetFaction, attackingFaction),
+            Reward = CalculateOffensiveReward(targetFaction, attackingFaction, availableForce, defenderBattleValue),
             DefenderBattleValue = defenderBattleValue,
             EstimatedDefenderBattleValue =
                 CautiousDefenderEstimate(defenderBattleValue, intel)
@@ -1226,14 +1234,14 @@ public class FactionStrategyController
     // The biomass the attacker gains by taking the region: the target population (headcount to
     // kill, convert, or seize) plus — only for a Consumption swarm that devours the land itself —
     // the region's carrying capacity (PRD §4.24).
-    internal static double CalculateOffensiveReward(RegionFaction targetFaction, Faction attackingFaction)
+    internal static double CalculateOffensiveReward(RegionFaction targetFaction, Faction attackingFaction, long availableAttackingForce, long defenderForce)
     {
         double reward = targetFaction.Population;
         if (attackingFaction.GrowthType == GrowthType.Consumption)
         {
             reward += targetFaction.Region.CarryingCapacity;
         }
-        return reward;
+        return reward * availableAttackingForce / defenderForce;
     }
 
     // The defender strength the attacker plans against: not a single noisy draw, but a pessimistic
