@@ -2,6 +2,7 @@
 using OnlyWar.Helpers.Battles.Placers;
 using OnlyWar.Helpers.Extensions;
 using OnlyWar.Models.Missions;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 
@@ -26,7 +27,7 @@ namespace OnlyWar.Helpers.Missions
             }
 
             // every point of margin of success modifies the starting range by 20 yards
-            ushort range = (ushort)(70 + marginOfSuccess * 20);
+            ushort range = (ushort)Math.Clamp((int)Math.Round(70 + marginOfSuccess * 20), 1, 200);
             // set up Ambush battle with OpFor attacker and context.Squad defender
             BattleGridManager bgm = new BattleGridManager();
             AmbushPlacer placer = new AmbushPlacer(bgm, range);

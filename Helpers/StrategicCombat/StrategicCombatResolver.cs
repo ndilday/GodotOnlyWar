@@ -11,10 +11,12 @@ namespace OnlyWar.Helpers.StrategicCombat
     public class StrategicCombatResolver
     {
         private readonly IRNG _rng;
+        private readonly Action<PlanetFaction, Region, float> _recordIntelGain;
 
-        public StrategicCombatResolver(IRNG rng = null)
+        public StrategicCombatResolver(IRNG rng = null, Action<PlanetFaction, Region, float> recordIntelGain = null)
         {
             _rng = rng ?? StaticRNG.Instance;
+            _recordIntelGain = recordIntelGain;
         }
 
         public StrategicCombatResult Resolve(StrategicCombatMission mission)
@@ -92,8 +94,18 @@ namespace OnlyWar.Helpers.StrategicCombat
                     Region stagingRegion = contribution.StagingFaction?.Region;
                     if (stagingRegion != null)
                     {
-                        target.PlanetFaction.AddRegionIntel(
-                            stagingRegion, StrategicCombatRules.IntelGainedFromBeingAttacked);
+                        if (_recordIntelGain != null)
+                        {
+                            _recordIntelGain(
+                                target.PlanetFaction,
+                                stagingRegion,
+                                StrategicCombatRules.IntelGainedFromBeingAttacked);
+                        }
+                        else
+                        {
+                            target.PlanetFaction.AddRegionIntel(
+                                stagingRegion, StrategicCombatRules.IntelGainedFromBeingAttacked);
+                        }
                     }
                 }
             }

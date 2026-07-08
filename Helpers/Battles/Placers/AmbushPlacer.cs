@@ -18,6 +18,7 @@ namespace OnlyWar.Helpers.Battles.Placers
         // Fraction of ambusher frontage assigned to the long (main) leg; the remainder
         // caps one end as the short leg.
         private const double LongLegFrontageShare = 0.6;
+        private const int MaxFormationStandoff = 200;
 
         private readonly BattleGridManager _grid;
         private readonly ushort _engagementRange;
@@ -130,7 +131,7 @@ namespace OnlyWar.Helpers.Battles.Placers
             // never rises into the short leg's latitude -- that shared north-west corner is the
             // junction, and keeping the long leg south of it stops the two legs raking each
             // other. An overlong leg simply overruns south, covering the column's length.
-            int standoff = Math.Max((int)_engagementRange, 1);
+            int standoff = FormationStandoff();
             int y = killZone.MaxY;
             foreach (BattleSquad squad in squads)
             {
@@ -156,7 +157,7 @@ namespace OnlyWar.Helpers.Battles.Placers
             // North face: squads placed horizontally, running along X, firing south down the
             // column. Centered over the kill zone but never extended west of it, so it can
             // never reach back under the long leg (keeping the north-west corner open).
-            int standoff = Math.Max((int)_engagementRange, 1);
+            int standoff = FormationStandoff();
             int legLength = squads.Sum(s => s.GetSquadBoxSize().X) + Math.Max(0, squads.Count - 1);
             int x = Math.Max(killZone.MinX, killZone.CenterX - legLength / 2);
             int bottom = killZone.MaxY + standoff;
@@ -168,5 +169,8 @@ namespace OnlyWar.Helpers.Battles.Placers
                 x += squadSize.X + 1;
             }
         }
+
+        private int FormationStandoff() =>
+            Math.Clamp((int)_engagementRange, 1, MaxFormationStandoff);
     }
 }

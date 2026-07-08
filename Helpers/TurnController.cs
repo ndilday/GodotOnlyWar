@@ -36,6 +36,9 @@ namespace OnlyWar.Helpers
         private const float BaselineGrowthRate = 0.0004f;
         // fraction of a standing garrison that retires each week (PRD Strategic Layer Phase 2)
         private const float GarrisonAttritionRate = 0.001f;
+        private const float GarrisonDraftRate = 0.025f;
+        private const float EmergencyGarrisonDraftRate = 0.05f;
+        private const float ActiveAssaultGarrisonDraftRate = 0.15f;
         // divisor converting a fortifying squad's summed engineering skill into a per-turn
         // defensive increment; tuned so a full, trained squad raises a defense by ~1-2/turn
         private const float EngineeringBuildDivisor = 100f;
@@ -95,9 +98,10 @@ namespace OnlyWar.Helpers
         // bonus and stealth difficulty carry over at equilibrium while now ramping in and decaying
         // out). A patrol is recon of one's own ground: it adds a flat base plus a log term in the
         // patrol's headcount. All playtest-pending.
-        private const float IntelDecayRate = 0.8f;
+        private const float IntelDecayRate = 0.75f;
         private const float IntelPerListeningPostLevel = 0.2f;
         private const float IntelPatrolBaseGain = 1.0f;
+        private readonly Dictionary<PlanetFaction, Dictionary<Region, float>> _turnIntelGains = new();
 
         public TurnController() : this(null)
         {
@@ -117,6 +121,7 @@ namespace OnlyWar.Helpers
             MissionContexts.Clear();
             SpecialMissions.Clear();
             StrategicCombatResults.Clear();
+            _turnIntelGains.Clear();
             ScenarioNotification = null;
 
             // --- 0. Shaping Phase ---
@@ -194,6 +199,7 @@ namespace OnlyWar.Helpers
                 MissionContexts.Clear();
                 SpecialMissions.Clear();
                 StrategicCombatResults.Clear();
+                _turnIntelGains.Clear();
 
                 // Strategic planning, scoped to this one planet. Enemy factions plan offensively;
                 // the Imperial PDF plans defensively (fortify/listen only), exactly as ProcessTurn
@@ -410,7 +416,7 @@ namespace OnlyWar.Helpers
 
         internal void ProcessStrategicCombatMissions(IEnumerable<Order> strategicCombatOrders)
         {
-            var resolver = new StrategicCombatResolver();
+            var resolver = new StrategicCombatResolver(recordIntelGain: RecordIntelGain);
             foreach (Order order in strategicCombatOrders)
             {
                 if (order.Mission is not StrategicCombatMission mission) continue;
@@ -590,11 +596,15 @@ namespace OnlyWar.Helpers
         // targeting acts on (FactionStrategyController; PRD §4.24) — by however much the recon
         // actually learned. A scout detected and driven off by the region's patrol never reaches
         // PerformReconMissionStep, so its Impact (and thus belief gained) stays ~zero: natural
-        // denial via the contested stealth check, not a flat override. AddObserverIntel ignores
-        // non-positive amounts. Only the player/default faction's recon additionally feeds the
-        // shared fog-of-war IntelligenceLevel surfaced in the UI; enemy recon does not leak into
-        // the player's knowledge of the region.
-        internal static void ResolveReconResult(Faction reconningFaction, RegionFaction target, float impact)
+        // denial via the contested stealth check, not a flat override. AddRegionIntel ignores
+        // non-positive amounts. During full turn processing, player/default recon gains are pooled
+        // through RecordIntelGain and later surfaced through player-visible RegionIntel; enemy recon
+        // remains faction-owned and does not leak into the player's knowledge of the region.
+        internal static void ResolveReconResult(
+            Faction reconningFaction,
+            RegionFaction target,
+            float impact,
+            Action<PlanetFaction, Region, float> recordIntelGain = null)
         {
             if (target == null) return;
             PlanetFaction reconningPlanetFaction =
@@ -603,16 +613,21 @@ namespace OnlyWar.Helpers
                     ? pf
                     : null;
             float observerBefore = reconningPlanetFaction?.GetRegionIntel(target.Region) ?? 0f;
-            float sharedBefore = target.Region.IntelligenceLevel;
-            reconningPlanetFaction?.AddRegionIntel(target.Region, impact);
-            if (reconningFaction == null || reconningFaction.IsPlayerFaction || reconningFaction.IsDefaultFaction)
+            if (reconningPlanetFaction != null)
             {
-                target.Region.IntelligenceLevel += impact;
+                if (recordIntelGain != null)
+                {
+                    recordIntelGain(reconningPlanetFaction, target.Region, impact);
+                }
+                else
+                {
+                    reconningPlanetFaction.AddRegionIntel(target.Region, impact);
+                }
             }
+            float observerAfter = reconningPlanetFaction?.GetRegionIntel(target.Region) ?? observerBefore;
             GameLog.Debug(() =>
                 $"Recon result {reconningFaction?.Name ?? "Unknown"} -> {DescribeRegionFaction(target)}: "
-                + $"impact={impact:F2}, regionIntel={observerBefore:F2}->{(reconningPlanetFaction?.GetRegionIntel(target.Region) ?? 0f):F2}, "
-                + $"sharedIntel={sharedBefore:F2}->{target.Region.IntelligenceLevel:F2}");
+                + $"impact={impact:F2}, regionIntel={observerBefore:F2}->{observerAfter:F2}");
         }
 
         private static void ApplyConstruction(ConstructionMission mission, int amount)
@@ -715,7 +730,7 @@ namespace OnlyWar.Helpers
                         // stays ~zero. A patrol contests recon by raising the defender's own-region
                         // intel, which lifts the stealth-check difficulty — not a flat override.
                         ResolveReconResult(context.Order.AssignedSquads.FirstOrDefault()?.Faction,
-                                           regionFaction, context.Impact);
+                                           regionFaction, context.Impact, RecordIntelGain);
                         break;
                     case MissionType.Sabotage:
                         SabotageMission sabotageMission = (SabotageMission)context.Order.Mission;
@@ -884,10 +899,81 @@ namespace OnlyWar.Helpers
                     {
                         gain += IntelPatrolBaseGain + (float)Math.Log10(patrolStrength);
                     }
-                    regionFaction.PlanetFaction.AddRegionIntel(region, gain);
+                    RecordIntelGain(regionFaction.PlanetFaction, region, gain);
+                }
+            }
+
+            ApplyTurnIntelGains(planet);
+        }
+
+        private void RecordIntelGain(PlanetFaction planetFaction, Region region, float gain)
+        {
+            if (planetFaction == null || region == null || gain <= 0f) return;
+            if (!_turnIntelGains.TryGetValue(planetFaction, out Dictionary<Region, float> factionGains))
+            {
+                factionGains = new Dictionary<Region, float>();
+                _turnIntelGains[planetFaction] = factionGains;
+            }
+            factionGains[region] = factionGains.TryGetValue(region, out float existing)
+                ? existing + gain
+                : gain;
+        }
+
+        private void ApplyTurnIntelGains(Planet planet)
+        {
+            if (_turnIntelGains.Count == 0) return;
+
+            List<PlanetFaction> sharingFactions = planet.PlanetFactionMap.Values
+                .Where(SharesPlayerVisibleIntel)
+                .ToList();
+            Dictionary<Region, float> pooledSharingGains = new();
+
+            foreach (KeyValuePair<PlanetFaction, Dictionary<Region, float>> factionEntry in _turnIntelGains.ToList())
+            {
+                PlanetFaction planetFaction = factionEntry.Key;
+                bool presentOnPlanet =
+                    planet.PlanetFactionMap.TryGetValue(planetFaction.Faction.Id, out PlanetFaction presentFaction)
+                    && ReferenceEquals(presentFaction, planetFaction);
+
+                foreach (KeyValuePair<Region, float> gainEntry in factionEntry.Value.ToList())
+                {
+                    if (gainEntry.Key.Planet != planet) continue;
+
+                    if (presentOnPlanet)
+                    {
+                        if (SharesPlayerVisibleIntel(planetFaction))
+                        {
+                            pooledSharingGains[gainEntry.Key] =
+                                pooledSharingGains.TryGetValue(gainEntry.Key, out float existing)
+                                    ? existing + gainEntry.Value
+                                    : gainEntry.Value;
+                        }
+                        else
+                        {
+                            planetFaction.AddRegionIntel(gainEntry.Key, gainEntry.Value);
+                        }
+                    }
+
+                    factionEntry.Value.Remove(gainEntry.Key);
+                }
+
+                if (factionEntry.Value.Count == 0)
+                {
+                    _turnIntelGains.Remove(planetFaction);
+                }
+            }
+
+            foreach (KeyValuePair<Region, float> pooledGain in pooledSharingGains)
+            {
+                foreach (PlanetFaction sharingFaction in sharingFactions)
+                {
+                    sharingFaction.AddRegionIntel(pooledGain.Key, pooledGain.Value);
                 }
             }
         }
+
+        private static bool SharesPlayerVisibleIntel(PlanetFaction planetFaction) =>
+            planetFaction?.Faction.IsPlayerFaction == true || planetFaction?.Faction.IsDefaultFaction == true;
 
         private void UpdatePlanet(Planet planet)
         {
@@ -1437,17 +1523,29 @@ namespace OnlyWar.Helpers
                 // must be replaced by fresh recruitment from population growth below
                 regionFaction.Garrison -= (long)(regionFaction.Garrison * GarrisonAttritionRate);
 
-                // if the pdf is less than three percent of the population, more people are drafted
+                float draftRate = GarrisonDraftRate;
+                if (isDefaultFaction && regionFaction.IsPublic && HasPublicNpcFactionInRegion(regionFaction))
+                {
+                    draftRate = ActiveAssaultGarrisonDraftRate;
+                }
+                // if the pdf is less than three percent of the population, more people are drafted;
                 // additionally, secret factions love to infiltrate the PDF
-                if (pdfRatio < 0.03f || !regionFaction.IsPublic)
+                else if (pdfRatio < 0.03f || !regionFaction.IsPublic)
                 {
-                    regionFaction.Garrison += (long)(newPop * 0.05f);
+                    draftRate = EmergencyGarrisonDraftRate;
                 }
-                else
-                {
-                    regionFaction.Garrison += (long)(newPop * 0.025f);
-                }
+
+                regionFaction.Garrison += (long)(newPop * draftRate);
             }
+        }
+
+        private static bool HasPublicNpcFactionInRegion(RegionFaction regionFaction)
+        {
+            return regionFaction.Region.RegionFactionMap.Values.Any(other =>
+                other != regionFaction
+                && other.IsPublic
+                && !other.PlanetFaction.Faction.IsPlayerFaction
+                && !other.PlanetFaction.Faction.IsDefaultFaction);
         }
 
         private void CheckForPlanetaryRevolt(Planet planet)
@@ -1795,7 +1893,8 @@ namespace OnlyWar.Helpers
                             region.SpecialMissions.Remove(mission);
                         }
                     }
-                    if (region.IntelligenceLevel > 0)
+                    float visibleIntel = region.GetPlayerVisibleIntel();
+                    if (visibleIntel > 0)
                     {
                         foreach (RegionFaction regionFaction in region.RegionFactionMap.Values)
                         {
@@ -1812,9 +1911,6 @@ namespace OnlyWar.Helpers
                                 HandleHiddenFactionIntelligence(regionFaction);
                             }
                         }
-
-                        // reduce intelligence level by 25%
-                        region.IntelligenceLevel *= 0.75f;
                     }
                 }
             }
@@ -1823,7 +1919,7 @@ namespace OnlyWar.Helpers
         public void HandlePublicFactionIntelligence(RegionFaction enemyRegionFaction)
         {
             // see if any intelligence gets spent in exchange for special mission opportunities
-            float specMissionChance = (float)Math.Log(enemyRegionFaction.Region.IntelligenceLevel, 2) + 1;
+            float specMissionChance = (float)Math.Log(enemyRegionFaction.Region.GetPlayerVisibleIntel(), 2) + 1;
             // subtract one for each special mission already identified
             specMissionChance -= enemyRegionFaction.Region.SpecialMissions.Count;
             for (int i = 0; i < specMissionChance; i++)
@@ -1865,7 +1961,7 @@ namespace OnlyWar.Helpers
             float popRatio = Math.Clamp(
                 (float)enemyRegionFaction.Population / regionPopulation, 0.0001f, 0.9999f);
             float zScore = GaussianCalculator.ApproximateInverseNormalCDF(popRatio);
-            zScore += enemyRegionFaction.Region.IntelligenceLevel / 10.0f;
+            zScore += enemyRegionFaction.Region.GetPlayerVisibleIntel() / 10.0f;
             double chance = RNG.NextRandomZValue();
             if (chance < zScore)
             {

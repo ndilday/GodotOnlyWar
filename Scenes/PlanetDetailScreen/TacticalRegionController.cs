@@ -38,11 +38,12 @@ public partial class TacticalRegionController : Control
         long garrison = defaultFaction?.Garrison ?? 0;
         bool publicEnemy = xenosRegionFaction != null && xenosRegionFaction.IsPublic;
         bool hiddenEnemy = xenosRegionFaction != null && !xenosRegionFaction.IsPublic;
+        float visibleIntel = region.GetPlayerVisibleIntel();
 
         bool showForces = layers.HasFlag(MapLayer.Forces);
         bool showOrders = layers.HasFlag(MapLayer.Orders);
         bool showIntel = layers.HasFlag(MapLayer.Intel);
-        bool showEntrenchment = showIntel && publicEnemy && region.IntelligenceLevel > 1;
+        bool showEntrenchment = showIntel && publicEnemy && visibleIntel > 1;
 
         // Layers combine rather than exclude: a tile can show force strength, order
         // status, and intel simultaneously if all three layers are toggled on.
@@ -54,7 +55,7 @@ public partial class TacticalRegionController : Control
         bool showXenos = (showForces || showIntel) && publicEnemy;
         string xenosText = showXenos ? xenosRegionFaction.GetPopulationDescription() : "";
 
-        bool showPlayerHidden = (showForces && hiddenEnemy && region.IntelligenceLevel > 0)
+        bool showPlayerHidden = (showForces && hiddenEnemy && visibleIntel > 0)
             || (showIntel && hiddenEnemy)
             || (showOrders && unassignedCount > 0);
 
@@ -69,7 +70,7 @@ public partial class TacticalRegionController : Control
         string civilianIconKey = showEntrenchment
             ? xenosIconKey
             : garrison > 0 ? "pdf_forces" : "imperial_population";
-        bool hiddenEnemyMarker = (showForces && hiddenEnemy && region.IntelligenceLevel > 0)
+        bool hiddenEnemyMarker = (showForces && hiddenEnemy && visibleIntel > 0)
             || (showIntel && hiddenEnemy);
         string hiddenIconKey = hiddenEnemyMarker ? xenosIconKey : "player_forces";
 

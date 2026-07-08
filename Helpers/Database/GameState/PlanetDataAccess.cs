@@ -62,20 +62,31 @@ namespace OnlyWar.Helpers.Database.GameState
             {
                 command.CommandText = "SELECT * FROM Region";
                 var reader = command.ExecuteReader();
+                int idOrdinal = reader.GetOrdinal("Id");
+                int planetIdOrdinal = reader.GetOrdinal("PlanetId");
+                int regionNumberOrdinal = reader.GetOrdinal("RegionNumber");
+                int regionNameOrdinal = reader.GetOrdinal("RegionName");
+                int regionTypeOrdinal = reader.GetOrdinal("RegionType");
+                int intelligenceLevelOrdinal = GetOrdinalOrDefault(reader, "IntelligenceLevel");
+                int carryingCapacityOrdinal = reader.GetOrdinal("CarryingCapacity");
+                int maximumCarryingCapacityOrdinal = GetOrdinalOrDefault(reader, "MaximumCarryingCapacity");
 
                 while (reader.Read())
                 {
-                    int id = reader.GetInt32(0);
-                    int planetId = reader.GetInt32(1);
-                    int regionNumber = reader.GetInt32(2);
-                    string regionName = reader[3].ToString();
-                    int regionType = reader.GetInt32(4);
-                    bool isUnderAssault = reader.GetBoolean(5);
-                    float intelligenceLevel = reader.GetFloat(6);
-                    long carryingCapacity = reader.GetInt64(7);
+                    int id = reader.GetInt32(idOrdinal);
+                    int planetId = reader.GetInt32(planetIdOrdinal);
+                    int regionNumber = reader.GetInt32(regionNumberOrdinal);
+                    string regionName = reader[regionNameOrdinal].ToString();
+                    int regionType = reader.GetInt32(regionTypeOrdinal);
+                    float intelligenceLevel = intelligenceLevelOrdinal >= 0
+                        ? Convert.ToSingle(reader[intelligenceLevelOrdinal])
+                        : 0f;
+                    long carryingCapacity = reader.GetInt64(carryingCapacityOrdinal);
                     // MaximumCarryingCapacity was appended after CarryingCapacity; legacy rows that
                     // predate it default to the current capacity (an undegraded region). See PRD §4.24.
-                    long maximumCarryingCapacity = reader.FieldCount > 8 ? reader.GetInt64(8) : carryingCapacity;
+                    long maximumCarryingCapacity = maximumCarryingCapacityOrdinal >= 0
+                        ? reader.GetInt64(maximumCarryingCapacityOrdinal)
+                        : carryingCapacity;
 
                     Planet planet = planets.First(p => p.Id == planetId);
                     Region region = new Region(id, planet, regionType, regionName, RegionExtensions.GetCoordinatesFromRegionNumber(regionNumber), intelligenceLevel, carryingCapacity, maximumCarryingCapacity);
@@ -241,6 +252,7 @@ namespace OnlyWar.Helpers.Database.GameState
             }
 
             PopulateRegionIntel(connection, regionMap);
+            MigrateLegacyRegionIntelligence(regionMap.Values);
         }
 
         // Loads each planet faction's per-region awareness onto its RegionIntel map. Tolerant of the
@@ -276,6 +288,38 @@ namespace OnlyWar.Helpers.Database.GameState
                     }
                 }
             }
+        }
+
+        private static void MigrateLegacyRegionIntelligence(IEnumerable<Region> regions)
+        {
+            foreach (Region region in regions)
+            {
+                if (region.IntelligenceLevel <= 0) continue;
+
+                foreach (PlanetFaction planetFaction in region.Planet.PlanetFactionMap.Values)
+                {
+                    if (!planetFaction.Faction.IsPlayerFaction && !planetFaction.Faction.IsDefaultFaction)
+                    {
+                        continue;
+                    }
+
+                    planetFaction.SetRegionIntel(
+                        region,
+                        Math.Max(planetFaction.GetRegionIntel(region), region.IntelligenceLevel));
+                }
+            }
+        }
+
+        private static int GetOrdinalOrDefault(IDataRecord reader, string columnName)
+        {
+            for (int i = 0; i < reader.FieldCount; i++)
+            {
+                if (string.Equals(reader.GetName(i), columnName, StringComparison.OrdinalIgnoreCase))
+                {
+                    return i;
+                }
+            }
+            return -1;
         }
 
 
@@ -411,7 +455,7 @@ namespace OnlyWar.Helpers.Database.GameState
                     command.AddParam("@planetId", planetId);
                     command.AddParam("@regionNumber", i);
                     command.AddParam("@regionName", regions[i].Name);
-                    command.AddParam("@intelligenceLevel", regions[i].IntelligenceLevel);
+                    command.AddParam("@intelligenceLevel", 0f);
                     command.AddParam("@carryingCapacity", regions[i].CarryingCapacity);
                     command.AddParam("@maximumCarryingCapacity", regions[i].MaximumCarryingCapacity);
                     command.ExecuteNonQuery();

@@ -29,21 +29,38 @@ namespace OnlyWar.Helpers.Extensions
                 ? planetFaction.GetRegionIntel(region)
                 : 0f;
 
+        public static float GetPlayerVisibleIntel(this Region region)
+        {
+            if (region == null) return 0f;
+
+            PlanetFaction playerFaction = region.Planet.PlanetFactionMap.Values
+                .FirstOrDefault(pf => pf.Faction.IsPlayerFaction);
+            if (playerFaction != null)
+            {
+                return playerFaction.GetRegionIntel(region);
+            }
+
+            PlanetFaction defaultFaction = region.Planet.PlanetFactionMap.Values
+                .FirstOrDefault(pf => pf.Faction.IsDefaultFaction);
+            return defaultFaction?.GetRegionIntel(region) ?? 0f;
+        }
+
         public static string GetPopulationDescription(this RegionFaction regionFaction)
         {
             if (regionFaction != null && regionFaction.IsPublic)
             {
-                if (regionFaction.Region.IntelligenceLevel <= 0)
+                float intel = regionFaction.Region.GetPlayerVisibleIntel();
+                if (intel <= 0)
                 {
                     return "Unknown";
                 }
-                else if (regionFaction.Region.IntelligenceLevel >= 6)
+                else if (intel >= 6)
                 {
                     return regionFaction.Population.ToString();
                 }
                 else
                 {
-                    int divisor = (int)Math.Pow(10, 6 - (int)regionFaction.Region.IntelligenceLevel);
+                    int divisor = (int)Math.Pow(10, 6 - (int)intel);
                     long popCount = regionFaction.Population / divisor * divisor;
                     if (popCount > 0)
                     {

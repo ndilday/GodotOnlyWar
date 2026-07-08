@@ -121,16 +121,6 @@ public class FactionStrategyController
             long requiredGarrison = CalculateRequiredGarrison(regionFaction);
             long organizedTroops = (long)(regionFaction.Population * regionFaction.Organization / 100.0f);
             long spareTroops = Math.Max(0, organizedTroops - requiredGarrison);
-            // Mobilise a civilian-base faction (the PDF) to the garrison its perceived threat warrants:
-            // for such a faction MilitaryStrength IS its Garrison, so arming the populace to this level
-            // is what actually raises its defensive battle value in combat. This is the payoff of the
-            // reactive garrison — a region that has been attacked (and thereby learned where the enemy
-            // masses) now stands up real defenders, not just a planning reservation. Population-is-
-            // military hordes (Tyranids/cults) already field their whole population and are skipped.
-            if (!regionFaction.PlanetFaction.Faction.PopulationIsMilitary && requiredGarrison > 0)
-            {
-                regionFaction.Garrison = Math.Min(requiredGarrison, organizedTroops);
-            }
             regionalForceStates.Add(new RegionForceState(regionFaction, requiredGarrison, spareTroops));
         }
 
@@ -710,43 +700,63 @@ public class FactionStrategyController
 
     private List<PotentialOffensive> IdentifyPotentialOffensivesOnPlanet(Faction attackingFaction, Planet planet, List<RegionForceState> regionalForceStates)
     {
-        var potentialOffensives = new List<PotentialOffensive>();
         var allEnemyRegionFactions = planet.Regions.SelectMany(r => r.RegionFactionMap.Values)
                                            .Where(rf => AreFactionsEnemies(attackingFaction, rf.PlanetFaction.Faction) && rf.IsPublic).ToList();
 
+        var localOffensives = new List<PotentialOffensive>();
+        foreach (var targetFaction in allEnemyRegionFactions)
+        {
+            if (targetFaction.Region.RegionFactionMap.ContainsKey(attackingFaction.Id))
+            {
+                AddPotentialOffensive(attackingFaction, targetFaction, [targetFaction.Region], regionalForceStates, localOffensives);
+            }
+        }
+        if (localOffensives.Count > 0)
+        {
+            return localOffensives;
+        }
+
+        var potentialOffensives = new List<PotentialOffensive>();
         foreach (var targetFaction in allEnemyRegionFactions)
         {
             var adjacentAttackingRegions = targetFaction.Region.GetAdjacentRegions()
                                                        .Where(r => r.RegionFactionMap.ContainsKey(attackingFaction.Id)).ToList();
-
-            if (adjacentAttackingRegions.Any())
-            {
-                long availableForce = adjacentAttackingRegions
-                    .Select(r => regionalForceStates.FirstOrDefault(s => s.RegionFaction.Region == r)?.SpareTroops ?? 0)
-                    .Sum();
-
-                if (availableForce > 0)
-                {
-                    long defenderBattleValue = CalculateDefenderBattleValue(targetFaction);
-                    // The attacker's estimate sharpens with its awareness of the target region —
-                    // built by reconnoitring it (see PlanMajorOffensiveOnPlanet), not blanket coverage.
-                    float intel = targetFaction.Region.GetFactionRegionIntel(attackingFaction.Id);
-
-                    potentialOffensives.Add(new PotentialOffensive
-                    {
-                        TargetRegion = targetFaction.Region,
-                        TargetFaction = targetFaction,
-                        AttackingRegions = adjacentAttackingRegions,
-                        AvailableAttackingForce = availableForce,
-                        Reward = CalculateOffensiveReward(targetFaction, attackingFaction),
-                        DefenderBattleValue = defenderBattleValue,
-                        EstimatedDefenderBattleValue =
-                            CautiousDefenderEstimate(defenderBattleValue, intel)
-                    });
-                }
-            }
+            AddPotentialOffensive(attackingFaction, targetFaction, adjacentAttackingRegions, regionalForceStates, potentialOffensives);
         }
         return potentialOffensives;
+    }
+
+    private static void AddPotentialOffensive(
+        Faction attackingFaction,
+        RegionFaction targetFaction,
+        List<Region> attackingRegions,
+        List<RegionForceState> regionalForceStates,
+        List<PotentialOffensive> potentialOffensives)
+    {
+        if (!attackingRegions.Any()) return;
+
+        long availableForce = attackingRegions
+            .Select(r => regionalForceStates.FirstOrDefault(s => s.RegionFaction.Region == r)?.SpareTroops ?? 0)
+            .Sum();
+
+        if (availableForce <= 0) return;
+
+        long defenderBattleValue = CalculateDefenderBattleValue(targetFaction);
+        // The attacker's estimate sharpens with its awareness of the target region —
+        // built by reconnoitring it (see PlanMajorOffensiveOnPlanet), not blanket coverage.
+        float intel = targetFaction.Region.GetFactionRegionIntel(attackingFaction.Id);
+
+        potentialOffensives.Add(new PotentialOffensive
+        {
+            TargetRegion = targetFaction.Region,
+            TargetFaction = targetFaction,
+            AttackingRegions = attackingRegions,
+            AvailableAttackingForce = availableForce,
+            Reward = CalculateOffensiveReward(targetFaction, attackingFaction),
+            DefenderBattleValue = defenderBattleValue,
+            EstimatedDefenderBattleValue =
+                CautiousDefenderEstimate(defenderBattleValue, intel)
+        });
     }
 
     private long CalculateRequiredGarrison(RegionFaction defender)
@@ -758,10 +768,11 @@ public class FactionStrategyController
         foreach (Region adjacentRegion in region.GetAdjacentRegions())
         {
             // The defender's awareness of the adjacent enemy region gates how much of that region's
-            // threat it perceives: a blind defender under-garrisons because it cannot see what is
+            // threat it perceives: a blind defender under-reserves because it cannot see what is
             // massing next door. Awareness is opened either by a deliberate recon or — the reactive
             // path — by being attacked from there, which grants intel of the attacker's staging
-            // regions (StrategicCombatResolver), so a region that got hit last turn now garrisons.
+            // regions (StrategicCombatResolver), so a region that got hit last turn plans around
+            // the threat instead of instantly raising a larger combat garrison.
             float sight = Math.Min(1.0f,
                 adjacentRegion.GetFactionRegionIntel(defenderFaction.Id) / GarrisonFullSightIntel);
             if (sight <= 0f) continue;
@@ -779,7 +790,7 @@ public class FactionStrategyController
         }
 
         // A diversion feinting against this region inflates the threat its defender believes it
-        // faces, causing it to hold a larger garrison than the real enemy force would warrant.
+        // faces, causing it to reserve more force than the real enemy force would warrant.
         if (defender.PerceivedThreatBonus > 0)
         {
             highestThreat += (long)defender.PerceivedThreatBonus;

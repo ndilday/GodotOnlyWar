@@ -1,5 +1,6 @@
 using System.Linq;
 using OnlyWar.Helpers;
+using OnlyWar.Helpers.Extensions;
 using OnlyWar.Models;
 using OnlyWar.Models.Planets;
 using OnlyWar.Tests.Fixtures;
@@ -21,7 +22,7 @@ public class MultiTurnSmokeTests
         RegionFaction cult = fixture.AddHiddenFaction(0, GrowthType.Conversion, population: 50);
         fixture.AddControllingFaction(1, "Heretic Rebels", population: 5000);
         fixture.InstallGovernor(investigation: 1f, neediness: 1f, opinion: 1f);
-        fixture.Planet.Regions[5].IntelligenceLevel = 10.0f;
+        fixture.DefaultPlanetFaction.SetRegionIntel(fixture.Planet.Regions[5], 10.0f);
 
         long startingPopulation = fixture.Planet.Population;
 
@@ -42,7 +43,7 @@ public class MultiTurnSmokeTests
         Assert.True(cult.Population > 50);
 
         // intelligence decays geometrically (0.75^12 ~ 0.03) toward zero
-        Assert.True(fixture.Planet.Regions[5].IntelligenceLevel < 1.0f);
+        Assert.True(fixture.Planet.Regions[5].GetPlayerVisibleIntel() < 1.0f);
 
         // the governor raised (and is still waiting on) at least one request for aid
         Assert.True(fixture.Sector.PlayerForce.Requests.Count >= 1);

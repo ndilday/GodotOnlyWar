@@ -84,12 +84,12 @@ public class FactionStrategyControllerTests
     }
 
     [Fact]
-    public void GenerateFactionOrders_PerceivedThreatBonusPinsGarrisonAndSuppressesActivity()
+    public void GenerateFactionOrders_PerceivedThreatBonusPinsReserveAndSuppressesActivity()
     {
         Faction enemy = CreateNonPlayerFaction();
         // Org 100, pop 1000 => 1000 organized troops. A diversion's perceived-threat bonus that
-        // exceeds the organized force should make the region feel it must hold everything as
-        // garrison, leaving nothing spare and producing no orders.
+        // exceeds the organized force should make the region feel it must reserve everything,
+        // leaving nothing spare and producing no orders.
         Sector sector = BuildSectorWithSingleRegionFaction(enemy, population: 1000, organization: 100, isPublic: true);
         RegionFaction regionFaction = sector.Planets.Values.First().Regions[0].RegionFactionMap[enemy.Id];
         regionFaction.PerceivedThreatBonus = 2000;
@@ -97,6 +97,73 @@ public class FactionStrategyControllerTests
         List<Order> orders = new FactionStrategyController().GenerateFactionOrders(enemy, sector);
 
         Assert.Empty(orders);
+    }
+
+    [Fact]
+    public void GenerateFactionOrders_DefensivePlanningDoesNotInstantlyRaiseGarrison()
+    {
+        Faction pdf = CreateDefaultFaction();
+        Faction enemy = CreateNonPlayerFaction();
+
+        Planet planet = CreatePlanet();
+        Region pdfRegion = planet.Regions[0];
+        Region enemyRegion = pdfRegion.GetAdjacentRegions().First();
+        AddRegionFaction(planet, pdfRegion, pdf, population: 1_000_000, organization: 100, garrison: 10);
+        AddRegionFaction(planet, enemyRegion, enemy, population: 1_000, organization: 100);
+        planet.PlanetFactionMap[pdf.Id].SetRegionIntel(enemyRegion, FactionStrategyController.GarrisonFullSightIntel);
+        Sector sector = new(CreatePlayerForce(), [], [planet], []);
+
+        List<Order> orders = new FactionStrategyController()
+            .GenerateFactionOrders(pdf, sector, defensiveOnly: true);
+
+        Assert.NotEmpty(orders);
+        Assert.Equal(10, pdfRegion.RegionFactionMap[pdf.Id].Garrison);
+    }
+
+    [Fact]
+    public void GenerateFactionOrders_ClearsLocalEnemyBeforeAdjacentTargets()
+    {
+        Faction attacker = CreateNonPlayerFaction();
+        Faction imperial = CreateDefaultFaction();
+        Planet planet = CreatePlanet();
+
+        PlanetFaction attackerPlanetFaction = new(attacker) { IsPublic = true };
+        PlanetFaction imperialPlanetFaction = new(imperial) { IsPublic = true };
+        planet.PlanetFactionMap[attacker.Id] = attackerPlanetFaction;
+        planet.PlanetFactionMap[imperial.Id] = imperialPlanetFaction;
+
+        Region localRegion = planet.Regions[0];
+        Region adjacentRegion = planet.Regions[1];
+        localRegion.RegionFactionMap[attacker.Id] = new RegionFaction(attackerPlanetFaction, localRegion)
+        {
+            Population = 10_000,
+            Organization = 100,
+            IsPublic = true
+        };
+        RegionFaction localTarget = new(imperialPlanetFaction, localRegion)
+        {
+            Population = 100,
+            Organization = 100,
+            IsPublic = true
+        };
+        localRegion.RegionFactionMap[imperial.Id] = localTarget;
+        RegionFaction adjacentTarget = new(imperialPlanetFaction, adjacentRegion)
+        {
+            Population = 1_000_000,
+            Organization = 100,
+            IsPublic = true
+        };
+        adjacentRegion.RegionFactionMap[imperial.Id] = adjacentTarget;
+        attackerPlanetFaction.SetRegionIntel(localRegion, FactionStrategyController.ReconIntelThreshold);
+        Sector sector = new(CreatePlayerForce(), [], [planet], []);
+
+        List<Order> orders = new FactionStrategyController().GenerateFactionOrders(attacker, sector);
+
+        StrategicCombatMission assault = orders
+            .Select(o => o.Mission)
+            .OfType<StrategicCombatMission>()
+            .Single();
+        Assert.Same(localTarget, assault.RegionFaction);
     }
 
     [Fact]
@@ -408,25 +475,22 @@ public class FactionStrategyControllerTests
     {
         Faction scout = CreateNonPlayerFaction();
         RegionFaction target = CreateTargetRegionFaction(scout);
-        float intelBefore = target.Region.IntelligenceLevel;
 
         TurnController.ResolveReconResult(scout, target, 1.5f);
 
         Assert.Equal(1.5f, target.PlanetFaction.GetRegionIntel(target.Region));
-        // Enemy recon does not raise the shared fog-of-war level the player sees.
-        Assert.Equal(intelBefore, target.Region.IntelligenceLevel);
+        Assert.Equal(0f, target.Region.GetPlayerVisibleIntel());
     }
 
     [Fact]
-    public void ResolveReconResult_PlayerReconAlsoFeedsTheSharedIntelligenceLevel()
+    public void ResolveReconResult_PlayerReconFeedsPlayerVisibleRegionIntel()
     {
         Faction player = CreatePlayerFaction();
         RegionFaction target = CreateTargetRegionFaction(player);
-        float intelBefore = target.Region.IntelligenceLevel;
 
         TurnController.ResolveReconResult(player, target, 2f);
 
-        Assert.Equal(intelBefore + 2f, target.Region.IntelligenceLevel);
+        Assert.Equal(2f, target.Region.GetPlayerVisibleIntel());
     }
 
     [Fact]

@@ -273,7 +273,8 @@ public partial class RegionScreenController : DialogController
         rows.Add(Row("Planet", region.Planet.Name));
         rows.Add(Row("Control", GetRegionControlLabel(region)));
         rows.Add(Row("Coordinates", $"({region.Coordinates.X}, {region.Coordinates.Y})"));
-        rows.Add(Row("Intelligence", $"{region.IntelligenceLevel:0.##}"));
+        float visibleIntel = region.GetPlayerVisibleIntel();
+        rows.Add(Row("Intelligence", $"{visibleIntel:0.##}"));
 
         RegionFaction playerFaction = GetPlayerRegionFaction(region);
         RegionFaction defaultFaction = region.RegionFactionMap.Values.FirstOrDefault(rf => rf.PlanetFaction.Faction.IsDefaultFaction);
@@ -292,7 +293,7 @@ public partial class RegionScreenController : DialogController
         {
             rows.Add(Row("Enemy Faction", enemyFaction.PlanetFaction.Faction.Name));
             rows.Add(Row("Enemy Population", enemyFaction.GetPopulationDescription()));
-            if (region.IntelligenceLevel > 1)
+            if (visibleIntel > 1)
             {
                 rows.Add(Row("Enemy Entrenchment", RegionFactionExtensions.GetDefenseLevelDescription(enemyFaction.Entrenchment)));
                 rows.Add(Row("Enemy Listening Posts", RegionFactionExtensions.GetDefenseLevelDescription(enemyFaction.ListeningPost)));

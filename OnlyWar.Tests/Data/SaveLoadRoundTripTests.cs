@@ -449,6 +449,68 @@ public class SaveLoadRoundTripTests
     }
 
     [Fact]
+    public void Load_LegacyRegionIntelligence_MigratesToPlayerAndDefaultRegionIntel()
+    {
+        Sector sector = SectorBuilder.GenerateSector(1, _data, _date, "Legacy Intel Migration Chapter");
+        GameDataSingleton.Instance.LoadGameDataFromBlob(_data, _date, sector);
+
+        Planet planet = sector.Planets.Values
+            .First(p => p.PlanetFactionMap.Values.Any(pf => pf.Faction.IsDefaultFaction)
+                && p.Regions.Any(r => r != null));
+        Region region = planet.Regions.First(r => r != null);
+        planet.PlanetFactionMap[sector.PlayerForce.Faction.Id] = new PlanetFaction(sector.PlayerForce.Faction);
+
+        string dbPath = Path.Combine(
+            Path.GetTempPath(), $"onlywar_legacy_regionintel_{Guid.NewGuid():N}.s3db");
+        try
+        {
+            Save(sector, dbPath, _data.Factions.SelectMany(f => f.Units).ToList());
+            using (var connection = new Microsoft.Data.Sqlite.SqliteConnection($"Data Source={dbPath}"))
+            {
+                connection.Open();
+                using (var command = connection.CreateCommand())
+                {
+                    command.CommandText = "DELETE FROM PlanetFactionRegionIntel WHERE RegionId = $regionId";
+                    command.Parameters.AddWithValue("$regionId", region.Id);
+                    command.ExecuteNonQuery();
+                }
+                using (var command = connection.CreateCommand())
+                {
+                    command.CommandText = "UPDATE Region SET IntelligenceLevel = $intel WHERE Id = $regionId";
+                    command.Parameters.AddWithValue("$intel", 4.5f);
+                    command.Parameters.AddWithValue("$regionId", region.Id);
+                    command.ExecuteNonQuery();
+                }
+            }
+
+            GameStateDataBlob loaded = Load(dbPath);
+
+            Planet loadedPlanet = loaded.Planets.Single(p => p.Id == planet.Id);
+            Region loadedRegion = loadedPlanet.Regions.Single(r => r != null && r.Id == region.Id);
+            PlanetFaction loadedDefault = loadedPlanet.PlanetFactionMap.Values.Single(pf => pf.Faction.IsDefaultFaction);
+            PlanetFaction loadedPlayer = loadedPlanet.PlanetFactionMap[sector.PlayerForce.Faction.Id];
+
+            Assert.Equal(4.5f, loadedDefault.GetRegionIntel(loadedRegion), 3);
+            Assert.Equal(4.5f, loadedPlayer.GetRegionIntel(loadedRegion), 3);
+        }
+        finally
+        {
+            Microsoft.Data.Sqlite.SqliteConnection.ClearAllPools();
+            try
+            {
+                if (File.Exists(dbPath))
+                {
+                    File.Delete(dbPath);
+                }
+            }
+            catch (IOException)
+            {
+                // Best-effort cleanup of a temp file; ignore if still locked.
+            }
+        }
+    }
+
+    [Fact]
     public void SaveThenLoad_PlayerOrderWithNonSpecialMission_SurvivesRoundTrip()
     {
         Sector sector = SectorBuilder.GenerateSector(1, _data, _date, "Order Round Trip Chapter");

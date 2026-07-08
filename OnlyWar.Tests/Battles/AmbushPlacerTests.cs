@@ -131,4 +131,22 @@ public class AmbushPlacerTests
         // a lone squad forms a plain linear ambush on the long (west) leg
         Assert.True(b.MaxX < kill.MinX, "lone ambusher should be on the west leg");
     }
+
+    [Fact]
+    public void PlaceSquads_HugeEngagementRange_DoesNotWrapCoordinates()
+    {
+        BattleGridManager grid = new();
+        List<BattleSquad> ambushed = [CreateSquad("Ambushed", 5, true)];
+        List<BattleSquad> ambushing =
+        [
+            CreateSquad("A0", 5, false),
+            CreateSquad("A1", 5, false),
+            CreateSquad("A2", 5, false)
+        ];
+
+        AmbushPlacer placer = new(grid, ushort.MaxValue);
+        Dictionary<BattleSquad, Tuple<int, int>> map = placer.PlaceSquads(ambushed, ambushing);
+
+        Assert.Equal(ambushed.Count + ambushing.Count, map.Count);
+    }
 }

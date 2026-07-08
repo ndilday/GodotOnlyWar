@@ -4,20 +4,20 @@ using OnlyWar.Models;
 using OnlyWar.Models.Missions;
 using OnlyWar.Models.Planets;
 using OnlyWar.Models.Soldiers;
+using OnlyWar.Models.Squads;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using OnlyWar.Helpers.StrategicCombat;
 
 namespace OnlyWar.Helpers.Missions.Assault
 {
     public class PrepareAssaultMissionStep : IMissionStep
     {
-        // Tabletop-scale ceiling on how many garrison troopers can be drawn into a single
-        // regional assault. Larger garrisons (e.g. hive cities holding millions) act as a
-        // deterrent to direct ground assault; engaging them at scale is intended to require
-        // bombardment, war machines, etc. (future work). This cap also keeps ForceGenerator
-        // from being handed an enormous battle-value budget.
-        private const long MaxMobilizedGarrison = 10_000;
+        // Tactical assaults must stay table-sized. Larger garrisons belong in the strategic
+        // resolver; if a tactical order reaches this step after the defender mobilized, cap the
+        // generated garrison to the same limits used when deciding tactical-vs-strategic combat.
+        private const long MaxTacticalGarrisonBattleValue = StrategicCombatRules.MassCombatBattleValueFloor - 1;
 
         public string Description { get { return "Prepare Assault"; } }
 
@@ -72,19 +72,35 @@ namespace OnlyWar.Helpers.Missions.Assault
                 float cdf = GaussianCalculator.ApproximateNormalCDF(attackerMarginOfSuccess);
                 float multiplier = (float)Math.Pow(2, 1 - (2 * cdf));
                 long effectiveGarrison = (long)(defendingRegionFaction.Garrison * multiplier);
-                effectiveGarrison = Math.Min(effectiveGarrison, MaxMobilizedGarrison);
+                long targetBattleValue = Math.Min(effectiveGarrison * 10L, MaxTacticalGarrisonBattleValue);
 
                 var request = new ForceGenerationRequest
                 {
                     Faction = defendingRegionFaction.PlanetFaction.Faction,
-                    TargetBattleValue = effectiveGarrison * 10L, // Assuming 10 BV per garrison trooper
+                    TargetBattleValue = targetBattleValue,
                     Profile = ForceCompositionProfile.Garrison
                 };
-                var garrisonSquads = ForceGenerator.GenerateForce(request);
+                var garrisonSquads = CapTacticalForce(ForceGenerator.GenerateForce(request));
                 defendingForce.AddRange(garrisonSquads.Select(s => new BattleSquad(false, s))); // Garrisons are never player squads
             }
 
             return defendingForce;
+        }
+
+        private static List<Squad> CapTacticalForce(IEnumerable<Squad> squads)
+        {
+            List<Squad> capped = new();
+            int actors = 0;
+            foreach (Squad squad in squads)
+            {
+                if (capped.Count >= StrategicCombatRules.MaxGeneratedSquads) break;
+                int squadActors = squad.Members.Count;
+                if (actors + squadActors > StrategicCombatRules.MaxTacticalActors) break;
+
+                capped.Add(squad);
+                actors += squadActors;
+            }
+            return capped;
         }
     }
 }

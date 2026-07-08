@@ -6,7 +6,7 @@ using Xunit;
 namespace OnlyWar.Tests.Domain;
 
 // Covers the fog-of-war grading the UI relies on: enemy population is hidden until recon
-// raises a region's IntelligenceLevel, and defensive values are only ever shown as fuzzy
+// raises player-visible RegionIntel, and defensive values are only ever shown as fuzzy
 // descriptions (RegionFactionExtensions).
 public class OpForVisibilityTests
 {
@@ -15,7 +15,7 @@ public class OpForVisibilityTests
     {
         SectorSimulationFixture fixture = SectorSimulationFixture.Create();
         RegionFaction cult = fixture.AddHiddenFaction(0, OnlyWar.Models.GrowthType.Logistic, population: 50000);
-        fixture.Planet.Regions[0].IntelligenceLevel = 6f;
+        fixture.DefaultPlanetFaction.SetRegionIntel(fixture.Planet.Regions[0], 6f);
 
         // a non-public faction is never described, regardless of intelligence
         Assert.Equal("None", cult.GetPopulationDescription());
@@ -26,7 +26,7 @@ public class OpForVisibilityTests
     {
         SectorSimulationFixture fixture = SectorSimulationFixture.Create();
         RegionFaction enemy = fixture.AddControllingFaction(1, "Rebels", population: 12345);
-        fixture.Planet.Regions[1].IntelligenceLevel = 0f;
+        fixture.DefaultPlanetFaction.SetRegionIntel(fixture.Planet.Regions[1], 0f);
 
         Assert.Equal("Unknown", enemy.GetPopulationDescription());
     }
@@ -37,7 +37,7 @@ public class OpForVisibilityTests
         SectorSimulationFixture fixture = SectorSimulationFixture.Create();
         RegionFaction enemy = fixture.AddControllingFaction(1, "Rebels", population: 12345);
         // intelligence 3 => divisor 10^(6-3) = 1000 => 12345 rounded down to 12000
-        fixture.Planet.Regions[1].IntelligenceLevel = 3f;
+        fixture.DefaultPlanetFaction.SetRegionIntel(fixture.Planet.Regions[1], 3f);
 
         Assert.Equal("12000", enemy.GetPopulationDescription());
     }
@@ -47,7 +47,7 @@ public class OpForVisibilityTests
     {
         SectorSimulationFixture fixture = SectorSimulationFixture.Create();
         RegionFaction enemy = fixture.AddControllingFaction(1, "Rebels", population: 12345);
-        fixture.Planet.Regions[1].IntelligenceLevel = 6f;
+        fixture.DefaultPlanetFaction.SetRegionIntel(fixture.Planet.Regions[1], 6f);
 
         Assert.Equal("12345", enemy.GetPopulationDescription());
     }

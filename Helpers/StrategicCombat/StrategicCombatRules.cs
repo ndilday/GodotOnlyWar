@@ -61,7 +61,7 @@ namespace OnlyWar.Helpers.StrategicCombat
 
         // Awareness a defender gains of each region an attack staged from, purely by being hit from
         // there: the blow itself reveals where the enemy is massing. This is the reactive path that
-        // lets a previously-blind defender size a garrison against a neighbour the following turn
+        // lets a previously-blind defender size its defensive need against a neighbour the following turn
         // (FactionStrategyController.CalculateRequiredGarrison) even with no listening posts or recon.
         public const float IntelGainedFromBeingAttacked = 2.0f;
 

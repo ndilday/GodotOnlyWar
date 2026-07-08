@@ -1,4 +1,5 @@
 using OnlyWar.Helpers;
+using OnlyWar.Helpers.Extensions;
 using OnlyWar.Models;
 using OnlyWar.Models.Missions;
 using OnlyWar.Models.Planets;
@@ -59,6 +60,21 @@ public class SectorEntityLogicTests
     }
 
     [Fact]
+    public void EndOfTurnRegionFactionsUpdate_PublicEnemyInRegionDraftsMorePdfFromGrowth()
+    {
+        RNG.Reset(1);
+        SectorSimulationFixture fixture = SectorSimulationFixture.Create();
+        RegionFaction pdf = fixture.DefaultRegionFaction(0);
+        pdf.Population = 1_000_000;
+        pdf.Garrison = 0;
+        fixture.AddPublicCult(0, population: 100, organization: 100);
+
+        new TurnController().EndOfTurnRegionFactionsUpdate(pdf, pdfRatio: 0.5f);
+
+        Assert.Equal(60, pdf.Garrison); // 1,000,000 * 0.0004 baseline growth * 15%
+    }
+
+    [Fact]
     public void ProcessTurn_DeclinesGentlyWhenRegionAboveCarryingCapacity()
     {
         RNG.Reset(1);
@@ -108,11 +124,40 @@ public class SectorEntityLogicTests
     {
         RNG.Reset(1);
         SectorSimulationFixture fixture = SectorSimulationFixture.Create();
-        fixture.Planet.Regions[3].IntelligenceLevel = 4.0f;
+        Region region = fixture.Planet.Regions[3];
+        fixture.DefaultPlanetFaction.SetRegionIntel(region, 4.0f);
 
         fixture.ProcessTurn();
 
-        Assert.Equal(3.0f, fixture.Planet.Regions[3].IntelligenceLevel, precision: 4);
+        Assert.Equal(3.0f, fixture.DefaultPlanetFaction.GetRegionIntel(region), precision: 4);
+        Assert.Equal(3.0f, region.GetPlayerVisibleIntel(), precision: 4);
+    }
+
+    [Fact]
+    public void ProcessTurn_PlayerAndDefaultSharingPoolsOnlyThisTurnIntelGains()
+    {
+        RNG.Reset(1);
+        SectorSimulationFixture fixture = SectorSimulationFixture.Create();
+        Region region = fixture.Planet.Regions[3];
+        Faction playerFaction = fixture.Sector.PlayerForce.Faction;
+        PlanetFaction playerPlanetFaction = new(playerFaction) { IsPublic = true };
+        fixture.Planet.PlanetFactionMap[playerFaction.Id] = playerPlanetFaction;
+        fixture.Planet.Regions[3].RegionFactionMap[playerFaction.Id] =
+            new RegionFaction(playerPlanetFaction, region)
+            {
+                Population = 1,
+                IsPublic = true,
+                Organization = 100,
+                ListeningPost = 3
+            };
+        fixture.DefaultRegionFaction(3).ListeningPost = 2;
+        playerPlanetFaction.SetRegionIntel(region, 2.0f);
+        fixture.DefaultPlanetFaction.SetRegionIntel(region, 3.0f);
+
+        fixture.ProcessTurn();
+
+        Assert.Equal(2.5f, playerPlanetFaction.GetRegionIntel(region), precision: 4);
+        Assert.Equal(3.25f, fixture.DefaultPlanetFaction.GetRegionIntel(region), precision: 4);
     }
 
     [Fact]
