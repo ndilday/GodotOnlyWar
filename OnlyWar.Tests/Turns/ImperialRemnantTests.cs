@@ -7,9 +7,10 @@ namespace OnlyWar.Tests.Turns;
 
 // Coverage for the Imperial remnant hide/unhide lifecycle and civilian emigration (PRD §4.24):
 // a governing population goes to ground when its garrison falls under a public enemy, surfaces
-// again on liberation, neither grows nor drafts while hidden, and bleeds survivors to adjacent
-// governed regions each week. Regions 1 and 2 are the only neighbours of region 0 in the fixture's
-// diamond grid, so region 0 is used as the source throughout.
+// again on liberation OR when its armed underground can outfight the occupier, keeps growing while
+// hidden (arming that growth into its garrison), and bleeds survivors to adjacent governed regions
+// each week. Regions 1 and 2 are the only neighbours of region 0 in the fixture's diamond grid, so
+// region 0 is used as the source throughout.
 [Collection(OnlyWar.Tests.TestCollections.SharedState)]
 public class ImperialRemnantTests
 {
@@ -143,18 +144,53 @@ public class ImperialRemnantTests
     }
 
     [Fact]
-    public void HiddenRemnant_NeitherGrowsNorAccruesGarrison()
+    public void HiddenRemnant_GrowsAndArmsItsGarrison()
     {
         SectorSimulationFixture fixture = SectorSimulationFixture.Create();
+        Region region = fixture.Planet.Regions[0];
+        region.CarryingCapacity = 10_000_000;
+        region.MaximumCarryingCapacity = 10_000_000;
         RegionFaction remnant = fixture.DefaultRegionFaction(0);
         remnant.Population = 1_000_000;
         remnant.Garrison = 0;
-        remnant.IsPublic = false; // gone to ground
+        remnant.IsPublic = false; // gone to ground, but still a living resistance
 
         new TurnController().EndOfTurnRegionFactionsUpdate(remnant, pdfRatio: 0.5f);
 
-        Assert.Equal(1_000_000, remnant.Population);
-        Assert.Equal(0, remnant.Garrison);
+        Assert.True(remnant.Population > 1_000_000, "a hidden resistance still has children");
+        Assert.True(remnant.Garrison > 0, "and arms that growth into the underground");
+        Assert.True(remnant.Garrison <= remnant.Population, "garrison never exceeds population");
+    }
+
+    [Fact]
+    public void HiddenRemnant_RisesToRetakeWhenLoyalStrengthOutweighsEnemy()
+    {
+        SectorSimulationFixture fixture = SectorSimulationFixture.Create();
+        RegionFaction remnant = fixture.DefaultRegionFaction(0);
+        remnant.IsPublic = false;
+        remnant.Population = 200_000;
+        remnant.Garrison = 100_000; // a strong armed underground
+        // a weak public swarm still holds ground in the region
+        fixture.AddConsumptionFaction(0, population: 1_000, organization: 100);
+
+        TurnController.UpdateImperialRemnantState(fixture.Planet.Regions[0]);
+
+        Assert.True(remnant.IsPublic, "the resistance rises to retake the region when it can win");
+    }
+
+    [Fact]
+    public void HiddenRemnant_StaysHiddenWhenEnemyOutweighsLoyalStrength()
+    {
+        SectorSimulationFixture fixture = SectorSimulationFixture.Create();
+        RegionFaction remnant = fixture.DefaultRegionFaction(0);
+        remnant.IsPublic = false;
+        remnant.Population = 200_000;
+        remnant.Garrison = 100; // a token underground, hopelessly outnumbered
+        fixture.AddConsumptionFaction(0, population: 500_000, organization: 100);
+
+        TurnController.UpdateImperialRemnantState(fixture.Planet.Regions[0]);
+
+        Assert.False(remnant.IsPublic, "a weak remnant stays hidden while the occupier is stronger");
     }
 
     [Fact]

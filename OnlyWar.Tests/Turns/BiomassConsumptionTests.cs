@@ -161,6 +161,37 @@ public class BiomassConsumptionTests
         Assert.Equal(100, region.CarryingCapacity);
     }
 
+    // The land must not regrow while a public swarm is still grazing it, or the swarm would have a
+    // renewable food source and never starve on its finite stranded-biomass budget.
+    [Fact]
+    public void RecoverCarryingCapacity_DoesNotHealWhilePublicSwarmPresent()
+    {
+        SectorSimulationFixture fixture = SectorSimulationFixture.Create();
+        Region region = fixture.Planet.Regions[0];
+        region.MaximumCarryingCapacity = 1_000_000;
+        region.CarryingCapacity = 500_000;
+        fixture.AddConsumptionFaction(0, population: 50_000, organization: 100); // swarm grazing
+
+        TurnController.RecoverCarryingCapacity(region);
+
+        Assert.Equal(500_000, region.CarryingCapacity);
+    }
+
+    // Once the swarm is gone from the region, the land heals again as before.
+    [Fact]
+    public void RecoverCarryingCapacity_HealsOnceSwarmIsGone()
+    {
+        SectorSimulationFixture fixture = SectorSimulationFixture.Create();
+        Region region = fixture.Planet.Regions[0];
+        region.MaximumCarryingCapacity = 1_000_000;
+        region.CarryingCapacity = 500_000;
+        // no Consumption faction present
+
+        TurnController.RecoverCarryingCapacity(region);
+
+        Assert.Equal(505_000, region.CarryingCapacity);
+    }
+
     // --- Forced expansion (PRD §4.24 Tyranid Troop AI, step 2) ---
 
     [Fact]

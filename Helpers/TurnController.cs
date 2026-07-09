@@ -39,6 +39,11 @@ namespace OnlyWar.Helpers
         private const float GarrisonDraftRate = 0.025f;
         private const float EmergencyGarrisonDraftRate = 0.05f;
         private const float ActiveAssaultGarrisonDraftRate = 0.15f;
+        // A hidden Imperial remnant is a resistance under occupation: rather than swelling an idle
+        // civilian base, its organic growth takes up arms into the hidden garrison, building toward
+        // the strength to rise again (UpdateImperialRemnantState). 1.0 = the whole new generation is
+        // armed; it is clamped to population by the Garrison setter regardless.
+        private const float OverrunRemnantGarrisonArmingRate = 1.0f;
         // divisor converting a fortifying squad's summed engineering skill into a per-turn
         // defensive increment; tuned so a full, trained squad raises a defense by ~1-2/turn
         private const float EngineeringBuildDivisor = 100f;
@@ -1299,53 +1304,53 @@ namespace OnlyWar.Helpers
             Faction controllingFaction = planet.GetControllingFaction();
             float newPop = 0;
             // An overrun Imperial remnant (a hidden default faction — Stage 3 of the hide/unhide
-            // lifecycle, PRD §4.24) is a population gone to ground under a public enemy: it neither
-            // grows organically nor drafts a garrison, so it skips growth resolution entirely.
+            // lifecycle, PRD §4.24) is a resistance gone to ground under a public enemy. It still
+            // grows organically — the populace keeps having children — but that growth arms the
+            // hidden garrison rather than swelling an idle civilian base (handled after the switch),
+            // building the strength it needs to rise again (UpdateImperialRemnantState). It never
+            // runs the normal garrison draft/attrition (UpdateRegionFactionForces skips it).
             bool isOverrunRemnant = regionFaction.PlanetFaction.Faction.IsDefaultFaction && !regionFaction.IsPublic;
             // GrowthMultiplier (default 1.0) is a general multiplicative throttle on *organic* growth,
             // available for future tuning of organically-growing factions (e.g. Ork feral penalty,
             // revolt tuning). It applies only to the Logistic/baseline branches below. Conversion is
             // not organic growth, and Consumption factions (Tyranids) have no organic birthrate at all
             // (they grow only by eating biomass — PRD §4.24), so neither reads it.
-            if (!isOverrunRemnant)
+            switch (regionFaction.PlanetFaction.Faction.GrowthType)
             {
-                switch (regionFaction.PlanetFaction.Faction.GrowthType)
-                {
-                    case GrowthType.Logistic:
-                        newPop = ApplyCarryingCapacity(
-                            regionFaction.Population * LogisticGrowthRate * regionFaction.GrowthMultiplier,
-                            regionFaction.Region);
-                        break;
-                    case GrowthType.Conversion:
-                        // Conversion factions (Genestealer Cult) grow only while HIDDEN. Converting
-                        // the populace is clandestine — cultists steal individuals away at night to
-                        // be implanted — which depends on cover, opportunity, and a target populace
-                        // still going about its life. Once the cult reveals itself into open warfare
-                        // that all collapses: the front replaces the shadows and there is neither the
-                        // means nor the inclination to keep proselytizing. A public converting faction
-                        // therefore makes no converts and does not grow this turn.
-                        if (!regionFaction.IsPublic)
+                case GrowthType.Logistic:
+                    newPop = ApplyCarryingCapacity(
+                        regionFaction.Population * LogisticGrowthRate * regionFaction.GrowthMultiplier,
+                        regionFaction.Region);
+                    break;
+                case GrowthType.Conversion:
+                    // Conversion factions (Genestealer Cult) grow only while HIDDEN. Converting
+                    // the populace is clandestine — cultists steal individuals away at night to
+                    // be implanted — which depends on cover, opportunity, and a target populace
+                    // still going about its life. Once the cult reveals itself into open warfare
+                    // that all collapses: the front replaces the shadows and there is neither the
+                    // means nor the inclination to keep proselytizing. A public converting faction
+                    // therefore makes no converts and does not grow this turn.
+                    if (!regionFaction.IsPublic)
+                    {
+                        newPop = ConvertPopulation(regionFaction.Region, regionFaction, newPop);
+                        if (regionFaction.PlanetFaction.Faction.Id != controllingFaction.Id &&
+                            planet.PlanetFactionMap[controllingFaction.Id].Leader != null)
                         {
-                            newPop = ConvertPopulation(regionFaction.Region, regionFaction, newPop);
-                            if (regionFaction.PlanetFaction.Faction.Id != controllingFaction.Id &&
-                                planet.PlanetFactionMap[controllingFaction.Id].Leader != null)
-                            {
-                                // TODO: see if the governor notices the converted population
-                            }
+                            // TODO: see if the governor notices the converted population
                         }
-                        break;
-                    case GrowthType.Consumption:
-                        // Consumption factions (Tyranids) have no organic birthrate; all their growth
-                        // comes from eating biomass (Predate/Consume), applied in the biomass step
-                        // rather than here (PRD §4.24). Organic growth is therefore zero.
-                        newPop = 0;
-                        break;
-                    default:
-                        newPop = ApplyCarryingCapacity(
-                            regionFaction.Population * BaselineGrowthRate * regionFaction.GrowthMultiplier,
-                            regionFaction.Region);
-                        break;
-                }
+                    }
+                    break;
+                case GrowthType.Consumption:
+                    // Consumption factions (Tyranids) have no organic birthrate; all their growth
+                    // comes from eating biomass (Predate/Consume), applied in the biomass step
+                    // rather than here (PRD §4.24). Organic growth is therefore zero.
+                    newPop = 0;
+                    break;
+                default:
+                    newPop = ApplyCarryingCapacity(
+                        regionFaction.Population * BaselineGrowthRate * regionFaction.GrowthMultiplier,
+                        regionFaction.Region);
+                    break;
             }
             // probabilistic rounding of the fractional remainder, handling both growth
             // (positive) and over-capacity decline (negative)
@@ -1361,9 +1366,19 @@ namespace OnlyWar.Helpers
             {
                 regionFaction.Population = 0;
             }
-            RecordScenarioNaturalPopulationChange(
-                regionFaction,
-                regionFaction.Population - populationBeforeGrowth);
+            long grown = regionFaction.Population - populationBeforeGrowth;
+            RecordScenarioNaturalPopulationChange(regionFaction, grown);
+            // A hidden remnant arms its own growth (see OverrunRemnantGarrisonArmingRate): the new
+            // generation joins the armed underground rather than an idle civilian base, so the
+            // resistance can eventually rise and retake the region. The Garrison setter clamps to
+            // population. UpdateRegionFactionForces skips overrun remnants, so this is their only
+            // garrison change — no double draft.
+            if (isOverrunRemnant && grown > 0)
+            {
+                long garrisonBefore = regionFaction.Garrison;
+                regionFaction.Garrison += (long)(grown * OverrunRemnantGarrisonArmingRate);
+                RecordScenarioPdfDrafted(regionFaction, regionFaction.Garrison - garrisonBefore);
+            }
             UpdateRegionFactionForces(regionFaction, pdfRatio, newPop);
         }
 
@@ -1559,6 +1574,16 @@ namespace OnlyWar.Helpers
         internal static void RecoverCarryingCapacity(Region region)
         {
             if (region.CarryingCapacity >= region.MaximumCarryingCapacity) return;
+            // The land cannot heal while a public Consumption swarm is still grazing it: recovery
+            // resumes only once the swarm is driven off or moves on. Without this the swarm has a
+            // renewable food source and never starves on the finite biomass budget the opening leans
+            // on (it re-strips the trickle of regrowth every turn). A hidden consumer — none exist
+            // today — is treated as not actively feeding, so it does not block regrowth.
+            bool publicSwarmPresent = region.RegionFactionMap.Values.Any(rf =>
+                rf.IsPublic
+                && rf.PlanetFaction.Faction.GrowthType == GrowthType.Consumption
+                && rf.Population > 0);
+            if (publicSwarmPresent) return;
             long gap = region.MaximumCarryingCapacity - region.CarryingCapacity;
             long recovered = (long)(gap * CarryingCapacityRecoveryRate);
             if (recovered <= 0) recovered = 1;
@@ -1677,10 +1702,39 @@ namespace OnlyWar.Helpers
                     defaultFaction.IsPublic = false;
                 }
             }
-            else if (!publicEnemy)
+            // A hidden remnant rises again either when the occupier is gone (no public enemy left)
+            // or when the loyal strength on the ground — its own armed underground, plus any landed
+            // Astartes and allied garrisons — outweighs every enemy force still in the region, and
+            // it moves openly to retake control (the resistance rises when it can win, not only when
+            // the enemy leaves).
+            else if (!publicEnemy || LoyalStrengthOutweighsEnemy(region))
             {
                 defaultFaction.IsPublic = true;
             }
+        }
+
+        // Loyal (default + player) fighting strength in a region — armed remnant/PDF garrisons,
+        // allied military strength, and landed friendly squads — against the total military strength
+        // of every enemy (non-default, non-player) faction present. Backs the hidden remnant's
+        // decision to rise and retake a region even while a public enemy still holds ground.
+        private static bool LoyalStrengthOutweighsEnemy(Region region)
+        {
+            long loyal = 0;
+            long enemy = 0;
+            foreach (RegionFaction rf in region.RegionFactionMap.Values)
+            {
+                Faction faction = rf.PlanetFaction.Faction;
+                if (faction.IsDefaultFaction || faction.IsPlayerFaction)
+                {
+                    loyal += rf.MilitaryStrength;
+                    loyal += SquadBattleValue(rf.LandedSquads);
+                }
+                else
+                {
+                    enemy += rf.MilitaryStrength;
+                }
+            }
+            return loyal > 0 && loyal > enemy;
         }
 
         // A region holds a public enemy if any non-player, non-default faction is public and still
