@@ -48,7 +48,20 @@ namespace OnlyWar.Models
         public IReadOnlyDictionary<int, FleetTemplate> FleetTemplates { get; }
 
         public List<Unit> Units { get; set; }
-        
+
+        private long? _minimumForceRequest;
+        // The battle value of the smallest full non-HQ squad this faction can field — the floor
+        // for any force-generation budget. A request below this can be ungeneratable (the force
+        // generator returns no squads when even a minimum partial squad exceeds the budget), so
+        // order budgets sized off a near-dead defender must be clamped up to it or the target is
+        // never attacked. Squad templates are fixed at load, so this is computed once.
+        public long MinimumForceRequest =>
+            _minimumForceRequest ??= SquadTemplates?.Values
+                .Where(st => st.BattleValue > 0 && (st.SquadType & SquadTypes.HQ) == 0)
+                .Select(st => (long)st.BattleValue)
+                .DefaultIfEmpty(0)
+                .Min() ?? 0;
+
         public Faction(int id, string name, Color color, bool isPlayerFaction, 
                        bool isDefaultFaction, bool canInfiltrate, GrowthType growthType,
                        IReadOnlyDictionary<int, Species> species,

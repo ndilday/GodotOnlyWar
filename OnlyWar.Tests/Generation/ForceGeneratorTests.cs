@@ -223,6 +223,26 @@ public class ForceGeneratorTests
         Assert.Equal(["Greater HQ", "Bodyguard"], generated.Select(s => s.SquadTemplate.Name).ToArray());
     }
 
+    [Fact]
+    public void MinimumForceRequest_IsTheCheapestFullNonHqSquad()
+    {
+        SquadTemplate hq = CreateTemplate(1, "HQ", SquadTypes.HQ, 1, 2);
+        SquadTemplate line = CreateTemplate(2, "Line", SquadTypes.None, 5, 10);
+        SquadTemplate heavy = CreateTemplate(3, "Heavy", SquadTypes.None, 1, 25);
+        SquadTemplate valueless = CreateTemplate(4, "Valueless", SquadTypes.None, 1, 0);
+        Faction faction = CreateFaction(hq, line, heavy, valueless);
+
+        // HQ squads and zero-value templates are not counted: the floor is the cheapest full
+        // squad the generic generator could actually field.
+        Assert.Equal(10, faction.MinimumForceRequest);
+    }
+
+    [Fact]
+    public void MinimumForceRequest_IsZeroWithoutUsableTemplates()
+    {
+        Assert.Equal(0, CreateFaction().MinimumForceRequest);
+    }
+
     private static SquadTemplate CreateTemplate(
         int id,
         string name,

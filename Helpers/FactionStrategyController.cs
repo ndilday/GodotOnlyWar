@@ -366,7 +366,11 @@ public class FactionStrategyController
         List<Order> allOrders)
     {
         long requestedBattleValue = Math.Min(target.AvailableAttackingForce, StrategicCombatRules.NpcReconBattleValueCap);
-        if (requestedBattleValue <= 0) return false;
+        if (requestedBattleValue <= 0 || target.AvailableAttackingForce < faction.MinimumForceRequest) return false;
+
+        // The recon budget, like any order budget, can be no smaller than the faction's smallest
+        // full squad, or the force generator may be unable to produce anything for it.
+        requestedBattleValue = Math.Max(requestedBattleValue, faction.MinimumForceRequest);
 
         var request = new ForceGenerationRequest
         {
@@ -437,13 +441,20 @@ public class FactionStrategyController
         Aggression aggression)
     {
         long totalAvailableForAttack = chosenOffensive.AvailableAttackingForce;
-        if (intendedBattleValue <= 0 || totalAvailableForAttack <= 0)
+        if (intendedBattleValue <= 0 || totalAvailableForAttack <= 0
+            || totalAvailableForAttack < faction.MinimumForceRequest)
         {
             GameLog.Debug(() =>
                 $"AI {missionType} {faction.Name}: target={DescribeOffensive(chosenOffensive)}, "
-                + $"available={totalAvailableForAttack}, intended={intendedBattleValue}; no order created");
+                + $"available={totalAvailableForAttack}, intended={intendedBattleValue}, "
+                + $"minimum={faction.MinimumForceRequest}; no order created");
             return false;
         }
+
+        // Never budget less than the faction's smallest full squad: the force generator cannot
+        // honor a smaller request, so an offensive sized off a near-dead defender (2x a tiny
+        // garrison) would silently produce no force and the target would never be attacked.
+        intendedBattleValue = Math.Max(intendedBattleValue, faction.MinimumForceRequest);
 
         // Commit the force and draw it from each staging region's military pool (Population for a
         // horde, Garrison otherwise), split in proportion to what each region contributed.
@@ -1017,8 +1028,13 @@ public class FactionStrategyController
             if (state.SpareTroops <= 0) continue;
 
             double patrolFraction = CalculatePatrolFraction(faction, planet, state);
-            int forceBattleValue = (int)(state.SpareTroops * patrolFraction);
+            long forceBattleValue = (long)(state.SpareTroops * patrolFraction);
             if (forceBattleValue <= 0) continue;
+
+            // A patrol screen is still an order: its budget can be no smaller than the faction's
+            // smallest full squad. A region too thin to field even that posts no screen.
+            forceBattleValue = Math.Max(forceBattleValue, faction.MinimumForceRequest);
+            if (forceBattleValue > state.SpareTroops) continue;
 
             var request = new ForceGenerationRequest
             {

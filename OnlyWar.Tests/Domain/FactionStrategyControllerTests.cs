@@ -305,6 +305,40 @@ public class FactionStrategyControllerTests
     }
 
     [Fact]
+    public void GenerateFactionOrders_TinyGarrisonStillDrawsAtLeastAFullSquadAssault()
+    {
+        RNG.Reset(1234);
+        // The attacker's only line squad is five 2-BV troopers with a five-man minimum: nothing
+        // smaller than a full 10-BV squad can be generated. Against a near-dead garrison (BV 2)
+        // the raw assault budget (2x defender = 4) is ungeneratable, so without the
+        // minimum-force-request floor the offensive silently fizzles and the region survives.
+        SoldierTemplate trooper = new(
+            50, TestModelFactory.HumanSpecies, "Cult Trooper", 1, 1, false, 0, [], null, 2);
+        SquadTemplate lineSquad = new(
+            50, "Cult Squad", TestModelFactory.DefaultWeapons, [], TestModelFactory.TestArmor,
+            [new SquadTemplateElement(trooper, 5, 5)], SquadTypes.None);
+        Faction attacker = BuildFaction(20, "Cult", isPlayer: false, isDefault: false, GrowthType.Conversion,
+            new Dictionary<int, SquadTemplate> { [lineSquad.Id] = lineSquad });
+        Faction defender = CreateDefaultFaction();
+        Planet planet = CreatePlanet();
+        Region staging = planet.Regions[0];
+        Region target = staging.GetAdjacentRegions().First();
+
+        AddRegionFaction(planet, staging, attacker, population: 1_000, organization: 100);
+        AddRegionFaction(planet, target, defender, population: 10, organization: 100, garrison: 2);
+        planet.PlanetFactionMap[attacker.Id].SetRegionIntel(target, FactionStrategyController.ReconIntelThreshold);
+        Sector sector = new(CreatePlayerForce(), [], [planet], []);
+
+        List<Order> orders = new FactionStrategyController().GenerateFactionOrders(attacker, sector);
+
+        Order assault = Assert.Single(orders, o => o.Mission.MissionType == MissionType.Advance);
+        long generatedBattleValue = assault.AssignedSquads
+            .Sum(s => s.Members.Sum(m => (long)m.Template.BattleValue));
+        Assert.Equal(10, attacker.MinimumForceRequest);
+        Assert.True(generatedBattleValue >= attacker.MinimumForceRequest);
+    }
+
+    [Fact]
     public void MissionStepOrchestrator_LightningRaidUsesRaidStep()
     {
         RegionFaction target = CreateTargetRegionFaction(CreateDefaultFaction(), population: 1_000, garrison: 100);
