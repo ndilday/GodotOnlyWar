@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -469,6 +470,46 @@ public class ScenarioTurnTests
 
         Assert.False(string.IsNullOrEmpty(controller.ScenarioNotification));
         Assert.Contains(promised.Name, controller.ScenarioNotification);
+    }
+
+    [Fact]
+    public void ProcessTurn_PromisedWorldLogsImperialRegionMetrics()
+    {
+        ScenarioFixture fixture = CreateScenarioFixture();
+        List<string> metricsLines = new();
+        GameLogLevel oldMinimumLevel = GameLog.MinimumLevel;
+        Action<GameLogLevel, string> oldSink = GameLog.Sink;
+
+        try
+        {
+            GameLog.MinimumLevel = GameLogLevel.Debug;
+            GameLog.Sink = (level, message) =>
+            {
+                if (level == GameLogLevel.Debug
+                    && message.StartsWith("Scenario region metrics", StringComparison.Ordinal))
+                {
+                    metricsLines.Add(message);
+                }
+            };
+
+            new TurnController().ProcessTurn(fixture.Sector);
+        }
+        finally
+        {
+            GameLog.Sink = oldSink;
+            GameLog.MinimumLevel = oldMinimumLevel;
+        }
+
+        Assert.Equal(fixture.Promised.Regions.Length, metricsLines.Count);
+        Assert.All(metricsLines, line =>
+        {
+            Assert.Contains("naturalPop=", line);
+            Assert.Contains("immigrationNet=", line);
+            Assert.Contains("civiliansKilledByEnemy=", line);
+            Assert.Contains("pdfLost=", line);
+            Assert.Contains("pdfDrafted=", line);
+            Assert.Contains("blighting=", line);
+        });
     }
 
     private ScenarioFixture CreateScenarioFixture(

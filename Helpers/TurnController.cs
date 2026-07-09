@@ -102,6 +102,19 @@ namespace OnlyWar.Helpers
         private const float IntelPerListeningPostLevel = 0.2f;
         private const float IntelPatrolBaseGain = 1.0f;
         private readonly Dictionary<PlanetFaction, Dictionary<Region, float>> _turnIntelGains = new();
+        private static Dictionary<Region, ScenarioRegionTurnMetrics> _activeScenarioRegionMetrics;
+        private static Planet _activeScenarioMetricsPlanet;
+        private static Faction _activeScenarioMetricsImperialFaction;
+
+        private sealed class ScenarioRegionTurnMetrics
+        {
+            public long NaturalPopulationChange { get; set; }
+            public long ImmigrationNet { get; set; }
+            public long CiviliansKilledByEnemyForces { get; set; }
+            public long PdfLost { get; set; }
+            public long PdfDrafted { get; set; }
+            public long Blighting { get; set; }
+        }
 
         public TurnController() : this(null)
         {
@@ -123,6 +136,8 @@ namespace OnlyWar.Helpers
             StrategicCombatResults.Clear();
             _turnIntelGains.Clear();
             ScenarioNotification = null;
+            Faction defaultFaction = GameDataSingleton.Instance.GameRulesData.DefaultFaction;
+            BeginScenarioRegionMetrics(GetScenarioMetricsPlanet(sector), defaultFaction);
 
             // --- 0. Shaping Phase ---
             // Diversion missions resolve before strategic planning so the feint they project is
@@ -143,7 +158,6 @@ namespace OnlyWar.Helpers
             // The Imperial PDF (default faction) plans defensively: it fortifies and builds listening
             // posts to hold worlds under assault, but launches no offensives (PRD §4.24). Without this
             // the PDF could raise no defenses at all — only enemy factions previously planned.
-            Faction defaultFaction = GameDataSingleton.Instance.GameRulesData.DefaultFaction;
             if (defaultFaction != null)
             {
                 allOrdersThisTurn.AddRange(
@@ -178,6 +192,8 @@ namespace OnlyWar.Helpers
             // Resolve the opening objective after the planet sim has settled this turn, so the
             // win/lapse checks read the post-combat, post-growth state of the promised world.
             ProcessScenario(sector);
+            LogScenarioRegionMetrics($"date={GameDataSingleton.Instance.Date}");
+            EndScenarioRegionMetrics();
             CleanupResolvedPlayerOrders(sector, playerOrdersThisTurn);
         }
 
@@ -204,6 +220,7 @@ namespace OnlyWar.Helpers
                 SpecialMissions.Clear();
                 StrategicCombatResults.Clear();
                 _turnIntelGains.Clear();
+                BeginScenarioRegionMetrics(planet, defaultFaction);
 
                 // Strategic planning, scoped to this one planet. Enemy factions plan offensively;
                 // the Imperial PDF plans defensively (fortify/listen only), exactly as ProcessTurn
@@ -235,9 +252,155 @@ namespace OnlyWar.Helpers
                 UpdatePlanet(planet);
                 PruneInvalidSpecialMissions(new[] { planet });
                 UpdateIntelligence(planet);
+                LogScenarioRegionMetrics($"generationWeek={week + 1}/{turns}");
+                EndScenarioRegionMetrics();
 
                 GameLog.Info(() =>
                     $"  week {week + 1}/{turns} '{planet.Name}' done in {weekTimer.ElapsedMilliseconds}ms");
+            }
+        }
+
+        private static Planet GetScenarioMetricsPlanet(Sector sector)
+        {
+            CampaignScenario scenario = sector?.Scenario;
+            if (scenario?.Type != ScenarioType.PromisedWorld)
+            {
+                return null;
+            }
+
+            return sector.Planets.TryGetValue(scenario.PromisedPlanetId, out Planet planet)
+                ? planet
+                : null;
+        }
+
+        private static void BeginScenarioRegionMetrics(Planet planet, Faction imperialFaction)
+        {
+            EndScenarioRegionMetrics();
+            if (!GameLog.IsEnabled(GameLogLevel.Debug) || planet == null || imperialFaction == null)
+            {
+                return;
+            }
+
+            _activeScenarioMetricsPlanet = planet;
+            _activeScenarioMetricsImperialFaction = imperialFaction;
+            _activeScenarioRegionMetrics = planet.Regions.ToDictionary(
+                region => region,
+                _ => new ScenarioRegionTurnMetrics());
+        }
+
+        private static void EndScenarioRegionMetrics()
+        {
+            _activeScenarioRegionMetrics = null;
+            _activeScenarioMetricsPlanet = null;
+            _activeScenarioMetricsImperialFaction = null;
+        }
+
+        private static ScenarioRegionTurnMetrics GetActiveScenarioMetrics(Region region)
+        {
+            if (_activeScenarioRegionMetrics == null || region == null)
+            {
+                return null;
+            }
+
+            if (!ReferenceEquals(region.Planet, _activeScenarioMetricsPlanet))
+            {
+                return null;
+            }
+
+            return _activeScenarioRegionMetrics.TryGetValue(region, out ScenarioRegionTurnMetrics metrics)
+                ? metrics
+                : null;
+        }
+
+        private static bool IsTrackedImperialFaction(RegionFaction regionFaction)
+        {
+            return regionFaction?.PlanetFaction?.Faction != null
+                && ReferenceEquals(regionFaction.PlanetFaction.Faction, _activeScenarioMetricsImperialFaction);
+        }
+
+        private static bool IsEnemyFaction(Faction faction)
+        {
+            return faction != null
+                && !faction.IsPlayerFaction
+                && !faction.IsDefaultFaction;
+        }
+
+        private static void RecordScenarioNaturalPopulationChange(RegionFaction regionFaction, long delta)
+        {
+            if (!IsTrackedImperialFaction(regionFaction)) return;
+            ScenarioRegionTurnMetrics metrics = GetActiveScenarioMetrics(regionFaction.Region);
+            if (metrics == null) return;
+            metrics.NaturalPopulationChange += delta;
+        }
+
+        private static void RecordScenarioImmigration(Region region, long delta)
+        {
+            ScenarioRegionTurnMetrics metrics = GetActiveScenarioMetrics(region);
+            if (metrics == null) return;
+            metrics.ImmigrationNet += delta;
+        }
+
+        private static void RecordScenarioCivilianKills(RegionFaction regionFaction, long killed, Faction attacker)
+        {
+            if (killed <= 0 || !IsEnemyFaction(attacker) || !IsTrackedImperialFaction(regionFaction)) return;
+            ScenarioRegionTurnMetrics metrics = GetActiveScenarioMetrics(regionFaction.Region);
+            if (metrics == null) return;
+            metrics.CiviliansKilledByEnemyForces += killed;
+        }
+
+        private static void RecordScenarioPdfLost(RegionFaction regionFaction, long lost, Faction attacker)
+        {
+            if (lost <= 0 || !IsEnemyFaction(attacker) || !IsTrackedImperialFaction(regionFaction)) return;
+            ScenarioRegionTurnMetrics metrics = GetActiveScenarioMetrics(regionFaction.Region);
+            if (metrics == null) return;
+            metrics.PdfLost += lost;
+        }
+
+        private static void RecordScenarioPdfDrafted(RegionFaction regionFaction, long drafted)
+        {
+            if (drafted <= 0 || !IsTrackedImperialFaction(regionFaction)) return;
+            ScenarioRegionTurnMetrics metrics = GetActiveScenarioMetrics(regionFaction.Region);
+            if (metrics == null) return;
+            metrics.PdfDrafted += drafted;
+        }
+
+        private static void RecordScenarioBlighting(Region region, long stripped, Faction consumer)
+        {
+            if (stripped <= 0 || !IsEnemyFaction(consumer)) return;
+            ScenarioRegionTurnMetrics metrics = GetActiveScenarioMetrics(region);
+            if (metrics == null) return;
+            metrics.Blighting += stripped;
+        }
+
+        private static void LogScenarioRegionMetrics(string turnLabel)
+        {
+            if (_activeScenarioRegionMetrics == null || _activeScenarioMetricsPlanet == null)
+            {
+                return;
+            }
+
+            foreach (Region region in _activeScenarioMetricsPlanet.Regions)
+            {
+                ScenarioRegionTurnMetrics metrics = GetActiveScenarioMetrics(region);
+                if (metrics == null) continue;
+
+                RegionFaction imperial = region.RegionFactionMap.TryGetValue(
+                    _activeScenarioMetricsImperialFaction.Id, out RegionFaction rf)
+                    ? rf
+                    : null;
+                long population = imperial?.Population ?? 0;
+                long garrison = imperial?.Garrison ?? 0;
+
+                GameLog.Debug(() =>
+                    $"Scenario region metrics {turnLabel} "
+                    + $"{region.Planet.Name}/{region.Name}/{_activeScenarioMetricsImperialFaction.Name}: "
+                    + $"naturalPop={metrics.NaturalPopulationChange}, "
+                    + $"immigrationNet={metrics.ImmigrationNet}, "
+                    + $"civiliansKilledByEnemy={metrics.CiviliansKilledByEnemyForces}, "
+                    + $"pdfLost={metrics.PdfLost}, pdfDrafted={metrics.PdfDrafted}, "
+                    + $"blighting={metrics.Blighting}, "
+                    + $"population={population}, pdf={garrison}, "
+                    + $"carryingCapacity={region.CarryingCapacity}/{region.MaximumCarryingCapacity}");
             }
         }
 
@@ -426,7 +589,13 @@ namespace OnlyWar.Helpers
             {
                 if (order.Mission is not StrategicCombatMission mission) continue;
 
+                long targetStrengthBefore = mission.RegionFaction?.MilitaryStrength ?? 0;
                 StrategicCombatResult result = resolver.Resolve(mission);
+                long targetStrengthAfter = mission.RegionFaction?.MilitaryStrength ?? 0;
+                RecordScenarioPdfLost(
+                    mission.RegionFaction,
+                    Math.Max(0, targetStrengthBefore - targetStrengthAfter),
+                    mission.Attacker);
                 StrategicCombatResults.Add(result);
                 GameLog.Debug(() =>
                     $"Strategic combat {result.Attacker?.Name} -> {DescribeRegionFaction(result.Target)}: "
@@ -833,6 +1002,12 @@ namespace OnlyWar.Helpers
                 }
                 long defenderStrengthBefore = regionFaction.MilitaryStrength;
                 regionFaction.RemoveMilitaryStrength(defenderCasualties);
+                long defenderStrengthAfter = regionFaction.MilitaryStrength;
+                Faction attackingFaction = context.Order.AssignedSquads.FirstOrDefault()?.Faction;
+                RecordScenarioPdfLost(
+                    regionFaction,
+                    Math.Max(0, defenderStrengthBefore - defenderStrengthAfter),
+                    attackingFaction);
                 GameLog.Debug(() =>
                     $"Mission attrition {context.Order.Mission.MissionType} -> {DescribeRegionFaction(regionFaction)}: "
                     + $"defenderLosses={defenderCasualties}, defenderStrength={defenderStrengthBefore}->{regionFaction.MilitaryStrength}");
@@ -1180,11 +1355,15 @@ namespace OnlyWar.Helpers
             {
                 whole += Math.Sign(fraction);
             }
+            long populationBeforeGrowth = regionFaction.Population;
             regionFaction.Population += (long)whole;
             if (regionFaction.Population < 0)
             {
                 regionFaction.Population = 0;
             }
+            RecordScenarioNaturalPopulationChange(
+                regionFaction,
+                regionFaction.Population - populationBeforeGrowth);
             UpdateRegionFactionForces(regionFaction, pdfRatio, newPop);
         }
 
@@ -1338,8 +1517,9 @@ namespace OnlyWar.Helpers
                 long capacityBefore = region.CarryingCapacity;
                 int preyFactionCount = prey.Count;
                 long preyBefore = (long)(preyRemaining + predated); // pre-consumption prey headcount
-                ApplyPredationKills(prey, killed);
+                ApplyPredationKills(prey, killed, consumer.PlanetFaction.Faction);
                 region.CarryingCapacity = Math.Max(0, region.CarryingCapacity - stripped);
+                RecordScenarioBlighting(region, stripped, consumer.PlanetFaction.Faction);
                 long converted = (long)((killed + stripped) * BiomassFeedEfficiency);
                 consumer.Population += converted;
                 GameLog.Trace(() =>
@@ -1353,7 +1533,7 @@ namespace OnlyWar.Helpers
         // Distributes predation kills across the region's prey factions in proportion to their share
         // of the surviving headcount, so a region that is 90% one faction / 10% another is culled in
         // that 9:1 ratio (PRD §4.24). The last faction absorbs any rounding remainder.
-        private static void ApplyPredationKills(List<RegionFaction> prey, long totalKilled)
+        private static void ApplyPredationKills(List<RegionFaction> prey, long totalKilled, Faction attacker)
         {
             if (totalKilled <= 0) return;
             long preyTotal = prey.Sum(rf => rf.Population);
@@ -1367,6 +1547,7 @@ namespace OnlyWar.Helpers
                     : (long)(totalKilled * (double)rf.Population / preyTotal);
                 share = Math.Clamp(share, 0, rf.Population);
                 rf.Population -= share;
+                RecordScenarioCivilianKills(rf, share, attacker);
                 applied += share;
             }
         }
@@ -1420,7 +1601,7 @@ namespace OnlyWar.Helpers
             }
 
             // Wholly out of reach of the fight: sacrificial predation of the local Imperial population.
-            SacrificialCultPredation(region, organized);
+            SacrificialCultPredation(region, organized, cult.PlanetFaction.Faction);
         }
 
         // An active Imperial enemy is a public PDF/player force able to fight back — a standing
@@ -1463,7 +1644,7 @@ namespace OnlyWar.Helpers
         // The Cult slaughters the local Imperial population (hidden remnant and civilians) as
         // sacrifices, using the same logarithmic predation yield as the swarm — but it gains nothing:
         // killing is not the Cult's growth, conversion is (PRD §4.24).
-        private static void SacrificialCultPredation(Region region, long organized)
+        private static void SacrificialCultPredation(Region region, long organized, Faction attacker)
         {
             List<RegionFaction> prey = region.RegionFactionMap.Values
                 .Where(rf => rf.PlanetFaction.Faction.IsDefaultFaction && rf.Population > 0)
@@ -1472,7 +1653,7 @@ namespace OnlyWar.Helpers
             if (preyRemaining <= 0) return;
 
             long killed = (long)Math.Min(preyRemaining, organized * PredationMarginalYield(preyRemaining));
-            ApplyPredationKills(prey, killed);
+            ApplyPredationKills(prey, killed, attacker);
             // Deliberately no Cult population gain.
         }
 
@@ -1532,9 +1713,14 @@ namespace OnlyWar.Helpers
                 .ToList();
             if (refuges.Count == 0) return;
 
-            long emigrants = (long)(remnant.Population * ImperialEmigrationRate);
+            // Only the civilian remainder flees; garrison members under arms stay to fight rather than
+            // stream out with the refugees. Drawing from the whole population would let the setter's
+            // Garrison<=Population clamp silently trim the garrison as a side effect of emigration.
+            long available = remnant.Population - remnant.Garrison;
+            long emigrants = (long)(available * ImperialEmigrationRate);
             if (emigrants <= 0) return;
             remnant.Population -= emigrants;
+            RecordScenarioImmigration(region, -emigrants);
 
             long refugeTotal = refuges.Sum(rf => rf.Population);
             long distributed = 0;
@@ -1547,6 +1733,7 @@ namespace OnlyWar.Helpers
                         ? (long)(emigrants * (double)refuges[i].Population / refugeTotal)
                         : emigrants / refuges.Count; // even split when every refuge is empty
                 refuges[i].Population += share;
+                RecordScenarioImmigration(refuges[i].Region, share);
                 distributed += share;
             }
         }
@@ -1597,7 +1784,11 @@ namespace OnlyWar.Helpers
                     draftRate = EmergencyGarrisonDraftRate;
                 }
 
+                long garrisonBeforeDraft = regionFaction.Garrison;
                 regionFaction.Garrison += (long)(newPop * draftRate);
+                RecordScenarioPdfDrafted(
+                    regionFaction,
+                    Math.Max(0, regionFaction.Garrison - garrisonBeforeDraft));
             }
         }
 
