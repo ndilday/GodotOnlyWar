@@ -692,6 +692,31 @@ public class FactionStrategyControllerTests
         Assert.All(orders, o => Assert.Equal(DefenseType.ListeningPost, Assert.IsType<ConstructionMission>(o.Mission).ConstructionType));
     }
 
+    [Fact]
+    public void GenerateFactionOrders_DefensiveOnly_ThinRegionBuildsFractionalListeningPost()
+    {
+        // A border region whose spare force cannot cover a whole listening-post level (level 0
+        // costs 2 build points = 200 troops) builds the fraction it can afford instead of
+        // staying blind: 150 spare troops buy 0.75 of a level.
+        Faction pdf = CreateDefaultFaction();
+        Faction enemy = CreateNonPlayerFaction();
+
+        Planet planet = CreatePlanet();
+        Region pdfRegion = planet.Regions[0];
+        Region enemyRegion = pdfRegion.GetAdjacentRegions().First();
+        AddRegionFaction(planet, pdfRegion, pdf, population: 1_000_000, organization: 100, garrison: 150);
+        AddRegionFaction(planet, enemyRegion, enemy, population: 1_000, organization: 100);
+        Sector sector = new(CreatePlayerForce(), [], [planet], []);
+
+        List<Order> orders = new FactionStrategyController()
+            .GenerateFactionOrders(pdf, sector, defensiveOnly: true);
+
+        Order order = Assert.Single(orders);
+        ConstructionMission mission = Assert.IsType<ConstructionMission>(order.Mission);
+        Assert.Equal(DefenseType.ListeningPost, mission.ConstructionType);
+        Assert.Equal(0.75, mission.BuildAmount, precision: 6);
+    }
+
     private static void AddRegionFaction(Planet planet, Region region, Faction faction,
         long population = 0, int organization = 100, long garrison = 0)
     {

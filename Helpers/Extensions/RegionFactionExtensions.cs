@@ -77,12 +77,13 @@ namespace OnlyWar.Helpers.Extensions
 
         // Fuzzy, fog-of-war-friendly description of a defensive value (Entrenchment,
         // Detection, Anti-Air). Shared by the planet-tactical and region screens so enemy
-        // defenses read consistently and never expose the raw integer to the player.
-        public static string GetDefenseLevelDescription(int level)
+        // defenses read consistently and never expose the raw value to the player.
+        // Stats are fractional; rounding to the nearest whole level keeps the old int bands.
+        public static string GetDefenseLevelDescription(double level)
         {
-            switch (level)
+            switch ((int)Math.Round(level))
             {
-                case 0:
+                case <= 0:
                     return "None";
                 case 1:
                 case 2:

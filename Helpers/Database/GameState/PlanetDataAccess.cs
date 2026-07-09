@@ -217,9 +217,11 @@ namespace OnlyWar.Helpers.Database.GameState
                     long population = reader.GetInt64(3);
                     long garrison = reader.GetInt64(4);
                     int organization = Math.Max(1, reader.GetInt32(5));
-                    int entrenchment = reader.GetInt32(6);
-                    int listeningPost = reader.GetInt32(7);
-                    int antiAir = reader.GetInt32(8);
+                    // Defense stats are doubles (fractional build/decay); GetDouble also reads the
+                    // whole-number values legacy saves stored when these were ints.
+                    double entrenchment = reader.GetDouble(6);
+                    double listeningPost = reader.GetDouble(7);
+                    double antiAir = reader.GetDouble(8);
                     // GrowthMultiplier was appended after AntiAir; legacy rows that predate it
                     // default to 1.0 (no throttle). See Design/OpeningScenario.md §2.2 / §7.
                     float growthMultiplier = reader.FieldCount > 9 ? (float)reader.GetDouble(9) : 1.0f;

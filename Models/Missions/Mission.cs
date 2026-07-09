@@ -49,15 +49,29 @@ namespace OnlyWar.Models.Missions
     public class ConstructionMission : Mission
     {
         public DefenseType ConstructionType { get; private set; }
+        // Levels (possibly fractional) this order builds when it resolves without an assigned
+        // squad (NPC faction development — TurnController.ProcessConstructionOrders). Squad-borne
+        // construction ignores it and builds from the squad's engineering skill instead. The
+        // int MissionSize on the base rounds it up, kept for mission persistence/display.
+        public double BuildAmount { get; private set; }
 
         public ConstructionMission(int id, DefenseType defenseType, int size, RegionFaction regionFaction) : base(id, MissionType.Construction, regionFaction, size)
         {
             ConstructionType = defenseType;
+            BuildAmount = size;
         }
 
         public ConstructionMission(DefenseType defenseType, int size, RegionFaction regionFaction) : base(MissionType.Construction, regionFaction, size)
         {
             ConstructionType = defenseType;
+            BuildAmount = size;
+        }
+
+        public ConstructionMission(DefenseType defenseType, double buildAmount, RegionFaction regionFaction)
+            : base(MissionType.Construction, regionFaction, (int)Math.Ceiling(buildAmount))
+        {
+            ConstructionType = defenseType;
+            BuildAmount = buildAmount;
         }
     }
 }

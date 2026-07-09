@@ -219,6 +219,10 @@ namespace OnlyWar.Helpers.StrategicCombat
             if (defender.MilitaryStrength > 0) return;
             if (defender.Population <= 0) return;
             defender.IsPublic = false;
+            // The conquest wrecks or captures half of the beaten defender's works; what stands
+            // then decays each turn it sits unmanned under the occupier
+            // (TurnController.DecayUnmannedDefenses).
+            defender.HalveDefensesOnGoingToGround();
         }
     }
 }

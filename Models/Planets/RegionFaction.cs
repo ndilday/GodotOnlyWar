@@ -44,15 +44,17 @@ namespace OnlyWar.Models.Planets
         public long MilitaryStrength =>
             PlanetFaction.Faction.PopulationIsMilitary ? Population : Garrison;
         public bool IsPublic { get; set; }
-        // Entrenchment provides bonsues against attacks
-        public int Entrenchment { get; set; }
+        // Entrenchment provides bonsues against attacks. Defense stats are doubles so that build
+        // progress (a fortifying squad's weekly engineering output) and demolition (occupation
+        // decay, sabotage) accrue fractionally instead of rounding to whole levels.
+        public double Entrenchment { get; set; }
         // ListeningPost is a buildable/sabotageable sensor structure (like Entrenchment/AntiAir). It
         // no longer directly provides an awareness bonus; instead it passively feeds this faction's
         // situational awareness of the region each turn (PlanetFaction.RegionIntel). Its awareness
         // role moved to the unified per-(faction, region) intel value.
-        public int ListeningPost { get; set; }
+        public double ListeningPost { get; set; }
         // AntiAir provides bonuses against air atacks and air assaults
-        public int AntiAir { get; set; }
+        public double AntiAir { get; set; }
         // Organization determins how much of the enemy force can be effectively deployed
         public int Organization { get; set; }
 
@@ -96,6 +98,17 @@ namespace OnlyWar.Models.Planets
             if (battleValue <= 0) return;
             if (PlanetFaction.Faction.PopulationIsMilitary) Population += battleValue;
             else Garrison += battleValue;
+        }
+
+        // A faction beaten into hiding abandons its defensive works to the occupier: half of each
+        // structure is wrecked in the collapse or captured. The remainder then rots away each turn
+        // it stays unmanned under enemy control (TurnController.DecayUnmannedDefenses), so a remnant
+        // that resurfaces after a long occupation does not get its old bastion back for free.
+        public void HalveDefensesOnGoingToGround()
+        {
+            Entrenchment *= 0.5;
+            ListeningPost *= 0.5;
+            AntiAir *= 0.5;
         }
 
         public void RemoveMilitaryStrength(long battleValue)

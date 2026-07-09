@@ -50,6 +50,32 @@ public class StrategicCombatResolverTests
     }
 
     [Fact]
+    public void Resolve_InvadingVictoryHalvesBrokenDefenderDefenses()
+    {
+        SectorSimulationFixture fixture = SectorSimulationFixture.Create();
+        RegionFaction staging = fixture.AddConsumptionFaction(0, population: 10_000, organization: 100);
+        RegionFaction target = fixture.DefaultRegionFaction(1);
+        // small enough for the assault to annihilate outright (defender losses cap at 75% per
+        // battle, so a larger garrison survives the round and only hides later, once ground to
+        // zero, via TurnController.UpdateImperialRemnantState)
+        target.Garrison = 2;
+        target.Entrenchment = 6;
+        target.ListeningPost = 4;
+        target.AntiAir = 2;
+        long committed = 5_000;
+        staging.RemoveMilitaryStrength(committed);
+
+        StrategicCombatResult result = Resolve(staging, target, committed, Aggression.Normal, invades: true);
+
+        Assert.Equal(StrategicCombatOutcome.InvaderFoothold, result.Outcome);
+        // the beaten defender goes to ground, losing half its works in the collapse
+        Assert.False(target.IsPublic);
+        Assert.Equal(3.0, target.Entrenchment);
+        Assert.Equal(2.0, target.ListeningPost);
+        Assert.Equal(1.0, target.AntiAir);
+    }
+
+    [Fact]
     public void Resolve_RaidingVictoryReturnsSurvivorsToStaging()
     {
         SectorSimulationFixture fixture = SectorSimulationFixture.Create();

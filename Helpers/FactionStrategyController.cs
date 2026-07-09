@@ -155,8 +155,10 @@ public class FactionStrategyController
                 // Under assault: dig in fully — fortifications, listening posts, organization —
                 // then post standing patrols (which also sweep their own ground for awareness) and
                 // scout the enemy regions pressing the border so the PDF fights informed rather than
-                // blind. A defensive posture still never launches an assault of its own.
-                GenerateDevelopmentOrders(regionalForceStates, allNewOrders);
+                // blind. A defensive posture still never launches an assault of its own. Development
+                // uses the same benefit-per-cost allocator as an offensive faction's; only the
+                // surrounding posture (no assaults, no offensive recon) differs.
+                GenerateEfficientDevelopmentOrders(faction, regionalForceStates, allNewOrders);
                 PlanDefensiveReconOnPlanet(faction, planet, regionalForceStates, allNewOrders);
                 PlanPatrolMissionsOnPlanet(faction, planet, regionalForceStates, allNewOrders);
             }
@@ -695,7 +697,7 @@ public class FactionStrategyController
 
         return string.Join(", ", missions
             .GroupBy(m => m.ConstructionType)
-            .Select(g => $"{g.Key}+{g.Sum(m => m.MissionSize)} ({g.Count()} orders)"));
+            .Select(g => $"{g.Key}+{g.Sum(m => m.BuildAmount):F2} ({g.Count()} orders)"));
     }
 
     private class DevelopmentOption
@@ -705,9 +707,25 @@ public class FactionStrategyController
         public double Score { get; set; }
     }
 
+    // Iteration guard for the development loop. Each pass either completes a whole level (finitely
+    // many bands before the cost cap) or drains a region's budget below the minimum spend, so the
+    // loop terminates on its own; the cap is a backstop against degenerate float behavior.
+    private const int MaxDevelopmentIterations = 256;
+    // Smallest spend (in battle-value troops) worth cutting a development order for; below this a
+    // region's leftover trickle stays in its pool rather than becoming dust orders.
+    private const long MinimumDevelopmentSpendTroops = 100;
+
+    // The band whose build cost applies while a fractional stat completes its next whole level
+    // (the epsilon keeps a level sitting exactly on a boundary from re-pricing into itself).
+    private static int CurrentLevelBand(double level) => (int)Math.Floor(Math.Max(0.0, level) + 1e-9);
+
     private void GenerateEfficientDevelopmentOrders(Faction faction, List<RegionForceState> regionalForceStates, List<Order> allOrders)
     {
-        Dictionary<RegionForceState, (int Org, int Det, int Ent, int Aa)> projected = regionalForceStates
+        // Project each stat as we plan this turn's builds (the stats themselves only change at
+        // resolution — ProcessConstructionOrders). Defense levels are fractional: each pass puts
+        // spare force wherever marginal benefit per cost is highest, buying however much of the
+        // current level the budget covers rather than being constrained to whole levels.
+        Dictionary<RegionForceState, (int Org, double Det, double Ent, double Aa)> projected = regionalForceStates
             .ToDictionary(
                 state => state,
                 state => (state.RegionFaction.Organization,
@@ -715,55 +733,75 @@ public class FactionStrategyController
                           state.RegionFaction.Entrenchment,
                           state.RegionFaction.AntiAir));
 
-        bool built;
-        do
+        for (int i = 0; i < MaxDevelopmentIterations; i++)
         {
-            built = false;
             var best = regionalForceStates
-                .Where(state => state.SpareTroops >= 100)
+                .Where(state => state.SpareTroops >= MinimumDevelopmentSpendTroops)
                 .Select(state => (State: state, Option: BestDevelopmentOption(faction, state, projected[state])))
-                .Where(choice => choice.Option != null && choice.Option.Cost * 100L <= choice.State.SpareTroops)
+                // Organization is an integer percentage bought in whole points, so it must be
+                // affordable outright; the fractional defense stats can always absorb any budget.
+                .Where(choice => choice.Option != null
+                    && (choice.Option.DefenseType != DefenseType.Organization
+                        || choice.Option.Cost * 100L <= choice.State.SpareTroops))
                 .OrderByDescending(choice => choice.Option.Score)
                 .FirstOrDefault();
 
             if (best.State == null || best.Option == null) break;
 
-            ConstructionMission mission = new(best.Option.DefenseType, 1, best.State.RegionFaction);
-            allOrders.Add(new Order(new List<Squad>(), Disposition.DugIn, true, false, Aggression.Avoid, mission));
-            best.State.SpareTroops -= best.Option.Cost * 100L;
-
-            (int org, int det, int ent, int aa) = projected[best.State];
-            switch (best.Option.DefenseType)
+            (int org, double det, double ent, double aa) = projected[best.State];
+            ConstructionMission mission;
+            long spend;
+            if (best.Option.DefenseType == DefenseType.Organization)
             {
-                case DefenseType.Organization:
-                    org++;
-                    break;
-                case DefenseType.ListeningPost:
-                    det++;
-                    break;
-                case DefenseType.Entrenchment:
-                    ent++;
-                    break;
-                case DefenseType.AntiAir:
-                    aa++;
-                    break;
+                mission = new ConstructionMission(DefenseType.Organization, 1, best.State.RegionFaction);
+                spend = best.Option.Cost * 100L;
+                org++;
             }
+            else
+            {
+                double level = best.Option.DefenseType switch
+                {
+                    DefenseType.ListeningPost => det,
+                    DefenseType.Entrenchment => ent,
+                    _ => aa
+                };
+                // Buy up to the next whole level at this band's price — less if the budget runs
+                // out first; on completing a band the loop re-prices the next one 10x higher.
+                double toNextLevel = CurrentLevelBand(level) + 1.0 - level;
+                long costPerLevel = best.Option.Cost * 100L;
+                double amount = Math.Min(toNextLevel, (double)best.State.SpareTroops / costPerLevel);
+                spend = (long)Math.Ceiling(amount * costPerLevel);
+                mission = new ConstructionMission(best.Option.DefenseType, amount, best.State.RegionFaction);
+                switch (best.Option.DefenseType)
+                {
+                    case DefenseType.ListeningPost:
+                        det += amount;
+                        break;
+                    case DefenseType.Entrenchment:
+                        ent += amount;
+                        break;
+                    case DefenseType.AntiAir:
+                        aa += amount;
+                        break;
+                }
+            }
+
+            allOrders.Add(new Order(new List<Squad>(), Disposition.DugIn, true, false, Aggression.Avoid, mission));
+            best.State.SpareTroops = Math.Max(0, best.State.SpareTroops - spend);
             projected[best.State] = (org, det, ent, aa);
-            built = true;
 
             GameLog.Trace(() =>
                 $"AI efficient construction {best.State.RegionFaction.PlanetFaction.Faction.Name}/"
                 + $"{best.State.RegionFaction.Region.Planet.Name}/{best.State.RegionFaction.Region.Name}: "
-                + $"{mission.ConstructionType}+1, cost={best.Option.Cost}, score={best.Option.Score:F2}, "
+                + $"{mission.ConstructionType}+{mission.BuildAmount:F2}, spend={spend}, score={best.Option.Score:F2}, "
                 + $"spareRemaining={best.State.SpareTroops}");
         }
-        while (built);
     }
 
     private DevelopmentOption BestDevelopmentOption(
         Faction faction,
         RegionForceState state,
-        (int Org, int Det, int Ent, int Aa) projected)
+        (int Org, double Det, double Ent, double Aa) projected)
     {
         List<DevelopmentOption> options = new();
         RegionFaction rf = state.RegionFaction;
@@ -777,13 +815,13 @@ public class FactionStrategyController
         AddDevelopmentOption(options, DefenseType.Organization, orgCost,
             (100 - projected.Org) / 25.0 + (localEnemy ? 1.0 : 0.0));
 
-        AddDevelopmentOption(options, DefenseType.ListeningPost, DefenseBuildCost(projected.Det),
+        AddDevelopmentOption(options, DefenseType.ListeningPost, DefenseBuildCost(CurrentLevelBand(projected.Det)),
             1.0 + Math.Max(0, GarrisonFullSightIntel - ownIntel) + (adjacentEnemy ? 1.5 : 0.0));
 
-        AddDevelopmentOption(options, DefenseType.Entrenchment, DefenseBuildCost(projected.Ent),
+        AddDevelopmentOption(options, DefenseType.Entrenchment, DefenseBuildCost(CurrentLevelBand(projected.Ent)),
             0.5 + (localEnemy ? 4.0 : 0.0) + (adjacentEnemy ? 2.0 : 0.0));
 
-        AddDevelopmentOption(options, DefenseType.AntiAir, DefenseBuildCost(projected.Aa),
+        AddDevelopmentOption(options, DefenseType.AntiAir, DefenseBuildCost(CurrentLevelBand(projected.Aa)),
             0.25 + (localEnemy || adjacentEnemy ? 0.5 : 0.0));
 
         return options
@@ -805,57 +843,6 @@ public class FactionStrategyController
             Cost = cost,
             Score = benefit / cost
         });
-    }
-
-    private void GenerateDevelopmentOrders(List<RegionForceState> regionalForceStates, List<Order> allOrders)
-    {
-        foreach (var state in regionalForceStates)
-        {
-            if (state.SpareTroops <= 0) continue;
-
-            long buildPointsAvailable = state.SpareTroops / 100;
-
-            // Project each defense's level as we plan this turn's builds. The stats themselves are
-            // only applied later (ProcessConstructionOrders), so without projecting here the per-level
-            // cost stayed constant and the loop poured a region's whole budget into a single defense.
-            // DefenseBuildCost rises by an order of magnitude per level and caps out before overflow,
-            // making high fortification levels rare strategic investments.
-            int org = state.RegionFaction.Organization;
-            int det = state.RegionFaction.ListeningPost;
-            int ent = state.RegionFaction.Entrenchment;
-            int aa = state.RegionFaction.AntiAir;
-
-            while (buildPointsAvailable > 0)
-            {
-                long orgCost = org < 100
-                    ? (long)(Math.Pow(2, org / 10) * (state.RegionFaction.Population / 10000.0f)) + 1
-                    : long.MaxValue;
-                long detCost = DefenseBuildCost(det);
-                long entCost = DefenseBuildCost(ent);
-                long aaCost = DefenseBuildCost(aa);
-
-                long minCost = Math.Min(orgCost, Math.Min(detCost, Math.Min(entCost, aaCost)));
-
-                if (minCost > buildPointsAvailable) break;
-
-                ConstructionMission mission;
-                if (minCost == orgCost) { mission = new ConstructionMission(DefenseType.Organization, 1, state.RegionFaction); org++; }
-                else if (minCost == entCost) { mission = new ConstructionMission(DefenseType.Entrenchment, 1, state.RegionFaction); ent++; }
-                else if (minCost == detCost) { mission = new ConstructionMission(DefenseType.ListeningPost, 1, state.RegionFaction); det++; }
-                else { mission = new ConstructionMission(DefenseType.AntiAir, 1, state.RegionFaction); aa++; }
-
-                Order devOrder = new Order(new List<Squad>(), Disposition.DugIn, true, false, Aggression.Avoid, mission);
-                allOrders.Add(devOrder);
-
-                buildPointsAvailable -= minCost;
-                // Deduct the "manpower cost" of this construction from the available pool for this region
-                state.SpareTroops -= minCost * 100;
-                GameLog.Trace(() =>
-                    $"AI construction plan {state.RegionFaction.PlanetFaction.Faction.Name}/"
-                    + $"{state.RegionFaction.Region.Planet.Name}/{state.RegionFaction.Region.Name}: "
-                    + $"{mission.ConstructionType}+1, cost={minCost}, spareRemaining={state.SpareTroops}");
-            }
-        }
     }
 
     // Exponential build cost for a defense stat: baseCost * 10^currentLevel. Computed in long and
@@ -887,22 +874,31 @@ public class FactionStrategyController
     {
         foreach (var state in states)
         {
-            if (state.SpareTroops <= 0) continue;
+            if (state.SpareTroops < MinimumDevelopmentSpendTroops) continue;
 
             bool bordersPublicEnemy = state.RegionFaction.Region.GetAdjacentRegions()
                 .Any(r => r.RegionFactionMap.Values
                            .Any(rf => rf.IsPublic && AreFactionsEnemies(faction, rf.PlanetFaction.Faction)));
             if (!bordersPublicEnemy) continue;
 
-            long detCost = DefenseBuildCost(state.RegionFaction.ListeningPost);
-            if (detCost == long.MaxValue || detCost * 100L > state.SpareTroops) continue;
+            double level = state.RegionFaction.ListeningPost;
+            long detCost = DefenseBuildCost(CurrentLevelBand(level));
+            if (detCost == long.MaxValue) continue;
+
+            // Still at most one level per turn, but a region too thin to afford the whole level
+            // now builds whatever fraction its spare force covers instead of staying blind.
+            long costPerLevel = detCost * 100L;
+            double amount = Math.Min(CurrentLevelBand(level) + 1.0 - level,
+                (double)state.SpareTroops / costPerLevel);
+            long spend = (long)Math.Ceiling(amount * costPerLevel);
 
             allOrders.Add(new Order(new List<Squad>(), Disposition.DugIn, true, false, Aggression.Avoid,
-                new ConstructionMission(DefenseType.ListeningPost, 1, state.RegionFaction)));
-            state.SpareTroops -= detCost * 100L;
+                new ConstructionMission(DefenseType.ListeningPost, amount, state.RegionFaction)));
+            state.SpareTroops = Math.Max(0, state.SpareTroops - spend);
             GameLog.Trace(() =>
                 $"AI border listening post {faction.Name}/{state.RegionFaction.Region.Planet.Name}/"
-                + $"{state.RegionFaction.Region.Name}: Detection+1, cost={detCost}, spareRemaining={state.SpareTroops}");
+                + $"{state.RegionFaction.Region.Name}: Detection+{amount:F2}, spend={spend}, "
+                + $"spareRemaining={state.SpareTroops}");
         }
     }
 

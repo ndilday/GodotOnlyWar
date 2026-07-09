@@ -47,8 +47,8 @@ namespace OnlyWar.Helpers.StrategicCombat
         public static double DefenderReadiness(int organization) =>
             0.35 + 0.65 * Math.Clamp(organization, 0, 100) / 100.0;
 
-        public static double EntrenchmentMultiplier(int entrenchment) =>
-            Math.Min(3.0, 1.0 + Math.Max(0, entrenchment) * 0.10);
+        public static double EntrenchmentMultiplier(double entrenchment) =>
+            Math.Min(3.0, 1.0 + Math.Max(0.0, entrenchment) * 0.10);
 
         // Per point of intel advantage the attacker holds over the defender, and the cap on the
         // resulting surprise bonus. This replaces the old flat defender DetectionMultiplier: a
@@ -69,7 +69,7 @@ namespace OnlyWar.Helpers.StrategicCombat
             1.0 + Math.Min(MaxAmbushSurprise,
                            Math.Max(0.0, attackerIntel - defenderIntel) * AmbushSurprisePerIntel);
 
-        public static double DefenderProtection(int entrenchment) =>
-            Math.Max(1.0 / (1.0 + Math.Max(0, entrenchment) * 0.08), 0.35);
+        public static double DefenderProtection(double entrenchment) =>
+            Math.Max(1.0 / (1.0 + Math.Max(0.0, entrenchment) * 0.08), 0.35);
     }
 }

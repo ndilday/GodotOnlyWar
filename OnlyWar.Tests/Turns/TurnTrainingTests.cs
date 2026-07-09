@@ -57,11 +57,11 @@ public class TurnTrainingTests
 
         fixture.ProcessTurn();
 
-        // the squad spends the turn building; even an untrained squad makes minimal progress,
-        // and the construction targets only the chosen defense type
-        Assert.True(fixture.RegionFaction.Entrenchment >= 1);
-        Assert.Equal(0, fixture.RegionFaction.ListeningPost);
-        Assert.Equal(0, fixture.RegionFaction.AntiAir);
+        // the squad spends the turn building; progress is fractional (summed engineering skill
+        // over the build divisor), and the construction targets only the chosen defense type
+        Assert.True(fixture.RegionFaction.Entrenchment > 0);
+        Assert.Equal(0.0, fixture.RegionFaction.ListeningPost);
+        Assert.Equal(0.0, fixture.RegionFaction.AntiAir);
     }
 
     [Fact]

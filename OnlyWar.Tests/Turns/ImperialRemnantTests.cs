@@ -194,6 +194,89 @@ public class ImperialRemnantTests
     }
 
     [Fact]
+    public void Remnant_HalvesDefensesWhenGoingToGround()
+    {
+        SectorSimulationFixture fixture = SectorSimulationFixture.Create();
+        RegionFaction remnant = fixture.DefaultRegionFaction(0);
+        remnant.Garrison = 0;
+        remnant.Entrenchment = 8;
+        remnant.ListeningPost = 4;
+        remnant.AntiAir = 2;
+        fixture.AddConsumptionFaction(0, population: 50_000, organization: 100);
+
+        TurnController.UpdateImperialRemnantState(fixture.Planet.Regions[0]);
+
+        Assert.False(remnant.IsPublic);
+        // falling to the occupier wrecks or forfeits half the defensive works
+        Assert.Equal(4.0, remnant.Entrenchment);
+        Assert.Equal(2.0, remnant.ListeningPost);
+        Assert.Equal(1.0, remnant.AntiAir);
+    }
+
+    [Fact]
+    public void Remnant_KeepsDefensesWhileStillGoverning()
+    {
+        SectorSimulationFixture fixture = SectorSimulationFixture.Create();
+        RegionFaction remnant = fixture.DefaultRegionFaction(0);
+        remnant.Garrison = 1_000; // besieged but still holding
+        remnant.Entrenchment = 8;
+        fixture.AddConsumptionFaction(0, population: 50_000, organization: 100);
+
+        TurnController.UpdateImperialRemnantState(fixture.Planet.Regions[0]);
+
+        Assert.True(remnant.IsPublic);
+        Assert.Equal(8.0, remnant.Entrenchment);
+    }
+
+    [Fact]
+    public void HiddenRemnant_DefensesDecayUnderOccupation()
+    {
+        SectorSimulationFixture fixture = SectorSimulationFixture.Create();
+        RegionFaction remnant = fixture.DefaultRegionFaction(0);
+        remnant.IsPublic = false;
+        remnant.Garrison = 0;
+        remnant.Entrenchment = 4;
+        remnant.ListeningPost = 1;
+        remnant.AntiAir = 0.2;
+        fixture.AddConsumptionFaction(0, population: 50_000, organization: 100);
+
+        TurnController.DecayUnmannedDefenses(fixture.Planet.Regions[0]);
+
+        // the occupier strips a quarter level per stat per turn, floored at zero
+        Assert.Equal(3.75, remnant.Entrenchment);
+        Assert.Equal(0.75, remnant.ListeningPost);
+        Assert.Equal(0.0, remnant.AntiAir);
+    }
+
+    [Fact]
+    public void HiddenRemnant_DefensesHoldWithNoOccupierPresent()
+    {
+        SectorSimulationFixture fixture = SectorSimulationFixture.Create();
+        RegionFaction remnant = fixture.DefaultRegionFaction(0);
+        remnant.IsPublic = false;
+        remnant.Garrison = 0;
+        remnant.Entrenchment = 4;
+
+        TurnController.DecayUnmannedDefenses(fixture.Planet.Regions[0]);
+
+        Assert.Equal(4.0, remnant.Entrenchment);
+    }
+
+    [Fact]
+    public void PublicDefender_DefensesDoNotDecay()
+    {
+        SectorSimulationFixture fixture = SectorSimulationFixture.Create();
+        RegionFaction defender = fixture.DefaultRegionFaction(0);
+        defender.Garrison = 1_000; // still fighting for its region — its works stay manned
+        defender.Entrenchment = 4;
+        fixture.AddConsumptionFaction(0, population: 50_000, organization: 100);
+
+        TurnController.DecayUnmannedDefenses(fixture.Planet.Regions[0]);
+
+        Assert.Equal(4.0, defender.Entrenchment);
+    }
+
+    [Fact]
     public void GoverningRemnant_GrowsAndDraftsGarrison()
     {
         SectorSimulationFixture fixture = SectorSimulationFixture.Create();

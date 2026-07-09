@@ -47,6 +47,11 @@ namespace OnlyWar.Helpers
         // divisor converting a fortifying squad's summed engineering skill into a per-turn
         // defensive increment; tuned so a full, trained squad raises a defense by ~1-2/turn
         private const float EngineeringBuildDivisor = 100f;
+        // Levels stripped per turn from each defense stat of a hidden faction whose region is held
+        // by a public enemy with fighting strength (DecayUnmannedDefenses). Because build costs are
+        // exponential per level, a linear decay razes light works in a few weeks while a
+        // fortress-grade bastion takes the better part of a year to fully strip.
+        private const double OccupiedDefenseDecayPerTurn = 0.25;
         // Superlinear scale for how convincing a diversion feint is. The apparent size of the
         // feinting force grows with the square of (1 + impact / this), so a high-margin
         // demonstration can make a force look several times larger than it is while a weak one
@@ -737,14 +742,14 @@ namespace OnlyWar.Helpers
 
         private void ProcessConstructionOrders(IEnumerable<Order> constructionOrders)
         {
-            // squad-less construction orders (NPC faction development) resolve instantly at a
-            // fixed mission size and don't create a context
+            // squad-less construction orders (NPC faction development) resolve instantly at the
+            // planner's (possibly fractional) build amount and don't create a context
             List<Order> orders = constructionOrders.ToList();
             foreach (var order in orders)
             {
                 if (order.Mission is ConstructionMission mission)
                 {
-                    ApplyConstruction(mission, mission.MissionSize);
+                    ApplyConstruction(mission, mission.BuildAmount);
                 }
             }
             if (orders.Count > 0)
@@ -811,16 +816,16 @@ namespace OnlyWar.Helpers
         // Resolves a construction order carried out by an assigned squad (e.g. the player
         // fortifying a region). The amount built scales with both squad size and engineering
         // skill: every able soldier contributes its Engineering (Fortification) skill value,
-        // and the summed contribution is divided down to a defensive increment (minimum 1 so
-        // an assigned squad always makes some progress).
+        // and the summed contribution is divided down to a fractional defensive increment.
+        // Progress accrues exactly — no per-turn rounding — so a squad's skill is neither
+        // truncated away nor inflated to a free whole level.
         private void ResolveSquadConstruction(Order order, ConstructionMission mission)
         {
             BaseSkill engineering = GameDataSingleton.Instance.GameRulesData.Skills.EngineeringFortification;
             float totalSkill = order.AssignedSquads
                 .SelectMany(s => s.Members)
                 .Sum(soldier => soldier.GetTotalSkillValue(engineering));
-            int amount = Math.Max(1, (int)(totalSkill / EngineeringBuildDivisor));
-            ApplyConstruction(mission, amount);
+            ApplyConstruction(mission, totalSkill / EngineeringBuildDivisor);
         }
 
         // Applies a resolved recon mission's result. The scouting faction sharpens its own belief
@@ -862,9 +867,9 @@ namespace OnlyWar.Helpers
                 + $"impact={impact:F2}, regionIntel={observerBefore:F2}->{observerAfter:F2}");
         }
 
-        private static void ApplyConstruction(ConstructionMission mission, int amount)
+        private static void ApplyConstruction(ConstructionMission mission, double amount)
         {
-            int before = GetConstructionLevel(mission);
+            double before = GetConstructionLevel(mission);
             switch (mission.ConstructionType)
             {
                 case DefenseType.Entrenchment:
@@ -877,16 +882,19 @@ namespace OnlyWar.Helpers
                     mission.RegionFaction.AntiAir += amount;
                     break;
                 case DefenseType.Organization:
-                    mission.RegionFaction.Organization = Math.Min(100, mission.RegionFaction.Organization + amount);
+                    // Organization is still an integer percentage; fractional construction
+                    // progress rounds when applied to it.
+                    mission.RegionFaction.Organization = Math.Min(100,
+                        mission.RegionFaction.Organization + (int)Math.Round(amount));
                     break;
             }
-            int after = GetConstructionLevel(mission);
+            double after = GetConstructionLevel(mission);
             GameLog.Trace(() =>
                 $"Construction applied {DescribeRegionFaction(mission.RegionFaction)}: "
-                + $"{mission.ConstructionType} {before}->{after} (requested +{amount})");
+                + $"{mission.ConstructionType} {before:F2}->{after:F2} (requested +{amount:F2})");
         }
 
-        private static int GetConstructionLevel(ConstructionMission mission)
+        private static double GetConstructionLevel(ConstructionMission mission)
         {
             return mission.ConstructionType switch
             {
@@ -915,7 +923,7 @@ namespace OnlyWar.Helpers
                     m.ConstructionType
                 })
                 .Select(g =>
-                    $"{g.Key.Faction}/{g.Key.Planet}/{g.Key.Region} {g.Key.ConstructionType}+{g.Sum(m => m.MissionSize)}"));
+                    $"{g.Key.Faction}/{g.Key.Planet}/{g.Key.Region} {g.Key.ConstructionType}+{g.Sum(m => m.BuildAmount):F2}"));
         }
 
         private static string DescribeStrategicContributions(IEnumerable<StrategicCombatContribution> contributions)
@@ -966,29 +974,19 @@ namespace OnlyWar.Helpers
                         break;
                     case MissionType.Sabotage:
                         SabotageMission sabotageMission = (SabotageMission)context.Order.Mission;
-                        int impact = (int)Math.Min(context.Impact, sabotageMission.MissionSize);
+                        // Fractional demolition: the mission's full margin counts, capped by the
+                        // scoped size of the target works, instead of truncating to whole levels.
+                        double impact = Math.Min(context.Impact, sabotageMission.MissionSize);
                         switch (sabotageMission.DefenseType)
                         {
                             case DefenseType.Entrenchment:
-                                regionFaction.Entrenchment -= impact;
-                                if (regionFaction.Entrenchment < 0)
-                                {
-                                    regionFaction.Entrenchment = 0;
-                                }
+                                regionFaction.Entrenchment = Math.Max(0.0, regionFaction.Entrenchment - impact);
                                 break;
                             case DefenseType.ListeningPost:
-                                regionFaction.ListeningPost -= impact;
-                                if (regionFaction.ListeningPost < 0)
-                                {
-                                    regionFaction.ListeningPost = 0;
-                                }
+                                regionFaction.ListeningPost = Math.Max(0.0, regionFaction.ListeningPost - impact);
                                 break;
                             case DefenseType.AntiAir:
-                                regionFaction.AntiAir -= impact;
-                                if (regionFaction.AntiAir < 0)
-                                {
-                                    regionFaction.AntiAir = 0;
-                                }
+                                regionFaction.AntiAir = Math.Max(0.0, regionFaction.AntiAir - impact);
                                 break;
                         }
                         break;
@@ -1002,7 +1000,7 @@ namespace OnlyWar.Helpers
                 long defenderCasualties = FallenBattleValue(context.OpposingSquads);
                 if (regionFaction.Entrenchment > 0)
                 {
-                    float casualtyMultiplier = 1.0f / (1.0f + regionFaction.Entrenchment / 5.0f);
+                    double casualtyMultiplier = 1.0 / (1.0 + regionFaction.Entrenchment / 5.0);
                     defenderCasualties = (long)(defenderCasualties * casualtyMultiplier);
                 }
                 long defenderStrengthBefore = regionFaction.MilitaryStrength;
@@ -1133,7 +1131,7 @@ namespace OnlyWar.Helpers
             {
                 foreach (RegionFaction regionFaction in region.RegionFactionMap.Values)
                 {
-                    float gain = regionFaction.ListeningPost * IntelPerListeningPostLevel;
+                    float gain = (float)(regionFaction.ListeningPost * IntelPerListeningPostLevel);
                     int patrolStrength = regionFaction.LandedSquads
                         .Where(s => s.CurrentOrders?.Mission.MissionType == MissionType.Patrol)
                         .Sum(s => s.Members.Count);
@@ -1246,6 +1244,7 @@ namespace OnlyWar.Helpers
                     // toward its natural ceiling (PRD §4.24).
                     ResolveBiomassConsumption(region);
                     RecoverCarryingCapacity(region);
+                    DecayUnmannedDefenses(region);
                 }
 
                 // Imperial remnant lifecycle (PRD §4.24), in two passes so emigration reads the
@@ -1700,6 +1699,10 @@ namespace OnlyWar.Helpers
                 if (defaultFaction.Garrison <= 0 && publicEnemy)
                 {
                     defaultFaction.IsPublic = false;
+                    // Falling to the occupier wrecks or forfeits half the defensive works; the
+                    // rest decays each turn it stands unmanned (DecayUnmannedDefenses), so a
+                    // remnant that later resurfaces does not inherit its old bastion intact.
+                    defaultFaction.HalveDefensesOnGoingToGround();
                 }
             }
             // A hidden remnant rises again either when the occupier is gone (no public enemy left)
@@ -1740,6 +1743,45 @@ namespace OnlyWar.Helpers
         // A region holds a public enemy if any non-player, non-default faction is public and still
         // has a presence (population or garrison). The player's own forces do not count — the
         // remnant hides from hostile occupiers, not from the relieving Astartes.
+        // Fortifications nobody mans do not survive occupation: each turn a hidden faction's
+        // defensive works stand in a region where a public enemy keeps fighting strength, the
+        // occupier strips them further — Tyranids digest them for raw matter, other conquerors
+        // demolish or cannibalize them. This is the slow half of fortification loss under
+        // occupation; the fast half is the halving taken at the moment the defender went to
+        // ground (RegionFaction.HalveDefensesOnGoingToGround). A public defender still fighting
+        // for its region mans its works, so they do not decay. Generic across factions:
+        // enmity is imperial (player/default) vs everyone else, as elsewhere in the turn loop.
+        internal static void DecayUnmannedDefenses(Region region)
+        {
+            foreach (RegionFaction regionFaction in region.RegionFactionMap.Values)
+            {
+                if (regionFaction.IsPublic) continue;
+                if (regionFaction.Entrenchment <= 0
+                    && regionFaction.ListeningPost <= 0
+                    && regionFaction.AntiAir <= 0)
+                {
+                    continue;
+                }
+
+                bool hiddenIsImperial = regionFaction.PlanetFaction.Faction.IsPlayerFaction
+                    || regionFaction.PlanetFaction.Faction.IsDefaultFaction;
+                bool occupierPresent = region.RegionFactionMap.Values.Any(other =>
+                    other.IsPublic
+                    && other.MilitaryStrength > 0
+                    && (other.PlanetFaction.Faction.IsPlayerFaction
+                        || other.PlanetFaction.Faction.IsDefaultFaction) != hiddenIsImperial);
+                if (!occupierPresent) continue;
+
+                regionFaction.Entrenchment = Math.Max(0.0, regionFaction.Entrenchment - OccupiedDefenseDecayPerTurn);
+                regionFaction.ListeningPost = Math.Max(0.0, regionFaction.ListeningPost - OccupiedDefenseDecayPerTurn);
+                regionFaction.AntiAir = Math.Max(0.0, regionFaction.AntiAir - OccupiedDefenseDecayPerTurn);
+                GameLog.Trace(() =>
+                    $"Occupation decay {DescribeRegionFaction(regionFaction)}: "
+                    + $"ent={regionFaction.Entrenchment:F2}, lp={regionFaction.ListeningPost:F2}, "
+                    + $"aa={regionFaction.AntiAir:F2}");
+            }
+        }
+
         private static bool HasPublicEnemy(Region region)
         {
             return region.RegionFactionMap.Values.Any(rf =>
@@ -1918,46 +1960,25 @@ namespace OnlyWar.Helpers
                                 RegionFaction controllingRegionFaction = region.RegionFactionMap[controllingFaction.Id];
                                 if (controllingRegionFaction.ListeningPost > 0)
                                 {
-                                    int revoltShare = controllingRegionFaction.ListeningPost / 2;
-                                    revoltShare += (int)RNG.NextRandomZValue();
-                                    if (revoltShare > controllingRegionFaction.ListeningPost)
-                                    {
-                                        revoltShare = controllingRegionFaction.ListeningPost;
-                                    }
-                                    if (revoltShare < 0)
-                                    {
-                                        revoltShare = 0;
-                                    }
+                                    double revoltShare = Math.Clamp(
+                                        controllingRegionFaction.ListeningPost / 2.0 + RNG.NextRandomZValue(),
+                                        0.0, controllingRegionFaction.ListeningPost);
                                     controllingRegionFaction.ListeningPost -= revoltShare;
                                     revoltingRegionFaction.ListeningPost += revoltShare;
                                 }
                                 if (controllingRegionFaction.AntiAir > 0)
                                 {
-                                    int revoltShare = controllingRegionFaction.AntiAir / 2;
-                                    revoltShare += (int)RNG.NextRandomZValue();
-                                    if (revoltShare > controllingRegionFaction.AntiAir)
-                                    {
-                                        revoltShare = controllingRegionFaction.AntiAir;
-                                    }
-                                    if (revoltShare < 0)
-                                    {
-                                        revoltShare = 0;
-                                    }
+                                    double revoltShare = Math.Clamp(
+                                        controllingRegionFaction.AntiAir / 2.0 + RNG.NextRandomZValue(),
+                                        0.0, controllingRegionFaction.AntiAir);
                                     controllingRegionFaction.AntiAir -= revoltShare;
                                     revoltingRegionFaction.AntiAir += revoltShare;
                                 }
                                 if (controllingRegionFaction.Entrenchment > 0)
                                 {
-                                    int revoltShare = controllingRegionFaction.Entrenchment / 2;
-                                    revoltShare += (int)RNG.NextRandomZValue();
-                                    if (revoltShare > controllingRegionFaction.Entrenchment)
-                                    {
-                                        revoltShare = controllingRegionFaction.Entrenchment;
-                                    }
-                                    if (revoltShare < 0)
-                                    {
-                                        revoltShare = 0;
-                                    }
+                                    double revoltShare = Math.Clamp(
+                                        controllingRegionFaction.Entrenchment / 2.0 + RNG.NextRandomZValue(),
+                                        0.0, controllingRegionFaction.Entrenchment);
                                     controllingRegionFaction.Entrenchment -= revoltShare;
                                     revoltingRegionFaction.Entrenchment += revoltShare;
                                 }
@@ -1999,13 +2020,16 @@ namespace OnlyWar.Helpers
                 long controllingStrength = SumMilitaryStrength(planet, controllingPlanetFaction);
                 if (hostileStrength < 0.7f * controllingStrength)
                 {
-                    // the revolt has been put down; the faction goes back underground
+                    // the revolt has been put down; the faction goes back underground, losing
+                    // half its defensive works in the collapse (the rest rots unmanned under
+                    // the restored controller — DecayUnmannedDefenses).
                     planetFaction.IsPublic = false;
                     foreach (Region region in planet.Regions)
                     {
                         if (region.RegionFactionMap.TryGetValue(planetFaction.Faction.Id, out RegionFaction rf))
                         {
                             rf.IsPublic = false;
+                            rf.HalveDefensesOnGoingToGround();
                         }
                     }
                 }
@@ -2241,8 +2265,8 @@ namespace OnlyWar.Helpers
                 {
                     // sabotage
                     // add up the amount of entrenchment, detection, and antiair in this region
-                    int defenseTotal = enemyRegionFaction.Entrenchment + enemyRegionFaction.ListeningPost + enemyRegionFaction.AntiAir;
-                    if (defenseTotal == 0)
+                    double defenseTotal = enemyRegionFaction.Entrenchment + enemyRegionFaction.ListeningPost + enemyRegionFaction.AntiAir;
+                    if (defenseTotal <= 0)
                     {
                         GenerateAmbushMission(enemyRegionFaction);
                     }
@@ -2289,37 +2313,35 @@ namespace OnlyWar.Helpers
             SpecialMissions.Add(ambush);
         }
 
-        private void GenerateSabotageMission(RegionFaction enemyRegionFaction, int defenseTotal)
+        private void GenerateSabotageMission(RegionFaction enemyRegionFaction, double defenseTotal)
         {
-            int roll = RNG.GetIntBelowMax(0, defenseTotal);
+            // Pick the target defense in proportion to how much of the region's works it makes up.
+            double roll = RNG.GetLinearDouble() * defenseTotal;
             if (roll <= enemyRegionFaction.Entrenchment)
             {
                 // saborage the entrenchments
-                int size = Math.Min(Math.Max((int)RNG.NextRandomZValue() + 1, 1), enemyRegionFaction.Entrenchment);
-                SabotageMission sabotage = new SabotageMission(DefenseType.Entrenchment, size, enemyRegionFaction);
-                enemyRegionFaction.Region.SpecialMissions.Add(sabotage);
-                SpecialMissions.Add(sabotage);
+                AddSabotageMission(enemyRegionFaction, DefenseType.Entrenchment, enemyRegionFaction.Entrenchment);
+            }
+            else if (roll - enemyRegionFaction.Entrenchment <= enemyRegionFaction.ListeningPost)
+            {
+                // sabotage the listening posts
+                AddSabotageMission(enemyRegionFaction, DefenseType.ListeningPost, enemyRegionFaction.ListeningPost);
             }
             else
             {
-                roll -= enemyRegionFaction.Entrenchment;
-                if (roll <= enemyRegionFaction.ListeningPost)
-                {
-                    // sabotage the listening posts
-                    int size = Math.Min(Math.Max((int)RNG.NextRandomZValue() + 1, 1), enemyRegionFaction.ListeningPost);
-                    SabotageMission sabotage = new SabotageMission(DefenseType.ListeningPost, size, enemyRegionFaction);
-                    enemyRegionFaction.Region.SpecialMissions.Add(sabotage);
-                    SpecialMissions.Add(sabotage);
-                }
-                else
-                {
-                    // sabotage the antiair
-                    int size = Math.Min(Math.Max((int)RNG.NextRandomZValue() + 1, 1), enemyRegionFaction.AntiAir);
-                    SabotageMission sabotage = new SabotageMission(DefenseType.AntiAir, size, enemyRegionFaction);
-                    enemyRegionFaction.Region.SpecialMissions.Add(sabotage);
-                    SpecialMissions.Add(sabotage);
-                }
+                // sabotage the antiair
+                AddSabotageMission(enemyRegionFaction, DefenseType.AntiAir, enemyRegionFaction.AntiAir);
             }
+        }
+
+        private void AddSabotageMission(RegionFaction enemyRegionFaction, DefenseType defenseType, double defenseLevel)
+        {
+            // MissionSize stays a whole number of levels; the fractional stat rounds up so even
+            // partially built works can be scoped for demolition.
+            int size = Math.Min(Math.Max((int)RNG.NextRandomZValue() + 1, 1), (int)Math.Ceiling(defenseLevel));
+            SabotageMission sabotage = new SabotageMission(defenseType, size, enemyRegionFaction);
+            enemyRegionFaction.Region.SpecialMissions.Add(sabotage);
+            SpecialMissions.Add(sabotage);
         }
 
         private void GenerateAssassinationMission(RegionFaction enemyRegionFaction)
