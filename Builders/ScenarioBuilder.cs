@@ -264,7 +264,7 @@ namespace OnlyWar.Builders
             // Size the Tyranids relative to the world's own PDF (measured before the stamp), so the
             // fight scales across the wide promised-world population band rather than being fixed by
             // an absolute headcount that is meaningless on a hive-scale world (§8 / ScenarioRules).
-            (long tyranidGarrison, long tyranidPopulation) = ScaledTyranidStrength(promised, data);
+            long tyranidPopulation = ScaledTyranidStrength(promised, data);
 
             int regionCount = RNG.GetIntBelowMax(
                 ScenarioRules.MinTyranidRegions, ScenarioRules.MaxTyranidRegions + 1);
@@ -298,7 +298,6 @@ namespace OnlyWar.Builders
                 {
                     IsPublic = true,
                     Population = regionTyranidPopulation,
-                    Garrison = tyranidGarrison,
                     // A landed swarm is fully mobilized: Organization is a 0-100 percentage and the
                     // whole brood feeds and fights, so the beachhead starts at 100. (This was 1,
                     // written when 1 was mistaken for "100%"; at the true scale that left only 1% of
@@ -318,10 +317,10 @@ namespace OnlyWar.Builders
             }
         }
 
-        // Tyranid per-region garrison/population as a fraction of the promised world's average
+        // Tyranid per-region population as a fraction of the promised world's average
         // Imperial region, measured before any region is overrun (§8). Returns at least 1 of each
         // so a stamped region is never empty even on a tiny world.
-        private static (long garrison, long population) ScaledTyranidStrength(Planet promised, GameRulesData data)
+        private static long ScaledTyranidStrength(Planet promised, GameRulesData data)
         {
             List<RegionFaction> imperialRegions = promised.Regions
                 .Where(r => r.RegionFactionMap.ContainsKey(data.DefaultFaction.Id))
@@ -329,13 +328,11 @@ namespace OnlyWar.Builders
                 .ToList();
             if (imperialRegions.Count == 0)
             {
-                return (1L, 1L);
+                return 1L;
             }
-            double avgGarrison = imperialRegions.Average(rf => rf.Garrison);
             double avgPopulation = imperialRegions.Average(rf => rf.Population);
-            long garrison = Math.Max(1L, (long)(avgGarrison * ScenarioRules.TyranidStrengthFraction));
             long population = Math.Max(1L, (long)(avgPopulation * ScenarioRules.TyranidStrengthFraction));
-            return (garrison, population);
+            return population;
         }
 
         // §3.3 — park the chapter in orbit. Squads stay embarked (no CurrentRegion, no

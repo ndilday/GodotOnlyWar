@@ -37,7 +37,7 @@ namespace OnlyWar.Helpers
         // the larger worlds — trivial to clear and unable to press outward). Scaling to the world's
         // own PDF keeps the fight in the same ballpark across the whole band. < 1 so a single
         // stamped region is weaker than a full Imperial region, keeping the objective winnable.
-        public const float TyranidStrengthFraction = 0.5f;
+        public const float TyranidStrengthFraction = 0.33f;
 
         // Fraction of a stamped region's original Imperial civilian population left behind as a
         // displaced remnant, so the region reads as "overrun" rather than empty. The remnant's
