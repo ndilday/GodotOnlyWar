@@ -23,6 +23,7 @@ namespace OnlyWar.Tests.Data;
 // asserts the high-level state survives the round trip. This is the regression guard
 // for schema drift: any future change to the save schema that is not propagated to
 // both SaveData and GetData will fail here.
+[Collection(OnlyWar.Tests.TestCollections.SharedState)]
 public class SaveLoadRoundTripTests
 {
     private readonly GameRulesData _data;

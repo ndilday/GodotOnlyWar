@@ -9,6 +9,7 @@ using Xunit;
 
 namespace OnlyWar.Tests.Domain;
 
+[Collection(OnlyWar.Tests.TestCollections.SharedState)]
 public class BattleDefaultsTests
 {
     [Fact]

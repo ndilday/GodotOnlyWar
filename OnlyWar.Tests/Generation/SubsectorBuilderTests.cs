@@ -11,6 +11,7 @@ using Xunit;
 
 namespace OnlyWar.Tests.Generation;
 
+[Collection(OnlyWar.Tests.TestCollections.SharedState)]
 public class SubsectorBuilderTests
 {
     public SubsectorBuilderTests()

@@ -12,6 +12,7 @@ namespace OnlyWar.Tests.Battles;
 /// on purpose; they exist to catch a formula regression, not to pin an exact
 /// probability.
 /// </summary>
+[Collection(OnlyWar.Tests.TestCollections.SharedState)]
 public class MeleeHitRateTests
 {
     private const int Trials = 200_000;

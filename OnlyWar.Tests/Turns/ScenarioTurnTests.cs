@@ -21,6 +21,7 @@ namespace OnlyWar.Tests.Turns;
 // through the compact SectorSimulationFixture (Tyranids grow by consumption and ignore it — PRD
 // §4.24); the win/lapse paths are exercised against a real stamped sector so they read the actual
 // scenario, Sector Lord, and promised-world state.
+[Collection(OnlyWar.Tests.TestCollections.SharedState)]
 public class ScenarioTurnTests
 {
     private readonly GameRulesData _data;

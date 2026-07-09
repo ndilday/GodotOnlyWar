@@ -11,6 +11,7 @@ namespace OnlyWar.Tests.Turns;
 // Exercises the end-of-turn "Sector Entity Logic" (TDD 6.3): population growth,
 // intelligence decay, special mission expiration, and governor request generation.
 // Driven through TurnController.ProcessTurn with a seeded global RNG.
+[Collection(OnlyWar.Tests.TestCollections.SharedState)]
 public class SectorEntityLogicTests
 {
     [Fact]

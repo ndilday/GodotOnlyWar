@@ -15,6 +15,7 @@ namespace OnlyWar.Tests.Data;
 // registration of the army root on the player faction. Generation itself must register the
 // OrderOfBattle root on Faction.Units, otherwise the save writes no Soldier rows and the first
 // PlayerSoldier insert violates PlayerSoldier.SoldierId -> Soldier.Id.
+[Collection(OnlyWar.Tests.TestCollections.SharedState)]
 public class NewGameSaveTests
 {
     private readonly GameRulesData _data;

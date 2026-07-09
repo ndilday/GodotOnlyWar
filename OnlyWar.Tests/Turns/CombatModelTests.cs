@@ -9,6 +9,7 @@ namespace OnlyWar.Tests.Turns;
 // Coverage for the combat-model corrections (PRD §4.24): casualties reduce a faction's fighting
 // strength from the correct pool (Population for a horde, Garrison for a faction with civilians),
 // and a victorious invader establishes a foothold from its survivors rather than dissolving.
+[Collection(OnlyWar.Tests.TestCollections.SharedState)]
 public class CombatModelTests
 {
     [Fact]

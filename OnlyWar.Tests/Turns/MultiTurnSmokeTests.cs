@@ -10,6 +10,7 @@ namespace OnlyWar.Tests.Turns;
 
 // Seeded multi-turn smoke test (TDD 9.2.1 #8): run several end-of-turn cycles with a
 // fixed RNG against a compact hand-built sector and assert high-level invariants hold.
+[Collection(OnlyWar.Tests.TestCollections.SharedState)]
 public class MultiTurnSmokeTests
 {
     private const int TurnCount = 12;

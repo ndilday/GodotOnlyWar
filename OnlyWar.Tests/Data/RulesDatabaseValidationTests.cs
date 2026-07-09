@@ -10,6 +10,7 @@ using Xunit;
 
 namespace OnlyWar.Tests.Data;
 
+[Collection(OnlyWar.Tests.TestCollections.SharedState)]
 public class RulesDatabaseValidationTests
 {
     [Fact]

@@ -10,6 +10,7 @@ namespace OnlyWar.Tests.Turns;
 // again on liberation, neither grows nor drafts while hidden, and bleeds survivors to adjacent
 // governed regions each week. Regions 1 and 2 are the only neighbours of region 0 in the fixture's
 // diamond grid, so region 0 is used as the source throughout.
+[Collection(OnlyWar.Tests.TestCollections.SharedState)]
 public class ImperialRemnantTests
 {
     [Fact]

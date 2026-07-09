@@ -18,6 +18,7 @@ using Xunit;
 
 namespace OnlyWar.Tests.Turns;
 
+[Collection(OnlyWar.Tests.TestCollections.SharedState)]
 public class TurnTrainingTests
 {
     [Fact]

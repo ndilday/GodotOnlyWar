@@ -12,6 +12,7 @@ namespace OnlyWar.Tests.Turns;
 // consumers are excluded from the crowding that limits ordinary growth, and stripped land slowly
 // heals toward its natural ceiling. The biomass methods are exercised directly (not through a full
 // ProcessTurn) so the conservation arithmetic can be asserted exactly.
+[Collection(OnlyWar.Tests.TestCollections.SharedState)]
 public class BiomassConsumptionTests
 {
     [Fact]

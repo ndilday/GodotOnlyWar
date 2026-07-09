@@ -13,6 +13,7 @@ namespace OnlyWar.Tests.Turns;
 // the force in regions with no active Imperial enemy in reach — it flows toward the front where one
 // remains adjacent, and slaughters the local Imperial population as sacrifices (with no growth of
 // its own) where the fight is wholly out of reach. Exercised directly for exact assertions.
+[Collection(OnlyWar.Tests.TestCollections.SharedState)]
 public class GenestealerCultTests
 {
     [Fact]

@@ -4,6 +4,7 @@ using Xunit;
 
 namespace OnlyWar.Tests.Math;
 
+[Collection(OnlyWar.Tests.TestCollections.SharedState)]
 public class GaussianCalculatorTests
 {
     [Theory]

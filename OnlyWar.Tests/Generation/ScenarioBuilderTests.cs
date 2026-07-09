@@ -17,6 +17,7 @@ namespace OnlyWar.Tests.Generation;
 // step 2): ScenarioBuilder.StampPromisedWorld, invoked from SectorBuilder.GenerateSector in place
 // of the old FoundTakebackPlanet prototype. The stamp invariants and full per-seed determinism are
 // the load-bearing guarantees for the opening.
+[Collection(OnlyWar.Tests.TestCollections.SharedState)]
 public class ScenarioBuilderTests
 {
     private readonly GameRulesData _data;
@@ -169,24 +170,36 @@ public class ScenarioBuilderTests
     // Regression: the opening now runs a scoped pre-/post-landing simulation during generation,
     // which drives real NPC recon/combat on the promised world. A recon that is detected by a region
     // with no squads to scramble produced an empty OpFor, and the downstream battle steps assumed a
-    // non-empty OpposingSquads and threw, so generation itself crashed for some seeds (seed 3 was
-    // the first repro). This broad seed spread remains intact for now; slow-test splitting is a
-    // separate follow-up.
+    // non-empty OpposingSquads and threw, so generation itself crashed for some seeds. Keep the
+    // first repro seed plus a known-good baseline in the normal suite.
     [Theory]
     [InlineData(1)]
-    [InlineData(2)]
     [InlineData(3)]
-    [InlineData(4)]
-    [InlineData(5)]
-    [InlineData(7)]
-    [InlineData(11)]
-    public void GenerateSector_RunsScopedSimsWithoutThrowing(int seed)
+    public void GenerateSector_KeyScopedSimSeedsRunWithoutThrowing(int seed)
     {
         Sector sector = SectorBuilder.GenerateSector(seed, _data, _date, "Robustness Chapter");
 
         Assert.NotNull(sector.Scenario);
         Assert.Equal(ObjectiveState.Pending, sector.Scenario.State);
         // A valid, playable promised world exists. Control is seed-dependent.
+        Assert.NotNull(sector.GetPlanet(sector.Scenario.PromisedPlanetId));
+    }
+
+    // Broader coverage for seed-sensitive scoped sim failures. This is intentionally kept out of
+    // the default fast path; run with a Category=Slow filter when tuning generation/balance.
+    [Trait("Category", "Slow")]
+    [Theory]
+    [InlineData(2)]
+    [InlineData(4)]
+    [InlineData(5)]
+    [InlineData(7)]
+    [InlineData(11)]
+    public void GenerateSector_AdditionalScopedSimSeedsRunWithoutThrowing(int seed)
+    {
+        Sector sector = SectorBuilder.GenerateSector(seed, _data, _date, "Robustness Chapter");
+
+        Assert.NotNull(sector.Scenario);
+        Assert.Equal(ObjectiveState.Pending, sector.Scenario.State);
         Assert.NotNull(sector.GetPlanet(sector.Scenario.PromisedPlanetId));
     }
 

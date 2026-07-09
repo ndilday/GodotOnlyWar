@@ -16,6 +16,7 @@ namespace OnlyWar.Tests.Generation;
 // the derived Sector Lord / subsector-governor designation folded into
 // SectorBuilder.GenerateWarpNetwork. The designation is recomputed (not persisted),
 // so the round-trip test proves it re-derives identically from saved planet data.
+[Collection(OnlyWar.Tests.TestCollections.SharedState)]
 public class GovernanceHierarchyTests
 {
     private readonly GameRulesData _data;

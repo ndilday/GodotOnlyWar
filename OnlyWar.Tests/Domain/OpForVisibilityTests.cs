@@ -8,6 +8,7 @@ namespace OnlyWar.Tests.Domain;
 // Covers the fog-of-war grading the UI relies on: enemy population is hidden until recon
 // raises player-visible RegionIntel, and defensive values are only ever shown as fuzzy
 // descriptions (RegionFactionExtensions).
+[Collection(OnlyWar.Tests.TestCollections.SharedState)]
 public class OpForVisibilityTests
 {
     [Fact]
