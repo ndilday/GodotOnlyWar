@@ -519,7 +519,7 @@ static void MigratePlanetScales(SqliteConnection connection)
         ("Hive",      50_000_000_000L, 150_000_000_000d, 1.3),  // 5-20 hives x 10-100B; overcrowded
         ("Forge",      1_000_000_000L,   2_000_000_000d, 1.1),  // billions; life-support limited
         ("Civilised",    500_000_000L,   1_500_000_000d, 1.5),  // Earth-like; room to develop
-        ("Agri",          50_000_000L,     150_000_000d, 4.0),  // low density; abundant farmland
+        ("Agri",           1_000_000L,      10_000_000d, 4.0),  // low density; median ~11M, tail ~1B (canon: most worlds well under 100M)
         ("Feudal",        10_000_000L,      40_000_000d, 3.0),  // pre-industrial; land-limited
         ("Feral",            200_000L,         800_000d, 5.0),  // tribal; vast unused wilderness
         ("Death",             10_000L,         300_000d, 1.2),  // hostile; near max sustainable

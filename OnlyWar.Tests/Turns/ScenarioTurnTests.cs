@@ -10,6 +10,7 @@ using OnlyWar.Models.Orders;
 using OnlyWar.Models.Planets;
 using OnlyWar.Models.Soldiers;
 using OnlyWar.Models.Squads;
+using OnlyWar.Models.Units;
 using OnlyWar.Tests.Fixtures;
 using Xunit;
 
@@ -84,8 +85,9 @@ public class ScenarioTurnTests
     [Fact]
     public void ProcessScenario_Win_GrantsWorldAndRaisesSectorLordOpinion()
     {
-        Sector sector = SectorBuilder.GenerateSector(1, _data, _date, "Victory Chapter");
-        Planet promised = sector.GetPlanet(sector.Scenario.PromisedPlanetId);
+        ScenarioFixture fixture = CreateScenarioFixture();
+        Sector sector = fixture.Sector;
+        Planet promised = fixture.Promised;
         Faction player = sector.PlayerForce.Faction;
         Character lord = sector.GetSectorLord();
         Assert.NotNull(lord);
@@ -124,8 +126,9 @@ public class ScenarioTurnTests
     [Fact]
     public void ProcessScenario_TyranidsGoneButCultRemains_StaysPending()
     {
-        Sector sector = SectorBuilder.GenerateSector(1, _data, _date, "Half-Liberated Chapter");
-        Planet promised = sector.GetPlanet(sector.Scenario.PromisedPlanetId);
+        ScenarioFixture fixture = CreateScenarioFixture();
+        Sector sector = fixture.Sector;
+        Planet promised = fixture.Promised;
         Faction player = sector.PlayerForce.Faction;
         Faction cult = _data.SectorFactions.Infiltrator;
 
@@ -151,19 +154,14 @@ public class ScenarioTurnTests
     [Fact]
     public void ProcessScenario_Lapse_WithdrawsAndLowersSectorLordOpinion()
     {
-        Sector sector = SectorBuilder.GenerateSector(2, _data, _date, "Lost Chapter");
-        Planet promised = sector.GetPlanet(sector.Scenario.PromisedPlanetId);
+        ScenarioFixture fixture = CreateScenarioFixture(imperialPresence: false);
+        Sector sector = fixture.Sector;
+        Planet promised = fixture.Promised;
         Faction player = sector.PlayerForce.Faction;
         Character lord = sector.GetSectorLord();
         Assert.NotNull(lord);
         float opinionBefore = lord.OpinionOfPlayerForce;
 
-        // Overrun the world: strip every Imperial and player presence, leaving only the Tyranids.
-        foreach (Region region in promised.Regions)
-        {
-            region.RegionFactionMap.Remove(Imperial.Id);
-            region.RegionFactionMap.Remove(player.Id);
-        }
         Assert.Contains(promised.Regions, r => r.RegionFactionMap.ContainsKey(Tyranids.Id));
 
         new TurnController().ProcessScenario(sector);
@@ -181,20 +179,9 @@ public class ScenarioTurnTests
     [Fact]
     public void ProcessScenario_Lapse_WithVacantSeat_StillResolves()
     {
-        Sector sector = SectorBuilder.GenerateSector(2, _data, _date, "Headless Chapter");
-        Planet promised = sector.GetPlanet(sector.Scenario.PromisedPlanetId);
-        Faction player = sector.PlayerForce.Faction;
-
-        // Vacate the Sector Lord's seat: clear the capital governor so GetSectorLord() is null.
-        Planet capital = sector.GetSectorCapital();
-        capital.PlanetFactionMap[capital.GetControllingFaction().Id].Leader = null;
+        ScenarioFixture fixture = CreateScenarioFixture(imperialPresence: false, vacantSectorSeat: true);
+        Sector sector = fixture.Sector;
         Assert.Null(sector.GetSectorLord());
-
-        foreach (Region region in promised.Regions)
-        {
-            region.RegionFactionMap.Remove(Imperial.Id);
-            region.RegionFactionMap.Remove(player.Id);
-        }
 
         new TurnController().ProcessScenario(sector);
 
@@ -205,8 +192,9 @@ public class ScenarioTurnTests
     [Fact]
     public void ProcessScenario_DoesNothingWhenNotPending()
     {
-        Sector sector = SectorBuilder.GenerateSector(1, _data, _date, "Settled Chapter");
-        Planet promised = sector.GetPlanet(sector.Scenario.PromisedPlanetId);
+        ScenarioFixture fixture = CreateScenarioFixture();
+        Sector sector = fixture.Sector;
+        Planet promised = fixture.Promised;
         Faction player = sector.PlayerForce.Faction;
         sector.Scenario.State = ObjectiveState.Won; // already resolved earlier
 
@@ -460,8 +448,9 @@ public class ScenarioTurnTests
     [Fact]
     public void ProcessScenario_Win_SurfacesNotification()
     {
-        Sector sector = SectorBuilder.GenerateSector(1, _data, _date, "Notified Chapter");
-        Planet promised = sector.GetPlanet(sector.Scenario.PromisedPlanetId);
+        ScenarioFixture fixture = CreateScenarioFixture();
+        Sector sector = fixture.Sector;
+        Planet promised = fixture.Promised;
         // Full liberation clears every hostile faction, not just the Tyranids.
         foreach (Region region in promised.Regions)
         {
@@ -481,4 +470,110 @@ public class ScenarioTurnTests
         Assert.False(string.IsNullOrEmpty(controller.ScenarioNotification));
         Assert.Contains(promised.Name, controller.ScenarioNotification);
     }
+
+    private ScenarioFixture CreateScenarioFixture(
+        bool imperialPresence = true,
+        bool vacantSectorSeat = false)
+    {
+        Faction player = _data.PlayerFaction;
+        Faction imperial = Imperial;
+        Faction tyranids = Tyranids;
+        Faction cult = _data.SectorFactions.Infiltrator;
+
+        Character lord = new()
+        {
+            Id = 7001,
+            Name = "Lord Testus",
+            OpinionOfPlayerForce = 3.5f
+        };
+
+        Planet promised = CreatePlanetWithRegions(1001, "Test Promised World");
+        Planet capital = CreatePlanetWithRegions(1002, "Test Sector Capital");
+        capital.GovernanceTier = GovernanceTier.SectorCapital;
+
+        PlanetFaction imperialCapitalFaction = AddPlanetFaction(capital, imperial);
+        imperialCapitalFaction.Leader = vacantSectorSeat ? null : lord;
+        AddRegionFaction(capital.Regions[0], imperialCapitalFaction, population: 1000, garrison: 100);
+
+        PlanetFaction imperialPromisedFaction = AddPlanetFaction(promised, imperial);
+        PlanetFaction tyranidPlanetFaction = AddPlanetFaction(promised, tyranids);
+        PlanetFaction cultPlanetFaction = AddPlanetFaction(promised, cult);
+
+        if (imperialPresence)
+        {
+            AddRegionFaction(promised.Regions[0], imperialPromisedFaction, population: 1000, garrison: 100);
+            AddRegionFaction(promised.Regions[1], imperialPromisedFaction, population: 1000, garrison: 100);
+        }
+
+        AddRegionFaction(promised.Regions[0], tyranidPlanetFaction, population: 250, garrison: 250);
+        AddRegionFaction(promised.Regions[1], cultPlanetFaction, population: 100, garrison: 100);
+
+        PlayerForce playerForce = CreatePlayerForce(player);
+        Sector sector = new(playerForce, [lord], [promised, capital], [])
+        {
+            Scenario = new CampaignScenario(
+                ScenarioType.PromisedWorld,
+                promised.Id,
+                "Test briefing",
+                lord.Id)
+        };
+
+        GameDataSingleton.Instance.LoadGameDataFromBlob(_data, _date, sector);
+        return new ScenarioFixture(sector, promised);
+    }
+
+    private static PlayerForce CreatePlayerForce(Faction player)
+    {
+        UnitTemplate template = new(9001, "Test Chapter", true, [], [])
+        {
+            Faction = player
+        };
+        Unit root = new(9001, "Test Chapter", template, []);
+        Army army = new("Test Chapter Ground Forces", null, "Chapter Master", root, []);
+        Fleet fleet = new("Test Chapter Fleet", null, "Fleet Master");
+        return new PlayerForce(player, army, fleet);
+    }
+
+    private static Planet CreatePlanetWithRegions(int id, string name)
+    {
+        Planet planet = new(id, name, new Coordinate((ushort)id, 1), 1, null, 1, 1);
+        for (int i = 0; i < planet.Regions.Length; i++)
+        {
+            planet.Regions[i] = new Region(
+                i + 1,
+                planet,
+                regionType: 1,
+                name: $"Region {i + 1}",
+                coordinates: new RegionCoordinate(i, 0),
+                intelligenceLevel: 0,
+                carryingCapacity: 10000);
+        }
+
+        return planet;
+    }
+
+    private static PlanetFaction AddPlanetFaction(Planet planet, Faction faction)
+    {
+        PlanetFaction planetFaction = new(faction);
+        planet.PlanetFactionMap[faction.Id] = planetFaction;
+        return planetFaction;
+    }
+
+    private static RegionFaction AddRegionFaction(
+        Region region,
+        PlanetFaction planetFaction,
+        long population,
+        long garrison)
+    {
+        RegionFaction regionFaction = new(planetFaction, region)
+        {
+            Population = population,
+            Garrison = garrison,
+            IsPublic = true
+        };
+        region.RegionFactionMap[planetFaction.Faction.Id] = regionFaction;
+        return regionFaction;
+    }
+
+    private sealed record ScenarioFixture(Sector Sector, Planet Promised);
 }

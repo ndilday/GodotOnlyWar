@@ -11,7 +11,7 @@ namespace OnlyWar.Helpers
         // minimum size: several canon Chapters recruit from feral and death worlds, so a sparse,
         // low-population world is a perfectly good — even iconic — first home. The upper bound stays
         // as a soft ceiling so the starter objective is not a multi-billion-population behemoth.
-        public const long MaxPromisedWorldPopulation = 500_000_000L;
+        public const long MaxPromisedWorldPopulation = 50_000_000L;
 
         // Planet types that can never be the promised world. Hive worlds are ruled out (a hive world
         // is not a "grant it to your Chapter" starter, and its scale swamps the opening fight); forge

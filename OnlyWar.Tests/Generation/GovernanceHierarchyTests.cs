@@ -17,42 +17,38 @@ namespace OnlyWar.Tests.Generation;
 // SectorBuilder.GenerateWarpNetwork. The designation is recomputed (not persisted),
 // so the round-trip test proves it re-derives identically from saved planet data.
 [Collection(OnlyWar.Tests.TestCollections.SharedState)]
-public class GovernanceHierarchyTests
+public class GovernanceHierarchyTests : IClassFixture<GovernanceHierarchyFixture>
 {
     private readonly GameRulesData _data;
     private readonly Date _date = new(39, 500, 1);
     private readonly GameStateRoundTripFixture _roundTrip;
+    private readonly Sector _seedOneSector;
 
-    public GovernanceHierarchyTests()
+    public GovernanceHierarchyTests(GovernanceHierarchyFixture fixture)
     {
-        Directory.SetCurrentDirectory(RulesDatabaseFixture.RepositoryRoot);
-        _data = new GameRulesData();
-        GameDataSingleton.Instance.LoadGameDataFromBlob(_data, _date, null);
+        _data = fixture.Data;
+        _seedOneSector = fixture.SeedOneSector;
         _roundTrip = new GameStateRoundTripFixture(_data, _date);
     }
 
     [Fact]
     public void GenerateWarpNetwork_TagsExactlyOneSectorCapital()
     {
-        Sector sector = SectorBuilder.GenerateSector(1, _data, _date, "Capital Chapter");
-
-        List<Planet> sectorCapitals = sector.Planets.Values
+        List<Planet> sectorCapitals = _seedOneSector.Planets.Values
             .Where(p => p.GovernanceTier == GovernanceTier.SectorCapital)
             .ToList();
 
         Assert.Single(sectorCapitals);
-        Assert.Same(sectorCapitals[0], sector.GetSectorCapital());
+        Assert.Same(sectorCapitals[0], _seedOneSector.GetSectorCapital());
     }
 
     [Fact]
     public void EachSubsectorWithImperialWorld_HasExactlyOneSeat()
     {
-        Sector sector = SectorBuilder.GenerateSector(1, _data, _date, "Seat Chapter");
-
         // At least one subsector must hold an Imperial world for this test to be meaningful.
-        Assert.Contains(sector.Subsectors, s => s.GovernanceSeat != null);
+        Assert.Contains(_seedOneSector.Subsectors, s => s.GovernanceSeat != null);
 
-        foreach (Subsector subsector in sector.Subsectors)
+        foreach (Subsector subsector in _seedOneSector.Subsectors)
         {
             List<Planet> imperialWorlds = subsector.Planets
                 .Where(p => p.GetControllingFaction().IsDefaultFaction)
@@ -81,12 +77,10 @@ public class GovernanceHierarchyTests
     [Fact]
     public void GetSectorLord_ReturnsSectorCapitalGovernor()
     {
-        Sector sector = SectorBuilder.GenerateSector(1, _data, _date, "Lord Chapter");
-
-        Planet capital = sector.GetSectorCapital();
+        Planet capital = _seedOneSector.GetSectorCapital();
         Assert.NotNull(capital);
 
-        Character lord = sector.GetSectorLord();
+        Character lord = _seedOneSector.GetSectorLord();
         // The Sector Lord is precisely the governor seated on the sector capital, which is
         // the leader of the capital's controlling (Imperial) PlanetFaction.
         Assert.Same(capital.Governor, lord);
@@ -98,8 +92,10 @@ public class GovernanceHierarchyTests
     [Fact]
     public void Governance_IsDeterministicForSeed()
     {
-        Sector first = SectorBuilder.GenerateSector(7, _data, _date, "Deterministic Chapter");
-        Sector second = SectorBuilder.GenerateSector(7, _data, _date, "Deterministic Chapter");
+        GameRulesData firstData = LoadFreshRulesData();
+        GameRulesData secondData = LoadFreshRulesData();
+        Sector first = SectorBuilder.GenerateSector(7, firstData, _date, "Deterministic Chapter");
+        Sector second = SectorBuilder.GenerateSector(7, secondData, _date, "Deterministic Chapter");
 
         Planet firstCapital = first.GetSectorCapital();
         Planet secondCapital = second.GetSectorCapital();
@@ -120,7 +116,7 @@ public class GovernanceHierarchyTests
     [Fact]
     public void Governance_RederivesIdenticallyAfterSaveLoad()
     {
-        Sector sector = SectorBuilder.GenerateSector(1, _data, _date, "Round Trip Governance Chapter");
+        Sector sector = _seedOneSector;
         GameDataSingleton.Instance.LoadGameDataFromBlob(_data, _date, sector);
         _roundTrip.RegisterPlayerArmy(sector);
 
@@ -152,5 +148,27 @@ public class GovernanceHierarchyTests
         {
             GameStateRoundTripFixture.CleanupDb(dbPath);
         }
+    }
+
+    private static GameRulesData LoadFreshRulesData()
+    {
+        Directory.SetCurrentDirectory(RulesDatabaseFixture.RepositoryRoot);
+        GameRulesData data = new();
+        GameDataSingleton.Instance.LoadGameDataFromBlob(data, new Date(39, 500, 1), null);
+        return data;
+    }
+}
+
+public sealed class GovernanceHierarchyFixture
+{
+    internal GameRulesData Data { get; }
+    internal Sector SeedOneSector { get; }
+
+    public GovernanceHierarchyFixture()
+    {
+        Directory.SetCurrentDirectory(RulesDatabaseFixture.RepositoryRoot);
+        Data = new GameRulesData();
+        GameDataSingleton.Instance.LoadGameDataFromBlob(Data, new Date(39, 500, 1), null);
+        SeedOneSector = SectorBuilder.GenerateSector(1, Data, new Date(39, 500, 1), "Governance Fixture Chapter");
     }
 }
