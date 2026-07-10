@@ -189,8 +189,12 @@ public partial class CommandWorkspaceView : DialogView
         _selectionTree = new Tree
         {
             SizeFlagsVertical = SizeFlags.ExpandFill,
-            CustomMinimumSize = new Vector2(0, 260)
+            CustomMinimumSize = new Vector2(0, 260),
+            Columns = 2
         };
+        _selectionTree.SetColumnExpand(0, true);
+        _selectionTree.SetColumnExpand(1, false);
+        _selectionTree.SetColumnCustomMinimumWidth(1, 64);
         _selectionTree.ItemSelected += OnSelectionTreeItemSelected;
         _selectionTree.ItemActivated += OnSelectionTreeItemActivated;
         leftStack.AddChild(_selectionTree);
@@ -445,6 +449,26 @@ public partial class CommandWorkspaceView : DialogView
             TreeItem item = tree.CreateItem(parentItem);
             item.SetText(0, node.Text);
             item.SetMetadata(0, Variant.From(node.Key));
+
+            if (node.IconKey != null)
+            {
+                item.SetIcon(0, IconAtlas.GetIcon(node.IconKey));
+                item.SetIconMaxWidth(0, 20);
+            }
+
+            if (node.Badge != null)
+            {
+                item.SetText(1, node.Badge);
+                item.SetTextAlignment(1, HorizontalAlignment.Right);
+                item.SetCustomColor(1, OnlyWarStyle.MutedText);
+            }
+
+            if (!node.Selectable)
+            {
+                item.SetSelectable(0, false);
+                item.SetCustomColor(0, OnlyWarStyle.MutedText);
+            }
+
             if (!string.IsNullOrEmpty(selectedKey) && node.Key == selectedKey)
             {
                 item.Select(0);

@@ -27,6 +27,13 @@ public partial class TacticalRegionView : Control
 		_xenosPopulation = GetNode<RichTextLabel>("Button/XenosPopulationLabel");
 		_objective.Texture = IconAtlas.GetIcon("objective");
 		_droppod.Texture = IconAtlas.GetIcon("land_squads");
+		// The atlas cells are square (128x128) but the slots are anchored to non-square
+		// rectangles (and the hex tiles are wider than tall), so the default STRETCH_SCALE
+		// distorts the icons. Keep aspect so they stay round/square regardless of slot shape.
+		foreach (TextureRect icon in new[] { _playerPublic, _playerHidden, _civilian, _xenos, _objective, _droppod })
+		{
+			icon.StretchMode = TextureRect.StretchModeEnum.KeepAspectCentered;
+		}
 		ConfigureText();
 	}
 

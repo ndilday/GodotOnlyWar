@@ -4,6 +4,7 @@ using OnlyWar.Models;
 using OnlyWar.Models.Missions;
 using OnlyWar.Models.Planets;
 using OnlyWar.Tests.Fixtures;
+using System.Linq;
 using Xunit;
 
 namespace OnlyWar.Tests.Turns;
@@ -229,5 +230,67 @@ public class SectorEntityLogicTests
         Assert.True(fixture.Sector.PlayerForce.Army.Requisition > before);
         Assert.Null(governor.ActiveRequest);
         Assert.DoesNotContain(request, fixture.Sector.PlayerForce.Requests);
+    }
+
+    // Design/MultiFactionRegions.md WI-4: the special-mission opportunity budget is split across a
+    // region's public enemy factions proportional to deployed strength, instead of being handed
+    // entirely to whichever faction is iterated first.
+    [Fact]
+    public void HandlePublicFactionIntelligence_SingleEnemyGetsTheFullBudget()
+    {
+        RNG.Reset(7);
+        SectorSimulationFixture fixture = SectorSimulationFixture.Create();
+        RegionFaction enemy = fixture.AddPublicCult(0, population: 1000, organization: 100);
+        enemy.Garrison = enemy.Population;
+        TurnController controller = new();
+
+        // Each opportunity roll only has ~50% odds of producing a mission (chance < 0 rolls
+        // nothing), so a single call rarely reaches the budget. But the loop bound
+        // (budget - already-identified-count-for-this-faction) means repeated calls against the
+        // same faction monotonically climb and saturate exactly at the budget, since once the
+        // count reaches it the loop bound drops to zero and stops running. Calling it many times
+        // therefore proves the budget passed in is honored in full for a single enemy - matching
+        // the pre-fix behavior where the lone faction consumed the entire region budget.
+        for (int i = 0; i < 100; i++)
+        {
+            controller.HandlePublicFactionIntelligence(enemy, specMissionBudget: 5f);
+        }
+
+        Assert.Equal(5, enemy.Region.SpecialMissions.Count(m => m.RegionFaction == enemy));
+    }
+
+    [Fact]
+    public void ProcessTurn_SplitsSpecialMissionBudgetProportionalToDeployedStrength()
+    {
+        RNG.Reset(42);
+        SectorSimulationFixture fixture = SectorSimulationFixture.Create();
+        Region region = fixture.Planet.Regions[0];
+        // deployed strength ratio is 9:1 (both at 100% organization, so deployed == population)
+        RegionFaction strong = fixture.AddPublicCult(0, population: 90000, organization: 100);
+        RegionFaction weak = fixture.AddPublicCult(0, population: 10000, organization: 100);
+        strong.Garrison = strong.Population;
+        weak.Garrison = weak.Population;
+        TurnController controller = new();
+
+        int strongCount = 0;
+        int weakCount = 0;
+        for (int turn = 0; turn < 20; turn++)
+        {
+            // re-assert region intel each turn so the region-wide budget stays large and stable
+            // despite the per-turn quarter decay (ProcessTurn_DecaysRegionIntelligenceByQuarter) -
+            // the point here is the SPLIT across factions, not the intel economy itself.
+            fixture.DefaultPlanetFaction.SetRegionIntel(region, 4096f);
+            controller.ProcessTurn(fixture.Sector);
+            strongCount += controller.SpecialMissions.Count(m => m.RegionFaction == strong);
+            weakCount += controller.SpecialMissions.Count(m => m.RegionFaction == weak);
+        }
+
+        // with the pre-fix, iteration-order-first-come budget, whichever faction the dictionary
+        // visited first would have soaked up the entire region budget every turn, leaving the other
+        // at (or near) zero regardless of strength. Proportional splitting instead tracks the 9:1
+        // deployed-strength ratio - assert the strong faction clearly dominates, not just non-zero.
+        Assert.True(strongCount > weakCount * 3,
+            $"expected strong ({strongCount}) to lead weak ({weakCount}) by roughly the 9:1 deployed-strength ratio");
+        Assert.True(weakCount > 0, "the weaker faction should still receive some opportunities, not be starved entirely");
     }
 }

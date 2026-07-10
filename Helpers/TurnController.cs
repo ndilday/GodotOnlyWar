@@ -2250,6 +2250,21 @@ namespace OnlyWar.Helpers
                     float visibleIntel = region.GetPlayerVisibleIntel();
                     if (visibleIntel > 0)
                     {
+                        // The special-mission opportunity budget is rolled once for the whole region
+                        // (it represents how much the player's overall intelligence picture "buys"
+                        // this turn), then split across the region's public enemy factions
+                        // proportional to their deployed strength (Design/MultiFactionRegions.md WI-4).
+                        // Without this split, iterating RegionFactionMap in dictionary order let
+                        // whichever public faction came first spend the entire region-wide budget,
+                        // starving every other faction regardless of how strong it was.
+                        float regionSpecMissionBudget = (float)Math.Log(visibleIntel, 2) + 1;
+                        List<RegionFaction> publicEnemyFactions = region.RegionFactionMap.Values
+                            .Where(rf => !rf.PlanetFaction.Faction.IsPlayerFaction
+                                         && !rf.PlanetFaction.Faction.IsDefaultFaction
+                                         && rf.IsPublic)
+                            .ToList();
+                        long totalDeployedStrength = publicEnemyFactions.Sum(rf => rf.GetDeployedStrength());
+
                         foreach (RegionFaction regionFaction in region.RegionFactionMap.Values)
                         {
                             if (regionFaction.PlanetFaction.Faction.IsPlayerFaction || regionFaction.PlanetFaction.Faction.IsDefaultFaction)
@@ -2258,7 +2273,12 @@ namespace OnlyWar.Helpers
                             }
                             if (regionFaction.IsPublic)
                             {
-                                HandlePublicFactionIntelligence(regionFaction);
+                                // Even split when every public faction has zero deployed strength
+                                // (e.g. all at 0 organization) so the budget doesn't just vanish.
+                                float share = totalDeployedStrength > 0
+                                    ? (float)regionFaction.GetDeployedStrength() / totalDeployedStrength
+                                    : 1.0f / publicEnemyFactions.Count;
+                                HandlePublicFactionIntelligence(regionFaction, regionSpecMissionBudget * share);
                             }
                             else
                             {
@@ -2270,12 +2290,15 @@ namespace OnlyWar.Helpers
             }
         }
 
-        public void HandlePublicFactionIntelligence(RegionFaction enemyRegionFaction)
+        public void HandlePublicFactionIntelligence(RegionFaction enemyRegionFaction, float specMissionBudget)
         {
-            // see if any intelligence gets spent in exchange for special mission opportunities
-            float specMissionChance = (float)Math.Log(enemyRegionFaction.Region.GetPlayerVisibleIntel(), 2) + 1;
-            // subtract one for each special mission already identified
-            specMissionChance -= enemyRegionFaction.Region.SpecialMissions.Count;
+            // specMissionBudget is this faction's proportional slice of the region-wide opportunity
+            // budget (Design/MultiFactionRegions.md WI-4), already computed by the caller. Subtract
+            // one for each special mission already identified against THIS faction specifically —
+            // not the region-wide total — so one faction's backlog doesn't suppress another's.
+            float specMissionChance = specMissionBudget;
+            specMissionChance -= enemyRegionFaction.Region.SpecialMissions
+                .Count(m => m.RegionFaction == enemyRegionFaction);
             for (int i = 0; i < specMissionChance; i++)
             {
                 double chance = RNG.NextRandomZValue();

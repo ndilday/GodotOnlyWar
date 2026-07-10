@@ -11,7 +11,6 @@ using System.Linq;
 
 public partial class RegionScreenController : DialogController
 {
-    private const string ActionOpenAdjacentRegion = "open_adjacent_region";
     private const string ActionOpenSquad = "open_squad";
     private const string ActionEditOrders = "edit_orders";
     private const string ActionUnassign = "unassign";
@@ -34,7 +33,6 @@ public partial class RegionScreenController : DialogController
 
     private RegionScreenView _view;
     private Region _currentRegion;
-    private Region _selectedAdjacentRegion;
     private Squad _selectedSquad;
     private Order _selectedOrder;
     private Order _copiedOrder;
@@ -99,7 +97,6 @@ public partial class RegionScreenController : DialogController
     public void DisplayRegion(Region region)
     {
         _currentRegion = region;
-        _selectedAdjacentRegion = null;
         _selectedSquad = null;
         _selectedOrder = null;
         _copiedOrder = null;
@@ -123,12 +120,6 @@ public partial class RegionScreenController : DialogController
         if (_selectedSquad != null)
         {
             SquadDoubleClicked?.Invoke(this, _selectedSquad);
-            return;
-        }
-
-        if (_selectedAdjacentRegion != null)
-        {
-            AdjacentRegionChangeRequested?.Invoke(this, _selectedAdjacentRegion);
         }
     }
 
@@ -136,12 +127,6 @@ public partial class RegionScreenController : DialogController
     {
         switch (key)
         {
-            case ActionOpenAdjacentRegion:
-                if (_selectedAdjacentRegion != null)
-                {
-                    AdjacentRegionChangeRequested?.Invoke(this, _selectedAdjacentRegion);
-                }
-                break;
             case ActionOpenSquad:
                 if (_selectedSquad != null)
                 {
@@ -178,7 +163,7 @@ public partial class RegionScreenController : DialogController
         if (_currentRegion == null) return;
 
         _view.SetHeader($"{_currentRegion.Planet.Name} / {_currentRegion.Name}");
-        _view.SetSelectionTitle("ROSTER", "Select a squad, contact, or adjacent region. Edit, copy, or paste orders from the command bar.");
+        _view.SetSelectionTitle("ROSTER", "Select a squad. Edit, copy, or paste orders from the command bar.");
         _view.PopulateSelectionTree(BuildRoster());
         PopulateAdjacentRegions();
         RefreshContextAndCommands();
@@ -197,61 +182,54 @@ public partial class RegionScreenController : DialogController
     {
         if (_currentRegion == null) return Array.Empty<CommandTreeNode>();
 
-        return
-        [
-            BuildDeployedForcesGroup(),
-            BuildKnownPresenceGroup(),
-            new CommandTreeNode("group:adjacent", "Adjacent Regions", BuildAdjacentRegionNodes())
-        ];
+        return BuildUnitNodes();
     }
 
-    private CommandTreeNode BuildDeployedForcesGroup()
+    private List<CommandTreeNode> BuildUnitNodes()
     {
         RegionFaction playerFaction = GetPlayerRegionFaction();
         List<CommandTreeNode> units = [];
         if (playerFaction != null)
         {
             foreach (IGrouping<OnlyWar.Models.Units.Unit, Squad> group in playerFaction.LandedSquads
-                .Where(squad => squad.Members.Count > 0 && RosterFormat.MatchesFilter(squad, _rosterFilter))
+                .Where(squad => squad.Members.Count > 0)
                 .GroupBy(squad => squad.ParentUnit))
             {
+                List<CommandTreeNode> squadNodes = group
+                    .Where(squad => RosterFormat.MatchesFilter(squad, _rosterFilter))
+                    .Select(squad => new CommandTreeNode(
+                        SquadKey(squad.Id),
+                        SquadRosterLabel(squad),
+                        null,
+                        IconAtlas.GetSquadIconKey(squad.SquadTemplate),
+                        squad.CurrentOrders?.Mission.RegionFaction.Region.Name ?? "None"))
+                    .ToList();
+
+                if (squadNodes.Count == 0) continue;
+
                 units.Add(new CommandTreeNode(
                     $"unit:{group.Key.Id}",
-                    $"{group.Key.Name} | {group.Sum(squad => squad.Members.Count)} marines",
-                    group.Select(squad => new CommandTreeNode(SquadKey(squad.Id), RosterFormat.SquadLabel(squad))).ToList()));
+                    $"{group.Key.Name} · {group.Sum(squad => squad.Members.Count)} marines",
+                    squadNodes,
+                    null,
+                    null,
+                    false));
             }
         }
 
-        return new CommandTreeNode("group:marines", "Deployed Forces", units);
+        return units;
     }
 
-    private CommandTreeNode BuildKnownPresenceGroup()
+    private static string SquadRosterLabel(Squad squad)
     {
-        List<CommandTreeNode> presences = [];
-        foreach (RegionFaction faction in _currentRegion.RegionFactionMap.Values.Where(rf => rf.IsPublic && !rf.PlanetFaction.Faction.IsPlayerFaction))
-        {
-            string role = faction.PlanetFaction.Faction.IsDefaultFaction ? "Allied/PDF" : "Enemy";
-            string strength = faction.PlanetFaction.Faction.IsDefaultFaction
-                ? $"{faction.Garrison:N0} garrison"
-                : faction.GetPopulationDescription();
-            presences.Add(new CommandTreeNode($"presence:{faction.PlanetFaction.Faction.Id}", $"{role}: {faction.PlanetFaction.Faction.Name} | {strength}"));
-        }
-        return new CommandTreeNode("group:presence", "Known Presence", presences);
-    }
-
-    private IReadOnlyList<CommandTreeNode> BuildAdjacentRegionNodes()
-    {
-        return _currentRegion.GetAdjacentRegions()
-            .OrderBy(region => region.Name)
-            .Select(region => new CommandTreeNode(AdjacentRegionKey(region.Id), $"{region.Name} | {GetRegionControlLabel(region)}"))
-            .ToList();
+        string strength = $"{squad.Members.Count(member => member.CanFight)}/{squad.Members.Count}";
+        return $"{squad.Name} | {strength}";
     }
 
     private string GetContextTitle()
     {
         if (_selectedSquad != null) return _selectedSquad.Name;
         if (_selectedOrder != null) return $"{_selectedOrder.Mission.MissionType} Orders";
-        if (_selectedAdjacentRegion != null) return _selectedAdjacentRegion.Name;
         return _currentRegion?.Name ?? "Region Detail";
     }
 
@@ -259,7 +237,6 @@ public partial class RegionScreenController : DialogController
     {
         if (_selectedSquad != null) return $"{_selectedSquad.ParentUnit?.Name ?? "Unknown Unit"} deployed in {_currentRegion.Name}";
         if (_selectedOrder != null) return $"Mission target: {_selectedOrder.Mission.RegionFaction.Region.Name}";
-        if (_selectedAdjacentRegion != null) return "Adjacent region on the same planet";
         return $"{_currentRegion.Planet.Name} surface command";
     }
 
@@ -267,7 +244,6 @@ public partial class RegionScreenController : DialogController
     {
         if (_selectedSquad != null) return BuildSquadRows(_selectedSquad);
         if (_selectedOrder != null) return BuildOrderRows(_selectedOrder);
-        if (_selectedAdjacentRegion != null) return BuildRegionRows(_selectedAdjacentRegion);
         return BuildRegionRows(_currentRegion);
     }
 
@@ -282,7 +258,7 @@ public partial class RegionScreenController : DialogController
         rows.Add(Row("Intelligence", $"{visibleIntel:0.##}"));
 
         RegionFaction playerFaction = GetPlayerRegionFaction(region);
-        RegionFaction enemyFaction = GetEnemyRegionFaction(region);
+        List<RegionFaction> enemyFactions = GetPublicEnemyRegionFactions(region);
 
         if (region.HasHiddenDefaultFaction())
         {
@@ -296,15 +272,19 @@ public partial class RegionScreenController : DialogController
         rows.Add(Row("Marines", playerFaction?.LandedSquads.Sum(squad => squad.Members.Count).ToString() ?? "0"));
         rows.Add(Row("Assigned Orders", playerFaction?.LandedSquads.Count(squad => squad.CurrentOrders != null).ToString() ?? "0"));
 
-        if (enemyFaction != null && enemyFaction.IsPublic)
+        if (enemyFactions.Count > 0)
         {
-            rows.Add(Row("Enemy Faction", enemyFaction.PlanetFaction.Faction.Name));
-            rows.Add(Row("Enemy Population", enemyFaction.GetPopulationDescription()));
-            if (visibleIntel > 1)
+            foreach (RegionFaction enemyFaction in enemyFactions)
             {
-                rows.Add(Row("Enemy Entrenchment", RegionFactionExtensions.GetDefenseLevelDescription(enemyFaction.Entrenchment)));
-                rows.Add(Row("Enemy Listening Posts", RegionFactionExtensions.GetDefenseLevelDescription(enemyFaction.ListeningPost)));
-                rows.Add(Row("Enemy Anti-Air", RegionFactionExtensions.GetDefenseLevelDescription(enemyFaction.AntiAir)));
+                string prefix = enemyFactions.Count > 1 ? $"Enemy ({enemyFaction.PlanetFaction.Faction.Name})" : "Enemy";
+                rows.Add(Row($"{prefix} Faction", enemyFaction.PlanetFaction.Faction.Name));
+                rows.Add(Row($"{prefix} Strength", enemyFaction.GetForceMagnitudeDescription()));
+                if (visibleIntel > 1)
+                {
+                    rows.Add(Row($"{prefix} Entrenchment", RegionFactionExtensions.GetDefenseLevelDescription(enemyFaction.Entrenchment)));
+                    rows.Add(Row($"{prefix} Listening Posts", RegionFactionExtensions.GetDefenseLevelDescription(enemyFaction.ListeningPost)));
+                    rows.Add(Row($"{prefix} Anti-Air", RegionFactionExtensions.GetDefenseLevelDescription(enemyFaction.AntiAir)));
+                }
             }
         }
         else
@@ -348,7 +328,6 @@ public partial class RegionScreenController : DialogController
     {
         return
         [
-            new CommandAction(ActionOpenAdjacentRegion, "Open Region", "map_pin", _selectedAdjacentRegion != null),
             new CommandAction(ActionOpenSquad, "Open Squad", "infantry", _selectedSquad != null),
             new CommandAction(ActionEditOrders, "Edit Orders", "objective", _selectedSquad != null),
             new CommandAction(ActionUnassign, "Unassign", "locked", _selectedSquad?.CurrentOrders != null),
@@ -359,18 +338,14 @@ public partial class RegionScreenController : DialogController
 
     private void ApplySelectionKey(string key)
     {
-        if (string.IsNullOrWhiteSpace(key) || key.StartsWith("group:") || key.StartsWith("presence:")) return;
+        if (string.IsNullOrWhiteSpace(key) || key.StartsWith("group:") || key.StartsWith("unit:")) return;
 
-        _selectedAdjacentRegion = null;
         _selectedSquad = null;
         _selectedOrder = null;
 
         string[] parts = key.Split(':');
         switch (parts[0])
         {
-            case "adjacent":
-                _selectedAdjacentRegion = _currentRegion.GetAdjacentRegions().FirstOrDefault(region => region.Id == int.Parse(parts[1]));
-                break;
             case "squad":
                 _selectedSquad = GetPlayerRegionFaction()?.LandedSquads.FirstOrDefault(squad => squad.Id == int.Parse(parts[1]));
                 _selectedOrder = _selectedSquad?.CurrentOrders;
@@ -473,9 +448,11 @@ public partial class RegionScreenController : DialogController
         return regionFaction;
     }
 
-    private static RegionFaction GetEnemyRegionFaction(Region region)
+    private static List<RegionFaction> GetPublicEnemyRegionFactions(Region region)
     {
-        return region.RegionFactionMap.Values.FirstOrDefault(rf => !rf.PlanetFaction.Faction.IsPlayerFaction && !rf.PlanetFaction.Faction.IsDefaultFaction);
+        return region.RegionFactionMap.Values
+            .Where(rf => rf.IsPublic && !rf.PlanetFaction.Faction.IsPlayerFaction && !rf.PlanetFaction.Faction.IsDefaultFaction)
+            .ToList();
     }
 
     private static string GetRegionControlLabel(Region region)
@@ -488,7 +465,6 @@ public partial class RegionScreenController : DialogController
         return new Tuple<string, string>(label, value);
     }
 
-    private static string AdjacentRegionKey(int regionId) => $"adjacent:{regionId}";
     private static string SquadKey(int squadId) => $"squad:{squadId}";
 
     private string GetDirectionFromCurrentToNeighbour(Region currentRegion, Region neighbourRegion)

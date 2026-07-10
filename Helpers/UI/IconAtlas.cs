@@ -1,5 +1,6 @@
 using Godot;
 using OnlyWar.Models;
+using OnlyWar.Models.Squads;
 using System.Collections.Generic;
 
 namespace OnlyWar.Helpers.UI
@@ -102,6 +103,20 @@ namespace OnlyWar.Helpers.UI
             return "hostile";
         }
 
+        public static string GetSquadIconKey(SquadTemplate template)
+        {
+            if (template == null) return "infantry";
+
+            SquadTypes type = template.SquadType;
+            if (type.HasFlag(SquadTypes.HQ)) return "hq";
+            if (type.HasFlag(SquadTypes.Elite)) return "elite";
+            if (type.HasFlag(SquadTypes.Bodyguard)) return "bodyguard";
+            if (type.HasFlag(SquadTypes.Heavy)) return "devastator";
+            if (type.HasFlag(SquadTypes.Fast)) return "assault";
+            if (type.HasFlag(SquadTypes.Scout)) return "scout";
+            return "tactical";
+        }
+
         public static AtlasTexture GetIcon(string key)
         {
             if (!IconCells.TryGetValue(key, out Vector2I cell))
@@ -129,7 +144,7 @@ namespace OnlyWar.Helpers.UI
             button.Icon = GetIcon(key);
             button.IconAlignment = HorizontalAlignment.Left;
             button.ExpandIcon = false;
-            button.Set("fixed_icon_size", new Vector2I(32, 32));
+            button.Set("fixed_icon_size", Vector2I.Zero);
             button.AddThemeConstantOverride("icon_max_width", 32);
             button.AddThemeConstantOverride("h_separation", 6);
             if (minWidth > 0)
@@ -146,7 +161,7 @@ namespace OnlyWar.Helpers.UI
             button.Icon = GetIcon(key);
             button.IconAlignment = HorizontalAlignment.Center;
             button.ExpandIcon = false;
-            button.Set("fixed_icon_size", new Vector2I(iconMaxWidth, iconMaxWidth));
+            button.Set("fixed_icon_size", Vector2I.Zero);
             button.CustomMinimumSize = new Vector2(size, size);
             button.SizeFlagsVertical = Control.SizeFlags.ShrinkCenter;
             button.AddThemeConstantOverride("icon_max_width", iconMaxWidth);

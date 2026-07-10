@@ -31,6 +31,18 @@ public partial class OrderDialogController : Control
 		_view.Canceled += OnCanceled;
 	}
 
+	// Returns the public, non-player, non-default RegionFaction entries eligible to be an
+	// enemy-directed order's target - the same population used for the mission-availability
+	// check at PopulateMissions ([-2]/[-8] branches) and for the Target Faction dropdown.
+	private static List<RegionFaction> GetTargetableEnemyRegionFactions(Region region)
+	{
+		return region.RegionFactionMap.Values
+			.Where(rf => rf.IsPublic
+				&& !rf.PlanetFaction.Faction.IsPlayerFaction
+				&& !rf.PlanetFaction.Faction.IsDefaultFaction)
+			.ToList();
+	}
+
 	public void PopulateOrderData(Squad squad)
 	{
 		_squad = squad;
@@ -70,7 +82,10 @@ public partial class OrderDialogController : Control
 	private void PopulateMissions()
 	{
 		List<Tuple<string, int>> missionOptions = new List<Tuple<string, int>>();
-		missionOptions.Add(new Tuple<string, int>("Recon", -1));
+		// NOTE: id -9 (not -1) for Recon. Godot's OptionButton.AddItem treats id == -1
+		// as "auto-assign to the item's index", so a literal -1 would be silently replaced
+		// with the item index (0), breaking Recon selection/confirmation.
+		missionOptions.Add(new Tuple<string, int>("Recon", -9));
 		if (_currentlySelectedRegion == _squad.CurrentRegion)
 		{
 			missionOptions.Add(new Tuple<string, int>("Defend", -3));
@@ -118,7 +133,7 @@ public partial class OrderDialogController : Control
 		// change aggression helper text
 		string text;
 		MissionType missionType;
-		if (e == -1)
+		if (e == -9)
 		{
 			missionType = MissionType.Recon;
 		}
@@ -183,7 +198,45 @@ public partial class OrderDialogController : Control
 				break;
 		}
 
+		// Target Faction selector: only the enemy-directed synthesized missions (Advance,
+		// Diversion) target a specific enemy faction chosen by the player. Everything else
+		// either targets the player's own RegionFaction, any region-scoped anchor (Recon), or
+		// already carries a baked-in target (special missions).
+		if (missionType == MissionType.Advance || missionType == MissionType.Diversion)
+		{
+			PopulateTargetFactionOptions();
+		}
+		else
+		{
+			_view.HideTargetFactionOption();
+		}
+
 		_view.SetMissionDescription(text);
+	}
+
+	// Populates the Target Faction dropdown from the current region's public, non-player,
+	// non-default RegionFactions. Exactly one candidate auto-selects and locks the dropdown
+	// (common case stays one-click); two or more require an explicit pick.
+	private void PopulateTargetFactionOptions()
+	{
+		List<RegionFaction> enemies = GetTargetableEnemyRegionFactions(_currentlySelectedRegion);
+		// Guard against id -1: Godot's OptionButton.AddItem treats id == -1 as "auto-assign to
+		// the item's index" (same quirk noted for Recon above), which would silently corrupt the
+		// selection. Real faction ids should never be -1, but skip defensively rather than crash.
+		var options = enemies
+			.Where(rf => rf.PlanetFaction.Faction.Id != -1)
+			.Select(rf => new Tuple<string, int>(
+				$"{rf.PlanetFaction.Faction.Name} — {rf.GetForceMagnitudeDescription()}",
+				rf.PlanetFaction.Faction.Id))
+			.ToList();
+		if (options.Count == 0)
+		{
+			// Shouldn't happen: the mission itself is disabled upstream when there are no
+			// enemies. Fail safe by hiding the selector rather than showing an empty dropdown.
+			_view.HideTargetFactionOption();
+			return;
+		}
+		_view.PopulateTargetFactionOptions(options);
 	}
 
 	private void OnAggressionOptionSelected(object sender, int e)
@@ -212,20 +265,20 @@ public partial class OrderDialogController : Control
 		_view.SetAggressionDescription(text);
 	}
 
-	private void OnOrdersConfirmed(object sender, Tuple<int, int, int> args)
+	private void OnOrdersConfirmed(object sender, OrderDialogResult args)
 	{
-		Region selectedRegion = _squad.CurrentRegion.Planet.Regions.FirstOrDefault(r => r.Id == args.Item1);
+		Region selectedRegion = _squad.CurrentRegion.Planet.Regions.FirstOrDefault(r => r.Id == args.RegionId);
 		if (selectedRegion == null)
 		{
-			GD.PushWarning($"Could not confirm orders: region id {args.Item1} no longer exists.");
+			GD.PushWarning($"Could not confirm orders: region id {args.RegionId} no longer exists.");
 			return;
 		}
 
-		//mission stuff related to args.Item2;
-		Aggression aggro = (Aggression)args.Item3;
+		//mission stuff related to args.MissionCode;
+		Aggression aggro = (Aggression)args.Aggression;
 
 		Mission mission;
-		if(args.Item2 == -1)
+		if(args.MissionCode == -9)
 		{
 			// use the first non-player, non-default region faction in this region
 			RegionFaction enemyRegionFaction = GetEnemyRegionFaction(selectedRegion)
@@ -238,23 +291,26 @@ public partial class OrderDialogController : Control
 			}
 			mission = new Mission(MissionType.Recon, enemyRegionFaction, 0);
 		}
-		else if(args.Item2 == -2)
+		else if(args.MissionCode == -2)
 		{
-			RegionFaction enemyRegionFaction = GetPublicEnemyRegionFaction(selectedRegion)
+			// Player-selected target faction from the dialog's dropdown, when one was targetable
+			// (region has public enemies) — falls back to the player's own RegionFaction for the
+			// "Move" case where PopulateMissions offered no enemy target.
+			RegionFaction enemyRegionFaction = GetSelectedTargetRegionFaction(selectedRegion, args.TargetFactionId)
 				?? GetOrCreatePlayerRegionFaction(selectedRegion);
 			mission = new Mission(MissionType.Advance, enemyRegionFaction, 0);
 		}
-		else if(args.Item2 == -3)
+		else if(args.MissionCode == -3)
 		{
 			mission = new Mission(MissionType.DefenseInDepth, GetOrCreatePlayerRegionFaction(selectedRegion), 0);
 		}
-		else if(args.Item2 == -4)
+		else if(args.MissionCode == -4)
 		{
 			mission = new Mission(MissionType.Patrol, GetOrCreatePlayerRegionFaction(selectedRegion), 0);
 		}
-		else if (args.Item2 <= -5 && args.Item2 >= -7)
+		else if (args.MissionCode <= -5 && args.MissionCode >= -7)
 		{
-			DefenseType defenseType = args.Item2 switch
+			DefenseType defenseType = args.MissionCode switch
 			{
 				-5 => DefenseType.Entrenchment,
 				-6 => DefenseType.ListeningPost,
@@ -262,11 +318,11 @@ public partial class OrderDialogController : Control
 			};
 			mission = new ConstructionMission(defenseType, 0, GetOrCreatePlayerRegionFaction(selectedRegion));
 		}
-		else if (args.Item2 == -8)
+		else if (args.MissionCode == -8)
 		{
 			// Diversion: feint against an enemy-held region while the squad stays in its own
 			// region (it demonstrates from adjacent territory rather than entering the target).
-			RegionFaction enemyRegionFaction = GetEnemyRegionFaction(selectedRegion);
+			RegionFaction enemyRegionFaction = GetSelectedTargetRegionFaction(selectedRegion, args.TargetFactionId);
 			if (enemyRegionFaction == null)
 			{
 				GD.PushWarning($"Could not confirm diversion orders for {selectedRegion.Name}: no enemy target.");
@@ -276,10 +332,10 @@ public partial class OrderDialogController : Control
 		}
 		else
 		{
-			mission = selectedRegion.SpecialMissions.FirstOrDefault(m => m.Id == args.Item2);
+			mission = selectedRegion.SpecialMissions.FirstOrDefault(m => m.Id == args.MissionCode);
 			if (mission == null)
 			{
-				GD.PushWarning($"Could not confirm orders for {selectedRegion.Name}: mission id {args.Item2} no longer exists.");
+				GD.PushWarning($"Could not confirm orders for {selectedRegion.Name}: mission id {args.MissionCode} no longer exists.");
 				return;
 			}
 		}
@@ -321,12 +377,18 @@ public partial class OrderDialogController : Control
 			&& !rf.PlanetFaction.Faction.IsDefaultFaction);
 	}
 
-	private static RegionFaction GetPublicEnemyRegionFaction(Region region)
+	// Looks up the enemy RegionFaction the player picked in the Target Faction dropdown by
+	// faction id. Returns null if no target was selected (dropdown not applicable/populated) or
+	// the region faction map no longer contains that faction (e.g. it was wiped out this turn).
+	private static RegionFaction GetSelectedTargetRegionFaction(Region region, int targetFactionId)
 	{
-		return region.RegionFactionMap.Values.FirstOrDefault(rf =>
-			!rf.PlanetFaction.Faction.IsPlayerFaction
-			&& !rf.PlanetFaction.Faction.IsDefaultFaction
-			&& rf.IsPublic);
+		if (targetFactionId < 0)
+		{
+			return null;
+		}
+		return region.RegionFactionMap.TryGetValue(targetFactionId, out RegionFaction targetRegionFaction)
+			? targetRegionFaction
+			: null;
 	}
 
 	private static RegionFaction GetDefaultRegionFaction(Region region)

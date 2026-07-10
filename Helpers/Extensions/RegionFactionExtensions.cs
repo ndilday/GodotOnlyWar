@@ -101,5 +101,65 @@ namespace OnlyWar.Helpers.Extensions
                     return "Massive";
             }
         }
+
+        // Troops this faction actually has fielded and active in the region — the fielded
+        // portion of its fighting strength. MilitaryStrength resolves the horde-vs-civilian
+        // split (Population for PopulationIsMilitary factions, Garrison otherwise); Organization
+        // (0-100%) trims it to the share that can be deployed. This is the "patrolling + defending"
+        // value used for detection difficulty, spotter fallback weighting, and special-mission budget.
+        public static long GetDeployedStrength(this RegionFaction rf) =>
+            (long)(rf.MilitaryStrength * rf.Organization / 100.0f);
+
+        // Strength magnitude expressed as an order-of-magnitude word, intel-gated to match
+        // fog-of-war disclosure. Lower intel yields coarser estimates (same as GetPopulationDescription).
+        public static string GetForceMagnitudeDescription(this RegionFaction regionFaction)
+        {
+            if (regionFaction != null && regionFaction.IsPublic)
+            {
+                float intel = regionFaction.Region.GetPlayerVisibleIntel();
+                if (intel <= 0)
+                {
+                    return "Unknown";
+                }
+
+                long deployedStrength = regionFaction.GetDeployedStrength();
+
+                if (intel >= 6)
+                {
+                    // Exact value available
+                    return GetMagnitudeWord(deployedStrength);
+                }
+                else
+                {
+                    // Round to nearest order of magnitude based on intel level
+                    int divisor = (int)Math.Pow(10, 6 - (int)intel);
+                    long roundedStrength = deployedStrength / divisor * divisor;
+                    if (roundedStrength == 0 && deployedStrength > 0)
+                    {
+                        return "Handful";  // Very small non-zero force below rounding threshold
+                    }
+                    return GetMagnitudeWord(roundedStrength);
+                }
+            }
+            return "None";
+        }
+
+        // Maps a deployed strength value to a rough order-of-magnitude word.
+        private static string GetMagnitudeWord(long strength)
+        {
+            if (strength <= 0)
+                return "None";
+            if (strength < 10)
+                return "Handful";
+            if (strength < 100)
+                return "Dozens";
+            if (strength < 1000)
+                return "Hundreds";
+            if (strength < 1000000)
+                return "Thousands";
+            if (strength < 1000000000)
+                return "Millions";
+            return "Billions";
+        }
     }
 }

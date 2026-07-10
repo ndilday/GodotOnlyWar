@@ -2,6 +2,7 @@ using OnlyWar.Builders;
 using OnlyWar.Helpers.Battles;
 using OnlyWar.Models;
 using OnlyWar.Models.Missions;
+using OnlyWar.Models.Planets;
 using OnlyWar.Models.Soldiers;
 using OnlyWar.Models.Squads;
 using System;
@@ -34,13 +35,19 @@ namespace OnlyWar.Helpers.Missions.Recon
             // A detected intrusion always draws at least one responding squad.
             numberOfOpposingSquads = Math.Max(1, numberOfOpposingSquads);
 
+            // The spotter (resolved by the detection step via Region.SelectSpotter) is the faction that
+            // actually caught the scout, and it may not be the mission's anchor RegionFaction when the
+            // region holds several enemy factions. Fall back to the mission's target for flows that do
+            // not resolve a spotter (special missions carry a concrete target of their own).
+            RegionFaction spotter = context.Spotter ?? context.Order.Mission.RegionFaction;
+
             // shouldn't all be the same squad type
-            // a flexible, but verbose method would be to define a table in the game rules that maps some concept of "situation" and faction ID to "lottery balls". 
+            // a flexible, but verbose method would be to define a table in the game rules that maps some concept of "situation" and faction ID to "lottery balls".
             // Then, here we would total the number of qualifying units lottery balls, and roll an int against that to generate a reasonable mix of units.
             // for now, get all squads of the OpFor faction and select one for each opFor squad needed
             var request = new ForceGenerationRequest
             {
-                Faction = context.Order.Mission.RegionFaction.PlanetFaction.Faction,
+                Faction = spotter.PlanetFaction.Faction,
                 Profile = ForceCompositionProfile.ScoutPatrol,
                 Tier = numberOfOpposingSquads
             };
@@ -55,12 +62,12 @@ namespace OnlyWar.Helpers.Missions.Recon
             if (context.OpposingSquads.Count == 0)
             {
                 context.Log.Add(
-                    $"Day {context.DaysElapsed}: Detected in {context.Order.Mission.RegionFaction.Region.Name}, "
+                    $"Day {context.DaysElapsed}: Detected in {spotter.Region.Name}, "
                     + "but no enemy force intercepts; the force presses on.");
                 GameLog.Trace(() =>
                     $"Detected {DescribeRegion(context)} day {context.DaysElapsed}: "
                     + $"intercept force requested (tier={numberOfOpposingSquads}) but none materialized "
-                    + $"({context.Order.Mission.RegionFaction.PlanetFaction.Faction.Name} fielded no ScoutPatrol); "
+                    + $"({spotter.PlanetFaction.Faction.Name} fielded no ScoutPatrol); "
                     + "recon uncontested, presses on");
                 returnStep?.ExecuteMissionStep(context, marginOfSuccess, returnStep);
                 return;
@@ -92,8 +99,10 @@ namespace OnlyWar.Helpers.Missions.Recon
 
         private static string DescribeRegion(MissionContext context)
         {
-            var target = context.Order.Mission.RegionFaction;
-            return $"{target.Region.Planet.Name}/{target.Region.Name}/{target.PlanetFaction.Faction.Name}";
+            // Reflect the spotter (the faction that intercepts) when one was resolved, falling back to
+            // the mission's anchor faction for flows that never set a spotter.
+            RegionFaction anchor = context.Spotter ?? context.Order.Mission.RegionFaction;
+            return $"{anchor.Region.Planet.Name}/{anchor.Region.Name}/{anchor.PlanetFaction.Faction.Name}";
         }
     }
 }

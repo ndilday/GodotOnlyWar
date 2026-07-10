@@ -403,7 +403,7 @@ public partial class PlanetTacticalScreenController : DialogController
         rows.Add(Row("Intelligence", $"{visibleIntel:0.##}"));
 
         RegionFaction playerRegionFaction = GetPlayerRegionFaction(region);
-        RegionFaction enemyFaction = GetEnemyRegionFaction(region);
+        List<RegionFaction> enemyFactions = GetPublicEnemyRegionFactions(region);
 
         if (region.HasHiddenDefaultFaction())
         {
@@ -418,15 +418,19 @@ public partial class PlanetTacticalScreenController : DialogController
         rows.Add(Row("Marines", playerRegionFaction?.LandedSquads.Sum(squad => squad.Members.Count).ToString() ?? "0"));
         rows.Add(Row("Assigned Orders", playerRegionFaction?.LandedSquads.Count(squad => squad.CurrentOrders != null).ToString() ?? "0"));
 
-        if (enemyFaction != null && enemyFaction.IsPublic)
+        if (enemyFactions.Count > 0)
         {
-            rows.Add(Row("Enemy Faction", enemyFaction.PlanetFaction.Faction.Name));
-            rows.Add(Row("Enemy Population", enemyFaction.GetPopulationDescription()));
-            if (visibleIntel > 1)
+            foreach (RegionFaction enemyFaction in enemyFactions)
             {
-                rows.Add(Row("Enemy Entrenchment", RegionFactionExtensions.GetDefenseLevelDescription(enemyFaction.Entrenchment)));
-                rows.Add(Row("Enemy Listening Posts", RegionFactionExtensions.GetDefenseLevelDescription(enemyFaction.ListeningPost)));
-                rows.Add(Row("Enemy Anti-Air", RegionFactionExtensions.GetDefenseLevelDescription(enemyFaction.AntiAir)));
+                string prefix = enemyFactions.Count > 1 ? $"Enemy ({enemyFaction.PlanetFaction.Faction.Name})" : "Enemy";
+                rows.Add(Row($"{prefix} Faction", enemyFaction.PlanetFaction.Faction.Name));
+                rows.Add(Row($"{prefix} Strength", enemyFaction.GetForceMagnitudeDescription()));
+                if (visibleIntel > 1)
+                {
+                    rows.Add(Row($"{prefix} Entrenchment", RegionFactionExtensions.GetDefenseLevelDescription(enemyFaction.Entrenchment)));
+                    rows.Add(Row($"{prefix} Listening Posts", RegionFactionExtensions.GetDefenseLevelDescription(enemyFaction.ListeningPost)));
+                    rows.Add(Row($"{prefix} Anti-Air", RegionFactionExtensions.GetDefenseLevelDescription(enemyFaction.AntiAir)));
+                }
             }
         }
         else
@@ -692,9 +696,11 @@ public partial class PlanetTacticalScreenController : DialogController
         regionFaction.IsPublic = false;
     }
 
-    private static RegionFaction GetEnemyRegionFaction(Region region)
+    private static List<RegionFaction> GetPublicEnemyRegionFactions(Region region)
     {
-        return region.GetVisibleEnemyRegionFaction();
+        return region.RegionFactionMap.Values
+            .Where(rf => rf.IsPublic && !rf.PlanetFaction.Faction.IsPlayerFaction && !rf.PlanetFaction.Faction.IsDefaultFaction)
+            .ToList();
     }
 
     private static string GetRegionControlLabel(Region region)

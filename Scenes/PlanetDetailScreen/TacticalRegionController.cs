@@ -4,6 +4,7 @@ using OnlyWar.Helpers.UI;
 using OnlyWar.Models;
 using OnlyWar.Models.Planets;
 using System;
+using System.Collections.Generic;
 using System.Linq;
 
 public partial class TacticalRegionController : Control
@@ -38,10 +39,17 @@ public partial class TacticalRegionController : Control
         _region = region;
         RegionFaction playerRegionFaction = region.RegionFactionMap.Values.FirstOrDefault(rf => rf.PlanetFaction.Faction.IsPlayerFaction);
         RegionFaction defaultFaction = region.RegionFactionMap.Values.FirstOrDefault(rf => rf.PlanetFaction.Faction.IsDefaultFaction);
-        // Prefer a public enemy over a still-hidden one (a Tyranid incursion can sit on top of a
-        // hidden Genestealer Cult); otherwise the hex would surface the hidden faction and render
-        // its headcount under the Imperial-civilian icon.
-        RegionFaction xenosRegionFaction = region.GetVisibleEnemyRegionFaction();
+        // A region can hold more than one public enemy faction at once (e.g. a Tyranid incursion
+        // contesting the same ground as an uprising cult). The hex tile only has room for a single
+        // xenos slot, so we surface the strongest public enemy there and fold the rest into the
+        // count/tooltip rather than collapsing to whichever faction iterates first.
+        List<RegionFaction> publicEnemyFactions = region.RegionFactionMap.Values
+            .Where(rf => rf.IsPublic && !rf.PlanetFaction.Faction.IsPlayerFaction && !rf.PlanetFaction.Faction.IsDefaultFaction)
+            .ToList();
+        bool multiFactionContested = publicEnemyFactions.Count > 1;
+        RegionFaction xenosRegionFaction = publicEnemyFactions.Count > 0
+            ? publicEnemyFactions.OrderByDescending(rf => rf.GetDeployedStrength()).First()
+            : region.GetVisibleEnemyRegionFaction();
 
         int playerCount = playerRegionFaction?.LandedSquads.Sum(s => s.Members.Count()) ?? 0;
         int assignedCount = playerRegionFaction?.LandedSquads.Count(s => s.CurrentOrders != null) ?? 0;
@@ -66,7 +74,15 @@ public partial class TacticalRegionController : Control
             : (playerCount > 0 ? playerCount.ToString() : "");
 
         bool showXenos = (showForces || showIntel) && publicEnemy;
-        string xenosText = showXenos ? xenosRegionFaction.GetPopulationDescription() : "";
+        // TODO(WI-6): the hex tile has only one xenos icon/label slot. When multiple public
+        // enemy factions contest the region we surface the strongest one's magnitude plus a
+        // "+N" count rather than a dedicated per-faction badge; a fuller multi-badge layout
+        // would need scene changes to TacticalRegionView and is left for a future pass.
+        string xenosText = showXenos
+            ? multiFactionContested
+                ? $"{xenosRegionFaction.GetForceMagnitudeDescription()} +{publicEnemyFactions.Count - 1}"
+                : xenosRegionFaction.GetForceMagnitudeDescription()
+            : "";
 
         bool showPlayerHidden = (showForces && hiddenEnemy && visibleIntel > 0)
             || (showIntel && hiddenEnemy)
@@ -100,6 +116,13 @@ public partial class TacticalRegionController : Control
         {
             color = MutedMapColor(playerRegionFaction.PlanetFaction.Faction.Color.ToGodotColor(), 0.18f);
         }
+        else if (multiFactionContested && (showForces || showIntel))
+        {
+            // Distinguish "several enemy factions fighting over this ground" from a clean
+            // single-faction hold by blending in the contested-region hazard color.
+            Color blended = xenosRegionFaction.PlanetFaction.Faction.Color.ToGodotColor().Lerp(ContestedRegionColor, 0.5f);
+            color = MutedMapColor(blended, 0.18f);
+        }
         else if (publicEnemy && (showForces || showIntel))
         {
             color = MutedMapColor(xenosRegionFaction.PlanetFaction.Faction.Color.ToGodotColor(), 0.18f);
@@ -118,7 +141,11 @@ public partial class TacticalRegionController : Control
             ? $"Space Marines: {playerCount} ({assignedCount}/{playerRegionFaction.LandedSquads.Count} squads assigned)"
             : $"Space Marines: {playerCount}";
         string xenosTooltip = showXenos
-            ? $"{xenosRegionFaction.PlanetFaction.Faction.Name}: {xenosText}"
+            ? multiFactionContested
+                ? string.Join("\n", publicEnemyFactions
+                    .OrderByDescending(rf => rf.GetDeployedStrength())
+                    .Select(rf => $"{rf.PlanetFaction.Faction.Name}: {rf.GetForceMagnitudeDescription()}"))
+                : $"{xenosRegionFaction.PlanetFaction.Faction.Name}: {xenosText}"
             : "";
 
         _view.Populate(

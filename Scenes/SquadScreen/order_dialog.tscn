@@ -107,6 +107,25 @@ So much stuff that this is multiline
 Yet more to come but who knows what it will be but in time we'll find out"
 fit_content = true
 
+[node name="TargetFactionHBox" type="HBoxContainer" parent="OrderDialogView/VBoxContainer"]
+layout_mode = 2
+
+[node name="RichTextLabel" type="RichTextLabel" parent="OrderDialogView/VBoxContainer/TargetFactionHBox"]
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_stretch_ratio = 5.0
+text = "Target Faction"
+fit_content = true
+
+[node name="TargetFactionOption" type="OptionButton" parent="OrderDialogView/VBoxContainer/TargetFactionHBox"]
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_stretch_ratio = 5.0
+disabled = true
+item_count = 1
+popup/item_0/text = "N/A"
+popup/item_0/id = 0
+
 [node name="AggressionHBox" type="HBoxContainer" parent="OrderDialogView/VBoxContainer"]
 layout_mode = 2
 

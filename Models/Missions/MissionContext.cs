@@ -22,6 +22,13 @@ namespace OnlyWar.Models.Missions
         public List<BattleSquad> OpposingSquads { get; set; }
         public List<string> Log { get; private set; }
 
+        // The enemy faction that detected the intruder, resolved by Region.SelectSpotter when a
+        // stealth check fails. It carries the spotter from the detection step to DetectedMissionStep
+        // so the intercepting force is raised from the faction that actually caught the scout — which,
+        // in a multi-faction region, need not be the mission's anchor RegionFaction. Null until a
+        // detection resolves one; flows that never set it fall back to the mission's target faction.
+        public RegionFaction Spotter { get; set; }
+
         public List<Mission> MissionsToAdd { get; }
         public List<Mission> MissionsToRemove { get; }
         public float Impact { get; set; }

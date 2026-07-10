@@ -128,14 +128,14 @@ public class FactionStrategyController
         foreach (var regionFaction in factionRegionsOnPlanet)
         {
             long requiredGarrison = CalculateRequiredGarrison(regionFaction);
-            long organizedTroops = (long)(regionFaction.MilitaryStrength * regionFaction.Organization / 100.0f);
+            long organizedTroops = regionFaction.GetDeployedStrength();
             long spareTroops = Math.Max(0, organizedTroops - requiredGarrison);
             long garrisonShortfall = Math.Max(0, requiredGarrison - organizedTroops);
             regionalForceStates.Add(new RegionForceState(regionFaction, requiredGarrison, spareTroops, garrisonShortfall));
         }
 
         long organizedTotal = factionRegionsOnPlanet
-            .Sum(regionFaction => (long)(regionFaction.MilitaryStrength * regionFaction.Organization / 100.0f));
+            .Sum(regionFaction => regionFaction.GetDeployedStrength());
         GameLog.Debug(() =>
             $"AI plan {faction.Name}/{planet.Name}: posture={(defensiveOnly ? "defensive" : "offensive")}, "
             + $"regions={factionRegionsOnPlanet.Count}, organized={organizedTotal}, "
