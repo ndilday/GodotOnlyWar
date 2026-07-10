@@ -41,7 +41,17 @@ namespace OnlyWar.Helpers.UI
             panel.AddThemeStyleboxOverride("panel", GetStylebox("panel", ContentPanelType));
         }
 
+        public static void ApplyContentPanel(Panel panel)
+        {
+            panel.AddThemeStyleboxOverride("panel", GetStylebox("panel", ContentPanelType));
+        }
+
         public static void ApplyInsetPanel(PanelContainer panel)
+        {
+            panel.AddThemeStyleboxOverride("panel", GetStylebox("panel", InsetPanelType));
+        }
+
+        public static void ApplyInsetPanel(Panel panel)
         {
             panel.AddThemeStyleboxOverride("panel", GetStylebox("panel", InsetPanelType));
         }

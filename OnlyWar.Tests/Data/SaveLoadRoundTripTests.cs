@@ -89,6 +89,26 @@ public class SaveLoadRoundTripTests
         orderedSquad.CurrentOrders = order;
         sector.AddNewOrder(order);
 
+        Squad landedSquad = armyRoot.GetAllSquads()
+            .First(s => s.Members.Count > 0 && s.Id != orderedSquad.Id);
+        Region landedRegion = sector.Planets.Values
+            .SelectMany(p => p.Regions)
+            .First(r => r != null);
+        if (!landedRegion.Planet.PlanetFactionMap.TryGetValue(_data.PlayerFaction.Id, out PlanetFaction playerPlanetFaction))
+        {
+            playerPlanetFaction = new PlanetFaction(_data.PlayerFaction) { IsPublic = true };
+            landedRegion.Planet.PlanetFactionMap[_data.PlayerFaction.Id] = playerPlanetFaction;
+        }
+        if (!landedRegion.RegionFactionMap.TryGetValue(_data.PlayerFaction.Id, out RegionFaction playerRegionFaction))
+        {
+            playerRegionFaction = new RegionFaction(playerPlanetFaction, landedRegion) { IsPublic = true };
+            landedRegion.RegionFactionMap[_data.PlayerFaction.Id] = playerRegionFaction;
+        }
+        landedSquad.BoardedLocation?.RemoveSquad(landedSquad);
+        landedSquad.BoardedLocation = null;
+        landedSquad.CurrentRegion = landedRegion;
+        playerRegionFaction.LandedSquads.Add(landedSquad);
+
         PlayerSoldier eventSoldier = armyRoot.GetAllSquads()
             .SelectMany(s => s.Members)
             .OfType<PlayerSoldier>()
@@ -204,6 +224,17 @@ public class SaveLoadRoundTripTests
             Assert.DoesNotContain(
                 loaded.Planets.SelectMany(p => p.Regions).SelectMany(r => r.SpecialMissions),
                 m => m.Id == orderMission.Id);
+
+            Squad loadedLandedSquad = loaded.Units
+                .SelectMany(u => u.GetAllSquads())
+                .Single(s => s.Id == landedSquad.Id);
+            Region loadedLandedRegion = loaded.Planets
+                .SelectMany(p => p.Regions)
+                .Single(r => r != null && r.Id == landedRegion.Id);
+            RegionFaction loadedPlayerRegionFaction = loadedLandedRegion.RegionFactionMap[_data.PlayerFaction.Id];
+            Assert.Equal(loadedLandedRegion, loadedLandedSquad.CurrentRegion);
+            Assert.Null(loadedLandedSquad.BoardedLocation);
+            Assert.Contains(loadedLandedSquad, loadedPlayerRegionFaction.LandedSquads);
 
             PlayerSoldier loadedEventSoldier = loaded.Units
                 .SelectMany(u => u.GetAllSquads())

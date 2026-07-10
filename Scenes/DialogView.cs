@@ -10,6 +10,9 @@ public partial class DialogView : Control
     public override void _Ready()
     {
         _closeButton = GetNode<Button>("CloseButton");
+        _closeButton.ZIndex = 100;
+        _closeButton.MouseFilter = MouseFilterEnum.Stop;
+        MoveChild(_closeButton, GetChildCount() - 1);
         _closeButton.Pressed += () => CloseButtonPressed?.Invoke(this, EventArgs.Empty);
     }
 }

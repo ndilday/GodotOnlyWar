@@ -157,7 +157,7 @@ public partial class FleetScreenController : DialogController
             && sourceFleet.Planet == destinationFleet.Planet;
     }
 
-    private static string GetUnitOrderKey(Unit unit)
+    internal static string GetUnitOrderKey(Unit unit)
     {
         if (unit == null) return "zzzzzzzz";
 
@@ -180,7 +180,7 @@ public partial class FleetScreenController : DialogController
         return string.Join("/", segments);
     }
 
-    private static int GetSquadOrder(Squad squad)
+    internal static int GetSquadOrder(Squad squad)
     {
         if (squad?.ParentUnit?.Squads == null) return int.MaxValue;
 

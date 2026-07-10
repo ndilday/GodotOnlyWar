@@ -129,15 +129,15 @@ public partial class MainGameScene : Control
 	{
 		if (@event.IsActionPressed("ui_cancel"))    // "ui_cancel" is mapped to Escape)
 		{
-			if (_chapterScreen.Visible) 
+			if (_chapterScreen != null && _chapterScreen.Visible) 
 			{
 				OnCloseScreen(_chapterScreen, EventArgs.Empty);
 			}
-			else if(_apothecariumScreen.Visible)
+			else if(_apothecariumScreen != null && _apothecariumScreen.Visible)
 			{
 				OnCloseScreen(_apothecariumScreen, EventArgs.Empty);
 			}
-			else if(_trainingUnitScreen.Visible)
+			else if(_trainingUnitScreen != null && _trainingUnitScreen.Visible)
 			{
 				OnCloseScreen(_trainingUnitScreen, EventArgs.Empty);
 			}
@@ -149,7 +149,11 @@ public partial class MainGameScene : Control
 			{
 				OnCloseScreen(_diplomacyScreen, EventArgs.Empty);
 			}
-			else if (_soldierScreen.Visible)
+			else if (_squadScreen != null && _squadScreen.Visible)
+			{
+				OnCloseScreen(_squadScreen, EventArgs.Empty);
+			}
+			else if (_soldierScreen != null && _soldierScreen.Visible)
 			{
 				OnSoldierViewCloseButtonPressed(null, null);
 			}
@@ -288,6 +292,12 @@ public partial class MainGameScene : Control
 					_topMenu.SetScreenText(planet.Name);
 				}
 				_planetTacticalScreen.RefreshFromExternalChange();
+				_topMenu.Visible = true;
+				_bottomMenu.Visible = true;
+			}
+			else if (control == _regionScreen)
+			{
+				_regionScreen.RefreshFromExternalChange();
 				_topMenu.Visible = true;
 				_bottomMenu.Visible = true;
 			}

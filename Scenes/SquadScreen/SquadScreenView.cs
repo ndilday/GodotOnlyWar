@@ -1,4 +1,5 @@
 using Godot;
+using OnlyWar.Helpers.UI;
 using System;
 using System.Collections.Generic;
 
@@ -56,6 +57,7 @@ public partial class SquadScreenView : DialogView
         _pasteLoadoutButton = GetNode<Button>("DataPanel/ButtonVBox/PasteLoadoutButton");
         _pasteLoadoutButton.Pressed += () => PasteLoadout(this, EventArgs.Empty);
         _weaponSets = new List<WeaponSetSelectionView>();
+        ApplyThemeStyling();
     }
 
     public void ClearSquadData()
@@ -77,7 +79,7 @@ public partial class SquadScreenView : DialogView
         {
             foreach (var weaponSetSelectionView in _weaponSets)
             {
-                _squadDetailsVBox.RemoveChild(weaponSetSelectionView);
+                _squadLoadoutVBox.RemoveChild(weaponSetSelectionView);
                 weaponSetSelectionView.WeaponSetCountChanged -= OnWeaponSetCountChanged;
                 weaponSetSelectionView.QueueFree();
             }
@@ -159,31 +161,25 @@ public partial class SquadScreenView : DialogView
         ClearSquadMembers();
         if (members == null || members.Count == 0)
         {
-            RichTextLabel label = new RichTextLabel { Text = "No members assigned.", SizeFlagsHorizontal = SizeFlags.ExpandFill };
-            _squadMemberVBox.AddChild(label);
+            _squadMemberVBox.AddChild(CreateMemberRow("No members assigned.", OnlyWarStyle.MutedText));
         }
         else
         {
             foreach (var member in members)
             {
                 string text = member.IsInjured
-                    ? $"{member.Label}  —  {member.RecoveryStatus}"
+                    ? $"{member.Label} - {member.RecoveryStatus}"
                     : member.Label;
-                RichTextLabel label = new RichTextLabel
-                {
-                    Text = text,
-                    FitContent = true,
-                    SizeFlagsHorizontal = SizeFlags.ExpandFill
-                };
+                Color textColor = OnlyWarStyle.BodyText;
                 if (member.IsOutOfAction)
                 {
-                    label.Modulate = OutOfActionColor;
+                    textColor = OutOfActionColor;
                 }
                 else if (member.IsInjured)
                 {
-                    label.Modulate = InjuredColor;
+                    textColor = InjuredColor;
                 }
-                _squadMemberVBox.AddChild(label);
+                _squadMemberVBox.AddChild(CreateMemberRow(text, textColor));
             }
         }
     }
@@ -236,24 +232,115 @@ public partial class SquadScreenView : DialogView
 
     }
 
+    private void ApplyThemeStyling()
+    {
+        ApplyContentPanel("DataPanel");
+        ApplyContentPanel("SquadMemberPanel");
+        ApplyContentPanel("LoadoutPanel");
+        ApplyContentPanel("OrdersPanel");
+        ApplyInsetPanel("DataPanel/Header");
+        ApplyInsetPanel("SquadMemberPanel/Header");
+        ApplyInsetPanel("LoadoutPanel/Panel");
+        ApplyInsetPanel("OrdersPanel/Panel");
+
+        _squadDetailsVBox.AddThemeConstantOverride("separation", 6);
+        _squadLoadoutVBox.AddThemeConstantOverride("separation", 6);
+        _squadOrderDetailsVBox.AddThemeConstantOverride("separation", 6);
+        _squadMemberVBox.AddThemeConstantOverride("separation", 6);
+
+        VBoxContainer ordersButtonBox = GetNodeOrNull<VBoxContainer>("OrdersPanel/ButtonVBox");
+        if (ordersButtonBox != null)
+        {
+            ordersButtonBox.AnchorTop = 0.62f;
+            ordersButtonBox.OffsetTop = 0;
+            ordersButtonBox.AddThemeConstantOverride("separation", 4);
+        }
+
+        Control ordersDetails = GetNodeOrNull<Control>("OrdersPanel/VBoxContainer");
+        if (ordersDetails != null)
+        {
+            ordersDetails.AnchorBottom = 0.60f;
+            ordersDetails.OffsetBottom = -5;
+        }
+    }
+
+    private void ApplyContentPanel(string path)
+    {
+        Panel panel = GetNodeOrNull<Panel>(path);
+        if (panel != null)
+        {
+            OnlyWarStyle.ApplyContentPanel(panel);
+        }
+    }
+
+    private void ApplyInsetPanel(string path)
+    {
+        Panel panel = GetNodeOrNull<Panel>(path);
+        if (panel != null)
+        {
+            OnlyWarStyle.ApplyInsetPanel(panel);
+        }
+    }
+
     private void AddLine(VBoxContainer container, string label, string value)
     {
-        Panel linePanel = new Panel();
-        linePanel.SizeFlagsHorizontal = SizeFlags.Fill;
-        linePanel.SizeFlagsVertical = SizeFlags.Fill;
-        linePanel.CustomMinimumSize = new Vector2(0, 20);
-        Label lineLabel = new Label();
-        lineLabel.Text = label;
-        lineLabel.AnchorLeft = 0;
-        lineLabel.HorizontalAlignment = HorizontalAlignment.Left;
-        lineLabel.SizeFlagsHorizontal = SizeFlags.ExpandFill;
-        linePanel.AddChild(lineLabel);
-        Label lineValue = new Label();
-        lineValue.Text = value;
-        lineValue.AnchorRight = 1;
-        lineValue.HorizontalAlignment = HorizontalAlignment.Right;
-        lineValue.SizeFlagsHorizontal = SizeFlags.ExpandFill;
-        linePanel.AddChild(lineValue);
+        PanelContainer linePanel = new()
+        {
+            CustomMinimumSize = new Vector2(0, 36),
+            SizeFlagsHorizontal = SizeFlags.ExpandFill
+        };
+        OnlyWarStyle.ApplyInsetPanel(linePanel);
+
+        HBoxContainer row = new()
+        {
+            SizeFlagsHorizontal = SizeFlags.ExpandFill
+        };
+        row.AddThemeConstantOverride("separation", 8);
+        linePanel.AddChild(row);
+
+        Label lineLabel = new()
+        {
+            Text = label,
+            ClipText = true,
+            TextOverrunBehavior = TextServer.OverrunBehavior.TrimEllipsis,
+            SizeFlagsHorizontal = SizeFlags.ExpandFill,
+            CustomMinimumSize = new Vector2(140, 0)
+        };
+        lineLabel.AddThemeColorOverride("font_color", OnlyWarStyle.MutedText);
+        row.AddChild(lineLabel);
+
+        Label lineValue = new()
+        {
+            Text = value,
+            HorizontalAlignment = HorizontalAlignment.Right,
+            ClipText = true,
+            TextOverrunBehavior = TextServer.OverrunBehavior.TrimEllipsis,
+            SizeFlagsHorizontal = SizeFlags.ExpandFill,
+            CustomMinimumSize = new Vector2(140, 0)
+        };
+        row.AddChild(lineValue);
+
         container.AddChild(linePanel);
+    }
+
+    private static Control CreateMemberRow(string text, Color textColor)
+    {
+        PanelContainer rowPanel = new()
+        {
+            CustomMinimumSize = new Vector2(0, 34),
+            SizeFlagsHorizontal = SizeFlags.ExpandFill
+        };
+        OnlyWarStyle.ApplyInsetPanel(rowPanel);
+
+        Label label = new()
+        {
+            Text = text,
+            ClipText = true,
+            TextOverrunBehavior = TextServer.OverrunBehavior.TrimEllipsis,
+            SizeFlagsHorizontal = SizeFlags.ExpandFill
+        };
+        label.AddThemeColorOverride("font_color", textColor);
+        rowPanel.AddChild(label);
+        return rowPanel;
     }
 }

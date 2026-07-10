@@ -106,6 +106,11 @@ public partial class RegionScreenController : DialogController
         RefreshWorkspace();
     }
 
+    public void RefreshFromExternalChange()
+    {
+        RefreshWorkspace();
+    }
+
     private void OnSelectionTreeItemSelected(object sender, string key)
     {
         ApplySelectionKey(key);

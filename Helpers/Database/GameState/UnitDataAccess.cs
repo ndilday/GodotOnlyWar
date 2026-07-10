@@ -53,6 +53,11 @@ namespace OnlyWar.Helpers.Database.GameState
                     if (reader[5].GetType() != typeof(DBNull))
                     {
                         squad.CurrentRegion = regionMap[reader.GetInt32(5)];
+                        if (squad.CurrentRegion.RegionFactionMap.TryGetValue(squad.Faction.Id, out RegionFaction regionFaction)
+                            && !regionFaction.LandedSquads.Contains(squad))
+                        {
+                            regionFaction.LandedSquads.Add(squad);
+                        }
                     }
 
                     if (squadWeaponSetMap.ContainsKey(id))

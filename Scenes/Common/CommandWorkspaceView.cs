@@ -35,10 +35,13 @@ public partial class CommandWorkspaceView : DialogView
 
     public void PopulateSelectionTree(IReadOnlyList<CommandTreeNode> entries)
     {
+        Dictionary<string, bool> collapsedByKey = CaptureSelectionTreeCollapsedStates();
+        string selectedKey = _selectionTree.GetSelected()?.GetMetadata(0).AsString();
+
         _selectionTree.Clear();
         TreeItem root = _selectionTree.CreateItem();
         _selectionTree.HideRoot = true;
-        AddTreeChildren(_selectionTree, root, entries);
+        AddTreeChildren(_selectionTree, root, entries, collapsedByKey, selectedKey);
     }
 
     public void SetContext(string title, string subtitle, IReadOnlyList<Tuple<string, string>> rows)
@@ -394,16 +397,65 @@ public partial class CommandWorkspaceView : DialogView
         SelectionTreeItemActivated?.Invoke(this, item.GetMetadata(0).AsString());
     }
 
-    private static void AddTreeChildren(Tree tree, TreeItem parentItem, IReadOnlyList<CommandTreeNode> nodes)
+    private Dictionary<string, bool> CaptureSelectionTreeCollapsedStates()
+    {
+        Dictionary<string, bool> collapsedByKey = [];
+        TreeItem root = _selectionTree.GetRoot();
+        if (root == null)
+        {
+            return collapsedByKey;
+        }
+
+        foreach (TreeItem item in EnumerateTreeItems(root.GetFirstChild()))
+        {
+            string key = item.GetMetadata(0).AsString();
+            if (!string.IsNullOrEmpty(key))
+            {
+                collapsedByKey[key] = item.Collapsed;
+            }
+        }
+
+        return collapsedByKey;
+    }
+
+    private static IEnumerable<TreeItem> EnumerateTreeItems(TreeItem item)
+    {
+        while (item != null)
+        {
+            yield return item;
+
+            foreach (TreeItem child in EnumerateTreeItems(item.GetFirstChild()))
+            {
+                yield return child;
+            }
+
+            item = item.GetNext();
+        }
+    }
+
+    private static void AddTreeChildren(
+        Tree tree,
+        TreeItem parentItem,
+        IReadOnlyList<CommandTreeNode> nodes,
+        IReadOnlyDictionary<string, bool> collapsedByKey,
+        string selectedKey)
     {
         foreach (CommandTreeNode node in nodes)
         {
             TreeItem item = tree.CreateItem(parentItem);
             item.SetText(0, node.Text);
             item.SetMetadata(0, Variant.From(node.Key));
+            if (!string.IsNullOrEmpty(selectedKey) && node.Key == selectedKey)
+            {
+                item.Select(0);
+            }
             if (node.Children.Count > 0)
             {
-                AddTreeChildren(tree, item, node.Children);
+                AddTreeChildren(tree, item, node.Children, collapsedByKey, selectedKey);
+                if (collapsedByKey.TryGetValue(node.Key, out bool wasCollapsed))
+                {
+                    item.Collapsed = wasCollapsed;
+                }
             }
         }
     }

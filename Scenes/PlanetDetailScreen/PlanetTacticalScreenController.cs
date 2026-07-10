@@ -76,6 +76,7 @@ public partial class PlanetTacticalScreenController : DialogController
             _tacticalRegions[i - 1] = GetNode<TacticalRegionController>($"PlanetTacticalScreenView/TacticalRegionPanel/TacticalRegionController{i}");
             _tacticalRegions[i - 1].AddToButtonGroup(_buttonGroup);
             _tacticalRegions[i - 1].TacticalRegionPressed += OnTacticalRegionPressed;
+            _tacticalRegions[i - 1].TacticalRegionDoubleClicked += OnTacticalRegionDoubleClicked;
         }
     }
 
@@ -110,9 +111,15 @@ public partial class PlanetTacticalScreenController : DialogController
     private void OnTacticalRegionPressed(object sender, Region region)
     {
         _selectedRegion = region;
-        _selectedLandedUnit = null;
-        _selectedLandedSquad = null;
         RefreshWorkspace();
+    }
+
+    private void OnTacticalRegionDoubleClicked(object sender, Region region)
+    {
+        if (region == null) return;
+
+        _selectedRegion = region;
+        RegionDoubleClicked?.Invoke(this, region);
     }
 
     private void OnSelectionTreeItemSelected(object sender, string key)
@@ -246,21 +253,17 @@ public partial class PlanetTacticalScreenController : DialogController
     {
         List<CommandTreeNode> ships = [];
         Faction playerFaction = GameDataSingleton.Instance.Sector.PlayerForce.Faction;
-        foreach (TaskForce taskForce in _selectedPlanet.OrbitingTaskForceList.Where(tf => tf.Faction == playerFaction))
+        foreach (TaskForce taskForce in _selectedPlanet.OrbitingTaskForceList
+            .Where(tf => tf.Faction == playerFaction)
+            .OrderBy(taskForce => taskForce.Id))
         {
-            foreach (Ship ship in taskForce.Ships)
+            foreach (Ship ship in taskForce.Ships
+                .OrderByDescending(ship => ship.Template.SoldierCapacity)
+                .ThenBy(ship => ship.Template.Id)
+                .ThenBy(ship => ship.Name)
+                .ThenBy(ship => ship.Id))
             {
-                List<CommandTreeNode> units = [];
-                foreach (IGrouping<Unit, Squad> group in ship.LoadedSquads
-                    .Where(squad => squad.Members.Count > 0 && RosterFormat.MatchesFilter(squad, _rosterFilter))
-                    .GroupBy(squad => squad.ParentUnit))
-                {
-                    units.Add(new CommandTreeNode(
-                        LoadedUnitKey(ship.Id, group.Key.Id),
-                        $"{group.Key.Name} | {group.Sum(squad => squad.Members.Count)} aboard",
-                        group.Select(squad => new CommandTreeNode(LoadedSquadKey(ship.Id, squad.Id), RosterFormat.SquadLabel(squad))).ToList()));
-                }
-
+                IReadOnlyList<CommandTreeNode> units = CreateLoadedUnitNodes(ship, _rosterFilter);
                 if (units.Count > 0 || _rosterFilter is "all" or "orbit")
                 {
                     ships.Add(new CommandTreeNode(ShipKey(ship.Id), $"{ship.Name} ({ship.LoadedSoldierCount}/{ship.Template.SoldierCapacity})", units));
@@ -277,19 +280,7 @@ public partial class PlanetTacticalScreenController : DialogController
         foreach (Region region in _selectedPlanet.Regions)
         {
             RegionFaction playerRegionFaction = GetPlayerRegionFaction(region);
-            List<CommandTreeNode> units = [];
-            if (playerRegionFaction != null)
-            {
-                foreach (IGrouping<Unit, Squad> group in playerRegionFaction.LandedSquads
-                    .Where(squad => squad.Members.Count > 0 && RosterFormat.MatchesFilter(squad, _rosterFilter))
-                    .GroupBy(squad => squad.ParentUnit))
-                {
-                    units.Add(new CommandTreeNode(
-                        SurfaceUnitKey(region.Id, group.Key.Id),
-                        $"{group.Key.Name} | {group.Sum(squad => squad.Members.Count)} on surface",
-                        group.Select(squad => new CommandTreeNode(SurfaceSquadKey(region.Id, squad.Id), RosterFormat.SquadLabel(squad))).ToList()));
-                }
-            }
+            IReadOnlyList<CommandTreeNode> units = CreateSurfaceUnitNodes(region.Id, playerRegionFaction, _rosterFilter);
 
             if (units.Count > 0)
             {
@@ -298,6 +289,50 @@ public partial class PlanetTacticalScreenController : DialogController
         }
 
         return regions;
+    }
+
+    internal static IReadOnlyList<CommandTreeNode> CreateLoadedUnitNodes(Ship ship, string rosterFilter)
+    {
+        return ship.LoadedSquads
+            .Where(squad => squad.Members.Count > 0 && RosterFormat.MatchesFilter(squad, rosterFilter))
+            .OrderBy(squad => FleetScreenController.GetUnitOrderKey(squad.ParentUnit))
+            .ThenBy(squad => FleetScreenController.GetSquadOrder(squad))
+            .ThenBy(squad => squad.Name)
+            .GroupBy(squad => squad.ParentUnit)
+            .Select(group =>
+            {
+                Unit unit = group.Key;
+                int unitId = unit?.Id ?? 0;
+                string unitName = unit?.Name ?? "Unassigned Unit";
+                return new CommandTreeNode(
+                    LoadedUnitKey(ship.Id, unitId),
+                    $"{unitName} | {group.Sum(squad => squad.Members.Count)} aboard",
+                    group.Select(squad => new CommandTreeNode(LoadedSquadKey(ship.Id, squad.Id), RosterFormat.SquadLabel(squad))).ToList());
+            })
+            .ToList();
+    }
+
+    internal static IReadOnlyList<CommandTreeNode> CreateSurfaceUnitNodes(int regionId, RegionFaction playerRegionFaction, string rosterFilter)
+    {
+        if (playerRegionFaction == null) return Array.Empty<CommandTreeNode>();
+
+        return playerRegionFaction.LandedSquads
+            .Where(squad => squad.Members.Count > 0 && RosterFormat.MatchesFilter(squad, rosterFilter))
+            .OrderBy(squad => FleetScreenController.GetUnitOrderKey(squad.ParentUnit))
+            .ThenBy(squad => FleetScreenController.GetSquadOrder(squad))
+            .ThenBy(squad => squad.Name)
+            .GroupBy(squad => squad.ParentUnit)
+            .Select(group =>
+            {
+                Unit unit = group.Key;
+                int unitId = unit?.Id ?? 0;
+                string unitName = unit?.Name ?? "Unassigned Unit";
+                return new CommandTreeNode(
+                    SurfaceUnitKey(regionId, unitId),
+                    $"{unitName} | {group.Sum(squad => squad.Members.Count)} on surface",
+                    group.Select(squad => new CommandTreeNode(SurfaceSquadKey(regionId, squad.Id), RosterFormat.SquadLabel(squad))).ToList());
+            })
+            .ToList();
     }
 
     private string GetContextTitle()
@@ -458,8 +493,6 @@ public partial class PlanetTacticalScreenController : DialogController
         {
             case "region":
                 _selectedRegion = _selectedPlanet.Regions.FirstOrDefault(region => region.Id == int.Parse(parts[1]));
-                _selectedLandedUnit = null;
-                _selectedLandedSquad = null;
                 break;
             case "ship":
                 _selectedShip = FindShip(int.Parse(parts[1]));
@@ -578,7 +611,10 @@ public partial class PlanetTacticalScreenController : DialogController
         if (_selectedRegion == null) return [];
         RegionFaction regionFaction = GetPlayerRegionFaction(_selectedRegion);
         if (regionFaction == null) return [];
-        if (_selectedLandedSquad != null) return [_selectedLandedSquad];
+        if (_selectedLandedSquad != null)
+        {
+            return _selectedLandedSquad.CurrentRegion == _selectedRegion ? [_selectedLandedSquad] : [];
+        }
         if (_selectedLandedUnit != null)
         {
             return regionFaction.LandedSquads.Where(squad => squad.ParentUnit == _selectedLandedUnit);

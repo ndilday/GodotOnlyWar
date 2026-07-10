@@ -1,4 +1,5 @@
 using Godot;
+using OnlyWar.Helpers.UI;
 using System;
 using System.Collections.Generic;
 
@@ -34,6 +35,7 @@ public partial class OrderDialogView : Panel
         _cancelButton.Pressed += OnCancelButtonPressed;
         _confirmButton = GetNode<Button>("ConfirmButton");
         _confirmButton.Pressed += OnConfirmButtonPressed;
+        ApplyThemeStyling();
     }
 
     public void SetHeader(string header)
@@ -132,6 +134,12 @@ public partial class OrderDialogView : Panel
 
     private void OnConfirmButtonPressed()
     {
+        if (_regionOption.Selected < 0 || _missionOption.Selected < 0 || _aggressionOption.Selected < 0)
+        {
+            _confirmButton.Disabled = true;
+            return;
+        }
+
         Tuple<int, int, int> tuple = new Tuple<int, int, int>
         (
             _regionOption.GetItemId(_regionOption.Selected),
@@ -139,5 +147,18 @@ public partial class OrderDialogView : Panel
             _aggressionOption.GetItemId(_aggressionOption.Selected)
         );
         OrdersConfirmed?.Invoke(this, tuple);
+    }
+
+    private void ApplyThemeStyling()
+    {
+        OnlyWarStyle.ApplyContentPanel(this);
+        OnlyWarStyle.ApplyInsetPanel(GetNode<Panel>("Panel"));
+
+        _missionDescription.AddThemeColorOverride("default_color", OnlyWarStyle.MutedText);
+        _aggressionDescription.AddThemeColorOverride("default_color", OnlyWarStyle.MutedText);
+
+        GetNode<VBoxContainer>("VBoxContainer").AddThemeConstantOverride("separation", 8);
+        _cancelButton.CustomMinimumSize = new Vector2(100, 36);
+        _confirmButton.CustomMinimumSize = new Vector2(100, 36);
     }
 }

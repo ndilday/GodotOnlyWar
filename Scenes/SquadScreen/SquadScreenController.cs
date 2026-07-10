@@ -17,7 +17,6 @@ public partial class SquadScreenController : DialogController
     private Squad _squad;
     private SquadScreenView _view;
     private OrderDialogController _orderController;
-    private TacticalRegionController _currentRegion;
     private int _ableBodied;
     private Order _savedOrders;
     private List<WeaponSet> _savedLoadout;
@@ -36,7 +35,6 @@ public partial class SquadScreenController : DialogController
         _view.OpenOrders += OnOpenOrders;
         _orderController = GetNode<OrderDialogController>("DialogView/OrderDialogController");
         _orderController.OrdersConfirmed += OnOrdersConfirmed;
-        _currentRegion = GetNode<TacticalRegionController>("DialogView/RegionPanel/TacticalRegionCenter");
     }
     private void OnOpenOrders(object sender, EventArgs e)
     {

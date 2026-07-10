@@ -15,12 +15,22 @@ public partial class TacticalRegionController : Control
     private Region _region;
 
     public event EventHandler<Region> TacticalRegionPressed;
+    public event EventHandler<Region> TacticalRegionDoubleClicked;
 
     public override void _Ready()
     {
         _view = GetNode<TacticalRegionView>("TacticalRegionView");
         _button = GetNode<Button>("TacticalRegionView/Button");
         _button.Pressed += () => TacticalRegionPressed?.Invoke(this, _region);
+        _button.GuiInput += OnButtonGuiInput;
+    }
+
+    private void OnButtonGuiInput(InputEvent inputEvent)
+    {
+        if (inputEvent is InputEventMouseButton { ButtonIndex: MouseButton.Left, Pressed: true, DoubleClick: true })
+        {
+            TacticalRegionDoubleClicked?.Invoke(this, _region);
+        }
     }
 
     public void Populate(Region region, MapLayer layers = MapLayer.None, bool selected = false)
