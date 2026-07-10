@@ -15,6 +15,8 @@ public partial class FleetScreenController : DialogController
     {
         base._Ready();
         _view = GetNode<FleetScreenView>("FleetScreenView");
+        _view.CanTransferSquadToShip = CanTransferSquadToShip;
+        _view.SquadDroppedOnShip += OnSquadDroppedOnShip;
         PopulateFleetData();
     }
 
@@ -48,11 +50,11 @@ public partial class FleetScreenController : DialogController
                 List<TreeNode> squadNodes = isInWarp
                     ? []
                     : CreateLoadedUnitNodes(ship).ToList();
-                return new TreeNode(ship.Id, shipText, squadNodes, selectable: !isInWarp);
+                return new TreeNode(ship.Id, shipText, squadNodes, selectable: !isInWarp, kind: TreeNodeKind.Ship);
             })
             .ToList();
 
-        return new TreeNode(taskForce.Id, $"Task Force {taskForce.Id}: {status}", shipNodes, selectable: !isInWarp);
+        return new TreeNode(taskForce.Id, $"Task Force {taskForce.Id}: {status}", shipNodes, selectable: !isInWarp, kind: TreeNodeKind.Fleet);
     }
 
     internal static IReadOnlyList<TreeNode> CreateLoadedUnitNodes(Ship ship)
@@ -67,11 +69,92 @@ public partial class FleetScreenController : DialogController
             {
                 Unit unit = group.Key;
                 List<TreeNode> squadNodes = group
-                    .Select(squad => new TreeNode(squad.Id, squad.Name, []))
+                    .Select(squad => new TreeNode(squad.Id, squad.Name, [], kind: TreeNodeKind.Squad))
                     .ToList();
-                return new TreeNode(unit?.Id ?? 0, unit?.Name ?? "Unassigned Unit", squadNodes, selectable: false);
+                return new TreeNode(unit?.Id ?? 0, unit?.Name ?? "Unassigned Unit", squadNodes, selectable: false, kind: TreeNodeKind.Unit);
             })
             .ToList();
+    }
+
+    internal static bool CanTransferSquadToShip(Squad squad, Ship destinationShip)
+    {
+        if (squad == null || destinationShip == null || squad.BoardedLocation == null)
+        {
+            return false;
+        }
+
+        Ship sourceShip = squad.BoardedLocation;
+        if (sourceShip == destinationShip)
+        {
+            return false;
+        }
+
+        if (destinationShip.AvailableCapacity < squad.Members.Count)
+        {
+            return false;
+        }
+
+        return ShipsShareTransferLocation(sourceShip, destinationShip);
+    }
+
+    internal static void TransferSquadToShip(Squad squad, Ship destinationShip)
+    {
+        if (!CanTransferSquadToShip(squad, destinationShip))
+        {
+            return;
+        }
+
+        Ship sourceShip = squad.BoardedLocation;
+        sourceShip.RemoveSquad(squad);
+        destinationShip.LoadSquad(squad);
+        squad.BoardedLocation = destinationShip;
+        squad.CurrentRegion = null;
+    }
+
+    private bool CanTransferSquadToShip(int squadId, int shipId)
+    {
+        return CanTransferSquadToShip(FindSquad(squadId), FindShip(shipId));
+    }
+
+    private void OnSquadDroppedOnShip(object sender, Tuple<int, int> args)
+    {
+        TransferSquadToShip(FindSquad(args.Item1), FindShip(args.Item2));
+        PopulateFleetData();
+    }
+
+    private Ship FindShip(int shipId)
+    {
+        return GameDataSingleton.Instance.Sector.Fleets.Values
+            .SelectMany(fleet => fleet.Ships)
+            .FirstOrDefault(ship => ship.Id == shipId);
+    }
+
+    private Squad FindSquad(int squadId)
+    {
+        return GameDataSingleton.Instance.Sector.Fleets.Values
+            .SelectMany(fleet => fleet.Ships)
+            .SelectMany(ship => ship.LoadedSquads)
+            .FirstOrDefault(squad => squad.Id == squadId);
+    }
+
+    private static bool ShipsShareTransferLocation(Ship sourceShip, Ship destinationShip)
+    {
+        TaskForce sourceFleet = sourceShip.Fleet;
+        TaskForce destinationFleet = destinationShip.Fleet;
+        if (sourceFleet == null || destinationFleet == null)
+        {
+            return false;
+        }
+
+        if (sourceFleet == destinationFleet)
+        {
+            return true;
+        }
+
+        return sourceFleet.TravelPhase == FleetTravelPhase.InOrbit
+            && destinationFleet.TravelPhase == FleetTravelPhase.InOrbit
+            && sourceFleet.Planet != null
+            && sourceFleet.Planet == destinationFleet.Planet;
     }
 
     private static string GetUnitOrderKey(Unit unit)

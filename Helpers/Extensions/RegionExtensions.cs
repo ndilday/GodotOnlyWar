@@ -47,6 +47,21 @@ namespace OnlyWar.Helpers.Extensions
             return enemies.FirstOrDefault(rf => rf.IsPublic) ?? enemies.FirstOrDefault();
         }
 
+        public static bool HasHiddenDefaultFaction(this Region region)
+        {
+            return region.RegionFactionMap.Values
+                .Any(rf => rf.PlanetFaction.Faction.IsDefaultFaction && !rf.IsPublic);
+        }
+
+        public static long GetVisibleCivilianPopulation(this Region region)
+        {
+            return region.RegionFactionMap.Values
+                .Where(rf => rf.IsPublic
+                             && (rf.PlanetFaction.Faction.IsDefaultFaction
+                                 || rf.PlanetFaction.Faction.IsPlayerFaction))
+                .Sum(rf => rf.Population);
+        }
+
         public static List<Region> GetSelfAndAdjacentRegions(this Region region)
         {
             return new List<Region> { region }.Union(GetAdjacentRegions(region)).ToList();

@@ -129,6 +129,12 @@ public class SaveLoadRoundTripTests
             int originalShips = sector.Fleets.Values.SelectMany(tf => tf.Ships).Count();
             int loadedShips = loaded.Fleets.SelectMany(tf => tf.Ships).Count();
             Assert.Equal(originalShips, loadedShips);
+            Assert.Equal(
+                sector.Fleets.Values.SelectMany(tf => tf.Ships).Sum(ship => ship.LoadedSquads.Count),
+                loaded.Fleets.SelectMany(tf => tf.Ships).Sum(ship => ship.LoadedSquads.Count));
+            Assert.Equal(
+                sector.Fleets.Values.SelectMany(tf => tf.Ships).Sum(ship => ship.LoadedSoldierCount),
+                loaded.Fleets.SelectMany(tf => tf.Ships).Sum(ship => ship.LoadedSoldierCount));
 
             Assert.Equal(CountSoldiers(originalUnits), CountSoldiers(loaded.Units));
             Assert.Equal(CountSquads(originalUnits), CountSquads(loaded.Units));

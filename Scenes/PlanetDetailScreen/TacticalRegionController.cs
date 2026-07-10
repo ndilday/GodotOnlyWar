@@ -8,6 +8,8 @@ using System.Linq;
 
 public partial class TacticalRegionController : Control
 {
+    private static readonly Color ContestedRegionColor = new(0.92f, 0.43f, 0.10f);
+
     private TacticalRegionView _view;
     private Button _button;
     private Region _region;
@@ -34,8 +36,9 @@ public partial class TacticalRegionController : Control
         int playerCount = playerRegionFaction?.LandedSquads.Sum(s => s.Members.Count()) ?? 0;
         int assignedCount = playerRegionFaction?.LandedSquads.Count(s => s.CurrentOrders != null) ?? 0;
         int unassignedCount = playerRegionFaction?.LandedSquads.Count(s => s.CurrentOrders == null) ?? 0;
-        long civilianPopulation = GetCivilianPopulation(playerRegionFaction, defaultFaction, xenosRegionFaction);
-        long garrison = defaultFaction?.Garrison ?? 0;
+        bool hiddenImperialPopulation = region.HasHiddenDefaultFaction();
+        long civilianPopulation = hiddenImperialPopulation ? 0 : region.GetVisibleCivilianPopulation();
+        long garrison = region.PlanetaryDefenseForces;
         bool publicEnemy = xenosRegionFaction != null && xenosRegionFaction.IsPublic;
         bool hiddenEnemy = xenosRegionFaction != null && !xenosRegionFaction.IsPublic;
         float visibleIntel = region.GetPlayerVisibleIntel();
@@ -59,10 +62,10 @@ public partial class TacticalRegionController : Control
             || (showIntel && hiddenEnemy)
             || (showOrders && unassignedCount > 0);
 
-        bool showCivilian = showEntrenchment || garrison > 0 || (showForces && civilianPopulation > 0);
+        bool showCivilian = showEntrenchment || garrison > 0 || (showForces && (civilianPopulation > 0 || hiddenImperialPopulation));
         string civilianText = showEntrenchment
             ? RegionFactionExtensions.GetDefenseLevelDescription(xenosRegionFaction.Entrenchment)
-            : garrison > 0 ? FormatCompact(garrison) : (showForces ? FormatCompact(civilianPopulation) : "");
+            : garrison > 0 ? FormatCompact(garrison) : (hiddenImperialPopulation ? "?" : (showForces ? FormatCompact(civilianPopulation) : ""));
 
         bool showObjective = region.SpecialMissions.Count > 0 || (showOrders && assignedCount > 0);
         const bool showDropPod = false;
@@ -75,7 +78,11 @@ public partial class TacticalRegionController : Control
         string hiddenIconKey = hiddenEnemyMarker ? xenosIconKey : "player_forces";
 
         Color color;
-        if (showOrders && assignedCount > 0)
+        if (region.ControllingFaction == null)
+        {
+            color = MutedMapColor(ContestedRegionColor, 0.10f);
+        }
+        else if (showOrders && assignedCount > 0)
         {
             color = new Color(0.46f, 0.36f, 0.16f);
         }
@@ -95,6 +102,7 @@ public partial class TacticalRegionController : Control
         string civilianTooltip = showEntrenchment
             ? $"Enemy Entrenchment: {RegionFactionExtensions.GetDefenseLevelDescription(xenosRegionFaction.Entrenchment)}"
             : garrison > 0 ? $"PDF Garrison: {garrison:N0}"
+            : hiddenImperialPopulation ? "Imperial Population: Unknown"
             : $"Imperial Population: {civilianPopulation:N0}";
         string playerTooltip = showOrders && playerRegionFaction != null
             ? $"Space Marines: {playerCount} ({assignedCount}/{playerRegionFaction.LandedSquads.Count} squads assigned)"
@@ -135,25 +143,7 @@ public partial class TacticalRegionController : Control
     {
         return region.ControllingFaction != null
             ? region.ControllingFaction.PlanetFaction.Faction.Color.ToGodotColor()
-            : Colors.DarkRed;
-    }
-
-    private static long GetCivilianPopulation(RegionFaction playerRegionFaction, RegionFaction defaultFaction, RegionFaction xenosRegionFaction)
-    {
-        long population = 0;
-        if (defaultFaction != null && defaultFaction.IsPublic)
-        {
-            population += defaultFaction.Population;
-        }
-        if (playerRegionFaction != null)
-        {
-            population += playerRegionFaction.Population;
-        }
-        if (xenosRegionFaction != null && !xenosRegionFaction.IsPublic)
-        {
-            population += xenosRegionFaction.Population;
-        }
-        return population;
+            : ContestedRegionColor;
     }
 
     private static string FormatCompact(long value)

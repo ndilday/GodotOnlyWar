@@ -47,6 +47,7 @@ namespace OnlyWar.Helpers.Database.GameState
                     if (reader[4].GetType() != typeof(DBNull))
                     {
                         squad.BoardedLocation = shipMap[reader.GetInt32(4)];
+                        squad.BoardedLocation.LoadSquad(squad);
                     }
 
                     if (reader[5].GetType() != typeof(DBNull))

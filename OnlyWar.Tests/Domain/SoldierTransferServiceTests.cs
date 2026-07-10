@@ -1,6 +1,7 @@
 using OnlyWar.Helpers;
 using OnlyWar.Models;
 using OnlyWar.Models.Fleets;
+using OnlyWar.Models.Planets;
 using OnlyWar.Models.Soldiers;
 using OnlyWar.Models.Squads;
 using OnlyWar.Models.Units;
@@ -243,6 +244,24 @@ public class SoldierTransferServiceTests
 
         Assert.Contains(options, option =>
             option.SquadId == target.Id && option.SoldierTemplate == tacticalMarine);
+    }
+
+    [Fact]
+    public void FormatBlockedTransferTarget_AppendsShipAndLocationForBoardedTarget()
+    {
+        SquadTemplate template = CreateSquadTemplate("Line Squad", (TestModelFactory.MarineTemplate, 0, 4));
+        Unit chapter = CreateUnit("Chapter");
+        Squad target = AddSquad(chapter, "Target Squad", template);
+        Planet planet = new(1, "Macragge", new Coordinate(1, 2), 1, null, 1, 0);
+        Ship ship = new(1, "Glory of Hera", new ShipTemplate(1, "Strike Cruiser", 20, 0, 0));
+        _ = new TaskForce(1, null, planet.Position, planet, null, [ship]);
+        target.BoardedLocation = ship;
+        SoldierTransferOption option = new(target.Id, TestModelFactory.MarineTemplate, "Test Marine, Target Squad, Chapter");
+        Dictionary<int, Squad> squadMap = chapter.GetAllSquads().ToDictionary(squad => squad.Id);
+
+        string targetDescription = _service.FormatBlockedTransferTarget(option, squadMap);
+
+        Assert.Equal("Test Marine, Target Squad, Chapter (Glory of Hera, orbiting Macragge)", targetDescription);
     }
 
     [Fact]

@@ -209,7 +209,7 @@ public partial class PlanetTacticalScreenController : DialogController
     {
         RefreshRegionMap();
         _view.SetContext(GetContextTitle(), GetContextSubtitle(), BuildContextRows());
-        _view.SetCommands(BuildCommands());
+        _view.SetCommandRows(BuildCommandRows());
     }
 
     private IReadOnlyList<CommandTreeNode> BuildRoster()
@@ -368,15 +368,17 @@ public partial class PlanetTacticalScreenController : DialogController
         rows.Add(Row("Intelligence", $"{visibleIntel:0.##}"));
 
         RegionFaction playerRegionFaction = GetPlayerRegionFaction(region);
-        RegionFaction defaultFaction = region.RegionFactionMap.Values.FirstOrDefault(rf => rf.PlanetFaction.Faction.IsDefaultFaction);
         RegionFaction enemyFaction = GetEnemyRegionFaction(region);
 
-        long civilianPopulation = (defaultFaction?.Population ?? 0) + (playerRegionFaction?.Population ?? 0);
-        if (enemyFaction != null && !enemyFaction.IsPublic)
+        if (region.HasHiddenDefaultFaction())
         {
-            civilianPopulation += enemyFaction.Population;
+            rows.Add(Row("Civilian Population", "Unknown"));
         }
-        rows.Add(Row("Civilian Population", civilianPopulation > 0 ? civilianPopulation.ToString("N0") : "None"));
+        else
+        {
+            long civilianPopulation = region.GetVisibleCivilianPopulation();
+            rows.Add(Row("Civilian Population", civilianPopulation > 0 ? civilianPopulation.ToString("N0") : "None"));
+        }
         rows.Add(Row("PDF Garrison", region.PlanetaryDefenseForces > 0 ? region.PlanetaryDefenseForces.ToString("N0") : "None"));
         rows.Add(Row("Marines", playerRegionFaction?.LandedSquads.Sum(squad => squad.Members.Count).ToString() ?? "0"));
         rows.Add(Row("Assigned Orders", playerRegionFaction?.LandedSquads.Count(squad => squad.CurrentOrders != null).ToString() ?? "0"));
@@ -437,6 +439,16 @@ public partial class PlanetTacticalScreenController : DialogController
         ];
     }
 
+    private IReadOnlyList<IReadOnlyList<CommandAction>> BuildCommandRows()
+    {
+        IReadOnlyList<CommandAction> commands = BuildCommands();
+        return
+        [
+            [commands[0], commands[1], commands[2]],
+            [commands[3], commands[4]]
+        ];
+    }
+
     private void ApplySelectionKey(string key)
     {
         if (string.IsNullOrWhiteSpace(key) || key.StartsWith("group:") || key.StartsWith("presence:")) return;
@@ -480,8 +492,7 @@ public partial class PlanetTacticalScreenController : DialogController
     private void LandSelectedForces()
     {
         if (!CanLand()) return;
-        RegionFaction regionFaction = GetPlayerRegionFaction(_selectedRegion);
-        if (regionFaction == null) return;
+        RegionFaction regionFaction = GetOrCreatePlayerRegionFaction(_selectedRegion);
 
         foreach (Squad squad in GetSelectedLoadedSquads().ToList())
         {
@@ -513,6 +524,7 @@ public partial class PlanetTacticalScreenController : DialogController
             squad.BoardedLocation = _selectedShip;
         }
 
+        CleanupPlayerRegionFactionAfterLoad(_selectedRegion, regionFaction);
         ClearForceSelections();
         RefreshWorkspace();
     }
@@ -521,7 +533,8 @@ public partial class PlanetTacticalScreenController : DialogController
     {
         return _selectedShip != null
             && _selectedRegion != null
-            && GetPlayerRegionFaction(_selectedRegion) != null
+            && _selectedRegion.Planet != null
+            && GameDataSingleton.Instance?.Sector?.PlayerForce?.Faction != null
             && GetSelectedLoadedSquads().Any();
     }
 
@@ -608,6 +621,39 @@ public partial class PlanetTacticalScreenController : DialogController
         Faction playerFaction = GameDataSingleton.Instance.Sector.PlayerForce.Faction;
         region.RegionFactionMap.TryGetValue(playerFaction.Id, out RegionFaction regionFaction);
         return regionFaction;
+    }
+
+    private RegionFaction GetOrCreatePlayerRegionFaction(Region region)
+    {
+        Faction playerFaction = GameDataSingleton.Instance.Sector.PlayerForce.Faction;
+        if (!region.Planet.PlanetFactionMap.TryGetValue(playerFaction.Id, out PlanetFaction playerPlanetFaction))
+        {
+            playerPlanetFaction = new PlanetFaction(playerFaction) { IsPublic = true };
+            region.Planet.PlanetFactionMap[playerFaction.Id] = playerPlanetFaction;
+        }
+
+        if (!region.RegionFactionMap.TryGetValue(playerFaction.Id, out RegionFaction regionFaction))
+        {
+            regionFaction = new RegionFaction(playerPlanetFaction, region) { IsPublic = true };
+            region.RegionFactionMap[playerFaction.Id] = regionFaction;
+        }
+
+        return regionFaction;
+    }
+
+    private static void CleanupPlayerRegionFactionAfterLoad(Region region, RegionFaction regionFaction)
+    {
+        if (region == null || regionFaction == null || regionFaction.LandedSquads.Count > 0) return;
+
+        if (regionFaction.Entrenchment <= 0
+            && regionFaction.ListeningPost <= 0
+            && regionFaction.AntiAir <= 0)
+        {
+            region.RegionFactionMap.Remove(regionFaction.PlanetFaction.Faction.Id);
+            return;
+        }
+
+        regionFaction.IsPublic = false;
     }
 
     private static RegionFaction GetEnemyRegionFaction(Region region)

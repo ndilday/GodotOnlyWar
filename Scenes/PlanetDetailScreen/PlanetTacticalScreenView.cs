@@ -20,7 +20,7 @@ public partial class PlanetTacticalScreenView : CommandWorkspaceView
 
         HideLegacyPanels();
         ConfigureMapPanel();
-        BuildWorkspaceShell(0.705f, 0.91f);
+        BuildWorkspaceShell(0.705f, 0.91f, 0.755f);
         CallDeferred(nameof(LayoutRegionHexGrid));
     }
 
@@ -36,11 +36,12 @@ public partial class PlanetTacticalScreenView : CommandWorkspaceView
         _tacticalRegionPanel.AnchorLeft = 0.245f;
         _tacticalRegionPanel.AnchorTop = 0.08f;
         _tacticalRegionPanel.AnchorRight = 0.705f;
-        _tacticalRegionPanel.AnchorBottom = 0.785f;
+        _tacticalRegionPanel.AnchorBottom = 0.735f;
         _tacticalRegionPanel.OffsetLeft = 0;
         _tacticalRegionPanel.OffsetTop = 0;
         _tacticalRegionPanel.OffsetRight = 0;
         _tacticalRegionPanel.OffsetBottom = 0;
+        _tacticalRegionPanel.ClipContents = true;
         _tacticalRegionPanel.SelfModulate = Colors.White;
 
         StyleBoxFlat mapStyle = new()
@@ -65,8 +66,8 @@ public partial class PlanetTacticalScreenView : CommandWorkspaceView
         const float visibleGridWidth = 0.82f;
         const float flatTopRatio = 2f / 1.7320508f;
         const float spacingFactor = 1.04f;
-        float panelWidth = Mathf.Max(_tacticalRegionPanel.Size.X, 736f);
-        float panelHeight = Mathf.Max(_tacticalRegionPanel.Size.Y, 538f);
+        float panelWidth = Mathf.Max(_tacticalRegionPanel.Size.X, 1f);
+        float panelHeight = Mathf.Max(_tacticalRegionPanel.Size.Y, 1f);
         float panelAspect = panelWidth / panelHeight;
         float hexWidth = visibleGridWidth / (1f + 3f * 1.5f * spacingFactor);
         float hexHeight = hexWidth * panelAspect / flatTopRatio;

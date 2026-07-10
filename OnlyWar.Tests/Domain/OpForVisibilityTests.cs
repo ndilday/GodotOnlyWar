@@ -53,6 +53,41 @@ public class OpForVisibilityTests
         Assert.Equal("12345", enemy.GetPopulationDescription());
     }
 
+    [Fact]
+    public void GetVisibleCivilianPopulation_HiddenDefaultFaction_RevealsNoCivilianCount()
+    {
+        SectorSimulationFixture fixture = SectorSimulationFixture.Create(defaultRegionPopulation: 20000);
+        Region region = fixture.Planet.Regions[0];
+        fixture.DefaultRegionFaction(0).IsPublic = false;
+
+        Assert.True(region.HasHiddenDefaultFaction());
+        Assert.Equal(0, region.GetVisibleCivilianPopulation());
+    }
+
+    [Fact]
+    public void PlanetaryDefenseForces_HiddenDefaultFaction_DoesNotCountAsActiveGarrison()
+    {
+        SectorSimulationFixture fixture = SectorSimulationFixture.Create(defaultRegionPopulation: 20000);
+        Region region = fixture.Planet.Regions[0];
+        RegionFaction remnant = fixture.DefaultRegionFaction(0);
+        remnant.Garrison = 5000;
+        remnant.IsPublic = false;
+
+        Assert.Equal(0, region.PlanetaryDefenseForces);
+        Assert.Equal(5000, remnant.Garrison);
+    }
+
+    [Fact]
+    public void GetVisibleEnemyRegionFaction_PublicEnemyTakesPriorityOverHiddenEnemy()
+    {
+        SectorSimulationFixture fixture = SectorSimulationFixture.Create();
+        RegionFaction hiddenCult = fixture.AddHiddenFaction(0, OnlyWar.Models.GrowthType.Conversion, population: 5000);
+        RegionFaction tyranids = fixture.AddConsumptionFaction(0, population: 12000, organization: 100);
+
+        Assert.Same(tyranids, fixture.Planet.Regions[0].GetVisibleEnemyRegionFaction());
+        Assert.False(hiddenCult.IsPublic);
+    }
+
     [Theory]
     [InlineData(0, "None")]
     [InlineData(2, "Minimal")]

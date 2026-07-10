@@ -174,8 +174,11 @@ public partial class ChapterController : Control
         if (_transferService.WouldExceedShipCapacity(
                 soldier, option, GameDataSingleton.Instance.Sector.PlayerForce.Army.SquadMap))
         {
+            string transferTarget = _transferService.FormatBlockedTransferTarget(
+                option,
+                GameDataSingleton.Instance.Sector.PlayerForce.Army.SquadMap);
             _transferBlockedDialog.DialogText =
-                $"{option.DisplayName} has no room aboard its ship. Free up space before transferring {soldier.Name} there.";
+                $"{transferTarget} has no room aboard its ship. Free up space before transferring {soldier.Name} there.";
             _transferBlockedDialog.PopupCentered();
             return;
         }
@@ -369,14 +372,7 @@ public partial class ChapterController : Control
 
         ChapterView.SetLeftMenu("Battle Brothers", soldiers);
 
-        if (selectedSoldier == null)
-        {
-            ChapterView.SetDetail(BuildSquadDetail(squad, null));
-        }
-        else
-        {
-            SetSoldierDetail(selectedSoldier);
-        }
+        ChapterView.SetDetail(BuildSquadDetail(squad, selectedSoldier));
     }
 
     private void RenderSoldierLevel(ISoldier soldier)
@@ -690,7 +686,7 @@ public partial class ChapterController : Control
         return new ChapterBrowserDetail(
             GetSquadIconKey(squad),
             squad.Name,
-            "Squad-level overview. Select individual soldiers to inspect their status.",
+            $"{SquadLocationFormatter.Format(squad)}. Select individual soldiers to inspect their status.",
             [
                 new ChapterBrowserMetric(squad.Members.Count.ToString(), "Soldiers"),
                 new ChapterBrowserMetric(woundedCount.ToString(), "Wounded"),

@@ -111,6 +111,24 @@ namespace OnlyWar.Helpers
             return targetShip.AvailableCapacity <= 0;
         }
 
+        public string FormatBlockedTransferTarget(
+            SoldierTransferOption option,
+            IReadOnlyDictionary<int, Squad> squadMap)
+        {
+            if (option == null)
+            {
+                return "Selected transfer target";
+            }
+            if (option.IsNewSquad || squadMap == null ||
+                !squadMap.TryGetValue(option.SquadId, out Squad targetSquad) ||
+                targetSquad.BoardedLocation == null)
+            {
+                return option.DisplayName;
+            }
+
+            return $"{option.DisplayName} ({SquadLocationFormatter.Format(targetSquad)})";
+        }
+
         public bool ApplyTransfer(
             PlayerSoldier soldier,
             SoldierTransferOption option,

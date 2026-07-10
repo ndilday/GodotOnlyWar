@@ -1,5 +1,7 @@
 using OnlyWar.Helpers;
+using OnlyWar.Models;
 using OnlyWar.Models.Planets;
+using OnlyWar.Models.Squads;
 using OnlyWar.Tests.Fixtures;
 using Xunit;
 
@@ -277,6 +279,46 @@ public class ImperialRemnantTests
     }
 
     [Fact]
+    public void ProcessTurn_KeepsZeroPopulationPlayerFootholdWithLandedSquad()
+    {
+        SectorSimulationFixture fixture = SectorSimulationFixture.Create();
+        Region region = fixture.Planet.Regions[0];
+        RegionFaction playerFoothold = AddPlayerRegionFaction(fixture, region);
+        playerFoothold.LandedSquads.Add(new Squad("Test Squad", null, null));
+
+        fixture.ProcessTurn();
+
+        Assert.Same(playerFoothold, region.RegionFactionMap[fixture.Sector.PlayerForce.Faction.Id]);
+    }
+
+    [Fact]
+    public void ProcessTurn_RemovesEmptyPlayerFootholdWithoutDefenses()
+    {
+        SectorSimulationFixture fixture = SectorSimulationFixture.Create();
+        Region region = fixture.Planet.Regions[0];
+        AddPlayerRegionFaction(fixture, region);
+
+        fixture.ProcessTurn();
+
+        Assert.False(region.RegionFactionMap.ContainsKey(fixture.Sector.PlayerForce.Faction.Id));
+    }
+
+    [Fact]
+    public void ProcessTurn_RemovesAbandonedPlayerFootholdAfterDefensesDecayToZero()
+    {
+        SectorSimulationFixture fixture = SectorSimulationFixture.Create();
+        Region region = fixture.Planet.Regions[0];
+        RegionFaction playerFoothold = AddPlayerRegionFaction(fixture, region);
+        playerFoothold.IsPublic = false;
+        playerFoothold.Entrenchment = 0.25;
+        fixture.AddConsumptionFaction(0, population: 50_000, organization: 100);
+
+        fixture.ProcessTurn();
+
+        Assert.False(region.RegionFactionMap.ContainsKey(fixture.Sector.PlayerForce.Faction.Id));
+    }
+
+    [Fact]
     public void GoverningRemnant_GrowsAndDraftsGarrison()
     {
         SectorSimulationFixture fixture = SectorSimulationFixture.Create();
@@ -291,5 +333,19 @@ public class ImperialRemnantTests
 
         Assert.True(governing.Population > 1_000_000, "a governing population grows organically");
         Assert.True(governing.Garrison > 0, "a governing PDF drafts from its growth");
+    }
+
+    private static RegionFaction AddPlayerRegionFaction(SectorSimulationFixture fixture, Region region)
+    {
+        Faction playerFaction = fixture.Sector.PlayerForce.Faction;
+        PlanetFaction playerPlanetFaction = new(playerFaction) { IsPublic = true };
+        fixture.Planet.PlanetFactionMap[playerFaction.Id] = playerPlanetFaction;
+        RegionFaction playerRegionFaction = new(playerPlanetFaction, region)
+        {
+            IsPublic = true,
+            Organization = 100
+        };
+        region.RegionFactionMap[playerFaction.Id] = playerRegionFaction;
+        return playerRegionFaction;
     }
 }

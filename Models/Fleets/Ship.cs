@@ -43,7 +43,7 @@ namespace OnlyWar.Models.Fleets
         public ShipTemplate Template { get; }
         public IReadOnlyCollection<Squad> LoadedSquads { get => _loadedSquads; } 
         public List<Boat> Boats { get; }
-        public int LoadedSoldierCount { get; private set; }
+        public int LoadedSoldierCount { get => _loadedSquads.Sum(squad => squad.Members.Count); }
         public int AvailableCapacity { get => Template.SoldierCapacity - LoadedSoldierCount; }
 
         public Ship(int id, string name, ShipTemplate template)
@@ -58,8 +58,6 @@ namespace OnlyWar.Models.Fleets
         public Ship(int id, string name, ShipTemplate template, BoatTemplate boatTemplate) 
             : this(id, name, template)
         {
-            _loadedSquads = [];
-            LoadedSoldierCount = 0;
             for (byte i = 0; i < Template.BoatCapacity; i++)
             {
                 Boats.Add(new Boat(boatTemplate));
@@ -68,24 +66,26 @@ namespace OnlyWar.Models.Fleets
 
         public void LoadSquad(Squad squad)
         {
+            if (_loadedSquads.Contains(squad))
+            {
+                return;
+            }
+
             int count = squad.Members.Count;
             if (count + LoadedSoldierCount > Template.SoldierCapacity)
             {
                 throw new InvalidOperationException("Trying to load too many soldiers onto the ship");
             }
             _loadedSquads.Add(squad);
-            LoadedSoldierCount += count;
         }
 
         public void RemoveSquad(Squad squad)
         {
             _loadedSquads.Remove(squad);
-            LoadedSoldierCount -= squad.Members.Count;
         }
 
         public void UnloadAllSquads()
         {
-            LoadedSoldierCount = 0;
             _loadedSquads.Clear();
         }
     }

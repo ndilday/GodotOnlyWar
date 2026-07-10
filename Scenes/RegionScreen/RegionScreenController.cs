@@ -277,15 +277,17 @@ public partial class RegionScreenController : DialogController
         rows.Add(Row("Intelligence", $"{visibleIntel:0.##}"));
 
         RegionFaction playerFaction = GetPlayerRegionFaction(region);
-        RegionFaction defaultFaction = region.RegionFactionMap.Values.FirstOrDefault(rf => rf.PlanetFaction.Faction.IsDefaultFaction);
         RegionFaction enemyFaction = GetEnemyRegionFaction(region);
 
-        long civilianPop = (defaultFaction?.Population ?? 0) + (playerFaction?.Population ?? 0);
-        if (enemyFaction != null && !enemyFaction.IsPublic)
+        if (region.HasHiddenDefaultFaction())
         {
-            civilianPop += enemyFaction.Population;
+            rows.Add(Row("Civilian Population", "Unknown"));
         }
-        rows.Add(Row("Civilian Population", civilianPop > 0 ? civilianPop.ToString("N0") : "None"));
+        else
+        {
+            long civilianPop = region.GetVisibleCivilianPopulation();
+            rows.Add(Row("Civilian Population", civilianPop > 0 ? civilianPop.ToString("N0") : "None"));
+        }
         rows.Add(Row("Marines", playerFaction?.LandedSquads.Sum(squad => squad.Members.Count).ToString() ?? "0"));
         rows.Add(Row("Assigned Orders", playerFaction?.LandedSquads.Count(squad => squad.CurrentOrders != null).ToString() ?? "0"));
 

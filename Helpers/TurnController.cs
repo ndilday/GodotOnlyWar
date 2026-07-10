@@ -1229,7 +1229,7 @@ namespace OnlyWar.Helpers
                     // snapshot the values: depopulated factions are removed from the map below
                     foreach (RegionFaction regionFaction in region.RegionFactionMap.Values.ToList())
                     {
-                        if(regionFaction.Population <= 0)
+                        if (CanRemoveRegionFaction(regionFaction))
                         {
                             region.RegionFactionMap.Remove(regionFaction.PlanetFaction.Faction.Id);
                         }
@@ -1245,6 +1245,7 @@ namespace OnlyWar.Helpers
                     ResolveBiomassConsumption(region);
                     RecoverCarryingCapacity(region);
                     DecayUnmannedDefenses(region);
+                    RemoveEmptyRegionFactions(region);
                 }
 
                 // Imperial remnant lifecycle (PRD §4.24), in two passes so emigration reads the
@@ -1780,6 +1781,27 @@ namespace OnlyWar.Helpers
                     + $"ent={regionFaction.Entrenchment:F2}, lp={regionFaction.ListeningPost:F2}, "
                     + $"aa={regionFaction.AntiAir:F2}");
             }
+        }
+
+        private static void RemoveEmptyRegionFactions(Region region)
+        {
+            foreach (RegionFaction regionFaction in region.RegionFactionMap.Values.ToList())
+            {
+                if (CanRemoveRegionFaction(regionFaction))
+                {
+                    region.RegionFactionMap.Remove(regionFaction.PlanetFaction.Faction.Id);
+                }
+            }
+        }
+
+        private static bool CanRemoveRegionFaction(RegionFaction regionFaction)
+        {
+            return regionFaction.Population <= 0
+                && regionFaction.Garrison <= 0
+                && regionFaction.LandedSquads.Count == 0
+                && regionFaction.Entrenchment <= 0
+                && regionFaction.ListeningPost <= 0
+                && regionFaction.AntiAir <= 0;
         }
 
         private static bool HasPublicEnemy(Region region)

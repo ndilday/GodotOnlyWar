@@ -1,8 +1,9 @@
-[gd_scene load_steps=4 format=3]
+[gd_scene load_steps=5 format=3]
 
 [ext_resource type="Theme" path="res://Scenes/OnlyWarTheme.tres" id="1_theme"]
 [ext_resource type="Script" path="res://Scenes/FleetScreen/FleetScreenController.cs" id="2_controller"]
 [ext_resource type="Script" path="res://Scenes/FleetScreen/FleetScreenView.cs" id="3_view"]
+[ext_resource type="Script" path="res://Scenes/FleetScreen/FleetTransferTree.cs" id="4_tree"]
 
 [node name="FleetScreenController" type="Control"]
 layout_mode = 3
@@ -76,3 +77,4 @@ offset_right = -10.0
 offset_bottom = -10.0
 grow_horizontal = 2
 grow_vertical = 2
+script = ExtResource("4_tree")

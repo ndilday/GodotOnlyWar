@@ -37,7 +37,7 @@ public class SoldierDetailBuilder
         return new ChapterBrowserDetail(
             GetSoldierIconKey(soldier),
             $"{soldier.Template.Name} {soldier.Name}",
-            soldier.CanFight ? "Available for duty." : "Wounded or impaired.",
+            $"{(soldier.CanFight ? "Available for duty" : "Wounded or impaired")} - {SquadLocationFormatter.Format(soldier.AssignedSquad)}",
             [],
             cards,
             includeOpenFullRecordAction ? "Open Full Record" : null,

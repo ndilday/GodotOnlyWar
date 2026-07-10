@@ -1,5 +1,4 @@
 using OnlyWar.Models;
-using OnlyWar.Models.Planets;
 using OnlyWar.Models.Soldiers;
 using System;
 using System.Collections.Generic;
@@ -59,22 +58,9 @@ namespace OnlyWar.Helpers
                 new("Time in Squad", FormatTimeSinceLastEvent(soldier, SoldierEventType.Transfer, currentDate))
             ];
 
-            if (soldier.AssignedSquad?.BoardedLocation != null)
-            {
-                soldierData.Add(new Tuple<string, string>("Location", $"Aboard {soldier.AssignedSquad.BoardedLocation.Name}"));
-            }
-            else if (soldier.AssignedSquad?.CurrentRegion != null)
-            {
-                Region region = soldier.AssignedSquad.CurrentRegion;
-                string subsectorName = ResolveSubsectorName(sector, region.Planet);
-                soldierData.Add(new Tuple<string, string>(
-                    "Location",
-                    $"Region {region.Id}, {region.Planet.Name}, {subsectorName}"));
-            }
-            else
-            {
-                soldierData.Add(new Tuple<string, string>("Location", "Unknown"));
-            }
+            soldierData.Add(new Tuple<string, string>(
+                "Location",
+                SquadLocationFormatter.Format(soldier.AssignedSquad)));
 
             return soldierData;
         }
@@ -156,15 +142,6 @@ namespace OnlyWar.Helpers
                 ? $"{years} {(years == 1 ? "year" : "years")}"
                 : $"{weeks} {(weeks == 1 ? "week" : "weeks")}";
             return $"{duration} (since {since})";
-        }
-
-        // A Planet carries no back-reference to its Subsector, so we resolve it by scanning
-        // the sector's subsectors for the one that owns the world.
-        private static string ResolveSubsectorName(Sector sector, Planet planet)
-        {
-            Subsector subsector = sector?.Subsectors
-                .FirstOrDefault(s => s.Planets.Contains(planet));
-            return subsector?.Name ?? "Subsector TBD";
         }
 
         // For an award type with multiple tiers, only the marine's most recent / highest

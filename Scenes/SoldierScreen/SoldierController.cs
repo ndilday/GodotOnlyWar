@@ -86,8 +86,11 @@ public partial class SoldierController : Control
         if (_transferService.WouldExceedShipCapacity(
                 _selectedSoldier, option, GameDataSingleton.Instance.Sector.PlayerForce.Army.SquadMap))
         {
+            string transferTarget = _transferService.FormatBlockedTransferTarget(
+                option,
+                GameDataSingleton.Instance.Sector.PlayerForce.Army.SquadMap);
             _transferBlockedDialog.DialogText =
-                $"{option.DisplayName} has no room aboard its ship. Free up space before transferring {_selectedSoldier.Name} there.";
+                $"{transferTarget} has no room aboard its ship. Free up space before transferring {_selectedSoldier.Name} there.";
             _transferBlockedDialog.PopupCentered();
             return;
         }

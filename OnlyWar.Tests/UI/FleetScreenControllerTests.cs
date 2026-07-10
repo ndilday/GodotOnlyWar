@@ -3,6 +3,7 @@ using System.Drawing;
 using System.Linq;
 using OnlyWar.Models;
 using OnlyWar.Models.Fleets;
+using OnlyWar.Models.Planets;
 using OnlyWar.Models.Squads;
 using OnlyWar.Models.Units;
 using OnlyWar.Tests.Fixtures;
@@ -92,6 +93,92 @@ public class FleetScreenControllerTests
         Assert.False(shipNode.Selectable);
     }
 
+    [Fact]
+    public void CanTransferSquadToShip_AllowsShipsInSameFleetWithCapacity()
+    {
+        Unit secondCompany = CreateUnit(2, "Second Company");
+        Ship sourceShip = CreateShip(1, "Source", 20);
+        Ship destinationShip = CreateShip(2, "Destination", 20);
+        _ = new TaskForce(1, CreateFaction(), null, CreatePlanet(1), null, [sourceShip, destinationShip]);
+        Squad squad = CreateSquad(11, "Boreas Squad", secondCompany, memberCount: 5);
+        sourceShip.LoadSquad(squad);
+        squad.BoardedLocation = sourceShip;
+
+        bool canTransfer = FleetScreenController.CanTransferSquadToShip(squad, destinationShip);
+
+        Assert.True(canTransfer);
+    }
+
+    [Fact]
+    public void CanTransferSquadToShip_RejectsShipWithoutCapacity()
+    {
+        Unit secondCompany = CreateUnit(2, "Second Company");
+        Ship sourceShip = CreateShip(1, "Source", 20);
+        Ship destinationShip = CreateShip(2, "Destination", 6);
+        _ = new TaskForce(1, CreateFaction(), null, CreatePlanet(1), null, [sourceShip, destinationShip]);
+        Squad squad = CreateSquad(11, "Boreas Squad", secondCompany, memberCount: 5);
+        Squad occupyingSquad = CreateSquad(12, "Ardent Squad", secondCompany, memberCount: 2);
+        sourceShip.LoadSquad(squad);
+        squad.BoardedLocation = sourceShip;
+        destinationShip.LoadSquad(occupyingSquad);
+        occupyingSquad.BoardedLocation = destinationShip;
+
+        bool canTransfer = FleetScreenController.CanTransferSquadToShip(squad, destinationShip);
+
+        Assert.False(canTransfer);
+    }
+
+    [Fact]
+    public void CanTransferSquadToShip_RejectsShipAtDifferentLocation()
+    {
+        Unit secondCompany = CreateUnit(2, "Second Company");
+        Ship sourceShip = CreateShip(1, "Source", 20);
+        Ship destinationShip = CreateShip(2, "Destination", 20);
+        Faction faction = CreateFaction();
+        _ = new TaskForce(1, faction, null, CreatePlanet(1), null, [sourceShip]);
+        _ = new TaskForce(2, faction, null, CreatePlanet(2), null, [destinationShip]);
+        Squad squad = CreateSquad(11, "Boreas Squad", secondCompany, memberCount: 5);
+        sourceShip.LoadSquad(squad);
+        squad.BoardedLocation = sourceShip;
+
+        bool canTransfer = FleetScreenController.CanTransferSquadToShip(squad, destinationShip);
+
+        Assert.False(canTransfer);
+    }
+
+    [Fact]
+    public void TransferSquadToShip_MovesSquadAndRefreshesCapacity()
+    {
+        Unit secondCompany = CreateUnit(2, "Second Company");
+        Ship sourceShip = CreateShip(1, "Source", 20);
+        Ship destinationShip = CreateShip(2, "Destination", 20);
+        _ = new TaskForce(1, CreateFaction(), null, CreatePlanet(1), null, [sourceShip, destinationShip]);
+        Squad squad = CreateSquad(11, "Boreas Squad", secondCompany, memberCount: 5);
+        sourceShip.LoadSquad(squad);
+        squad.BoardedLocation = sourceShip;
+
+        FleetScreenController.TransferSquadToShip(squad, destinationShip);
+
+        Assert.DoesNotContain(squad, sourceShip.LoadedSquads);
+        Assert.Contains(squad, destinationShip.LoadedSquads);
+        Assert.Equal(destinationShip, squad.BoardedLocation);
+        Assert.Equal(0, sourceShip.LoadedSoldierCount);
+        Assert.Equal(5, destinationShip.LoadedSoldierCount);
+    }
+
+    [Fact]
+    public void LoadedSoldierCount_TracksMembersAddedAfterSquadEmbarks()
+    {
+        Unit secondCompany = CreateUnit(2, "Second Company");
+        Ship ship = CreateShip(1, "Source", 20);
+        Squad squad = new(11, "Boreas Squad", secondCompany, TestModelFactory.SquadTemplate);
+
+        ship.LoadSquad(squad);
+        squad.AddSquadMember(TestModelFactory.CreateSoldier(name: "Boreas Marine"));
+
+        Assert.Equal(1, ship.LoadedSoldierCount);
+    }
+
     private static Ship CreateShip()
     {
         return CreateShip(1, "Bellum", 100);
@@ -115,12 +202,20 @@ public class FleetScreenControllerTests
         child.ParentUnit = parent;
     }
 
-    private static Squad CreateSquad(int id, string name, Unit unit)
+    private static Squad CreateSquad(int id, string name, Unit unit, int memberCount = 1)
     {
         Squad squad = new(id, name, unit, TestModelFactory.SquadTemplate);
-        squad.AddSquadMember(TestModelFactory.CreateSoldier(name: $"{name} Marine"));
+        for (int i = 0; i < memberCount; i++)
+        {
+            squad.AddSquadMember(TestModelFactory.CreateSoldier(name: $"{name} Marine {i + 1}"));
+        }
         unit.AddSquad(squad);
         return squad;
+    }
+
+    private static Planet CreatePlanet(int id)
+    {
+        return new Planet(id, $"Planet {id}", new Coordinate((ushort)id, (ushort)id), 1, null, 1, 0);
     }
 
     private static Faction CreateFaction()

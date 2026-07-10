@@ -19,7 +19,7 @@ public partial class CommandWorkspaceView : DialogView
     private Label _contextTitleLabel;
     private Label _contextSubtitleLabel;
     private VBoxContainer _contextStack;
-    private HBoxContainer _commandBar;
+    private VBoxContainer _commandStack;
 
     public event EventHandler<string> SelectionTreeItemSelected;
     public event EventHandler<string> SelectionTreeItemActivated;
@@ -55,20 +55,39 @@ public partial class CommandWorkspaceView : DialogView
 
     public void SetCommands(IReadOnlyList<CommandAction> actions)
     {
-        ClearContainer(_commandBar);
+        SetCommandRows([actions]);
+    }
 
-        foreach (CommandAction action in actions)
+    public void SetCommandRows(IReadOnlyList<IReadOnlyList<CommandAction>> actionRows)
+    {
+        ClearContainer(_commandStack);
+
+        foreach (IReadOnlyList<CommandAction> rowActions in actionRows)
         {
-            Button button = new()
+            HBoxContainer row = new()
             {
-                Text = action.Text,
-                Disabled = !action.Enabled,
-                MouseDefaultCursorShape = CursorShape.PointingHand,
-                CustomMinimumSize = new Vector2(116, 42)
+                Alignment = BoxContainer.AlignmentMode.End,
+                SizeFlagsHorizontal = SizeFlags.ExpandFill,
+                SizeFlagsVertical = SizeFlags.ShrinkCenter
             };
-            IconAtlas.Apply(button, action.IconKey, 116);
-            button.Pressed += () => CommandPressed?.Invoke(this, action.Key);
-            _commandBar.AddChild(button);
+            row.AddThemeConstantOverride("separation", 8);
+            _commandStack.AddChild(row);
+
+            foreach (CommandAction action in rowActions)
+            {
+                Button button = new()
+                {
+                    Text = action.Text,
+                    Disabled = !action.Enabled,
+                    MouseDefaultCursorShape = CursorShape.PointingHand,
+                    CustomMinimumSize = new Vector2(116, 42),
+                    TextOverrunBehavior = TextServer.OverrunBehavior.TrimEllipsis,
+                    TooltipText = action.Text
+                };
+                IconAtlas.Apply(button, action.IconKey, 116);
+                button.Pressed += () => CommandPressed?.Invoke(this, action.Key);
+                row.AddChild(button);
+            }
         }
     }
 
@@ -148,7 +167,7 @@ public partial class CommandWorkspaceView : DialogView
         }
     }
 
-    protected void BuildWorkspaceShell(float mapRightAnchor, float contextBottomAnchor)
+    protected void BuildWorkspaceShell(float mapRightAnchor, float contextBottomAnchor, float commandTopAnchor = 0.805f)
     {
         BuildHeaderBar();
 
@@ -219,14 +238,15 @@ public partial class CommandWorkspaceView : DialogView
         _contextStack.SizeFlagsHorizontal = SizeFlags.ExpandFill;
         contextScroll.AddChild(_contextStack);
 
-        PanelContainer commandPanel = CreatePanel("CommandPanel", 0.245f, 0.805f, mapRightAnchor, 0.91f);
-        _commandBar = new HBoxContainer
+        PanelContainer commandPanel = CreatePanel("CommandPanel", 0.245f, commandTopAnchor, mapRightAnchor, 0.91f);
+        _commandStack = new VBoxContainer
         {
             Alignment = BoxContainer.AlignmentMode.End,
-            SizeFlagsHorizontal = SizeFlags.ExpandFill
+            SizeFlagsHorizontal = SizeFlags.ExpandFill,
+            SizeFlagsVertical = SizeFlags.ExpandFill
         };
-        _commandBar.AddThemeConstantOverride("separation", 8);
-        commandPanel.AddChild(_commandBar);
+        _commandStack.AddThemeConstantOverride("separation", 6);
+        commandPanel.AddChild(_commandStack);
     }
 
     private void BuildHeaderBar()
