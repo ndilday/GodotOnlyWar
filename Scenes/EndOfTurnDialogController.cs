@@ -1,4 +1,5 @@
 using Godot;
+using OnlyWar.Helpers;
 using OnlyWar.Helpers.Battles;
 using OnlyWar.Helpers.Extensions;
 using OnlyWar.Models.Battles;
@@ -147,19 +148,44 @@ public partial class EndOfTurnDialogController : DialogController
     {
         Mission mission = context.Order?.Mission;
         Region region = mission?.RegionFaction?.Region;
-        string missionType = mission?.MissionType.ToString() ?? "Mission";
+        MissionType missionType = mission?.MissionType ?? MissionType.Patrol;
+        string missionTypeName = mission?.MissionType.ToString() ?? "Mission";
         string location = region == null ? "Unknown location" : $"{region.Name}, {region.Planet?.Name}";
         string force = FormatMissionForce(context.MissionSquads);
+        bool actingFactionIsPlayer = context.MissionSquads
+            .Any(squad => squad?.Squad?.Faction?.IsPlayerFaction == true);
         string attacker = context.MissionSquads
             .Select(squad => squad?.Squad?.Faction?.Name)
             .FirstOrDefault(name => !string.IsNullOrWhiteSpace(name)) ?? "Unknown attacker";
         string defender = mission?.RegionFaction?.PlanetFaction?.Faction?.Name ?? "Unknown defender";
-        string subtitle = $"{attacker} vs {defender}: {force} - {location}";
-        string summary = context.EnemiesKilled > 0
-            ? $"{context.EnemiesKilled} enemies killed. {context.DebriefLines.Count} debrief entries."
-            : $"{context.DebriefLines.Count} debrief entries.";
 
-        return new EndOfTurnReportEntry(missionType, subtitle, summary, true, context);
+        // Mirror BuildStrategicCombatEntry's gating: the player's own missions are always shown in
+        // full, but a mission run by an NPC faction only surfaces precise detail once the player has
+        // some region intel - otherwise it degrades to an unconfirmed report, same as strategic combat.
+        bool hasIntel = actingFactionIsPlayer || (region?.GetPlayerVisibleIntel() ?? 0f) > 0f;
+        if (!hasIntel)
+        {
+            return new EndOfTurnReportEntry(
+                missionTypeName,
+                MissionReportSummaryBuilder.BuildUnconfirmedSubtitle(missionType, location),
+                MissionReportSummaryBuilder.BuildUnconfirmedSummary(missionType, location),
+                true,
+                context);
+        }
+
+        string subtitle = $"{attacker} vs {defender}: {force} - {location}";
+        string summary = MissionReportSummaryBuilder.BuildSummary(
+            missionType,
+            actingFactionIsPlayer,
+            attacker,
+            location,
+            context.EnemiesKilled,
+            context.DaysElapsed,
+            context.Impact,
+            context.Spotter != null,
+            context.Log);
+
+        return new EndOfTurnReportEntry(missionTypeName, subtitle, summary, true, context);
     }
 
     private static EndOfTurnReportEntry BuildStrategicCombatEntry(StrategicCombatResult result)
