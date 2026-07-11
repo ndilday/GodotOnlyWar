@@ -13,6 +13,33 @@ namespace OnlyWar.Helpers.Missions
         public float RunMissionCheck(List<BattleSquad> squads);
     }
 
+    // Central choke point for "learn by doing" field experience (PRD §4.12). Every mission
+    // check, regardless of which IMissionCheck implementation ran it, funnels through here so
+    // field XP is awarded consistently without touching every individual mission step. Awards
+    // go to every able participating PlayerSoldier in the squads that attempted the check (the
+    // whole squad exercises the skill, not just whichever soldier's roll was used to resolve
+    // it), scaled by MissionExperienceCalculator's margin-inverse curve, and only to
+    // PlayerSoldier instances (mirrors PlayerChapterBattleAftermathPolicy's battle XP, which
+    // likewise skips non-player soldiers).
+    internal static class MissionExperienceAwarder
+    {
+        public static void AwardFieldExperience(List<BattleSquad> squads, BaseSkill skillUsed, float margin)
+        {
+            if (squads == null || skillUsed == null)
+            {
+                return;
+            }
+            float points = MissionExperienceCalculator.CalculatePointsForMargin(margin);
+            foreach (BattleSoldier soldier in squads.SelectMany(s => s.AbleSoldiers))
+            {
+                if (soldier?.Soldier is PlayerSoldier playerSoldier)
+                {
+                    playerSoldier.AddSkillPoints(skillUsed, points);
+                }
+            }
+        }
+    }
+
     // A force that has been emptied of able soldiers (combat can wipe or fully incapacitate an
     // order's squad mid-mission) cannot attempt a check; rather than averaging/min-ing over an
     // empty set (which throws), the attempt auto-fails by this many sigma. Modest magnitude so the
@@ -41,7 +68,9 @@ namespace OnlyWar.Helpers.Missions
             BattleSoldier bestSoldier = squads.SelectMany(s => s.AbleSoldiers)
                 .OrderByDescending(soldier => soldier.Soldier.GetTotalSkillValue(SkillUsed))
                 .FirstOrDefault();
-            return RunCheckInternal(bestSoldier);
+            float margin = RunCheckInternal(bestSoldier);
+            MissionExperienceAwarder.AwardFieldExperience(squads, SkillUsed, margin);
+            return margin;
         }
 
         protected float RunCheckInternal(BattleSoldier soldier)
@@ -72,7 +101,9 @@ namespace OnlyWar.Helpers.Missions
             BattleSoldier bestLeader = squads.Select(s => s.SquadLeader)
                 .OrderByDescending(soldier => soldier?.Soldier.GetTotalSkillValue(SkillUsed))
                 .FirstOrDefault();
-            return RunCheckInternal(bestLeader);
+            float margin = RunCheckInternal(bestLeader);
+            MissionExperienceAwarder.AwardFieldExperience(squads, SkillUsed, margin);
+            return margin;
         }
     }
 
@@ -97,7 +128,9 @@ namespace OnlyWar.Helpers.Missions
             }
             float totalSkill = ableSoldiers.Average(soldier => soldier.Soldier.GetTotalSkillValue(SkillUsed));
             float zAdvantage = (totalSkill - _difficulty) / 5.0f;
-            return GaussianCalculator.DetermineMarginOfSuccessZvalue(zAdvantage);
+            float margin = GaussianCalculator.DetermineMarginOfSuccessZvalue(zAdvantage);
+            MissionExperienceAwarder.AwardFieldExperience(squads, SkillUsed, margin);
+            return margin;
         }
     }
 }
