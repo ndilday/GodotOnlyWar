@@ -1,6 +1,7 @@
 ﻿using OnlyWar.Builders;
 using OnlyWar.Helpers.Battles;
 using OnlyWar.Helpers.Extensions;
+using OnlyWar.Helpers.Missions;
 using OnlyWar.Helpers.StrategicCombat;
 using OnlyWar.Models;
 using OnlyWar.Models.Fleets;
@@ -660,6 +661,7 @@ namespace OnlyWar.Helpers
                 MissionContext context = new MissionContext(order, involvedBattleSquads, new List<BattleSquad>());
                 MissionStepOrchestrator.GetStartingStep(context).ExecuteMissionStep(context, 0, null);
                 MissionContexts.Add(context);
+                if (isPlayerOrder) MissionOutcomeRecorder.RecordMissionOutcome(context, GameDataSingleton.Instance.Date);
                 GameLog.Debug(() =>
                     $"Combat mission result {order.AssignedSquads.First().Faction.Name} "
                     + $"{order.Mission.MissionType} -> {DescribeRegionFaction(order.Mission.RegionFaction)}: "
@@ -686,6 +688,7 @@ namespace OnlyWar.Helpers
                 MissionContext context = new MissionContext(order, involvedBattleSquads, new List<BattleSquad>());
                 MissionStepOrchestrator.GetStartingStep(context).ExecuteMissionStep(context, 0, null);
                 MissionContexts.Add(context);
+                if (isPlayerOrder) MissionOutcomeRecorder.RecordMissionOutcome(context, GameDataSingleton.Instance.Date);
                 ApplyDiversionEffect(order, context);
             }
         }
