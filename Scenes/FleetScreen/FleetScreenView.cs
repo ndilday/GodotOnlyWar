@@ -25,10 +25,10 @@ public partial class FleetScreenView : DialogView
         _fleetTree.Clear();
         TreeItem root = _fleetTree.CreateItem();
         _fleetTree.HideRoot = true;
-        AddTreeChildren(root, entries, collapsedByKey);
+        AddTreeChildren(root, entries, collapsedByKey, "");
     }
 
-    private void AddTreeChildren(TreeItem parentItem, IReadOnlyList<TreeNode> nodes, IReadOnlyDictionary<string, bool> collapsedByKey)
+    private void AddTreeChildren(TreeItem parentItem, IReadOnlyList<TreeNode> nodes, IReadOnlyDictionary<string, bool> collapsedByKey, string parentPath)
     {
         foreach (TreeNode childNode in nodes)
         {
@@ -37,10 +37,14 @@ public partial class FleetScreenView : DialogView
             string key = $"{childNode.Kind}:{childNode.Id}";
             childItem.SetMetadata(0, Variant.From(key));
             childItem.SetSelectable(0, childNode.Selectable);
+            // The same company (Unit) can appear under multiple ships, so its "{Kind}:{Id}"
+            // key is not unique on its own. Track collapse state by full path from the root
+            // so each ship's copy of a company keeps its own expanded/collapsed state.
+            string path = $"{parentPath}/{key}";
             if (childNode.Children?.Count > 0)
             {
-                AddTreeChildren(childItem, childNode.Children, collapsedByKey);
-                if (collapsedByKey.TryGetValue(key, out bool wasCollapsed))
+                AddTreeChildren(childItem, childNode.Children, collapsedByKey, path);
+                if (collapsedByKey.TryGetValue(path, out bool wasCollapsed))
                 {
                     childItem.Collapsed = wasCollapsed;
                 }
@@ -57,27 +61,20 @@ public partial class FleetScreenView : DialogView
             return collapsedByKey;
         }
 
-        foreach (TreeItem item in EnumerateTreeItems(root.GetFirstChild()))
+        CaptureCollapsedStates(root.GetFirstChild(), "", collapsedByKey);
+        return collapsedByKey;
+    }
+
+    private static void CaptureCollapsedStates(TreeItem item, string parentPath, Dictionary<string, bool> collapsedByKey)
+    {
+        while (item != null)
         {
             string key = item.GetMetadata(0).AsString();
             if (!string.IsNullOrEmpty(key))
             {
-                collapsedByKey[key] = item.Collapsed;
-            }
-        }
-
-        return collapsedByKey;
-    }
-
-    private static IEnumerable<TreeItem> EnumerateTreeItems(TreeItem item)
-    {
-        while (item != null)
-        {
-            yield return item;
-
-            foreach (TreeItem child in EnumerateTreeItems(item.GetFirstChild()))
-            {
-                yield return child;
+                string path = $"{parentPath}/{key}";
+                collapsedByKey[path] = item.Collapsed;
+                CaptureCollapsedStates(item.GetFirstChild(), path, collapsedByKey);
             }
 
             item = item.GetNext();

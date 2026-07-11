@@ -223,7 +223,7 @@ public partial class PlanetTacticalScreenController : DialogController
     {
         if (_selectedPlanet == null) return Array.Empty<CommandTreeNode>();
 
-        List<CommandTreeNode> roots = [BuildRegionsGroup()];
+        List<CommandTreeNode> roots = [];
         if (_rosterFilter != "surface")
         {
             roots.Add(new CommandTreeNode("group:orbit", "In Orbit", BuildOrbitShipNodes()));
@@ -233,20 +233,6 @@ public partial class PlanetTacticalScreenController : DialogController
             roots.Add(new CommandTreeNode("group:surface", "Deployed", BuildSurfaceRegionNodes()));
         }
         return roots;
-    }
-
-    private CommandTreeNode BuildRegionsGroup()
-    {
-        List<CommandTreeNode> regionNodes = _selectedPlanet.Regions.Select(region =>
-        {
-            RegionFaction playerFaction = GetPlayerRegionFaction(region);
-            int total = playerFaction?.LandedSquads.Count ?? 0;
-            string ordersSuffix = total > 0
-                ? $" | {playerFaction.LandedSquads.Count(squad => squad.CurrentOrders != null)}/{total} orders"
-                : "";
-            return new CommandTreeNode(RegionKey(region.Id), $"{region.Name} | {GetRegionControlLabel(region)}{ordersSuffix}");
-        }).ToList();
-        return new CommandTreeNode("group:regions", "Regions", regionNodes);
     }
 
     private IReadOnlyList<CommandTreeNode> BuildOrbitShipNodes()

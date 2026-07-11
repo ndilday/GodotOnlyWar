@@ -4,7 +4,7 @@ using Microsoft.Data.Sqlite;
 
 if (args.Length < 2)
 {
-    Console.Error.WriteLine("Usage: RulesDbTool <schema|training-source|migrate-training|migrate-progenoid|migrate-ratings|migrate-planet-scales|migrate-fortification|migrate-tyranids|migrate-tyranid-squads|migrate-tyranid-consumption|migrate-evasion|migrate-squad-caps|migrate-veteran-sergeant|migrate-collapse-sergeants|migrate-chaplaincy|migrate-company-judiciar|migrate-company-apothecary|migrate-remove-veteran-captain|migrate-remove-recruitment-captain|migrate-starting-fleet-capacity|migrate-pdf|migrate-scout-skills|migrate-leader-tactics|remove-unused-unit-templates> <db-path>");
+    Console.Error.WriteLine("Usage: RulesDbTool <schema|training-source|migrate-training|migrate-progenoid|migrate-ratings|migrate-planet-scales|migrate-fortification|migrate-tyranids|migrate-tyranid-squads|migrate-tyranid-consumption|migrate-evasion|migrate-squad-caps|migrate-veteran-sergeant|migrate-collapse-sergeants|migrate-chaplaincy|migrate-company-judiciar|migrate-company-apothecary|migrate-remove-veteran-captain|migrate-remove-recruitment-captain|migrate-starting-fleet-capacity|migrate-pdf|migrate-scout-skills|migrate-leader-tactics|migrate-ship-capacity|remove-unused-unit-templates> <db-path>");
     return 1;
 }
 
@@ -13,7 +13,7 @@ string dbPath = args[1];
 string connectionString = new SqliteConnectionStringBuilder
 {
     DataSource = dbPath,
-    Mode = command is "migrate-training" or "migrate-progenoid" or "migrate-ratings" or "migrate-planet-scales" or "migrate-fortification" or "migrate-tyranids" or "migrate-tyranid-squads" or "migrate-tyranid-consumption" or "migrate-evasion" or "migrate-squad-caps" or "migrate-veteran-sergeant" or "migrate-collapse-sergeants" or "migrate-chaplaincy" or "migrate-company-judiciar" or "migrate-company-apothecary" or "migrate-remove-veteran-captain" or "migrate-remove-recruitment-captain" or "migrate-starting-fleet-capacity" or "migrate-pdf" or "migrate-scout-skills" or "migrate-leader-tactics" or "remove-unused-unit-templates" ? SqliteOpenMode.ReadWriteCreate : SqliteOpenMode.ReadOnly
+    Mode = command is "migrate-training" or "migrate-progenoid" or "migrate-ratings" or "migrate-planet-scales" or "migrate-fortification" or "migrate-tyranids" or "migrate-tyranid-squads" or "migrate-tyranid-consumption" or "migrate-evasion" or "migrate-squad-caps" or "migrate-veteran-sergeant" or "migrate-collapse-sergeants" or "migrate-chaplaincy" or "migrate-company-judiciar" or "migrate-company-apothecary" or "migrate-remove-veteran-captain" or "migrate-remove-recruitment-captain" or "migrate-starting-fleet-capacity" or "migrate-pdf" or "migrate-scout-skills" or "migrate-leader-tactics" or "migrate-ship-capacity" or "remove-unused-unit-templates" ? SqliteOpenMode.ReadWriteCreate : SqliteOpenMode.ReadOnly
 }.ToString();
 
 using SqliteConnection connection = new(connectionString);
@@ -92,6 +92,9 @@ switch (command)
         break;
     case "migrate-leader-tactics":
         MigrateLeaderTactics(connection);
+        break;
+    case "migrate-ship-capacity":
+        MigrateShipCapacity(connection);
         break;
     default:
         Console.Error.WriteLine($"Unknown command: {command}");
@@ -1153,6 +1156,23 @@ static void MigrateStartingFleetCapacity(SqliteConnection connection)
     transaction.Commit();
     Console.WriteLine(
         $"Starting fleet capacity migration complete. Added {inserted} Strike Cruiser template link(s).");
+}
+
+// Retune the troop-carrying capacity (SoldierCapacity) of two player-faction ship classes:
+// the Strike Cruiser to 110 and the Gladius Escort to 15. Resolved by ClassName so it is not
+// tied to a ShipTemplate.Id. Idempotent (a straight UPDATE to fixed target values).
+static void MigrateShipCapacity(SqliteConnection connection)
+{
+    using SqliteTransaction transaction = connection.BeginTransaction();
+
+    int strike = Execute(connection, transaction,
+        "UPDATE ShipTemplate SET SoldierCapacity = 110 WHERE ClassName = 'Strike Cruiser' AND FactionId = 1");
+    int gladius = Execute(connection, transaction,
+        "UPDATE ShipTemplate SET SoldierCapacity = 15 WHERE ClassName = 'Gladius Escort' AND FactionId = 1");
+
+    transaction.Commit();
+    Console.WriteLine(
+        $"Ship capacity migration complete. Updated {strike} Strike Cruiser and {gladius} Gladius Escort row(s).");
 }
 
 // The default-Imperial faction (the PDF) shipped with no species, soldier, or squad

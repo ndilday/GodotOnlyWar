@@ -101,9 +101,13 @@ public partial class ChapterController : Control
     {
         // While a filter is active the left menu shows a flat result list; a click just
         // previews the soldier and never drills, so the results stay put.
+        // Outside of filtering, a soldier is a leaf: selecting one from a squad roster (or
+        // switching between soldiers once drilled in) opens its own detail so the transfer
+        // control is available, matching how filter results behave.
         if (_activeFilter.Count == 0 &&
             item.Level == ChapterBrowserLevel.Soldier &&
-            _navigator.Path.Level == ChapterBrowserLevel.Soldier)
+            (_navigator.Path.Level == ChapterBrowserLevel.Soldier ||
+             _navigator.Path.Level == ChapterBrowserLevel.Squad))
         {
             _navigator.DrillInto(item);
         }
@@ -208,6 +212,7 @@ public partial class ChapterController : Control
         // that same context rather than following this one to its new home.
         List<int> contextSoldierIds = GetCurrentContextSoldierIds();
         int transferIndex = contextSoldierIds.IndexOf(soldier.Id);
+        int originSquadId = soldier.AssignedSquad.Id;
 
         GameDataSingleton.Instance.Sector.PlayerForce.Army.PopulateSquadMap();
         bool didTransfer = _transferService.ApplyTransfer(
@@ -218,7 +223,20 @@ public partial class ChapterController : Control
 
         if (didTransfer)
         {
-            SelectNextInContext(contextSoldierIds, transferIndex);
+            // Moving the last member out empties (and disbands) the origin squad — e.g. the
+            // final scout leaving a scout squad. If the path we're browsing referenced that
+            // squad, it's now stale and the next render would crash, so follow the soldier to
+            // his new squad instead of advancing within the vanished context.
+            bool originSquadRemoved =
+                !GetChapter().GetAllSquads().Any(squad => squad.Id == originSquadId);
+            if (originSquadRemoved && _navigator.Path.SquadId == originSquadId)
+            {
+                NavigateToSoldierSquad(soldier);
+            }
+            else
+            {
+                SelectNextInContext(contextSoldierIds, transferIndex);
+            }
         }
 
         ClearPendingTransfer();
@@ -372,7 +390,17 @@ public partial class ChapterController : Control
 
         ChapterView.SetLeftMenu("Battle Brothers", soldiers);
 
-        ChapterView.SetDetail(BuildSquadDetail(squad, selectedSoldier));
+        // A soldier is a leaf, so entering a squad shows the auto-selected top member's own
+        // detail (with the transfer control) rather than a squad overview, keeping squad entry
+        // consistent with clicking any other member. Empty squads fall back to the overview.
+        if (selectedSoldier != null)
+        {
+            SetSoldierDetail(selectedSoldier);
+        }
+        else
+        {
+            ChapterView.SetDetail(BuildSquadDetail(squad, null));
+        }
     }
 
     private void RenderSoldierLevel(ISoldier soldier)
@@ -398,7 +426,7 @@ public partial class ChapterController : Control
     private void SetSoldierDetail(ISoldier soldier)
     {
         _currentDetailSoldierId = soldier.Id;
-        ChapterView.SetDetail(_soldierDetailBuilder.Build(soldier, false));
+        ChapterView.SetDetail(_soldierDetailBuilder.Build(soldier, false, includeSquadInTitle: true));
         if (soldier is PlayerSoldier playerSoldier)
         {
             _transferOptions = _transferService.GetTransferOptions(
@@ -543,6 +571,44 @@ public partial class ChapterController : Control
         _navigator.Select(nextId.HasValue
             ? new ChapterBrowserItemEvent(ChapterBrowserLevel.Soldier, nextId.Value)
             : null);
+    }
+
+    // Points the browser at the squad the soldier now belongs to, selecting the soldier itself.
+    // Used after a transfer disbands the squad we were viewing, so the stale path can't crash the
+    // next render and the player follows the soldier to his new home. Any active filter is cleared
+    // since its scope (the disbanded squad) no longer exists.
+    private void NavigateToSoldierSquad(ISoldier soldier)
+    {
+        Squad newSquad = soldier.AssignedSquad;
+        _activeFilter = [];
+        _navigator.Path.CompanyId = FindCompanyId(newSquad);
+        _navigator.Path.SquadId = newSquad?.Id;
+        _navigator.Path.SoldierId = soldier.Id;
+        _navigator.Select(new ChapterBrowserItemEvent(ChapterBrowserLevel.Soldier, soldier.Id));
+    }
+
+    // The breadcrumb path models companies as direct children of the chapter, so map a squad back
+    // to the company that owns it (a company may nest the squad in a sub-unit, hence GetAllSquads).
+    // Returns null for a chapter-level command squad that hangs directly off the order of battle.
+    private int? FindCompanyId(Squad squad)
+    {
+        if (squad == null)
+        {
+            return null;
+        }
+        Unit chapter = GetChapter();
+        if (chapter.Squads.Contains(squad))
+        {
+            return null;
+        }
+        foreach (Unit company in chapter.ChildUnits)
+        {
+            if (company.GetAllSquads().Contains(squad))
+            {
+                return company.Id;
+            }
+        }
+        return null;
     }
 
     private IReadOnlyList<ChapterBreadcrumbItem> BuildBreadcrumbs(Unit chapter)

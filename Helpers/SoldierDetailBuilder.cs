@@ -9,7 +9,7 @@ public class SoldierDetailBuilder
 {
     private readonly SoldierDossierService _dossierService = new();
 
-    public ChapterBrowserDetail Build(ISoldier soldier, bool includeOpenFullRecordAction)
+    public ChapterBrowserDetail Build(ISoldier soldier, bool includeOpenFullRecordAction, bool includeSquadInTitle = false)
     {
         List<ChapterBrowserDetailCard> cards = [];
 
@@ -34,9 +34,15 @@ public class SoldierDetailBuilder
             cards.Add(new ChapterBrowserDetailCard("archive", "Record", "Chronicle", "Detailed battle history is only available for player soldiers."));
         }
 
+        string title = $"{soldier.Template.Name} {soldier.Name}";
+        if (includeSquadInTitle && soldier.AssignedSquad != null)
+        {
+            title += $" - {soldier.AssignedSquad.Name}, {soldier.AssignedSquad.ParentUnit.Name}";
+        }
+
         return new ChapterBrowserDetail(
             GetSoldierIconKey(soldier),
-            $"{soldier.Template.Name} {soldier.Name}",
+            title,
             $"{(soldier.CanFight ? "Available for duty" : "Wounded or impaired")} - {SquadLocationFormatter.Format(soldier.AssignedSquad)}",
             [],
             cards,
