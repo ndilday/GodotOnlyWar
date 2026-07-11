@@ -36,7 +36,7 @@ public partial class Camera2D : Godot.Camera2D
 								  _sectorMap.GridDimensions.Y * _sectorMap.CellSize.Y + 2 * MapBorderPixels);
     }
 
-	public override void _Input(InputEvent @event)
+	public override void _UnhandledInput(InputEvent @event)
 	{
         if (@event is InputEventMouseButton emb)
         {

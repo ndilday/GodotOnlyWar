@@ -26,7 +26,12 @@ namespace OnlyWar.Helpers.Missions.Assault
             // The attacker's preparation check remains the same
             BaseSkill tactics = GameDataSingleton.Instance.GameRulesData.Skills.Tactics;
             LeaderMissionTest missionTest = new LeaderMissionTest(tactics, 10.0f);
-            context.AddLog($"Day {context.DaysElapsed}: Force prepares to assault {context.Order.Mission.RegionFaction.Region.Name}");
+            string attacker = context.MissionSquads
+                .Select(squad => squad?.Squad?.Faction?.Name)
+                .FirstOrDefault(name => !string.IsNullOrWhiteSpace(name)) ?? "Unknown force";
+            string defender = context.Order.Mission.RegionFaction.PlanetFaction.Faction.Name;
+            string region = context.Order.Mission.RegionFaction.Region.Name;
+            context.AddLog($"Day {context.DaysElapsed}: {attacker} prepares to assault {defender} forces in {region}.");
             float margin = missionTest.RunMissionCheck(context.MissionSquads);
 
             // Assemble the defending force from actual units and garrisons
@@ -36,7 +41,7 @@ namespace OnlyWar.Helpers.Missions.Assault
             {
                 // No defenders, the assault is an uncontested success.
                 // This could be a separate mission step in the future (e.g., "Secure Unopposed Region").
-                context.AddLog($"Day {context.DaysElapsed}: Assault on {context.Order.Mission.RegionFaction.Region.Name} is unopposed.");
+                context.AddLog($"Day {context.DaysElapsed}: {attacker}'s assault on {defender} forces in {region} is unopposed.");
                 context.Impact += 5; // Give a significant positive impact for taking territory freely.
                 // a more robust system would properly transfer ownership here
                 return;
@@ -45,38 +50,41 @@ namespace OnlyWar.Helpers.Missions.Assault
             new MeetingEngagementMissionStep().ExecuteMissionStep(context, margin, null);
         }
 
-        private List<BattleSquad> AssembleDefendingForce(RegionFaction defendingRegionFaction, float attackerMarginOfSuccess)
+        internal List<BattleSquad> AssembleDefendingForce(RegionFaction defendingRegionFaction, float attackerMarginOfSuccess)
         {
             var defendingForce = new List<BattleSquad>();
-            bool defenderIsPlayer = defendingRegionFaction.PlanetFaction.Faction.IsPlayerFaction;
+
+            // A defence order protects the geographic region, not merely one faction's enclave
+            // within it. Under the current two-coalition diplomacy model, the Chapter and the
+            // default Imperial faction fight together; hostile non-Imperial forces likewise share
+            // a side. Pool every allied presence in the assaulted region.
+            List<RegionFaction> alliedDefenders = defendingRegionFaction.Region.RegionFactionMap.Values
+                .Where(rf => AreAllied(rf.PlanetFaction.Faction, defendingRegionFaction.PlanetFaction.Faction))
+                .ToList();
 
             // 1. Get all landed squads in the region with defensive orders. A diversion force is
             // deliberately in the open, so it too is caught up in the fighting if its feint draws
             // a counterattack into the region it is standing in. A standing patrol is likewise a
             // screen posted to engage raiders — it joins the defence of the region it patrols.
-            var defendingSquads = defendingRegionFaction.LandedSquads
-                                                        .Where(s => s.CurrentOrders?.Mission.MissionType == MissionType.DefenseInDepth
-                                                                 || s.CurrentOrders?.Mission.MissionType == MissionType.Diversion
-                                                                 || s.CurrentOrders?.Mission.MissionType == MissionType.Patrol)
-                                                        .ToList();
+            var defendingSquads = GetRegionalDefensiveSquads(defendingRegionFaction);
 
             if (defendingSquads.Any())
             {
-                defendingForce.AddRange(defendingSquads.Select(s => new BattleSquad(defenderIsPlayer, s)));
+                defendingForce.AddRange(defendingSquads.Select(s => new BattleSquad(s.Faction?.IsPlayerFaction == true, s)));
             }
 
-            // 2. Generate squads based on the garrison count
-            if (defendingRegionFaction.Garrison > 0)
+            // 2. Generate squads for each allied faction's abstract garrison.
+            foreach (RegionFaction alliedDefender in alliedDefenders.Where(rf => rf.Garrison > 0))
             {
                 // Attacker's success in preparation reduces the effectiveness of the garrison mobilization
                 float cdf = GaussianCalculator.ApproximateNormalCDF(attackerMarginOfSuccess);
                 float multiplier = (float)Math.Pow(2, 1 - (2 * cdf));
-                long effectiveGarrison = (long)(defendingRegionFaction.Garrison * multiplier);
+                long effectiveGarrison = (long)(alliedDefender.Garrison * multiplier);
                 long targetBattleValue = Math.Min(effectiveGarrison * 10L, MaxTacticalGarrisonBattleValue);
 
                 var request = new ForceGenerationRequest
                 {
-                    Faction = defendingRegionFaction.PlanetFaction.Faction,
+                    Faction = alliedDefender.PlanetFaction.Faction,
                     TargetBattleValue = targetBattleValue,
                     Profile = ForceCompositionProfile.Garrison
                 };
@@ -85,6 +93,26 @@ namespace OnlyWar.Helpers.Missions.Assault
             }
 
             return defendingForce;
+        }
+
+        internal static bool AreAllied(Faction first, Faction second)
+        {
+            if (first == null || second == null) return false;
+            bool firstIsImperial = first.IsPlayerFaction || first.IsDefaultFaction;
+            bool secondIsImperial = second.IsPlayerFaction || second.IsDefaultFaction;
+            return firstIsImperial == secondIsImperial;
+        }
+
+        internal static List<Squad> GetRegionalDefensiveSquads(RegionFaction defendingRegionFaction)
+        {
+            Faction defender = defendingRegionFaction.PlanetFaction.Faction;
+            return defendingRegionFaction.Region.RegionFactionMap.Values
+                .Where(rf => AreAllied(rf.PlanetFaction.Faction, defender))
+                .SelectMany(rf => rf.LandedSquads)
+                .Where(s => s.CurrentOrders?.Mission.MissionType == MissionType.DefenseInDepth
+                         || s.CurrentOrders?.Mission.MissionType == MissionType.Diversion
+                         || s.CurrentOrders?.Mission.MissionType == MissionType.Patrol)
+                .ToList();
         }
 
         private static List<Squad> CapTacticalForce(IEnumerable<Squad> squads)

@@ -63,7 +63,11 @@ public partial class EndOfTurnDialogController : DialogController
         {
             PackedScene scene = GD.Load<PackedScene>("res://Scenes/MissionDebriefDialog.tscn");
             _missionDebriefDialog = (MissionDebriefDialogController)scene.Instantiate();
-            _missionDebriefDialog.CloseButtonPressed += (s, e) => _missionDebriefDialog.Visible = false;
+            _missionDebriefDialog.CloseButtonPressed += (s, e) =>
+            {
+                _missionDebriefDialog.Visible = false;
+                _view.Visible = true;
+            };
             _missionDebriefDialog.BattleReviewRequested += OnBattleReviewRequested;
             AddChild(_missionDebriefDialog);
         }
@@ -74,6 +78,7 @@ public partial class EndOfTurnDialogController : DialogController
             entry.MissionContext.DebriefLines.Count > 0
                 ? entry.MissionContext.DebriefLines
                 : entry.MissionContext.Log.Select(line => new MissionDebriefLine(line)).ToList());
+        _view.Visible = false;
         _missionDebriefDialog.Visible = true;
     }
 
@@ -145,7 +150,11 @@ public partial class EndOfTurnDialogController : DialogController
         string missionType = mission?.MissionType.ToString() ?? "Mission";
         string location = region == null ? "Unknown location" : $"{region.Name}, {region.Planet?.Name}";
         string force = FormatMissionForce(context.MissionSquads);
-        string subtitle = $"{force} - {location}";
+        string attacker = context.MissionSquads
+            .Select(squad => squad?.Squad?.Faction?.Name)
+            .FirstOrDefault(name => !string.IsNullOrWhiteSpace(name)) ?? "Unknown attacker";
+        string defender = mission?.RegionFaction?.PlanetFaction?.Faction?.Name ?? "Unknown defender";
+        string subtitle = $"{attacker} vs {defender}: {force} - {location}";
         string summary = context.EnemiesKilled > 0
             ? $"{context.EnemiesKilled} enemies killed. {context.DebriefLines.Count} debrief entries."
             : $"{context.DebriefLines.Count} debrief entries.";
