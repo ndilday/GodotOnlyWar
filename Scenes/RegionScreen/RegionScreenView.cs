@@ -177,7 +177,13 @@ public partial class RegionScreenView : CommandWorkspaceView
             IconAtlas.Apply(button, GetMissionIconKey(mission.Kind), 0);
             AvailableMission capturedMission = mission;
             button.Pressed += () => MissionSelected?.Invoke(this, capturedMission);
-            OnlyWarStyle.ApplyAccentButtonRow(button, button.ButtonPressed, mission.Kind == MissionAvailabilityKind.Special ? OnlyWarStyle.Gold : OnlyWarStyle.PlayerAccent);
+            Color accent = mission.Kind == MissionAvailabilityKind.Special ? OnlyWarStyle.Gold : OnlyWarStyle.PlayerAccent;
+            OnlyWarStyle.ApplyAccentButtonRow(button, button.ButtonPressed, accent);
+            // Re-apply the accent styling whenever the toggle state changes so a button the
+            // ButtonGroup silently deselects (e.g. selecting a mission in the other column)
+            // doesn't keep its highlighted "normal" stylebox.
+            Button capturedButton = button;
+            button.Toggled += pressed => OnlyWarStyle.ApplyAccentButtonRow(capturedButton, pressed, accent);
             _missionButtons.Add(button);
             _missionsListStack.AddChild(button);
         }

@@ -2237,6 +2237,18 @@ namespace OnlyWar.Helpers
             {
                 foreach (Region region in planet.Regions)
                 {
+                    float visibleIntel = region.GetPlayerVisibleIntel();
+                    if (visibleIntel <= 0)
+                    {
+                        // Special missions are intelligence-derived opportunities (Ambush,
+                        // Sabotage, Assassination, ...). Once the player's visible intel in a
+                        // region decays to zero the opportunities can no longer be tracked, so
+                        // they expire wholesale rather than lingering as stale entries on the
+                        // orders menu after the intel that produced them is gone.
+                        region.SpecialMissions.Clear();
+                        continue;
+                    }
+
                     // 25% chance of unexecuted special missions being removed
                     // snapshot the list: expired missions are removed from it below
                     foreach (Mission mission in region.SpecialMissions.ToList())
@@ -2247,7 +2259,6 @@ namespace OnlyWar.Helpers
                             region.SpecialMissions.Remove(mission);
                         }
                     }
-                    float visibleIntel = region.GetPlayerVisibleIntel();
                     if (visibleIntel > 0)
                     {
                         // The special-mission opportunity budget is rolled once for the whole region

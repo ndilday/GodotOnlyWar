@@ -169,6 +169,9 @@ public class SectorEntityLogicTests
         SectorSimulationFixture fixture = SectorSimulationFixture.Create();
         RegionFaction cult = fixture.AddHiddenFaction(0, GrowthType.Logistic, population: 20000);
         Region region = fixture.Planet.Regions[0];
+        // The staleness (25% decay) path only applies while the player still has intel on the
+        // region; with zero intel the opportunities expire wholesale (see the test below).
+        fixture.DefaultPlanetFaction.SetRegionIntel(region, 10.0f);
         for (int i = 0; i < 100; i++)
         {
             region.SpecialMissions.Add(new Mission(MissionType.Ambush, cult, 1));
@@ -178,6 +181,26 @@ public class SectorEntityLogicTests
 
         // each stale mission has a 25% chance to expire: expect roughly 75 to remain
         Assert.InRange(region.SpecialMissions.Count, 50, 95);
+    }
+
+    [Fact]
+    public void ProcessTurn_ClearsSpecialMissionsWhenPlayerIntelReachesZero()
+    {
+        RNG.Reset(98765);
+        SectorSimulationFixture fixture = SectorSimulationFixture.Create();
+        RegionFaction cult = fixture.AddHiddenFaction(0, GrowthType.Logistic, population: 20000);
+        Region region = fixture.Planet.Regions[0];
+        // No intel on the region: the opportunities that earlier intel produced can no longer be
+        // tracked, so they should all expire rather than lingering as stale menu entries.
+        fixture.DefaultPlanetFaction.SetRegionIntel(region, 0f);
+        for (int i = 0; i < 100; i++)
+        {
+            region.SpecialMissions.Add(new Mission(MissionType.Ambush, cult, 1));
+        }
+
+        fixture.ProcessTurn();
+
+        Assert.Empty(region.SpecialMissions);
     }
 
     [Fact]
