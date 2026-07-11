@@ -7,6 +7,11 @@ using System.Linq;
 
 public partial class BattleReviewView : DialogView
 {
+    private const float KeyboardPanSpeed = 520.0f;
+    private const float WheelZoomFactor = 1.12f;
+    private const float KeyboardZoomSpeed = 1.6f;
+    private const float MinZoom = 0.35f;
+    private const float MaxZoom = 3.0f;
     private Label _battleTitleLabel;
     private Label _roundLabel;
     private Label _phaseLabel;
@@ -14,6 +19,8 @@ public partial class BattleReviewView : DialogView
     private VBoxContainer _forceTreeVBox;
     private HBoxContainer _timelineBox;
     private GridContainer _casualtyGrid;
+    private SubViewportContainer _replayViewportContainer;
+    private bool _isPanning;
     private Label _selectedNameLabel;
     private Label _selectedMetaLabel;
     private RichTextLabel _selectedStatsLabel;
@@ -49,7 +56,7 @@ public partial class BattleReviewView : DialogView
         _resultLabel = GetNode<Label>("Layout/CenterPanel/HeaderPanel/HeaderMargin/HeaderStack/TitleRow/ResultLabel");
         _forceTreeVBox = GetNode<VBoxContainer>("Layout/LeftPanel/LeftMargin/LeftStack/ForceScroll/ForceTreeVBox");
         _timelineBox = GetNode<HBoxContainer>("Layout/CenterPanel/BottomPanel/BottomMargin/BottomStack/TimelineScroll/TimelineBox");
-        _casualtyGrid = GetNode<GridContainer>("Layout/CenterPanel/BottomPanel/BottomMargin/BottomStack/CasualtyGrid");
+        _casualtyGrid = GetNode<GridContainer>("Layout/CenterPanel/BottomPanel/BottomMargin/BottomStack/CasualtyScroll/CasualtyGrid");
         _selectedNameLabel = GetNode<Label>("Layout/RightPanel/SelectedPanel/SelectedMargin/SelectedStack/SelectedNameLabel");
         _selectedMetaLabel = GetNode<Label>("Layout/RightPanel/SelectedPanel/SelectedMargin/SelectedStack/SelectedMetaLabel");
         _selectedStatsLabel = GetNode<RichTextLabel>("Layout/RightPanel/SelectedPanel/SelectedMargin/SelectedStack/SelectedStatsLabel");
@@ -63,6 +70,9 @@ public partial class BattleReviewView : DialogView
         _speedButton = GetNode<Button>("Layout/CenterPanel/HeaderPanel/HeaderMargin/HeaderStack/PlaybackRow/SpeedButton");
         MapRoot = GetNode<Node2D>("Layout/CenterPanel/ReplayPanel/SubViewportContainer/SubViewport/MapRoot");
         ReplayCamera = GetNode<Godot.Camera2D>("Layout/CenterPanel/ReplayPanel/SubViewportContainer/SubViewport/Camera2D");
+        _replayViewportContainer = GetNode<SubViewportContainer>("Layout/CenterPanel/ReplayPanel/SubViewportContainer");
+        _replayViewportContainer.TooltipText = "Right-drag or use WASD to pan. Mouse wheel or Q/E to zoom.";
+        _replayViewportContainer.GuiInput += HandleReplayInput;
 
         _previousRoundButton.Pressed += () => PreviousRoundPressed?.Invoke(this, EventArgs.Empty);
         _stepBackButton.Pressed += () => StepBackPressed?.Invoke(this, EventArgs.Empty);
@@ -70,6 +80,63 @@ public partial class BattleReviewView : DialogView
         _stepForwardButton.Pressed += () => StepForwardPressed?.Invoke(this, EventArgs.Empty);
         _nextRoundButton.Pressed += () => NextRoundPressed?.Invoke(this, EventArgs.Empty);
         _speedButton.Pressed += () => SpeedPressed?.Invoke(this, EventArgs.Empty);
+    }
+
+    private void HandleReplayInput(InputEvent inputEvent)
+    {
+        if (inputEvent is InputEventMouseButton button)
+        {
+            if (button.ButtonIndex == MouseButton.Right)
+            {
+                _isPanning = button.Pressed;
+                _replayViewportContainer.AcceptEvent();
+            }
+            else if (button.Pressed && (button.ButtonIndex == MouseButton.WheelUp || button.ButtonIndex == MouseButton.WheelDown))
+            {
+                float factor = button.ButtonIndex == MouseButton.WheelUp ? WheelZoomFactor : 1.0f / WheelZoomFactor;
+                ZoomAtPoint(button.Position, factor);
+                _replayViewportContainer.AcceptEvent();
+            }
+        }
+        else if (inputEvent is InputEventMouseMotion motion && _isPanning)
+        {
+            ReplayCamera.Position -= motion.Relative / ReplayCamera.Zoom;
+            _replayViewportContainer.AcceptEvent();
+        }
+    }
+
+    public override void _Process(double delta)
+    {
+        base._Process(delta);
+
+        if (Input.IsKeyPressed(Key.E) ^ Input.IsKeyPressed(Key.Q))
+        {
+            float direction = Input.IsKeyPressed(Key.E) ? 1.0f : -1.0f;
+            float factor = Mathf.Pow(KeyboardZoomSpeed, direction * (float)delta);
+            ZoomAtPoint(_replayViewportContainer.Size / 2.0f, factor);
+        }
+
+        Vector2 panDirection = Vector2.Zero;
+        if (Input.IsKeyPressed(Key.W)) panDirection.Y -= 1.0f;
+        if (Input.IsKeyPressed(Key.S)) panDirection.Y += 1.0f;
+        if (Input.IsKeyPressed(Key.A)) panDirection.X -= 1.0f;
+        if (Input.IsKeyPressed(Key.D)) panDirection.X += 1.0f;
+        if (panDirection == Vector2.Zero) return;
+
+        ReplayCamera.Position += panDirection.Normalized() * KeyboardPanSpeed * (float)delta / ReplayCamera.Zoom.X;
+    }
+
+    // Zooms by 'factor' while keeping the world point currently under 'screenPoint'
+    // (in viewport-container pixels) fixed on screen. The camera uses FixedTopLeft
+    // anchoring, so the world point under a screen pixel is Position + screenPoint / Zoom.
+    private void ZoomAtPoint(Vector2 screenPoint, float factor)
+    {
+        float oldZoom = ReplayCamera.Zoom.X;
+        float newZoom = Math.Clamp(oldZoom * factor, MinZoom, MaxZoom);
+        if (Mathf.IsEqualApprox(newZoom, oldZoom)) return;
+
+        ReplayCamera.Position += screenPoint * (1.0f / oldZoom - 1.0f / newZoom);
+        ReplayCamera.Zoom = new Vector2(newZoom, newZoom);
     }
 
     public void SetDisplay(BattleReplayDisplay display)
@@ -197,10 +264,7 @@ public partial class BattleReviewView : DialogView
         _selectedStatsLabel.Text =
             $"[color=#f4d885]Starting Strength:[/color] {summary.StartingStrength}\n" +
             $"[color=#f4d885]Current Strength:[/color] {summary.CurrentStrength}\n" +
-            $"[color=#f4d885]Losses:[/color] {summary.Losses} ({summary.LossPercent:P0})\n" +
-            $"[color=#f4d885]Fatigue:[/color] {summary.FatigueLabel}\n" +
-            $"[color=#f4d885]Morale:[/color] {summary.MoraleLabel}\n" +
-            $"[color=#f4d885]Ammunition:[/color] {summary.AmmunitionLabel}";
+            $"[color=#f4d885]Losses:[/color] {summary.Losses} ({summary.LossPercent:P0})";
 
         foreach (string effect in summary.NotableEffects)
         {
@@ -279,10 +343,10 @@ public partial class BattleReviewView : DialogView
     {
         ClearContainer(_casualtyGrid);
         AddCasualtyCell("Round", true);
-        AddCasualtyCell("Player", true);
-        AddCasualtyCell("Enemy", true);
-        AddCasualtyCell("P Cum.", true);
-        AddCasualtyCell("E Cum.", true);
+        AddCasualtyCell("Player losses", true);
+        AddCasualtyCell("Opposing losses", true);
+        AddCasualtyCell("Player total losses", true);
+        AddCasualtyCell("Opposing total losses", true);
 
         foreach (BattleCasualtyRoundSummary summary in casualties.TakeLast(12))
         {
@@ -300,7 +364,7 @@ public partial class BattleReviewView : DialogView
         {
             Text = text,
             HorizontalAlignment = HorizontalAlignment.Center,
-            CustomMinimumSize = new Vector2(70, 18)
+            CustomMinimumSize = new Vector2(130, 20)
         };
         label.AddThemeFontSizeOverride("font_size", isHeader ? 12 : 11);
         if (isHeader)

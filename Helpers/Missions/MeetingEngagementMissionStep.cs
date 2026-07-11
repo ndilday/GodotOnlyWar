@@ -28,15 +28,18 @@ namespace OnlyWar.Helpers.Missions
                 return;
             }
 
-            // set up meeting engagement with OpFor and context.Squad
-            // convert margin of success to a CDF, and use that to adjust the engagement range between the preference of the two sides
+            // set up meeting engagement between the mission force (attacker) and the defenders.
+            // The attacker's prep-check margin, as a CDF, slides the opening range between the two
+            // sides' preferred engagement ranges: a decisive attacker closes toward its own
+            // preference, a repelled one is held out at the defender's preference. Interpolating
+            // between the two preferences (rather than from their midpoint) means neither side is
+            // ever dragged past the other's preferred range.
             float rangeModifier = GaussianCalculator.ApproximateNormalCDF(marginOfSuccess);
-            BattleSoldier enemySoldier = opposingSquads.First().GetRandomSquadMember();
-            BattleSoldier playerSoldier = missionSquads.First().GetRandomSquadMember();
-            double playerRange = missionSquads.Average(s => s.GetPreferredEngagementRange(enemySoldier.Soldier.Size, enemySoldier.Armor.Template.ArmorProvided, enemySoldier.Soldier.Constitution, enemySoldier.Soldier.Template.Species.RangedEvasion));
-            double enemyRange = opposingSquads.Average(s => s.GetPreferredEngagementRange(playerSoldier.Soldier.Size, playerSoldier.Armor.Template.ArmorProvided, playerSoldier.Soldier.Constitution, playerSoldier.Soldier.Template.Species.RangedEvasion));
-            double halfway = (playerRange + enemyRange) / 2;
-            ushort range = (ushort)(halfway + (playerRange - halfway) * rangeModifier);
+            BattleSoldier defenderSoldier = opposingSquads.First().GetRandomSquadMember();
+            BattleSoldier attackerSoldier = missionSquads.First().GetRandomSquadMember();
+            double attackerRange = missionSquads.Average(s => s.GetPreferredEngagementRange(defenderSoldier.Soldier.Size, defenderSoldier.Armor.Template.ArmorProvided, defenderSoldier.Soldier.Constitution, defenderSoldier.Soldier.Template.Species.RangedEvasion));
+            double defenderRange = opposingSquads.Average(s => s.GetPreferredEngagementRange(attackerSoldier.Soldier.Size, attackerSoldier.Armor.Template.ArmorProvided, attackerSoldier.Soldier.Constitution, attackerSoldier.Soldier.Template.Species.RangedEvasion));
+            ushort range = (ushort)(defenderRange + (attackerRange - defenderRange) * rangeModifier);
             // set up meeting engagement battle
             BattleGridManager bgm = new BattleGridManager();
             AnnihilationPlacer placer = new AnnihilationPlacer(bgm, range);

@@ -185,7 +185,7 @@ render_target_update_mode = 4
 anchor_mode = 0
 
 [node name="BottomPanel" type="Panel" parent="DialogView/Layout/CenterPanel"]
-custom_minimum_size = Vector2(0, 150)
+custom_minimum_size = Vector2(0, 190)
 layout_mode = 2
 
 [node name="BottomMargin" type="MarginContainer" parent="DialogView/Layout/CenterPanel/BottomPanel"]
@@ -218,7 +218,12 @@ vertical_scroll_mode = 0
 layout_mode = 2
 theme_override_constants/separation = 5
 
-[node name="CasualtyGrid" type="GridContainer" parent="DialogView/Layout/CenterPanel/BottomPanel/BottomMargin/BottomStack"]
+[node name="CasualtyScroll" type="ScrollContainer" parent="DialogView/Layout/CenterPanel/BottomPanel/BottomMargin/BottomStack"]
+custom_minimum_size = Vector2(0, 84)
+layout_mode = 2
+size_flags_vertical = 3
+
+[node name="CasualtyGrid" type="GridContainer" parent="DialogView/Layout/CenterPanel/BottomPanel/BottomMargin/BottomStack/CasualtyScroll"]
 layout_mode = 2
 columns = 5
 

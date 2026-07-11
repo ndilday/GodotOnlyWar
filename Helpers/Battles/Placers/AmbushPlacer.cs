@@ -69,7 +69,7 @@ namespace OnlyWar.Helpers.Battles.Placers
                 int left = xMid - squadSize.X / 2;
                 int bottom = topLimit - squadSize.Y;
                 squadPositionMap[squad] = new Tuple<int, int>(left, bottom);
-                BattleSquadPlacer.PlaceBattleSquad(_grid, squad, new Tuple<int, int>(left, bottom), true, true);
+                BattleSquadPlacer.PlaceBattleSquad(_grid, squad, new Tuple<int, int>(left, bottom), true, true, true);
 
                 // the squad occupies X in [left, left + width) and Y in [bottom, topLimit]
                 minX = Math.Min(minX, left);
@@ -141,7 +141,7 @@ namespace OnlyWar.Helpers.Battles.Placers
                 int left = killZone.MinX - standoff - squadSize.Y;
                 int bottom = y - squadSize.X;
                 squadPositionMap[squad] = new Tuple<int, int>(left, bottom);
-                BattleSquadPlacer.PlaceBattleSquad(_grid, squad, new Tuple<int, int>(left, bottom), false, false);
+                BattleSquadPlacer.PlaceBattleSquad(_grid, squad, new Tuple<int, int>(left, bottom), false, false, false);
                 y -= squadSize.X + 1;
             }
         }
@@ -165,7 +165,7 @@ namespace OnlyWar.Helpers.Battles.Placers
             {
                 Coordinate squadSize = squad.GetSquadBoxSize();
                 squadPositionMap[squad] = new Tuple<int, int>(x, bottom);
-                BattleSquadPlacer.PlaceBattleSquad(_grid, squad, new Tuple<int, int>(x, bottom), true, false);
+                BattleSquadPlacer.PlaceBattleSquad(_grid, squad, new Tuple<int, int>(x, bottom), true, false, false);
                 x += squadSize.X + 1;
             }
         }

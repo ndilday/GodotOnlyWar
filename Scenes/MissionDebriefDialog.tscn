@@ -13,7 +13,17 @@ script = ExtResource("2_controller")
 theme = ExtResource("4_theme")
 script = ExtResource("3_view")
 
-[node name="DebriefPanel" type="Panel" parent="DialogView" index="0"]
+[node name="CloseButton" parent="DialogView" index="0"]
+anchor_left = 1.0
+anchor_top = 0.0
+anchor_right = 1.0
+anchor_bottom = 0.0
+offset_left = -114.0
+offset_top = 70.0
+offset_right = -74.0
+offset_bottom = 110.0
+
+[node name="DebriefPanel" type="Panel" parent="DialogView" index="1"]
 layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
@@ -54,7 +64,7 @@ grow_horizontal = 2
 grow_vertical = 2
 theme_override_constants/margin_left = 12
 theme_override_constants/margin_top = 10
-theme_override_constants/margin_right = 56
+theme_override_constants/margin_right = 12
 theme_override_constants/margin_bottom = 10
 
 [node name="HeaderStack" type="VBoxContainer" parent="DialogView/DebriefPanel/DebriefMargin/Layout/HeaderPanel/HeaderMargin"]
@@ -63,7 +73,9 @@ theme_override_constants/separation = 4
 
 [node name="TitleLabel" type="Label" parent="DialogView/DebriefPanel/DebriefMargin/Layout/HeaderPanel/HeaderMargin/HeaderStack"]
 layout_mode = 2
+theme_override_font_sizes/font_size = 28
 text = "MISSION DEBRIEF"
+horizontal_alignment = 1
 
 [node name="SubtitleLabel" type="Label" parent="DialogView/DebriefPanel/DebriefMargin/Layout/HeaderPanel/HeaderMargin/HeaderStack"]
 layout_mode = 2

@@ -69,7 +69,7 @@ namespace OnlyWar.Helpers.Battles.Aftermath
 
         private void RememberFinalPlayerSnapshots(BattleState finalState)
         {
-            foreach (BattleSquad squad in finalState.PlayerSquads.Values.Concat(finalState.OpposingSquads.Values))
+            foreach (BattleSquad squad in finalState.AttackerSquads.Values.Concat(finalState.OpposingSquads.Values))
             {
                 foreach (BattleSoldier soldier in squad.Soldiers)
                 {
@@ -135,7 +135,7 @@ namespace OnlyWar.Helpers.Battles.Aftermath
 
         private static void ApplySoldierExperienceForBattle(BattleState finalState)
         {
-            foreach (BattleSquad squad in finalState.PlayerSquads.Values.Concat(finalState.OpposingSquads.Values))
+            foreach (BattleSquad squad in finalState.AttackerSquads.Values.Concat(finalState.OpposingSquads.Values))
             {
                 foreach (BattleSoldier soldier in squad.Soldiers)
                 {

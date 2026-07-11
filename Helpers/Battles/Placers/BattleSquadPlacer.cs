@@ -10,17 +10,6 @@ namespace OnlyWar.Helpers.Battles.Placers
         public delegate void SquadPlacedHandler(BattleSquad squad, Tuple<int, int> position);
         public static event SquadPlacedHandler OnSquadPlaced;
 
-        public static void PlaceBattleSquad(BattleGridManager manager, BattleSquad squad, Tuple<int, int> bottomLeft, bool longHorizontal)
-        {
-            PlaceBattleSquad(manager, squad, bottomLeft, longHorizontal, squad.IsPlayerSquad);
-        }
-
-        public static void PlaceBattleSquad(BattleGridManager manager, BattleSquad squad, Tuple<int, int> bottomLeft,
-                                           bool longHorizontal, bool tacticalSide)
-        {
-            PlaceBattleSquad(manager, squad, bottomLeft, longHorizontal, tacticalSide, squad.IsPlayerSquad);
-        }
-
         public static void PlaceBattleSquad(BattleGridManager manager, BattleSquad squad, Tuple<int, int> bottomLeft,
                                            bool longHorizontal, bool tacticalSide, bool formationSide)
         {
@@ -48,13 +37,16 @@ namespace OnlyWar.Helpers.Battles.Placers
                                                                            (short)(bottomLeft.Item2 + squadBoxSize.Y - 1));
             int cellWidth = squad.AbleSoldiers.Max(s => s.Soldier.Template.Species.Width);
             int cellDepth = squad.AbleSoldiers.Max(s => s.Soldier.Template.Species.Depth);
+            int membersPerRow = Math.Max(1, squadBoxSize.X / cellWidth);
+            int rowCount = (int)Math.Ceiling((double)squad.AbleSoldiers.Count / membersPerRow);
+            int emptyRearRankSlots = rowCount * membersPerRow - squad.AbleSoldiers.Count;
             for (int i = 0; i < squad.AbleSoldiers.Count; i++)
             {
                 ushort width = squad.AbleSoldiers[i].Soldier.Template.Species.Width;
                 ushort depth = squad.AbleSoldiers[i].Soldier.Template.Species.Depth;
-                int membersPerRow = Math.Max(1, squadBoxSize.X / cellWidth);
-                int rowIndex = i / membersPerRow;
-                int columnIndex = i % membersPerRow;
+                int formationIndex = i + emptyRearRankSlots;
+                int rowIndex = formationIndex / membersPerRow;
+                int columnIndex = formationIndex % membersPerRow;
                 int yMod = rowIndex * cellDepth * (formationSide ? -1 : 1);
                 int xMod = (columnIndex * cellWidth) - ((squadBoxSize.X - cellWidth) / 2)
                            + ((cellWidth - width) / 2);

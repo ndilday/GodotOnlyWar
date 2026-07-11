@@ -6,7 +6,7 @@ namespace OnlyWar.Models.Battles
 {
     public class BattleConfiguration
     {
-        public IReadOnlyList<BattleSquad> PlayerSquads;
+        public IReadOnlyList<BattleSquad> AttackerSquads;
         public IReadOnlyList<BattleSquad> OpposingSquads;
         public Region Region;
         public BattleGridManager Grid;

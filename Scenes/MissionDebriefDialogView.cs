@@ -61,20 +61,39 @@ public partial class MissionDebriefDialogView : DialogView
             BbcodeEnabled = false,
             SizeFlagsHorizontal = SizeFlags.ExpandFill
         };
-        stack.AddChild(text);
 
         if (line.HasBattle)
         {
+            text.Visible = false;
+            HBoxContainer controls = new();
+            controls.AddThemeConstantOverride("separation", 8);
+
+            Button logButton = new()
+            {
+                Text = "SHOW BATTLE LOG",
+                CustomMinimumSize = new Vector2(190, 34),
+                TooltipText = "Expand the raw event log for this engagement"
+            };
+            logButton.Pressed += () =>
+            {
+                text.Visible = !text.Visible;
+                logButton.Text = text.Visible ? "HIDE BATTLE LOG" : "SHOW BATTLE LOG";
+            };
+            controls.AddChild(logButton);
+
             Button reviewButton = new()
             {
-                Text = "REVIEW BATTLE",
+                Text = "VIEW BATTLE",
                 CustomMinimumSize = new Vector2(170, 34),
                 TooltipText = "Open the battle replay for this engagement"
             };
             BattleHistory battleHistory = line.BattleHistory;
             reviewButton.Pressed += () => BattleReviewRequested?.Invoke(this, battleHistory);
-            stack.AddChild(reviewButton);
+            controls.AddChild(reviewButton);
+            stack.AddChild(controls);
         }
+
+        stack.AddChild(text);
 
         _lineList.AddChild(panel);
     }

@@ -18,16 +18,16 @@ namespace OnlyWar.Helpers.Missions.Recon
             context.AddLog($"Day {context.DaysElapsed}: Force is detected by enemy forces in {context.Order.Mission.RegionFaction.Region.Name}");
             // compare size of each force
             float opForSize = context.OpposingSquads.Sum(s => s.Squad.SquadTemplate.BattleValue);
-            float playerSize = context.MissionSquads.Sum(s => s.Squad.SquadTemplate.BattleValue);
+            float attackerSize = context.MissionSquads.Sum(s => s.Squad.SquadTemplate.BattleValue);
             if(context.Order.LevelOfAggression == Aggression.Attritional)
             {
-                playerSize *= 2;
+                attackerSize *= 2;
             }
             else if(context.Order.LevelOfAggression == Aggression.Cautious)
             {
                 opForSize *= 2;
             }
-            if(playerSize >= opForSize || context.Order.LevelOfAggression == Aggression.Aggressive)
+            if(attackerSize >= opForSize || context.Order.LevelOfAggression == Aggression.Aggressive)
             {
                 new MeetingEngagementMissionStep().ExecuteMissionStep(context, marginOfSuccess, returnStep);
             }

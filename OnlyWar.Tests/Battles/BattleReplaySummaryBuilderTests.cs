@@ -31,6 +31,25 @@ public class BattleReplaySummaryBuilderTests
     }
 
     [Fact]
+    public void Build_NpcAttackAgainstPlayerDefenderGroupsByAffiliationNotResolverSide()
+    {
+        BattleSquad npcAttacker = CreateBattleSquad(false, "Cult Mob", "Cultist One", "Cultist Two");
+        BattleSquad playerDefender = CreateBattleSquad(true, "Alpha", "Sergeant Alpha", "Brother Alpha");
+        BattleHistory history = new();
+        history.Turns.Add(new BattleTurn(new BattleState(
+            new Dictionary<int, BattleSquad> { [npcAttacker.Id] = npcAttacker },
+            new Dictionary<int, BattleSquad> { [playerDefender.Id] = playerDefender }), []));
+
+        BattleReplayDisplay display = new BattleReplaySummaryBuilder().Build(history, 0);
+
+        Assert.Equal(playerDefender.Id, display.SelectedFormationId);
+        BattleForceHierarchyNode playerRoot = Assert.Single(display.ForceHierarchy, node => node.IsPlayerForce);
+        Assert.Contains(playerRoot.Children.SelectMany(node => node.Children), node => node.FormationId == playerDefender.Id);
+        BattleForceHierarchyNode opposingRoot = Assert.Single(display.ForceHierarchy, node => !node.IsPlayerForce);
+        Assert.Contains(opposingRoot.Children.SelectMany(node => node.Children), node => node.FormationId == npcAttacker.Id);
+    }
+
+    [Fact]
     public void Build_ForceHierarchyReportsCurrentStrengthAndLosses()
     {
         BattleSquad playerSquad = CreateBattleSquad(true, "Alpha", "Sergeant Alpha", "Brother Alpha");

@@ -33,7 +33,7 @@ namespace OnlyWar.Helpers.Battles
         private const int MaxBattleTurns = 1000;
 
         public BattleTurnResolver(BattleGridManager grid,
-                                  IList<BattleSquad> playerBattleSquads,
+                                  IList<BattleSquad> attackerBattleSquads,
                                   IList<BattleSquad> opposingBattleSquads,
                                   Region region)
         {
@@ -45,21 +45,21 @@ namespace OnlyWar.Helpers.Battles
             _casualtyMap = new Dictionary<int, BattleSoldier>();
             BattleHistory = new BattleHistory();
             _aftermathContext = new BattleAftermathContext(
-                playerBattleSquads.ToList(),
+                attackerBattleSquads.ToList(),
                 opposingBattleSquads.ToList(),
                 region,
                 BattleHistory);
             _aftermathPolicy = BattleAftermathPolicyFactory.Create(_aftermathContext);
 
             _currentState = new BattleState(
-                playerBattleSquads.ToDictionary(bs => bs.Id, bs => bs),
+                attackerBattleSquads.ToDictionary(bs => bs.Id, bs => bs),
                 opposingBattleSquads.ToDictionary(os => os.Id, os => os));
             BattleHistory.Turns.Add(new BattleTurn(_currentState, new List<IAction>()));
 
             GameLog.Debug(() =>
                 $"Battle start in {_region?.Name}: {_aftermathContext.FirstSideStartingSoldierCount} vs "
                 + $"{_aftermathContext.SecondSideStartingSoldierCount} soldiers "
-                + $"({playerBattleSquads.Count}+{opposingBattleSquads.Count} squads)");
+                + $"({attackerBattleSquads.Count}+{opposingBattleSquads.Count} squads)");
         }
 
         private void WoundResolver_OnSoldierDeath(WoundResolution wound, WoundLevel woundLevel)
@@ -102,7 +102,7 @@ namespace OnlyWar.Helpers.Battles
             CleanupAtEndOfTurn();
 
             BattleHistory.Turns.Add(new BattleTurn(_currentState, executedActions));
-            if (_currentState.PlayerSquads.Count == 0 || _currentState.OpposingSquads.Count == 0)
+            if (_currentState.AttackerSquads.Count == 0 || _currentState.OpposingSquads.Count == 0)
             {
                 Log(false, "One side destroyed, battle over");
                 ProcessEndOfBattle();
@@ -133,15 +133,15 @@ namespace OnlyWar.Helpers.Battles
                           ConcurrentQueue<string> log)
         {
             BattleDefaults battleDefaults = GameDataSingleton.Instance.GameRulesData.BattleDefaults;
-            MeleeWeapon playerDefaultWeapon = new MeleeWeapon(battleDefaults.ImperialUnarmedWeapon);
+            MeleeWeapon attackerDefaultWeapon = new MeleeWeapon(battleDefaults.ImperialUnarmedWeapon);
             MeleeWeapon opposingDefaultWeapon = new MeleeWeapon(battleDefaults.GenericUnarmedWeapon);
 
-            foreach (BattleSquad squad in _currentState.PlayerSquads.Values)
+            foreach (BattleSquad squad in _currentState.AttackerSquads.Values)
             {
                 BattleSquadPlanner planner = new BattleSquadPlanner(_grid, _currentState.Soldiers,
                                                                     shootSegmentActions, moveSegmentActions,
                                                                     meleeSegmentActions,
-                                                                    log, playerDefaultWeapon);
+                                                                    log, attackerDefaultWeapon);
                 planner.PrepareActions(squad);
             }
 
@@ -203,7 +203,7 @@ namespace OnlyWar.Helpers.Battles
                 RemoveSoldier(soldier);
             }
 
-            foreach (BattleSquad squad in _currentState.PlayerSquads.Values)
+            foreach (BattleSquad squad in _currentState.AttackerSquads.Values)
             {
                 UpdateSquadMeleeStatus(squad);
             }

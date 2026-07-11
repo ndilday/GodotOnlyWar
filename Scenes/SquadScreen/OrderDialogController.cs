@@ -280,7 +280,7 @@ public partial class OrderDialogController : Control
 			case -2: return new AvailableMission("Attack", MissionAvailabilityKind.Attack);
 			case -3: return new AvailableMission("Defend", MissionAvailabilityKind.Defend);
 			case -4: return new AvailableMission("Patrol", MissionAvailabilityKind.Patrol);
-			case -5: return new AvailableMission("Fortify (Entrenchment)", MissionAvailabilityKind.FortifyEntrenchment);
+			case -5: return new AvailableMission("Build Fortifications", MissionAvailabilityKind.FortifyEntrenchment);
 			case -6: return new AvailableMission("Build Listening Post", MissionAvailabilityKind.BuildListeningPost);
 			case -7: return new AvailableMission("Build Anti-Air", MissionAvailabilityKind.BuildAntiAir);
 			case -8: return new AvailableMission("Diversion", MissionAvailabilityKind.Diversion);

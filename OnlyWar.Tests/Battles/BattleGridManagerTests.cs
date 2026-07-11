@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using OnlyWar.Helpers.Battles;
 using OnlyWar.Helpers.Battles.Placers;
 using OnlyWar.Models;
@@ -23,6 +24,19 @@ public class BattleGridManagerTests
         Soldier soldier = TestModelFactory.CreateSoldier(name: name);
         soldier.Id = id;
         return new BattleSquad(isPlayerSquad, TestModelFactory.CreateSquad(name, soldier));
+    }
+
+    private static BattleSquad CreateBattleSquadWithSoldiers(string name, int firstId, int count, bool isPlayerSquad)
+    {
+        Soldier[] soldiers = Enumerable.Range(0, count)
+            .Select(index =>
+            {
+                Soldier soldier = TestModelFactory.CreateSoldier(name: $"{name} {index + 1}");
+                soldier.Id = firstId + index;
+                return soldier;
+            })
+            .ToArray();
+        return new BattleSquad(isPlayerSquad, TestModelFactory.CreateSquad(name, soldiers));
     }
 
     private static List<Tuple<int, int>> Cell(int x, int y) => [new Tuple<int, int>(x, y)];
@@ -120,7 +134,13 @@ public class BattleGridManagerTests
         second.Id = 2;
         BattleSquad squad = new(false, TestModelFactory.CreateSquad("Raveners", first, second));
 
-        BattleSquadPlacer.PlaceBattleSquad(grid, squad, new Tuple<int, int>(0, 0), longHorizontal: false);
+        BattleSquadPlacer.PlaceBattleSquad(
+            grid,
+            squad,
+            new Tuple<int, int>(0, 0),
+            longHorizontal: false,
+            tacticalSide: false,
+            formationSide: false);
 
         Assert.Equal(new[] { new Tuple<int, int>(1, 0), new Tuple<int, int>(2, 0) },
             grid.GetSoldierPosition(1));
@@ -190,6 +210,41 @@ public class BattleGridManagerTests
         grid.GetNearestEnemy(attackers.Soldiers[0].Soldier.Id, out int closestEnemyId);
 
         Assert.Equal(defenders.Soldiers[0].Soldier.Id, closestEnemyId);
+    }
+
+    [Fact]
+    public void AnnihilationPlacer_CentersForcesAcrossTheEngagementGap()
+    {
+        BattleGridManager grid = new();
+        BattleSquad bottom = CreateBattleSquadWithSoldiers("Bottom", 100, 9, true);
+        BattleSquad top = CreateBattleSquadWithSoldiers("Top", 200, 10, false);
+        AnnihilationPlacer placer = new(grid, range: 12);
+
+        placer.PlaceSquads([bottom], [top]);
+
+        double bottomCenterX = bottom.Soldiers.Average(soldier => grid.GetSoldierPosition(soldier.Soldier.Id)[0].Item1);
+        double topCenterX = top.Soldiers.Average(soldier => grid.GetSoldierPosition(soldier.Soldier.Id)[0].Item1);
+        int bottomFrontY = bottom.Soldiers.Max(soldier => grid.GetSoldierPosition(soldier.Soldier.Id)[0].Item2);
+        int topFrontY = top.Soldiers.Min(soldier => grid.GetSoldierPosition(soldier.Soldier.Id)[0].Item2);
+
+        Assert.InRange(System.Math.Abs(bottomCenterX - topCenterX), 0, 0.6);
+        Assert.True(topFrontY > bottomFrontY);
+    }
+
+    [Fact]
+    public void PlaceBattleSquad_PutsIncompleteRankBehindFullFrontRank()
+    {
+        BattleGridManager grid = new();
+        BattleSquad squad = CreateBattleSquadWithSoldiers("Nine", 300, 9, true);
+
+        BattleSquadPlacer.PlaceBattleSquad(grid, squad, new Tuple<int, int>(0, 0),
+            longHorizontal: true, tacticalSide: true, formationSide: false);
+
+        int frontY = squad.Soldiers.Max(soldier => grid.GetSoldierPosition(soldier.Soldier.Id)[0].Item2);
+        int soldiersInFrontRank = squad.Soldiers.Count(soldier =>
+            grid.GetSoldierPosition(soldier.Soldier.Id)[0].Item2 == frontY);
+
+        Assert.Equal(5, soldiersInFrontRank);
     }
 
     [Fact]

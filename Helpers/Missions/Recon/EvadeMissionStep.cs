@@ -19,8 +19,8 @@ namespace OnlyWar.Helpers.Missions.Recon
             // TODO: increase difficulty based on enemy force size?
             BaseSkill tactics = GameDataSingleton.Instance.GameRulesData.Skills.Tactics;
             float enemySpeed = context.OpposingSquads.Average(s => s.GetSquadMove());
-            float playerSpeed = context.MissionSquads.Average(s => s.GetSquadMove());
-            float difficulty = 10f - playerSpeed + enemySpeed + marginOfSuccess;
+            float attackerSpeed = context.MissionSquads.Average(s => s.GetSquadMove());
+            float difficulty = 10f - attackerSpeed + enemySpeed + marginOfSuccess;
             LeaderMissionTest missionTest = new LeaderMissionTest(tactics, difficulty);
             float margin = missionTest.RunMissionCheck(context.MissionSquads);
             if (margin > 0.0f)

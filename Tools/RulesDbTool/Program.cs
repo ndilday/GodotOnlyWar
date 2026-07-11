@@ -4,7 +4,7 @@ using Microsoft.Data.Sqlite;
 
 if (args.Length < 2)
 {
-    Console.Error.WriteLine("Usage: RulesDbTool <schema|training-source|migrate-training|migrate-progenoid|migrate-ratings|migrate-planet-scales|migrate-fortification|migrate-tyranids|migrate-tyranid-squads|migrate-tyranid-consumption|migrate-evasion|migrate-squad-caps|migrate-veteran-sergeant|migrate-collapse-sergeants|migrate-chaplaincy|migrate-company-judiciar|migrate-company-apothecary|migrate-remove-veteran-captain|migrate-remove-recruitment-captain|migrate-starting-fleet-capacity|migrate-pdf|migrate-scout-skills|migrate-leader-tactics|migrate-ship-capacity|remove-unused-unit-templates> <db-path>");
+    Console.Error.WriteLine("Usage: RulesDbTool <schema|training-source|migrate-training|migrate-progenoid|migrate-ratings|migrate-planet-scales|migrate-fortification|migrate-tyranids|migrate-tyranid-squads|migrate-tyranid-consumption|migrate-evasion|migrate-squad-caps|migrate-veteran-sergeant|migrate-veteran-loadouts|migrate-collapse-sergeants|migrate-chaplaincy|migrate-company-judiciar|migrate-company-apothecary|migrate-remove-veteran-captain|migrate-remove-recruitment-captain|migrate-starting-fleet-capacity|migrate-pdf|migrate-scout-skills|migrate-leader-tactics|migrate-ship-capacity|remove-unused-unit-templates> <db-path>");
     return 1;
 }
 
@@ -13,7 +13,7 @@ string dbPath = args[1];
 string connectionString = new SqliteConnectionStringBuilder
 {
     DataSource = dbPath,
-    Mode = command is "migrate-training" or "migrate-progenoid" or "migrate-ratings" or "migrate-planet-scales" or "migrate-fortification" or "migrate-tyranids" or "migrate-tyranid-squads" or "migrate-tyranid-consumption" or "migrate-evasion" or "migrate-squad-caps" or "migrate-veteran-sergeant" or "migrate-collapse-sergeants" or "migrate-chaplaincy" or "migrate-company-judiciar" or "migrate-company-apothecary" or "migrate-remove-veteran-captain" or "migrate-remove-recruitment-captain" or "migrate-starting-fleet-capacity" or "migrate-pdf" or "migrate-scout-skills" or "migrate-leader-tactics" or "migrate-ship-capacity" or "remove-unused-unit-templates" ? SqliteOpenMode.ReadWriteCreate : SqliteOpenMode.ReadOnly
+    Mode = command is "migrate-training" or "migrate-progenoid" or "migrate-ratings" or "migrate-planet-scales" or "migrate-fortification" or "migrate-tyranids" or "migrate-tyranid-squads" or "migrate-tyranid-consumption" or "migrate-evasion" or "migrate-squad-caps" or "migrate-veteran-sergeant" or "migrate-veteran-loadouts" or "migrate-collapse-sergeants" or "migrate-chaplaincy" or "migrate-company-judiciar" or "migrate-company-apothecary" or "migrate-remove-veteran-captain" or "migrate-remove-recruitment-captain" or "migrate-starting-fleet-capacity" or "migrate-pdf" or "migrate-scout-skills" or "migrate-leader-tactics" or "migrate-ship-capacity" or "remove-unused-unit-templates" ? SqliteOpenMode.ReadWriteCreate : SqliteOpenMode.ReadOnly
 }.ToString();
 
 using SqliteConnection connection = new(connectionString);
@@ -62,6 +62,9 @@ switch (command)
         break;
     case "migrate-veteran-sergeant":
         MigrateVeteranSergeant(connection);
+        break;
+    case "migrate-veteran-loadouts":
+        MigrateVeteranLoadouts(connection);
         break;
     case "migrate-collapse-sergeants":
         MigrateCollapseSergeants(connection);
@@ -1286,6 +1289,103 @@ static void MigratePdf(SqliteConnection connection)
         $"weapon sets (Autogun {autogunSet}, Heavy Stubber {heavyStubberSet}), and PDF Infantry Squad {squad}.");
 }
 
+// Give the Veteran Squad the per-model weapon upgrades it was missing. Every regular veteran can
+// trade the default Bolt Pistol + Chainsword for a power sword in the melee slot and/or swap the
+// pistol for a plasma pistol, plasma gun, or boltgun. The two axes are independent (2 melee x 4
+// ranged), so the eight combinations minus the default become seven selectable WeaponSets under a
+// single "Veteran Weapons" option. The veteran sergeant is intentionally excluded: the squad
+// leader always receives the template's default set in BattleSquad.AllocateEquipment, so the option
+// is capped at the nine regular veterans rather than the full ten-model squad.
+static void MigrateVeteranLoadouts(SqliteConnection connection)
+{
+    using SqliteTransaction transaction = connection.BeginTransaction();
+    const int SpaceMarines = 1;
+
+    // NB: several of these ids are legitimately 0 (Veteran Squad, Boltgun, Chainsword), so we use
+    // RequireIdAllowZero, which distinguishes a missing row from a real id of 0 (RequireId does not).
+    int veteranSquad = RequireIdAllowZero(connection, transaction,
+        "SELECT Id FROM SquadTemplate WHERE Name = 'Veteran Squad' AND FactionId = 1", "Veteran Squad template");
+
+    if (ExecuteScalarInt(connection, transaction,
+        "SELECT COUNT(*) FROM SquadTemplateWeaponOption WHERE SquadTemplateId = $sq AND Name = 'Veteran Weapons'",
+        ("$sq", veteranSquad)) > 0)
+    {
+        Console.WriteLine("Veteran loadout migration already applied; nothing to do.");
+        return;
+    }
+
+    // Resolve the underlying weapon templates by name. Boltgun and Bolt Pistol have duplicate rows
+    // shared with other Imperial factions; the Space Marine weapon sets use the lowest-id copy, so
+    // take that. The remaining names are unique.
+    int boltgun = RequireIdAllowZero(connection, transaction,
+        "SELECT Id FROM RangedWeaponTemplate WHERE Name = 'Boltgun' ORDER BY Id LIMIT 1", "Boltgun");
+    int boltPistol = RequireIdAllowZero(connection, transaction,
+        "SELECT Id FROM RangedWeaponTemplate WHERE Name = 'Bolt Pistol' ORDER BY Id LIMIT 1", "Bolt Pistol");
+    int plasmaGun = RequireIdAllowZero(connection, transaction,
+        "SELECT Id FROM RangedWeaponTemplate WHERE Name = 'Plasma Gun' ORDER BY Id LIMIT 1", "Plasma Gun");
+    int plasmaPistol = RequireIdAllowZero(connection, transaction,
+        "SELECT Id FROM RangedWeaponTemplate WHERE Name = 'Plasma Pistol' ORDER BY Id LIMIT 1", "Plasma Pistol");
+    int chainsword = RequireIdAllowZero(connection, transaction,
+        "SELECT Id FROM MeleeWeaponTemplate WHERE Name = 'Chainsword' ORDER BY Id LIMIT 1", "Chainsword");
+    int powerSword = RequireIdAllowZero(connection, transaction,
+        "SELECT Id FROM MeleeWeaponTemplate WHERE Name = 'Power Sword' ORDER BY Id LIMIT 1", "Power Sword");
+
+    // The seven non-default combinations. Plasma Pistol + Chainsword already ships as a WeaponSet,
+    // so GetOrCreateWeaponSet reuses it; the other six are created.
+    int[] sets =
+    [
+        GetOrCreateWeaponSet(connection, transaction, SpaceMarines, "Plasma Pistol + Chainsword", plasmaPistol, chainsword),
+        GetOrCreateWeaponSet(connection, transaction, SpaceMarines, "Plasma Gun + Chainsword", plasmaGun, chainsword),
+        GetOrCreateWeaponSet(connection, transaction, SpaceMarines, "Boltgun + Chainsword", boltgun, chainsword),
+        GetOrCreateWeaponSet(connection, transaction, SpaceMarines, "Bolt Pistol + Power Sword", boltPistol, powerSword),
+        GetOrCreateWeaponSet(connection, transaction, SpaceMarines, "Plasma Pistol + Power Sword", plasmaPistol, powerSword),
+        GetOrCreateWeaponSet(connection, transaction, SpaceMarines, "Plasma Gun + Power Sword", plasmaGun, powerSword),
+        GetOrCreateWeaponSet(connection, transaction, SpaceMarines, "Boltgun + Power Sword", boltgun, powerSword),
+    ];
+
+    // One option covering up to the nine regular veterans (the sergeant always takes the default).
+    int option = ExecuteScalarInt(connection, transaction, "SELECT COALESCE(MAX(Id), 0) + 1 FROM SquadTemplateWeaponOption");
+    Execute(connection, transaction,
+        @"INSERT INTO SquadTemplateWeaponOption (Id, SquadTemplateId, Name, MinimumRequired, MaximumAllowed)
+          VALUES ($id, $sq, 'Veteran Weapons', 0, 9)",
+        ("$id", option), ("$sq", veteranSquad));
+
+    foreach (int set in sets)
+    {
+        int link = ExecuteScalarInt(connection, transaction, "SELECT COALESCE(MAX(Id), 0) + 1 FROM SquadTemplateWeaponOptionWeaponSet");
+        Execute(connection, transaction,
+            @"INSERT INTO SquadTemplateWeaponOptionWeaponSet (Id, WeaponSetId, SquadTemplateWeaponOptionId)
+              VALUES ($id, $ws, $opt)",
+            ("$id", link), ("$ws", set), ("$opt", option));
+    }
+
+    transaction.Commit();
+    Console.WriteLine(
+        $"Veteran loadout migration complete. Added 'Veteran Weapons' option {option} " +
+        $"with weapon sets [{string.Join(", ", sets)}] to Veteran Squad {veteranSquad}.");
+}
+
+// Return the id of the faction's WeaponSet with this name, creating it (primary ranged + primary
+// melee, no secondaries) if it does not yet exist. Lets a rerun reuse sets from a prior run.
+static int GetOrCreateWeaponSet(SqliteConnection connection, SqliteTransaction transaction, int factionId,
+                                string name, int primaryRangedWeaponId, int primaryMeleeWeaponId)
+{
+    int existing = ExecuteScalarInt(connection, transaction,
+        "SELECT Id FROM WeaponSet WHERE Name = $n AND FactionId = $f", ("$n", name), ("$f", factionId));
+    if (existing != 0)
+    {
+        return existing;
+    }
+
+    int id = ExecuteScalarInt(connection, transaction, "SELECT COALESCE(MAX(Id), 0) + 1 FROM WeaponSet");
+    Execute(connection, transaction,
+        @"INSERT INTO WeaponSet
+            (Id, FactionId, Name, PrimaryRangedWeaponId, SecondaryRangedWeaponId, PrimaryMeleeWeaponId, SecondaryMeleeWeaponId)
+          VALUES ($id, $f, $n, $r, NULL, $m, NULL)",
+        ("$id", id), ("$f", factionId), ("$n", name), ("$r", primaryRangedWeaponId), ("$m", primaryMeleeWeaponId));
+    return id;
+}
+
 // Two data fixes for the recon/scout loop (see the audit note in
 // ForceGenerator.GenerateScoutPatrol and the Stealth mission checks under Helpers/Missions/Recon).
 // The scout-leader Tactics half of this audit now lives in migrate-leader-tactics, which covers
@@ -1494,6 +1594,22 @@ static int RequireId(SqliteConnection connection, SqliteTransaction transaction,
         throw new InvalidOperationException($"Required rules data not found: {description}.");
     }
     return id;
+}
+
+// Like RequireId, but treats only a missing row (null result) as an error, so it can return a
+// legitimate id of 0. Use this whenever the looked-up row may live at id 0 (e.g. Boltgun,
+// Chainsword, the Veteran Squad).
+static int RequireIdAllowZero(SqliteConnection connection, SqliteTransaction transaction, string sql, string description)
+{
+    using SqliteCommand command = connection.CreateCommand();
+    command.Transaction = transaction;
+    command.CommandText = sql;
+    object result = command.ExecuteScalar();
+    if (result == null || result == DBNull.Value)
+    {
+        throw new InvalidOperationException($"Required rules data not found: {description}.");
+    }
+    return Convert.ToInt32(result);
 }
 
 static void RemoveCaptainVariant(SqliteConnection connection, string variantName)

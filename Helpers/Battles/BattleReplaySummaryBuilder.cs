@@ -15,13 +15,13 @@ namespace OnlyWar.Helpers.Battles
             if (history.Turns.Count == 0) throw new ArgumentException("Battle history must contain at least one turn.", nameof(history));
 
             int currentTurnIndex = Math.Clamp(requestedTurnIndex, 0, history.Turns.Count - 1);
-            BattleTurn initialTurn = history.Turns[0];
+            BattleState baselineState = BuildBaselineState(history);
             BattleTurn currentTurn = history.Turns[currentTurnIndex];
             int? resolvedSelection = ResolveSelectedFormationId(currentTurn.State, selectedFormationId);
 
-            IReadOnlyList<BattleForceHierarchyNode> hierarchy = BuildForceHierarchy(initialTurn.State, currentTurn.State, resolvedSelection);
+            IReadOnlyList<BattleForceHierarchyNode> hierarchy = BuildForceHierarchy(baselineState, currentTurn.State, resolvedSelection);
             BattleFormationSummary selectedFormation = resolvedSelection.HasValue
-                ? BuildFormationSummary(initialTurn.State, currentTurn.State, resolvedSelection.Value)
+                ? BuildFormationSummary(baselineState, currentTurn.State, resolvedSelection.Value)
                 : null;
 
             return new BattleReplayDisplay(
@@ -30,13 +30,31 @@ namespace OnlyWar.Helpers.Battles
                 history.Turns[^1].TurnNumber,
                 "Battle Chronicle",
                 BuildPhaseLabel(currentTurn),
-                BuildResultLabel(initialTurn.State, currentTurn.State),
+                BuildResultLabel(baselineState, currentTurn.State, currentTurnIndex == history.Turns.Count - 1 && currentTurnIndex > 0),
                 resolvedSelection,
                 hierarchy,
                 selectedFormation,
                 BuildEventEntries(currentTurn),
                 BuildTimeline(history, currentTurnIndex),
                 BuildCasualtySummaries(history));
+        }
+
+        private static BattleState BuildBaselineState(BattleHistory history)
+        {
+            // This reconstruction only needs two buckets to rebuild a BattleState; the replay
+            // reads squads back via GetAllSquads and the IsPlayerSquad flag, never by tactical
+            // side. Bucketing by IsPlayerSquad here (rather than by original attacker/defender
+            // slot) is therefore purely cosmetic and does not have to match the live battle.
+            Dictionary<int, BattleSquad> playerSquads = [];
+            Dictionary<int, BattleSquad> opposingSquads = [];
+            foreach (BattleSquad squad in history.Turns
+                .SelectMany(turn => GetAllSquads(turn.State))
+                .GroupBy(squad => squad.Id)
+                .Select(group => group.OrderByDescending(CountAble).First()))
+            {
+                (squad.IsPlayerSquad ? playerSquads : opposingSquads)[squad.Id] = squad;
+            }
+            return new BattleState(playerSquads, opposingSquads);
         }
 
         private static int? ResolveSelectedFormationId(BattleState state, int? selectedFormationId)
@@ -46,10 +64,13 @@ namespace OnlyWar.Helpers.Battles
                 return selectedFormationId.Value;
             }
 
-            BattleSquad firstPlayer = state.PlayerSquads.Values.OrderBy(s => s.Id).FirstOrDefault();
+            BattleSquad firstPlayer = GetAllSquads(state)
+                .Where(s => s.IsPlayerSquad)
+                .OrderBy(s => s.Id)
+                .FirstOrDefault();
             if (firstPlayer != null) return firstPlayer.Id;
 
-            return state.OpposingSquads.Values.OrderBy(s => s.Id).FirstOrDefault()?.Id;
+            return GetAllSquads(state).OrderBy(s => s.Id).FirstOrDefault()?.Id;
         }
 
         private static IReadOnlyList<BattleForceHierarchyNode> BuildForceHierarchy(
@@ -57,10 +78,12 @@ namespace OnlyWar.Helpers.Battles
             BattleState currentState,
             int? selectedFormationId)
         {
+            List<BattleSquad> initialSquads = GetAllSquads(initialState).ToList();
+            List<BattleSquad> currentSquads = GetAllSquads(currentState).ToList();
             List<BattleForceHierarchyNode> roots =
             [
-                BuildForceRoot("Player Force", "Imperial formations", "controlled", true, initialState.PlayerSquads.Values, currentState.PlayerSquads.Values, selectedFormationId),
-                BuildForceRoot("Opposing Force", "Hostile formations", "hostile", false, initialState.OpposingSquads.Values, currentState.OpposingSquads.Values, selectedFormationId)
+                BuildForceRoot("Player Force", "Imperial formations", "controlled", true, initialSquads.Where(s => s.IsPlayerSquad), currentSquads.Where(s => s.IsPlayerSquad), selectedFormationId),
+                BuildForceRoot("Opposing Force", "Hostile formations", "hostile", false, initialSquads.Where(s => !s.IsPlayerSquad), currentSquads.Where(s => !s.IsPlayerSquad), selectedFormationId)
             ];
 
             return roots.Where(root => root.StartingStrength > 0 || root.CurrentStrength > 0).ToList();
@@ -98,8 +121,14 @@ namespace OnlyWar.Helpers.Battles
                     .Concat(currentUnitSquads
                         .Where(currentSquad => initialUnitSquads.All(initialSquad => initialSquad.Id != currentSquad.Id))
                         .Select(currentSquad => BuildSquadNode(null, currentSquad, selectedFormationId)))
+                    .Where(node => node.StartingStrength > 0 || node.CurrentStrength > 0)
                     .OrderBy(node => node.Title)
                     .ToList();
+
+                if (squadNodes.Count == 0)
+                {
+                    continue;
+                }
 
                 children.Add(new BattleForceHierarchyNode(
                     null,
@@ -154,7 +183,6 @@ namespace OnlyWar.Helpers.Battles
 
             List<string> effects = [];
             if (currentSquad?.IsInMelee == true) effects.Add("Engaged in melee");
-            if (currentStrength == 0) effects.Add("Formation combat ineffective");
             if (lossPercent >= 0.5f) effects.Add("Severe losses");
             if (effects.Count == 0) effects.Add("No notable effects tracked");
 
@@ -162,7 +190,7 @@ namespace OnlyWar.Helpers.Battles
                 source.Id,
                 source.Name,
                 GetUnitName(source),
-                source.SquadLeader?.Soldier?.Name ?? "No leader",
+                source.Soldiers.FirstOrDefault(soldier => soldier.Soldier.Template.IsSquadLeader)?.Soldier?.Name ?? "No leader",
                 GetFormationType(source),
                 source.IsPlayerSquad,
                 startingStrength,
@@ -233,15 +261,15 @@ namespace OnlyWar.Helpers.Battles
         private static IReadOnlyList<BattleCasualtyRoundSummary> BuildCasualtySummaries(BattleHistory history)
         {
             List<BattleCasualtyRoundSummary> summaries = [];
-            int startingPlayer = CountAble(history.Turns[0].State.PlayerSquads.Values);
-            int startingOpposing = CountAble(history.Turns[0].State.OpposingSquads.Values);
+            int startingPlayer = CountAble(GetPlayerSquads(history.Turns[0].State));
+            int startingOpposing = CountAble(GetOpposingSquads(history.Turns[0].State));
             int previousPlayerLosses = 0;
             int previousOpposingLosses = 0;
 
             foreach (BattleTurn turn in history.Turns)
             {
-                int currentPlayerLosses = startingPlayer - CountAble(turn.State.PlayerSquads.Values);
-                int currentOpposingLosses = startingOpposing - CountAble(turn.State.OpposingSquads.Values);
+                int currentPlayerLosses = startingPlayer - CountAble(GetPlayerSquads(turn.State));
+                int currentOpposingLosses = startingOpposing - CountAble(GetOpposingSquads(turn.State));
                 summaries.Add(new BattleCasualtyRoundSummary(
                     turn.TurnNumber,
                     Math.Max(0, currentPlayerLosses - previousPlayerLosses),
@@ -264,16 +292,17 @@ namespace OnlyWar.Helpers.Battles
             return turn.TurnNumber == 0 ? "Deployment" : "Battle phase";
         }
 
-        private static string BuildResultLabel(BattleState initialState, BattleState currentState)
+        private static string BuildResultLabel(BattleState initialState, BattleState currentState, bool isFinalRound)
         {
-            int playerCurrent = CountAble(currentState.PlayerSquads.Values);
-            int opposingCurrent = CountAble(currentState.OpposingSquads.Values);
+            if (!isFinalRound) return "Battle in progress";
+            int playerCurrent = CountAble(GetPlayerSquads(currentState));
+            int opposingCurrent = CountAble(GetOpposingSquads(currentState));
             if (playerCurrent == 0 && opposingCurrent == 0) return "Mutual destruction";
             if (opposingCurrent == 0) return "Player force victorious";
             if (playerCurrent == 0) return "Opposing force victorious";
 
-            int playerStarting = CountAble(initialState.PlayerSquads.Values);
-            int opposingStarting = CountAble(initialState.OpposingSquads.Values);
+            int playerStarting = CountAble(GetPlayerSquads(initialState));
+            int opposingStarting = CountAble(GetOpposingSquads(initialState));
             int playerLosses = playerStarting - playerCurrent;
             int opposingLosses = opposingStarting - opposingCurrent;
             if (opposingLosses > playerLosses) return "Advantage: player force";
@@ -330,19 +359,39 @@ namespace OnlyWar.Helpers.Battles
 
         private static BattleSquad TryGetSquad(BattleState state, int squadId)
         {
-            if (state.PlayerSquads.TryGetValue(squadId, out BattleSquad playerSquad)) return playerSquad;
+            if (state.AttackerSquads.TryGetValue(squadId, out BattleSquad attackerSquad)) return attackerSquad;
             if (state.OpposingSquads.TryGetValue(squadId, out BattleSquad opposingSquad)) return opposingSquad;
             return null;
         }
 
         private static bool ContainsSquad(BattleState state, int squadId)
         {
-            return state.PlayerSquads.ContainsKey(squadId) || state.OpposingSquads.ContainsKey(squadId);
+            return state.AttackerSquads.ContainsKey(squadId) || state.OpposingSquads.ContainsKey(squadId);
+        }
+
+        private static IEnumerable<BattleSquad> GetAllSquads(BattleState state)
+        {
+            return state.AttackerSquads.Values.Concat(state.OpposingSquads.Values);
+        }
+
+        private static IEnumerable<BattleSquad> GetPlayerSquads(BattleState state)
+        {
+            return GetAllSquads(state).Where(squad => squad.IsPlayerSquad);
+        }
+
+        private static IEnumerable<BattleSquad> GetOpposingSquads(BattleState state)
+        {
+            return GetAllSquads(state).Where(squad => !squad.IsPlayerSquad);
         }
 
         private static int CountAble(BattleSquad squad)
         {
-            return squad?.AbleSoldiers.Count ?? 0;
+            // BattleState snapshots own a cloned tactical soldier list, while the underlying
+            // campaign soldiers are intentionally shared. AbleSoldiers reads those shared
+            // soldiers' latest CanFight value and would therefore rewrite earlier replay
+            // strengths after later wounds. The snapshot list itself is pruned as casualties
+            // occur, so its count is the historically correct strength for that turn.
+            return squad?.Soldiers.Count ?? 0;
         }
 
         private static int CountAble(IEnumerable<BattleSquad> squads)

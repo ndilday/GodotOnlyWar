@@ -59,7 +59,7 @@ namespace OnlyWar.Helpers.Missions
                 missionOptions.Add(new AvailableMission("Defend", MissionAvailabilityKind.Defend));
                 missionOptions.Add(new AvailableMission("Patrol", MissionAvailabilityKind.Patrol));
                 // Fortification: the squad spends the turn building defenses in its own region.
-                missionOptions.Add(new AvailableMission("Fortify (Entrenchment)", MissionAvailabilityKind.FortifyEntrenchment));
+                missionOptions.Add(new AvailableMission("Build Fortifications", MissionAvailabilityKind.FortifyEntrenchment));
                 missionOptions.Add(new AvailableMission("Build Listening Post", MissionAvailabilityKind.BuildListeningPost));
                 missionOptions.Add(new AvailableMission("Build Anti-Air", MissionAvailabilityKind.BuildAntiAir));
             }

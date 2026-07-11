@@ -35,6 +35,9 @@ public partial class BattleReviewController : DialogController
     private int _playbackSpeedIndex = 1;
     private bool _isPlaying;
     private double _playbackElapsed;
+    private Vector2I _mapOffset;
+    private Vector2 _mapSize = Vector2.One;
+    private bool _hasFramedCamera;
 
     public override void _Ready()
     {
@@ -117,7 +120,33 @@ public partial class BattleReviewController : DialogController
         StopPlayback();
         _history = history;
         _selectedFormationId = null;
+        _hasFramedCamera = false;
+        ComputeMapBounds();
         DisplayTurn(0);
+    }
+
+    // Establishes a single, stable map coordinate system that covers every position
+    // across the whole replay, so the drawn origin doesn't shift turn-to-turn (which
+    // would make the player's manual pan/zoom jump between rounds).
+    private void ComputeMapBounds()
+    {
+        List<Tuple<int, int>> allPositions = _history.Turns
+            .SelectMany(turn => turn.State.SoldierPositionsMap.Values.SelectMany(value => value))
+            .ToList();
+
+        if (allPositions.Count == 0)
+        {
+            _mapOffset = Vector2I.Zero;
+            _mapSize = new Vector2(_pixelsPerGrid.X, _pixelsPerGrid.Y);
+            return;
+        }
+
+        Vector2I topLeft = GetTopLeftOfPositions(allPositions) - Vector2I.One;
+        Vector2I bottomRight = GetBottomRightOfPositions(allPositions) + Vector2I.One;
+        _mapOffset = topLeft;
+        _mapSize = new Vector2(
+            Math.Max(1, bottomRight.X - topLeft.X + 1) * _pixelsPerGrid.X,
+            Math.Max(1, bottomRight.Y - topLeft.Y + 1) * _pixelsPerGrid.Y);
     }
 
     private void DisplayTurn(int requestedTurnIndex)
@@ -210,29 +239,27 @@ public partial class BattleReviewController : DialogController
         BattleTurn currentTurn = _history.Turns[turnIndex];
         BattleState state = currentTurn.State;
         BattleState previousState = turnIndex > 0 ? _history.Turns[turnIndex - 1].State : null;
-        IReadOnlyList<Tuple<int, int>> allPositions = GetAllReplayPositions(state, previousState);
-        if (allPositions.Count == 0) return;
 
-        Vector2I topLeft = GetTopLeftOfPositions(allPositions) - Vector2I.One;
-        Vector2I bottomRight = GetBottomRightOfPositions(allPositions) + Vector2I.One;
-        Vector2 mapSize = new(
-            Math.Max(1, bottomRight.X - topLeft.X + 1) * _pixelsPerGrid.X,
-            Math.Max(1, bottomRight.Y - topLeft.Y + 1) * _pixelsPerGrid.Y);
+        DrawBackground(_mapSize);
+        DrawGrid(_mapSize);
+        DrawRoundOverlays(previousState, state, currentTurn, _mapOffset);
 
-        DrawBackground(mapSize);
-        DrawGrid(mapSize);
-        DrawRoundOverlays(previousState, state, currentTurn, topLeft);
-
-        foreach (BattleSquad squad in state.PlayerSquads.Values.OrderBy(squad => squad.Id))
+        foreach (BattleSquad squad in state.AttackerSquads.Values.OrderBy(squad => squad.Id))
         {
-            DrawSquad(squad, topLeft, selectedFormationId == squad.Id);
+            DrawSquad(squad, _mapOffset, selectedFormationId == squad.Id);
         }
         foreach (BattleSquad squad in state.OpposingSquads.Values.OrderBy(squad => squad.Id))
         {
-            DrawSquad(squad, topLeft, selectedFormationId == squad.Id);
+            DrawSquad(squad, _mapOffset, selectedFormationId == squad.Id);
         }
 
-        CenterCamera(mapSize);
+        // Frame the deployment so every participant is visible, but only on open —
+        // afterward the player's manual pan/zoom is preserved across rounds.
+        if (!_hasFramedCamera)
+        {
+            FrameParticipants(GetAllReplayPositions(state, previousState));
+            _hasFramedCamera = true;
+        }
     }
 
     private static IReadOnlyList<Tuple<int, int>> GetAllReplayPositions(BattleState currentState, BattleState previousState)
@@ -251,8 +278,8 @@ public partial class BattleReviewController : DialogController
         ColorRect background = new()
         {
             Color = BackgroundColor,
-            Size = mapSize,
-            Position = Vector2.Zero,
+            Size = mapSize + new Vector2(4000, 4000),
+            Position = new Vector2(-2000, -2000),
             ZIndex = -10
         };
         _view.MapRoot.AddChild(background);
@@ -286,7 +313,7 @@ public partial class BattleReviewController : DialogController
     private void DrawSquad(BattleSquad squad, Vector2I topLeftOffset, bool selected)
     {
         List<Vector2> markerPositions = [];
-        foreach (BattleSoldier soldier in squad.AbleSoldiers)
+        foreach (BattleSoldier soldier in squad.Soldiers)
         {
             foreach (Tuple<int, int> location in soldier.PositionList)
             {
@@ -299,7 +326,6 @@ public partial class BattleReviewController : DialogController
         if (markerPositions.Count == 0) return;
 
         Vector2 centroid = markerPositions.Aggregate(Vector2.Zero, (sum, position) => sum + position) / markerPositions.Count;
-        DrawFormationBanner(squad, centroid, selected);
         DrawFormationLabel(squad, centroid, selected);
     }
 
@@ -363,7 +389,7 @@ public partial class BattleReviewController : DialogController
     {
         Label label = new()
         {
-            Text = $"{squad.Name}  {squad.AbleSoldiers.Count}",
+            Text = $"{squad.Name}  {squad.Soldiers.Count}",
             Position = centroid + new Vector2(10, -28),
             ZIndex = selected ? 6 : 5,
             MouseFilter = Control.MouseFilterEnum.Ignore
@@ -404,15 +430,15 @@ public partial class BattleReviewController : DialogController
 
     private void DrawRoutMarkers(BattleState previousState, BattleState currentState, Vector2I topLeftOffset)
     {
-        foreach (BattleSquad previousSquad in previousState.PlayerSquads.Values.Concat(previousState.OpposingSquads.Values).OrderBy(squad => squad.Id))
+        foreach (BattleSquad previousSquad in previousState.AttackerSquads.Values.Concat(previousState.OpposingSquads.Values).OrderBy(squad => squad.Id))
         {
-            if (previousSquad.AbleSoldiers.Count == 0)
+            if (previousSquad.Soldiers.Count == 0)
             {
                 continue;
             }
 
             BattleSquad currentSquad = TryGetSquad(currentState, previousSquad.Id);
-            if (currentSquad?.AbleSoldiers.Count > 0)
+            if (currentSquad?.Soldiers.Count > 0)
             {
                 continue;
             }
@@ -437,7 +463,7 @@ public partial class BattleReviewController : DialogController
             if (action is ShootAction shootAction && TryGetSoldierMapPosition(shootAction.ShooterId, currentState, previousState, topLeftOffset, out Vector2 shooterPosition)
                 && TryGetSoldierMapPosition(shootAction.TargetId, currentState, previousState, topLeftOffset, out Vector2 targetPosition))
             {
-                DrawArrowLine(shooterPosition, targetPosition, ProjectileColor, 2.4f, 11);
+                DrawDashedLine(shooterPosition, targetPosition, ProjectileColor, 1.15f, 11);
                 DrawCalloutLabel($"{Math.Max(1, shootAction.NumberOfShots)} SHOTS", (shooterPosition + targetPosition) / 2.0f + new Vector2(4, -18), ProjectileColor, 11, 12);
                 drawn++;
                 continue;
@@ -464,6 +490,20 @@ public partial class BattleReviewController : DialogController
                 DrawCalloutLabel("MELEE", (actorPosition + targetCalloutPosition) / 2.0f + new Vector2(4, -18), ChargeColor, 11, 11);
                 drawn++;
             }
+        }
+    }
+
+    private void DrawDashedLine(Vector2 start, Vector2 end, Color color, float width, int zIndex)
+    {
+        Vector2 delta = end - start;
+        float length = delta.Length();
+        if (length <= 1.0f) return;
+        Vector2 direction = delta / length;
+        const float dashLength = 9.0f;
+        const float gapLength = 7.0f;
+        for (float offset = 0; offset < length; offset += dashLength + gapLength)
+        {
+            DrawLine(start + direction * offset, start + direction * Math.Min(offset + dashLength, length), color, width, zIndex);
         }
     }
 
@@ -561,7 +601,7 @@ public partial class BattleReviewController : DialogController
 
     private Vector2 GetSquadCentroid(BattleSquad squad, Vector2I topLeftOffset)
     {
-        List<Vector2> positions = squad.AbleSoldiers
+        List<Vector2> positions = squad.Soldiers
             .SelectMany(soldier => soldier.PositionList)
             .Select(position => GridToMapPosition(position, topLeftOffset))
             .ToList();
@@ -571,11 +611,45 @@ public partial class BattleReviewController : DialogController
             : positions.Aggregate(Vector2.Zero, (sum, position) => sum + position) / positions.Count;
     }
 
-    private void CenterCamera(Vector2 mapSize)
+    // Centers on and zooms in as tightly as possible while keeping every participant
+    // position visible. The camera uses FixedTopLeft anchoring, so Position is the
+    // top-left world corner of the view (not its center).
+    private void FrameParticipants(IReadOnlyList<Tuple<int, int>> positions)
     {
-        _view.ReplayCamera.Position = mapSize / 2.0f;
-        float zoom = Math.Clamp(Math.Min(900.0f / Math.Max(mapSize.X, 1), 560.0f / Math.Max(mapSize.Y, 1)), 0.45f, 2.0f);
+        Vector2 contentMin;
+        Vector2 contentMax;
+        Vector2 halfCell = new Vector2(_pixelsPerGrid.X, _pixelsPerGrid.Y) / 2.0f;
+        if (positions.Count == 0)
+        {
+            contentMin = Vector2.Zero;
+            contentMax = _mapSize;
+        }
+        else
+        {
+            Vector2I topLeft = GetTopLeftOfPositions(positions);
+            Vector2I bottomRight = GetBottomRightOfPositions(positions);
+            contentMin = GridToMapPosition(Tuple.Create(topLeft.X, topLeft.Y), _mapOffset) - halfCell;
+            contentMax = GridToMapPosition(Tuple.Create(bottomRight.X, bottomRight.Y), _mapOffset) + halfCell;
+        }
+
+        Vector2 contentSize = contentMax - contentMin;
+        Vector2 contentCenter = (contentMin + contentMax) / 2.0f;
+
+        Vector2 viewportSize = _view.ReplayCamera.GetViewportRect().Size;
+        if (viewportSize.X <= 1.0f || viewportSize.Y <= 1.0f)
+        {
+            viewportSize = new Vector2(900.0f, 560.0f);
+        }
+
+        const float framingPadding = 0.92f;
+        float zoom = Math.Clamp(
+            Math.Min(
+                viewportSize.X / Math.Max(contentSize.X, 1.0f),
+                viewportSize.Y / Math.Max(contentSize.Y, 1.0f)) * framingPadding,
+            0.35f,
+            3.0f);
         _view.ReplayCamera.Zoom = new Vector2(zoom, zoom);
+        _view.ReplayCamera.Position = contentCenter - viewportSize / (2.0f * zoom);
     }
 
     private void ClearMap()
@@ -603,7 +677,7 @@ public partial class BattleReviewController : DialogController
 
     private static BattleSquad TryGetSquad(BattleState state, int squadId)
     {
-        if (state.PlayerSquads.TryGetValue(squadId, out BattleSquad playerSquad)) return playerSquad;
+        if (state.AttackerSquads.TryGetValue(squadId, out BattleSquad attackerSquad)) return attackerSquad;
         if (state.OpposingSquads.TryGetValue(squadId, out BattleSquad opposingSquad)) return opposingSquad;
         return null;
     }
