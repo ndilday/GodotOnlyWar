@@ -26,7 +26,7 @@ namespace OnlyWar.Helpers.Missions.Diversion
             LeaderMissionTest missionTest = new LeaderMissionTest(tactics, difficulty);
 
             context.DaysElapsed++;
-            context.Log.Add($"Day {context.DaysElapsed}: Force makes a show of strength against {enemyFaction.Region.Name}");
+            context.AddLog($"Day {context.DaysElapsed}: Force makes a show of strength against {enemyFaction.Region.Name}");
             float margin = missionTest.RunMissionCheck(context.MissionSquads);
             if (margin > 0)
             {

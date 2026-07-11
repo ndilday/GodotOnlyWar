@@ -29,7 +29,7 @@ namespace OnlyWar.Helpers.Missions.Ambush
                 .ToList();
             if (missionSquads.Count == 0 || opposingSquads.Count == 0)
             {
-                context.Log.Add($"Day {context.DaysElapsed}: No combat-capable forces remain for ambush.");
+                context.AddLog($"Day {context.DaysElapsed}: No combat-capable forces remain for ambush.");
                 return;
             }
 
@@ -62,7 +62,7 @@ namespace OnlyWar.Helpers.Missions.Ambush
                 BurrowPlacer.PlaceBurrowers(bgm, missionSquads.Concat(opposingSquads));
                 int oppForSize = opposingSquads.Sum(s => s.AbleSoldiers.Count);
                 string log = $"Day {context.DaysElapsed}: Force ambushed {oppForSize} {opposingSquads.First().Squad.Faction.Name}\n";
-                context.Log.Add(log);
+                context.AddLog(log);
                 // run the battle
                 BattleTurnResolver resolver = new BattleTurnResolver(bgm, missionSquads, opposingSquads, context.Order.Mission.RegionFaction.Region);
                 bool battleDone = false;
@@ -72,7 +72,7 @@ namespace OnlyWar.Helpers.Missions.Ambush
                     resolver.ProcessNextTurn();
                 }
                 context.EnemiesKilled += resolver.BattleHistory.EnemiesKilled;
-                context.Log.Add(resolver.BattleHistory.GetBattleLog());
+                context.AddBattleLog(resolver.BattleHistory.GetBattleLog(), resolver.BattleHistory);
                 new ExfiltrateMissionStep().ExecuteMissionStep(context, 0, null);
             }
             else

@@ -624,7 +624,10 @@ public partial class MainGameScene : Control
 		// handle ship movement
 
 		// display end of turn dialog
-		_endOfTurnDialog.AddData(_turnController.MissionContexts, _turnController.SpecialMissions);
+		_endOfTurnDialog.AddData(
+			_turnController.MissionContexts,
+			_turnController.SpecialMissions,
+			_turnController.StrategicCombatResults);
 		_endOfTurnDialog.Visible = true;
 
 		// Surface the opening-scenario resolution (win/lapse) if it fired this turn

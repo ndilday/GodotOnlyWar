@@ -23,7 +23,7 @@ namespace OnlyWar.Helpers.Missions.Sabotage
 
             Order order = context.MissionSquads.First().Squad.CurrentOrders;
 
-            context.Log.Add($"Day {context.DaysElapsed}: Force plants explosives in {context.Order.Mission.RegionFaction.Region.Name}");
+            context.AddLog($"Day {context.DaysElapsed}: Force plants explosives in {context.Order.Mission.RegionFaction.Region.Name}");
             float margin = missionTest.RunMissionCheck(context.MissionSquads);
             if(margin > 0)
             {

@@ -41,7 +41,7 @@ namespace OnlyWar.Helpers.Missions.Recon
                 return;
             }
             context.DaysElapsed++;
-            context.Log.Add($"Day {context.DaysElapsed}: Force attempting to infiltrate into {context.Order.Mission.RegionFaction.Region.Name}");
+            context.AddLog($"Day {context.DaysElapsed}: Force attempting to infiltrate into {context.Order.Mission.RegionFaction.Region.Name}");
             // modifiers should include: size of enemy forces, size of player force, terrain, some notion of enemy focus (hunting, defending, hiding), whether enemy is hidden or public
             float bestStealth = context.MissionSquads
                 .SelectMany(s => s.AbleSoldiers)
@@ -70,12 +70,12 @@ namespace OnlyWar.Helpers.Missions.Recon
         {
             if (context.DaysElapsed >= 6)
             {
-                context.Log.Add("Mission failed: Force unable to infiltrate into region");
+                context.AddLog("Mission failed: Force unable to infiltrate into region");
                 return false;
             }
             else if (context.MissionSquads.Where(s => s.ShouldContinueMission()).Count() == 0)
             {
-                context.Log.Add("Mission aborted: too many casualties");
+                context.AddLog("Mission aborted: too many casualties");
                 return false;
             }
             return true;

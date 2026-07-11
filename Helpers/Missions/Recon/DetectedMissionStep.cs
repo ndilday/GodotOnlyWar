@@ -61,7 +61,7 @@ namespace OnlyWar.Helpers.Missions.Recon
             // as uncontested and continue the mission rather than fighting a phantom force.
             if (context.OpposingSquads.Count == 0)
             {
-                context.Log.Add(
+                context.AddLog(
                     $"Day {context.DaysElapsed}: Detected in {spotter.Region.Name}, "
                     + "but no enemy force intercepts; the force presses on.");
                 GameLog.Trace(() =>

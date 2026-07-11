@@ -33,15 +33,61 @@ public partial class CommandWorkspaceView : DialogView
         _selectionHintLabel.Text = hint;
     }
 
+    // Switches the roster Tree between single- and multi-selection. Multi-select uses Godot's
+    // standard ctrl/shift-click semantics; non-selectable rows (unit headers) are unaffected.
+    public void SetSelectionMultiSelect(bool multiSelect)
+    {
+        _selectionTree.SelectMode = multiSelect ? Tree.SelectModeEnum.Multi : Tree.SelectModeEnum.Single;
+    }
+
+    // Returns the metadata keys of every currently-selected row in the roster Tree (order not
+    // guaranteed). Callers filter by key prefix (e.g. "squad:") to resolve model objects.
+    public IReadOnlyList<string> GetSelectedKeys()
+    {
+        List<string> keys = [];
+        TreeItem root = _selectionTree.GetRoot();
+        if (root != null)
+        {
+            CollectSelectedKeys(root.GetFirstChild(), keys);
+        }
+        return keys;
+    }
+
+    // Clears the roster Tree's selection without rebuilding it (used after a successful multi-squad
+    // assignment so the next PopulateSelectionTree doesn't resurrect the old selection).
+    public void ClearSelection()
+    {
+        _selectionTree.DeselectAll();
+    }
+
+    private static void CollectSelectedKeys(TreeItem item, List<string> keys)
+    {
+        while (item != null)
+        {
+            if (item.IsSelected(0) || item.IsSelected(1))
+            {
+                string key = item.GetMetadata(0).AsString();
+                if (!string.IsNullOrEmpty(key))
+                {
+                    keys.Add(key);
+                }
+            }
+            CollectSelectedKeys(item.GetFirstChild(), keys);
+            item = item.GetNext();
+        }
+    }
+
     public void PopulateSelectionTree(IReadOnlyList<CommandTreeNode> entries)
     {
         Dictionary<string, bool> collapsedByKey = CaptureSelectionTreeCollapsedStates();
-        string selectedKey = _selectionTree.GetSelected()?.GetMetadata(0).AsString();
+        // Capture the full selection set (not just GetSelected()'s single anchor) so a rebuild —
+        // e.g. after a filter change or refresh — preserves a multi-squad selection intact.
+        HashSet<string> selectedKeys = [.. GetSelectedKeys()];
 
         _selectionTree.Clear();
         TreeItem root = _selectionTree.CreateItem();
         _selectionTree.HideRoot = true;
-        AddTreeChildren(_selectionTree, root, entries, collapsedByKey, selectedKey);
+        AddTreeChildren(_selectionTree, root, entries, collapsedByKey, selectedKeys);
     }
 
     public void SetContext(string title, string subtitle, IReadOnlyList<Tuple<string, string>> rows)
@@ -194,8 +240,16 @@ public partial class CommandWorkspaceView : DialogView
         };
         _selectionTree.SetColumnExpand(0, true);
         _selectionTree.SetColumnExpand(1, false);
-        _selectionTree.SetColumnCustomMinimumWidth(1, 64);
+        // Wider badge column so target-region names ("Terra Lambda") aren't clipped, and a smaller
+        // per-level indent so squad rows sit closer under their company header — the reclaimed
+        // horizontal space goes to the badge.
+        _selectionTree.SetColumnCustomMinimumWidth(1, 116);
+        _selectionTree.AddThemeConstantOverride("item_margin", 6);
         _selectionTree.ItemSelected += OnSelectionTreeItemSelected;
+        // In SELECT_MULTI mode Godot emits multi_selected (not item_selected) for every selection
+        // change, so screens using multi-select (e.g. the Region roster) must listen here too or
+        // they never learn the selection changed. Single-select screens simply never fire it.
+        _selectionTree.MultiSelected += OnSelectionTreeMultiSelected;
         _selectionTree.ItemActivated += OnSelectionTreeItemActivated;
         leftStack.AddChild(_selectionTree);
 
@@ -394,6 +448,14 @@ public partial class CommandWorkspaceView : DialogView
         SelectionTreeItemSelected?.Invoke(this, item.GetMetadata(0).AsString());
     }
 
+    // Fires on every add/remove in multi-select mode. The key is only informational — callers
+    // recompute the whole selection from GetSelectedKeys() — so it's enough to signal "changed".
+    private void OnSelectionTreeMultiSelected(TreeItem item, long column, bool selected)
+    {
+        string key = item != null ? item.GetMetadata(0).AsString() : "";
+        SelectionTreeItemSelected?.Invoke(this, key);
+    }
+
     private void OnSelectionTreeItemActivated()
     {
         TreeItem item = _selectionTree.GetSelected();
@@ -442,7 +504,7 @@ public partial class CommandWorkspaceView : DialogView
         TreeItem parentItem,
         IReadOnlyList<CommandTreeNode> nodes,
         IReadOnlyDictionary<string, bool> collapsedByKey,
-        string selectedKey)
+        IReadOnlySet<string> selectedKeys)
     {
         foreach (CommandTreeNode node in nodes)
         {
@@ -461,6 +523,11 @@ public partial class CommandWorkspaceView : DialogView
                 item.SetText(1, node.Badge);
                 item.SetTextAlignment(1, HorizontalAlignment.Right);
                 item.SetCustomColor(1, OnlyWarStyle.MutedText);
+                // The badge is a passive label, not its own selection target: make the cell
+                // non-selectable so a click anywhere on the row selects the row (column 0) rather
+                // than the badge cell in isolation. This also keeps multi-select selections landing
+                // on column 0 so GetSelectedKeys sees every picked squad.
+                item.SetSelectable(1, false);
             }
 
             if (!node.Selectable)
@@ -469,13 +536,13 @@ public partial class CommandWorkspaceView : DialogView
                 item.SetCustomColor(0, OnlyWarStyle.MutedText);
             }
 
-            if (!string.IsNullOrEmpty(selectedKey) && node.Key == selectedKey)
+            if (node.Selectable && selectedKeys.Contains(node.Key))
             {
                 item.Select(0);
             }
             if (node.Children.Count > 0)
             {
-                AddTreeChildren(tree, item, node.Children, collapsedByKey, selectedKey);
+                AddTreeChildren(tree, item, node.Children, collapsedByKey, selectedKeys);
                 if (collapsedByKey.TryGetValue(node.Key, out bool wasCollapsed))
                 {
                     item.Collapsed = wasCollapsed;

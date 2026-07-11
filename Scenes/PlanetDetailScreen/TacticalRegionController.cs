@@ -34,7 +34,11 @@ public partial class TacticalRegionController : Control
         }
     }
 
-    public void Populate(Region region, MapLayer layers = MapLayer.None, bool selected = false)
+    // showOverlays=false renders a bare tile — hex fill (control color), name, and selection only,
+    // with none of the force/hidden/civilian/xenos/objective markers. Used by the Region screen's
+    // compact target-picker, where those planet-map overlays are unlabeled clutter and the detail
+    // lives in the side dossier instead. The full planet map leaves it true.
+    public void Populate(Region region, MapLayer layers = MapLayer.None, bool selected = false, bool showOverlays = true)
     {
         _region = region;
         RegionFaction playerRegionFaction = region.RegionFactionMap.Values.FirstOrDefault(rf => rf.PlanetFaction.Faction.IsPlayerFaction);
@@ -102,6 +106,12 @@ public partial class TacticalRegionController : Control
         bool hiddenEnemyMarker = (showForces && hiddenEnemy && visibleIntel > 0)
             || (showIntel && hiddenEnemy);
         string hiddenIconKey = hiddenEnemyMarker ? xenosIconKey : "player_forces";
+
+        if (!showOverlays)
+        {
+            showPlayerPublic = showPlayerHidden = showCivilian = showXenos = showObjective = false;
+            playerPopulation = civilianText = xenosText = "";
+        }
 
         Color color;
         if (region.ControllingFaction == null)

@@ -1,5 +1,7 @@
 using Godot;
 using OnlyWar.Helpers.Extensions;
+using OnlyWar.Helpers.Missions;
+using OnlyWar.Helpers.Orders;
 using OnlyWar.Models;
 using OnlyWar.Models.Missions;
 using OnlyWar.Models.Orders;
@@ -79,35 +81,34 @@ public partial class OrderDialogController : Control
 		}
 	}
 
+	// Maps a MissionAvailability.AvailableMission back onto the OptionButton id scheme the view
+	// and OnMissionOptionSelected/OnOrdersConfirmed still key off of.
+	// NOTE: id -9 (not -1) for Recon. Godot's OptionButton.AddItem treats id == -1
+	// as "auto-assign to the item's index", so a literal -1 would be silently replaced
+	// with the item index (0), breaking Recon selection/confirmation.
+	private static int GetOptionButtonId(AvailableMission mission)
+	{
+		return mission.Kind switch
+		{
+			MissionAvailabilityKind.Recon => -9,
+			MissionAvailabilityKind.Attack => -2,
+			MissionAvailabilityKind.Move => -2,
+			MissionAvailabilityKind.Defend => -3,
+			MissionAvailabilityKind.Patrol => -4,
+			MissionAvailabilityKind.FortifyEntrenchment => -5,
+			MissionAvailabilityKind.BuildListeningPost => -6,
+			MissionAvailabilityKind.BuildAntiAir => -7,
+			MissionAvailabilityKind.Diversion => -8,
+			_ => mission.SpecialMission.Id,
+		};
+	}
+
 	private void PopulateMissions()
 	{
-		List<Tuple<string, int>> missionOptions = new List<Tuple<string, int>>();
-		// NOTE: id -9 (not -1) for Recon. Godot's OptionButton.AddItem treats id == -1
-		// as "auto-assign to the item's index", so a literal -1 would be silently replaced
-		// with the item index (0), breaking Recon selection/confirmation.
-		missionOptions.Add(new Tuple<string, int>("Recon", -9));
-		if (_currentlySelectedRegion == _squad.CurrentRegion)
-		{
-			missionOptions.Add(new Tuple<string, int>("Defend", -3));
-			missionOptions.Add(new Tuple<string, int>("Patrol", -4));
-			// Fortification: the squad spends the turn building defenses in its own region.
-			missionOptions.Add(new Tuple<string, int>("Fortify (Entrenchment)", -5));
-			missionOptions.Add(new Tuple<string, int>("Build Listening Post", -6));
-			missionOptions.Add(new Tuple<string, int>("Build Anti-Air", -7));
-		}
-		else if(_currentlySelectedRegion.RegionFactionMap.Values.Any(rf => !rf.PlanetFaction.Faction.IsDefaultFaction && !rf.PlanetFaction.Faction.IsPlayerFaction))
-		{
-			missionOptions.Add(new Tuple<string, int>("Attack", -2));
-			missionOptions.Add(new Tuple<string, int>("Diversion", -8));
-		}
-		else
-		{
-			missionOptions.Add(new Tuple<string, int>("Move", -2));
-		}
-		foreach (var mission in _currentlySelectedRegion.SpecialMissions)
-		{
-			missionOptions.Add(new Tuple<string, int>(mission.MissionType.ToString(), mission.Id));
-		}
+		var availableMissions = MissionAvailability.GetAvailableMissions(_squad.CurrentRegion, _currentlySelectedRegion);
+		List<Tuple<string, int>> missionOptions = availableMissions
+			.Select(m => new Tuple<string, int>(m.Label, GetOptionButtonId(m)))
+			.ToList();
 		_view.PopulateMissionOptions(missionOptions);
 	}
 
@@ -265,6 +266,30 @@ public partial class OrderDialogController : Control
 		_view.SetAggressionDescription(text);
 	}
 
+	// Maps the OptionButton mission id (args.MissionCode) back onto an AvailableMission descriptor
+	// so OrderAssignment.AssignSquadsToMission can build the Mission the same way
+	// MissionAvailability.GetAvailableMissions would have offered it. Note -2 covers both Attack
+	// and Move (PopulateMissions never offers both for the same target region), and both resolve
+	// identically in OrderAssignment (target-faction dropdown falls back to the player's own
+	// RegionFaction when no enemy was targetable), so mapping -2 to Attack here is safe.
+	private AvailableMission ResolveSelectedMission(Region selectedRegion, int missionCode)
+	{
+		switch (missionCode)
+		{
+			case -9: return new AvailableMission("Recon", MissionAvailabilityKind.Recon);
+			case -2: return new AvailableMission("Attack", MissionAvailabilityKind.Attack);
+			case -3: return new AvailableMission("Defend", MissionAvailabilityKind.Defend);
+			case -4: return new AvailableMission("Patrol", MissionAvailabilityKind.Patrol);
+			case -5: return new AvailableMission("Fortify (Entrenchment)", MissionAvailabilityKind.FortifyEntrenchment);
+			case -6: return new AvailableMission("Build Listening Post", MissionAvailabilityKind.BuildListeningPost);
+			case -7: return new AvailableMission("Build Anti-Air", MissionAvailabilityKind.BuildAntiAir);
+			case -8: return new AvailableMission("Diversion", MissionAvailabilityKind.Diversion);
+			default:
+				Mission specialMission = selectedRegion.SpecialMissions.FirstOrDefault(m => m.Id == missionCode);
+				return specialMission == null ? null : new AvailableMission(specialMission.MissionType.ToString(), MissionAvailabilityKind.Special, specialMission);
+		}
+	}
+
 	private void OnOrdersConfirmed(object sender, OrderDialogResult args)
 	{
 		Region selectedRegion = _squad.CurrentRegion.Planet.Regions.FirstOrDefault(r => r.Id == args.RegionId);
@@ -277,76 +302,23 @@ public partial class OrderDialogController : Control
 		//mission stuff related to args.MissionCode;
 		Aggression aggro = (Aggression)args.Aggression;
 
-		Mission mission;
-		if(args.MissionCode == -9)
+		AvailableMission mission = ResolveSelectedMission(selectedRegion, args.MissionCode);
+		if (mission == null)
 		{
-			// use the first non-player, non-default region faction in this region
-			RegionFaction enemyRegionFaction = GetEnemyRegionFaction(selectedRegion)
-				?? GetDefaultRegionFaction(selectedRegion)
-				?? GetOrCreatePlayerRegionFaction(selectedRegion);
-			if (enemyRegionFaction == null)
-			{
-				GD.PushWarning($"Could not confirm recon orders for {selectedRegion.Name}: no valid region faction target.");
-				return;
-			}
-			mission = new Mission(MissionType.Recon, enemyRegionFaction, 0);
-		}
-		else if(args.MissionCode == -2)
-		{
-			// Player-selected target faction from the dialog's dropdown, when one was targetable
-			// (region has public enemies) — falls back to the player's own RegionFaction for the
-			// "Move" case where PopulateMissions offered no enemy target.
-			RegionFaction enemyRegionFaction = GetSelectedTargetRegionFaction(selectedRegion, args.TargetFactionId)
-				?? GetOrCreatePlayerRegionFaction(selectedRegion);
-			mission = new Mission(MissionType.Advance, enemyRegionFaction, 0);
-		}
-		else if(args.MissionCode == -3)
-		{
-			mission = new Mission(MissionType.DefenseInDepth, GetOrCreatePlayerRegionFaction(selectedRegion), 0);
-		}
-		else if(args.MissionCode == -4)
-		{
-			mission = new Mission(MissionType.Patrol, GetOrCreatePlayerRegionFaction(selectedRegion), 0);
-		}
-		else if (args.MissionCode <= -5 && args.MissionCode >= -7)
-		{
-			DefenseType defenseType = args.MissionCode switch
-			{
-				-5 => DefenseType.Entrenchment,
-				-6 => DefenseType.ListeningPost,
-				_ => DefenseType.AntiAir
-			};
-			mission = new ConstructionMission(defenseType, 0, GetOrCreatePlayerRegionFaction(selectedRegion));
-		}
-		else if (args.MissionCode == -8)
-		{
-			// Diversion: feint against an enemy-held region while the squad stays in its own
-			// region (it demonstrates from adjacent territory rather than entering the target).
-			RegionFaction enemyRegionFaction = GetSelectedTargetRegionFaction(selectedRegion, args.TargetFactionId);
-			if (enemyRegionFaction == null)
-			{
-				GD.PushWarning($"Could not confirm diversion orders for {selectedRegion.Name}: no enemy target.");
-				return;
-			}
-			mission = new Mission(MissionType.Diversion, enemyRegionFaction, 0);
-		}
-		else
-		{
-			mission = selectedRegion.SpecialMissions.FirstOrDefault(m => m.Id == args.MissionCode);
-			if (mission == null)
-			{
-				GD.PushWarning($"Could not confirm orders for {selectedRegion.Name}: mission id {args.MissionCode} no longer exists.");
-				return;
-			}
+			GD.PushWarning($"Could not confirm orders for {selectedRegion.Name}: mission id {args.MissionCode} no longer exists.");
+			return;
 		}
 
-		if(_squad.CurrentOrders != null)
+		Order newOrder = OrderAssignment.AssignSquadsToMission(
+			new List<Squad> { _squad }, selectedRegion, mission, args.TargetFactionId, aggro);
+		if (newOrder == null)
 		{
-			GameDataSingleton.Instance.Sector.RemoveOrder(_squad.CurrentOrders);
+			// Recon/Diversion couldn't resolve a valid region-faction target (same failure modes
+			// OnOrdersConfirmed used to guard against inline).
+			GD.PushWarning($"Could not confirm orders for {selectedRegion.Name}: no valid region faction target for mission {mission.Kind}.");
+			return;
 		}
 
-		_squad.CurrentOrders = new Order(new List<Squad> { _squad }, Disposition.Mobile, true, false, aggro, mission);
-		GameDataSingleton.Instance.Sector.AddNewOrder(_squad.CurrentOrders);
 		Visible = false;
 		OrdersConfirmed?.Invoke(this, EventArgs.Empty);
 	}
@@ -354,45 +326,5 @@ public partial class OrderDialogController : Control
 	private void OnCanceled(object sender, EventArgs e)
 	{
 		Visible = false;
-	}
-
-	// Returns the player's RegionFaction in the given region, creating (and registering) one
-	// if the player does not yet have a presence there. Player-built fortifications are stored
-	// on this region faction. Mirrors the on-demand creation used for Advance orders.
-	private static RegionFaction GetOrCreatePlayerRegionFaction(Region region)
-	{
-		Faction playerFaction = GameDataSingleton.Instance.Sector.PlayerForce.Faction;
-		if (!region.RegionFactionMap.TryGetValue(playerFaction.Id, out RegionFaction playerRegionFaction))
-		{
-			playerRegionFaction = new RegionFaction(region.Planet.PlanetFactionMap[playerFaction.Id], region);
-			region.RegionFactionMap[playerFaction.Id] = playerRegionFaction;
-		}
-		return playerRegionFaction;
-	}
-
-	private static RegionFaction GetEnemyRegionFaction(Region region)
-	{
-		return region.RegionFactionMap.Values.FirstOrDefault(rf =>
-			!rf.PlanetFaction.Faction.IsPlayerFaction
-			&& !rf.PlanetFaction.Faction.IsDefaultFaction);
-	}
-
-	// Looks up the enemy RegionFaction the player picked in the Target Faction dropdown by
-	// faction id. Returns null if no target was selected (dropdown not applicable/populated) or
-	// the region faction map no longer contains that faction (e.g. it was wiped out this turn).
-	private static RegionFaction GetSelectedTargetRegionFaction(Region region, int targetFactionId)
-	{
-		if (targetFactionId < 0)
-		{
-			return null;
-		}
-		return region.RegionFactionMap.TryGetValue(targetFactionId, out RegionFaction targetRegionFaction)
-			? targetRegionFaction
-			: null;
-	}
-
-	private static RegionFaction GetDefaultRegionFaction(Region region)
-	{
-		return region.RegionFactionMap.Values.FirstOrDefault(rf => rf.PlanetFaction.Faction.IsDefaultFaction);
 	}
 }

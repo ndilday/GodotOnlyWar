@@ -3,33 +3,85 @@
 [ext_resource type="PackedScene" uid="uid://cadpqoqxtyo0p" path="res://Scenes/Dialog.tscn" id="1_4b3o3"]
 [ext_resource type="Script" uid="uid://dccc2rigppyje" path="res://Scenes/EndOfTurnDialogController.cs" id="2_e3mme"]
 [ext_resource type="Script" uid="uid://gmdkckjl3s5u" path="res://Scenes/EndOfTurnDialogView.cs" id="3_ngawf"]
-
-[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_e3mme"]
-bg_color = Color(0, 0, 0, 1)
+[ext_resource type="Theme" uid="uid://ylp8bk1nhedq" path="res://Scenes/OnlyWarTheme.tres" id="4_theme"]
 
 [node name="DialogController" instance=ExtResource("1_4b3o3")]
+theme = ExtResource("4_theme")
 script = ExtResource("2_e3mme")
 
 [node name="DialogView" parent="." index="0"]
+theme = ExtResource("4_theme")
 script = ExtResource("3_ngawf")
 
-[node name="Panel" type="Panel" parent="DialogView" index="0"]
+[node name="ReportPanel" type="Panel" parent="DialogView" index="0"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = 18.0
+offset_top = 18.0
+offset_right = -18.0
+offset_bottom = -18.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="ReportMargin" type="MarginContainer" parent="DialogView/ReportPanel"]
 layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
 anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
-theme_override_styles/panel = SubResource("StyleBoxFlat_e3mme")
+theme_override_constants/margin_left = 16
+theme_override_constants/margin_top = 16
+theme_override_constants/margin_right = 16
+theme_override_constants/margin_bottom = 16
 
-[node name="ScrollContainer" type="ScrollContainer" parent="DialogView/Panel" index="0"]
+[node name="Layout" type="VBoxContainer" parent="DialogView/ReportPanel/ReportMargin"]
+layout_mode = 2
+theme_override_constants/separation = 10
+
+[node name="HeaderPanel" type="Panel" parent="DialogView/ReportPanel/ReportMargin/Layout"]
+custom_minimum_size = Vector2(0, 86)
+layout_mode = 2
+
+[node name="HeaderMargin" type="MarginContainer" parent="DialogView/ReportPanel/ReportMargin/Layout/HeaderPanel"]
 layout_mode = 1
-anchors_preset = -1
-anchor_left = 0.05
-anchor_top = 0.05
-anchor_right = 0.95
-anchor_bottom = 0.95
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_constants/margin_left = 12
+theme_override_constants/margin_top = 10
+theme_override_constants/margin_right = 56
+theme_override_constants/margin_bottom = 10
 
-[node name="VBoxContainer" type="VBoxContainer" parent="DialogView/Panel/ScrollContainer" index="0"]
+[node name="HeaderStack" type="VBoxContainer" parent="DialogView/ReportPanel/ReportMargin/Layout/HeaderPanel/HeaderMargin"]
+layout_mode = 2
+theme_override_constants/separation = 4
+
+[node name="TitleLabel" type="Label" parent="DialogView/ReportPanel/ReportMargin/Layout/HeaderPanel/HeaderMargin/HeaderStack"]
+layout_mode = 2
+text = "TURN REPORT"
+
+[node name="SummaryLabel" type="Label" parent="DialogView/ReportPanel/ReportMargin/Layout/HeaderPanel/HeaderMargin/HeaderStack"]
+layout_mode = 2
+text = "0 reports received by chapter command."
+autowrap_mode = 2
+
+[node name="ScrollContainer" type="ScrollContainer" parent="DialogView/ReportPanel/ReportMargin/Layout"]
+layout_mode = 2
+size_flags_vertical = 3
+horizontal_scroll_mode = 0
+
+[node name="EntryList" type="VBoxContainer" parent="DialogView/ReportPanel/ReportMargin/Layout/ScrollContainer"]
 layout_mode = 2
 size_flags_horizontal = 3
+theme_override_constants/separation = 8
+
+[node name="EmptyHintLabel" type="Label" parent="DialogView/ReportPanel/ReportMargin/Layout"]
+visible = false
+layout_mode = 2
+text = "No reports reached command this turn."
+horizontal_alignment = 1

@@ -1,5 +1,7 @@
 using Godot;
 using OnlyWar.Helpers.Extensions;
+using OnlyWar.Helpers.Missions;
+using OnlyWar.Helpers.Orders;
 using OnlyWar.Helpers.UI;
 using OnlyWar.Models;
 using OnlyWar.Models.Orders;
@@ -11,19 +13,6 @@ using System.Linq;
 
 public partial class RegionScreenController : DialogController
 {
-    private const string ActionOpenSquad = "open_squad";
-    private const string ActionEditOrders = "edit_orders";
-    private const string ActionUnassign = "unassign";
-    private const string ActionCopyOrders = "copy_orders";
-    private const string ActionPasteOrders = "paste_orders";
-
-    private static readonly (MapLayer Layer, string Label, string IconKey)[] MapLayerOptions =
-    [
-        (MapLayer.Forces, "Forces", "infantry"),
-        (MapLayer.Orders, "Orders", "objective"),
-        (MapLayer.Intel, "Intel", "threat")
-    ];
-
     private static readonly (string Key, string Label)[] RosterFilters =
     [
         ("all", "All"),
@@ -33,11 +22,12 @@ public partial class RegionScreenController : DialogController
 
     private RegionScreenView _view;
     private Region _currentRegion;
-    private Squad _selectedSquad;
-    private Order _selectedOrder;
-    private Order _copiedOrder;
+    private Region _targetRegion;
+    private readonly List<Squad> _selectedSquads = [];
+    private AvailableMission _selectedMission;
+    private Aggression _aggression = Aggression.Normal;
+    private int _selectedTargetFactionId = -1;
     private OrderDialogController _orderDialog;
-    private MapLayer _activeLayers = MapLayer.Forces | MapLayer.Orders;
     private string _rosterFilter = "all";
 
     public event EventHandler<Squad> SquadDoubleClicked;
@@ -51,16 +41,20 @@ public partial class RegionScreenController : DialogController
 
         _view.SelectionTreeItemSelected += OnSelectionTreeItemSelected;
         _view.SelectionTreeItemActivated += OnSelectionTreeItemActivated;
-        _view.CommandPressed += OnCommandPressed;
         _view.AdjacentRegionClicked += OnAdjacentRegionClicked;
-        _view.MapLayerToggled += OnMapLayerToggled;
+        _view.TargetRegionSelected += OnTargetRegionSelected;
+        _view.MissionSelected += OnMissionSelected;
+        _view.AggressionChanged += OnAggressionChanged;
+        _view.AssignPressed += OnAssignPressed;
+        _view.UnassignPressed += OnUnassignPressed;
+        _view.TargetFactionSelected += OnTargetFactionSelected;
+        _view.ActiveOrderActivated += OnActiveOrderActivated;
         _view.RosterFilterSelected += OnRosterFilterSelected;
         _orderDialog.OrdersConfirmed += OnOrdersConfirmed;
 
-        _view.SetMapLayerOptions(MapLayerOptions);
-        _view.SetActiveMapLayers(_activeLayers);
         _view.SetRosterFilters(RosterFilters);
         _view.SetActiveRosterFilter(_rosterFilter);
+        _view.SetSelectionMultiSelect(true);
     }
 
     public override void _ExitTree()
@@ -69,22 +63,20 @@ public partial class RegionScreenController : DialogController
         {
             _view.SelectionTreeItemSelected -= OnSelectionTreeItemSelected;
             _view.SelectionTreeItemActivated -= OnSelectionTreeItemActivated;
-            _view.CommandPressed -= OnCommandPressed;
             _view.AdjacentRegionClicked -= OnAdjacentRegionClicked;
-            _view.MapLayerToggled -= OnMapLayerToggled;
+            _view.TargetRegionSelected -= OnTargetRegionSelected;
+            _view.MissionSelected -= OnMissionSelected;
+            _view.AggressionChanged -= OnAggressionChanged;
+            _view.AssignPressed -= OnAssignPressed;
+            _view.UnassignPressed -= OnUnassignPressed;
+            _view.TargetFactionSelected -= OnTargetFactionSelected;
+            _view.ActiveOrderActivated -= OnActiveOrderActivated;
             _view.RosterFilterSelected -= OnRosterFilterSelected;
         }
         if (GodotObject.IsInstanceValid(_orderDialog))
         {
             _orderDialog.OrdersConfirmed -= OnOrdersConfirmed;
         }
-    }
-
-    private void OnMapLayerToggled(object sender, MapLayer layer)
-    {
-        _activeLayers ^= layer;
-        _view.SetActiveMapLayers(_activeLayers);
-        PopulateAdjacentRegions();
     }
 
     private void OnRosterFilterSelected(object sender, string key)
@@ -97,9 +89,11 @@ public partial class RegionScreenController : DialogController
     public void DisplayRegion(Region region)
     {
         _currentRegion = region;
-        _selectedSquad = null;
-        _selectedOrder = null;
-        _copiedOrder = null;
+        _targetRegion = region;
+        _selectedSquads.Clear();
+        _selectedMission = null;
+        _selectedTargetFactionId = -1;
+        _aggression = Aggression.Normal;
         RefreshWorkspace();
     }
 
@@ -110,47 +104,87 @@ public partial class RegionScreenController : DialogController
 
     private void OnSelectionTreeItemSelected(object sender, string key)
     {
-        ApplySelectionKey(key);
-        RefreshContextAndCommands();
+        RecomputeSelectedSquads();
+        UpdateSelectionSummary();
+        RefreshCommitBar();
     }
 
     private void OnSelectionTreeItemActivated(object sender, string key)
     {
-        ApplySelectionKey(key);
-        if (_selectedSquad != null)
+        Squad squad = ResolveSquadFromKey(key);
+        if (squad != null)
         {
-            SquadDoubleClicked?.Invoke(this, _selectedSquad);
+            SquadDoubleClicked?.Invoke(this, squad);
         }
     }
 
-    private void OnCommandPressed(object sender, string key)
+    private void OnUnassignPressed(object sender, EventArgs e)
     {
-        switch (key)
-        {
-            case ActionOpenSquad:
-                if (_selectedSquad != null)
-                {
-                    SquadDoubleClicked?.Invoke(this, _selectedSquad);
-                }
-                break;
-            case ActionEditOrders:
-                OpenOrdersDialog();
-                break;
-            case ActionUnassign:
-                UnassignSelectedSquad();
-                break;
-            case ActionCopyOrders:
-                CopySelectedOrders();
-                break;
-            case ActionPasteOrders:
-                PasteCopiedOrders();
-                break;
-        }
+        UnassignSelectedSquads();
     }
 
     private void OnAdjacentRegionClicked(object sender, Region region)
     {
         AdjacentRegionChangeRequested?.Invoke(this, region);
+    }
+
+    private void OnTargetRegionSelected(object sender, Region region)
+    {
+        if (region == null || region == _targetRegion) return;
+
+        _targetRegion = region;
+        _selectedMission = null;
+        _selectedTargetFactionId = -1;
+        RefreshTargetPicker();
+        RefreshMissionsAndOrders();
+        RefreshDossier();
+        RefreshCommitBar();
+    }
+
+    private void OnMissionSelected(object sender, AvailableMission mission)
+    {
+        _selectedMission = mission;
+        _selectedTargetFactionId = -1;
+        RefreshTargetFactionSelector();
+        RefreshCommitBar();
+    }
+
+    private void OnAggressionChanged(object sender, Aggression aggression)
+    {
+        _aggression = aggression;
+        RefreshCommitBar();
+    }
+
+    private void OnTargetFactionSelected(object sender, int targetFactionId)
+    {
+        _selectedTargetFactionId = targetFactionId;
+        RefreshCommitBar();
+    }
+
+    private void OnActiveOrderActivated(object sender, Order order)
+    {
+        Squad squad = order.AssignedSquads.FirstOrDefault();
+        if (squad == null) return;
+
+        OpenOrdersDialog(squad);
+    }
+
+    private void OnAssignPressed(object sender, EventArgs e)
+    {
+        if (_selectedSquads.Count == 0 || _selectedMission == null || _targetRegion == null) return;
+
+        int targetFactionId = ResolveTargetFactionId();
+        Order newOrder = OrderAssignment.AssignSquadsToMission(
+            _selectedSquads.ToList(), _targetRegion, _selectedMission, targetFactionId, _aggression);
+        if (newOrder == null)
+        {
+            GD.PushWarning($"Could not assign squads to {_selectedMission.Label} vs {_targetRegion.Name}: mission target could not be resolved.");
+            return;
+        }
+
+        _selectedSquads.Clear();
+        _view.ClearSelection();
+        RefreshWorkspace();
     }
 
     private void OnOrdersConfirmed(object sender, EventArgs e)
@@ -163,19 +197,180 @@ public partial class RegionScreenController : DialogController
         if (_currentRegion == null) return;
 
         _view.SetHeader($"{_currentRegion.Planet.Name} / {_currentRegion.Name}");
-        _view.SetSelectionTitle("ROSTER", "Select a squad. Edit, copy, or paste orders from the command bar.");
+        _view.SetSelectionTitle("ROSTER", "Select squads. Pick a target hex and mission, then assign.");
         _view.PopulateSelectionTree(BuildRoster());
-        PopulateAdjacentRegions();
-        RefreshContextAndCommands();
+        RecomputeSelectedSquads();
+        UpdateSelectionSummary();
+
+        RefreshTargetPicker();
+        RefreshMissionsAndOrders();
+        RefreshTargetFactionSelector();
+        RefreshDossier();
+        RefreshCommitBar();
     }
 
-    private void RefreshContextAndCommands()
+    private void RefreshTargetPicker()
     {
         if (_currentRegion == null) return;
 
-        PopulateAdjacentRegions();
-        _view.SetContext(GetContextTitle(), GetContextSubtitle(), BuildContextRows());
-        _view.SetCommands(BuildCommands());
+        Dictionary<string, Region> adjacentRegionMap = _currentRegion.GetAdjacentRegions()
+            .Select(region => new { Direction = GetDirectionFromCurrentToNeighbour(_currentRegion, region), Region = region })
+            .Where(entry => entry.Direction != null)
+            .ToDictionary(entry => entry.Direction, entry => entry.Region);
+
+        _view.PopulateAdjacentRegions(_currentRegion, adjacentRegionMap, _targetRegion);
+    }
+
+    private void RefreshMissionsAndOrders()
+    {
+        if (_currentRegion == null || _targetRegion == null) return;
+
+        IReadOnlyList<AvailableMission> missions = MissionAvailability.GetAvailableMissions(_currentRegion, _targetRegion);
+        if (_selectedMission != null && !missions.Any(m => m.Kind == _selectedMission.Kind && m.Label == _selectedMission.Label))
+        {
+            _selectedMission = null;
+        }
+
+        _view.SetMissionsHeader(_targetRegion.Name, BuildMissionsFlagText());
+        _view.SetMissions(missions, _selectedMission);
+        _view.SetActiveOrders(BuildActiveOrderRows());
+    }
+
+    private string BuildMissionsFlagText()
+    {
+        List<RegionFaction> enemies = GetPublicEnemyRegionFactions(_targetRegion);
+        if (enemies.Count == 0) return null;
+
+        RegionFaction strongest = enemies.OrderByDescending(rf => rf.GetDeployedStrength()).First();
+        return enemies.Count > 1
+            ? $"{strongest.PlanetFaction.Faction.Name} +{enemies.Count - 1}"
+            : strongest.PlanetFaction.Faction.Name;
+    }
+
+    private List<ActiveOrderRow> BuildActiveOrderRows()
+    {
+        RegionFaction playerFaction = GetPlayerRegionFaction(_currentRegion);
+        if (playerFaction == null) return [];
+
+        return playerFaction.LandedSquads
+            .Where(squad => squad.CurrentOrders != null)
+            .GroupBy(squad => squad.CurrentOrders)
+            .Select(group => new ActiveOrderRow(
+                group.Key,
+                group.Key.Mission.MissionType.ToString(),
+                group.Key.Mission.RegionFaction.Region.Name,
+                group.Count()))
+            .ToList();
+    }
+
+    private void RefreshTargetFactionSelector()
+    {
+        bool relevant = _selectedMission != null
+            && (_selectedMission.Kind == MissionAvailabilityKind.Attack || _selectedMission.Kind == MissionAvailabilityKind.Diversion)
+            && _targetRegion != null;
+
+        List<RegionFaction> enemies = relevant ? GetPublicEnemyRegionFactions(_targetRegion) : [];
+
+        if (!relevant || enemies.Count <= 1)
+        {
+            _selectedTargetFactionId = enemies.Count == 1 ? enemies[0].PlanetFaction.Faction.Id : -1;
+            _view.SetTargetFactionOptions(Array.Empty<(string, int)>(), false);
+            return;
+        }
+
+        List<(string Name, int Id)> options = enemies
+            .Select(rf => (Name: $"{rf.PlanetFaction.Faction.Name} — {rf.GetForceMagnitudeDescription()}", Id: rf.PlanetFaction.Faction.Id))
+            .ToList();
+        if (_selectedTargetFactionId < 0 || enemies.All(rf => rf.PlanetFaction.Faction.Id != _selectedTargetFactionId))
+        {
+            _selectedTargetFactionId = options[0].Id;
+        }
+        _view.SetTargetFactionOptions(options, true);
+    }
+
+    private int ResolveTargetFactionId()
+    {
+        if (_selectedMission == null) return -1;
+        if (_selectedMission.Kind != MissionAvailabilityKind.Attack && _selectedMission.Kind != MissionAvailabilityKind.Diversion) return -1;
+        return _selectedTargetFactionId;
+    }
+
+    private void RefreshCommitBar()
+    {
+        _view.SetAggression(_aggression);
+        int count = _selectedSquads.Count;
+        bool enabled = count > 0 && _selectedMission != null;
+        _view.SetAssignButton(count == 1 ? "Assign 1 Squad" : $"Assign {count} Squads", enabled);
+        _view.SetUnassignButton(_selectedSquads.Any(squad => squad.CurrentOrders != null));
+    }
+
+    private void RefreshDossier()
+    {
+        Region target = _targetRegion ?? _currentRegion;
+        if (target == null) return;
+
+        List<DossierCardData> cards = [];
+        float visibleIntel = target.GetPlayerVisibleIntel();
+        List<RegionFaction> enemyFactions = GetPublicEnemyRegionFactions(target);
+
+        // Region first, then the single Local Force card, then any number of hostile faction
+        // cards last - so the fixed cards stay anchored at the top regardless of how many
+        // enemies contest the region.
+        List<Tuple<string, string>> regionRows =
+        [
+            Row("Control", GetRegionControlLabel(target)),
+            Row("Intel rating", $"{visibleIntel:0.##}"),
+            Row("Civilians", target.HasHiddenDefaultFaction() ? "Unknown" : target.GetVisibleCivilianPopulation().ToString("N0"))
+        ];
+        cards.Add(new DossierCardData("Region", target.Name, regionRows, OnlyWarStyle.Gold));
+
+        long garrison = target.PlanetaryDefenseForces;
+        List<Tuple<string, string>> localRows = [Row("Strength", garrison > 0 ? garrison.ToString("N0") : "None")];
+        RegionFaction alliedFaction = target.RegionFactionMap.Values
+            .FirstOrDefault(rf => rf.PlanetFaction.Faction.IsDefaultFaction);
+        if (alliedFaction != null)
+        {
+            // Allied (PDF/Imperial) defenses are always visible to the player - no intel gate,
+            // unlike the hostile cards which only reveal fortifications once intel is sufficient.
+            localRows.Add(Row("Entrenchment", RegionFactionExtensions.GetDefenseLevelDescription(alliedFaction.Entrenchment)));
+            localRows.Add(Row("Listening Posts", RegionFactionExtensions.GetDefenseLevelDescription(alliedFaction.ListeningPost)));
+            localRows.Add(Row("Anti-Air", RegionFactionExtensions.GetDefenseLevelDescription(alliedFaction.AntiAir)));
+        }
+        cards.Add(new DossierCardData("Local Force", "PDF Garrison", localRows, OnlyWarStyle.MedicalStable));
+
+        foreach (RegionFaction enemyFaction in enemyFactions)
+        {
+            List<Tuple<string, string>> rows = [Row("Force magnitude", enemyFaction.GetForceMagnitudeDescription())];
+            if (visibleIntel > 1)
+            {
+                rows.Add(Row("Entrenchment", RegionFactionExtensions.GetDefenseLevelDescription(enemyFaction.Entrenchment)));
+                rows.Add(Row("Listening Posts", RegionFactionExtensions.GetDefenseLevelDescription(enemyFaction.ListeningPost)));
+                rows.Add(Row("Anti-Air", RegionFactionExtensions.GetDefenseLevelDescription(enemyFaction.AntiAir)));
+            }
+            cards.Add(new DossierCardData(
+                "Hostile Faction",
+                enemyFaction.PlanetFaction.Faction.Name,
+                rows,
+                OnlyWarStyle.OpposingAccent,
+                GetMagnitudeBarFraction(enemyFaction.GetForceMagnitudeDescription())));
+        }
+
+        _view.SetDossier(target.Name, cards);
+    }
+
+    private static float? GetMagnitudeBarFraction(string magnitudeWord)
+    {
+        return magnitudeWord switch
+        {
+            "None" => 0f,
+            "Handful" => 0.15f,
+            "Dozens" => 0.3f,
+            "Hundreds" => 0.5f,
+            "Thousands" => 0.7f,
+            "Millions" => 0.85f,
+            "Billions" => 1f,
+            _ => null
+        };
     }
 
     private IReadOnlyList<CommandTreeNode> BuildRoster()
@@ -226,138 +421,43 @@ public partial class RegionScreenController : DialogController
         return $"{squad.Name} | {strength}";
     }
 
-    private string GetContextTitle()
+    private void UpdateSelectionSummary()
     {
-        if (_selectedSquad != null) return _selectedSquad.Name;
-        if (_selectedOrder != null) return $"{_selectedOrder.Mission.MissionType} Orders";
-        return _currentRegion?.Name ?? "Region Detail";
+        int count = _selectedSquads.Count;
+        int fighting = _selectedSquads.Sum(squad => squad.Members.Count(member => member.CanFight));
+        string summary = count == 0
+            ? "Select squads. Pick a target hex and mission, then assign."
+            : $"{count} squad{(count == 1 ? "" : "s")} selected · {fighting} fighting";
+        _view.SetSelectionTitle("ROSTER", summary);
     }
 
-    private string GetContextSubtitle()
+    private void RecomputeSelectedSquads()
     {
-        if (_selectedSquad != null) return $"{_selectedSquad.ParentUnit?.Name ?? "Unknown Unit"} deployed in {_currentRegion.Name}";
-        if (_selectedOrder != null) return $"Mission target: {_selectedOrder.Mission.RegionFaction.Region.Name}";
-        return $"{_currentRegion.Planet.Name} surface command";
+        _selectedSquads.Clear();
+        RegionFaction playerFaction = GetPlayerRegionFaction();
+        if (playerFaction == null) return;
+
+        HashSet<int> selectedIds = _view.GetSelectedKeys()
+            .Where(key => key.StartsWith("squad:"))
+            .Select(key => int.Parse(key.Split(':')[1]))
+            .ToHashSet();
+        if (selectedIds.Count == 0) return;
+
+        _selectedSquads.AddRange(playerFaction.LandedSquads.Where(squad => selectedIds.Contains(squad.Id)));
     }
 
-    private IReadOnlyList<Tuple<string, string>> BuildContextRows()
+    private Squad ResolveSquadFromKey(string key)
     {
-        if (_selectedSquad != null) return BuildSquadRows(_selectedSquad);
-        if (_selectedOrder != null) return BuildOrderRows(_selectedOrder);
-        return BuildRegionRows(_currentRegion);
+        if (string.IsNullOrWhiteSpace(key) || !key.StartsWith("squad:")) return null;
+        int squadId = int.Parse(key.Split(':')[1]);
+        return GetPlayerRegionFaction()?.LandedSquads.FirstOrDefault(squad => squad.Id == squadId);
     }
 
-    private IReadOnlyList<Tuple<string, string>> BuildRegionRows(Region region)
+    private void OpenOrdersDialog(Squad squad)
     {
-        List<Tuple<string, string>> rows = [];
-        rows.Add(Row("Region Name", region.Name));
-        rows.Add(Row("Planet", region.Planet.Name));
-        rows.Add(Row("Control", GetRegionControlLabel(region)));
-        rows.Add(Row("Coordinates", $"({region.Coordinates.X}, {region.Coordinates.Y})"));
-        float visibleIntel = region.GetPlayerVisibleIntel();
-        rows.Add(Row("Intelligence", $"{visibleIntel:0.##}"));
-
-        RegionFaction playerFaction = GetPlayerRegionFaction(region);
-        List<RegionFaction> enemyFactions = GetPublicEnemyRegionFactions(region);
-
-        if (region.HasHiddenDefaultFaction())
+        if (squad != null)
         {
-            rows.Add(Row("Civilian Population", "Unknown"));
-        }
-        else
-        {
-            long civilianPop = region.GetVisibleCivilianPopulation();
-            rows.Add(Row("Civilian Population", civilianPop > 0 ? civilianPop.ToString("N0") : "None"));
-        }
-        rows.Add(Row("Marines", playerFaction?.LandedSquads.Sum(squad => squad.Members.Count).ToString() ?? "0"));
-        rows.Add(Row("Assigned Orders", playerFaction?.LandedSquads.Count(squad => squad.CurrentOrders != null).ToString() ?? "0"));
-
-        if (enemyFactions.Count > 0)
-        {
-            foreach (RegionFaction enemyFaction in enemyFactions)
-            {
-                string prefix = enemyFactions.Count > 1 ? $"Enemy ({enemyFaction.PlanetFaction.Faction.Name})" : "Enemy";
-                rows.Add(Row($"{prefix} Faction", enemyFaction.PlanetFaction.Faction.Name));
-                rows.Add(Row($"{prefix} Strength", enemyFaction.GetForceMagnitudeDescription()));
-                if (visibleIntel > 1)
-                {
-                    rows.Add(Row($"{prefix} Entrenchment", RegionFactionExtensions.GetDefenseLevelDescription(enemyFaction.Entrenchment)));
-                    rows.Add(Row($"{prefix} Listening Posts", RegionFactionExtensions.GetDefenseLevelDescription(enemyFaction.ListeningPost)));
-                    rows.Add(Row($"{prefix} Anti-Air", RegionFactionExtensions.GetDefenseLevelDescription(enemyFaction.AntiAir)));
-                }
-            }
-        }
-        else
-        {
-            rows.Add(Row("Enemy Presence", "None Detected"));
-        }
-
-        rows.Add(Row("Adjacent Regions", region.GetAdjacentRegions().Count().ToString()));
-        return rows;
-    }
-
-    private IReadOnlyList<Tuple<string, string>> BuildSquadRows(Squad squad)
-    {
-        List<Tuple<string, string>> rows = [];
-        rows.Add(Row("Unit", squad.ParentUnit?.Name ?? "Unknown"));
-        rows.Add(Row("Fighting Strength", $"{squad.Members.Count(member => member.CanFight)}/{squad.Members.Count}"));
-        rows.Add(Row("Orders", squad.CurrentOrders?.Mission.MissionType.ToString() ?? "Unassigned"));
-        if (squad.CurrentOrders != null)
-        {
-            rows.Add(Row("Target Region", squad.CurrentOrders.Mission.RegionFaction.Region.Name));
-            rows.Add(Row("Target Faction", squad.CurrentOrders.Mission.RegionFaction.PlanetFaction?.Faction.Name ?? "Unknown"));
-            rows.Add(Row("Aggression", squad.CurrentOrders.LevelOfAggression.ToString()));
-            rows.Add(Row("Squads Assigned", squad.CurrentOrders.AssignedSquads.Count.ToString()));
-        }
-        return rows;
-    }
-
-    private static IReadOnlyList<Tuple<string, string>> BuildOrderRows(Order order)
-    {
-        return
-        [
-            Row("Mission Type", order.Mission.MissionType.ToString()),
-            Row("Target Region", order.Mission.RegionFaction.Region.Name),
-            Row("Target Faction", order.Mission.RegionFaction.PlanetFaction?.Faction.Name ?? "Unknown"),
-            Row("Aggression", order.LevelOfAggression.ToString()),
-            Row("Squads Assigned", order.AssignedSquads.Count.ToString())
-        ];
-    }
-
-    private IReadOnlyList<CommandAction> BuildCommands()
-    {
-        return
-        [
-            new CommandAction(ActionOpenSquad, "Open Squad", "infantry", _selectedSquad != null),
-            new CommandAction(ActionEditOrders, "Edit Orders", "objective", _selectedSquad != null),
-            new CommandAction(ActionUnassign, "Unassign", "locked", _selectedSquad?.CurrentOrders != null),
-            new CommandAction(ActionCopyOrders, "Copy", "archive", _selectedSquad?.CurrentOrders != null),
-            new CommandAction(ActionPasteOrders, GetPasteCommandText(), "save", CanPasteOrders())
-        ];
-    }
-
-    private void ApplySelectionKey(string key)
-    {
-        if (string.IsNullOrWhiteSpace(key) || key.StartsWith("group:") || key.StartsWith("unit:")) return;
-
-        _selectedSquad = null;
-        _selectedOrder = null;
-
-        string[] parts = key.Split(':');
-        switch (parts[0])
-        {
-            case "squad":
-                _selectedSquad = GetPlayerRegionFaction()?.LandedSquads.FirstOrDefault(squad => squad.Id == int.Parse(parts[1]));
-                _selectedOrder = _selectedSquad?.CurrentOrders;
-                break;
-        }
-    }
-
-    private void OpenOrdersDialog()
-    {
-        if (_selectedSquad != null)
-        {
-            _orderDialog.PopulateOrderData(_selectedSquad);
+            _orderDialog.PopulateOrderData(squad);
             _orderDialog.Visible = true;
         }
         else
@@ -366,73 +466,23 @@ public partial class RegionScreenController : DialogController
         }
     }
 
-    private void UnassignSelectedSquad()
+    private void UnassignSelectedSquads()
     {
-        if (_selectedSquad?.CurrentOrders == null) return;
+        List<Squad> squadsWithOrders = _selectedSquads.Where(squad => squad.CurrentOrders != null).ToList();
+        if (squadsWithOrders.Count == 0) return;
 
-        Order order = _selectedSquad.CurrentOrders;
-        order.AssignedSquads.Remove(_selectedSquad);
-        _selectedSquad.CurrentOrders = null;
-        if (order.AssignedSquads.Count == 0)
+        foreach (Squad squad in squadsWithOrders)
         {
-            GameDataSingleton.Instance.Sector.RemoveOrder(order);
-        }
-
-        _selectedOrder = null;
-        RefreshWorkspace();
-    }
-
-    private void CopySelectedOrders()
-    {
-        if (_selectedSquad?.CurrentOrders == null) return;
-
-        _copiedOrder = _selectedSquad.CurrentOrders;
-        RefreshContextAndCommands();
-    }
-
-    private void PasteCopiedOrders()
-    {
-        if (!CanPasteOrders()) return;
-
-        if (_selectedSquad.CurrentOrders != null)
-        {
-            Order oldOrder = _selectedSquad.CurrentOrders;
-            oldOrder.AssignedSquads.Remove(_selectedSquad);
-            if (oldOrder.AssignedSquads.Count == 0)
+            Order order = squad.CurrentOrders;
+            order.AssignedSquads.Remove(squad);
+            squad.CurrentOrders = null;
+            if (order.AssignedSquads.Count == 0)
             {
-                GameDataSingleton.Instance.Sector.RemoveOrder(oldOrder);
+                GameDataSingleton.Instance.Sector.RemoveOrder(order);
             }
         }
 
-        _selectedSquad.CurrentOrders = _copiedOrder;
-        if (!_copiedOrder.AssignedSquads.Contains(_selectedSquad))
-        {
-            _copiedOrder.AssignedSquads.Add(_selectedSquad);
-        }
-        _selectedOrder = _copiedOrder;
         RefreshWorkspace();
-    }
-
-    private string GetPasteCommandText()
-    {
-        return _copiedOrder != null ? $"Paste ({_copiedOrder.Mission.MissionType})" : "Paste";
-    }
-
-    private bool CanPasteOrders()
-    {
-        return _selectedSquad != null
-            && _copiedOrder != null
-            && _selectedSquad.Members.Count(member => member.CanFight) >= 5;
-    }
-
-    private void PopulateAdjacentRegions()
-    {
-        Dictionary<string, Region> adjacentRegionMap = _currentRegion.GetAdjacentRegions()
-            .Select(region => new { Direction = GetDirectionFromCurrentToNeighbour(_currentRegion, region), Region = region })
-            .Where(entry => entry.Direction != null)
-            .ToDictionary(entry => entry.Direction, entry => entry.Region);
-
-        _view.PopulateAdjacentRegions(_currentRegion, adjacentRegionMap, _activeLayers);
     }
 
     private RegionFaction GetPlayerRegionFaction()

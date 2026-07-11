@@ -14,7 +14,7 @@ namespace OnlyWar.Helpers.Missions.Recon
 
         public void ExecuteMissionStep(MissionContext context, float marginOfSuccess, IMissionStep returnStep)
         {
-            context.Log.Add($"Day {context.DaysElapsed}: Force attempting to escape enemy force");
+            context.AddLog($"Day {context.DaysElapsed}: Force attempting to escape enemy force");
             // modify by speeds of each side
             // TODO: increase difficulty based on enemy force size?
             BaseSkill tactics = GameDataSingleton.Instance.GameRulesData.Skills.Tactics;
@@ -25,13 +25,13 @@ namespace OnlyWar.Helpers.Missions.Recon
             float margin = missionTest.RunMissionCheck(context.MissionSquads);
             if (margin > 0.0f)
             {
-                context.Log.Add($"Day {context.DaysElapsed}: Force successfully escaped enemy force");
+                context.AddLog($"Day {context.DaysElapsed}: Force successfully escaped enemy force");
                 returnStep.ExecuteMissionStep(context, margin, returnStep);
             }
             else
             {
                 // attempt failed
-                context.Log.Add($"Day {context.DaysElapsed}: Escape failed");
+                context.AddLog($"Day {context.DaysElapsed}: Escape failed");
                 new MeetingEngagementMissionStep().ExecuteMissionStep(context, margin, returnStep);
             }
 

@@ -23,7 +23,7 @@ namespace OnlyWar.Helpers.Missions.Raid
             long defenderBattleValue = StrategicCombatResolver.CalculateDefenderBattleValue(enemyFaction);
             if (defenderBattleValue <= 0)
             {
-                context.Log.Add($"Day {context.DaysElapsed}: No military target found in {enemyFaction.Region.Name}.");
+                context.AddLog($"Day {context.DaysElapsed}: No military target found in {enemyFaction.Region.Name}.");
                 ExfiltrateIfNeeded(context);
                 return;
             }
@@ -36,7 +36,7 @@ namespace OnlyWar.Helpers.Missions.Raid
             LeaderMissionTest missionTest = new(tactics, difficulty);
 
             context.DaysElapsed++;
-            context.Log.Add($"Day {context.DaysElapsed}: Force searches for an exposed target in {enemyFaction.Region.Name}.");
+            context.AddLog($"Day {context.DaysElapsed}: Force searches for an exposed target in {enemyFaction.Region.Name}.");
             float margin = missionTest.RunMissionCheck(context.MissionSquads);
 
             double opportunity = Math.Clamp(0.35 + GaussianCalculator.ApproximateNormalCDF(margin) * 0.9, 0.25, 1.25);
@@ -56,7 +56,7 @@ namespace OnlyWar.Helpers.Missions.Raid
 
             if (opposingSquads.Count == 0)
             {
-                context.Log.Add($"Day {context.DaysElapsed}: The raiders find no isolated force to engage.");
+                context.AddLog($"Day {context.DaysElapsed}: The raiders find no isolated force to engage.");
                 ExfiltrateIfNeeded(context);
                 return;
             }

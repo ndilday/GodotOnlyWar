@@ -26,7 +26,7 @@ namespace OnlyWar.Helpers.Missions.Assault
             // The attacker's preparation check remains the same
             BaseSkill tactics = GameDataSingleton.Instance.GameRulesData.Skills.Tactics;
             LeaderMissionTest missionTest = new LeaderMissionTest(tactics, 10.0f);
-            context.Log.Add($"Day {context.DaysElapsed}: Force prepares to assault {context.Order.Mission.RegionFaction.Region.Name}");
+            context.AddLog($"Day {context.DaysElapsed}: Force prepares to assault {context.Order.Mission.RegionFaction.Region.Name}");
             float margin = missionTest.RunMissionCheck(context.MissionSquads);
 
             // Assemble the defending force from actual units and garrisons
@@ -36,7 +36,7 @@ namespace OnlyWar.Helpers.Missions.Assault
             {
                 // No defenders, the assault is an uncontested success.
                 // This could be a separate mission step in the future (e.g., "Secure Unopposed Region").
-                context.Log.Add($"Day {context.DaysElapsed}: Assault on {context.Order.Mission.RegionFaction.Region.Name} is unopposed.");
+                context.AddLog($"Day {context.DaysElapsed}: Assault on {context.Order.Mission.RegionFaction.Region.Name} is unopposed.");
                 context.Impact += 5; // Give a significant positive impact for taking territory freely.
                 // a more robust system would properly transfer ownership here
                 return;

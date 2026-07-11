@@ -32,7 +32,7 @@ namespace OnlyWar.Helpers.Missions
             SquadMissionTest missionTest = new SquadMissionTest(stealth, difficulty);
             if (context.MissionSquads.SelectMany(s => s.AbleSoldiers).Count() == 0)
             {
-                context.Log.Add($"Day {context.DaysElapsed}: Contact lost with mission force, assumed dead.");
+                context.AddLog($"Day {context.DaysElapsed}: Contact lost with mission force, assumed dead.");
                 return;
             }
             // Bound the detect->exfil->detect loop: a force that cannot slip back out within the week
@@ -40,7 +40,7 @@ namespace OnlyWar.Helpers.Missions
             // spinning DaysElapsed indefinitely (see MissionContext.MissionDurationDays).
             if (context.DaysElapsed >= MissionContext.MissionDurationDays + MissionContext.ExfiltrationGraceDays)
             {
-                context.Log.Add($"Day {context.DaysElapsed}: Force could not break contact; gone to ground behind enemy lines.");
+                context.AddLog($"Day {context.DaysElapsed}: Force could not break contact; gone to ground behind enemy lines.");
                 GameLog.Trace(() =>
                     $"Exfiltrate {context.Order.Mission.RegionFaction.Region.Planet.Name}/"
                     + $"{context.Order.Mission.RegionFaction.Region.Name} day {context.DaysElapsed}: "
@@ -48,11 +48,11 @@ namespace OnlyWar.Helpers.Missions
                 return;
             }
             context.DaysElapsed++;
-            context.Log.Add($"Day {context.DaysElapsed}: Force attempting to exfiltrate from {context.Order.Mission.RegionFaction.Region.Name}");
+            context.AddLog($"Day {context.DaysElapsed}: Force attempting to exfiltrate from {context.Order.Mission.RegionFaction.Region.Name}");
             float margin = missionTest.RunMissionCheck(context.MissionSquads);
             if (margin > 0.0f)
             {
-                context.Log.Add($"Day {context.DaysElapsed}: Force has returned to base.");
+                context.AddLog($"Day {context.DaysElapsed}: Force has returned to base.");
                 GameLog.Trace(() =>
                     $"Exfiltrate {context.Order.Mission.RegionFaction.Region.Planet.Name}/"
                     + $"{context.Order.Mission.RegionFaction.Region.Name} day {context.DaysElapsed}: "

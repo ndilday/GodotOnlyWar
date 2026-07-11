@@ -1,41 +1,112 @@
 using Godot;
+using OnlyWar.Helpers.UI;
 using System;
 using System.Collections.Generic;
 
 public partial class EndOfTurnDialogView : DialogView
 {
-    private VBoxContainer _vboxContainer;
+    private Label _titleLabel;
+    private Label _summaryLabel;
+    private VBoxContainer _entryList;
+    private Label _emptyHintLabel;
+
+    public event EventHandler<int> EntrySelected;
 
     public override void _Ready()
     {
         base._Ready();
-        _vboxContainer = GetNode<VBoxContainer>("Panel/ScrollContainer/VBoxContainer");
+        _titleLabel = GetNode<Label>("ReportPanel/ReportMargin/Layout/HeaderPanel/HeaderMargin/HeaderStack/TitleLabel");
+        _summaryLabel = GetNode<Label>("ReportPanel/ReportMargin/Layout/HeaderPanel/HeaderMargin/HeaderStack/SummaryLabel");
+        _entryList = GetNode<VBoxContainer>("ReportPanel/ReportMargin/Layout/ScrollContainer/EntryList");
+        _emptyHintLabel = GetNode<Label>("ReportPanel/ReportMargin/Layout/EmptyHintLabel");
+        OnlyWarStyle.ApplyContentPanel(GetNode<Panel>("ReportPanel"));
+        OnlyWarStyle.ApplyInsetPanel(GetNode<Panel>("ReportPanel/ReportMargin/Layout/HeaderPanel"));
     }
 
-    public void AddData(IEnumerable<string> data)
+    public void SetReport(IReadOnlyList<EndOfTurnReportEntry> entries)
     {
-        foreach (string s in data)
+        ClearEntries();
+        int reportCount = entries?.Count ?? 0;
+        _titleLabel.Text = "TURN REPORT";
+        _summaryLabel.Text = $"{reportCount} report{(reportCount == 1 ? "" : "s")} received by chapter command.";
+        _emptyHintLabel.Visible = reportCount == 0;
+
+        if (entries == null)
         {
-            RichTextLabel label = new RichTextLabel();
-            label.Text = s;
-            label.AnchorLeft = 0;
-            label.HorizontalAlignment = HorizontalAlignment.Left;
-            label.SizeFlagsHorizontal = SizeFlags.ExpandFill;
-            label.FitContent = true;
-            _vboxContainer.AddChild(label);
+            return;
+        }
+
+        for (int i = 0; i < entries.Count; i++)
+        {
+            AddEntry(entries[i], i);
         }
     }
 
-    public void ClearData()
+    private void AddEntry(EndOfTurnReportEntry entry, int index)
     {
-        var existingLines = _vboxContainer.GetChildren();
-        if (existingLines != null)
+        PanelContainer panel = new();
+        OnlyWarStyle.ApplyListRow(panel, false);
+
+        MarginContainer margin = new();
+        panel.AddChild(margin);
+
+        VBoxContainer stack = new();
+        stack.AddThemeConstantOverride("separation", 5);
+        margin.AddChild(stack);
+
+        HBoxContainer titleRow = new();
+        titleRow.AddThemeConstantOverride("separation", 10);
+        stack.AddChild(titleRow);
+
+        Label title = new()
         {
-            foreach (var line in existingLines)
+            Text = entry.Title.ToUpperInvariant(),
+            SizeFlagsHorizontal = SizeFlags.ExpandFill,
+            ClipText = true,
+            TextOverrunBehavior = TextServer.OverrunBehavior.TrimEllipsis
+        };
+        title.AddThemeColorOverride("font_color", entry.CanOpenDebrief ? OnlyWarStyle.Gold : OnlyWarStyle.MutedText);
+        titleRow.AddChild(title);
+
+        if (entry.CanOpenDebrief)
+        {
+            Button openButton = new()
             {
-                _vboxContainer.RemoveChild(line);
-                line.QueueFree();
-            }
+                Text = "DEBRIEF",
+                CustomMinimumSize = new Vector2(118, 32),
+                TooltipText = "Open the full mission debrief"
+            };
+            int selectedIndex = index;
+            openButton.Pressed += () => EntrySelected?.Invoke(this, selectedIndex);
+            titleRow.AddChild(openButton);
+        }
+
+        Label subtitle = new()
+        {
+            Text = entry.Subtitle,
+            AutowrapMode = TextServer.AutowrapMode.WordSmart
+        };
+        subtitle.AddThemeColorOverride("font_color", OnlyWarStyle.BodyText);
+        stack.AddChild(subtitle);
+
+        Label summary = new()
+        {
+            Text = entry.Summary,
+            AutowrapMode = TextServer.AutowrapMode.WordSmart
+        };
+        summary.AddThemeFontSizeOverride("font_size", 13);
+        summary.AddThemeColorOverride("font_color", OnlyWarStyle.MutedText);
+        stack.AddChild(summary);
+
+        _entryList.AddChild(panel);
+    }
+
+    private void ClearEntries()
+    {
+        foreach (Node child in _entryList.GetChildren())
+        {
+            _entryList.RemoveChild(child);
+            child.QueueFree();
         }
     }
 }

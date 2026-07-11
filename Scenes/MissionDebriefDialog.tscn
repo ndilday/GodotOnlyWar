@@ -1,0 +1,81 @@
+[gd_scene load_steps=5 format=3 uid="uid://bl2k8dpnyl2ri"]
+
+[ext_resource type="PackedScene" uid="uid://cadpqoqxtyo0p" path="res://Scenes/Dialog.tscn" id="1_dialog"]
+[ext_resource type="Script" path="res://Scenes/MissionDebriefDialogController.cs" id="2_controller"]
+[ext_resource type="Script" path="res://Scenes/MissionDebriefDialogView.cs" id="3_view"]
+[ext_resource type="Theme" uid="uid://ylp8bk1nhedq" path="res://Scenes/OnlyWarTheme.tres" id="4_theme"]
+
+[node name="DialogController" instance=ExtResource("1_dialog")]
+theme = ExtResource("4_theme")
+script = ExtResource("2_controller")
+
+[node name="DialogView" parent="." index="0"]
+theme = ExtResource("4_theme")
+script = ExtResource("3_view")
+
+[node name="DebriefPanel" type="Panel" parent="DialogView" index="0"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = 46.0
+offset_top = 42.0
+offset_right = -46.0
+offset_bottom = -42.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="DebriefMargin" type="MarginContainer" parent="DialogView/DebriefPanel"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_constants/margin_left = 16
+theme_override_constants/margin_top = 16
+theme_override_constants/margin_right = 16
+theme_override_constants/margin_bottom = 16
+
+[node name="Layout" type="VBoxContainer" parent="DialogView/DebriefPanel/DebriefMargin"]
+layout_mode = 2
+theme_override_constants/separation = 10
+
+[node name="HeaderPanel" type="Panel" parent="DialogView/DebriefPanel/DebriefMargin/Layout"]
+custom_minimum_size = Vector2(0, 86)
+layout_mode = 2
+
+[node name="HeaderMargin" type="MarginContainer" parent="DialogView/DebriefPanel/DebriefMargin/Layout/HeaderPanel"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_constants/margin_left = 12
+theme_override_constants/margin_top = 10
+theme_override_constants/margin_right = 56
+theme_override_constants/margin_bottom = 10
+
+[node name="HeaderStack" type="VBoxContainer" parent="DialogView/DebriefPanel/DebriefMargin/Layout/HeaderPanel/HeaderMargin"]
+layout_mode = 2
+theme_override_constants/separation = 4
+
+[node name="TitleLabel" type="Label" parent="DialogView/DebriefPanel/DebriefMargin/Layout/HeaderPanel/HeaderMargin/HeaderStack"]
+layout_mode = 2
+text = "MISSION DEBRIEF"
+
+[node name="SubtitleLabel" type="Label" parent="DialogView/DebriefPanel/DebriefMargin/Layout/HeaderPanel/HeaderMargin/HeaderStack"]
+layout_mode = 2
+text = ""
+autowrap_mode = 2
+
+[node name="ScrollContainer" type="ScrollContainer" parent="DialogView/DebriefPanel/DebriefMargin/Layout"]
+layout_mode = 2
+size_flags_vertical = 3
+horizontal_scroll_mode = 0
+
+[node name="LineList" type="VBoxContainer" parent="DialogView/DebriefPanel/DebriefMargin/Layout/ScrollContainer"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/separation = 8
