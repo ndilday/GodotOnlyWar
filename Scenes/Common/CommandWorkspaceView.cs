@@ -90,15 +90,18 @@ public partial class CommandWorkspaceView : DialogView
         AddTreeChildren(_selectionTree, root, entries, collapsedByKey, selectedKeys);
     }
 
-    public void SetContext(string title, string subtitle, IReadOnlyList<Tuple<string, string>> rows)
+    // Renders the right-hand context panel as accent-tinted dossier cards, matching the Region Ops
+    // "selected target" panel. Title/subtitle head the panel; each card groups related rows under a
+    // muted category label with an accent-colored subtitle and optional strength bar.
+    public void SetContextCards(string title, string subtitle, IReadOnlyList<DossierCardData> cards)
     {
         _contextTitleLabel.Text = title;
         _contextSubtitleLabel.Text = subtitle;
         ClearContainer(_contextStack);
 
-        foreach (Tuple<string, string> row in rows)
+        foreach (DossierCardData card in cards)
         {
-            _contextStack.AddChild(CreateContextRow(row.Item1, row.Item2));
+            _contextStack.AddChild(DossierCard.Create(card));
         }
     }
 
@@ -130,6 +133,13 @@ public partial class CommandWorkspaceView : DialogView
                     Disabled = !action.Enabled,
                     MouseDefaultCursorShape = CursorShape.PointingHand,
                     CustomMinimumSize = new Vector2(116, 42),
+                    // ClipText keeps the button's minimum width at the 116px floor (rather than the
+                    // full text width), so a long dynamic label like "Land From Immortal" can't push
+                    // the right-aligned row past the panel's left edge and over the roster tree.
+                    ClipText = true,
+                    // ExpandFill lets the buttons share the command bar's free width evenly, so they
+                    // grow to fit their text instead of shrinking to 116px and truncating.
+                    SizeFlagsHorizontal = SizeFlags.ExpandFill,
                     TextOverrunBehavior = TextServer.OverrunBehavior.TrimEllipsis,
                     TooltipText = action.Text
                 };
@@ -295,11 +305,15 @@ public partial class CommandWorkspaceView : DialogView
         contextOuter.AddChild(contextScroll);
 
         _contextStack = new VBoxContainer();
-        _contextStack.AddThemeConstantOverride("separation", 6);
+        _contextStack.AddThemeConstantOverride("separation", 8);
         _contextStack.SizeFlagsHorizontal = SizeFlags.ExpandFill;
         contextScroll.AddChild(_contextStack);
 
-        PanelContainer commandPanel = CreatePanel("CommandPanel", 0.245f, commandTopAnchor, mapRightAnchor, 0.91f);
+        // Inset the command bar's left edge past the roster's 0.235 right edge with a clear gutter.
+        // The map above shares the roster's 0.245 neighbour but hides it (subtle bg, inset hexes);
+        // the command bar's opaque panel does not, so at 0.245 it reads as crowding/overlapping the
+        // roster tree. 0.26 gives ~40px of clear space regardless of the roster's content bleed.
+        PanelContainer commandPanel = CreatePanel("CommandPanel", 0.26f, commandTopAnchor, mapRightAnchor, 0.91f);
         _commandStack = new VBoxContainer
         {
             Alignment = BoxContainer.AlignmentMode.End,
@@ -397,48 +411,6 @@ public partial class CommandWorkspaceView : DialogView
         label.AddThemeFontSizeOverride("font_size", 13);
         label.AddThemeColorOverride("font_color", OnlyWarStyle.MutedText);
         return label;
-    }
-
-    private Control CreateContextRow(string labelText, string valueText)
-    {
-        PanelContainer row = new()
-        {
-            CustomMinimumSize = new Vector2(0, 44),
-            SizeFlagsHorizontal = SizeFlags.ExpandFill,
-            SizeFlagsVertical = SizeFlags.ShrinkBegin
-        };
-        OnlyWarStyle.ApplyInsetPanel(row);
-
-        HBoxContainer rowContent = new()
-        {
-            SizeFlagsHorizontal = SizeFlags.ExpandFill
-        };
-        rowContent.AddThemeConstantOverride("separation", 8);
-        row.AddChild(rowContent);
-
-        Label label = new()
-        {
-            Text = labelText,
-            ClipText = true,
-            TextOverrunBehavior = TextServer.OverrunBehavior.TrimEllipsis,
-            CustomMinimumSize = new Vector2(130, 0),
-            SizeFlagsHorizontal = SizeFlags.ExpandFill
-        };
-        label.AddThemeColorOverride("font_color", OnlyWarStyle.MutedText);
-        rowContent.AddChild(label);
-
-        Label value = new()
-        {
-            Text = valueText,
-            HorizontalAlignment = HorizontalAlignment.Right,
-            ClipText = true,
-            TextOverrunBehavior = TextServer.OverrunBehavior.TrimEllipsis,
-            CustomMinimumSize = new Vector2(130, 0),
-            SizeFlagsHorizontal = SizeFlags.ExpandFill
-        };
-        rowContent.AddChild(value);
-
-        return row;
     }
 
     private void OnSelectionTreeItemSelected()

@@ -89,14 +89,22 @@ public class ImperialRemnantTests
         RegionFaction remnant = fixture.DefaultRegionFaction(0);
         remnant.IsPublic = false;
         remnant.Population = 100_000;
-        // neighbours (regions 1 and 2) each start governed with population 20,000
+        // Region 0 (Alpha) borders three governed regions on the hex board — 1 (Beta),
+        // 2 (Gamma) and 4 (Epsilon) — each starting with population 20,000.
 
         TurnController.ProcessImperialEmigration(fixture.Planet.Regions[0]);
 
         Assert.Equal(95_000, remnant.Population);
-        // 5% of 100,000 = 5,000, split evenly between two equally-populated refuges
-        Assert.Equal(22_500, fixture.DefaultRegionFaction(1).Population);
-        Assert.Equal(22_500, fixture.DefaultRegionFaction(2).Population);
+        // 5% of 100,000 = 5,000, split across three equally-populated refuges (the last
+        // absorbs the rounding remainder, so shares are within one refugee of even).
+        long totalRefuge = fixture.DefaultRegionFaction(1).Population
+            + fixture.DefaultRegionFaction(2).Population
+            + fixture.DefaultRegionFaction(4).Population;
+        Assert.Equal(65_000, totalRefuge);
+        foreach (int r in new[] { 1, 2, 4 })
+        {
+            Assert.InRange(fixture.DefaultRegionFaction(r).Population, 21_666, 21_668);
+        }
     }
 
     [Fact]
@@ -106,14 +114,17 @@ public class ImperialRemnantTests
         RegionFaction remnant = fixture.DefaultRegionFaction(0);
         remnant.IsPublic = false;
         remnant.Population = 100_000;
+        // Region 0 (Alpha) borders three governed regions: 1 (Beta), 2 (Gamma), 4 (Epsilon).
         fixture.DefaultRegionFaction(1).Population = 30_000;
         fixture.DefaultRegionFaction(2).Population = 10_000;
+        fixture.DefaultRegionFaction(4).Population = 10_000;
 
         TurnController.ProcessImperialEmigration(fixture.Planet.Regions[0]);
 
-        // 5,000 refugees split 3:1 by the refuges' 30k/10k populations
-        Assert.Equal(33_750, fixture.DefaultRegionFaction(1).Population);
-        Assert.Equal(11_250, fixture.DefaultRegionFaction(2).Population);
+        // 5,000 refugees split 3:1:1 by the refuges' 30k/10k/10k populations
+        Assert.Equal(33_000, fixture.DefaultRegionFaction(1).Population);
+        Assert.Equal(11_000, fixture.DefaultRegionFaction(2).Population);
+        Assert.Equal(11_000, fixture.DefaultRegionFaction(4).Population);
     }
 
     [Fact]
@@ -123,9 +134,10 @@ public class ImperialRemnantTests
         RegionFaction remnant = fixture.DefaultRegionFaction(0);
         remnant.IsPublic = false;
         remnant.Population = 100_000;
-        // both neighbours are themselves overrun — no governed refuge to flee to
+        // all three neighbours (1, 2, 4) are themselves overrun — no governed refuge to flee to
         fixture.DefaultRegionFaction(1).IsPublic = false;
         fixture.DefaultRegionFaction(2).IsPublic = false;
+        fixture.DefaultRegionFaction(4).IsPublic = false;
 
         TurnController.ProcessImperialEmigration(fixture.Planet.Regions[0]);
 

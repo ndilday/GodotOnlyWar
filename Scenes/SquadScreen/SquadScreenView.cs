@@ -12,24 +12,14 @@ public partial class SquadScreenView : DialogView
 {
     private VBoxContainer _squadDetailsVBox;
     private VBoxContainer _squadLoadoutVBox;
-    private VBoxContainer _squadOrderDetailsVBox;
     private VBoxContainer _squadMemberVBox;
     private RichTextLabel _defaultName;
     private RichTextLabel _defaultCount;
-    private Button _unassignButton;
-    private Button _openOrdersButton;
-    private Button _assignToExistingButton;
-    private Button _copyOrdersButton;
-    private Button _pasteOrdersButton;
     private Button _copyLoadoutButton;
     private Button _pasteLoadoutButton;
     private List<WeaponSetSelectionView> _weaponSets;
 
     public event EventHandler<Tuple<string, int>> WeaponSetSelectionWeaponSetCountChanged;
-    public event EventHandler OrdersUnassigned;
-    public event EventHandler OpenOrders;
-    public event EventHandler CopyOrders;
-    public event EventHandler PasteOrders;
     public event EventHandler CopyLoadout;
     public event EventHandler PasteLoadout;
 
@@ -38,20 +28,9 @@ public partial class SquadScreenView : DialogView
         base._Ready();
         _squadDetailsVBox = GetNode<VBoxContainer>("DataPanel/VBoxContainer");
         _squadLoadoutVBox = GetNode<VBoxContainer>("LoadoutPanel/ScrollContainer/VBoxContainer");
-        _squadOrderDetailsVBox = GetNode<VBoxContainer>("OrdersPanel/VBoxContainer");
         _squadMemberVBox = GetNode<VBoxContainer>("SquadMemberPanel/ScrollContainer/VBoxContainer");
         _defaultName = GetNode<RichTextLabel>("LoadoutPanel/ScrollContainer/VBoxContainer/DefaultHBox/Name");
         _defaultCount = GetNode<RichTextLabel>("LoadoutPanel/ScrollContainer/VBoxContainer/DefaultHBox/Count");
-        _unassignButton = GetNode<Button>("OrdersPanel/ButtonVBox/UnassignButton");
-        _unassignButton.Pressed += () => OrdersUnassigned(this, EventArgs.Empty);
-        _openOrdersButton = GetNode<Button>("OrdersPanel/ButtonVBox/OpenOrdersButton");
-        _openOrdersButton.Pressed += () => OpenOrders(this, EventArgs.Empty);
-        _assignToExistingButton = GetNode<Button>("OrdersPanel/ButtonVBox/AssignToExistingButton");
-        _assignToExistingButton.Pressed += OnAssignToExistingPressed;
-        _copyOrdersButton = GetNode<Button>("OrdersPanel/ButtonVBox/CopyOrdersButton");
-        _copyOrdersButton.Pressed += () => CopyOrders(this, EventArgs.Empty);
-        _pasteOrdersButton = GetNode<Button>("OrdersPanel/ButtonVBox/PasteOrdersButton");
-        _pasteOrdersButton.Pressed += () => PasteOrders(this, EventArgs.Empty);
         _copyLoadoutButton = GetNode<Button>("DataPanel/ButtonVBox/CopyLoadoutButton");
         _copyLoadoutButton.Pressed += () => CopyLoadout(this, EventArgs.Empty);
         _pasteLoadoutButton = GetNode<Button>("DataPanel/ButtonVBox/PasteLoadoutButton");
@@ -87,26 +66,6 @@ public partial class SquadScreenView : DialogView
         }
     }
 
-    public void ClearOrderDetails()
-    {
-        var existingLines = _squadOrderDetailsVBox.GetChildren();
-        if (existingLines != null)
-        {
-            foreach (var line in existingLines)
-            {
-                _squadOrderDetailsVBox.RemoveChild(line);
-                line.QueueFree();
-            }
-        }
-        _unassignButton.Disabled = true;
-        _openOrdersButton.Disabled = false;
-    }
-
-    public void SetOpenOrdersButtonText(string text)
-    {
-        _openOrdersButton.Text = text;
-    }
-
     public void PopulateSquadData(IReadOnlyList<Tuple<string, string>> stringPairs)
     {
         ClearSquadData();
@@ -134,20 +93,6 @@ public partial class SquadScreenView : DialogView
             view.WeaponSetCountChanged += OnWeaponSetCountChanged;
         }
 
-    }
-
-    public void PopulateOrderDetails(List<Tuple<string, string>> lines)
-    {
-        ClearOrderDetails();
-        if (lines?.Count > 0)
-        {
-            foreach (Tuple<string, string> line in lines)
-            {
-                AddLine(_squadOrderDetailsVBox, line.Item1, line.Item2);
-            }
-            _unassignButton.Disabled = false;
-            _openOrdersButton.Disabled = false;
-        }
     }
 
     // Injured members are visually distinguished and carry their expected recovery time
@@ -207,11 +152,6 @@ public partial class SquadScreenView : DialogView
         }
     }
 
-    public void DisablePasteOrders(bool disable)
-    {
-        _pasteOrdersButton.Disabled = disable;
-    }
-
     public void DisablePasteLoadout(bool disable)
     {
         _pasteLoadoutButton.Disabled = disable;
@@ -222,46 +162,18 @@ public partial class SquadScreenView : DialogView
         WeaponSetSelectionWeaponSetCountChanged?.Invoke(sender, args);
     }
 
-    private void OnNewOrdersPressed()
-    {
-
-    }
-
-    private void OnAssignToExistingPressed()
-    {
-
-    }
-
     private void ApplyThemeStyling()
     {
         ApplyContentPanel("DataPanel");
         ApplyContentPanel("SquadMemberPanel");
         ApplyContentPanel("LoadoutPanel");
-        ApplyContentPanel("OrdersPanel");
         ApplyInsetPanel("DataPanel/Header");
         ApplyInsetPanel("SquadMemberPanel/Header");
         ApplyInsetPanel("LoadoutPanel/Panel");
-        ApplyInsetPanel("OrdersPanel/Panel");
 
         _squadDetailsVBox.AddThemeConstantOverride("separation", 6);
         _squadLoadoutVBox.AddThemeConstantOverride("separation", 6);
-        _squadOrderDetailsVBox.AddThemeConstantOverride("separation", 6);
         _squadMemberVBox.AddThemeConstantOverride("separation", 6);
-
-        VBoxContainer ordersButtonBox = GetNodeOrNull<VBoxContainer>("OrdersPanel/ButtonVBox");
-        if (ordersButtonBox != null)
-        {
-            ordersButtonBox.AnchorTop = 0.62f;
-            ordersButtonBox.OffsetTop = 0;
-            ordersButtonBox.AddThemeConstantOverride("separation", 4);
-        }
-
-        Control ordersDetails = GetNodeOrNull<Control>("OrdersPanel/VBoxContainer");
-        if (ordersDetails != null)
-        {
-            ordersDetails.AnchorBottom = 0.60f;
-            ordersDetails.OffsetBottom = -5;
-        }
     }
 
     private void ApplyContentPanel(string path)

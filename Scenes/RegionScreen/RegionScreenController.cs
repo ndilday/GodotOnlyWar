@@ -519,15 +519,18 @@ public partial class RegionScreenController : DialogController
 
     private string GetDirectionFromCurrentToNeighbour(Region currentRegion, Region neighbourRegion)
     {
+        // Hex board: row is X (increasing downward = south) and horizontal offset is (2*Y - X).
+        // These six offsets match the flat-top tiling used by the planet-detail map; see
+        // RegionExtensions.GetAdjacentRegions.
         int dx = neighbourRegion.Coordinates.X - currentRegion.Coordinates.X;
         int dy = neighbourRegion.Coordinates.Y - currentRegion.Coordinates.Y;
 
-        if (dx == 0 && dy > 0) return "N";
-        if (dx > 0 && dy > 0) return "NE";
-        if (dx > 0 && dy == 0) return "SE";
-        if (dx == 0 && dy < 0) return "S";
-        if (dx < 0 && dy < 0) return "SW";
-        if (dx < 0 && dy == 0) return "NW";
+        if (dx == -2 && dy == -1) return "N";
+        if (dx == -1 && dy == 0) return "NE";
+        if (dx == 1 && dy == 1) return "SE";
+        if (dx == 2 && dy == 1) return "S";
+        if (dx == 1 && dy == 0) return "SW";
+        if (dx == -1 && dy == -1) return "NW";
 
         return null;
     }

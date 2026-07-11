@@ -122,21 +122,34 @@ namespace OnlyWar.Helpers.Extensions
             return new List<Region> { region }.Union(GetAdjacentRegions(region)).ToList();
         }
 
+        // The regions are laid out as a flat-top hex board (see PlanetTacticalScreenView's
+        // diamond layout). In coordinate space a region's row is X and its horizontal offset is
+        // (2*Y - X), so the six hex neighbours are NOT the square 8-neighbourhood of (X, Y) but
+        // the offsets below. Using a square neighbourhood here made the region-detail screen show
+        // the wrong neighbours (e.g. Omicron (5,3) picking up Xi (5,2) instead of Iota (3,2)) and
+        // fed bogus adjacency into fleet routing, biomass spread, and faction strategy.
+        private static readonly (int dx, int dy)[] HexNeighborOffsets =
+        {
+            (-2, -1), // N
+            (-1,  0), // NE
+            ( 1,  1), // SE
+            ( 2,  1), // S
+            ( 1,  0), // SW
+            (-1, -1), // NW
+        };
+
         public static List<Region> GetAdjacentRegions(this Region region)
         {
             List<Region> adjacentRegions = new List<Region>();
-            foreach (Region r in region.Planet.Regions)
+            foreach ((int dx, int dy) in HexNeighborOffsets)
             {
-                if ((r.Coordinates.X == region.Coordinates.X - 1 ||
-                    r.Coordinates.X == region.Coordinates.X ||
-                    r.Coordinates.X == region.Coordinates.X + 1) &&
-                   (r.Coordinates.Y == region.Coordinates.Y - 1 ||
-                    r.Coordinates.Y == region.Coordinates.Y ||
-                    r.Coordinates.Y == region.Coordinates.Y + 1) &&
-                   (r.Coordinates.X != region.Coordinates.X ||
-                    r.Coordinates.Y != region.Coordinates.Y))
+                int x = region.Coordinates.X + dx;
+                int y = region.Coordinates.Y + dy;
+                Region neighbor = region.Planet.Regions
+                    .FirstOrDefault(r => r != null && r.Coordinates.X == x && r.Coordinates.Y == y);
+                if (neighbor != null)
                 {
-                    adjacentRegions.Add(r);
+                    adjacentRegions.Add(neighbor);
                 }
             }
             return adjacentRegions;

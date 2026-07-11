@@ -16,9 +16,7 @@ public partial class SquadScreenController : DialogController
 {
     private Squad _squad;
     private SquadScreenView _view;
-    private OrderDialogController _orderController;
     private int _ableBodied;
-    private Order _savedOrders;
     private List<WeaponSet> _savedLoadout;
     private int _savedLoadoutSquadTemplateId;
 
@@ -27,51 +25,8 @@ public partial class SquadScreenController : DialogController
         base._Ready();
         _view = GetNode<SquadScreenView>("DialogView");
         _view.WeaponSetSelectionWeaponSetCountChanged += OnWeaponSetSelectionWeaponSetCountChanged;
-        _view.OrdersUnassigned += OnOrdersUnassigned;
-        _view.CopyOrders += OnCopyOrders;
-        _view.PasteOrders += OnPasteOrders;
         _view.CopyLoadout += OnCopyLoadout;
         _view.PasteLoadout += OnPasteLoadout;
-        _view.OpenOrders += OnOpenOrders;
-        _orderController = GetNode<OrderDialogController>("DialogView/OrderDialogController");
-        _orderController.OrdersConfirmed += OnOrdersConfirmed;
-    }
-    private void OnOpenOrders(object sender, EventArgs e)
-    {
-        _orderController.PopulateOrderData(_squad);
-        _orderController.Visible = true;
-    }
-
-    private void OnOrdersConfirmed(object sender, EventArgs e)
-    {
-        PopulateOrderDetails();
-        _view.SetOpenOrdersButtonText("Edit Current Orders");
-    }
-
-    private void OnOrdersUnassigned(object sender, EventArgs e)
-    {
-        _squad.CurrentOrders = null;
-        PopulateOrderDetails();
-        _view.SetOpenOrdersButtonText("Assign Orders");
-    }
-
-    private void OnCopyOrders(object sender, EventArgs e)
-    {
-        _savedOrders = _squad.CurrentOrders;
-        _view.DisablePasteOrders(false);
-    }
-
-    private void OnPasteOrders(object sender, EventArgs e)
-    {
-        _squad.CurrentOrders = new Order(
-            new List<Squad> { _squad }, 
-            _savedOrders.Disposition, 
-            _savedOrders.IsQuiet, 
-            _savedOrders.IsActivelyEngaging, 
-            _savedOrders.LevelOfAggression,
-            _savedOrders.Mission);
-        _savedOrders.AssignedSquads.Add(_squad);
-        PopulateOrderDetails();
     }
 
     private void OnCopyLoadout(object sender, EventArgs e)
@@ -124,7 +79,6 @@ public partial class SquadScreenController : DialogController
         _ableBodied = _squad.Members.Where(s => CanFight(s)).Count();
         PopulateSquadDetails();
         PopulateSquadLoadout();
-        PopulateSquadOrders();
         PopulateSquadMembers();
         _view.DisablePasteLoadout(_savedLoadout == null || _savedLoadoutSquadTemplateId != _squad.SquadTemplate.Id);
     }
@@ -198,30 +152,6 @@ public partial class SquadScreenController : DialogController
         _view.PopulateSquadLoadout(weaponSets, defaultOptions);
     }
 
-    private void PopulateSquadOrders()
-    {
-        PopulateOrderDetails();
-    }
-
-    private void PopulateOrderDetails()
-    {
-        List<Tuple<string, string>> lines = [];
-        if (_squad.CurrentOrders != null)
-        {
-            lines.Add(new Tuple<string, string>("Mission Type", _squad.CurrentOrders.Mission.MissionType.ToString()));
-            lines.Add(new Tuple<string, string>("Mission Location", _squad.CurrentOrders.Mission.RegionFaction.Region.Name));
-            lines.Add(new Tuple<string, string>("Mission Target", _squad.CurrentOrders.Mission.RegionFaction.PlanetFaction.Faction.Name));
-            lines.Add(new Tuple<string, string>("Size of Operation", $"{_squad.CurrentOrders.AssignedSquads.Count} squads"));
-            lines.Add(new Tuple<string, string>("Engagement Level", _squad.CurrentOrders.LevelOfAggression.ToString()));
-            _view.SetOpenOrdersButtonText("Edit Current Orders");
-        }
-        else
-        {
-            _view.SetOpenOrdersButtonText("Assign Orders");
-        }
-        _view.PopulateOrderDetails(lines);
-    }
-
     private void PopulateSquadMembers()
     {
         List<SquadMemberRow> memberList = new List<SquadMemberRow>();
@@ -232,11 +162,11 @@ public partial class SquadScreenController : DialogController
                                                   .ThenByDescending(s => s.Template.Rank)
                                                   .ThenBy(s => s.Name))
             {
-                // Use Rank enum if available, otherwise Rank number
-                string rankString = soldier.Template.Rank.ToString(); // Replace with actual rank name if possible
+                // Show the soldier's title (e.g. Sergeant, Battle-Brother) rather than the raw rank number.
+                string title = soldier.Template.Name;
                 (string recovery, bool injured, bool outOfAction) = GetRecoveryStatus(soldier);
                 memberList.Add(new SquadMemberRow(
-                    soldier.Id, $"{rankString} {soldier.Name}", recovery, injured, outOfAction));
+                    soldier.Id, $"{title} {soldier.Name}", recovery, injured, outOfAction));
             }
         }
         _view.PopulateSquadMembers(memberList);
@@ -309,19 +239,18 @@ public partial class SquadScreenController : DialogController
 
     private string GetDirectionFromCurrentToNeighbour(Region currentRegion, Region neighbourRegion)
     {
-        // **You need to implement the logic to determine the direction (e.g., "N", "NE", "E", etc.)**
-        // **based on the relative positions or relationships of `currentRegion` and `neighbourRegion`.**
-
-        // **Example (Conceptual -  you'll need to adapt this to your Region/Grid system):**
-        int dx = neighbourRegion.Coordinates.X - currentRegion.Coordinates.X; // Example: Grid coordinates
+        // Hex board: row is X (increasing downward = south) and horizontal offset is (2*Y - X).
+        // These six offsets match the flat-top tiling used by the planet-detail map; see
+        // RegionExtensions.GetAdjacentRegions.
+        int dx = neighbourRegion.Coordinates.X - currentRegion.Coordinates.X;
         int dy = neighbourRegion.Coordinates.Y - currentRegion.Coordinates.Y;
 
-        if (dy == 1 && dx == 0) return "N";
-        if (dy == 1 && dx == 1) return "NE";
-        if (dy == 0 && dx == 1) return "SE";
-        if (dy == -1 && dx == 0) return "S";
-        if (dy == -1 && dx == -1) return "SW";
-        if (dy == 0 && dx == -1) return "NW";
+        if (dx == -2 && dy == -1) return "N";
+        if (dx == -1 && dy == 0) return "NE";
+        if (dx == 1 && dy == 1) return "SE";
+        if (dx == 2 && dy == 1) return "S";
+        if (dx == 1 && dy == 0) return "SW";
+        if (dx == -1 && dy == -1) return "NW";
 
         return null; // Or throw an exception if direction cannot be determined (error case)
     }

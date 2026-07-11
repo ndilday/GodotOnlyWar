@@ -215,7 +215,7 @@ public partial class PlanetTacticalScreenController : DialogController
     private void RefreshContextAndCommands()
     {
         RefreshRegionMap();
-        _view.SetContext(GetContextTitle(), GetContextSubtitle(), BuildContextRows());
+        _view.SetContextCards(GetContextTitle(), GetContextSubtitle(), BuildContextCards());
         _view.SetCommandRows(BuildCommandRows());
     }
 
@@ -339,117 +339,144 @@ public partial class PlanetTacticalScreenController : DialogController
         return "Strategic planet summary";
     }
 
-    private IReadOnlyList<Tuple<string, string>> BuildContextRows()
+    private IReadOnlyList<DossierCardData> BuildContextCards()
     {
-        if (_selectedPlanet == null) return Array.Empty<Tuple<string, string>>();
-        if (_selectedLoadedSquad != null) return BuildSquadRows(_selectedLoadedSquad);
-        if (_selectedLandedSquad != null) return BuildSquadRows(_selectedLandedSquad);
-        if (_selectedShip != null) return BuildShipRows(_selectedShip);
-        if (_selectedRegion != null) return BuildRegionRows(_selectedRegion);
-        return BuildPlanetRows(_selectedPlanet);
+        if (_selectedPlanet == null) return Array.Empty<DossierCardData>();
+        if (_selectedLoadedSquad != null) return BuildSquadCards(_selectedLoadedSquad);
+        if (_selectedLandedSquad != null) return BuildSquadCards(_selectedLandedSquad);
+        if (_selectedShip != null) return BuildShipCards(_selectedShip);
+        if (_selectedRegion != null) return BuildRegionCards(_selectedRegion);
+        return BuildPlanetCards(_selectedPlanet);
     }
 
-    private IReadOnlyList<Tuple<string, string>> BuildPlanetRows(Planet planet)
+    private IReadOnlyList<DossierCardData> BuildPlanetCards(Planet planet)
     {
-        List<Tuple<string, string>> rows = [];
-        rows.Add(Row("Name", planet.Name));
+        List<DossierCardData> cards = [];
         Faction controllingFaction = planet.GetControllingFaction();
-        rows.Add(Row("Control", controllingFaction?.Name ?? "Unknown"));
-        if (controllingFaction != null && (controllingFaction.IsDefaultFaction || controllingFaction.IsPlayerFaction))
+        bool imperialOrPlayer = controllingFaction != null && (controllingFaction.IsDefaultFaction || controllingFaction.IsPlayerFaction);
+
+        List<Tuple<string, string>> worldRows = [Row("Control", controllingFaction?.Name ?? "Unknown")];
+        if (imperialOrPlayer)
         {
-            rows.Add(Row("Classification", planet.Template.Name));
-            rows.Add(Row("Population", planet.Population.ToString("N0")));
-            rows.Add(Row("PDF Size", planet.PlanetaryDefenseForces.ToString("N0")));
-            rows.Add(Row("Aestimare", ConvertImportanceToString(planet.Importance)));
-            rows.Add(Row("Tithe Grade", ConvertTaxRangeToString(planet.TaxLevel)));
-            Character governor = planet.PlanetFactionMap[controllingFaction.Id].Leader;
-            if (governor != null)
-            {
-                rows.Add(Row("Governor", governor.Name));
-                rows.Add(Row("Governor Opinion", ConvertOpinionToString(governor.OpinionOfPlayerForce)));
-                rows.Add(Row("Active Request", governor.ActiveRequest != null ? "Yes" : "No"));
-            }
+            worldRows.Add(Row("Classification", planet.Template.Name));
+            worldRows.Add(Row("Population", planet.Population.ToString("N0")));
+            worldRows.Add(Row("PDF Size", planet.PlanetaryDefenseForces.ToString("N0")));
+            worldRows.Add(Row("Aestimare", ConvertImportanceToString(planet.Importance)));
+            worldRows.Add(Row("Tithe Grade", ConvertTaxRangeToString(planet.TaxLevel)));
         }
         else if (controllingFaction != null)
         {
-            rows.Add(Row("Xenos Present", controllingFaction.Name));
+            worldRows.Add(Row("Xenos Present", controllingFaction.Name));
+        }
+        worldRows.Add(Row("Regions", planet.Regions.Length.ToString()));
+        worldRows.Add(Row("Orbiting Task Forces", planet.OrbitingTaskForceList.Count.ToString()));
+        cards.Add(new DossierCardData("World", planet.Name, worldRows, OnlyWarStyle.Gold));
+
+        if (imperialOrPlayer)
+        {
+            Character governor = planet.PlanetFactionMap[controllingFaction.Id].Leader;
+            if (governor != null)
+            {
+                List<Tuple<string, string>> governorRows =
+                [
+                    Row("Opinion", ConvertOpinionToString(governor.OpinionOfPlayerForce)),
+                    Row("Active Request", governor.ActiveRequest != null ? "Yes" : "No")
+                ];
+                cards.Add(new DossierCardData("Governor", governor.Name, governorRows, OnlyWarStyle.PlayerAccent));
+            }
         }
 
-        rows.Add(Row("Regions", planet.Regions.Length.ToString()));
-        rows.Add(Row("Orbiting Task Forces", planet.OrbitingTaskForceList.Count.ToString()));
-        return rows;
+        return cards;
     }
 
-    private IReadOnlyList<Tuple<string, string>> BuildRegionRows(Region region)
+    // Mirrors the Region Ops dossier ordering: hostile faction(s) first, then the local Imperial
+    // force, then the region summary - so the same data reads consistently across both screens.
+    private IReadOnlyList<DossierCardData> BuildRegionCards(Region region)
     {
-        List<Tuple<string, string>> rows = [];
-        rows.Add(Row("Control", GetRegionControlLabel(region)));
-        rows.Add(Row("Coordinates", $"({region.Coordinates.X}, {region.Coordinates.Y})"));
+        List<DossierCardData> cards = [];
         float visibleIntel = region.GetPlayerVisibleIntel();
-        rows.Add(Row("Intelligence", $"{visibleIntel:0.##}"));
-
         RegionFaction playerRegionFaction = GetPlayerRegionFaction(region);
         List<RegionFaction> enemyFactions = GetPublicEnemyRegionFactions(region);
-
-        if (region.HasHiddenDefaultFaction())
-        {
-            rows.Add(Row("Civilian Population", "Unknown"));
-        }
-        else
-        {
-            long civilianPopulation = region.GetVisibleCivilianPopulation();
-            rows.Add(Row("Civilian Population", civilianPopulation > 0 ? civilianPopulation.ToString("N0") : "None"));
-        }
-        rows.Add(Row("PDF Garrison", region.PlanetaryDefenseForces > 0 ? region.PlanetaryDefenseForces.ToString("N0") : "None"));
-        rows.Add(Row("Marines", playerRegionFaction?.LandedSquads.Sum(squad => squad.Members.Count).ToString() ?? "0"));
-        rows.Add(Row("Assigned Orders", playerRegionFaction?.LandedSquads.Count(squad => squad.CurrentOrders != null).ToString() ?? "0"));
 
         if (enemyFactions.Count > 0)
         {
             foreach (RegionFaction enemyFaction in enemyFactions)
             {
-                string prefix = enemyFactions.Count > 1 ? $"Enemy ({enemyFaction.PlanetFaction.Faction.Name})" : "Enemy";
-                rows.Add(Row($"{prefix} Faction", enemyFaction.PlanetFaction.Faction.Name));
-                rows.Add(Row($"{prefix} Strength", enemyFaction.GetForceMagnitudeDescription()));
+                List<Tuple<string, string>> enemyRows = [Row("Force Magnitude", enemyFaction.GetForceMagnitudeDescription())];
                 if (visibleIntel > 1)
                 {
-                    rows.Add(Row($"{prefix} Entrenchment", RegionFactionExtensions.GetDefenseLevelDescription(enemyFaction.Entrenchment)));
-                    rows.Add(Row($"{prefix} Listening Posts", RegionFactionExtensions.GetDefenseLevelDescription(enemyFaction.ListeningPost)));
-                    rows.Add(Row($"{prefix} Anti-Air", RegionFactionExtensions.GetDefenseLevelDescription(enemyFaction.AntiAir)));
+                    enemyRows.Add(Row("Entrenchment", RegionFactionExtensions.GetDefenseLevelDescription(enemyFaction.Entrenchment)));
+                    enemyRows.Add(Row("Listening Posts", RegionFactionExtensions.GetDefenseLevelDescription(enemyFaction.ListeningPost)));
+                    enemyRows.Add(Row("Anti-Air", RegionFactionExtensions.GetDefenseLevelDescription(enemyFaction.AntiAir)));
                 }
+                cards.Add(new DossierCardData("Hostile Faction", enemyFaction.PlanetFaction.Faction.Name, enemyRows, OnlyWarStyle.OpposingAccent));
             }
         }
         else
         {
-            rows.Add(Row("Enemy Presence", "None Detected"));
+            cards.Add(new DossierCardData("Hostile Faction", "None Detected", Array.Empty<Tuple<string, string>>(), OnlyWarStyle.OpposingAccent));
         }
 
-        return rows;
+        List<Tuple<string, string>> localRows =
+        [
+            Row("Marines", playerRegionFaction?.LandedSquads.Sum(squad => squad.Members.Count).ToString() ?? "0"),
+            Row("Assigned Orders", playerRegionFaction?.LandedSquads.Count(squad => squad.CurrentOrders != null).ToString() ?? "0"),
+            Row("PDF Garrison", region.PlanetaryDefenseForces > 0 ? region.PlanetaryDefenseForces.ToString("N0") : "None")
+        ];
+        cards.Add(new DossierCardData("Local Force", "Imperial Presence", localRows, OnlyWarStyle.PlayerAccent));
+
+        List<Tuple<string, string>> regionRows =
+        [
+            Row("Control", GetRegionControlLabel(region)),
+            Row("Coordinates", $"({region.Coordinates.X}, {region.Coordinates.Y})"),
+            Row("Intel Rating", $"{visibleIntel:0.##}")
+        ];
+        if (region.HasHiddenDefaultFaction())
+        {
+            regionRows.Add(Row("Civilians", "Unknown"));
+        }
+        else
+        {
+            long civilianPopulation = region.GetVisibleCivilianPopulation();
+            regionRows.Add(Row("Civilians", civilianPopulation > 0 ? civilianPopulation.ToString("N0") : "None"));
+        }
+        cards.Add(new DossierCardData("Region", null, regionRows, OnlyWarStyle.Gold));
+
+        return cards;
     }
 
-    private IReadOnlyList<Tuple<string, string>> BuildSquadRows(Squad squad)
+    private static IReadOnlyList<DossierCardData> BuildSquadCards(Squad squad)
     {
-        List<Tuple<string, string>> rows = [];
-        rows.Add(Row("Unit", squad.ParentUnit?.Name ?? "Unknown"));
-        rows.Add(Row("Fighting Strength", $"{squad.Members.Count(member => member.CanFight)}/{squad.Members.Count}"));
-        rows.Add(Row("Location", squad.BoardedLocation != null ? $"Aboard {squad.BoardedLocation.Name}" : squad.CurrentRegion?.Name ?? "Unknown"));
-        rows.Add(Row("Orders", squad.CurrentOrders?.Mission.MissionType.ToString() ?? "Unassigned"));
+        List<Tuple<string, string>> rows =
+        [
+            Row("Unit", squad.ParentUnit?.Name ?? "Unknown"),
+            Row("Fighting Strength", $"{squad.Members.Count(member => member.CanFight)}/{squad.Members.Count}"),
+            Row("Location", squad.BoardedLocation != null ? $"Aboard {squad.BoardedLocation.Name}" : squad.CurrentRegion?.Name ?? "Unknown"),
+            Row("Orders", squad.CurrentOrders?.Mission.MissionType.ToString() ?? "Unassigned")
+        ];
         if (squad.CurrentOrders != null)
         {
             rows.Add(Row("Target Region", squad.CurrentOrders.Mission.RegionFaction.Region.Name));
             rows.Add(Row("Aggression", squad.CurrentOrders.LevelOfAggression.ToString()));
         }
-        return rows;
+        float? strengthBar = squad.Members.Count > 0
+            ? (float)squad.Members.Count(member => member.CanFight) / squad.Members.Count
+            : null;
+        return [new DossierCardData("Squad", squad.Name, rows, OnlyWarStyle.PlayerAccent, strengthBar)];
     }
 
-    private static IReadOnlyList<Tuple<string, string>> BuildShipRows(Ship ship)
+    private static IReadOnlyList<DossierCardData> BuildShipCards(Ship ship)
     {
-        return
+        List<Tuple<string, string>> rows =
         [
             Row("Loaded", $"{ship.LoadedSoldierCount}/{ship.Template.SoldierCapacity}"),
             Row("Available Capacity", ship.AvailableCapacity.ToString()),
             Row("Loaded Squads", ship.LoadedSquads.Count.ToString())
         ];
+        float? loadBar = ship.Template.SoldierCapacity > 0
+            ? (float)ship.LoadedSoldierCount / ship.Template.SoldierCapacity
+            : null;
+        return [new DossierCardData("Transport", ship.Name, rows, OnlyWarStyle.PlayerAccent, loadBar)];
     }
 
     private IReadOnlyList<CommandAction> BuildCommands()
