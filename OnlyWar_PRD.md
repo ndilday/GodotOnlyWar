@@ -458,6 +458,21 @@ Each feature is described as a behavioral specification: what the system does, a
 - Melee hit probability is derived from the attacker's melee skill, the defender's melee skill, the defender's per-species evasion value, and the weapons involved.
 - A squad in melee cannot fire two-handed ranged weapons unless it opts to disengage.
 
+**Melee Combat — Attack Speed, Multiple Attacks & Weapon Rebalance (0.7 To-Do, §5.3)**
+
+Today every soldier gets exactly one melee attack action per turn, swung with the first equipped weapon only; the per-soldier `AttackSpeed` attribute (authored per species with clear intent — humans 10, Hormagaunts 20, Genestealers 30, a Hive Tyrant 60) is generated and persisted but never read by combat, and several melee weapon columns (`ExtraDamage`, `IsPenetrating`, `ParryModifier`) are dead. Combined with flat armor subtraction, this leaves melee drastically under-lethal: a Hormagaunt penetrates Astartes power armor on ~3.5% of hits and inflicts only Negligible wounds when it does. This item makes melee combat deliver what the species and weapon data already promise:
+
+- **Attacks per turn from AttackSpeed.** A soldier's base attack count per melee action is `AttackSpeed / 10`, with the fractional part resolved probabilistically (a marine at AttackSpeed 15 always swings once and has a 50% chance of a second swing). A Hive Tyrant at 60 averages six attacks; a PDF trooper averages one.
+- **Weapon speed as a multiplier.** The weapon `ExtraAttacks` column is reinterpreted as a weapon *speed multiplier* applied to the soldier's attack count (total attacks = `AttackSpeed/10 × weapon speed factor`) rather than an additive bonus. Existing `ExtraAttacks` values were authored under additive intent and must be revisited entirely.
+- **Dual wielding.** A second equipped melee weapon grants +1 attack (delivered with the off-hand weapon's profile) and a bonus to the wielder's melee defense, representing the off-hand blade's primary role as a parrying tool.
+- **Attack distribution.** A soldier with multiple attacks decides at the start of the turn how to distribute them among adjacent enemies, using decision logic analogous to how shot count is chosen when firing. Wounds still resolve at end of turn, so committing every attack into one target risks overkill — that tradeoff is intentional.
+- **Parry.** `ParryModifier` is implemented on the *defender's* side of the contested melee roll: attacks against a soldier wielding a clumsy weapon (e.g., power fist, −1) land more easily; a deft weapon makes its wielder harder to hit.
+- **Damage rebalance.** All melee `StrengthMultiplier` values are doubled — under flat armor subtraction the current values leave low-Strength melee mathematically incapable of harming power armor at any roll — with heavy-tier `WoundMultiplier` values potentially dialed down in compensation. All melee weapon values require an explicit balancing pass against the targets below. The `ExtraDamage` column is dropped (its effect is reproducible with the remaining columns); `IsPenetrating`, likewise unread, is dropped or repurposed in the same pass.
+- **Non-goal.** AttackSpeed affects attack count only; melee *defense* remains a function of skill, evasion, stance, and parry — a fast creature is not additionally harder to hit.
+- **Data fixes.** The Ork Warboss's `AttackSpeed` is 3.06 — equal to his Size and almost certainly a mislinked attribute template — and his default weapon set is the Space Marine "Bolter + Bolt Pistol". Both are corrected as part of this work.
+- **Balance targets.** Tabletop lethality is a guide, not a spec: base marines are deliberately "two-wound" soldiers where tabletop made them one-wound. Concretely: a lone Hormagaunt loses to a marine well over 95% of the time, and one-shot marine kills are rare (lucky head hits only); a Genestealer is roughly even money against a marine in melee; a Carnifex defeats ~8–10 PDF troopers head-to-head.
+- **BattleValue recompute.** After the rework lands, `SoldierTemplate.BattleValue` is recomputed from the engine-math valuation model (per-template offense × durability against a reference threat panel, BV = k·√(O×D)), and the strategic constants calibrated in BV-space (mass-combat floor, NPC recon cap, §4.24 invasion budgets) get a sanity pass against the new scale.
+
 **Wounds in Battle**
 - All wound rules from the Soldier Lifecycle apply during battle.
 - A soldier whose wounds reach the incapacitation threshold is removed from combat.
@@ -1030,7 +1045,9 @@ The following must ship in 0.7. Status reflects the current codebase (✅ done �
 
 ### 5.3 Alpha 0.7 — To-Do
 
-Targeted for 0.7 but not part of the committed 0.7 set (§5.2). All items originally tracked here have since landed and moved up to §5.2 (most recently the Opening Scenario / "Promised World" and Mission Field Experience & Records work). No outstanding To-Do items remain in this bucket.
+Targeted for 0.7 but not part of the committed 0.7 set (§5.2). (Previous items tracked here have landed and moved up to §5.2, most recently the Opening Scenario / "Promised World" and Mission Field Experience & Records work.)
+
+- **Melee Combat Rework — Attack Speed, Multiple Attacks & Weapon Rebalance:** Make melee lethality deliver what the species and weapon data already promise. AttackSpeed-driven multiple attacks (probabilistic `AttackSpeed/10`; the attribute is currently authored and persisted but never read), weapon `ExtraAttacks` reinterpreted as a speed multiplier (values revisited entirely), dual-wield +1 attack plus melee-defense bonus, plan-time attack distribution across adjacent enemies mirroring shot-count logic, `ParryModifier` wired into the defender's side of the contested roll, all `StrengthMultiplier` values doubled with a heavy-tier `WoundMultiplier` compensating pass, dead-column cleanup (`ExtraDamage` dropped), and Ork Warboss data fixes. Explicit balance stance: tabletop is a guide, but base marines are deliberately "two-wound" soldiers. Concludes with a `SoldierTemplate.BattleValue` recompute from the engine-math valuation model and a sanity pass on BV-space strategic constants. Full behavioral spec in §4.14 (*Melee Combat — Attack Speed, Multiple Attacks & Weapon Rebalance*). Distinct from the Battle Logic Phase 4 stretch bucket (§5.4), which covers grenades/AoE/morale.
 
 ### 5.4 Alpha 0.7 — Stretch
 
