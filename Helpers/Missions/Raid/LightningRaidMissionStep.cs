@@ -23,6 +23,7 @@ namespace OnlyWar.Helpers.Missions.Raid
             long defenderBattleValue = StrategicCombatResolver.CalculateDefenderBattleValue(enemyFaction);
             if (defenderBattleValue <= 0)
             {
+                context.NoViableTarget = true;
                 context.AddLog($"Day {context.DaysElapsed}: No military target found in {enemyFaction.Region.Name}.");
                 ExfiltrateIfNeeded(context);
                 return;
@@ -56,6 +57,7 @@ namespace OnlyWar.Helpers.Missions.Raid
 
             if (opposingSquads.Count == 0)
             {
+                context.NoViableTarget = true;
                 context.AddLog($"Day {context.DaysElapsed}: The raiders find no isolated force to engage.");
                 ExfiltrateIfNeeded(context);
                 return;

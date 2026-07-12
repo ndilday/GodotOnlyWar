@@ -49,6 +49,28 @@ namespace OnlyWar.Models.Missions
         public float Impact { get; set; }
         public int EnemiesKilled { get; set; }
 
+        // --- Structured mission-outcome signals (PRD 5.3 "Mission Field Experience & Records") ---
+        // Set by the individual mission steps at the point each event resolves, so downstream consumers
+        // (MissionOutcomeClassifier -> the career-log recorder and the end-of-turn report) classify how
+        // the mission went from these facts rather than by string-matching Log lines - the wording of a
+        // step's log line can change freely without silently breaking classification. Each flag is
+        // monotonic: a step sets it true when the event happens and nothing clears it. The force's
+        // terminal disposition is derived from the first four by MissionOutcomeClassifier (which applies
+        // a worst-fate-wins priority); the last two capture orthogonal objective facts.
+
+        // The strike force slipped back out after being detected (evaded the interceptors / exfiltrated).
+        public bool ForceBrokeContact { get; set; }
+        // The force could not break contact and was lost behind enemy lines (assumed dead / gone to ground).
+        public bool ForceLostContact { get; set; }
+        // An embedded engagement left the force combat-ineffective and ended the mission under fire.
+        public bool ForceWithdrewUnderFire { get; set; }
+        // The force could not reach its objective before acting (failed to infiltrate / too many casualties).
+        public bool ObjectiveAborted { get; set; }
+        // The operation found nothing worthwhile to engage (a raid/ambush that turned up no target).
+        public bool NoViableTarget { get; set; }
+        // An assassination force reached and identified its target.
+        public bool TargetLocated { get; set; }
+
         public MissionContext(Order order, List<BattleSquad> playerSquads, List<BattleSquad> opposingForces)
         {
             Order = order;

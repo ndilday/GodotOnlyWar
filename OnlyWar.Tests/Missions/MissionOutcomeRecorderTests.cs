@@ -74,6 +74,56 @@ public class MissionOutcomeRecorderTests
     }
 
     [Fact]
+    public void PlayerAssassination_TargetLocatedAndKilled_RecordsElimination()
+    {
+        Faction player = CreateFaction(30, "Chapter", isPlayer: true);
+        Faction enemy = CreateFaction(31, "Cult", isPlayer: false);
+        Region region = CreateRegion("Spire", "Necromunda");
+        RegionFaction targetFaction = new(new PlanetFaction(enemy), region);
+
+        PlayerSoldier soldier = CreatePlayerSoldier("Brother Vindicare");
+        Squad squad = CreateSquad("Kill Team", soldier);
+        squad.CurrentOrders = new Order([squad], Disposition.Raiding, true, false,
+            Aggression.Cautious, new Mission(MissionType.Assassination, targetFaction, 0));
+        BattleSquad battleSquad = new(true, squad);
+
+        MissionContext context = new(squad.CurrentOrders, [battleSquad], [])
+        {
+            TargetLocated = true,
+            EnemiesKilled = 1
+        };
+
+        MissionOutcomeRecorder.RecordMissionOutcome(context, new Date(1, 1, 1));
+
+        Assert.Contains("target eliminated", soldier.SoldierEvents[0].Detail);
+    }
+
+    [Fact]
+    public void PlayerAssassination_Aborted_RecordsAborted()
+    {
+        Faction player = CreateFaction(32, "Chapter", isPlayer: true);
+        Faction enemy = CreateFaction(33, "Cult", isPlayer: false);
+        Region region = CreateRegion("Underhive", "Necromunda");
+        RegionFaction targetFaction = new(new PlanetFaction(enemy), region);
+
+        PlayerSoldier soldier = CreatePlayerSoldier("Brother Eversor");
+        Squad squad = CreateSquad("Kill Team", soldier);
+        squad.CurrentOrders = new Order([squad], Disposition.Raiding, true, false,
+            Aggression.Cautious, new Mission(MissionType.Assassination, targetFaction, 0));
+        BattleSquad battleSquad = new(true, squad);
+
+        // Force lost behind enemy lines before reaching the target -> the recorder's "aborted" branch.
+        MissionContext context = new(squad.CurrentOrders, [battleSquad], [])
+        {
+            ForceLostContact = true
+        };
+
+        MissionOutcomeRecorder.RecordMissionOutcome(context, new Date(1, 1, 1));
+
+        Assert.Contains("aborted", soldier.SoldierEvents[0].Detail);
+    }
+
+    [Fact]
     public void NpcMission_ProducesNoEvents()
     {
         Faction npcFaction = CreateFaction(5, "Imperial Guard", isPlayer: false);

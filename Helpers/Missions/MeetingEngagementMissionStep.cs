@@ -24,6 +24,7 @@ namespace OnlyWar.Helpers.Missions
                 .ToList();
             if (missionSquads.Count == 0 || opposingSquads.Count == 0)
             {
+                context.NoViableTarget = true;
                 context.AddLog($"Day {context.DaysElapsed}: No combat-capable forces remain for engagement.");
                 return;
             }
@@ -66,6 +67,7 @@ namespace OnlyWar.Helpers.Missions
             // casualty abort, applied at the point the battle actually depletes the squad.
             if (!context.MissionSquads.Any(s => s.ShouldContinueMission()))
             {
+                context.ForceWithdrewUnderFire = true;
                 context.AddLog($"Day {context.DaysElapsed}: Force combat-ineffective; mission ended.");
                 return;
             }

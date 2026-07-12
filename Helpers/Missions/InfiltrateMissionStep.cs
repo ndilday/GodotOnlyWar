@@ -70,11 +70,13 @@ namespace OnlyWar.Helpers.Missions.Recon
         {
             if (context.DaysElapsed >= 6)
             {
+                context.ObjectiveAborted = true;
                 context.AddLog("Mission failed: Force unable to infiltrate into region");
                 return false;
             }
             else if (context.MissionSquads.Where(s => s.ShouldContinueMission()).Count() == 0)
             {
+                context.ObjectiveAborted = true;
                 context.AddLog("Mission aborted: too many casualties");
                 return false;
             }

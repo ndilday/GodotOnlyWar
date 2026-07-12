@@ -29,6 +29,7 @@ namespace OnlyWar.Helpers.Missions.Ambush
                 .ToList();
             if (missionSquads.Count == 0 || opposingSquads.Count == 0)
             {
+                context.NoViableTarget = true;
                 context.AddLog($"Day {context.DaysElapsed}: No combat-capable forces remain for ambush.");
                 return;
             }

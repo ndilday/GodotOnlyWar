@@ -38,6 +38,7 @@ namespace OnlyWar.Helpers.Missions.Assassinate
             };
             context.OpposingSquads = ForceGenerator.GenerateForce(request).Select(s => new BattleSquad(false, s)).ToList();
 
+            context.TargetLocated = true;
             context.AddLog($"Day {context.DaysElapsed}: Force has located the assassination target");
 
             if (context.DaysElapsed >= 6)

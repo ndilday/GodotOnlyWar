@@ -25,6 +25,7 @@ namespace OnlyWar.Helpers.Missions.Recon
             float margin = missionTest.RunMissionCheck(context.MissionSquads);
             if (margin > 0.0f)
             {
+                context.ForceBrokeContact = true;
                 context.AddLog($"Day {context.DaysElapsed}: Force successfully escaped enemy force");
                 returnStep.ExecuteMissionStep(context, margin, returnStep);
             }

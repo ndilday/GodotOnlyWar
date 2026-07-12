@@ -2,6 +2,7 @@ using Godot;
 using OnlyWar.Helpers;
 using OnlyWar.Helpers.Battles;
 using OnlyWar.Helpers.Extensions;
+using OnlyWar.Helpers.Missions;
 using OnlyWar.Models.Battles;
 using OnlyWar.Models.Missions;
 using OnlyWar.Models.Planets;
@@ -174,16 +175,12 @@ public partial class EndOfTurnDialogController : DialogController
         }
 
         string subtitle = $"{attacker} vs {defender}: {force} - {location}";
+        MissionOutcomeClassification classification = MissionOutcomeClassifier.Classify(context);
         string summary = MissionReportSummaryBuilder.BuildSummary(
-            missionType,
+            classification,
             actingFactionIsPlayer,
             attacker,
-            location,
-            context.EnemiesKilled,
-            context.DaysElapsed,
-            context.Impact,
-            context.Spotter != null,
-            context.Log);
+            location);
 
         return new EndOfTurnReportEntry(missionTypeName, subtitle, summary, true, context);
     }

@@ -1,16 +1,14 @@
+using OnlyWar.Helpers.Missions;
 using OnlyWar.Models.Missions;
-using System;
-using System.Collections.Generic;
-using System.Linq;
 
 namespace OnlyWar.Helpers
 {
     // Pure string-building for the end-of-turn mission report (PRD 4.13/4.19). Kept free of Godot
     // types so it can be exercised directly by xunit tests - EndOfTurnDialogController itself is a
-    // Godot partial class and can't be instantiated headlessly. Classification is deliberately built
-    // only from signals MissionContext already exposes (EnemiesKilled, DaysElapsed, Impact, Spotter,
-    // Log) rather than any richer per-mission-type outcome data, since that may or may not land from a
-    // sibling work stream.
+    // Godot partial class and can't be instantiated headlessly. The underlying outcome classification
+    // is shared with the career-log recorder via MissionOutcomeClassifier (a MissionOutcomeClassification
+    // built from MissionContext's structured signals); this builder only renders it in the commander's
+    // second-person "Your forces ..." voice, so the two consumers can never silently disagree.
     public static class MissionReportSummaryBuilder
     {
         // The subject phrase used to open the outcome sentence: "Your forces" for the player's own
@@ -38,36 +36,30 @@ namespace OnlyWar.Helpers
         }
 
         public static string BuildSummary(
-            MissionType missionType,
+            MissionOutcomeClassification classification,
             bool isPlayerFaction,
             string actingFactionName,
-            string location,
-            int enemiesKilled,
-            ushort daysElapsed,
-            float impact,
-            bool wasDetected,
-            IReadOnlyList<string> log)
+            string location)
         {
-            log ??= Array.Empty<string>();
             string subject = BuildSubject(isPlayerFaction, actingFactionName);
             location = string.IsNullOrWhiteSpace(location) ? "an unknown location" : location;
 
-            switch (missionType)
+            switch (classification.MissionType)
             {
                 case MissionType.Recon:
                 case MissionType.Patrol:
-                    return BuildReconSummary(subject, location, wasDetected, log);
+                    return BuildReconSummary(subject, location, classification);
 
                 case MissionType.Assassination:
-                    return BuildAssassinationSummary(subject, location, impact, log);
+                    return BuildAssassinationSummary(subject, location, classification);
 
                 case MissionType.Sabotage:
-                    return impact > 0
+                    return classification.Impact > 0
                         ? $"{subject} sabotaged enemy operations in {location}."
                         : $"{subject} attempted sabotage in {location} without notable effect.";
 
                 case MissionType.Diversion:
-                    return impact > 0
+                    return classification.Impact > 0
                         ? $"{subject} staged a diversion in {location}, drawing enemy attention."
                         : $"{subject} attempted a diversion in {location} with limited effect.";
 
@@ -81,33 +73,33 @@ namespace OnlyWar.Helpers
                 case MissionType.Extermination:
                 case MissionType.Infiltrate:
                 case MissionType.CloseAirSupport:
-                    return BuildCombatSummary(subject, missionType, location, enemiesKilled, log);
+                    return BuildCombatSummary(subject, location, classification);
 
                 case MissionType.Fortify:
                 case MissionType.DefenseInDepth:
                 case MissionType.LastStand:
                 case MissionType.Training:
                 case MissionType.Construction:
-                    return $"{subject} carried out {missionType} operations in {location}.";
+                    return $"{subject} carried out {classification.MissionType} operations in {location}.";
 
                 default:
-                    return $"{subject} conducted a {missionType} in {location}.";
+                    return $"{subject} conducted a {classification.MissionType} in {location}.";
             }
         }
 
         private static string BuildReconSummary(
-            string subject, string location, bool wasDetected, IReadOnlyList<string> log)
+            string subject, string location, MissionOutcomeClassification classification)
         {
-            if (!wasDetected)
+            if (!classification.WasDetected)
             {
                 return $"{subject} reconnoitered {location} undetected.";
             }
 
-            if (ContainsAny(log, "assumed dead", "gone to ground"))
+            if (classification.Disposition == MissionForceDisposition.LostContact)
             {
                 return $"{subject} were detected in {location} and lost contact with base.";
             }
-            if (ContainsAny(log, "successfully escaped", "returned to base"))
+            if (classification.Disposition == MissionForceDisposition.BrokeContact)
             {
                 return $"{subject} were detected in {location} but broke contact successfully.";
             }
@@ -115,14 +107,13 @@ namespace OnlyWar.Helpers
         }
 
         private static string BuildAssassinationSummary(
-            string subject, string location, float impact, IReadOnlyList<string> log)
+            string subject, string location, MissionOutcomeClassification classification)
         {
-            bool locatedTarget = ContainsAny(log, "located the assassination target");
-            if (locatedTarget && impact > 0)
+            if (classification.TargetEliminated)
             {
                 return $"{subject} eliminated the target in {location}.";
             }
-            if (locatedTarget)
+            if (classification.TargetLocated)
             {
                 return $"{subject} located the target in {location}, but the mission did not conclude cleanly.";
             }
@@ -130,45 +121,25 @@ namespace OnlyWar.Helpers
         }
 
         private static string BuildCombatSummary(
-            string subject, MissionType missionType, string location, int enemiesKilled, IReadOnlyList<string> log)
+            string subject, string location, MissionOutcomeClassification classification)
         {
-            if (enemiesKilled > 0)
+            if (classification.EnemiesKilled > 0)
             {
-                if (ContainsAny(log, "combat-ineffective"))
+                if (classification.Disposition == MissionForceDisposition.WithdrewUnderFire)
                 {
-                    return $"{subject} killed {enemiesKilled} enemy troops in {location} before being forced to withdraw with heavy losses.";
+                    return $"{subject} killed {classification.EnemiesKilled} enemy troops in {location} before being forced to withdraw with heavy losses.";
                 }
-                bool withdrew = ContainsAny(log, "returned to base");
+                bool withdrew = classification.Disposition == MissionForceDisposition.BrokeContact;
                 return withdrew
-                    ? $"{subject} killed {enemiesKilled} enemy troops in {location} and withdrew."
-                    : $"{subject} killed {enemiesKilled} enemy troops in {location}.";
+                    ? $"{subject} killed {classification.EnemiesKilled} enemy troops in {location} and withdrew."
+                    : $"{subject} killed {classification.EnemiesKilled} enemy troops in {location}.";
             }
 
-            if (ContainsAny(log, "no isolated force", "no military target", "no combat-capable forces"))
+            if (classification.NoViableTarget)
             {
                 return $"{subject} found no viable target in {location}.";
             }
-            return $"{subject} conducted a {missionType} in {location} without confirmed enemy casualties.";
-        }
-
-        private static bool ContainsAny(IReadOnlyList<string> log, params string[] needles)
-        {
-            for (int i = 0; i < log.Count; i++)
-            {
-                string line = log[i];
-                if (string.IsNullOrEmpty(line))
-                {
-                    continue;
-                }
-                for (int j = 0; j < needles.Length; j++)
-                {
-                    if (line.IndexOf(needles[j], StringComparison.OrdinalIgnoreCase) >= 0)
-                    {
-                        return true;
-                    }
-                }
-            }
-            return false;
+            return $"{subject} conducted a {classification.MissionType} in {location} without confirmed enemy casualties.";
         }
     }
 }

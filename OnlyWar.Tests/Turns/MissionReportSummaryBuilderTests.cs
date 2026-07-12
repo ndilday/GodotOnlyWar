@@ -1,5 +1,5 @@
-using System.Collections.Generic;
 using OnlyWar.Helpers;
+using OnlyWar.Helpers.Missions;
 using OnlyWar.Models.Missions;
 using Xunit;
 
@@ -7,15 +7,39 @@ namespace OnlyWar.Tests.Turns;
 
 // EndOfTurnDialogController is a Godot partial class and can't be instantiated headlessly, so the
 // end-of-turn mission-summary string building lives in this pure, Godot-free helper instead
-// (Helpers/MissionReportSummaryBuilder.cs) and is exercised directly here.
+// (Helpers/MissionReportSummaryBuilder.cs) and is exercised directly here. The builder now renders a
+// shared MissionOutcomeClassification (built by MissionOutcomeClassifier from MissionContext's
+// structured signals) rather than re-classifying from Log text, so these tests hand it a
+// classification directly.
 public class MissionReportSummaryBuilderTests
 {
+    private static MissionOutcomeClassification Classification(
+        MissionType missionType,
+        bool wasDetected = false,
+        MissionForceDisposition disposition = MissionForceDisposition.Nominal,
+        bool noViableTarget = false,
+        bool targetLocated = false,
+        bool targetEliminated = false,
+        int enemiesKilled = 0,
+        float impact = 0f) =>
+        new()
+        {
+            MissionType = missionType,
+            WasDetected = wasDetected,
+            Disposition = disposition,
+            NoViableTarget = noViableTarget,
+            TargetLocated = targetLocated,
+            TargetEliminated = targetEliminated,
+            EnemiesKilled = enemiesKilled,
+            Impact = impact
+        };
+
     [Fact]
     public void BuildSummary_UndetectedRecon_ReportsUndetected()
     {
         string summary = MissionReportSummaryBuilder.BuildSummary(
-            MissionType.Recon, true, "Player Chapter", "Sacred Ground, Terra",
-            enemiesKilled: 0, daysElapsed: 3, impact: 1f, wasDetected: false, log: new List<string>());
+            Classification(MissionType.Recon, wasDetected: false),
+            true, "Player Chapter", "Sacred Ground, Terra");
 
         Assert.Contains("Your forces", summary);
         Assert.Contains("undetected", summary);
@@ -24,11 +48,10 @@ public class MissionReportSummaryBuilderTests
     [Fact]
     public void BuildSummary_DetectedReconThatEscapes_ReportsBrokeContact()
     {
-        var log = new List<string> { "Day 4: Force successfully escaped enemy force" };
-
         string summary = MissionReportSummaryBuilder.BuildSummary(
-            MissionType.Recon, true, "Player Chapter", "Sacred Ground, Terra",
-            enemiesKilled: 0, daysElapsed: 4, impact: 0f, wasDetected: true, log: log);
+            Classification(MissionType.Recon, wasDetected: true,
+                disposition: MissionForceDisposition.BrokeContact),
+            true, "Player Chapter", "Sacred Ground, Terra");
 
         Assert.Contains("detected", summary);
         Assert.Contains("broke contact", summary);
@@ -37,11 +60,10 @@ public class MissionReportSummaryBuilderTests
     [Fact]
     public void BuildSummary_DetectedReconThatIsLost_ReportsLostContact()
     {
-        var log = new List<string> { "Day 5: Contact lost with mission force, assumed dead." };
-
         string summary = MissionReportSummaryBuilder.BuildSummary(
-            MissionType.Recon, false, "Tyranid Swarm", "Hive Sector, Baal",
-            enemiesKilled: 0, daysElapsed: 5, impact: 0f, wasDetected: true, log: log);
+            Classification(MissionType.Recon, wasDetected: true,
+                disposition: MissionForceDisposition.LostContact),
+            false, "Tyranid Swarm", "Hive Sector, Baal");
 
         Assert.StartsWith("Tyranid Swarm", summary);
         Assert.Contains("lost contact", summary);
@@ -51,21 +73,30 @@ public class MissionReportSummaryBuilderTests
     public void BuildSummary_CombatMissionWithKills_ReportsKillCount()
     {
         string summary = MissionReportSummaryBuilder.BuildSummary(
-            MissionType.Advance, true, "Player Chapter", "Iron Valley, Cadia",
-            enemiesKilled: 7, daysElapsed: 2, impact: 0f, wasDetected: false, log: new List<string>());
+            Classification(MissionType.Advance, enemiesKilled: 7),
+            true, "Player Chapter", "Iron Valley, Cadia");
 
         Assert.Contains("killed 7 enemy troops", summary);
     }
 
     [Fact]
+    public void BuildSummary_CombatMissionWithKillsThenHeavyLosses_ReportsWithdrawalUnderFire()
+    {
+        string summary = MissionReportSummaryBuilder.BuildSummary(
+            Classification(MissionType.Advance, enemiesKilled: 4,
+                disposition: MissionForceDisposition.WithdrewUnderFire),
+            true, "Player Chapter", "Iron Valley, Cadia");
+
+        Assert.Contains("killed 4 enemy troops", summary);
+        Assert.Contains("heavy losses", summary);
+    }
+
+    [Fact]
     public void BuildSummary_CombatMissionWithNoKillsAndNoTarget_ReportsNoTarget()
     {
-        var log = new List<string> { "Day 1: Force searches for an exposed target in Iron Valley." };
-
         string summary = MissionReportSummaryBuilder.BuildSummary(
-            MissionType.LightningRaid, true, "Player Chapter", "Iron Valley, Cadia",
-            enemiesKilled: 0, daysElapsed: 1, impact: 0f, wasDetected: false,
-            log: new List<string> { "Day 1: The raiders find no isolated force to engage." });
+            Classification(MissionType.LightningRaid, noViableTarget: true),
+            true, "Player Chapter", "Iron Valley, Cadia");
 
         Assert.Contains("no viable target", summary);
     }
@@ -74,8 +105,8 @@ public class MissionReportSummaryBuilderTests
     public void BuildSummary_SabotageWithPositiveImpact_ReportsSuccess()
     {
         string summary = MissionReportSummaryBuilder.BuildSummary(
-            MissionType.Sabotage, true, "Player Chapter", "Forge Complex, Mars",
-            enemiesKilled: 0, daysElapsed: 3, impact: 2.5f, wasDetected: false, log: new List<string>());
+            Classification(MissionType.Sabotage, impact: 2.5f),
+            true, "Player Chapter", "Forge Complex, Mars");
 
         Assert.Contains("sabotaged enemy operations", summary);
     }
@@ -84,30 +115,40 @@ public class MissionReportSummaryBuilderTests
     public void BuildSummary_SabotageWithNoImpact_ReportsNoEffect()
     {
         string summary = MissionReportSummaryBuilder.BuildSummary(
-            MissionType.Sabotage, true, "Player Chapter", "Forge Complex, Mars",
-            enemiesKilled: 0, daysElapsed: 3, impact: -1f, wasDetected: false, log: new List<string>());
+            Classification(MissionType.Sabotage, impact: -1f),
+            true, "Player Chapter", "Forge Complex, Mars");
 
         Assert.Contains("without notable effect", summary);
     }
 
     [Fact]
-    public void BuildSummary_AssassinationTargetLocatedAndImpactPositive_ReportsElimination()
+    public void BuildSummary_AssassinationTargetEliminated_ReportsElimination()
     {
-        var log = new List<string> { "Day 6: Force has located the assassination target" };
-
         string summary = MissionReportSummaryBuilder.BuildSummary(
-            MissionType.Assassination, true, "Player Chapter", "Spire, Necromunda",
-            enemiesKilled: 0, daysElapsed: 6, impact: 1f, wasDetected: false, log: log);
+            Classification(MissionType.Assassination, targetLocated: true,
+                targetEliminated: true, enemiesKilled: 1),
+            true, "Player Chapter", "Spire, Necromunda");
 
         Assert.Contains("eliminated the target", summary);
+    }
+
+    [Fact]
+    public void BuildSummary_AssassinationTargetLocatedButNotEliminated_ReportsInconclusive()
+    {
+        string summary = MissionReportSummaryBuilder.BuildSummary(
+            Classification(MissionType.Assassination, targetLocated: true),
+            true, "Player Chapter", "Spire, Necromunda");
+
+        Assert.Contains("located the target", summary);
+        Assert.Contains("did not conclude cleanly", summary);
     }
 
     [Fact]
     public void BuildSummary_UnknownMissionType_FallsBackToGeneric()
     {
         string summary = MissionReportSummaryBuilder.BuildSummary(
-            MissionType.Construction, false, "Ork Waaagh", "Scrapyard, Golgotha",
-            enemiesKilled: 0, daysElapsed: 1, impact: 0f, wasDetected: false, log: new List<string>());
+            Classification(MissionType.Construction),
+            false, "Ork Waaagh", "Scrapyard, Golgotha");
 
         Assert.Contains("Ork Waaagh", summary);
         Assert.Contains("Construction", summary);

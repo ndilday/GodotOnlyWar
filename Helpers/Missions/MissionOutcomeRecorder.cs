@@ -4,7 +4,6 @@ using OnlyWar.Models.Missions;
 using OnlyWar.Models.Planets;
 using OnlyWar.Models.Soldiers;
 using System.Collections.Generic;
-using System.Linq;
 
 namespace OnlyWar.Helpers.Missions
 {
@@ -25,10 +24,11 @@ namespace OnlyWar.Helpers.Missions
             RegionFaction targetFaction = context.Order?.Mission?.RegionFaction;
             if (targetFaction == null) return;
 
-            string detail = BuildOutcomeDetail(context, targetFaction);
+            MissionOutcomeClassification classification = MissionOutcomeClassifier.Classify(context);
+            string detail = BuildOutcomeDetail(classification, targetFaction);
             int? factionId = targetFaction.PlanetFaction?.Faction?.Id;
             string locationName = $"{targetFaction.Region.Name}, {targetFaction.Region.Planet.Name}";
-            int? magnitude = context.EnemiesKilled > 0 ? context.EnemiesKilled : null;
+            int? magnitude = classification.EnemiesKilled > 0 ? classification.EnemiesKilled : null;
 
             foreach (BattleSquad squad in context.MissionSquads)
             {
@@ -51,16 +51,19 @@ namespace OnlyWar.Helpers.Missions
             }
         }
 
-        private static string BuildOutcomeDetail(MissionContext context, RegionFaction targetFaction)
+        private static string BuildOutcomeDetail(MissionOutcomeClassification classification, RegionFaction targetFaction)
         {
             string regionName = targetFaction.Region.Name;
             string enemyName = targetFaction.PlanetFaction?.Faction?.Name ?? "the enemy";
-            bool detected = context.Spotter != null;
-            bool aborted = context.Log.Any(line =>
-                line.Contains("aborted") || line.Contains("gone to ground") || line.Contains("assumed dead"));
-            int killed = context.EnemiesKilled;
+            bool detected = classification.WasDetected;
+            // The career log treats a force lost behind enemy lines or one that never reached its
+            // objective as "aborted" for these one-line summaries (the old string match keyed on
+            // "aborted"/"gone to ground"/"assumed dead", which map to exactly these two dispositions).
+            bool aborted = classification.Disposition is MissionForceDisposition.LostContact
+                                                       or MissionForceDisposition.AbortedBeforeObjective;
+            int killed = classification.EnemiesKilled;
 
-            switch (context.Order.Mission.MissionType)
+            switch (classification.MissionType)
             {
                 case MissionType.Recon:
                     return detected
@@ -74,13 +77,13 @@ namespace OnlyWar.Helpers.Missions
 
                 case MissionType.Sabotage:
                     if (aborted) return $"Sabotage mission into {regionName} aborted before objectives were met.";
-                    return context.Impact > 0
+                    return classification.Impact > 0
                         ? $"Sabotage carried out against {enemyName} assets in {regionName}."
                         : $"Attempted sabotage in {regionName}, but failed to achieve significant effect.";
 
                 case MissionType.Assassination:
                     if (aborted) return $"Assassination attempt in {regionName} aborted before the target could be reached.";
-                    return killed > 0
+                    return classification.TargetEliminated
                         ? $"Assassination mission in {regionName} successful; target eliminated."
                         : $"Assassination attempt in {regionName} failed to eliminate the target.";
 
@@ -108,8 +111,8 @@ namespace OnlyWar.Helpers.Missions
 
                 default:
                     return aborted
-                        ? $"{context.Order.Mission.MissionType} operation in {regionName} aborted."
-                        : $"Conducted a {context.Order.Mission.MissionType} operation in {regionName}.";
+                        ? $"{classification.MissionType} operation in {regionName} aborted."
+                        : $"Conducted a {classification.MissionType} operation in {regionName}.";
             }
         }
     }

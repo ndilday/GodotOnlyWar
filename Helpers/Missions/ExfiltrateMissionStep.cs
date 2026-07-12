@@ -32,6 +32,7 @@ namespace OnlyWar.Helpers.Missions
             SquadMissionTest missionTest = new SquadMissionTest(stealth, difficulty);
             if (context.MissionSquads.SelectMany(s => s.AbleSoldiers).Count() == 0)
             {
+                context.ForceLostContact = true;
                 context.AddLog($"Day {context.DaysElapsed}: Contact lost with mission force, assumed dead.");
                 return;
             }
@@ -40,6 +41,7 @@ namespace OnlyWar.Helpers.Missions
             // spinning DaysElapsed indefinitely (see MissionContext.MissionDurationDays).
             if (context.DaysElapsed >= MissionContext.MissionDurationDays + MissionContext.ExfiltrationGraceDays)
             {
+                context.ForceLostContact = true;
                 context.AddLog($"Day {context.DaysElapsed}: Force could not break contact; gone to ground behind enemy lines.");
                 GameLog.Trace(() =>
                     $"Exfiltrate {context.Order.Mission.RegionFaction.Region.Planet.Name}/"
@@ -52,6 +54,7 @@ namespace OnlyWar.Helpers.Missions
             float margin = missionTest.RunMissionCheck(context.MissionSquads);
             if (margin > 0.0f)
             {
+                context.ForceBrokeContact = true;
                 context.AddLog($"Day {context.DaysElapsed}: Force has returned to base.");
                 GameLog.Trace(() =>
                     $"Exfiltrate {context.Order.Mission.RegionFaction.Region.Planet.Name}/"

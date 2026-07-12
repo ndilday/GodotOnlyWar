@@ -555,13 +555,18 @@ static void MigrateFortificationSkill(SqliteConnection connection)
     // Phase 2 player-constructable defenses). Mirrors the existing "Engineering (Cybernetics)"
     // entry: Tech category (7), Intelligence attribute (4), difficulty 2.
     const string skillName = "Engineering (Fortification)";
-    int skillId = ExecuteScalarInt(connection, transaction, "SELECT Id FROM BaseSkill WHERE Name = $n", ("$n", skillName));
-    if (skillId == 0)
+    int? existingSkillId = TryFindInt(connection, transaction, "SELECT Id FROM BaseSkill WHERE Name = $n", ("$n", skillName));
+    int skillId;
+    if (existingSkillId is null)
     {
         skillId = ExecuteScalarInt(connection, transaction, "SELECT COALESCE(MAX(Id), 0) + 1 FROM BaseSkill");
         Execute(connection, transaction,
             "INSERT INTO BaseSkill (Id, Name, SkillCategory, Attribute, Difficulty) VALUES ($id, $n, 7, 4, 2)",
             ("$id", skillId), ("$n", skillName));
+    }
+    else
+    {
+        skillId = existingSkillId.Value;
     }
 
     // Every combat marine trains it at a low weight so any squad can fortify, slowly.
@@ -575,8 +580,8 @@ static void MigrateFortificationSkill(SqliteConnection connection)
 
     foreach (string profileName in combatProfiles)
     {
-        int profileId = ExecuteScalarInt(connection, transaction, "SELECT Id FROM TrainingProfile WHERE Name = $n", ("$n", profileName));
-        if (profileId == 0)
+        int? profileId = TryFindInt(connection, transaction, "SELECT Id FROM TrainingProfile WHERE Name = $n", ("$n", profileName));
+        if (profileId is null)
         {
             continue;
         }
@@ -693,9 +698,9 @@ static void MigrateTyranidSquads(SqliteConnection connection)
 
     // SoldierTemplate Ids created by migrate-tyranids (look up by name so this stays
     // independent of the exact ids that pass produced).
-    int lictorSoldier = ExecuteScalarInt(connection, transaction, "SELECT Id FROM SoldierTemplate WHERE Name = 'Lictor' AND FactionId = 2");
-    int ravenerSoldier = ExecuteScalarInt(connection, transaction, "SELECT Id FROM SoldierTemplate WHERE Name = 'Ravener' AND FactionId = 2");
-    if (lictorSoldier == 0 || ravenerSoldier == 0)
+    int? lictorSoldier = TryFindInt(connection, transaction, "SELECT Id FROM SoldierTemplate WHERE Name = 'Lictor' AND FactionId = 2");
+    int? ravenerSoldier = TryFindInt(connection, transaction, "SELECT Id FROM SoldierTemplate WHERE Name = 'Ravener' AND FactionId = 2");
+    if (lictorSoldier is null || ravenerSoldier is null)
     {
         throw new InvalidOperationException("Run migrate-tyranids first; Lictor/Ravener SoldierTemplates are missing.");
     }
@@ -713,14 +718,14 @@ static void MigrateTyranidSquads(SqliteConnection connection)
     InsertSquadTemplate(connection, transaction, lictorSquad, Tyranids, "Lictor",
         defaultArmorId: Chitin15mm, defaultWeaponSetId: ScythingTalons,
         squadType: Scout | Elite);
-    InsertSquadElement(connection, transaction, lictorSquad, lictorSoldier, min: 1, max: 1);
+    InsertSquadElement(connection, transaction, lictorSquad, lictorSoldier.Value, min: 1, max: 1);
 
     // Ravener: fast-attack pack of 5, no separate leader statline. Scout.
     int ravenerSquad = lictorSquad + 1;
     InsertSquadTemplate(connection, transaction, ravenerSquad, Tyranids, "Ravener Pack",
         defaultArmorId: Chitin15mm, defaultWeaponSetId: ScythingTalons,
         squadType: Scout);
-    InsertSquadElement(connection, transaction, ravenerSquad, ravenerSoldier, min: 5, max: 5);
+    InsertSquadElement(connection, transaction, ravenerSquad, ravenerSoldier.Value, min: 5, max: 5);
 
     transaction.Commit();
     Console.WriteLine($"Tyranid squad migration complete. Added Lictor (squad {lictorSquad}, solo) and Ravener Pack (squad {ravenerSquad}, x5).");
@@ -831,9 +836,9 @@ static void MigrateVeteranSergeant(SqliteConnection connection)
     // slot in every First Company squad, which the transfer UI then offered as a
     // promotion target. Introduce a proper Veteran Sergeant rank to lead the line
     // veteran squads and repoint the squad's leader slot to it.
-    int sergeantId = ExecuteScalarInt(connection, transaction,
+    int? sergeantId = TryFindInt(connection, transaction,
         "SELECT Id FROM SoldierTemplate WHERE Name = 'Sergeant' AND FactionId = 1");
-    if (sergeantId == 0)
+    if (sergeantId is null)
     {
         throw new InvalidOperationException("Line 'Sergeant' soldier template is missing; cannot model the Veteran Sergeant on it.");
     }
@@ -842,7 +847,9 @@ static void MigrateVeteranSergeant(SqliteConnection connection)
     // leader, and the sergeant work-experience training profile.
     int speciesId = ExecuteScalarInt(connection, transaction,
         "SELECT SpeciesId FROM SoldierTemplate WHERE Id = $id", ("$id", sergeantId));
-    int profileId = ExecuteScalarInt(connection, transaction,
+    // WorkExperienceTrainingProfileId is nullable; TryFindInt returns null for a SQL NULL, which
+    // we carry straight through to DBNull (distinct from a real profile id of 0).
+    int? profileId = TryFindInt(connection, transaction,
         "SELECT WorkExperienceTrainingProfileId FROM SoldierTemplate WHERE Id = $id", ("$id", sergeantId));
 
     int veteranSergeant = ExecuteScalarInt(connection, transaction,
@@ -854,7 +861,7 @@ static void MigrateVeteranSergeant(SqliteConnection connection)
             (Id, FactionId, SpeciesId, Name, Rank, SubRank, IsSquadLeader, SpecialistType, WorkExperienceTrainingProfileId)
           VALUES ($id, $f, $s, 'Veteran Sergeant', 5, 15, 1, 0, $p)",
         ("$id", veteranSergeant), ("$f", PlayerFaction), ("$s", speciesId),
-        ("$p", profileId == 0 ? DBNull.Value : profileId));
+        ("$p", profileId is null ? DBNull.Value : profileId.Value));
 
     // Mirror the line Sergeant's MOS training (leadership/tactics emphasis).
     Execute(connection, transaction,
@@ -862,15 +869,17 @@ static void MigrateVeteranSergeant(SqliteConnection connection)
           SELECT $new, BaseSkillId, PointsAdded FROM SoldierMosTraining WHERE SoldierTemplateId = $old",
         ("$new", veteranSergeant), ("$old", sergeantId));
 
-    // Repoint the line Veteran Squad's leader slot from Veteran Captain to the new rank.
-    int veteranCaptain = ExecuteScalarInt(connection, transaction,
+    // Repoint the line Veteran Squad's leader slot from Veteran Captain to the new rank. If the
+    // Veteran Captain is already gone, $vc is DBNull and the UPDATE simply matches nothing (rather
+    // than accidentally matching a soldier at id 0).
+    int? veteranCaptain = TryFindInt(connection, transaction,
         "SELECT Id FROM SoldierTemplate WHERE Name = 'Veteran Captain' AND FactionId = 1");
     int updated = Execute(connection, transaction,
         @"UPDATE SquadTemplateElement
           SET SoldierTemplateId = $vs
           WHERE SoldierTemplateId = $vc
             AND SquadTemplateId IN (SELECT Id FROM SquadTemplate WHERE Name = 'Veteran Squad' AND FactionId = 1)",
-        ("$vs", veteranSergeant), ("$vc", veteranCaptain));
+        ("$vs", veteranSergeant), ("$vc", veteranCaptain is null ? DBNull.Value : veteranCaptain.Value));
 
     transaction.Commit();
     Console.WriteLine($"Veteran Sergeant migration complete. Added soldier {veteranSergeant}; repointed {updated} Veteran Squad leader element(s).");
@@ -886,19 +895,19 @@ static void MigrateCollapseSergeants(SqliteConnection connection)
     // distinct soldier template, so we move that leadership/tactics-plus-combat-focus
     // training onto the squad template (LeaderWorkExperienceProfileId) and fold the two
     // variants back into the plain Sergeant.
-    int assaultSergeant = ExecuteScalarInt(connection, transaction,
+    int? assaultSergeant = TryFindInt(connection, transaction,
         "SELECT Id FROM SoldierTemplate WHERE Name = 'Sergeant (A)' AND FactionId = 1");
-    int devastatorSergeant = ExecuteScalarInt(connection, transaction,
+    int? devastatorSergeant = TryFindInt(connection, transaction,
         "SELECT Id FROM SoldierTemplate WHERE Name = 'Sergeant (D)' AND FactionId = 1");
-    if (assaultSergeant == 0 && devastatorSergeant == 0)
+    if (assaultSergeant is null && devastatorSergeant is null)
     {
         Console.WriteLine("Sergeant collapse already applied; nothing to do.");
         return;
     }
 
-    int sergeant = ExecuteScalarInt(connection, transaction,
+    int? sergeant = TryFindInt(connection, transaction,
         "SELECT Id FROM SoldierTemplate WHERE Name = 'Sergeant' AND FactionId = 1");
-    if (sergeant == 0)
+    if (sergeant is null)
     {
         throw new InvalidOperationException(
             "Line 'Sergeant' soldier template is missing; cannot collapse the assault/devastator variants onto it.");
@@ -916,19 +925,19 @@ static void MigrateCollapseSergeants(SqliteConnection connection)
     // drop the variant and its MOS rows. The TrainingProfile rows themselves are kept:
     // they are now referenced by the squad templates' leader profiles.
     int repointed = 0;
-    foreach (int variant in new[] { assaultSergeant, devastatorSergeant })
+    foreach (int? variant in new[] { assaultSergeant, devastatorSergeant })
     {
-        if (variant == 0)
+        if (variant is null)
         {
             continue;
         }
         repointed += Execute(connection, transaction,
             "UPDATE SquadTemplateElement SET SoldierTemplateId = $s WHERE SoldierTemplateId = $v",
-            ("$s", sergeant), ("$v", variant));
+            ("$s", sergeant.Value), ("$v", variant.Value));
         Execute(connection, transaction,
-            "DELETE FROM SoldierMosTraining WHERE SoldierTemplateId = $v", ("$v", variant));
+            "DELETE FROM SoldierMosTraining WHERE SoldierTemplateId = $v", ("$v", variant.Value));
         Execute(connection, transaction,
-            "DELETE FROM SoldierTemplate WHERE Id = $v", ("$v", variant));
+            "DELETE FROM SoldierTemplate WHERE Id = $v", ("$v", variant.Value));
     }
 
     transaction.Commit();
@@ -940,16 +949,16 @@ static void MigrateCollapseSergeants(SqliteConnection connection)
 static void SetSquadLeaderProfile(SqliteConnection connection, SqliteTransaction transaction,
                                   string squadName, string profileName)
 {
-    int profileId = ExecuteScalarInt(connection, transaction,
+    int? profileId = TryFindInt(connection, transaction,
         "SELECT Id FROM TrainingProfile WHERE Name = $n", ("$n", profileName));
-    if (profileId == 0)
+    if (profileId is null)
     {
         throw new InvalidOperationException(
             $"Training profile '{profileName}' is missing; run migrate-training before migrate-collapse-sergeants.");
     }
     int updated = Execute(connection, transaction,
         "UPDATE SquadTemplate SET LeaderWorkExperienceProfileId = $p WHERE Name = $n AND FactionId = 1",
-        ("$p", profileId), ("$n", squadName));
+        ("$p", profileId.Value), ("$n", squadName));
     if (updated == 0)
     {
         Console.WriteLine($"  warning: squad template '{squadName}' not found; leader profile not set.");
@@ -965,17 +974,16 @@ static void MigrateChaplaincy(SqliteConnection connection)
 {
     using SqliteTransaction transaction = connection.BeginTransaction();
 
-    int chaplain = ExecuteScalarInt(connection, transaction,
+    int? chaplain = TryFindInt(connection, transaction,
         "SELECT Id FROM SoldierTemplate WHERE Name = 'Chaplain' AND FactionId = 1");
-    if (chaplain == 0)
+    if (chaplain is null)
     {
         throw new InvalidOperationException(
             "'Chaplain' soldier template is missing; cannot model the Judiciar on it.");
     }
 
-    int judiciar = ExecuteScalarInt(connection, transaction,
-        "SELECT Id FROM SoldierTemplate WHERE Name = 'Judiciar' AND FactionId = 1");
-    if (judiciar != 0)
+    if (TryFindInt(connection, transaction,
+        "SELECT Id FROM SoldierTemplate WHERE Name = 'Judiciar' AND FactionId = 1") is not null)
     {
         Console.WriteLine("Chaplaincy migration already applied; nothing to do.");
         return;
@@ -985,11 +993,11 @@ static void MigrateChaplaincy(SqliteConnection connection)
     // not a squad leader. Rank 4 / SubRank 0 keeps it just below the Chaplain (SubRank 2)
     // as the most junior chaplaincy rank, without renumbering the existing Chaplain.
     int speciesId = ExecuteScalarInt(connection, transaction,
-        "SELECT SpeciesId FROM SoldierTemplate WHERE Id = $id", ("$id", chaplain));
+        "SELECT SpeciesId FROM SoldierTemplate WHERE Id = $id", ("$id", chaplain.Value));
     int specialistType = ExecuteScalarInt(connection, transaction,
-        "SELECT SpecialistType FROM SoldierTemplate WHERE Id = $id", ("$id", chaplain));
+        "SELECT SpecialistType FROM SoldierTemplate WHERE Id = $id", ("$id", chaplain.Value));
 
-    judiciar = ExecuteScalarInt(connection, transaction,
+    int judiciar = ExecuteScalarInt(connection, transaction,
         "SELECT COALESCE(MAX(Id), 0) + 1 FROM SoldierTemplate");
     Execute(connection, transaction,
         @"INSERT INTO SoldierTemplate
@@ -1001,28 +1009,28 @@ static void MigrateChaplaincy(SqliteConnection connection)
     Execute(connection, transaction,
         @"INSERT INTO SoldierMosTraining (SoldierTemplateId, BaseSkillId, PointsAdded)
           SELECT $new, BaseSkillId, PointsAdded FROM SoldierMosTraining WHERE SoldierTemplateId = $old",
-        ("$new", judiciar), ("$old", chaplain));
+        ("$new", judiciar), ("$old", chaplain.Value));
 
     // Give every company HQ squad a single optional Chaplain slot.
     string[] companyHqSquads = { "Veteran HQ Squad", "HQ Squad", "Scout HQ Squad" };
     foreach (string squadName in companyHqSquads)
     {
-        int squadId = ExecuteScalarInt(connection, transaction,
+        int? squadId = TryFindInt(connection, transaction,
             "SELECT Id FROM SquadTemplate WHERE Name = $n AND FactionId = 1", ("$n", squadName));
-        if (squadId == 0)
+        if (squadId is null)
         {
             Console.WriteLine($"  warning: squad template '{squadName}' not found; no Chaplain slot added.");
             continue;
         }
-        EnsureSquadElement(connection, transaction, squadId, chaplain, 0, 1);
+        EnsureSquadElement(connection, transaction, squadId.Value, chaplain.Value, 0, 1);
     }
 
     // The Reclusium keeps its Chaplain slots and gains room for Judiciars in training.
-    int reclusium = ExecuteScalarInt(connection, transaction,
+    int? reclusium = TryFindInt(connection, transaction,
         "SELECT Id FROM SquadTemplate WHERE Name = 'Reclusium' AND FactionId = 1");
-    if (reclusium != 0)
+    if (reclusium is not null)
     {
-        EnsureSquadElement(connection, transaction, reclusium, judiciar, 0, 50);
+        EnsureSquadElement(connection, transaction, reclusium.Value, judiciar, 0, 50);
     }
 
     transaction.Commit();
@@ -1038,9 +1046,9 @@ static void MigrateCompanyJudiciar(SqliteConnection connection)
 {
     using SqliteTransaction transaction = connection.BeginTransaction();
 
-    int judiciar = ExecuteScalarInt(connection, transaction,
+    int? judiciar = TryFindInt(connection, transaction,
         "SELECT Id FROM SoldierTemplate WHERE Name = 'Judiciar' AND FactionId = 1");
-    if (judiciar == 0)
+    if (judiciar is null)
     {
         throw new InvalidOperationException(
             "'Judiciar' soldier template is missing; run migrate-chaplaincy before migrate-company-judiciar.");
@@ -1049,14 +1057,14 @@ static void MigrateCompanyJudiciar(SqliteConnection connection)
     string[] companyHqSquads = { "Veteran HQ Squad", "HQ Squad", "Scout HQ Squad" };
     foreach (string squadName in companyHqSquads)
     {
-        int squadId = ExecuteScalarInt(connection, transaction,
+        int? squadId = TryFindInt(connection, transaction,
             "SELECT Id FROM SquadTemplate WHERE Name = $n AND FactionId = 1", ("$n", squadName));
-        if (squadId == 0)
+        if (squadId is null)
         {
             Console.WriteLine($"  warning: squad template '{squadName}' not found; no Judiciar slot added.");
             continue;
         }
-        EnsureSquadElement(connection, transaction, squadId, judiciar, 0, 1);
+        EnsureSquadElement(connection, transaction, squadId.Value, judiciar.Value, 0, 1);
     }
 
     transaction.Commit();
@@ -1072,9 +1080,9 @@ static void MigrateCompanyApothecary(SqliteConnection connection)
 {
     using SqliteTransaction transaction = connection.BeginTransaction();
 
-    int apothecary = ExecuteScalarInt(connection, transaction,
+    int? apothecary = TryFindInt(connection, transaction,
         "SELECT Id FROM SoldierTemplate WHERE Name = 'Apothecary' AND FactionId = 1");
-    if (apothecary == 0)
+    if (apothecary is null)
     {
         throw new InvalidOperationException(
             "'Apothecary' soldier template is missing; cannot add company Apothecary slots.");
@@ -1083,14 +1091,14 @@ static void MigrateCompanyApothecary(SqliteConnection connection)
     string[] companyHqSquads = { "Veteran HQ Squad", "HQ Squad", "Scout HQ Squad" };
     foreach (string squadName in companyHqSquads)
     {
-        int squadId = ExecuteScalarInt(connection, transaction,
+        int? squadId = TryFindInt(connection, transaction,
             "SELECT Id FROM SquadTemplate WHERE Name = $n AND FactionId = 1", ("$n", squadName));
-        if (squadId == 0)
+        if (squadId is null)
         {
             Console.WriteLine($"  warning: squad template '{squadName}' not found; no Apothecary slot added.");
             continue;
         }
-        EnsureSquadElement(connection, transaction, squadId, apothecary, 0, 1);
+        EnsureSquadElement(connection, transaction, squadId.Value, apothecary.Value, 0, 1);
     }
 
     transaction.Commit();
@@ -1123,11 +1131,11 @@ static void MigrateStartingFleetCapacity(SqliteConnection connection)
 {
     using SqliteTransaction transaction = connection.BeginTransaction();
 
-    int fleetTemplateId = ExecuteScalarInt(connection, transaction,
-        "SELECT COALESCE((SELECT Id FROM FleetTemplate WHERE Name = 'Starting Space Marine Fleet' AND FactionId = 1), -1)");
-    int strikeCruiserId = ExecuteScalarInt(connection, transaction,
-        "SELECT COALESCE((SELECT Id FROM ShipTemplate WHERE ClassName = 'Strike Cruiser' AND FactionId = 1), -1)");
-    if (fleetTemplateId < 0 || strikeCruiserId < 0)
+    int? fleetTemplateId = TryFindInt(connection, transaction,
+        "SELECT Id FROM FleetTemplate WHERE Name = 'Starting Space Marine Fleet' AND FactionId = 1");
+    int? strikeCruiserId = TryFindInt(connection, transaction,
+        "SELECT Id FROM ShipTemplate WHERE ClassName = 'Strike Cruiser' AND FactionId = 1");
+    if (fleetTemplateId is null || strikeCruiserId is null)
     {
         throw new InvalidOperationException("Starting fleet or Strike Cruiser template is missing.");
     }
@@ -1138,8 +1146,8 @@ static void MigrateStartingFleetCapacity(SqliteConnection connection)
         FROM FleetTemplateShipTemplate
         WHERE FleetTemplateId = $fleetTemplateId AND ShipTemplateId = $strikeCruiserId
         """,
-        ("$fleetTemplateId", fleetTemplateId),
-        ("$strikeCruiserId", strikeCruiserId));
+        ("$fleetTemplateId", fleetTemplateId.Value),
+        ("$strikeCruiserId", strikeCruiserId.Value));
 
     int inserted = 0;
     while (existingStrikeCruisers + inserted < targetStrikeCruisers)
@@ -1151,8 +1159,8 @@ static void MigrateStartingFleetCapacity(SqliteConnection connection)
             VALUES ($id, $fleetTemplateId, $strikeCruiserId)
             """,
             ("$id", nextId),
-            ("$fleetTemplateId", fleetTemplateId),
-            ("$strikeCruiserId", strikeCruiserId));
+            ("$fleetTemplateId", fleetTemplateId.Value),
+            ("$strikeCruiserId", strikeCruiserId.Value));
         inserted++;
     }
 
@@ -1301,9 +1309,9 @@ static void MigrateVeteranLoadouts(SqliteConnection connection)
     using SqliteTransaction transaction = connection.BeginTransaction();
     const int SpaceMarines = 1;
 
-    // NB: several of these ids are legitimately 0 (Veteran Squad, Boltgun, Chainsword), so we use
-    // RequireIdAllowZero, which distinguishes a missing row from a real id of 0 (RequireId does not).
-    int veteranSquad = RequireIdAllowZero(connection, transaction,
+    // NB: several of these ids are legitimately 0 (Veteran Squad, Boltgun, Chainsword). RequireId
+    // handles that correctly — it only errors on a missing row, not on a real id of 0.
+    int veteranSquad = RequireId(connection, transaction,
         "SELECT Id FROM SquadTemplate WHERE Name = 'Veteran Squad' AND FactionId = 1", "Veteran Squad template");
 
     if (ExecuteScalarInt(connection, transaction,
@@ -1317,17 +1325,17 @@ static void MigrateVeteranLoadouts(SqliteConnection connection)
     // Resolve the underlying weapon templates by name. Boltgun and Bolt Pistol have duplicate rows
     // shared with other Imperial factions; the Space Marine weapon sets use the lowest-id copy, so
     // take that. The remaining names are unique.
-    int boltgun = RequireIdAllowZero(connection, transaction,
+    int boltgun = RequireId(connection, transaction,
         "SELECT Id FROM RangedWeaponTemplate WHERE Name = 'Boltgun' ORDER BY Id LIMIT 1", "Boltgun");
-    int boltPistol = RequireIdAllowZero(connection, transaction,
+    int boltPistol = RequireId(connection, transaction,
         "SELECT Id FROM RangedWeaponTemplate WHERE Name = 'Bolt Pistol' ORDER BY Id LIMIT 1", "Bolt Pistol");
-    int plasmaGun = RequireIdAllowZero(connection, transaction,
+    int plasmaGun = RequireId(connection, transaction,
         "SELECT Id FROM RangedWeaponTemplate WHERE Name = 'Plasma Gun' ORDER BY Id LIMIT 1", "Plasma Gun");
-    int plasmaPistol = RequireIdAllowZero(connection, transaction,
+    int plasmaPistol = RequireId(connection, transaction,
         "SELECT Id FROM RangedWeaponTemplate WHERE Name = 'Plasma Pistol' ORDER BY Id LIMIT 1", "Plasma Pistol");
-    int chainsword = RequireIdAllowZero(connection, transaction,
+    int chainsword = RequireId(connection, transaction,
         "SELECT Id FROM MeleeWeaponTemplate WHERE Name = 'Chainsword' ORDER BY Id LIMIT 1", "Chainsword");
-    int powerSword = RequireIdAllowZero(connection, transaction,
+    int powerSword = RequireId(connection, transaction,
         "SELECT Id FROM MeleeWeaponTemplate WHERE Name = 'Power Sword' ORDER BY Id LIMIT 1", "Power Sword");
 
     // The seven non-default combinations. Plasma Pistol + Chainsword already ships as a WeaponSet,
@@ -1370,11 +1378,11 @@ static void MigrateVeteranLoadouts(SqliteConnection connection)
 static int GetOrCreateWeaponSet(SqliteConnection connection, SqliteTransaction transaction, int factionId,
                                 string name, int primaryRangedWeaponId, int primaryMeleeWeaponId)
 {
-    int existing = ExecuteScalarInt(connection, transaction,
+    int? existing = TryFindInt(connection, transaction,
         "SELECT Id FROM WeaponSet WHERE Name = $n AND FactionId = $f", ("$n", name), ("$f", factionId));
-    if (existing != 0)
+    if (existing is not null)
     {
-        return existing;
+        return existing.Value;
     }
 
     int id = ExecuteScalarInt(connection, transaction, "SELECT COALESCE(MAX(Id), 0) + 1 FROM WeaponSet");
@@ -1533,14 +1541,14 @@ static void SetMosTraining(SqliteConnection connection, SqliteTransaction transa
 static void SetMosTrainingByName(SqliteConnection connection, SqliteTransaction transaction,
                                  int factionId, string soldierName, int baseSkillId, double points)
 {
-    int soldierId = ExecuteScalarInt(connection, transaction,
+    int? soldierId = TryFindInt(connection, transaction,
         "SELECT Id FROM SoldierTemplate WHERE Name = $n AND FactionId = $f", ("$n", soldierName), ("$f", factionId));
-    if (soldierId == 0)
+    if (soldierId is null)
     {
         Console.WriteLine($"  warning: soldier template '{soldierName}' (faction {factionId}) not found; skipped skill {baseSkillId}.");
         return;
     }
-    SetMosTraining(connection, transaction, soldierId, baseSkillId, points);
+    SetMosTraining(connection, transaction, soldierId.Value, baseSkillId, points);
 }
 
 // Reads the human baseline columns (everything except the physical attributes, which the PDF
@@ -1586,30 +1594,12 @@ static void InsertPdfSoldier(SqliteConnection connection, SqliteTransaction tran
         ("$leader", isSquadLeader ? 1 : 0), ("$bv", battleValue));
 }
 
+// Returns the looked-up id, throwing if the row is missing. Correctly returns a real id of 0
+// (e.g. Boltgun, Chainsword, the Veteran Squad); only a missing row is an error.
 static int RequireId(SqliteConnection connection, SqliteTransaction transaction, string sql, string description)
 {
-    int id = ExecuteScalarInt(connection, transaction, sql);
-    if (id == 0)
-    {
-        throw new InvalidOperationException($"Required rules data not found: {description}.");
-    }
-    return id;
-}
-
-// Like RequireId, but treats only a missing row (null result) as an error, so it can return a
-// legitimate id of 0. Use this whenever the looked-up row may live at id 0 (e.g. Boltgun,
-// Chainsword, the Veteran Squad).
-static int RequireIdAllowZero(SqliteConnection connection, SqliteTransaction transaction, string sql, string description)
-{
-    using SqliteCommand command = connection.CreateCommand();
-    command.Transaction = transaction;
-    command.CommandText = sql;
-    object result = command.ExecuteScalar();
-    if (result == null || result == DBNull.Value)
-    {
-        throw new InvalidOperationException($"Required rules data not found: {description}.");
-    }
-    return Convert.ToInt32(result);
+    return TryFindInt(connection, transaction, sql)
+        ?? throw new InvalidOperationException($"Required rules data not found: {description}.");
 }
 
 static void RemoveCaptainVariant(SqliteConnection connection, string variantName)
@@ -1622,28 +1612,28 @@ static void RemoveCaptainVariant(SqliteConnection connection, string variantName
     // variant to the plain Captain and drop the template. A leftover variant slot also
     // caused the transfer UI to offer an "opening" in an HQ squad that already had a
     // Captain, because the slot's specific template read as unfilled.
-    int variant = ExecuteScalarInt(connection, transaction,
+    int? variant = TryFindInt(connection, transaction,
         "SELECT Id FROM SoldierTemplate WHERE Name = $n AND FactionId = 1", ("$n", variantName));
-    if (variant == 0)
+    if (variant is null)
     {
         Console.WriteLine($"{variantName} already removed; nothing to do.");
         return;
     }
 
-    int captain = ExecuteScalarInt(connection, transaction,
+    int? captain = TryFindInt(connection, transaction,
         "SELECT Id FROM SoldierTemplate WHERE Name = 'Captain' AND FactionId = 1");
-    if (captain == 0)
+    if (captain is null)
     {
         throw new InvalidOperationException($"'Captain' soldier template is missing; cannot retarget {variantName} references.");
     }
 
     int repointed = Execute(connection, transaction,
         "UPDATE SquadTemplateElement SET SoldierTemplateId = $c WHERE SoldierTemplateId = $v",
-        ("$c", captain), ("$v", variant));
+        ("$c", captain.Value), ("$v", variant.Value));
     Execute(connection, transaction,
-        "DELETE FROM SoldierMosTraining WHERE SoldierTemplateId = $v", ("$v", variant));
+        "DELETE FROM SoldierMosTraining WHERE SoldierTemplateId = $v", ("$v", variant.Value));
     Execute(connection, transaction,
-        "DELETE FROM SoldierTemplate WHERE Id = $v", ("$v", variant));
+        "DELETE FROM SoldierTemplate WHERE Id = $v", ("$v", variant.Value));
 
     transaction.Commit();
     Console.WriteLine($"Removed {variantName} (soldier {variant}); repointed {repointed} squad element(s) to Captain {captain}.");
@@ -1771,11 +1761,16 @@ static void UpsertProfile(
     IReadOnlyDictionary<string, int> soldierTemplateIds,
     IReadOnlyList<string> soldierTemplateNames)
 {
-    int profileId = ExecuteScalarInt(connection, transaction, "SELECT Id FROM TrainingProfile WHERE Name = $name", ("$name", name));
-    if (profileId == 0)
+    int? existingProfileId = TryFindInt(connection, transaction, "SELECT Id FROM TrainingProfile WHERE Name = $name", ("$name", name));
+    int profileId;
+    if (existingProfileId is null)
     {
         profileId = nextProfileId++;
         Execute(connection, transaction, "INSERT INTO TrainingProfile (Id, Name) VALUES ($id, $name)", ("$id", profileId), ("$name", name));
+    }
+    else
+    {
+        profileId = existingProfileId.Value;
     }
 
     Execute(connection, transaction, "DELETE FROM TrainingProfileEntry WHERE TrainingProfileId = $id", ("$id", profileId));
@@ -1834,7 +1829,10 @@ static Dictionary<string, int> LoadIds(SqliteConnection connection, SqliteTransa
     return ids;
 }
 
-static int ExecuteScalarInt(SqliteConnection connection, SqliteTransaction transaction, string sql, params (string Name, object Value)[] parameters)
+// Runs a scalar query and returns its value, or null when there is no row (or the value is SQL
+// NULL). This is the safe primitive for id lookups: ids in this schema start at 0, so a missing
+// row must be distinguishable from a real id of 0 — which a plain int return cannot do.
+static int? TryFindInt(SqliteConnection connection, SqliteTransaction transaction, string sql, params (string Name, object Value)[] parameters)
 {
     using SqliteCommand command = connection.CreateCommand();
     command.Transaction = transaction;
@@ -1845,7 +1843,15 @@ static int ExecuteScalarInt(SqliteConnection connection, SqliteTransaction trans
     }
 
     object result = command.ExecuteScalar();
-    return result == null || result == DBNull.Value ? 0 : Convert.ToInt32(result);
+    return result == null || result == DBNull.Value ? null : Convert.ToInt32(result);
+}
+
+// Convenience for scalar queries where an absent/NULL result is genuinely 0 — COUNT(*) and
+// COALESCE(MAX(Id), 0) + 1 id-allocation queries. Do NOT use this for "SELECT Id WHERE ..."
+// lookups; use TryFindInt there so a missing row is never mistaken for a real id of 0.
+static int ExecuteScalarInt(SqliteConnection connection, SqliteTransaction transaction, string sql, params (string Name, object Value)[] parameters)
+{
+    return TryFindInt(connection, transaction, sql, parameters) ?? 0;
 }
 
 static int Execute(SqliteConnection connection, SqliteTransaction transaction, string sql, params (string Name, object Value)[] parameters)

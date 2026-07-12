@@ -295,7 +295,7 @@ Each feature is described as a behavioral specification: what the system does, a
 - The player can page through turn reports if multiple missions resolved in the same turn.
 - Generated report text follows the Narrative Voice specification (4.19): individuals are named, notable events are surfaced via the notability classifier, and outcomes are framed against the orders the player issued.
 
-*Post-0.7:* Marines who are deployed on a mission but see no combat that turn gain a small amount of experience from the deployment itself (field experience, maintaining readiness).
+*Field experience:* Marines deployed on a mission earn skill growth from the operation itself — scaled by how hard the mission's skill checks were — rather than that week's garrison training, so no deployment is a wasted week for development. See §4.12 (Field Experience).
 
 ---
 
@@ -314,7 +314,15 @@ Each feature is described as a behavioral specification: what the system does, a
 **Training**
 - Each week a marine is not deployed on a mission, he gains skill points in categories appropriate to his role and training assignment.
 - Scouts in training gain points according to their current training focus.
-- Marines deployed on missions do not gain training points that week.
+- Marines deployed on a mission do not accumulate garrison *training* points that week; they instead earn *field experience* from the operation (see Field Experience below).
+
+**Field Experience (Learn by Doing)**
+- The experience model is *learn-by-doing*: a skill grows from being exercised under real conditions, not from an abstract end-of-mission reward. This mirrors battle, where a marine's ranged, melee, and physical skills grow from the acts of aiming, firing, and swinging rather than from winning the engagement.
+- Every skill check a mission step resolves — stealth on infiltration and exfiltration, tactics and positioning at the objective, and the weapon or espionage skills a given mission type exercises — awards skill points in the skill that was tested to each able participating soldier, applied at the moment the check resolves. A soldier lost later in the same mission keeps what he learned up to that point.
+- The award scales inversely with the check's *margin*: a trivial success (a large positive margin) teaches almost nothing, while a narrow success or an outright failure (a small or negative margin) teaches the most — challenge at the edge of a soldier's ability is where he grows. Failure is not rewarded over success as such (a hard-won success and a near-miss failure teach comparably), so there is no incentive to field under-skilled squads deliberately to farm experience.
+- Field experience is deliberately tuned to outpace an equivalent week of garrison training for the skill exercised, reflecting the action-oriented ethos of the chapter: live operations forge better soldiers than drills. Because it concentrates on the tested skill (rather than spreading a fixed weekly budget across a training profile) and because skill cost is geometric — each additional point of a skill costs exponentially more raw points than the last — this advantage is largest for green and mid-tier marines and tapers naturally for veterans.
+- No explicit per-mission cap is applied in the first pass. The geometric skill-cost curve and the margin scaling are the intended governors of runaway growth; a cap may be introduced later if playtesting shows one is needed (for example, from a squad farming repeated close-fail checks in the detect/evade loop).
+- Mission field experience grows skills only; soldier attributes are treated as largely fixed by adulthood and are not advanced by this system in the current pass. (Battle retains its existing attribute growth from physical exertion.) How to represent the fiction's exceptionally-statted "hero" characters is left open — see §6.13.
 
 **Evaluation**
 - Periodically, each marine is evaluated and assigned composite scores for Melee, Ranged, and Leadership aptitude.
@@ -366,6 +374,11 @@ Each feature is described as a behavioral specification: what the system does, a
 - Each mission type has a distinct execution sequence with skill-based checks and possible combat encounters along the way.
 - After the mission objective is resolved, the squad exfiltrates (if in an enemy region). Exfiltration uses the same stealth-versus-defender-intel mechanics as infiltration.
 - Mission outcomes affect regional intelligence level, enemy defensive ratings, and enemy casualty counts as appropriate to mission type.
+
+**Mission Record & Experience**
+- Each mission a squad runs records a per-soldier history event describing the operation and its outcome (e.g., reconnaissance conducted, region infiltrated undetected, detected and forced to break contact, target eliminated) — the non-combat counterpart to the battle-participation events already recorded for combat. These feed the soldier's career history and periodic evaluation (§4.12), so field service, not only kills in battle, informs promotion and role decisions. Emission of these events is sequenced with the structured event-log work (§5.5).
+- The skill checks resolved during the mission grow the participating soldiers' skills per the Field Experience rules (§4.12).
+- Overall mission results are surfaced in the end-of-turn report alongside battle debriefs, attributed to the acting faction, per the Narrative Voice specification (§4.19).
 
 **Mission Types — Specific Behaviors**
 - **Recon:** Squad conducts surveillance over multiple days, accumulating intelligence for the region. Higher skill margins produce better intelligence; critically poor margins produce false or corrupted intelligence. Intelligence decays over subsequent turns.
@@ -1017,6 +1030,8 @@ Targeted for 0.7 but not part of the committed 0.7 set (§5.2). The other items 
   - ✅ **Let the sector simulate forward during liberation** so governor/Inquisition requests (§4.16, §6.5) have already populated by the time the objective completes — no artificial early-game content lull. *(Implemented — the scenario gates nothing; the normal turn loop (`FactionStrategyController`, governor logic, growth) runs every turn while the objective is pending, and `ProcessScenario` resolves win/lapse from the live board state. Pacing comes from the balance numbers above, not artificial gates.)*
   - ✅ **Failure/abandonment handling — decided: promise lapses + reputation hit.** If the player ignores the objective, loses the assault, or the world is overrun (the Tyranids hold every region, no Imperial/player presence remaining), the promise is withdrawn — no Chapter World granted, and the Sector Lord's opinion of the chapter drops. The game continues as a normal sandbox rather than leaving a dangling goal. The finite biomass budget (§4.24) is tuned so a fully-overrun world is the consequence of genuine neglect, not a soft-lock. (Considered and deferred: redirecting the chapter to a replacement promised world on loss.) *(Implemented — `TurnController.ProcessScenario` resolves **Win** (no *enemy* presence remains — the Tyranid swarm **and** the revealed Genestealer Cult both cleared, i.e. the world fully back in Imperial/player hands, not merely Tyranid-free → grant the player the planet-wide `PlanetFaction`, raise the current Sector Lord's opinion) and **Lapse** (fully overrun → withdraw the promise, lower the Sector Lord's opinion; a vacant seat is a no-op that still resolves), with a notification surfaced via `ScenarioNotification`; the game then continues as a sandbox. Opinion swings (`±0.5`) share the balance-pass caveat above.)*
 
+- ✅ **Mission Field Experience & Records:** Non-battle missions currently grant no soldier development and leave no trace on soldier history — a successful recon that infiltrates a hive undetected teaches its scouts nothing and is never recorded. Add the learn-by-doing field-experience model (§4.12): per-check skill growth on the skill each mission step tested, margin-scaled so close shaves and failures teach most, tuned above garrison training, uncapped in this pass (the geometric skill-cost curve and margin scaling are the governors). Pair it with per-soldier mission history events and end-of-turn mission-result reporting (§4.13). Event emission reuses the structured event-log substrate already landed as §5.5 step (1), pulling the non-combat mission-outcome events forward from the 0.8 event work so field service is visible now. Attributes stay static this pass (open question §6.13). *(Implemented — field XP is awarded inside `MissionCheck.RunMissionCheck` (a Gaussian-bump margin curve in `Helpers/Missions/MissionExperienceCalculator.cs`) to every able PlayerSoldier on each check; `Helpers/Missions/MissionOutcomeRecorder.cs` writes a per-soldier `MissionOutcome` `SoldierEvent` at mission end (hooked from `TurnController.ProcessCombatMissions`/`ProcessDiversionMissions`, player orders only); `Helpers/MissionReportSummaryBuilder.cs` produces the outcome-classified, acting-faction-attributed end-of-turn summary. Covered by unit tests. **Follow-up:** mission-outcome classification currently reads `EnemiesKilled` plus mission-step log-string matching — a structured per-step outcome signal on `MissionContext` would remove that fragility and let the recorder and report share one classifier.)*
+
 ### 5.4 Alpha 0.7 — Stretch
 
 To be drawn from if capacity allows:
@@ -1041,7 +1056,7 @@ The connective pass that turns 0.7's broad simulation into a felt sandbox narrat
 0.8 sequencing — status reflects the current codebase (✅ done · ⬜ not started):
 
 - ✅ **(1) Structured event log substrate + migration + death preservation.** *(Implemented.)* Added a typed `SoldierEvent` / `SoldierEventType` model (`Models/Soldiers/SoldierEvent.cs`) carrying date, faction, weapon, magnitude, location, and related-soldier ids, with `Render()` reproducing the legacy display lines so the history surface is unchanged. `PlayerSoldier` now holds a `List<SoldierEvent>` (with a `SoldierHistory` string projection for existing readers); all existing write sites (`NewChapterBuilder`, `RatingCalculator`, `SoldierTransferService`, `BattleTurnResolver`) emit typed events. Persistence moved to a structured `PlayerSoldierEvent` table (old free-text `PlayerSoldierHistory` table dropped; save compatibility intentionally broken). Fallen brothers are preserved in `Army.FallenBrothers` and round-trip through save/load (see 4.12). Covered by unit tests for `Render()` fidelity and save/load round-trips for events and fallen brothers.
-- ⬜ **(2) Emit the missing events** — first blood, kill milestones, last-survivor / survival-against-odds, mentor relationships, oaths, near-death recoveries, and all non-combat mission outcomes (reserved enum values already exist for these).
+- ⬜ **(2) Emit the missing events** — first blood, kill milestones, last-survivor / survival-against-odds, mentor relationships, oaths, and near-death recoveries (reserved enum values already exist for these). *Non-combat mission-outcome events are pulled forward to 0.7 — see §5.3 "Mission Field Experience & Records" — so field service is recorded ahead of the rest of this event pass.*
 - ⬜ **(3) Notability classifier** over the log.
 - ⬜ **(4) Narrator / voice pass** rendering events and report lines.
 
@@ -1198,6 +1213,12 @@ This is a post-0.7 design item. Navigator quality should be designed as a chapte
 **Question:** The Tyranid model requires the default-Imperial faction to hide/unhide **per region**, whereas the existing revolt machinery (§4.20) flips factions public/hidden at **planet** granularity and excludes the default faction. Should *all* going-public transitions (Orks §4.22, Revolt §4.20, Cult) be unified at region granularity, or should planet-level be kept for infiltrators with a separate region-level path added only for the Imperial remnant?
 
 **Why it comes up.** Region-level hide/unhide for the Imperial remnant is the committed near-term choice (§4.24), and a region-level model is arguably truer for every faction (a cult can be crushed in one region while holding another). But generalizing touches the Ork amassing/WAAAGH! emergence and the revolt lifecycle, both currently reasoned at planet scale. The broader unification is deferred; the remnant's region-level path is built first as the concrete need.
+
+### 6.13 Soldier Attribute Growth & Hero Representation (raised by Field Experience, §4.12)
+
+**Question:** Mission field experience (§4.12) grows skills but not attributes, on the working assumption that a marine's core attributes are largely fixed by the time he reaches active service. The fiction, however, gives its exceptional characters markedly higher attributes, so how should such "heroes" arise mechanically?
+
+**Why it comes up.** Options include leaving attributes entirely fixed from generation (heroes are simply generated with better rolls); allowing *extreme-margin* events — surviving a check far above one's ability — to grant rare attribute growth (a "crucible forges heroes" model that reuses the same margin-scaled field-experience hook); or a separate milestone/award-driven attribute track. Each has different implications for how legible and how deterministic hero emergence feels. Parked for a later pass; attributes remain static for now, so the field-experience system ships skills-only.
 
 ---
 
