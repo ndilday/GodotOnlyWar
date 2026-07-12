@@ -1,5 +1,4 @@
 using OnlyWar.Helpers.Extensions;
-using OnlyWar.Helpers.Missions.Recon;
 using OnlyWar.Models.Missions;
 using OnlyWar.Models.Planets;
 using OnlyWar.Models.Soldiers;
@@ -38,25 +37,27 @@ namespace OnlyWar.Helpers.Missions.Assassinate
             };
             context.OpposingSquads = ForceGenerator.GenerateForce(request).Select(s => new BattleSquad(false, s)).ToList();
 
+            BattleSquad targetSquad = context.OpposingSquads.FirstOrDefault();
+            context.AssassinationTargetSoldierId = targetSquad?.SquadLeader?.Soldier.Id
+                ?? targetSquad?.AbleSoldiers.FirstOrDefault()?.Soldier.Id;
+
             context.TargetLocated = true;
             context.AddLog($"Day {context.DaysElapsed}: Force has located the assassination target");
 
-            if (context.DaysElapsed >= 6)
+            // Fight the generated HQ encounter itself. Routing back through recon stealth here used
+            // to let DetectedMissionStep replace OpposingSquads with an interceptor patrol, meaning
+            // the located target never entered battle and bodyguard/interceptor kills could be
+            // mistaken for the objective.
+            new MeetingEngagementMissionStep().ExecuteMissionStep(context, margin, returnStep: null);
+
+            if (!context.MissionSquads.Any(s => s.ShouldContinueMission()))
             {
-                // time to go home
-                if (context.Order.Mission.RegionFaction.Region != context.MissionSquads.First().Squad.CurrentRegion)
-                {
-                    new ExfiltrateMissionStep().ExecuteMissionStep(context, 0.0f, this);
-                }
-                else if (context.DaysElapsed >= 7)
-                {
-                    //we don't have to go anywhere so just exit.
-                    return;
-                }
+                return;
             }
-            else
+
+            if (context.Order.Mission.RegionFaction.Region != context.MissionSquads.First().Squad.CurrentRegion)
             {
-                new ReconStealthMissionStep().ExecuteMissionStep(context, marginOfSuccess, this);
+                new ExfiltrateMissionStep().ExecuteMissionStep(context, 0.0f, this);
             }
         }
     }

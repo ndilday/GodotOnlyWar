@@ -1,9 +1,7 @@
-using OnlyWar.Helpers.Battles;
 using OnlyWar.Models;
 using OnlyWar.Models.Missions;
 using OnlyWar.Models.Planets;
 using OnlyWar.Models.Soldiers;
-using System.Collections.Generic;
 
 namespace OnlyWar.Helpers.Missions
 {
@@ -30,24 +28,15 @@ namespace OnlyWar.Helpers.Missions
             string locationName = $"{targetFaction.Region.Name}, {targetFaction.Region.Planet.Name}";
             int? magnitude = classification.EnemiesKilled > 0 ? classification.EnemiesKilled : null;
 
-            foreach (BattleSquad squad in context.MissionSquads)
+            foreach (PlayerSoldier playerSoldier in context.StartingPlayerParticipants)
             {
-                // A soldier killed mid-mission (e.g. in the meeting engagement embedded in a
-                // Lightning Raid) is already removed from squad.Soldiers by BattleTurnResolver, so
-                // this naturally skips them rather than writing to (or throwing on) a dead soldier.
-                foreach (BattleSoldier battleSoldier in squad.Soldiers)
-                {
-                    if (battleSoldier.Soldier is PlayerSoldier playerSoldier)
-                    {
-                        playerSoldier.AddEvent(new SoldierEvent(
-                            date,
-                            SoldierEventType.MissionOutcome,
-                            detail,
-                            factionId: factionId,
-                            magnitude: magnitude,
-                            locationName: locationName));
-                    }
-                }
+                playerSoldier.AddEvent(new SoldierEvent(
+                    date,
+                    SoldierEventType.MissionOutcome,
+                    detail,
+                    factionId: factionId,
+                    magnitude: magnitude,
+                    locationName: locationName));
             }
         }
 
@@ -66,9 +55,13 @@ namespace OnlyWar.Helpers.Missions
             switch (classification.MissionType)
             {
                 case MissionType.Recon:
-                    return detected
-                        ? $"Reconnaissance of {regionName} compromised; detected by the {enemyName} and forced to break contact."
-                        : $"Reconnaissance conducted in {regionName}; region infiltrated undetected.";
+                    if (!detected)
+                        return $"Reconnaissance conducted in {regionName}; region infiltrated undetected.";
+                    if (classification.Disposition == MissionForceDisposition.LostContact)
+                        return $"Reconnaissance of {regionName} compromised; detected by the {enemyName} and lost contact with base.";
+                    if (classification.Disposition == MissionForceDisposition.BrokeContact)
+                        return $"Reconnaissance of {regionName} compromised; detected by the {enemyName}, but broke contact successfully.";
+                    return $"Reconnaissance of {regionName} compromised; detected by the {enemyName}.";
 
                 case MissionType.Infiltrate:
                     return detected

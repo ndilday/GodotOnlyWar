@@ -17,8 +17,9 @@ public partial class MissionDebriefDialogController : DialogController
         _view.BattleReviewRequested += (s, history) => BattleReviewRequested?.Invoke(this, history);
     }
 
-    public void SetMissionDebrief(string title, string subtitle, IReadOnlyList<MissionDebriefLine> lines)
+    public void SetMissionDebrief(string title, string subtitle, string outcomeStatus,
+        string outcomeSummary, IReadOnlyList<MissionDebriefLine> lines)
     {
-        _view.SetMissionDebrief(title, subtitle, lines);
+        _view.SetMissionDebrief(title, subtitle, outcomeStatus, outcomeSummary, lines);
     }
 }

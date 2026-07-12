@@ -48,7 +48,7 @@ public partial class RegionScreenController : DialogController
         _view.AssignPressed += OnAssignPressed;
         _view.UnassignPressed += OnUnassignPressed;
         _view.TargetFactionSelected += OnTargetFactionSelected;
-        _view.ActiveOrderActivated += OnActiveOrderActivated;
+        _view.InboundOrderActivated += OnInboundOrderActivated;
         _view.RosterFilterSelected += OnRosterFilterSelected;
         _orderDialog.OrdersConfirmed += OnOrdersConfirmed;
 
@@ -70,7 +70,7 @@ public partial class RegionScreenController : DialogController
             _view.AssignPressed -= OnAssignPressed;
             _view.UnassignPressed -= OnUnassignPressed;
             _view.TargetFactionSelected -= OnTargetFactionSelected;
-            _view.ActiveOrderActivated -= OnActiveOrderActivated;
+            _view.InboundOrderActivated -= OnInboundOrderActivated;
             _view.RosterFilterSelected -= OnRosterFilterSelected;
         }
         if (GodotObject.IsInstanceValid(_orderDialog))
@@ -161,7 +161,7 @@ public partial class RegionScreenController : DialogController
         RefreshCommitBar();
     }
 
-    private void OnActiveOrderActivated(object sender, Order order)
+    private void OnInboundOrderActivated(object sender, Order order)
     {
         Squad squad = order.AssignedSquads.FirstOrDefault();
         if (squad == null) return;
@@ -233,7 +233,6 @@ public partial class RegionScreenController : DialogController
 
         _view.SetMissionsHeader(_targetRegion.Name, BuildMissionsFlagText());
         _view.SetMissions(missions, _selectedMission);
-        _view.SetActiveOrders(BuildActiveOrderRows());
     }
 
     private string BuildMissionsFlagText()
@@ -245,22 +244,6 @@ public partial class RegionScreenController : DialogController
         return enemies.Count > 1
             ? $"{strongest.PlanetFaction.Faction.Name} +{enemies.Count - 1}"
             : strongest.PlanetFaction.Faction.Name;
-    }
-
-    private List<ActiveOrderRow> BuildActiveOrderRows()
-    {
-        RegionFaction playerFaction = GetPlayerRegionFaction(_currentRegion);
-        if (playerFaction == null) return [];
-
-        return playerFaction.LandedSquads
-            .Where(squad => squad.CurrentOrders != null)
-            .GroupBy(squad => squad.CurrentOrders)
-            .Select(group => new ActiveOrderRow(
-                group.Key,
-                group.Key.Mission.MissionType.ToString(),
-                group.Key.Mission.RegionFaction.Region.Name,
-                group.Count()))
-            .ToList();
     }
 
     private void RefreshTargetFactionSelector()
@@ -356,6 +339,7 @@ public partial class RegionScreenController : DialogController
         }
 
         _view.SetDossier(target.Name, cards);
+        _view.SetInboundOrders(InboundOrders.ForRegion(target));
     }
 
     private static float? GetMagnitudeBarFraction(string magnitudeWord)

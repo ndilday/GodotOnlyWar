@@ -1,5 +1,6 @@
 using Godot;
 using OnlyWar.Helpers.Extensions;
+using OnlyWar.Helpers.Orders;
 using OnlyWar.Helpers.UI;
 using OnlyWar.Models;
 using OnlyWar.Models.Fleets;
@@ -441,6 +442,22 @@ public partial class PlanetTacticalScreenController : DialogController
             regionRows.Add(Row("Civilians", civilianPopulation > 0 ? civilianPopulation.ToString("N0") : "None"));
         }
         cards.Add(new DossierCardData("Region", null, regionRows, OnlyWarStyle.Gold));
+
+        // Mirrors the Region Ops dossier's Inbound Orders card: every player order aimed at this
+        // region from anywhere in the sector, so recon/advance converging from a different region
+        // is visible here too. Static (informational) to match this screen's card idiom - orders
+        // are edited via the command bar's "Edit Orders" rather than by clicking the card.
+        List<InboundOrderInfo> inbound = InboundOrders.ForRegion(region);
+        List<Tuple<string, string>> inboundRows = inbound
+            .Select(info => Row(
+                $"{info.MissionLabel} · from {info.OriginLabel}",
+                info.SquadCount == 1 ? "1 squad" : $"{info.SquadCount} squads"))
+            .ToList();
+        cards.Add(new DossierCardData(
+            "Inbound Orders",
+            inbound.Count == 0 ? "None" : null,
+            inboundRows,
+            OnlyWarStyle.PlayerAccent));
 
         return cards;
     }

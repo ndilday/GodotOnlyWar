@@ -54,11 +54,7 @@ namespace OnlyWar.Helpers.Missions
                 Disposition = ResolveDisposition(context),
                 NoViableTarget = context.NoViableTarget,
                 TargetLocated = context.TargetLocated,
-                // The assassination target rides in the OpForce for the embedded engagement, so a located
-                // target plus confirmed kills means the target itself was eliminated. Requiring
-                // TargetLocated keeps a detected-and-fought-off attempt (which can rack up interceptor
-                // kills without ever reaching the target) from being reported as a successful hit.
-                TargetEliminated = context.TargetLocated && killed > 0,
+                TargetEliminated = context.TargetEliminated,
                 EnemiesKilled = killed,
                 Impact = context.Impact
             };

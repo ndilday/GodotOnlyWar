@@ -77,6 +77,8 @@ public partial class EndOfTurnDialogController : DialogController
         _missionDebriefDialog.SetMissionDebrief(
             entry.Title,
             entry.Subtitle,
+            MissionReportSummaryBuilder.BuildOutcomeStatus(MissionOutcomeClassifier.Classify(entry.MissionContext)),
+            entry.Summary,
             entry.MissionContext.DebriefLines.Count > 0
                 ? entry.MissionContext.DebriefLines
                 : entry.MissionContext.Log.Select(line => new MissionDebriefLine(line)).ToList());
@@ -95,11 +97,16 @@ public partial class EndOfTurnDialogController : DialogController
         {
             PackedScene scene = GD.Load<PackedScene>("res://Scenes/BattleReviewScreen/battle_review_screen.tscn");
             _battleReviewDialog = (BattleReviewController)scene.Instantiate();
-            _battleReviewDialog.CloseButtonPressed += (s, e) => _battleReviewDialog.Visible = false;
+            _battleReviewDialog.CloseButtonPressed += (s, e) =>
+            {
+                _battleReviewDialog.Visible = false;
+                _missionDebriefDialog.Visible = true;
+            };
             AddChild(_battleReviewDialog);
         }
 
         _battleReviewDialog.LoadNewHistory(battleHistory);
+        _missionDebriefDialog.Visible = false;
         _battleReviewDialog.Visible = true;
     }
 
@@ -112,7 +119,11 @@ public partial class EndOfTurnDialogController : DialogController
 
         foreach (MissionContext context in missionContexts)
         {
-            entries.Add(BuildMissionEntry(context));
+            EndOfTurnReportEntry entry = BuildMissionEntry(context);
+            if (entry != null)
+            {
+                entries.Add(entry);
+            }
         }
 
         foreach (StrategicCombatResult result in strategicCombatResults ?? Enumerable.Empty<StrategicCombatResult>())
@@ -163,15 +174,10 @@ public partial class EndOfTurnDialogController : DialogController
         // Mirror BuildStrategicCombatEntry's gating: the player's own missions are always shown in
         // full, but a mission run by an NPC faction only surfaces precise detail once the player has
         // some region intel - otherwise it degrades to an unconfirmed report, same as strategic combat.
-        bool hasIntel = actingFactionIsPlayer || (region?.GetPlayerVisibleIntel() ?? 0f) > 0f;
-        if (!hasIntel)
+        float playerVisibleIntel = region?.GetPlayerVisibleIntel() ?? 0f;
+        if (!MissionReportSummaryBuilder.ShouldIncludeInTurnSummary(actingFactionIsPlayer, playerVisibleIntel))
         {
-            return new EndOfTurnReportEntry(
-                missionTypeName,
-                MissionReportSummaryBuilder.BuildUnconfirmedSubtitle(missionType, location),
-                MissionReportSummaryBuilder.BuildUnconfirmedSummary(missionType, location),
-                true,
-                context);
+            return null;
         }
 
         string subtitle = $"{attacker} vs {defender}: {force} - {location}";

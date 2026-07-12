@@ -176,4 +176,22 @@ public class MissionReportSummaryBuilderTests
     {
         Assert.Equal("Ork Waaagh", MissionReportSummaryBuilder.BuildSubject(false, "Ork Waaagh"));
     }
+
+    [Fact]
+    public void ShouldIncludeInTurnSummary_PlayerMissionWithoutIntel_IsIncluded()
+    {
+        Assert.True(MissionReportSummaryBuilder.ShouldIncludeInTurnSummary(true, 0f));
+    }
+
+    [Fact]
+    public void ShouldIncludeInTurnSummary_NpcMissionWithIntel_IsIncluded()
+    {
+        Assert.True(MissionReportSummaryBuilder.ShouldIncludeInTurnSummary(false, 0.01f));
+    }
+
+    [Fact]
+    public void ShouldIncludeInTurnSummary_NpcMissionWithoutIntel_IsOmitted()
+    {
+        Assert.False(MissionReportSummaryBuilder.ShouldIncludeInTurnSummary(false, 0f));
+    }
 }

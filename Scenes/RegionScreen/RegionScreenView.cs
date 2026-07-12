@@ -1,29 +1,12 @@
 using Godot;
 using OnlyWar.Helpers.Missions;
+using OnlyWar.Helpers.Orders;
 using OnlyWar.Helpers.UI;
 using OnlyWar.Models.Orders;
 using OnlyWar.Models.Planets;
 using System;
 using System.Collections.Generic;
 using System.Linq;
-
-// Row model for the "Active orders from <region>" strip: one shared Order plus enough
-// display data to render a compact single line without the view reaching back into the model.
-public class ActiveOrderRow
-{
-    public Order Order { get; }
-    public string MissionLabel { get; }
-    public string TargetRegionName { get; }
-    public int SquadCount { get; }
-
-    public ActiveOrderRow(Order order, string missionLabel, string targetRegionName, int squadCount)
-    {
-        Order = order;
-        MissionLabel = missionLabel;
-        TargetRegionName = targetRegionName;
-        SquadCount = squadCount;
-    }
-}
 
 public partial class RegionScreenView : CommandWorkspaceView
 {
@@ -50,9 +33,6 @@ public partial class RegionScreenView : CommandWorkspaceView
     private readonly List<Button> _missionButtons = [];
     private ButtonGroup _missionButtonGroup;
 
-    private Label _ordersStripHeaderLabel;
-    private VBoxContainer _ordersStripStack;
-
     private readonly Dictionary<Aggression, Button> _aggressionButtons = [];
     private ButtonGroup _aggressionButtonGroup;
     private OptionButton _targetFactionOption;
@@ -61,6 +41,7 @@ public partial class RegionScreenView : CommandWorkspaceView
 
     private Label _dossierTitleLabel;
     private VBoxContainer _dossierStack;
+    private VBoxContainer _inboundOrdersStack;
 
     public event EventHandler<Region> AdjacentRegionClicked;
     public event EventHandler<Region> TargetRegionSelected;
@@ -69,7 +50,7 @@ public partial class RegionScreenView : CommandWorkspaceView
     public event EventHandler AssignPressed;
     public event EventHandler UnassignPressed;
     public event EventHandler<int> TargetFactionSelected;
-    public event EventHandler<Order> ActiveOrderActivated;
+    public event EventHandler<Order> InboundOrderActivated;
 
     public override void _Ready()
     {
@@ -112,7 +93,6 @@ public partial class RegionScreenView : CommandWorkspaceView
         ConfigureBoardPanel();
         CompactHexCluster();
         BuildMissionsSection();
-        BuildActiveOrdersStrip();
         BuildCommitBar();
         BuildDossierPanel();
     }
@@ -189,58 +169,58 @@ public partial class RegionScreenView : CommandWorkspaceView
         }
     }
 
-    public void SetActiveOrders(IReadOnlyList<ActiveOrderRow> rows)
+    // Renders the "Inbound Orders" card in the target dossier: every player order aimed at the
+    // selected region, regardless of which region its squads are tasked from. Rows are clickable
+    // (single click) to reopen the order dialog - this is the surviving edit affordance now that
+    // the central "active orders" strip is gone.
+    public void SetInboundOrders(IReadOnlyList<InboundOrderInfo> rows)
     {
-        ClearContainerChildren(_ordersStripStack);
+        ClearContainerChildren(_inboundOrdersStack);
+
+        PanelContainer cardPanel = new() { SizeFlagsHorizontal = SizeFlags.ExpandFill };
+        OnlyWarStyle.ApplyTintedListRow(cardPanel, false, OnlyWarStyle.PlayerAccent);
+
+        VBoxContainer cardStack = new();
+        cardStack.AddThemeConstantOverride("separation", 4);
+        cardPanel.AddChild(cardStack);
+
+        Label titleLabel = new() { Text = "INBOUND ORDERS" };
+        titleLabel.AddThemeFontSizeOverride("font_size", 12);
+        titleLabel.AddThemeColorOverride("font_color", OnlyWarStyle.MutedText);
+        cardStack.AddChild(titleLabel);
 
         if (rows.Count == 0)
         {
-            Label empty = new() { Text = "No active orders in this region." };
+            Label empty = new() { Text = "None" };
             empty.AddThemeFontSizeOverride("font_size", 12);
             empty.AddThemeColorOverride("font_color", OnlyWarStyle.MutedText);
-            _ordersStripStack.AddChild(empty);
+            cardStack.AddChild(empty);
+            _inboundOrdersStack.AddChild(cardPanel);
             return;
         }
 
-        foreach (ActiveOrderRow row in rows)
+        foreach (InboundOrderInfo row in rows)
         {
-            PanelContainer rowPanel = new()
+            string squads = row.SquadCount == 1 ? "1 squad" : $"{row.SquadCount} squads";
+            Button rowButton = new()
             {
-                CustomMinimumSize = new Vector2(0, 30),
+                Text = $"{row.MissionLabel} · {squads} · from {row.OriginLabel}",
+                TooltipText = "Open orders",
+                MouseDefaultCursorShape = CursorShape.PointingHand,
                 SizeFlagsHorizontal = SizeFlags.ExpandFill,
-                MouseFilter = MouseFilterEnum.Stop
-            };
-            OnlyWarStyle.ApplyInsetPanel(rowPanel);
-
-            HBoxContainer content = new() { SizeFlagsHorizontal = SizeFlags.ExpandFill };
-            content.AddThemeConstantOverride("separation", 8);
-            rowPanel.AddChild(content);
-
-            Label label = new()
-            {
-                Text = $"{row.MissionLabel} · {row.TargetRegionName}",
-                SizeFlagsHorizontal = SizeFlags.ExpandFill,
+                Alignment = HorizontalAlignment.Left,
                 ClipText = true,
-                TextOverrunBehavior = TextServer.OverrunBehavior.TrimEllipsis
+                TextOverrunBehavior = TextServer.OverrunBehavior.TrimEllipsis,
+                CustomMinimumSize = new Vector2(0, 30)
             };
-            label.AddThemeFontSizeOverride("font_size", 12);
-            content.AddChild(label);
-
-            Label countLabel = new() { Text = row.SquadCount == 1 ? "1 squad" : $"{row.SquadCount} squads" };
-            countLabel.AddThemeFontSizeOverride("font_size", 12);
-            countLabel.AddThemeColorOverride("font_color", OnlyWarStyle.MutedText);
-            content.AddChild(countLabel);
-
-            rowPanel.GuiInput += inputEvent =>
-            {
-                if (inputEvent is InputEventMouseButton { ButtonIndex: MouseButton.Left, Pressed: true, DoubleClick: true })
-                {
-                    ActiveOrderActivated?.Invoke(this, row.Order);
-                }
-            };
-
-            _ordersStripStack.AddChild(rowPanel);
+            rowButton.AddThemeFontSizeOverride("font_size", 12);
+            OnlyWarStyle.ApplyAccentButtonRow(rowButton, false, OnlyWarStyle.PlayerAccent);
+            Order capturedOrder = row.Order;
+            rowButton.Pressed += () => InboundOrderActivated?.Invoke(this, capturedOrder);
+            cardStack.AddChild(rowButton);
         }
+
+        _inboundOrdersStack.AddChild(cardPanel);
     }
 
     public void SetAggression(Aggression aggression)
@@ -367,7 +347,10 @@ public partial class RegionScreenView : CommandWorkspaceView
             OffsetLeft = 6,
             OffsetTop = 0,
             OffsetRight = -6,
-            OffsetBottom = -168
+            // Runs down to just above the pinned commit bar (top at -74). Previously stopped at
+            // -168 to clear the active-orders strip that sat between it and the commit bar; that
+            // strip moved to the dossier's Inbound Orders card, so the mission list reclaims the band.
+            OffsetBottom = -78
         };
         section.AddThemeConstantOverride("separation", 4);
         _boardPanel.AddChild(section);
@@ -404,41 +387,6 @@ public partial class RegionScreenView : CommandWorkspaceView
         _missionsListStack.AddThemeConstantOverride("h_separation", 4);
         _missionsListStack.AddThemeConstantOverride("v_separation", 4);
         scroll.AddChild(_missionsListStack);
-    }
-
-    private void BuildActiveOrdersStrip()
-    {
-        VBoxContainer strip = new()
-        {
-            Name = "ActiveOrdersStrip",
-            AnchorLeft = 0f,
-            AnchorTop = 1f,
-            AnchorRight = 1f,
-            AnchorBottom = 1f,
-            OffsetLeft = 6,
-            OffsetTop = -168,
-            OffsetRight = -6,
-            OffsetBottom = -78
-        };
-        strip.AddThemeConstantOverride("separation", 2);
-        _boardPanel.AddChild(strip);
-
-        _ordersStripHeaderLabel = new Label { Text = "ACTIVE ORDERS" };
-        _ordersStripHeaderLabel.AddThemeFontSizeOverride("font_size", 12);
-        _ordersStripHeaderLabel.AddThemeColorOverride("font_color", OnlyWarStyle.MutedText);
-        strip.AddChild(_ordersStripHeaderLabel);
-
-        ScrollContainer scroll = new()
-        {
-            SizeFlagsHorizontal = SizeFlags.ExpandFill,
-            SizeFlagsVertical = SizeFlags.ExpandFill,
-            HorizontalScrollMode = ScrollContainer.ScrollMode.Disabled
-        };
-        strip.AddChild(scroll);
-
-        _ordersStripStack = new VBoxContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill };
-        _ordersStripStack.AddThemeConstantOverride("separation", 2);
-        scroll.AddChild(_ordersStripStack);
     }
 
     // Pinned via a fixed pixel offset from the board's bottom edge rather than an anchor
@@ -559,9 +507,20 @@ public partial class RegionScreenView : CommandWorkspaceView
         };
         outer.AddChild(scroll);
 
+        // The scroll holds one content column so the dossier cards and the inbound-orders card
+        // scroll together. Two separate stacks let SetDossier and SetInboundOrders repopulate
+        // independently without clobbering each other's children.
+        VBoxContainer content = new() { SizeFlagsHorizontal = SizeFlags.ExpandFill };
+        content.AddThemeConstantOverride("separation", 8);
+        scroll.AddChild(content);
+
         _dossierStack = new VBoxContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill };
         _dossierStack.AddThemeConstantOverride("separation", 8);
-        scroll.AddChild(_dossierStack);
+        content.AddChild(_dossierStack);
+
+        _inboundOrdersStack = new VBoxContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill };
+        _inboundOrdersStack.AddThemeConstantOverride("separation", 8);
+        content.AddChild(_inboundOrdersStack);
     }
 
     private static string GetMissionIconKey(MissionAvailabilityKind kind)

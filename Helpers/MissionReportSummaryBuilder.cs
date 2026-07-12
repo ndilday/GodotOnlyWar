@@ -11,6 +11,31 @@ namespace OnlyWar.Helpers
     // second-person "Your forces ..." voice, so the two consumers can never silently disagree.
     public static class MissionReportSummaryBuilder
     {
+        public static bool ShouldIncludeInTurnSummary(bool isPlayerMission, float playerVisibleIntel) =>
+            isPlayerMission || playerVisibleIntel > 0f;
+
+        public static string BuildOutcomeStatus(MissionOutcomeClassification classification)
+        {
+            if (classification.Disposition is MissionForceDisposition.LostContact
+                or MissionForceDisposition.WithdrewUnderFire
+                or MissionForceDisposition.AbortedBeforeObjective)
+                return "MISSION FAILED";
+
+            return classification.MissionType switch
+            {
+                MissionType.Assassination => classification.TargetEliminated ? "MISSION SUCCESSFUL" : "MISSION FAILED",
+                MissionType.Sabotage or MissionType.Diversion => classification.Impact > 0 ? "MISSION SUCCESSFUL" : "MISSION FAILED",
+                MissionType.Recon or MissionType.Patrol => classification.Impact > 0 || !classification.WasDetected
+                    ? "MISSION SUCCESSFUL" : "MISSION INCONCLUSIVE",
+                MissionType.LightningRaid or MissionType.HitAndRun or MissionType.Advance
+                    or MissionType.DeepStrike or MissionType.EstablishAirhead or MissionType.ObjectiveRaid
+                    or MissionType.Ambush or MissionType.Extermination or MissionType.CloseAirSupport
+                    => classification.EnemiesKilled > 0 ? "MISSION SUCCESSFUL"
+                        : classification.NoViableTarget ? "MISSION INCONCLUSIVE" : "MISSION FAILED",
+                _ => "MISSION COMPLETE"
+            };
+        }
+
         // The subject phrase used to open the outcome sentence: "Your forces" for the player's own
         // mission (per 4.19 second-person voice), the faction's name otherwise.
         public static string BuildSubject(bool isPlayerFaction, string actingFactionName)

@@ -64,17 +64,43 @@ public class MissionOutcomeRecorderTests
 
         MissionContext context = new(squad.CurrentOrders, [battleSquad], [])
         {
-            Spotter = spotterFaction
+            Spotter = spotterFaction,
+            ForceBrokeContact = true
         };
 
         MissionOutcomeRecorder.RecordMissionOutcome(context, new Date(1, 1, 1));
 
         Assert.Single(soldier.SoldierEvents);
-        Assert.Contains("break contact", soldier.SoldierEvents[0].Detail);
+        Assert.Contains("broke contact successfully", soldier.SoldierEvents[0].Detail);
     }
 
     [Fact]
-    public void PlayerAssassination_TargetLocatedAndKilled_RecordsElimination()
+    public void PlayerRecon_DetectedAndLostNotesLostContact()
+    {
+        PlayerSoldier soldier = CreatePlayerSoldier("Brother Lost");
+        MissionContext context = CreateDetectedReconContext(soldier);
+        context.ForceLostContact = true;
+
+        MissionOutcomeRecorder.RecordMissionOutcome(context, new Date(1, 1, 1));
+
+        Assert.Contains("lost contact with base", soldier.SoldierEvents[0].Detail);
+        Assert.DoesNotContain("broke contact successfully", soldier.SoldierEvents[0].Detail);
+    }
+
+    [Fact]
+    public void PlayerRecon_DetectedWithoutTerminalDispositionOnlyNotesDetection()
+    {
+        PlayerSoldier soldier = CreatePlayerSoldier("Brother Spotted");
+        MissionContext context = CreateDetectedReconContext(soldier);
+
+        MissionOutcomeRecorder.RecordMissionOutcome(context, new Date(1, 1, 1));
+
+        Assert.EndsWith("detected by the Orks.", soldier.SoldierEvents[0].Detail);
+        Assert.DoesNotContain("contact", soldier.SoldierEvents[0].Detail);
+    }
+
+    [Fact]
+    public void PlayerAssassination_TargetExplicitlyEliminated_RecordsElimination()
     {
         Faction player = CreateFaction(30, "Chapter", isPlayer: true);
         Faction enemy = CreateFaction(31, "Cult", isPlayer: false);
@@ -90,6 +116,7 @@ public class MissionOutcomeRecorderTests
         MissionContext context = new(squad.CurrentOrders, [battleSquad], [])
         {
             TargetLocated = true,
+            TargetEliminated = true,
             EnemiesKilled = 1
         };
 
@@ -147,7 +174,7 @@ public class MissionOutcomeRecorderTests
     }
 
     [Fact]
-    public void SoldierLostMidMission_DoesNotThrowAndRecordsSurvivors()
+    public void SoldierLostMidMission_RecordsOutcomeForStartingParticipants()
     {
         Faction player = CreateFaction(7, "Chapter", isPlayer: true);
         Faction enemy = CreateFaction(8, "Tyranids", isPlayer: false);
@@ -160,23 +187,23 @@ public class MissionOutcomeRecorderTests
         squad.CurrentOrders = new Order([squad], Disposition.Raiding, true, false,
             Aggression.Aggressive, new Mission(MissionType.LightningRaid, targetFaction, 0));
         BattleSquad battleSquad = new(true, squad);
+        MissionContext context = new(squad.CurrentOrders, [battleSquad], [])
+        {
+            EnemiesKilled = 3
+        };
 
         // Simulate the fallen soldier being removed from the BattleSquad mid-mission, as
         // BattleTurnResolver does when a soldier dies in an embedded engagement.
         BattleSoldier fallenBattleSoldier = battleSquad.Soldiers.First(s => s.Soldier == fallen);
         battleSquad.RemoveSoldier(fallenBattleSoldier);
 
-        MissionContext context = new(squad.CurrentOrders, [battleSquad], [])
-        {
-            EnemiesKilled = 3
-        };
-
         var exception = Record.Exception(() =>
             MissionOutcomeRecorder.RecordMissionOutcome(context, new Date(1, 1, 1)));
 
         Assert.Null(exception);
         Assert.Single(survivor.SoldierEvents);
-        Assert.Empty(fallen.SoldierEvents);
+        Assert.Single(fallen.SoldierEvents);
+        Assert.Equal(SoldierEventType.MissionOutcome, fallen.SoldierEvents[0].Type);
     }
 
     private static Squad CreateSquad(string name, params ISoldier[] soldiers)
@@ -187,6 +214,22 @@ public class MissionOutcomeRecorderTests
             squad.AddSquadMember(soldier);
         }
         return squad;
+    }
+
+    private static MissionContext CreateDetectedReconContext(PlayerSoldier soldier)
+    {
+        Faction player = CreateFaction(40, "Chapter", isPlayer: true);
+        Faction enemy = CreateFaction(41, "Orks", isPlayer: false);
+        Region region = CreateRegion("Ironveldt", "Kroll");
+        RegionFaction targetFaction = new(new PlanetFaction(enemy), region);
+        Squad squad = CreateSquad("Scout Squad", soldier);
+        squad.CurrentOrders = new Order([squad], Disposition.Raiding, true, false,
+            Aggression.Cautious, new Mission(MissionType.Recon, targetFaction, 0));
+
+        return new MissionContext(squad.CurrentOrders, [new BattleSquad(true, squad)], [])
+        {
+            Spotter = new RegionFaction(new PlanetFaction(enemy), region)
+        };
     }
 
     private static Region CreateRegion(string regionName, string planetName)

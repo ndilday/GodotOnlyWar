@@ -115,15 +115,29 @@ public class MissionOutcomeClassifierTests
     }
 
     [Fact]
-    public void Classify_TargetLocatedWithKills_IsEliminated()
+    public void Classify_ExplicitTargetElimination_IsEliminated()
     {
         MissionContext context = CreateContext(MissionType.Assassination);
         context.TargetLocated = true;
-        context.EnemiesKilled = 1;
+        context.TargetEliminated = true;
 
         MissionOutcomeClassification result = MissionOutcomeClassifier.Classify(context);
         Assert.True(result.TargetLocated);
         Assert.True(result.TargetEliminated);
+    }
+
+    [Fact]
+    public void Classify_BodyguardKillsDoNotEliminateTarget()
+    {
+        MissionContext context = CreateContext(MissionType.Assassination);
+        context.TargetLocated = true;
+        context.EnemiesKilled = 3;
+
+        MissionOutcomeClassification result = MissionOutcomeClassifier.Classify(context);
+
+        Assert.True(result.TargetLocated);
+        Assert.False(result.TargetEliminated);
+        Assert.Equal(3, result.EnemiesKilled);
     }
 
     [Fact]

@@ -65,6 +65,7 @@ namespace OnlyWar.Helpers.Battles
         private void WoundResolver_OnSoldierDeath(WoundResolution wound, WoundLevel woundLevel)
         {
             _casualtyMap[wound.Suffererer.Soldier.Id] = wound.Suffererer;
+            BattleHistory.KilledSoldierIds.Add(wound.Suffererer.Soldier.Id);
             _aftermathPolicy.OnSoldierKilled(wound, woundLevel);
         }
 

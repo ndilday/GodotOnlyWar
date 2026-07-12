@@ -2,8 +2,10 @@ using OnlyWar.Helpers.Battles;
 using OnlyWar.Models.Battles;
 using OnlyWar.Models.Orders;
 using OnlyWar.Models.Planets;
+using OnlyWar.Models.Soldiers;
 using OnlyWar.Models.Squads;
 using System.Collections.Generic;
+using System.Linq;
 
 namespace OnlyWar.Models.Missions
 {
@@ -32,6 +34,7 @@ namespace OnlyWar.Models.Missions
 
         public Order Order { get; }
         public List<BattleSquad> MissionSquads { get; }
+        public IReadOnlyList<PlayerSoldier> StartingPlayerParticipants { get; }
         public ushort DaysElapsed { get; set; }
         public List<BattleSquad> OpposingSquads { get; set; }
         public List<string> Log { get; private set; }
@@ -70,11 +73,21 @@ namespace OnlyWar.Models.Missions
         public bool NoViableTarget { get; set; }
         // An assassination force reached and identified its target.
         public bool TargetLocated { get; set; }
+        // The generated HQ soldier selected as the assassination objective, and whether that exact
+        // soldier was confirmed killed. Bodyguard/interceptor casualties do not satisfy the objective.
+        public int? AssassinationTargetSoldierId { get; set; }
+        public bool TargetEliminated { get; set; }
 
         public MissionContext(Order order, List<BattleSquad> playerSquads, List<BattleSquad> opposingForces)
         {
             Order = order;
             MissionSquads = playerSquads;
+            StartingPlayerParticipants = playerSquads
+                .SelectMany(squad => squad.Soldiers)
+                .Select(battleSoldier => battleSoldier.Soldier)
+                .OfType<PlayerSoldier>()
+                .Distinct()
+                .ToList();
             OpposingSquads = opposingForces;
             DaysElapsed = 0;
             MissionsToAdd = new List<Mission>();
@@ -95,6 +108,16 @@ namespace OnlyWar.Models.Missions
         {
             Log.Add(text);
             DebriefLines.Add(new MissionDebriefLine(text, battleHistory));
+        }
+
+        public void RecordBattleOutcome(BattleHistory battleHistory)
+        {
+            EnemiesKilled += battleHistory.EnemiesKilled;
+            if (AssassinationTargetSoldierId is int targetId
+                && battleHistory.KilledSoldierIds.Contains(targetId))
+            {
+                TargetEliminated = true;
+            }
         }
     }
 }

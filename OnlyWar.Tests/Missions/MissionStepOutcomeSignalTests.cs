@@ -5,6 +5,7 @@ using OnlyWar.Helpers.Missions;
 using OnlyWar.Helpers.Missions.Ambush;
 using OnlyWar.Helpers.Missions.Recon;
 using OnlyWar.Models;
+using OnlyWar.Models.Battles;
 using OnlyWar.Models.Missions;
 using OnlyWar.Models.Orders;
 using OnlyWar.Models.Planets;
@@ -20,6 +21,34 @@ namespace OnlyWar.Tests.Missions;
 // covered by MissionOutcomeClassifierTests.
 public class MissionStepOutcomeSignalTests
 {
+    [Fact]
+    public void RecordBattleOutcome_TargetCasualty_SetsTargetEliminated()
+    {
+        MissionContext context = CreateContext(MissionType.Assassination);
+        context.AssassinationTargetSoldierId = 42;
+        BattleHistory history = new() { EnemiesKilled = 2 };
+        history.KilledSoldierIds.Add(42);
+
+        context.RecordBattleOutcome(history);
+
+        Assert.True(context.TargetEliminated);
+        Assert.Equal(2, context.EnemiesKilled);
+    }
+
+    [Fact]
+    public void RecordBattleOutcome_OnlyBodyguardCasualty_DoesNotSetTargetEliminated()
+    {
+        MissionContext context = CreateContext(MissionType.Assassination);
+        context.AssassinationTargetSoldierId = 42;
+        BattleHistory history = new() { EnemiesKilled = 1 };
+        history.KilledSoldierIds.Add(99);
+
+        context.RecordBattleOutcome(history);
+
+        Assert.False(context.TargetEliminated);
+        Assert.Equal(1, context.EnemiesKilled);
+    }
+
     [Fact]
     public void InfiltrateShouldContinue_WeekElapsed_SetsObjectiveAborted()
     {
