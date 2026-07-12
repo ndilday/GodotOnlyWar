@@ -168,7 +168,7 @@ namespace OnlyWar.Helpers.Database.GameRules
                 [];
             using (var command = connection.CreateCommand())
             {
-                command.CommandText = "SELECT * FROM MeleeWeaponTemplate";
+                command.CommandText = "SELECT Id, Name, Location, RelatedSkillId, Accuracy, ArmorMultiplier, WoundMultiplier, RequiredStrength, StrengthMultiplier, ParryModifier, AttackSpeedMultiplier FROM MeleeWeaponTemplate";
                 var reader = command.ExecuteReader();
                 while (reader.Read())
                 {
@@ -181,17 +181,16 @@ namespace OnlyWar.Helpers.Database.GameRules
                     float woundMultiplier = Convert.ToSingle(reader[6]);
                     float requiredStrength = Convert.ToSingle(reader[7]);
                     float strengthMultiplier = Convert.ToSingle(reader[8]);
-                    float extraDamage = Convert.ToSingle(reader[9]);
-                    float parryMod = Convert.ToSingle(reader[10]);
-                    float extraAttacks = Convert.ToSingle(reader[11]);
+                    float parryMod = Convert.ToSingle(reader[9]);
+                    float attackSpeedMultiplier = Convert.ToSingle(reader[10]);
 
                     BaseSkill baseSkill = baseSkillMap[baseSkillId];
 
                     MeleeWeaponTemplate weaponTemplate =
                         new MeleeWeaponTemplate(id, name, (EquipLocation)location, baseSkill,
                                                 accuracy, armorMultiplier, woundMultiplier,
-                                                requiredStrength, strengthMultiplier, extraDamage,
-                                                parryMod, extraAttacks);
+                                                requiredStrength, strengthMultiplier, parryMod,
+                                                attackSpeedMultiplier);
                     factionWeaponTemplateMap[id] = weaponTemplate;
                 }
             }

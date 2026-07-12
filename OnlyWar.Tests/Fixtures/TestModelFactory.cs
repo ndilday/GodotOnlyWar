@@ -107,8 +107,7 @@ internal static class TestModelFactory
             0,
             1,
             0,
-            0,
-            0));
+            1));
 
     public static SquadTemplate SquadTemplate { get; } = new(
         1,

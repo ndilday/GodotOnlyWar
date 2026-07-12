@@ -80,7 +80,14 @@ namespace OnlyWar.Helpers.Missions.Assault
                 float cdf = GaussianCalculator.ApproximateNormalCDF(attackerMarginOfSuccess);
                 float multiplier = (float)Math.Pow(2, 1 - (2 * cdf));
                 long effectiveGarrison = (long)(alliedDefender.Garrison * multiplier);
-                long targetBattleValue = Math.Min(effectiveGarrison * 10L, MaxTacticalGarrisonBattleValue);
+                // Garrison already lives in strategic battle-value points; the old x10 conversion
+                // massively over-mobilised defenders after SoldierTemplate.BattleValue was
+                // recalculated onto real per-template values.
+                long targetBattleValue = effectiveGarrison <= 0
+                    ? 0
+                    : Math.Min(
+                        Math.Max(effectiveGarrison, alliedDefender.PlanetFaction.Faction.MinimumForceRequest),
+                        MaxTacticalGarrisonBattleValue);
 
                 var request = new ForceGenerationRequest
                 {

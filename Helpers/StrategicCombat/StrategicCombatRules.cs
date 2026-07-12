@@ -6,9 +6,25 @@ namespace OnlyWar.Helpers.StrategicCombat
 {
     public static class StrategicCombatRules
     {
-        public const long MassCombatBattleValueFloor = 1500;
         public const int MaxTacticalActors = 120;
         public const int MaxGeneratedSquads = 24;
+
+        // Battle-value anchors from the shipped rules database after the melee-refactor
+        // recalculation pass (OnlyWar.s3db): used to keep strategic thresholds tied to real
+        // soldiers rather than the old implicit "10 BV per trooper" rule of thumb.
+        public const long PdfTrooperBattleValue = 5;
+        public const long HormagauntBattleValue = 2;
+        public const long GenestealerBattleValue = 8;
+        public const long TacticalMarineBattleValue = 28;
+        public const long MeleeCarnifexBattleValue = 124;
+
+        // These strategic thresholds retain the pre-recalculation unit scale. BattleValues are
+        // deliberately compressed to that same scale so garrison growth, force pools, and
+        // tactical/strategic handoff decisions remain comparable.
+        public const long MassCombatBattleValueFloor = 1500;
+
+        // A recon probe should stay within the existing small-detachment budget. Each faction's
+        // own MinimumForceRequest can still floor this up to a full squad when its data requires it.
         public const long NpcReconBattleValueCap = 200;
 
         public const double CombatSigma = 0.12;

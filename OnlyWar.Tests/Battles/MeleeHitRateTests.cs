@@ -18,14 +18,16 @@ public class MeleeHitRateTests
     private const int Trials = 200_000;
 
     private static double HitRate(float attackSkill, float weaponAccuracy, bool didMove,
-                                  float defenderSkill, float defenderEvasion)
+                                  float defenderSkill, float defenderEvasion,
+                                  float defenderDefenseModifier = 0)
     {
         RNG.Reset(12345);
         int hits = 0;
         for (int i = 0; i < Trials; i++)
         {
             if (MeleeAttackAction.RollMeleeHit(attackSkill, weaponAccuracy, didMove,
-                                               defenderSkill, defenderEvasion))
+                                               defenderSkill, defenderEvasion,
+                                               defenderDefenseModifier))
             {
                 hits++;
             }
@@ -70,5 +72,14 @@ public class MeleeHitRateTests
         double stationary = HitRate(10, 0, didMove: false, 10, 0);
         double moved = HitRate(10, 0, didMove: true, 10, 0);
         Assert.True(moved < stationary);
+    }
+
+    [Fact]
+    public void DefenseModifier_LowersHitRate()
+    {
+        double unguarded = HitRate(10, 0, didMove: false, 10, 0, defenderDefenseModifier: 0);
+        double guarded = HitRate(10, 0, didMove: false, 10, 0, defenderDefenseModifier: 1);
+
+        Assert.True(guarded < unguarded);
     }
 }

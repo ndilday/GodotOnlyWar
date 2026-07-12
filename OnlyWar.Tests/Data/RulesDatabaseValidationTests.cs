@@ -2,7 +2,9 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using OnlyWar.Builders;
+using OnlyWar.Helpers.StrategicCombat;
 using OnlyWar.Models;
+using OnlyWar.Models.Equippables;
 using OnlyWar.Models.Soldiers.Ratings;
 using OnlyWar.Models.Squads;
 using OnlyWar.Tests.Fixtures;
@@ -204,12 +206,29 @@ public class RulesDatabaseValidationTests
         List<Squad> force = ForceGenerator.GenerateForce(new ForceGenerationRequest
         {
             Faction = pdf,
-            TargetBattleValue = 500,
+            TargetBattleValue = 700,
             Profile = ForceCompositionProfile.Garrison
         });
 
         Assert.NotEmpty(force);
         Assert.All(force, s => Assert.Equal("PDF Infantry Squad", s.SquadTemplate.Name));
+    }
+
+    [Fact]
+    public void SoldierTemplateBattleValues_MatchStrategicCalibrationAnchors()
+    {
+        var rules = RulesDatabaseFixture.LoadRules();
+
+        int TemplateValue(string name) => rules.Factions
+            .SelectMany(f => f.SoldierTemplates.Values)
+            .Single(st => st.Name == name)
+            .BattleValue;
+
+        Assert.Equal(StrategicCombatRules.PdfTrooperBattleValue, TemplateValue("PDF Trooper"));
+        Assert.Equal(StrategicCombatRules.TacticalMarineBattleValue, TemplateValue("Tactical Marine"));
+        Assert.Equal(StrategicCombatRules.HormagauntBattleValue, TemplateValue("Hormagaunt"));
+        Assert.Equal(StrategicCombatRules.GenestealerBattleValue, TemplateValue("Genestealer"));
+        Assert.Equal(StrategicCombatRules.MeleeCarnifexBattleValue, TemplateValue("Melee Carnifex"));
     }
 
     [Fact]
@@ -358,5 +377,21 @@ public class RulesDatabaseValidationTests
                 Assert.True(bodyTemplate.Sum(hl => hl.HitProbabilityMap[stanceIndex]) > 0);
             }
         }
+    }
+
+    [Fact]
+    public void MeleeWeaponTemplates_UsePhaseOneSpeedAndFistParryDefaults()
+    {
+        var rules = RulesDatabaseFixture.LoadRules();
+
+        Assert.NotEmpty(rules.MeleeWeaponTemplates);
+        Assert.All(rules.MeleeWeaponTemplates.Values,
+            weapon => Assert.Equal(1.0f, weapon.AttackSpeedMultiplier));
+
+        List<MeleeWeaponTemplate> fists = rules.MeleeWeaponTemplates.Values
+            .Where(weapon => weapon.Name == "Fist")
+            .ToList();
+        Assert.NotEmpty(fists);
+        Assert.All(fists, fist => Assert.Equal(-1.0f, fist.ParryModifier));
     }
 }

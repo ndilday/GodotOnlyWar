@@ -31,6 +31,7 @@ namespace OnlyWar.Helpers.Battles
         public float TurnsRunning { get; set; }
         public ushort TurnsShooting { get; set; }
         public ushort TurnsSwinging { get; set; } 
+        public ushort TurnsDefending { get; set; }
         public ushort TurnsAiming { get; set; }
         public uint WoundsTaken { get; set; }
 
@@ -128,6 +129,7 @@ namespace OnlyWar.Helpers.Battles
             TurnsRunning = soldier.TurnsRunning;
             TurnsShooting = soldier.TurnsShooting;
             TurnsSwinging = soldier.TurnsSwinging;
+            TurnsDefending = soldier.TurnsDefending;
             TurnsAiming = soldier.TurnsAiming;
             WoundsTaken = soldier.WoundsTaken;
             EnemiesTakenDown = soldier.EnemiesTakenDown;
@@ -219,6 +221,39 @@ namespace OnlyWar.Helpers.Battles
                 return baseMoveSpeed * 0.75f;
             }
             return baseMoveSpeed;
+        }
+
+        public MeleeWeapon GetPrimaryMeleeWeapon(MeleeWeapon defaultWeapon)
+        {
+            if (EquippedMeleeWeapons.Count > 0)
+            {
+                return EquippedMeleeWeapons[0];
+            }
+
+            return defaultWeapon;
+        }
+
+        public MeleeWeapon GetSecondaryMeleeWeapon()
+        {
+            return IsDualWieldingMelee() ? EquippedMeleeWeapons[1] : null;
+        }
+
+        public bool IsDualWieldingMelee()
+        {
+            return EquippedMeleeWeapons.Count >= 2
+                && EquippedMeleeWeapons[0].Template.Location == EquipLocation.OneHand
+                && EquippedMeleeWeapons[1].Template.Location == EquipLocation.OneHand;
+        }
+
+        public float GetMeleeParryModifier()
+        {
+            float total = 0;
+            foreach (MeleeWeapon weapon in EquippedMeleeWeapons)
+            {
+                total += weapon.Template.ParryModifier;
+            }
+
+            return total;
         }
 
         public override string ToString()

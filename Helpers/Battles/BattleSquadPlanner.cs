@@ -9,6 +9,8 @@ namespace OnlyWar.Helpers.Battles
 {
     public class BattleSquadPlanner
     {
+        private const float TargetTakeOutConfidenceThreshold = MeleeMath.TakeOutConfidenceTarget;
+
         private readonly BattleGridManager _grid;
         private readonly ConcurrentBag<IAction> _shootActionBag;
         private readonly ConcurrentBag<IAction> _moveActionBag;
@@ -348,13 +350,20 @@ namespace OnlyWar.Helpers.Battles
             }
             else
             {
-                float distance = _grid.GetNearestEnemy(soldier.Soldier.Id, out int closestEnemyId);
-                if (distance != 1) throw new InvalidOperationException("Attempting to melee with no adjacent enemy");
-                BattleSoldier enemy = _soldierMap[closestEnemyId];
                 soldier.CurrentSpeed = 0;
-                MeleeWeapon weapon = soldier.EquippedMeleeWeapons.Count == 0 ? 
-                    _defaultMeleeWeapon : soldier.EquippedMeleeWeapons[0];
-                _meleeActionBag.Add(new MeleeAttackAction(soldier, enemy, weapon, false, _log));
+                List<BattleSoldier> adjacentEnemies = _grid.GetAdjacentEnemies(soldier.Soldier.Id)
+                    .Select(enemyId => _soldierMap[enemyId])
+                    .ToList();
+                if (adjacentEnemies.Count == 0)
+                {
+                    throw new InvalidOperationException("Attempting to melee with no adjacent enemy");
+                }
+
+                MeleeAttackAction action = CreateMeleeAttackAction(soldier, adjacentEnemies, false);
+                if (action != null)
+                {
+                    _meleeActionBag.Add(action);
+                }
             }
         }
 
@@ -460,8 +469,173 @@ namespace OnlyWar.Helpers.Battles
                 ushort orientation = CalculateOrientationFromVector(move);
                 _moveActionBag.Add(new MoveAction(soldier, _grid, currentPosition, newPos, orientation));
                 BattleSoldier target = oppSquad.AbleSoldiers.Single(s => s.Soldier.Id == closestEnemyId);
-                _meleeActionBag.Add(new MeleeAttackAction(soldier, target, soldier.MeleeWeapons.Count == 0 ? _defaultMeleeWeapon : soldier.EquippedMeleeWeapons[0], distance >= 2, _log));
+                MeleeAttackAction action = CreateMeleeAttackAction(soldier, [target], distance >= 2);
+                if (action != null)
+                {
+                    _meleeActionBag.Add(action);
+                }
             }
+        }
+
+        private MeleeAttackAction CreateMeleeAttackAction(BattleSoldier soldier, IEnumerable<BattleSoldier> candidateTargets, bool didMove)
+        {
+            List<BattleSoldier> targets = candidateTargets
+                .Where(target => target != null && target.CanFight)
+                .GroupBy(target => target.Soldier.Id)
+                .Select(group => group.First())
+                .OrderBy(target => target.Soldier.Id)
+                .ToList();
+            if (targets.Count == 0)
+            {
+                return null;
+            }
+
+            MeleeWeapon primaryWeapon = soldier.GetPrimaryMeleeWeapon(_defaultMeleeWeapon);
+            MeleeWeapon secondaryWeapon = soldier.GetSecondaryMeleeWeapon();
+            List<MeleeWeapon> plannedWeapons = BuildPlannedWeaponSequence(soldier, primaryWeapon, secondaryWeapon);
+            if (plannedWeapons.Count == 0)
+            {
+                return null;
+            }
+
+            List<PlannedMeleeStrike> strikePlans = BuildStrikePlan(soldier, targets, plannedWeapons, didMove);
+            if (strikePlans.Count == 0)
+            {
+                return null;
+            }
+
+            return new MeleeAttackAction(soldier, strikePlans, didMove, _log);
+        }
+
+        private List<MeleeWeapon> BuildPlannedWeaponSequence(BattleSoldier soldier, MeleeWeapon primaryWeapon, MeleeWeapon secondaryWeapon)
+        {
+            int primaryAttackCount = DetermineAttackCount(soldier, primaryWeapon);
+            List<MeleeWeapon> plannedWeapons = [];
+            for (int i = 0; i < primaryAttackCount; i++)
+            {
+                plannedWeapons.Add(primaryWeapon);
+            }
+
+            if (secondaryWeapon != null)
+            {
+                plannedWeapons.Add(secondaryWeapon);
+            }
+
+            return plannedWeapons;
+        }
+
+        private int DetermineAttackCount(BattleSoldier soldier, MeleeWeapon weapon)
+        {
+            float attackCount = MeleeMath.CalculateBaseAttackCount(
+                soldier.Soldier.AttackSpeed,
+                weapon?.Template.AttackSpeedMultiplier
+                    ?? MeleeWeaponTemplate.DefaultAttackSpeedMultiplier);
+            int guaranteedAttacks = (int)Math.Floor(attackCount);
+            float fractionalAttack = attackCount - guaranteedAttacks;
+            if (RNG.GetLinearDouble() < fractionalAttack)
+            {
+                guaranteedAttacks++;
+            }
+
+            return Math.Max(0, guaranteedAttacks);
+        }
+
+        private List<PlannedMeleeStrike> BuildStrikePlan(BattleSoldier attacker,
+                                                         IReadOnlyList<BattleSoldier> targets,
+                                                         IReadOnlyList<MeleeWeapon> plannedWeapons,
+                                                         bool didMove)
+        {
+            List<BattleSoldier> untargetedEnemies = targets.ToList();
+            List<PlannedMeleeStrike> strikePlans = [];
+            BattleSoldier currentTarget = null;
+            float cumulativeTakeOutConfidence = 0;
+
+            foreach (MeleeWeapon weapon in plannedWeapons)
+            {
+                if (currentTarget == null)
+                {
+                    List<BattleSoldier> targetPool = untargetedEnemies.Count > 0 ? untargetedEnemies : targets.ToList();
+                    currentTarget = SelectBestMeleeTarget(attacker, weapon, targetPool, didMove);
+                    cumulativeTakeOutConfidence = 0;
+                }
+
+                if (currentTarget == null)
+                {
+                    break;
+                }
+
+                strikePlans.Add(new PlannedMeleeStrike(currentTarget.Soldier.Id,
+                                                       weapon.Template.Id,
+                                                       currentTarget.Soldier.Name,
+                                                       weapon.Template.Name));
+
+                float strikeTakeOutChance = EstimateTakeOutProbability(attacker, currentTarget, weapon, didMove);
+                cumulativeTakeOutConfidence = 1 - ((1 - cumulativeTakeOutConfidence) * (1 - strikeTakeOutChance));
+                if (cumulativeTakeOutConfidence >= TargetTakeOutConfidenceThreshold)
+                {
+                    untargetedEnemies.RemoveAll(target => target.Soldier.Id == currentTarget.Soldier.Id);
+                    currentTarget = null;
+                    cumulativeTakeOutConfidence = 0;
+                }
+            }
+
+            return strikePlans;
+        }
+
+        private BattleSoldier SelectBestMeleeTarget(BattleSoldier attacker,
+                                                    MeleeWeapon weapon,
+                                                    IReadOnlyList<BattleSoldier> targets,
+                                                    bool didMove)
+        {
+            BattleSoldier bestTarget = null;
+            float bestTakeOutChance = float.MinValue;
+            float bestHitChance = float.MinValue;
+
+            foreach (BattleSoldier target in targets)
+            {
+                float hitChance = EstimateHitProbability(attacker, target, weapon, didMove);
+                float takeOutChance = Math.Clamp(hitChance * EstimateTakeOutOnHit(target, attacker, weapon), 0, 1);
+                if (takeOutChance > bestTakeOutChance
+                    || (Math.Abs(takeOutChance - bestTakeOutChance) < 0.0001f && hitChance > bestHitChance)
+                    || (Math.Abs(takeOutChance - bestTakeOutChance) < 0.0001f
+                        && Math.Abs(hitChance - bestHitChance) < 0.0001f
+                        && (bestTarget == null || target.Soldier.Id < bestTarget.Soldier.Id)))
+                {
+                    bestTarget = target;
+                    bestTakeOutChance = takeOutChance;
+                    bestHitChance = hitChance;
+                }
+            }
+
+            return bestTarget;
+        }
+
+        private float EstimateTakeOutProbability(BattleSoldier attacker, BattleSoldier target, MeleeWeapon weapon, bool didMove)
+        {
+            float hitChance = EstimateHitProbability(attacker, target, weapon, didMove);
+            return Math.Clamp(hitChance * EstimateTakeOutOnHit(target, attacker, weapon), 0, 1);
+        }
+
+        private float EstimateHitProbability(BattleSoldier attacker, BattleSoldier target, MeleeWeapon weapon, bool didMove)
+        {
+            float attackSkill = attacker.Soldier.GetTotalSkillValue(weapon.Template.RelatedSkill);
+            float defenderSkill = MeleeAttackAction.GetDefenderMeleeSkill(target, weapon.Template.RelatedSkill);
+            float defenderDefenseModifier = MeleeAttackAction.GetDefenderDefenseModifier(target);
+            return MeleeAttackAction.EstimateHitProbability(attackSkill,
+                                                            weapon.Template.Accuracy,
+                                                            didMove,
+                                                            defenderSkill,
+                                                            target.Soldier.Template.Species.MeleeEvasion,
+                                                            defenderDefenseModifier);
+        }
+
+        private float EstimateTakeOutOnHit(BattleSoldier target, BattleSoldier attacker, MeleeWeapon weapon)
+        {
+            float averageDamage = attacker.Soldier.Strength * weapon.Template.StrengthMultiplier * 3.5f;
+            float effectiveArmor = (target.Armor?.Template.ArmorProvided ?? 0) * weapon.Template.ArmorMultiplier;
+            float penetratingDamage = Math.Max(0, averageDamage - effectiveArmor);
+            float woundRatio = (penetratingDamage * weapon.Template.WoundMultiplier) / target.Soldier.Constitution;
+            return Math.Clamp(woundRatio, 0, 1);
         }
 
         private void AddRangedActionToBag(BattleSoldier soldier, bool isMoving)

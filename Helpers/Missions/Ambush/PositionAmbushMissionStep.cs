@@ -9,6 +9,7 @@ using OnlyWar.Models;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using OnlyWar.Helpers.StrategicCombat;
 
 namespace OnlyWar.Helpers.Missions.Ambush
 {
@@ -62,7 +63,9 @@ namespace OnlyWar.Helpers.Missions.Ambush
             var request = new ForceGenerationRequest
             {
                 Faction = enemyFaction.PlanetFaction.Faction,
-                TargetBattleValue = forceSize * 10, // for now, assume 10 BV per soldier
+                // Mission size is still expressed in rough headcount bands; convert it using the
+                // compressed PDF baseline so it remains in the same strategic unit scale.
+                TargetBattleValue = forceSize * StrategicCombatRules.PdfTrooperBattleValue,
                 Profile = ForceCompositionProfile.AmbushForce
             };
             return ForceGenerator.GenerateForce(request).Select(s => new BattleSquad(false, s)).ToList();

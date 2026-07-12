@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Linq;
 
 namespace OnlyWar.Helpers.Battles
 {
@@ -143,6 +144,36 @@ namespace OnlyWar.Helpers.Battles
         {
             float distance = GetNearestEnemy(soldierId, out int closestSoldierId);
             return closestSoldierId != -1 && distance <= 1.001f;
+        }
+
+        public IReadOnlyList<int> GetAdjacentEnemies(int soldierId)
+        {
+            if (!_soldiers.ContainsKey(soldierId))
+            {
+                throw new ArgumentException("Soldier not found");
+            }
+
+            bool soldierTeam = _soldierSideMap[soldierId];
+            List<Tuple<int, float>> adjacentEnemies = [];
+            foreach (int otherSoldierId in _soldierPositionsMap.Keys)
+            {
+                if (_soldierSideMap[otherSoldierId] == soldierTeam)
+                {
+                    continue;
+                }
+
+                float distance = GetDistanceBetweenSoldiers(soldierId, otherSoldierId);
+                if (distance <= 1.001f)
+                {
+                    adjacentEnemies.Add(new Tuple<int, float>(otherSoldierId, distance));
+                }
+            }
+
+            return adjacentEnemies
+                .OrderBy(tuple => tuple.Item2)
+                .ThenBy(tuple => tuple.Item1)
+                .Select(tuple => tuple.Item1)
+                .ToList();
         }
 
         public bool GetSoldierSide(int soldierId)

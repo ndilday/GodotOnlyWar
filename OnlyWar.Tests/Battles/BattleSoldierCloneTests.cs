@@ -24,6 +24,7 @@ public class BattleSoldierCloneTests
         source.TurnsRunning = 2;
         source.TurnsShooting = 3;
         source.TurnsSwinging = 4;
+        source.TurnsDefending = 5;
         source.TurnsAiming = 5;
         source.WoundsTaken = 6;
         source.EnemiesTakenDown = 7;
@@ -44,6 +45,7 @@ public class BattleSoldierCloneTests
         Assert.Equal(source.TurnsRunning, clone.TurnsRunning);
         Assert.Equal(source.TurnsShooting, clone.TurnsShooting);
         Assert.Equal(source.TurnsSwinging, clone.TurnsSwinging);
+        Assert.Equal(source.TurnsDefending, clone.TurnsDefending);
         Assert.Equal(source.TurnsAiming, clone.TurnsAiming);
         Assert.Equal(source.WoundsTaken, clone.WoundsTaken);
         Assert.Equal(source.EnemiesTakenDown, clone.EnemiesTakenDown);

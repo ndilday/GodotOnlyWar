@@ -87,23 +87,26 @@ namespace OnlyWar.Models.Equippables
 
     public class MeleeWeaponTemplate: WeaponTemplate
     {
+        public const float DefaultAttackSpeedMultiplier = 1.0f;
+
         public float StrengthMultiplier { get; }
-        public float ExtraDamage { get; }
         public float ParryModifier { get; }
+        public float AttackSpeedMultiplier { get; }
         //public float Reach;
-        public float ExtraAttacks { get; }
+
         public MeleeWeaponTemplate(int id, string name, EquipLocation location,
                               BaseSkill skill, float accuracy,
                               float armorMultiplier, float penetrationMultiplier,
                               float requiredStrength, float strengthMultiplier,
-                              float extraDamage, float parryMod, float extraAttacks)
+                              float parryMod, float attackSpeedMultiplier)
                               : base(id, name, location, skill, accuracy, armorMultiplier, 
                                      penetrationMultiplier, requiredStrength)
         {
             StrengthMultiplier = strengthMultiplier;
-            ExtraDamage = extraDamage;
             ParryModifier = parryMod;
-            ExtraAttacks = extraAttacks;
+            AttackSpeedMultiplier = attackSpeedMultiplier <= 0
+                ? DefaultAttackSpeedMultiplier
+                : attackSpeedMultiplier;
         }
     }
 

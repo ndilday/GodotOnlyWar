@@ -99,9 +99,17 @@ namespace OnlyWar.Helpers.Battles
             }
 
             List<IAction> executedActions = new List<IAction>();
+            HashSet<int> defendingSoldierIds = [];
             HandleShooting(shootSegmentActions, executedActions);
             HandleMoving(moveSegmentActions, executedActions);
-            HandleMelee(meleeSegmentActions, executedActions);
+            HandleMelee(meleeSegmentActions, executedActions, defendingSoldierIds);
+            foreach (int soldierId in defendingSoldierIds)
+            {
+                if (_currentState.Soldiers.TryGetValue(soldierId, out BattleSoldier soldier))
+                {
+                    soldier.TurnsDefending++;
+                }
+            }
             _woundResolver.Resolve();
 
             CleanupAtEndOfTurn();
@@ -185,13 +193,18 @@ namespace OnlyWar.Helpers.Battles
             }
         }
 
-        private void HandleMelee(ConcurrentBag<IAction> meleeActions, List<IAction> executedActions)
+        private void HandleMelee(ConcurrentBag<IAction> meleeActions, List<IAction> executedActions, ISet<int> defendingSoldierIds)
         {
-            foreach (IAction action in meleeActions)
+            foreach (IAction action in meleeActions.OrderBy(action => action.ActorId))
             {
                 action.Execute(_currentState);
                 if (action is MeleeAttackAction meleeAction)
                 {
+                    foreach (int targetId in meleeAction.TargetedDefenderIds)
+                    {
+                        defendingSoldierIds.Add(targetId);
+                    }
+
                     foreach (WoundResolution wound in meleeAction.WoundResolutions)
                     {
                         _woundResolver.WoundQueue.Add(wound);
