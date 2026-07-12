@@ -426,6 +426,52 @@ public class SaveLoadRoundTripTests
         }
     }
 
+    [Fact]
+    public void Load_RepopulatesSectorOrders_FromLoadedPlayerSquads()
+    {
+        // Regression: the data-access layer restores orders only onto squads (Squad.CurrentOrders),
+        // so BuildSectorFromBlob must re-register them with Sector.Orders - the authoritative list
+        // that turn processing (TurnController) and the region/planet inbound-orders views read.
+        // Without the rebuild a reloaded game processes and displays no standing orders.
+        Sector sector = SectorBuilder.GenerateSector(1, _data, _date, "Load Orders Chapter");
+        GameDataSingleton.Instance.LoadGameDataFromBlob(_data, _date, sector);
+        _roundTrip.RegisterPlayerArmy(sector);
+        Unit armyRoot = sector.PlayerForce.Army.OrderOfBattle;
+
+        Squad orderedSquad = armyRoot.GetAllSquads().First(s => s.Members.Count > 0);
+        Region orderRegion = sector.Planets.Values
+            .SelectMany(p => p.Regions)
+            .First(r => r.RegionFactionMap.Count > 0);
+        RegionFaction orderTarget = orderRegion.RegionFactionMap.Values.First();
+        Mission orderMission = new(MissionType.Recon, orderTarget, 0);
+        Order order = new([orderedSquad], Disposition.Mobile, true, false, Aggression.Normal, orderMission);
+        orderedSquad.CurrentOrders = order;
+        sector.AddNewOrder(order);
+
+        string dbPath = GameStateRoundTripFixture.CreateTempDbPath("onlywar_load_orders");
+        try
+        {
+            _roundTrip.Save(sector, dbPath, _roundTrip.CurrentUnits);
+            GameStateDataBlob loaded = _roundTrip.Load(dbPath);
+
+            // A fresh rules-data instance, exactly as the real StartMenu load path constructs.
+            GameRulesData freshRules = new();
+            Sector rebuilt = SavedGameLoader.BuildSectorFromBlob(loaded, freshRules);
+
+            Squad rebuiltSquad = rebuilt.PlayerForce.Army.OrderOfBattle.GetAllSquads()
+                .Single(s => s.Id == orderedSquad.Id);
+            Assert.NotNull(rebuiltSquad.CurrentOrders);
+            Assert.Equal(MissionType.Recon, rebuiltSquad.CurrentOrders.Mission.MissionType);
+            // The squad's restored order is registered with the Sector, not merely dangling off
+            // the squad - this is the assertion that would have caught the empty-Orders bug.
+            Assert.Contains(rebuiltSquad.CurrentOrders, rebuilt.Orders.Values);
+        }
+        finally
+        {
+            GameStateRoundTripFixture.CleanupDb(dbPath);
+        }
+    }
+
     private static int CountSoldiers(IEnumerable<Unit> rootUnits)
     {
         return rootUnits.Sum(u => u.GetAllSquads().Sum(s => s.Members.Count));

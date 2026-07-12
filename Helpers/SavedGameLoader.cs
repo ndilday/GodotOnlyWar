@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using System.Linq;
 using OnlyWar.Helpers.Database.GameState;
 using OnlyWar.Models;
+using OnlyWar.Models.Orders;
 using OnlyWar.Models.Soldiers;
 
 namespace OnlyWar.Helpers
@@ -57,6 +58,22 @@ namespace OnlyWar.Helpers
             // Reattach the Opening Scenario state (null for legacy/sandbox saves), which rides on the
             // GlobalData row rather than being derived (Design/OpeningScenario.md §7).
             sector.Scenario = gameState.Scenario;
+
+            // The data-access layer restores each Order onto its squads (Squad.CurrentOrders) but
+            // never re-registers it with the Sector, whose Orders collection is authoritative for
+            // turn processing (TurnController reads sector.Orders.Values) and the region/planet
+            // "inbound orders" views. Rebuild it here from the loaded player squads - the exact
+            // inverse of SaveData, which persists the distinct CurrentOrders of the player's squads.
+            // Without this a reloaded game processes no standing orders and shows none as inbound.
+            foreach (Order order in gameState.Units
+                         .Where(u => u.UnitTemplate.Faction.Id == gameRulesData.PlayerFaction.Id)
+                         .SelectMany(u => u.GetAllSquads())
+                         .Select(squad => squad.CurrentOrders)
+                         .Where(o => o != null && o.Mission != null)
+                         .Distinct())
+            {
+                sector.AddNewOrder(order);
+            }
             return sector;
         }
     }

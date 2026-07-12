@@ -142,6 +142,11 @@ namespace OnlyWar.Helpers
 
         public void ProcessTurn(Sector sector)
         {
+            // Ending the displayed turn advances the campaign into the week whose events are
+            // about to be resolved. Keeping this in the turn controller ensures every caller
+            // (including simulations outside the main screen) observes the same campaign date.
+            GameDataSingleton.Instance.Date.IncrementWeek();
+
             MissionContexts.Clear();
             SpecialMissions.Clear();
             StrategicCombatResults.Clear();

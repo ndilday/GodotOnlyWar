@@ -1,4 +1,5 @@
-﻿using OnlyWar.Helpers.Battles;
+﻿using OnlyWar.Helpers;
+using OnlyWar.Helpers.Battles;
 using OnlyWar.Models.Soldiers;
 using OnlyWar.Models.Squads;
 using System.Collections.Generic;
@@ -30,13 +31,22 @@ namespace OnlyWar.Helpers.Missions
                 return;
             }
             float points = MissionExperienceCalculator.CalculatePointsForMargin(margin);
+            int recipients = 0;
             foreach (BattleSoldier soldier in squads.SelectMany(s => s.AbleSoldiers))
             {
                 if (soldier?.Soldier is PlayerSoldier playerSoldier)
                 {
                     playerSoldier.AddSkillPoints(skillUsed, points);
+                    GameLog.Trace(() =>
+                        $"Field XP: {playerSoldier.Name} +{points:F4} {skillUsed.Name} "
+                        + $"(margin={margin:F2})");
+                    recipients++;
                 }
             }
+            int awardedCount = recipients;
+            GameLog.Trace(() =>
+                $"Field XP awarded: {skillUsed.Name} margin={margin:F2} -> "
+                + $"{points:F4} pts to {awardedCount} soldier(s)");
         }
     }
 

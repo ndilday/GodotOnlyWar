@@ -16,6 +16,16 @@ public class MultiTurnSmokeTests
     private const int TurnCount = 12;
 
     [Fact]
+    public void ProcessTurn_AdvancesCampaignDate()
+    {
+        SectorSimulationFixture fixture = SectorSimulationFixture.Create();
+
+        fixture.ProcessTurn();
+
+        Assert.Equal(new Date(1, 1, 2), GameDataSingleton.Instance.Date);
+    }
+
+    [Fact]
     public void RunningManyTurns_KeepsSectorInvariantsConsistent()
     {
         RNG.Reset(424242);
