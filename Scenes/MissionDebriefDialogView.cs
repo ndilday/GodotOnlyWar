@@ -9,7 +9,7 @@ public partial class MissionDebriefDialogView : DialogView
 {
     private Label _titleLabel;
     private Label _subtitleLabel;
-    private Button _outcomeButton;
+    private Label _outcomeLabel;
     private Label _outcomeSummary;
     private ScrollContainer _stepScroll;
     private VBoxContainer _lineList;
@@ -21,13 +21,12 @@ public partial class MissionDebriefDialogView : DialogView
         base._Ready();
         _titleLabel = GetNode<Label>("DebriefPanel/DebriefMargin/Layout/HeaderPanel/HeaderMargin/HeaderStack/TitleLabel");
         _subtitleLabel = GetNode<Label>("DebriefPanel/DebriefMargin/Layout/HeaderPanel/HeaderMargin/HeaderStack/SubtitleLabel");
-        _outcomeButton = GetNode<Button>("DebriefPanel/DebriefMargin/Layout/OutcomeButton");
+        _outcomeLabel = GetNode<Label>("DebriefPanel/DebriefMargin/Layout/OutcomeLabel");
         _outcomeSummary = GetNode<Label>("DebriefPanel/DebriefMargin/Layout/OutcomeSummary");
         _stepScroll = GetNode<ScrollContainer>("DebriefPanel/DebriefMargin/Layout/ScrollContainer");
         _lineList = GetNode<VBoxContainer>("DebriefPanel/DebriefMargin/Layout/ScrollContainer/LineList");
         OnlyWarStyle.ApplyContentPanel(GetNode<Panel>("DebriefPanel"));
         OnlyWarStyle.ApplyInsetPanel(GetNode<Panel>("DebriefPanel/DebriefMargin/Layout/HeaderPanel"));
-        _outcomeButton.Pressed += ToggleSteps;
     }
 
     public void SetMissionDebrief(string title, string subtitle, string outcomeStatus,
@@ -35,9 +34,9 @@ public partial class MissionDebriefDialogView : DialogView
     {
         _titleLabel.Text = (title ?? "Mission Debrief").ToUpperInvariant();
         _subtitleLabel.Text = subtitle ?? "";
-        _outcomeButton.Text = $"▸  {outcomeStatus ?? "MISSION OUTCOME"} — SHOW MISSION STEPS";
+        _outcomeLabel.Text = outcomeStatus ?? "MISSION OUTCOME";
         _outcomeSummary.Text = outcomeSummary ?? "";
-        _stepScroll.Visible = false;
+        _stepScroll.Visible = true;
         ClearLines();
 
         if (lines == null || lines.Count == 0)
@@ -50,17 +49,6 @@ public partial class MissionDebriefDialogView : DialogView
         {
             AddTextLine(line);
         }
-    }
-
-    private void ToggleSteps()
-    {
-        _stepScroll.Visible = !_stepScroll.Visible;
-        string marker = _stepScroll.Visible ? "▾" : "▸";
-        string action = _stepScroll.Visible ? "HIDE MISSION STEPS" : "SHOW MISSION STEPS";
-        string status = _outcomeButton.Text;
-        int separator = status.IndexOf(" — ", StringComparison.Ordinal);
-        if (separator >= 0) status = status.Substring(3, separator - 3);
-        _outcomeButton.Text = $"{marker}  {status} — {action}";
     }
 
     private void AddTextLine(MissionDebriefLine line)

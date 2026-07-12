@@ -82,11 +82,11 @@ layout_mode = 2
 text = ""
 autowrap_mode = 2
 
-[node name="OutcomeButton" type="Button" parent="DialogView/DebriefPanel/DebriefMargin/Layout"]
+[node name="OutcomeLabel" type="Label" parent="DialogView/DebriefPanel/DebriefMargin/Layout"]
 custom_minimum_size = Vector2(0, 58)
 layout_mode = 2
 text = "MISSION OUTCOME"
-alignment = 0
+vertical_alignment = 1
 
 [node name="OutcomeSummary" type="Label" parent="DialogView/DebriefPanel/DebriefMargin/Layout"]
 layout_mode = 2

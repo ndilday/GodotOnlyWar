@@ -38,6 +38,14 @@ public partial class Camera2D : Godot.Camera2D
 
 	public override void _UnhandledInput(InputEvent @event)
 	{
+        // Hidden full-screen views and visible dialogs both make the map non-interactive.
+        // The dialog check is also a defensive backstop for wheel events released by a
+        // ScrollContainer after it reaches the end of its scroll range.
+        if (!IsVisibleInTree() || IsDialogVisible())
+        {
+            return;
+        }
+
         if (@event is InputEventMouseButton emb)
         {
             // zoom in
@@ -72,6 +80,19 @@ public partial class Camera2D : Godot.Camera2D
             ClampCamera();
         }
 	}
+
+    private bool IsDialogVisible()
+    {
+        foreach (Node node in GetTree().GetNodesInGroup(DialogController.DialogInputBlockerGroup))
+        {
+            if (node is CanvasItem { Visible: true } canvasItem && canvasItem.IsVisibleInTree())
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
 
     // Returns the most zoomed-out level allowed: the smallest zoom at which the
     // map (including its border) still covers the unoccluded gap between the
