@@ -73,5 +73,8 @@ namespace OnlyWar.Helpers.Battles.Aftermath
             }
             return FirstSideFaction ?? SecondSideFaction;
         }
+
+        public bool IsSecondSide(BattleSoldier soldier) =>
+            soldier?.BattleSquad != null && _secondSideSquadIds.Contains(soldier.BattleSquad.Id);
     }
 }

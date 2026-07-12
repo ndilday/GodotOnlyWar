@@ -26,7 +26,7 @@ public class MissionStepOutcomeSignalTests
     {
         MissionContext context = CreateContext(MissionType.Assassination);
         context.AssassinationTargetSoldierId = 42;
-        BattleHistory history = new() { EnemiesKilled = 2 };
+        BattleHistory history = new() { FirstSideEnemiesKilled = 2 };
         history.KilledSoldierIds.Add(42);
 
         context.RecordBattleOutcome(history);
@@ -40,7 +40,7 @@ public class MissionStepOutcomeSignalTests
     {
         MissionContext context = CreateContext(MissionType.Assassination);
         context.AssassinationTargetSoldierId = 42;
-        BattleHistory history = new() { EnemiesKilled = 1 };
+        BattleHistory history = new() { FirstSideEnemiesKilled = 1 };
         history.KilledSoldierIds.Add(99);
 
         context.RecordBattleOutcome(history);

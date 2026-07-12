@@ -112,7 +112,7 @@ namespace OnlyWar.Models.Missions
 
         public void RecordBattleOutcome(BattleHistory battleHistory)
         {
-            EnemiesKilled += battleHistory.EnemiesKilled;
+            EnemiesKilled += battleHistory.FirstSideEnemiesKilled;
             if (AssassinationTargetSoldierId is int targetId
                 && battleHistory.KilledSoldierIds.Contains(targetId))
             {

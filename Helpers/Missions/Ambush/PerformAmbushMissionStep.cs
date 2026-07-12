@@ -72,7 +72,7 @@ namespace OnlyWar.Helpers.Missions.Ambush
                 {
                     resolver.ProcessNextTurn();
                 }
-                context.EnemiesKilled += resolver.BattleHistory.EnemiesKilled;
+                context.RecordBattleOutcome(resolver.BattleHistory);
                 context.AddBattleLog(resolver.BattleHistory.GetBattleLog(), resolver.BattleHistory);
                 new ExfiltrateMissionStep().ExecuteMissionStep(context, 0, null);
             }

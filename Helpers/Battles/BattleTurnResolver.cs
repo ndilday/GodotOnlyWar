@@ -66,6 +66,10 @@ namespace OnlyWar.Helpers.Battles
         {
             _casualtyMap[wound.Suffererer.Soldier.Id] = wound.Suffererer;
             BattleHistory.KilledSoldierIds.Add(wound.Suffererer.Soldier.Id);
+            if (_aftermathContext.IsSecondSide(wound.Suffererer))
+            {
+                BattleHistory.FirstSideEnemiesKilled++;
+            }
             _aftermathPolicy.OnSoldierKilled(wound, woundLevel);
         }
 
