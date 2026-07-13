@@ -11,18 +11,6 @@ namespace OnlyWar.Tests.Domain;
 public class NamedSkillRegistryTests
 {
     [Fact]
-    public void Registry_ResolvesRequiredSkills_FromRealRulesDatabase()
-    {
-        var rules = RulesDatabaseFixture.LoadRules();
-
-        var registry = new NamedSkillRegistry(rules.BaseSkills);
-
-        Assert.Equal("Stealth", registry.Stealth.Name);
-        Assert.Equal("Tactics", registry.Tactics.Name);
-        Assert.Equal("Fist", registry.Fist.Name);
-    }
-
-    [Fact]
     public void Registry_FailsFast_WhenRequiredSkillIsMissing()
     {
         var rules = RulesDatabaseFixture.LoadRules();

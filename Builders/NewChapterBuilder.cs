@@ -23,18 +23,27 @@ namespace OnlyWar.Builders
         // Judiciars (chaplains in training) kept in the Reclusium beyond the one seconded to
         // each captained company, forming the chaplaincy's pool of aspirants.
         private const int RECLUSIUM_JUDICIAR_RESERVE = 2;
+        private const int DEFAULT_FOUNDING_SOLDIER_COUNT = 1000;
         private delegate void TrainingFunction(PlayerSoldier playerSoldier);
 
         internal static PlayerForce CreateChapter(GameRulesData data,
                                                   ISoldierTrainingService trainingService,
                                                   Date trainingStartDate,
                                                   Date date,
-                                                  string chapterName = null)
+                                                  string chapterName = null,
+                                                  int foundingSoldierCount = DEFAULT_FOUNDING_SOLDIER_COUNT)
         {
+            if (foundingSoldierCount <= 0)
+            {
+                throw new ArgumentOutOfRangeException(nameof(foundingSoldierCount),
+                    "A chapter must start with at least one soldier.");
+            }
+
             chapterName = string.IsNullOrWhiteSpace(chapterName) ? "Heart of the Emperor" : chapterName.Trim();
             Date trainingEndDate =
                 new Date(trainingStartDate.GetTotalWeeks() + INITIAL_TRAINING_DURATION_WEEKS);
-            List<PlayerSoldier> soldiers = GenerateInitialSoldiers(data, trainingService, trainingStartDate, date, trainingEndDate);
+            List<PlayerSoldier> soldiers = GenerateInitialSoldiers(
+                data, trainingService, trainingStartDate, date, trainingEndDate, foundingSoldierCount);
 
             PlayerForce chapter = BuildChapterStructure(data, trainingEndDate, soldiers, chapterName);
             chapter.Army.Requisition = FOUNDING_REQUISITION;
@@ -49,7 +58,7 @@ namespace OnlyWar.Builders
             chapter.Fleet.TaskForces.Add(new TaskForce(data.PlayerFaction, data.PlayerFaction.FleetTemplates.First().Value));
             List<string> foundingHistoryEntries = new List<string>
             {
-                $"The {chapterName} officially forms with its first 1,000 battle brothers."
+                $"The {chapterName} officially forms with its first {foundingSoldierCount:N0} battle brothers."
             };
             chapter.AddToBattleHistory(date, "Chapter Founding", foundingHistoryEntries);
             return chapter;
@@ -67,12 +76,18 @@ namespace OnlyWar.Builders
             return chapter;
         }
 
-        private static List<PlayerSoldier> GenerateInitialSoldiers(GameRulesData data, ISoldierTrainingService trainingService, Date trainingStartDate, Date date, Date trainingEndDate)
+        private static List<PlayerSoldier> GenerateInitialSoldiers(
+            GameRulesData data,
+            ISoldierTrainingService trainingService,
+            Date trainingStartDate,
+            Date date,
+            Date trainingEndDate,
+            int foundingSoldierCount)
         {
             SoldierTemplate soldierTemplate = data.PlayerFaction.SoldierTemplates[0];
             List<PlayerSoldier> soldiers =
                 SoldierFactory.Instance.GenerateNewSoldiers(
-                    1000,
+                    foundingSoldierCount,
                     soldierTemplate.Species,
                     data.SkillTemplateList)
                 .Select(s => new PlayerSoldier(s, $"{NameGenerator.GetName()} {NameGenerator.GetName()}"))

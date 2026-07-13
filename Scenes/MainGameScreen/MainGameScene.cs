@@ -34,6 +34,7 @@ public partial class MainGameScene : Control
 	private RegionScreenController _regionScreen;
 	private Stack<Control> _previousScreenStack;
 	private CanvasLayer _mainUILayer;
+	private ActivityOverlay _activityOverlay;
 	private TurnController _turnController;
 	private EndOfTurnDialogController _endOfTurnDialog;
 	private BriefingDialogController _briefingDialog;
@@ -41,6 +42,7 @@ public partial class MainGameScene : Control
 	private CampaignScenario _pendingBriefingScenario;
 	private int? _selectedPlanetId;
 	private int? _selectedFleetId;
+	private bool _isProcessingTurn;
 	public override void _Ready()
 	{
 		// The engine log seams (BattleLog/GameLog) are wired to the Godot console by the
@@ -78,6 +80,7 @@ public partial class MainGameScene : Control
 		_sectorMap.FleetClicked += OnFleetClicked;
 		_sectorMap.FleetRightClicked += OnFleetRightClicked;
 		_mainUILayer = GetNode<CanvasLayer>("UILayer");
+		_activityOverlay = GetNode<ActivityOverlay>("UILayer/ActivityOverlay");
 		_turnController = new TurnController();
 		_previousScreenStack = new Stack<Control>();
 		RefreshTopMenuStatus();
@@ -606,7 +609,35 @@ public partial class MainGameScene : Control
 		RefreshSelectedSystemInspector();
 	}
 
-	private void OnEndTurnButtonPressed(object sender, EventArgs e)
+	private async void OnEndTurnButtonPressed(object sender, EventArgs e)
+	{
+		if (_isProcessingTurn)
+		{
+			return;
+		}
+
+		_isProcessingTurn = true;
+		_activityOverlay.ShowBusy("RESOLVING TURN", "Processing orders, movement, and the wider war...");
+		// Let the modal draw before the synchronous turn resolver starts.
+		await ToSignal(GetTree(), "process_frame");
+		await ToSignal(GetTree(), "process_frame");
+
+		try
+		{
+			ProcessTurnCore();
+		}
+		catch (Exception exception)
+		{
+			GD.PushError($"Turn resolution failed: {exception}");
+		}
+		finally
+		{
+			_activityOverlay.HideBusy();
+			_isProcessingTurn = false;
+		}
+	}
+
+	private void ProcessTurnCore()
 	{
 		// handle squad orders
 		_turnController.ProcessTurn(GameDataSingleton.Instance.Sector);

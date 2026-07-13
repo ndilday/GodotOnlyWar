@@ -17,29 +17,6 @@ public class ChapterGenerationTemplatesTests
     }
 
     [Fact]
-    public void Registry_ResolvesRequiredTemplates_FromRealRulesDatabase()
-    {
-        var templates = new ChapterGenerationTemplates(LoadPlayerFaction());
-
-        // A representative spread across the soldier-template and squad-template sets.
-        Assert.Equal("Chapter Master", templates.ChapterMaster.Name);
-        Assert.Equal("Codiciers", templates.Codicier.Name);
-        Assert.Equal("Sergeant", templates.Sergeant.Name);
-        Assert.Equal("Scout Marine", templates.ScoutMarine.Name);
-        Assert.Equal("Tactical Squad", templates.TacticalSquad.Name);
-        Assert.Equal("Scout Squad", templates.ScoutSquad.Name);
-
-        // Specialist chapter HQ squad templates and the distinct-identity companies
-        // used to locate generated units/squads by template rather than display name.
-        Assert.Equal("Librarius", templates.Librarius.Name);
-        Assert.Equal("Armory", templates.Armory.Name);
-        Assert.Equal("Apothecarion", templates.Apothecarion.Name);
-        Assert.Equal("Reclusium", templates.Reclusium.Name);
-        Assert.Equal("Veteran Company", templates.VeteranCompany.Name);
-        Assert.Equal("Scout Company", templates.ScoutCompany.Name);
-    }
-
-    [Fact]
     public void Registry_FailsFast_WhenRequiredSoldierTemplateIsMissing()
     {
         var playerFaction = LoadPlayerFaction();

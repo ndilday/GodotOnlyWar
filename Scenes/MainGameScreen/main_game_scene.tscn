@@ -1,4 +1,4 @@
-[gd_scene load_steps=7 format=3 uid="uid://hbcnhfu1vqdb"]
+[gd_scene load_steps=8 format=3 uid="uid://hbcnhfu1vqdb"]
 
 [ext_resource type="Script" uid="uid://c6xx12s582odk" path="res://Scenes/MainGameScreen/MainGameScene.cs" id="1_g3hiw"]
 [ext_resource type="PackedScene" uid="uid://ck5vq6a7t604p" path="res://Scenes/SectorMap/SectorMap.tscn" id="2_lvld5"]
@@ -6,6 +6,7 @@
 [ext_resource type="PackedScene" uid="uid://ctrhbg0anf5cx" path="res://Scenes/MainGameScreen/BottomMenu.tscn" id="4_1ccxp"]
 [ext_resource type="PackedScene" uid="uid://b0g3xsci3r5mb" path="res://Scenes/MainGameScreen/LeftMapTools.tscn" id="5_cgkku"]
 [ext_resource type="PackedScene" uid="uid://dbyl28kccv75p" path="res://Scenes/MainGameScreen/SystemInspector.tscn" id="6_f4umo"]
+[ext_resource type="PackedScene" path="res://Scenes/Common/activity_overlay.tscn" id="7_activity"]
 
 [node name="MainGameScene" type="Control"]
 layout_mode = 3
@@ -28,3 +29,5 @@ grow_vertical = 2
 [node name="SystemInspector" parent="UILayer" instance=ExtResource("6_f4umo")]
 
 [node name="BottomMenu" parent="UILayer" instance=ExtResource("4_1ccxp")]
+
+[node name="ActivityOverlay" parent="UILayer" instance=ExtResource("7_activity")]

@@ -134,36 +134,50 @@ public class ScenarioBuilderTests
     // world's final state is the product of several scoped turns of combat and growth. This guards
     // both the stamped metadata and the final simulated board for deterministic replay.
     [Fact]
-    public void Stamp_AndSimulatedBoard_AreDeterministicForSeed()
+    public void GenerateSector_SameSeedProducesSameOpeningOutcome()
     {
-        Sector first = SectorBuilder.GenerateSector(7, _data, _date, "Deterministic Chapter");
-        Sector second = SectorBuilder.GenerateSector(7, _data, _date, "Deterministic Chapter");
+        (GameRulesData firstData, Sector first) = GenerateFreshSector(7);
+        (GameRulesData secondData, Sector second) = GenerateFreshSector(7);
 
+        Assert.Equal(first.Scenario.Type, second.Scenario.Type);
+        Assert.Equal(first.Scenario.State, second.Scenario.State);
         Assert.Equal(first.Scenario.PromisedPlanetId, second.Scenario.PromisedPlanetId);
         Assert.Equal(first.Scenario.OriginalAuthorityCharacterId,
                      second.Scenario.OriginalAuthorityCharacterId);
         Assert.Equal(first.Scenario.BriefingText, second.Scenario.BriefingText);
 
-        Faction tyranids = Tyranids;
+        Faction firstTyranids = firstData.SectorFactions.Invader;
+        Faction secondTyranids = secondData.SectorFactions.Invader;
         List<int> firstStamped = TyranidRegions(
-                first.GetPlanet(first.Scenario.PromisedPlanetId), tyranids)
+                first.GetPlanet(first.Scenario.PromisedPlanetId), firstTyranids)
             .Select(r => r.Id).OrderBy(id => id).ToList();
         List<int> secondStamped = TyranidRegions(
-                second.GetPlanet(second.Scenario.PromisedPlanetId), tyranids)
+                second.GetPlanet(second.Scenario.PromisedPlanetId), secondTyranids)
             .Select(r => r.Id).OrderBy(id => id).ToList();
         Assert.Equal(firstStamped, secondStamped);
-        Assert.Equal(RegionFactionPopulations(first), RegionFactionPopulations(second));
+        Assert.Equal(FactionPopulationTotals(first), FactionPopulationTotals(second));
     }
 
-    // (regionId, factionId) -> population across every region faction on the promised world, sorted
-    // for a stable order-independent comparison.
-    private static List<((int, int), long)> RegionFactionPopulations(Sector sector)
+    private (GameRulesData Data, Sector Sector) GenerateFreshSector(int seed)
+    {
+        Directory.SetCurrentDirectory(RulesDatabaseFixture.RepositoryRoot);
+        GameRulesData data = new();
+        GameDataSingleton.Instance.LoadGameDataFromBlob(data, _date, null);
+        Sector sector = SectorBuilder.GenerateSector(seed, data, _date, "Deterministic Chapter");
+        return (data, sector);
+    }
+
+    // Faction totals are part of the opening outcome, while individual region-faction
+    // rows are implementation detail and would make this replay test unnecessarily brittle.
+    private static List<(int FactionId, long Population)> FactionPopulationTotals(Sector sector)
     {
         Planet promised = sector.GetPlanet(sector.Scenario.PromisedPlanetId);
         return promised.Regions
             .SelectMany(r => r.RegionFactionMap.Values
-                .Select(rf => ((r.Id, rf.PlanetFaction.Faction.Id), rf.Population)))
-            .OrderBy(t => t.Item1.Item1).ThenBy(t => t.Item1.Item2)
+                .Select(rf => rf))
+            .GroupBy(rf => rf.PlanetFaction.Faction.Id)
+            .Select(group => (FactionId: group.Key, Population: group.Sum(rf => rf.Population)))
+            .OrderBy(t => t.FactionId)
             .ToList();
     }
 

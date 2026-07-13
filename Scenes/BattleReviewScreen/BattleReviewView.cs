@@ -312,7 +312,7 @@ public partial class BattleReviewView : DialogView
 
             Label body = new()
             {
-                Text = CollapseWhitespace(entry.Text),
+                Text = NormalizeEventText(entry.Text),
                 AutowrapMode = TextServer.AutowrapMode.WordSmart
             };
             body.AddThemeFontSizeOverride("font_size", 12);
@@ -394,9 +394,15 @@ public partial class BattleReviewView : DialogView
         };
     }
 
-    private static string CollapseWhitespace(string text)
+    private static string NormalizeEventText(string text)
     {
-        return string.Join(" ", (text ?? "").Split((char[])null, StringSplitOptions.RemoveEmptyEntries));
+        string normalizedText = (text ?? "").Replace("\r\n", "\n");
+        return string.Join(
+            "\n",
+            normalizedText
+                .Split('\n')
+                .Select(line => string.Join(" ", line.Split((char[])null, StringSplitOptions.RemoveEmptyEntries)))
+                .Where(line => !string.IsNullOrWhiteSpace(line)));
     }
 
     private static void ClearContainer(Container container)

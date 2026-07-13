@@ -27,22 +27,64 @@ namespace OnlyWar.Builders
 
     public static class ForceGenerator
     {
+        private static readonly string[] SquadDesignators =
+        [
+            "Alpha", "Bravo", "Charlie", "Delta", "Echo", "Foxtrot", "Golf", "Hotel",
+            "India", "Juliett", "Kilo", "Lima", "Mike", "November", "Oscar", "Papa",
+            "Quebec", "Romeo", "Sierra", "Tango", "Uniform", "Victor", "Whiskey", "X-ray",
+            "Yankee", "Zulu"
+        ];
+
         public static List<Squad> GenerateForce(ForceGenerationRequest request)
         {
+            List<Squad> generatedForce;
             switch (request.Profile)
             {
                 case ForceCompositionProfile.SpecialHQTarget:
-                    return GenerateHqEncounter(request);
+                    generatedForce = GenerateHqEncounter(request);
+                    break;
 
                 case ForceCompositionProfile.ScoutPatrol:
-                    return GenerateScoutPatrol(request);
+                    generatedForce = GenerateScoutPatrol(request);
+                    break;
 
                 case ForceCompositionProfile.Garrison:
                 case ForceCompositionProfile.AssaultForce:
                 case ForceCompositionProfile.AmbushForce:
                 default:
-                    return GenerateGenericForce(request);
+                    generatedForce = GenerateGenericForce(request);
+                    break;
             }
+
+            NameGeneratedSquads(generatedForce);
+            return generatedForce;
+        }
+
+        private static void NameGeneratedSquads(IReadOnlyList<Squad> generatedSquads)
+        {
+            foreach (IGrouping<int, Squad> templateGroup in generatedSquads
+                .GroupBy(squad => squad.SquadTemplate.Id))
+            {
+                List<Squad> squads = templateGroup.ToList();
+                string templateName = squads[0].SquadTemplate.Name;
+                if (squads.Count == 1)
+                {
+                    squads[0].Name = templateName;
+                    continue;
+                }
+
+                for (int i = 0; i < squads.Count; i++)
+                {
+                    squads[i].Name = $"{templateName} {GetSquadDesignator(i)}";
+                }
+            }
+        }
+
+        private static string GetSquadDesignator(int index)
+        {
+            return index < SquadDesignators.Length
+                ? SquadDesignators[index]
+                : $"Unit {index + 1}";
         }
 
         private static List<Squad> GenerateGenericForce(ForceGenerationRequest request)

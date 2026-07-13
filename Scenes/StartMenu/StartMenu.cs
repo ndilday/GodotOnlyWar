@@ -6,22 +6,55 @@ using OnlyWar.Models;
 using OnlyWar.Models.Soldiers;
 using System;
 using System.Linq;
-using System.Threading.Tasks;
 
 public partial class StartMenu : Control
 {
 
 	private NewGameSetupController _setupScreen;
+	private ActivityOverlay _activityOverlay;
+	private bool _isTransitioning;
+
+	public override void _Ready()
+	{
+		_activityOverlay = GetNode<ActivityOverlay>("ActivityOverlay");
+	}
 
 	public void OnNewGameButtonPressed()
 	{
+		if (_isTransitioning)
+		{
+			return;
+		}
+
 		ShowNewGameSetup();
 	}
 
-	public void OnLoadGameButtonPressed()
+	public async void OnLoadGameButtonPressed()
 	{
-		LoadGameData();
-		LaunchMainGameScene();
+		if (_isTransitioning)
+		{
+			return;
+		}
+
+		_isTransitioning = true;
+		SetMenuButtonsVisible(false);
+		_activityOverlay.ShowBusy("LOADING CAMPAIGN", "Restoring the sector, forces, and orders...");
+		// Let the modal draw before the synchronous database reconstruction starts.
+		await ToSignal(GetTree(), "process_frame");
+		await ToSignal(GetTree(), "process_frame");
+
+		try
+		{
+			LoadGameData();
+			LaunchMainGameScene();
+		}
+		catch (Exception exception)
+		{
+			GD.PushError($"Load failed: {exception}");
+			_activityOverlay.HideBusy();
+			SetMenuButtonsVisible(true);
+			_isTransitioning = false;
+		}
 	}
 
     private void ShowNewGameSetup()
@@ -41,14 +74,36 @@ public partial class StartMenu : Control
         SetMenuButtonsVisible(true);
     }
 
-    private void OnCampaignConfirmed(object sender, NewGameSettings settings)
+    private async void OnCampaignConfirmed(object sender, NewGameSettings settings)
     {
-        GameDataSingleton.Instance.InitializeNewGameData(
-            new GameRulesData(),
-            new Date(39, 500, 1),
-            settings.ChapterName,
-            settings.Seed);
-        LaunchMainGameScene();
+        if (_isTransitioning)
+        {
+            return;
+        }
+
+        _isTransitioning = true;
+        _setupScreen.Visible = false;
+        _activityOverlay.ShowBusy("FOUNDING CHAPTER", "Generating the sector and preparing your command...");
+		// Let the modal draw before the synchronous sector generation starts.
+        await ToSignal(GetTree(), "process_frame");
+		await ToSignal(GetTree(), "process_frame");
+
+        try
+        {
+            GameDataSingleton.Instance.InitializeNewGameData(
+                new GameRulesData(),
+                new Date(39, 500, 1),
+                settings.ChapterName,
+                settings.Seed);
+            LaunchMainGameScene();
+        }
+        catch (Exception exception)
+        {
+            GD.PushError($"New game failed: {exception}");
+            _activityOverlay.HideBusy();
+            _setupScreen.Visible = true;
+            _isTransitioning = false;
+        }
     }
 
     private void SetMenuButtonsVisible(bool isVisible)
@@ -56,15 +111,13 @@ public partial class StartMenu : Control
         GetNode<Control>("MenuButtons").Visible = isVisible;
     }
 
-    private async void LaunchMainGameScene()
+    private void LaunchMainGameScene()
     {
         // Replace StartMenu with MainGameScene
         PackedScene mainGameSceneScene = GD.Load<PackedScene>("res://Scenes/MainGameScreen/main_game_scene.tscn");
         MainGameScene mainGameSceneInstance = mainGameSceneScene.Instantiate<MainGameScene>();
         QueueFree(); // StartMenu removes itself
         GetParent().AddChild(mainGameSceneInstance); // Add MainGameScene to the *parent* of StartMenu
-
-        await Task.Delay(1); // Small delay to ensure MainGameScene is fully in tree before _Ready()
     }
 
     private void LoadGameData()

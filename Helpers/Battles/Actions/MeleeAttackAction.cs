@@ -219,6 +219,9 @@ namespace OnlyWar.Helpers.Battles.Actions
 
             if (best == float.MinValue)
             {
+                // Unarmed defenders fight with the default unarmed weapon's skill (Fist for
+                // Astartes, Generic Melee for NPC species). Basic unarmed-combat training is
+                // part of every soldier's MOS data, so this stays above raw untrained.
                 MeleeWeapon unarmedWeapon = GetUnarmedWeapon(defender);
                 best = defender.Soldier.GetTotalSkillValue(
                     unarmedWeapon?.Template.RelatedSkill ?? fallbackSkill);
@@ -323,7 +326,8 @@ namespace OnlyWar.Helpers.Battles.Actions
                 }
 
                 hitCountByTargetAndWeapon.TryGetValue(key, out int hitCount);
-                desc += $"{_attackerName} attacks {strikePlan.TargetName} with {strikePlan.WeaponName}, hitting {hitCount} times.\n";
+                desc += $"{_attackerName} attacks {strikePlan.TargetName} with {strikePlan.WeaponName}\n";
+                desc += $"Hitting {hitCount} times.\n";
             }
 
             foreach (WoundResolution wound in WoundResolutions)

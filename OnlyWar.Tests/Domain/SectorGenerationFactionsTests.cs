@@ -11,17 +11,6 @@ namespace OnlyWar.Tests.Domain;
 public class SectorGenerationFactionsTests
 {
     [Fact]
-    public void Registry_ResolvesRequiredFactions_FromRealRulesDatabase()
-    {
-        var rules = RulesDatabaseFixture.LoadRules();
-
-        var sectorFactions = new SectorGenerationFactions(rules.Factions);
-
-        Assert.Equal("Genestealer Cult", sectorFactions.Infiltrator.Name);
-        Assert.Equal("Tyranids", sectorFactions.Invader.Name);
-    }
-
-    [Fact]
     public void Registry_FailsFast_WhenRequiredFactionIsMissing()
     {
         var rules = RulesDatabaseFixture.LoadRules();

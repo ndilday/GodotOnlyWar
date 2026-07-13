@@ -64,10 +64,16 @@ public class NewChapterBuilderTests
     }
 
     [Fact]
-    public void CreateChapter_LeavesNoEmptyCompanySquadsAndPlacesEverySoldier()
+    public void CreateChapter_DoesNotLoseSoldiersDuringAssignment()
     {
+        const int foundingSoldierCount = 500;
         PlayerForce chapter = NewChapterBuilder.CreateChapter(
-            _data, CreateTrainingService(), new Date(39, 496, 1), new Date(39, 500, 1), "Crimson Sentinels");
+            _data,
+            CreateTrainingService(),
+            new Date(39, 496, 1),
+            new Date(39, 500, 1),
+            "Crimson Sentinels",
+            foundingSoldierCount: foundingSoldierCount);
 
         var oob = chapter.Army.OrderOfBattle;
 
@@ -85,8 +91,10 @@ public class NewChapterBuilderTests
                 string.Join(", ", emptyLineSquads.Select(s => $"{s.Name} ({s.SquadTemplate.Name})")));
         }
 
-        // No soldier is lost in the create-on-demand assignment.
-        Assert.Equal(1000, oob.GetAllMembers().Count());
+        // No soldier is lost in the create-on-demand assignment. The test uses a
+        // compact founding roster so this checks the assignment logic rather than
+        // pinning the test to the production chapter size.
+        Assert.Equal(foundingSoldierCount, oob.GetAllMembers().Count());
     }
 
     [Fact]

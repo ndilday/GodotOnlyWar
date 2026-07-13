@@ -204,6 +204,38 @@ public class ForceGeneratorTests
     }
 
     [Fact]
+    public void GeneratedForce_NamesRepeatedTemplatesWithPhoneticDesignators()
+    {
+        SquadTemplate line = CreateTemplate(1, "Line", SquadTypes.None, 1, 1);
+        Faction faction = CreateFaction(line);
+
+        List<Squad> generated = ForceGenerator.GenerateForce(new ForceGenerationRequest
+        {
+            Faction = faction,
+            TargetBattleValue = 3,
+            Profile = ForceCompositionProfile.AssaultForce
+        });
+
+        Assert.Equal(["Line Alpha", "Line Bravo", "Line Charlie"], generated.Select(squad => squad.Name).ToArray());
+    }
+
+    [Fact]
+    public void GeneratedForce_UsesTemplateNameWhenTemplateAppearsOnce()
+    {
+        SquadTemplate line = CreateTemplate(1, "Line", SquadTypes.None, 1, 1);
+        Faction faction = CreateFaction(line);
+
+        List<Squad> generated = ForceGenerator.GenerateForce(new ForceGenerationRequest
+        {
+            Faction = faction,
+            TargetBattleValue = 1,
+            Profile = ForceCompositionProfile.AssaultForce
+        });
+
+        Assert.Equal("Line", Assert.Single(generated).Name);
+    }
+
+    [Fact]
     public void SpecialHqTarget_ClampsTierAndAddsBodyguardWhenBudgetIsZero()
     {
         SquadTemplate lesserHq = CreateTemplate(1, "Lesser HQ", SquadTypes.HQ, 1, 5);

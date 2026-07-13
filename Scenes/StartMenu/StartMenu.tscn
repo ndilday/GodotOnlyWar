@@ -1,8 +1,9 @@
-[gd_scene format=3 uid="uid://b5sny34jdvj4p"]
+[gd_scene load_steps=5 format=3 uid="uid://b5sny34jdvj4p"]
 
 [ext_resource type="Script" uid="uid://hw54lwpq6qao" path="res://Scenes/StartMenu/StartMenu.cs" id="1_k7bfn"]
 [ext_resource type="Texture2D" uid="uid://dinv6fao5fjj0" path="res://Scenes/StartMenu/start_menu_command_sanctum_hive.png" id="1_vpgy8"]
 [ext_resource type="Theme" uid="uid://ylp8bk1nhedq" path="res://Scenes/OnlyWarTheme.tres" id="3_theme"]
+[ext_resource type="PackedScene" path="res://Scenes/Common/activity_overlay.tscn" id="4_activity"]
 
 [node name="StartMenu" type="Control" unique_id=812985460]
 layout_mode = 3
@@ -64,6 +65,8 @@ text = "New Game"
 [node name="LoadGameButton" type="Button" parent="MenuButtons" unique_id=646845223]
 layout_mode = 2
 text = "Load Game"
+
+[node name="ActivityOverlay" parent="." instance=ExtResource("4_activity")]
 
 [connection signal="pressed" from="MenuButtons/NewGameButton" to="." method="OnNewGameButtonPressed"]
 [connection signal="pressed" from="MenuButtons/LoadGameButton" to="." method="OnLoadGameButtonPressed"]
