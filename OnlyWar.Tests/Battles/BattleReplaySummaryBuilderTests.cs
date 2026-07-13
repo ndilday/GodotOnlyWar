@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Drawing;
 using System.Linq;
 using OnlyWar.Models;
+using OnlyWar.Models.Equippables;
 using OnlyWar.Helpers.Battles;
 using OnlyWar.Helpers.Battles.Actions;
 using OnlyWar.Models.Battles;
@@ -144,6 +145,26 @@ public class BattleReplaySummaryBuilderTests
             .SelectMany(node => node.Children)
             .Single(node => node.FormationId == opposingSquad.Id);
         Assert.Equal("heavy", opposingFormation.IconKey);
+    }
+
+    [Fact]
+    public void Build_ReportsActiveWeaponSetsIncludingImplicitDefaultMembers()
+    {
+        BattleSquad playerSquad = CreateBattleSquad(true, "Alpha", "Sergeant Alpha", "Brother Alpha", "Brother Beta");
+        WeaponSet specialistSet = new(42, "Specialist Weapons");
+        playerSquad.Squad.Loadout.Add(specialistSet);
+        playerSquad.Squad.Loadout.Add(specialistSet);
+        BattleHistory history = CreateHistory(playerSquad, CreateBattleSquad(false, "Cult Mob", "Cultist One"));
+
+        BattleFormationSummary summary = new BattleReplaySummaryBuilder()
+            .Build(history, 0, playerSquad.Id)
+            .SelectedFormation;
+
+        Assert.Equal(2, summary.ActiveWeaponSets.Count);
+        Assert.Equal("Test Weapons", summary.ActiveWeaponSets[0].Name);
+        Assert.Equal(1, summary.ActiveWeaponSets[0].Count);
+        Assert.Equal("Specialist Weapons", summary.ActiveWeaponSets[1].Name);
+        Assert.Equal(2, summary.ActiveWeaponSets[1].Count);
     }
 
     private static BattleHistory CreateHistory(BattleSquad playerSquad, BattleSquad opposingSquad)

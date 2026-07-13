@@ -163,7 +163,6 @@ public partial class EndOfTurnDialogController : DialogController
         MissionType missionType = mission?.MissionType ?? MissionType.Patrol;
         string missionTypeName = mission?.MissionType.ToString() ?? "Mission";
         string location = region == null ? "Unknown location" : $"{region.Name}, {region.Planet?.Name}";
-        string force = FormatMissionForce(context.MissionSquads);
         bool actingFactionIsPlayer = context.MissionSquads
             .Any(squad => squad?.Squad?.Faction?.IsPlayerFaction == true);
         string attacker = context.MissionSquads
@@ -180,7 +179,16 @@ public partial class EndOfTurnDialogController : DialogController
             return null;
         }
 
-        string subtitle = $"{attacker} vs {defender}: {force} - {location}";
+        string subtitle = MissionReportHeadlineBuilder.Build(
+            missionType,
+            actingFactionIsPlayer,
+            context.MissionSquads
+                .Select(squad => squad?.Squad?.Name)
+                .ToList(),
+            attacker,
+            defender,
+            region?.Name,
+            region?.Planet?.Name);
         MissionOutcomeClassification classification = MissionOutcomeClassifier.Classify(context);
         string summary = MissionReportSummaryBuilder.BuildSummary(
             classification,
@@ -227,28 +235,6 @@ public partial class EndOfTurnDialogController : DialogController
             summary,
             false,
             null);
-    }
-
-    private static string FormatMissionForce(IReadOnlyList<BattleSquad> squads)
-    {
-        if (squads == null || squads.Count == 0)
-        {
-            return "Unassigned force";
-        }
-
-        List<string> names = squads
-            .Select(squad => squad?.Squad?.Name)
-            .Where(name => !string.IsNullOrWhiteSpace(name))
-            .Distinct()
-            .Take(3)
-            .ToList();
-        if (names.Count == 0)
-        {
-            return "Mission force";
-        }
-
-        string suffix = squads.Count > names.Count ? $" +{squads.Count - names.Count}" : "";
-        return $"{string.Join(", ", names)}{suffix}";
     }
 }
 

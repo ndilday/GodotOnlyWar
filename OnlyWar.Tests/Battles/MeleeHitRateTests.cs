@@ -36,34 +36,36 @@ public class MeleeHitRateTests
     }
 
     [Fact]
-    public void ParitySkill_NoEvasion_LandsAroundOneInFour()
+    public void ParitySkill_NoEvasion_LandsAroundOneInTwo()
     {
-        // Equal skill, no weapon accuracy, no evasion: the C=3 defender advantage
-        // should put this near 24%. Theoretical: P(N(0, 3*sqrt2) > 3) ~= 0.24.
+        // Equal skill, no weapon accuracy, no evasion, zero defender advantage:
+        // tabletop's "hit on 4s" — the contested roll should land near 50%.
         double rate = HitRate(attackSkill: 10, weaponAccuracy: 0, didMove: false,
                               defenderSkill: 10, defenderEvasion: 0);
-        Assert.InRange(rate, 0.20, 0.28);
+        Assert.InRange(rate, 0.46, 0.54);
     }
 
     [Fact]
-    public void StrongSkillEdge_LandsMoreOften()
+    public void StrongSkillEdge_LandsMoreOften_ButSaturatesGently()
     {
-        // A 6-point skill advantage swamps the defender advantage; hits become common.
+        // A 6-point skill advantage: with the sigma-6 dice each point is worth
+        // ~5.6% near parity, so this lands near P(N(0, 6*sqrt2) > -6) ~= 0.76 —
+        // clearly superior without approaching auto-hit.
         double rate = HitRate(attackSkill: 16, weaponAccuracy: 0, didMove: false,
                               defenderSkill: 10, defenderEvasion: 0);
-        Assert.InRange(rate, 0.50, 0.80);
+        Assert.InRange(rate, 0.70, 0.82);
     }
 
     [Fact]
-    public void Evasion_StacksOnDefenderAdvantage_AndSuppressesHits()
+    public void Evasion_SuppressesHits_LikeAnInvulnerableSave()
     {
-        // A slippery defender (evasion 3) on top of C=3 makes a parity attacker
-        // rarely connect — the Genestealer/Ravener fantasy.
+        // A slippery defender (evasion 3) versus a parity attacker: hits drop from
+        // ~50% toward P(N(0, 6*sqrt2) > 3) ~= 0.36 — a meaningful invulnerable-save
+        // style reduction, not untouchability.
         double withoutEvasion = HitRate(10, 0, false, 10, 0);
         double withEvasion = HitRate(10, 0, false, 10, 3);
-        // Effective barrier is C + evasion = 6, so P(N(0, 3*sqrt2) > 6) ~= 0.08.
         Assert.True(withEvasion < withoutEvasion);
-        Assert.InRange(withEvasion, 0.05, 0.15);
+        Assert.InRange(withEvasion, 0.31, 0.41);
     }
 
     [Fact]

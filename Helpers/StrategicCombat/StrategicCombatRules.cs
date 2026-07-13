@@ -15,9 +15,9 @@ namespace OnlyWar.Helpers.StrategicCombat
         // than the old implicit "10 BV per trooper" rule of thumb.
         public const long PdfTrooperBattleValue = 5;
         public const long HormagauntBattleValue = 7;
-        public const long GenestealerBattleValue = 14;
-        public const long TacticalMarineBattleValue = 10;
-        public const long MeleeCarnifexBattleValue = 27;
+        public const long GenestealerBattleValue = 13;
+        public const long TacticalMarineBattleValue = 9;
+        public const long MeleeCarnifexBattleValue = 30;
 
         // These strategic thresholds retain the pre-recalculation unit scale. BattleValues are
         // deliberately compressed to that same scale so garrison growth, force pools, and

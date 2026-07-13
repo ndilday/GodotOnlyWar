@@ -2,6 +2,7 @@ using OnlyWar.Helpers.Battles;
 using OnlyWar.Helpers.Battles.Resolutions;
 using OnlyWar.Models.Soldiers;
 using OnlyWar.Tests.Fixtures;
+using System.Linq;
 using Xunit;
 
 namespace OnlyWar.Tests.Battles;
@@ -10,9 +11,15 @@ public class WoundResolverTests
 {
     // A soldier with Constitution 10 makes the wound ratio == totalDamage / 10,
     // so damage values map cleanly onto the severity thresholds.
-    private static BattleSoldier CreateSufferer()
+    private static BattleSoldier CreateSufferer(params HitLocation[] bodyLocations)
     {
-        Soldier soldier = TestModelFactory.CreateSoldier(name: "Wounded Marine");
+        Soldier soldier = bodyLocations.Length == 0
+            ? TestModelFactory.CreateSoldier(name: "Wounded Marine")
+            : new Soldier(bodyLocations.ToList(), [])
+            {
+                Name = "Wounded Marine",
+                Constitution = 10
+            };
         soldier.Id = 1;
         return new BattleSoldier(soldier, null);
     }
@@ -23,7 +30,9 @@ public class WoundResolverTests
         uint crippleWound = uint.MaxValue,
         uint severWound = uint.MaxValue,
         bool isVital = false,
-        bool isMotive = false)
+        bool isMotive = false,
+        bool isRangedWeaponHolder = false,
+        bool isMeleeWeaponHolder = false)
     {
         return new HitLocationTemplate
         {
@@ -33,16 +42,21 @@ public class WoundResolverTests
             WoundMultiplier = woundMultiplier,
             CrippleWound = crippleWound,
             SeverWound = severWound,
+            HitProbabilityMap = [1, 1, 1],
             IsVital = isVital,
             IsMotive = isMotive,
-            IsRangedWeaponHolder = false,
-            IsMeleeWeaponHolder = false
+            IsRangedWeaponHolder = isRangedWeaponHolder,
+            IsMeleeWeaponHolder = isMeleeWeaponHolder
         };
     }
 
-    private static WoundResolution Enqueue(WoundResolver resolver, HitLocation hitLocation, float damage)
+    private static WoundResolution Enqueue(
+        WoundResolver resolver,
+        HitLocation hitLocation,
+        float damage,
+        BattleSoldier sufferer = null)
     {
-        WoundResolution wound = new(null, null, CreateSufferer(), damage, hitLocation);
+        WoundResolution wound = new(null, null, sufferer ?? CreateSufferer(), damage, hitLocation);
         resolver.WoundQueue.Add(wound);
         return wound;
     }
@@ -155,6 +169,32 @@ public class WoundResolverTests
         int impactLineCount = (first.Description?.Contains("can no longer walk") == true ? 1 : 0)
             + (second.Description?.Contains("can no longer walk") == true ? 1 : 0);
         Assert.Equal(1, impactLineCount);
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void Resolve_DoesNotAddStatusSentenceForWoundThatDisablesLastWeaponHolder(bool rangedHolder)
+    {
+        WoundResolver resolver = new();
+        resolver.OnSoldierFall += (_, _) => { };
+        resolver.OnSoldierDeath += (_, _) => { };
+
+        HitLocation weaponHolder = new(Template(
+            crippleWound: (uint)WoundLevel.Critical,
+            isRangedWeaponHolder: rangedHolder,
+            isMeleeWeaponHolder: !rangedHolder));
+        HitLocation otherWeaponHolder = new(Template(
+            crippleWound: (uint)WoundLevel.Critical,
+            isRangedWeaponHolder: !rangedHolder,
+            isMeleeWeaponHolder: rangedHolder));
+        BattleSoldier sufferer = CreateSufferer(weaponHolder, otherWeaponHolder);
+        WoundResolution wound = Enqueue(resolver, weaponHolder, 10f, sufferer);
+
+        resolver.Resolve();
+
+        Assert.DoesNotContain("can no longer fight", wound.Description);
+        Assert.DoesNotContain("can no longer walk", wound.Description);
     }
 
     [Fact]

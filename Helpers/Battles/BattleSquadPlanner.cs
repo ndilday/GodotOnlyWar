@@ -167,7 +167,6 @@ namespace OnlyWar.Helpers.Battles
 
                 if (advanceVotes > standVotes && advanceVotes > retreatVotes)
                 {
-                    _log.Enqueue(squad.Name + " advances");
                     if (chargeVotes >= advanceVotes / 2)
                     {
                         foreach (BattleSoldier soldier in squad.AbleSoldiers)

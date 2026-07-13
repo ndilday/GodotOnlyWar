@@ -29,13 +29,22 @@ namespace OnlyWar.Helpers.Battles.Actions
 
     public class MeleeAttackAction : IAction
     {
-        // Flat defender-advantage constant in the contested melee roll: "it is
-        // easier to avoid a blow than to land one." At equal skill and zero evasion
-        // this yields a ~24% per-swing hit rate. The single most important melee
-        // balance knob — see Design/EvasionBurrowAndAmbush.md.
-        public const float MeleeDefenderAdvantage = 3.0f;
+        // Flat defender-advantage constant in the contested melee roll. Zero since the
+        // melee rework calibration pass: equal-skill fighters trade at ~50% per swing
+        // (tabletop's "hit on 4s"); melee pacing is governed by attack counts and damage,
+        // not an artificial whiff rate. Raise this to make all melee defense stronger.
+        public const float MeleeDefenderAdvantage = 0.0f;
+
+        // Standard deviation of each side's random draw in the contested roll. Doubled
+        // (3 -> 6) in the same calibration pass: each point of skill margin is worth
+        // ~5.6% hit chance near parity instead of ~9.4%, compressing large skill gaps
+        // toward tabletop's clamped 33-67% band (a genestealer is mega scary but not
+        // unhittable) while keeping the smooth Gaussian tails.
+        public const float MeleeRollStandardDeviation = 6.0f;
+
         private const float MovementAttackPenalty = 2.0f;
-        private static readonly float OpposedRollSigma = (float)Math.Sqrt(18.0f);
+        private static readonly float OpposedRollSigma =
+            (float)(MeleeRollStandardDeviation * Math.Sqrt(2.0));
 
         private readonly int _attackerId;
         private readonly string _attackerName;
@@ -149,8 +158,10 @@ namespace OnlyWar.Helpers.Battles.Actions
         /// Contested melee hit roll. The attacker's skill + weapon accuracy (less a
         /// movement penalty) is opposed by the defender's melee skill, evasion,
         /// defense modifiers, and the flat <see cref="MeleeDefenderAdvantage"/>;
-        /// each side carries its own random draw. A hit lands when the attacker's
-        /// total exceeds the defender's.
+        /// each side carries its own random draw of
+        /// <see cref="MeleeRollStandardDeviation"/>. A hit lands when the attacker's
+        /// total exceeds the defender's. At equal skill and zero modifiers this
+        /// yields a ~50% per-swing hit rate.
         /// </summary>
         public static bool RollMeleeHit(float attackSkill,
                                         float weaponAccuracy,
@@ -174,10 +185,10 @@ namespace OnlyWar.Helpers.Battles.Actions
                                         float defenderDefenseModifier)
         {
             float attackTotal = attackSkill + weaponAccuracy + (didMove ? -MovementAttackPenalty : 0)
-                                + (3.0f * (float)RNG.NextRandomZValue());
+                                + (MeleeRollStandardDeviation * (float)RNG.NextRandomZValue());
             float defendTotal = defenderSkill + defenderEvasion + MeleeDefenderAdvantage
                                 + defenderDefenseModifier
-                                + (3.0f * (float)RNG.NextRandomZValue());
+                                + (MeleeRollStandardDeviation * (float)RNG.NextRandomZValue());
             return attackTotal > defendTotal;
         }
 
@@ -196,13 +207,16 @@ namespace OnlyWar.Helpers.Battles.Actions
 
         public static float GetDefenderDefenseModifier(BattleSoldier defender)
         {
+            // Defensive value of the weapons in hand is expressed solely through their
+            // parry modifiers (summed across equipped weapons); a second weapon helps
+            // defense only if it is actually a parrying tool. No flat dual-wield bonus.
             float parryModifier = defender.GetMeleeParryModifier();
             if (defender.EquippedMeleeWeapons.Count == 0)
             {
                 parryModifier += GetUnarmedWeapon(defender)?.Template.ParryModifier ?? 0;
             }
 
-            return parryModifier + (defender.IsDualWieldingMelee() ? 1.0f : 0.0f);
+            return parryModifier;
         }
 
         public static float GetDefenderMeleeSkill(BattleSoldier defender, BaseSkill fallbackSkill)

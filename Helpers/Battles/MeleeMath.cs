@@ -45,7 +45,8 @@ namespace OnlyWar.Helpers.Battles
             float meanDelta = attackSkill + weaponAccuracy + (didMove ? -2 : 0)
                               - defenderSkill - defenderEvasion - defenderAdvantage
                               - defenderParryModifier;
-            float standardDeviation = (float)Math.Sqrt(18.0);
+            float standardDeviation = (float)(Actions.MeleeAttackAction.MeleeRollStandardDeviation
+                                              * Math.Sqrt(2.0));
             return StandardNormalCdf(meanDelta / standardDeviation);
         }
 

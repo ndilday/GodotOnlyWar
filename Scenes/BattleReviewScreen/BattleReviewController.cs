@@ -70,11 +70,6 @@ public partial class BattleReviewController : DialogController
             _selectedFormationId = formationId;
             DisplayTurn(_currentTurnIndex);
         };
-        _view.TimelineTurnSelected += (_, turnIndex) =>
-        {
-            StopPlayback();
-            DisplayTurn(turnIndex);
-        };
 
         if (GameDataSingleton.Instance?.IsInitialized == true)
         {

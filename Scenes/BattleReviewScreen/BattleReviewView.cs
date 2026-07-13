@@ -17,13 +17,12 @@ public partial class BattleReviewView : DialogView
     private Label _phaseLabel;
     private Label _resultLabel;
     private VBoxContainer _forceTreeVBox;
-    private HBoxContainer _timelineBox;
-    private GridContainer _casualtyGrid;
     private SubViewportContainer _replayViewportContainer;
     private bool _isPanning;
     private Label _selectedNameLabel;
     private Label _selectedMetaLabel;
     private RichTextLabel _selectedStatsLabel;
+    private VBoxContainer _activeWeaponSetsVBox;
     private VBoxContainer _effectsVBox;
     private VBoxContainer _eventListVBox;
     private Button _previousRoundButton;
@@ -42,7 +41,6 @@ public partial class BattleReviewView : DialogView
     public event EventHandler NextRoundPressed;
     public event EventHandler SpeedPressed;
     public event EventHandler<int> FormationSelected;
-    public event EventHandler<int> TimelineTurnSelected;
 
     public Node2D MapRoot { get; private set; }
     public Godot.Camera2D ReplayCamera { get; private set; }
@@ -55,11 +53,10 @@ public partial class BattleReviewView : DialogView
         _phaseLabel = GetNode<Label>("Layout/CenterPanel/HeaderPanel/HeaderMargin/HeaderStack/TitleRow/PhaseLabel");
         _resultLabel = GetNode<Label>("Layout/CenterPanel/HeaderPanel/HeaderMargin/HeaderStack/TitleRow/ResultLabel");
         _forceTreeVBox = GetNode<VBoxContainer>("Layout/LeftPanel/LeftMargin/LeftStack/ForceScroll/ForceTreeVBox");
-        _timelineBox = GetNode<HBoxContainer>("Layout/CenterPanel/BottomPanel/BottomMargin/BottomStack/TimelineScroll/TimelineBox");
-        _casualtyGrid = GetNode<GridContainer>("Layout/CenterPanel/BottomPanel/BottomMargin/BottomStack/CasualtyScroll/CasualtyGrid");
         _selectedNameLabel = GetNode<Label>("Layout/RightPanel/SelectedPanel/SelectedMargin/SelectedStack/SelectedNameLabel");
         _selectedMetaLabel = GetNode<Label>("Layout/RightPanel/SelectedPanel/SelectedMargin/SelectedStack/SelectedMetaLabel");
         _selectedStatsLabel = GetNode<RichTextLabel>("Layout/RightPanel/SelectedPanel/SelectedMargin/SelectedStack/SelectedStatsLabel");
+        _activeWeaponSetsVBox = GetNode<VBoxContainer>("Layout/RightPanel/SelectedPanel/SelectedMargin/SelectedStack/ActiveWeaponSetsVBox");
         _effectsVBox = GetNode<VBoxContainer>("Layout/RightPanel/SelectedPanel/SelectedMargin/SelectedStack/EffectsVBox");
         _eventListVBox = GetNode<VBoxContainer>("Layout/RightPanel/EventPanel/EventMargin/EventStack/EventScroll/EventListVBox");
         _previousRoundButton = GetNode<Button>("Layout/CenterPanel/HeaderPanel/HeaderMargin/HeaderStack/PlaybackRow/PreviousRoundButton");
@@ -148,8 +145,6 @@ public partial class BattleReviewView : DialogView
         SetForceHierarchy(display.ForceHierarchy);
         SetSelectedFormation(display.SelectedFormation);
         SetEvents(display.CurrentTurnEvents);
-        SetTimeline(display.Timeline);
-        SetCasualties(display.CasualtiesByRound);
     }
 
     public void SetPlaybackButtons(bool canGoBack, bool canGoForward, bool isPlaying, string speedLabel, bool canChangeSpeed)
@@ -250,6 +245,7 @@ public partial class BattleReviewView : DialogView
 
     private void SetSelectedFormation(BattleFormationSummary summary)
     {
+        ClearContainer(_activeWeaponSetsVBox);
         ClearContainer(_effectsVBox);
         if (summary == null)
         {
@@ -265,6 +261,19 @@ public partial class BattleReviewView : DialogView
             $"[color=#f4d885]Starting Strength:[/color] {summary.StartingStrength}\n" +
             $"[color=#f4d885]Current Strength:[/color] {summary.CurrentStrength}\n" +
             $"[color=#f4d885]Losses:[/color] {summary.Losses} ({summary.LossPercent:P0})";
+
+        foreach (BattleWeaponSetSummary weaponSet in summary.ActiveWeaponSets ?? Array.Empty<BattleWeaponSetSummary>())
+        {
+            Label label = new()
+            {
+                Text = $"{weaponSet.Name}  x{weaponSet.Count}",
+                ClipText = true,
+                TextOverrunBehavior = TextServer.OverrunBehavior.TrimEllipsis
+            };
+            label.AddThemeFontSizeOverride("font_size", 12);
+            label.AddThemeColorOverride("font_color", OnlyWarStyle.MutedText);
+            _activeWeaponSetsVBox.AddChild(label);
+        }
 
         foreach (string effect in summary.NotableEffects)
         {
@@ -319,59 +328,6 @@ public partial class BattleReviewView : DialogView
             stack.AddChild(body);
             _eventListVBox.AddChild(panel);
         }
-    }
-
-    private void SetTimeline(IReadOnlyList<BattleTimelineEntry> timeline)
-    {
-        ClearContainer(_timelineBox);
-        foreach (BattleTimelineEntry entry in timeline)
-        {
-            Button button = new()
-            {
-                Text = entry.Label,
-                TooltipText = entry.Summary,
-                CustomMinimumSize = new Vector2(54, 32)
-            };
-            OnlyWarStyle.ApplyAccentButtonRow(button, entry.IsSelected, OnlyWarStyle.PlayerAccent);
-            int turnIndex = entry.TurnIndex;
-            button.Pressed += () => TimelineTurnSelected?.Invoke(this, turnIndex);
-            _timelineBox.AddChild(button);
-        }
-    }
-
-    private void SetCasualties(IReadOnlyList<BattleCasualtyRoundSummary> casualties)
-    {
-        ClearContainer(_casualtyGrid);
-        AddCasualtyCell("Round", true);
-        AddCasualtyCell("Player losses", true);
-        AddCasualtyCell("Opposing losses", true);
-        AddCasualtyCell("Player total losses", true);
-        AddCasualtyCell("Opposing total losses", true);
-
-        foreach (BattleCasualtyRoundSummary summary in casualties.TakeLast(12))
-        {
-            AddCasualtyCell(summary.TurnNumber.ToString(), false);
-            AddCasualtyCell(summary.PlayerLossesThisRound.ToString(), false);
-            AddCasualtyCell(summary.OpposingLossesThisRound.ToString(), false);
-            AddCasualtyCell(summary.PlayerCumulativeLosses.ToString(), false);
-            AddCasualtyCell(summary.OpposingCumulativeLosses.ToString(), false);
-        }
-    }
-
-    private void AddCasualtyCell(string text, bool isHeader)
-    {
-        Label label = new()
-        {
-            Text = text,
-            HorizontalAlignment = HorizontalAlignment.Center,
-            CustomMinimumSize = new Vector2(130, 20)
-        };
-        label.AddThemeFontSizeOverride("font_size", isHeader ? 12 : 11);
-        if (isHeader)
-        {
-            label.AddThemeColorOverride("font_color", OnlyWarStyle.Gold);
-        }
-        _casualtyGrid.AddChild(label);
     }
 
     private static Color GetSeverityColor(BattleEventSeverity severity)

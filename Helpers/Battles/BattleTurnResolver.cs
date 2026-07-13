@@ -57,9 +57,10 @@ namespace OnlyWar.Helpers.Battles
             BattleHistory.Turns.Add(new BattleTurn(_currentState, new List<IAction>()));
 
             GameLog.Debug(() =>
-                $"Battle start in {_region?.Name}: {_aftermathContext.FirstSideStartingSoldierCount} vs "
-                + $"{_aftermathContext.SecondSideStartingSoldierCount} soldiers "
-                + $"({attackerBattleSquads.Count}+{opposingBattleSquads.Count} squads)");
+                $"Battle start in {_region?.Name}: {_aftermathContext.FirstSideStartingSoldierCount} "
+                + $"{_aftermathContext.FirstSideFaction.Name} vs "
+                + $"{_aftermathContext.SecondSideStartingSoldierCount}  "
+                + $"{_aftermathContext.SecondSideFaction.Name}");
         }
 
         private void WoundResolver_OnSoldierDeath(WoundResolution wound, WoundLevel woundLevel)
@@ -143,7 +144,6 @@ namespace OnlyWar.Helpers.Battles
                 + $"{_stopwatch.ElapsedMilliseconds}ms, started "
                 + $"{_aftermathContext.FirstSideStartingSoldierCount} vs "
                 + $"{_aftermathContext.SecondSideStartingSoldierCount} soldiers");
-            BattleLog.Write("Battle completed");
             _aftermathPolicy.OnBattleCompleted(_currentState);
             OnBattleComplete?.Invoke(this, BattleHistory);
         }

@@ -1,5 +1,6 @@
 using OnlyWar.Helpers.Battles.Actions;
 using OnlyWar.Models.Battles;
+using OnlyWar.Models.Equippables;
 using OnlyWar.Models.Squads;
 using System;
 using System.Collections.Generic;
@@ -198,7 +199,42 @@ namespace OnlyWar.Helpers.Battles
                 BuildFatigueLabel(source),
                 BuildMoraleLabel(lossPercent, currentStrength),
                 BuildAmmunitionLabel(source),
+                BuildActiveWeaponSets(source, startingStrength),
                 effects);
+        }
+
+        private static IReadOnlyList<BattleWeaponSetSummary> BuildActiveWeaponSets(BattleSquad squad, int startingStrength)
+        {
+            WeaponSet defaultWeaponSet = squad?.Squad?.SquadTemplate?.DefaultWeapons;
+            if (defaultWeaponSet == null && squad?.Squad?.Loadout == null)
+            {
+                return [];
+            }
+
+            Dictionary<string, int> customSetCounts = new(StringComparer.OrdinalIgnoreCase);
+            foreach (WeaponSet weaponSet in squad.Squad.Loadout ?? [])
+            {
+                if (weaponSet == null || (defaultWeaponSet != null && weaponSet.Id == defaultWeaponSet.Id))
+                {
+                    continue;
+                }
+
+                string name = string.IsNullOrWhiteSpace(weaponSet.Name) ? "Unnamed weapon set" : weaponSet.Name;
+                customSetCounts[name] = customSetCounts.TryGetValue(name, out int count) ? count + 1 : 1;
+            }
+
+            List<BattleWeaponSetSummary> summaries = [];
+            int customSetCount = customSetCounts.Values.Sum();
+            int defaultSetCount = Math.Max(0, startingStrength - customSetCount);
+            if (defaultWeaponSet != null && defaultSetCount > 0)
+            {
+                summaries.Add(new BattleWeaponSetSummary(defaultWeaponSet.Name, defaultSetCount));
+            }
+
+            summaries.AddRange(customSetCounts
+                .OrderBy(entry => entry.Key)
+                .Select(entry => new BattleWeaponSetSummary(entry.Key, entry.Value)));
+            return summaries;
         }
 
         private static IReadOnlyList<BattleEventEntry> BuildEventEntries(BattleTurn turn)

@@ -1546,7 +1546,7 @@ namespace OnlyWar.Helpers
                 RecordScenarioBlighting(region, stripped, consumer.PlanetFaction.Faction);
                 long converted = (long)((killed + stripped) * BiomassFeedEfficiency);
                 consumer.Population += converted;
-                GameLog.Trace(() =>
+                GameLog.Debug(() =>
                     $"Biomass consume {DescribeRegionFaction(consumer)}: troops={troops:F0}, "
                     + $"predated={killed} (prey {preyBefore} across {preyFactionCount} factions), "
                     + $"consumed={stripped} (capacity {capacityBefore}->{region.CarryingCapacity}), "

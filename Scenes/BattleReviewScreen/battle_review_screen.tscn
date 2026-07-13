@@ -184,56 +184,13 @@ render_target_update_mode = 4
 [node name="Camera2D" type="Camera2D" parent="DialogView/Layout/CenterPanel/ReplayPanel/SubViewportContainer/SubViewport"]
 anchor_mode = 0
 
-[node name="BottomPanel" type="Panel" parent="DialogView/Layout/CenterPanel"]
-custom_minimum_size = Vector2(0, 190)
-layout_mode = 2
-
-[node name="BottomMargin" type="MarginContainer" parent="DialogView/Layout/CenterPanel/BottomPanel"]
-layout_mode = 1
-anchors_preset = 15
-anchor_right = 1.0
-anchor_bottom = 1.0
-grow_horizontal = 2
-grow_vertical = 2
-theme_override_constants/margin_left = 8
-theme_override_constants/margin_top = 8
-theme_override_constants/margin_right = 8
-theme_override_constants/margin_bottom = 8
-
-[node name="BottomStack" type="VBoxContainer" parent="DialogView/Layout/CenterPanel/BottomPanel/BottomMargin"]
-layout_mode = 2
-theme_override_constants/separation = 6
-
-[node name="TimelineLabel" type="Label" parent="DialogView/Layout/CenterPanel/BottomPanel/BottomMargin/BottomStack"]
-layout_mode = 2
-text = "BATTLE TIMELINE"
-horizontal_alignment = 1
-
-[node name="TimelineScroll" type="ScrollContainer" parent="DialogView/Layout/CenterPanel/BottomPanel/BottomMargin/BottomStack"]
-custom_minimum_size = Vector2(0, 42)
-layout_mode = 2
-vertical_scroll_mode = 0
-
-[node name="TimelineBox" type="HBoxContainer" parent="DialogView/Layout/CenterPanel/BottomPanel/BottomMargin/BottomStack/TimelineScroll"]
-layout_mode = 2
-theme_override_constants/separation = 5
-
-[node name="CasualtyScroll" type="ScrollContainer" parent="DialogView/Layout/CenterPanel/BottomPanel/BottomMargin/BottomStack"]
-custom_minimum_size = Vector2(0, 84)
-layout_mode = 2
-size_flags_vertical = 3
-
-[node name="CasualtyGrid" type="GridContainer" parent="DialogView/Layout/CenterPanel/BottomPanel/BottomMargin/BottomStack/CasualtyScroll"]
-layout_mode = 2
-columns = 5
-
 [node name="RightPanel" type="VBoxContainer" parent="DialogView/Layout"]
 custom_minimum_size = Vector2(340, 0)
 layout_mode = 2
 theme_override_constants/separation = 8
 
 [node name="SelectedPanel" type="Panel" parent="DialogView/Layout/RightPanel"]
-custom_minimum_size = Vector2(0, 285)
+custom_minimum_size = Vector2(0, 330)
 layout_mode = 2
 
 [node name="SelectedMargin" type="MarginContainer" parent="DialogView/Layout/RightPanel/SelectedPanel"]
@@ -271,6 +228,15 @@ layout_mode = 2
 size_flags_vertical = 3
 bbcode_enabled = true
 fit_content = true
+
+[node name="ActiveWeaponSetsLabel" type="Label" parent="DialogView/Layout/RightPanel/SelectedPanel/SelectedMargin/SelectedStack"]
+layout_mode = 2
+text = "ACTIVE WEAPON SETS"
+horizontal_alignment = 1
+
+[node name="ActiveWeaponSetsVBox" type="VBoxContainer" parent="DialogView/Layout/RightPanel/SelectedPanel/SelectedMargin/SelectedStack"]
+layout_mode = 2
+theme_override_constants/separation = 3
 
 [node name="EffectsVBox" type="VBoxContainer" parent="DialogView/Layout/RightPanel/SelectedPanel/SelectedMargin/SelectedStack"]
 layout_mode = 2

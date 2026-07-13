@@ -98,7 +98,6 @@ namespace OnlyWar.Helpers.Battles.Resolutions
                         }
                         if (!wound.Suffererer.CanFight)
                         {
-                            wound.Description += $"{wound.Suffererer.Soldier.Name} can no longer walk\n";
                             OnSoldierFall.Invoke(wound, woundLevel);
                         }
                     }
@@ -110,7 +109,6 @@ namespace OnlyWar.Helpers.Battles.Resolutions
                         }
                         if (!wound.Suffererer.CanFight)
                         {
-                            wound.Description += $"{wound.Suffererer.Soldier.Name} can no longer walk\n";
                             OnSoldierFall.Invoke(wound, woundLevel);
                         }
                     }

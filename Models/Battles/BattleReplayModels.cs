@@ -105,6 +105,7 @@ namespace OnlyWar.Models.Battles
         public string FatigueLabel { get; }
         public string MoraleLabel { get; }
         public string AmmunitionLabel { get; }
+        public IReadOnlyList<BattleWeaponSetSummary> ActiveWeaponSets { get; }
         public IReadOnlyList<string> NotableEffects { get; }
 
         public BattleFormationSummary(
@@ -119,6 +120,7 @@ namespace OnlyWar.Models.Battles
             string fatigueLabel,
             string moraleLabel,
             string ammunitionLabel,
+            IReadOnlyList<BattleWeaponSetSummary> activeWeaponSets,
             IReadOnlyList<string> notableEffects)
         {
             FormationId = formationId;
@@ -134,7 +136,20 @@ namespace OnlyWar.Models.Battles
             FatigueLabel = fatigueLabel;
             MoraleLabel = moraleLabel;
             AmmunitionLabel = ammunitionLabel;
+            ActiveWeaponSets = activeWeaponSets;
             NotableEffects = notableEffects;
+        }
+    }
+
+    public sealed class BattleWeaponSetSummary
+    {
+        public string Name { get; }
+        public int Count { get; }
+
+        public BattleWeaponSetSummary(string name, int count)
+        {
+            Name = name;
+            Count = count;
         }
     }
 

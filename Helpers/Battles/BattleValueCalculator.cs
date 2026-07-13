@@ -360,15 +360,12 @@ public static class BattleValueCalculator
             return UnarmedFist.ParryModifier;
         }
 
+        // Defensive value comes solely from parry modifiers, summed across weapons;
+        // there is no flat dual-wield defense bonus.
         float parry = defender.MeleeWeapon.ParryModifier;
         if (defender.SecondaryMeleeWeapon != null)
         {
             parry += defender.SecondaryMeleeWeapon.ParryModifier;
-            if (defender.MeleeWeapon.Location == EquipLocation.OneHand
-                && defender.SecondaryMeleeWeapon.Location == EquipLocation.OneHand)
-            {
-                parry += 1.0f;   // dual-wield defense bonus
-            }
         }
         return parry;
     }
