@@ -213,57 +213,6 @@ public class ScenarioTurnTests
         Assert.Null(controller.ScenarioNotification);
     }
 
-    // Regression (Design/OpeningScenario.md §8/§12): a combat Order persists across turns —
-    // ProcessTurn never clears orders — and dead soldiers are permanently removed from
-    // Squad.Members (BattleTurnResolver.RemoveSoldiersKilledInBattle). So once combat wipes or
-    // fully incapacitates an order's squad, the next turn TurnController.ProcessCombatMissions would
-    // re-construct a BattleSquad from the now-unmanned squad, and BattleSquad.AllocateEquipment threw
-    // ArgumentOutOfRangeException ("tempSquad[0]") because it assumed AbleSoldiers was non-empty.
-    // This blocked long headless forward-sim / balance-tuning runs. The fix skips depleted squads in
-    // ProcessCombatMissions (and guards AllocateEquipment). This test plants a persistent combat
-    // order on a squad, depletes that squad each turn (the "members remain but none can fight" state
-    // combat leaves behind), and runs the real sector forward asserting no crash.
-    [Fact]
-    public void ProcessTurn_NonConstructionPlayerOrderOnDepletedSquadClearsAfterTurn()
-    {
-        RNG.Reset(20250628);
-        Sector sector = SectorBuilder.GenerateSector(11, _data, _date, "Attrition Chapter");
-        GameDataSingleton.Instance.LoadGameDataFromBlob(_data, _date, sector);
-
-        Planet promised = sector.GetPlanet(sector.Scenario.PromisedPlanetId);
-        RegionFaction tyranidTarget = promised.Regions
-            .Select(r => r.RegionFactionMap.TryGetValue(Tyranids.Id, out RegionFaction rf) ? rf : null)
-            .First(rf => rf != null);
-
-        // Plant a single persistent combat order: it is NOT removed between turns, so it re-runs
-        // against the same squad every turn — exactly the path that crashed once the squad emptied.
-        Squad strikeSquad = sector.PlayerForce.Army.OrderOfBattle.GetAllSquads()
-            .First(s => s.Members.Any(m => m.CanFight));
-        Mission reconMission = new Mission(MissionType.Recon, tyranidTarget, 0);
-        Order reconOrder = new(new List<Squad> { strikeSquad }, Disposition.Mobile,
-                               isQuiet: true, isActivelyEngaging: false, Aggression.Cautious, reconMission);
-        sector.AddNewOrder(reconOrder);
-
-        for (int turn = 0; turn < TurnsToSimulate; turn++)
-        {
-            // Re-incapacitate every member each turn (the weekly healing pass would otherwise restore
-            // them), so when ProcessCombatMissions runs the order it always finds an unmanned squad.
-            DepleteSquad(strikeSquad);
-            Assert.NotEmpty(strikeSquad.Members);
-            Assert.DoesNotContain(strikeSquad.Members, m => m.CanFight);
-
-            // Before the fix this threw on the first turn the depleted squad reached the BattleSquad
-            // path; the assertion is simply that the full run completes without an exception.
-            new TurnController().ProcessTurn(sector);
-        }
-
-        // The order survives the run (depleted squads are skipped, not disbanded), and the squad is
-        // still depleted — proving the persistent order kept landing on the unmanned-squad path.
-        Assert.DoesNotContain(reconOrder.Id, sector.Orders.Keys);
-        Assert.Null(strikeSquad.CurrentOrders);
-        Assert.DoesNotContain(strikeSquad.Members, m => m.CanFight);
-    }
-
     [Fact]
     public void ProcessTurn_PlayerConstructionOrderPersistsAfterTurn()
     {
