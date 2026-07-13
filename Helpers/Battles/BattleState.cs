@@ -80,8 +80,8 @@ namespace OnlyWar.Models.Battles
 			// These collections represent the two tactical sides supplied to the resolver, not
 			// player and NPC affiliation. An NPC attacker is in AttackerSquads (the mission side),
 			// while a defending Chapter squad can be in OpposingSquads. Remove from the collection
-			// that actually owns the squad instead of consulting the presentation-only
-			// IsPlayerSquad flag.
+			// that actually owns the squad instead of consulting affiliation flags such as
+			// IsPlayerSquad or the report-only IsPlayerAligned flag.
 			// Cleanup can encounter several casualties from the same wiped squad. The first
 			// casualty removes the squad; subsequent casualties must therefore be harmless.
 			_attackerBattleSquads.Remove(squad.Id);

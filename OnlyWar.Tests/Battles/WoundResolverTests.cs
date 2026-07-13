@@ -142,6 +142,38 @@ public class WoundResolverTests
     }
 
     [Fact]
+    public void Resolve_ReportsUnableToWalkOnlyForWoundThatCripplesMotiveLocation()
+    {
+        WoundResolver resolver = new();
+        resolver.OnSoldierFall += (_, _) => { };
+        HitLocation location = new(Template(crippleWound: (uint)WoundLevel.Critical, isMotive: true));
+        WoundResolution first = Enqueue(resolver, location, 10f);
+        WoundResolution second = Enqueue(resolver, location, 10f);
+
+        resolver.Resolve();
+
+        int impactLineCount = (first.Description?.Contains("can no longer walk") == true ? 1 : 0)
+            + (second.Description?.Contains("can no longer walk") == true ? 1 : 0);
+        Assert.Equal(1, impactLineCount);
+    }
+
+    [Fact]
+    public void Resolve_ReportsDeathOnlyForWoundThatCripplesVitalLocation()
+    {
+        WoundResolver resolver = new();
+        resolver.OnSoldierDeath += (_, _) => { };
+        HitLocation location = new(Template(crippleWound: (uint)WoundLevel.Critical, isVital: true));
+        WoundResolution first = Enqueue(resolver, location, 10f);
+        WoundResolution second = Enqueue(resolver, location, 10f);
+
+        resolver.Resolve();
+
+        int deathLineCount = (first.Description?.Contains("has died") == true ? 1 : 0)
+            + (second.Description?.Contains("has died") == true ? 1 : 0);
+        Assert.Equal(1, deathLineCount);
+    }
+
+    [Fact]
     public void Resolve_DrainsTheWoundQueue()
     {
         WoundResolver resolver = new();

@@ -102,6 +102,28 @@ public class MissionReportSummaryBuilderTests
     }
 
     [Fact]
+    public void BuildSummary_PlayerCombatMissionWithNoKills_ReportsUnconfirmedCasualties()
+    {
+        string summary = MissionReportSummaryBuilder.BuildSummary(
+            Classification(MissionType.Advance),
+            true, "Player Chapter", "Iron Valley, Cadia");
+
+        Assert.Contains("without confirmed enemy casualties", summary);
+    }
+
+    [Fact]
+    public void BuildSummary_NpcCombatMissionWithNoKills_ReportsNoDamage()
+    {
+        string summary = MissionReportSummaryBuilder.BuildSummary(
+            Classification(MissionType.Advance),
+            false, "Tyranid Swarm", "Iron Valley, Cadia");
+
+        Assert.Equal(
+            "Tyranid Swarm conducted a Advance in Iron Valley, Cadia but inflicted no damage.",
+            summary);
+    }
+
+    [Fact]
     public void BuildSummary_SabotageWithPositiveImpact_ReportsSuccess()
     {
         string summary = MissionReportSummaryBuilder.BuildSummary(

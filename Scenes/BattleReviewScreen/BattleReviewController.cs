@@ -315,12 +315,12 @@ public partial class BattleReviewController : DialogController
         List<Vector2> markerPositions = [];
         foreach (BattleSoldier soldier in squad.Soldiers)
         {
-            foreach (Tuple<int, int> location in soldier.PositionList)
-            {
-                Vector2 position = GridToMapPosition(location, topLeftOffset);
-                markerPositions.Add(position);
-                DrawMarker(position, squad.IsPlayerSquad, selected, squad.Id);
-            }
+            // PositionList describes every occupied footprint cell for combat and framing. The
+            // report marker represents one model, however, so draw one centered marker per
+            // soldier (a 4x2 Carnifex must not become eight circles).
+            Vector2 position = GetSoldierMapPosition(soldier, topLeftOffset);
+            markerPositions.Add(position);
+            DrawMarker(position, squad.IsPlayerAligned, selected, squad.Id);
         }
 
         if (markerPositions.Count == 0) return;
@@ -331,7 +331,7 @@ public partial class BattleReviewController : DialogController
 
     private void DrawFormationBanner(BattleSquad squad, Vector2 centroid, bool selected)
     {
-        Color color = selected ? SelectedMarkerColor : squad.IsPlayerSquad ? PlayerMarkerColor : OpposingMarkerColor;
+        Color color = selected ? SelectedMarkerColor : squad.IsPlayerAligned ? PlayerMarkerColor : OpposingMarkerColor;
         Vector2 mastBase = centroid + new Vector2(-18, -16);
         Vector2 mastTop = mastBase + new Vector2(0, -26);
         DrawLine(mastBase, mastTop, color, selected ? 2.5f : 2.0f, 6);
@@ -394,7 +394,7 @@ public partial class BattleReviewController : DialogController
             ZIndex = selected ? 6 : 5,
             MouseFilter = Control.MouseFilterEnum.Ignore
         };
-        label.AddThemeColorOverride("font_color", selected ? SelectedMarkerColor : squad.IsPlayerSquad ? PlayerMarkerColor : OpposingMarkerColor);
+        label.AddThemeColorOverride("font_color", selected ? SelectedMarkerColor : squad.IsPlayerAligned ? PlayerMarkerColor : OpposingMarkerColor);
         label.AddThemeFontSizeOverride("font_size", selected ? 14 : 12);
         _view.MapRoot.AddChild(label);
     }
@@ -452,20 +452,16 @@ public partial class BattleReviewController : DialogController
 
     private void DrawActionCallouts(BattleState previousState, BattleState currentState, BattleTurn currentTurn, Vector2I topLeftOffset)
     {
-        int drawn = 0;
+        // Keep the replay faithful to the recorded turn. Large formations can
+        // legitimately produce more than 16 actions, especially during an
+        // opening volley, so do not truncate the action overlays by count.
         foreach (IAction action in currentTurn.Actions)
         {
-            if (drawn >= 16)
-            {
-                return;
-            }
-
             if (action is ShootAction shootAction && TryGetSoldierMapPosition(shootAction.ShooterId, currentState, previousState, topLeftOffset, out Vector2 shooterPosition)
                 && TryGetSoldierMapPosition(shootAction.TargetId, currentState, previousState, topLeftOffset, out Vector2 targetPosition))
             {
                 DrawDashedLine(shooterPosition, targetPosition, ProjectileColor, 1.15f, 11);
                 DrawCalloutLabel($"{Math.Max(1, shootAction.NumberOfShots)} SHOTS", (shooterPosition + targetPosition) / 2.0f + new Vector2(4, -18), ProjectileColor, 11, 12);
-                drawn++;
                 continue;
             }
 
@@ -477,7 +473,6 @@ public partial class BattleReviewController : DialogController
                 string label = currentSoldier?.IsInMelee == true ? "CHARGE" : "MOVE";
                 DrawArrowLine(from, to, ChargeColor, 2.2f, 10);
                 DrawCalloutLabel(label, (from + to) / 2.0f + new Vector2(4, -18), ChargeColor, 11, 11);
-                drawn++;
                 continue;
             }
 
@@ -488,7 +483,6 @@ public partial class BattleReviewController : DialogController
             {
                 DrawArrowLine(actorPosition, targetCalloutPosition, ChargeColor, 2.0f, 10);
                 DrawCalloutLabel("MELEE", (actorPosition + targetCalloutPosition) / 2.0f + new Vector2(4, -18), ChargeColor, 11, 11);
-                drawn++;
             }
         }
     }

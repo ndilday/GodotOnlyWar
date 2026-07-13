@@ -17,6 +17,10 @@ namespace OnlyWar.Helpers.Battles
         public List<BattleSoldier> Soldiers { get; private set; }
         public float CoverModifier { get; private set; }
         public bool IsPlayerSquad { get; private set; }
+        // Presentation-side affiliation for battle reports. The Chapter and the Imperial PDF
+        // fight on the same side, but IsPlayerSquad must remain Chapter-only because battle rules
+        // use it to distinguish player-controlled missions from NPC missions.
+        public bool IsPlayerAligned => IsPlayerSquad || Squad?.Faction?.IsDefaultFaction == true;
         public bool IsInMelee { get; set; }
 
         public Squad Squad { get; }

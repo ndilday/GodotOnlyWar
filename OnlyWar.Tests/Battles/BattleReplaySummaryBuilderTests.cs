@@ -1,6 +1,8 @@
 using System;
 using System.Collections.Generic;
+using System.Drawing;
 using System.Linq;
+using OnlyWar.Models;
 using OnlyWar.Helpers.Battles;
 using OnlyWar.Helpers.Battles.Actions;
 using OnlyWar.Models.Battles;
@@ -47,6 +49,34 @@ public class BattleReplaySummaryBuilderTests
         Assert.Contains(playerRoot.Children.SelectMany(node => node.Children), node => node.FormationId == playerDefender.Id);
         BattleForceHierarchyNode opposingRoot = Assert.Single(display.ForceHierarchy, node => !node.IsPlayerForce);
         Assert.Contains(opposingRoot.Children.SelectMany(node => node.Children), node => node.FormationId == npcAttacker.Id);
+    }
+
+    [Fact]
+    public void Build_DefaultPdfDefenderIsShownOnPlayerAlignedSide()
+    {
+        BattleSquad chapterDefender = CreateBattleSquad(true, "Alpha", "Sergeant Alpha", "Brother Alpha");
+        BattleSquad pdfDefender = CreateBattleSquad(
+            false,
+            "PDF Garrison",
+            CreateDefaultPdfFaction(),
+            "PDF Trooper");
+        BattleSquad tyranidAttacker = CreateBattleSquad(false, "Carnifex", "Carnifex");
+        BattleHistory history = new();
+        history.Turns.Add(new BattleTurn(new BattleState(
+            new Dictionary<int, BattleSquad> { [tyranidAttacker.Id] = tyranidAttacker },
+            new Dictionary<int, BattleSquad>
+            {
+                [chapterDefender.Id] = chapterDefender,
+                [pdfDefender.Id] = pdfDefender
+            }), []));
+
+        BattleReplayDisplay display = new BattleReplaySummaryBuilder().Build(history, 0, pdfDefender.Id);
+
+        BattleForceHierarchyNode playerRoot = Assert.Single(display.ForceHierarchy, node => node.IsPlayerForce);
+        BattleForceHierarchyNode opposingRoot = Assert.Single(display.ForceHierarchy, node => !node.IsPlayerForce);
+        Assert.Contains(playerRoot.Children.SelectMany(node => node.Children), node => node.FormationId == pdfDefender.Id);
+        Assert.DoesNotContain(opposingRoot.Children.SelectMany(node => node.Children), node => node.FormationId == pdfDefender.Id);
+        Assert.True(display.SelectedFormation.IsPlayerForce);
     }
 
     [Fact]
@@ -137,6 +167,21 @@ public class BattleReplaySummaryBuilderTests
 
     private static BattleSquad CreateBattleSquad(bool isPlayerSquad, string squadName, SquadTypes squadType, params string[] soldierNames)
     {
+        return CreateBattleSquad(isPlayerSquad, squadName, squadType, null, soldierNames);
+    }
+
+    private static BattleSquad CreateBattleSquad(bool isPlayerSquad, string squadName, Faction faction, params string[] soldierNames)
+    {
+        return CreateBattleSquad(isPlayerSquad, squadName, SquadTypes.None, faction, soldierNames);
+    }
+
+    private static BattleSquad CreateBattleSquad(
+        bool isPlayerSquad,
+        string squadName,
+        SquadTypes squadType,
+        Faction faction,
+        params string[] soldierNames)
+    {
         List<Soldier> soldiers = [];
         for (int i = 0; i < soldierNames.Length; i++)
         {
@@ -154,6 +199,7 @@ public class BattleReplaySummaryBuilderTests
             TestModelFactory.TestArmor,
             [new SquadTemplateElement(TestModelFactory.SergeantTemplate, 0, 1), new SquadTemplateElement(TestModelFactory.MarineTemplate, 0, 4)],
             squadType);
+        squadTemplate.Faction = faction;
         Squad sourceSquad = new(squadName, null, squadTemplate);
         foreach (Soldier soldier in soldiers)
         {
@@ -168,6 +214,25 @@ public class BattleReplaySummaryBuilderTests
         }
 
         return squad;
+    }
+
+    private static Faction CreateDefaultPdfFaction()
+    {
+        return new Faction(
+            900,
+            "PDF",
+            Color.White,
+            isPlayerFaction: false,
+            isDefaultFaction: true,
+            canInfiltrate: false,
+            growthType: GrowthType.None,
+            species: null,
+            soldierTemplates: null,
+            squadTemplates: null,
+            unitTemplates: null,
+            boatTemplates: null,
+            shipTemplates: null,
+            fleetTemplates: null);
     }
 
     private sealed class FakeAction : IAction

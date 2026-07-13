@@ -42,8 +42,8 @@ namespace OnlyWar.Helpers.Battles
         private static BattleState BuildBaselineState(BattleHistory history)
         {
             // This reconstruction only needs two buckets to rebuild a BattleState; the replay
-            // reads squads back via GetAllSquads and the IsPlayerSquad flag, never by tactical
-            // side. Bucketing by IsPlayerSquad here (rather than by original attacker/defender
+            // reads squads back via GetAllSquads and the player-aligned flag, never by tactical
+            // side. Bucketing by IsPlayerAligned here (rather than by original attacker/defender
             // slot) is therefore purely cosmetic and does not have to match the live battle.
             Dictionary<int, BattleSquad> playerSquads = [];
             Dictionary<int, BattleSquad> opposingSquads = [];
@@ -52,7 +52,7 @@ namespace OnlyWar.Helpers.Battles
                 .GroupBy(squad => squad.Id)
                 .Select(group => group.OrderByDescending(CountAble).First()))
             {
-                (squad.IsPlayerSquad ? playerSquads : opposingSquads)[squad.Id] = squad;
+                (squad.IsPlayerAligned ? playerSquads : opposingSquads)[squad.Id] = squad;
             }
             return new BattleState(playerSquads, opposingSquads);
         }
@@ -65,7 +65,7 @@ namespace OnlyWar.Helpers.Battles
             }
 
             BattleSquad firstPlayer = GetAllSquads(state)
-                .Where(s => s.IsPlayerSquad)
+                .Where(s => s.IsPlayerAligned)
                 .OrderBy(s => s.Id)
                 .FirstOrDefault();
             if (firstPlayer != null) return firstPlayer.Id;
@@ -82,8 +82,8 @@ namespace OnlyWar.Helpers.Battles
             List<BattleSquad> currentSquads = GetAllSquads(currentState).ToList();
             List<BattleForceHierarchyNode> roots =
             [
-                BuildForceRoot("Player Force", "Imperial formations", "controlled", true, initialSquads.Where(s => s.IsPlayerSquad), currentSquads.Where(s => s.IsPlayerSquad), selectedFormationId),
-                BuildForceRoot("Opposing Force", "Hostile formations", "hostile", false, initialSquads.Where(s => !s.IsPlayerSquad), currentSquads.Where(s => !s.IsPlayerSquad), selectedFormationId)
+                BuildForceRoot("Player Force", "Imperial formations", "controlled", true, initialSquads.Where(s => s.IsPlayerAligned), currentSquads.Where(s => s.IsPlayerAligned), selectedFormationId),
+                BuildForceRoot("Opposing Force", "Hostile formations", "hostile", false, initialSquads.Where(s => !s.IsPlayerAligned), currentSquads.Where(s => !s.IsPlayerAligned), selectedFormationId)
             ];
 
             return roots.Where(root => root.StartingStrength > 0 || root.CurrentStrength > 0).ToList();
@@ -164,7 +164,7 @@ namespace OnlyWar.Helpers.Battles
                 source.Name,
                 BuildSquadSubtitle(source, startingStrength, currentStrength),
                 GetSquadIconKey(source),
-                source.IsPlayerSquad,
+                source.IsPlayerAligned,
                 selectedFormationId == source.Id,
                 startingStrength,
                 currentStrength,
@@ -192,7 +192,7 @@ namespace OnlyWar.Helpers.Battles
                 GetUnitName(source),
                 source.Soldiers.FirstOrDefault(soldier => soldier.Soldier.Template.IsSquadLeader)?.Soldier?.Name ?? "No leader",
                 GetFormationType(source),
-                source.IsPlayerSquad,
+                source.IsPlayerAligned,
                 startingStrength,
                 currentStrength,
                 BuildFatigueLabel(source),
@@ -376,12 +376,12 @@ namespace OnlyWar.Helpers.Battles
 
         private static IEnumerable<BattleSquad> GetPlayerSquads(BattleState state)
         {
-            return GetAllSquads(state).Where(squad => squad.IsPlayerSquad);
+            return GetAllSquads(state).Where(squad => squad.IsPlayerAligned);
         }
 
         private static IEnumerable<BattleSquad> GetOpposingSquads(BattleState state)
         {
-            return GetAllSquads(state).Where(squad => !squad.IsPlayerSquad);
+            return GetAllSquads(state).Where(squad => !squad.IsPlayerAligned);
         }
 
         private static int CountAble(BattleSquad squad)
@@ -401,7 +401,7 @@ namespace OnlyWar.Helpers.Battles
 
         private static string GetUnitName(BattleSquad squad)
         {
-            return squad?.Squad?.ParentUnit?.Name ?? (squad?.IsPlayerSquad == true ? "Strike Force" : "Enemy Warhost");
+            return squad?.Squad?.ParentUnit?.Name ?? (squad?.IsPlayerAligned == true ? "Imperial Defenders" : "Enemy Warhost");
         }
 
         private static string BuildSquadSubtitle(BattleSquad squad, int startingStrength, int currentStrength)

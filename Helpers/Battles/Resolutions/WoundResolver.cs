@@ -35,6 +35,8 @@ namespace OnlyWar.Helpers.Battles.Resolutions
         {
             if (!wound.HitLocation.IsSevered)
             {
+                bool wasCrippled = wound.HitLocation.IsCrippled;
+                bool wasFunctionallyDisabled = wound.HitLocation.IsSevered || wasCrippled;
                 float totalDamage = wound.Damage;
                 WoundLevel woundLevel;
                 // check wound.HitLocation for natural armor
@@ -80,7 +82,7 @@ namespace OnlyWar.Helpers.Battles.Resolutions
                 wound.Description = $"{wound.Suffererer.Soldier.Name} suffers {woundLevel.ToString()} wound to {wound.HitLocation.Template.Name}\n";
 
                 // see if wound.HitLocation is now severed
-                if (wound.HitLocation.IsSevered || wound.HitLocation.IsCrippled)
+                if (!wasFunctionallyDisabled && (wound.HitLocation.IsSevered || wound.HitLocation.IsCrippled))
                 {
                     // if severed, see if it's an arm or leg
                     if (wound.HitLocation.Template.IsMotive)
@@ -112,7 +114,7 @@ namespace OnlyWar.Helpers.Battles.Resolutions
                             OnSoldierFall.Invoke(wound, woundLevel);
                         }
                     }
-                    if(wound.HitLocation.Template.IsVital && wound.HitLocation.IsCrippled)
+                    if (wound.HitLocation.Template.IsVital && wound.HitLocation.IsCrippled)
                     {
                         wound.Description += $"{wound.Suffererer.Soldier.Name} has died\n";
                         OnSoldierDeath.Invoke(wound, woundLevel);

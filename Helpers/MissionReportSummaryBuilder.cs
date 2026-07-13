@@ -98,7 +98,7 @@ namespace OnlyWar.Helpers
                 case MissionType.Extermination:
                 case MissionType.Infiltrate:
                 case MissionType.CloseAirSupport:
-                    return BuildCombatSummary(subject, location, classification);
+                    return BuildCombatSummary(subject, location, classification, isPlayerFaction);
 
                 case MissionType.Fortify:
                 case MissionType.DefenseInDepth:
@@ -146,7 +146,10 @@ namespace OnlyWar.Helpers
         }
 
         private static string BuildCombatSummary(
-            string subject, string location, MissionOutcomeClassification classification)
+            string subject,
+            string location,
+            MissionOutcomeClassification classification,
+            bool isPlayerFaction)
         {
             if (classification.EnemiesKilled > 0)
             {
@@ -164,7 +167,9 @@ namespace OnlyWar.Helpers
             {
                 return $"{subject} found no viable target in {location}.";
             }
-            return $"{subject} conducted a {classification.MissionType} in {location} without confirmed enemy casualties.";
+            return isPlayerFaction
+                ? $"{subject} conducted a {classification.MissionType} in {location} without confirmed enemy casualties."
+                : $"{subject} conducted a {classification.MissionType} in {location} but inflicted no damage.";
         }
     }
 }
