@@ -35,6 +35,7 @@ namespace OnlyWar.Helpers.Missions
         public bool TargetLocated { get; init; }
         public bool TargetEliminated { get; init; }
         public int EnemiesKilled { get; init; }
+        public int EnemyKillCredits { get; init; }
         public float Impact { get; init; }
     }
 
@@ -56,6 +57,7 @@ namespace OnlyWar.Helpers.Missions
                 TargetLocated = context.TargetLocated,
                 TargetEliminated = context.TargetEliminated,
                 EnemiesKilled = killed,
+                EnemyKillCredits = context.EnemyKillCredits,
                 Impact = context.Impact
             };
         }

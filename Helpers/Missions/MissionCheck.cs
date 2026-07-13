@@ -24,9 +24,18 @@ namespace OnlyWar.Helpers.Missions
     // likewise skips non-player soldiers).
     internal static class MissionExperienceAwarder
     {
+        // NPC missions still use the same mission-check classes for their tactical rolls, but
+        // field XP is a player-career system. Keep those checks out of the XP path entirely rather
+        // than calculating an award and discovering afterward that there are no recipients.
+        public static bool ShouldAwardFieldExperience(List<BattleSquad> squads)
+        {
+            return squads?.SelectMany(squad => squad?.AbleSoldiers ?? Enumerable.Empty<BattleSoldier>())
+                .Any(soldier => soldier?.Soldier is PlayerSoldier) == true;
+        }
+
         public static void AwardFieldExperience(List<BattleSquad> squads, BaseSkill skillUsed, float margin)
         {
-            if (squads == null || skillUsed == null)
+            if (skillUsed == null || !ShouldAwardFieldExperience(squads))
             {
                 return;
             }
@@ -79,7 +88,10 @@ namespace OnlyWar.Helpers.Missions
                 .OrderByDescending(soldier => soldier.Soldier.GetTotalSkillValue(SkillUsed))
                 .FirstOrDefault();
             float margin = RunCheckInternal(bestSoldier);
-            MissionExperienceAwarder.AwardFieldExperience(squads, SkillUsed, margin);
+            if (MissionExperienceAwarder.ShouldAwardFieldExperience(squads))
+            {
+                MissionExperienceAwarder.AwardFieldExperience(squads, SkillUsed, margin);
+            }
             return margin;
         }
 
@@ -112,7 +124,10 @@ namespace OnlyWar.Helpers.Missions
                 .OrderByDescending(soldier => soldier?.Soldier.GetTotalSkillValue(SkillUsed))
                 .FirstOrDefault();
             float margin = RunCheckInternal(bestLeader);
-            MissionExperienceAwarder.AwardFieldExperience(squads, SkillUsed, margin);
+            if (MissionExperienceAwarder.ShouldAwardFieldExperience(squads))
+            {
+                MissionExperienceAwarder.AwardFieldExperience(squads, SkillUsed, margin);
+            }
             return margin;
         }
     }
@@ -139,7 +154,10 @@ namespace OnlyWar.Helpers.Missions
             float totalSkill = ableSoldiers.Average(soldier => soldier.Soldier.GetTotalSkillValue(SkillUsed));
             float zAdvantage = (totalSkill - _difficulty) / 5.0f;
             float margin = GaussianCalculator.DetermineMarginOfSuccessZvalue(zAdvantage);
-            MissionExperienceAwarder.AwardFieldExperience(squads, SkillUsed, margin);
+            if (MissionExperienceAwarder.ShouldAwardFieldExperience(squads))
+            {
+                MissionExperienceAwarder.AwardFieldExperience(squads, SkillUsed, margin);
+            }
             return margin;
         }
     }

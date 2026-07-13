@@ -671,6 +671,7 @@ namespace OnlyWar.Helpers
                     $"Combat mission result {order.AssignedSquads.First().Faction.Name} "
                     + $"{order.Mission.MissionType} -> {DescribeRegionFaction(order.Mission.RegionFaction)}: "
                     + $"impact={context.Impact:F2}, enemiesKilled={context.EnemiesKilled}, days={context.DaysElapsed}, "
+                    + $"killCredits={context.EnemyKillCredits}, "
                     + $"logEntries={context.Log.Count}");
             }
         }

@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using System.Linq;
 using OnlyWar.Helpers;
 using OnlyWar.Helpers.Battles;
@@ -85,7 +86,7 @@ public class MissionExperienceCalculatorTests
     {
         Soldier npc = TestModelFactory.CreateSoldier(name: "NPC", dexterity: 10,
             skills: new Skill(TestSkills.Stealth, 1));
-        BattleSquad squad = CreateBattleSquad(npc);
+        BattleSquad squad = CreateBattleSquad(false, npc);
         SquadMissionTest missionTest = new(TestSkills.Stealth, difficulty: 5);
 
         float before = npc.GetTotalSkillValue(TestSkills.Stealth);
@@ -94,6 +95,33 @@ public class MissionExperienceCalculatorTests
         missionTest.RunMissionCheck([squad]);
 
         Assert.Equal(before, npc.GetTotalSkillValue(TestSkills.Stealth));
+    }
+
+    [Fact]
+    public void RunMissionCheck_NonPlayerMissionDoesNotLogFieldExperience()
+    {
+        Soldier npc = TestModelFactory.CreateSoldier(name: "NPC", dexterity: 10,
+            skills: new Skill(TestSkills.Stealth, 1));
+        BattleSquad squad = CreateBattleSquad(false, npc);
+        SquadMissionTest missionTest = new(TestSkills.Stealth, difficulty: 5);
+        List<string> logs = [];
+        GameLogLevel previousMinimumLevel = GameLog.MinimumLevel;
+        var previousSink = GameLog.Sink;
+
+        try
+        {
+            GameLog.MinimumLevel = GameLogLevel.Trace;
+            GameLog.Sink = (level, message) => logs.Add(message);
+            RNG.Reset(42);
+            missionTest.RunMissionCheck([squad]);
+        }
+        finally
+        {
+            GameLog.MinimumLevel = previousMinimumLevel;
+            GameLog.Sink = previousSink;
+        }
+
+        Assert.Empty(logs);
     }
 
     [Fact]
@@ -138,11 +166,16 @@ public class MissionExperienceCalculatorTests
 
     private static BattleSquad CreateBattleSquad(params ISoldier[] soldiers)
     {
+        return CreateBattleSquad(true, soldiers);
+    }
+
+    private static BattleSquad CreateBattleSquad(bool isPlayerSquad, params ISoldier[] soldiers)
+    {
         Squad squad = new("Test Squad", null, TestModelFactory.SquadTemplate);
         foreach (ISoldier soldier in soldiers)
         {
             squad.AddSquadMember(soldier);
         }
-        return new BattleSquad(true, squad);
+        return new BattleSquad(isPlayerSquad, squad);
     }
 }

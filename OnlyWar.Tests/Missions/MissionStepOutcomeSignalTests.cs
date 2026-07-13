@@ -26,13 +26,14 @@ public class MissionStepOutcomeSignalTests
     {
         MissionContext context = CreateContext(MissionType.Assassination);
         context.AssassinationTargetSoldierId = 42;
-        BattleHistory history = new() { FirstSideEnemiesKilled = 2 };
+        BattleHistory history = new() { FirstSideEnemiesKilled = 2, FirstSideEnemyDeaths = 1 };
         history.KilledSoldierIds.Add(42);
 
         context.RecordBattleOutcome(history);
 
         Assert.True(context.TargetEliminated);
-        Assert.Equal(2, context.EnemiesKilled);
+        Assert.Equal(1, context.EnemiesKilled);
+        Assert.Equal(2, context.EnemyKillCredits);
     }
 
     [Fact]
@@ -40,13 +41,26 @@ public class MissionStepOutcomeSignalTests
     {
         MissionContext context = CreateContext(MissionType.Assassination);
         context.AssassinationTargetSoldierId = 42;
-        BattleHistory history = new() { FirstSideEnemiesKilled = 1 };
+        BattleHistory history = new() { FirstSideEnemiesKilled = 1, FirstSideEnemyDeaths = 1 };
         history.KilledSoldierIds.Add(99);
 
         context.RecordBattleOutcome(history);
 
         Assert.False(context.TargetEliminated);
         Assert.Equal(1, context.EnemiesKilled);
+        Assert.Equal(1, context.EnemyKillCredits);
+    }
+
+    [Fact]
+    public void RecordBattleOutcome_TracksKillCreditsSeparatelyFromUniqueDeaths()
+    {
+        MissionContext context = CreateContext(MissionType.Ambush);
+        BattleHistory history = new() { FirstSideEnemiesKilled = 3, FirstSideEnemyDeaths = 2 };
+
+        context.RecordBattleOutcome(history);
+
+        Assert.Equal(2, context.EnemiesKilled);
+        Assert.Equal(3, context.EnemyKillCredits);
     }
 
     [Fact]

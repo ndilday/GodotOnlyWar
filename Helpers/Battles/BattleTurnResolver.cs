@@ -65,10 +65,18 @@ namespace OnlyWar.Helpers.Battles
         private void WoundResolver_OnSoldierDeath(WoundResolution wound, WoundLevel woundLevel)
         {
             _casualtyMap[wound.Suffererer.Soldier.Id] = wound.Suffererer;
-            BattleHistory.KilledSoldierIds.Add(wound.Suffererer.Soldier.Id);
-            if (_aftermathContext.IsSecondSide(wound.Suffererer))
+            bool isFirstSideEnemy = _aftermathContext.IsSecondSide(wound.Suffererer);
+            bool isFirstDeath = BattleHistory.KilledSoldierIds.Add(wound.Suffererer.Soldier.Id);
+            if (isFirstSideEnemy)
             {
+                // Keep per-hit credit separate from the unique body count. A target can receive
+                // multiple fatal wounds before the wound queue is drained, and each can be a valid
+                // simultaneous kill credit even though only one enemy died.
                 BattleHistory.FirstSideEnemiesKilled++;
+                if (isFirstDeath)
+                {
+                    BattleHistory.FirstSideEnemyDeaths++;
+                }
             }
             _aftermathPolicy.OnSoldierKilled(wound, woundLevel);
         }

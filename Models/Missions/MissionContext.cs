@@ -50,7 +50,11 @@ namespace OnlyWar.Models.Missions
         public List<Mission> MissionsToAdd { get; }
         public List<Mission> MissionsToRemove { get; }
         public float Impact { get; set; }
+        // Unique enemy bodies killed by this mission. This is the report-facing casualty count.
         public int EnemiesKilled { get; set; }
+        // Per-hit/per-attacker credits, which may exceed EnemiesKilled when simultaneous fatal hits
+        // land on the same enemy.
+        public int EnemyKillCredits { get; set; }
 
         // --- Structured mission-outcome signals (PRD 5.3 "Mission Field Experience & Records") ---
         // Set by the individual mission steps at the point each event resolves, so downstream consumers
@@ -96,6 +100,7 @@ namespace OnlyWar.Models.Missions
             DebriefLines = new List<MissionDebriefLine>();
             Impact = 0.0f;
             EnemiesKilled = 0;
+            EnemyKillCredits = 0;
         }
 
         public void AddLog(string text)
@@ -112,7 +117,8 @@ namespace OnlyWar.Models.Missions
 
         public void RecordBattleOutcome(BattleHistory battleHistory)
         {
-            EnemiesKilled += battleHistory.FirstSideEnemiesKilled;
+            EnemiesKilled += battleHistory.FirstSideEnemyDeaths;
+            EnemyKillCredits += battleHistory.FirstSideEnemiesKilled;
             if (AssassinationTargetSoldierId is int targetId
                 && battleHistory.KilledSoldierIds.Contains(targetId))
             {

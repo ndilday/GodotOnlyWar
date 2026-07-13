@@ -5,11 +5,15 @@ namespace OnlyWar.Models.Battles
     public class BattleHistory
     {
         public List<BattleTurn> Turns { get; }
+        // Player-career credit. Multiple fatal hits on one enemy can legitimately produce multiple
+        // credits when the shots resolve simultaneously.
         public int EnemiesKilled { get; set; }
-        // Casualties suffered by the second side. Mission battles always pass the mission force as
-        // the first side, so this is the kill count used by mission outcome reporting. EnemiesKilled
-        // remains the player-chapter career credit and can have the opposite perspective in NPC missions.
+        // Per-hit kill credits against the second side. Mission battles pass the mission force as the
+        // first side, so this is the mission force's credit total and may exceed actual deaths.
         public int FirstSideEnemiesKilled { get; set; }
+        // Unique soldiers killed on the second side. Unlike FirstSideEnemiesKilled, this is a body
+        // count and cannot exceed the second side's starting soldier count.
+        public int FirstSideEnemyDeaths { get; set; }
         // Stable soldier identities confirmed killed during this battle, independent of which
         // aftermath policy is active. Mission objectives can track a specific casualty directly.
         public HashSet<int> KilledSoldierIds { get; }
@@ -19,6 +23,7 @@ namespace OnlyWar.Models.Battles
             Turns = new List<BattleTurn>();
             EnemiesKilled = 0;
             FirstSideEnemiesKilled = 0;
+            FirstSideEnemyDeaths = 0;
             KilledSoldierIds = new HashSet<int>();
         }
     }
