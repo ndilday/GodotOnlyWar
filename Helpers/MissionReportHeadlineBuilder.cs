@@ -5,15 +5,14 @@ using System.Linq;
 namespace OnlyWar.Helpers
 {
     // Pure string-building for the primary line of an end-of-turn mission report. Keeping this
-    // separate from the Godot controller makes the player/enemy and recon/mission distinctions easy
-    // to exercise without instantiating the UI scene.
+    // separate from the Godot controller makes the recon/mission distinctions easy to exercise
+    // without instantiating the UI scene. Player missions only: NPC-run missions are never shown in
+    // full detail (see NpcMissionReportBuilder), so this no longer has an enemy-mission branch.
     public static class MissionReportHeadlineBuilder
     {
         public static string Build(
             MissionType missionType,
-            bool isPlayerMission,
             IReadOnlyList<string> squadNames,
-            string actingFactionName,
             string enemyFactionName,
             string regionName,
             string planetName)
@@ -22,11 +21,6 @@ namespace OnlyWar.Helpers
             string region = ValueOrFallback(regionName, "Unknown region");
             string planet = ValueOrFallback(planetName, "Unknown planet");
             string location = $"{region}, {planet}";
-
-            if (!isPlayerMission)
-            {
-                return $"{ValueOrFallback(actingFactionName, "Unknown faction")} {missionName} in {location}";
-            }
 
             int squadCount = squadNames?.Count ?? 0;
             string squadName = squadNames?

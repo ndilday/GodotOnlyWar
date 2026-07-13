@@ -10,7 +10,8 @@ namespace OnlyWar.Tests.Turns;
 // (Helpers/MissionReportSummaryBuilder.cs) and is exercised directly here. The builder now renders a
 // shared MissionOutcomeClassification (built by MissionOutcomeClassifier from MissionContext's
 // structured signals) rather than re-classifying from Log text, so these tests hand it a
-// classification directly.
+// classification directly. Player missions only - NPC-run missions go through
+// NpcMissionReportBuilder (see NpcMissionReportBuilderTests) instead.
 public class MissionReportSummaryBuilderTests
 {
     private static MissionOutcomeClassification Classification(
@@ -39,7 +40,7 @@ public class MissionReportSummaryBuilderTests
     {
         string summary = MissionReportSummaryBuilder.BuildSummary(
             Classification(MissionType.Recon, wasDetected: false),
-            true, "Player Chapter", "Sacred Ground, Terra");
+            "Sacred Ground, Terra");
 
         Assert.Contains("Your forces", summary);
         Assert.Contains("undetected", summary);
@@ -51,7 +52,7 @@ public class MissionReportSummaryBuilderTests
         string summary = MissionReportSummaryBuilder.BuildSummary(
             Classification(MissionType.Recon, wasDetected: true,
                 disposition: MissionForceDisposition.BrokeContact),
-            true, "Player Chapter", "Sacred Ground, Terra");
+            "Sacred Ground, Terra");
 
         Assert.Contains("detected", summary);
         Assert.Contains("broke contact", summary);
@@ -63,9 +64,9 @@ public class MissionReportSummaryBuilderTests
         string summary = MissionReportSummaryBuilder.BuildSummary(
             Classification(MissionType.Recon, wasDetected: true,
                 disposition: MissionForceDisposition.LostContact),
-            false, "Tyranid Swarm", "Hive Sector, Baal");
+            "Hive Sector, Baal");
 
-        Assert.StartsWith("Tyranid Swarm", summary);
+        Assert.StartsWith("Your forces", summary);
         Assert.Contains("lost contact", summary);
     }
 
@@ -74,7 +75,7 @@ public class MissionReportSummaryBuilderTests
     {
         string summary = MissionReportSummaryBuilder.BuildSummary(
             Classification(MissionType.Advance, enemiesKilled: 7),
-            true, "Player Chapter", "Iron Valley, Cadia");
+            "Iron Valley, Cadia");
 
         Assert.Contains("killed 7 enemy troops", summary);
     }
@@ -85,7 +86,7 @@ public class MissionReportSummaryBuilderTests
         string summary = MissionReportSummaryBuilder.BuildSummary(
             Classification(MissionType.Advance, enemiesKilled: 4,
                 disposition: MissionForceDisposition.WithdrewUnderFire),
-            true, "Player Chapter", "Iron Valley, Cadia");
+            "Iron Valley, Cadia");
 
         Assert.Contains("killed 4 enemy troops", summary);
         Assert.Contains("heavy losses", summary);
@@ -96,31 +97,19 @@ public class MissionReportSummaryBuilderTests
     {
         string summary = MissionReportSummaryBuilder.BuildSummary(
             Classification(MissionType.LightningRaid, noViableTarget: true),
-            true, "Player Chapter", "Iron Valley, Cadia");
+            "Iron Valley, Cadia");
 
         Assert.Contains("no viable target", summary);
     }
 
     [Fact]
-    public void BuildSummary_PlayerCombatMissionWithNoKills_ReportsUnconfirmedCasualties()
+    public void BuildSummary_CombatMissionWithNoKills_ReportsUnconfirmedCasualties()
     {
         string summary = MissionReportSummaryBuilder.BuildSummary(
             Classification(MissionType.Advance),
-            true, "Player Chapter", "Iron Valley, Cadia");
+            "Iron Valley, Cadia");
 
         Assert.Contains("without confirmed enemy casualties", summary);
-    }
-
-    [Fact]
-    public void BuildSummary_NpcCombatMissionWithNoKills_ReportsNoDamage()
-    {
-        string summary = MissionReportSummaryBuilder.BuildSummary(
-            Classification(MissionType.Advance),
-            false, "Tyranid Swarm", "Iron Valley, Cadia");
-
-        Assert.Equal(
-            "Tyranid Swarm conducted a Advance in Iron Valley, Cadia but inflicted no damage.",
-            summary);
     }
 
     [Fact]
@@ -128,7 +117,7 @@ public class MissionReportSummaryBuilderTests
     {
         string summary = MissionReportSummaryBuilder.BuildSummary(
             Classification(MissionType.Sabotage, impact: 2.5f),
-            true, "Player Chapter", "Forge Complex, Mars");
+            "Forge Complex, Mars");
 
         Assert.Contains("sabotaged enemy operations", summary);
     }
@@ -138,7 +127,7 @@ public class MissionReportSummaryBuilderTests
     {
         string summary = MissionReportSummaryBuilder.BuildSummary(
             Classification(MissionType.Sabotage, impact: -1f),
-            true, "Player Chapter", "Forge Complex, Mars");
+            "Forge Complex, Mars");
 
         Assert.Contains("without notable effect", summary);
     }
@@ -149,7 +138,7 @@ public class MissionReportSummaryBuilderTests
         string summary = MissionReportSummaryBuilder.BuildSummary(
             Classification(MissionType.Assassination, targetLocated: true,
                 targetEliminated: true, enemiesKilled: 1),
-            true, "Player Chapter", "Spire, Necromunda");
+            "Spire, Necromunda");
 
         Assert.Contains("eliminated the target", summary);
     }
@@ -159,7 +148,7 @@ public class MissionReportSummaryBuilderTests
     {
         string summary = MissionReportSummaryBuilder.BuildSummary(
             Classification(MissionType.Assassination, targetLocated: true),
-            true, "Player Chapter", "Spire, Necromunda");
+            "Spire, Necromunda");
 
         Assert.Contains("located the target", summary);
         Assert.Contains("did not conclude cleanly", summary);
@@ -170,50 +159,15 @@ public class MissionReportSummaryBuilderTests
     {
         string summary = MissionReportSummaryBuilder.BuildSummary(
             Classification(MissionType.Construction),
-            false, "Ork Waaagh", "Scrapyard, Golgotha");
+            "Scrapyard, Golgotha");
 
-        Assert.Contains("Ork Waaagh", summary);
+        Assert.Contains("Your forces", summary);
         Assert.Contains("Construction", summary);
     }
 
     [Fact]
-    public void BuildUnconfirmedSummary_MentionsMissionTypeAndLocation()
+    public void BuildSubject_ReturnsYourForces()
     {
-        string summary = MissionReportSummaryBuilder.BuildUnconfirmedSummary(
-            MissionType.Ambush, "Iron Valley, Cadia");
-
-        Assert.Contains("Unconfirmed", summary);
-        Assert.Contains("Ambush", summary);
-        Assert.Contains("Iron Valley, Cadia", summary);
-    }
-
-    [Fact]
-    public void BuildSubject_PlayerFaction_ReturnsYourForces()
-    {
-        Assert.Equal("Your forces", MissionReportSummaryBuilder.BuildSubject(true, "Player Chapter"));
-    }
-
-    [Fact]
-    public void BuildSubject_NpcFaction_ReturnsFactionName()
-    {
-        Assert.Equal("Ork Waaagh", MissionReportSummaryBuilder.BuildSubject(false, "Ork Waaagh"));
-    }
-
-    [Fact]
-    public void ShouldIncludeInTurnSummary_PlayerMissionWithoutIntel_IsIncluded()
-    {
-        Assert.True(MissionReportSummaryBuilder.ShouldIncludeInTurnSummary(true, 0f));
-    }
-
-    [Fact]
-    public void ShouldIncludeInTurnSummary_NpcMissionWithIntel_IsIncluded()
-    {
-        Assert.True(MissionReportSummaryBuilder.ShouldIncludeInTurnSummary(false, 0.01f));
-    }
-
-    [Fact]
-    public void ShouldIncludeInTurnSummary_NpcMissionWithoutIntel_IsOmitted()
-    {
-        Assert.False(MissionReportSummaryBuilder.ShouldIncludeInTurnSummary(false, 0f));
+        Assert.Equal("Your forces", MissionReportSummaryBuilder.BuildSubject());
     }
 }

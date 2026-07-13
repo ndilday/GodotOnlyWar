@@ -13,6 +13,15 @@ namespace OnlyWar.Helpers.Extensions
             {
                 sb.Append(turn.GetBattleLog());
             }
+            if (battleHistory.ClosingSummary.Count > 0)
+            {
+                sb.Append('\n');
+                foreach (string line in battleHistory.ClosingSummary)
+                {
+                    sb.Append(line);
+                    sb.Append('\n');
+                }
+            }
             return sb.ToString();
         }
 

@@ -1,0 +1,414 @@
+using System;
+using System.Collections.Concurrent;
+using System.Collections.Generic;
+using System.Linq;
+using OnlyWar.Helpers;
+using OnlyWar.Helpers.Battles;
+using OnlyWar.Helpers.Battles.Actions;
+using OnlyWar.Models.Equippables;
+using OnlyWar.Models.Soldiers;
+using OnlyWar.Tests.Fixtures;
+using Xunit;
+
+namespace OnlyWar.Tests.Battles;
+
+public class BattleSquadPlannerTests
+{
+    private sealed class EngagedDecisionScenario
+    {
+        public BattleSquad ShooterSquad { get; init; }
+        public BattleSoldier Shooter { get; init; }
+        public IReadOnlyList<BattleSoldier> Attackers { get; init; }
+        public MeleeWeapon ProjectedMeleeWeapon { get; init; }
+        public BattleSquadPlanner Planner { get; init; }
+        public ConcurrentBag<IAction> ShootActions { get; init; }
+        public ConcurrentBag<IAction> MeleeActions { get; init; }
+    }
+
+    private static BattleSquad CreateSquad(
+        string name,
+        int soldierId,
+        int battleValue = 2,
+        float size = 1)
+    {
+        SoldierTemplate template = new(
+            10_000 + soldierId,
+            TestModelFactory.HumanSpecies,
+            $"{name} Template",
+            1,
+            1,
+            false,
+            0,
+            Array.Empty<Tuple<BaseSkill, float>>(),
+            battleValue: battleValue);
+        Soldier soldier = TestModelFactory.CreateSoldier(template, name);
+        soldier.Id = soldierId;
+        soldier.Size = size;
+        return new BattleSquad(false, TestModelFactory.CreateSquad(name, soldier));
+    }
+
+    private static void Place(
+        BattleGridManager grid,
+        BattleSoldier soldier,
+        bool side,
+        int x,
+        int y)
+    {
+        soldier.TopLeft = new Tuple<int, int>(x, y);
+        grid.PlaceSoldier(soldier, side, [new Tuple<int, int>(x, y)]);
+    }
+
+    private static BattleSquadPlanner CreatePlanner(
+        BattleGridManager grid,
+        params BattleSquad[] squads)
+    {
+        Dictionary<int, BattleSoldier> soldiers = squads
+            .SelectMany(squad => squad.Soldiers)
+            .ToDictionary(soldier => soldier.Soldier.Id);
+        BattleSoldier shooter = squads[0].Soldiers[0];
+        return new BattleSquadPlanner(
+            grid,
+            soldiers,
+            new ConcurrentBag<IAction>(),
+            new ConcurrentBag<IAction>(),
+            new ConcurrentBag<IAction>(),
+            new ConcurrentQueue<string>(),
+            shooter.MeleeWeapons[0]);
+    }
+
+    private static EngagedDecisionScenario CreateEngagedDecisionScenario(int attackerCount)
+    {
+        BattleSquad shooterSquad = CreateSquad("Engaged Shooter", 500, battleValue: 10);
+        BattleSoldier shooter = shooterSquad.Soldiers[0];
+        ((Soldier)shooter.Soldier).Dexterity = 17;
+
+        RangedWeapon pointBlankWeapon = new(new RangedWeaponTemplate(
+            99_100,
+            "Compact Rifle",
+            EquipLocation.TwoHand,
+            TestSkills.Ranged,
+            accuracy: 0,
+            armorMultiplier: 1,
+            penetrationMultiplier: 1,
+            requiredStrength: 0,
+            baseDamage: 3,
+            maxDistance: 50,
+            rof: 1,
+            ammo: 5,
+            recoil: 0,
+            bulk: 1,
+            doesDamageDegradeWithRange: false,
+            reloadTime: 1));
+        MeleeWeapon projectedMeleeWeapon = new(new MeleeWeaponTemplate(
+            99_101,
+            "Parrying Knife",
+            EquipLocation.OneHand,
+            TestSkills.Melee,
+            accuracy: 0,
+            armorMultiplier: 1,
+            penetrationMultiplier: 1,
+            requiredStrength: 0,
+            strengthMultiplier: 0.2f,
+            parryMod: 4,
+            attackSpeedMultiplier: 1));
+        shooter.RangedWeapons.Clear();
+        shooter.EquippedRangedWeapons.Clear();
+        shooter.RangedWeapons.Add(pointBlankWeapon);
+        shooter.EquippedRangedWeapons.Add(pointBlankWeapon);
+        shooter.MeleeWeapons.Clear();
+        shooter.EquippedMeleeWeapons.Clear();
+        shooter.MeleeWeapons.Add(projectedMeleeWeapon);
+
+        MeleeWeaponTemplate attackerWeaponTemplate = new(
+            99_102,
+            "Light Claws",
+            EquipLocation.OneHand,
+            TestSkills.Melee,
+            accuracy: 0,
+            armorMultiplier: 1,
+            penetrationMultiplier: 1,
+            requiredStrength: 0,
+            strengthMultiplier: 0.2142857f,
+            parryMod: 0,
+            attackSpeedMultiplier: 1);
+
+        List<BattleSquad> squads = [shooterSquad];
+        List<BattleSoldier> attackers = [];
+        BattleGridManager grid = new();
+        Place(grid, shooter, true, 0, 0);
+        (int X, int Y)[] attackerPositions = [(1, 0), (0, 1), (-1, 0)];
+        for (int index = 0; index < attackerCount; index++)
+        {
+            BattleSquad attackerSquad = CreateSquad(
+                $"Attacker {index + 1}",
+                510 + index,
+                battleValue: 10);
+            BattleSoldier attacker = attackerSquad.Soldiers[0];
+            MeleeWeapon attackerWeapon = new(attackerWeaponTemplate);
+            attacker.RangedWeapons.Clear();
+            attacker.EquippedRangedWeapons.Clear();
+            attacker.MeleeWeapons.Clear();
+            attacker.EquippedMeleeWeapons.Clear();
+            attacker.MeleeWeapons.Add(attackerWeapon);
+            attacker.EquippedMeleeWeapons.Add(attackerWeapon);
+            Place(
+                grid,
+                attacker,
+                false,
+                attackerPositions[index].X,
+                attackerPositions[index].Y);
+            squads.Add(attackerSquad);
+            attackers.Add(attacker);
+        }
+
+        Dictionary<int, BattleSoldier> soldierMap = squads
+            .SelectMany(squad => squad.Soldiers)
+            .ToDictionary(soldier => soldier.Soldier.Id);
+        ConcurrentBag<IAction> shootActions = [];
+        ConcurrentBag<IAction> meleeActions = [];
+        BattleSquadPlanner planner = new(
+            grid,
+            soldierMap,
+            shootActions,
+            new ConcurrentBag<IAction>(),
+            meleeActions,
+            new ConcurrentQueue<string>(),
+            projectedMeleeWeapon);
+        shooterSquad.IsInMelee = true;
+        shooter.IsInMelee = true;
+
+        return new EngagedDecisionScenario
+        {
+            ShooterSquad = shooterSquad,
+            Shooter = shooter,
+            Attackers = attackers,
+            ProjectedMeleeWeapon = projectedMeleeWeapon,
+            Planner = planner,
+            ShootActions = shootActions,
+            MeleeActions = meleeActions
+        };
+    }
+
+    [Fact]
+    public void SelectBestRangedTarget_PrefersCleanFartherTargetOverEntangledNearTarget()
+    {
+        BattleSquad shooters = CreateSquad("Shooter", 1);
+        BattleSquad allySquad = CreateSquad("Ally", 2, battleValue: 20);
+        BattleSquad entangledEnemy = CreateSquad("Entangled", 10);
+        BattleSquad cleanEnemy = CreateSquad("Clean", 20);
+        BattleSoldier shooter = shooters.Soldiers[0];
+        BattleSoldier ally = allySquad.Soldiers[0];
+        BattleSoldier entangled = entangledEnemy.Soldiers[0];
+        BattleSoldier clean = cleanEnemy.Soldiers[0];
+
+        BattleGridManager grid = new();
+        Place(grid, shooter, true, 0, 0);
+        Place(grid, ally, true, 4, 1);
+        Place(grid, entangled, false, 4, 0);
+        Place(grid, clean, false, 8, 0);
+        BattleSquadPlanner planner = CreatePlanner(
+            grid,
+            shooters,
+            allySquad,
+            entangledEnemy,
+            cleanEnemy);
+
+        shooter.TargetId = entangled.Soldier.Id;
+        BattleSquadPlanner.RangedTargetEvaluation entangledScore = planner.EvaluateRangedTarget(
+            shooter,
+            entangled,
+            shooter.EquippedRangedWeapons[0],
+            4,
+            0);
+        BattleSquadPlanner.RangedTargetEvaluation cleanScore = planner.EvaluateRangedTarget(
+            shooter,
+            clean,
+            shooter.EquippedRangedWeapons[0],
+            8,
+            0);
+        BattleSquadPlanner.RangedTargetEvaluation selected = planner.SelectBestRangedTarget(
+            shooter,
+            useBulk: false);
+
+        Assert.True(entangledScore.ExpectedFriendlyBattleValueLost > 0);
+        Assert.Equal(0, cleanScore.ExpectedFriendlyBattleValueLost);
+        Assert.True(cleanScore.Score > entangledScore.Score);
+        Assert.Equal(clean.Soldier.Id, selected.Target.Soldier.Id);
+    }
+
+    [Fact]
+    public void SelectBestRangedTarget_StillShootsLargeHighValueMonsterInMelee()
+    {
+        BattleSquad shooters = CreateSquad("Shooter", 101);
+        BattleSquad allySquad = CreateSquad("Ally", 102, battleValue: 20);
+        BattleSquad monsterSquad = CreateSquad("Monster", 110, battleValue: 30, size: 12);
+        BattleSquad cleanEnemy = CreateSquad("Clean", 120);
+        BattleSoldier shooter = shooters.Soldiers[0];
+        BattleSoldier ally = allySquad.Soldiers[0];
+        BattleSoldier monster = monsterSquad.Soldiers[0];
+        BattleSoldier clean = cleanEnemy.Soldiers[0];
+
+        BattleGridManager grid = new();
+        Place(grid, shooter, true, 0, 0);
+        Place(grid, ally, true, 4, 1);
+        Place(grid, monster, false, 4, 0);
+        Place(grid, clean, false, 8, 0);
+        BattleSquadPlanner planner = CreatePlanner(
+            grid,
+            shooters,
+            allySquad,
+            monsterSquad,
+            cleanEnemy);
+
+        BattleSquadPlanner.RangedTargetEvaluation monsterScore = planner.EvaluateRangedTarget(
+            shooter,
+            monster,
+            shooter.EquippedRangedWeapons[0],
+            4,
+            0);
+        BattleSquadPlanner.RangedTargetEvaluation selected = planner.SelectBestRangedTarget(
+            shooter,
+            useBulk: false);
+
+        Assert.True(monsterScore.ExpectedFriendlyBattleValueLost > 0);
+        Assert.Equal(monster.Soldier.Id, selected.Target.Soldier.Id);
+    }
+
+    [Fact]
+    public void SelectBestRangedTarget_ConsidersOnlyThreeNearestInRangeEnemySquads()
+    {
+        BattleSquad shooters = CreateSquad("Shooter", 201);
+        BattleSquad first = CreateSquad("First", 210);
+        BattleSquad second = CreateSquad("Second", 220);
+        BattleSquad third = CreateSquad("Third", 230);
+        BattleSquad fourth = CreateSquad("Fourth", 240, battleValue: 10_000, size: 20);
+        BattleSoldier shooter = shooters.Soldiers[0];
+
+        BattleGridManager grid = new();
+        Place(grid, shooter, true, 0, 0);
+        Place(grid, first.Soldiers[0], false, 2, 0);
+        Place(grid, second.Soldiers[0], false, 3, 0);
+        Place(grid, third.Soldiers[0], false, 4, 0);
+        Place(grid, fourth.Soldiers[0], false, 5, 0);
+        BattleSquadPlanner planner = CreatePlanner(grid, shooters, first, second, third, fourth);
+
+        BattleSquadPlanner.RangedTargetEvaluation selected = planner.SelectBestRangedTarget(
+            shooter,
+            useBulk: false);
+
+        Assert.NotEqual(fourth.Soldiers[0].Soldier.Id, selected.Target.Soldier.Id);
+        Assert.Contains(
+            selected.Target.Soldier.Id,
+            new[]
+            {
+                first.Soldiers[0].Soldier.Id,
+                second.Soldiers[0].Soldier.Id,
+                third.Soldiers[0].Soldier.Id
+            });
+    }
+
+    [Fact]
+    public void SquadImminence_IsCachedPerAttackerAndTargetSquadForPlannerTurn()
+    {
+        BattleSquad shooters = CreateSquad("Shooter", 301);
+        BattleSquad meleeEnemy = CreateSquad("Melee Enemy", 310);
+        meleeEnemy.Soldiers[0].EquippedRangedWeapons.Clear();
+        meleeEnemy.Soldiers[0].RangedWeapons.Clear();
+
+        BattleGridManager grid = new();
+        Place(grid, shooters.Soldiers[0], true, 0, 0);
+        Place(grid, meleeEnemy.Soldiers[0], false, 13, 0);
+        BattleSquadPlanner planner = CreatePlanner(grid, shooters, meleeEnemy);
+
+        float first = planner.GetSquadImminence(shooters, meleeEnemy);
+        float second = planner.GetSquadImminence(shooters, meleeEnemy);
+
+        Assert.InRange(first, 0.01f, 0.99f);
+        Assert.Equal(first, second);
+        Assert.Equal(1, planner.CachedSquadImminenceCount);
+    }
+
+    [Fact]
+    public void EvaluateRangedTarget_CarriesShotCountUsedByHitProbability()
+    {
+        BattleSquad shooters = CreateSquad("Shooter", 401);
+        BattleSquad enemy = CreateSquad("Enemy", 410);
+        BattleSoldier shooter = shooters.Soldiers[0];
+        RangedWeapon burstWeapon = new(new RangedWeaponTemplate(
+            99_001,
+            "Burst Weapon",
+            EquipLocation.TwoHand,
+            TestSkills.Ranged,
+            accuracy: 0,
+            armorMultiplier: 1,
+            penetrationMultiplier: 1,
+            requiredStrength: 0,
+            baseDamage: 2,
+            maxDistance: 50,
+            rof: 12,
+            ammo: 12,
+            recoil: 1,
+            bulk: 0,
+            doesDamageDegradeWithRange: false,
+            reloadTime: 1));
+        shooter.EquippedRangedWeapons.Clear();
+        shooter.EquippedRangedWeapons.Add(burstWeapon);
+
+        BattleGridManager grid = new();
+        Place(grid, shooter, true, 0, 0);
+        Place(grid, enemy.Soldiers[0], false, 4, 0);
+        BattleSquadPlanner planner = CreatePlanner(grid, shooters, enemy);
+
+        BattleSquadPlanner.RangedTargetEvaluation evaluation = planner.EvaluateRangedTarget(
+            shooter,
+            enemy.Soldiers[0],
+            burstWeapon,
+            4,
+            0);
+        float preRollTotal = shooter.Soldier.GetTotalSkillValue(TestSkills.Ranged)
+            + BattleModifiersUtil.CalculateRateOfFireModifier(evaluation.ShotsToFire)
+            + BattleModifiersUtil.CalculateRangeModifier(4, 0)
+            + BattleModifiersUtil.CalculateSizeModifier(enemy.Soldiers[0].Soldier.Size);
+        float expectedProbability = GaussianCalculator.ApproximateNormalCDF(
+            (preRollTotal - 10.5f) / 3f);
+
+        Assert.InRange(evaluation.ShotsToFire, 1, burstWeapon.LoadedAmmo);
+        Assert.Equal(expectedProbability, evaluation.HitProbability, precision: 5);
+    }
+
+    [Fact]
+    public void EngagedShooter_ShootsAgainstOneAttacker_ButReadiesMeleeAgainstThree()
+    {
+        EngagedDecisionScenario singleAttacker = CreateEngagedDecisionScenario(1);
+        singleAttacker.Planner.PrepareActions(singleAttacker.ShooterSquad);
+
+        ShootAction shot = Assert.IsType<ShootAction>(Assert.Single(singleAttacker.ShootActions));
+        Assert.True(shot.UseBulk);
+        Assert.Equal(singleAttacker.Attackers[0].Soldier.Id, shot.TargetId);
+        Assert.Empty(singleAttacker.MeleeActions);
+
+        EngagedDecisionScenario threeAttackers = CreateEngagedDecisionScenario(3);
+        threeAttackers.Planner.PrepareActions(threeAttackers.ShooterSquad);
+
+        Assert.IsType<ReadyMeleeWeaponAction>(Assert.Single(threeAttackers.ShootActions));
+        Assert.Empty(threeAttackers.MeleeActions);
+    }
+
+    [Fact]
+    public void ForfeitedParryRisk_AccumulatesAcrossEveryAdjacentAttacker()
+    {
+        EngagedDecisionScenario singleAttacker = CreateEngagedDecisionScenario(1);
+        float singleRisk = singleAttacker.Planner.EstimateForfeitedParryRisk(
+            singleAttacker.Shooter,
+            singleAttacker.Attackers,
+            [singleAttacker.ProjectedMeleeWeapon]);
+        EngagedDecisionScenario threeAttackers = CreateEngagedDecisionScenario(3);
+        float tripleRisk = threeAttackers.Planner.EstimateForfeitedParryRisk(
+            threeAttackers.Shooter,
+            threeAttackers.Attackers,
+            [threeAttackers.ProjectedMeleeWeapon]);
+
+        Assert.True(singleRisk > 0);
+        Assert.Equal(singleRisk * 3, tripleRisk, precision: 4);
+    }
+}

@@ -207,11 +207,23 @@ namespace OnlyWar.Helpers.Battles.Actions
 
         public static float GetDefenderDefenseModifier(BattleSoldier defender)
         {
+            return GetDefenderDefenseModifier(defender, defender?.EquippedMeleeWeapons);
+        }
+
+        /// <summary>
+        /// Returns the defensive modifier for a specific projected melee loadout. The planner uses
+        /// this overload when comparing a gun currently in hand with the melee weapon that would be
+        /// readied instead; planning must not mutate the soldier's real equipment to value that parry.
+        /// </summary>
+        internal static float GetDefenderDefenseModifier(
+            BattleSoldier defender,
+            IReadOnlyCollection<MeleeWeapon> projectedMeleeWeapons)
+        {
             // Defensive value of the weapons in hand is expressed solely through their
             // parry modifiers (summed across equipped weapons); a second weapon helps
             // defense only if it is actually a parrying tool. No flat dual-wield bonus.
-            float parryModifier = defender.GetMeleeParryModifier();
-            if (defender.EquippedMeleeWeapons.Count == 0)
+            float parryModifier = MeleeMath.SumParryModifiers(projectedMeleeWeapons);
+            if (projectedMeleeWeapons == null || projectedMeleeWeapons.Count == 0)
             {
                 parryModifier += GetUnarmedWeapon(defender)?.Template.ParryModifier ?? 0;
             }
@@ -244,7 +256,7 @@ namespace OnlyWar.Helpers.Battles.Actions
             return best;
         }
 
-        private static MeleeWeapon GetUnarmedWeapon(BattleSoldier defender)
+        internal static MeleeWeapon GetUnarmedWeapon(BattleSoldier defender)
         {
             if (defender?.BattleSquad == null)
             {

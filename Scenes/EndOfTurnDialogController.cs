@@ -3,6 +3,7 @@ using OnlyWar.Helpers;
 using OnlyWar.Helpers.Battles;
 using OnlyWar.Helpers.Extensions;
 using OnlyWar.Helpers.Missions;
+using OnlyWar.Models;
 using OnlyWar.Models.Battles;
 using OnlyWar.Models.Missions;
 using OnlyWar.Models.Planets;
@@ -51,7 +52,7 @@ public partial class EndOfTurnDialogController : DialogController
         }
 
         EndOfTurnReportEntry entry = _reportEntries[entryIndex];
-        if (entry.MissionContext == null)
+        if (!entry.CanOpenDebrief)
         {
             return;
         }
@@ -59,6 +60,8 @@ public partial class EndOfTurnDialogController : DialogController
         ShowMissionDebrief(entry);
     }
 
+    // Reads only entry-level data (no MissionContext) so NPC entries can open a debrief - built from
+    // redacted, entry-owned lines - without ever exposing the underlying MissionContext to the view.
     private void ShowMissionDebrief(EndOfTurnReportEntry entry)
     {
         if (_missionDebriefDialog == null)
@@ -77,11 +80,9 @@ public partial class EndOfTurnDialogController : DialogController
         _missionDebriefDialog.SetMissionDebrief(
             entry.Title,
             entry.Subtitle,
-            MissionReportSummaryBuilder.BuildOutcomeStatus(MissionOutcomeClassifier.Classify(entry.MissionContext)),
+            entry.OutcomeStatus,
             entry.Summary,
-            entry.MissionContext.DebriefLines.Count > 0
-                ? entry.MissionContext.DebriefLines
-                : entry.MissionContext.Log.Select(line => new MissionDebriefLine(line)).ToList());
+            entry.DebriefLines);
         _view.Visible = false;
         _missionDebriefDialog.Visible = true;
     }
@@ -160,8 +161,6 @@ public partial class EndOfTurnDialogController : DialogController
     {
         Mission mission = context.Order?.Mission;
         Region region = mission?.RegionFaction?.Region;
-        MissionType missionType = mission?.MissionType ?? MissionType.Patrol;
-        string missionTypeName = mission?.MissionType.ToString() ?? "Mission";
         string location = region == null ? "Unknown location" : $"{region.Name}, {region.Planet?.Name}";
         bool actingFactionIsPlayer = context.MissionSquads
             .Any(squad => squad?.Squad?.Faction?.IsPlayerFaction == true);
@@ -170,34 +169,73 @@ public partial class EndOfTurnDialogController : DialogController
             .FirstOrDefault(name => !string.IsNullOrWhiteSpace(name)) ?? "Unknown attacker";
         string defender = mission?.RegionFaction?.PlanetFaction?.Faction?.Name ?? "Unknown defender";
 
-        // Mirror BuildStrategicCombatEntry's gating: the player's own missions are always shown in
-        // full, but a mission run by an NPC faction only surfaces precise detail once the player has
-        // some region intel - otherwise it degrades to an unconfirmed report, same as strategic combat.
+        if (actingFactionIsPlayer)
+        {
+            string missionTypeName = mission?.MissionType.ToString() ?? "Mission";
+            string subtitle = MissionReportHeadlineBuilder.Build(
+                mission?.MissionType ?? MissionType.Patrol,
+                context.MissionSquads
+                    .Select(squad => squad?.Squad?.Name)
+                    .ToList(),
+                defender,
+                region?.Name,
+                region?.Planet?.Name);
+            MissionOutcomeClassification classification = MissionOutcomeClassifier.Classify(context);
+            string summary = MissionReportSummaryBuilder.BuildSummary(classification, location);
+            string outcomeStatus = MissionReportSummaryBuilder.BuildOutcomeStatus(classification);
+            IReadOnlyList<MissionDebriefLine> lines = context.DebriefLines.Count > 0
+                ? context.DebriefLines
+                : context.Log.Select(line => new MissionDebriefLine(line)).ToList();
+
+            return new EndOfTurnReportEntry(
+                missionTypeName, subtitle, summary, true, outcomeStatus, lines);
+        }
+
+        // NPC-run mission: never surface the ground-truth mission type or the full debrief log - only
+        // what the player could plausibly have gathered from a sighting, a visible aftermath effect,
+        // ambient regional surveillance, or direct engagement (NpcMissionReportBuilder). CanOpenDebrief
+        // is false except when the player's own squads fought this mission's force directly (below);
+        // that closes the old full-mission-log leak while still letting real battles be reviewed.
+        MissionOutcomeClassification npcClassification = MissionOutcomeClassifier.Classify(context);
+        bool spotterIsPlayerSide = IsPlayerOrDefaultFaction(context.Spotter?.PlanetFaction?.Faction);
+        bool targetIsPlayerSide = IsPlayerOrDefaultFaction(mission?.RegionFaction?.PlanetFaction?.Faction);
+        bool playerForcesEngaged = context.OpposingSquads?.Any(squad => squad?.IsPlayerSquad == true) == true;
         float playerVisibleIntel = region?.GetPlayerVisibleIntel() ?? 0f;
-        if (!MissionReportSummaryBuilder.ShouldIncludeInTurnSummary(actingFactionIsPlayer, playerVisibleIntel))
+
+        NpcMissionReport report = NpcMissionReportBuilder.Build(
+            npcClassification,
+            spotterIsPlayerSide,
+            targetIsPlayerSide,
+            playerForcesEngaged,
+            attacker,
+            defender,
+            location,
+            playerVisibleIntel);
+
+        if (report == null)
         {
             return null;
         }
 
-        string subtitle = MissionReportHeadlineBuilder.Build(
-            missionType,
-            actingFactionIsPlayer,
-            context.MissionSquads
-                .Select(squad => squad?.Squad?.Name)
-                .ToList(),
-            attacker,
-            defender,
-            region?.Name,
-            region?.Planet?.Name);
-        MissionOutcomeClassification classification = MissionOutcomeClassifier.Classify(context);
-        string summary = MissionReportSummaryBuilder.BuildSummary(
-            classification,
-            actingFactionIsPlayer,
-            attacker,
-            location);
+        // The player's soldiers fought real battles here - the same BattleHistory a player mission
+        // would show - so those specific battles may be opened for review. Only the battle-bearing
+        // lines pass through: their text is GetBattleLog() combat-event output (what the "SHOW BATTLE
+        // LOG" toggle displays), which the player's soldiers witnessed first-hand. The non-battle
+        // lines are what narrate the enemy's actual intent, and those are filtered out here.
+        List<MissionDebriefLine> battleLines = context.DebriefLines.Where(line => line.HasBattle).ToList();
+        bool canOpenDebrief = playerForcesEngaged && battleLines.Count > 0;
+        string engagementStatus = canOpenDebrief ? "ENGAGEMENT REPORT" : "";
+        IReadOnlyList<MissionDebriefLine> debriefLines = canOpenDebrief
+            ? battleLines
+            : Array.Empty<MissionDebriefLine>();
 
-        return new EndOfTurnReportEntry(missionTypeName, subtitle, summary, true, context);
+        return new EndOfTurnReportEntry(
+            report.Title, report.Subtitle, report.Summary, canOpenDebrief, engagementStatus, debriefLines,
+            isEnemyActivity: true);
     }
+
+    private static bool IsPlayerOrDefaultFaction(Faction faction) =>
+        faction != null && (faction.IsPlayerFaction || faction.IsDefaultFaction);
 
     private static EndOfTurnReportEntry BuildStrategicCombatEntry(StrategicCombatResult result)
     {
@@ -206,16 +244,18 @@ public partial class EndOfTurnDialogController : DialogController
         string location = region == null ? "Unknown region" : $"{region.Name}, {region.Planet?.Name}";
         string attacker = result.Attacker?.Name ?? "Unknown attacker";
         string defender = target?.PlanetFaction?.Faction?.Name ?? "Unknown defender";
-        bool hasIntel = (region?.GetPlayerVisibleIntel() ?? 0f) > 0f;
+        float playerVisibleIntel = region?.GetPlayerVisibleIntel() ?? 0f;
 
-        if (!hasIntel)
+        if (playerVisibleIntel <= 0f)
         {
+            // No evidence at all: don't name either faction or imply anything about scale/outcome,
+            // just that something happened nearby (mirrors NpcMissionReportBuilder's Movement tier).
             return new EndOfTurnReportEntry(
-                "Unconfirmed Combat",
-                $"{attacker} vs {defender} - {location}",
-                $"You have received reports of combat between {attacker} and {defender} in {location}.",
+                "Distant Fighting",
+                $"Enemy activity - {location}",
+                $"Reports of fighting in {location} have reached command.",
                 false,
-                null);
+                isEnemyActivity: true);
         }
 
         string outcome = result.Outcome switch
@@ -226,15 +266,21 @@ public partial class EndOfTurnDialogController : DialogController
             StrategicCombatOutcome.AttackerDestroyed => $"{attacker} was destroyed.",
             _ => "Combat resolved."
         };
-        string summary =
-            $"{outcome} Attacker losses: {result.AttackerLosses}. Defender losses: {result.DefenderLosses}.";
+        string summary = outcome;
+        // Precise loss figures require confirmed identification of the forces involved, not just
+        // ambient awareness that a fight happened - same tier NpcMissionReportBuilder uses to unlock
+        // naming the acting faction in its Contact channel.
+        if (NpcMissionReportBuilder.GetTier(playerVisibleIntel) >= NpcReportTier.Identified)
+        {
+            summary += $" Attacker losses: {result.AttackerLosses}. Defender losses: {result.DefenderLosses}.";
+        }
 
         return new EndOfTurnReportEntry(
             "Strategic Combat",
             $"{attacker} vs {defender} - {location}",
             summary,
             false,
-            null);
+            isEnemyActivity: true);
     }
 }
 
@@ -244,19 +290,27 @@ public sealed class EndOfTurnReportEntry
     public string Subtitle { get; }
     public string Summary { get; }
     public bool CanOpenDebrief { get; }
-    public MissionContext MissionContext { get; }
+    public bool IsEnemyActivity { get; }
+    // Computed once at entry-build time so ShowMissionDebrief never needs to read a MissionContext -
+    // NPC entries can open a (redacted) debrief without ever exposing the underlying mission.
+    public string OutcomeStatus { get; }
+    public IReadOnlyList<MissionDebriefLine> DebriefLines { get; }
 
     public EndOfTurnReportEntry(
         string title,
         string subtitle,
         string summary,
         bool canOpenDebrief,
-        MissionContext missionContext)
+        string outcomeStatus = "",
+        IReadOnlyList<MissionDebriefLine> debriefLines = null,
+        bool isEnemyActivity = false)
     {
         Title = title ?? "";
         Subtitle = subtitle ?? "";
         Summary = summary ?? "";
         CanOpenDebrief = canOpenDebrief;
-        MissionContext = missionContext;
+        IsEnemyActivity = isEnemyActivity;
+        OutcomeStatus = outcomeStatus ?? "";
+        DebriefLines = debriefLines ?? Array.Empty<MissionDebriefLine>();
     }
 }

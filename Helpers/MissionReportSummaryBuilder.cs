@@ -11,9 +11,6 @@ namespace OnlyWar.Helpers
     // second-person "Your forces ..." voice, so the two consumers can never silently disagree.
     public static class MissionReportSummaryBuilder
     {
-        public static bool ShouldIncludeInTurnSummary(bool isPlayerMission, float playerVisibleIntel) =>
-            isPlayerMission || playerVisibleIntel > 0f;
-
         public static string BuildOutcomeStatus(MissionOutcomeClassification classification)
         {
             if (classification.Disposition is MissionForceDisposition.LostContact
@@ -36,37 +33,16 @@ namespace OnlyWar.Helpers
             };
         }
 
-        // The subject phrase used to open the outcome sentence: "Your forces" for the player's own
-        // mission (per 4.19 second-person voice), the faction's name otherwise.
-        public static string BuildSubject(bool isPlayerFaction, string actingFactionName)
-        {
-            if (isPlayerFaction)
-            {
-                return "Your forces";
-            }
-            return string.IsNullOrWhiteSpace(actingFactionName) ? "An unknown force" : actingFactionName;
-        }
-
-        // The unconfirmed variant shown for NPC-vs-NPC (or NPC-vs-third-party) missions the player has
-        // no region intel on - mirrors BuildStrategicCombatEntry's hasIntel gating so no precise outcome
-        // leaks through.
-        public static string BuildUnconfirmedSummary(MissionType missionType, string location)
-        {
-            return $"Unconfirmed reports place a {missionType} action near {location}.";
-        }
-
-        public static string BuildUnconfirmedSubtitle(MissionType missionType, string location)
-        {
-            return $"Unconfirmed {missionType} - {location}";
-        }
+        // The player's own missions are the only ones this builder renders (NPC missions go through
+        // NpcMissionReportBuilder instead), so the subject is always the second-person "Your forces"
+        // voice per 4.19.
+        public static string BuildSubject() => "Your forces";
 
         public static string BuildSummary(
             MissionOutcomeClassification classification,
-            bool isPlayerFaction,
-            string actingFactionName,
             string location)
         {
-            string subject = BuildSubject(isPlayerFaction, actingFactionName);
+            string subject = BuildSubject();
             location = string.IsNullOrWhiteSpace(location) ? "an unknown location" : location;
 
             switch (classification.MissionType)
@@ -98,7 +74,7 @@ namespace OnlyWar.Helpers
                 case MissionType.Extermination:
                 case MissionType.Infiltrate:
                 case MissionType.CloseAirSupport:
-                    return BuildCombatSummary(subject, location, classification, isPlayerFaction);
+                    return BuildCombatSummary(subject, location, classification);
 
                 case MissionType.Fortify:
                 case MissionType.DefenseInDepth:
@@ -148,8 +124,7 @@ namespace OnlyWar.Helpers
         private static string BuildCombatSummary(
             string subject,
             string location,
-            MissionOutcomeClassification classification,
-            bool isPlayerFaction)
+            MissionOutcomeClassification classification)
         {
             if (classification.EnemiesKilled > 0)
             {
@@ -167,9 +142,7 @@ namespace OnlyWar.Helpers
             {
                 return $"{subject} found no viable target in {location}.";
             }
-            return isPlayerFaction
-                ? $"{subject} conducted a {classification.MissionType} in {location} without confirmed enemy casualties."
-                : $"{subject} conducted a {classification.MissionType} in {location} but inflicted no damage.";
+            return $"{subject} conducted a {classification.MissionType} in {location} without confirmed enemy casualties.";
         }
     }
 }

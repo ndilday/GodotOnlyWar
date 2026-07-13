@@ -127,16 +127,16 @@ namespace OnlyWar.Helpers.Battles
             if (_currentState.AttackerSquads.Count == 0 || _currentState.OpposingSquads.Count == 0)
             {
                 Log(false, "One side destroyed, battle over");
-                ProcessEndOfBattle();
+                ProcessEndOfBattle(false);
             }
             else if (_currentState.TurnNumber >= MaxBattleTurns)
             {
                 Log(false, $"Battle unresolved after {MaxBattleTurns} turns; forcing disengagement");
-                ProcessEndOfBattle();
+                ProcessEndOfBattle(true);
             }
         }
 
-        private void ProcessEndOfBattle()
+        private void ProcessEndOfBattle(bool hitTurnCap)
         {
             _stopwatch.Stop();
             GameLog.Debug(() =>
@@ -144,6 +144,17 @@ namespace OnlyWar.Helpers.Battles
                 + $"{_stopwatch.ElapsedMilliseconds}ms, started "
                 + $"{_aftermathContext.FirstSideStartingSoldierCount} vs "
                 + $"{_aftermathContext.SecondSideStartingSoldierCount} soldiers");
+            int firstSideRemaining = _currentState.AttackerSquads.Values.Sum(s => s.AbleSoldiers.Count);
+            int secondSideRemaining = _currentState.OpposingSquads.Values.Sum(s => s.AbleSoldiers.Count);
+            BattleHistory.ClosingSummary.AddRange(BattleSummaryBuilder.Build(
+                _aftermathContext.FirstSideFaction?.Name,
+                _aftermathContext.SecondSideFaction?.Name,
+                _aftermathContext.FirstSideStartingSoldierCount,
+                firstSideRemaining,
+                _aftermathContext.SecondSideStartingSoldierCount,
+                secondSideRemaining,
+                _currentState.TurnNumber,
+                hitTurnCap));
             _aftermathPolicy.OnBattleCompleted(_currentState);
             OnBattleComplete?.Invoke(this, BattleHistory);
         }

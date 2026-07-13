@@ -452,11 +452,15 @@ Each feature is described as a behavioral specification: what the system does, a
 - Damage after armor reduction is applied to that location at the appropriate wound severity.
 - Weapons have a rate of fire. Firing multiple times in a turn incurs an accuracy penalty for each shot after the first.
 - Firing a two-handed weapon with one hand (due to an injured arm) incurs an additional accuracy penalty.
+- **Shooting into melee.** A shot at a figure engaged with the shooter's allies takes a -3 to-hit penalty. If the modified result is a near miss from -1 through 0, inclusive, one full-strength stray hit is resolved against the connected melee scrum. The nominal target and every connected participant are eligible, weighted by physical size; at point-blank range this can include the shooter.
+- **Ranged target value.** Soldiers score every candidate in the three nearest enemy squads that are within weapon range using `imminence(target squad) x E[enemy BV removed] - E[friendly BV lost]`. Enemy value includes hit probability, expected post-armor wound damage as a fraction of Constitution, and the target template's Battle Value. Friendly loss uses the exact near-miss probability and size-weighted scrum distribution with no imminence discount. Target-squad imminence is cached for the planning turn and is `1 / (1 + turns until that squad can engage)` from distance, movement speed, and preferred engagement range.
+- **Target-selection intent.** The score normally favors a clean target over an equally valuable enemy entangled with allies, but can still favor a large, high-value monster in melee because its size improves the hit chance and absorbs most size-weighted strays.
+- **Future non-goal.** General dangerous fields of fire and line-of-fire/line-of-sight tracing through friendly formations are not part of this refinement. They require fire-lane tracing plus formation behavior that keeps allies out of those lanes; the reusable scrum stray-distribution rule is the seed for that later system.
 
 **Melee Combat**
 - Squads that close to melee range engage in hand-to-hand combat.
 - Melee hit probability is derived from the attacker's melee skill, the defender's melee skill, the defender's per-species evasion value, and the weapons involved.
-- A squad in melee cannot fire two-handed ranged weapons unless it opts to disengage.
+- An engaged soldier compares the projected BV removed by his planned melee strike sequence with a point-blank ranged shot scored by the same ranged target-value rule. The shot pays the firing-into-melee and weapon `Bulk` penalties and the expected self-BV cost of forfeiting parry against every adjacent attacker. This allows a loaded firearm to remain useful against a light engagement while favoring readying a melee weapon when several enemies press the shooter.
 
 **Melee Combat — Attack Speed, Multiple Attacks & Weapon Rebalance (shipped in 0.7, §5.2)**
 

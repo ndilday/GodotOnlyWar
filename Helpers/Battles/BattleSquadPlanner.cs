@@ -10,6 +10,7 @@ namespace OnlyWar.Helpers.Battles
     public class BattleSquadPlanner
     {
         private const float TargetTakeOutConfidenceThreshold = MeleeMath.TakeOutConfidenceTarget;
+        private const int RangedTargetSquadCandidateCount = 3;
 
         private readonly BattleGridManager _grid;
         private readonly ConcurrentBag<IAction> _shootActionBag;
@@ -18,6 +19,42 @@ namespace OnlyWar.Helpers.Battles
         private readonly MeleeWeapon _defaultMeleeWeapon;
         private readonly IReadOnlyDictionary<int, BattleSoldier> _soldierMap;
         private readonly ConcurrentQueue<string> _log;
+        private readonly Dictionary<(int AttackerSquadId, int TargetSquadId), float> _squadImminenceCache = [];
+
+        internal sealed class RangedTargetEvaluation
+        {
+            public BattleSoldier Target { get; }
+            public RangedWeapon Weapon { get; }
+            public float Range { get; }
+            public int ShotsToFire { get; }
+            public float HitProbability { get; }
+            public float ExpectedDamageRatio { get; }
+            public float ExpectedEnemyBattleValueRemoved { get; }
+            public float ExpectedFriendlyBattleValueLost { get; }
+            public float Score => ExpectedEnemyBattleValueRemoved - ExpectedFriendlyBattleValueLost;
+
+            public RangedTargetEvaluation(
+                BattleSoldier target,
+                RangedWeapon weapon,
+                float range,
+                int shotsToFire,
+                float hitProbability,
+                float expectedDamageRatio,
+                float expectedEnemyBattleValueRemoved,
+                float expectedFriendlyBattleValueLost)
+            {
+                Target = target;
+                Weapon = weapon;
+                Range = range;
+                ShotsToFire = shotsToFire;
+                HitProbability = hitProbability;
+                ExpectedDamageRatio = expectedDamageRatio;
+                ExpectedEnemyBattleValueRemoved = expectedEnemyBattleValueRemoved;
+                ExpectedFriendlyBattleValueLost = expectedFriendlyBattleValueLost;
+            }
+        }
+
+        internal int CachedSquadImminenceCount => _squadImminenceCache.Count;
 
         public BattleSquadPlanner(BattleGridManager grid, 
                                   IReadOnlyDictionary<int, BattleSoldier> soldiers,
@@ -222,23 +259,32 @@ namespace OnlyWar.Helpers.Battles
             {
                 AddReloadRangedWeaponActionToBag(soldier);
             }
-            // determine if soldier was already aiming and the target is still around and not in a melee
-            else if (soldier.Aim != null && _soldierMap.ContainsKey(soldier.Aim.Item1))
+            // Keep an established aim only while its target and weapon remain the best ranged option.
+            // This preserves the value already invested in aiming without allowing TargetId/Aim to pin
+            // the squad to a now-inferior target after the battlefield changes.
+            else if (soldier.Aim != null
+                && _soldierMap.ContainsKey(soldier.Aim.Item1)
+                && IsExistingAimStillBest(soldier))
             {
                 BattleSoldier target = _soldierMap[soldier.Aim.Item1];
                 range = _grid.GetDistanceBetweenSoldiers(soldier.Soldier.Id, soldier.Aim.Item1);
                 // if the aim cannot be improved, go ahead and shoot
                 if (soldier.Aim.Item3 == 3)
                 {
-                    Tuple<float, float> effectEstimate = EstimateHitAndDamage(soldier, target, soldier.Aim.Item2, range, soldier.Aim.Item2.Template.Accuracy + 4);
-                    int shotsToFire = CalculateShotsToFire(soldier.Aim.Item2, effectEstimate.Item1, effectEstimate.Item2);
+                    RangedTargetEvaluation effectEstimate = EvaluateRangedTarget(
+                        soldier,
+                        target,
+                        soldier.Aim.Item2,
+                        range,
+                        soldier.Aim.Item2.Template.Accuracy + 4);
                     soldier.CurrentSpeed = 0;
                     _shootActionBag.Add(new ShootAction(soldier.Soldier.Id,
                         soldier.Aim.Item1,
                         soldier.Aim.Item2.Template.Id,
                         range,
-                        shotsToFire,
-                        false));
+                        effectEstimate.ShotsToFire,
+                        false,
+                        _grid));
                 }
                 else
                 {
@@ -246,20 +292,25 @@ namespace OnlyWar.Helpers.Battles
                     // current aim bonus is 1 for all-out attack, plus weapon accuracy, plus aim
                     float currentModifiers = soldier.Aim.Item2.Template.Accuracy + soldier.Aim.Item3 + 1;
                     // item1 is the pre-roll to-hit total; item2 is the expected ratio of damage to con, so 1 is a potential killshot
-                    Tuple<float, float> resultEstimate = EstimateHitAndDamage(soldier, target, soldier.Aim.Item2, range, currentModifiers);
+                    RangedTargetEvaluation resultEstimate = EvaluateRangedTarget(
+                        soldier,
+                        target,
+                        soldier.Aim.Item2,
+                        range,
+                        currentModifiers);
                     // it's about to attack, go ahead and shoot, you may not get another chance
                     if (target.GetMoveSpeed() > range
                         // there's a good chance of both hitting and killing, go ahead and shoot now
-                        || (resultEstimate.Item2 >= 1 && resultEstimate.Item1 >= 0.33f))
+                        || (resultEstimate.ExpectedDamageRatio >= 1 && resultEstimate.HitProbability >= 0.33f))
                     {
-                        int shotsToFire = CalculateShotsToFire(soldier.Aim.Item2, resultEstimate.Item1, resultEstimate.Item2);
                         soldier.CurrentSpeed = 0;
                         _shootActionBag.Add(new ShootAction(soldier.Soldier.Id,
                             soldier.Aim.Item1,
                             soldier.Aim.Item2.Template.Id,
                             range,
-                            shotsToFire,
-                            false));
+                            resultEstimate.ShotsToFire,
+                            false,
+                            _grid));
                     }
                     else
                     {
@@ -272,6 +323,7 @@ namespace OnlyWar.Helpers.Battles
             // need to aim or shoot at a new target
             else
             {
+                soldier.Aim = null;
                 soldier.CurrentSpeed = 0;
                 AddRangedActionToBag(soldier, false);
             }
@@ -340,30 +392,263 @@ namespace OnlyWar.Helpers.Battles
         private void AddMeleeActionsToBag(BattleSoldier soldier)
         {
             soldier.TargetId = null;
-            // for now just attack, don't worry about cooler moves
-            // if we have melee weapons but none are equipped, we should change that
+            soldier.CurrentSpeed = 0;
+            List<BattleSoldier> adjacentEnemies = _grid.GetAdjacentEnemies(soldier.Soldier.Id)
+                .Select(enemyId => _soldierMap[enemyId])
+                .Where(enemy => enemy.CanFight)
+                .OrderBy(enemy => enemy.Soldier.Id)
+                .ToList();
+            if (adjacentEnemies.Count == 0)
+            {
+                throw new InvalidOperationException("Attempting to melee with no adjacent enemy");
+            }
+
+            IReadOnlyList<MeleeWeapon> projectedMeleeLoadout = GetProjectedMeleeLoadout(soldier);
+            MeleeWeapon projectedPrimary = projectedMeleeLoadout.FirstOrDefault() ?? _defaultMeleeWeapon;
+            MeleeWeapon projectedSecondary = GetSecondaryMeleeWeapon(projectedMeleeLoadout);
+            List<MeleeWeapon> plannedMeleeWeapons = BuildPlannedWeaponSequence(
+                soldier,
+                projectedPrimary,
+                projectedSecondary);
+            List<PlannedMeleeStrike> projectedStrikePlans = BuildStrikePlan(
+                soldier,
+                adjacentEnemies,
+                plannedMeleeWeapons,
+                didMove: false);
+            float meleeScore = EstimateProjectedMeleeBattleValue(
+                soldier,
+                projectedStrikePlans,
+                plannedMeleeWeapons);
+
+            RangedTargetEvaluation pointBlankShot = SelectBestPointBlankRangedTarget(
+                soldier,
+                adjacentEnemies);
+            float forfeitedParryRisk = pointBlankShot == null
+                ? 0
+                : EstimateForfeitedParryRisk(
+                    soldier,
+                    adjacentEnemies,
+                    projectedMeleeLoadout);
+            float pointBlankScore = (pointBlankShot?.Score ?? float.MinValue) - forfeitedParryRisk;
+
+            if (pointBlankShot != null && pointBlankScore > meleeScore)
+            {
+                soldier.TargetId = pointBlankShot.Target.Soldier.Id;
+                _shootActionBag.Add(new ShootAction(
+                    soldier.Soldier.Id,
+                    pointBlankShot.Target.Soldier.Id,
+                    pointBlankShot.Weapon.Template.Id,
+                    pointBlankShot.Range,
+                    pointBlankShot.ShotsToFire,
+                    useBulk: true,
+                    _grid));
+                return;
+            }
+
+            // Preserve the existing action economy: choosing a melee weapon that is not yet in
+            // hand spends this turn readying it; an already-ready (or unarmed default) loadout
+            // attacks using the exact strike plan that was scored above.
             if (soldier.EquippedMeleeWeapons.Count == 0 && soldier.MeleeWeapons.Count > 0)
             {
-                soldier.CurrentSpeed = 0;
                 _shootActionBag.Add(new ReadyMeleeWeaponAction(soldier, soldier.MeleeWeapons[0]));
             }
-            else
+            else if (projectedStrikePlans.Count > 0)
             {
-                soldier.CurrentSpeed = 0;
-                List<BattleSoldier> adjacentEnemies = _grid.GetAdjacentEnemies(soldier.Soldier.Id)
-                    .Select(enemyId => _soldierMap[enemyId])
-                    .ToList();
-                if (adjacentEnemies.Count == 0)
-                {
-                    throw new InvalidOperationException("Attempting to melee with no adjacent enemy");
-                }
+                _meleeActionBag.Add(new MeleeAttackAction(
+                    soldier,
+                    projectedStrikePlans,
+                    didMove: false,
+                    _log));
+            }
+        }
 
-                MeleeAttackAction action = CreateMeleeAttackAction(soldier, adjacentEnemies, false);
-                if (action != null)
+        private IReadOnlyList<MeleeWeapon> GetProjectedMeleeLoadout(BattleSoldier soldier)
+        {
+            if (soldier.EquippedMeleeWeapons.Count > 0)
+            {
+                return soldier.EquippedMeleeWeapons.ToList();
+            }
+
+            if (soldier.MeleeWeapons.Count > 0)
+            {
+                // ReadyMeleeWeaponAction currently draws the first owned weapon. Score that same
+                // future state rather than treating a two-handed gunner's melee alternative as zero.
+                return [soldier.MeleeWeapons[0]];
+            }
+
+            MeleeWeapon unarmedWeapon = MeleeAttackAction.GetUnarmedWeapon(soldier);
+            return unarmedWeapon == null ? [_defaultMeleeWeapon] : [unarmedWeapon];
+        }
+
+        private static MeleeWeapon GetSecondaryMeleeWeapon(IReadOnlyList<MeleeWeapon> loadout)
+        {
+            return loadout.Count >= 2
+                && loadout[0].Template.Location == EquipLocation.OneHand
+                && loadout[1].Template.Location == EquipLocation.OneHand
+                    ? loadout[1]
+                    : null;
+        }
+
+        private RangedTargetEvaluation SelectBestPointBlankRangedTarget(
+            BattleSoldier soldier,
+            IReadOnlyList<BattleSoldier> adjacentEnemies)
+        {
+            RangedTargetEvaluation best = null;
+            foreach (BattleSoldier target in adjacentEnemies.OrderBy(enemy => enemy.Soldier.Id))
+            {
+                float range = _grid.GetDistanceBetweenSoldiers(
+                    soldier.Soldier.Id,
+                    target.Soldier.Id);
+                foreach (RangedWeapon weapon in soldier.EquippedRangedWeapons
+                    .Where(candidate => candidate.LoadedAmmo > 0
+                        && range <= candidate.Template.MaximumRange)
+                    .OrderBy(candidate => candidate.Template.Id))
                 {
-                    _meleeActionBag.Add(action);
+                    RangedTargetEvaluation evaluation = EvaluateRangedTarget(
+                        soldier,
+                        target,
+                        weapon,
+                        range,
+                        additionalToHitModifier: -weapon.Template.Bulk);
+                    if (best == null || evaluation.Score > best.Score)
+                    {
+                        best = evaluation;
+                    }
                 }
             }
+
+            return best;
+        }
+
+        internal float EstimateProjectedMeleeBattleValue(
+            BattleSoldier attacker,
+            IReadOnlyList<PlannedMeleeStrike> strikePlans,
+            IReadOnlyList<MeleeWeapon> plannedWeapons)
+        {
+            Dictionary<int, float> targetSurvivalProbability = [];
+            int strikeCount = Math.Min(strikePlans.Count, plannedWeapons.Count);
+            for (int index = 0; index < strikeCount; index++)
+            {
+                PlannedMeleeStrike strike = strikePlans[index];
+                if (!_soldierMap.TryGetValue(strike.TargetId, out BattleSoldier target))
+                {
+                    continue;
+                }
+
+                float strikeTakeOutProbability = EstimateTakeOutProbability(
+                    attacker,
+                    target,
+                    plannedWeapons[index],
+                    didMove: false);
+                float survival = targetSurvivalProbability.TryGetValue(
+                    strike.TargetId,
+                    out float existingSurvival)
+                        ? existingSurvival
+                        : 1;
+                targetSurvivalProbability[strike.TargetId] = survival * (1 - strikeTakeOutProbability);
+            }
+
+            return targetSurvivalProbability.Sum(entry =>
+                (1 - entry.Value) * GetBattleValue(_soldierMap[entry.Key]));
+        }
+
+        internal float EstimateForfeitedParryRisk(
+            BattleSoldier defender,
+            IReadOnlyList<BattleSoldier> adjacentAttackers,
+            IReadOnlyCollection<MeleeWeapon> projectedDefensiveWeapons)
+        {
+            float defenderBattleValue = GetBattleValue(defender);
+            if (defenderBattleValue <= 0 || adjacentAttackers.Count == 0)
+            {
+                return 0;
+            }
+
+            float projectedParryModifier = MeleeAttackAction.GetDefenderDefenseModifier(
+                defender,
+                projectedDefensiveWeapons);
+            float expectedBattleValueRisk = 0;
+            foreach (BattleSoldier attacker in adjacentAttackers)
+            {
+                IReadOnlyList<MeleeWeapon> attackerLoadout = GetProjectedMeleeLoadout(attacker);
+                MeleeWeapon primaryWeapon = attackerLoadout.FirstOrDefault();
+                if (primaryWeapon == null)
+                {
+                    continue;
+                }
+
+                float primaryStrikeCount = MeleeMath.CalculateBaseAttackCount(
+                    attacker.Soldier.AttackSpeed,
+                    primaryWeapon.Template.AttackSpeedMultiplier);
+                expectedBattleValueRisk += EstimateForfeitedParryRiskForStrikes(
+                    defender,
+                    attacker,
+                    primaryWeapon,
+                    primaryStrikeCount,
+                    projectedDefensiveWeapons,
+                    projectedParryModifier,
+                    defenderBattleValue);
+
+                MeleeWeapon secondaryWeapon = GetSecondaryMeleeWeapon(attackerLoadout);
+                if (secondaryWeapon != null)
+                {
+                    expectedBattleValueRisk += EstimateForfeitedParryRiskForStrikes(
+                        defender,
+                        attacker,
+                        secondaryWeapon,
+                        1,
+                        projectedDefensiveWeapons,
+                        projectedParryModifier,
+                        defenderBattleValue);
+                }
+            }
+
+            return Math.Clamp(expectedBattleValueRisk, 0, defenderBattleValue);
+        }
+
+        private float EstimateForfeitedParryRiskForStrikes(
+            BattleSoldier defender,
+            BattleSoldier attacker,
+            MeleeWeapon attackingWeapon,
+            float strikeCount,
+            IReadOnlyCollection<MeleeWeapon> projectedDefensiveWeapons,
+            float projectedParryModifier,
+            float defenderBattleValue)
+        {
+            if (strikeCount <= 0)
+            {
+                return 0;
+            }
+
+            float defenderSkill = projectedDefensiveWeapons.Count > 0
+                ? projectedDefensiveWeapons.Max(weapon =>
+                    defender.Soldier.GetTotalSkillValue(weapon.Template.RelatedSkill))
+                : MeleeAttackAction.GetDefenderMeleeSkill(
+                    defender,
+                    attackingWeapon.Template.RelatedSkill);
+            float attackerSkill = attacker.Soldier.GetTotalSkillValue(
+                attackingWeapon.Template.RelatedSkill);
+            float hitProbabilityWithParry = MeleeAttackAction.EstimateHitProbability(
+                attackerSkill,
+                attackingWeapon.Template.Accuracy,
+                didMove: false,
+                defenderSkill,
+                defender.Soldier.Template.Species.MeleeEvasion,
+                projectedParryModifier);
+            float hitProbabilityWhileShooting = MeleeAttackAction.EstimateHitProbability(
+                attackerSkill,
+                attackingWeapon.Template.Accuracy,
+                didMove: false,
+                defenderSkill,
+                defender.Soldier.Template.Species.MeleeEvasion,
+                defenderDefenseModifier: 0);
+            float increasedHitProbability = Math.Max(
+                0,
+                hitProbabilityWhileShooting - hitProbabilityWithParry);
+            float woundRatio = EstimateTakeOutOnHit(defender, attacker, attackingWeapon);
+            return strikeCount
+                * increasedHitProbability
+                * woundRatio
+                * defenderBattleValue;
         }
 
         private void AddChargeActionsToBag(BattleSoldier soldier)
@@ -656,49 +941,278 @@ namespace OnlyWar.Helpers.Battles
 
         private void AddShootOrAimActionToBag(BattleSoldier soldier, bool isMoving)
         {
-            BattleSoldier target;
-            if (soldier.TargetId != null && _soldierMap.ContainsKey((int)soldier.TargetId))
-            {
-                target = _soldierMap[(int)soldier.TargetId];
-            }
-            else
-            {
-                _grid.GetNearestEnemy(soldier.Soldier.Id, out int closestEnemyId);
-                BattleSquad oppSquad = _soldierMap[closestEnemyId].BattleSquad;
-                target = oppSquad.GetRandomSquadMember();
-                soldier.TargetId = target.Soldier.Id;
-            }
+            RangedTargetEvaluation targetEvaluation = SelectBestRangedTarget(soldier, isMoving);
+            if (targetEvaluation == null) return;
+
+            BattleSoldier target = targetEvaluation.Target;
+            soldier.TargetId = target.Soldier.Id;
 
             float range = _grid.GetDistanceBetweenSoldiers(soldier.Soldier.Id, target.Soldier.Id);
             // decide whether to shoot or aim
             // calculate the expected number of hits if the soldier shoots now
             // calculate the expected number of hits if the soldier aims for a turn, then shoots
             // if aiming >= 2xshooting, aim
-            Tuple<float, float, RangedWeapon> shootNow = GetBestWeaponForSituation(soldier, target, range, isMoving, false);
-            Tuple<float, float, RangedWeapon> aimNow = GetBestWeaponForSituation(soldier, target, range, isMoving, true);
-            if (shootNow.Item1 * 2 > aimNow.Item1)
+            RangedTargetEvaluation shootNow = GetBestWeaponForSituation(soldier, target, range, isMoving, false);
+            RangedTargetEvaluation aimNow = GetBestWeaponForSituation(soldier, target, range, isMoving, true);
+            if (shootNow != null && (aimNow == null || shootNow.HitProbability * 2 > aimNow.HitProbability))
             {
-                int shotsToFire =
-                    CalculateShotsToFire(shootNow.Item3, shootNow.Item1, shootNow.Item2);
                 _shootActionBag.Add(new ShootAction(soldier.Soldier.Id,
                     target.Soldier.Id,
-                    shootNow.Item3.Template.Id,
+                    shootNow.Weapon.Template.Id,
                     range,
-                    shotsToFire,
-                    isMoving));
+                    shootNow.ShotsToFire,
+                    isMoving,
+                    _grid));
             }
             else if (!isMoving)
             {
                 // aim with longest ranged weapon
-                if (aimNow?.Item3 != null)
+                if (aimNow?.Weapon != null)
                 {
-                    _shootActionBag.Add(new AimAction(soldier, target, aimNow.Item3, _log));
+                    _shootActionBag.Add(new AimAction(soldier, target, aimNow.Weapon, _log));
                 }
                 else
                 {
                     _shootActionBag.Add(new AimAction(soldier, target, soldier.EquippedRangedWeapons.OrderByDescending(w => w.Template.MaximumRange).First(), _log));
                 }
             }
+        }
+
+        private bool IsExistingAimStillBest(BattleSoldier soldier)
+        {
+            RangedTargetEvaluation bestTarget = SelectBestRangedTarget(
+                soldier,
+                useBulk: false,
+                includeExistingAim: true);
+
+            return bestTarget != null
+                && bestTarget.Target.Soldier.Id == soldier.Aim.Item1
+                && bestTarget.Weapon.Template.Id == soldier.Aim.Item2.Template.Id;
+        }
+
+        /// <summary>
+        /// Scores every soldier in the three nearest in-range enemy squads and returns the
+        /// target/weapon pair with the greatest expected battle-value swing.
+        /// </summary>
+        internal RangedTargetEvaluation SelectBestRangedTarget(
+            BattleSoldier soldier,
+            bool useBulk,
+            bool includeExistingAim = false)
+        {
+            if (soldier?.EquippedRangedWeapons == null || soldier.EquippedRangedWeapons.Count == 0)
+            {
+                return null;
+            }
+
+            RangedTargetEvaluation best = null;
+            foreach (BattleSquad candidateSquad in GetNearestInRangeEnemySquads(soldier))
+            {
+                foreach (BattleSoldier target in candidateSquad.AbleSoldiers
+                    .Where(IsPlaced)
+                    .OrderBy(candidate => candidate.Soldier.Id))
+                {
+                    float range = _grid.GetDistanceBetweenSoldiers(soldier.Soldier.Id, target.Soldier.Id);
+                    foreach (RangedWeapon weapon in soldier.EquippedRangedWeapons
+                        .Where(candidate => candidate.LoadedAmmo > 0 && range <= candidate.Template.MaximumRange)
+                        .OrderBy(candidate => candidate.Template.Id))
+                    {
+                        float toHitModifier = useBulk ? -weapon.Template.Bulk : 0;
+                        if (includeExistingAim
+                            && soldier.Aim?.Item1 == target.Soldier.Id
+                            && soldier.Aim.Item2.Template.Id == weapon.Template.Id)
+                        {
+                            toHitModifier += weapon.Template.Accuracy + soldier.Aim.Item3 + 1;
+                        }
+
+                        RangedTargetEvaluation evaluation = EvaluateRangedTarget(
+                            soldier,
+                            target,
+                            weapon,
+                            range,
+                            toHitModifier);
+                        // Candidate squads, soldiers, and weapons are ordered nearest-first and
+                        // deterministically, so an exact tie naturally stays on the closer option.
+                        if (best == null || evaluation.Score > best.Score)
+                        {
+                            best = evaluation;
+                        }
+                    }
+                }
+            }
+
+            return best;
+        }
+
+        internal RangedTargetEvaluation EvaluateRangedTarget(
+            BattleSoldier soldier,
+            BattleSoldier target,
+            RangedWeapon weapon,
+            float range,
+            float additionalToHitModifier)
+        {
+            Tuple<float, float, int> attackEstimate = EstimatePlannedRangedAttack(
+                soldier,
+                target,
+                weapon,
+                range,
+                additionalToHitModifier);
+            float woundRatio = Math.Clamp(attackEstimate.Item2, 0, 1);
+            float imminence = GetSquadImminence(soldier.BattleSquad, target.BattleSquad);
+            float enemyBattleValueRemoved = imminence
+                * attackEstimate.Item1
+                * woundRatio
+                * GetBattleValue(target);
+            float friendlyBattleValueLost = CalculateExpectedFriendlyStrayCost(
+                soldier,
+                target,
+                weapon,
+                range,
+                additionalToHitModifier,
+                attackEstimate.Item3);
+
+            return new RangedTargetEvaluation(
+                target,
+                weapon,
+                range,
+                attackEstimate.Item3,
+                attackEstimate.Item1,
+                attackEstimate.Item2,
+                enemyBattleValueRemoved,
+                friendlyBattleValueLost);
+        }
+
+        private IReadOnlyList<BattleSquad> GetNearestInRangeEnemySquads(BattleSoldier shooter)
+        {
+            float maximumRange = shooter.EquippedRangedWeapons
+                .Where(weapon => weapon.LoadedAmmo > 0)
+                .Select(weapon => weapon.Template.MaximumRange)
+                .DefaultIfEmpty(0)
+                .Max();
+            if (maximumRange <= 0 || !IsPlaced(shooter)) return [];
+
+            bool shooterSide = _grid.GetSoldierSide(shooter.Soldier.Id);
+            return _grid.GetSoldierPositions().Keys
+                .Where(id => id != shooter.Soldier.Id
+                    && _soldierMap.ContainsKey(id)
+                    && _grid.GetSoldierSide(id) != shooterSide
+                    && _soldierMap[id].CanFight)
+                .GroupBy(id => _soldierMap[id].BattleSquad)
+                .Select(group => new
+                {
+                    Squad = group.Key,
+                    Distance = group.Min(id => _grid.GetDistanceBetweenSoldiers(shooter.Soldier.Id, id))
+                })
+                .Where(candidate => candidate.Squad != null && candidate.Distance <= maximumRange)
+                .OrderBy(candidate => candidate.Distance)
+                .ThenBy(candidate => candidate.Squad.Id)
+                .Take(RangedTargetSquadCandidateCount)
+                .Select(candidate => candidate.Squad)
+                .ToList();
+        }
+
+        private float CalculateExpectedFriendlyStrayCost(
+            BattleSoldier shooter,
+            BattleSoldier nominalTarget,
+            RangedWeapon weapon,
+            float range,
+            float additionalToHitModifier,
+            int numberOfShots)
+        {
+            if (!_grid.IsTargetEngagedWithShootersAllies(
+                shooter.Soldier.Id,
+                nominalTarget.Soldier.Id))
+            {
+                return 0;
+            }
+
+            List<BattleSoldier> scrumParticipants = _grid
+                .GetMeleeScrumParticipants(nominalTarget.Soldier.Id)
+                .Where(_soldierMap.ContainsKey)
+                .Select(id => _soldierMap[id])
+                .ToList();
+            bool shooterSide = _grid.GetSoldierSide(shooter.Soldier.Id);
+            float expectedFriendlyLossOnStray = scrumParticipants
+                .Where(participant => _grid.GetSoldierSide(participant.Soldier.Id) == shooterSide)
+                .Sum(participant =>
+                {
+                    float victimProbability = RangedFriendlyFireRules.CalculateStrayTargetProbability(
+                        participant,
+                        scrumParticipants);
+                    float armor = participant.Armor?.Template.ArmorProvided ?? 0;
+                    float woundRatio = Math.Clamp(
+                        CalculateExpectedDamage(
+                            weapon,
+                            range,
+                            armor,
+                            participant.Soldier.Constitution),
+                        0,
+                        1);
+                    return victimProbability * woundRatio * GetBattleValue(participant);
+                });
+
+            float preRollHitTotal = CalculateRangedPreRollHitTotal(
+                shooter,
+                nominalTarget,
+                weapon,
+                range,
+                additionalToHitModifier,
+                numberOfShots,
+                firingIntoMelee: true);
+            return RangedFriendlyFireRules.CalculateNearMissProbability(preRollHitTotal)
+                * expectedFriendlyLossOnStray;
+        }
+
+        internal float GetSquadImminence(BattleSquad attackerSquad, BattleSquad targetSquad)
+        {
+            if (attackerSquad == null || targetSquad == null) return 0;
+
+            var cacheKey = (attackerSquad.Id, targetSquad.Id);
+            if (_squadImminenceCache.TryGetValue(cacheKey, out float cached))
+            {
+                return cached;
+            }
+
+            float calculated = CalculateSquadImminence(attackerSquad, targetSquad);
+            _squadImminenceCache[cacheKey] = calculated;
+            return calculated;
+        }
+
+        private float CalculateSquadImminence(BattleSquad attackerSquad, BattleSquad targetSquad)
+        {
+            List<BattleSoldier> attackers = attackerSquad.AbleSoldiers.Where(IsPlaced).ToList();
+            List<BattleSoldier> targets = targetSquad.AbleSoldiers.Where(IsPlaced).ToList();
+            if (attackers.Count == 0 || targets.Count == 0) return 0;
+
+            float distance = attackers
+                .SelectMany(attacker => targets.Select(target =>
+                    _grid.GetDistanceBetweenSoldiers(attacker.Soldier.Id, target.Soldier.Id)))
+                .Min();
+            float preferredRange = Math.Max(
+                1,
+                targetSquad.GetPreferredEngagementRange(
+                    attackerSquad.GetAverageSize(),
+                    attackerSquad.GetAverageArmor(),
+                    attackerSquad.GetAverageConstitution(),
+                    attackerSquad.GetAverageRangedEvasion()));
+            float distanceToEngagement = Math.Max(0, distance - preferredRange);
+            if (distanceToEngagement <= 0) return 1;
+
+            float moveSpeed = targetSquad.GetSquadMove();
+            if (moveSpeed <= 0 || float.IsInfinity(moveSpeed)) return 0;
+
+            float turnsUntilEngagement = (float)Math.Ceiling(distanceToEngagement / moveSpeed);
+            return 1f / (1f + turnsUntilEngagement);
+        }
+
+        private bool IsPlaced(BattleSoldier soldier)
+        {
+            return soldier != null
+                && _grid.GetSoldierPositions().ContainsKey(soldier.Soldier.Id);
+        }
+
+        private static float GetBattleValue(BattleSoldier soldier)
+        {
+            return Math.Max(0, soldier?.Soldier?.Template?.BattleValue ?? 0);
         }
 
         private float EstimateArmorPenDistance(RangedWeapon weapon, float targetArmor)
@@ -715,48 +1229,103 @@ namespace OnlyWar.Helpers.Battles
             return weapon.Template.MaximumRange * distanceRatio;
         }
 
-        private Tuple<float, float, RangedWeapon> GetBestWeaponForSituation(BattleSoldier soldier, BattleSoldier target, float range, bool useBulk, bool useAccuracy)
+        private RangedTargetEvaluation GetBestWeaponForSituation(BattleSoldier soldier, BattleSoldier target, float range, bool useBulk, bool useAccuracy)
         {
-            RangedWeapon bestWeapon = null;
-            float bestAccuracy = 0;
-            float bestDamage = -0;
+            RangedTargetEvaluation best = null;
+            float bestScore = float.MinValue;
             foreach(RangedWeapon weapon in soldier.EquippedRangedWeapons.OrderByDescending(w => w.Template.DamageMultiplier))
             {
+                if (range > weapon.Template.MaximumRange || weapon.LoadedAmmo <= 0) continue;
+
                 float bulkAndAccMod = 0;
                 bulkAndAccMod -= useBulk ? weapon.Template.Bulk : 0;
                 // base accuracy bonus is the weapon's accuracy plus 1 for aiming making it an all-out attack
                 bulkAndAccMod += useAccuracy ? weapon.Template.Accuracy + 1 : 0;
-                Tuple<float, float> hitAndDamage = EstimateHitAndDamage(soldier, target, weapon, range, bulkAndAccMod);
+                RangedTargetEvaluation evaluation = EvaluateRangedTarget(
+                    soldier,
+                    target,
+                    weapon,
+                    range,
+                    bulkAndAccMod);
                 // if not likely to break through armor, there's little point
-                if (hitAndDamage.Item1 > 0.1f && hitAndDamage.Item2 > bestDamage)
+                if (evaluation.HitProbability > 0.1f && evaluation.Score > bestScore)
                 {
                     // about a 1/10 chance of hitting
-                    bestAccuracy = hitAndDamage.Item1;
-                    bestDamage = hitAndDamage.Item2;
-                    bestWeapon = weapon;
+                    best = evaluation;
+                    bestScore = evaluation.Score;
                 }
             }
-            return new Tuple<float, float, RangedWeapon>(bestAccuracy, bestDamage, bestWeapon);
+            return best;
         }
 
-        private int CalculateShotsToFire(RangedWeapon weapon, float toHitAtMaximumRateOfFire, float damagePerShot)
+        private Tuple<float, float, int> EstimatePlannedRangedAttack(
+            BattleSoldier soldier,
+            BattleSoldier target,
+            RangedWeapon weapon,
+            float range,
+            float moveAndAimMod)
+        {
+            int shotsToFire = Math.Max(
+                1,
+                Math.Min((int)weapon.Template.RateOfFire, (int)weapon.LoadedAmmo));
+            Tuple<float, float> estimate = null;
+            for (int iteration = 0; iteration < 4; iteration++)
+            {
+                estimate = EstimateHitAndDamage(
+                    soldier,
+                    target,
+                    weapon,
+                    range,
+                    moveAndAimMod,
+                    shotsToFire);
+                int revisedShots = CalculateShotsToFire(
+                    weapon,
+                    estimate.Item1,
+                    estimate.Item2);
+                if (revisedShots == shotsToFire)
+                {
+                    return new Tuple<float, float, int>(
+                        estimate.Item1,
+                        estimate.Item2,
+                        shotsToFire);
+                }
+
+                shotsToFire = revisedShots;
+            }
+
+            // Recalculate once with the final shot count so the returned probability is exactly
+            // the one ShootAction will resolve, even if a future rule introduces oscillation.
+            estimate = EstimateHitAndDamage(
+                soldier,
+                target,
+                weapon,
+                range,
+                moveAndAimMod,
+                shotsToFire);
+            return new Tuple<float, float, int>(estimate.Item1, estimate.Item2, shotsToFire);
+        }
+
+        private int CalculateShotsToFire(RangedWeapon weapon, float toHitAtPlannedRateOfFire, float damagePerShot)
         {
             int minRoF = 1;
-            int maxRof = weapon.Template.RateOfFire;
+            int maxRof = Math.Max(
+                1,
+                Math.Min((int)weapon.Template.RateOfFire, (int)weapon.LoadedAmmo));
             // assume all machine guns have to fire at at least 1/4 their max
             if(weapon.Template.RateOfFire > 10)
             {
-                minRoF = weapon.Template.RateOfFire / 4;
+                minRoF = Math.Min(weapon.Template.RateOfFire / 4, maxRof);
             }
 
-            if (toHitAtMaximumRateOfFire < .1f)
+            if (toHitAtPlannedRateOfFire < .1f)
             {
                 // don't waste ammo on impossible shots
                 return minRoF;
             }
-            if(weapon.LoadedAmmo < maxRof)
+
+            if (damagePerShot <= 0)
             {
-                maxRof = weapon.LoadedAmmo;
+                return minRoF;
             }
 
             int killRof = (int)Math.Round(1 / damagePerShot) + 1;
@@ -765,18 +1334,56 @@ namespace OnlyWar.Helpers.Battles
 
         }
 
-        private Tuple<float, float> EstimateHitAndDamage(BattleSoldier soldier, BattleSoldier target, RangedWeapon weapon, float range, float moveAndAimMod)
+        private Tuple<float, float> EstimateHitAndDamage(
+            BattleSoldier soldier,
+            BattleSoldier target,
+            RangedWeapon weapon,
+            float range,
+            float moveAndAimMod,
+            int numberOfShots)
         {
-            float sizeMod = BattleModifiersUtil.CalculateSizeModifier(target.Soldier.Size);
-            float armor = target.Armor.Template.ArmorProvided;
+            float armor = target.Armor?.Template.ArmorProvided ?? 0;
             float con = target.Soldier.Constitution;
             float expectedDamage = CalculateExpectedDamage(weapon, range, armor, con);
-            float rangeMod = BattleModifiersUtil.CalculateRangeModifier(range, target.CurrentSpeed);
-            float rofMod = BattleModifiersUtil.CalculateRateOfFireModifier(weapon.Template.RateOfFire);
-            float weaponSkill = soldier.Soldier.GetTotalSkillValue(weapon.Template.RelatedSkill);
-            float total = weaponSkill + rofMod + rangeMod + sizeMod + moveAndAimMod - 10.5f;
-            float probability = GaussianCalculator.ApproximateNormalCDF(total);
+            bool firingIntoMelee = _grid.IsTargetEngagedWithShootersAllies(
+                soldier.Soldier.Id,
+                target.Soldier.Id);
+            float preRollHitTotal = CalculateRangedPreRollHitTotal(
+                soldier,
+                target,
+                weapon,
+                range,
+                moveAndAimMod,
+                numberOfShots,
+                firingIntoMelee);
+            float probability = GaussianCalculator.ApproximateNormalCDF(
+                (preRollHitTotal - 10.5f) / 3f);
             return new Tuple<float, float>(probability, expectedDamage);
+        }
+
+        private static float CalculateRangedPreRollHitTotal(
+            BattleSoldier soldier,
+            BattleSoldier target,
+            RangedWeapon weapon,
+            float range,
+            float moveAndAimMod,
+            int numberOfShots,
+            bool firingIntoMelee)
+        {
+            float sizeMod = BattleModifiersUtil.CalculateSizeModifier(target.Soldier.Size);
+            float rangeMod = BattleModifiersUtil.CalculateRangeModifier(range, target.CurrentSpeed);
+            float rofMod = BattleModifiersUtil.CalculateRateOfFireModifier(numberOfShots);
+            float weaponSkill = soldier.Soldier.GetTotalSkillValue(weapon.Template.RelatedSkill);
+            float meleeModifier = firingIntoMelee
+                ? RangedFriendlyFireRules.FiringIntoMeleePenalty
+                : 0;
+            return weaponSkill
+                + rofMod
+                + rangeMod
+                + sizeMod
+                + moveAndAimMod
+                + meleeModifier
+                - target.Soldier.Template.Species.RangedEvasion;
         }
 
         private void AddMoveAction(BattleSoldier soldier, float moveSpeed, Tuple<int, int> line)
@@ -940,7 +1547,10 @@ namespace OnlyWar.Helpers.Battles
         {
             float effectiveStrength = BattleModifiersUtil.CalculateDamageAtRange(weapon, range);
             float effectiveArmor = armor * weapon.Template.ArmorMultiplier;
-            return ((effectiveStrength * 4.25f) - effectiveArmor) / con;
+            float penetratingDamage = Math.Max(0, (effectiveStrength * 4.25f) - effectiveArmor);
+            return con <= 0
+                ? 1
+                : (penetratingDamage * weapon.Template.WoundMultiplier) / con;
         }
     }
 }

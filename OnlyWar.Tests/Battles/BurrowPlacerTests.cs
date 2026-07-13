@@ -11,8 +11,9 @@ namespace OnlyWar.Tests.Battles;
 
 /// <summary>
 /// Burrow-arrival placement (see Design/EvasionBurrowAndAmbush.md): a burrow-capable
-/// squad placed at range should be pulled directly up against the nearest enemy, while
-/// a non-burrowing squad is left where it was.
+/// squad placed at range picks the nearest enemy squad and erupts around that squad's
+/// footprint — adjacent cells first, spilling into outer rings when the perimeter
+/// fills — while a non-burrowing squad is left where it was.
 /// </summary>
 public class BurrowPlacerTests
 {
@@ -73,5 +74,53 @@ public class BurrowPlacerTests
         BurrowPlacer.PlaceBurrowers(grid, new[] { marines, enemy });
 
         Assert.Equal(new Tuple<int, int>(10, 10), grid.GetSoldierPosition(marine.Soldier.Id)[0]);
+    }
+
+    [Fact]
+    public void PlaceBurrowers_SpillsIntoOuterRingsWhenPerimeterFills()
+    {
+        // a lone enemy has only 4 orthogonally adjacent cells; 6 burrowers must
+        // overflow into the second ring instead of being left at their spawn
+        BattleGridManager grid = new();
+        BattleSquad enemy = CreateSquad("Enemy", TestModelFactory.MarineTemplate, 1);
+        BattleSquad burrowers = CreateSquad("Burrowers", TestModelFactory.BurrowerTemplate, 2, 3, 4, 5, 6, 7);
+
+        BattleSoldier enemySoldier = Place(grid, enemy, 0, side: false, x: 0, y: 0);
+        for (int i = 0; i < 6; i++)
+        {
+            Place(grid, burrowers, i, side: true, x: 20 + i, y: 20);
+        }
+
+        BurrowPlacer.PlaceBurrowers(grid, new[] { burrowers, enemy });
+
+        foreach (BattleSoldier burrower in burrowers.AbleSoldiers)
+        {
+            float distance = grid.GetDistanceBetweenSoldiers(burrower.Soldier.Id, enemySoldier.Soldier.Id);
+            Assert.True(distance <= 2.001f, $"burrower ended up {distance} from the enemy");
+        }
+    }
+
+    [Fact]
+    public void PlaceBurrowers_WholeSquadEruptsAroundSameEnemySquad()
+    {
+        // the squad's nearest enemy squad (min pairwise distance) is B, so even the
+        // burrower that is individually closer to A must erupt around B
+        BattleGridManager grid = new();
+        BattleSquad enemyA = CreateSquad("EnemyA", TestModelFactory.MarineTemplate, 1);
+        BattleSquad enemyB = CreateSquad("EnemyB", TestModelFactory.MarineTemplate, 2);
+        BattleSquad burrowers = CreateSquad("Burrowers", TestModelFactory.BurrowerTemplate, 3, 4);
+
+        Place(grid, enemyA, 0, side: false, x: 0, y: 0);
+        BattleSoldier enemyBSoldier = Place(grid, enemyB, 0, side: false, x: 20, y: 0);
+        Place(grid, burrowers, 0, side: true, x: 5, y: 0);  // 5 from A, 15 from B
+        Place(grid, burrowers, 1, side: true, x: 16, y: 0); // 16 from A, 4 from B
+
+        BurrowPlacer.PlaceBurrowers(grid, new[] { burrowers, enemyA, enemyB });
+
+        foreach (BattleSoldier burrower in burrowers.AbleSoldiers)
+        {
+            float distance = grid.GetDistanceBetweenSoldiers(burrower.Soldier.Id, enemyBSoldier.Soldier.Id);
+            Assert.True(distance <= 1.001f, $"burrower ended up {distance} from enemy squad B");
+        }
     }
 }

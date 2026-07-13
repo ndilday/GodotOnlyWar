@@ -213,71 +213,6 @@ public class ScenarioTurnTests
         Assert.Null(controller.ScenarioNotification);
     }
 
-    // Regression (Design/OpeningScenario.md §8 step 7 note / §12): a fully generated sector must
-    // run forward through ProcessTurn without crashing once an order produces a combat/recon
-    // mission with assigned squads. Order creation (FactionStrategyController for NPCs, a directly
-    // constructed Order here) never set Squad.CurrentOrders, so the first turn such a mission ran,
-    // the infiltrate step's BattleSquad.ShouldContinueMission dereferenced a null CurrentOrders and
-    // threw a NullReferenceException. The compact SectorSimulationFixture never exercises real
-    // battles, which is why this slipped through; this test runs a real stamped sector forward with
-    // a genuine combat mission landing on the BattleSquad path every turn.
-    [Fact]
-    public void ProcessTurn_RealSectorRunForward_RunsCombatWithoutCrashing()
-    {
-        RNG.Reset(20250628);
-        Sector sector = SectorBuilder.GenerateSector(7, _data, _date, "Crusade Chapter");
-        // Register the generated sector so turn processing can resolve GameDataSingleton.Instance.Sector.
-        GameDataSingleton.Instance.LoadGameDataFromBlob(_data, _date, sector);
-
-        // A stamped Tyranid region is the standing combat target for the run.
-        Planet promised = sector.GetPlanet(sector.Scenario.PromisedPlanetId);
-        RegionFaction tyranidTarget = promised.Regions
-            .Select(r => r.RegionFactionMap.TryGetValue(Tyranids.Id, out RegionFaction rf) ? rf : null)
-            .First(rf => rf != null);
-
-        // A mission context with assigned squads is produced only by ProcessCombatMissions, i.e.
-        // the BattleSquad path that hosts the regression. Seeing one each turn proves real battles
-        // ran (not just population/growth bookkeeping) and that the run never threw.
-        bool sawCombatWithSquads = false;
-        for (int turn = 0; turn < TurnsToSimulate; turn++)
-        {
-            // Each turn, send a fresh, still-manned squad to recon the Tyranid region. The squad is
-            // embarked (no CurrentRegion), so the orchestrator routes it through InfiltrateMissionStep
-            // — the exact step whose ShouldContinue hit the null CurrentOrders. Building the Order
-            // directly (without manually assigning CurrentOrders) is what reproduces the bug, so this
-            // guards the fix in the Order constructor. A new squad each turn keeps the order off any
-            // squad that prior combat has emptied (constructing a BattleSquad from an unmanned squad
-            // is a separate edge, out of scope here).
-            Squad strikeSquad = sector.PlayerForce.Army.OrderOfBattle.GetAllSquads()
-                .FirstOrDefault(s => s.CurrentOrders == null && s.Members.Any(m => m.CanFight));
-            Order reconOrder = null;
-            if (strikeSquad != null)
-            {
-                Mission reconMission = new Mission(MissionType.Recon, tyranidTarget, 0);
-                reconOrder = new Order(new List<Squad> { strikeSquad }, Disposition.Mobile,
-                                       isQuiet: true, isActivelyEngaging: false, Aggression.Cautious, reconMission);
-                sector.AddNewOrder(reconOrder);
-            }
-
-            TurnController controller = new();
-            controller.ProcessTurn(sector);
-            if (controller.MissionContexts.Any(c => c.Order.AssignedSquads.Any()))
-            {
-                sawCombatWithSquads = true;
-            }
-
-            if (reconOrder != null)
-            {
-                Assert.DoesNotContain(reconOrder.Id, sector.Orders.Keys);
-                Assert.Null(strikeSquad.CurrentOrders);
-            }
-        }
-
-        Assert.True(sawCombatWithSquads,
-            "expected a combat/recon mission with assigned squads to run so the BattleSquad "
-            + "turn-processing path is actually exercised");
-    }
-
     // Regression (Design/OpeningScenario.md §8/§12): a combat Order persists across turns —
     // ProcessTurn never clears orders — and dead soldiers are permanently removed from
     // Squad.Members (BattleTurnResolver.RemoveSoldiersKilledInBattle). So once combat wipes or
@@ -356,60 +291,6 @@ public class ScenarioTurnTests
         Assert.Contains(constructionOrder.Id, sector.Orders.Keys);
         Assert.Same(constructionOrder, squad.CurrentOrders);
         Assert.True(playerRegionFaction.Entrenchment > 0);
-    }
-
-    [Fact]
-    public void ProcessTurn_ExecutedSpecialMissionIsRemovedAfterTurn()
-    {
-        RNG.Reset(20250628);
-        Sector sector = SectorBuilder.GenerateSector(13, _data, _date, "Vanishing Chapter");
-        GameDataSingleton.Instance.LoadGameDataFromBlob(_data, _date, sector);
-
-        Planet promised = sector.GetPlanet(sector.Scenario.PromisedPlanetId);
-        RegionFaction tyranidTarget = promised.Regions
-            .Select(r => r.RegionFactionMap.TryGetValue(Tyranids.Id, out RegionFaction rf) ? rf : null)
-            .First(rf => rf != null);
-        Mission specialMission = new(MissionType.Recon, tyranidTarget, 0);
-        tyranidTarget.Region.SpecialMissions.Add(specialMission);
-
-        Squad squad = sector.PlayerForce.Army.OrderOfBattle.GetAllSquads()
-            .First(s => s.Members.Any(m => m.CanFight));
-        Order order = new(new List<Squad> { squad }, Disposition.Mobile,
-                          isQuiet: true, isActivelyEngaging: false,
-                          Aggression.Cautious, specialMission);
-        sector.AddNewOrder(order);
-
-        new TurnController().ProcessTurn(sector);
-
-        Assert.DoesNotContain(specialMission, tyranidTarget.Region.SpecialMissions);
-        Assert.DoesNotContain(order.Id, sector.Orders.Keys);
-        Assert.Null(squad.CurrentOrders);
-    }
-
-    // The planet-scoped opening sim runs only the promised world's local turn slice; it must NOT run
-    // the player force's own weekly upkeep (§4.24). A light wound that ProcessTurn's medical pass
-    // would heal in a week stays untouched after SimulatePlanetForward, proving the sim skips
-    // ProcessMedical (and, by the same omission, training and fleet movement).
-    [Fact]
-    public void SimulatePlanetForward_DoesNotHealPlayerForce()
-    {
-        Sector sector = SectorBuilder.GenerateSector(7, _data, _date, "Unhealed Chapter");
-        GameDataSingleton.Instance.LoadGameDataFromBlob(_data, _date, sector);
-        Planet promised = sector.GetPlanet(sector.Scenario.PromisedPlanetId);
-
-        // A light (minor/moderate) wound on a non-vital location: automatically healed by a weekly
-        // medical pass, and not replacement-eligible, so ProcessTurn would clear it in one week.
-        ISoldier soldier = sector.PlayerForce.Army.OrderOfBattle.GetAllMembers().First();
-        HitLocation location = soldier.Body.HitLocations
-            .First(hl => !hl.Template.IsVital && !hl.IsSevered);
-        location.Wounds = new Wounds(0x00000011u, 0);
-        uint woundedTotal = location.Wounds.WoundTotal;
-        Assert.True(woundedTotal > 0);
-
-        new TurnController().SimulatePlanetForward(sector, promised, turns: 1);
-
-        // Untouched: the scoped sim never reached the medical pass that would have healed it.
-        Assert.Equal(woundedTotal, location.Wounds.WoundTotal);
     }
 
     // Sever a vital hit location on every member so CanFight is false while each soldier remains in

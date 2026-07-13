@@ -11,9 +11,7 @@ public class MissionReportHeadlineBuilderTests
     {
         string headline = MissionReportHeadlineBuilder.Build(
             MissionType.Recon,
-            true,
             ["Melee Carnifex"],
-            "Imperial",
             "Tyranids",
             "Terra Lambda",
             "Terra");
@@ -26,9 +24,7 @@ public class MissionReportHeadlineBuilderTests
     {
         string headline = MissionReportHeadlineBuilder.Build(
             MissionType.Patrol,
-            true,
             ["Alpha", "Bravo"],
-            "Imperial",
             "Tyranids",
             "Terra Lambda",
             "Terra");
@@ -41,9 +37,7 @@ public class MissionReportHeadlineBuilderTests
     {
         string headline = MissionReportHeadlineBuilder.Build(
             MissionType.Advance,
-            true,
             ["Melee Carnifex"],
-            "Imperial",
             "Tyranids",
             "Terra Lambda",
             "Terra");
@@ -56,28 +50,11 @@ public class MissionReportHeadlineBuilderTests
     {
         string headline = MissionReportHeadlineBuilder.Build(
             MissionType.Extermination,
-            true,
             ["Alpha", "Bravo"],
-            "Imperial",
             "Genestealer Cult",
             "Terra Lambda",
             "Terra");
 
         Assert.Equal("2 squads Extermination on Genestealer Cult in Terra Lambda, Terra", headline);
-    }
-
-    [Fact]
-    public void Build_EnemyMission_UsesActingFactionAndRegion()
-    {
-        string headline = MissionReportHeadlineBuilder.Build(
-            MissionType.Advance,
-            false,
-            ["Melee Carnifex"],
-            "Tyranids",
-            "Imperial",
-            "Terra Lambda",
-            "Terra");
-
-        Assert.Equal("Tyranids Advance in Terra Lambda, Terra", headline);
     }
 }

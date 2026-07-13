@@ -45,7 +45,14 @@ public partial class EndOfTurnDialogView : DialogView
     private void AddEntry(EndOfTurnReportEntry entry, int index)
     {
         PanelContainer panel = new();
-        OnlyWarStyle.ApplyListRow(panel, false);
+        if (entry.IsEnemyActivity)
+        {
+            OnlyWarStyle.ApplyTintedListRow(panel, false, OnlyWarStyle.OpposingAccent);
+        }
+        else
+        {
+            OnlyWarStyle.ApplyListRow(panel, false);
+        }
 
         MarginContainer margin = new();
         panel.AddChild(margin);

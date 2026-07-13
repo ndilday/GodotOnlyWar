@@ -199,6 +199,33 @@ public class BattleGridManagerTests
     }
 
     [Fact]
+    public void IsTargetEngagedWithShootersAllies_OnlyCountsShootersTacticalSide()
+    {
+        BattleGridManager grid = new();
+        grid.PlaceSoldier(CreateBattleSoldier(1), true, Cell(0, 0));   // shooter
+        grid.PlaceSoldier(CreateBattleSoldier(2), true, Cell(10, 0)); // shooter's ally
+        grid.PlaceSoldier(CreateBattleSoldier(3), false, Cell(11, 0)); // target
+        grid.PlaceSoldier(CreateBattleSoldier(4), false, Cell(11, 1)); // target's ally
+
+        Assert.True(grid.IsTargetEngagedWithShootersAllies(1, 3));
+        Assert.False(grid.IsTargetEngagedWithShootersAllies(1, 4));
+    }
+
+    [Fact]
+    public void GetMeleeScrumParticipants_FollowsOpposingSideConnectionsAndIncludesTarget()
+    {
+        BattleGridManager grid = new();
+        grid.PlaceSoldier(CreateBattleSoldier(1), false, Cell(0, 0));
+        grid.PlaceSoldier(CreateBattleSoldier(2), true, Cell(1, 0));
+        grid.PlaceSoldier(CreateBattleSoldier(3), false, Cell(2, 0));
+        grid.PlaceSoldier(CreateBattleSoldier(4), false, Cell(-1, 0)); // same-side adjacency to 1 does not connect
+        grid.PlaceSoldier(CreateBattleSoldier(5), true, Cell(10, 0));
+
+        Assert.Equal(new[] { 1, 2, 3 }, grid.GetMeleeScrumParticipants(1));
+        Assert.Equal(new[] { 5 }, grid.GetMeleeScrumParticipants(5));
+    }
+
+    [Fact]
     public void AnnihilationPlacer_PlacesNpcForcesAsOpposingTacticalSides()
     {
         BattleGridManager grid = new();

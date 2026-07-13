@@ -176,6 +176,79 @@ namespace OnlyWar.Helpers.Battles
                 .ToList();
         }
 
+        /// <summary>
+        /// Returns every figure whose footprint is within melee distance of the supplied figure,
+        /// regardless of tactical side.
+        /// </summary>
+        public IReadOnlyList<int> GetAdjacentSoldiers(int soldierId)
+        {
+            if (!_soldiers.ContainsKey(soldierId))
+            {
+                throw new ArgumentException("Soldier not found");
+            }
+
+            return _soldierPositionsMap.Keys
+                .Where(otherSoldierId => otherSoldierId != soldierId)
+                .Select(otherSoldierId => new Tuple<int, float>(
+                    otherSoldierId,
+                    GetDistanceBetweenSoldiers(soldierId, otherSoldierId)))
+                .Where(tuple => tuple.Item2 <= 1.001f)
+                .OrderBy(tuple => tuple.Item2)
+                .ThenBy(tuple => tuple.Item1)
+                .Select(tuple => tuple.Item1)
+                .ToList();
+        }
+
+        /// <summary>
+        /// Whether the target is in base contact with any member of the shooter's tactical side.
+        /// The shooter counts when firing while personally engaged.
+        /// </summary>
+        public bool IsTargetEngagedWithShootersAllies(int shooterId, int targetId)
+        {
+            if (!_soldiers.ContainsKey(shooterId) || !_soldiers.ContainsKey(targetId))
+            {
+                throw new ArgumentException("Soldier not found");
+            }
+
+            bool shooterSide = _soldierSideMap[shooterId];
+            return GetAdjacentSoldiers(targetId)
+                .Any(adjacentId => _soldierSideMap[adjacentId] == shooterSide);
+        }
+
+        /// <summary>
+        /// Finds the connected melee scrum containing <paramref name="soldierId"/>. Connections
+        /// only cross tactical sides, so a rank of merely adjacent allies does not enlarge the
+        /// stray-shot pool. The supplied soldier is included in the result.
+        /// </summary>
+        public IReadOnlyList<int> GetMeleeScrumParticipants(int soldierId)
+        {
+            if (!_soldiers.ContainsKey(soldierId))
+            {
+                throw new ArgumentException("Soldier not found");
+            }
+
+            HashSet<int> participants = [soldierId];
+            Queue<int> frontier = new();
+            frontier.Enqueue(soldierId);
+
+            while (frontier.Count > 0)
+            {
+                int currentId = frontier.Dequeue();
+                bool currentSide = _soldierSideMap[currentId];
+                foreach (int adjacentId in GetAdjacentSoldiers(currentId))
+                {
+                    if (_soldierSideMap[adjacentId] == currentSide || !participants.Add(adjacentId))
+                    {
+                        continue;
+                    }
+
+                    frontier.Enqueue(adjacentId);
+                }
+            }
+
+            return participants.OrderBy(id => id).ToList();
+        }
+
         public bool GetSoldierSide(int soldierId)
         {
             if (!_soldierSideMap.ContainsKey(soldierId))

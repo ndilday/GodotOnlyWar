@@ -37,6 +37,8 @@ public static class BattleValueCalculator
     /// <summary>
     /// Melee output is discounted for the turns spent closing under fire; faster movers
     /// waste less. Factor = MeleeClosingFactor * min(1, MoveSpeed / reference speed).
+    /// Burrowers pay no closing tax at all: BurrowPlacer erupts them adjacent to an
+    /// enemy squad at battle start and they attack the turn they surface.
     /// </summary>
     public const float MeleeClosingReferenceSpeed = 8.0f;
     public const float MeleeClosingFactor = 0.75f;
@@ -78,6 +80,8 @@ public static class BattleValueCalculator
         public float MeleeEvasion { get; init; }
         public float RangedEvasion { get; init; }
         public float Armor { get; init; }
+        /// <summary>Burrow-capable species erupt adjacent to the enemy and strike the same turn.</summary>
+        public bool CanBurrow { get; init; }
         public MeleeWeaponTemplate MeleeWeapon { get; init; }
         /// <summary>Off-hand melee weapon: adds one strike per turn and +1 melee defense.</summary>
         public MeleeWeaponTemplate SecondaryMeleeWeapon { get; init; }
@@ -319,9 +323,11 @@ public static class BattleValueCalculator
         float engagementCap = 1.0f + attacker.WidthCells + attacker.DepthCells;
         killRate = Math.Min(killRate, engagementCap);
 
-        // Melee spends turns closing under fire before it lands anything.
-        float closing = MeleeClosingFactor
-            * Math.Min(1.0f, attacker.MoveSpeed / MeleeClosingReferenceSpeed);
+        // Melee spends turns closing under fire before it lands anything — unless the
+        // attacker burrows, in which case it surfaces adjacent and swings immediately.
+        float closing = attacker.CanBurrow
+            ? 1.0f
+            : MeleeClosingFactor * Math.Min(1.0f, attacker.MoveSpeed / MeleeClosingReferenceSpeed);
         return killRate * closing;
     }
 

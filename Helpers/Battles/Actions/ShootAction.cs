@@ -12,6 +12,10 @@ namespace OnlyWar.Helpers.Battles.Actions
     public class ShootAction : IAction
     {
         private string _soldierName, _targetName, _weaponName;
+        private readonly BattleGridManager _grid;
+        private bool _isResolved;
+        private bool _strayHitWasFriendly;
+        private string _strayTargetName;
 
         public int ActorId => ShooterId;
 
@@ -21,9 +25,18 @@ namespace OnlyWar.Helpers.Battles.Actions
         public float Range { get; }
         public int NumberOfShots { get; }
         public bool UseBulk { get; }
+        public int? StrayTargetId { get; private set; }
+        public bool IsFriendlyFire => StrayTargetId.HasValue && _strayHitWasFriendly;
         public List<WoundResolution> WoundResolutions { get; }
 
-        public ShootAction(int shooterId, int targetId, int weaponId, float range, int numberOfShots, bool useBulk)
+        public ShootAction(
+            int shooterId,
+            int targetId,
+            int weaponId,
+            float range,
+            int numberOfShots,
+            bool useBulk,
+            BattleGridManager grid = null)
         {
             ShooterId = shooterId;
             TargetId = targetId;
@@ -31,6 +44,7 @@ namespace OnlyWar.Helpers.Battles.Actions
             Range = range;
             NumberOfShots = numberOfShots;
             UseBulk = useBulk;
+            _grid = grid;
             WoundResolutions = new List<WoundResolution>();
         }
 
@@ -38,7 +52,7 @@ namespace OnlyWar.Helpers.Battles.Actions
         {
             // we don't want to resolve hit locations during replays, 
             // so we need to resolve them before calling Execute
-            if (WoundResolutions.Count == 0)
+            if (!_isResolved)
             {
                 var shooter = state.GetSoldier(ShooterId);
                 var target = state.GetSoldier(TargetId);
@@ -48,7 +62,8 @@ namespace OnlyWar.Helpers.Battles.Actions
                 _weaponName = weapon.Template.Name;
 
                 var skill = shooter.Soldier.GetTotalSkillValue(weapon.Template.RelatedSkill);
-                var modifier = CalculateToHitModifiers(shooter, target, weapon, skill);
+                bool firingIntoMelee = _grid?.IsTargetEngagedWithShootersAllies(ShooterId, TargetId) == true;
+                var modifier = CalculateToHitModifiers(shooter, target, weapon, skill, firingIntoMelee);
                 var roll = 10.5f + (3.0f * (float)RNG.NextRandomZValue());
                 var total = skill + modifier - roll;
                 shooter.Aim = null;
@@ -67,11 +82,37 @@ namespace OnlyWar.Helpers.Battles.Actions
                         numberOfShots--;
                     } while (total > 1 && numberOfShots > 0);
                 }
+                else if (firingIntoMelee && RangedFriendlyFireRules.IsNearMiss(total))
+                {
+                    IReadOnlyList<BattleSoldier> participants = _grid
+                        .GetMeleeScrumParticipants(TargetId)
+                        .Select(state.GetSoldier)
+                        .ToList();
+                    BattleSoldier strayTarget = RangedFriendlyFireRules.SelectStrayTarget(
+                        participants,
+                        RNG.GetLinearDouble());
+                    StrayTargetId = strayTarget.Soldier.Id;
+                    _strayHitWasFriendly = _grid.GetSoldierSide(ShooterId)
+                        == _grid.GetSoldierSide(strayTarget.Soldier.Id);
+                    _strayTargetName = strayTarget.Soldier.Name;
+
+                    WoundResolution woundResolution = HandleHit(shooter, weapon, strayTarget);
+                    if (woundResolution != null)
+                    {
+                        WoundResolutions.Add(woundResolution);
+                    }
+                }
                 shooter.TurnsShooting++;
+                _isResolved = true;
             }
         }
 
-        private float CalculateToHitModifiers(BattleSoldier shooter, BattleSoldier target, RangedWeapon weapon, float soldierSkill)
+        public float CalculateToHitModifiers(
+            BattleSoldier shooter,
+            BattleSoldier target,
+            RangedWeapon weapon,
+            float soldierSkill,
+            bool firingIntoMelee)
         {
             float totalModifier = 0;
             // the bulky weapon penalty is usually added when the weapon is fired while moving
@@ -93,6 +134,10 @@ namespace OnlyWar.Helpers.Battles.Actions
             // elusive targets (serpentine Raveners, weaving Genestealers, camo-caped
             // Scouts) are flatly harder to hit — see Design/EvasionBurrowAndAmbush.md
             totalModifier -= target.Soldier.Template.Species.RangedEvasion;
+            if (firingIntoMelee)
+            {
+                totalModifier += RangedFriendlyFireRules.FiringIntoMeleePenalty;
+            }
 
             return totalModifier;
         }
@@ -118,7 +163,15 @@ namespace OnlyWar.Helpers.Battles.Actions
         public string Description()
         {
             string desc = $"{_soldierName} fires a {_weaponName} {NumberOfShots} times at {_targetName}\n";
-            desc += $"Hitting {WoundResolutions.Count} times\n";
+            if (StrayTargetId.HasValue)
+            {
+                string allegiance = IsFriendlyFire ? "friendly fire" : "a stray hit";
+                desc += $"The shot misses its mark and strikes {_strayTargetName} ({allegiance})\n";
+            }
+            else
+            {
+                desc += $"Hitting {WoundResolutions.Count} times\n";
+            }
             foreach (WoundResolution wound in WoundResolutions)
             {
                 desc += wound.Description;

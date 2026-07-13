@@ -140,6 +140,33 @@ public class BattleValueCalculatorTests
     }
 
     [Fact]
+    public void Burrower_PaysNoMeleeClosingTax()
+    {
+        MeleeWeaponTemplate weapon = TestModelFactory.DefaultWeapons.PrimaryMeleeWeapon;
+        BattleValueCalculator.Input walker = BaselineInput(weapon);
+        BattleValueCalculator.Result walkerResult = BattleValueCalculator.Calculate(walker);
+        BattleValueCalculator.Result burrowerResult = BattleValueCalculator.Calculate(new BattleValueCalculator.Input
+        {
+            Strength = walker.Strength,
+            Constitution = walker.Constitution,
+            AttackSpeed = walker.AttackSpeed,
+            Size = walker.Size,
+            MeleeSkill = walker.MeleeSkill,
+            Armor = walker.Armor,
+            MeleeWeapon = weapon,
+            CanBurrow = true
+        });
+
+        // Same body, same weapon: erupting adjacent (attack on arrival) beats walking in
+        // under fire by exactly the forgone closing tax (walker at MoveSpeed 6 keeps
+        // 0.75 * 6/8 of its melee output; the burrower keeps all of it).
+        float walkerClosing = BattleValueCalculator.MeleeClosingFactor
+            * (walker.MoveSpeed / BattleValueCalculator.MeleeClosingReferenceSpeed);
+        Assert.True(burrowerResult.Offense > walkerResult.Offense);
+        Assert.Equal(walkerResult.Offense / walkerClosing, burrowerResult.Offense, precision: 3);
+    }
+
+    [Fact]
     public void LargerCreature_IsEasierToHit_NotIntrinsicallyTankier()
     {
         // Same body, same armor, same constitution — the bigger silhouette should be worth

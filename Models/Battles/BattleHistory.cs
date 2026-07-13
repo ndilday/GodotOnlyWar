@@ -17,6 +17,9 @@ namespace OnlyWar.Models.Battles
         // Stable soldier identities confirmed killed during this battle, independent of which
         // aftermath policy is active. Mission objectives can track a specific casualty directly.
         public HashSet<int> KilledSoldierIds { get; }
+        // Closing facts (casualties, who held the field) rendered after the per-turn log. Populated
+        // once by BattleTurnResolver at the end of the battle, via BattleSummaryBuilder.
+        public List<string> ClosingSummary { get; }
 
         public BattleHistory()
         {
@@ -25,6 +28,7 @@ namespace OnlyWar.Models.Battles
             FirstSideEnemiesKilled = 0;
             FirstSideEnemyDeaths = 0;
             KilledSoldierIds = new HashSet<int>();
+            ClosingSummary = new List<string>();
         }
     }
 }
