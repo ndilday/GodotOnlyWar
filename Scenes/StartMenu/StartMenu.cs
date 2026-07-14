@@ -2,6 +2,7 @@ using Godot;
 using OnlyWar.Builders;
 using OnlyWar.Helpers;
 using OnlyWar.Helpers.Database.GameState;
+using OnlyWar.Helpers.Storage;
 using OnlyWar.Models;
 using OnlyWar.Models.Soldiers;
 using System;
@@ -12,11 +13,29 @@ public partial class StartMenu : Control
 
 	private NewGameSetupController _setupScreen;
 	private ActivityOverlay _activityOverlay;
+	private Button _loadGameButton;
+	private Label _loadStatusLabel;
+	private string _selectedSavePath;
 	private bool _isTransitioning;
 
 	public override void _Ready()
 	{
 		_activityOverlay = GetNode<ActivityOverlay>("ActivityOverlay");
+		_loadGameButton = GetNode<Button>("MenuButtons/LoadGameButton");
+		_loadStatusLabel = GetNode<Label>("MenuButtons/LoadStatusLabel");
+
+		try
+		{
+			GameStorage.InitializeUserStorage();
+			RefreshLoadGameAvailability();
+		}
+		catch (Exception exception)
+		{
+			GD.PushError($"Could not initialize game storage: {exception}");
+			_selectedSavePath = null;
+			_loadGameButton.Disabled = true;
+			_loadStatusLabel.Text = "Save storage is unavailable. See the game log for details.";
+		}
 	}
 
 	public void OnNewGameButtonPressed()
@@ -35,6 +54,11 @@ public partial class StartMenu : Control
 		{
 			return;
 		}
+		if (string.IsNullOrWhiteSpace(_selectedSavePath))
+		{
+			RefreshLoadGameAvailability();
+			return;
+		}
 
 		_isTransitioning = true;
 		SetMenuButtonsVisible(false);
@@ -45,7 +69,7 @@ public partial class StartMenu : Control
 
 		try
 		{
-			LoadGameData();
+			LoadGameData(_selectedSavePath);
 			LaunchMainGameScene();
 		}
 		catch (Exception exception)
@@ -53,6 +77,7 @@ public partial class StartMenu : Control
 			GD.PushError($"Load failed: {exception}");
 			_activityOverlay.HideBusy();
 			SetMenuButtonsVisible(true);
+			_loadStatusLabel.Text = $"Load failed: {exception.Message}";
 			_isTransitioning = false;
 		}
 	}
@@ -91,7 +116,7 @@ public partial class StartMenu : Control
         try
         {
             GameDataSingleton.Instance.InitializeNewGameData(
-                new GameRulesData(),
+                new GameRulesData(GameStorage.RulesDatabasePath),
                 new Date(39, 500, 1),
                 settings.ChapterName,
                 settings.Seed);
@@ -120,11 +145,11 @@ public partial class StartMenu : Control
         GetParent().AddChild(mainGameSceneInstance); // Add MainGameScene to the *parent* of StartMenu
     }
 
-    private void LoadGameData()
+    private void LoadGameData(string savePath)
     {
-        GameRulesData gameRulesData = new GameRulesData(); // Load Game Rules Data (if needed for loading)
+        GameRulesData gameRulesData = new(GameStorage.RulesDatabasePath);
 
-        GameStateDataBlob gameState = LoadGameData(gameRulesData);
+        GameStateDataBlob gameState = LoadGameData(gameRulesData, savePath);
         Sector sector = SavedGameLoader.BuildSectorFromBlob(gameState, gameRulesData);
 
         GameDataSingleton.Instance.LoadGameDataFromBlob(gameRulesData, gameState.CurrentDate, sector);
@@ -135,7 +160,7 @@ public partial class StartMenu : Control
         // Potentially pass loaded data to mainGameSceneInstance if needed for UI setup
     }
 
-    private GameStateDataBlob LoadGameData(GameRulesData gameRulesData)
+    private GameStateDataBlob LoadGameData(GameRulesData gameRulesData, string savePath)
     {
         var shipTemplateMap = gameRulesData.Factions.Where(f => f.ShipTemplates != null)
                                                                       .SelectMany(f => f.ShipTemplates.Values)
@@ -153,7 +178,7 @@ public partial class StartMenu : Control
                                                          .SelectMany(f => f.SoldierTemplates.Values)
                                                          .ToDictionary(st => st.Id);
         var gameData =
-            GameStateDataAccess.Instance.GetData("default.s3db",
+            GameStateDataAccess.Instance.GetData(savePath,
                                                  gameRulesData.Factions.ToDictionary(f => f.Id),
                                                  gameRulesData.PlanetTemplateMap,
                                                  shipTemplateMap, 
@@ -165,4 +190,26 @@ public partial class StartMenu : Control
                                                  soldierTypeMap);
         return gameData;
     }
+
+	private void RefreshLoadGameAvailability()
+	{
+		SaveGameCatalog catalog = new(GameStorage.SaveDirectory);
+		var saves = catalog.Discover();
+		SaveGameEntry preferredSave = saves.FirstOrDefault(save => save.IsCompatible);
+
+		if (preferredSave != null)
+		{
+			_selectedSavePath = preferredSave.FilePath;
+			_loadGameButton.Disabled = false;
+			_loadStatusLabel.Text =
+				$"Saved {preferredSave.LastWriteTimeUtc.ToLocalTime():g}";
+			return;
+		}
+
+		_selectedSavePath = null;
+		_loadGameButton.Disabled = true;
+		_loadStatusLabel.Text = saves.Count == 0
+			? "No saved campaign found."
+			: saves[0].FailureReason;
+	}
 }

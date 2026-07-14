@@ -1,5 +1,6 @@
 ﻿using OnlyWar.Helpers;
 using OnlyWar.Helpers.Database.GameRules;
+using OnlyWar.Helpers.Storage;
 using OnlyWar.Models.Equippables;
 using OnlyWar.Models.Planets;
 using OnlyWar.Models.Soldiers;
@@ -63,9 +64,10 @@ namespace OnlyWar.Models
         // (see TDD §8.3 / §4.1.1). Resolved and validated at load; fails fast if missing.
         public BattleDefaults BattleDefaults { get; }
 
-        public GameRulesData()
+        public GameRulesData(string databasePath = null)
         {
-            var gameBlob = GameRulesDataAccess.Instance.GetData(".\\Database\\OnlyWar.s3db");
+            databasePath ??= GameStorage.RulesDatabasePath;
+            var gameBlob = GameRulesDataAccess.Instance.GetData(databasePath);
             
             DebugMode = true;
             SectorSize = new(200, 200);

@@ -1,6 +1,7 @@
 using Godot;
 using OnlyWar.Helpers;
 using OnlyWar.Helpers.Database.GameState;
+using OnlyWar.Helpers.Storage;
 using OnlyWar.Models;
 using OnlyWar.Models.Fleets;
 using OnlyWar.Models.Planets;
@@ -227,8 +228,9 @@ public partial class MainGameScene : Control
 		var units = GameDataSingleton.Instance.GameRulesData.Factions.SelectMany(f => f.Units);
 		try
 		{
+			GameStorage.InitializeUserStorage();
 			GameStateDataAccess.Instance.SaveData(
-				"default.s3db",
+				GameStorage.DefaultSavePath,
 				GameDataSingleton.Instance.Date,
 				GameDataSingleton.Instance.Sector.PlayerForce.Army.Requisition,
 				GameDataSingleton.Instance.Sector.PlayerForce.GeneseedStockpile,
@@ -749,6 +751,7 @@ public partial class MainGameScene : Control
 			_mainUILayer.AddChild(_squadScreen);
 			_squadScreen.CloseButtonPressed += OnCloseScreen;
 		}
+		PlaceMainContentOverlay(_squadScreen);
 		_squadScreen.SetSquad(squad);
 		_squadScreen.Visible = true;
 		Control control = (Control)sender;
@@ -765,6 +768,7 @@ public partial class MainGameScene : Control
 			_mainUILayer.AddChild(_squadScreen);
 			_squadScreen.CloseButtonPressed += OnCloseScreen;
 		}
+		PlaceMainContentOverlay(_squadScreen);
 		_squadScreen.SetSquad(squad);
 		_squadScreen.Visible = true;
 		Control control = (Control)sender;

@@ -10,6 +10,7 @@ using System;
 using System.Collections.Generic;
 using System.Data;
 using System.Drawing;
+using System.IO;
 using System.Linq;
 using Microsoft.Data.Sqlite;
 
@@ -65,12 +66,18 @@ namespace OnlyWar.Helpers.Database.GameRules
         }
         public GameRulesBlob GetData(string filePath)
         {
+            string fullPath = Path.GetFullPath(filePath);
+            if (!File.Exists(fullPath))
+            {
+                throw new FileNotFoundException("The game rules database is missing.", fullPath);
+            }
+
             var connectionString = new SqliteConnectionStringBuilder()
             {
                 Mode = SqliteOpenMode.ReadOnly,
-                DataSource = filePath
+                DataSource = fullPath
             }.ToString();
-            IDbConnection dbCon = new SqliteConnection(connectionString);
+            using IDbConnection dbCon = new SqliteConnection(connectionString);
             dbCon.Open();
             var baseSkills = _baseSkillDataAccess.GetBaseSkills(dbCon);
             var skillTemplates = GetSkillTemplates(dbCon, baseSkills);
@@ -94,7 +101,6 @@ namespace OnlyWar.Helpers.Database.GameRules
                                                fleetDataBlob.FleetTemplates);
             var ratingDefinitions = _ratingDataAccess.GetRatingDefinitions(dbCon);
             var ratingAwardTiers = _ratingDataAccess.GetRatingAwardTiers(dbCon);
-            dbCon.Close();
             return new GameRulesBlob
             {
                 Factions = factions,

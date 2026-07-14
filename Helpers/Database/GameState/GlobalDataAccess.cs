@@ -1,6 +1,7 @@
 using OnlyWar.Models;
 using System;
 using System.Data;
+using System.IO;
 
 namespace OnlyWar.Helpers.Database.GameState
 {
@@ -13,6 +14,30 @@ namespace OnlyWar.Helpers.Database.GameState
 
     public class GlobalDataAccess
     {
+        public int GetSaveVersion(IDbConnection connection)
+        {
+            using var command = connection.CreateCommand();
+            command.CommandText = "SELECT SaveVersion FROM GlobalData LIMIT 1";
+            object result = command.ExecuteScalar();
+            if (result == null || result is DBNull)
+            {
+                throw new InvalidDataException("The save contains no GlobalData row.");
+            }
+
+            return Convert.ToInt32(result);
+        }
+
+        public void EnsureCompatibleSaveVersion(IDbConnection connection)
+        {
+            int version = GetSaveVersion(connection);
+            if (version != SaveFormat.CurrentVersion)
+            {
+                throw new InvalidDataException(
+                    $"Save version {version} is not supported by this build "
+                    + $"(expected {SaveFormat.CurrentVersion}).");
+            }
+        }
+
         public GlobalState GetGlobalData(IDbConnection connection)
         {
             GlobalState state = null;
@@ -63,13 +88,14 @@ namespace OnlyWar.Helpers.Database.GameState
             {
                 command.Transaction = transaction;
                 command.CommandText = @"INSERT INTO GlobalData VALUES
-                    (@millenium, @year, @week, 1, @requisition, @geneseedStockpile, @geneseedPurity,
+                    (@millenium, @year, @week, @saveVersion, @requisition, @geneseedStockpile, @geneseedPurity,
                      @scenarioType, @scenarioPromisedPlanetId, @scenarioState,
                      @scenarioBriefingAcknowledged, @scenarioBriefingText,
                      @scenarioOriginalAuthorityCharacterId);";
                 command.AddParam("@millenium", currentDate.Millenium);
                 command.AddParam("@year", currentDate.Year);
                 command.AddParam("@week", currentDate.Week);
+                command.AddParam("@saveVersion", SaveFormat.CurrentVersion);
                 command.AddParam("@requisition", requisition);
                 command.AddParam("@geneseedStockpile", geneseedStockpile);
                 command.AddParam("@geneseedPurity", geneseedPurity);

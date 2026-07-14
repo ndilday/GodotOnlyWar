@@ -150,6 +150,8 @@ Mission execution is modeled as a chain of `IMissionStep` objects. Each step's `
 
 Read-only SQLite file loaded once at application start. Accessed via `GameRulesDataAccess` (singleton). Contains:
 
+At runtime, `GameStorage` locates the immutable install root and supplies the ordinary filesystem path `Database/OnlyWar.s3db`; the database is deliberately shipped loose beside the exported executable because `Microsoft.Data.Sqlite` cannot open a database inside Godot's virtual PCK filesystem. Editor and test runs locate the same install root by walking up from the process/assembly directories, so no code depends on the current working directory.
+
 - `Faction`, `Species`, `SoldierTemplate`, `SquadTemplate`, `SquadTemplateElement`
 - `UnitTemplate`, `UnitTemplateHierarchy`, `UnitTemplateSquadTemplate`
 - `BaseSkill`, `SkillTemplate`
@@ -186,9 +188,9 @@ Rating formulas require a constrained evaluator rather than arbitrary script exe
 
 ### 4.2 Save State Database
 
-Written in full on each save (file is deleted and recreated from scratch using `SaveStructure.sql`). Read on load via `GameStateDataAccess` (singleton). All writes are wrapped in a single transaction; exceptions trigger rollback.
+Written in full on each save (file is deleted and recreated from scratch using the loose, read-only `Database/SaveStructure.sql`). Read on load via `GameStateDataAccess` (singleton). All writes are wrapped in a single transaction; exceptions trigger rollback. Player saves live under `user://saves` (`%APPDATA%\OnlyWar\saves` on Windows), never in the install directory. `SaveGameCatalog` discovers `*.s3db` files and inspects only their metadata for the start menu.
 
-Save files are not version-migrated. A save from a different schema version is not compatible.
+Save files are not version-migrated. `SaveFormat.CurrentVersion` is written to `GlobalData.SaveVersion`; discovery marks a different version as incompatible, and the data access layer rejects it before reading sector tables. Missing saves are opened in neither create nor write mode, preventing a failed load from leaving behind an empty SQLite file.
 
 Connections use `Microsoft.Data.Sqlite` (the `SqliteConnectionStringBuilder` `DataSource`) with foreign key enforcement enabled (`ForeignKeys = true`). The schema is foreign-key-valid — every reference resolves to a table in the save file — and the save routines insert parent rows before the rows that reference them. `Faction` is intentionally *not* a foreign-key target: factions live only in the read-only rules database and are matched by id at load. See §8.5.1 for the provider-compatibility work that established this.
 

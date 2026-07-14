@@ -13,6 +13,7 @@ using System.Data;
 using System.IO;
 using System.Linq;
 using OnlyWar.Models.Orders;
+using OnlyWar.Helpers.Storage;
 
 namespace OnlyWar.Helpers.Database.GameState
 {
@@ -88,9 +89,16 @@ namespace OnlyWar.Helpers.Database.GameState
                             IReadOnlyDictionary<int, BaseSkill> baseSkillMap, 
                             IReadOnlyDictionary<int, SoldierTemplate> soldierTemplateMap)
         {
-            string connection = BuildConnectionString(filePath);
-            IDbConnection dbCon = new SqliteConnection(connection);
+            string fullPath = Path.GetFullPath(filePath);
+            if (!File.Exists(fullPath))
+            {
+                throw new FileNotFoundException("The selected save file does not exist.", fullPath);
+            }
+
+            string connection = BuildConnectionString(fullPath, SqliteOpenMode.ReadOnly);
+            using IDbConnection dbCon = new SqliteConnection(connection);
             dbCon.Open();
+            _globalDataAccess.EnsureCompatibleSaveVersion(dbCon);
             var characterMap = _planetDataAccess.GetCharacterMap(dbCon, factionMap);
             //var regionData = _planetDataAccess.Get
             var planets = _planetDataAccess.GetPlanets(dbCon, factionMap, characterMap,
@@ -114,7 +122,6 @@ namespace OnlyWar.Helpers.Database.GameState
             var global = _globalDataAccess.GetGlobalData(dbCon);
             var medicalProcedures = _medicalProcedureDataAccess.GetProcedures(dbCon);
             var history = _playerFactionEventDataAccess.GetHistory(dbCon);
-            dbCon.Close();
             // Decorated soldiers with no squad are fallen brothers; the living are reached
             // through the loaded units, so only the fallen need to ride along in the blob.
             var fallenBrothers = playerSoldiers.Values
@@ -161,8 +168,9 @@ namespace OnlyWar.Helpers.Database.GameState
             // until the final move, so a failure anywhere below can never destroy it.
             string fullPath = Path.GetFullPath(filePath);
             string directory = Path.GetDirectoryName(fullPath);
+            Directory.CreateDirectory(directory);
             string tempPath = Path.Combine(
-                directory ?? string.Empty,
+                directory,
                 $".{Path.GetFileName(fullPath)}.{Guid.NewGuid():N}.tmp");
             if (File.Exists(tempPath))
             {
@@ -219,7 +227,7 @@ namespace OnlyWar.Helpers.Database.GameState
                                    IEnumerable<Ship> ships,
                                    IEnumerable<Unit> units)
         {
-            string connection = BuildConnectionString(filePath);
+            string connection = BuildConnectionString(filePath, SqliteOpenMode.ReadWriteCreate);
             using IDbConnection dbCon = new SqliteConnection(connection);
             dbCon.Open();
             using (var transaction = dbCon.BeginTransaction())
@@ -310,7 +318,7 @@ namespace OnlyWar.Helpers.Database.GameState
                                                      geneseedStockpile, geneseedPurity, scenario);
                     _playerFactionEventDataAccess.SaveData(transaction, history);
                 }
-                catch (Exception e)
+                catch (Exception)
                 {
                     transaction.Rollback();
                     throw;
@@ -322,10 +330,10 @@ namespace OnlyWar.Helpers.Database.GameState
 
         private static string DefaultSchemaFilePath()
         {
-            return Godot.ProjectSettings.GlobalizePath("res://Database/SaveStructure.sql");
+            return GameStorage.SaveSchemaPath;
         }
 
-        private static string BuildConnectionString(string filePath)
+        private static string BuildConnectionString(string filePath, SqliteOpenMode mode)
         {
             // Foreign key enforcement is enabled. The save schema is FK-valid (every
             // reference resolves to a table in the save file) and the save routines
@@ -333,6 +341,7 @@ namespace OnlyWar.Helpers.Database.GameState
             return new SqliteConnectionStringBuilder
             {
                 DataSource = filePath,
+                Mode = mode,
                 ForeignKeys = true,
                 Pooling = false
             }.ToString();
@@ -341,7 +350,7 @@ namespace OnlyWar.Helpers.Database.GameState
         private void GenerateTables(string filePath, string schemaFilePath)
         {
             string cmdText = File.ReadAllText(schemaFilePath);
-            string connection = BuildConnectionString(filePath);
+            string connection = BuildConnectionString(filePath, SqliteOpenMode.ReadWriteCreate);
             using IDbConnection dbCon = new SqliteConnection(connection);
             dbCon.Open();
             using (var command = dbCon.CreateCommand())

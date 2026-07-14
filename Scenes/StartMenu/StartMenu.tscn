@@ -50,10 +50,10 @@ anchor_left = 0.5
 anchor_top = 0.5
 anchor_right = 0.5
 anchor_bottom = 0.5
-offset_left = -100.0
-offset_top = -38.0
-offset_right = 100.0
-offset_bottom = 38.0
+offset_left = -180.0
+offset_top = -60.0
+offset_right = 180.0
+offset_bottom = 80.0
 grow_horizontal = 2
 grow_vertical = 2
 theme_override_constants/separation = 12
@@ -65,6 +65,15 @@ text = "New Game"
 [node name="LoadGameButton" type="Button" parent="MenuButtons" unique_id=646845223]
 layout_mode = 2
 text = "Load Game"
+
+[node name="LoadStatusLabel" type="Label" parent="MenuButtons"]
+custom_minimum_size = Vector2(0, 40)
+layout_mode = 2
+theme_override_font_sizes/font_size = 14
+text = "Checking for saved campaigns..."
+horizontal_alignment = 1
+vertical_alignment = 1
+autowrap_mode = 2
 
 [node name="ActivityOverlay" parent="." instance=ExtResource("4_activity")]
 
