@@ -7,7 +7,6 @@ using OnlyWar.Models.Equippables;
 using OnlyWar.Models.Planets;
 using OnlyWar.Models.Soldiers;
 using System;
-using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
@@ -92,19 +91,22 @@ namespace OnlyWar.Helpers.Battles
         {
             _grid.ClearReservations();
             _casualtyMap.Clear();
-            _currentState = new BattleState(_currentState);
+            _currentState.AdvanceTurn();
 
             Log(false, "Turn " + _currentState.TurnNumber.ToString());
 
-            ConcurrentBag<IAction> moveSegmentActions = new ConcurrentBag<IAction>();
-            ConcurrentBag<IAction> shootSegmentActions = new ConcurrentBag<IAction>();
-            ConcurrentBag<IAction> meleeSegmentActions = new ConcurrentBag<IAction>();
-            ConcurrentQueue<string> log = new ConcurrentQueue<string>();
-            Plan(shootSegmentActions, moveSegmentActions, meleeSegmentActions, log);
-            while (!log.IsEmpty)
+            List<IAction> moveSegmentActions = [];
+            List<IAction> shootSegmentActions = [];
+            List<IAction> meleeSegmentActions = [];
+            List<string> log = BattleLog.IsEnabled ? [] : null;
+            Action<string> logSink = log == null ? null : log.Add;
+            Plan(shootSegmentActions, moveSegmentActions, meleeSegmentActions, logSink);
+            if (log != null)
             {
-                log.TryDequeue(out string line);
-                Log(false, line);
+                foreach (string line in log)
+                {
+                    Log(false, line);
+                }
             }
 
             List<IAction> executedActions = new List<IAction>();
@@ -124,6 +126,10 @@ namespace OnlyWar.Helpers.Battles
             CleanupAtEndOfTurn();
 
             BattleHistory.Turns.Add(new BattleTurn(_currentState, executedActions));
+            foreach (int casualtyId in _casualtyMap.Keys)
+            {
+                _currentState.RemoveSoldier(casualtyId);
+            }
             if (_currentState.AttackerSquads.Count == 0 || _currentState.OpposingSquads.Count == 0)
             {
                 Log(false, "One side destroyed, battle over");
@@ -159,10 +165,10 @@ namespace OnlyWar.Helpers.Battles
             OnBattleComplete?.Invoke(this, BattleHistory);
         }
 
-        private void Plan(ConcurrentBag<IAction> shootSegmentActions,
-                          ConcurrentBag<IAction> moveSegmentActions,
-                          ConcurrentBag<IAction> meleeSegmentActions,
-                          ConcurrentQueue<string> log)
+        private void Plan(List<IAction> shootSegmentActions,
+                          List<IAction> moveSegmentActions,
+                          List<IAction> meleeSegmentActions,
+                          Action<string> log)
         {
             BattleDefaults battleDefaults = GameDataSingleton.Instance.GameRulesData.BattleDefaults;
             MeleeWeapon attackerDefaultWeapon = new MeleeWeapon(battleDefaults.ImperialUnarmedWeapon);
@@ -187,10 +193,13 @@ namespace OnlyWar.Helpers.Battles
             }
         }
 
-        private void HandleShooting(ConcurrentBag<IAction> shootActions, List<IAction> executedActions)
+        private void HandleShooting(List<IAction> shootActions, List<IAction> executedActions)
         {
-            foreach (IAction action in shootActions)
+            // ConcurrentBag enumerated the actions in LIFO order in this single-threaded path.
+            // Walk the list backwards to retain identical seeded execution and RNG consumption.
+            for (int actionIndex = shootActions.Count - 1; actionIndex >= 0; actionIndex--)
             {
+                IAction action = shootActions[actionIndex];
                 action.Execute(_currentState);
                 if (action is ShootAction shootAction)
                 {
@@ -203,18 +212,21 @@ namespace OnlyWar.Helpers.Battles
             }
         }
 
-        private void HandleMoving(ConcurrentBag<IAction> moveActions, List<IAction> executedActions)
+        private void HandleMoving(List<IAction> moveActions, List<IAction> executedActions)
         {
-            foreach (IAction action in moveActions)
+            for (int actionIndex = moveActions.Count - 1; actionIndex >= 0; actionIndex--)
             {
+                IAction action = moveActions[actionIndex];
                 action.Execute(_currentState);
                 executedActions.Add(action);
             }
         }
 
-        private void HandleMelee(ConcurrentBag<IAction> meleeActions, List<IAction> executedActions, ISet<int> defendingSoldierIds)
+        private void HandleMelee(List<IAction> meleeActions, List<IAction> executedActions, ISet<int> defendingSoldierIds)
         {
-            foreach (IAction action in meleeActions.OrderBy(action => action.ActorId))
+            // Reverse before the stable sort so the old bag order is retained if an actor ever
+            // contributes more than one melee action in a segment.
+            foreach (IAction action in meleeActions.AsEnumerable().Reverse().OrderBy(action => action.ActorId))
             {
                 action.Execute(_currentState);
                 if (action is MeleeAttackAction meleeAction)

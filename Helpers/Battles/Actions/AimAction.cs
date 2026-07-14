@@ -1,7 +1,6 @@
 ﻿using OnlyWar.Models.Battles;
 using OnlyWar.Models.Equippables;
 using System;
-using System.Collections.Concurrent;
 
 namespace OnlyWar.Helpers.Battles.Actions
 {
@@ -15,7 +14,7 @@ namespace OnlyWar.Helpers.Battles.Actions
 
         public int ActorId => _soldierId;
 
-        public AimAction(BattleSoldier soldier, BattleSoldier target, RangedWeapon weapon, ConcurrentQueue<string> log)
+        public AimAction(BattleSoldier soldier, BattleSoldier target, RangedWeapon weapon, Action<string> log)
         {
             _soldierId = soldier.Soldier.Id;
             _soldierName = soldier.Soldier.Name;

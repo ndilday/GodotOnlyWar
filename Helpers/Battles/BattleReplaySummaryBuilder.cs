@@ -16,7 +16,7 @@ namespace OnlyWar.Helpers.Battles
             if (history.Turns.Count == 0) throw new ArgumentException("Battle history must contain at least one turn.", nameof(history));
 
             int currentTurnIndex = Math.Clamp(requestedTurnIndex, 0, history.Turns.Count - 1);
-            BattleState baselineState = BuildBaselineState(history);
+            BattleStateSnapshot baselineState = BuildBaselineState(history);
             BattleTurn currentTurn = history.Turns[currentTurnIndex];
             int? resolvedSelection = ResolveSelectedFormationId(currentTurn.State, selectedFormationId);
 
@@ -40,32 +40,32 @@ namespace OnlyWar.Helpers.Battles
                 BuildCasualtySummaries(history));
         }
 
-        private static BattleState BuildBaselineState(BattleHistory history)
+        private static BattleStateSnapshot BuildBaselineState(BattleHistory history)
         {
-            // This reconstruction only needs two buckets to rebuild a BattleState; the replay
+            // This reconstruction only needs two buckets to rebuild a snapshot; the replay
             // reads squads back via GetAllSquads and the player-aligned flag, never by tactical
             // side. Bucketing by IsPlayerAligned here (rather than by original attacker/defender
             // slot) is therefore purely cosmetic and does not have to match the live battle.
-            Dictionary<int, BattleSquad> playerSquads = [];
-            Dictionary<int, BattleSquad> opposingSquads = [];
-            foreach (BattleSquad squad in history.Turns
+            Dictionary<int, BattleSquadSnapshot> playerSquads = [];
+            Dictionary<int, BattleSquadSnapshot> opposingSquads = [];
+            foreach (BattleSquadSnapshot squad in history.Turns
                 .SelectMany(turn => GetAllSquads(turn.State))
                 .GroupBy(squad => squad.Id)
                 .Select(group => group.OrderByDescending(CountAble).First()))
             {
                 (squad.IsPlayerAligned ? playerSquads : opposingSquads)[squad.Id] = squad;
             }
-            return new BattleState(playerSquads, opposingSquads);
+            return BattleStateSnapshot.FromSquads(0, playerSquads.Values, opposingSquads.Values);
         }
 
-        private static int? ResolveSelectedFormationId(BattleState state, int? selectedFormationId)
+        private static int? ResolveSelectedFormationId(BattleStateSnapshot state, int? selectedFormationId)
         {
             if (selectedFormationId.HasValue && ContainsSquad(state, selectedFormationId.Value))
             {
                 return selectedFormationId.Value;
             }
 
-            BattleSquad firstPlayer = GetAllSquads(state)
+            BattleSquadSnapshot firstPlayer = GetAllSquads(state)
                 .Where(s => s.IsPlayerAligned)
                 .OrderBy(s => s.Id)
                 .FirstOrDefault();
@@ -75,12 +75,12 @@ namespace OnlyWar.Helpers.Battles
         }
 
         private static IReadOnlyList<BattleForceHierarchyNode> BuildForceHierarchy(
-            BattleState initialState,
-            BattleState currentState,
+            BattleStateSnapshot initialState,
+            BattleStateSnapshot currentState,
             int? selectedFormationId)
         {
-            List<BattleSquad> initialSquads = GetAllSquads(initialState).ToList();
-            List<BattleSquad> currentSquads = GetAllSquads(currentState).ToList();
+            List<BattleSquadSnapshot> initialSquads = GetAllSquads(initialState).ToList();
+            List<BattleSquadSnapshot> currentSquads = GetAllSquads(currentState).ToList();
             List<BattleForceHierarchyNode> roots =
             [
                 BuildForceRoot("Player Force", "Imperial formations", "controlled", true, initialSquads.Where(s => s.IsPlayerAligned), currentSquads.Where(s => s.IsPlayerAligned), selectedFormationId),
@@ -95,28 +95,28 @@ namespace OnlyWar.Helpers.Battles
             string subtitle,
             string iconKey,
             bool isPlayerForce,
-            IEnumerable<BattleSquad> initialSquads,
-            IEnumerable<BattleSquad> currentSquads,
+            IEnumerable<BattleSquadSnapshot> initialSquads,
+            IEnumerable<BattleSquadSnapshot> currentSquads,
             int? selectedFormationId)
         {
             List<BattleForceHierarchyNode> children = [];
-            Dictionary<string, List<BattleSquad>> currentByUnit = currentSquads
+            Dictionary<string, List<BattleSquadSnapshot>> currentByUnit = currentSquads
                 .OrderBy(squad => GetUnitName(squad))
                 .ThenBy(squad => squad.Name)
                 .GroupBy(GetUnitName)
                 .ToDictionary(group => group.Key, group => group.ToList());
-            Dictionary<string, List<BattleSquad>> initialByUnit = initialSquads
+            Dictionary<string, List<BattleSquadSnapshot>> initialByUnit = initialSquads
                 .GroupBy(GetUnitName)
                 .ToDictionary(group => group.Key, group => group.ToList());
 
             foreach (string unitName in initialByUnit.Keys.Union(currentByUnit.Keys).OrderBy(name => name))
             {
-                List<BattleSquad> initialUnitSquads = initialByUnit.TryGetValue(unitName, out List<BattleSquad> initial) ? initial : [];
-                List<BattleSquad> currentUnitSquads = currentByUnit.TryGetValue(unitName, out List<BattleSquad> current) ? current : [];
+                List<BattleSquadSnapshot> initialUnitSquads = initialByUnit.TryGetValue(unitName, out List<BattleSquadSnapshot> initial) ? initial : [];
+                List<BattleSquadSnapshot> currentUnitSquads = currentByUnit.TryGetValue(unitName, out List<BattleSquadSnapshot> current) ? current : [];
                 List<BattleForceHierarchyNode> squadNodes = initialUnitSquads
                     .Select(initialSquad =>
                     {
-                        BattleSquad currentSquad = currentUnitSquads.FirstOrDefault(squad => squad.Id == initialSquad.Id);
+                        BattleSquadSnapshot currentSquad = currentUnitSquads.FirstOrDefault(squad => squad.Id == initialSquad.Id);
                         return BuildSquadNode(initialSquad, currentSquad, selectedFormationId);
                     })
                     .Concat(currentUnitSquads
@@ -155,9 +155,9 @@ namespace OnlyWar.Helpers.Battles
                 children);
         }
 
-        private static BattleForceHierarchyNode BuildSquadNode(BattleSquad initialSquad, BattleSquad currentSquad, int? selectedFormationId)
+        private static BattleForceHierarchyNode BuildSquadNode(BattleSquadSnapshot initialSquad, BattleSquadSnapshot currentSquad, int? selectedFormationId)
         {
-            BattleSquad source = currentSquad ?? initialSquad;
+            BattleSquadSnapshot source = currentSquad ?? initialSquad;
             int startingStrength = CountAble(initialSquad);
             int currentStrength = CountAble(currentSquad);
             return new BattleForceHierarchyNode(
@@ -172,11 +172,11 @@ namespace OnlyWar.Helpers.Battles
                 []);
         }
 
-        private static BattleFormationSummary BuildFormationSummary(BattleState initialState, BattleState currentState, int formationId)
+        private static BattleFormationSummary BuildFormationSummary(BattleStateSnapshot initialState, BattleStateSnapshot currentState, int formationId)
         {
-            BattleSquad initialSquad = TryGetSquad(initialState, formationId);
-            BattleSquad currentSquad = TryGetSquad(currentState, formationId);
-            BattleSquad source = currentSquad ?? initialSquad;
+            BattleSquadSnapshot initialSquad = TryGetSquad(initialState, formationId);
+            BattleSquadSnapshot currentSquad = TryGetSquad(currentState, formationId);
+            BattleSquadSnapshot source = currentSquad ?? initialSquad;
             int startingStrength = CountAble(initialSquad);
             int currentStrength = CountAble(currentSquad);
             int losses = startingStrength - currentStrength;
@@ -203,7 +203,7 @@ namespace OnlyWar.Helpers.Battles
                 effects);
         }
 
-        private static IReadOnlyList<BattleWeaponSetSummary> BuildActiveWeaponSets(BattleSquad squad, int startingStrength)
+        private static IReadOnlyList<BattleWeaponSetSummary> BuildActiveWeaponSets(BattleSquadSnapshot squad, int startingStrength)
         {
             WeaponSet defaultWeaponSet = squad?.Squad?.SquadTemplate?.DefaultWeapons;
             if (defaultWeaponSet == null && squad?.Squad?.Loadout == null)
@@ -244,14 +244,14 @@ namespace OnlyWar.Helpers.Battles
             foreach (IAction action in turn.Actions)
             {
                 sequence++;
-                BattleSoldier actor = turn.State.Soldiers.TryGetValue(action.ActorId, out BattleSoldier soldier) ? soldier : null;
+                BattleSoldierSnapshot actor = turn.State.Soldiers.TryGetValue(action.ActorId, out BattleSoldierSnapshot soldier) ? soldier : null;
                 int woundCount = CountWounds(action);
                 string text = SafeDescription(action).Trim();
                 entries.Add(new BattleEventEntry(
                     turn.TurnNumber,
                     $"{turn.TurnNumber:00}:{sequence:00}",
                     actor?.Soldier?.Name ?? $"Actor {action.ActorId}",
-                    actor?.BattleSquad?.Name ?? "Unknown formation",
+                    actor?.SquadName ?? "Unknown formation",
                     BuildEventType(action),
                     string.IsNullOrWhiteSpace(text) ? action.GetType().Name : text,
                     BuildSeverity(text, woundCount)));
@@ -328,7 +328,7 @@ namespace OnlyWar.Helpers.Battles
             return turn.TurnNumber == 0 ? "Deployment" : "Battle phase";
         }
 
-        private static string BuildResultLabel(BattleState initialState, BattleState currentState, bool isFinalRound)
+        private static string BuildResultLabel(BattleStateSnapshot initialState, BattleStateSnapshot currentState, bool isFinalRound)
         {
             if (!isFinalRound) return "Battle in progress";
             int playerCurrent = CountAble(GetPlayerSquads(currentState));
@@ -393,65 +393,63 @@ namespace OnlyWar.Helpers.Battles
             }
         }
 
-        private static BattleSquad TryGetSquad(BattleState state, int squadId)
+        private static BattleSquadSnapshot TryGetSquad(BattleStateSnapshot state, int squadId)
         {
-            if (state.AttackerSquads.TryGetValue(squadId, out BattleSquad attackerSquad)) return attackerSquad;
-            if (state.OpposingSquads.TryGetValue(squadId, out BattleSquad opposingSquad)) return opposingSquad;
+            if (state.AttackerSquads.TryGetValue(squadId, out BattleSquadSnapshot attackerSquad)) return attackerSquad;
+            if (state.OpposingSquads.TryGetValue(squadId, out BattleSquadSnapshot opposingSquad)) return opposingSquad;
             return null;
         }
 
-        private static bool ContainsSquad(BattleState state, int squadId)
+        private static bool ContainsSquad(BattleStateSnapshot state, int squadId)
         {
             return state.AttackerSquads.ContainsKey(squadId) || state.OpposingSquads.ContainsKey(squadId);
         }
 
-        private static IEnumerable<BattleSquad> GetAllSquads(BattleState state)
+        private static IEnumerable<BattleSquadSnapshot> GetAllSquads(BattleStateSnapshot state)
         {
             return state.AttackerSquads.Values.Concat(state.OpposingSquads.Values);
         }
 
-        private static IEnumerable<BattleSquad> GetPlayerSquads(BattleState state)
+        private static IEnumerable<BattleSquadSnapshot> GetPlayerSquads(BattleStateSnapshot state)
         {
             return GetAllSquads(state).Where(squad => squad.IsPlayerAligned);
         }
 
-        private static IEnumerable<BattleSquad> GetOpposingSquads(BattleState state)
+        private static IEnumerable<BattleSquadSnapshot> GetOpposingSquads(BattleStateSnapshot state)
         {
             return GetAllSquads(state).Where(squad => !squad.IsPlayerAligned);
         }
 
-        private static int CountAble(BattleSquad squad)
+        private static int CountAble(BattleSquadSnapshot squad)
         {
-            // BattleState snapshots own a cloned tactical soldier list, while the underlying
-            // campaign soldiers are intentionally shared. AbleSoldiers reads those shared
-            // soldiers' latest CanFight value and would therefore rewrite earlier replay
-            // strengths after later wounds. The snapshot list itself is pruned as casualties
-            // occur, so its count is the historically correct strength for that turn.
+            // The compact snapshot list is pruned as casualties occur, so its count is the
+            // historically correct strength for that turn even though campaign soldier identity
+            // references are shared.
             return squad?.Soldiers.Count ?? 0;
         }
 
-        private static int CountAble(IEnumerable<BattleSquad> squads)
+        private static int CountAble(IEnumerable<BattleSquadSnapshot> squads)
         {
             return squads.Sum(CountAble);
         }
 
-        private static string GetUnitName(BattleSquad squad)
+        private static string GetUnitName(BattleSquadSnapshot squad)
         {
             return squad?.Squad?.ParentUnit?.Name ?? (squad?.IsPlayerAligned == true ? "Imperial Defenders" : "Enemy Warhost");
         }
 
-        private static string BuildSquadSubtitle(BattleSquad squad, int startingStrength, int currentStrength)
+        private static string BuildSquadSubtitle(BattleSquadSnapshot squad, int startingStrength, int currentStrength)
         {
             string type = GetFormationType(squad);
             return $"{type} - {currentStrength}/{startingStrength}";
         }
 
-        private static string GetFormationType(BattleSquad squad)
+        private static string GetFormationType(BattleSquadSnapshot squad)
         {
             return squad?.Squad?.SquadTemplate?.Name ?? "Formation";
         }
 
-        private static string GetSquadIconKey(BattleSquad squad)
+        private static string GetSquadIconKey(BattleSquadSnapshot squad)
         {
             if (squad == null)
             {
@@ -468,12 +466,12 @@ namespace OnlyWar.Helpers.Battles
             return "infantry";
         }
 
-        private static string BuildFatigueLabel(BattleSquad squad)
+        private static string BuildFatigueLabel(BattleSquadSnapshot squad)
         {
-            if (squad == null || squad.AbleSoldiers.Count == 0) return "Broken";
-            float runningTurns = squad.AbleSoldiers.Sum(soldier => soldier.TurnsRunning);
-            if (runningTurns > squad.AbleSoldiers.Count * 4) return "High";
-            if (runningTurns > squad.AbleSoldiers.Count * 2) return "Moderate";
+            if (squad == null || squad.Soldiers.Count == 0) return "Broken";
+            float runningTurns = squad.Soldiers.Sum(soldier => soldier.TurnsRunning);
+            if (runningTurns > squad.Soldiers.Count * 4) return "High";
+            if (runningTurns > squad.Soldiers.Count * 2) return "Moderate";
             return "Low";
         }
 
@@ -485,10 +483,10 @@ namespace OnlyWar.Helpers.Battles
             return "Steady";
         }
 
-        private static string BuildAmmunitionLabel(BattleSquad squad)
+        private static string BuildAmmunitionLabel(BattleSquadSnapshot squad)
         {
             if (squad == null) return "Unknown";
-            int shots = squad.AbleSoldiers.Sum(soldier => soldier.TurnsShooting);
+            int shots = squad.Soldiers.Sum(soldier => soldier.TurnsShooting);
             return shots == 0 ? "Unspent" : $"{shots} volleys";
         }
     }

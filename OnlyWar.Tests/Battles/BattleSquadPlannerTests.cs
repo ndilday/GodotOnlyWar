@@ -1,5 +1,4 @@
 using System;
-using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
 using OnlyWar.Helpers;
@@ -21,8 +20,8 @@ public class BattleSquadPlannerTests
         public IReadOnlyList<BattleSoldier> Attackers { get; init; }
         public MeleeWeapon ProjectedMeleeWeapon { get; init; }
         public BattleSquadPlanner Planner { get; init; }
-        public ConcurrentBag<IAction> ShootActions { get; init; }
-        public ConcurrentBag<IAction> MeleeActions { get; init; }
+        public List<IAction> ShootActions { get; init; }
+        public List<IAction> MeleeActions { get; init; }
     }
 
     private static BattleSquad CreateSquad(
@@ -69,10 +68,10 @@ public class BattleSquadPlannerTests
         return new BattleSquadPlanner(
             grid,
             soldiers,
-            new ConcurrentBag<IAction>(),
-            new ConcurrentBag<IAction>(),
-            new ConcurrentBag<IAction>(),
-            new ConcurrentQueue<string>(),
+            new List<IAction>(),
+            new List<IAction>(),
+            new List<IAction>(),
+            null,
             shooter.MeleeWeapons[0]);
     }
 
@@ -164,15 +163,15 @@ public class BattleSquadPlannerTests
         Dictionary<int, BattleSoldier> soldierMap = squads
             .SelectMany(squad => squad.Soldiers)
             .ToDictionary(soldier => soldier.Soldier.Id);
-        ConcurrentBag<IAction> shootActions = [];
-        ConcurrentBag<IAction> meleeActions = [];
+        List<IAction> shootActions = [];
+        List<IAction> meleeActions = [];
         BattleSquadPlanner planner = new(
             grid,
             soldierMap,
             shootActions,
-            new ConcurrentBag<IAction>(),
+            new List<IAction>(),
             meleeActions,
-            new ConcurrentQueue<string>(),
+            null,
             projectedMeleeWeapon);
         shooterSquad.IsInMelee = true;
         shooter.IsInMelee = true;
@@ -374,6 +373,44 @@ public class BattleSquadPlannerTests
 
         Assert.InRange(evaluation.ShotsToFire, 1, burstWeapon.LoadedAmmo);
         Assert.Equal(expectedProbability, evaluation.HitProbability, precision: 5);
+    }
+
+    [Fact]
+    public void EvaluateRangedTarget_ReusesIdenticalEvaluationButSeparatesChangedTargetSpeed()
+    {
+        BattleSquad shooters = CreateSquad("Shooter", 450);
+        BattleSquad enemy = CreateSquad("Enemy", 460);
+        BattleSoldier shooter = shooters.Soldiers[0];
+        BattleSoldier target = enemy.Soldiers[0];
+        RangedWeapon weapon = shooter.EquippedRangedWeapons[0];
+        BattleGridManager grid = new();
+        Place(grid, shooter, true, 0, 0);
+        Place(grid, target, false, 4, 0);
+        BattleSquadPlanner planner = CreatePlanner(grid, shooters, enemy);
+
+        BattleSquadPlanner.RangedTargetEvaluation first = planner.EvaluateRangedTarget(
+            shooter,
+            target,
+            weapon,
+            4,
+            0);
+        BattleSquadPlanner.RangedTargetEvaluation repeated = planner.EvaluateRangedTarget(
+            shooter,
+            target,
+            weapon,
+            4,
+            0);
+        target.CurrentSpeed = 3;
+        BattleSquadPlanner.RangedTargetEvaluation movingTarget = planner.EvaluateRangedTarget(
+            shooter,
+            target,
+            weapon,
+            4,
+            0);
+
+        Assert.Same(first, repeated);
+        Assert.NotSame(first, movingTarget);
+        Assert.Equal(2, planner.CachedRangedEvaluationCount);
     }
 
     [Fact]

@@ -478,6 +478,17 @@ Before this rework every soldier got exactly one melee attack action per turn, s
 - **Balance targets.** Tabletop lethality is a guide, not a spec: base marines are deliberately "two-wound" soldiers where tabletop made them one-wound. Concretely: a lone Hormagaunt loses to a marine well over 95% of the time, and one-shot marine kills are rare (lucky head hits only); a Genestealer is roughly even money against a marine in melee; a Carnifex defeats ~8–10 PDF troopers head-to-head.
 - **BattleValue recompute.** `SoldierTemplate.BattleValue` is recomputed from the engine-math valuation model (per-template offense × durability against a reference threat panel, BV = k·√(O×D), implemented in `Helpers/Battles/BattleValueCalculator.cs`), and the strategic constants calibrated in BV-space (`StrategicCombatRules` anchors, mass-combat floor, NPC recon cap, §4.24 invasion budgets) track the recomputed scale. Player-soldier BV deliberately remains the template guideline rather than a live skill-tracking value: enemies size their responses by *estimating* the player force, not by concrete data on every marine, so a veteran chapter over-performs its paper strength by design.
 
+**Template Weapons — Flamers (0.7, in progress)**
+
+Flamer-type weapons are currently modeled as ordinary single-target guns differentiated only by stats (short range, high accuracy), which loses everything that makes a flamer a flamer. This rework makes them true template weapons. Grenades (Battle Logic Phase 4, §5.4) will reuse the same machinery with a thrown delivery.
+
+- **Cone template, not a shot.** A flamer burst projects a cone from the shooter along the aiming line toward its target. The cone always extends to the weapon's full `MaximumRange` (the target sets the direction, not the extent — a flame stream cannot be stopped short), and its half-width grows linearly from the nozzle to the weapon's `AreaRadius` at maximum range. Weapon data: `TemplateType` (0 = normal, 1 = spray/cone; future values reserved for grenade bursts), `AreaRadius`, `FuelPerBurst`.
+- **Auto-hit, indiscriminately.** Every soldier — friend or foe — whose footprint falls inside the cone is struck. There is no to-hit roll and no aim bonus; size, speed/range, and per-species `RangedEvasion` modifiers do not apply (you cannot weave away from a wall of fire). Armor and wound resolution work normally per victim (hit location roll, armor × `ArmorMultiplier`, `WoundMultiplier`).
+- **Firing lines matter.** Because the cone burns everything along its length, allies standing between the bearer and his target are hit, and a burst aimed at a melee scrum engulfs every participant on both sides. This *replaces* the near-miss/stray-shot rule for template weapons — engulfment is certain, not a mishap. Target selection must therefore score firing lines (enemy value caught in the cone minus friendly value caught), not individual targets.
+- **Fuel, not shots.** `AmmoCapacity` is a fuel tank; each burst consumes `FuelPerBurst` (rate of fire remains 1 — one burst per action). An empty tank forces the weapon's long reload (a tank swap). The bearer's decision logic weighs a burst's expected value against remaining fuel.
+- **Battle Value.** Template weapons are valued by expected victims per burst against the reference threat panel — density-scaled (multiple chaff caught per burst, one monster) — with the fuel duty cycle replacing the ammo/recoil model, feeding the standard BV = k·√(offense × durability) pipeline.
+- **Gated follow-ons (Battle Logic Phase 4, §5.4).** An "on fire" damage-over-time and panic condition is specified in intent but gated on the morale system (§6.2). Cover/terrain interaction with templates is gated on Battle Visuals Phase 3 line of sight.
+
 **Wounds in Battle**
 - All wound rules from the Soldier Lifecycle apply during battle.
 - A soldier whose wounds reach the incapacitation threshold is removed from combat.
@@ -1052,14 +1063,16 @@ The following must ship in 0.7. Status reflects the current codebase (✅ done �
 
 ### 5.3 Alpha 0.7 — To-Do
 
-Targeted for 0.7 but not part of the committed 0.7 set (§5.2). All items originally tracked here have since landed and moved up to §5.2 (most recently the Melee Combat Rework). No outstanding To-Do items remain in this bucket.
+Targeted for 0.7 but not part of the committed 0.7 set (§5.2). All items originally tracked here have since landed and moved up to §5.2 (most recently the Melee Combat Rework).
+
+- **Template Weapons — Flamers:** Convert flamer-type weapons from stat-line guns into true cone-template weapons: auto-hit against everything in a cone (both sides), evasion/size modifiers bypassed, fuel-per-burst ammo, firing-line target selection, template-aware Battle Value. Full behavioral spec in §4.14 (*Template Weapons — Flamers*). Pulled forward from the Battle Logic Phase 4 stretch bucket (§5.4) so the flamer is not rebuilt twice; on-fire/morale and grenades stay in Phase 4.
 
 ### 5.4 Alpha 0.7 — Stretch
 
 To be drawn from if capacity allows:
 
 - **Living Universe Phase 3B — Revolt:** Revolutionary population mechanic; evidence-based requests. Full behavioral spec in §4.20 — per-region Contentment driving a sector-wide Insurrectionist faction (reusing the converting-faction/Cult machinery), governor Severity-driven response, garrison defection, intra- and inter-planet spread, evidence-gated requests, and "for a revolt" limited to inaction-with-consequences in 0.7. Built on the faction-presence model as a forward-compatible subset of the Pop-model question (§6.7); Chaos radicalization specified but gated on Chaos content.
-- **Battle Logic Phase 4:** Grenades, AoE weapons, flamers, morale, sprint/fire tradeoff, retreat mechanic, post-battle loadout recalculation.
+- **Battle Logic Phase 4:** Grenades (reusing the §4.14 template-weapon machinery with a thrown delivery), morale, on-fire damage-over-time/panic (§4.14 gated follow-on), sprint/fire tradeoff, retreat mechanic, post-battle loadout recalculation. *(Flamers/cone templates were pulled forward to §5.3.)*
 - **Leg Wound & Prone-Combat Realism (maybe):** Rework the leg-hit outcome so a single solid hit staggers rather than reliably felling. Motivated by combat GSW data: even for 40k-tier energies (nothing softer than .45/7.62), only ~45–55% of solid leg hits fracture bone/joint or major vessel and actually prevent movement; the rest slow but don't stop. Scope:
   - **Raise the "can no longer walk" bar one level to Massive.** Motive (leg/foot) locations currently drop a soldier at their *cripple* threshold (Critical, i.e. damage ≥ Constitution); require the higher *Massive* band instead so a Critical leg wound impairs but does not fell. Torso/vital lethality is unchanged; this narrows the current asymmetry where a leg is fight-ending at half the damage the torso needs to be decisive.
   - **Downed-but-armed enemies keep firing prone.** A soldier felled by a motive-location wound who still holds a ranged weapon may continue firing from prone, after a short delay (a few rounds) to represent going down and re-orienting rather than instantly returning accurate fire.

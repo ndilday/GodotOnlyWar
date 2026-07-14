@@ -12,6 +12,18 @@ namespace OnlyWar.Helpers.Battles
 {
     public class BattleSquad : ICloneable
     {
+        private static int _globalAbleSoldiersVersion;
+        private List<BattleSoldier> _ableSoldiers;
+        private int _ableSoldiersSourceCount = -1;
+        private int _cachedGlobalAbleSoldiersVersion = -1;
+        private int _ableSoldiersVersion;
+        private int _statisticsVersion = -1;
+        private float _averageArmor;
+        private float _averageSize;
+        private float _averageRangedEvasion;
+        private float _averageConstitution;
+        private float _squadMove;
+
         public int Id { get; private set; }
         public string Name { get; private set; }
         public List<BattleSoldier> Soldiers { get; private set; }
@@ -29,7 +41,22 @@ namespace OnlyWar.Helpers.Battles
         {
             get
             {
-                return Soldiers.Where(s => s.CanFight).ToList();
+                // This property is read repeatedly while planning every soldier's turn. Reuse the
+                // filtered list until a wound/removal can change combat eligibility. The count
+                // check also keeps direct test/setup mutations of the public Soldiers list safe.
+                int globalVersion = System.Threading.Volatile.Read(ref _globalAbleSoldiersVersion);
+                if (_ableSoldiers == null
+                    || _ableSoldiersSourceCount != Soldiers.Count
+                    || _cachedGlobalAbleSoldiersVersion != globalVersion)
+                {
+                    _ableSoldiers = Soldiers.Where(s => s.CanFight).ToList();
+                    _ableSoldiersSourceCount = Soldiers.Count;
+                    _cachedGlobalAbleSoldiersVersion = globalVersion;
+                    _ableSoldiersVersion++;
+                    _statisticsVersion = -1;
+                }
+
+                return _ableSoldiers;
             }
         }
 
@@ -86,103 +113,85 @@ namespace OnlyWar.Helpers.Battles
 
         public Coordinate GetSquadBoxSize()
         {
+            List<BattleSoldier> ableSoldiers = AbleSoldiers;
             int numberOfRows = 1;
-            if (AbleSoldiers.Count >= 30)
+            if (ableSoldiers.Count >= 30)
             {
                 numberOfRows = 3;
             }
-            else if (AbleSoldiers.Count > 7)
+            else if (ableSoldiers.Count > 7)
             {
                 numberOfRows = 2;
             }
             // membersPerRow is how many soldiers are in each row (back row may be smaller)
-            ushort membersPerRow = (ushort)Math.Ceiling((float)(AbleSoldiers.Count) / (float)(numberOfRows));
-            ushort maxWidth = AbleSoldiers.Max(s => s.Soldier.Template.Species.Width);
-            ushort maxDepth = AbleSoldiers.Max(s => s.Soldier.Template.Species.Depth);
+            ushort membersPerRow = (ushort)Math.Ceiling((float)ableSoldiers.Count / numberOfRows);
+            ushort maxWidth = ableSoldiers.Max(s => s.Soldier.Template.Species.Width);
+            ushort maxDepth = ableSoldiers.Max(s => s.Soldier.Template.Species.Depth);
             return new Coordinate((ushort)(membersPerRow * maxWidth),
                                              (ushort)(numberOfRows * maxDepth));
         }
 
         public BattleSoldier GetRandomSquadMember()
         {
-            return AbleSoldiers[RNG.GetIntBelowMax(0, AbleSoldiers.Count)];
+            List<BattleSoldier> ableSoldiers = AbleSoldiers;
+            return ableSoldiers[RNG.GetIntBelowMax(0, ableSoldiers.Count)];
         }
 
         public float GetAverageArmor()
         {
-            int runningTotal = 0;
-            int squadSize = 0;
-            foreach(BattleSoldier soldier in AbleSoldiers)
-            {
-                if(soldier.Armor != null)
-                {
-                    runningTotal += soldier.Armor.Template.ArmorProvided;
-                    squadSize++;
-                }
-            }
-            if (squadSize == 0) return 0;
-            return (float)runningTotal / (float)squadSize;
+            EnsureStatistics();
+            return _averageArmor;
         }
     
         public float GetAverageSize()
         {
-            float squadSize = 0;
-            float runningTotal = 0;
-            foreach(BattleSoldier soldier in AbleSoldiers)
-            {
-                runningTotal += soldier.Soldier.Size;
-                squadSize += 1.0f;
-            }
-            return runningTotal / squadSize;
+            EnsureStatistics();
+            return _averageSize;
         }
 
         public float GetAverageRangedEvasion()
         {
-            float squadSize = 0;
-            float runningTotal = 0;
-            foreach (BattleSoldier soldier in AbleSoldiers)
-            {
-                runningTotal += soldier.Soldier.Template.Species.RangedEvasion;
-                squadSize += 1.0f;
-            }
-            return runningTotal / squadSize;
+            EnsureStatistics();
+            return _averageRangedEvasion;
         }
 
         public float GetAverageConstitution()
         {
-            float squadSize = 0;
-            float runningTotal = 0;
-            foreach (BattleSoldier soldier in AbleSoldiers)
-            {
-                runningTotal += soldier.Soldier.Constitution;
-                squadSize += 1.0f;
-            }
-            return runningTotal / squadSize;
+            EnsureStatistics();
+            return _averageConstitution;
         }
 
         public float GetSquadMove()
         {
-            // TODO: adjust if there are disabled squad members to account for being carried?
-            float runningTotal = float.MaxValue;
-            foreach (BattleSoldier soldier in AbleSoldiers)
-            {
-                float currentMaxSpeed = soldier.GetMoveSpeed();
-                if (currentMaxSpeed < runningTotal)
-                {
-                    runningTotal = currentMaxSpeed;
-                }
-            }
-            return runningTotal;
+            EnsureStatistics();
+            return _squadMove;
         }
 
         public void RemoveSoldier(BattleSoldier soldier)
         {
-            Soldiers.Remove(soldier);
+            if (Soldiers.Remove(soldier))
+            {
+                InvalidateAbleSoldiers();
+            }
+        }
+
+        internal void InvalidateAbleSoldiers()
+        {
+            // BattleState clones share the underlying ISoldier injury data. A wound applied through
+            // one wrapper can therefore change eligibility in another wrapper retained by a chained
+            // mission. A global generation invalidates all wrappers lazily without scanning them.
+            System.Threading.Interlocked.Increment(ref _globalAbleSoldiersVersion);
+            _ableSoldiers = null;
+            _ableSoldiersSourceCount = -1;
+            _cachedGlobalAbleSoldiersVersion = -1;
+            _ableSoldiersVersion++;
+            _statisticsVersion = -1;
         }
 
         public bool ShouldContinueMission()
         {
-            if (AbleSoldiers.Count == 0)
+            int ableSoldierCount = AbleSoldiers.Count;
+            if (ableSoldierCount == 0)
             {
                 return false;
             }
@@ -194,7 +203,7 @@ namespace OnlyWar.Helpers.Battles
             {
                 // see how large the squad currently is compared to its maximum size
                 // TODO: adjust based on whether the squad leader is still around?
-                float ratio = (float)AbleSoldiers.Count / (float)Squad.SquadTemplate.Elements.Sum(e => e.MaximumNumber);
+                float ratio = (float)ableSoldierCount / Squad.SquadTemplate.Elements.Sum(e => e.MaximumNumber);
                 switch (Squad.CurrentOrders.LevelOfAggression)
                 {
                     case Aggression.Avoid:
@@ -271,6 +280,50 @@ namespace OnlyWar.Helpers.Battles
                     soldier.Armor = new Armor(Squad.SquadTemplate.Armor);
                 }
             }
+        }
+
+        private void EnsureStatistics()
+        {
+            List<BattleSoldier> ableSoldiers = AbleSoldiers;
+            if (_statisticsVersion == _ableSoldiersVersion)
+            {
+                return;
+            }
+
+            int armorTotal = 0;
+            int armoredSoldierCount = 0;
+            float sizeTotal = 0;
+            float rangedEvasionTotal = 0;
+            float constitutionTotal = 0;
+            float ableSoldierCount = 0;
+            float squadMove = float.MaxValue;
+
+            foreach (BattleSoldier soldier in ableSoldiers)
+            {
+                if (soldier.Armor != null)
+                {
+                    armorTotal += soldier.Armor.Template.ArmorProvided;
+                    armoredSoldierCount++;
+                }
+
+                sizeTotal += soldier.Soldier.Size;
+                rangedEvasionTotal += soldier.Soldier.Template.Species.RangedEvasion;
+                constitutionTotal += soldier.Soldier.Constitution;
+                ableSoldierCount += 1.0f;
+
+                float currentMaxSpeed = soldier.GetMoveSpeed();
+                if (currentMaxSpeed < squadMove)
+                {
+                    squadMove = currentMaxSpeed;
+                }
+            }
+
+            _averageArmor = armoredSoldierCount == 0 ? 0 : (float)armorTotal / armoredSoldierCount;
+            _averageSize = sizeTotal / ableSoldierCount;
+            _averageRangedEvasion = rangedEvasionTotal / ableSoldierCount;
+            _averageConstitution = constitutionTotal / ableSoldierCount;
+            _squadMove = squadMove;
+            _statisticsVersion = _ableSoldiersVersion;
         }
     }
 }

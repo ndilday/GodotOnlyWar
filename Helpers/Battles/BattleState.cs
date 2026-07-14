@@ -7,14 +7,12 @@ namespace OnlyWar.Models.Battles
 {
 	public class BattleState
 	{
-		private readonly Dictionary<int, IReadOnlyList<Tuple<int, int>>> _soldierPositionsMap;
 		private readonly Dictionary<int, BattleSoldier> _soldiers;
 		private readonly Dictionary<int, BattleSquad> _attackerBattleSquads;
 		private readonly Dictionary<int, BattleSquad> _opposingBattleSquads;
 
 		public int TurnNumber { get; private set; }
 		public IReadOnlyDictionary<int, BattleSoldier> Soldiers { get => _soldiers; }
-		public IReadOnlyDictionary<int, IReadOnlyList<Tuple<int, int>>> SoldierPositionsMap { get => _soldierPositionsMap; }
 		public IReadOnlyDictionary<int, BattleSquad> AttackerSquads { get => _attackerBattleSquads; }
 		public IReadOnlyDictionary<int, BattleSquad> OpposingSquads { get => _opposingBattleSquads; }
 
@@ -24,6 +22,11 @@ namespace OnlyWar.Models.Battles
 
 		// Constructor for creating a new state based on a previous state (deep copy)
 		public BattleState(BattleState original) : this(original.TurnNumber + 1, original.AttackerSquads, original.OpposingSquads) { }
+
+		public void AdvanceTurn()
+		{
+			TurnNumber++;
+		}
 
 		private BattleState(int turnNumber, IReadOnlyDictionary<int, BattleSquad> attackerSquads, IReadOnlyDictionary<int, BattleSquad> opposingSquads)
 		{
@@ -39,13 +42,11 @@ namespace OnlyWar.Models.Battles
 
 			// add the soldiers to the soldier map from the squads
 			_soldiers = new Dictionary<int, BattleSoldier>();
-			_soldierPositionsMap = new Dictionary<int, IReadOnlyList<Tuple<int, int>>>();
 			foreach (BattleSquad squad in AttackerSquads.Values.Concat(OpposingSquads.Values))
 			{
 				foreach (BattleSoldier soldier in squad.AbleSoldiers)
 				{
 					_soldiers[soldier.Soldier.Id] = soldier;
-					_soldierPositionsMap[soldier.Soldier.Id] = soldier.PositionList;
 				}
 			}
 		}
@@ -86,6 +87,11 @@ namespace OnlyWar.Models.Battles
 			// casualty removes the squad; subsequent casualties must therefore be harmless.
 			_attackerBattleSquads.Remove(squad.Id);
 			_opposingBattleSquads.Remove(squad.Id);
+		}
+
+		public void RemoveSoldier(int soldierId)
+		{
+			_soldiers.Remove(soldierId);
 		}
 	}
 }

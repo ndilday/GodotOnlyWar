@@ -10,6 +10,11 @@ namespace OnlyWar.Helpers.Battles
         readonly private Dictionary<int, IList<Tuple<int, int>>> _soldierPositionsMap;
         readonly private Dictionary<int, bool> _soldierSideMap;
         readonly private Grid _grid;
+        readonly private Dictionary<(int FirstId, int SecondId), float> _distanceCache;
+        readonly private Dictionary<int, (float Distance, int SoldierId)> _nearestEnemyCache;
+        readonly private Dictionary<int, IReadOnlyList<int>> _adjacentSoldierCache;
+        readonly private Dictionary<(bool ShooterSide, int TargetId), bool> _engagementCache;
+        readonly private Dictionary<int, IReadOnlyList<int>> _meleeScrumCache;
 
         public BattleGridManager()
         {
@@ -17,6 +22,11 @@ namespace OnlyWar.Helpers.Battles
             _soldierPositionsMap = [];
             _soldierSideMap = [];
             _grid = new Grid();
+            _distanceCache = [];
+            _nearestEnemyCache = [];
+            _adjacentSoldierCache = [];
+            _engagementCache = [];
+            _meleeScrumCache = [];
         }
 
         public object Clone()
@@ -52,6 +62,7 @@ namespace OnlyWar.Helpers.Battles
             _soldierSideMap[soldier.Soldier.Id] = side;
             _grid.OccupyCells(cells, soldier.Soldier.Id);
             _soldierPositionsMap[soldier.Soldier.Id] = cells;
+            InvalidateLayoutQueries();
         }
 
         public void MoveSoldier(BattleSoldier soldier, Tuple<int, int> newTopLeft, ushort newOrientation)
@@ -62,6 +73,7 @@ namespace OnlyWar.Helpers.Battles
             _grid.FreeCells(_soldierPositionsMap[soldier.Soldier.Id]);
             _grid.OccupyCells(newLocation, soldier.Soldier.Id);
             _soldierPositionsMap[soldier.Soldier.Id] = newLocation;
+            InvalidateLayoutQueries();
         }
 
         public bool TryMoveSoldier(BattleSoldier soldier, Tuple<int, int> newTopLeft, ushort newOrientation)
@@ -75,6 +87,7 @@ namespace OnlyWar.Helpers.Battles
             _grid.FreeCells(_soldierPositionsMap[soldier.Soldier.Id]);
             _grid.OccupyCells(newLocation, soldier.Soldier.Id);
             _soldierPositionsMap[soldier.Soldier.Id] = newLocation;
+            InvalidateLayoutQueries();
             return true;
         }
 
@@ -137,13 +150,20 @@ namespace OnlyWar.Helpers.Battles
                 _soldiers.Remove(soldierId);
                 _soldierPositionsMap.Remove(soldierId);
                 _soldierSideMap.Remove(soldierId);
+                InvalidateLayoutQueries();
             }
         }
 
         public bool IsAdjacentToEnemy(int soldierId)
         {
-            float distance = GetNearestEnemy(soldierId, out int closestSoldierId);
-            return closestSoldierId != -1 && distance <= 1.001f;
+            if (!_soldiers.ContainsKey(soldierId))
+            {
+                throw new ArgumentException("Soldier not found");
+            }
+
+            bool soldierSide = _soldierSideMap[soldierId];
+            return GetAdjacentSoldiers(soldierId)
+                .Any(adjacentId => _soldierSideMap[adjacentId] != soldierSide);
         }
 
         public IReadOnlyList<int> GetAdjacentEnemies(int soldierId)
@@ -154,25 +174,8 @@ namespace OnlyWar.Helpers.Battles
             }
 
             bool soldierTeam = _soldierSideMap[soldierId];
-            List<Tuple<int, float>> adjacentEnemies = [];
-            foreach (int otherSoldierId in _soldierPositionsMap.Keys)
-            {
-                if (_soldierSideMap[otherSoldierId] == soldierTeam)
-                {
-                    continue;
-                }
-
-                float distance = GetDistanceBetweenSoldiers(soldierId, otherSoldierId);
-                if (distance <= 1.001f)
-                {
-                    adjacentEnemies.Add(new Tuple<int, float>(otherSoldierId, distance));
-                }
-            }
-
-            return adjacentEnemies
-                .OrderBy(tuple => tuple.Item2)
-                .ThenBy(tuple => tuple.Item1)
-                .Select(tuple => tuple.Item1)
+            return GetAdjacentSoldiers(soldierId)
+                .Where(otherSoldierId => _soldierSideMap[otherSoldierId] != soldierTeam)
                 .ToList();
         }
 
@@ -187,16 +190,18 @@ namespace OnlyWar.Helpers.Battles
                 throw new ArgumentException("Soldier not found");
             }
 
-            return _soldierPositionsMap.Keys
-                .Where(otherSoldierId => otherSoldierId != soldierId)
-                .Select(otherSoldierId => new Tuple<int, float>(
-                    otherSoldierId,
-                    GetDistanceBetweenSoldiers(soldierId, otherSoldierId)))
-                .Where(tuple => tuple.Item2 <= 1.001f)
-                .OrderBy(tuple => tuple.Item2)
-                .ThenBy(tuple => tuple.Item1)
-                .Select(tuple => tuple.Item1)
+            if (_adjacentSoldierCache.TryGetValue(soldierId, out IReadOnlyList<int> cached))
+            {
+                return cached;
+            }
+
+            List<int> adjacentSoldiers = _grid.GetAdjacentObjects(soldierId)
+                .Where(_soldiers.ContainsKey)
+                .OrderBy(otherSoldierId => GetDistanceBetweenSoldiers(soldierId, otherSoldierId))
+                .ThenBy(otherSoldierId => otherSoldierId)
                 .ToList();
+            _adjacentSoldierCache[soldierId] = adjacentSoldiers;
+            return adjacentSoldiers;
         }
 
         /// <summary>
@@ -211,8 +216,14 @@ namespace OnlyWar.Helpers.Battles
             }
 
             bool shooterSide = _soldierSideMap[shooterId];
-            return GetAdjacentSoldiers(targetId)
-                .Any(adjacentId => _soldierSideMap[adjacentId] == shooterSide);
+            var cacheKey = (shooterSide, targetId);
+            if (!_engagementCache.TryGetValue(cacheKey, out bool isEngaged))
+            {
+                isEngaged = GetAdjacentSoldiers(targetId)
+                    .Any(adjacentId => _soldierSideMap[adjacentId] == shooterSide);
+                _engagementCache[cacheKey] = isEngaged;
+            }
+            return isEngaged;
         }
 
         /// <summary>
@@ -225,6 +236,11 @@ namespace OnlyWar.Helpers.Battles
             if (!_soldiers.ContainsKey(soldierId))
             {
                 throw new ArgumentException("Soldier not found");
+            }
+
+            if (_meleeScrumCache.TryGetValue(soldierId, out IReadOnlyList<int> cached))
+            {
+                return cached;
             }
 
             HashSet<int> participants = [soldierId];
@@ -246,7 +262,12 @@ namespace OnlyWar.Helpers.Battles
                 }
             }
 
-            return participants.OrderBy(id => id).ToList();
+            IReadOnlyList<int> result = participants.OrderBy(id => id).ToList();
+            foreach (int participantId in result)
+            {
+                _meleeScrumCache[participantId] = result;
+            }
+            return result;
         }
 
         public bool GetSoldierSide(int soldierId)
@@ -264,34 +285,43 @@ namespace OnlyWar.Helpers.Battles
             {
                 throw new ArgumentException("Soldier not found");
             }
-            //var targetSet = _playerSoldierIds.Contains(id) ? _opposingSoldierIds : _playerSoldierIds;
-            IList<Tuple<int, int>> startLocations = _grid.GetObjectCells(soldierId);
+
+            if (_nearestEnemyCache.TryGetValue(soldierId, out var cached))
+            {
+                closestSoldierId = cached.SoldierId;
+                return cached.Distance;
+            }
+
             bool soldierTeam = _soldierSideMap[soldierId];
             closestSoldierId = -1;
-            float distanceSq = float.MaxValue;
+            float distance = (float)Math.Sqrt(float.MaxValue);
             foreach (KeyValuePair<int, IList<Tuple<int, int>>> kvp in _soldierPositionsMap)
             {
                 if (_soldierSideMap[kvp.Key] != soldierTeam)
                 {
-                    foreach (Tuple<int, int> tuple in kvp.Value)
+                    float candidateDistance = GetDistanceBetweenSoldiers(soldierId, kvp.Key);
+                    if (candidateDistance < distance)
                     {
-                        foreach (Tuple<int, int> soldierTuple in startLocations)
-                        {
-                            float tempDistance = CalculateDistanceSq(soldierTuple, tuple);
-                            if (tempDistance < distanceSq)
-                            {
-                                distanceSq = tempDistance;
-                                closestSoldierId = kvp.Key;
-                            }
-                        }
+                        distance = candidateDistance;
+                        closestSoldierId = kvp.Key;
                     }
                 }
             }
-            return (float)Math.Sqrt(distanceSq);
+
+            _nearestEnemyCache[soldierId] = (distance, closestSoldierId);
+            return distance;
         }
 
         public float GetDistanceBetweenSoldiers(int soldierId1, int soldierId2)
         {
+            var cacheKey = soldierId1 <= soldierId2
+                ? (soldierId1, soldierId2)
+                : (soldierId2, soldierId1);
+            if (_distanceCache.TryGetValue(cacheKey, out float cached))
+            {
+                return cached;
+            }
+
             IList<Tuple<int, int>> pos1 = _soldierPositionsMap[soldierId1];
             IList<Tuple<int, int>> pos2 = _soldierPositionsMap[soldierId2];
             float distanceSq = int.MaxValue;
@@ -306,7 +336,9 @@ namespace OnlyWar.Helpers.Battles
                     }
                 }
             }
-            return (float)Math.Sqrt(distanceSq);
+            float distance = (float)Math.Sqrt(distanceSq);
+            _distanceCache[cacheKey] = distance;
+            return distance;
         }
 
         public IList<Tuple<int, int>> GetSoldierPosition(int soldierId)
@@ -364,7 +396,18 @@ namespace OnlyWar.Helpers.Battles
         private float CalculateDistanceSq(Tuple<int, int> pos1, Tuple<int, int> pos2)
         {
             // for now, as a quick good-enough, just look at the difference in coordinates
-            return (float)(Math.Pow(pos1.Item1 - pos2.Item1, 2) + Math.Pow(pos1.Item2 - pos2.Item2, 2));
+            long xDistance = pos1.Item1 - pos2.Item1;
+            long yDistance = pos1.Item2 - pos2.Item2;
+            return (xDistance * xDistance) + (yDistance * yDistance);
+        }
+
+        private void InvalidateLayoutQueries()
+        {
+            _distanceCache.Clear();
+            _nearestEnemyCache.Clear();
+            _adjacentSoldierCache.Clear();
+            _engagementCache.Clear();
+            _meleeScrumCache.Clear();
         }
     }
 }

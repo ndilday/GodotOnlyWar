@@ -2,6 +2,7 @@ using OnlyWar.Helpers.Battles;
 using OnlyWar.Helpers.Battles.Resolutions;
 using OnlyWar.Models.Soldiers;
 using OnlyWar.Tests.Fixtures;
+using System.Collections.Generic;
 using System.Linq;
 using Xunit;
 
@@ -223,5 +224,46 @@ public class WoundResolverTests
         resolver.Resolve();
 
         Assert.True(resolver.WoundQueue.IsEmpty);
+    }
+
+    [Fact]
+    public void WoundQueue_TakesMostRecentlyAddedWoundFirst()
+    {
+        WoundResolver resolver = new();
+        WoundResolution first = new(null, null, CreateSufferer(), 1, new HitLocation(Template()));
+        WoundResolution second = new(null, null, CreateSufferer(), 2, new HitLocation(Template()));
+        resolver.WoundQueue.Add(first);
+        resolver.WoundQueue.Add(second);
+
+        Assert.True(resolver.WoundQueue.TryTake(out WoundResolution taken));
+        Assert.Same(second, taken);
+    }
+
+    [Fact]
+    public void Resolve_InvalidatesCachedAbleSoldiersWhenWoundDisablesMember()
+    {
+        BattleSquad squad = new(false, TestModelFactory.CreateSquad(
+            "Test Squad",
+            TestModelFactory.CreateSoldier(name: "Wounded Marine")));
+        BattleSoldier sufferer = squad.Soldiers[0];
+        HitLocation vitalLocation = sufferer.Soldier.Body.HitLocations
+            .First(location => location.Template.IsVital);
+        List<BattleSoldier> cachedAbleSoldiers = squad.AbleSoldiers;
+        Assert.Same(cachedAbleSoldiers, squad.AbleSoldiers);
+
+        WoundResolver resolver = new();
+        resolver.OnSoldierDeath += (_, _) => { };
+        resolver.OnSoldierFall += (_, _) => { };
+        resolver.WoundQueue.Add(new WoundResolution(
+            null,
+            null,
+            sufferer,
+            float.MaxValue,
+            vitalLocation));
+
+        resolver.Resolve();
+
+        Assert.Empty(squad.AbleSoldiers);
+        Assert.NotSame(cachedAbleSoldiers, squad.AbleSoldiers);
     }
 }

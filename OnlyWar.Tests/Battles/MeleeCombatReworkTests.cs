@@ -1,5 +1,4 @@
 using System;
-using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
 using OnlyWar.Helpers;
@@ -116,7 +115,7 @@ public class MeleeCombatReworkTests
             attackerSoldier,
             [new PlannedMeleeStrike(defenderSoldier.Soldier.Id, attackerWeapon.Template.Id, defenderSoldier.Soldier.Name, attackerWeapon.Template.Name)],
             false,
-            new ConcurrentQueue<string>());
+            null);
 
         action.Execute(state);
 
@@ -145,7 +144,7 @@ public class MeleeCombatReworkTests
             attackerSoldier,
             [new PlannedMeleeStrike(defenderSoldier.Soldier.Id, attackerWeapon.Template.Id, defenderSoldier.Soldier.Name, attackerWeapon.Template.Name)],
             false,
-            new ConcurrentQueue<string>());
+            null);
 
         action.Execute(state);
         int woundCountAfterFirstExecute = action.WoundResolutions.Count;
@@ -228,7 +227,7 @@ public class MeleeCombatReworkTests
         grid.PlaceSoldier(firstDefender, false, firstDefender.PositionList.ToList());
         grid.PlaceSoldier(secondDefender, false, secondDefender.PositionList.ToList());
 
-        ConcurrentBag<IAction> meleeActions = [];
+        List<IAction> meleeActions = [];
         BattleSquadPlanner planner = new(
             grid,
             new Dictionary<int, BattleSoldier>
@@ -237,10 +236,10 @@ public class MeleeCombatReworkTests
                 [firstDefender.Soldier.Id] = firstDefender,
                 [secondDefender.Soldier.Id] = secondDefender
             },
-            new ConcurrentBag<IAction>(),
-            new ConcurrentBag<IAction>(),
+            new List<IAction>(),
+            new List<IAction>(),
             meleeActions,
-            new ConcurrentQueue<string>(),
+            null,
             attacker.EquippedMeleeWeapons[0]);
 
         attackerSquad.IsInMelee = true;

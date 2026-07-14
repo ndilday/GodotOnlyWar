@@ -1,4 +1,4 @@
-﻿using System.Collections.Concurrent;
+﻿using System.Collections.Generic;
 
 using OnlyWar.Models.Soldiers;
 using OnlyWar.Models.Equippables;
@@ -13,11 +13,11 @@ namespace OnlyWar.Helpers.Battles.Resolutions
         public event SoldierFallHandler OnSoldierFall;
 
         public string ResolutionLog { get; private set; }
-        public ConcurrentBag<WoundResolution> WoundQueue { get; private set; }
+        public LifoBuffer<WoundResolution> WoundQueue { get; private set; }
 
         public WoundResolver()
         {
-            WoundQueue = [];
+            WoundQueue = new LifoBuffer<WoundResolution>();
             ResolutionLog = "";
         }
 
@@ -79,6 +79,7 @@ namespace OnlyWar.Helpers.Battles.Resolutions
                     woundLevel = WoundLevel.Negligible;
                 }
                 wound.HitLocation.Wounds.AddWound(woundLevel);
+                wound.Suffererer.BattleSquad?.InvalidateAbleSoldiers();
                 wound.Description = $"{wound.Suffererer.Soldier.Name} suffers {woundLevel.ToString()} wound to {wound.HitLocation.Template.Name}\n";
 
                 // see if wound.HitLocation is now severed
@@ -119,6 +120,36 @@ namespace OnlyWar.Helpers.Battles.Resolutions
                     }
                 }
             }
+        }
+    }
+
+    /// <summary>
+    /// Minimal single-threaded replacement for ConcurrentBag. Add/TryTake deliberately retain
+    /// the bag's existing LIFO behavior so seeded wound resolution order remains unchanged.
+    /// </summary>
+    public sealed class LifoBuffer<T>
+    {
+        private readonly List<T> _items = [];
+
+        public bool IsEmpty => _items.Count == 0;
+
+        public void Add(T item)
+        {
+            _items.Add(item);
+        }
+
+        public bool TryTake(out T item)
+        {
+            int index = _items.Count - 1;
+            if (index < 0)
+            {
+                item = default;
+                return false;
+            }
+
+            item = _items[index];
+            _items.RemoveAt(index);
+            return true;
         }
     }
 }

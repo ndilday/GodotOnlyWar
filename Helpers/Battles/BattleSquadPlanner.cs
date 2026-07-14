@@ -1,5 +1,4 @@
 ﻿using System;
-using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
 using OnlyWar.Helpers.Battles.Actions;
@@ -13,13 +12,22 @@ namespace OnlyWar.Helpers.Battles
         private const int RangedTargetSquadCandidateCount = 3;
 
         private readonly BattleGridManager _grid;
-        private readonly ConcurrentBag<IAction> _shootActionBag;
-        private readonly ConcurrentBag<IAction> _moveActionBag;
-        private readonly ConcurrentBag<IAction> _meleeActionBag;
+        private readonly ICollection<IAction> _shootActions;
+        private readonly ICollection<IAction> _moveActions;
+        private readonly ICollection<IAction> _meleeActions;
         private readonly MeleeWeapon _defaultMeleeWeapon;
         private readonly IReadOnlyDictionary<int, BattleSoldier> _soldierMap;
-        private readonly ConcurrentQueue<string> _log;
+        private readonly Action<string> _log;
         private readonly Dictionary<(int AttackerSquadId, int TargetSquadId), float> _squadImminenceCache = [];
+        private readonly Dictionary<
+            (int ShooterId,
+             int TargetId,
+             int WeaponId,
+             int RangeBits,
+             int ModifierBits,
+             int TargetSpeedBits,
+             int LoadedAmmo),
+            RangedTargetEvaluation> _rangedEvaluationCache = [];
 
         internal sealed class RangedTargetEvaluation
         {
@@ -54,20 +62,64 @@ namespace OnlyWar.Helpers.Battles
             }
         }
 
+        private readonly struct RangedHitEstimateContext
+        {
+            private readonly float _weaponSkill;
+            private readonly float _rangeModifier;
+            private readonly float _sizeModifier;
+            private readonly float _moveAndAimModifier;
+            private readonly float _meleeModifier;
+            private readonly float _targetEvasion;
+
+            public RangedHitEstimateContext(
+                BattleSoldier soldier,
+                BattleSoldier target,
+                RangedWeapon weapon,
+                float range,
+                float moveAndAimModifier,
+                bool firingIntoMelee)
+            {
+                _weaponSkill = soldier.Soldier.GetTotalSkillValue(weapon.Template.RelatedSkill);
+                _rangeModifier = BattleModifiersUtil.CalculateRangeModifier(range, target.CurrentSpeed);
+                _sizeModifier = BattleModifiersUtil.CalculateSizeModifier(target.Soldier.Size);
+                _moveAndAimModifier = moveAndAimModifier;
+                _meleeModifier = firingIntoMelee
+                    ? RangedFriendlyFireRules.FiringIntoMeleePenalty
+                    : 0;
+                _targetEvasion = target.Soldier.Template.Species.RangedEvasion;
+            }
+
+            public float CalculatePreRollHitTotal(int numberOfShots)
+            {
+                // Preserve the original left-to-right floating-point expression exactly. These
+                // values guide target and ammunition decisions, so even rounding-level changes can
+                // alter a seeded battle at a threshold.
+                float rateOfFireModifier = BattleModifiersUtil.CalculateRateOfFireModifier(numberOfShots);
+                return _weaponSkill
+                    + rateOfFireModifier
+                    + _rangeModifier
+                    + _sizeModifier
+                    + _moveAndAimModifier
+                    + _meleeModifier
+                    - _targetEvasion;
+            }
+        }
+
         internal int CachedSquadImminenceCount => _squadImminenceCache.Count;
+        internal int CachedRangedEvaluationCount => _rangedEvaluationCache.Count;
 
         public BattleSquadPlanner(BattleGridManager grid, 
                                   IReadOnlyDictionary<int, BattleSoldier> soldiers,
-                                  ConcurrentBag<IAction> shootActionBag,
-                                  ConcurrentBag<IAction> moveActionBag,
-                                  ConcurrentBag<IAction> meleeActionBag,
-                                  ConcurrentQueue<string> log,
+                                  ICollection<IAction> shootActions,
+                                  ICollection<IAction> moveActions,
+                                  ICollection<IAction> meleeActions,
+                                  Action<string> log,
                                   MeleeWeapon defaultMeleeWeapon)
         {
             _grid = grid;
-            _shootActionBag = shootActionBag;
-            _moveActionBag = moveActionBag;
-            _meleeActionBag = meleeActionBag;
+            _shootActions = shootActions;
+            _moveActions = moveActions;
+            _meleeActions = meleeActions;
             _defaultMeleeWeapon = defaultMeleeWeapon;
             _soldierMap = soldiers;
             _log = log;
@@ -278,7 +330,7 @@ namespace OnlyWar.Helpers.Battles
                         range,
                         soldier.Aim.Item2.Template.Accuracy + 4);
                     soldier.CurrentSpeed = 0;
-                    _shootActionBag.Add(new ShootAction(soldier.Soldier.Id,
+                    _shootActions.Add(new ShootAction(soldier.Soldier.Id,
                         soldier.Aim.Item1,
                         soldier.Aim.Item2.Template.Id,
                         range,
@@ -304,7 +356,7 @@ namespace OnlyWar.Helpers.Battles
                         || (resultEstimate.ExpectedDamageRatio >= 1 && resultEstimate.HitProbability >= 0.33f))
                     {
                         soldier.CurrentSpeed = 0;
-                        _shootActionBag.Add(new ShootAction(soldier.Soldier.Id,
+                        _shootActions.Add(new ShootAction(soldier.Soldier.Id,
                             soldier.Aim.Item1,
                             soldier.Aim.Item2.Template.Id,
                             range,
@@ -316,7 +368,7 @@ namespace OnlyWar.Helpers.Battles
                     {
                         // keep aiming
                         soldier.CurrentSpeed = 0;
-                        _shootActionBag.Add(new AimAction(soldier, target, soldier.Aim.Item2, _log));
+                        _shootActions.Add(new AimAction(soldier, target, soldier.Aim.Item2, _log));
                     }
                 }
             }
@@ -337,21 +389,21 @@ namespace OnlyWar.Helpers.Battles
             {
                 // the easiest case... ready our one ranged weapon
                 soldier.CurrentSpeed = 0;
-                _shootActionBag.Add(new ReadyRangedWeaponAction(soldier, soldier.RangedWeapons[0]));
+                _shootActions.Add(new ReadyRangedWeaponAction(soldier, soldier.RangedWeapons[0]));
             }
             else if (soldier.RangedWeapons.Count > 1 && handsFree >= 1)
             {
                 // ugh, this is a decision with a lot of factors that will only come up rarely
                 // for now, let's go with the longer ranged weapon
                 soldier.CurrentSpeed = 0;
-            _shootActionBag.Add(new ReadyRangedWeaponAction(soldier, soldier.RangedWeapons.OrderByDescending(w => w.Template.MaximumRange).First()));
+                _shootActions.Add(new ReadyRangedWeaponAction(soldier, soldier.RangedWeapons.OrderByDescending(w => w.Template.MaximumRange).First()));
 
             }
         }
 
         private void AddReloadRangedWeaponActionToBag(BattleSoldier soldier)
         {
-            _shootActionBag.Add(new ReloadRangedWeaponAction(soldier, soldier.EquippedRangedWeapons[0]));
+            _shootActions.Add(new ReloadRangedWeaponAction(soldier, soldier.EquippedRangedWeapons[0]));
         }
 
         private void AddAdvanceActionsToBag(BattleSoldier soldier)
@@ -434,7 +486,7 @@ namespace OnlyWar.Helpers.Battles
             if (pointBlankShot != null && pointBlankScore > meleeScore)
             {
                 soldier.TargetId = pointBlankShot.Target.Soldier.Id;
-                _shootActionBag.Add(new ShootAction(
+                _shootActions.Add(new ShootAction(
                     soldier.Soldier.Id,
                     pointBlankShot.Target.Soldier.Id,
                     pointBlankShot.Weapon.Template.Id,
@@ -450,11 +502,11 @@ namespace OnlyWar.Helpers.Battles
             // attacks using the exact strike plan that was scored above.
             if (soldier.EquippedMeleeWeapons.Count == 0 && soldier.MeleeWeapons.Count > 0)
             {
-                _shootActionBag.Add(new ReadyMeleeWeaponAction(soldier, soldier.MeleeWeapons[0]));
+                _shootActions.Add(new ReadyMeleeWeaponAction(soldier, soldier.MeleeWeapons[0]));
             }
             else if (projectedStrikePlans.Count > 0)
             {
-                _meleeActionBag.Add(new MeleeAttackAction(
+                _meleeActions.Add(new MeleeAttackAction(
                     soldier,
                     projectedStrikePlans,
                     didMove: false,
@@ -743,7 +795,7 @@ namespace OnlyWar.Helpers.Battles
             else if (soldier.EquippedMeleeWeapons.Count == 0 && soldier.MeleeWeapons.Count > 0)
             {
                 soldier.CurrentSpeed = 0;
-                _shootActionBag.Add(new ReadyMeleeWeaponAction(soldier, soldier.MeleeWeapons[0]));
+                _shootActions.Add(new ReadyMeleeWeaponAction(soldier, soldier.MeleeWeapons[0]));
             }
             else
             {
@@ -751,12 +803,12 @@ namespace OnlyWar.Helpers.Battles
                 soldier.CurrentSpeed = moveSpeed;
                 _grid.ReserveSpace(newPos);
                 ushort orientation = CalculateOrientationFromVector(move);
-                _moveActionBag.Add(new MoveAction(soldier, _grid, currentPosition, newPos, orientation));
+                _moveActions.Add(new MoveAction(soldier, _grid, currentPosition, newPos, orientation));
                 BattleSoldier target = oppSquad.AbleSoldiers.Single(s => s.Soldier.Id == closestEnemyId);
                 MeleeAttackAction action = CreateMeleeAttackAction(soldier, [target], distance >= 2);
                 if (action != null)
                 {
-                    _meleeActionBag.Add(action);
+                    _meleeActions.Add(action);
                 }
             }
         }
@@ -956,7 +1008,7 @@ namespace OnlyWar.Helpers.Battles
             RangedTargetEvaluation aimNow = GetBestWeaponForSituation(soldier, target, range, isMoving, true);
             if (shootNow != null && (aimNow == null || shootNow.HitProbability * 2 > aimNow.HitProbability))
             {
-                _shootActionBag.Add(new ShootAction(soldier.Soldier.Id,
+                _shootActions.Add(new ShootAction(soldier.Soldier.Id,
                     target.Soldier.Id,
                     shootNow.Weapon.Template.Id,
                     range,
@@ -969,11 +1021,11 @@ namespace OnlyWar.Helpers.Battles
                 // aim with longest ranged weapon
                 if (aimNow?.Weapon != null)
                 {
-                    _shootActionBag.Add(new AimAction(soldier, target, aimNow.Weapon, _log));
+                    _shootActions.Add(new AimAction(soldier, target, aimNow.Weapon, _log));
                 }
                 else
                 {
-                    _shootActionBag.Add(new AimAction(soldier, target, soldier.EquippedRangedWeapons.OrderByDescending(w => w.Template.MaximumRange).First(), _log));
+                    _shootActions.Add(new AimAction(soldier, target, soldier.EquippedRangedWeapons.OrderByDescending(w => w.Template.MaximumRange).First(), _log));
                 }
             }
         }
@@ -1050,6 +1102,19 @@ namespace OnlyWar.Helpers.Battles
             float range,
             float additionalToHitModifier)
         {
+            var cacheKey = (
+                soldier.Soldier.Id,
+                target.Soldier.Id,
+                weapon.Template.Id,
+                BitConverter.SingleToInt32Bits(range),
+                BitConverter.SingleToInt32Bits(additionalToHitModifier),
+                BitConverter.SingleToInt32Bits(target.CurrentSpeed),
+                (int)weapon.LoadedAmmo);
+            if (_rangedEvaluationCache.TryGetValue(cacheKey, out RangedTargetEvaluation cached))
+            {
+                return cached;
+            }
+
             Tuple<float, float, int> attackEstimate = EstimatePlannedRangedAttack(
                 soldier,
                 target,
@@ -1070,7 +1135,7 @@ namespace OnlyWar.Helpers.Battles
                 additionalToHitModifier,
                 attackEstimate.Item3);
 
-            return new RangedTargetEvaluation(
+            RangedTargetEvaluation result = new RangedTargetEvaluation(
                 target,
                 weapon,
                 range,
@@ -1079,6 +1144,8 @@ namespace OnlyWar.Helpers.Battles
                 attackEstimate.Item2,
                 enemyBattleValueRemoved,
                 friendlyBattleValueLost);
+            _rangedEvaluationCache[cacheKey] = result;
+            return result;
         }
 
         private IReadOnlyList<BattleSquad> GetNearestInRangeEnemySquads(BattleSoldier shooter)
@@ -1268,15 +1335,25 @@ namespace OnlyWar.Helpers.Battles
             int shotsToFire = Math.Max(
                 1,
                 Math.Min((int)weapon.Template.RateOfFire, (int)weapon.LoadedAmmo));
+            float armor = target.Armor?.Template.ArmorProvided ?? 0;
+            float con = target.Soldier.Constitution;
+            float expectedDamage = CalculateExpectedDamage(weapon, range, armor, con);
+            bool firingIntoMelee = _grid.IsTargetEngagedWithShootersAllies(
+                soldier.Soldier.Id,
+                target.Soldier.Id);
+            RangedHitEstimateContext hitContext = new(
+                soldier,
+                target,
+                weapon,
+                range,
+                moveAndAimMod,
+                firingIntoMelee);
             Tuple<float, float> estimate = null;
             for (int iteration = 0; iteration < 4; iteration++)
             {
                 estimate = EstimateHitAndDamage(
-                    soldier,
-                    target,
-                    weapon,
-                    range,
-                    moveAndAimMod,
+                    hitContext,
+                    expectedDamage,
                     shotsToFire);
                 int revisedShots = CalculateShotsToFire(
                     weapon,
@@ -1296,11 +1373,8 @@ namespace OnlyWar.Helpers.Battles
             // Recalculate once with the final shot count so the returned probability is exactly
             // the one ShootAction will resolve, even if a future rule introduces oscillation.
             estimate = EstimateHitAndDamage(
-                soldier,
-                target,
-                weapon,
-                range,
-                moveAndAimMod,
+                hitContext,
+                expectedDamage,
                 shotsToFire);
             return new Tuple<float, float, int>(estimate.Item1, estimate.Item2, shotsToFire);
         }
@@ -1334,28 +1408,12 @@ namespace OnlyWar.Helpers.Battles
 
         }
 
-        private Tuple<float, float> EstimateHitAndDamage(
-            BattleSoldier soldier,
-            BattleSoldier target,
-            RangedWeapon weapon,
-            float range,
-            float moveAndAimMod,
+        private static Tuple<float, float> EstimateHitAndDamage(
+            RangedHitEstimateContext hitContext,
+            float expectedDamage,
             int numberOfShots)
         {
-            float armor = target.Armor?.Template.ArmorProvided ?? 0;
-            float con = target.Soldier.Constitution;
-            float expectedDamage = CalculateExpectedDamage(weapon, range, armor, con);
-            bool firingIntoMelee = _grid.IsTargetEngagedWithShootersAllies(
-                soldier.Soldier.Id,
-                target.Soldier.Id);
-            float preRollHitTotal = CalculateRangedPreRollHitTotal(
-                soldier,
-                target,
-                weapon,
-                range,
-                moveAndAimMod,
-                numberOfShots,
-                firingIntoMelee);
+            float preRollHitTotal = hitContext.CalculatePreRollHitTotal(numberOfShots);
             float probability = GaussianCalculator.ApproximateNormalCDF(
                 (preRollHitTotal - 10.5f) / 3f);
             return new Tuple<float, float>(probability, expectedDamage);
@@ -1370,20 +1428,14 @@ namespace OnlyWar.Helpers.Battles
             int numberOfShots,
             bool firingIntoMelee)
         {
-            float sizeMod = BattleModifiersUtil.CalculateSizeModifier(target.Soldier.Size);
-            float rangeMod = BattleModifiersUtil.CalculateRangeModifier(range, target.CurrentSpeed);
-            float rofMod = BattleModifiersUtil.CalculateRateOfFireModifier(numberOfShots);
-            float weaponSkill = soldier.Soldier.GetTotalSkillValue(weapon.Template.RelatedSkill);
-            float meleeModifier = firingIntoMelee
-                ? RangedFriendlyFireRules.FiringIntoMeleePenalty
-                : 0;
-            return weaponSkill
-                + rofMod
-                + rangeMod
-                + sizeMod
-                + moveAndAimMod
-                + meleeModifier
-                - target.Soldier.Template.Species.RangedEvasion;
+            RangedHitEstimateContext hitContext = new(
+                soldier,
+                target,
+                weapon,
+                range,
+                moveAndAimMod,
+                firingIntoMelee);
+            return hitContext.CalculatePreRollHitTotal(numberOfShots);
         }
 
         private void AddMoveAction(BattleSoldier soldier, float moveSpeed, Tuple<int, int> line)
@@ -1394,7 +1446,7 @@ namespace OnlyWar.Helpers.Battles
             soldier.CurrentSpeed = moveSpeed;
             _grid.ReserveSpace(newLocation);
             ushort orientation = CalculateOrientationFromVector(line);
-            _moveActionBag.Add(new MoveAction(soldier, _grid, soldier.TopLeft, newLocation, orientation));
+            _moveActions.Add(new MoveAction(soldier, _grid, soldier.TopLeft, newLocation, orientation));
         }
 
         private Tuple<int, int> CalculateMovementAlongLine(Tuple<int, int> line, float moveSpeed)

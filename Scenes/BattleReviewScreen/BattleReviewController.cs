@@ -126,7 +126,7 @@ public partial class BattleReviewController : DialogController
     private void ComputeMapBounds()
     {
         List<Tuple<int, int>> allPositions = _history.Turns
-            .SelectMany(turn => turn.State.SoldierPositionsMap.Values.SelectMany(value => value))
+            .SelectMany(turn => GetBoundaryPositions(turn.State))
             .ToList();
 
         if (allPositions.Count == 0)
@@ -232,18 +232,18 @@ public partial class BattleReviewController : DialogController
         ClearMap();
 
         BattleTurn currentTurn = _history.Turns[turnIndex];
-        BattleState state = currentTurn.State;
-        BattleState previousState = turnIndex > 0 ? _history.Turns[turnIndex - 1].State : null;
+        BattleStateSnapshot state = currentTurn.State;
+        BattleStateSnapshot previousState = turnIndex > 0 ? _history.Turns[turnIndex - 1].State : null;
 
         DrawBackground(_mapSize);
         DrawGrid(_mapSize);
         DrawRoundOverlays(previousState, state, currentTurn, _mapOffset);
 
-        foreach (BattleSquad squad in state.AttackerSquads.Values.OrderBy(squad => squad.Id))
+        foreach (BattleSquadSnapshot squad in state.AttackerSquads.Values.OrderBy(squad => squad.Id))
         {
             DrawSquad(squad, _mapOffset, selectedFormationId == squad.Id);
         }
-        foreach (BattleSquad squad in state.OpposingSquads.Values.OrderBy(squad => squad.Id))
+        foreach (BattleSquadSnapshot squad in state.OpposingSquads.Values.OrderBy(squad => squad.Id))
         {
             DrawSquad(squad, _mapOffset, selectedFormationId == squad.Id);
         }
@@ -257,15 +257,24 @@ public partial class BattleReviewController : DialogController
         }
     }
 
-    private static IReadOnlyList<Tuple<int, int>> GetAllReplayPositions(BattleState currentState, BattleState previousState)
+    private static IReadOnlyList<Tuple<int, int>> GetAllReplayPositions(BattleStateSnapshot currentState, BattleStateSnapshot previousState)
     {
-        List<Tuple<int, int>> positions = currentState.SoldierPositionsMap.Values.SelectMany(value => value).ToList();
+        List<Tuple<int, int>> positions = GetBoundaryPositions(currentState).ToList();
         if (previousState != null)
         {
-            positions.AddRange(previousState.SoldierPositionsMap.Values.SelectMany(value => value));
+            positions.AddRange(GetBoundaryPositions(previousState));
         }
 
         return positions;
+    }
+
+    private static IEnumerable<Tuple<int, int>> GetBoundaryPositions(BattleStateSnapshot state)
+    {
+        foreach (BattleSoldierSnapshot soldier in state.Soldiers.Values)
+        {
+            yield return new Tuple<int, int>(soldier.MinX, soldier.MinY);
+            yield return new Tuple<int, int>(soldier.MaxX, soldier.MaxY);
+        }
     }
 
     private void DrawBackground(Vector2 mapSize)
@@ -305,14 +314,14 @@ public partial class BattleReviewController : DialogController
         _view.MapRoot.AddChild(line);
     }
 
-    private void DrawSquad(BattleSquad squad, Vector2I topLeftOffset, bool selected)
+    private void DrawSquad(BattleSquadSnapshot squad, Vector2I topLeftOffset, bool selected)
     {
         List<Vector2> markerPositions = [];
-        foreach (BattleSoldier soldier in squad.Soldiers)
+        foreach (BattleSoldierSnapshot soldier in squad.Soldiers)
         {
-            // PositionList describes every occupied footprint cell for combat and framing. The
-            // report marker represents one model, however, so draw one centered marker per
-            // soldier (a 4x2 Carnifex must not become eight circles).
+            // The compact snapshot retains footprint bounds for combat framing. The report marker
+            // represents one model, however, so draw one centered marker per soldier (a 4x2
+            // Carnifex must not become eight circles).
             Vector2 position = GetSoldierMapPosition(soldier, topLeftOffset);
             markerPositions.Add(position);
             DrawMarker(position, squad.IsPlayerAligned, selected, squad.Id);
@@ -324,7 +333,7 @@ public partial class BattleReviewController : DialogController
         DrawFormationLabel(squad, centroid, selected);
     }
 
-    private void DrawFormationBanner(BattleSquad squad, Vector2 centroid, bool selected)
+    private void DrawFormationBanner(BattleSquadSnapshot squad, Vector2 centroid, bool selected)
     {
         Color color = selected ? SelectedMarkerColor : squad.IsPlayerAligned ? PlayerMarkerColor : OpposingMarkerColor;
         Vector2 mastBase = centroid + new Vector2(-18, -16);
@@ -380,7 +389,7 @@ public partial class BattleReviewController : DialogController
         _view.MapRoot.AddChild(ring);
     }
 
-    private void DrawFormationLabel(BattleSquad squad, Vector2 centroid, bool selected)
+    private void DrawFormationLabel(BattleSquadSnapshot squad, Vector2 centroid, bool selected)
     {
         Label label = new()
         {
@@ -394,7 +403,7 @@ public partial class BattleReviewController : DialogController
         _view.MapRoot.AddChild(label);
     }
 
-    private void DrawRoundOverlays(BattleState previousState, BattleState currentState, BattleTurn currentTurn, Vector2I topLeftOffset)
+    private void DrawRoundOverlays(BattleStateSnapshot previousState, BattleStateSnapshot currentState, BattleTurn currentTurn, Vector2I topLeftOffset)
     {
         if (previousState == null)
         {
@@ -406,11 +415,11 @@ public partial class BattleReviewController : DialogController
         DrawActionCallouts(previousState, currentState, currentTurn, topLeftOffset);
     }
 
-    private void DrawCasualtyMarkers(BattleState previousState, BattleState currentState, Vector2I topLeftOffset)
+    private void DrawCasualtyMarkers(BattleStateSnapshot previousState, BattleStateSnapshot currentState, Vector2I topLeftOffset)
     {
-        foreach (BattleSoldier soldier in previousState.Soldiers.Values.OrderBy(soldier => soldier.Soldier.Id))
+        foreach (BattleSoldierSnapshot soldier in previousState.Soldiers.Values.OrderBy(soldier => soldier.Id))
         {
-            if (currentState.Soldiers.ContainsKey(soldier.Soldier.Id))
+            if (currentState.Soldiers.ContainsKey(soldier.Id))
             {
                 continue;
             }
@@ -423,16 +432,16 @@ public partial class BattleReviewController : DialogController
         }
     }
 
-    private void DrawRoutMarkers(BattleState previousState, BattleState currentState, Vector2I topLeftOffset)
+    private void DrawRoutMarkers(BattleStateSnapshot previousState, BattleStateSnapshot currentState, Vector2I topLeftOffset)
     {
-        foreach (BattleSquad previousSquad in previousState.AttackerSquads.Values.Concat(previousState.OpposingSquads.Values).OrderBy(squad => squad.Id))
+        foreach (BattleSquadSnapshot previousSquad in previousState.AttackerSquads.Values.Concat(previousState.OpposingSquads.Values).OrderBy(squad => squad.Id))
         {
             if (previousSquad.Soldiers.Count == 0)
             {
                 continue;
             }
 
-            BattleSquad currentSquad = TryGetSquad(currentState, previousSquad.Id);
+            BattleSquadSnapshot currentSquad = TryGetSquad(currentState, previousSquad.Id);
             if (currentSquad?.Soldiers.Count > 0)
             {
                 continue;
@@ -445,7 +454,7 @@ public partial class BattleReviewController : DialogController
         }
     }
 
-    private void DrawActionCallouts(BattleState previousState, BattleState currentState, BattleTurn currentTurn, Vector2I topLeftOffset)
+    private void DrawActionCallouts(BattleStateSnapshot previousState, BattleStateSnapshot currentState, BattleTurn currentTurn, Vector2I topLeftOffset)
     {
         // Keep the replay faithful to the recorded turn. Large formations can
         // legitimately produce more than 16 actions, especially during an
@@ -464,7 +473,7 @@ public partial class BattleReviewController : DialogController
                 && TryGetSoldierMapPosition(action.ActorId, currentState, null, topLeftOffset, out Vector2 to)
                 && from.DistanceTo(to) > 1.0f)
             {
-                BattleSoldier currentSoldier = currentState.Soldiers.TryGetValue(action.ActorId, out BattleSoldier soldier) ? soldier : null;
+                BattleSoldierSnapshot currentSoldier = currentState.Soldiers.TryGetValue(action.ActorId, out BattleSoldierSnapshot soldier) ? soldier : null;
                 string label = currentSoldier?.IsInMelee == true ? "CHARGE" : "MOVE";
                 DrawArrowLine(from, to, ChargeColor, 2.2f, 10);
                 DrawCalloutLabel(label, (from + to) / 2.0f + new Vector2(4, -18), ChargeColor, 11, 11);
@@ -557,28 +566,22 @@ public partial class BattleReviewController : DialogController
             adjustedPosition.Y * _pixelsPerGrid.Y + _pixelsPerGrid.Y / 2.0f);
     }
 
-    private Vector2 GetSoldierMapPosition(BattleSoldier soldier, Vector2I topLeftOffset)
+    private Vector2 GetSoldierMapPosition(BattleSoldierSnapshot soldier, Vector2I topLeftOffset)
     {
-        IReadOnlyList<Tuple<int, int>> positions = soldier.PositionList;
-        if (positions.Count == 0)
-        {
-            return GridToMapPosition(soldier.TopLeft, topLeftOffset);
-        }
-
-        return positions
-            .Select(position => GridToMapPosition(position, topLeftOffset))
-            .Aggregate(Vector2.Zero, (sum, position) => sum + position) / positions.Count;
+        return new Vector2(
+            (soldier.CenterX - topLeftOffset.X) * _pixelsPerGrid.X + _pixelsPerGrid.X / 2.0f,
+            (soldier.CenterY - topLeftOffset.Y) * _pixelsPerGrid.Y + _pixelsPerGrid.Y / 2.0f);
     }
 
-    private bool TryGetSoldierMapPosition(int soldierId, BattleState primaryState, BattleState fallbackState, Vector2I topLeftOffset, out Vector2 position)
+    private bool TryGetSoldierMapPosition(int soldierId, BattleStateSnapshot primaryState, BattleStateSnapshot fallbackState, Vector2I topLeftOffset, out Vector2 position)
     {
-        if (primaryState != null && primaryState.Soldiers.TryGetValue(soldierId, out BattleSoldier primarySoldier))
+        if (primaryState != null && primaryState.Soldiers.TryGetValue(soldierId, out BattleSoldierSnapshot primarySoldier))
         {
             position = GetSoldierMapPosition(primarySoldier, topLeftOffset);
             return true;
         }
 
-        if (fallbackState != null && fallbackState.Soldiers.TryGetValue(soldierId, out BattleSoldier fallbackSoldier))
+        if (fallbackState != null && fallbackState.Soldiers.TryGetValue(soldierId, out BattleSoldierSnapshot fallbackSoldier))
         {
             position = GetSoldierMapPosition(fallbackSoldier, topLeftOffset);
             return true;
@@ -588,11 +591,10 @@ public partial class BattleReviewController : DialogController
         return false;
     }
 
-    private Vector2 GetSquadCentroid(BattleSquad squad, Vector2I topLeftOffset)
+    private Vector2 GetSquadCentroid(BattleSquadSnapshot squad, Vector2I topLeftOffset)
     {
         List<Vector2> positions = squad.Soldiers
-            .SelectMany(soldier => soldier.PositionList)
-            .Select(position => GridToMapPosition(position, topLeftOffset))
+            .Select(soldier => GetSoldierMapPosition(soldier, topLeftOffset))
             .ToList();
 
         return positions.Count == 0
@@ -664,10 +666,10 @@ public partial class BattleReviewController : DialogController
             positions.Max(position => position.Item2));
     }
 
-    private static BattleSquad TryGetSquad(BattleState state, int squadId)
+    private static BattleSquadSnapshot TryGetSquad(BattleStateSnapshot state, int squadId)
     {
-        if (state.AttackerSquads.TryGetValue(squadId, out BattleSquad attackerSquad)) return attackerSquad;
-        if (state.OpposingSquads.TryGetValue(squadId, out BattleSquad opposingSquad)) return opposingSquad;
+        if (state.AttackerSquads.TryGetValue(squadId, out BattleSquadSnapshot attackerSquad)) return attackerSquad;
+        if (state.OpposingSquads.TryGetValue(squadId, out BattleSquadSnapshot opposingSquad)) return opposingSquad;
         return null;
     }
 }

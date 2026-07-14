@@ -187,6 +187,26 @@ public class BattleGridManagerTests
     }
 
     [Fact]
+    public void GetNearestEnemy_InvalidatesCachedResultAfterMovement()
+    {
+        BattleGridManager grid = new();
+        BattleSoldier subject = CreateBattleSoldier(1);
+        BattleSoldier initiallyNear = CreateBattleSoldier(2);
+        BattleSoldier initiallyFar = CreateBattleSoldier(3);
+        grid.PlaceSoldier(subject, true, Cell(0, 0));
+        grid.PlaceSoldier(initiallyNear, false, Cell(2, 0));
+        grid.PlaceSoldier(initiallyFar, false, Cell(5, 0));
+
+        Assert.Equal(2f, grid.GetNearestEnemy(1, out int firstClosest), precision: 4);
+        Assert.Equal(2, firstClosest);
+
+        grid.MoveSoldier(initiallyNear, new Tuple<int, int>(10, 0), 0);
+
+        Assert.Equal(5f, grid.GetNearestEnemy(1, out int secondClosest), precision: 4);
+        Assert.Equal(3, secondClosest);
+    }
+
+    [Fact]
     public void IsAdjacentToEnemy_UsesTacticalSide()
     {
         BattleGridManager grid = new();
@@ -196,6 +216,22 @@ public class BattleGridManagerTests
 
         Assert.True(grid.IsAdjacentToEnemy(1));
         Assert.False(grid.IsAdjacentToEnemy(2));
+    }
+
+    [Fact]
+    public void IsAdjacentToEnemy_InvalidatesCachedResultAfterMovement()
+    {
+        BattleGridManager grid = new();
+        BattleSoldier subject = CreateBattleSoldier(1);
+        BattleSoldier enemy = CreateBattleSoldier(2);
+        grid.PlaceSoldier(subject, true, Cell(0, 0));
+        grid.PlaceSoldier(enemy, false, Cell(1, 0));
+
+        Assert.True(grid.IsAdjacentToEnemy(1));
+
+        grid.MoveSoldier(enemy, new Tuple<int, int>(4, 0), 0);
+
+        Assert.False(grid.IsAdjacentToEnemy(1));
     }
 
     [Fact]
@@ -223,6 +259,23 @@ public class BattleGridManagerTests
 
         Assert.Equal(new[] { 1, 2, 3 }, grid.GetMeleeScrumParticipants(1));
         Assert.Equal(new[] { 5 }, grid.GetMeleeScrumParticipants(5));
+    }
+
+    [Fact]
+    public void GetMeleeScrumParticipants_InvalidatesCachedComponentAfterMovement()
+    {
+        BattleGridManager grid = new();
+        BattleSoldier first = CreateBattleSoldier(1);
+        BattleSoldier second = CreateBattleSoldier(2);
+        grid.PlaceSoldier(first, false, Cell(0, 0));
+        grid.PlaceSoldier(second, true, Cell(1, 0));
+
+        Assert.Equal(new[] { 1, 2 }, grid.GetMeleeScrumParticipants(1));
+
+        grid.MoveSoldier(second, new Tuple<int, int>(5, 0), 0);
+
+        Assert.Equal(new[] { 1 }, grid.GetMeleeScrumParticipants(1));
+        Assert.Equal(new[] { 2 }, grid.GetMeleeScrumParticipants(2));
     }
 
     [Fact]

@@ -10,6 +10,7 @@ namespace OnlyWar.Helpers
     public static class BattleLog
     {
         public static Action<string> Sink { get; set; }
+        public static bool IsEnabled => Sink != null;
 
         public static void Write(string text)
         {

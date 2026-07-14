@@ -7,12 +7,12 @@ namespace OnlyWar.Models.Battles
     public class BattleTurn
     {
         public int TurnNumber { get { return State.TurnNumber; } }
-        public BattleState State { get; private set; }
+        public BattleStateSnapshot State { get; }
         public IReadOnlyList<IAction> Actions { get; }
 
         public BattleTurn(BattleState state, IReadOnlyList<IAction> actions)
         {
-            State = state;
+            State = BattleStateSnapshot.Capture(state);
             Actions = actions;
         }
      }

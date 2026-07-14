@@ -1,5 +1,4 @@
 using System;
-using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
 
@@ -48,7 +47,7 @@ namespace OnlyWar.Helpers.Battles.Actions
 
         private readonly int _attackerId;
         private readonly string _attackerName;
-        private readonly ConcurrentQueue<string> _log;
+        private readonly Action<string> _log;
         private readonly bool _didMove;
         private bool _wasExecuted;
 
@@ -62,7 +61,7 @@ namespace OnlyWar.Helpers.Battles.Actions
         public MeleeAttackAction(BattleSoldier attacker,
                                  IReadOnlyList<PlannedMeleeStrike> strikePlans,
                                  bool didMove,
-                                 ConcurrentQueue<string> log)
+                                 Action<string> log)
         {
             _attackerId = attacker.Soldier.Id;
             _attackerName = attacker.Soldier.Name;
@@ -77,7 +76,7 @@ namespace OnlyWar.Helpers.Battles.Actions
                                  BattleSoldier target,
                                  MeleeWeapon weapon,
                                  bool didMove,
-                                 ConcurrentQueue<string> log)
+                                 Action<string> log)
             : this(attacker,
                    [new PlannedMeleeStrike(target.Soldier.Id,
                                            weapon.Template.Id,
@@ -136,10 +135,10 @@ namespace OnlyWar.Helpers.Battles.Actions
                                         target.Soldier.Template.Species.MeleeEvasion,
                                         defenderDefenseModifier);
 
-                _log.Enqueue(attacker.Soldier.Name + " swings at " + target.Soldier);
+                _log?.Invoke(attacker.Soldier.Name + " swings at " + target.Soldier);
                 if (hit)
                 {
-                    _log.Enqueue(attacker.Soldier.Name + " strikes " + target.Soldier);
+                    _log?.Invoke(attacker.Soldier.Name + " strikes " + target.Soldier);
                     HandleHit(attacker, weapon, target);
                 }
             }
@@ -150,7 +149,7 @@ namespace OnlyWar.Helpers.Battles.Actions
             }
             else
             {
-                _log.Enqueue("<color=orange>" + attacker.Soldier.Name + " did not get close enough to attack</color>");
+                _log?.Invoke("<color=orange>" + attacker.Soldier.Name + " did not get close enough to attack</color>");
             }
         }
 
