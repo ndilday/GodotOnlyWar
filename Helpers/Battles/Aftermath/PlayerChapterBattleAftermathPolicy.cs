@@ -272,9 +272,11 @@ namespace OnlyWar.Helpers.Battles.Aftermath
             return battleEvents;
         }
 
-        private static bool CreditPlayerSoldierForKill(BattleSoldier inflicter, BattleSoldier sufferer, WeaponTemplate weapon)
+        private bool CreditPlayerSoldierForKill(BattleSoldier inflicter, BattleSoldier sufferer, WeaponTemplate weapon)
         {
-            if (inflicter?.Soldier is not PlayerSoldier playerSoldier || sufferer?.Soldier is PlayerSoldier)
+            if (inflicter?.Soldier is not PlayerSoldier playerSoldier
+                || sufferer?.Soldier is PlayerSoldier
+                || !_context.AreOpposingSides(inflicter, sufferer))
             {
                 return false;
             }

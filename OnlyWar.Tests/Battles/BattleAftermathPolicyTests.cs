@@ -57,6 +57,34 @@ public class BattleAftermathPolicyTests
         Assert.Equal((ushort)1, player.RangedWeaponCasualtyCountMap[weapon.Id]);
     }
 
+    [Fact]
+    public void PlayerBattleDoesNotCreditFriendlyFireAsAnEnemyKill()
+    {
+        Faction playerFaction = CreateFaction(30, "Chapter", isPlayer: true);
+        Faction enemyFaction = CreateFaction(31, "Tyranids", isPlayer: false);
+        PlayerSoldier player = CreatePlayerSoldier("Brother Incinerator");
+        Soldier ally = CreateSoldier("Attached Guardsman");
+        BattleSquad attackers = CreateBattleSquad(
+            playerFaction,
+            "Mixed Strike Squad",
+            player,
+            ally);
+        BattleSquad defenders = CreateBattleSquad(
+            enemyFaction,
+            "Brood",
+            CreateSoldier("Gaunt"));
+        BattleHistory history = new();
+        BattleAftermathContext context = new([attackers], [defenders], null, history);
+        IBattleAftermathPolicy policy = BattleAftermathPolicyFactory.Create(context);
+        WoundResolution wound = CreateRangedWound(attackers.Soldiers[0], attackers.Soldiers[1]);
+
+        policy.OnSoldierKilled(wound, WoundLevel.Mortal);
+
+        Assert.Equal(0, history.EnemiesKilled);
+        Assert.Equal((ushort)0, attackers.Soldiers[0].EnemiesTakenDown);
+        Assert.Empty(player.RangedWeaponCasualtyCountMap);
+    }
+
     private static WoundResolution CreateRangedWound(BattleSoldier inflicter, BattleSoldier sufferer)
     {
         WeaponTemplate weapon = inflicter.EquippedRangedWeapons[0].Template;

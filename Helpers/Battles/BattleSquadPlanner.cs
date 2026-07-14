@@ -62,6 +62,33 @@ namespace OnlyWar.Helpers.Battles
             }
         }
 
+        internal sealed class TemplateFiringLineEvaluation
+        {
+            public BattleSoldier Target { get; }
+            public RangedWeapon Weapon { get; }
+            public float Range { get; }
+            public IReadOnlyList<int> VictimIds { get; }
+            public float ExpectedEnemyBattleValueRemoved { get; }
+            public float ExpectedFriendlyBattleValueLost { get; }
+            public float Score => ExpectedEnemyBattleValueRemoved - ExpectedFriendlyBattleValueLost;
+
+            public TemplateFiringLineEvaluation(
+                BattleSoldier target,
+                RangedWeapon weapon,
+                float range,
+                IReadOnlyList<int> victimIds,
+                float expectedEnemyBattleValueRemoved,
+                float expectedFriendlyBattleValueLost)
+            {
+                Target = target;
+                Weapon = weapon;
+                Range = range;
+                VictimIds = victimIds;
+                ExpectedEnemyBattleValueRemoved = expectedEnemyBattleValueRemoved;
+                ExpectedFriendlyBattleValueLost = expectedFriendlyBattleValueLost;
+            }
+        }
+
         private readonly struct RangedHitEstimateContext
         {
             private readonly float _weaponSkill;
@@ -185,6 +212,26 @@ namespace OnlyWar.Helpers.Battles
                     float targetCon = closestSquad.GetAverageConstitution();
                     float targetEvasion = closestSquad.GetAverageRangedEvasion();
                     float preferredHitDistance = BattleModifiersUtil.CalculateOptimalDistance(soldier, targetSize, targetArmor, targetCon, targetEvasion);
+                    float templateMaximumRange = soldier.RangedWeapons
+                        .Where(weapon => weapon.Template.IsTemplateWeapon)
+                        .Select(weapon => weapon.Template.MaximumRange)
+                        .DefaultIfEmpty(0)
+                        .Max();
+                    if (templateMaximumRange > 0)
+                    {
+                        // Template weapons auto-hit once they are in reach, so their movement
+                        // decision is about entering the template rather than finding a to-hit
+                        // sweet spot derived from accuracy, target size, or evasion.
+                        if (distance > templateMaximumRange)
+                        {
+                            advanceVotes++;
+                        }
+                        else
+                        {
+                            standVotes++;
+                        }
+                        continue;
+                    }
                     if (preferredHitDistance == -1)
                     {
                         // this soldier wants to run
@@ -292,8 +339,12 @@ namespace OnlyWar.Helpers.Battles
         {
             float range = _grid.GetNearestEnemy(soldier.Soldier.Id, out int closestEnemyId);
             float speed = _soldierMap[closestEnemyId].BattleSquad.AbleSoldiers.First().GetMoveSpeed();
+            bool hasLoadedTemplateWeapon = soldier.EquippedRangedWeapons.Any(
+                weapon => weapon.Template.IsTemplateWeapon && weapon.LoadedAmmo > 0);
             // see if the enemy is within charging range and the soldier doesn't already have a target lined up
-            if (speed >= range && (soldier.Aim == null || soldier.RangedWeapons[0].LoadedAmmo == 0))
+            if (!hasLoadedTemplateWeapon
+                && speed >= range
+                && (soldier.Aim == null || soldier.RangedWeapons[0].LoadedAmmo == 0))
             {
                 AddChargeActionsToBag(soldier);
             }
@@ -475,13 +526,32 @@ namespace OnlyWar.Helpers.Battles
             RangedTargetEvaluation pointBlankShot = SelectBestPointBlankRangedTarget(
                 soldier,
                 adjacentEnemies);
-            float forfeitedParryRisk = pointBlankShot == null
+            TemplateFiringLineEvaluation pointBlankTemplate = SelectBestTemplateFiringLine(
+                soldier,
+                adjacentEnemies);
+            float bestRangedScore = Math.Max(
+                pointBlankShot?.Score ?? float.MinValue,
+                pointBlankTemplate?.Score ?? float.MinValue);
+            float forfeitedParryRisk = pointBlankShot == null && pointBlankTemplate == null
                 ? 0
                 : EstimateForfeitedParryRisk(
                     soldier,
                     adjacentEnemies,
                     projectedMeleeLoadout);
-            float pointBlankScore = (pointBlankShot?.Score ?? float.MinValue) - forfeitedParryRisk;
+            float pointBlankScore = bestRangedScore - forfeitedParryRisk;
+
+            if (pointBlankTemplate != null
+                && pointBlankTemplate.Score >= (pointBlankShot?.Score ?? float.MinValue)
+                && pointBlankScore > meleeScore)
+            {
+                soldier.TargetId = pointBlankTemplate.Target.Soldier.Id;
+                _shootActions.Add(new AreaAttackAction(
+                    soldier.Soldier.Id,
+                    pointBlankTemplate.Target.Soldier.Id,
+                    pointBlankTemplate.Weapon.Template.Id,
+                    _grid));
+                return;
+            }
 
             if (pointBlankShot != null && pointBlankScore > meleeScore)
             {
@@ -553,6 +623,7 @@ namespace OnlyWar.Helpers.Battles
                     target.Soldier.Id);
                 foreach (RangedWeapon weapon in soldier.EquippedRangedWeapons
                     .Where(candidate => candidate.LoadedAmmo > 0
+                        && !candidate.Template.IsTemplateWeapon
                         && range <= candidate.Template.MaximumRange)
                     .OrderBy(candidate => candidate.Template.Id))
                 {
@@ -993,8 +1064,29 @@ namespace OnlyWar.Helpers.Battles
 
         private void AddShootOrAimActionToBag(BattleSoldier soldier, bool isMoving)
         {
+            TemplateFiringLineEvaluation templateLine = SelectBestTemplateFiringLine(soldier);
             RangedTargetEvaluation targetEvaluation = SelectBestRangedTarget(soldier, isMoving);
-            if (targetEvaluation == null) return;
+            if (templateLine != null
+                && templateLine.Score >= (targetEvaluation?.Score ?? float.MinValue))
+            {
+                soldier.TargetId = templateLine.Target.Soldier.Id;
+                _shootActions.Add(new AreaAttackAction(
+                    soldier.Soldier.Id,
+                    templateLine.Target.Soldier.Id,
+                    templateLine.Weapon.Template.Id,
+                    _grid));
+                return;
+            }
+
+            if (targetEvaluation == null)
+            {
+                if (!isMoving && soldier.EquippedRangedWeapons.Any(
+                    weapon => weapon.Template.IsTemplateWeapon && weapon.LoadedAmmo > 0))
+                {
+                    AddClosingMoveToBag(soldier);
+                }
+                return;
+            }
 
             BattleSoldier target = targetEvaluation.Target;
             soldier.TargetId = target.Soldier.Id;
@@ -1025,7 +1117,11 @@ namespace OnlyWar.Helpers.Battles
                 }
                 else
                 {
-                    _shootActions.Add(new AimAction(soldier, target, soldier.EquippedRangedWeapons.OrderByDescending(w => w.Template.MaximumRange).First(), _log));
+                    RangedWeapon aimWeapon = soldier.EquippedRangedWeapons
+                        .Where(weapon => !weapon.Template.IsTemplateWeapon)
+                        .OrderByDescending(weapon => weapon.Template.MaximumRange)
+                        .First();
+                    _shootActions.Add(new AimAction(soldier, target, aimWeapon, _log));
                 }
             }
         }
@@ -1065,7 +1161,9 @@ namespace OnlyWar.Helpers.Battles
                 {
                     float range = _grid.GetDistanceBetweenSoldiers(soldier.Soldier.Id, target.Soldier.Id);
                     foreach (RangedWeapon weapon in soldier.EquippedRangedWeapons
-                        .Where(candidate => candidate.LoadedAmmo > 0 && range <= candidate.Template.MaximumRange)
+                        .Where(candidate => candidate.LoadedAmmo > 0
+                            && !candidate.Template.IsTemplateWeapon
+                            && range <= candidate.Template.MaximumRange)
                         .OrderBy(candidate => candidate.Template.Id))
                     {
                         float toHitModifier = useBulk ? -weapon.Template.Bulk : 0;
@@ -1088,6 +1186,103 @@ namespace OnlyWar.Helpers.Battles
                         {
                             best = evaluation;
                         }
+                    }
+                }
+            }
+
+            return best;
+        }
+
+        internal TemplateFiringLineEvaluation SelectBestTemplateFiringLine(
+            BattleSoldier soldier,
+            IEnumerable<BattleSoldier> candidateTargets = null)
+        {
+            if (soldier?.EquippedRangedWeapons == null
+                || soldier.EquippedRangedWeapons.Count == 0
+                || !IsPlaced(soldier))
+            {
+                return null;
+            }
+
+            IEnumerable<BattleSoldier> targets = candidateTargets
+                ?? GetNearestInRangeEnemySquads(soldier)
+                    .SelectMany(candidateSquad => candidateSquad.AbleSoldiers);
+            bool shooterSide = _grid.GetSoldierSide(soldier.Soldier.Id);
+            TemplateFiringLineEvaluation best = null;
+            foreach (BattleSoldier target in targets
+                .Where(target => target != null
+                    && target.CanFight
+                    && IsPlaced(target)
+                    && _grid.GetSoldierSide(target.Soldier.Id) != shooterSide)
+                .GroupBy(target => target.Soldier.Id)
+                .Select(group => group.First())
+                .OrderBy(target => target.Soldier.Id))
+            {
+                float range = _grid.GetDistanceBetweenSoldiers(
+                    soldier.Soldier.Id,
+                    target.Soldier.Id);
+                foreach (RangedWeapon weapon in soldier.EquippedRangedWeapons
+                    .Where(weapon => weapon.Template.IsTemplateWeapon
+                        && weapon.LoadedAmmo > 0
+                        && range <= weapon.Template.MaximumRange)
+                    .OrderBy(weapon => weapon.Template.Id))
+                {
+                    IReadOnlyList<int> victimIds = ConeTemplate.GetVictimIds(
+                        _grid,
+                        soldier.Soldier.Id,
+                        target.Soldier.Id,
+                        weapon.Template.MaximumRange,
+                        weapon.Template.AreaRadius);
+                    float expectedEnemyBattleValueRemoved = 0;
+                    float expectedFriendlyBattleValueLost = 0;
+                    foreach (int victimId in victimIds)
+                    {
+                        if (!_soldierMap.TryGetValue(victimId, out BattleSoldier victim))
+                        {
+                            continue;
+                        }
+                        if (!victim.CanFight)
+                        {
+                            // Incapacitated figures are still physically engulfed by the action,
+                            // but their battle value has already been removed from the fight.
+                            continue;
+                        }
+
+                        float victimRange = _grid.GetDistanceBetweenSoldiers(
+                            soldier.Soldier.Id,
+                            victimId);
+                        float armor = victim.Armor?.Template.ArmorProvided ?? 0;
+                        float woundRatio = Math.Clamp(
+                            CalculateExpectedDamage(
+                                weapon,
+                                victimRange,
+                                armor,
+                                victim.Soldier.Constitution),
+                            0,
+                            1);
+                        float expectedBattleValueRemoval = woundRatio * GetBattleValue(victim);
+                        if (_grid.GetSoldierSide(victimId) == shooterSide)
+                        {
+                            expectedFriendlyBattleValueLost += expectedBattleValueRemoval;
+                        }
+                        else
+                        {
+                            expectedEnemyBattleValueRemoved += expectedBattleValueRemoval;
+                        }
+                    }
+
+                    TemplateFiringLineEvaluation evaluation = new(
+                        target,
+                        weapon,
+                        range,
+                        victimIds,
+                        expectedEnemyBattleValueRemoved,
+                        expectedFriendlyBattleValueLost);
+                    // A zero-value burst wastes fuel, and a negative one knowingly trades
+                    // more friendly value than it removes. Neither is a viable firing line.
+                    if (evaluation.Score > 0 && (best == null || evaluation.Score > best.Score))
+                    {
+                        best = evaluation;
                     }
                 }
             }
@@ -1302,7 +1497,12 @@ namespace OnlyWar.Helpers.Battles
             float bestScore = float.MinValue;
             foreach(RangedWeapon weapon in soldier.EquippedRangedWeapons.OrderByDescending(w => w.Template.DamageMultiplier))
             {
-                if (range > weapon.Template.MaximumRange || weapon.LoadedAmmo <= 0) continue;
+                if (weapon.Template.IsTemplateWeapon
+                    || range > weapon.Template.MaximumRange
+                    || weapon.LoadedAmmo <= 0)
+                {
+                    continue;
+                }
 
                 float bulkAndAccMod = 0;
                 bulkAndAccMod -= useBulk ? weapon.Template.Bulk : 0;
@@ -1323,6 +1523,18 @@ namespace OnlyWar.Helpers.Battles
                 }
             }
             return best;
+        }
+
+        private void AddClosingMoveToBag(BattleSoldier soldier)
+        {
+            float distance = _grid.GetNearestEnemy(soldier.Soldier.Id, out int closestEnemyId);
+            if (closestEnemyId == -1 || distance <= 0) return;
+
+            Tuple<int, int> enemyPosition = _grid.GetSoldierPosition(closestEnemyId)[0];
+            Tuple<int, int> line = new(
+                enemyPosition.Item1 - soldier.TopLeft.Item1,
+                enemyPosition.Item2 - soldier.TopLeft.Item2);
+            AddMoveAction(soldier, soldier.GetMoveSpeed(), line);
         }
 
         private Tuple<float, float, int> EstimatePlannedRangedAttack(

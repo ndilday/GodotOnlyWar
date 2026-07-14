@@ -65,7 +65,8 @@ namespace OnlyWar.Helpers.Battles
         private void WoundResolver_OnSoldierDeath(WoundResolution wound, WoundLevel woundLevel)
         {
             _casualtyMap[wound.Suffererer.Soldier.Id] = wound.Suffererer;
-            bool isFirstSideEnemy = _aftermathContext.IsSecondSide(wound.Suffererer);
+            bool isFirstSideEnemy = _aftermathContext.IsFirstSide(wound.Inflicter)
+                && _aftermathContext.IsSecondSide(wound.Suffererer);
             bool isFirstDeath = BattleHistory.KilledSoldierIds.Add(wound.Suffererer.Soldier.Id);
             if (isFirstSideEnemy)
             {
@@ -204,6 +205,13 @@ namespace OnlyWar.Helpers.Battles
                 if (action is ShootAction shootAction)
                 {
                     foreach (WoundResolution wound in shootAction.WoundResolutions)
+                    {
+                        _woundResolver.WoundQueue.Add(wound);
+                    }
+                }
+                else if (action is AreaAttackAction areaAttackAction)
+                {
+                    foreach (WoundResolution wound in areaAttackAction.WoundResolutions)
                     {
                         _woundResolver.WoundQueue.Add(wound);
                     }

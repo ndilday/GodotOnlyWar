@@ -95,7 +95,10 @@ internal static class TestModelFactory
             0,
             1,
             true,
-            1),
+            1,
+            0,
+            0,
+            0),
         primaryMelee: new MeleeWeaponTemplate(
             2,
             "Test Knife",

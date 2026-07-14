@@ -63,14 +63,19 @@ namespace OnlyWar.Models.Equippables
         public ushort Recoil { get; }
         public ushort Bulk { get; }
         public bool DoesDamageDegradeWithRange { get; }
-
         public ushort ReloadTime { get; }
+        public byte TemplateType { get; }
+        public float AreaRadius { get; }
+        public ushort FuelPerBurst { get; }
+        public bool IsTemplateWeapon => TemplateType != 0;
+
         public RangedWeaponTemplate(int id, string name, EquipLocation location,
                               BaseSkill skill, float accuracy,
                               float armorMultiplier, float penetrationMultiplier,
                               float requiredStrength, float baseDamage,
                               float maxDistance, byte rof, ushort ammo,
-                              ushort recoil, ushort bulk, bool doesDamageDegradeWithRange, ushort reloadTime)
+                              ushort recoil, ushort bulk, bool doesDamageDegradeWithRange, ushort reloadTime,
+                              byte templateType = 0, float areaRadius = 0, ushort fuelPerBurst = 0)
                               : base(id, name, location, skill, accuracy, armorMultiplier, 
                                      penetrationMultiplier, requiredStrength)
         {
@@ -82,6 +87,9 @@ namespace OnlyWar.Models.Equippables
             Bulk = bulk;
             DoesDamageDegradeWithRange = doesDamageDegradeWithRange;
             ReloadTime = reloadTime;
+            TemplateType = templateType;
+            AreaRadius = areaRadius;
+            FuelPerBurst = fuelPerBurst;
         }
     }
 

@@ -248,6 +248,11 @@ public static class BattleValueCalculator
 
     private static float CalculateRangedKillRate(Input attacker, RangedWeaponTemplate weapon, Input defender)
     {
+        if (weapon.IsTemplateWeapon)
+        {
+            return CalculateTemplateWeaponKillRate(weapon, defender);
+        }
+
         int rateOfFire = Math.Max(1, (int)weapon.RateOfFire);
         float margin = attacker.RangedSkill
             + BattleModifiersUtil.CalculateRateOfFireModifier(rateOfFire)
@@ -277,6 +282,40 @@ public static class BattleValueCalculator
         float sustain = volleysPerMagazine / (volleysPerMagazine + weapon.ReloadTime);
 
         return killsPerVolley * standoff * sustain;
+    }
+
+    private static float CalculateTemplateWeaponKillRate(
+        RangedWeaponTemplate weapon,
+        Input defender)
+    {
+        if (weapon.FuelPerBurst == 0 || weapon.AmmoCapacity == 0)
+        {
+            return 0;
+        }
+
+        // A template auto-hits every caught figure. The panel density represents how many
+        // separate bodies a typical full-length cone covers; large solitary targets stay at one.
+        float expectedVictimsPerBurst = ReferenceEquals(defender, SwarmChaffProfile)
+            ? 3.0f
+            : ReferenceEquals(defender, LightInfantryProfile)
+                ? 1.5f
+                : 1.0f;
+        float killFractionPerVictim = CalculateKillFractionPerHit(
+            weapon.DamageMultiplier,
+            weapon.ArmorMultiplier,
+            weapon.WoundMultiplier,
+            defender);
+        float killsPerBurst = expectedVictimsPerBurst * killFractionPerVictim;
+
+        // Keep the shared 30m standoff baseline; the template branch changes only how a
+        // burst hits and how its fuel/reload duty cycle is calculated.
+        float standoff = Math.Clamp(
+            1.0f + 0.12f * (float)Math.Log(Math.Max(1.0f, weapon.MaximumRange) / 30.0f),
+            0.8f,
+            1.6f);
+        float burstsPerTank = (float)weapon.AmmoCapacity / weapon.FuelPerBurst;
+        float sustain = burstsPerTank / (burstsPerTank + weapon.ReloadTime);
+        return killsPerBurst * standoff * sustain;
     }
 
     private static float ExpectedHitsInVolley(float margin, int rateOfFire, float recoil)

@@ -76,5 +76,12 @@ namespace OnlyWar.Helpers.Battles.Aftermath
 
         public bool IsSecondSide(BattleSoldier soldier) =>
             soldier?.BattleSquad != null && _secondSideSquadIds.Contains(soldier.BattleSquad.Id);
+
+        public bool IsFirstSide(BattleSoldier soldier) =>
+            soldier?.BattleSquad != null && _firstSideSquadIds.Contains(soldier.BattleSquad.Id);
+
+        public bool AreOpposingSides(BattleSoldier first, BattleSoldier second) =>
+            (IsFirstSide(first) && IsSecondSide(second))
+            || (IsSecondSide(first) && IsFirstSide(second));
     }
 }

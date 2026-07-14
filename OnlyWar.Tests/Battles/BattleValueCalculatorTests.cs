@@ -140,6 +140,52 @@ public class BattleValueCalculatorTests
     }
 
     [Fact]
+    public void TemplateWeapon_AutoHitIgnoresSkillAndUsesFuelDutyCycle()
+    {
+        RangedWeaponTemplate baseline = TestModelFactory.DefaultWeapons.PrimaryRangedWeapon;
+        RangedWeaponTemplate smallTank = new(
+            baseline.Id, "Template Flamer", baseline.Location, baseline.RelatedSkill,
+            accuracy: 0, armorMultiplier: baseline.ArmorMultiplier,
+            penetrationMultiplier: baseline.WoundMultiplier,
+            requiredStrength: baseline.RequiredStrength, baseDamage: 10, maxDistance: 30,
+            rof: 1, ammo: 10, recoil: 100, bulk: baseline.Bulk,
+            doesDamageDegradeWithRange: false, reloadTime: 10,
+            templateType: 1, areaRadius: 3, fuelPerBurst: 10);
+        RangedWeaponTemplate largeTank = new(
+            baseline.Id, "Template Flamer", baseline.Location, baseline.RelatedSkill,
+            accuracy: 0, armorMultiplier: baseline.ArmorMultiplier,
+            penetrationMultiplier: baseline.WoundMultiplier,
+            requiredStrength: baseline.RequiredStrength, baseDamage: 10, maxDistance: 30,
+            rof: 1, ammo: 100, recoil: 100, bulk: baseline.Bulk,
+            doesDamageDegradeWithRange: false, reloadTime: 10,
+            templateType: 1, areaRadius: 3, fuelPerBurst: 10);
+
+        static BattleValueCalculator.Input InputFor(
+            RangedWeaponTemplate weapon,
+            float rangedSkill) => new()
+        {
+            Strength = 10,
+            Constitution = 10,
+            AttackSpeed = 10,
+            Size = 1,
+            MeleeSkill = 10,
+            RangedSkill = rangedSkill,
+            Armor = 5,
+            RangedWeapon = weapon
+        };
+
+        BattleValueCalculator.Result unskilled = BattleValueCalculator.Calculate(
+            InputFor(smallTank, rangedSkill: -100));
+        BattleValueCalculator.Result expert = BattleValueCalculator.Calculate(
+            InputFor(smallTank, rangedSkill: 100));
+        BattleValueCalculator.Result sustained = BattleValueCalculator.Calculate(
+            InputFor(largeTank, rangedSkill: -100));
+
+        Assert.Equal(unskilled.Offense, expert.Offense, precision: 6);
+        Assert.True(sustained.Offense > unskilled.Offense);
+    }
+
+    [Fact]
     public void Burrower_PaysNoMeleeClosingTax()
     {
         MeleeWeaponTemplate weapon = TestModelFactory.DefaultWeapons.PrimaryMeleeWeapon;

@@ -46,6 +46,33 @@ public class BattleSquadPlannerTests
         return new BattleSquad(false, TestModelFactory.CreateSquad(name, soldier));
     }
 
+    private static BattleSquad CreateSquad(
+        string name,
+        params (int SoldierId, int BattleValue)[] members)
+    {
+        List<Soldier> soldiers = members
+            .Select(member =>
+            {
+                SoldierTemplate template = new(
+                    20_000 + member.SoldierId,
+                    TestModelFactory.HumanSpecies,
+                    $"{name} {member.SoldierId} Template",
+                    1,
+                    1,
+                    false,
+                    0,
+                    Array.Empty<Tuple<BaseSkill, float>>(),
+                    battleValue: member.BattleValue);
+                Soldier soldier = TestModelFactory.CreateSoldier(
+                    template,
+                    $"{name} {member.SoldierId}");
+                soldier.Id = member.SoldierId;
+                return soldier;
+            })
+            .ToList();
+        return new BattleSquad(false, TestModelFactory.CreateSquad(name, soldiers.ToArray()));
+    }
+
     private static void Place(
         BattleGridManager grid,
         BattleSoldier soldier,
@@ -61,6 +88,21 @@ public class BattleSquadPlannerTests
         BattleGridManager grid,
         params BattleSquad[] squads)
     {
+        return CreatePlanner(
+            grid,
+            new List<IAction>(),
+            new List<IAction>(),
+            new List<IAction>(),
+            squads);
+    }
+
+    private static BattleSquadPlanner CreatePlanner(
+        BattleGridManager grid,
+        ICollection<IAction> shootActions,
+        ICollection<IAction> moveActions,
+        ICollection<IAction> meleeActions,
+        params BattleSquad[] squads)
+    {
         Dictionary<int, BattleSoldier> soldiers = squads
             .SelectMany(squad => squad.Soldiers)
             .ToDictionary(soldier => soldier.Soldier.Id);
@@ -68,11 +110,43 @@ public class BattleSquadPlannerTests
         return new BattleSquadPlanner(
             grid,
             soldiers,
-            new List<IAction>(),
-            new List<IAction>(),
-            new List<IAction>(),
+            shootActions,
+            moveActions,
+            meleeActions,
             null,
             shooter.MeleeWeapons[0]);
+    }
+
+    private static RangedWeapon EquipTemplateWeapon(
+        BattleSoldier soldier,
+        float areaRadius = 5,
+        float maximumRange = 30)
+    {
+        RangedWeapon weapon = new(new RangedWeaponTemplate(
+            99_200,
+            "Test Flamer",
+            EquipLocation.TwoHand,
+            TestSkills.Ranged,
+            accuracy: 0,
+            armorMultiplier: 1,
+            penetrationMultiplier: 1,
+            requiredStrength: 0,
+            baseDamage: 5,
+            maxDistance: maximumRange,
+            rof: 1,
+            ammo: 50,
+            recoil: 0,
+            bulk: 0,
+            doesDamageDegradeWithRange: false,
+            reloadTime: 3,
+            templateType: 1,
+            areaRadius: areaRadius,
+            fuelPerBurst: 10));
+        soldier.RangedWeapons.Clear();
+        soldier.EquippedRangedWeapons.Clear();
+        soldier.RangedWeapons.Add(weapon);
+        soldier.EquippedRangedWeapons.Add(weapon);
+        return weapon;
     }
 
     private static EngagedDecisionScenario CreateEngagedDecisionScenario(int attackerCount)
@@ -429,6 +503,136 @@ public class BattleSquadPlannerTests
 
         Assert.IsType<ReadyMeleeWeaponAction>(Assert.Single(threeAttackers.ShootActions));
         Assert.Empty(threeAttackers.MeleeActions);
+    }
+
+    [Fact]
+    public void TemplateWeaponBearer_EmitsAreaAttackWithoutAimingOrShooting()
+    {
+        BattleSquad shooters = CreateSquad("Flamer Bearer", 600);
+        BattleSquad enemies = CreateSquad("Enemy", 610);
+        BattleSoldier shooter = shooters.Soldiers[0];
+        RangedWeapon flamer = EquipTemplateWeapon(shooter);
+        BattleGridManager grid = new();
+        Place(grid, shooter, true, 0, 0);
+        Place(grid, enemies.Soldiers[0], false, 10, 0);
+        List<IAction> shootActions = [];
+        List<IAction> moveActions = [];
+        List<IAction> meleeActions = [];
+        BattleSquadPlanner planner = CreatePlanner(
+            grid,
+            shootActions,
+            moveActions,
+            meleeActions,
+            shooters,
+            enemies);
+
+        planner.PrepareActions(shooters);
+
+        AreaAttackAction action = Assert.IsType<AreaAttackAction>(Assert.Single(shootActions));
+        Assert.Equal(shooter.Soldier.Id, action.ShooterId);
+        Assert.Equal(enemies.Soldiers[0].Soldier.Id, action.TargetId);
+        Assert.Equal(flamer.Template.Id, action.WeaponId);
+        Assert.DoesNotContain(shootActions, candidate => candidate is AimAction or ShootAction);
+        Assert.Empty(moveActions);
+        Assert.Empty(meleeActions);
+    }
+
+    [Fact]
+    public void TemplateWeaponBearer_PrefersFiringLineThroughDenseEnemyCluster()
+    {
+        BattleSquad shooters = CreateSquad("Flamer Bearer", 620);
+        BattleSquad sparseEnemies = CreateSquad("Sparse Enemy", 630);
+        BattleSquad denseEnemies = CreateSquad(
+            "Dense Enemies",
+            (640, 2),
+            (641, 2),
+            (642, 2));
+        BattleSoldier shooter = shooters.Soldiers[0];
+        EquipTemplateWeapon(shooter);
+        BattleGridManager grid = new();
+        Place(grid, shooter, true, 0, 0);
+        Place(grid, sparseEnemies.Soldiers[0], false, 10, 0);
+        Place(grid, denseEnemies.Soldiers.Single(soldier => soldier.Soldier.Id == 640), false, 0, 10);
+        Place(grid, denseEnemies.Soldiers.Single(soldier => soldier.Soldier.Id == 641), false, -1, 10);
+        Place(grid, denseEnemies.Soldiers.Single(soldier => soldier.Soldier.Id == 642), false, 1, 10);
+        List<IAction> shootActions = [];
+        BattleSquadPlanner planner = CreatePlanner(
+            grid,
+            shootActions,
+            new List<IAction>(),
+            new List<IAction>(),
+            shooters,
+            sparseEnemies,
+            denseEnemies);
+
+        planner.PrepareActions(shooters);
+
+        AreaAttackAction action = Assert.IsType<AreaAttackAction>(Assert.Single(shootActions));
+        Assert.Equal(640, action.TargetId);
+        BattleSquadPlanner.TemplateFiringLineEvaluation evaluation =
+            planner.SelectBestTemplateFiringLine(shooter);
+        Assert.Equal(3, evaluation.VictimIds.Count);
+        Assert.All(evaluation.VictimIds, victimId =>
+            Assert.Contains(victimId, new[] { 640, 641, 642 }));
+    }
+
+    [Fact]
+    public void TemplateWeaponBearer_ClosesInsteadOfFiringWhenFriendlyCostIsGreater()
+    {
+        BattleSquad shooters = CreateSquad("Flamer Bearer", 650);
+        BattleSquad allies = CreateSquad("Valuable Ally", 651, battleValue: 100);
+        BattleSquad enemies = CreateSquad("Enemy", 660, battleValue: 2);
+        BattleSoldier shooter = shooters.Soldiers[0];
+        EquipTemplateWeapon(shooter);
+        BattleGridManager grid = new();
+        Place(grid, shooter, true, 0, 0);
+        Place(grid, allies.Soldiers[0], true, 5, 0);
+        Place(grid, enemies.Soldiers[0], false, 10, 0);
+        List<IAction> shootActions = [];
+        List<IAction> moveActions = [];
+        BattleSquadPlanner planner = CreatePlanner(
+            grid,
+            shootActions,
+            moveActions,
+            new List<IAction>(),
+            shooters,
+            allies,
+            enemies);
+
+        planner.PrepareActions(shooters);
+
+        Assert.Empty(shootActions);
+        Assert.IsType<MoveAction>(Assert.Single(moveActions));
+        Assert.Null(planner.SelectBestTemplateFiringLine(shooter));
+    }
+
+    [Fact]
+    public void EngagedTemplateWeaponBearer_UsesAreaAttackForPointBlankShot()
+    {
+        BattleSquad shooters = CreateSquad("Engaged Flamer Bearer", 670, battleValue: 2);
+        BattleSquad enemies = CreateSquad("Adjacent Enemy", 680, battleValue: 10);
+        BattleSoldier shooter = shooters.Soldiers[0];
+        EquipTemplateWeapon(shooter);
+        BattleGridManager grid = new();
+        Place(grid, shooter, true, 0, 0);
+        Place(grid, enemies.Soldiers[0], false, 1, 0);
+        shooters.IsInMelee = true;
+        shooter.IsInMelee = true;
+        List<IAction> shootActions = [];
+        List<IAction> meleeActions = [];
+        BattleSquadPlanner planner = CreatePlanner(
+            grid,
+            shootActions,
+            new List<IAction>(),
+            meleeActions,
+            shooters,
+            enemies);
+
+        planner.PrepareActions(shooters);
+
+        AreaAttackAction action = Assert.IsType<AreaAttackAction>(Assert.Single(shootActions));
+        Assert.Equal(enemies.Soldiers[0].Soldier.Id, action.TargetId);
+        Assert.Empty(meleeActions);
     }
 
     [Fact]

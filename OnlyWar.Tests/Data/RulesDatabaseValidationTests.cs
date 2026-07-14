@@ -29,6 +29,28 @@ public class RulesDatabaseValidationTests
     }
 
     [Fact]
+    public void RangedWeaponTemplates_LoadTemplateWeaponColumnsFromShippedDatabase()
+    {
+        var rules = RulesDatabaseFixture.LoadRules();
+
+        foreach (int weaponId in new[] { 2, 18 })
+        {
+            var flamer = rules.RangedWeaponTemplates[weaponId];
+
+            Assert.True(flamer.IsTemplateWeapon);
+            Assert.Equal(1, flamer.TemplateType);
+            Assert.Equal(3.0f, flamer.AreaRadius);
+            Assert.Equal(10, flamer.FuelPerBurst);
+            Assert.Equal(0, flamer.Accuracy);
+        }
+
+        var bolter = rules.RangedWeaponTemplates[1];
+        Assert.False(bolter.IsTemplateWeapon);
+        Assert.Equal(0, bolter.AreaRadius);
+        Assert.Equal(0, bolter.FuelPerBurst);
+    }
+
+    [Fact]
     public void ForceGenerator_MobilisesADefendingForceForADefaultFactionGarrison()
     {
         // This drives the end-to-end path a PDF garrison takes when assaulted:
