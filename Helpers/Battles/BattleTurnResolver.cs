@@ -17,6 +17,7 @@ namespace OnlyWar.Helpers.Battles
     {
         private BattleGridManager _grid;
         private readonly Region _region;
+        private readonly BattleExecutionContext _execution;
         private readonly BattleAftermathContext _aftermathContext;
         private readonly IBattleAftermathPolicy _aftermathPolicy;
         private readonly WoundResolver _woundResolver;
@@ -31,13 +32,15 @@ namespace OnlyWar.Helpers.Battles
         // would otherwise spin the caller's while loop forever, so this caps the fight.
         private const int MaxBattleTurns = 1000;
 
-        public BattleTurnResolver(BattleGridManager grid,
-                                  IList<BattleSquad> attackerBattleSquads,
-                                  IList<BattleSquad> opposingBattleSquads,
-                                  Region region)
+        internal BattleTurnResolver(BattleGridManager grid,
+                                    IList<BattleSquad> attackerBattleSquads,
+                                    IList<BattleSquad> opposingBattleSquads,
+                                    Region region,
+                                    BattleExecutionContext execution)
         {
             _grid = grid;
             _region = region;
+            _execution = execution ?? throw new ArgumentNullException(nameof(execution));
             _woundResolver = new WoundResolver();
             _woundResolver.OnSoldierDeath += WoundResolver_OnSoldierDeath;
             _woundResolver.OnSoldierFall += WoundResolver_OnSoldierFall;
@@ -47,7 +50,8 @@ namespace OnlyWar.Helpers.Battles
                 attackerBattleSquads.ToList(),
                 opposingBattleSquads.ToList(),
                 region,
-                BattleHistory);
+                BattleHistory,
+                execution.Aftermath);
             _aftermathPolicy = BattleAftermathPolicyFactory.Create(_aftermathContext);
 
             _currentState = new BattleState(
@@ -171,16 +175,14 @@ namespace OnlyWar.Helpers.Battles
                           List<IAction> meleeSegmentActions,
                           Action<string> log)
         {
-            BattleDefaults battleDefaults = GameDataSingleton.Instance.GameRulesData.BattleDefaults;
-            MeleeWeapon attackerDefaultWeapon = new MeleeWeapon(battleDefaults.ImperialUnarmedWeapon);
-            MeleeWeapon opposingDefaultWeapon = new MeleeWeapon(battleDefaults.GenericUnarmedWeapon);
-
             foreach (BattleSquad squad in _currentState.AttackerSquads.Values)
             {
                 BattleSquadPlanner planner = new BattleSquadPlanner(_grid, _currentState.Soldiers,
                                                                     shootSegmentActions, moveSegmentActions,
                                                                     meleeSegmentActions,
-                                                                    log, attackerDefaultWeapon);
+                                                                    log,
+                                                                    _execution.Rules.MeleeWeaponTemplates,
+                                                                    _execution.Random);
                 planner.PrepareActions(squad);
             }
 
@@ -189,7 +191,9 @@ namespace OnlyWar.Helpers.Battles
                 BattleSquadPlanner planner = new BattleSquadPlanner(_grid, _currentState.Soldiers,
                                                                     shootSegmentActions, moveSegmentActions,
                                                                     meleeSegmentActions,
-                                                                    log, opposingDefaultWeapon);
+                                                                    log,
+                                                                    _execution.Rules.MeleeWeaponTemplates,
+                                                                    _execution.Random);
                 planner.PrepareActions(squad);
             }
         }

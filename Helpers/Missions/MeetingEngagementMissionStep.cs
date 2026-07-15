@@ -14,8 +14,9 @@ namespace OnlyWar.Helpers.Missions
     {
         public string Description { get { return "Meeting Engagement"; } }
 
-        public void ExecuteMissionStep(MissionContext context, float marginOfSuccess, IMissionStep returnStep)
+        public void ExecuteMissionStep(MissionExecutionContext execution, float marginOfSuccess, IMissionStep returnStep)
         {
+            MissionContext context = execution.State;
             List<BattleSquad> missionSquads = context.MissionSquads
                 .Where(squad => squad.AbleSoldiers.Count > 0)
                 .ToList();
@@ -36,8 +37,10 @@ namespace OnlyWar.Helpers.Missions
             // between the two preferences (rather than from their midpoint) means neither side is
             // ever dragged past the other's preferred range.
             float rangeModifier = GaussianCalculator.ApproximateNormalCDF(marginOfSuccess);
-            BattleSoldier defenderSoldier = opposingSquads.First().GetRandomSquadMember();
-            BattleSoldier attackerSoldier = missionSquads.First().GetRandomSquadMember();
+            BattleSoldier defenderSoldier = opposingSquads.First()
+                .GetRandomSquadMember(execution.Random);
+            BattleSoldier attackerSoldier = missionSquads.First()
+                .GetRandomSquadMember(execution.Random);
             double attackerRange = missionSquads.Average(s => s.GetPreferredEngagementRange(defenderSoldier.Soldier.Size, defenderSoldier.Armor.Template.ArmorProvided, defenderSoldier.Soldier.Constitution, defenderSoldier.Soldier.Template.Species.RangedEvasion));
             double defenderRange = opposingSquads.Average(s => s.GetPreferredEngagementRange(attackerSoldier.Soldier.Size, attackerSoldier.Armor.Template.ArmorProvided, attackerSoldier.Soldier.Constitution, attackerSoldier.Soldier.Template.Species.RangedEvasion));
             ushort range = (ushort)(defenderRange + (attackerRange - defenderRange) * rangeModifier);
@@ -52,7 +55,12 @@ namespace OnlyWar.Helpers.Missions
             string log = $"Day {context.DaysElapsed}: Force accepted engagement with {oppForSize} {opposingSquads.First().Squad.Faction.Name}\n";
             context.AddLog(log);
             // run the battle
-            BattleTurnResolver resolver = new BattleTurnResolver(bgm, missionSquads, opposingSquads, context.Order.Mission.RegionFaction.Region);
+            BattleTurnResolver resolver = new BattleTurnResolver(
+                bgm,
+                missionSquads,
+                opposingSquads,
+                context.Order.Mission.RegionFaction.Region,
+                execution.Battle);
             bool battleDone = false;
             resolver.OnBattleComplete += (sender, e) => { battleDone = true; };
             while (!battleDone)
@@ -75,7 +83,7 @@ namespace OnlyWar.Helpers.Missions
             {
                 return;
             }
-            returnStep.ExecuteMissionStep(context, marginOfSuccess, returnStep);
+            returnStep.ExecuteMissionStep(execution, marginOfSuccess, returnStep);
         }
     }
 }

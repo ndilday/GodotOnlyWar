@@ -60,10 +60,6 @@ namespace OnlyWar.Models
         // fails fast if missing.
         public SectorGenerationFactions SectorFactions { get; }
 
-        // Validated registry of default battle resources referenced by name
-        // (see TDD §8.3 / §4.1.1). Resolved and validated at load; fails fast if missing.
-        public BattleDefaults BattleDefaults { get; }
-
         public GameRulesData(string databasePath = null)
         {
             databasePath ??= GameStorage.RulesDatabasePath;
@@ -92,7 +88,6 @@ namespace OnlyWar.Models
             Skills = new NamedSkillRegistry(_baseSkillMap);
             ChapterTemplates = new ChapterGenerationTemplates(PlayerFaction);
             SectorFactions = new SectorGenerationFactions(_factions);
-            BattleDefaults = new BattleDefaults(MeleeWeaponTemplates, Skills);
             ValidateTrainingSkills();
             ValidateRatingDefinitions();
         }

@@ -8,14 +8,42 @@ namespace OnlyWar.Builders
 {
     public static class SquadFactory
     {
-        public static Squad GenerateSquad(SquadTemplate squadTemplate, string name = "")
+        public static Squad GenerateSquad(SquadTemplate squadTemplate, IRNG random, string name = "")
+        {
+            return GenerateSquad(squadTemplate, random, null, name);
+        }
+
+        public static Squad GenerateSquad(
+            SquadTemplate squadTemplate,
+            IRNG random,
+            IEntityIdAllocator entityIds,
+            string name = "")
         {
             Dictionary<SquadTemplateElement, int> counts = squadTemplate.Elements
                 .ToDictionary(element => element, element => (int)element.MaximumNumber);
-            return GenerateSquad(squadTemplate, counts, name);
+            return GenerateSquad(squadTemplate, counts, random, entityIds, name);
         }
 
-        public static Squad GenerateSquadWithinBudget(SquadTemplate squadTemplate, long maximumBattleValue, string name = "")
+        public static Squad GenerateSquadWithinBudget(
+            SquadTemplate squadTemplate,
+            long maximumBattleValue,
+            IRNG random,
+            string name = "")
+        {
+            return GenerateSquadWithinBudget(
+                squadTemplate,
+                maximumBattleValue,
+                random,
+                null,
+                name);
+        }
+
+        public static Squad GenerateSquadWithinBudget(
+            SquadTemplate squadTemplate,
+            long maximumBattleValue,
+            IRNG random,
+            IEntityIdAllocator entityIds,
+            string name = "")
         {
             Dictionary<SquadTemplateElement, int> counts = CalculateSquadCountsWithinBudget(
                 squadTemplate,
@@ -23,7 +51,7 @@ namespace OnlyWar.Builders
                 out long battleValue);
             if (counts == null || battleValue <= 0) return null;
 
-            return GenerateSquad(squadTemplate, counts, name);
+            return GenerateSquad(squadTemplate, counts, random, entityIds, name);
         }
 
         public static long CalculateSquadBattleValueWithinBudget(SquadTemplate squadTemplate, long maximumBattleValue)
@@ -71,32 +99,47 @@ namespace OnlyWar.Builders
             return counts;
         }
 
-        private static Squad GenerateSquad(SquadTemplate squadTemplate, IReadOnlyDictionary<SquadTemplateElement, int> counts, string name)
+        private static Squad GenerateSquad(
+            SquadTemplate squadTemplate,
+            IReadOnlyDictionary<SquadTemplateElement, int> counts,
+            IRNG random,
+            IEntityIdAllocator entityIds,
+            string name)
         {
-            Squad squad = new Squad(name, null, squadTemplate);
+            Squad squad = entityIds == null
+                ? new Squad(name, null, squadTemplate)
+                : new Squad(entityIds.GetNextId(), name, null, squadTemplate);
             foreach (SquadTemplateElement element in squadTemplate.Elements)
             {
                 SoldierTemplate template = element.SoldierTemplate;
-                Soldier[] soldiers = SoldierFactory.Instance.GenerateNewSoldiers(counts[element], template);
+                Soldier[] soldiers = SoldierFactory.Instance.GenerateNewSoldiers(
+                    counts[element],
+                    template,
+                    random,
+                    entityIds);
 
                 foreach (Soldier soldier in soldiers)
                 {
                     squad.AddSquadMember(soldier);
                     soldier.AssignedSquad = squad;
                     soldier.Template = template;
-                    soldier.Name = $"{soldier.Template.Name} {soldier.Id}";
+                    soldier.Name = entityIds == null
+                        ? $"{soldier.Template.Name} {soldier.Id}"
+                        : soldier.Template.Name;
                 }
             }
             if (squad.SquadTemplate.WeaponOptions != null)
             {
                 foreach (SquadWeaponOption weaponOption in squad.SquadTemplate.WeaponOptions)
                 {
-                    int taking = RNG.GetIntBelowMax(weaponOption.MinNumber, weaponOption.MaxNumber + 1);
+                    int taking = random.GetIntBelowMax(
+                        weaponOption.MinNumber,
+                        weaponOption.MaxNumber + 1);
                     taking = System.Math.Min(taking, squad.Members.Count);
                     int maxIndex = weaponOption.Options.Count;
                     for (int i = 0; i < taking; i++)
                     {
-                        squad.Loadout.Add(weaponOption.Options[RNG.GetIntBelowMax(0, maxIndex)]);
+                        squad.Loadout.Add(weaponOption.Options[random.GetIntBelowMax(0, maxIndex)]);
                     }
                 }
             }

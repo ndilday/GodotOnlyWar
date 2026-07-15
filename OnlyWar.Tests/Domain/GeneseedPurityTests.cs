@@ -31,13 +31,47 @@ public class GeneseedPurityTests
     [Fact]
     public void RollRecoveredPurity_StaysWithinBaselineDriftAndBounds()
     {
+        SeededRNG random = new(12345);
         for (int i = 0; i < 1000; i++)
         {
-            float purity = GeneseedRules.RollRecoveredPurity();
+            float purity = GeneseedRules.RollRecoveredPurity(random);
             Assert.InRange(purity, GeneseedRules.MinPurity, GeneseedRules.MaxPurity);
             Assert.InRange(purity,
                 GeneseedRules.FoundingPurity - GeneseedRules.RecoveredPurityDrift,
                 GeneseedRules.FoundingPurity);
         }
+    }
+
+    [Fact]
+    public void RollRecoveredPurity_ConsumesExactlyOneRangeDraw()
+    {
+        RecordingRNG random = new();
+
+        float purity = GeneseedRules.RollRecoveredPurity(random);
+
+        Assert.Equal(1, random.RangeDrawCount);
+        Assert.Equal(GeneseedRules.FoundingPurity - GeneseedRules.RecoveredPurityDrift,
+            random.LastLowerBound, 6);
+        Assert.Equal(GeneseedRules.FoundingPurity, random.LastUpperBound, 6);
+        Assert.Equal(0.975f, purity, 4);
+    }
+
+    private sealed class RecordingRNG : IRNG
+    {
+        public int RangeDrawCount { get; private set; }
+        public double LastLowerBound { get; private set; }
+        public double LastUpperBound { get; private set; }
+
+        public double GetDoubleInRange(double lowerBound, double upperBound)
+        {
+            RangeDrawCount++;
+            LastLowerBound = lowerBound;
+            LastUpperBound = upperBound;
+            return (lowerBound + upperBound) / 2;
+        }
+
+        public double GetLinearDouble() => throw new System.NotSupportedException();
+        public int GetIntBelowMax(int min, int max) => throw new System.NotSupportedException();
+        public double NextRandomZValue() => throw new System.NotSupportedException();
     }
 }

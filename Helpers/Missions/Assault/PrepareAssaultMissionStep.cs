@@ -21,10 +21,11 @@ namespace OnlyWar.Helpers.Missions.Assault
 
         public string Description { get { return "Prepare Assault"; } }
 
-        public void ExecuteMissionStep(MissionContext context, float marginOfSuccess, IMissionStep returnStep)
+        public void ExecuteMissionStep(MissionExecutionContext execution, float marginOfSuccess, IMissionStep returnStep)
         {
+            MissionContext context = execution.State;
             // The attacker's preparation check remains the same
-            BaseSkill tactics = GameDataSingleton.Instance.GameRulesData.Skills.Tactics;
+            BaseSkill tactics = execution.Rules.Tactics;
             LeaderMissionTest missionTest = new LeaderMissionTest(tactics, 10.0f);
             string attacker = context.MissionSquads
                 .Select(squad => squad?.Squad?.Faction?.Name)
@@ -32,10 +33,14 @@ namespace OnlyWar.Helpers.Missions.Assault
             string defender = context.Order.Mission.RegionFaction.PlanetFaction.Faction.Name;
             string region = context.Order.Mission.RegionFaction.Region.Name;
             context.AddLog($"Day {context.DaysElapsed}: {attacker} prepares to assault {defender} forces in {region}.");
-            float margin = missionTest.RunMissionCheck(context.MissionSquads);
+            float margin = missionTest.RunMissionCheck(context.MissionSquads, execution.Random);
 
             // Assemble the defending force from actual units and garrisons
-            context.OpposingSquads = AssembleDefendingForce(context.Order.Mission.RegionFaction, margin);
+            context.OpposingSquads = AssembleDefendingForce(
+                context.Order.Mission.RegionFaction,
+                margin,
+                execution.Random,
+                execution.EntityIds);
 
             if (context.OpposingSquads.Count == 0)
             {
@@ -47,10 +52,14 @@ namespace OnlyWar.Helpers.Missions.Assault
                 return;
             }
 
-            new MeetingEngagementMissionStep().ExecuteMissionStep(context, margin, null);
+            new MeetingEngagementMissionStep().ExecuteMissionStep(execution, margin, null);
         }
 
-        internal List<BattleSquad> AssembleDefendingForce(RegionFaction defendingRegionFaction, float attackerMarginOfSuccess)
+        internal List<BattleSquad> AssembleDefendingForce(
+            RegionFaction defendingRegionFaction,
+            float attackerMarginOfSuccess,
+            IRNG random,
+            IEntityIdAllocator entityIds = null)
         {
             var defendingForce = new List<BattleSquad>();
 
@@ -95,7 +104,8 @@ namespace OnlyWar.Helpers.Missions.Assault
                     TargetBattleValue = targetBattleValue,
                     Profile = ForceCompositionProfile.Garrison
                 };
-                var garrisonSquads = CapTacticalForce(ForceGenerator.GenerateForce(request));
+                var garrisonSquads = CapTacticalForce(
+                    ForceGenerator.GenerateForce(request, random, entityIds));
                 defendingForce.AddRange(garrisonSquads.Select(s => new BattleSquad(false, s))); // Garrisons are never player squads
             }
 

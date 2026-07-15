@@ -13,9 +13,10 @@ namespace OnlyWar.Helpers.Missions.Sabotage
     {
         public string Description => "Sabotage Mission";
 
-        public void ExecuteMissionStep(MissionContext context, float marginOfSuccess, IMissionStep returnStep)
+        public void ExecuteMissionStep(MissionExecutionContext execution, float marginOfSuccess, IMissionStep returnStep)
         {
-            BaseSkill tactics = GameDataSingleton.Instance.GameRulesData.Skills.Tactics;
+            MissionContext context = execution.State;
+            BaseSkill tactics = execution.Rules.Tactics;
             RegionFaction enemyFaction = context.Order.Mission.RegionFaction;
             float difficulty = (float)(enemyFaction.Entrenchment * 0.5);
             difficulty += (float)Math.Log10(enemyFaction.Garrison);
@@ -24,7 +25,7 @@ namespace OnlyWar.Helpers.Missions.Sabotage
             Order order = context.MissionSquads.First().Squad.CurrentOrders;
 
             context.AddLog($"Day {context.DaysElapsed}: Force plants explosives in {context.Order.Mission.RegionFaction.Region.Name}");
-            float margin = missionTest.RunMissionCheck(context.MissionSquads);
+            float margin = missionTest.RunMissionCheck(context.MissionSquads, execution.Random);
             if(margin > 0)
             {
                 context.Impact += margin;
@@ -35,7 +36,7 @@ namespace OnlyWar.Helpers.Missions.Sabotage
                 // time to go home
                 if (context.Order.Mission.RegionFaction.Region != context.MissionSquads.First().Squad.CurrentRegion)
                 {
-                    new ExfiltrateMissionStep().ExecuteMissionStep(context, 0.0f, this);
+                    new ExfiltrateMissionStep().ExecuteMissionStep(execution, 0.0f, this);
                 }
                 else if (context.DaysElapsed >= 7)
                 {
@@ -45,7 +46,7 @@ namespace OnlyWar.Helpers.Missions.Sabotage
             }
             else
             {
-                new ReconStealthMissionStep().ExecuteMissionStep(context, marginOfSuccess, this);
+                new ReconStealthMissionStep().ExecuteMissionStep(execution, marginOfSuccess, this);
             }
         }
     }

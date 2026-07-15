@@ -15,9 +15,10 @@ namespace OnlyWar.Helpers.Missions.Diversion
     {
         public string Description => "Demonstrate Force";
 
-        public void ExecuteMissionStep(MissionContext context, float marginOfSuccess, IMissionStep returnStep)
+        public void ExecuteMissionStep(MissionExecutionContext execution, float marginOfSuccess, IMissionStep returnStep)
         {
-            BaseSkill tactics = GameDataSingleton.Instance.GameRulesData.Skills.Tactics;
+            MissionContext context = execution.State;
+            BaseSkill tactics = execution.Rules.Tactics;
             RegionFaction enemyFaction = context.Order.Mission.RegionFaction;
             // The harder the enemy is to bluff (better detection, larger garrison able to
             // appraise the threat), the harder it is to project a convincing feint.
@@ -27,7 +28,7 @@ namespace OnlyWar.Helpers.Missions.Diversion
 
             context.DaysElapsed++;
             context.AddLog($"Day {context.DaysElapsed}: Force makes a show of strength against {enemyFaction.Region.Name}");
-            float margin = missionTest.RunMissionCheck(context.MissionSquads);
+            float margin = missionTest.RunMissionCheck(context.MissionSquads, execution.Random);
             if (margin > 0)
             {
                 context.Impact += margin;
@@ -37,7 +38,7 @@ namespace OnlyWar.Helpers.Missions.Diversion
             // exfiltrate, so just keep demonstrating until the campaign week is spent.
             if (context.DaysElapsed < 7)
             {
-                ExecuteMissionStep(context, marginOfSuccess, returnStep);
+                ExecuteMissionStep(execution, marginOfSuccess, returnStep);
             }
         }
     }

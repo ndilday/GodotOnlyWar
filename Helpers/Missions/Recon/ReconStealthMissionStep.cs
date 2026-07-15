@@ -16,8 +16,9 @@ namespace OnlyWar.Helpers.Missions.Recon
 
         public ReconStealthMissionStep(){}
 
-        public void ExecuteMissionStep(MissionContext context, float marginOfSuccess, IMissionStep returnStep)
+        public void ExecuteMissionStep(MissionExecutionContext execution, float marginOfSuccess, IMissionStep returnStep)
         {
+            MissionContext context = execution.State;
             // The mission runs for at most a week. This cap is the safety net for the detect->evade
             // loop: the graceful day check lives in PerformReconMissionStep and only fires on a
             // *successful* infiltration, so a scout that keeps failing stealth would otherwise loop
@@ -30,7 +31,7 @@ namespace OnlyWar.Helpers.Missions.Recon
                     + $"week elapsed at day {context.DaysElapsed}; breaking contact");
                 if (context.Order.Mission.RegionFaction.Region != context.MissionSquads.First().Squad.CurrentRegion)
                 {
-                    new ExfiltrateMissionStep().ExecuteMissionStep(context, 0.0f, null);
+                    new ExfiltrateMissionStep().ExecuteMissionStep(execution, 0.0f, null);
                 }
                 return;
             }
@@ -39,7 +40,7 @@ namespace OnlyWar.Helpers.Missions.Recon
             // mod for terrain
             // mod for enemy recon focus
             // mod for equipment
-            BaseSkill stealth = GameDataSingleton.Instance.GameRulesData.Skills.Stealth;
+            BaseSkill stealth = execution.Rules.Stealth;
             Region region = context.Order.Mission.RegionFaction.Region;
             // the scout's own knowledge of the region makes it easier to find a stealthy route
             Faction scout = context.MissionSquads.FirstOrDefault()?.Squad.Faction;
@@ -59,14 +60,14 @@ namespace OnlyWar.Helpers.Missions.Recon
                 .Select(sol => sol.Soldier.GetTotalSkillValue(stealth))
                 .DefaultIfEmpty(0f)
                 .Max();
-            float margin = missionTest.RunMissionCheck(context.MissionSquads);
+            float margin = missionTest.RunMissionCheck(context.MissionSquads, execution.Random);
             bool slippedIn = margin > 0.0f;
             // On detection, resolve which of the region's enemy factions spotted the scout now, so the
             // trace can name it and DetectedMissionStep raises the interceptor from that faction (which
             // need not be the mission's anchor RegionFaction) rather than the target.
             if (!slippedIn)
             {
-                context.Spotter = region.SelectSpotter();
+                context.Spotter = region.SelectSpotter(execution.Random);
             }
             GameLog.Trace(() =>
                 $"Recon stealth {DescribeFaction(context)} -> {DescribeTarget(context)} day {context.DaysElapsed}: "
@@ -76,11 +77,11 @@ namespace OnlyWar.Helpers.Missions.Recon
                 + $"{(slippedIn ? "SLIPPED IN" : $"DETECTED by {DescribeSpotter(context.Spotter)}")}");
             if (slippedIn)
             {
-                new PerformReconMissionStep().ExecuteMissionStep(context, margin, this);
+                new PerformReconMissionStep().ExecuteMissionStep(execution, margin, this);
             }
             else
             {
-                new DetectedMissionStep().ExecuteMissionStep(context, margin, this);
+                new DetectedMissionStep().ExecuteMissionStep(execution, margin, this);
             }
         }
 

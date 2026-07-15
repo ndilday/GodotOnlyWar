@@ -20,16 +20,12 @@ namespace OnlyWar.Models.Soldiers
     {
         public BaseSkill Stealth { get; }
         public BaseSkill Tactics { get; }
-        public BaseSkill Fist { get; }
-        public BaseSkill GenericMelee { get; }
         public BaseSkill EngineeringFortification { get; }
 
         public NamedSkillRegistry(IReadOnlyDictionary<int, BaseSkill> baseSkillMap)
         {
             Stealth = Resolve(baseSkillMap, "Stealth");
             Tactics = Resolve(baseSkillMap, "Tactics");
-            Fist = Resolve(baseSkillMap, "Fist");
-            GenericMelee = Resolve(baseSkillMap, "Generic Melee");
             EngineeringFortification = Resolve(baseSkillMap, "Engineering (Fortification)");
         }
 

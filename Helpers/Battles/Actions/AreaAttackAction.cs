@@ -11,6 +11,7 @@ namespace OnlyWar.Helpers.Battles.Actions
     public class AreaAttackAction : IAction
     {
         private readonly BattleGridManager _grid;
+        private readonly IRNG _random;
         private readonly List<string> _victimNames = [];
         private readonly List<string> _friendlyVictimNames = [];
         private string _soldierName;
@@ -30,12 +31,14 @@ namespace OnlyWar.Helpers.Battles.Actions
             int shooterId,
             int targetId,
             int weaponId,
-            BattleGridManager grid)
+            BattleGridManager grid,
+            IRNG random)
         {
             ShooterId = shooterId;
             TargetId = targetId;
             WeaponId = weaponId;
             _grid = grid ?? throw new ArgumentNullException(nameof(grid));
+            _random = random ?? throw new ArgumentNullException(nameof(random));
         }
 
         public void Execute(BattleState state)
@@ -93,7 +96,7 @@ namespace OnlyWar.Helpers.Battles.Actions
             RangedWeapon weapon,
             BattleSoldier target)
         {
-            HitLocation hitLocation = HitLocationCalculator.DetermineHitLocation(target);
+            HitLocation hitLocation = HitLocationCalculator.DetermineHitLocation(target, _random);
             if (hitLocation.IsSevered)
             {
                 return null;
@@ -101,7 +104,7 @@ namespace OnlyWar.Helpers.Battles.Actions
 
             float range = _grid.GetDistanceBetweenSoldiers(ShooterId, target.Soldier.Id);
             float damage = BattleModifiersUtil.CalculateDamageAtRange(weapon, range)
-                * (3.5f + ((float)RNG.NextRandomZValue() * 1.75f));
+                * (3.5f + ((float)_random.NextRandomZValue() * 1.75f));
             float effectiveArmor = target.Armor.Template.ArmorProvided
                 * weapon.Template.ArmorMultiplier;
             float penetratingDamage = damage - effectiveArmor;

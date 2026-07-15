@@ -15,8 +15,9 @@ namespace OnlyWar.Helpers.Battles
         private readonly ICollection<IAction> _shootActions;
         private readonly ICollection<IAction> _moveActions;
         private readonly ICollection<IAction> _meleeActions;
-        private readonly MeleeWeapon _defaultMeleeWeapon;
         private readonly IReadOnlyDictionary<int, BattleSoldier> _soldierMap;
+        private readonly IReadOnlyDictionary<int, MeleeWeaponTemplate> _meleeWeaponTemplates;
+        private readonly IRNG _random;
         private readonly Action<string> _log;
         private readonly Dictionary<(int AttackerSquadId, int TargetSquadId), float> _squadImminenceCache = [];
         private readonly Dictionary<
@@ -141,14 +142,17 @@ namespace OnlyWar.Helpers.Battles
                                   ICollection<IAction> moveActions,
                                   ICollection<IAction> meleeActions,
                                   Action<string> log,
-                                  MeleeWeapon defaultMeleeWeapon)
+                                  IReadOnlyDictionary<int, MeleeWeaponTemplate> meleeWeaponTemplates,
+                                  IRNG random)
         {
             _grid = grid;
             _shootActions = shootActions;
             _moveActions = moveActions;
             _meleeActions = meleeActions;
-            _defaultMeleeWeapon = defaultMeleeWeapon;
             _soldierMap = soldiers;
+            _meleeWeaponTemplates = meleeWeaponTemplates
+                ?? throw new ArgumentNullException(nameof(meleeWeaponTemplates));
+            _random = random ?? throw new ArgumentNullException(nameof(random));
             _log = log;
         }
 
@@ -246,7 +250,7 @@ namespace OnlyWar.Helpers.Battles
                                                             BattleModifiersUtil.EstimateHitDistance(soldier.Soldier, soldier.EquippedRangedWeapons[0], targetSize, soldier.HandsFree, targetEvasion));
                             if (desperateHitDistance > 0)
                             {
-                                float targetPreferredDistance = BattleModifiersUtil.CalculateOptimalDistance(closestSquad.GetRandomSquadMember(),
+                                float targetPreferredDistance = BattleModifiersUtil.CalculateOptimalDistance(closestSquad.GetRandomSquadMember(_random),
                                                                            soldier.Soldier.Size,
                                                                            soldier.Armor.Template.ArmorProvided,
                                                                            soldier.Soldier.Constitution,
@@ -282,7 +286,7 @@ namespace OnlyWar.Helpers.Battles
                     else
                     {
                         float targetPreferredDistance = BattleModifiersUtil.CalculateOptimalDistance(
-                            closestSquad.GetRandomSquadMember(),
+                            closestSquad.GetRandomSquadMember(_random),
                             soldier.Soldier.Size,
                             soldier.Armor.Template.ArmorProvided,
                             soldier.Soldier.Constitution,
@@ -387,7 +391,8 @@ namespace OnlyWar.Helpers.Battles
                         range,
                         effectEstimate.ShotsToFire,
                         false,
-                        _grid));
+                        _grid,
+                        _random));
                 }
                 else
                 {
@@ -413,7 +418,8 @@ namespace OnlyWar.Helpers.Battles
                             range,
                             resultEstimate.ShotsToFire,
                             false,
-                            _grid));
+                            _grid,
+                            _random));
                     }
                     else
                     {
@@ -507,7 +513,7 @@ namespace OnlyWar.Helpers.Battles
             }
 
             IReadOnlyList<MeleeWeapon> projectedMeleeLoadout = GetProjectedMeleeLoadout(soldier);
-            MeleeWeapon projectedPrimary = projectedMeleeLoadout.FirstOrDefault() ?? _defaultMeleeWeapon;
+            MeleeWeapon projectedPrimary = projectedMeleeLoadout.FirstOrDefault();
             MeleeWeapon projectedSecondary = GetSecondaryMeleeWeapon(projectedMeleeLoadout);
             List<MeleeWeapon> plannedMeleeWeapons = BuildPlannedWeaponSequence(
                 soldier,
@@ -549,7 +555,8 @@ namespace OnlyWar.Helpers.Battles
                     soldier.Soldier.Id,
                     pointBlankTemplate.Target.Soldier.Id,
                     pointBlankTemplate.Weapon.Template.Id,
-                    _grid));
+                    _grid,
+                    _random));
                 return;
             }
 
@@ -563,7 +570,8 @@ namespace OnlyWar.Helpers.Battles
                     pointBlankShot.Range,
                     pointBlankShot.ShotsToFire,
                     useBulk: true,
-                    _grid));
+                    grid: _grid,
+                    random: _random));
                 return;
             }
 
@@ -580,7 +588,9 @@ namespace OnlyWar.Helpers.Battles
                     soldier,
                     projectedStrikePlans,
                     didMove: false,
-                    _log));
+                    log: _log,
+                    random: _random,
+                    meleeWeaponTemplates: _meleeWeaponTemplates));
             }
         }
 
@@ -599,7 +609,7 @@ namespace OnlyWar.Helpers.Battles
             }
 
             MeleeWeapon unarmedWeapon = MeleeAttackAction.GetUnarmedWeapon(soldier);
-            return unarmedWeapon == null ? [_defaultMeleeWeapon] : [unarmedWeapon];
+            return unarmedWeapon == null ? [] : [unarmedWeapon];
         }
 
         private static MeleeWeapon GetSecondaryMeleeWeapon(IReadOnlyList<MeleeWeapon> loadout)
@@ -897,7 +907,8 @@ namespace OnlyWar.Helpers.Battles
                 return null;
             }
 
-            MeleeWeapon primaryWeapon = soldier.GetPrimaryMeleeWeapon(_defaultMeleeWeapon);
+            MeleeWeapon primaryWeapon = soldier.GetPrimaryMeleeWeapon(
+                MeleeAttackAction.GetUnarmedWeapon(soldier));
             MeleeWeapon secondaryWeapon = soldier.GetSecondaryMeleeWeapon();
             List<MeleeWeapon> plannedWeapons = BuildPlannedWeaponSequence(soldier, primaryWeapon, secondaryWeapon);
             if (plannedWeapons.Count == 0)
@@ -911,7 +922,13 @@ namespace OnlyWar.Helpers.Battles
                 return null;
             }
 
-            return new MeleeAttackAction(soldier, strikePlans, didMove, _log);
+            return new MeleeAttackAction(
+                soldier,
+                strikePlans,
+                didMove,
+                _log,
+                _random,
+                _meleeWeaponTemplates);
         }
 
         private List<MeleeWeapon> BuildPlannedWeaponSequence(BattleSoldier soldier, MeleeWeapon primaryWeapon, MeleeWeapon secondaryWeapon)
@@ -939,7 +956,7 @@ namespace OnlyWar.Helpers.Battles
                     ?? MeleeWeaponTemplate.DefaultAttackSpeedMultiplier);
             int guaranteedAttacks = (int)Math.Floor(attackCount);
             float fractionalAttack = attackCount - guaranteedAttacks;
-            if (RNG.GetLinearDouble() < fractionalAttack)
+            if (_random.GetLinearDouble() < fractionalAttack)
             {
                 guaranteedAttacks++;
             }
@@ -1074,7 +1091,8 @@ namespace OnlyWar.Helpers.Battles
                     soldier.Soldier.Id,
                     templateLine.Target.Soldier.Id,
                     templateLine.Weapon.Template.Id,
-                    _grid));
+                    _grid,
+                    _random));
                 return;
             }
 
@@ -1106,7 +1124,8 @@ namespace OnlyWar.Helpers.Battles
                     range,
                     shootNow.ShotsToFire,
                     isMoving,
-                    _grid));
+                    _grid,
+                    _random));
             }
             else if (!isMoving)
             {

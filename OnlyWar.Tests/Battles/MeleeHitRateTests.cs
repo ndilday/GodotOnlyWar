@@ -27,7 +27,8 @@ public class MeleeHitRateTests
         {
             if (MeleeAttackAction.RollMeleeHit(attackSkill, weaponAccuracy, didMove,
                                                defenderSkill, defenderEvasion,
-                                               defenderDefenseModifier))
+                                               defenderDefenseModifier,
+                                               StaticRNG.Instance))
             {
                 hits++;
             }

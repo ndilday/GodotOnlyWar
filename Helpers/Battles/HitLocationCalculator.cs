@@ -5,13 +5,14 @@ namespace OnlyWar.Helpers.Battles
 {
     static public class HitLocationCalculator
     {
-        static public HitLocation DetermineHitLocation(BattleSoldier soldier)
+        static public HitLocation DetermineHitLocation(BattleSoldier soldier, IRNG random)
         {
+            if (random == null) throw new ArgumentNullException(nameof(random));
             // we're using the "lottery ball" approach to randomness here, where each point of probability
             // for each available body party defines the size of the random linear distribution
             // TODO: factor in cover/body position
             // 
-            int roll = RNG.GetIntBelowMax(0, soldier.Soldier.Body.TotalProbabilityMap[soldier.Stance]);
+            int roll = random.GetIntBelowMax(0, soldier.Soldier.Body.TotalProbabilityMap[soldier.Stance]);
             foreach (HitLocation location in soldier.Soldier.Body.HitLocations)
             {
                 int locationChance = location.Template.HitProbabilityMap[(int)soldier.Stance];

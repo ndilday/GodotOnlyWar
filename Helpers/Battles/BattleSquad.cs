@@ -131,10 +131,10 @@ namespace OnlyWar.Helpers.Battles
                                              (ushort)(numberOfRows * maxDepth));
         }
 
-        public BattleSoldier GetRandomSquadMember()
+        public BattleSoldier GetRandomSquadMember(IRNG random)
         {
             List<BattleSoldier> ableSoldiers = AbleSoldiers;
-            return ableSoldiers[RNG.GetIntBelowMax(0, ableSoldiers.Count)];
+            return ableSoldiers[random.GetIntBelowMax(0, ableSoldiers.Count)];
         }
 
         public float GetAverageArmor()

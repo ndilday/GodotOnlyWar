@@ -27,8 +27,9 @@ namespace OnlyWar.Helpers.Battles
             }
         }
 
-        public BattleSquadLayout LayoutBattleSquad(BattleSquad squad, bool isLoose)
+        public BattleSquadLayout LayoutBattleSquad(BattleSquad squad, bool isLoose, IRNG random)
         {
+            if (random == null) throw new ArgumentNullException(nameof(random));
             int x = 0;
             int y = 0;
             int i = 0;
@@ -40,7 +41,7 @@ namespace OnlyWar.Helpers.Battles
             List<BattleSoldier> ableSoldiers = squad.AbleSoldiers;
             int rows = ((ableSoldiers.Count - 1) / 10) + 1;
             int soldiersPerRow = ableSoldiers.Count / rows;
-            foreach (BattleSoldier soldier in ableSoldiers.OrderBy(s => RNG.GetLinearDouble()))
+            foreach (BattleSoldier soldier in ableSoldiers.OrderBy(s => random.GetLinearDouble()))
             {
                 Tuple<int, int> position = new(x, y);
                 layout.BattleSoldierPositionMap[soldier.Soldier.Id] = position;

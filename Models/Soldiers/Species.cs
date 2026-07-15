@@ -1,5 +1,7 @@
 ﻿using System.Collections.Generic;
 
+using OnlyWar.Models.Equippables;
+
 namespace OnlyWar.Models.Soldiers
 {
     public class SkillTemplate : NormalizedValueTemplate
@@ -36,6 +38,8 @@ namespace OnlyWar.Models.Soldiers
         public float RangedEvasion { get; }
         public SpeciesAbilities Abilities { get; }
         public BodyTemplate BodyTemplate { get; }
+        public int DefaultUnarmedWeaponTemplateId { get; }
+        public MeleeWeaponTemplate DefaultUnarmedWeapon { get; }
 
         public Species(int id, string name, NormalizedValueTemplate strength,
                        NormalizedValueTemplate dex, NormalizedValueTemplate con,
@@ -44,7 +48,8 @@ namespace OnlyWar.Models.Soldiers
                        NormalizedValueTemplate psy, NormalizedValueTemplate atk,
                        NormalizedValueTemplate mov, NormalizedValueTemplate siz,
                        ushort width, ushort depth, float meleeEvasion, float rangedEvasion,
-                       SpeciesAbilities abilities, BodyTemplate bodyTemplate)
+                       SpeciesAbilities abilities, BodyTemplate bodyTemplate,
+                       MeleeWeaponTemplate defaultUnarmedWeapon)
         {
             Id = id;
             Name = name;
@@ -65,6 +70,9 @@ namespace OnlyWar.Models.Soldiers
             RangedEvasion = rangedEvasion;
             Abilities = abilities;
             BodyTemplate = bodyTemplate;
+            DefaultUnarmedWeapon = defaultUnarmedWeapon
+                ?? throw new System.ArgumentNullException(nameof(defaultUnarmedWeapon));
+            DefaultUnarmedWeaponTemplateId = defaultUnarmedWeapon.Id;
         }
     }
 }

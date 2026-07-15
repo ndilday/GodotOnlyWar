@@ -4,6 +4,7 @@ using System.Linq;
 using OnlyWar.Helpers;
 using OnlyWar.Helpers.Battles;
 using OnlyWar.Helpers.Battles.Actions;
+using OnlyWar.Models;
 using OnlyWar.Models.Battles;
 using OnlyWar.Models.Equippables;
 using OnlyWar.Models.Soldiers;
@@ -115,7 +116,9 @@ public class MeleeCombatReworkTests
             attackerSoldier,
             [new PlannedMeleeStrike(defenderSoldier.Soldier.Id, attackerWeapon.Template.Id, defenderSoldier.Soldier.Name, attackerWeapon.Template.Name)],
             false,
-            null);
+            null,
+            new SeededRNG(12345),
+            CreateMeleeTemplateMap(attackerSoldier, defenderSoldier));
 
         action.Execute(state);
 
@@ -144,7 +147,9 @@ public class MeleeCombatReworkTests
             attackerSoldier,
             [new PlannedMeleeStrike(defenderSoldier.Soldier.Id, attackerWeapon.Template.Id, defenderSoldier.Soldier.Name, attackerWeapon.Template.Name)],
             false,
-            null);
+            null,
+            new SeededRNG(12345),
+            CreateMeleeTemplateMap(attackerSoldier, defenderSoldier));
 
         action.Execute(state);
         int woundCountAfterFirstExecute = action.WoundResolutions.Count;
@@ -240,7 +245,8 @@ public class MeleeCombatReworkTests
             new List<IAction>(),
             meleeActions,
             null,
-            attacker.EquippedMeleeWeapons[0]);
+            CreateMeleeTemplateMap(attacker, firstDefender, secondDefender),
+            new SeededRNG(12345));
 
         attackerSquad.IsInMelee = true;
         planner.PrepareActions(attackerSquad);
@@ -249,5 +255,126 @@ public class MeleeCombatReworkTests
         Assert.Equal(3, action.StrikePlans.Count);
         Assert.Equal(2, action.StrikePlans.Count(strike => strike.TargetId == firstDefender.Soldier.Id));
         Assert.Equal(1, action.StrikePlans.Count(strike => strike.TargetId == secondDefender.Soldier.Id));
+    }
+
+    [Fact]
+    public void UnarmedPlannerAndDefense_UseEachCombatantsSpeciesDefault()
+    {
+        MeleeWeaponTemplate attackerDefault = CreateMeleeWeapon(
+            801,
+            "Species Claw",
+            AttackSkill).Template;
+        MeleeWeaponTemplate defenderDefault = CreateMeleeWeapon(
+            802,
+            "Species Guard",
+            PrimaryParrySkill).Template;
+        Species attackerSpecies = CreateSpecies(801, "Clawed Species", attackerDefault);
+        Species defenderSpecies = CreateSpecies(802, "Guarding Species", defenderDefault);
+        SoldierTemplate attackerTemplate = new(
+            801, attackerSpecies, "Clawed Fighter", 1, 1, false, 0, []);
+        SoldierTemplate defenderTemplate = new(
+            802, defenderSpecies, "Guarding Fighter", 1, 1, false, 0, []);
+        Soldier attackerModel = TestModelFactory.CreateSoldier(
+            attackerTemplate,
+            "Attacker",
+            skills: new Skill(AttackSkill, 4));
+        Soldier defenderModel = TestModelFactory.CreateSoldier(
+            defenderTemplate,
+            "Defender",
+            skills: new Skill(PrimaryParrySkill, 16));
+        attackerModel.Id = 801;
+        defenderModel.Id = 802;
+        BattleSquad attackerSquad = new(
+            true,
+            TestModelFactory.CreateSquad("Attackers", attackerModel));
+        BattleSquad defenderSquad = new(
+            false,
+            TestModelFactory.CreateSquad("Defenders", defenderModel));
+        BattleSoldier attacker = attackerSquad.Soldiers.Single();
+        BattleSoldier defender = defenderSquad.Soldiers.Single();
+        attacker.RangedWeapons.Clear();
+        attacker.EquippedRangedWeapons.Clear();
+        attacker.MeleeWeapons.Clear();
+        attacker.EquippedMeleeWeapons.Clear();
+        defender.RangedWeapons.Clear();
+        defender.EquippedRangedWeapons.Clear();
+        defender.MeleeWeapons.Clear();
+        defender.EquippedMeleeWeapons.Clear();
+        attacker.TopLeft = new Tuple<int, int>(0, 0);
+        defender.TopLeft = new Tuple<int, int>(1, 0);
+
+        BattleGridManager grid = new();
+        grid.PlaceSoldier(attacker, true, attacker.PositionList.ToList());
+        grid.PlaceSoldier(defender, false, defender.PositionList.ToList());
+        List<IAction> meleeActions = [];
+        BattleSquadPlanner planner = new(
+            grid,
+            new Dictionary<int, BattleSoldier>
+            {
+                [attacker.Soldier.Id] = attacker,
+                [defender.Soldier.Id] = defender
+            },
+            new List<IAction>(),
+            new List<IAction>(),
+            meleeActions,
+            null,
+            CreateMeleeTemplateMap(attacker, defender),
+            new SeededRNG(12345));
+
+        attackerSquad.IsInMelee = true;
+        planner.PrepareActions(attackerSquad);
+
+        MeleeAttackAction action = Assert.Single(meleeActions.OfType<MeleeAttackAction>());
+        PlannedMeleeStrike strike = Assert.Single(action.StrikePlans);
+        Assert.Equal(attackerDefault.Id, strike.WeaponTemplateId);
+        Assert.Equal(
+            defender.Soldier.GetTotalSkillValue(PrimaryParrySkill),
+            MeleeAttackAction.GetDefenderMeleeSkill(defender, AttackSkill));
+    }
+
+    private static Species CreateSpecies(
+        int id,
+        string name,
+        MeleeWeaponTemplate defaultUnarmedWeapon)
+    {
+        return new Species(
+            id,
+            name,
+            Value(10),
+            Value(10),
+            Value(10),
+            Value(10),
+            Value(10),
+            Value(10),
+            Value(10),
+            Value(0),
+            Value(10),
+            Value(6),
+            Value(1),
+            1,
+            1,
+            0,
+            0,
+            SpeciesAbilities.None,
+            HumanBodyTemplate.Instance,
+            defaultUnarmedWeapon);
+    }
+
+    private static NormalizedValueTemplate Value(float value) => new()
+    {
+        BaseValue = value,
+        StandardDeviation = 0
+    };
+
+    private static IReadOnlyDictionary<int, MeleeWeaponTemplate> CreateMeleeTemplateMap(
+        params BattleSoldier[] soldiers)
+    {
+        return soldiers
+            .SelectMany(soldier => soldier.MeleeWeapons
+                .Concat(soldier.EquippedMeleeWeapons)
+                .Select(weapon => weapon.Template)
+                .Append(soldier.Soldier.Template.Species.DefaultUnarmedWeapon))
+            .GroupBy(template => template.Id)
+            .ToDictionary(group => group.Key, group => group.First());
     }
 }

@@ -17,8 +17,9 @@ namespace OnlyWar.Helpers.Missions.Recon
 
         public DetectedMissionStep(){}
 
-        public void ExecuteMissionStep(MissionContext context, float marginOfSuccess, IMissionStep returnStep)
+        public void ExecuteMissionStep(MissionExecutionContext execution, float marginOfSuccess, IMissionStep returnStep)
         {
+            MissionContext context = execution.State;
             // Build the intercepting OpFor. Its size grows the worse the scout's stealth margin was
             // (a badly-blown infiltration is met by more defenders). marginOfSuccess is <= 0 here —
             // this is the detected branch — so subtracting its truncated value ADDS squads. The cast
@@ -28,7 +29,7 @@ namespace OnlyWar.Helpers.Missions.Recon
             int numberOfOpposingSquads = context.MissionSquads.Count - (short)marginOfSuccess;
             // any fractional value of margin of Success is treated as the probability of an additional squad being added.
             float fraction = Math.Abs(marginOfSuccess - (short)marginOfSuccess);
-            if (RNG.GetLinearDouble() < fraction)
+            if (execution.Random.GetLinearDouble() < fraction)
             {
                 numberOfOpposingSquads++;
             }
@@ -51,7 +52,12 @@ namespace OnlyWar.Helpers.Missions.Recon
                 Profile = ForceCompositionProfile.ScoutPatrol,
                 Tier = numberOfOpposingSquads
             };
-            context.OpposingSquads = ForceGenerator.GenerateForce(request).Select(s => new BattleSquad(false, s)).ToList();
+            context.OpposingSquads = ForceGenerator.GenerateForce(
+                    request,
+                    execution.Random,
+                    execution.EntityIds)
+                .Select(s => new BattleSquad(false, s))
+                .ToList();
 
             // No force may actually materialize to intercept the scout: the region can detect the
             // intrusion (a listening post over a bare garrison) yet have no squads to scramble, or
@@ -69,7 +75,7 @@ namespace OnlyWar.Helpers.Missions.Recon
                     + $"intercept force requested (tier={numberOfOpposingSquads}) but none materialized "
                     + $"({spotter.PlanetFaction.Faction.Name} fielded no ScoutPatrol); "
                     + "recon uncontested, presses on");
-                returnStep?.ExecuteMissionStep(context, marginOfSuccess, returnStep);
+                returnStep?.ExecuteMissionStep(execution, marginOfSuccess, returnStep);
                 return;
             }
 
@@ -77,11 +83,11 @@ namespace OnlyWar.Helpers.Missions.Recon
             // defenders were scrambled, the harder that is. Difficulty reads the ACTUAL generated
             // OpFor — the old code evaluated this from context.OpposingSquads *before* it was
             // populated, so it computed Log(0) = -infinity and the scout trivially won every contest.
-            BaseSkill tactics = GameDataSingleton.Instance.GameRulesData.Skills.Tactics;
+            BaseSkill tactics = execution.Rules.Tactics;
             int opForSize = Math.Max(1, context.OpposingSquads.Sum(s => s.AbleSoldiers.Count));
             float difficulty = 10.0f + (float)Math.Log(opForSize, 10);
             LeaderMissionTest missionTest = new LeaderMissionTest(tactics, difficulty);
-            float margin = missionTest.RunMissionCheck(context.MissionSquads);
+            float margin = missionTest.RunMissionCheck(context.MissionSquads, execution.Random);
             GameLog.Trace(() =>
                 $"Detected {DescribeRegion(context)} day {context.DaysElapsed}: "
                 + $"intercepted by {context.OpposingSquads.Sum(s => s.AbleSoldiers.Count)} "
@@ -89,11 +95,11 @@ namespace OnlyWar.Helpers.Missions.Recon
                 + $"tacticsMargin={margin:F2} -> {(margin > 0 ? "outmaneuvered them (cross-detection)" : "AMBUSHED")}");
             if (margin > 0.0f)
             {
-                new CrossDetectionMissionStep().ExecuteMissionStep(context, margin, returnStep);
+                new CrossDetectionMissionStep().ExecuteMissionStep(execution, margin, returnStep);
             }
             else
             {
-                new AmbushedMissionStep().ExecuteMissionStep(context, margin, returnStep);
+                new AmbushedMissionStep().ExecuteMissionStep(execution, margin, returnStep);
             }
         }
 

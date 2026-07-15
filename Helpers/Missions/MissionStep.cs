@@ -6,6 +6,9 @@ namespace OnlyWar.Helpers.Missions
     {
         public string Description { get; }
 
-        public void ExecuteMissionStep(MissionContext context, float marginOfSuccess, IMissionStep returnStep);
+        public void ExecuteMissionStep(
+            MissionExecutionContext execution,
+            float marginOfSuccess,
+            IMissionStep returnStep);
     }
 }

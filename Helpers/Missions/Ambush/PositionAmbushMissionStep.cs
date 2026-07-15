@@ -19,13 +19,14 @@ namespace OnlyWar.Helpers.Missions.Ambush
 
         public PositionAmbushMissionStep() { }
 
-        public void ExecuteMissionStep(MissionContext context, float marginOfSuccess, IMissionStep returnStep)
+        public void ExecuteMissionStep(MissionExecutionContext execution, float marginOfSuccess, IMissionStep returnStep)
         {
+            MissionContext context = execution.State;
             // negative mod for size of enemy force
             // mod for terrain
             // mod for enemy recon focus
             // mod for equipment
-            BaseSkill stealth = GameDataSingleton.Instance.GameRulesData.Skills.Stealth;
+            BaseSkill stealth = execution.Rules.Stealth;
             RegionFaction enemyFaction = context.Order.Mission.RegionFaction;
             float difficulty = enemyFaction.GetOwnRegionIntel() * 0.5f;
             // every degree of magnitude of troops adds one to the difficulty
@@ -37,26 +38,34 @@ namespace OnlyWar.Helpers.Missions.Ambush
             if (attacker != null) difficulty -= enemyFaction.Region.GetFactionRegionIntel(attacker);
             SquadMissionTest missionTest = new SquadMissionTest(stealth, difficulty);
 
-            context.OpposingSquads = PopulateOpposingForce(context.Order.Mission.MissionSize, enemyFaction);
+            context.OpposingSquads = PopulateOpposingForce(
+                context.Order.Mission.MissionSize,
+                enemyFaction,
+                execution.Random,
+                execution.EntityIds);
 
             context.DaysElapsed++;
-            float margin = missionTest.RunMissionCheck(context.MissionSquads);
+            float margin = missionTest.RunMissionCheck(context.MissionSquads, execution.Random);
 
             if (margin > 0.0f)
             {
-                new PerformAmbushMissionStep().ExecuteMissionStep(context, margin, null);
+                new PerformAmbushMissionStep().ExecuteMissionStep(execution, margin, null);
             }
             else
             {
-                new MeetingEngagementMissionStep().ExecuteMissionStep(context, margin, null);
+                new MeetingEngagementMissionStep().ExecuteMissionStep(execution, margin, null);
             }
         }
 
-        private List<BattleSquad> PopulateOpposingForce(int missionSize, RegionFaction enemyFaction)
+        private static List<BattleSquad> PopulateOpposingForce(
+            int missionSize,
+            RegionFaction enemyFaction,
+            IRNG random,
+            IEntityIdAllocator entityIds)
         {
             List<BattleSquad> opposingForces = new List<BattleSquad>();
             // determine size of force to generate
-            double log = RNG.GetLinearDouble() + missionSize;
+            double log = random.GetLinearDouble() + missionSize;
             int forceSize = (int)Math.Pow(10, log);
 
             // generate opposing force
@@ -68,7 +77,9 @@ namespace OnlyWar.Helpers.Missions.Ambush
                 TargetBattleValue = forceSize * StrategicCombatRules.PdfTrooperBattleValue,
                 Profile = ForceCompositionProfile.AmbushForce
             };
-            return ForceGenerator.GenerateForce(request).Select(s => new BattleSquad(false, s)).ToList();
+            return ForceGenerator.GenerateForce(request, random, entityIds)
+                .Select(s => new BattleSquad(false, s))
+                .ToList();
         }
     }
 }

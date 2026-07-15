@@ -5,6 +5,7 @@ using System.IO;
 using System.Linq;
 using OnlyWar.Helpers;
 using OnlyWar.Helpers.Battles;
+using OnlyWar.Helpers.Battles.Aftermath;
 using OnlyWar.Models;
 using OnlyWar.Models.Soldiers;
 using OnlyWar.Models.Squads;
@@ -19,11 +20,13 @@ public class BattleTurnResolverTests
     [Fact]
     public void ProcessNextTurn_UsesImmutableCompactSnapshotsAcrossMutableSimulationTurns()
     {
+        GameRulesData rules = new();
+        Date battleDate = new(1, 1, 1);
         string originalDirectory = Environment.CurrentDirectory;
         try
         {
             Directory.SetCurrentDirectory(RulesDatabaseFixture.RepositoryRoot);
-            GameDataSingleton.Instance.LoadGameDataFromBlob(new GameRulesData(), new Date(1, 1, 1), null);
+            GameDataSingleton.Instance.LoadGameDataFromBlob(rules, battleDate, null);
         }
         finally
         {
@@ -35,7 +38,11 @@ public class BattleTurnResolverTests
         BattleGridManager grid = new();
         Place(grid, attackers.Soldiers[0], side: true, x: 0, y: 0);
         Place(grid, defenders.Soldiers[0], side: false, x: 4, y: 0);
-        BattleTurnResolver resolver = new(grid, [attackers], [defenders], region: null);
+        BattleAftermathDependencies aftermath = new(
+            battleDate, StaticRNG.Instance, NoOpPlayerBattleAftermathSink.Instance);
+        BattleExecutionContext execution = new(rules, StaticRNG.Instance, aftermath);
+        BattleTurnResolver resolver = new(
+            grid, [attackers], [defenders], region: null, execution);
         bool completed = false;
         resolver.OnBattleComplete += (_, _) => completed = true;
 
@@ -96,5 +103,22 @@ public class BattleTurnResolverTests
             new Dictionary<int, Models.Fleets.BoatTemplate>(),
             new Dictionary<int, Models.Fleets.ShipTemplate>(),
             new Dictionary<int, Models.Fleets.FleetTemplate>());
+    }
+
+    private sealed class NoOpPlayerBattleAftermathSink : IPlayerBattleAftermathSink
+    {
+        public static NoOpPlayerBattleAftermathSink Instance { get; } = new();
+
+        public void MoveToFallenBrothers(PlayerSoldier soldier)
+        {
+        }
+
+        public void AddRecoveredGeneseed(float purity)
+        {
+        }
+
+        public void AddToBattleHistory(Date date, string title, IReadOnlyList<string> subEvents)
+        {
+        }
     }
 }

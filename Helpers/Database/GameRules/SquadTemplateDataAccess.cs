@@ -31,11 +31,11 @@ namespace OnlyWar.Helpers.Database.GameRules
             var attributes = GetAttributeTemplates(connection);
             var soldierTemplateSkills = GetSoldierMosTrainingBySoldierTemplateId(connection, baseSkillMap);
             var trainingProfiles = GetTrainingProfilesById(connection, baseSkillMap);
-            var species = GetSpeciesByFactionId(connection, attributes, hitLocationMap);
+            var meleeWeapons = GetMeleeWeaponTemplates(connection, baseSkillMap);
+            var species = GetSpeciesByFactionId(connection, attributes, hitLocationMap, meleeWeapons);
             var soldierTemplates = 
                 GetSoldierTemplatesByFactionId(connection, soldierTemplateSkills, species, trainingProfiles);
             var armorTemplates = GetArmorTemplates(connection);
-            var meleeWeapons = GetMeleeWeaponTemplates(connection, baseSkillMap);
             var rangedWeapons = GetRangedWeaponTemplates(connection, baseSkillMap);
             var weaponSets = GetWeaponSetMap(connection, meleeWeapons, rangedWeapons);
             var squadTemplateWeaponSetIds = 
@@ -479,7 +479,8 @@ namespace OnlyWar.Helpers.Database.GameRules
 
         private Dictionary<int, List<Species>> GetSpeciesByFactionId(IDbConnection connection,
                                                                      Dictionary<int, NormalizedValueTemplate> attributeMap,
-                                                                     Dictionary<int, List<HitLocationTemplate>> hitLocationTemplateMap)
+                                                                     Dictionary<int, List<HitLocationTemplate>> hitLocationTemplateMap,
+                                                                     Dictionary<int, MeleeWeaponTemplate> meleeWeaponTemplateMap)
         {
             Dictionary<int, List<Species>> speciesMap = [];
             using (var command = connection.CreateCommand())
@@ -511,6 +512,14 @@ namespace OnlyWar.Helpers.Database.GameRules
                     float meleeEvasion = (float)reader.GetDouble(17);
                     float rangedEvasion = (float)reader.GetDouble(18);
                     SpeciesAbilities abilities = (SpeciesAbilities)reader.GetInt32(19);
+                    if (reader.FieldCount <= 20 || reader[20].GetType() == typeof(DBNull))
+                    {
+                        throw new InvalidOperationException(
+                            $"Species {id} ('{name}') does not define a default unarmed weapon template.");
+                    }
+                    int defaultUnarmedWeaponTemplateId = reader.GetInt32(20);
+                    MeleeWeaponTemplate defaultUnarmedWeapon = ResolveDefaultUnarmedWeapon(
+                        id, name, defaultUnarmedWeaponTemplateId, meleeWeaponTemplateMap);
                     Species species = new Species(id, name,
                                                   attributeMap[strengthTemplateId],
                                                   attributeMap[dexterityTemplateId],
@@ -528,7 +537,8 @@ namespace OnlyWar.Helpers.Database.GameRules
                                                   meleeEvasion,
                                                   rangedEvasion,
                                                   abilities,
-                                                  new BodyTemplate(hitLocationTemplateMap[bodyId]));
+                                                  new BodyTemplate(hitLocationTemplateMap[bodyId]),
+                                                  defaultUnarmedWeapon);
 
                     if (!speciesMap.ContainsKey(factionId))
                     {
@@ -538,6 +548,24 @@ namespace OnlyWar.Helpers.Database.GameRules
                 }
             }
             return speciesMap;
+        }
+
+        internal static MeleeWeaponTemplate ResolveDefaultUnarmedWeapon(
+            int speciesId,
+            string speciesName,
+            int defaultUnarmedWeaponTemplateId,
+            IReadOnlyDictionary<int, MeleeWeaponTemplate> meleeWeaponTemplateMap)
+        {
+            if (meleeWeaponTemplateMap == null
+                || !meleeWeaponTemplateMap.TryGetValue(
+                    defaultUnarmedWeaponTemplateId, out MeleeWeaponTemplate weaponTemplate))
+            {
+                throw new InvalidOperationException(
+                    $"Species {speciesId} ('{speciesName}') references default unarmed weapon template "
+                    + $"{defaultUnarmedWeaponTemplateId}, which is not in the rules database.");
+            }
+
+            return weaponTemplate;
         }
 
         private Dictionary<int, List<SoldierTemplate>> GetSoldierTemplatesByFactionId(

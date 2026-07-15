@@ -88,7 +88,7 @@ public class ReconDetectionTests
         AddEnemy(region, CreateFaction(21, "Beta"), population: 1_000, organization: 0, intel: 0f);
 
         RNG.Reset(7);
-        RegionFaction spotter = region.SelectSpotter();
+        RegionFaction spotter = region.SelectSpotter(StaticRNG.Instance);
 
         Assert.NotNull(spotter);
         Assert.Contains(spotter, region.RegionFactionMap.Values);
@@ -101,7 +101,7 @@ public class ReconDetectionTests
         int secondHits = 0;
         for (int i = 0; i < iterations; i++)
         {
-            RegionFaction spotter = region.SelectSpotter();
+            RegionFaction spotter = region.SelectSpotter(StaticRNG.Instance);
             if (spotter == first) firstHits++;
             else if (spotter == second) secondHits++;
         }

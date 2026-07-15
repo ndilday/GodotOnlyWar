@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using System.Drawing;
 using System.Linq;
 using OnlyWar.Helpers.Battles;
+using OnlyWar.Helpers;
 using OnlyWar.Helpers.Missions.Assault;
 using OnlyWar.Helpers.StrategicCombat;
 using OnlyWar.Models;
@@ -51,7 +52,10 @@ public class PrepareAssaultMissionStepTests
         target.Garrison = StrategicCombatRules.PdfTrooperBattleValue * 10;
 
         List<BattleSquad> defenders = new PrepareAssaultMissionStep()
-            .AssembleDefendingForce(target, attackerMarginOfSuccess: 0f);
+            .AssembleDefendingForce(
+                target,
+                attackerMarginOfSuccess: 0f,
+                StaticRNG.Instance);
 
         long generatedBattleValue = defenders
             .SelectMany(squad => squad.Squad.Members)

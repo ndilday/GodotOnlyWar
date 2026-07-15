@@ -75,7 +75,7 @@ public class MissionExperienceCalculatorTests
         float secondBefore = second.GetTotalSkillValue(TestSkills.Stealth);
 
         RNG.Reset(42);
-        missionTest.RunMissionCheck([squad]);
+        missionTest.RunMissionCheck([squad], StaticRNG.Instance);
 
         Assert.True(first.GetTotalSkillValue(TestSkills.Stealth) > firstBefore);
         Assert.True(second.GetTotalSkillValue(TestSkills.Stealth) > secondBefore);
@@ -92,7 +92,7 @@ public class MissionExperienceCalculatorTests
         float before = npc.GetTotalSkillValue(TestSkills.Stealth);
 
         RNG.Reset(42);
-        missionTest.RunMissionCheck([squad]);
+        missionTest.RunMissionCheck([squad], StaticRNG.Instance);
 
         Assert.Equal(before, npc.GetTotalSkillValue(TestSkills.Stealth));
     }
@@ -113,7 +113,7 @@ public class MissionExperienceCalculatorTests
             GameLog.MinimumLevel = GameLogLevel.Trace;
             GameLog.Sink = (level, message) => logs.Add(message);
             RNG.Reset(42);
-            missionTest.RunMissionCheck([squad]);
+            missionTest.RunMissionCheck([squad], StaticRNG.Instance);
         }
         finally
         {
@@ -134,7 +134,7 @@ public class MissionExperienceCalculatorTests
         float leadershipBefore = soldier.GetTotalSkillValue(TestSkills.Leadership);
 
         RNG.Reset(42);
-        missionTest.RunMissionCheck([squad]);
+        missionTest.RunMissionCheck([squad], StaticRNG.Instance);
 
         Assert.Equal(leadershipBefore, soldier.GetTotalSkillValue(TestSkills.Leadership));
     }
@@ -150,7 +150,7 @@ public class MissionExperienceCalculatorTests
         float lowBefore = low.GetTotalSkillValue(TestSkills.Stealth);
 
         RNG.Reset(7);
-        missionTest.RunMissionCheck([squad]);
+        missionTest.RunMissionCheck([squad], StaticRNG.Instance);
 
         // "Low" was not the soldier whose skill resolved the check, but he still participated
         // in (and thus learns from) the mission.

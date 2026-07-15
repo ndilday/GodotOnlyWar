@@ -1,5 +1,6 @@
 using OnlyWar.Builders;
 using OnlyWar.Helpers.Battles;
+using OnlyWar.Helpers.Battles.Aftermath;
 using OnlyWar.Helpers.Missions;
 using OnlyWar.Helpers.Simulation;
 using OnlyWar.Helpers.StrategicCombat;
@@ -26,6 +27,8 @@ namespace OnlyWar.Helpers.Turns
         private const float DiversionThreatScale = 4.0f;
 
         private readonly GameSession _session;
+        private readonly MissionRules _missionRules;
+        private readonly BattleExecutionContext _battleExecution;
         private readonly Action<PlanetFaction, Region, float> _recordIntelGain;
         private readonly Action<RegionFaction, long, Faction> _recordScenarioPdfLost;
 
@@ -35,6 +38,17 @@ namespace OnlyWar.Helpers.Turns
             Action<RegionFaction, long, Faction> recordScenarioPdfLost)
         {
             _session = session ?? throw new ArgumentNullException(nameof(session));
+            _missionRules = new MissionRules(
+                _session.Rules.Skills.Stealth,
+                _session.Rules.Skills.Tactics);
+            BattleAftermathDependencies aftermath = new(
+                _session.CurrentDate,
+                _session.Random,
+                new PlayerBattleAftermathSink(_session.Sector.PlayerForce));
+            _battleExecution = new BattleExecutionContext(
+                _session.Rules,
+                _session.Random,
+                aftermath);
             _recordIntelGain = recordIntelGain;
             _recordScenarioPdfLost = recordScenarioPdfLost;
         }
@@ -103,7 +117,14 @@ namespace OnlyWar.Helpers.Turns
                     + $"squads={order.AssignedSquads.Count}, soldiers={order.AssignedSquads.Sum(s => s.Members.Count)}, "
                     + $"battleValue={SquadBattleValue(order.AssignedSquads)}");
                 MissionContext context = new(order, involvedBattleSquads, new List<BattleSquad>());
-                MissionStepOrchestrator.GetStartingStep(context).ExecuteMissionStep(context, 0, null);
+                var execution = new MissionExecutionContext(
+                    context,
+                    _missionRules,
+                    _session.Random,
+                    _battleExecution,
+                    new TacticalEntityIdAllocator());
+                MissionStepOrchestrator.GetStartingStep(execution)
+                    .ExecuteMissionStep(execution, 0, null);
                 missionContexts.Add(context);
                 if (isPlayerOrder)
                 {
@@ -134,7 +155,14 @@ namespace OnlyWar.Helpers.Turns
                 if (involvedBattleSquads.Count == 0) continue;
 
                 MissionContext context = new(order, involvedBattleSquads, new List<BattleSquad>());
-                MissionStepOrchestrator.GetStartingStep(context).ExecuteMissionStep(context, 0, null);
+                var execution = new MissionExecutionContext(
+                    context,
+                    _missionRules,
+                    _session.Random,
+                    _battleExecution,
+                    new TacticalEntityIdAllocator());
+                MissionStepOrchestrator.GetStartingStep(execution)
+                    .ExecuteMissionStep(execution, 0, null);
                 missionContexts.Add(context);
                 if (isPlayerOrder)
                 {

@@ -46,10 +46,14 @@ public class GaussianCalculatorTests
     public void DetermineMarginOfSuccessZvalue_IsDeterministicForSeededRng()
     {
         RNG.Reset(123);
-        float first = GaussianCalculator.DetermineMarginOfSuccessZvalue(0.25f);
+        float first = GaussianCalculator.DetermineMarginOfSuccessZvalue(
+            0.25f,
+            StaticRNG.Instance);
 
         RNG.Reset(123);
-        float second = GaussianCalculator.DetermineMarginOfSuccessZvalue(0.25f);
+        float second = GaussianCalculator.DetermineMarginOfSuccessZvalue(
+            0.25f,
+            StaticRNG.Instance);
 
         Assert.Equal(first, second);
     }

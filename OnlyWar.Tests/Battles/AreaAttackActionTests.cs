@@ -197,7 +197,8 @@ public class AreaAttackActionTests
             0,
             1_000,
             SpeciesAbilities.None,
-            HumanBodyTemplate.Instance);
+            HumanBodyTemplate.Instance,
+            TestModelFactory.DefaultUnarmedWeapon);
         return new SoldierTemplate(
             99,
             species,
@@ -267,7 +268,12 @@ public class AreaAttackActionTests
         {
             int weaponId = State.GetSoldier(shooterId)
                 .EquippedRangedWeapons.Single().Template.Id;
-            AreaAttackAction action = new(shooterId, targetId, weaponId, Grid);
+            AreaAttackAction action = new(
+                shooterId,
+                targetId,
+                weaponId,
+                Grid,
+                StaticRNG.Instance);
             action.Execute(State);
             return action;
         }

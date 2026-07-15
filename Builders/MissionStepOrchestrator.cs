@@ -13,23 +13,25 @@ namespace OnlyWar.Builders
 {
     public static class MissionStepOrchestrator
     {
-        public static IMissionStep GetStartingStep(MissionContext context)
+        public static IMissionStep GetStartingStep(MissionExecutionContext execution)
         {
+            MissionContext context = execution.State;
             // A diversion is overt and demonstrates from an adjacent region by design, so it
             // never infiltrates the target.
             if (context.Order.Mission.MissionType == MissionType.Diversion)
             {
-                return GetMainInitialStep(context);
+                return GetMainInitialStep(execution);
             }
             if (context.Order.Mission.RegionFaction.Region != context.MissionSquads.First().Squad.CurrentRegion)
             {
                 return new InfiltrateMissionStep();
             }
-            return GetMainInitialStep(context);
+            return GetMainInitialStep(execution);
         }
 
-        public static IMissionStep GetMainInitialStep(MissionContext context)
+        public static IMissionStep GetMainInitialStep(MissionExecutionContext execution)
         {
+            MissionContext context = execution.State;
             switch (context.Order.Mission.MissionType)
             {
                 case MissionType.Advance:

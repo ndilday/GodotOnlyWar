@@ -33,8 +33,9 @@ namespace OnlyWar.Helpers.Battles.Placers
             }
         }
 
-        public ArmyLayout LayoutArmyLine(IEnumerable<BattleSquad> squads, bool isLoose)
+        public ArmyLayout LayoutArmyLine(IEnumerable<BattleSquad> squads, bool isLoose, IRNG random)
         {
+            if (random == null) throw new ArgumentNullException(nameof(random));
             int lineLeft = 0;
             int lineRight = 0;
             int y = 0;
@@ -84,15 +85,15 @@ namespace OnlyWar.Helpers.Battles.Placers
                 }
 
                 // place remaining default squads in a line, a few yards apart from each other
-                PlaceSquads(defaultSquads, isLoose, layout, y, ref lineLeft, ref lineRight, ref maxY);
+                PlaceSquads(defaultSquads, isLoose, layout, y, ref lineLeft, ref lineRight, ref maxY, random);
 
                 // place fast squads at each end of the default squads
-                PlaceSquads(fastSquads, isLoose, layout, y, ref lineLeft, ref lineRight, ref maxY);
+                PlaceSquads(fastSquads, isLoose, layout, y, ref lineLeft, ref lineRight, ref maxY, random);
 
                 // place heavy squads in a line, a few yards apart from each other, behind the first line
                 // place remaining default squads in a line, a few yards apart from each other
                 y = maxY + 3;
-                PlaceSquads(heavySquads, isLoose, layout, y, ref lineLeft, ref lineRight, ref maxY);
+                PlaceSquads(heavySquads, isLoose, layout, y, ref lineLeft, ref lineRight, ref maxY, random);
 
                 // place HQ
                 // evenly space the HQs across the maximum width of the force
@@ -103,7 +104,7 @@ namespace OnlyWar.Helpers.Battles.Placers
                 {
                     BattleSquad hqSquad = hqSquads[i];
                     BattleSquadLayout squadLayout =
-                        BattleSquadLayoutHelper.Instance.LayoutBattleSquad(hqSquad, isLoose);
+                        BattleSquadLayoutHelper.Instance.LayoutBattleSquad(hqSquad, isLoose, random);
                     layout.SquadLayoutMap[hqSquad.Id] = squadLayout;
                     
                     layout.SquadPositionMap[squad.Id] = 
@@ -121,7 +122,8 @@ namespace OnlyWar.Helpers.Battles.Placers
             return layout;
         }
 
-        private static void PlaceSquads(List<BattleSquad> squads, bool isLoose, ArmyLayout layout, int y, ref int lineLeft, ref int lineRight, ref int maxY)
+        private static void PlaceSquads(List<BattleSquad> squads, bool isLoose, ArmyLayout layout, int y,
+                                        ref int lineLeft, ref int lineRight, ref int maxY, IRNG random)
         {
             int i = 0;
             while (i < squads.Count)
@@ -129,7 +131,7 @@ namespace OnlyWar.Helpers.Battles.Placers
                 BattleSquad squad = squads[i];
                 // place a squad to the left
                 BattleSquadLayout squadLayout =
-                    BattleSquadLayoutHelper.Instance.LayoutBattleSquad(squad, isLoose);
+                    BattleSquadLayoutHelper.Instance.LayoutBattleSquad(squad, isLoose, random);
                 layout.SquadLayoutMap[squad.Id] = squadLayout;
                 lineLeft = lineLeft - 3 - squadLayout.SquadDimension.Item1;
                 layout.SquadPositionMap[squad.Id] = new Tuple<int, int>(lineLeft, y);
@@ -144,7 +146,7 @@ namespace OnlyWar.Helpers.Battles.Placers
                 {
                     squad = squads[i];
                     squadLayout =
-                        BattleSquadLayoutHelper.Instance.LayoutBattleSquad(squad, isLoose);
+                        BattleSquadLayoutHelper.Instance.LayoutBattleSquad(squad, isLoose, random);
                     layout.SquadLayoutMap[squad.Id] = squadLayout;
                     layout.SquadPositionMap[squad.Id] =
                         new Tuple<int, int>(lineRight + 3, y);

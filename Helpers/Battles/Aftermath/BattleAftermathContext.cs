@@ -2,6 +2,7 @@ using OnlyWar.Models;
 using OnlyWar.Models.Battles;
 using OnlyWar.Models.Planets;
 using OnlyWar.Models.Soldiers;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 
@@ -22,12 +23,14 @@ namespace OnlyWar.Helpers.Battles.Aftermath
         public int SecondSideStartingSoldierCount { get; }
         public Faction FirstSideFaction { get; }
         public Faction SecondSideFaction { get; }
+        public BattleAftermathDependencies Dependencies { get; }
 
         public BattleAftermathContext(
             IReadOnlyList<BattleSquad> firstSideSquads,
             IReadOnlyList<BattleSquad> secondSideSquads,
             Region region,
-            BattleHistory battleHistory)
+            BattleHistory battleHistory,
+            BattleAftermathDependencies dependencies)
         {
             _firstSideSquads = firstSideSquads;
             _secondSideSquads = secondSideSquads;
@@ -36,6 +39,7 @@ namespace OnlyWar.Helpers.Battles.Aftermath
 
             Region = region;
             BattleHistory = battleHistory;
+            Dependencies = dependencies ?? throw new ArgumentNullException(nameof(dependencies));
             StartingSoldiers = firstSideSquads
                 .Concat(secondSideSquads)
                 .SelectMany(squad => squad.AbleSoldiers)

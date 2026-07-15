@@ -403,7 +403,8 @@ public class BattleGridManagerTests
             rangedEvasion: 0f,
             meleeEvasion: 0f,
             abilities: SpeciesAbilities.None,
-            bodyTemplate: HumanBodyTemplate.Instance);
+            bodyTemplate: HumanBodyTemplate.Instance,
+            defaultUnarmedWeapon: TestModelFactory.DefaultUnarmedWeapon);
 
         return new SoldierTemplate(
             99,

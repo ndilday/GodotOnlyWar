@@ -4,6 +4,7 @@ using System.Linq;
 using OnlyWar.Builders;
 using OnlyWar.Helpers;
 using OnlyWar.Helpers.Extensions;
+using OnlyWar.Helpers.Missions;
 using OnlyWar.Helpers.Missions.Raid;
 using OnlyWar.Helpers.StrategicCombat;
 using OnlyWar.Models;
@@ -348,8 +349,12 @@ public class FactionStrategyControllerTests
         Order order = new([squad], Disposition.Mobile, true, true, Aggression.Cautious,
             new Mission(MissionType.LightningRaid, target, 0));
         MissionContext context = new(order, [], []);
+        MissionExecutionContext execution = TestExecutionContextFactory.CreateMission(
+            context,
+            StaticRNG.Instance);
 
-        Assert.IsType<LightningRaidMissionStep>(MissionStepOrchestrator.GetMainInitialStep(context));
+        Assert.IsType<LightningRaidMissionStep>(
+            MissionStepOrchestrator.GetMainInitialStep(execution));
     }
 
     [Fact]

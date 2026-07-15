@@ -15,13 +15,14 @@ namespace OnlyWar.Helpers.Missions.Assassinate
 
         public AssassinateStealthMissionStep() { }
 
-        public void ExecuteMissionStep(MissionContext context, float marginOfSuccess, IMissionStep returnStep)
+        public void ExecuteMissionStep(MissionExecutionContext execution, float marginOfSuccess, IMissionStep returnStep)
         {
+            MissionContext context = execution.State;
             // negative mod for size of enemy force
             // mod for terrain
             // mod for enemy recon focus
             // mod for equipment
-            BaseSkill stealth = GameDataSingleton.Instance.GameRulesData.Skills.Stealth;
+            BaseSkill stealth = execution.Rules.Stealth;
             RegionFaction enemyFaction = context.Order.Mission.RegionFaction;
             float difficulty = enemyFaction.GetOwnRegionIntel() * 0.5f;
             // every degree of magnitude of troops adds one to the difficulty
@@ -34,14 +35,14 @@ namespace OnlyWar.Helpers.Missions.Assassinate
             SquadMissionTest missionTest = new SquadMissionTest(stealth, difficulty);
 
             context.DaysElapsed++;
-            float margin = missionTest.RunMissionCheck(context.MissionSquads);
+            float margin = missionTest.RunMissionCheck(context.MissionSquads, execution.Random);
             if (margin > 0.0f)
             {
-                new PerformAssassinationMissionStep().ExecuteMissionStep(context, margin, this);
+                new PerformAssassinationMissionStep().ExecuteMissionStep(execution, margin, this);
             }
             else
             {
-                new DetectedMissionStep().ExecuteMissionStep(context, margin, this);
+                new DetectedMissionStep().ExecuteMissionStep(execution, margin, this);
             }
         }
     }

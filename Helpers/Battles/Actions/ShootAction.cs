@@ -12,6 +12,7 @@ namespace OnlyWar.Helpers.Battles.Actions
     {
         private string _soldierName, _targetName, _weaponName;
         private readonly BattleGridManager _grid;
+        private readonly IRNG _random;
         private bool _isResolved;
         private bool _strayHitWasFriendly;
         private string _strayTargetName;
@@ -35,7 +36,8 @@ namespace OnlyWar.Helpers.Battles.Actions
             float range,
             int numberOfShots,
             bool useBulk,
-            BattleGridManager grid = null)
+            BattleGridManager grid,
+            IRNG random)
         {
             ShooterId = shooterId;
             TargetId = targetId;
@@ -44,6 +46,7 @@ namespace OnlyWar.Helpers.Battles.Actions
             NumberOfShots = numberOfShots;
             UseBulk = useBulk;
             _grid = grid;
+            _random = random ?? throw new ArgumentNullException(nameof(random));
             WoundResolutions = new List<WoundResolution>();
         }
 
@@ -63,7 +66,7 @@ namespace OnlyWar.Helpers.Battles.Actions
                 var skill = shooter.Soldier.GetTotalSkillValue(weapon.Template.RelatedSkill);
                 bool firingIntoMelee = _grid?.IsTargetEngagedWithShootersAllies(ShooterId, TargetId) == true;
                 var modifier = CalculateToHitModifiers(shooter, target, weapon, skill, firingIntoMelee);
-                var roll = 10.5f + (3.0f * (float)RNG.NextRandomZValue());
+                var roll = 10.5f + (3.0f * (float)_random.NextRandomZValue());
                 var total = skill + modifier - roll;
                 shooter.Aim = null;
                 if (total > 0)
@@ -89,7 +92,7 @@ namespace OnlyWar.Helpers.Battles.Actions
                         .ToList();
                     BattleSoldier strayTarget = RangedFriendlyFireRules.SelectStrayTarget(
                         participants,
-                        RNG.GetLinearDouble());
+                        _random.GetLinearDouble());
                     StrayTargetId = strayTarget.Soldier.Id;
                     _strayHitWasFriendly = _grid.GetSoldierSide(ShooterId)
                         == _grid.GetSoldierSide(strayTarget.Soldier.Id);
@@ -143,11 +146,11 @@ namespace OnlyWar.Helpers.Battles.Actions
 
         private WoundResolution HandleHit(BattleSoldier shooter, RangedWeapon weapon, BattleSoldier target)
         {
-            HitLocation hitLocation = HitLocationCalculator.DetermineHitLocation(target);
+            HitLocation hitLocation = HitLocationCalculator.DetermineHitLocation(target, _random);
             // make sure this body part hasn't already been shot off
             if (!hitLocation.IsSevered)
             {
-                float damage = BattleModifiersUtil.CalculateDamageAtRange(weapon, Range) * (3.5f + ((float)RNG.NextRandomZValue() * 1.75f));
+                float damage = BattleModifiersUtil.CalculateDamageAtRange(weapon, Range) * (3.5f + ((float)_random.NextRandomZValue() * 1.75f));
                 float effectiveArmor = target.Armor.Template.ArmorProvided * weapon.Template.ArmorMultiplier;
                 float penDamage = damage - effectiveArmor;
                 if (penDamage > 0)

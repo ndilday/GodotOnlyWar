@@ -16,6 +16,119 @@ namespace OnlyWar.Tests.Generation;
 public class ForceGeneratorTests
 {
     [Fact]
+    public void GeneratedForce_UsesOneInjectedRandomStreamInExistingDrawOrder()
+    {
+        SquadTemplate line = CreateTemplate(1, "Line", SquadTypes.None, 1, 1);
+        Faction faction = CreateFaction(line);
+        var random = new RecordingRng();
+
+        List<Squad> generated = ForceGenerator.GenerateForce(new ForceGenerationRequest
+        {
+            Faction = faction,
+            TargetBattleValue = 1,
+            Profile = ForceCompositionProfile.AssaultForce
+        }, random, new TacticalEntityIdAllocator());
+
+        Assert.Single(generated);
+        Assert.Equal(
+            new[] { "int" }.Concat(Enumerable.Repeat("normal", 11)),
+            random.Draws);
+    }
+
+    [Fact]
+    public void TacticalForce_UsesUniqueNegativeIdsOutsidePersistentIdRange()
+    {
+        SquadTemplate line = CreateTemplate(1, "Line", SquadTypes.None, 2, 2);
+        Faction faction = CreateFaction(line);
+
+        List<Squad> generated = ForceGenerator.GenerateForce(new ForceGenerationRequest
+        {
+            Faction = faction,
+            TargetBattleValue = 4,
+            Profile = ForceCompositionProfile.AssaultForce
+        }, new RecordingRng(), new TacticalEntityIdAllocator());
+
+        int[] entityIds = generated
+            .SelectMany(squad => new[] { squad.Id }.Concat(squad.Members.Select(member => member.Id)))
+            .ToArray();
+
+        Assert.Equal(6, entityIds.Length);
+        Assert.Equal(entityIds.Length, entityIds.Distinct().Count());
+        Assert.All(entityIds, id => Assert.True(id < -1));
+        Assert.DoesNotContain(42, entityIds);
+    }
+
+    [Fact]
+    public void TacticalForce_IdsIncreaseInCreationOrderForBattleTieBreakers()
+    {
+        SquadTemplate line = CreateTemplate(1, "Line", SquadTypes.None, 2, 2);
+        Faction faction = CreateFaction(line);
+
+        List<Squad> generated = ForceGenerator.GenerateForce(new ForceGenerationRequest
+        {
+            Faction = faction,
+            TargetBattleValue = 4,
+            Profile = ForceCompositionProfile.AssaultForce
+        }, new RecordingRng(), new TacticalEntityIdAllocator());
+
+        int[] entityIds = generated
+            .SelectMany(squad => new[] { squad.Id }.Concat(squad.Members.Select(member => member.Id)))
+            .ToArray();
+
+        Assert.Equal(entityIds.OrderBy(id => id), entityIds);
+        Assert.All(entityIds, id => Assert.True(id < -1));
+    }
+
+    [Fact]
+    public void TacticalForce_UsesReadableCreationOrderNamesInsteadOfNegativeIds()
+    {
+        SquadTemplate line = CreateTemplate(1, "Line", SquadTypes.None, 2, 2);
+        Faction faction = CreateFaction(line);
+
+        List<Squad> generated = ForceGenerator.GenerateForce(new ForceGenerationRequest
+        {
+            Faction = faction,
+            TargetBattleValue = 4,
+            Profile = ForceCompositionProfile.AssaultForce
+        }, new RecordingRng(), new TacticalEntityIdAllocator());
+
+        ISoldier[] soldiers = generated.SelectMany(squad => squad.Members).ToArray();
+        Assert.Equal(
+            Enumerable.Range(1, soldiers.Length)
+                .Select(index => $"{soldiers[index - 1].Template.Name} {index}"),
+            soldiers.Select(soldier => soldier.Name));
+        Assert.DoesNotContain(
+            soldiers,
+            soldier => soldier.Name.Contains(
+                soldier.Id.ToString(),
+                System.StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void TacticalForce_DoesNotAdvancePersistentSquadOrSoldierCounters()
+    {
+        SquadTemplate line = CreateTemplate(1, "Line", SquadTypes.None, 1, 1);
+        Faction faction = CreateFaction(line);
+        var random = new RecordingRng();
+        SoldierFactory.Instance.SetCurrentHighestSoldierId(500_000);
+        Squad persistentBefore = SquadFactory.GenerateSquad(line, random);
+
+        ForceGenerator.GenerateForce(new ForceGenerationRequest
+        {
+            Faction = faction,
+            TargetBattleValue = 3,
+            Profile = ForceCompositionProfile.AssaultForce
+        }, random, new TacticalEntityIdAllocator());
+
+        Squad persistentAfter = SquadFactory.GenerateSquad(line, random);
+
+        Assert.Equal(persistentBefore.Id + 1, persistentAfter.Id);
+        Assert.Equal(
+            persistentBefore.Members.Single().Id + 1,
+            persistentAfter.Members.Single().Id);
+    }
+
+    [Fact]
     public void GenericForce_DoesNotAddHqBelowCommandScaleAndFillsBudget()
     {
         SquadTemplate hq = CreateTemplate(1, "HQ", SquadTypes.HQ, 1, 5);
@@ -23,7 +136,7 @@ public class ForceGeneratorTests
         SquadTemplate line = CreateTemplate(3, "Line", SquadTypes.None, 1, 3);
         Faction faction = CreateFaction(hq, heavy, line);
 
-        List<Squad> generated = ForceGenerator.GenerateForce(new ForceGenerationRequest
+        List<Squad> generated = GenerateForce(new ForceGenerationRequest
         {
             Faction = faction,
             TargetBattleValue = 10,
@@ -42,7 +155,7 @@ public class ForceGeneratorTests
         SquadTemplate line = CreateTemplate(2, "Line", SquadTypes.None, 1, 3);
         Faction faction = CreateFaction(hq, line);
 
-        List<Squad> generated = ForceGenerator.GenerateForce(new ForceGenerationRequest
+        List<Squad> generated = GenerateForce(new ForceGenerationRequest
         {
             Faction = faction,
             TargetBattleValue = 14,
@@ -62,7 +175,7 @@ public class ForceGeneratorTests
         SquadTemplate line = CreateTemplate(2, "Line", SquadTypes.None, 1, 3);
         Faction faction = CreateFaction(hq, line);
 
-        List<Squad> generated = ForceGenerator.GenerateForce(new ForceGenerationRequest
+        List<Squad> generated = GenerateForce(new ForceGenerationRequest
         {
             Faction = faction,
             TargetBattleValue = 13,
@@ -81,7 +194,7 @@ public class ForceGeneratorTests
         SquadTemplate line = CreateTemplate(2, "Line", SquadTypes.None, 1, 500);
         Faction faction = CreateFaction(heavy, line);
 
-        List<Squad> generated = ForceGenerator.GenerateForce(new ForceGenerationRequest
+        List<Squad> generated = GenerateForce(new ForceGenerationRequest
         {
             Faction = faction,
             TargetBattleValue = 3000,
@@ -101,7 +214,7 @@ public class ForceGeneratorTests
         SquadTemplate expensive = CreateTemplate(2, "Expensive", SquadTypes.None, 1, 10);
         Faction faction = CreateFaction(hq, expensive);
 
-        List<Squad> generated = ForceGenerator.GenerateForce(new ForceGenerationRequest
+        List<Squad> generated = GenerateForce(new ForceGenerationRequest
         {
             Faction = faction,
             TargetBattleValue = 5,
@@ -117,7 +230,7 @@ public class ForceGeneratorTests
         SquadTemplate line = CreateTemplate(1, "Line", SquadTypes.None, 5, 10, minSoldiers: 2);
         Faction faction = CreateFaction(line);
 
-        List<Squad> generated = ForceGenerator.GenerateForce(new ForceGenerationRequest
+        List<Squad> generated = GenerateForce(new ForceGenerationRequest
         {
             Faction = faction,
             TargetBattleValue = 6,
@@ -137,7 +250,7 @@ public class ForceGeneratorTests
         SquadTemplate line = CreateTemplate(2, "Line", SquadTypes.None, 10, 10, minSoldiers: 2);
         Faction faction = CreateFaction(heavy, line);
 
-        List<Squad> generated = ForceGenerator.GenerateForce(new ForceGenerationRequest
+        List<Squad> generated = GenerateForce(new ForceGenerationRequest
         {
             Faction = faction,
             TargetBattleValue = 9,
@@ -156,7 +269,7 @@ public class ForceGeneratorTests
         SquadTemplate exact = CreateTemplate(2, "Exact", SquadTypes.None, 5, 45);
         Faction faction = CreateFaction(weak, exact);
 
-        List<Squad> generated = ForceGenerator.GenerateForce(new ForceGenerationRequest
+        List<Squad> generated = GenerateForce(new ForceGenerationRequest
         {
             Faction = faction,
             TargetBattleValue = 9,
@@ -175,7 +288,7 @@ public class ForceGeneratorTests
         SquadTemplate line = CreateTemplate(1, "Line", SquadTypes.None, 5, 10, minSoldiers: 3);
         Faction faction = CreateFaction(line);
 
-        List<Squad> generated = ForceGenerator.GenerateForce(new ForceGenerationRequest
+        List<Squad> generated = GenerateForce(new ForceGenerationRequest
         {
             Faction = faction,
             TargetBattleValue = 5,
@@ -192,7 +305,7 @@ public class ForceGeneratorTests
         SquadTemplate line = CreateTemplate(2, "Line", SquadTypes.None, 1, 2);
         Faction faction = CreateFaction(scout, line);
 
-        List<Squad> generated = ForceGenerator.GenerateForce(new ForceGenerationRequest
+        List<Squad> generated = GenerateForce(new ForceGenerationRequest
         {
             Faction = faction,
             Tier = 3,
@@ -209,7 +322,7 @@ public class ForceGeneratorTests
         SquadTemplate line = CreateTemplate(1, "Line", SquadTypes.None, 1, 1);
         Faction faction = CreateFaction(line);
 
-        List<Squad> generated = ForceGenerator.GenerateForce(new ForceGenerationRequest
+        List<Squad> generated = GenerateForce(new ForceGenerationRequest
         {
             Faction = faction,
             TargetBattleValue = 3,
@@ -225,7 +338,7 @@ public class ForceGeneratorTests
         SquadTemplate line = CreateTemplate(1, "Line", SquadTypes.None, 1, 1);
         Faction faction = CreateFaction(line);
 
-        List<Squad> generated = ForceGenerator.GenerateForce(new ForceGenerationRequest
+        List<Squad> generated = GenerateForce(new ForceGenerationRequest
         {
             Faction = faction,
             TargetBattleValue = 1,
@@ -244,7 +357,7 @@ public class ForceGeneratorTests
         greaterHq.BodyguardSquadTemplate = bodyguard;
         Faction faction = CreateFaction(lesserHq, greaterHq, bodyguard);
 
-        List<Squad> generated = ForceGenerator.GenerateForce(new ForceGenerationRequest
+        List<Squad> generated = GenerateForce(new ForceGenerationRequest
         {
             Faction = faction,
             Tier = 99,
@@ -301,6 +414,9 @@ public class ForceGeneratorTests
     private static long SquadBattleValue(IEnumerable<Squad> squads) =>
         squads.Sum(squad => squad.Members.Sum(member => (long)member.Template.BattleValue));
 
+    private static List<Squad> GenerateForce(ForceGenerationRequest request) =>
+        ForceGenerator.GenerateForce(request, StaticRNG.Instance);
+
     private static Faction CreateFaction(params SquadTemplate[] squadTemplates)
     {
         return new Faction(
@@ -318,5 +434,27 @@ public class ForceGeneratorTests
             null,
             null,
             null);
+    }
+
+    private sealed class RecordingRng : IRNG
+    {
+        public List<string> Draws { get; } = [];
+
+        public double GetDoubleInRange(double lowerBound, double upperBound) =>
+            throw new System.NotSupportedException();
+
+        public double GetLinearDouble() => throw new System.NotSupportedException();
+
+        public int GetIntBelowMax(int min, int max)
+        {
+            Draws.Add("int");
+            return min;
+        }
+
+        public double NextRandomZValue()
+        {
+            Draws.Add("normal");
+            return 0;
+        }
     }
 }

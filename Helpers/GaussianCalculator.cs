@@ -9,10 +9,10 @@ namespace OnlyWar.Helpers
     public static class GaussianCalculator
     {
 
-        public static float DetermineMarginOfSuccessZvalue(float zValue)
+        public static float DetermineMarginOfSuccessZvalue(float zValue, IRNG random)
         {
-
-            double roll = RNG.NextRandomZValue();
+            if (random == null) throw new ArgumentNullException(nameof(random));
+            double roll = random.NextRandomZValue();
             return (float)(zValue - roll);
         }
 

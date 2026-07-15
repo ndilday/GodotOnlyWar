@@ -49,6 +49,8 @@ namespace OnlyWar.Helpers.Battles.Actions
         private readonly string _attackerName;
         private readonly Action<string> _log;
         private readonly bool _didMove;
+        private readonly IRNG _random;
+        private readonly IReadOnlyDictionary<int, MeleeWeaponTemplate> _meleeWeaponTemplates;
         private bool _wasExecuted;
 
         public List<WoundResolution> WoundResolutions { get; }
@@ -61,12 +63,17 @@ namespace OnlyWar.Helpers.Battles.Actions
         public MeleeAttackAction(BattleSoldier attacker,
                                  IReadOnlyList<PlannedMeleeStrike> strikePlans,
                                  bool didMove,
-                                 Action<string> log)
+                                 Action<string> log,
+                                 IRNG random,
+                                 IReadOnlyDictionary<int, MeleeWeaponTemplate> meleeWeaponTemplates)
         {
             _attackerId = attacker.Soldier.Id;
             _attackerName = attacker.Soldier.Name;
             _didMove = didMove;
             _log = log;
+            _random = random ?? throw new ArgumentNullException(nameof(random));
+            _meleeWeaponTemplates = meleeWeaponTemplates
+                ?? throw new ArgumentNullException(nameof(meleeWeaponTemplates));
             StrikePlans = strikePlans?.ToList() ?? [];
             WoundResolutions = [];
             _targetedDefenderIds = [];
@@ -76,14 +83,18 @@ namespace OnlyWar.Helpers.Battles.Actions
                                  BattleSoldier target,
                                  MeleeWeapon weapon,
                                  bool didMove,
-                                 Action<string> log)
+                                 Action<string> log,
+                                 IRNG random,
+                                 IReadOnlyDictionary<int, MeleeWeaponTemplate> meleeWeaponTemplates)
             : this(attacker,
                    [new PlannedMeleeStrike(target.Soldier.Id,
                                            weapon.Template.Id,
                                            target.Soldier.Name,
                                            weapon.Template.Name)],
                    didMove,
-                   log)
+                   log,
+                   random,
+                   meleeWeaponTemplates)
         {
         }
 
@@ -133,7 +144,8 @@ namespace OnlyWar.Helpers.Battles.Actions
                                         _didMove,
                                         defenderSkill,
                                         target.Soldier.Template.Species.MeleeEvasion,
-                                        defenderDefenseModifier);
+                                        defenderDefenseModifier,
+                                        _random);
 
                 _log?.Invoke(attacker.Soldier.Name + " swings at " + target.Soldier);
                 if (hit)
@@ -166,14 +178,16 @@ namespace OnlyWar.Helpers.Battles.Actions
                                         float weaponAccuracy,
                                         bool didMove,
                                         float defenderSkill,
-                                        float defenderEvasion)
+                                        float defenderEvasion,
+                                        IRNG random)
         {
             return RollMeleeHit(attackSkill,
                                 weaponAccuracy,
                                 didMove,
                                 defenderSkill,
                                 defenderEvasion,
-                                0);
+                                0,
+                                random);
         }
 
         public static bool RollMeleeHit(float attackSkill,
@@ -181,13 +195,15 @@ namespace OnlyWar.Helpers.Battles.Actions
                                         bool didMove,
                                         float defenderSkill,
                                         float defenderEvasion,
-                                        float defenderDefenseModifier)
+                                        float defenderDefenseModifier,
+                                        IRNG random)
         {
+            if (random == null) throw new ArgumentNullException(nameof(random));
             float attackTotal = attackSkill + weaponAccuracy + (didMove ? -MovementAttackPenalty : 0)
-                                + (MeleeRollStandardDeviation * (float)RNG.NextRandomZValue());
+                                + (MeleeRollStandardDeviation * (float)random.NextRandomZValue());
             float defendTotal = defenderSkill + defenderEvasion + MeleeDefenderAdvantage
                                 + defenderDefenseModifier
-                                + (MeleeRollStandardDeviation * (float)RNG.NextRandomZValue());
+                                + (MeleeRollStandardDeviation * (float)random.NextRandomZValue());
             return attackTotal > defendTotal;
         }
 
@@ -257,21 +273,12 @@ namespace OnlyWar.Helpers.Battles.Actions
 
         internal static MeleeWeapon GetUnarmedWeapon(BattleSoldier defender)
         {
-            if (defender?.BattleSquad == null)
+            if (defender?.Soldier?.Template?.Species?.DefaultUnarmedWeapon == null)
             {
                 return null;
             }
 
-            GameRulesData rules = GameDataSingleton.Instance.GameRulesData;
-            if (rules == null)
-            {
-                return null;
-            }
-
-            MeleeWeaponTemplate template = defender.BattleSquad.IsPlayerSquad
-                ? rules.BattleDefaults.ImperialUnarmedWeapon
-                : rules.BattleDefaults.GenericUnarmedWeapon;
-            return template == null ? null : new MeleeWeapon(template);
+            return new MeleeWeapon(defender.Soldier.Template.Species.DefaultUnarmedWeapon);
         }
 
         private static bool IsAdjacent(BattleSoldier attacker, BattleSoldier target)
@@ -289,7 +296,7 @@ namespace OnlyWar.Helpers.Battles.Actions
             return !targetIsAbove && !targetIsBelow && !targetIsLeft && !targetIsRight;
         }
 
-        private static MeleeWeapon ResolveWeapon(BattleSoldier attacker, int weaponTemplateId)
+        private MeleeWeapon ResolveWeapon(BattleSoldier attacker, int weaponTemplateId)
         {
             MeleeWeapon matchingWeapon = attacker.EquippedMeleeWeapons
                 .Concat(attacker.MeleeWeapons)
@@ -299,7 +306,7 @@ namespace OnlyWar.Helpers.Battles.Actions
                 return matchingWeapon;
             }
 
-            if (GameDataSingleton.Instance.GameRulesData.MeleeWeaponTemplates.TryGetValue(weaponTemplateId, out MeleeWeaponTemplate template))
+            if (_meleeWeaponTemplates.TryGetValue(weaponTemplateId, out MeleeWeaponTemplate template))
             {
                 return new MeleeWeapon(template);
             }
@@ -309,11 +316,11 @@ namespace OnlyWar.Helpers.Battles.Actions
 
         private void HandleHit(BattleSoldier attacker, MeleeWeapon weapon, BattleSoldier target)
         {
-            HitLocation hitLocation = HitLocationCalculator.DetermineHitLocation(target);
+            HitLocation hitLocation = HitLocationCalculator.DetermineHitLocation(target, _random);
             if (!hitLocation.IsSevered)
             {
                 float damage = attacker.Soldier.Strength * weapon.Template.StrengthMultiplier
-                    * (3.5f + ((float)RNG.NextRandomZValue() * 1.75f));
+                    * (3.5f + ((float)_random.NextRandomZValue() * 1.75f));
                 float effectiveArmor = (target.Armor?.Template.ArmorProvided ?? 0) * weapon.Template.ArmorMultiplier;
                 float penDamage = damage - effectiveArmor;
                 if (penDamage > 0)

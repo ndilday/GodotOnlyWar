@@ -8,6 +8,19 @@ namespace OnlyWar.Tests.Fixtures;
 
 internal static class TestModelFactory
 {
+    public static MeleeWeaponTemplate DefaultUnarmedWeapon { get; } = new(
+        0,
+        "Test Fist",
+        EquipLocation.OneHand,
+        TestSkills.Melee,
+        0,
+        1,
+        1,
+        0,
+        0.5f,
+        -1,
+        1);
+
     public static Species HumanSpecies { get; } = new(
         1,
         "Test Human",
@@ -27,7 +40,8 @@ internal static class TestModelFactory
         0f,
         0f,
         SpeciesAbilities.None,
-        HumanBodyTemplate.Instance);
+        HumanBodyTemplate.Instance,
+        DefaultUnarmedWeapon);
 
     public static SoldierTemplate MarineTemplate { get; } = new(
         1,
@@ -51,7 +65,8 @@ internal static class TestModelFactory
         0f,
         0f,
         SpeciesAbilities.Burrow,
-        HumanBodyTemplate.Instance);
+        HumanBodyTemplate.Instance,
+        DefaultUnarmedWeapon);
 
     public static SoldierTemplate BurrowerTemplate { get; } = new(
         3,

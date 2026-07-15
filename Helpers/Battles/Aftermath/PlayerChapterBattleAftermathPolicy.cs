@@ -4,6 +4,7 @@ using OnlyWar.Models.Battles;
 using OnlyWar.Models.Equippables;
 using OnlyWar.Models.Planets;
 using OnlyWar.Models.Soldiers;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 
@@ -12,12 +13,16 @@ namespace OnlyWar.Helpers.Battles.Aftermath
     internal sealed class PlayerChapterBattleAftermathPolicy : IBattleAftermathPolicy
     {
         private readonly BattleAftermathContext _context;
+        private readonly BattleAftermathDependencies _dependencies;
         private readonly Dictionary<int, BattleSoldier> _latestPlayerSoldierSnapshots = new();
         private readonly Dictionary<int, GeneseedRecoveryResult> _geneseedResults = new();
 
-        public PlayerChapterBattleAftermathPolicy(BattleAftermathContext context)
+        public PlayerChapterBattleAftermathPolicy(
+            BattleAftermathContext context,
+            BattleAftermathDependencies dependencies)
         {
-            _context = context;
+            _context = context ?? throw new ArgumentNullException(nameof(context));
+            _dependencies = dependencies ?? throw new ArgumentNullException(nameof(dependencies));
             foreach (BattleSoldier soldier in context.StartingPlayerSoldiers)
             {
                 RememberPlayerSnapshot(soldier);
@@ -44,7 +49,7 @@ namespace OnlyWar.Helpers.Battles.Aftermath
             {
                 Faction opposingFaction = _context.GetOpposingFaction(wound.Suffererer);
                 playerSoldier.AddEvent(new SoldierEvent(
-                    GameDataSingleton.Instance.Date,
+                    _dependencies.Date,
                     SoldierEventType.Death,
                     $"Killed in battle with the {opposingFaction?.Name ?? "enemy"} by a {wound.Weapon.Name}",
                     factionId: opposingFaction?.Id,
@@ -124,7 +129,7 @@ namespace OnlyWar.Helpers.Battles.Aftermath
 
                 PlayerSoldier playerSoldier = (PlayerSoldier)startingSoldier.Soldier;
                 playerSoldier.AddEvent(new SoldierEvent(
-                    GameDataSingleton.Instance.Date,
+                    _dependencies.Date,
                     SoldierEventType.BattleParticipation,
                     detail,
                     factionId: opposingFaction?.Id,
@@ -168,7 +173,8 @@ namespace OnlyWar.Helpers.Battles.Aftermath
                         }
                         else
                         {
-                            BaseSkill baseMeleeSkill = GameDataSingleton.Instance.GameRulesData.Skills.Fist;
+                            BaseSkill baseMeleeSkill = soldier.Soldier.Template.Species
+                                .DefaultUnarmedWeapon.RelatedSkill;
                             soldier.Soldier.AddSkillPoints(baseMeleeSkill, soldier.TurnsSwinging * 0.0005f);
                         }
                         soldier.Soldier.AddAttributePoints(OnlyWar.Models.Soldiers.Attribute.Strength, soldier.TurnsSwinging * 0.0005f);
@@ -188,12 +194,8 @@ namespace OnlyWar.Helpers.Battles.Aftermath
                     {
                         PlayerSoldier playerSoldier = (PlayerSoldier)soldier.Soldier;
                         dead.Add(playerSoldier);
-                        playerSoldier.AssignedSquad?.RemoveSquadMember(playerSoldier);
-                        playerSoldier.AssignedSquad = null;
-                        Army army = GameDataSingleton.Instance.Sector.PlayerForce.Army;
-                        army.PlayerSoldierMap.Remove(soldier.Soldier.Id);
                         RecordGeneseedRecovery(playerSoldier);
-                        army.FallenBrothers[playerSoldier.Id] = playerSoldier;
+                        _dependencies.PlayerSink.MoveToFallenBrothers(playerSoldier);
                         break;
                     }
                 }
@@ -206,7 +208,7 @@ namespace OnlyWar.Helpers.Battles.Aftermath
             (GeneseedRecoveryResult result, float purity) = ResolveGeneseedRecovery(soldier);
             _geneseedResults[soldier.Id] = result;
             soldier.AddEvent(new SoldierEvent(
-                GameDataSingleton.Instance.Date,
+                _dependencies.Date,
                 SoldierEventType.GeneseedRecovery,
                 GetGeneseedRecoveryDetail(result, purity),
                 magnitude: result == GeneseedRecoveryResult.Recovered
@@ -214,19 +216,19 @@ namespace OnlyWar.Helpers.Battles.Aftermath
                     : null));
         }
 
-        private static (GeneseedRecoveryResult, float) ResolveGeneseedRecovery(PlayerSoldier soldier)
+        private (GeneseedRecoveryResult, float) ResolveGeneseedRecovery(PlayerSoldier soldier)
         {
             if (soldier.Body.HitLocations.Any(hl => hl.Template.HoldsProgenoid && hl.IsSevered))
             {
                 return (GeneseedRecoveryResult.Destroyed, 0f);
             }
-            if (GameDataSingleton.Instance.Date.GetWeeksDifference(soldier.ProgenoidImplantDate)
+            if (_dependencies.Date.GetWeeksDifference(soldier.ProgenoidImplantDate)
                 < GeneseedRules.ProgenoidMaturityWeeks)
             {
                 return (GeneseedRecoveryResult.Immature, 0f);
             }
-            float purity = GeneseedRules.RollRecoveredPurity();
-            GameDataSingleton.Instance.Sector.PlayerForce.AddRecoveredGeneseed(purity);
+            float purity = GeneseedRules.RollRecoveredPurity(_dependencies.Random);
+            _dependencies.PlayerSink.AddRecoveredGeneseed(purity);
             return (GeneseedRecoveryResult.Recovered, purity);
         }
 
@@ -250,9 +252,7 @@ namespace OnlyWar.Helpers.Battles.Aftermath
         {
             List<string> subEvents = GetBattleLog(killedInBattle);
             string title = $"A skirmish in {_context.Region.Name}, {_context.Region.Planet.Name}";
-            GameDataSingleton.Instance.Sector.PlayerForce.AddToBattleHistory(GameDataSingleton.Instance.Date,
-                                                                             title,
-                                                                             subEvents);
+            _dependencies.PlayerSink.AddToBattleHistory(_dependencies.Date, title, subEvents);
         }
 
         private List<string> GetBattleLog(List<PlayerSoldier> killedInBattle)

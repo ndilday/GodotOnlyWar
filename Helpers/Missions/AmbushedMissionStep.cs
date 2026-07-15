@@ -12,8 +12,9 @@ namespace OnlyWar.Helpers.Missions
     {
         public string Description { get { return "Ambushed"; } }
 
-        public void ExecuteMissionStep(MissionContext context, float marginOfSuccess, IMissionStep returnStep)
+        public void ExecuteMissionStep(MissionExecutionContext execution, float marginOfSuccess, IMissionStep returnStep)
         {
+            MissionContext context = execution.State;
             List<BattleSquad> missionSquads = context.MissionSquads
                 .Where(squad => squad.AbleSoldiers.Count > 0)
                 .ToList();
@@ -39,7 +40,12 @@ namespace OnlyWar.Helpers.Missions
             string log = $"Day {context.DaysElapsed}: Force was ambushed by {oppForSize} {opposingSquads.First().Squad.Faction.Name}\n";
             context.AddLog(log);
             // run the battle
-            BattleTurnResolver resolver = new BattleTurnResolver(bgm, missionSquads, opposingSquads, context.Order.Mission.RegionFaction.Region);
+            BattleTurnResolver resolver = new BattleTurnResolver(
+                bgm,
+                missionSquads,
+                opposingSquads,
+                context.Order.Mission.RegionFaction.Region,
+                execution.Battle);
             bool battleDone = false;
             resolver.OnBattleComplete += (sender, e) => { battleDone = true; };
             while (!battleDone)
@@ -62,7 +68,7 @@ namespace OnlyWar.Helpers.Missions
             {
                 return;
             }
-            returnStep.ExecuteMissionStep(context, 0, this);
+            returnStep.ExecuteMissionStep(execution, 0, this);
         }
     }
 }

@@ -12,28 +12,29 @@ namespace OnlyWar.Helpers.Missions.Recon
 
         public EvadeMissionStep(){}
 
-        public void ExecuteMissionStep(MissionContext context, float marginOfSuccess, IMissionStep returnStep)
+        public void ExecuteMissionStep(MissionExecutionContext execution, float marginOfSuccess, IMissionStep returnStep)
         {
+            MissionContext context = execution.State;
             context.AddLog($"Day {context.DaysElapsed}: Force attempting to escape enemy force");
             // modify by speeds of each side
             // TODO: increase difficulty based on enemy force size?
-            BaseSkill tactics = GameDataSingleton.Instance.GameRulesData.Skills.Tactics;
+            BaseSkill tactics = execution.Rules.Tactics;
             float enemySpeed = context.OpposingSquads.Average(s => s.GetSquadMove());
             float attackerSpeed = context.MissionSquads.Average(s => s.GetSquadMove());
             float difficulty = 10f - attackerSpeed + enemySpeed + marginOfSuccess;
             LeaderMissionTest missionTest = new LeaderMissionTest(tactics, difficulty);
-            float margin = missionTest.RunMissionCheck(context.MissionSquads);
+            float margin = missionTest.RunMissionCheck(context.MissionSquads, execution.Random);
             if (margin > 0.0f)
             {
                 context.ForceBrokeContact = true;
                 context.AddLog($"Day {context.DaysElapsed}: Force successfully escaped enemy force");
-                returnStep.ExecuteMissionStep(context, margin, returnStep);
+                returnStep.ExecuteMissionStep(execution, margin, returnStep);
             }
             else
             {
                 // attempt failed
                 context.AddLog($"Day {context.DaysElapsed}: Escape failed");
-                new MeetingEngagementMissionStep().ExecuteMissionStep(context, margin, returnStep);
+                new MeetingEngagementMissionStep().ExecuteMissionStep(execution, margin, returnStep);
             }
 
         }

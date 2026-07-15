@@ -1,6 +1,7 @@
 ﻿using OnlyWar.Helpers;
 using OnlyWar.Helpers.Battles;
 using OnlyWar.Models;
+using OnlyWar.Models.Soldiers;
 using OnlyWar.Models.Squads;
 using System;
 using System.Collections.Generic;
@@ -35,28 +36,40 @@ namespace OnlyWar.Builders
             "Yankee", "Zulu"
         ];
 
-        public static List<Squad> GenerateForce(ForceGenerationRequest request)
+        public static List<Squad> GenerateForce(ForceGenerationRequest request, IRNG random)
+        {
+            return GenerateForce(request, random, null);
+        }
+
+        public static List<Squad> GenerateForce(
+            ForceGenerationRequest request,
+            IRNG random,
+            IEntityIdAllocator entityIds)
         {
             List<Squad> generatedForce;
             switch (request.Profile)
             {
                 case ForceCompositionProfile.SpecialHQTarget:
-                    generatedForce = GenerateHqEncounter(request);
+                    generatedForce = GenerateHqEncounter(request, random, entityIds);
                     break;
 
                 case ForceCompositionProfile.ScoutPatrol:
-                    generatedForce = GenerateScoutPatrol(request);
+                    generatedForce = GenerateScoutPatrol(request, random, entityIds);
                     break;
 
                 case ForceCompositionProfile.Garrison:
                 case ForceCompositionProfile.AssaultForce:
                 case ForceCompositionProfile.AmbushForce:
                 default:
-                    generatedForce = GenerateGenericForce(request);
+                    generatedForce = GenerateGenericForce(request, random, entityIds);
                     break;
             }
 
             NameGeneratedSquads(generatedForce);
+            if (entityIds != null)
+            {
+                NameTacticalSoldiers(generatedForce);
+            }
             return generatedForce;
         }
 
@@ -80,6 +93,18 @@ namespace OnlyWar.Builders
             }
         }
 
+        private static void NameTacticalSoldiers(IEnumerable<Squad> generatedSquads)
+        {
+            int ordinal = 1;
+            foreach (Squad squad in generatedSquads)
+            {
+                foreach (Soldier soldier in squad.Members.Cast<Soldier>())
+                {
+                    soldier.Name = $"{soldier.Template.Name} {ordinal++}";
+                }
+            }
+        }
+
         private static string GetSquadDesignator(int index)
         {
             return index < SquadDesignators.Length
@@ -87,7 +112,10 @@ namespace OnlyWar.Builders
                 : $"Unit {index + 1}";
         }
 
-        private static List<Squad> GenerateGenericForce(ForceGenerationRequest request)
+        private static List<Squad> GenerateGenericForce(
+            ForceGenerationRequest request,
+            IRNG random,
+            IEntityIdAllocator entityIds)
         {
             var generatedSquads = new List<Squad>();
             var usableTemplates = request.Faction.SquadTemplates.Values
@@ -104,7 +132,12 @@ namespace OnlyWar.Builders
             if (!availableTemplates.Any()) return new List<Squad>();
 
             long remainingValue = request.TargetBattleValue;
-            Squad hqSquad = GenerateGenericHqSquad(hqTemplates, availableTemplates, remainingValue);
+            Squad hqSquad = GenerateGenericHqSquad(
+                hqTemplates,
+                availableTemplates,
+                remainingValue,
+                random,
+                entityIds);
             if (hqSquad != null)
             {
                 generatedSquads.Add(hqSquad);
@@ -120,7 +153,11 @@ namespace OnlyWar.Builders
                     .ToList();
                 if (!affordableTemplates.Any())
                 {
-                    Squad partialSquad = GeneratePartialRemainderSquad(availableTemplates, remainingValue);
+                    Squad partialSquad = GeneratePartialRemainderSquad(
+                        availableTemplates,
+                        remainingValue,
+                        random,
+                        entityIds);
                     if (partialSquad != null)
                     {
                         generatedSquads.Add(partialSquad);
@@ -146,9 +183,13 @@ namespace OnlyWar.Builders
                     unusedTemplates = affordableTemplates;
                 }
 
-                SquadTemplate affordableTemplate = unusedTemplates[RNG.GetIntBelowMax(0, unusedTemplates.Count)];
+                SquadTemplate affordableTemplate = unusedTemplates[
+                    random.GetIntBelowMax(0, unusedTemplates.Count)];
                 usedTemplateIds.Add(affordableTemplate.Id);
-                generatedSquads.Add(SquadFactory.GenerateSquad(affordableTemplate));
+                generatedSquads.Add(SquadFactory.GenerateSquad(
+                    affordableTemplate,
+                    random,
+                    entityIds));
                 remainingValue -= affordableTemplate.BattleValue;
             }
 
@@ -165,7 +206,9 @@ namespace OnlyWar.Builders
         private static Squad GenerateGenericHqSquad(
             IEnumerable<SquadTemplate> hqTemplates,
             IEnumerable<SquadTemplate> availableNonHqTemplates,
-            long budget)
+            long budget,
+            IRNG random,
+            IEntityIdAllocator entityIds)
         {
             List<SquadTemplate> viableHqTemplates = hqTemplates
                 .Where(hq => hq.BattleValue <= budget)
@@ -174,8 +217,9 @@ namespace OnlyWar.Builders
 
             if (!viableHqTemplates.Any()) return null;
 
-            SquadTemplate template = viableHqTemplates[RNG.GetIntBelowMax(0, viableHqTemplates.Count)];
-            return SquadFactory.GenerateSquad(template);
+            SquadTemplate template = viableHqTemplates[
+                random.GetIntBelowMax(0, viableHqTemplates.Count)];
+            return SquadFactory.GenerateSquad(template, random, entityIds);
         }
 
         private static bool CanAffordFullSquadCount(
@@ -187,7 +231,11 @@ namespace OnlyWar.Builders
             return budget >= (long)cheapestBattleValue * squadCount;
         }
 
-        private static Squad GeneratePartialRemainderSquad(IEnumerable<SquadTemplate> availableTemplates, long remainingValue)
+        private static Squad GeneratePartialRemainderSquad(
+            IEnumerable<SquadTemplate> availableTemplates,
+            long remainingValue,
+            IRNG random,
+            IEntityIdAllocator entityIds)
         {
             SquadTemplate template = availableTemplates
                 .Select(t => new
@@ -203,7 +251,11 @@ namespace OnlyWar.Builders
 
             if (template != null)
             {
-                return SquadFactory.GenerateSquadWithinBudget(template, remainingValue);
+                return SquadFactory.GenerateSquadWithinBudget(
+                    template,
+                    remainingValue,
+                    random,
+                    entityIds);
             }
 
             return null;
@@ -219,7 +271,10 @@ namespace OnlyWar.Builders
         private static long SquadBattleValue(Squad squad) =>
             squad.Members.Sum(member => (long)member.Template.BattleValue);
 
-        private static List<Squad> GenerateHqEncounter(ForceGenerationRequest request)
+        private static List<Squad> GenerateHqEncounter(
+            ForceGenerationRequest request,
+            IRNG random,
+            IEntityIdAllocator entityIds)
         {
             var opposingForces = new List<Squad>();
             var sortedHqSquads = request.Faction.SquadTemplates.Values
@@ -231,20 +286,26 @@ namespace OnlyWar.Builders
 
             int index = Math.Clamp(request.Tier - 1, 0, sortedHqSquads.Count - 1);
             SquadTemplate targetSquadTemplate = sortedHqSquads[index];
-            Squad hqSquad = SquadFactory.GenerateSquad(targetSquadTemplate);
+            Squad hqSquad = SquadFactory.GenerateSquad(targetSquadTemplate, random, entityIds);
             opposingForces.Add(hqSquad);
 
             // Use the BattleValue to determine if a bodyguard should be added
             if (request.TargetBattleValue <= 0 && targetSquadTemplate.BodyguardSquadTemplate != null)
             {
-                Squad bodyguardSquad = SquadFactory.GenerateSquad(targetSquadTemplate.BodyguardSquadTemplate);
+                Squad bodyguardSquad = SquadFactory.GenerateSquad(
+                    targetSquadTemplate.BodyguardSquadTemplate,
+                    random,
+                    entityIds);
                 opposingForces.Add(bodyguardSquad);
             }
 
             return opposingForces;
         }
 
-        private static List<Squad> GenerateScoutPatrol(ForceGenerationRequest request)
+        private static List<Squad> GenerateScoutPatrol(
+            ForceGenerationRequest request,
+            IRNG random,
+            IEntityIdAllocator entityIds)
         {
             var opposingForces = new List<Squad>();
             var scoutTemplates = request.Faction.SquadTemplates.Values
@@ -262,8 +323,9 @@ namespace OnlyWar.Builders
 
             for(int i = request.Tier; i > 0; i--)
             {
-                SquadTemplate template = scoutTemplates[RNG.GetIntBelowMax(0, scoutTemplates.Count)];
-                opposingForces.Add(SquadFactory.GenerateSquad(template));
+                SquadTemplate template = scoutTemplates[
+                    random.GetIntBelowMax(0, scoutTemplates.Count)];
+                opposingForces.Add(SquadFactory.GenerateSquad(template, random, entityIds));
             }
             return opposingForces;
         }

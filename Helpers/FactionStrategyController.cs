@@ -380,7 +380,7 @@ public class FactionStrategyController
             TargetBattleValue = requestedBattleValue,
             Profile = ForceCompositionProfile.AssaultForce
         };
-        List<Squad> scouts = ForceGenerator.GenerateForce(request);
+        List<Squad> scouts = ForceGenerator.GenerateForce(request, StaticRNG.Instance);
         if (scouts.Count == 0)
         {
             GameLog.Debug(() =>
@@ -492,7 +492,7 @@ public class FactionStrategyController
         }
 
         var request = new ForceGenerationRequest { Faction = faction, TargetBattleValue = committedBattleValue, Profile = ForceCompositionProfile.AssaultForce };
-        List<Squad> generatedSquads = ForceGenerator.GenerateForce(request);
+        List<Squad> generatedSquads = ForceGenerator.GenerateForce(request, StaticRNG.Instance);
         if (generatedSquads.Count == 0)
         {
             ReturnCommittedForce(contributions);
@@ -1039,7 +1039,7 @@ public class FactionStrategyController
                 Profile = ForceCompositionProfile.ScoutPatrol // Use a more appropriate profile
             };
 
-            List<Squad> patrolSquads = ForceGenerator.GenerateForce(request);
+            List<Squad> patrolSquads = ForceGenerator.GenerateForce(request, StaticRNG.Instance);
             if (patrolSquads.Count == 0) continue;
 
             // The patrol is a standing screen, not a sweep: its squads land in the faction's own

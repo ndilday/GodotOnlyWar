@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using OnlyWar.Builders;
+using OnlyWar.Helpers;
 using OnlyWar.Models;
 using OnlyWar.Models.Squads;
 using OnlyWar.Tests.Fixtures;
@@ -64,7 +65,7 @@ public class RulesDatabaseValidationTests
             Faction = pdf,
             TargetBattleValue = targetBattleValue,
             Profile = ForceCompositionProfile.Garrison
-        });
+        }, StaticRNG.Instance);
 
         Assert.NotEmpty(force);
         Assert.All(force, squad =>

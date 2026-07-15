@@ -49,6 +49,21 @@ public sealed class GameSessionTurnControllerTests
         Assert.Equal("sector", exception.ParamName);
     }
 
+    [Fact]
+    public void Constructor_AllowsMinimalNpcOnlySessionWithoutPlayerForce()
+    {
+        Sector sector = new();
+        GameSession session = new(
+            GameDataSingleton.Instance.GameRulesData,
+            sector,
+            new Date(9, 321, 17),
+            new CountingRng());
+
+        TurnController controller = new(session);
+
+        Assert.NotNull(controller);
+    }
+
     private sealed class CountingRng : IRNG
     {
         internal int LinearDoubleCalls { get; private set; }

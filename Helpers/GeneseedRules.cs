@@ -26,9 +26,9 @@ namespace OnlyWar.Helpers
 
         // Rolls the purity of one recovered gland: at most the founding baseline, sometimes
         // a little lower, never above pristine.
-        public static float RollRecoveredPurity()
+        public static float RollRecoveredPurity(IRNG random)
         {
-            double roll = RNG.GetDoubleInRange(FoundingPurity - RecoveredPurityDrift, FoundingPurity);
+            double roll = random.GetDoubleInRange(FoundingPurity - RecoveredPurityDrift, FoundingPurity);
             return (float)Math.Clamp(roll, MinPurity, MaxPurity);
         }
     }

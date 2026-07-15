@@ -106,7 +106,6 @@ public class BattleSquadPlannerTests
         Dictionary<int, BattleSoldier> soldiers = squads
             .SelectMany(squad => squad.Soldiers)
             .ToDictionary(soldier => soldier.Soldier.Id);
-        BattleSoldier shooter = squads[0].Soldiers[0];
         return new BattleSquadPlanner(
             grid,
             soldiers,
@@ -114,7 +113,8 @@ public class BattleSquadPlannerTests
             moveActions,
             meleeActions,
             null,
-            shooter.MeleeWeapons[0]);
+            CreateMeleeTemplateMap(soldiers.Values),
+            new SeededRNG(12345));
     }
 
     private static RangedWeapon EquipTemplateWeapon(
@@ -246,7 +246,8 @@ public class BattleSquadPlannerTests
             new List<IAction>(),
             meleeActions,
             null,
-            projectedMeleeWeapon);
+            CreateMeleeTemplateMap(soldierMap.Values),
+            new SeededRNG(12345));
         shooterSquad.IsInMelee = true;
         shooter.IsInMelee = true;
 
@@ -260,6 +261,18 @@ public class BattleSquadPlannerTests
             ShootActions = shootActions,
             MeleeActions = meleeActions
         };
+    }
+
+    private static IReadOnlyDictionary<int, MeleeWeaponTemplate> CreateMeleeTemplateMap(
+        IEnumerable<BattleSoldier> soldiers)
+    {
+        return soldiers
+            .SelectMany(soldier => soldier.MeleeWeapons
+                .Concat(soldier.EquippedMeleeWeapons)
+                .Select(weapon => weapon.Template)
+                .Append(soldier.Soldier.Template.Species.DefaultUnarmedWeapon))
+            .GroupBy(template => template.Id)
+            .ToDictionary(group => group.Key, group => group.First());
     }
 
     [Fact]

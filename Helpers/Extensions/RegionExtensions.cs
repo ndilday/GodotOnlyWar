@@ -29,30 +29,34 @@ namespace OnlyWar.Helpers.Extensions
         // be the spotter. When no one has any awareness, the intruder walks into a patrol and the
         // spotter is drawn in proportion to deployed strength instead. Returns null only when no
         // enemy faction is present at all (the caller then falls back to the mission's target).
-        public static RegionFaction SelectSpotter(this Region region)
+        public static RegionFaction SelectSpotter(this Region region, IRNG random)
         {
+            if (random == null) throw new ArgumentNullException(nameof(random));
             List<RegionFaction> enemies = region.GetDetectingEnemyFactions();
             if (enemies.Count == 0) return null;
 
             double totalIntel = enemies.Sum(rf => (double)rf.GetOwnRegionIntel());
             if (totalIntel > 0)
             {
-                return WeightedPick(enemies, rf => rf.GetOwnRegionIntel(), totalIntel);
+                return WeightedPick(enemies, rf => rf.GetOwnRegionIntel(), totalIntel, random);
             }
 
             // No surveillance anywhere in the region: the intruder blunders into whoever is out
             // patrolling, weighted by the troops each faction actually has fielded.
             double totalStrength = enemies.Sum(rf => (double)rf.GetDeployedStrength());
             if (totalStrength <= 0) return enemies[0];
-            return WeightedPick(enemies, rf => rf.GetDeployedStrength(), totalStrength);
+            return WeightedPick(enemies, rf => rf.GetDeployedStrength(), totalStrength, random);
         }
 
         // Roulette-wheel pick over a non-empty list using the shared RNG, given a per-item weight and
         // its precomputed positive total. Falls through to the last item to absorb float rounding.
         private static RegionFaction WeightedPick(
-            List<RegionFaction> factions, Func<RegionFaction, double> weight, double totalWeight)
+            List<RegionFaction> factions,
+            Func<RegionFaction, double> weight,
+            double totalWeight,
+            IRNG random)
         {
-            double roll = RNG.GetLinearDouble() * totalWeight;
+            double roll = random.GetLinearDouble() * totalWeight;
             double cumulative = 0;
             foreach (RegionFaction rf in factions)
             {

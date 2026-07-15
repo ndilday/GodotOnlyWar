@@ -20,7 +20,15 @@ public class ShootActionFriendlyFireTests
         BattleSquad targets = CreateSquad(false, (2, "Target"));
         BattleSoldier shooter = shooters.Soldiers[0];
         BattleSoldier target = targets.Soldiers[0];
-        ShootAction action = new(1, 2, shooter.EquippedRangedWeapons[0].Template.Id, 5, 1, false);
+        ShootAction action = new(
+            1,
+            2,
+            shooter.EquippedRangedWeapons[0].Template.Id,
+            5,
+            1,
+            false,
+            grid: null,
+            StaticRNG.Instance);
         float skill = shooter.Soldier.GetTotalSkillValue(shooter.EquippedRangedWeapons[0].Template.RelatedSkill);
 
         float cleanModifier = action.CalculateToHitModifiers(
@@ -140,7 +148,8 @@ public class ShootActionFriendlyFireTests
             range: 1,
             numberOfShots: 1,
             useBulk: false,
-            grid: grid);
+            grid: grid,
+            random: StaticRNG.Instance);
     }
 
     private static BattleSquad CreateSquad(bool isPlayerSquad, params (int Id, string Name)[] members)

@@ -11,7 +11,7 @@ namespace OnlyWar.Helpers.Missions
     {
         public BaseSkill SkillUsed { get; }
         // RunMissionTest returns the number of sigmas the squad succeeded or failed by
-        public float RunMissionCheck(List<BattleSquad> squads);
+        public float RunMissionCheck(List<BattleSquad> squads, IRNG random);
     }
 
     // Central choke point for "learn by doing" field experience (PRD §4.12). Every mission
@@ -81,13 +81,13 @@ namespace OnlyWar.Helpers.Missions
             _difficulty = difficulty;
         }
 
-        public virtual float RunMissionCheck(List<BattleSquad> squads)
+        public virtual float RunMissionCheck(List<BattleSquad> squads, IRNG random)
         {
             // find soldier in squad with highest skill in SkillUsed
             BattleSoldier bestSoldier = squads.SelectMany(s => s.AbleSoldiers)
                 .OrderByDescending(soldier => soldier.Soldier.GetTotalSkillValue(SkillUsed))
                 .FirstOrDefault();
-            float margin = RunCheckInternal(bestSoldier);
+            float margin = RunCheckInternal(bestSoldier, random);
             if (MissionExperienceAwarder.ShouldAwardFieldExperience(squads))
             {
                 MissionExperienceAwarder.AwardFieldExperience(squads, SkillUsed, margin);
@@ -95,16 +95,17 @@ namespace OnlyWar.Helpers.Missions
             return margin;
         }
 
-        protected float RunCheckInternal(BattleSoldier soldier)
+        protected float RunCheckInternal(BattleSoldier soldier, IRNG random)
         {
             // No able soldier to make the attempt: auto-fail rather than dereferencing null.
             if (soldier == null)
             {
                 return GaussianCalculator.DetermineMarginOfSuccessZvalue(
-                    MissionCheckDefaults.NoAbleSoldiersZDisadvantage);
+                    MissionCheckDefaults.NoAbleSoldiersZDisadvantage,
+                    random);
             }
             float zAdvantage = (soldier.Soldier.GetTotalSkillValue(SkillUsed) - _difficulty) / 5.0f;
-            return GaussianCalculator.DetermineMarginOfSuccessZvalue(zAdvantage);
+            return GaussianCalculator.DetermineMarginOfSuccessZvalue(zAdvantage, random);
         }
     }
 
@@ -114,16 +115,16 @@ namespace OnlyWar.Helpers.Missions
         {
         }
 
-        public override float RunMissionCheck(List<BattleSquad> squads)
+        public override float RunMissionCheck(List<BattleSquad> squads, IRNG random)
         {
             if (!squads.Any(s => s.Squad.SquadLeader != null))
             {
-                return base.RunMissionCheck(squads);
+                return base.RunMissionCheck(squads, random);
             }
             BattleSoldier bestLeader = squads.Select(s => s.SquadLeader)
                 .OrderByDescending(soldier => soldier?.Soldier.GetTotalSkillValue(SkillUsed))
                 .FirstOrDefault();
-            float margin = RunCheckInternal(bestLeader);
+            float margin = RunCheckInternal(bestLeader, random);
             if (MissionExperienceAwarder.ShouldAwardFieldExperience(squads))
             {
                 MissionExperienceAwarder.AwardFieldExperience(squads, SkillUsed, margin);
@@ -141,7 +142,7 @@ namespace OnlyWar.Helpers.Missions
             SkillUsed = skill;
             _difficulty = difficulty;
         }
-        public float RunMissionCheck(List<BattleSquad> squads)
+        public float RunMissionCheck(List<BattleSquad> squads, IRNG random)
         {
             List<BattleSoldier> ableSoldiers = squads.SelectMany(s => s.AbleSoldiers).ToList();
             // No able soldiers left to attempt the check: auto-fail rather than averaging over an
@@ -149,11 +150,12 @@ namespace OnlyWar.Helpers.Missions
             if (ableSoldiers.Count == 0)
             {
                 return GaussianCalculator.DetermineMarginOfSuccessZvalue(
-                    MissionCheckDefaults.NoAbleSoldiersZDisadvantage);
+                    MissionCheckDefaults.NoAbleSoldiersZDisadvantage,
+                    random);
             }
             float totalSkill = ableSoldiers.Average(soldier => soldier.Soldier.GetTotalSkillValue(SkillUsed));
             float zAdvantage = (totalSkill - _difficulty) / 5.0f;
-            float margin = GaussianCalculator.DetermineMarginOfSuccessZvalue(zAdvantage);
+            float margin = GaussianCalculator.DetermineMarginOfSuccessZvalue(zAdvantage, random);
             if (MissionExperienceAwarder.ShouldAwardFieldExperience(squads))
             {
                 MissionExperienceAwarder.AwardFieldExperience(squads, SkillUsed, margin);

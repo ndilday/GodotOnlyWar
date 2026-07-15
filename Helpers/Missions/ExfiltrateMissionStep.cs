@@ -16,13 +16,14 @@ namespace OnlyWar.Helpers.Missions
 
         public ExfiltrateMissionStep(){}
 
-        public void ExecuteMissionStep(MissionContext context, float marginOfSuccess, IMissionStep returnStep)
+        public void ExecuteMissionStep(MissionExecutionContext execution, float marginOfSuccess, IMissionStep returnStep)
         {
+            MissionContext context = execution.State;
             // negative mod for size of enemy force
             // mod for terrain
             // mod for enemy recon focus
             // mod for equipment
-            BaseSkill stealth = GameDataSingleton.Instance.GameRulesData.Skills.Stealth;
+            BaseSkill stealth = execution.Rules.Stealth;
             RegionFaction enemyFaction = context.Order.Mission.RegionFaction;
             float difficulty = enemyFaction.GetOwnRegionIntel() * 0.5f;
             // every degree of magnitude of troops adds one to the difficulty
@@ -51,7 +52,7 @@ namespace OnlyWar.Helpers.Missions
             }
             context.DaysElapsed++;
             context.AddLog($"Day {context.DaysElapsed}: Force attempting to exfiltrate from {context.Order.Mission.RegionFaction.Region.Name}");
-            float margin = missionTest.RunMissionCheck(context.MissionSquads);
+            float margin = missionTest.RunMissionCheck(context.MissionSquads, execution.Random);
             if (margin > 0.0f)
             {
                 context.ForceBrokeContact = true;
@@ -64,7 +65,7 @@ namespace OnlyWar.Helpers.Missions
             }
             else
             {
-                new DetectedMissionStep().ExecuteMissionStep(context, margin, this);
+                new DetectedMissionStep().ExecuteMissionStep(execution, margin, this);
             }
         }
     }

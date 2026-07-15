@@ -14,13 +14,14 @@ namespace OnlyWar.Helpers.Missions.Recon
             
         }
 
-        public void ExecuteMissionStep(MissionContext context, float marginOfSuccess, IMissionStep returnStep)
+        public void ExecuteMissionStep(MissionExecutionContext execution, float marginOfSuccess, IMissionStep returnStep)
         {
-            BaseSkill tactics = GameDataSingleton.Instance.GameRulesData.Skills.Tactics;
+            MissionContext context = execution.State;
+            BaseSkill tactics = execution.Rules.Tactics;
             LeaderMissionTest missionTest = new LeaderMissionTest(tactics, 10.0f);
             // move the generation of new missions to the turn controller, rather than the individual mission steps
             context.AddLog($"Day {context.DaysElapsed}: Force performs reconnisance in {context.Order.Mission.RegionFaction.Region.Name}");
-            float margin = missionTest.RunMissionCheck(context.MissionSquads);
+            float margin = missionTest.RunMissionCheck(context.MissionSquads, execution.Random);
             // a particularly bad result means bad intel
             if(margin > 0 || margin < -0.5f)
             {
@@ -32,7 +33,7 @@ namespace OnlyWar.Helpers.Missions.Recon
                 // time to go home
                 if (context.Order.Mission.RegionFaction.Region != context.MissionSquads.First().Squad.CurrentRegion)
                 {
-                    new ExfiltrateMissionStep().ExecuteMissionStep(context, 0.0f, this);
+                    new ExfiltrateMissionStep().ExecuteMissionStep(execution, 0.0f, this);
                 }
                 else if(context.DaysElapsed >= 7)
                 {
@@ -42,7 +43,7 @@ namespace OnlyWar.Helpers.Missions.Recon
             }
             else
             {
-                new ReconStealthMissionStep().ExecuteMissionStep(context, marginOfSuccess, this);
+                new ReconStealthMissionStep().ExecuteMissionStep(execution, marginOfSuccess, this);
             }
         }
     }

@@ -15,9 +15,10 @@ namespace OnlyWar.Helpers.Missions.Assassinate
     {
         public string Description => "Assassination Mission";
 
-        public void ExecuteMissionStep(MissionContext context, float marginOfSuccess, IMissionStep returnStep)
+        public void ExecuteMissionStep(MissionExecutionContext execution, float marginOfSuccess, IMissionStep returnStep)
         {
-            BaseSkill tactics = GameDataSingleton.Instance.GameRulesData.Skills.Tactics;
+            MissionContext context = execution.State;
+            BaseSkill tactics = execution.Rules.Tactics;
             // size 1: Prime
             // size 2: Broodlord
             // size 3: Hive Tyrant
@@ -25,7 +26,7 @@ namespace OnlyWar.Helpers.Missions.Assassinate
             float difficulty = (float)((enemyFaction.Entrenchment + enemyFaction.GetOwnRegionIntel()) * 0.5)
                 + (float)Math.Log10(enemyFaction.Garrison);
             LeaderMissionTest missionTest = new LeaderMissionTest(tactics, difficulty);
-            float margin = missionTest.RunMissionCheck(context.MissionSquads);
+            float margin = missionTest.RunMissionCheck(context.MissionSquads, execution.Random);
             
             // TODO: my current data design doesn't handle HQ+Bodyguard in a single squad very well, so for now, I should come up with a way to associate each HQ with a particular separate bodyguard squad
             var request = new ForceGenerationRequest
@@ -35,7 +36,12 @@ namespace OnlyWar.Helpers.Missions.Assassinate
                 Profile = ForceCompositionProfile.SpecialHQTarget,
                 Tier = context.Order.Mission.MissionSize
             };
-            context.OpposingSquads = ForceGenerator.GenerateForce(request).Select(s => new BattleSquad(false, s)).ToList();
+            context.OpposingSquads = ForceGenerator.GenerateForce(
+                    request,
+                    execution.Random,
+                    execution.EntityIds)
+                .Select(s => new BattleSquad(false, s))
+                .ToList();
 
             BattleSquad targetSquad = context.OpposingSquads.FirstOrDefault();
             context.AssassinationTargetSoldierId = targetSquad?.SquadLeader?.Soldier.Id
@@ -48,7 +54,10 @@ namespace OnlyWar.Helpers.Missions.Assassinate
             // to let DetectedMissionStep replace OpposingSquads with an interceptor patrol, meaning
             // the located target never entered battle and bodyguard/interceptor kills could be
             // mistaken for the objective.
-            new MeetingEngagementMissionStep().ExecuteMissionStep(context, margin, returnStep: null);
+            new MeetingEngagementMissionStep().ExecuteMissionStep(
+                execution,
+                margin,
+                returnStep: null);
 
             if (!context.MissionSquads.Any(s => s.ShouldContinueMission()))
             {
@@ -57,7 +66,7 @@ namespace OnlyWar.Helpers.Missions.Assassinate
 
             if (context.Order.Mission.RegionFaction.Region != context.MissionSquads.First().Squad.CurrentRegion)
             {
-                new ExfiltrateMissionStep().ExecuteMissionStep(context, 0.0f, this);
+                new ExfiltrateMissionStep().ExecuteMissionStep(execution, 0.0f, this);
             }
         }
     }

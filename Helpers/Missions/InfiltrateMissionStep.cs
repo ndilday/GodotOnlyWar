@@ -16,13 +16,14 @@ namespace OnlyWar.Helpers.Missions.Recon
 
         public InfiltrateMissionStep(){ }
 
-        public void ExecuteMissionStep(MissionContext context, float marginOfSuccess, IMissionStep returnStep)
+        public void ExecuteMissionStep(MissionExecutionContext execution, float marginOfSuccess, IMissionStep returnStep)
         {
+            MissionContext context = execution.State;
             // negative mod for size of enemy force
             // mod for terrain
             // mod for enemy recon focus
             // mod for equipment
-            BaseSkill stealth = GameDataSingleton.Instance.GameRulesData.Skills.Stealth;
+            BaseSkill stealth = execution.Rules.Stealth;
             RegionFaction enemyFaction = context.Order.Mission.RegionFaction;
             // The defender's awareness of its own ground (unified intel; a patrol sweeping the region
             // raises this directly, so a patrolled region is intrinsically harder to slip into).
@@ -48,7 +49,7 @@ namespace OnlyWar.Helpers.Missions.Recon
                 .Select(sol => sol.Soldier.GetTotalSkillValue(stealth))
                 .DefaultIfEmpty(0f)
                 .Max();
-            float margin = missionTest.RunMissionCheck(context.MissionSquads);
+            float margin = missionTest.RunMissionCheck(context.MissionSquads, execution.Random);
             RegionFaction infTarget = context.Order.Mission.RegionFaction;
             GameLog.Trace(() =>
                 $"Infiltrate {context.MissionSquads.FirstOrDefault()?.Squad.Faction?.Name ?? "?"} -> "
@@ -58,11 +59,12 @@ namespace OnlyWar.Helpers.Missions.Recon
                 + $"bestStealthSkill={bestStealth:F2}, margin={margin:F2} -> {(margin > 0 ? "INFILTRATED" : "DETECTED")}");
             if (margin > 0.0f)
             {
-                MissionStepOrchestrator.GetMainInitialStep(context).ExecuteMissionStep(context, margin, returnStep);
+                MissionStepOrchestrator.GetMainInitialStep(execution)
+                    .ExecuteMissionStep(execution, margin, returnStep);
             }
             else
             {
-                new DetectedMissionStep().ExecuteMissionStep(context, margin, this);
+                new DetectedMissionStep().ExecuteMissionStep(execution, margin, this);
             }
         }
 

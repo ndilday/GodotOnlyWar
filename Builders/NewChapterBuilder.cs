@@ -89,7 +89,8 @@ namespace OnlyWar.Builders
                 SoldierFactory.Instance.GenerateNewSoldiers(
                     foundingSoldierCount,
                     soldierTemplate.Species,
-                    data.SkillTemplateList)
+                    data.SkillTemplateList,
+                    StaticRNG.Instance)
                 .Select(s => new PlayerSoldier(s, $"{NameGenerator.GetName()} {NameGenerator.GetName()}"))
                 .ToList();
 

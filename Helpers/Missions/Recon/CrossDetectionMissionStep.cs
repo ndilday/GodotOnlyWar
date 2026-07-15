@@ -12,8 +12,9 @@ namespace OnlyWar.Helpers.Missions.Recon
         {
         }
 
-        public void ExecuteMissionStep(MissionContext context, float marginOfSuccess, IMissionStep returnStep)
+        public void ExecuteMissionStep(MissionExecutionContext execution, float marginOfSuccess, IMissionStep returnStep)
         {
+            MissionContext context = execution.State;
             // decide whether to fight or flee
             context.AddLog($"Day {context.DaysElapsed}: Force is detected by enemy forces in {context.Order.Mission.RegionFaction.Region.Name}");
             // compare size of each force
@@ -29,12 +30,18 @@ namespace OnlyWar.Helpers.Missions.Recon
             }
             if(attackerSize >= opForSize || context.Order.LevelOfAggression == Aggression.Aggressive)
             {
-                new MeetingEngagementMissionStep().ExecuteMissionStep(context, marginOfSuccess, returnStep);
+                new MeetingEngagementMissionStep().ExecuteMissionStep(
+                    execution,
+                    marginOfSuccess,
+                    returnStep);
             }
             else
             {
                 // attempt to flee
-                new ExfiltrateMissionStep().ExecuteMissionStep(context, marginOfSuccess, returnStep);
+                new ExfiltrateMissionStep().ExecuteMissionStep(
+                    execution,
+                    marginOfSuccess,
+                    returnStep);
             }
         }
     }

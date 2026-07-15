@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using System.Drawing;
 using OnlyWar.Helpers.Battles;
+using OnlyWar.Helpers;
 using OnlyWar.Helpers.Missions;
 using OnlyWar.Helpers.Missions.Ambush;
 using OnlyWar.Helpers.Missions.Recon;
@@ -11,6 +12,7 @@ using OnlyWar.Models.Orders;
 using OnlyWar.Models.Planets;
 using OnlyWar.Models.Soldiers;
 using OnlyWar.Models.Squads;
+using OnlyWar.Tests.Fixtures;
 using Xunit;
 
 namespace OnlyWar.Tests.Missions;
@@ -94,7 +96,7 @@ public class MissionStepOutcomeSignalTests
         MissionContext context = CreateContext(MissionType.Advance);
 
         // Empty mission and opposing squad lists hit the guard before any battle setup.
-        new MeetingEngagementMissionStep().ExecuteMissionStep(context, 0f, null);
+        new MeetingEngagementMissionStep().ExecuteMissionStep(CreateExecution(context), 0f, null);
 
         Assert.True(context.NoViableTarget);
     }
@@ -104,7 +106,7 @@ public class MissionStepOutcomeSignalTests
     {
         MissionContext context = CreateContext(MissionType.Ambush);
 
-        new AmbushedMissionStep().ExecuteMissionStep(context, 0f, null);
+        new AmbushedMissionStep().ExecuteMissionStep(CreateExecution(context), 0f, null);
 
         Assert.True(context.NoViableTarget);
     }
@@ -114,7 +116,7 @@ public class MissionStepOutcomeSignalTests
     {
         MissionContext context = CreateContext(MissionType.Ambush);
 
-        new PerformAmbushMissionStep().ExecuteMissionStep(context, 0f, null);
+        new PerformAmbushMissionStep().ExecuteMissionStep(CreateExecution(context), 0f, null);
 
         Assert.True(context.NoViableTarget);
     }
@@ -126,6 +128,9 @@ public class MissionStepOutcomeSignalTests
             Aggression.Cautious, mission);
         return new MissionContext(order, new List<BattleSquad>(), new List<BattleSquad>());
     }
+
+    private static MissionExecutionContext CreateExecution(MissionContext context) =>
+        TestExecutionContextFactory.CreateMission(context, StaticRNG.Instance);
 
     private static RegionFaction CreateRegionFaction()
     {

@@ -27,9 +27,17 @@ namespace OnlyWar.Builders
             _nextId = highestId + 1;
         }
 
-        public Soldier GenerateNewSoldier(SoldierTemplate template)
+        public Soldier GenerateNewSoldier(SoldierTemplate template, IRNG random)
         {
-            Soldier soldier = GenerateNewSoldier(template.Species, null);
+            return GenerateNewSoldier(template, random, null);
+        }
+
+        public Soldier GenerateNewSoldier(
+            SoldierTemplate template,
+            IRNG random,
+            IEntityIdAllocator entityIds)
+        {
+            Soldier soldier = GenerateNewSoldier(template.Species, null, random, entityIds);
 
             foreach (Tuple<BaseSkill, float> skillBoost in template.MosTraining)
             {
@@ -39,44 +47,59 @@ namespace OnlyWar.Builders
             return soldier;
         }
 
-        public Soldier GenerateNewSoldier(Species species, IReadOnlyList<SkillTemplate> newRecruitSkills)
+        public Soldier GenerateNewSoldier(
+            Species species,
+            IReadOnlyList<SkillTemplate> newRecruitSkills,
+            IRNG random)
+        {
+            return GenerateNewSoldier(species, newRecruitSkills, random, null);
+        }
+
+        public Soldier GenerateNewSoldier(
+            Species species,
+            IReadOnlyList<SkillTemplate> newRecruitSkills,
+            IRNG random,
+            IEntityIdAllocator entityIds)
         {
             Soldier soldier = new Soldier(species.BodyTemplate)
             {
-                Id = _nextId
+                Id = entityIds?.GetNextId() ?? _nextId
             };
-            _nextId++;
+            if (entityIds == null)
+            {
+                _nextId++;
+            }
 
             soldier.Strength = species.Strength.BaseValue
-                + (float)(RNG.NextRandomZValue() * species.Strength.StandardDeviation);
+                + (float)(random.NextRandomZValue() * species.Strength.StandardDeviation);
             soldier.Dexterity = species.Dexterity.BaseValue
-                + (float)(RNG.NextRandomZValue() * species.Dexterity.StandardDeviation);
+                + (float)(random.NextRandomZValue() * species.Dexterity.StandardDeviation);
             soldier.Constitution = species.Constitution.BaseValue
-                + (float)(RNG.NextRandomZValue() * species.Constitution.StandardDeviation);
+                + (float)(random.NextRandomZValue() * species.Constitution.StandardDeviation);
             soldier.Ego = species.Ego.BaseValue
-                + (float)(RNG.NextRandomZValue() * species.Ego.StandardDeviation);
+                + (float)(random.NextRandomZValue() * species.Ego.StandardDeviation);
             soldier.Charisma = species.Charisma.BaseValue
-                + (float)(RNG.NextRandomZValue() * species.Charisma.StandardDeviation);
+                + (float)(random.NextRandomZValue() * species.Charisma.StandardDeviation);
             soldier.Perception = species.Perception.BaseValue
-                + (float)(RNG.NextRandomZValue() * species.Perception.StandardDeviation);
+                + (float)(random.NextRandomZValue() * species.Perception.StandardDeviation);
             soldier.Intelligence = species.Intelligence.BaseValue
-                + (float)(RNG.NextRandomZValue() * species.Intelligence.StandardDeviation);
+                + (float)(random.NextRandomZValue() * species.Intelligence.StandardDeviation);
 
             soldier.AttackSpeed = species.AttackSpeed.BaseValue
-                + (float)(RNG.NextRandomZValue() * species.AttackSpeed.StandardDeviation);
+                + (float)(random.NextRandomZValue() * species.AttackSpeed.StandardDeviation);
             soldier.MoveSpeed = species.MoveSpeed.BaseValue
-                + (float)(RNG.NextRandomZValue() * species.MoveSpeed.StandardDeviation);
+                + (float)(random.NextRandomZValue() * species.MoveSpeed.StandardDeviation);
             soldier.Size = species.Size.BaseValue
-                + (float)(RNG.NextRandomZValue() * species.Size.StandardDeviation);
+                + (float)(random.NextRandomZValue() * species.Size.StandardDeviation);
             soldier.PsychicPower = species.PsychicPower.BaseValue
-                + (float)(RNG.NextRandomZValue() * species.PsychicPower.StandardDeviation);
+                + (float)(random.NextRandomZValue() * species.PsychicPower.StandardDeviation);
 
             if (newRecruitSkills != null)
             {
                 foreach (SkillTemplate skillTemplate in newRecruitSkills)
                 {
                     float roll = skillTemplate.BaseValue
-                        + (float)(RNG.NextRandomZValue() * skillTemplate.StandardDeviation);
+                        + (float)(random.NextRandomZValue() * skillTemplate.StandardDeviation);
                     if (roll > 0)
                     {
                         soldier.AddSkillPoints(skillTemplate.BaseSkill, roll);
@@ -88,22 +111,45 @@ namespace OnlyWar.Builders
             return soldier;
         }
 
-        public Soldier[] GenerateNewSoldiers(int count, SoldierTemplate template)
+        public Soldier[] GenerateNewSoldiers(int count, SoldierTemplate template, IRNG random)
+        {
+            return GenerateNewSoldiers(count, template, random, null);
+        }
+
+        public Soldier[] GenerateNewSoldiers(
+            int count,
+            SoldierTemplate template,
+            IRNG random,
+            IEntityIdAllocator entityIds)
         {
             Soldier[] soldierArray = new Soldier[count];
             for(int i = 0; i < count; i++)
             {
-                soldierArray[i] = GenerateNewSoldier(template);
+                soldierArray[i] = GenerateNewSoldier(template, random, entityIds);
             }
             return soldierArray;
         }
 
-        public Soldier[] GenerateNewSoldiers(int count, Species species, IReadOnlyList<SkillTemplate> newRecruitSkills)
+        public Soldier[] GenerateNewSoldiers(
+            int count,
+            Species species,
+            IReadOnlyList<SkillTemplate> newRecruitSkills,
+            IRNG random)
+        {
+            return GenerateNewSoldiers(count, species, newRecruitSkills, random, null);
+        }
+
+        public Soldier[] GenerateNewSoldiers(
+            int count,
+            Species species,
+            IReadOnlyList<SkillTemplate> newRecruitSkills,
+            IRNG random,
+            IEntityIdAllocator entityIds)
         {
             Soldier[] soldierArray = new Soldier[count];
             for (int i = 0; i < count; i++)
             {
-                soldierArray[i] = GenerateNewSoldier(species, newRecruitSkills);
+                soldierArray[i] = GenerateNewSoldier(species, newRecruitSkills, random, entityIds);
             }
             return soldierArray;
         }
