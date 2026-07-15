@@ -31,10 +31,10 @@ namespace OnlyWar.Models
          }
 
         // Registers the sector while it is still being generated, so the opening-scenario stamp can
-        // run its planet-scoped simulations (which read GameDataSingleton.Instance.Sector) before
-        // SectorBuilder.GenerateSector returns and assigns the final Sector. Mirrors what
-        // LoadGameDataFromBlob does for a restored sector. GameRulesData/Date are already set by
-        // InitializeNewGameData (and by the tests) before generation runs.
+        // create a GameSession for its planet-scoped simulations before SectorBuilder.GenerateSector
+        // returns and assigns the final Sector. Mirrors what LoadGameDataFromBlob does for a restored
+        // sector. GameRulesData/Date are already set by InitializeNewGameData (and by the tests)
+        // before generation runs.
         internal void SetSectorDuringGeneration(Sector sector)
         {
             Sector = sector;

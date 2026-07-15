@@ -27,8 +27,7 @@ public partial class RegionScreenView : CommandWorkspaceView
     private TacticalRegionController _northwestRegionController;
 
     private Label _missionsHeaderLabel;
-    private PanelContainer _missionsFlagPanel;
-    private Label _missionsFlagLabel;
+    private HBoxContainer _missionsFlagRow;
     private GridContainer _missionsListStack;
     private readonly List<Button> _missionButtons = [];
     private ButtonGroup _missionButtonGroup;
@@ -122,11 +121,22 @@ public partial class RegionScreenView : CommandWorkspaceView
         SetupAdjacentRegion(_northwestRegionController, "NW");
     }
 
-    public void SetMissionsHeader(string targetName, string flagText)
+    public void SetMissionsHeader(string targetName, IReadOnlyList<string> factionBadges)
     {
         _missionsHeaderLabel.Text = string.IsNullOrEmpty(targetName) ? "MISSIONS" : $"Missions vs {targetName}";
-        _missionsFlagPanel.Visible = !string.IsNullOrEmpty(flagText);
-        _missionsFlagLabel.Text = flagText ?? "";
+
+        foreach (Node child in _missionsFlagRow.GetChildren())
+        {
+            _missionsFlagRow.RemoveChild(child);
+            child.QueueFree();
+        }
+
+        foreach (string factionName in factionBadges ?? Array.Empty<string>())
+        {
+            _missionsFlagRow.AddChild(CreateMissionFactionBadge(factionName));
+        }
+
+        _missionsFlagRow.Visible = factionBadges?.Count > 0;
     }
 
     public void SetMissions(IReadOnlyList<AvailableMission> missions, AvailableMission selected)
@@ -364,14 +374,14 @@ public partial class RegionScreenView : CommandWorkspaceView
         _missionsHeaderLabel.AddThemeFontOverride("font", GetThemeFont("display"));
         headerRow.AddChild(_missionsHeaderLabel);
 
-        _missionsFlagPanel = new PanelContainer { Visible = false };
-        OnlyWarStyle.ApplyTintedListRow(_missionsFlagPanel, false, OnlyWarStyle.OpposingAccent);
-        headerRow.AddChild(_missionsFlagPanel);
-
-        _missionsFlagLabel = new Label();
-        _missionsFlagLabel.AddThemeFontSizeOverride("font_size", 11);
-        _missionsFlagLabel.AddThemeColorOverride("font_color", OnlyWarStyle.OpposingAccent);
-        _missionsFlagPanel.AddChild(_missionsFlagLabel);
+        _missionsFlagRow = new HBoxContainer
+        {
+            Visible = false,
+            SizeFlagsHorizontal = SizeFlags.ShrinkBegin,
+            SizeFlagsVertical = SizeFlags.ShrinkCenter
+        };
+        _missionsFlagRow.AddThemeConstantOverride("separation", 4);
+        headerRow.AddChild(_missionsFlagRow);
 
         ScrollContainer scroll = new()
         {
@@ -387,6 +397,26 @@ public partial class RegionScreenView : CommandWorkspaceView
         _missionsListStack.AddThemeConstantOverride("h_separation", 4);
         _missionsListStack.AddThemeConstantOverride("v_separation", 4);
         scroll.AddChild(_missionsListStack);
+    }
+
+    private static PanelContainer CreateMissionFactionBadge(string factionName)
+    {
+        PanelContainer panel = new()
+        {
+            TooltipText = factionName,
+            SizeFlagsVertical = SizeFlags.ShrinkCenter
+        };
+        OnlyWarStyle.ApplyTintedListRow(panel, false, OnlyWarStyle.OpposingAccent);
+
+        Label label = new()
+        {
+            Text = factionName,
+            TooltipText = factionName
+        };
+        label.AddThemeFontSizeOverride("font_size", 11);
+        label.AddThemeColorOverride("font_color", OnlyWarStyle.OpposingAccent);
+        panel.AddChild(label);
+        return panel;
     }
 
     // Pinned via a fixed pixel offset from the board's bottom edge rather than an anchor

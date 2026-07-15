@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using OnlyWar.Helpers.Extensions;
+using OnlyWar.Helpers.Turns;
 using OnlyWar.Models;
 using OnlyWar.Models.Missions;
 using OnlyWar.Models.Planets;
@@ -73,7 +74,7 @@ namespace OnlyWar.Helpers.StrategicCombat
             }
             else if (attackerWon && mission.InvadesOnVictory)
             {
-                TurnController.EstablishInvaderPresence(attacker, target.Region, attackerSurvivors);
+                InvaderPresenceService.Establish(attacker, target.Region, attackerSurvivors);
                 HideBrokenCivilianDefender(target);
                 controlChanged = true;
                 outcome = StrategicCombatOutcome.InvaderFoothold;

@@ -1,7 +1,8 @@
 # OnlyWar — Product Requirements Document
 
-**Version:** Alpha 0.7 (In Development)  
-**Last Updated:** June 2026  
+**Version:** Alpha 0.7 Released / Alpha 0.8 Roadmap
+
+**Last Updated:** July 2026
 **Author:** Nathan Dilday  
 
 ---
@@ -36,12 +37,16 @@
    - 4.22 [Turn Simulation — Orks & Indelible Infestation](#422-turn-simulation--orks--indelible-infestation)
    - 4.23 [Turn Simulation — Supply, Requisition & Pledges](#423-turn-simulation--supply-requisition--pledges)
    - 4.24 [Turn Simulation — Tyranid Invasion & Biomass Consumption](#424-turn-simulation--tyranid-invasion--biomass-consumption)
+   - 4.25 [Chapter Mandates & Legacy Objectives](#425-chapter-mandates--legacy-objectives)
+   - 4.26 [Planet Tactical Map & Information Legibility](#426-planet-tactical-map--information-legibility)
+   - 4.27 [System Menu, Accessibility & Release UX](#427-system-menu-accessibility--release-ux)
 5. [Release Scoping](#5-release-scoping)
    - 5.1 [Released (Alpha 0.6 and prior)](#51-released-alpha-06-and-prior)
    - 5.2 [Alpha 0.7 — Committed](#52-alpha-07--committed)
    - 5.3 [Alpha 0.7 — To-Do](#53-alpha-07--to-do)
    - 5.4 [Alpha 0.7 — Stretch](#54-alpha-07--stretch)
-   - 5.5 [Alpha 0.8 — Narrative & Cohesion](#55-alpha-08--narrative--cohesion)
+   - 5.4.1 [Alpha 0.7.1 — Stabilization & Release Confidence](#541-alpha-071--stabilization--release-confidence)
+   - 5.5 [Alpha 0.8 — Command, Narrative & Continuity](#55-alpha-08--command-narrative--continuity)
    - 5.6 [Alpha 0.8+ — Cross-Faction Simulation (Relationships, Intel, Orks)](#56-alpha-08--cross-faction-simulation-relationships-intel-orks)
    - 5.7 [Post-0.7 Backlog](#57-post-07-backlog)
 6. [Open Design Questions](#6-open-design-questions)
@@ -260,8 +265,16 @@ Each feature is described as a behavioral specification: what the system does, a
 
 **Acceptance Criteria (Planned — Post-0.7):**
 - **Sergeant training cap.** A Sergeant's own skill level in a category is a hard cap on how far he can train a scout in that category — a scout cannot be trained beyond his instructor's level. Soldier ratings are updated every four turns; each time ratings update and a scout remains at his Sergeant's instructional limit in one or more skills, the Recruiter surfaces a notification. The player then has three options: leave the scout in the squad and accept no further improvement in the capped skill; transfer him to a Scout squad whose Sergeant has a higher level in that area; or promote him to a line squad, where development continues through deployment and combat experience rather than structured training.
-- The player can initiate a new intake of potential recruits from chapter-held worlds.
 - The Armory allows the designation of potential Techmarines to be sent to Mars for training.
+
+**Acceptance Criteria (Planned — 0.8 Recruitment v1):**
+- Recruitment rights are unlocked through sufficiently strong governor relationships, chapter ownership, or an explicit manpower pledge; they identify which worlds may supply candidates.
+- Starting an intake consumes Requisition and available gene-seed. Both costs are shown before confirmation, and an intake cannot begin if either resource is insufficient.
+- Intake throughput is limited by chapter training capacity: available Scout Sergeants and any future recruitment/training facilities. Recruitment is a pipeline, not an instant purchase.
+- Candidates progress through aspirant/neophyte training into Scout squads before becoming full Battle Brothers. The Recruiter shows source world, elapsed/remaining time, training capacity used, and the expected destination squad or holding pool.
+- Recruitment source and method may affect candidate quality, intake time, population/political cost, or governor opinion. The first implementation needs at least one clearly differentiated trade-off rather than several cosmetically identical buttons.
+- Recruitment is managed through standing assignments and relationships, not a repeatable one-off “find recruits” mission.
+- Advanced methods, detailed population extraction, and specialized recruitment facilities may follow later; v1 must close the Chapter's attrition/recovery loop without requiring the complete typed-materiel economy.
 
 ---
 
@@ -503,12 +516,15 @@ Flamer-type weapons were previously modeled as ordinary single-target guns diffe
 - Battle ends when one side has no squads willing to continue.
 
 **Disengagement — Covered Withdrawal and Rout**
+
+**Implementation status (post-0.7).** The sequence below is a design specification, not current battle behavior. The current mission layer applies casualty/aggression continuation thresholds after an engagement, and the battle resolver forces an unresolved battle to disengage at its turn cap, but battles do not yet model covered withdrawal to the map edge, pursuit, morale-triggered rout, or a burrow/flight-specific immediate exit. These behaviors remain together in Battle Logic Phase 4 (§5.4).
+
 - A squad leaves an engagement in one of two modes:
   - **Covered Withdrawal** (player-ordered): the squad moves away from the enemy at jog speed each turn, shooting as it goes. Withdrawal fire uses normal shooting rules and counts toward the pursuer's casualty threshold. The squad remains on the map until it reaches the map edge, then exits.
   - **Rout** (morale-triggered; morale itself is still open, see §6.2): the squad moves away at run speed each turn with no shooting, remaining on the map until it reaches the edge.
 - **Pursuit:** the non-withdrawing force continues to act normally — moving toward and firing at the fleeing squad according to its own aggression. Pursuit tenacity is governed by the pursuer's aggression using the same casualty thresholds as normal battle continuation: an Aggressive force pursues until it cannot reach or shoot the fleeing squad or its own casualties trigger withdrawal; an Avoid force does not pursue at all. A pursuer that takes sufficient casualties from withdrawal fire may itself begin to withdraw, ending pursuit.
 - Combat ends when the two forces are outside mutual shooting range and at least one side is fully withdrawing or routing; both forces need not exit the map.
-- Units capable of burrowing or flight may disengage immediately, bypassing the normal withdrawal sequence.
+- A squad capable of burrowing or flight may disengage immediately when it elects to retreat, bypassing the normal withdrawal sequence.
 
 **Battle Record**
 - A full record of the battle is stored: all actions taken per turn, soldier positions, wounds inflicted, and outcome.
@@ -657,6 +673,13 @@ Example ranges for reference:
 - All game state is preserved across save/load: sector state, all faction populations and garrisons, all marines (attributes, skills, wounds, history, kill records), all squad assignments, fleet positions, loaded squads, active orders, active governor requests, game date, and chapter battle history.
 - Loading a save produces a game state identical to the state at the time of saving.
 
+**Acceptance Criteria (Planned — 0.7.1 Release Confidence):**
+- The save UI exposes named manual slots and a visible chooser showing campaign/chapter name, campaign date, last-write time, and compatibility state. “Load” must not silently mean “load whichever compatible file is newest.”
+- The game maintains several rolling autosaves, including a protected pre-turn autosave immediately before turn resolution mutates campaign state. Autosaves are distinct from and never overwrite named manual slots.
+- Save writes remain atomic. A failed save or migration leaves the prior valid file intact and presents an actionable error rather than creating an empty or half-written campaign.
+- Save formats use ordered schema migrations rather than exact-version rejection alone. Before migration, the original file is backed up automatically; each migration is independently testable and advances one declared version step.
+- The load chooser displays incompatible or failed saves with the reason they cannot be opened. It does not hide them or replace the error with a generic “no save found” state.
+
 ---
 
 ### 4.19 Narrative Voice & Emotional Impact
@@ -675,7 +698,7 @@ This is a cross-cutting specification. The per-surface acceptance criteria below
 6. **Restraint and variation.** The simulation supplies the drama; text frames it and never melodramatizes. Each event type draws from a pool of phrasings to avoid repetition fatigue across a long campaign.
 7. **Design for player-authored meaning.** The data model should anticipate the player later eulogizing, honoring, or renaming notable dead, even if the UI for it is deferred.
 
-**Notability Classifier.** A shared rule set determines which events are "notable" — worthy of a callout in the Turn Report and (if adopted, see below) the Chapter Chronicle. Initial notable triggers: a brother's first confirmed kill; crossing a kill milestone; the death of a veteran (above a service/rank threshold); an officer crippled or slain; a last-survivor outcome; a squad that held under orders past a heavy-casualty threshold; first contact with a new faction; a world saved or lost (by the chapter or by the wider Imperium); a hidden cult revealed. Thresholds are tunable and should live in rules data where practical.
+**Notability Classifier.** A shared rule set determines which events are "notable" — worthy of a callout in the Turn Report and the Command Brief/Chapter Chronicle. Initial notable triggers: a brother's first confirmed kill; crossing a kill milestone; the death of a veteran (above a service/rank threshold); an officer crippled or slain; a last-survivor outcome; a squad that held under orders past a heavy-casualty threshold; first contact with a new faction; a world saved or lost (by the chapter or by the wider Imperium); a hidden cult revealed. Thresholds are tunable and should live in rules data where practical.
 
 **Per-Surface Acceptance Criteria:**
 
@@ -687,7 +710,12 @@ This is a cross-cutting specification. The per-surface acceptance criteria below
 - **New Game Founding (4.1):** A short founding history / chapter myth is generated at campaign start, seeding the first entry of the chapter's narrative record.
 - **Wider-Imperium Dispatches:** As the uncontrolled Imperial presence grows (per the sandbox reframe), its actions reach the player as voiced dispatches — Battlefleet priorities, other chapters' deeds, Inquisitorial edicts — that texture the sector as a living theater the chapter is one actor within.
 
-**Candidate Feature — Chapter Chronicle (decision pending).** A persistent, sector-level narrative log: the campaign-scale analogue of the per-soldier history log. It would auto-record notable events (per the classifier above) into a single readable saga — founding myth, defining battles, named heroes and their deaths, worlds won and lost, factions revealed — giving the sandbox player one place to relive and retell the campaign. **Decision deferred:** draft the per-surface text improvements above first, then revisit whether a dedicated Chronicle screen/system is warranted or whether the enriched Turn Report and history logs already carry the narrative load.
+**Committed Feature — Command Brief & Chapter Chronicle.** This is one persistent command surface with two complementary lenses over the same typed event/state substrate:
+
+- **Command Brief (present and future):** an actionable operations overview showing active operations and expected status; idle deployable squads and squads lacking orders; fleets in transit with arrival ranges; medical procedures and recovery milestones; active requests; expiring intelligence and special-mission opportunities; current campaign mandates; and major sector changes since the previous turn. Every actionable entry deep-links to the relevant planet, region, fleet, squad, soldier, request, or mission.
+- **Chapter Chronicle (past):** a persistent sector-level narrative log that records notable events from the classifier into one readable saga — founding myth, defining battles, named heroes and their deaths, worlds won and lost, factions revealed, and mandates completed or failed.
+- The first turn uses the Command Brief as lightweight onboarding: a short checklist points the player toward the Promised World, landing forces, issuing orders, and understanding End Turn without creating a separate tutorial mode.
+- The transient Turn Report remains the account of the week just resolved. Its notable events feed the Chronicle, while unresolved consequences and next actions feed the next Command Brief; the three surfaces must not maintain contradictory copies of campaign facts.
 
 ---
 
@@ -971,6 +999,47 @@ This is a behavioral specification. It depends on §4.21 (behavior flags, growth
 
 ---
 
+### 4.25 Chapter Mandates & Legacy Objectives
+
+**Description.** The Promised World gives a new campaign a strong opening horizon, but its resolution must not leave the sandbox directionless. Chapter Mandates are generated, medium-term objectives that express what the Chapter is trying to become without imposing a rigid victory screen or ending the campaign.
+
+**Acceptance Criteria (Planned — 0.8):**
+- Once the Promised World resolves, the campaign offers a small set of state-aware mandates rather than a fixed universal quest chain. The player chooses or accepts a limited number so the system supplies direction without becoming a task list.
+- Initial mandate families include: establish or secure a Chapter World; rebuild a depleted company; protect several strategic Imperial worlds; eradicate a named regional threat; reach a defined reputation with sector authorities; and establish a functioning supply network.
+- Mandates are generated only when their prerequisites and completion conditions are meaningful in the current sector. A mandate cannot ask the player to interact with content or systems absent from that campaign.
+- Progress, stakes, and rewards are visible in the Command Brief. Relevant events deep-link to the affected worlds, forces, characters, or supply lines.
+- Completion produces an appropriate persistent consequence — reputation, Requisition, a pledge/right, a Chronicle entry, or a new mandate horizon. Failure or expiration changes relationships or sector state but is not a campaign-ending fail state.
+- Mandates coexist with free-form play. The player may ignore them and continue the sandbox, accepting the simulated and political consequences.
+
+---
+
+### 4.26 Planet Tactical Map & Information Legibility
+
+**Description.** The current tactical-region hexes attempt to communicate ownership, several force types, orders, intelligence, fortifications, and multiple hostile factions through icons too small to read reliably. Alpha 0.8 receives a legibility-first redesign of the map's information hierarchy rather than another incremental icon addition.
+
+**Acceptance Criteria (Planned — 0.8):**
+- Produce and approve a visual baseline before implementation. The redesign may change icon placement, tile bands, labels, color hierarchy, and zoom behavior; compatibility with the current single-icon slots is not a constraint.
+- At the normal decision-making zoom, a player can distinguish controlling faction, player presence, public hostile presence, active orders, and selected state without relying on tooltips or memorizing tiny glyphs.
+- Information is layered and zoom-adaptive: the normal view shows the most important state, while closer zoom or the selected-region presentation may reveal faction names, intel-gated magnitude, fortifications, and secondary forces.
+- A region containing multiple public enemy factions visibly reads as contested and preserves each disclosed faction's identity. Hidden factions remain absent, and ordering/color must not leak undisclosed raw strength.
+- The map and the selected-region dossier use the same intel-gated presence model and terminology. The roomy Region detail header continues to show one pill per public hostile faction.
+- Icon size, contrast, label scaling, and color choices remain readable at the supported minimum UI scale and common color-vision deficiencies.
+
+---
+
+### 4.27 System Menu, Accessibility & Release UX
+
+**Description.** The top-level System Options action must provide the campaign-control and presentation settings expected of a deployable desktop game. These controls are release infrastructure, not simulation features.
+
+**Acceptance Criteria (Planned — 0.7.1):**
+- The System Options button opens a working modal with Resume, Save, Load, Return to Title, and Quit. Destructive navigation prompts when unsaved progress would be lost.
+- Display settings include fullscreen/windowed mode and UI/text scaling. The supported scale range is exercised on the main command, Chapter, planet, region, squad, Apothecarium, and Battle Review screens without clipped mandatory controls.
+- End Turn uses a conditional preflight only when there is meaningful unresolved attention: idle deployable squads, actionable fleets without orders, or soon-expiring opportunities. The player can proceed immediately and may configure warning preferences; routine turns do not require a redundant confirmation.
+- The System menu can export a diagnostic bundle containing the game/build version and recent log, with the current save included only through an explicit player choice.
+- Headless scene-wiring smoke tests instantiate the main gameplay scenes and verify that required top-level actions have subscribers and can open their intended surfaces. A visible but inert button is a release-blocking failure.
+
+---
+
 ## 5. Release Scoping
 
 ### 5.1 Released (Alpha 0.6 and prior)
@@ -1018,9 +1087,9 @@ The following must ship in 0.7. Status reflects the current codebase (✅ done �
   - ✅ OpFor fog of war, recon orders, and special missions. *(Implemented — recon orders raise a region's intelligence and the special-mission/intelligence system already existed; this pass closed the remaining fog-of-war leak in the UI. Hidden factions are now concealed on every screen (folded into the civilian count, discovered only via the intelligence system); public-enemy population is graded by intelligence level ("Unknown" → fuzzed → exact); and enemy defenses appear only once intelligence exceeds a threshold and only as fuzzy descriptions, never raw values. The Region screen previously revealed hidden-faction identity and exact garrison/defense values regardless of intelligence — now consistent with the planet tactical screen.)*
   - ✅ Diversion missions. *(Implemented — a squad can be ordered to run an overt "Diversion" feint against an enemy-held region while remaining in its own. Unlike stealth missions it skips infiltration: a `DemonstrateForceMissionStep` makes a daily show of force (a Tactics check whose difficulty rises with the target's defender-held regional intel and garrison size), accumulating Impact. Diversions resolve in a new pre-planning "shaping" phase **before** factions generate their turn orders, so the feint shapes enemy decisions that same turn. A successful feint projects a superlinear `apparentThreat = manpower × (1 + impact/scale)²` onto the target's `PerceivedThreatBonus`, inflating the garrison its controller feels it must hold; at Normal aggression or higher it also raises the feinting force's `ProvocationLevel`, which lowers the AI's force-ratio threshold for attacking (toward parity) and biases its target selection — baiting a counterattack. Because the feint force stands in the open, it is pulled into the fight as a defender if it draws that counterattack. Both effects are transient: set during the shaping phase, consumed by faction planning, then cleared the same turn (never saved). **Enemy-generated diversions (the AI running its own feints) are deferred post-0.7 — see §5.7.***)*
   - ✅ Player-constructable fortifications (Entrenchments, Listening Posts, Anti-Air batteries). *(Implemented — a squad in its own region can be ordered to Fortify (Entrenchment), Build Listening Post, or Build Anti-Air; the squad spends the turn building instead of fighting. Progress scales with squad size and a new Intelligence-based "Engineering (Fortification)" skill that all combat marines train, accumulating defenses over successive turns. The construction-mission resolution and save round-trip are shared with the existing NPC development path.)*
-  - ✅ Burrowing and camouflage as ambush tactics. *(Implemented.)*
+  - ✅ Burrowing and camouflage as ambush tactics. *(The 0.7 scope is complete: species evasion and burrow-arrival placement are implemented. Immediate burrow/flight retreat belongs to the broader withdrawal system in Battle Logic Phase 4 rather than this completed 0.7 commitment; see §5.4.)*
     - ✅ **Evasion / hard-to-hit modifier:** *(Implemented — a per-species evasion value is now subtracted from the attacker's total in both `ShootAction` and `MeleeAttackAction`, giving elusive bodies (serpentine Raveners, weaving Genestealers/Lictors) a defensive "harder to hit" lever in melee as well as ranged without overloading Size, which still tracks real bulk for wounds/footprint. Melee attacks now also account for the defender's melee skill. Previously the Ravener leaned on its high MoveSpeed for ranged evasion only; this closes the melee gap.)*
-    - ✅ **Immediate disengagement:** burrowing- and flight-capable units may break off an engagement immediately, bypassing the normal covered-withdrawal sequence (specified under Battle Continuation in §4.14).
+    - ✅ **Burrow arrival:** *(Implemented — a wholly burrow-capable squad erupts around the nearest enemy squad after normal battle placement, spilling into successively wider rings when the immediate perimeter is full.)*
 - ✅ **Subsector warp lanes:** *(Implemented.)* Each subsector has a capital world, determined by an importance score (population size for 0.7; strategic classification post-0.7). The capital has established warp lanes to all other planets in the subsector. Cross-subsector lanes connect the capitals of adjoining subsectors, with a spanning tree guaranteeing the whole sector is reachable. Lanes are derived deterministically from planet positions during sector creation (and rebuilt on load) rather than persisted. The fleet movement dialog routes along lanes by default. The "Chart Direct Route (Risky)" option is deferred post-0.7 (see 4.17).
 - ✅ **Tyranid Infiltration Units:** Lictor and Ravener content data. *(Species, SoldierTemplate, and skill-training data added via the `migrate-tyranids` rules-DB migration — Lictor as an elite WS6 ambusher (S6, T5/6-wound, Perception-led senses, high Stealth, melee carried by skill rather than Dex) and Ravener as a fast-attack glass cannon (the fastest ground bug, Hormagaunt-level instincts, Warrior-tier body). Squad templates added via `migrate-tyranid-squads` — the Lictor as a solo unit (`Scout | Elite`, 15mm chitin) and the Ravener as a 5-strong leaderless pack (`Scout`), both with 15mm chitin and Scything Talons; both are now eligible for `ForceGenerator` dynamic forces (scout patrols and generic forces), and the per-species melee/ranged evasion lever they were designed around is now in place (see above). The fixed `UnitTemplate` armies — legacy scaffolding only the player's Space Marine chapter ever instantiated — were unused for every non-player faction, so the dead Tyranid (and Genestealer Cult) `UnitTemplate` rows were dropped from the rules DB via the `remove-unused-unit-templates` tool command rather than extended.)*
 
@@ -1059,7 +1128,7 @@ The following must ship in 0.7. Status reflects the current codebase (✅ done �
 
 - ✅ **Melee Combat Rework — Attack Speed, Multiple Attacks & Weapon Rebalance:** Make melee lethality deliver what the species and weapon data already promise — AttackSpeed-driven multiple attacks, weapon speed multipliers, dual wielding, parry, a doubled melee damage scale, and a `SoldierTemplate.BattleValue` recompute. Explicit balance stance: tabletop is a guide, but base marines are deliberately "two-wound" soldiers. Full behavioral spec in §4.14 (*Melee Combat — Attack Speed, Multiple Attacks & Weapon Rebalance*). Distinct from the Battle Logic Phase 4 stretch bucket (§5.4), which covers grenades/AoE/morale. *(Implemented — attacks per melee action are `AttackSpeed/10 × weapon AttackSpeedMultiplier` with the fraction resolved probabilistically (`MeleeMath`); the `ExtraAttacks` column was replaced by `AttackSpeedMultiplier` (all values currently 1.0 — per-weapon speed differentiation remains a data/balance lever); dual wielding (two one-handed melee weapons) grants one off-hand strike with the off-hand weapon's profile, with defensive value carried entirely by weapon `ParryModifier`s (an initial flat +1 dual-wield defense bonus was removed — it gave every dual-natural-weapon Tyranid a free defensive stack on top of the evasion that already models their invulnerable-save analog); the planner distributes strikes across adjacent enemies, committing to a target until cumulative take-out confidence reaches 75% before moving on (`BattleSquadPlanner.BuildStrikePlan`); `ParryModifier` now counts on the defender's side of the contested roll (summed across equipped weapons; the unarmed fist is −1); `StrengthMultiplier` values were doubled with heavy-tier `WoundMultiplier`s dialed down in compensation; dead columns `ExtraDamage` and `IsPenetrating` were dropped; a follow-up calibration pass re-anchored the contested roll to tabletop's intuition band — `MeleeDefenderAdvantage` 3→0 (equal skill trades at ~50%, tabletop's "hit on 4s") and the per-side roll σ 3→6 (each skill point worth ~5.6% near parity, compressing large gaps toward tabletop's clamped 33–67% ladder so a Genestealer is mega-scary but killable — ~72% out / ~28% back vs a marine; see `Design/Active/EvasionBurrowAndAmbush.md`); every Space Marine template gained 1 point of Fist MOS training so an unarmed marine fights trained rather than helpless (a default "close combat weapon" — knife/bayonet — is a possible future refinement); Ork Warboss data fixed (AttackSpeed attribute was mislinked to his Size template — now 30; marine "Bolter + Bolt Pistol" set replaced with a new "Slugga + Big Choppa" set; Generic Melee/Ranged training added). `BattleValueCalculator` was rewritten as an engine-faithful valuation — expected kills/turn and survival-turns against a four-profile reference threat panel (swarm chaff / light infantry / elite infantry / monster), BV = 5·√(offense × durability)·command, replaying the engine's real to-hit/damage math including recoil decay, aim-vs-fire arbitrage, single-target overkill caps, ammo duty cycle, and melee closing/engagement limits — and all `SoldierTemplate.BattleValue` rows were regenerated with it (PDF Trooper 5 anchor; Tactical Marine 10, Genestealer 14, Hive Tyrant 95), with the `StrategicCombatRules` BV anchor constants updated to match. Player-soldier BV intentionally remains the template guideline rather than a live skill-tracking value: enemy forces size their responses by estimating the player force, not by concrete data on every marine. Values are subject to normal ongoing balance adjustment.)*
 
-- ✅ **Mission Field Experience & Records:** Non-battle missions currently grant no soldier development and leave no trace on soldier history — a successful recon that infiltrates a hive undetected teaches its scouts nothing and is never recorded. Add the learn-by-doing field-experience model (§4.12): per-check skill growth on the skill each mission step tested, margin-scaled so close shaves and failures teach most, tuned above garrison training, uncapped in this pass (the geometric skill-cost curve and margin scaling are the governors). Pair it with per-soldier mission history events and end-of-turn mission-result reporting (§4.13). Event emission reuses the structured event-log substrate already landed as §5.5 step (1), pulling the non-combat mission-outcome events forward from the 0.8 event work so field service is visible now. Attributes stay static this pass (open question §6.13). *(Implemented — field XP is awarded inside `MissionCheck.RunMissionCheck` (a Gaussian-bump margin curve in `Helpers/Missions/MissionExperienceCalculator.cs`) to every able PlayerSoldier on each check; `Helpers/Missions/MissionOutcomeRecorder.cs` writes a per-soldier `MissionOutcome` `SoldierEvent` at mission end (hooked from `TurnController.ProcessCombatMissions`/`ProcessDiversionMissions`, player orders only); `Helpers/MissionReportSummaryBuilder.cs` produces the outcome-classified, acting-faction-attributed end-of-turn summary. Covered by unit tests. **Follow-up:** mission-outcome classification currently reads `EnemiesKilled` plus mission-step log-string matching — a structured per-step outcome signal on `MissionContext` would remove that fragility and let the recorder and report share one classifier.)*
+- ✅ **Mission Field Experience & Records:** Before this work, non-battle missions granted no soldier development and left no trace on soldier history — a successful recon that infiltrated a hive undetected taught its scouts nothing and was never recorded. The implemented learn-by-doing field-experience model (§4.12) grants per-check skill growth on the skill each mission step tested, margin-scaled so close shaves and failures teach most, tuned above garrison training, and uncapped in this pass (the geometric skill-cost curve and margin scaling are the governors). It is paired with per-soldier mission history events and end-of-turn mission-result reporting (§4.13). Event emission reuses the structured event-log substrate already landed as §5.5 step (1), pulling the non-combat mission-outcome events forward from the 0.8 event work so field service is visible now. Attributes stay static in this pass (open question §6.13). *(Implemented — field XP is awarded inside `MissionCheck.RunMissionCheck` (a Gaussian-bump margin curve in `Helpers/Missions/MissionExperienceCalculator.cs`) to every able PlayerSoldier on each check; `Helpers/Missions/MissionOutcomeRecorder.cs` writes a per-soldier `MissionOutcome` `SoldierEvent` at mission end (hooked from `TurnController.ProcessCombatMissions`/`ProcessDiversionMissions`, player orders only); `Helpers/MissionReportSummaryBuilder.cs` produces the outcome-classified, acting-faction-attributed end-of-turn summary. Mission steps now set structured, monotonic outcome signals on `MissionContext` (`ForceBrokeContact`, `ForceLostContact`, `ForceWithdrewUnderFire`, `ObjectiveAborted`, `NoViableTarget`, and assassination-target facts); `MissionOutcomeClassifier` derives a single classification from those signals, shared by the career-log recorder, player Turn Report, and redacted NPC reporting. Log-string matching is no longer used for outcome classification. Covered by unit tests.)*
 
 - ✅ **Template Weapons — Flamers:** Convert flamer-type weapons from stat-line guns into true cone-template weapons: auto-hit against everything in a cone (both sides), evasion/size modifiers bypassed, fuel-per-burst ammo, firing-line target selection, template-aware Battle Value. Full behavioral spec in §4.14 (*Template Weapons — Flamers*). Pulled forward from the Battle Logic Phase 4 stretch bucket (§5.4) so the flamer is not rebuilt twice; on-fire/morale and grenades stay in Phase 4. *(Implemented — `RangedWeaponTemplate` and the rules DB now carry `TemplateType`, `AreaRadius`, and `FuelPerBurst`; both Flamer rows project a deterministic full-range cone widening from a 0.5-cell nozzle to a 3-cell half-width, auto-hit every friendly or enemy footprint caught while excluding the shooter, resolve normal hit-location/armor/wound math per victim without stray-shot rules, and spend 10 of their 50 fuel per burst. `BattleSquadPlanner` bypasses aim and ordinary single-target scoring for templates, evaluates complete firing lines by expected enemy BV removed minus friendly BV lost, prefers dense positive-value lines, and closes instead of firing unsafe ones, including the engaged point-blank path. `BattleValueCalculator` and the offline harness value template auto-hits with density-scaled victims and a fuel/reload duty cycle; the flamer-option Tactical and Assault Marine rows remain BV 9 after regeneration. Area wounds are queued by the live resolver, reported as fire-phase volleys in replay summaries, and friendly-fire casualties no longer receive enemy-kill credit. Covered by focused cone, action, planner, database, BV, and aftermath tests.)*
 
@@ -1072,7 +1141,7 @@ Targeted for 0.7 but not part of the committed 0.7 set (§5.2). All items origin
 To be drawn from if capacity allows:
 
 - **Living Universe Phase 3B — Revolt:** Revolutionary population mechanic; evidence-based requests. Full behavioral spec in §4.20 — per-region Contentment driving a sector-wide Insurrectionist faction (reusing the converting-faction/Cult machinery), governor Severity-driven response, garrison defection, intra- and inter-planet spread, evidence-gated requests, and "for a revolt" limited to inaction-with-consequences in 0.7. Built on the faction-presence model as a forward-compatible subset of the Pop-model question (§6.7); Chaos radicalization specified but gated on Chaos content.
-- **Battle Logic Phase 4:** Grenades (reusing the §4.14 template-weapon machinery with a thrown delivery), morale, on-fire damage-over-time/panic (§4.14 gated follow-on), sprint/fire tradeoff, retreat mechanic, post-battle loadout recalculation. *(Flamers/cone templates were pulled forward to §5.3.)*
+- **Battle Logic Phase 4:** Grenades (reusing the §4.14 template-weapon machinery with a thrown delivery), morale, on-fire damage-over-time/panic (§4.14 gated follow-on), sprint/fire tradeoff, the full covered-withdrawal/rout/pursuit mechanic (including immediate disengagement for burrowing- and flight-capable squads), and post-battle loadout recalculation. *(Flamers/cone templates were pulled forward to §5.3.)*
 - **Leg Wound & Prone-Combat Realism (maybe):** Rework the leg-hit outcome so a single solid hit staggers rather than reliably felling. Motivated by combat GSW data: even for 40k-tier energies (nothing softer than .45/7.62), only ~45–55% of solid leg hits fracture bone/joint or major vessel and actually prevent movement; the rest slow but don't stop. Scope:
   - **Raise the "can no longer walk" bar one level to Massive.** Motive (leg/foot) locations currently drop a soldier at their *cripple* threshold (Critical, i.e. damage ≥ Constitution); require the higher *Massive* band instead so a Critical leg wound impairs but does not fell. Torso/vital lethality is unchanged; this narrows the current asymmetry where a leg is fight-ending at half the damage the torso needs to be decisive.
   - **Downed-but-armed enemies keep firing prone.** A soldier felled by a motive-location wound who still holds a ranged weapon may continue firing from prone, after a short delay (a few rounds) to represent going down and re-orienting rather than instantly returning accurate fire.
@@ -1083,9 +1152,18 @@ To be drawn from if capacity allows:
 - **Mission System Expansion:** Talent recruitment missions; IG support missions; Chaos cult investigation; STC hunt; prisoner recovery.
 - **Supply & Requisition Phase 2 — pledges & delivery:** Layer the pledge system onto the Phase 1 currency (§4.23). Fulfilling a request generates a tracked **pledge** — a *standing tithe* (recurring) or *one-off* — that delivers **Requisition over subsequent turns** along a **supply line bound to its source world**: a world that revolts (§4.20) or falls suspends or defaults its pledges, wiring supply into the Living Galaxy. Broaden sinks beyond the Apothecary to other 0.7 systems (e.g. fortification materiel §4.13, recruitment costs). Pledges deliver Requisition only in this phase; **typed materiel** (wargear / vehicles / ships driven by strategic classification §4.1), the **Armory wargear inventory** (§6.9), **pledge interdiction** (§6.10), and **Inquisition negative-requisition** (§6.5) remain post-0.7, each gated on a system not present in 0.7.
 
-### 5.5 Alpha 0.8 — Narrative & Cohesion
+### 5.4.1 Alpha 0.7.1 — Stabilization & Release Confidence
 
-The connective pass that turns 0.7's broad simulation into a felt sandbox narrative. These items are mostly *connective* work over systems that already exist — making the player feel the consequences the simulation already produces — rather than net-new systems. See Section 4.19 for the governing specification.
+Alpha 0.7.1 is deliberately limited to protecting and operating the released campaign. It does not add a new faction or major simulation system.
+
+- ⬜ **System menu and accessibility baseline** — wire the existing System Options action and implement the Resume/Save/Load/Title/Quit, display mode, UI/text scaling, warning-preference, and diagnostic-export requirements in §4.27.
+- ⬜ **Save confidence** — named manual slots, a visible save chooser, rolling autosaves, a protected pre-turn autosave, explicit compatibility/error states, and atomic ordered schema migrations with automatic backup (§4.18).
+- ⬜ **Conditional End Turn preflight** — warn only for meaningful unresolved attention and allow immediate override; do not add an unconditional “Are you sure?” to every turn (§4.27).
+- ⬜ **Scene-wiring release tests** — headlessly instantiate the principal gameplay scenes and fail when a required top-level action is visible but inert. This specifically covers System Options and the save/load/end-turn surfaces.
+
+### 5.5 Alpha 0.8 — Command, Narrative & Continuity
+
+The connective pass that turns 0.7's broad simulation into a legible, felt, sustainable sandbox campaign. The first half makes existing state understandable and memorable; the second closes the Chapter recovery loop and supplies a medium-term horizon. See §§4.19 and 4.25–4.26 for the governing specifications.
 
 **Implementation prerequisite — structured soldier event log.** Soldier history was an unstructured `List<string>` of free-text lines, written from only a handful of sites (founding, promotion/transfer, ratings/awards, a per-battle summary, and a thin death line); non-combat missions (recon, sabotage, assassination, infiltration, fortification) recorded nothing. Before any narration work, this is being replaced with a **structured, queryable event log** — typed events carrying date, location, faction, weapon, magnitude, and related-soldier references — that serves as both the substrate the notability classifier queries and the source the narrator renders to text. Audit findings driving this:
 
@@ -1099,6 +1177,10 @@ The connective pass that turns 0.7's broad simulation into a felt sandbox narrat
 - ⬜ **(2) Emit the missing events** — first blood, kill milestones, last-survivor / survival-against-odds, mentor relationships, oaths, and near-death recoveries (reserved enum values already exist for these). *Non-combat mission-outcome events are pulled forward to 0.7 — see §5.3 "Mission Field Experience & Records" — so field service is recorded ahead of the rest of this event pass.*
 - ⬜ **(3) Notability classifier** over the log.
 - ⬜ **(4) Narrator / voice pass** rendering events and report lines.
+- ⬜ **(5) Command Brief & Chapter Chronicle** — commit the persistent two-lens command/narrative surface in §4.19, including deep links and the first-turn checklist.
+- ⬜ **(6) Planet tactical-map legibility redesign** — approve a visual baseline and replace the current tiny-glyph information hierarchy, including honest multi-faction presentation (§4.26).
+- ⬜ **(7) Recruitment v1** — connect recruitment rights, governor relationships, Requisition, gene-seed, training capacity, and the aspirant/neophyte-to-Scout pipeline (§4.9, §6.3).
+- ⬜ **(8) Chapter Mandates** — add state-aware, non-terminal medium-term objectives after the Promised World (§4.25).
 
 - **Narrative Voice baseline:** Apply the 4.19 authoring principles and notability classifier across the Turn Report, Soldier history log, and death/apothecary records — named individuals, specificity, continuity callbacks, and outcomes framed against the player's orders.
 - **Eulogy-style death records:** Where, how, final tally, years served, and geneseed recovered or lost (with lost geneseed narrated as a compounding loss).
@@ -1107,7 +1189,9 @@ The connective pass that turns 0.7's broad simulation into a felt sandbox narrat
 - **Founding myth:** Generate a short chapter history at new-game start.
 - **Battle Review log humanization:** Named actors and flavor on criticals, kills, and last stands.
 - **Wider-Imperium dispatches (initial):** Voiced notifications for major uncontrolled-Imperium actions in the sector (Battlefleet priorities, worlds the Imperium addresses without the chapter), establishing the relevance/legacy stakes framing.
-- **Chapter Chronicle (decision pending):** Specify and, if adopted, implement a persistent sector-level narrative log. Decision to be made after the per-surface text improvements above are drafted (see 4.19).
+- **Command Brief & Chapter Chronicle:** Implement the committed persistent operations/saga surface defined in §4.19. The Chronicle records what mattered; the Brief shows what now requires command attention.
+
+**Engineering follow-through supporting 0.8:** Finish the simulation seams documented in TDD §8: split the remaining large `PlanetTurnProcessor` by domain, replace the production-wide random sequence with deterministic named streams that can be reproduced from saved campaign/turn inputs, and retire transitional `TurnController` compatibility shims and unused prototypes as callers migrate. These are enabling changes, not separate player-facing features.
 
 ### 5.6 Alpha 0.8+ — Cross-Faction Simulation (Relationships, Intel, Orks)
 
@@ -1140,7 +1224,7 @@ Documented for planning purposes; not scheduled:
 
 **Soldier Screen — awards as icons.** Replace the textual awards list on the Soldier Screen (§4.7) with an icon strip in the screen's top panel: one icon per award the marine holds, with the date the award was earned shown as hover text. The existing display rule still applies — for a multi-tier award type, only the most recent / highest tier is shown (one icon, not one per tier). Small UI/presentation item; depends on an icon set for the award types.
 
-**Infrastructure:** Full mod support (XML data, moddable factions, name lists, planet data, chapter generation); data-layer decoupling to replace hardcoded rules-data display-name references with stable keys, validated registries, and data-driven rule profiles; Graphics overhaul; Full UX pass.
+**Infrastructure:** Full mod support (XML data, moddable factions, name lists, planet data, chapter generation); data-layer decoupling to replace hardcoded rules-data display-name references with stable keys, validated registries, and data-driven rule profiles; graphics work beyond the scheduled planet tactical-map redesign; and UX work beyond the 0.7.1 system/accessibility baseline and 0.8 Command Brief.
 
 **Rules Data / Modding:** Move tunable simulation rules out of code where practical. Priority candidates include soldier work-experience training profiles, scout training focus profiles, mission skill requirements, sector-generation faction selection, chapter organization roles, and soldier rating formulas. The goal is that renaming a displayed skill, faction, template, or unit does not break game logic.
 
@@ -1165,18 +1249,20 @@ This split is deferred indefinitely. Aggression is a per-order, per-mission sett
 - Death of the squad leader.
 - Being significantly outnumbered.
 
-**Outcomes to define:** reduced combat effectiveness, forced retreat (covered withdrawal), rout (immediate disorderly exit from the map), or broken (squad cannot be assigned orders for a number of turns after the battle ends). The mechanics of covered withdrawal and rout are themselves resolved and specified under Battle Continuation in §4.14; what remains open here is what *triggers* a morale check and which of these outcomes results.
+**Outcomes to define:** reduced combat effectiveness, forced retreat (covered withdrawal), rout (immediate disorderly exit from the map), or broken (squad cannot be assigned orders for a number of turns after the battle ends). The intended mechanics of covered withdrawal and rout are specified—but not yet implemented—under Battle Continuation in §4.14; what remains open here is what *triggers* a morale check and which of these outcomes results.
 
-### 6.3 New Recruit Intake
+### 6.3 New Recruit Intake — V1 COMMITTED FOR 0.8
 
-This is a backlog item. The intended design is that the player has access to several different recruitment methods, each with distinct trade-offs:
+Recruitment v1 is committed in §4.9 and closes the current one-way attrition loop. The player gains recruitment rights through relationships or chapter ownership, spends Requisition and gene-seed, and moves candidates through a capacity-limited aspirant/neophyte pipeline into Scout squads.
+
+The open design space is how many additional recruitment methods should eventually coexist and how sharply their trade-offs should differ:
 
 - One method might yield more recruits but strain the source planet's population or reduce planetary morale.
 - Achieving a high reputation with a planetary governor could unlock that governor offering recruitment rights on their world, as a relationship reward.
 - Some Scout squads or Sergeants may be assigned to recruitment duties rather than training or deployment, representing the chapter's active effort to identify and select candidates.
-- A dedicated scouting mission purely to find recruits is not planned; recruitment is expected to be managed through standing assignments and governor relationships rather than one-off missions.
+- A dedicated scouting mission purely to find recruits is not planned; recruitment is managed through standing assignments and governor relationships rather than one-off missions.
 
-The full design of the recruitment screen and its trade-off options is deferred to backlog.
+V1 needs one complete, legible path and at least one meaningful source/method trade-off. A broader menu of recruitment cultures, facilities, population consequences, and chapter-specific methods remains later expansion rather than a blocker for 0.8.
 
 ### 6.4 Imperial Guard Interactions
 

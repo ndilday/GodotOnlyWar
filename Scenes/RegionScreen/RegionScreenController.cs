@@ -231,19 +231,15 @@ public partial class RegionScreenController : DialogController
             _selectedMission = null;
         }
 
-        _view.SetMissionsHeader(_targetRegion.Name, BuildMissionsFlagText());
+        _view.SetMissionsHeader(_targetRegion.Name, BuildMissionsFlagTexts(_targetRegion));
         _view.SetMissions(missions, _selectedMission);
     }
 
-    private string BuildMissionsFlagText()
+    internal static IReadOnlyList<string> BuildMissionsFlagTexts(Region targetRegion)
     {
-        List<RegionFaction> enemies = GetPublicEnemyRegionFactions(_targetRegion);
-        if (enemies.Count == 0) return null;
-
-        RegionFaction strongest = enemies.OrderByDescending(rf => rf.GetDeployedStrength()).First();
-        return enemies.Count > 1
-            ? $"{strongest.PlanetFaction.Faction.Name} +{enemies.Count - 1}"
-            : strongest.PlanetFaction.Faction.Name;
+        return GetPublicEnemyRegionFactions(targetRegion)
+            .Select(regionFaction => regionFaction.PlanetFaction.Faction.Name)
+            .ToList();
     }
 
     private void RefreshTargetFactionSelector()
@@ -486,6 +482,8 @@ public partial class RegionScreenController : DialogController
     {
         return region.RegionFactionMap.Values
             .Where(rf => rf.IsPublic && !rf.PlanetFaction.Faction.IsPlayerFaction && !rf.PlanetFaction.Faction.IsDefaultFaction)
+            .OrderBy(rf => rf.PlanetFaction.Faction.Name)
+            .ThenBy(rf => rf.PlanetFaction.Faction.Id)
             .ToList();
     }
 

@@ -2,6 +2,7 @@ using Godot;
 using OnlyWar.Helpers;
 using OnlyWar.Helpers.Database.GameState;
 using OnlyWar.Helpers.Storage;
+using OnlyWar.Helpers.Turns;
 using OnlyWar.Models;
 using OnlyWar.Models.Fleets;
 using OnlyWar.Models.Planets;
@@ -642,7 +643,8 @@ public partial class MainGameScene : Control
 	private void ProcessTurnCore()
 	{
 		// handle squad orders
-		_turnController.ProcessTurn(GameDataSingleton.Instance.Sector);
+		TurnResolutionResult turnResult =
+			_turnController.ProcessTurn(GameDataSingleton.Instance.Sector);
 		RefreshTopMenuStatus();
 		_sectorMap.RefreshFleets();
 		RefreshSelectedSystemInspector();
@@ -658,16 +660,16 @@ public partial class MainGameScene : Control
 
 		// display end of turn dialog
 		_endOfTurnDialog.AddData(
-			_turnController.MissionContexts,
-			_turnController.SpecialMissions,
-			_turnController.StrategicCombatResults);
+			turnResult.MissionContexts,
+			turnResult.SpecialMissions,
+			turnResult.StrategicCombatResults);
 		_endOfTurnDialog.Visible = true;
 
 		// Surface the opening-scenario resolution (win/lapse) if it fired this turn
 		// (Design/OpeningScenario.md §6.2).
-		if (!string.IsNullOrEmpty(_turnController.ScenarioNotification))
+		if (!string.IsNullOrEmpty(turnResult.ScenarioNotification))
 		{
-			ShowScenarioNotification(_turnController.ScenarioNotification);
+			ShowScenarioNotification(turnResult.ScenarioNotification);
 		}
 	}
 

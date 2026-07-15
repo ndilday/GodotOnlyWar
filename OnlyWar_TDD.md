@@ -1,8 +1,10 @@
 # OnlyWar — Technical Design Document
 
-**Version:** Alpha 0.7 (In Development)  
-**Last Updated:** March 2026  
-**Author:** Nathan Dilday  
+**Version:** Alpha 0.7
+
+**Last Updated:** July 2026
+
+**Author:** Nathan Dilday
 
 ---
 
@@ -68,6 +70,8 @@
     /GameState            Save/load DB access (planets, soldiers, squads, orders, etc.)
   /Extensions             Extension methods (Color, Squad, etc.)
   /Missions               Mission step implementations organized by mission type
+  /Simulation             Session-scoped simulation dependencies
+  /Turns                  End-of-turn phase processors, shared turn context/result, intel ledger
 /Models
   /Battles                BattleConfiguration, BattleHistory, BattleTurn, BattleMissionTemplate
   /Equippables            Weapon and armor models and templates
@@ -114,7 +118,7 @@ Every Godot scene that has meaningful logic is split into two C# classes:
 - `GameRulesData` — the loaded rules blob (all templates, base skills, body templates)
 - `Date` — current game date
 
-All scene controllers and helpers reach into this singleton for their data. This is a deliberate and accepted coupling point for the current solo-developer scope.
+Most scene controllers still reach into this singleton for their data. End-of-turn simulation now treats it as a composition boundary instead: the default `TurnController` constructor captures the loaded rules, sector, date, and production `IRNG` adapter in a `GameSession`, then injects that session into the turn processors. Tests and future simulations can construct a session directly without making the singleton their source of truth.
 
 ### 3.3 Template / Instance Pattern
 
@@ -190,7 +194,9 @@ Rating formulas require a constrained evaluator rather than arbitrary script exe
 
 Written in full on each save (file is deleted and recreated from scratch using the loose, read-only `Database/SaveStructure.sql`). Read on load via `GameStateDataAccess` (singleton). All writes are wrapped in a single transaction; exceptions trigger rollback. Player saves live under `user://saves` (`%APPDATA%\OnlyWar\saves` on Windows), never in the install directory. `SaveGameCatalog` discovers `*.s3db` files and inspects only their metadata for the start menu.
 
-Save files are not version-migrated. `SaveFormat.CurrentVersion` is written to `GlobalData.SaveVersion`; discovery marks a different version as incompatible, and the data access layer rejects it before reading sector tables. Missing saves are opened in neither create nor write mode, preventing a failed load from leaving behind an empty SQLite file.
+**Current 0.7 behavior:** save files are not version-migrated. `SaveFormat.CurrentVersion` is written to `GlobalData.SaveVersion`; discovery marks a different version as incompatible, and the data access layer rejects it before reading sector tables. Missing saves are opened in neither create nor write mode, preventing a failed load from leaving behind an empty SQLite file.
+
+**Planned for 0.7.1:** replace exact-version rejection as the only upgrade path with ordered one-version-at-a-time migrators. Migration first copies the original to a timestamped backup, applies each step transactionally, validates the resulting version/schema, and leaves the original usable on failure. `SaveGameCatalog` continues metadata-only discovery but reports whether an entry is current, migratable, incompatible-newer, or corrupt. Named manual slots and rolling autosaves use the same atomic persistence path; the protected pre-turn autosave is written before `ProcessTurn` mutates campaign state.
 
 Connections use `Microsoft.Data.Sqlite` (the `SqliteConnectionStringBuilder` `DataSource`) with foreign key enforcement enabled (`ForeignKeys = true`). The schema is foreign-key-valid — every reference resolves to a table in the save file — and the save routines insert parent rows before the rows that reference them. `Faction` is intentionally *not* a foreign-key target: factions live only in the read-only rules database and are matched by id at load. See §8.5.1 for the provider-compatibility work that established this.
 
@@ -491,17 +497,33 @@ PresenceRequest : IRequest
 
 ### 6.1 Turn Controller
 
-`TurnController` is the single entry point for end-of-turn processing, called by `MainGameScreenController.OnEndTurnButtonPressed`. Its `ProcessTurn(Sector)` method executes in this order:
+`TurnController` is the single entry point for end-of-turn processing, called by `MainGameScene.OnEndTurnButtonPressed`. It is an orchestration facade: phase behavior lives in focused processors under `Helpers/Turns`. Two context objects separate lifetime and responsibility:
 
-1. Collect all active player squad orders.
-2. Generate AI orders via `FactionStrategyController.GenerateFactionOrders` for every non-player, non-default faction.
-3. For each order (player and AI), construct a `MissionContext` and run the mission step chain via `MissionStepOrchestrator.GetStartingStep`.
-4. Collect `MissionContext` results and `SpecialMission` discoveries.
-5. Run `SectorEntityLogic` for population growth, going-public logic, intelligence decay, and governor request generation.
-6. Advance `GameDataSingleton.Instance.Date` by one week.
-7. Return collected contexts and missions for display in the End of Turn Dialog.
+- `GameSession` is the stable dependency set for simulations belonging to one loaded game: rules, sector, mutable campaign date, and `IRNG`. The production constructors build it once from `GameDataSingleton` plus `StaticRNG`; an internal constructor accepts an explicit session for isolated tests and future alternate simulations.
+- `SimulationContext` is per-run state: the session, `TurnResolutionResult`, `TurnIntelLedger`, separate player/all-order lists, and an optional planet scope for generation-time forward simulation.
 
-Training is now wired into this flow. Non-deployed non-Scout marines receive weekly work-experience training through `ApplySoldierWorkExperience`; Scout squads are routed through `TrainScouts` with each squad's selected `TrainingFocus`. Scout squads assigned to missions are excluded from weekly Scout training.
+`ProcessTurn(Sector)` returns the run's `TurnResolutionResult`; the retained sector parameter must be the same object owned by the session, preventing rules/date/RNG from one game being combined with another sector. The controller's `MissionContexts`, `SpecialMissions`, `StrategicCombatResults`, and `ScenarioNotification` properties remain as compatibility views for existing tests.
+
+The processors are divided by simulation responsibility:
+
+- `TurnOrderPlanner` appends hostile-faction and defensive Imperial PDF orders without owning mission resolution.
+- `MissionTurnProcessor` resolves diversion shaping, strategic/tactical missions, and construction; `MissionAftermathProcessor` applies strategic consequences and cleans consumed missions/orders. `InvaderPresenceService` provides the common foothold operation used by tactical aftermath, strategic combat, and planetary expansion.
+- `ChapterUpkeepProcessor` owns weekly medical and training work; `FleetTurnProcessor` advances travel and delegates warp-subjective training back to the shared upkeep processor.
+- `PlanetTurnProcessor` owns planet/region simulation, revolts, governors, and intelligence-derived special missions. `TurnIntelLedger` accumulates recon, listening-post, and patrol gains until the intelligence phase applies them.
+- `ScenarioTurnProcessor` resolves campaign objectives after the simulated world state settles. `ScenarioMetricsCollector` owns the optional debug-only opening-scenario trace.
+
+`ProcessTurn` preserves this phase order:
+
+1. Advance the campaign date, clear the result/intel ledger, and begin scenario metrics.
+2. Resolve player diversions so their projected threat exists during planning.
+3. Append hostile-faction orders and defensive-only Imperial PDF orders, then clear the one-turn diversion effects.
+4. Resolve strategic combat, tactical missions, and construction; remove consumed special missions.
+5. Apply mission aftermath, Chapter medical/training upkeep, fleet movement, planet simulation, special-mission pruning, and intelligence updates.
+6. Resolve the campaign scenario, finish diagnostics, clean resolved player orders, and return the result.
+
+`SimulatePlanetForward` reuses the same planning, mission, aftermath, planet, intelligence, and diagnostic processors for generation-time world evolution, but intentionally omits date advancement, Chapter upkeep, fleet movement, other planets, and scenario resolution.
+
+Non-deployed non-Scout marines receive weekly work-experience training through `ApplySoldierWorkExperience`; Scout squads are routed through `TrainScouts` with each squad's selected `TrainingFocus`. Scout squads assigned to missions are excluded from weekly Scout training.
 
 ### 6.2 Faction Strategy
 
@@ -516,7 +538,7 @@ Training is now wired into this flow. Non-deployed non-Scout marines receive wee
 
 ### 6.3 Sector Entity Logic
 
-`SectorEntityLogic` runs after all orders are resolved. It handles:
+`PlanetTurnProcessor` runs after mission aftermath and Chapter/fleet upkeep. It handles:
 
 **Population & carrying-capacity scales.** Population is a raw headcount (the `// in thousands` comments were stale). Per-type population and carrying capacity are each described by a `LogNormalValueTemplate { Floor, Scale }`: a roll is `Floor + 10^z · Scale` (z standard-normal), so `Floor` is a hard minimum, `Scale` is the median of the variable part, and the distribution is right-skewed (mean ≈ `Floor + 3.77·Scale`). These are distinct from the normal `NormalizedValueTemplate { BaseValue, StandardDeviation }` still used for Importance. The rules-DB columns are `PopulationFloor`/`PopulationScale` and `CarryingCapacityFloor`/`CarryingCapacityScale` (renamed from the misleading `*Base`/`*StandardDeviation`). Values are canon-grounded per world type (Hive ~80B typical down to Death ~310K), with carrying capacity = population scale × a per-type headroom (Hive 1.3 … Feral 5.0). Because hive/forge populations reach billions, `Garrison` and `PlanetaryDefenseForces` are `long`.
 
@@ -675,7 +697,7 @@ Warp lane generation (0.7 addition): after subsector clustering, the highest-pop
 - `FleetRoute.BaseTurns` is the objective total weeks rounded up for campaign turn processing.
 - `TaskForce` stores resolved travel state rather than the full route graph: origin, destination, `FleetTravelPhase`, total and current-phase objective weeks remaining, rolled subjective warp weeks, rolled objective warp weeks, and a one-time subjective-training-applied flag.
 - Route-based movement advances through `OutboundSystemTransit`, `InWarp`, `InboundSystemTransit`, and `InOrbit`. Legacy fixed-week movement remains a simple countdown path for tests and older callers.
-- Turn training excludes embarked squads while their fleet is `InWarp`; when `AdvanceTravelOneWeek` reports warp exit, `TurnController` applies `WeeklyTrainingPoints * WarpSubjectiveWeeks` to embarked idle squads.
+- Turn training excludes embarked squads while their fleet is `InWarp`; when `AdvanceTravelOneWeek` reports warp exit, `FleetTurnProcessor` delegates `WeeklyTrainingPoints * WarpSubjectiveWeeks` training for embarked idle squads to `ChapterUpkeepProcessor`.
 - Navigator quality modifying either Gaussian roll is a TODO for a later pass.
 
 1. Assign each planet its own subsector.
@@ -744,7 +766,7 @@ The per-company inner loop iterated `chapter.Squads` rather than `company.Squads
 
 ### 8.3 Hardcoded String-Based Lookups — Medium
 
-**Location:** `SectorEntityLogic`, all `IMissionStep` implementations, `NewChapterBuilder`
+**Location:** `PlanetTurnProcessor`, all `IMissionStep` implementations, `NewChapterBuilder`
 
 Skills and templates are frequently looked up by name string (e.g., `s.Name == "Stealth"`, `st.Name == "Tactical Marine"`). A rename in the database silently breaks the lookup at runtime with no compile-time warning.
 
@@ -801,13 +823,15 @@ The save/load path was written against the older `System.Data.SQLite`/Mono provi
 
 A separate `Date.CompareTo` bug (used reference equality, so it returned non-zero for equal-but-distinct `Date` instances and broke `IComparable`-based equality, sorting, and dictionary use) was fixed and `GetHashCode` added.
 
-### 8.6 GameDataSingleton as Global Mutable State — Low (Now), Medium (Later)
+### 8.6 GameDataSingleton as Global Mutable State — Partially Mitigated
 
 **Location:** `GameDataSingleton`
 
 Mutated from multiple controllers without coordination. Acceptable in a single-threaded context, but makes unit testing difficult because any test touching a logic system that reads from the singleton must set up the full singleton first.
 
-**Fix:** No immediate action required. The preferred direction is to refactor pure-logic systems (battle resolution, mission checks, faction AI) to accept their inputs as method parameters rather than reading from the singleton, enabling isolated unit testing without the full singleton overhead. Progress so far: `FactionStrategyController` already takes `(faction, sector)` and is tested with no singleton at all (§9.2.1 #4), and `RatingCalculator` takes its `IRNG` by injection. `TurnController` still reads the singleton (`Date`, `Sector.PlayerForce`, `GameRulesData.Factions`), so its end-of-turn tests (§9.2.1 #5, #8) seed a hand-built sector into the singleton via `LoadGameDataFromBlob`; assembly-wide disabled parallelization keeps that safe.
+**Mitigation:** Pure-logic systems should accept their inputs as parameters rather than reading global state. `FactionStrategyController` already takes `(faction, sector)` and `RatingCalculator` takes an `IRNG`. The end-of-turn system now goes further: `TurnController` creates or accepts a `GameSession` containing rules, sector, date, and `IRNG`, and injects it into every processor under `Helpers/Turns`; `SimulationContext` owns each run's result, intel ledger, orders, and optional planet scope. Direct `GameDataSingleton` and static `RNG` reads have therefore been removed from those processors, while the public constructors retain current production behavior through one explicit singleton adapter at the orchestration boundary. `GameSessionTurnControllerTests` verifies that an injected date and RNG are used instead of singleton state, and the seeded turn suite protects random draw order.
+
+The risk is not fully resolved: most scene controllers and some deeper mission/battle helpers still use global state, and older end-to-end tests intentionally seed `GameDataSingleton`. Future extraction should continue outward from the new session seam rather than growing a service-locator API on `GameSession`.
 
 ### 8.7 IdGenerator Is Not Thread-Safe — Low
 
@@ -853,7 +877,7 @@ Sector generation left a region with a `RegionFaction` whose faction had no corr
 
 ### 8.12 End-of-Turn Resolution Bugs — RESOLVED
 
-**Location:** `Helpers/TurnController.cs` (`UpdatePlanets`, `UpdateIntelligence`)
+**Location:** `Helpers/Turns/PlanetTurnProcessor.cs` (`UpdatePlanet`, `UpdateIntelligence`)
 
 Surfaced while writing the `SectorEntityLogic` / multi-turn coverage (§9.2.1 #5, #8):
 
@@ -861,6 +885,30 @@ Surfaced while writing the `SectorEntityLogic` / multi-turn coverage (§9.2.1 #5
 - **Governor logic was dead code.** `PlanetFaction.Population` is a get-only property hardcoded to `0` and never maintained, so the end-of-turn leader update was gated behind `planetFaction.Population <= 0` — always true. Every `PlanetFaction` was therefore stripped from the map each turn and `EndOfTurnLeaderUpdate` (governor aging, request fulfilment, and **request generation**) never ran. `UpdatePlanets` now derives the faction's planet-wide population by summing its `RegionFaction.Population` across the planet's regions, restoring the governor-request feature. (Removing the vestigial `PlanetFaction.Population` property is left as a follow-up.)
 
 Covered by `SectorEntityLogicTests` and `MultiTurnSmokeTests`.
+
+### 8.13 Production RNG Reproducibility — Medium
+
+**Location:** `GameSession`, `StaticRNG`, save metadata, simulation processors
+
+`GameSession` now makes the random dependency explicit and removes direct static RNG reads from turn processors, but production still injects `StaticRNG.Instance`, backed by one process-global sequence. The campaign seed and random-stream position are not persisted. Consequently, a save plus its orders cannot reproduce the next turn exactly, and adding one unrelated random draw can perturb every later seeded outcome.
+
+**Planned direction:** introduce deterministic named streams derived from persisted campaign identity/seed, campaign turn, subsystem key, and—where appropriate—entity id. Examples include `turn/planet-growth/{planetId}`, `turn/faction-planning/{factionId}`, and `battle/{battleId}`. Stream-key/version metadata must be explicit so algorithm changes do not masquerade as the same reproducible simulation. Do not switch all consumers in one pass: preserve current draw order within each migrated subsystem, characterize results, then move one boundary at a time. `StaticRNG` remains the compatibility adapter until the migration is complete.
+
+### 8.14 PlanetTurnProcessor Breadth — Medium
+
+**Location:** `Helpers/Turns/PlanetTurnProcessor.cs`
+
+The `TurnController` extraction succeeded, but its largest leaf still owns several independently evolving domains: organic/conversion growth and garrison drafting; Tyranid consumption and expansion; Cult maneuvers; Imperial remnants and emigration; revolt/civil-stability behavior; governor aging/requests/Requisition; and intelligence/opportunity generation. The class preserves important phase ordering, but its breadth makes unrelated changes collide and encourages more cross-domain helper methods.
+
+**Planned direction:** retain a small `PlanetTurnProcessor` as the order-defining coordinator and extract domain processors beneath it: `PopulationTurnProcessor`, `ConsumptionTurnProcessor`, `CivilStabilityTurnProcessor`, `GovernorTurnProcessor`, and `IntelligenceTurnProcessor`. Share `GameSession`, `SimulationContext`, and `TurnIntelLedger`; do not duplicate state between processors. Extract one domain at a time behind the existing turn and generation tests, preserving enumeration and random-draw order.
+
+### 8.15 Transitional Turn APIs and Dead Prototypes — Low
+
+**Location:** `TurnController.Compatibility.cs`, `Helpers/OrderProcessor.cs`, focused tests/callers
+
+The behavior-preserving controller split intentionally retained historical helper entry points in a compatibility partial. That made the refactor safe, but the shims should not become a permanent second API alongside the focused processors. `OrderProcessor` also appears to be an unused earlier orchestration prototype.
+
+**Planned direction:** migrate tests and production callers to `TurnResolutionResult` and the focused owner for each behavior, then delete each compatibility member when its final caller is gone. Confirm unused prototypes with solution-wide reference search and remove them rather than documenting them as supported paths. This cleanup follows the processor/session migration; it must not be combined with behavior changes.
 
 
 ---
@@ -873,7 +921,7 @@ The `OnlyWar.Tests` xUnit project covers the pure domain and helper logic increm
 
 The `OnlyWar.Tests` xUnit project references the game assembly and runs against the shipped rules database. Keep expanding it around pure domain and helper logic first. Systems with Godot node dependencies cannot be unit tested without a Godot runtime; focus the test project on pure domain and helper logic. Test parallelization is disabled assembly-wide (`[assembly: CollectionBehavior(DisableTestParallelization = true)]`) so suites that load the shared `GameDataSingleton` do not interfere.
 
-Make `RNG` injectable: introduce an `IRNG` interface and a `SeededRNG` implementation so tests can run with a fixed seed for deterministic results. *(Implemented — `Helpers/IRNG.cs` with `StaticRNG` (production adapter over the global `RNG`), `SeededRNG` (own seeded instance), and a `FixedRNG` test double. `RatingCalculator` is the first consumer to take `IRNG` by injection.)*
+Make `RNG` injectable: introduce an `IRNG` interface and a `SeededRNG` implementation so tests can run with a fixed seed for deterministic results. *(Implemented — `Helpers/IRNG.cs` with `StaticRNG` (production adapter over the global `RNG`), `SeededRNG` (own seeded instance), and a `FixedRNG` test double. `RatingCalculator` and the end-of-turn processors consume injected `IRNG`; production supplies `StaticRNG` through `GameSession`.)*
 
 ### 9.2 Priority Test Targets
 
@@ -896,11 +944,12 @@ Initial coverage now exists for wounds, skill math, Gaussian math, mission check
 2. **Mission save duplication regression** — *(Implemented — `MissionSaveTests`.)* Drives `PlanetDataAccess.SavePlanet` against a freshly created save schema and asserts the `Mission` table holds exactly one row for a region with one special mission, plus field round-trip and null-`DefenseType` cases. Covers §8.1.
 3. **Rules DB schema validation** — *(Implemented — `RulesDatabaseValidationTests`.)* In addition to the existing `TrainingProfile` coverage, the suite now constructs `GameRulesData` against the shipped database (exercising the fail-fast load-time validation for the data-driven rating/training tables and the validated registries) and directly asserts rating-table referential integrity (every award tier references a defined rating; every `SkillTotal` rating component resolves to a real base skill). Mission-definition tables remain future work (§4.1.1) and will get the same treatment when introduced.
 4. **`FactionStrategyController`** — *(Implemented — `FactionStrategyControllerTests`.)* The controller already takes `(faction, sector)` and reads no `GameDataSingleton` state, so no refactor was needed; tests build `Planet`/`Region`/`RegionFaction` graphs and cover the empty-result cases (faction absent, hidden regions, no spare troops) and the development-construction path (spare troops spent on `ConstructionMission` orders).
-5. **`SectorEntityLogic`** — *(Implemented — `SectorEntityLogicTests`.)* The end-of-turn logic lives in `TurnController`; driven through `ProcessTurn` with a seeded global `RNG` (`RNG.Reset`) over a compact hand-built sector (`SectorSimulationFixture`). Covers logistic growth, conversion growth (one default member converted per week), intelligence decay (×0.75/turn), stale special-mission expiration, and governor request generation against a public threat. Surfaced and fixed three latent bugs (see §8.12).
+5. **`SectorEntityLogic`** — *(Implemented — `SectorEntityLogicTests`, `SessionSimulationContextPrimitiveTests`, `GameSessionTurnControllerTests`.)* The end-of-turn domain logic lives in the `Helpers/Turns` processors and is driven through the `TurnController.ProcessTurn` orchestration facade over a compact hand-built sector (`SectorSimulationFixture`). Existing seeded tests protect turn behavior and random draw order; session/context tests cover dependency identity, per-run order isolation, null contracts, and a controller run whose date and RNG differ from `GameDataSingleton`. Domain coverage includes logistic growth, conversion growth (one default member converted per week), intelligence decay (×0.75/turn), stale special-mission expiration, and governor request generation against a public threat. Surfaced and fixed three latent bugs (see §8.12).
 6. **`BattleGridManager` and `WoundResolver`** — *(Implemented — `BattleGridManagerTests`, `WoundResolverTests`.)* Grid tests cover placement/occupancy/reservation conflicts, movement (free-old/occupy-new and collision), removal, nearest-enemy/distance queries, open-adjacency selection, and clone fidelity. Wound tests cover the damage-ratio severity ladder, natural-armor subtraction, wound-multiplier scaling, already-severed short-circuit, and the vital-location-death / motive-location-fall event paths.
 7. **Rating formula evaluator** — *(Implemented — `RatingCalculatorTests`, `RatingDefinitionDataTests`.)* Rating formulas and award thresholds are data-driven (§4.1.1); tests assert the evaluator's aggregation/normalization structure with a fixed `IRNG`, that the migrated definitions match the documented formulas, and that award tiers fire correctly (highest-tier-only, best-skill-in-category name interpolation, history flags).
 8. **Seeded multi-turn smoke test** — *(Implemented — `MultiTurnSmokeTests`.)* Builds a compact single-planet sector (`SectorSimulationFixture`) with a conversion cult, a public rival controller, a governor, and a high-intelligence region, then runs twelve `ProcessTurn` cycles under a fixed seed and asserts high-level invariants survive: planet stays populated with no negative region populations, the default faction persists, the cult steadily recruits, intelligence decays toward zero, and the governor's aid request persists.
 9. **New game smoke test** — Generate a new campaign from rules data and assert chapter, fleet, sector, subsector, planet, faction, and squad invariants without requiring the Godot UI.
+10. **Godot scene-wiring smoke tests** — *(Planned for 0.7.1.)* Headlessly instantiate the main command scene and principal overlay screens, verify required nodes resolve, and exercise top-level actions far enough to prove their event has a subscriber and opens the intended surface. These tests are intentionally shallow: their purpose is to catch visible-but-inert controls and broken scene paths, not duplicate controller/domain tests through Godot.
 
 ### 9.3 Regression Risk Areas
 
@@ -912,3 +961,5 @@ These areas are particularly likely to produce hard-to-detect bugs as features a
 - Changing skill or template names in the rules database without updating hardcoded string lookups or validated registries (see 8.3).
 - Changing the `Wounds.WeeksToHeal` nibble-offset encoding without updating all dependent healing logic.
 - Adding new data-driven rules tables without adding rules-load validation and regression tests.
+- Adding a save-schema change without a one-version migration, backup/failure test, and current-version round trip.
+- Renaming or re-keying a deterministic RNG stream without an explicit stream-version decision and reproducibility fixture.
