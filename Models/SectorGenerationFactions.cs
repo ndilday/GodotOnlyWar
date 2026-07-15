@@ -25,10 +25,14 @@ namespace OnlyWar.Models
         /// <summary>The overt invasion faction (Tyranids).</summary>
         public Faction Invader { get; }
 
+        /// <summary>The sector-wide secular-rebellion faction.</summary>
+        public Faction Insurrectionists { get; }
+
         public SectorGenerationFactions(IReadOnlyList<Faction> factions)
         {
             Infiltrator = Resolve(factions, "Genestealer Cult");
             Invader = Resolve(factions, "Tyranids");
+            Insurrectionists = Resolve(factions, "Insurrectionists");
         }
 
         private static Faction Resolve(IReadOnlyList<Faction> factions, string name)

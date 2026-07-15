@@ -106,7 +106,7 @@ public class MissionSaveTests
         command.CommandText = @"
             CREATE TABLE Planet (Id INTEGER PRIMARY KEY UNIQUE NOT NULL, PlanetTemplateId INTEGER NOT NULL,
                 Name STRING NOT NULL UNIQUE, x INTEGER NOT NULL, y INTEGER NOT NULL, Importance INTEGER NOT NULL,
-                TaxLevel INTEGER NOT NULL);
+                TaxLevel INTEGER NOT NULL, CapitalRegionId INTEGER);
             CREATE TABLE PlanetFaction (PlanetId INTEGER NOT NULL, FactionId INTEGER NOT NULL, IsPublic BOOLEAN NOT NULL,
                 PlanetaryControl INTEGER NOT NULL, PlayerReputation REAL NOT NULL, LeaderId INTEGER);
             CREATE TABLE Region (Id INTEGER PRIMARY KEY UNIQUE NOT NULL, PlanetId INTEGER NOT NULL, RegionNumber INTEGER NOT NULL,
@@ -114,7 +114,9 @@ public class MissionSaveTests
                 CarryingCapacity BIGINT NOT NULL, MaximumCarryingCapacity BIGINT NOT NULL);
             CREATE TABLE RegionFaction (RegionId INTEGER NOT NULL, FactionId INTEGER NOT NULL, IsPublic BOOLEAN NOT NULL,
                 Population BIGINT NOT NULL, Garrison INTEGER NOT NULL, Organization INTEGER NOT NULL, Entrenchment INTEGER NOT NULL,
-                ListeningPost INTEGER NOT NULL, AntiAir INTEGER NOT NULL, GrowthMultiplier REAL NOT NULL DEFAULT 1.0);
+                ListeningPost INTEGER NOT NULL, AntiAir INTEGER NOT NULL, GrowthMultiplier REAL NOT NULL DEFAULT 1.0,
+                Contentment REAL NOT NULL DEFAULT 70.0, ArmedCivilians INTEGER NOT NULL DEFAULT 0,
+                HasEmergenceAdvantage BOOLEAN NOT NULL DEFAULT 0);
             CREATE TABLE PlanetFactionRegionIntel (PlanetId INTEGER NOT NULL, FactionId INTEGER NOT NULL, RegionId INTEGER NOT NULL,
                 IntelLevel REAL NOT NULL);
             CREATE TABLE Mission (Id INTEGER PRIMARY KEY UNIQUE NOT NULL, MissionType INTEGER NOT NULL, RegionId INTEGER NOT NULL,

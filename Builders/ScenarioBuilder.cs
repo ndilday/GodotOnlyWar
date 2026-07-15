@@ -181,7 +181,7 @@ namespace OnlyWar.Builders
         private static Planet SelectPromisedWorld(List<Planet> planetList, GameRulesData data)
         {
             List<Planet> eligible = planetList
-                .Where(p => p.GetControllingFaction().IsDefaultFaction
+                .Where(p => p.GetControllingFaction()?.IsDefaultFaction == true
                             && p.GovernanceTier == GovernanceTier.Planetary
                             && !ScenarioRules.ExcludedPromisedWorldTypes.Contains(p.Template.Name)
                             && p.Population <= ScenarioRules.MaxPromisedWorldPopulation)
@@ -193,7 +193,7 @@ namespace OnlyWar.Builders
                 // population ceiling. The type exclusion (no Hive/Forge) is a hard rule, so it is
                 // kept even in the fallback — only the size ceiling is relaxed.
                 eligible = planetList
-                    .Where(p => p.GetControllingFaction().IsDefaultFaction
+                    .Where(p => p.GetControllingFaction()?.IsDefaultFaction == true
                                 && p.GovernanceTier == GovernanceTier.Planetary
                                 && !ScenarioRules.ExcludedPromisedWorldTypes.Contains(p.Template.Name))
                     .ToList();
@@ -212,7 +212,7 @@ namespace OnlyWar.Builders
 
             // Ultimate fallback: the old FoundTakebackPlanet rule, so generation cannot fail.
             return planetList
-                .Where(p => !p.GetControllingFaction().IsDefaultFaction)
+                .Where(p => p.GetControllingFaction()?.IsDefaultFaction == false)
                 .OrderBy(p => p.Population).ThenBy(p => p.Id)
                 .First();
         }
@@ -396,7 +396,7 @@ namespace OnlyWar.Builders
             }
 
             Planet fallbackSeat = planetList
-                .Where(p => p.GetControllingFaction().IsDefaultFaction && p.Governor != null)
+                .Where(p => p.GetControllingFaction()?.IsDefaultFaction == true && p.Governor != null)
                 .OrderByDescending(p => p.Importance).ThenByDescending(p => p.Population).ThenBy(p => p.Id)
                 .FirstOrDefault();
             if (fallbackSeat != null)

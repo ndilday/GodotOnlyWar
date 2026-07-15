@@ -33,45 +33,65 @@ namespace OnlyWar.Helpers.Extensions
 
         public static Faction GetControllingFaction(this Planet planet)
         {
-            // the controlling faction is the one holding the plurality of cleanly-controlled regions
-            SortedList<int, int> factionRegionControlMap = new SortedList<int, int>();
-            Dictionary<int, Faction> factionMap = new Dictionary<int, Faction>();
-            foreach (Region region in planet.Regions)
+            if (planet == null) return null;
+
+            Region capital = planet.Regions.FirstOrDefault(region => region?.Id == planet.CapitalRegionId);
+            if (capital == null)
             {
-                Faction controllingFaction = region.ControllingFaction?.PlanetFaction.Faction;
-                // A contested or vacated region has no single public controller (zero or several
-                // public factions, so Region.ControllingFaction is null). Skip it rather than
-                // letting the null crash the tally: this keeps the turn loop alive while factions
-                // fight over regions, e.g. the Opening Scenario's Tyranid spread as it pushes into
-                // Imperial regions over a campaign (Design/OpeningScenario.md §6).
-                if (controllingFaction == null)
-                {
-                    continue;
-                }
-                if (factionRegionControlMap.ContainsKey(controllingFaction.Id))
-                {
-                    factionRegionControlMap[controllingFaction.Id]++;
-                }
-                else
-                {
-                    factionMap[controllingFaction.Id] = controllingFaction;
-                    factionRegionControlMap[controllingFaction.Id] = 1;
-                }
+                // Legacy saves predate CapitalRegionId. Establish a stable fallback on first use;
+                // the next save persists it.
+                capital = planet.Regions
+                    .Where(region => region != null)
+                    .OrderByDescending(region => region.Population)
+                    .ThenBy(region => region.Id)
+                    .FirstOrDefault();
+                if (capital == null) return null;
+                planet.SetCapitalRegion(capital.Id);
             }
-            if (factionRegionControlMap.Count == 0)
+
+            Faction capitalController = capital.ControllingFaction?.PlanetFaction?.Faction;
+            if (capitalController == null) return null;
+
+            var cleanControl = planet.Regions
+                .Where(region => region != null)
+                .Select(region => region.ControllingFaction?.PlanetFaction?.Faction)
+                .Where(faction => faction != null)
+                .GroupBy(faction => faction.Id)
+                .Select(group => new { Faction = group.First(), Regions = group.Count() })
+                .OrderByDescending(entry => entry.Regions)
+                .ThenBy(entry => entry.Faction.Id)
+                .ToList();
+
+            int capitalControllerRegions = cleanControl
+                .FirstOrDefault(entry => entry.Faction.Id == capitalController.Id)?.Regions ?? 0;
+            bool hasUniquePlurality = cleanControl
+                .Where(entry => entry.Faction.Id != capitalController.Id)
+                .All(entry => capitalControllerRegions > entry.Regions);
+
+            return hasUniquePlurality ? capitalController : null;
+        }
+
+        public static bool IsContested(this Planet planet)
+        {
+            return planet?.GetControllingFaction() == null;
+        }
+
+        public static Region GetCapitalRegion(this Planet planet)
+        {
+            if (planet == null) return null;
+            Region capital = planet.Regions.FirstOrDefault(region => region?.Id == planet.CapitalRegionId);
+            if (capital != null) return capital;
+
+            capital = planet.Regions
+                .Where(region => region != null)
+                .OrderByDescending(region => region.Population)
+                .ThenBy(region => region.Id)
+                .FirstOrDefault();
+            if (capital != null)
             {
-                // No region is cleanly controlled (every region is contested). Fall back to a
-                // public planet faction — preferring the default (Imperial) one — so callers still
-                // receive a non-null controller; only the most degenerate planets reach this.
-                return planet.PlanetFactionMap.Values
-                           .Where(pf => pf.IsPublic)
-                           .OrderByDescending(pf => pf.Faction.IsDefaultFaction)
-                           .Select(pf => pf.Faction)
-                           .FirstOrDefault()
-                       ?? planet.PlanetFactionMap.Values.First().Faction;
+                planet.SetCapitalRegion(capital.Id);
             }
-            int key = factionRegionControlMap.OrderByDescending(kv => kv.Value).First().Key;
-            return factionMap[key];
+            return capital;
         }
     }
 }

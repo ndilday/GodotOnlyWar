@@ -39,6 +39,7 @@ namespace OnlyWar.Helpers.Turns
             }
 
             Faction controller = source.GetControllingFaction();
+            if (controller == null) return false;
             bool friendly = controller.IsDefaultFaction || controller.IsPlayerFaction;
             return friendly;
         }

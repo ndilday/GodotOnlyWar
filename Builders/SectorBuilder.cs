@@ -94,7 +94,7 @@ namespace OnlyWar.Builders
             foreach (Subsector subsector in sector.Subsectors)
             {
                 Planet seat = subsector.Planets
-                    .Where(p => p.GetControllingFaction().IsDefaultFaction)
+                    .Where(p => p.GetControllingFaction()?.IsDefaultFaction == true)
                     .OrderByDescending(p => p.Importance)
                     .ThenByDescending(p => p.Population)
                     .ThenBy(p => p.Id)

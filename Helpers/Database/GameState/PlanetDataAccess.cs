@@ -25,6 +25,7 @@ namespace OnlyWar.Helpers.Database.GameState
             {
                 command.CommandText = "SELECT * FROM Planet";
                 var reader = command.ExecuteReader();
+                int capitalRegionIdOrdinal = GetOrdinalOrDefault(reader, "CapitalRegionId");
                 while (reader.Read())
                 {
                     int id = reader.GetInt32(0);
@@ -37,6 +38,10 @@ namespace OnlyWar.Helpers.Database.GameState
                     var template = planetTemplateMap[planetTemplateId];
                     // for now, we're hard coding all planets to be size 16
                     Planet planet = new Planet(id, name, new Coordinate((ushort)x, (ushort)y), 16, template, importance, taxLevel);
+                    if (capitalRegionIdOrdinal >= 0 && reader[capitalRegionIdOrdinal] is not DBNull)
+                    {
+                        planet.SetCapitalRegion(reader.GetInt32(capitalRegionIdOrdinal));
+                    }
 
                     // set up region adjacency
                     foreach (PlanetFaction planetFaction in planetFactions[id])
@@ -225,6 +230,17 @@ namespace OnlyWar.Helpers.Database.GameState
                     // GrowthMultiplier was appended after AntiAir; legacy rows that predate it
                     // default to 1.0 (no throttle). See Design/OpeningScenario.md §2.2 / §7.
                     float growthMultiplier = reader.FieldCount > 9 ? (float)reader.GetDouble(9) : 1.0f;
+                    int contentmentOrdinal = GetOrdinalOrDefault(reader, "Contentment");
+                    int armedCiviliansOrdinal = GetOrdinalOrDefault(reader, "ArmedCivilians");
+                    int emergenceOrdinal = GetOrdinalOrDefault(reader, "HasEmergenceAdvantage");
+                    float contentment = contentmentOrdinal >= 0
+                        ? Convert.ToSingle(reader[contentmentOrdinal])
+                        : 70f;
+                    long armedCivilians = armedCiviliansOrdinal >= 0
+                        ? reader.GetInt64(armedCiviliansOrdinal)
+                        : 0;
+                    bool hasEmergenceAdvantage = emergenceOrdinal >= 0
+                        && reader.GetBoolean(emergenceOrdinal);
 
                     Region region = regionMap[regionId];
                     if (!region.Planet.PlanetFactionMap.TryGetValue(factionId, out PlanetFaction planetFaction))
@@ -243,6 +259,9 @@ namespace OnlyWar.Helpers.Database.GameState
                             IsPublic = isPublic,
                             Population = population,
                             Garrison = garrison,
+                            ArmedCivilians = armedCivilians,
+                            Contentment = contentment,
+                            HasEmergenceAdvantage = hasEmergenceAdvantage,
                             Organization = organization,
                             Entrenchment = entrenchment,
                             ListeningPost = listeningPost,
@@ -250,6 +269,26 @@ namespace OnlyWar.Helpers.Database.GameState
                             GrowthMultiplier = growthMultiplier
                         };
                     region.RegionFactionMap[regionFaction.PlanetFaction.Faction.Id] = regionFaction;
+                }
+            }
+
+            // A legacy save has no stored capital. Region populations are not available until this
+            // method completes, so establish the capital here rather than during GetRegions.
+            // The next save persists the choice and later demographic changes cannot move it.
+            foreach (Planet planet in regionMap.Values.Select(region => region.Planet).Distinct()
+                .Where(planet => planet.CapitalRegionId < 0
+                    || !regionMap.ContainsKey(planet.CapitalRegionId)))
+            {
+                int capitalRegionId = planet.Regions
+                    .Where(region => region != null)
+                    .OrderByDescending(region => region.Population)
+                    .ThenBy(region => region.Id)
+                    .Select(region => region.Id)
+                    .DefaultIfEmpty(-1)
+                    .First();
+                if (capitalRegionId >= 0)
+                {
+                    planet.SetCapitalRegion(capitalRegionId);
                 }
             }
 
@@ -350,6 +389,14 @@ namespace OnlyWar.Helpers.Database.GameState
                     Date nextRequestEligibleDate = reader.FieldCount > 11 && reader[11] is not DBNull
                         ? Date.FromTotalWeeks(reader.GetInt32(11))
                         : null;
+                    int competenceOrdinal = GetOrdinalOrDefault(reader, "Competence");
+                    int severityOrdinal = GetOrdinalOrDefault(reader, "Severity");
+                    float competence = competenceOrdinal >= 0
+                        ? Convert.ToSingle(reader[competenceOrdinal])
+                        : 0.5f;
+                    float severity = severityOrdinal >= 0
+                        ? Convert.ToSingle(reader[severityOrdinal])
+                        : 0.5f;
 
                     Character character = new Character()
                     {
@@ -359,6 +406,8 @@ namespace OnlyWar.Helpers.Database.GameState
                         Appreciation = appreciation,
                         Influence = influence,
                         Investigation = investigation,
+                        Competence = competence,
+                        Severity = severity,
                         Loyalty = factionMap[factionId],
                         Neediness = neediness,
                         OpinionOfPlayerForce = opinionOfPlayer,
@@ -380,8 +429,8 @@ namespace OnlyWar.Helpers.Database.GameState
             {
                 command.Transaction = transaction;
                 command.CommandText = @"INSERT INTO Planet
-                    (Id, PlanetTemplateId, Name, x, y, Importance, TaxLevel) VALUES
-                    (@id, @templateId, @name, @x, @y, @importance, @taxLevel);";
+                    (Id, PlanetTemplateId, Name, x, y, Importance, TaxLevel, CapitalRegionId) VALUES
+                    (@id, @templateId, @name, @x, @y, @importance, @taxLevel, @capitalRegionId);";
                 command.AddParam("@id", planet.Id);
                 command.AddParam("@templateId", planet.Template.Id);
                 command.AddParam("@name", planet.Name);
@@ -389,6 +438,9 @@ namespace OnlyWar.Helpers.Database.GameState
                 command.AddParam("@y", planet.Position.Y);
                 command.AddParam("@importance", planet.Importance);
                 command.AddParam("@taxLevel", planet.TaxLevel);
+                command.AddParam("@capitalRegionId", planet.CapitalRegionId < 0
+                    ? null
+                    : planet.CapitalRegionId);
                 command.ExecuteNonQuery();
             }
             SavePlanetFactions(transaction, planet.Id, planet.PlanetFactionMap);
@@ -405,10 +457,11 @@ namespace OnlyWar.Helpers.Database.GameState
                 command.Transaction = transaction;
                 command.CommandText = @"INSERT INTO Character
                     (Id, Name, Age, Investigation, Paranoia, Neediness, Patience, Appreciation,
-                     Influence, LoyalFactionId, OpinionOfPlayer, NextRequestEligibleDate) VALUES
+                     Influence, LoyalFactionId, OpinionOfPlayer, NextRequestEligibleDate,
+                     Competence, Severity) VALUES
                     (@id, @name, @age, @investigation, @paranoia, @neediness, @patience,
                      @appreciation, @influence, @loyalFactionId, @opinionOfPlayer,
-                     @nextRequestEligibleDate);";
+                     @nextRequestEligibleDate, @competence, @severity);";
                 command.AddParam("@id", character.Id);
                 command.AddParam("@name", character.Name);
                 command.AddParam("@age", character.Age);
@@ -422,6 +475,8 @@ namespace OnlyWar.Helpers.Database.GameState
                 command.AddParam("@opinionOfPlayer", character.OpinionOfPlayerForce);
                 command.AddParam("@nextRequestEligibleDate",
                     character.NextRequestEligibleDate?.GetTotalWeeks());
+                command.AddParam("@competence", character.Competence);
+                command.AddParam("@severity", character.Severity);
                 command.ExecuteNonQuery();
             }
         }
@@ -484,8 +539,8 @@ namespace OnlyWar.Helpers.Database.GameState
                     {
                         command.Transaction = transaction;
                         command.CommandText = @"INSERT INTO RegionFaction
-                            (RegionId, FactionId, IsPublic, Population, Garrison, Organization, Entrenchment, ListeningPost, AntiAir, GrowthMultiplier) VALUES
-                            (@regionId, @factionId, @isPublic, @population, @garrison, @organization, @entrenchment, @listeningPost, @antiAir, @growthMultiplier);";
+                            (RegionId, FactionId, IsPublic, Population, Garrison, Organization, Entrenchment, ListeningPost, AntiAir, GrowthMultiplier, Contentment, ArmedCivilians, HasEmergenceAdvantage) VALUES
+                            (@regionId, @factionId, @isPublic, @population, @garrison, @organization, @entrenchment, @listeningPost, @antiAir, @growthMultiplier, @contentment, @armedCivilians, @hasEmergenceAdvantage);";
                         command.AddParam("@regionId", region.Id);
                         command.AddParam("@factionId", regionFaction.PlanetFaction.Faction.Id);
                         command.AddParam("@isPublic", regionFaction.IsPublic ? 1 : 0);
@@ -496,6 +551,9 @@ namespace OnlyWar.Helpers.Database.GameState
                         command.AddParam("@listeningPost", regionFaction.ListeningPost);
                         command.AddParam("@antiAir", regionFaction.AntiAir);
                         command.AddParam("@growthMultiplier", regionFaction.GrowthMultiplier);
+                        command.AddParam("@contentment", regionFaction.Contentment);
+                        command.AddParam("@armedCivilians", regionFaction.ArmedCivilians);
+                        command.AddParam("@hasEmergenceAdvantage", regionFaction.HasEmergenceAdvantage ? 1 : 0);
                         command.ExecuteNonQuery();
                     }
                 }

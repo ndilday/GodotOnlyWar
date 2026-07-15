@@ -53,6 +53,15 @@ public class SaveLoadRoundTripTests
 
         Character pledgeAuthority = sector.Characters.First(character => character.Id >= 0);
         Planet pledgeSource = sector.Planets.Values.First(planet => planet.Id >= 0);
+        pledgeAuthority.Competence = 0.37f;
+        pledgeAuthority.Severity = 0.82f;
+        RegionFaction civilState = pledgeSource.Regions
+            .SelectMany(region => region.RegionFactionMap.Values)
+            .First(regionFaction => regionFaction.Population - regionFaction.Garrison >= 1_234);
+        civilState.Contentment = 27.5f;
+        civilState.ArmedCivilians = 1_234;
+        civilState.HasEmergenceAdvantage = true;
+        int capitalRegionId = pledgeSource.CapitalRegionId;
         Pledge originalPledge = new(
             0,
             pledgeSource.Id,
@@ -190,6 +199,18 @@ public class SaveLoadRoundTripTests
             Assert.Equal(0.83f, loaded.GeneseedPurity, 3);
             Assert.Equal(sector.Planets.Count, loaded.Planets.Count);
             Assert.Equal(sector.Characters.Count(), loaded.Characters.Count);
+            Character loadedAuthority = loaded.Characters.Single(character => character.Id == pledgeAuthority.Id);
+            Assert.Equal(0.37f, loadedAuthority.Competence, 3);
+            Assert.Equal(0.82f, loadedAuthority.Severity, 3);
+            Planet loadedPledgeSource = loaded.Planets.Single(planet => planet.Id == pledgeSource.Id);
+            Assert.Equal(capitalRegionId, loadedPledgeSource.CapitalRegionId);
+            RegionFaction loadedCivilState = loadedPledgeSource.Regions
+                .SelectMany(region => region.RegionFactionMap.Values)
+                .Single(regionFaction => regionFaction.Region.Id == civilState.Region.Id
+                    && regionFaction.PlanetFaction.Faction.Id == civilState.PlanetFaction.Faction.Id);
+            Assert.Equal(27.5f, loadedCivilState.Contentment, 3);
+            Assert.Equal(1_234, loadedCivilState.ArmedCivilians);
+            Assert.True(loadedCivilState.HasEmergenceAdvantage);
             Assert.Equal(sector.PlayerForce.Requests.Count, loaded.Requests.Count);
             IRequest loadedRequest = loaded.Requests.Single(request => request.Id == requestId);
             Assert.Equal(RequestStatus.InProgress, loadedRequest.Status);
@@ -343,7 +364,7 @@ public class SaveLoadRoundTripTests
     }
 
     [Fact]
-    public void Load_LegacySave_HasNullScenarioAndDefaultGrowthMultiplier()
+    public void Load_LegacySave_HasCompatibleCivilStateDefaults()
     {
         Sector sector = SectorBuilder.GenerateSector(1, _data, _date, "Legacy Save Chapter");
         GameDataSingleton.Instance.LoadGameDataFromBlob(_data, _date, sector);
@@ -367,6 +388,19 @@ public class SaveLoadRoundTripTests
                 .SelectMany(r => r.RegionFactionMap.Values);
             Assert.NotEmpty(allRegionFactions);
             Assert.All(allRegionFactions, rf => Assert.Equal(1.0f, rf.GrowthMultiplier));
+            Assert.All(allRegionFactions, rf => Assert.Equal(70f, rf.Contentment));
+            Assert.All(allRegionFactions, rf => Assert.Equal(0, rf.ArmedCivilians));
+            Assert.All(allRegionFactions, rf => Assert.False(rf.HasEmergenceAdvantage));
+            Assert.All(loaded.Characters, character => Assert.Equal(0.5f, character.Competence));
+            Assert.All(loaded.Characters, character => Assert.Equal(0.5f, character.Severity));
+            Assert.All(loaded.Planets, planet =>
+            {
+                Region expectedCapital = planet.Regions
+                    .OrderByDescending(region => region.Population)
+                    .ThenBy(region => region.Id)
+                    .First();
+                Assert.Equal(expectedCapital.Id, planet.CapitalRegionId);
+            });
         }
         finally
         {
@@ -393,7 +427,13 @@ public class SaveLoadRoundTripTests
                     SELECT Millenium, Year, Week, SaveVersion, Requisition, GeneseedStockpile, GeneseedPurity FROM GlobalData;
                 DROP TABLE GlobalData;
                 ALTER TABLE GlobalData_legacy RENAME TO GlobalData;
-                ALTER TABLE RegionFaction DROP COLUMN GrowthMultiplier;";
+                ALTER TABLE RegionFaction DROP COLUMN GrowthMultiplier;
+                ALTER TABLE RegionFaction DROP COLUMN Contentment;
+                ALTER TABLE RegionFaction DROP COLUMN ArmedCivilians;
+                ALTER TABLE RegionFaction DROP COLUMN HasEmergenceAdvantage;
+                ALTER TABLE Character DROP COLUMN Competence;
+                ALTER TABLE Character DROP COLUMN Severity;
+                ALTER TABLE Planet DROP COLUMN CapitalRegionId;";
             command.ExecuteNonQuery();
         }
         connection.Close();

@@ -1,6 +1,7 @@
 using Godot;
 using OnlyWar.Helpers.Extensions;
 using OnlyWar.Helpers.Orders;
+using OnlyWar.Helpers.Simulation;
 using OnlyWar.Helpers.UI;
 using OnlyWar.Models;
 using OnlyWar.Models.Fleets;
@@ -383,6 +384,7 @@ public partial class PlanetTacticalScreenController : DialogController
                 List<Tuple<string, string>> governorRows =
                 [
                     Row("Opinion", ConvertOpinionToString(governor.OpinionOfPlayerForce)),
+                    Row("Civil Assessment", GovernorCivilAssessmentService.Assess(planet, governor)),
                     Row("Active Request", governor.ActiveRequest != null ? "Yes" : "No")
                 ];
                 cards.Add(new DossierCardData("Governor", governor.Name, governorRows, OnlyWarStyle.PlayerAccent));

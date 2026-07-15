@@ -45,6 +45,7 @@ namespace OnlyWar.Helpers.Turns
         private readonly List<Mission> _specialMissions;
         private readonly TurnIntelLedger _intelLedger;
         private readonly GovernorTurnProcessor _governorTurnProcessor;
+        private readonly CivilUnrestTurnProcessor _civilUnrestTurnProcessor;
 
         internal PlanetTurnProcessor(
             GameSession session,
@@ -55,6 +56,7 @@ namespace OnlyWar.Helpers.Turns
             _specialMissions = specialMissions ?? throw new ArgumentNullException(nameof(specialMissions));
             _intelLedger = intelLedger ?? new TurnIntelLedger();
             _governorTurnProcessor = new GovernorTurnProcessor(_session);
+            _civilUnrestTurnProcessor = new CivilUnrestTurnProcessor(_session);
         }
 
         internal void ClearTurnIntelGains()
@@ -120,6 +122,7 @@ namespace OnlyWar.Helpers.Turns
 
             CheckForPlanetaryRevolt(planet);
             CheckForRevoltSuppression(planet);
+            _civilUnrestTurnProcessor.ProcessPlanet(planet);
 
             foreach (PlanetFaction planetFaction in planet.PlanetFactionMap.Values.ToList())
             {
@@ -158,7 +161,8 @@ namespace OnlyWar.Helpers.Turns
                     if (!regionFaction.IsPublic)
                     {
                         newPop = ConvertPopulation(regionFaction.Region, regionFaction, newPop);
-                        if (regionFaction.PlanetFaction.Faction.Id != controllingFaction.Id &&
+                        if (controllingFaction != null
+                            && regionFaction.PlanetFaction.Faction.Id != controllingFaction.Id &&
                             planet.PlanetFactionMap[controllingFaction.Id].Leader != null)
                         {
                             // Governor detection of converted population remains future work.
@@ -168,6 +172,10 @@ namespace OnlyWar.Helpers.Turns
                 case GrowthType.Consumption:
                     newPop = 0;
                     break;
+                case GrowthType.Unrest:
+                    // Secular allegiance, embedded-PDF recruitment, and civilian arming are
+                    // processed together by CivilUnrestTurnProcessor after ordinary growth.
+                    return;
                 default:
                     newPop = ApplyCarryingCapacity(
                         regionFaction.Population * BaselineGrowthRate * regionFaction.GrowthMultiplier,
@@ -645,122 +653,81 @@ namespace OnlyWar.Helpers.Turns
 
         private void CheckForPlanetaryRevolt(Planet planet)
         {
-            Faction controllingFaction = planet.GetControllingFaction();
-            PlanetFaction controllingPlanetFaction = planet.PlanetFactionMap[controllingFaction.Id];
-            Faction hiddenFactionType = null;
-            PlanetFaction hiddenPlanetFaction = null;
-
-            foreach (PlanetFaction planetFaction in planet.PlanetFactionMap.Values)
+            foreach (Region region in planet.Regions.Where(region => region != null))
             {
-                if (!planetFaction.IsPublic
-                    && !planetFaction.Faction.IsDefaultFaction
-                    && !planetFaction.Faction.IsPlayerFaction)
-                {
-                    hiddenFactionType = planetFaction.Faction;
-                    hiddenPlanetFaction = planetFaction;
-                    break;
-                }
-            }
+                RegionFaction loyalist = region.RegionFactionMap.Values.FirstOrDefault(rf =>
+                    rf.IsPublic
+                    && (rf.PlanetFaction.Faction.IsDefaultFaction
+                        || rf.PlanetFaction.Faction.IsPlayerFaction));
+                if (loyalist == null) continue;
 
-            if (hiddenPlanetFaction != null)
-            {
-                long hiddenFactionStrength = 0;
-                long controllingFactionStrength = 0;
-
-                foreach (Region region in planet.Regions)
+                bool externalEnemyPresent = region.RegionFactionMap.Values.Any(rf =>
+                    rf.IsPublic
+                    && FactionDispositionService.IsExternalEnemy(rf.PlanetFaction.Faction));
+                foreach (RegionFaction infiltrator in region.RegionFactionMap.Values
+                    .Where(rf => !rf.IsPublic
+                        && rf.PlanetFaction.Faction.GrowthType == GrowthType.Conversion)
+                    .ToList())
                 {
-                    foreach (RegionFaction regionFaction in region.RegionFactionMap.Values)
+                    if (externalEnemyPresent
+                        || infiltrator.MilitaryStrength <= loyalist.MilitaryStrength)
                     {
-                        if (regionFaction.PlanetFaction == controllingPlanetFaction)
-                        {
-                            controllingFactionStrength += regionFaction.MilitaryStrength;
-                        }
-                        else if (regionFaction.PlanetFaction == hiddenPlanetFaction)
-                        {
-                            hiddenFactionStrength += regionFaction.MilitaryStrength;
-                        }
+                        continue;
                     }
-                }
 
-                if (hiddenFactionStrength > controllingFactionStrength)
-                {
-                    foreach (Region region in planet.Regions)
-                    {
-                        if (region.RegionFactionMap.ContainsKey(hiddenFactionType.Id))
-                        {
-                            RegionFaction revoltingRegionFaction = region.RegionFactionMap[hiddenFactionType.Id];
-                            revoltingRegionFaction.IsPublic = true;
-                            revoltingRegionFaction.Population += revoltingRegionFaction.Garrison;
-                            revoltingRegionFaction.Garrison = 0;
-                            if (region.RegionFactionMap.ContainsKey(controllingFaction.Id))
-                            {
-                                RegionFaction controllingRegionFaction = region.RegionFactionMap[controllingFaction.Id];
-                                if (controllingRegionFaction.ListeningPost > 0)
-                                {
-                                    double revoltShare = Math.Clamp(
-                                        controllingRegionFaction.ListeningPost / 2.0 + _session.Random.NextRandomZValue(),
-                                        0.0, controllingRegionFaction.ListeningPost);
-                                    controllingRegionFaction.ListeningPost -= revoltShare;
-                                    revoltingRegionFaction.ListeningPost += revoltShare;
-                                }
-                                if (controllingRegionFaction.AntiAir > 0)
-                                {
-                                    double revoltShare = Math.Clamp(
-                                        controllingRegionFaction.AntiAir / 2.0 + _session.Random.NextRandomZValue(),
-                                        0.0, controllingRegionFaction.AntiAir);
-                                    controllingRegionFaction.AntiAir -= revoltShare;
-                                    revoltingRegionFaction.AntiAir += revoltShare;
-                                }
-                                if (controllingRegionFaction.Entrenchment > 0)
-                                {
-                                    double revoltShare = Math.Clamp(
-                                        controllingRegionFaction.Entrenchment / 2.0 + _session.Random.NextRandomZValue(),
-                                        0.0, controllingRegionFaction.Entrenchment);
-                                    controllingRegionFaction.Entrenchment -= revoltShare;
-                                    revoltingRegionFaction.Entrenchment += revoltShare;
-                                }
-                                controllingRegionFaction.Organization = (int)(_session.Random.GetLinearDouble() * 100);
-                            }
-                        }
-                    }
-                    hiddenPlanetFaction.IsPublic = true;
+                    FactionRevealService.Reveal(infiltrator);
+                    TransferRevoltDefenses(loyalist, infiltrator);
                 }
             }
         }
 
         private void CheckForRevoltSuppression(Planet planet)
         {
-            Faction controllingFaction = planet.GetControllingFaction();
-            if (controllingFaction.IsPlayerFaction) return;
-            PlanetFaction controllingPlanetFaction = planet.PlanetFactionMap[controllingFaction.Id];
-
-            foreach (PlanetFaction planetFaction in planet.PlanetFactionMap.Values)
+            foreach (Region region in planet.Regions.Where(region => region != null))
             {
-                if (!planetFaction.IsPublic
-                    || planetFaction == controllingPlanetFaction
-                    || planetFaction.Faction.IsDefaultFaction
-                    || planetFaction.Faction.IsPlayerFaction
-                    || planetFaction.Faction.GrowthType != GrowthType.Conversion)
-                {
-                    continue;
-                }
+                RegionFaction loyalist = region.RegionFactionMap.Values.FirstOrDefault(rf =>
+                    rf.IsPublic
+                    && (rf.PlanetFaction.Faction.IsDefaultFaction
+                        || rf.PlanetFaction.Faction.IsPlayerFaction));
+                if (loyalist == null) continue;
 
-                long hostileStrength = SumMilitaryStrength(planet, planetFaction);
-                long controllingStrength = SumMilitaryStrength(planet, controllingPlanetFaction);
-                if (hostileStrength < 0.7f * controllingStrength)
+                foreach (RegionFaction insurgent in region.RegionFactionMap.Values
+                    .Where(rf => rf.IsPublic
+                        && rf.PlanetFaction.Faction.GrowthType == GrowthType.Conversion)
+                    .ToList())
                 {
-                    planetFaction.IsPublic = false;
-                    foreach (Region region in planet.Regions)
-                    {
-                        if (region.RegionFactionMap.TryGetValue(planetFaction.Faction.Id, out RegionFaction rf))
-                        {
-                            rf.IsPublic = false;
-                            rf.HalveDefensesOnGoingToGround();
-                        }
-                    }
+                    if (insurgent.MilitaryStrength >= 0.7f * loyalist.MilitaryStrength) continue;
+                    insurgent.IsPublic = false;
+                    insurgent.HalveDefensesOnGoingToGround();
                 }
             }
+
+            foreach (PlanetFaction planetFaction in planet.PlanetFactionMap.Values
+                .Where(pf => pf.Faction.GrowthType == GrowthType.Conversion))
+            {
+                planetFaction.IsPublic = planet.Regions.Where(region => region != null).Any(region =>
+                    region.RegionFactionMap.TryGetValue(
+                        planetFaction.Faction.Id, out RegionFaction rf) && rf.IsPublic);
+            }
         }
+
+        private void TransferRevoltDefenses(RegionFaction loyalist, RegionFaction revolting)
+        {
+            double share = DrawRevoltDefenseShare(loyalist.ListeningPost);
+            loyalist.ListeningPost -= share;
+            revolting.ListeningPost += share;
+            share = DrawRevoltDefenseShare(loyalist.AntiAir);
+            loyalist.AntiAir -= share;
+            revolting.AntiAir += share;
+            share = DrawRevoltDefenseShare(loyalist.Entrenchment);
+            loyalist.Entrenchment -= share;
+            revolting.Entrenchment += share;
+            loyalist.Organization = (int)(_session.Random.GetLinearDouble() * 100);
+        }
+
+        private double DrawRevoltDefenseShare(double defense) => defense <= 0
+            ? 0
+            : Math.Clamp(defense / 2.0 + _session.Random.NextRandomZValue(), 0.0, defense);
 
         private static long SumMilitaryStrength(Planet planet, PlanetFaction planetFaction)
         {

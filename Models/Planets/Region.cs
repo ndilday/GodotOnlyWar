@@ -61,12 +61,13 @@ namespace OnlyWar.Models.Planets
         {
             get
             {
-                // PDF is only the active, public garrison maintained by the default
-                // (Imperial) faction. A hidden remnant can retain armed underground strength
-                // in RegionFaction.Garrison, but it is not actively garrisoning the region
-                // until it becomes public again.
+                // The official PDF roster includes the public default-faction garrison plus
+                // covert members of hidden factions that continue serving in the host defense.
+                // ArmedCivilians is deliberately excluded: revolutionary militia are not PDF.
                 return RegionFactionMap.Values
-                    .Where(rf => rf.IsPublic && rf.PlanetFaction.Faction.IsDefaultFaction)
+                    .Where(rf =>
+                        (rf.IsPublic && rf.PlanetFaction.Faction.IsDefaultFaction)
+                        || (!rf.IsPublic && rf.PlanetFaction.Faction.DefendsHostWhileHidden))
                     .Sum(rf => rf.Garrison);
             }
         }

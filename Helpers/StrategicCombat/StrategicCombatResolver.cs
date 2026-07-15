@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using OnlyWar.Helpers;
 using OnlyWar.Helpers.Extensions;
 using OnlyWar.Helpers.Turns;
 using OnlyWar.Models;
@@ -26,8 +27,9 @@ namespace OnlyWar.Helpers.StrategicCombat
 
             RegionFaction target = mission.RegionFaction;
             Faction attacker = mission.Attacker;
+            List<RegionFaction> defenders = GetDefendingFactions(target, attacker);
             long committed = Math.Max(0, mission.CommittedBattleValue);
-            long defenderBattleValue = CalculateEngagedDefenderBattleValue(mission, target);
+            long defenderBattleValue = CalculateEngagedDefenderBattleValue(mission, target, defenders);
 
             // Surprise from the attacker/defender awareness differential (StrategicCombatRules): a
             // faction attacking a region it understands better than the defender sees its own ground
@@ -59,11 +61,11 @@ namespace OnlyWar.Helpers.StrategicCombat
             defenderLossRate = Math.Clamp(defenderLossRate, 0.01, 0.75);
 
             long attackerLosses = ClampLoss((long)Math.Round(committed * attackerLossRate), committed, defenderEffective);
-            long mutableDefenderStrength = target.MilitaryStrength;
+            long mutableDefenderStrength = defenders.Sum(defender => defender.MilitaryStrength);
             long defenderLosses = ClampLoss((long)Math.Round(defenderBattleValue * defenderLossRate),
                 mutableDefenderStrength, attackerEffective);
 
-            target.RemoveMilitaryStrength(defenderLosses);
+            ApplyDefenderLosses(defenders, defenderLosses, mutableDefenderStrength);
             long attackerSurvivors = committed - attackerLosses;
 
             bool controlChanged = false;
@@ -137,9 +139,17 @@ namespace OnlyWar.Helpers.StrategicCombat
             return defender.MilitaryStrength + landedNpcBattleValue;
         }
 
-        private static long CalculateEngagedDefenderBattleValue(StrategicCombatMission mission, RegionFaction target)
+        internal static long CalculateDefenderBattleValueAgainst(RegionFaction target, Faction attacker)
         {
-            long fullDefenderBattleValue = CalculateDefenderBattleValue(target);
+            return GetDefendingFactions(target, attacker).Sum(CalculateDefenderBattleValue);
+        }
+
+        private static long CalculateEngagedDefenderBattleValue(
+            StrategicCombatMission mission,
+            RegionFaction target,
+            IReadOnlyCollection<RegionFaction> defenders)
+        {
+            long fullDefenderBattleValue = defenders.Sum(CalculateDefenderBattleValue);
             if (mission.MissionType != MissionType.LightningRaid || fullDefenderBattleValue <= 0)
             {
                 return fullDefenderBattleValue;
@@ -153,6 +163,42 @@ namespace OnlyWar.Helpers.StrategicCombat
             long manageableDefenders = (long)Math.Round(mission.CommittedBattleValue * 1.25);
 
             return Math.Max(1, Math.Min(fullDefenderBattleValue, Math.Min(exposedDefenders, manageableDefenders)));
+        }
+
+        private static List<RegionFaction> GetDefendingFactions(RegionFaction target, Faction attacker)
+        {
+            if (target?.Region == null) return [];
+            List<RegionFaction> defenders = [target];
+            defenders.AddRange(target.Region.RegionFactionMap.Values.Where(candidate =>
+                candidate != target
+                && FactionDispositionService.DefendsHostAgainst(candidate, attacker)));
+            return defenders;
+        }
+
+        private static void ApplyDefenderLosses(
+            IReadOnlyList<RegionFaction> defenders,
+            long losses,
+            long totalMilitaryStrength)
+        {
+            if (losses <= 0 || totalMilitaryStrength <= 0) return;
+
+            long applied = 0;
+            foreach (RegionFaction defender in defenders.OrderByDescending(item => item.MilitaryStrength))
+            {
+                long share = (long)Math.Floor(losses * (defender.MilitaryStrength / (double)totalMilitaryStrength));
+                share = Math.Min(share, defender.MilitaryStrength);
+                defender.RemoveMilitaryStrength(share);
+                applied += share;
+            }
+
+            long residue = losses - applied;
+            foreach (RegionFaction defender in defenders.OrderByDescending(item => item.MilitaryStrength))
+            {
+                if (residue <= 0) break;
+                long extra = Math.Min(residue, defender.MilitaryStrength);
+                defender.RemoveMilitaryStrength(extra);
+                residue -= extra;
+            }
         }
 
         public static double CalculateAttackerEffectiveStrength(StrategicCombatMission mission)

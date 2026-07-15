@@ -2,6 +2,8 @@
 using Godot;
 using OnlyWar.Models.Squads;
 
+using System;
+
 namespace OnlyWar.Models.Planets
 {
     public class RegionFaction
@@ -11,6 +13,8 @@ namespace OnlyWar.Models.Planets
         public readonly List<Squad> LandedSquads;
         private long _population;
         private long _garrison;
+        private long _armedCivilians;
+        private float _contentment = 70f;
 
         // Total headcount for this faction in the region. The garrison is a subset of it (the portion
         // under arms), so lowering the population trims the garrison down with it — the invariant
@@ -22,6 +26,10 @@ namespace OnlyWar.Models.Planets
             {
                 _population = value < 0 ? 0 : value;
                 if (_garrison > _population) _garrison = _population;
+                // Embedded garrison and armed civilian cadres are disjoint subsets of Population.
+                // Preserve embedded personnel first when a population loss forces the pools down.
+                long remaining = _population - _garrison;
+                if (_armedCivilians > remaining) _armedCivilians = remaining;
             }
         }
 
@@ -33,7 +41,33 @@ namespace OnlyWar.Models.Planets
         public long Garrison
         {
             get => _garrison;
-            set => _garrison = value < 0 ? 0 : (value > _population ? _population : value);
+            set
+            {
+                long maximum = _population - _armedCivilians;
+                _garrison = value < 0 ? 0 : (value > maximum ? maximum : value);
+            }
+        }
+
+        // Armed civilian cadres are distinct from Garrison, which represents personnel embedded
+        // in a host military/PDF. Keeping this pool separate prevents civilian insurgents from
+        // inflating the nominal PDF strength shown to the player. The two armed pools are disjoint
+        // subsets of Population and therefore may not exceed it in combination.
+        public long ArmedCivilians
+        {
+            get => _armedCivilians;
+            set
+            {
+                long maximum = _population - _garrison;
+                _armedCivilians = value < 0 ? 0 : (value > maximum ? maximum : value);
+            }
+        }
+
+        // Internal civil-allegiance value. This is deliberately a simulation primitive rather than
+        // player-visible intelligence, and is always constrained to the 0-100 rules scale.
+        public float Contentment
+        {
+            get => _contentment;
+            set => _contentment = float.IsNaN(value) ? 70f : Mathf.Clamp(value, 0f, 100f);
         }
 
         // This faction's fighting strength in the region: its whole population for a horde whose
@@ -42,8 +76,13 @@ namespace OnlyWar.Models.Planets
         // revolt/suppression checks read this rather than raw garrison, so a hidden cult is measured
         // by the members who would actually rise, not its vestigial armed cells (PRD §4.24).
         public long MilitaryStrength =>
-            PlanetFaction.Faction.PopulationIsMilitary ? Population : Garrison;
+            PlanetFaction.Faction.GrowthType == GrowthType.Unrest
+                ? Garrison + ArmedCivilians
+                : PlanetFaction.Faction.PopulationIsMilitary ? Population : Garrison;
         public bool IsPublic { get; set; }
+        // The first offensive after a hidden presence reveals is planned as an Ambush. Persisting
+        // the marker prevents a save between revelation and planning from losing that advantage.
+        public bool HasEmergenceAdvantage { get; set; }
         // Entrenchment provides bonsues against attacks. Defense stats are doubles so that build
         // progress (a fortifying squad's weekly engineering output) and demolition (occupation
         // decay, sabotage) accrue fractionally instead of rounding to whole levels.
@@ -96,7 +135,12 @@ namespace OnlyWar.Models.Planets
         public void AddMilitaryStrength(long battleValue)
         {
             if (battleValue <= 0) return;
-            if (PlanetFaction.Faction.PopulationIsMilitary) Population += battleValue;
+            if (PlanetFaction.Faction.GrowthType == GrowthType.Unrest)
+            {
+                Population += battleValue;
+                ArmedCivilians += battleValue;
+            }
+            else if (PlanetFaction.Faction.PopulationIsMilitary) Population += battleValue;
             else Garrison += battleValue;
         }
 
@@ -114,7 +158,25 @@ namespace OnlyWar.Models.Planets
         public void RemoveMilitaryStrength(long battleValue)
         {
             if (battleValue <= 0) return;
-            if (PlanetFaction.Faction.PopulationIsMilitary)
+            if (PlanetFaction.Faction.GrowthType == GrowthType.Unrest)
+            {
+                long available = Garrison + ArmedCivilians;
+                long lost = Math.Min(available, battleValue);
+                if (lost <= 0) return;
+                long garrisonLost = available <= 0
+                    ? 0
+                    : Math.Min(Garrison, (long)Math.Round(lost * (Garrison / (double)available)));
+                long civiliansLost = lost - garrisonLost;
+                if (civiliansLost > ArmedCivilians)
+                {
+                    garrisonLost += civiliansLost - ArmedCivilians;
+                    civiliansLost = ArmedCivilians;
+                }
+                Garrison -= garrisonLost;
+                ArmedCivilians -= civiliansLost;
+                Population -= lost;
+            }
+            else if (PlanetFaction.Faction.PopulationIsMilitary)
             {
                 // A horde's numbers are its army: losses come straight out of population (the setter
                 // trims any vestigial garrison that would now exceed it).

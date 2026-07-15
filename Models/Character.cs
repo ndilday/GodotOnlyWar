@@ -13,6 +13,12 @@ namespace OnlyWar.Models
 
         // how likely to see false hidden activity
         public float Paranoia { get; set; }
+
+        // how effectively this character administers the population under their authority
+        public float Competence { get; set; } = 0.5f;
+
+        // how readily and indiscriminately this character employs coercion
+        public float Severity { get; set; } = 0.5f;
         
         // how likely to request aid
         public float Neediness { get; set; }

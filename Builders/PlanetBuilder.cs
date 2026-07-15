@@ -1,5 +1,6 @@
 ﻿using OnlyWar.Helpers;
 using OnlyWar.Helpers.Extensions;
+using OnlyWar.Helpers.Simulation;
 using OnlyWar.Models;
 using OnlyWar.Models.Planets;
 using System;
@@ -67,7 +68,10 @@ namespace OnlyWar.Builders
             
 
             PopulateRegions(template, planet, planetFaction);
-
+            planet.SetCapitalRegion(planet.Regions
+                .OrderByDescending(region => region.Population)
+                .ThenBy(region => region.Id)
+                .First().Id);
             if (infiltratingFaction != null)
             {
                 HandleInfiltratingFaction(infiltratingFaction, planet);
@@ -82,9 +86,36 @@ namespace OnlyWar.Builders
                     // they'll never reuest player aid 
                     planetFaction.Leader.OpinionOfPlayerForce = -1;
                 }
+                InitializeContentment(planet, planetFaction.Leader, planetTemplateMap);
                 _nextLeaderId++;
             }
             return planet;
+        }
+
+        private static void InitializeContentment(
+            Planet planet,
+            Character governor,
+            IReadOnlyDictionary<int, PlanetTemplate> templates)
+        {
+            int minimumTax = templates.Values.Min(item => item.TaxRange.MinValue);
+            int maximumTax = templates.Values.Max(item => item.TaxRange.MaxValue);
+            double normalizedTax = maximumTax <= minimumTax
+                ? 0.0
+                : Math.Clamp((planet.TaxLevel - minimumTax) / (double)(maximumTax - minimumTax), 0.0, 1.0);
+            double structural = CivilUnrestRules.CalculateStructuralBaseline(
+                normalizedTax, governor.Competence, governor.Severity);
+
+            foreach (Region region in planet.Regions)
+            {
+                RegionFaction imperial = region.RegionFactionMap.Values.First(rf =>
+                    rf.PlanetFaction.Faction.IsDefaultFaction);
+                imperial.Contentment = (float)CivilUnrestRules.CalculateContentmentTarget(
+                    structural,
+                    imperial.Garrison,
+                    imperial.Population,
+                    region.NonConsumerPopulation,
+                    region.CarryingCapacity);
+            }
         }
 
         // Seeds a hidden infiltrating faction (a Genestealer Cult) across every region of a

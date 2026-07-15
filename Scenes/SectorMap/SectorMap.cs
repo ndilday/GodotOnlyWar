@@ -806,7 +806,8 @@ public partial class SectorMap : Node2D
 			Vector2I gridPosition = new(kvp.Value.Position.X, kvp.Value.Position.Y);
 			int index = GridPositionToIndex(gridPosition);
 			HasPlanet[index] = true;
-            var color = kvp.Value.GetControllingFaction().Color;
+            Faction controller = kvp.Value.GetControllingFaction();
+            var color = controller?.Color ?? System.Drawing.Color.Gray;
             ClickableSprite2D planet = DrawTexture(starTexture, starTextureScale, gridPosition, new Color(color.R, color.G, color.B, color.A));
             planet.Pressed += (object sender, EventArgs e) => PlanetClicked?.Invoke(planet, kvp.Key);
             planet.DoublePressed += (object sender, EventArgs e) => PlanetDoubleClicked?.Invoke(planet, kvp.Key);

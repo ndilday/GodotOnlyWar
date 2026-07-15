@@ -51,7 +51,7 @@ public class GovernanceHierarchyTests : IClassFixture<GovernanceHierarchyFixture
         foreach (Subsector subsector in _seedOneSector.Subsectors)
         {
             List<Planet> imperialWorlds = subsector.Planets
-                .Where(p => p.GetControllingFaction().IsDefaultFaction)
+                .Where(p => p.GetControllingFaction()?.IsDefaultFaction == true)
                 .ToList();
 
             // Worlds tagged as a capital of any tier are the subsector's seat.

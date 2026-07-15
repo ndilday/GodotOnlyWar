@@ -16,7 +16,10 @@ namespace OnlyWar.Models
         Conversion = 2,
         // Consumption factions (Tyranids) have no organic birthrate: they grow only by eating
         // biomass — Predate (headcount) and Consume (carrying capacity). See PRD §4.24.
-        Consumption = 3
+        Consumption = 3,
+        // Civilian allegiance shifts into and out of an Unrest faction according to the host
+        // region's Contentment. Unlike Conversion, this flow is reversible when conditions improve.
+        Unrest = 4
     }
 
     public class Faction
@@ -39,6 +42,13 @@ namespace OnlyWar.Models
         // rather than returning them to their staging region (raid). A Tyranid tide invades; a
         // raider returns home. Interim default keyed off the consuming growth type (§4.24).
         public bool InvadesOnVictory { get; set; }
+        // Hidden infiltrators with this semantic continue to serve in the host's defenses against
+        // an external attacker without revealing themselves. Relationship policy is centralized in
+        // FactionDispositionService; callers should not infer this from a faction name.
+        public bool DefendsHostWhileHidden { get; set; }
+        // Public human insurgents may suspend their war with Imperial forces while a public external
+        // enemy is present on the planet. Cults deliberately do not receive this public truce.
+        public bool OffersExternalEnemyTruce { get; set; }
         public IReadOnlyDictionary<int, Species> Species { get; }
         public IReadOnlyDictionary<int, SoldierTemplate> SoldierTemplates { get; }
         public IReadOnlyDictionary<int, SquadTemplate> SquadTemplates { get; }
@@ -83,7 +93,10 @@ namespace OnlyWar.Models
             // currently exists is a population-is-military horde, and Tyranids (Consumption) are the
             // invaders. Both are overridable once FactionBehavior/rules data carry them explicitly.
             PopulationIsMilitary = !isPlayerFaction && !isDefaultFaction;
-            InvadesOnVictory = growthType == GrowthType.Consumption;
+            InvadesOnVictory = growthType is GrowthType.Consumption or GrowthType.Unrest;
+            DefendsHostWhileHidden = growthType == GrowthType.Conversion
+                || growthType == GrowthType.Unrest;
+            OffersExternalEnemyTruce = growthType == GrowthType.Unrest;
             Species = species;
             SoldierTemplates = soldierTemplates;
             SquadTemplates = squadTemplates;

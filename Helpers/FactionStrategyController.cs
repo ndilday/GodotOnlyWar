@@ -418,8 +418,18 @@ public class FactionStrategyController
     private bool LaunchAssault(Faction faction, PotentialOffensive chosenOffensive, List<RegionForceState> regionalForceStates, List<Order> allOrders)
     {
         long intendedBattleValue = (long)(chosenOffensive.DefenderBattleValue * 2);
-        return LaunchOffensive(faction, chosenOffensive, regionalForceStates, allOrders,
-            intendedBattleValue, MissionType.Advance, Aggression.Normal);
+        List<RegionFaction> emergingSources = chosenOffensive.AttackingRegions
+            .Select(region => region.RegionFactionMap.TryGetValue(faction.Id, out RegionFaction rf) ? rf : null)
+            .Where(rf => rf?.HasEmergenceAdvantage == true)
+            .ToList();
+        MissionType missionType = emergingSources.Count > 0 ? MissionType.Ambush : MissionType.Advance;
+        bool launched = LaunchOffensive(faction, chosenOffensive, regionalForceStates, allOrders,
+            intendedBattleValue, missionType, Aggression.Normal);
+        if (launched)
+        {
+            foreach (RegionFaction source in emergingSources) source.HasEmergenceAdvantage = false;
+        }
+        return launched;
     }
 
     private bool LaunchLightningRaid(Faction faction, PotentialOffensive chosenOffensive, List<RegionForceState> regionalForceStates, List<Order> allOrders)
@@ -539,6 +549,9 @@ public class FactionStrategyController
         if (attacker == null || offensive?.TargetFaction == null) return false;
         if (attacker.IsPlayerFaction || offensive.TargetFaction.PlanetFaction.Faction.IsPlayerFaction) return false;
         if (offensive.TargetFaction.LandedSquads.Any(s => s.Faction?.IsPlayerFaction == true)) return false;
+        // Secular insurgents are represented by abstract embedded-PDF and armed-civilian pools;
+        // they deliberately have no squad templates to generate for tactical combat.
+        if (attacker.GrowthType == GrowthType.Unrest) return true;
 
         long defenderBattleValue = offensive.DefenderBattleValue > 0
             ? offensive.DefenderBattleValue
@@ -608,7 +621,8 @@ public class FactionStrategyController
         return sourceRegion.GetAdjacentRegions()
             .Where(region => region != currentTarget)
             .Count(region => region.RegionFactionMap.Values.Any(rf =>
-                rf.IsPublic && AreFactionsEnemies(faction, rf.PlanetFaction.Faction)));
+                rf.IsPublic && FactionDispositionService.AreEnemies(
+                    faction, rf.PlanetFaction.Faction, region.Planet)));
     }
 
     private static void ReturnCommittedForce(IEnumerable<StrategicCombatContribution> contributions)
@@ -878,7 +892,8 @@ public class FactionStrategyController
 
             bool bordersPublicEnemy = state.RegionFaction.Region.GetAdjacentRegions()
                 .Any(r => r.RegionFactionMap.Values
-                           .Any(rf => rf.IsPublic && AreFactionsEnemies(faction, rf.PlanetFaction.Faction)));
+                           .Any(rf => rf.IsPublic && FactionDispositionService.AreEnemies(
+                               faction, rf.PlanetFaction.Faction, r.Planet)));
             if (!bordersPublicEnemy) continue;
 
             double level = state.RegionFaction.ListeningPost;
@@ -907,7 +922,8 @@ public class FactionStrategyController
         return planet.Regions
             .SelectMany(region => region.RegionFactionMap.Values)
             .Any(regionFaction => regionFaction.IsPublic
-                                  && AreFactionsEnemies(faction, regionFaction.PlanetFaction.Faction));
+                                  && FactionDispositionService.AreEnemies(
+                                      faction, regionFaction.PlanetFaction.Faction, planet));
     }
 
     // Before spare troops are spent on offensives, shore up the line: a region with spare force
@@ -995,7 +1011,8 @@ public class FactionStrategyController
     private static bool HasLocalEnemyCiviliansButNoMilitary(Faction faction, Region region)
     {
         List<RegionFaction> enemies = region.RegionFactionMap.Values
-            .Where(rf => rf.IsPublic && AreFactionsEnemies(faction, rf.PlanetFaction.Faction))
+            .Where(rf => rf.IsPublic && FactionDispositionService.AreEnemies(
+                faction, rf.PlanetFaction.Faction, region.Planet))
             .ToList();
         return enemies.Any(rf => rf.Population > 0)
                && enemies.All(rf => CalculateDefenderBattleValue(rf) <= 0);
@@ -1005,7 +1022,7 @@ public class FactionStrategyController
     {
         return region.RegionFactionMap.Values.Any(rf =>
             rf.IsPublic
-            && AreFactionsEnemies(faction, rf.PlanetFaction.Faction)
+            && FactionDispositionService.AreEnemies(faction, rf.PlanetFaction.Faction, region.Planet)
             && CalculateDefenderBattleValue(rf) > 0);
     }
 
@@ -1013,7 +1030,8 @@ public class FactionStrategyController
     {
         return region.GetAdjacentRegions()
             .SelectMany(adjacent => adjacent.RegionFactionMap.Values)
-            .Where(rf => rf.IsPublic && AreFactionsEnemies(faction, rf.PlanetFaction.Faction))
+            .Where(rf => rf.IsPublic && FactionDispositionService.AreEnemies(
+                faction, rf.PlanetFaction.Faction, region.Planet))
             .Sum(CalculateDefenderBattleValue);
     }
 
@@ -1100,7 +1118,8 @@ public class FactionStrategyController
     private List<PotentialOffensive> IdentifyPotentialOffensivesOnPlanet(Faction attackingFaction, Planet planet, List<RegionForceState> regionalForceStates)
     {
         var allEnemyRegionFactions = planet.Regions.SelectMany(r => r.RegionFactionMap.Values)
-                                           .Where(rf => AreFactionsEnemies(attackingFaction, rf.PlanetFaction.Faction) && rf.IsPublic).ToList();
+                                           .Where(rf => FactionDispositionService.AreEnemies(
+                                               attackingFaction, rf.PlanetFaction.Faction, planet) && rf.IsPublic).ToList();
 
         var localOffensives = new List<PotentialOffensive>();
         foreach (var targetFaction in allEnemyRegionFactions)
@@ -1139,7 +1158,8 @@ public class FactionStrategyController
 
         if (availableForce <= 0) return;
 
-        long defenderBattleValue = CalculateDefenderBattleValue(targetFaction);
+        long defenderBattleValue = StrategicCombatResolver.CalculateDefenderBattleValueAgainst(
+            targetFaction, attackingFaction);
         // The attacker's estimate sharpens with its awareness of the target region —
         // built by reconnoitring it (see PlanMajorOffensiveOnPlanet), not blanket coverage.
         float intel = targetFaction.Region.GetFactionRegionIntel(attackingFaction.Id);
@@ -1181,7 +1201,8 @@ public class FactionStrategyController
             // is its Population, with no standing Garrison), so a PDF perceived no threat from a massing
             // uprising next door and held nothing back.
             long adjacentThreat = adjacentRegion.RegionFactionMap.Values
-                .Where(rf => AreFactionsEnemies(defenderFaction, rf.PlanetFaction.Faction))
+                .Where(rf => FactionDispositionService.AreEnemies(
+                    defenderFaction, rf.PlanetFaction.Faction, region.Planet))
                 .Sum(rf => (long)(CalculateDefenderBattleValue(rf) * sight));
 
             if (adjacentThreat > highestThreat) highestThreat = adjacentThreat;
@@ -1268,11 +1289,4 @@ public class FactionStrategyController
         return (long)Math.Round(trueBattleValue * multiplier);
     }
 
-    private static bool AreFactionsEnemies(Faction f1, Faction f2)
-    {
-        if (f1 == null || f2 == null) return false;
-        bool f1IsImperial = f1.IsPlayerFaction || f1.IsDefaultFaction;
-        bool f2IsImperial = f2.IsPlayerFaction || f2.IsDefaultFaction;
-        return f1IsImperial != f2IsImperial;
-    }
 }

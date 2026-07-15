@@ -87,6 +87,28 @@ public class FactionStrategyControllerTests
     }
 
     [Fact]
+    public void GenerateFactionOrders_NewlyRevealedUnrestOpensWithStrategicAmbush()
+    {
+        Faction unrest = BuildFaction(20, "Insurrectionists", false, false, GrowthType.Unrest);
+        Faction pdf = CreateDefaultFaction(21);
+        Planet planet = CreatePlanet();
+        Region region = planet.Regions[0];
+        AddRegionFaction(planet, region, unrest, population: 20_000, organization: 100);
+        RegionFaction rebels = region.RegionFactionMap[unrest.Id];
+        rebels.ArmedCivilians = 10_000;
+        rebels.HasEmergenceAdvantage = true;
+        AddRegionFaction(planet, region, pdf, population: 100_000, organization: 100, garrison: 100);
+        Sector sector = new(CreatePlayerForce(), [], [planet], []);
+
+        List<Order> orders = new FactionStrategyController().GenerateFactionOrders(unrest, sector);
+
+        Assert.Contains(orders, order =>
+            order.Mission is StrategicCombatMission mission
+            && mission.MissionType == MissionType.Ambush);
+        Assert.False(rebels.HasEmergenceAdvantage);
+    }
+
+    [Fact]
     public void GenerateFactionOrders_PerceivedThreatBonusPinsReserveAndSuppressesActivity()
     {
         Faction enemy = CreateNonPlayerFaction();

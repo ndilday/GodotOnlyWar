@@ -22,6 +22,11 @@ namespace OnlyWar.Models.Planets
         public readonly int Size;
         public readonly Region[] Regions;
 
+        // The permanent seat of planetary government. Selected once from the greatest original
+        // regional population (Region.Id breaks ties) and persisted so later migration, conquest,
+        // or depopulation cannot move the capital implicitly.
+        public int CapitalRegionId { get; private set; }
+
         public List<TaskForce> OrbitingTaskForceList;
         public readonly Dictionary<int, PlanetFaction> PlanetFactionMap;
 
@@ -35,6 +40,7 @@ namespace OnlyWar.Models.Planets
             get
             {
                 Faction controllingFaction = this.GetControllingFaction();
+                if (controllingFaction == null) return null;
                 return PlanetFactionMap.TryGetValue(controllingFaction.Id, out PlanetFaction pf)
                     ? pf.Leader
                     : null;
@@ -45,7 +51,16 @@ namespace OnlyWar.Models.Planets
         {
             get
             {
-                return 0;
+                List<RegionFaction> imperialRegions = Regions
+                    .Where(region => region != null)
+                    .Select(region => region.RegionFactionMap.Values.FirstOrDefault(rf =>
+                        rf.PlanetFaction.Faction.IsDefaultFaction && rf.Population > 0))
+                    .Where(rf => rf != null)
+                    .ToList();
+                long population = imperialRegions.Sum(rf => rf.Population);
+                if (population <= 0) return 0;
+                return (float)(imperialRegions.Sum(rf => rf.Contentment * (double)rf.Population)
+                    / population);
             }
         }
         
@@ -69,7 +84,7 @@ namespace OnlyWar.Models.Planets
         }
 
         public Planet(int id, string name, Coordinate position, int size,
-            PlanetTemplate template, int importance, int taxLevel)
+            PlanetTemplate template, int importance, int taxLevel, int capitalRegionId = -1)
         {
             Id = id;
             Name = name;
@@ -78,9 +93,15 @@ namespace OnlyWar.Models.Planets
             Template = template;
             Importance = importance;
             TaxLevel = taxLevel;
+            CapitalRegionId = capitalRegionId;
             OrbitingTaskForceList = [];
             PlanetFactionMap = [];
             Regions = new Region[16];
+        }
+
+        public void SetCapitalRegion(int regionId)
+        {
+            CapitalRegionId = regionId;
         }
 
     }

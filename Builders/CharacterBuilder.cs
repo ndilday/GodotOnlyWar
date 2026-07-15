@@ -18,6 +18,8 @@ namespace OnlyWar.Builders
                 Appreciation = (float)RNG.GetLinearDouble(),
                 Influence = (float)RNG.GetLinearDouble(),
                 Investigation = (float)RNG.GetLinearDouble(),
+                Competence = (float)RNG.GetLinearDouble(),
+                Severity = (float)RNG.GetLinearDouble(),
                 Neediness = (float)RNG.GetLinearDouble(),
                 Paranoia = (float)RNG.GetLinearDouble(),
                 Patience = (float)RNG.GetLinearDouble(),
