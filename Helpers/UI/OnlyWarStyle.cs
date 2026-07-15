@@ -89,6 +89,20 @@ namespace OnlyWar.Helpers.UI
             button.AddThemeStyleboxOverride("pressed", CreateAccentButtonStyle(true, accent, true));
         }
 
+        public static void ApplyListRow(Button button, bool selected, bool enabled = true)
+        {
+            StyleBoxFlat normal = GetListRowStyle(selected);
+            if (!enabled)
+            {
+                normal.BgColor = WithAlpha(normal.BgColor, 0.48f);
+                normal.BorderColor = WithAlpha(normal.BorderColor, 0.42f);
+            }
+            button.AddThemeStyleboxOverride("normal", normal);
+            button.AddThemeStyleboxOverride("disabled", (StyleBoxFlat)normal.Duplicate());
+            button.AddThemeStyleboxOverride("hover", GetListRowStyle(true));
+            button.AddThemeStyleboxOverride("pressed", GetListRowStyle(true));
+        }
+
         public static StyleBoxFlat GetListRowStyle(bool selected)
         {
             return GetStylebox(selected ? "selected" : "normal", ListRowType);

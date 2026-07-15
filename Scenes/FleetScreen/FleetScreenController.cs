@@ -11,6 +11,8 @@ public partial class FleetScreenController : DialogController
 {
     private FleetScreenView _view;
 
+    public event EventHandler CampaignChanged;
+
     public override void _Ready()
     {
         base._Ready();
@@ -118,7 +120,12 @@ public partial class FleetScreenController : DialogController
 
     private void OnSquadDroppedOnShip(object sender, Tuple<int, int> args)
     {
-        TransferSquadToShip(FindSquad(args.Item1), FindShip(args.Item2));
+        Squad squad = FindSquad(args.Item1);
+        Ship destination = FindShip(args.Item2);
+        if (!CanTransferSquadToShip(squad, destination)) return;
+
+        TransferSquadToShip(squad, destination);
+        CampaignChanged?.Invoke(this, EventArgs.Empty);
         PopulateFleetData();
     }
 

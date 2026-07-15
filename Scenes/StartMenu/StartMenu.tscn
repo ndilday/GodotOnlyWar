@@ -51,9 +51,9 @@ anchor_top = 0.5
 anchor_right = 0.5
 anchor_bottom = 0.5
 offset_left = -180.0
-offset_top = -60.0
+offset_top = -100.0
 offset_right = 180.0
-offset_bottom = 80.0
+offset_bottom = 180.0
 grow_horizontal = 2
 grow_vertical = 2
 theme_override_constants/separation = 12
@@ -65,6 +65,14 @@ text = "New Game"
 [node name="LoadGameButton" type="Button" parent="MenuButtons" unique_id=646845223]
 layout_mode = 2
 text = "Load Game"
+
+[node name="OptionsButton" type="Button" parent="MenuButtons"]
+layout_mode = 2
+text = "Options"
+
+[node name="QuitButton" type="Button" parent="MenuButtons"]
+layout_mode = 2
+text = "Quit"
 
 [node name="LoadStatusLabel" type="Label" parent="MenuButtons"]
 custom_minimum_size = Vector2(0, 40)
@@ -79,3 +87,5 @@ autowrap_mode = 2
 
 [connection signal="pressed" from="MenuButtons/NewGameButton" to="." method="OnNewGameButtonPressed"]
 [connection signal="pressed" from="MenuButtons/LoadGameButton" to="." method="OnLoadGameButtonPressed"]
+[connection signal="pressed" from="MenuButtons/OptionsButton" to="." method="OnOptionsButtonPressed"]
+[connection signal="pressed" from="MenuButtons/QuitButton" to="." method="OnQuitButtonPressed"]

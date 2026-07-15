@@ -14,6 +14,9 @@ namespace OnlyWar.Helpers.Storage
     internal static class GameStorage
     {
         internal const string DefaultSaveFileName = "default.s3db";
+        internal const string ProtectedPreTurnSaveFileName = "autosave-pre-turn.s3db";
+        internal const string InitialAutosaveFileName = "autosave-initial.s3db";
+        internal const string PostTurnAutosaveFilePrefix = "autosave-turn-";
 
         private static readonly Lazy<string> InstallDirectoryValue =
             new(LocateInstallDirectory);

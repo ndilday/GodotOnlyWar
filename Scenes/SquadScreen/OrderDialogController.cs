@@ -25,12 +25,18 @@ public partial class OrderDialogController : Control
 
 	public override void _Ready()
 	{
+		AddToGroup(DialogController.DialogInputBlockerGroup);
 		_view = GetNode<OrderDialogView>("OrderDialogView");
 		_view.RegionOptionSelected += OnRegionOptionSelected;
 		_view.MissionOptionSelected += OnMissionOptionSelected;
 		_view.AggressionOptionSelected += OnAggressionOptionSelected;
 		_view.OrdersConfirmed += OnOrdersConfirmed;
 		_view.Canceled += OnCanceled;
+	}
+
+	public void RequestClose()
+	{
+		OnCanceled(this, EventArgs.Empty);
 	}
 
 	// Returns the public, non-player, non-default RegionFaction entries eligible to be an

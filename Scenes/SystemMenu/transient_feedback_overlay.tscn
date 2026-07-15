@@ -1,0 +1,48 @@
+[gd_scene load_steps=3 format=3]
+
+[ext_resource type="Theme" path="res://Scenes/OnlyWarTheme.tres" id="1_theme"]
+[ext_resource type="Script" path="res://Scenes/SystemMenu/TransientFeedbackOverlay.cs" id="2_script"]
+
+[node name="TransientFeedbackOverlay" type="Control"]
+visible = false
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+theme = ExtResource("1_theme")
+script = ExtResource("2_script")
+
+[node name="Panel" type="PanelContainer" parent="."]
+custom_minimum_size = Vector2(520, 70)
+layout_mode = 1
+anchors_preset = 10
+anchor_right = 1.0
+offset_left = -780.0
+offset_top = 24.0
+offset_right = -260.0
+offset_bottom = 94.0
+grow_horizontal = 2
+mouse_filter = 2
+
+[node name="Margin" type="MarginContainer" parent="Panel"]
+layout_mode = 2
+mouse_filter = 2
+theme_override_constants/margin_left = 16
+theme_override_constants/margin_top = 12
+theme_override_constants/margin_right = 16
+theme_override_constants/margin_bottom = 12
+
+[node name="Message" type="Label" parent="Panel/Margin"]
+layout_mode = 2
+mouse_filter = 2
+theme_override_colors/font_color = Color(0.839216, 0.8, 0.709804, 1)
+text = "Campaign saved."
+horizontal_alignment = 1
+vertical_alignment = 1
+autowrap_mode = 2
+
+[node name="Timer" type="Timer" parent="."]
+one_shot = true

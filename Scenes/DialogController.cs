@@ -7,6 +7,15 @@ public partial class DialogController : Control
 
     public event EventHandler CloseButtonPressed;
 
+    /// <summary>
+    /// Requests the same close operation as the visible close button. Global gameplay input uses
+    /// this for the X shortcut so each dialog keeps its existing owner-specific unwind behavior.
+    /// </summary>
+    public void RequestClose()
+    {
+        CloseButtonPressed?.Invoke(this, EventArgs.Empty);
+    }
+
     public override void _Ready()
     {
         AddToGroup(DialogInputBlockerGroup);
@@ -16,7 +25,7 @@ public partial class DialogController : Control
             if(child is DialogView)
             {
                 DialogView view = (DialogView)child;
-                view.CloseButtonPressed += (object sender, EventArgs e) => CloseButtonPressed?.Invoke(this, e);
+                view.CloseButtonPressed += (object sender, EventArgs e) => RequestClose();
                 break;
             }
         }

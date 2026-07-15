@@ -62,7 +62,7 @@ public partial class MainGameScene : Control
 		_topMenu = GetNode<TopMenu>("UILayer/TopMenu");
 		_leftMapTools = GetNode<LeftMapTools>("UILayer/LeftMapTools");
 		_systemInspector = GetNode<SystemInspector>("UILayer/SystemInspector");
-		_topMenu.SaveButtonPressed += OnSaveButtonPressed;
+		_topMenu.SystemOptionsButtonPressed += OnSystemOptionsButtonPressed;
 		_leftMapTools.MapToolPressed += OnMapToolPressed;
 		_systemInspector.OpenSystemPressed += OnInspectorOpenSystemPressed;
 		_systemInspector.PlotCoursePressed += OnInspectorPlotCoursePressed;
@@ -85,6 +85,7 @@ public partial class MainGameScene : Control
 		_activityOverlay = GetNode<ActivityOverlay>("UILayer/ActivityOverlay");
 		_turnController = new TurnController();
 		_previousScreenStack = new Stack<Control>();
+		InitializeCampaignControls();
 		RefreshTopMenuStatus();
 		// Start with the world the chapter fleet is orbiting selected (the promised world at game
 		// start), mirroring the camera's initial centring in SectorMap. Fall back to the first
@@ -125,43 +126,18 @@ public partial class MainGameScene : Control
 		{
 			// Persisted on the next save; the guard survives reload (§5).
 			_pendingBriefingScenario.BriefingAcknowledged = true;
+			MarkCampaignChanged();
 			_pendingBriefingScenario = null;
 		}
 		_briefingDialog.Visible = false;
 	}
 
-	public override void _UnhandledInput(InputEvent @event)
+	public override void _Input(InputEvent @event)
 	{
-		if (@event.IsActionPressed("ui_cancel"))    // "ui_cancel" is mapped to Escape)
+		if (HandleGlobalCampaignInput(@event))
 		{
-			if (_chapterScreen != null && _chapterScreen.Visible) 
-			{
-				OnCloseScreen(_chapterScreen, EventArgs.Empty);
-			}
-			else if(_apothecariumScreen != null && _apothecariumScreen.Visible)
-			{
-				OnCloseScreen(_apothecariumScreen, EventArgs.Empty);
-			}
-			else if(_trainingUnitScreen != null && _trainingUnitScreen.Visible)
-			{
-				OnCloseScreen(_trainingUnitScreen, EventArgs.Empty);
-			}
-			else if(_fleetScreen != null && _fleetScreen.Visible)
-			{
-				OnCloseScreen(_fleetScreen, EventArgs.Empty);
-			}
-			else if(_diplomacyScreen != null && _diplomacyScreen.Visible)
-			{
-				OnCloseScreen(_diplomacyScreen, EventArgs.Empty);
-			}
-			else if (_squadScreen != null && _squadScreen.Visible)
-			{
-				OnCloseScreen(_squadScreen, EventArgs.Empty);
-			}
-			else if (_soldierScreen != null && _soldierScreen.Visible)
-			{
-				OnSoldierViewCloseButtonPressed(null, null);
-			}
+			GetViewport().SetInputAsHandled();
+			return;
 		}
 
 	   /* if (@event is InputEventMouseButton emb)
@@ -223,49 +199,6 @@ public partial class MainGameScene : Control
 		_topMenu.SetDebugText(actionKey);
 	}
 
-	private async void OnSaveButtonPressed(object sender, EventArgs e)
-	{
-		string message = "";
-		var units = GameDataSingleton.Instance.GameRulesData.Factions.SelectMany(f => f.Units);
-		try
-		{
-			GameStorage.InitializeUserStorage();
-			GameStateDataAccess.Instance.SaveData(
-				GameStorage.DefaultSavePath,
-				GameDataSingleton.Instance.Date,
-				GameDataSingleton.Instance.Sector.PlayerForce.Army.Requisition,
-				GameDataSingleton.Instance.Sector.PlayerForce.GeneseedStockpile,
-				GameDataSingleton.Instance.Sector.PlayerForce.GeneseedPurity,
-				GameDataSingleton.Instance.Sector.Scenario,
-				GameDataSingleton.Instance.Sector.PlayerForce.Army.MedicalProcedures,
-				GameDataSingleton.Instance.Sector.Characters,
-				GameDataSingleton.Instance.Sector.PlayerForce.Requests,
-				GameDataSingleton.Instance.Sector.Planets.Values,
-				GameDataSingleton.Instance.Sector.Fleets.Values,
-				units,
-				GameDataSingleton.Instance.Sector.PlayerForce.Army.PlayerSoldierMap.Values,
-				GameDataSingleton.Instance.Sector.PlayerForce.Army.FallenBrothers.Values,
-				GameDataSingleton.Instance.Sector.PlayerForce.BattleHistory);
-			message = "SAVED!";
-		}
-		catch (Exception exception)
-		{
-			GD.PushWarning($"Save Failed: {exception.Message}");
-			message = "SAVE FAILED!";
-		}
-		finally
-		{
-			// Update button text temporarily
-			_topMenu.SetSaveButtonText(message);
-
-			// Wait for a short duration (e.g., 1.5 seconds) using Godot's Timer
-			await ToSignal(GetTree().CreateTimer(2f), "timeout");
-
-			// Revert button text back to original
-			_topMenu.SetSaveButtonText("Save");
-		}
-	}
-
 	private void OnChapterButtonPressed(object sender, EventArgs e)
 	{
 		if(_chapterScreen == null)
@@ -273,6 +206,7 @@ public partial class MainGameScene : Control
 			PackedScene chapterScene = GD.Load<PackedScene>("res://Scenes/ChapterScreen/chapter_screen.tscn");
 			_chapterScreen = (ChapterController)chapterScene.Instantiate();
 			_chapterScreen.CloseButtonPressed += OnCloseScreen;
+			_chapterScreen.CampaignChanged += OnCampaignChanged;
 			_mainUILayer.AddChild(_chapterScreen);
 		}
 		_chapterScreen.Visible = true;
@@ -325,6 +259,7 @@ public partial class MainGameScene : Control
 			PackedScene apothecariumScene = GD.Load<PackedScene>("res://Scenes/ApothecariumScreen/apothecarium_screen.tscn");
 			_apothecariumScreen = (ApothecariumScreenController)apothecariumScene.Instantiate();
 			_apothecariumScreen.CloseButtonPressed += OnCloseScreen;
+			_apothecariumScreen.CampaignChanged += OnCampaignChanged;
 			_mainUILayer.AddChild(_apothecariumScreen);
 		}
 		_apothecariumScreen.Visible = true;
@@ -339,6 +274,7 @@ public partial class MainGameScene : Control
 			_trainingUnitScreen = (TrainingUnitScreenController)trainingUnitScene.Instantiate();
 			_trainingUnitScreen.CloseButtonPressed += OnCloseScreen;
 			_trainingUnitScreen.SoldierLinkClicked += OnSoldierSelectedForDisplay;
+			_trainingUnitScreen.CampaignChanged += OnCampaignChanged;
 			_mainUILayer.AddChild(_trainingUnitScreen);
 		}
 		_trainingUnitScreen.Visible = true;
@@ -352,6 +288,7 @@ public partial class MainGameScene : Control
 			PackedScene fleetScene = GD.Load<PackedScene>("res://Scenes/FleetScreen/fleet_screen.tscn");
 			_fleetScreen = (FleetScreenController)fleetScene.Instantiate();
 			_fleetScreen.CloseButtonPressed += OnCloseScreen;
+			_fleetScreen.CampaignChanged += OnCampaignChanged;
 			_mainUILayer.AddChild(_fleetScreen);
 		}
 		_fleetScreen.PopulateFleetData();
@@ -421,6 +358,7 @@ public partial class MainGameScene : Control
 			_planetTacticalScreen.CloseButtonPressed += OnCloseScreen;
 			_planetTacticalScreen.OrbitalSquadDoubleClicked += OnOrbitalSquadDoubleClicked;
 			_planetTacticalScreen.RegionDoubleClicked += OnRegionDoubleClicked;
+			_planetTacticalScreen.CampaignChanged += OnCampaignChanged;
 			_mainUILayer.AddChild(_planetTacticalScreen);
 		}
 		PlaceMainContentOverlay(_planetTacticalScreen);
@@ -607,37 +545,15 @@ public partial class MainGameScene : Control
 
 	private void OnFleetActionCompleted(object sender, EventArgs e)
 	{
+		MarkCampaignChanged();
 		((Control)sender).Visible = false;
 		_sectorMap.RefreshFleets();
 		RefreshSelectedSystemInspector();
 	}
 
-	private async void OnEndTurnButtonPressed(object sender, EventArgs e)
+	private void OnEndTurnButtonPressed(object sender, EventArgs e)
 	{
-		if (_isProcessingTurn)
-		{
-			return;
-		}
-
-		_isProcessingTurn = true;
-		_activityOverlay.ShowBusy("RESOLVING TURN", "Processing orders, movement, and the wider war...");
-		// Let the modal draw before the synchronous turn resolver starts.
-		await ToSignal(GetTree(), "process_frame");
-		await ToSignal(GetTree(), "process_frame");
-
-		try
-		{
-			ProcessTurnCore();
-		}
-		catch (Exception exception)
-		{
-			GD.PushError($"Turn resolution failed: {exception}");
-		}
-		finally
-		{
-			_activityOverlay.HideBusy();
-			_isProcessingTurn = false;
-		}
+		RequestEndTurn();
 	}
 
 	private void ProcessTurnCore()
@@ -715,6 +631,7 @@ public partial class MainGameScene : Control
 
 	private void OnSoldierTransferred(object sender, EventArgs e)
 	{
+		MarkCampaignChanged();
 		_chapterScreen?.PopulateCompanyList();
 	}
 
@@ -727,6 +644,7 @@ public partial class MainGameScene : Control
 			_regionScreen.CloseButtonPressed += OnCloseScreen;
 			_regionScreen.SquadDoubleClicked += OnSquadDoubleClicked;
 			_regionScreen.AdjacentRegionChangeRequested += OnAdjacentRegionChangeRequested;
+			_regionScreen.CampaignChanged += OnCampaignChanged;
 			_mainUILayer.AddChild(_regionScreen);
 		}
 		PlaceMainContentOverlay(_regionScreen);
@@ -752,6 +670,7 @@ public partial class MainGameScene : Control
 			_squadScreen = (SquadScreenController)squadScene.Instantiate();
 			_mainUILayer.AddChild(_squadScreen);
 			_squadScreen.CloseButtonPressed += OnCloseScreen;
+			_squadScreen.CampaignChanged += OnCampaignChanged;
 		}
 		PlaceMainContentOverlay(_squadScreen);
 		_squadScreen.SetSquad(squad);
@@ -769,6 +688,7 @@ public partial class MainGameScene : Control
 			_squadScreen = (SquadScreenController)squadScene.Instantiate();
 			_mainUILayer.AddChild(_squadScreen);
 			_squadScreen.CloseButtonPressed += OnCloseScreen;
+			_squadScreen.CampaignChanged += OnCampaignChanged;
 		}
 		PlaceMainContentOverlay(_squadScreen);
 		_squadScreen.SetSquad(squad);

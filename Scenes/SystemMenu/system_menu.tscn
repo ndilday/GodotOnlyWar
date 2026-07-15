@@ -1,0 +1,152 @@
+[gd_scene load_steps=3 format=3]
+
+[ext_resource type="Theme" path="res://Scenes/OnlyWarTheme.tres" id="1_theme"]
+[ext_resource type="Script" path="res://Scenes/SystemMenu/SystemMenuController.cs" id="2_script"]
+
+[node name="SystemMenu" type="Control"]
+visible = false
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 0
+theme = ExtResource("1_theme")
+script = ExtResource("2_script")
+
+[node name="Backdrop" type="ColorRect" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 0
+color = Color(0.0039, 0.0059, 0.0078, 0.84)
+
+[node name="Panel" type="PanelContainer" parent="."]
+custom_minimum_size = Vector2(620, 760)
+layout_mode = 1
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -310.0
+offset_top = -380.0
+offset_right = 310.0
+offset_bottom = 380.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="Margin" type="MarginContainer" parent="Panel"]
+layout_mode = 2
+theme_override_constants/margin_left = 30
+theme_override_constants/margin_top = 24
+theme_override_constants/margin_right = 30
+theme_override_constants/margin_bottom = 24
+
+[node name="Content" type="VBoxContainer" parent="Panel/Margin"]
+layout_mode = 2
+theme_override_constants/separation = 12
+
+[node name="Title" type="Label" parent="Panel/Margin/Content"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.956863, 0.839216, 0.521569, 1)
+theme_override_font_sizes/font_size = 24
+text = "SYSTEM MENU"
+horizontal_alignment = 1
+
+[node name="Subtitle" type="Label" parent="Panel/Margin/Content"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.66, 0.6, 0.49, 1)
+text = "Campaign control and release support"
+horizontal_alignment = 1
+
+[node name="LastSaveLabel" type="Label" parent="Panel/Margin/Content"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.839216, 0.8, 0.709804, 1)
+text = "No recovery point created this session."
+horizontal_alignment = 1
+autowrap_mode = 2
+
+[node name="Actions" type="VBoxContainer" parent="Panel/Margin/Content"]
+layout_mode = 2
+theme_override_constants/separation = 7
+
+[node name="ResumeButton" type="Button" parent="Panel/Margin/Content/Actions"]
+custom_minimum_size = Vector2(0, 42)
+layout_mode = 2
+text = "Resume"
+
+[node name="SaveButton" type="Button" parent="Panel/Margin/Content/Actions"]
+custom_minimum_size = Vector2(0, 42)
+layout_mode = 2
+text = "Save Campaign…"
+
+[node name="LoadButton" type="Button" parent="Panel/Margin/Content/Actions"]
+custom_minimum_size = Vector2(0, 42)
+layout_mode = 2
+text = "Load Campaign…"
+
+[node name="TitleButton" type="Button" parent="Panel/Margin/Content/Actions"]
+custom_minimum_size = Vector2(0, 42)
+layout_mode = 2
+text = "Return to Title"
+
+[node name="QuitButton" type="Button" parent="Panel/Margin/Content/Actions"]
+custom_minimum_size = Vector2(0, 42)
+layout_mode = 2
+text = "Quit to Desktop"
+
+[node name="WarningHeader" type="Label" parent="Panel/Margin/Content"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.956863, 0.839216, 0.521569, 1)
+theme_override_font_sizes/font_size = 14
+text = "END TURN WARNINGS"
+
+[node name="WarningPanel" type="PanelContainer" parent="Panel/Margin/Content"]
+layout_mode = 2
+
+[node name="Margin" type="MarginContainer" parent="Panel/Margin/Content/WarningPanel"]
+layout_mode = 2
+theme_override_constants/margin_left = 12
+theme_override_constants/margin_top = 9
+theme_override_constants/margin_right = 12
+theme_override_constants/margin_bottom = 9
+
+[node name="Warnings" type="VBoxContainer" parent="Panel/Margin/Content/WarningPanel/Margin"]
+layout_mode = 2
+theme_override_constants/separation = 3
+
+[node name="IdleSquads" type="CheckBox" parent="Panel/Margin/Content/WarningPanel/Margin/Warnings"]
+layout_mode = 2
+button_pressed = true
+text = "Idle deployable squads"
+
+[node name="TaskForces" type="CheckBox" parent="Panel/Margin/Content/WarningPanel/Margin/Warnings"]
+layout_mode = 2
+button_pressed = true
+text = "Actionable fleets without orders"
+
+[node name="SpecialMissions" type="CheckBox" parent="Panel/Margin/Content/WarningPanel/Margin/Warnings"]
+layout_mode = 2
+button_pressed = true
+text = "Special missions at risk"
+
+[node name="Spacer" type="Control" parent="Panel/Margin/Content"]
+layout_mode = 2
+size_flags_vertical = 3
+
+[node name="ExportButton" type="Button" parent="Panel/Margin/Content"]
+custom_minimum_size = Vector2(0, 40)
+layout_mode = 2
+text = "Export Diagnostic Bundle…"
+
+[node name="EscapeHint" type="Label" parent="Panel/Margin/Content"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.66, 0.6, 0.49, 1)
+theme_override_font_sizes/font_size = 12
+text = "ESC — Resume"
+horizontal_alignment = 1

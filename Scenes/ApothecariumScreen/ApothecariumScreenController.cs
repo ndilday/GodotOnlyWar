@@ -16,6 +16,8 @@ public partial class ApothecariumScreenController : DialogController
     private ApothecariumSelectionKind _selectedKind = ApothecariumSelectionKind.Vault;
     private int? _selectedId;
 
+    public event EventHandler CampaignChanged;
+
     public override void _Ready()
     {
         base._Ready();
@@ -65,6 +67,7 @@ public partial class ApothecariumScreenController : DialogController
         }
         if (_procedureService.TryAssign(force, soldier, option))
         {
+            CampaignChanged?.Invoke(this, EventArgs.Empty);
             // The procedure now holds the location; refresh so it drops out of the offered
             // options, the Requisition spend is reflected, and the soldier reads as in care.
             Render();

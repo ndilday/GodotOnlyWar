@@ -1,0 +1,98 @@
+[gd_scene load_steps=3 format=3]
+
+[ext_resource type="Theme" path="res://Scenes/OnlyWarTheme.tres" id="1_theme"]
+[ext_resource type="Script" path="res://Scenes/SystemMenu/DestructiveNavigationDialog.cs" id="2_script"]
+
+[node name="DestructiveNavigationDialog" type="Control"]
+visible = false
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 0
+theme = ExtResource("1_theme")
+script = ExtResource("2_script")
+
+[node name="Backdrop" type="ColorRect" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 0
+color = Color(0.0039, 0.0059, 0.0078, 0.86)
+
+[node name="Panel" type="PanelContainer" parent="."]
+custom_minimum_size = Vector2(660, 340)
+layout_mode = 1
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -330.0
+offset_top = -170.0
+offset_right = 330.0
+offset_bottom = 170.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="Margin" type="MarginContainer" parent="Panel"]
+layout_mode = 2
+theme_override_constants/margin_left = 26
+theme_override_constants/margin_top = 22
+theme_override_constants/margin_right = 26
+theme_override_constants/margin_bottom = 22
+
+[node name="Content" type="VBoxContainer" parent="Panel/Margin"]
+layout_mode = 2
+theme_override_constants/separation = 14
+
+[node name="HeaderCloseButton" type="Button" parent="Panel/Margin/Content"]
+custom_minimum_size = Vector2(42, 36)
+layout_mode = 2
+size_flags_horizontal = 8
+tooltip_text = "Cancel (X)"
+text = "X"
+
+[node name="Title" type="Label" parent="Panel/Margin/Content"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.956863, 0.839216, 0.521569, 1)
+theme_override_font_sizes/font_size = 21
+text = "UNSAVED PROGRESS"
+
+[node name="Message" type="Label" parent="Panel/Margin/Content"]
+layout_mode = 2
+size_flags_vertical = 3
+theme_override_colors/font_color = Color(0.839216, 0.8, 0.709804, 1)
+text = "Save before continuing?"
+autowrap_mode = 2
+
+[node name="ErrorLabel" type="Label" parent="Panel/Margin/Content"]
+visible = false
+layout_mode = 2
+theme_override_colors/font_color = Color(0.92, 0.28, 0.2, 1)
+text = "Save failed."
+autowrap_mode = 2
+
+[node name="Buttons" type="HBoxContainer" parent="Panel/Margin/Content"]
+layout_mode = 2
+alignment = 2
+theme_override_constants/separation = 8
+
+[node name="CancelButton" type="Button" parent="Panel/Margin/Content/Buttons"]
+layout_mode = 2
+text = "Cancel"
+
+[node name="DiscardButton" type="Button" parent="Panel/Margin/Content/Buttons"]
+layout_mode = 2
+text = "Discard Changes"
+
+[node name="SaveButton" type="Button" parent="Panel/Margin/Content/Buttons"]
+custom_minimum_size = Vector2(190, 0)
+layout_mode = 2
+text = "Save and Continue"
+

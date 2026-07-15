@@ -1,0 +1,96 @@
+[gd_scene load_steps=4 format=3]
+
+[ext_resource type="PackedScene" path="res://Scenes/Dialog.tscn" id="1_dialog"]
+[ext_resource type="Script" path="res://Scenes/MainGameScreen/EndTurnPreflightDialog.cs" id="2_script"]
+[ext_resource type="Theme" path="res://Scenes/OnlyWarTheme.tres" id="3_theme"]
+
+[node name="EndTurnPreflightDialog" instance=ExtResource("1_dialog")]
+theme = ExtResource("3_theme")
+script = ExtResource("2_script")
+
+[node name="DialogView" parent="." index="0"]
+theme = ExtResource("3_theme")
+mouse_filter = 0
+
+[node name="CloseButton" parent="DialogView" index="0"]
+anchor_left = 0.86
+anchor_top = 0.09
+anchor_right = 0.86
+anchor_bottom = 0.09
+offset_left = -68.0
+offset_top = 28.0
+offset_right = -28.0
+offset_bottom = 68.0
+
+[node name="PreflightPanel" type="Panel" parent="DialogView" index="1"]
+layout_mode = 1
+anchor_left = 0.14
+anchor_top = 0.09
+anchor_right = 0.86
+anchor_bottom = 0.91
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 0
+
+[node name="ContentMargin" type="MarginContainer" parent="DialogView/PreflightPanel"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_constants/margin_left = 22
+theme_override_constants/margin_top = 18
+theme_override_constants/margin_right = 22
+theme_override_constants/margin_bottom = 18
+
+[node name="Layout" type="VBoxContainer" parent="DialogView/PreflightPanel/ContentMargin"]
+layout_mode = 2
+theme_override_constants/separation = 12
+
+[node name="TitleLabel" type="Label" parent="DialogView/PreflightPanel/ContentMargin/Layout"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 28
+text = "ADVANCE TURN?"
+horizontal_alignment = 1
+
+[node name="SummaryLabel" type="Label" parent="DialogView/PreflightPanel/ContentMargin/Layout"]
+layout_mode = 2
+text = "Command matters can still be resolved before the turn advances."
+horizontal_alignment = 1
+autowrap_mode = 2
+
+[node name="RiskLabel" type="Label" parent="DialogView/PreflightPanel/ContentMargin/Layout"]
+layout_mode = 2
+text = "You may return to command, or advance immediately."
+horizontal_alignment = 1
+autowrap_mode = 2
+
+[node name="AttentionScroll" type="ScrollContainer" parent="DialogView/PreflightPanel/ContentMargin/Layout"]
+layout_mode = 2
+size_flags_vertical = 3
+horizontal_scroll_mode = 0
+mouse_filter = 0
+mouse_force_pass_scroll_events = false
+
+[node name="AttentionList" type="VBoxContainer" parent="DialogView/PreflightPanel/ContentMargin/Layout/AttentionScroll"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/separation = 16
+
+[node name="ActionRow" type="HBoxContainer" parent="DialogView/PreflightPanel/ContentMargin/Layout"]
+layout_mode = 2
+alignment = 2
+theme_override_constants/separation = 10
+
+[node name="CancelButton" type="Button" parent="DialogView/PreflightPanel/ContentMargin/Layout/ActionRow"]
+custom_minimum_size = Vector2(150, 42)
+layout_mode = 2
+text = "CANCEL"
+
+[node name="ProceedButton" type="Button" parent="DialogView/PreflightPanel/ContentMargin/Layout/ActionRow"]
+custom_minimum_size = Vector2(210, 42)
+layout_mode = 2
+text = "END TURN ANYWAY"
+
+[editable path="DialogView"]

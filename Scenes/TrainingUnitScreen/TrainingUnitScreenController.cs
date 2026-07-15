@@ -14,6 +14,7 @@ public partial class TrainingUnitScreenController : Control
 
     public event EventHandler CloseButtonPressed;
     public event EventHandler<int> SoldierLinkClicked;
+    public event EventHandler CampaignChanged;
 
     public override void _Ready()
     {
@@ -66,8 +67,10 @@ public partial class TrainingUnitScreenController : Control
     private void OnTrainingFocusSelected(object sender, TrainingFocuses focus)
     {
         if (_selectedSquad == null) return;
+        if (_selectedSquad.TrainingFocus == focus) return;
 
         _selectedSquad.TrainingFocus = focus;
+        CampaignChanged?.Invoke(this, EventArgs.Empty);
         PopulateScoutSquadList();
     }
 

@@ -43,13 +43,25 @@
 5. [Release Scoping](#5-release-scoping)
    - 5.1 [Released (Alpha 0.6 and prior)](#51-released-alpha-06-and-prior)
    - 5.2 [Alpha 0.7 — Committed](#52-alpha-07--committed)
-   - 5.3 [Alpha 0.7 — To-Do](#53-alpha-07--to-do)
-   - 5.4 [Alpha 0.7 — Stretch](#54-alpha-07--stretch)
-   - 5.4.1 [Alpha 0.7.1 — Stabilization & Release Confidence](#541-alpha-071--stabilization--release-confidence)
+   - 5.3 [Alpha 0.7.1 — Stabilization & Release Confidence](#53-alpha-071--stabilization--release-confidence)
+   - 5.4 [Alpha 0.7.1 — Stretch Goals](#54-alpha-071--stretch-goals)
    - 5.5 [Alpha 0.8 — Command, Narrative & Continuity](#55-alpha-08--command-narrative--continuity)
    - 5.6 [Alpha 0.8+ — Cross-Faction Simulation (Relationships, Intel, Orks)](#56-alpha-08--cross-faction-simulation-relationships-intel-orks)
    - 5.7 [Post-0.7 Backlog](#57-post-07-backlog)
 6. [Open Design Questions](#6-open-design-questions)
+   - 6.1 [Aggression Axis Split — DEFERRED](#61-aggression-axis-split--deferred)
+   - 6.2 [Morale](#62-morale)
+   - 6.3 [New Recruit Intake — V1 COMMITTED FOR 0.8](#63-new-recruit-intake--v1-committed-for-08)
+   - 6.4 [Imperial Guard Interactions](#64-imperial-guard-interactions)
+   - 6.5 [Inquisition Role](#65-inquisition-role)
+   - 6.6 [Navis Nobilite Relations (Post-0.7 Backlog)](#66-navis-nobilite-relations-post-07-backlog)
+   - 6.7 [Pop-Based Population Model (raised by Revolt, §4.20)](#67-pop-based-population-model-raised-by-revolt-420)
+   - 6.8 [Ork Terminal Control State (raised by Orks, §4.22)](#68-ork-terminal-control-state-raised-by-orks-422)
+   - 6.9 [Armory / Wargear Inventory Commitment (raised by Supply, §4.23)](#69-armory--wargear-inventory-commitment-raised-by-supply-423)
+   - 6.10 [Pledge Interdiction in Transit (raised by Supply, §4.23)](#610-pledge-interdiction-in-transit-raised-by-supply-423)
+   - 6.11 [Tyranid Breeding Structures as Strikable Objectives (raised by Tyranids, §4.24)](#611-tyranid-breeding-structures-as-strikable-objectives-raised-by-tyranids-424)
+   - 6.12 [Region-Level Going-Public Generalization (raised by Tyranids, §4.24)](#612-region-level-going-public-generalization-raised-by-tyranids-424)
+   - 6.13 [Soldier Attribute Growth & Hero Representation (raised by Field Experience, §4.12)](#613-soldier-attribute-growth--hero-representation-raised-by-field-experience-412)
 7. [Glossary](#7-glossary)
 
 ---
@@ -668,16 +680,16 @@ Example ranges for reference:
 **Description.** The player can save their campaign at any time and resume it later.
 
 **Acceptance Criteria:**
-- The player can save the game from the top menu bar.
-- The player can load a saved game from the main menu.
+- The player can save the game from the global System menu.
+- The player can choose and load a saved game from either the title screen or the in-campaign System menu.
 - All game state is preserved across save/load: sector state, all faction populations and garrisons, all marines (attributes, skills, wounds, history, kill records), all squad assignments, fleet positions, loaded squads, active orders, active governor requests, game date, and chapter battle history.
 - Loading a save produces a game state identical to the state at the time of saving.
 
-**Acceptance Criteria (Planned — 0.7.1 Release Confidence):**
+**Acceptance Criteria (Implemented — 0.7.1 Release Confidence):**
 - The save UI exposes named manual slots and a visible chooser showing campaign/chapter name, campaign date, last-write time, and compatibility state. “Load” must not silently mean “load whichever compatible file is newest.”
 - The game maintains several rolling autosaves, including a protected pre-turn autosave immediately before turn resolution mutates campaign state. Autosaves are distinct from and never overwrite named manual slots.
-- Save writes remain atomic. A failed save or migration leaves the prior valid file intact and presents an actionable error rather than creating an empty or half-written campaign.
-- Save formats use ordered schema migrations rather than exact-version rejection alone. Before migration, the original file is backed up automatically; each migration is independently testable and advances one declared version step.
+- Save writes remain atomic. A failed save leaves the prior valid file intact and presents an actionable error rather than creating an empty or half-written campaign.
+- Alpha 0.7.1 keeps exact-version compatibility and does not change the save format. Ordered schema migration support is deferred until the first intentional save-format version change.
 - The load chooser displays incompatible or failed saves with the reason they cannot be opened. It does not hide them or replace the error with a generic “no save found” state.
 
 ---
@@ -1031,12 +1043,12 @@ This is a behavioral specification. It depends on §4.21 (behavior flags, growth
 
 **Description.** The top-level System Options action must provide the campaign-control and presentation settings expected of a deployable desktop game. These controls are release infrastructure, not simulation features.
 
-**Acceptance Criteria (Planned — 0.7.1):**
-- The System Options button opens a working modal with Resume, Save, Load, Return to Title, and Quit. Destructive navigation prompts when unsaved progress would be lost.
-- Display settings include fullscreen/windowed mode and UI/text scaling. The supported scale range is exercised on the main command, Chapter, planet, region, squad, Apothecarium, and Battle Review screens without clipped mandatory controls.
-- End Turn uses a conditional preflight only when there is meaningful unresolved attention: idle deployable squads, actionable fleets without orders, or soon-expiring opportunities. The player can proceed immediately and may configure warning preferences; routine turns do not require a redundant confirmation.
-- The System menu can export a diagnostic bundle containing the game/build version and recent log, with the current save included only through an explicit player choice.
-- Headless scene-wiring smoke tests instantiate the main gameplay scenes and verify that required top-level actions have subscribers and can open their intended surfaces. A visible but inert button is a release-blocking failure.
+**Acceptance Criteria (0.7.1):**
+- The System Options button opens a working modal with Resume, Save, Load, Return to Title, and Quit. Destructive navigation prompts when unsaved progress would be lost. Escape opens/closes the System menu globally during campaign play; X closes the top gameplay dialog while text fields retain normal typing behavior.
+- Fullscreen/windowed mode and UI/text scaling are a separate follow-up body of work and are not part of this coding session.
+- End Turn uses a conditional preflight only when there is meaningful unresolved attention: idle deployable squads, actionable fleets without orders, or unassigned special missions at risk. Special missions are described accurately as having an independent 25% disappearance chance per turn while visible (and being cleared at zero intelligence), not as having a fixed expiry. The player can proceed immediately and may configure global warning preferences; routine turns do not require a redundant confirmation.
+- The System menu can export a diagnostic bundle containing the game/build version, global settings, and recent logs, with a fresh current-campaign snapshot included only through an explicit player choice.
+- Headless scene-wiring smoke tests instantiate the release-control surfaces and verify that required top-level actions have subscribers and can open their intended surfaces. A visible but inert button is a release-blocking failure.
 
 ---
 
@@ -1132,13 +1144,17 @@ The following must ship in 0.7. Status reflects the current codebase (✅ done �
 
 - ✅ **Template Weapons — Flamers:** Convert flamer-type weapons from stat-line guns into true cone-template weapons: auto-hit against everything in a cone (both sides), evasion/size modifiers bypassed, fuel-per-burst ammo, firing-line target selection, template-aware Battle Value. Full behavioral spec in §4.14 (*Template Weapons — Flamers*). Pulled forward from the Battle Logic Phase 4 stretch bucket (§5.4) so the flamer is not rebuilt twice; on-fire/morale and grenades stay in Phase 4. *(Implemented — `RangedWeaponTemplate` and the rules DB now carry `TemplateType`, `AreaRadius`, and `FuelPerBurst`; both Flamer rows project a deterministic full-range cone widening from a 0.5-cell nozzle to a 3-cell half-width, auto-hit every friendly or enemy footprint caught while excluding the shooter, resolve normal hit-location/armor/wound math per victim without stray-shot rules, and spend 10 of their 50 fuel per burst. `BattleSquadPlanner` bypasses aim and ordinary single-target scoring for templates, evaluates complete firing lines by expected enemy BV removed minus friendly BV lost, prefers dense positive-value lines, and closes instead of firing unsafe ones, including the engaged point-blank path. `BattleValueCalculator` and the offline harness value template auto-hits with density-scaled victims and a fuel/reload duty cycle; the flamer-option Tactical and Assault Marine rows remain BV 9 after regeneration. Area wounds are queued by the live resolver, reported as fire-phase volleys in replay summaries, and friendly-fire casualties no longer receive enemy-kill credit. Covered by focused cone, action, planner, database, BV, and aftermath tests.)*
 
-### 5.3 Alpha 0.7 — To-Do
+### 5.3 Alpha 0.7.1 — Stabilization & Release Confidence
 
-Targeted for 0.7 but not part of the committed 0.7 set (§5.2). All items originally tracked here have since landed and moved up to §5.2 (most recently Template Weapons — Flamers).
+Alpha 0.7.1 is deliberately limited to protecting and operating the released campaign. It does not add a new faction or major simulation system.
 
-### 5.4 Alpha 0.7 — Stretch
+- ✅ **System menu and release-support baseline** — the specialized Save button has been removed in favor of a global System menu with Resume/Save/Load/Return to Title/Quit, dirty-state prompts, global Escape toggle, X-to-close gameplay dialogs, global End Turn warning preferences, and diagnostic export. Title Load is now an explicit chooser; title Options/Quit use the same release-support surfaces (§4.27). *(Implemented.)*
+- ⬜ **Display mode and UI/text scaling** — deliberately separated from the System menu work and deferred to its own implementation/visual-QA pass across the supported screens (§4.27).
+- ✅ **Save confidence** — unlimited named manual slots; visible manual/autosave chooser; initial, protected pre-turn, and three rolling post-turn recovery points; atomic save/metadata replacement; explicit corrupt/incompatible states; and recoverability-aware destructive navigation (§4.18). The save format remains version 1 and speculative migration support is deferred until the first intentional format change. *(Implemented.)*
+- ✅ **Conditional End Turn preflight** — warns only for combat-capable idle squads that can deploy now, actionable in-orbit task forces without destinations, and unassigned special missions at their real independent 25% per-turn disappearance risk; allows immediate override and has global per-category preferences. Routine turns advance without confirmation; governor-request expiry is outside this body of work (§4.27). *(Implemented.)*
+- ✅ **Scene-wiring release tests** — the Godot 4.7 headless smoke instantiates the campaign/title release controls and exercises the real System Options, Save, Load, Resume, Diagnostics, End Turn, title Load, and title Options buttons plus Escape/X input behavior. Visible-but-inert controls or broken scene paths fail the smoke. *(Implemented — `Scenes/Debug/release_scene_wiring_smoke.tscn`.)*
 
-To be drawn from if capacity allows:
+### 5.4 Alpha 0.7.1 — Stretch Goals
 
 - **Living Universe Phase 3B — Revolt:** Revolutionary population mechanic; evidence-based requests. Full behavioral spec in §4.20 — per-region Contentment driving a sector-wide Insurrectionist faction (reusing the converting-faction/Cult machinery), governor Severity-driven response, garrison defection, intra- and inter-planet spread, evidence-gated requests, and "for a revolt" limited to inaction-with-consequences in 0.7. Built on the faction-presence model as a forward-compatible subset of the Pop-model question (§6.7); Chaos radicalization specified but gated on Chaos content.
 - **Battle Logic Phase 4:** Grenades (reusing the §4.14 template-weapon machinery with a thrown delivery), morale, on-fire damage-over-time/panic (§4.14 gated follow-on), sprint/fire tradeoff, the full covered-withdrawal/rout/pursuit mechanic (including immediate disengagement for burrowing- and flight-capable squads), and post-battle loadout recalculation. *(Flamers/cone templates were pulled forward to §5.3.)*
@@ -1151,15 +1167,6 @@ To be drawn from if capacity allows:
 - **UX Improvement Phase 1:** Drag-and-drop where applicable; squad row redesign; zoom-adaptive planet name labels.
 - **Mission System Expansion:** Talent recruitment missions; IG support missions; Chaos cult investigation; STC hunt; prisoner recovery.
 - **Supply & Requisition Phase 2 — pledges & delivery:** Layer the pledge system onto the Phase 1 currency (§4.23). Fulfilling a request generates a tracked **pledge** — a *standing tithe* (recurring) or *one-off* — that delivers **Requisition over subsequent turns** along a **supply line bound to its source world**: a world that revolts (§4.20) or falls suspends or defaults its pledges, wiring supply into the Living Galaxy. Broaden sinks beyond the Apothecary to other 0.7 systems (e.g. fortification materiel §4.13, recruitment costs). Pledges deliver Requisition only in this phase; **typed materiel** (wargear / vehicles / ships driven by strategic classification §4.1), the **Armory wargear inventory** (§6.9), **pledge interdiction** (§6.10), and **Inquisition negative-requisition** (§6.5) remain post-0.7, each gated on a system not present in 0.7.
-
-### 5.4.1 Alpha 0.7.1 — Stabilization & Release Confidence
-
-Alpha 0.7.1 is deliberately limited to protecting and operating the released campaign. It does not add a new faction or major simulation system.
-
-- ⬜ **System menu and accessibility baseline** — wire the existing System Options action and implement the Resume/Save/Load/Title/Quit, display mode, UI/text scaling, warning-preference, and diagnostic-export requirements in §4.27.
-- ⬜ **Save confidence** — named manual slots, a visible save chooser, rolling autosaves, a protected pre-turn autosave, explicit compatibility/error states, and atomic ordered schema migrations with automatic backup (§4.18).
-- ⬜ **Conditional End Turn preflight** — warn only for meaningful unresolved attention and allow immediate override; do not add an unconditional “Are you sure?” to every turn (§4.27).
-- ⬜ **Scene-wiring release tests** — headlessly instantiate the principal gameplay scenes and fail when a required top-level action is visible but inert. This specifically covers System Options and the save/load/end-turn surfaces.
 
 ### 5.5 Alpha 0.8 — Command, Narrative & Continuity
 

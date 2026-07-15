@@ -110,8 +110,13 @@ public sealed class DeploymentStorageTests : IDisposable
         connection.Open();
         using SqliteCommand command = connection.CreateCommand();
         command.CommandText = @"
-            CREATE TABLE GlobalData (SaveVersion INTEGER NOT NULL);
-            INSERT INTO GlobalData (SaveVersion) VALUES ($saveVersion);";
+            CREATE TABLE GlobalData (
+                Millenium INTEGER NOT NULL,
+                Year INTEGER NOT NULL,
+                Week INTEGER NOT NULL,
+                SaveVersion INTEGER NOT NULL);
+            INSERT INTO GlobalData (Millenium, Year, Week, SaveVersion)
+            VALUES (1, 1, 1, $saveVersion);";
         command.Parameters.AddWithValue("$saveVersion", saveVersion);
         command.ExecuteNonQuery();
         return path;

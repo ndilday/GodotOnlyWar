@@ -52,6 +52,7 @@ public partial class PlanetTacticalScreenController : DialogController
 
     public event EventHandler<Region> RegionDoubleClicked;
     public event EventHandler<Squad> OrbitalSquadDoubleClicked;
+    public event EventHandler CampaignChanged;
 
     public override void _Ready()
     {
@@ -183,6 +184,7 @@ public partial class PlanetTacticalScreenController : DialogController
 
     private void OnOrdersConfirmed(object sender, EventArgs e)
     {
+        CampaignChanged?.Invoke(this, EventArgs.Empty);
         RefreshWorkspace();
     }
 
@@ -560,6 +562,7 @@ public partial class PlanetTacticalScreenController : DialogController
     {
         if (!CanLand()) return;
         RegionFaction regionFaction = GetOrCreatePlayerRegionFaction(_selectedRegion);
+        bool changed = false;
 
         foreach (Squad squad in GetSelectedLoadedSquads().ToList())
         {
@@ -571,8 +574,10 @@ public partial class PlanetTacticalScreenController : DialogController
             }
             squad.CurrentRegion = _selectedRegion;
             squad.BoardedLocation = null;
+            changed = true;
         }
 
+        if (changed) CampaignChanged?.Invoke(this, EventArgs.Empty);
         ClearForceSelections();
         RefreshWorkspace();
     }
@@ -582,6 +587,7 @@ public partial class PlanetTacticalScreenController : DialogController
         if (!CanLoad()) return;
         RegionFaction regionFaction = GetPlayerRegionFaction(_selectedRegion);
         if (regionFaction == null) return;
+        bool changed = false;
 
         foreach (Squad squad in GetSelectedLandedSquads().ToList())
         {
@@ -589,8 +595,10 @@ public partial class PlanetTacticalScreenController : DialogController
             _selectedShip.LoadSquad(squad);
             squad.CurrentRegion = null;
             squad.BoardedLocation = _selectedShip;
+            changed = true;
         }
 
+        if (changed) CampaignChanged?.Invoke(this, EventArgs.Empty);
         CleanupPlayerRegionFactionAfterLoad(_selectedRegion, regionFaction);
         ClearForceSelections();
         RefreshWorkspace();

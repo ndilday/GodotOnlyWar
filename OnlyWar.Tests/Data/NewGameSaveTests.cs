@@ -11,7 +11,7 @@ using Xunit;
 namespace OnlyWar.Tests.Data;
 
 // Regression guard for the new-game save FK failure: a freshly generated chapter must be
-// savable through the exact path MainGameScene.OnSaveButtonPressed uses, without any test-only
+// savable through the same aggregate mapping used by CurrentCampaignSaveWriter, without test-only
 // registration of the army root on the player faction. Generation itself must register the
 // OrderOfBattle root on Faction.Units, otherwise the save writes no Soldier rows and the first
 // PlayerSoldier insert violates PlayerSoldier.SoldierId -> Soldier.Id.
@@ -43,7 +43,7 @@ public class NewGameSaveTests
         Sector sector = SectorBuilder.GenerateSector(1, _data, _date, "New Game Save Chapter");
         GameDataSingleton.Instance.LoadGameDataFromBlob(_data, _date, sector);
 
-        // Exactly what MainGameScene.OnSaveButtonPressed does: no manual Units.Add.
+        // Match CurrentCampaignSaveWriter's unit selection: no manual Units.Add.
         List<Unit> units = _data.Factions.SelectMany(f => f.Units).ToList();
 
         string dbPath = GameStateRoundTripFixture.CreateTempDbPath("onlywar_newgame");

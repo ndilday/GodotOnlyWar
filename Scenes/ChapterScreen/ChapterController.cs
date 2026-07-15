@@ -26,6 +26,7 @@ public partial class ChapterController : Control
     public ChapterView ChapterView { get; set; }
 
     public event EventHandler CloseButtonPressed;
+    public event EventHandler CampaignChanged;
 
     public override void _Ready()
     {
@@ -223,6 +224,7 @@ public partial class ChapterController : Control
 
         if (didTransfer)
         {
+            CampaignChanged?.Invoke(this, EventArgs.Empty);
             // Moving the last member out empties (and disbands) the origin squad — e.g. the
             // final scout leaving a scout squad. If the path we're browsing referenced that
             // squad, it's now stale and the next render would crash, so follow the soldier to

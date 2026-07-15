@@ -20,6 +20,8 @@ public partial class SquadScreenController : DialogController
     private List<WeaponSet> _savedLoadout;
     private int _savedLoadoutSquadTemplateId;
 
+    public event EventHandler CampaignChanged;
+
     public override void _Ready()
     {
         base._Ready();
@@ -41,6 +43,7 @@ public partial class SquadScreenController : DialogController
     {
         // **You need to implement the logic to paste the loadout from the clipboard.**
         _squad.Loadout = _savedLoadout.ToList();
+        CampaignChanged?.Invoke(this, EventArgs.Empty);
         PopulateSquadLoadout();
 
     }
@@ -50,6 +53,7 @@ public partial class SquadScreenController : DialogController
         WeaponSetSelectionView view = (WeaponSetSelectionView)sender;
         string optionName = view.OptionName;
         var matchingLoadouts = _squad.Loadout.Where(ws => ws.Name == args.Item1);
+        bool changed = matchingLoadouts.Count() != args.Item2;
         if(matchingLoadouts.Count() > args.Item2)
         {
             // remove the difference between the current count and the new count
@@ -71,6 +75,7 @@ public partial class SquadScreenController : DialogController
         int defaultCount = _ableBodied - _squad.Loadout.Where(ws => ws != _squad.SquadTemplate.DefaultWeapons).Count();
         _view.SetDefaultWeaponSetCount(defaultCount);
         _view.DisableCountIncreases(defaultCount == 0);
+        if (changed) CampaignChanged?.Invoke(this, EventArgs.Empty);
     }
 
     public void SetSquad(Squad squad)

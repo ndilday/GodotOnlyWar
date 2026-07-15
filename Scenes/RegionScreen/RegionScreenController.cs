@@ -32,6 +32,7 @@ public partial class RegionScreenController : DialogController
 
     public event EventHandler<Squad> SquadDoubleClicked;
     public event EventHandler<Region> AdjacentRegionChangeRequested;
+    public event EventHandler CampaignChanged;
 
     public override void _Ready()
     {
@@ -184,11 +185,13 @@ public partial class RegionScreenController : DialogController
 
         _selectedSquads.Clear();
         _view.ClearSelection();
+        CampaignChanged?.Invoke(this, EventArgs.Empty);
         RefreshWorkspace();
     }
 
     private void OnOrdersConfirmed(object sender, EventArgs e)
     {
+        CampaignChanged?.Invoke(this, EventArgs.Empty);
         RefreshWorkspace();
     }
 
@@ -462,6 +465,7 @@ public partial class RegionScreenController : DialogController
             }
         }
 
+        CampaignChanged?.Invoke(this, EventArgs.Empty);
         RefreshWorkspace();
     }
 
