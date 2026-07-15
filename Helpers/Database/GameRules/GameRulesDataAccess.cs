@@ -29,6 +29,7 @@ namespace OnlyWar.Helpers.Database.GameRules
         public IReadOnlyDictionary<int, TrainingProfile> TrainingProfiles { get; set; }
         public IReadOnlyList<Models.Soldiers.Ratings.RatingDefinition> RatingDefinitions { get; set; }
         public IReadOnlyList<Models.Soldiers.Ratings.RatingAwardTier> RatingAwardTiers { get; set; }
+        public Models.Supply.SupplyEconomyRules SupplyEconomyRules { get; set; }
 
     }
 
@@ -40,6 +41,7 @@ namespace OnlyWar.Helpers.Database.GameRules
         private readonly PlanetTemplateDataAccess _planetDataAccess;
         private readonly SquadTemplateDataAccess _squadDataAccess;
         private readonly RatingDataAccess _ratingDataAccess;
+        private readonly SupplyRulesDataAccess _supplyRulesDataAccess;
 
         private static GameRulesDataAccess _instance;
 
@@ -51,6 +53,7 @@ namespace OnlyWar.Helpers.Database.GameRules
             _planetDataAccess = new PlanetTemplateDataAccess();
             _squadDataAccess = new SquadTemplateDataAccess();
             _ratingDataAccess = new RatingDataAccess();
+            _supplyRulesDataAccess = new SupplyRulesDataAccess();
         }
 
         public static GameRulesDataAccess Instance
@@ -101,6 +104,7 @@ namespace OnlyWar.Helpers.Database.GameRules
                                                fleetDataBlob.FleetTemplates);
             var ratingDefinitions = _ratingDataAccess.GetRatingDefinitions(dbCon);
             var ratingAwardTiers = _ratingDataAccess.GetRatingAwardTiers(dbCon);
+            var supplyEconomyRules = _supplyRulesDataAccess.GetData(dbCon);
             return new GameRulesBlob
             {
                 Factions = factions,
@@ -113,7 +117,8 @@ namespace OnlyWar.Helpers.Database.GameRules
                 WeaponSets = squadDataBlob.WeaponSetMap,
                 TrainingProfiles = squadDataBlob.TrainingProfilesById,
                 RatingDefinitions = ratingDefinitions,
-                RatingAwardTiers = ratingAwardTiers
+                RatingAwardTiers = ratingAwardTiers,
+                SupplyEconomyRules = supplyEconomyRules
             };
         }
 

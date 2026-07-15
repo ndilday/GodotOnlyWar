@@ -21,6 +21,22 @@ namespace OnlyWar.Models
             Week = (weeks % 52) + 1;
             Millenium = (years / 1000) + 1;
             Year = (years % 1000) + 1;
+            // The campaign calendar represents the final year of a millennium as
+            // year 000 of the following millennium (e.g. 000.M42), matching IncrementWeek.
+            if (Year == 1000)
+            {
+                Millenium++;
+                Year = 0;
+            }
+        }
+
+        // Save tables store GetTotalWeeks(), whose first valid week is 1. The legacy
+        // single-int constructor accepts a zero-based week offset, so persistence must
+        // cross that boundary explicitly to avoid shifting every restored date by one week.
+        public static Date FromTotalWeeks(int totalWeeks)
+        {
+            if (totalWeeks < 1) throw new ArgumentOutOfRangeException(nameof(totalWeeks));
+            return new Date(totalWeeks - 1);
         }
 
         public void IncrementWeek()

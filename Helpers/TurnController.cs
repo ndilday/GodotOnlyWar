@@ -20,6 +20,7 @@ namespace OnlyWar.Helpers
         private readonly PlanetTurnProcessor _planetTurnProcessor;
         private readonly PlanetForwardSimulator _planetForwardSimulator;
         private readonly ScenarioTurnProcessor _scenarioTurnProcessor;
+        private readonly ChapterSupplyTurnProcessor _chapterSupplyTurnProcessor;
         private readonly GameSession _session;
         private readonly TurnIntelLedger _intelLedger;
         private readonly TurnResolutionResult _lastResult;
@@ -63,6 +64,7 @@ namespace OnlyWar.Helpers
                 _intelLedger,
                 _lastResult);
             _scenarioTurnProcessor = new ScenarioTurnProcessor(_session);
+            _chapterSupplyTurnProcessor = new ChapterSupplyTurnProcessor(_session);
         }
 
         public TurnResolutionResult ProcessTurn(Sector sector)
@@ -123,6 +125,7 @@ namespace OnlyWar.Helpers
             _planetTurnProcessor.UpdatePlanets(sector.Planets.Values);
             MissionAftermathProcessor.PruneInvalidSpecialMissions(sector.Planets.Values);
             _planetTurnProcessor.UpdateIntelligence(sector.Planets.Values);
+            _chapterSupplyTurnProcessor.ProcessDeliveries();
 
             // --- 4. Scenario Resolution Phase ---
             // Resolve the opening objective after the planet sim has settled this turn, so the

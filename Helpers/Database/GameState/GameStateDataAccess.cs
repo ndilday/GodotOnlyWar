@@ -14,6 +14,7 @@ using System.IO;
 using System.Linq;
 using OnlyWar.Models.Orders;
 using OnlyWar.Helpers.Storage;
+using OnlyWar.Models.Supply;
 
 namespace OnlyWar.Helpers.Database.GameState
 {
@@ -22,6 +23,7 @@ namespace OnlyWar.Helpers.Database.GameState
         public List<Character> Characters { get; set; }
         public List<Planet> Planets { get; set; }
         public List<IRequest> Requests { get; set; }
+        public List<Pledge> Pledges { get; set; }
         public List<TaskForce> Fleets { get; set; }
         public List<Unit> Units { get; set; }
         public Date CurrentDate { get; set; }
@@ -52,6 +54,7 @@ namespace OnlyWar.Helpers.Database.GameState
         private readonly GlobalDataAccess _globalDataAccess;
         private readonly PlayerFactionEventDataAccess _playerFactionEventDataAccess;
         private readonly MedicalProcedureDataAccess _medicalProcedureDataAccess;
+        private readonly PledgeDataAccess _pledgeDataAccess;
         private static GameStateDataAccess _instance;
         public static GameStateDataAccess Instance
         {
@@ -76,6 +79,7 @@ namespace OnlyWar.Helpers.Database.GameState
             _globalDataAccess = new GlobalDataAccess();
             _playerFactionEventDataAccess = new PlayerFactionEventDataAccess();
             _medicalProcedureDataAccess = new MedicalProcedureDataAccess();
+            _pledgeDataAccess = new PledgeDataAccess();
         }
 
         public GameStateDataBlob GetData(string filePath,
@@ -107,6 +111,7 @@ namespace OnlyWar.Helpers.Database.GameState
             PlanetDataAccess.PopulateRegionFactions(dbCon, factionMap, regions);
             var missionMap = _planetDataAccess.PopulateRegionMissions(dbCon, regions);
             var requests = _requestDataAccess.GetRequests(dbCon, characterMap, factionMap, planets);
+            var pledges = _pledgeDataAccess.GetPledges(dbCon);
             var ships = _fleetDataAccess.GetShipsByFleetId(dbCon, shipTemplateMap);
             var shipMap = ships.Values.SelectMany(s => s).ToDictionary(ship => ship.Id);
             var fleets = _fleetDataAccess.GetFleetsByFactionId(dbCon, ships, factionMap, planets);
@@ -132,6 +137,7 @@ namespace OnlyWar.Helpers.Database.GameState
                 Characters = characterMap.Values.ToList(),
                 Planets = planets,
                 Requests = requests,
+                Pledges = pledges,
                 Fleets = fleets,
                 Units = units,
                 CurrentDate = global?.Date,
@@ -154,6 +160,7 @@ namespace OnlyWar.Helpers.Database.GameState
                              IEnumerable<MedicalProcedure> medicalProcedures,
                              IEnumerable<Character> characters,
                              IEnumerable<IRequest> requests,
+                             IEnumerable<Pledge> pledges,
                              IEnumerable<Planet> planets,
                              IEnumerable<TaskForce> fleets,
                              IEnumerable<Unit> units,
@@ -184,7 +191,7 @@ namespace OnlyWar.Helpers.Database.GameState
                 GenerateTables(tempPath, schemaFilePath ?? DefaultSchemaFilePath());
                 WriteSaveData(tempPath, currentDate, requisition, geneseedStockpile,
                               geneseedPurity, scenario, medicalProcedures, characters, requests,
-                              planets, fleets, playerSoldiers, fallenBrothers, history, squads,
+                              pledges, planets, fleets, playerSoldiers, fallenBrothers, history, squads,
                               ships, units);
                 // Release the pooled SQLite handles so the temp file can be moved over the
                 // target on Windows (an open handle would block the move).
@@ -218,6 +225,7 @@ namespace OnlyWar.Helpers.Database.GameState
                                    IEnumerable<MedicalProcedure> medicalProcedures,
                                    IEnumerable<Character> characters,
                                    IEnumerable<IRequest> requests,
+                                   IEnumerable<Pledge> pledges,
                                    IEnumerable<Planet> planets,
                                    IEnumerable<TaskForce> fleets,
                                    IEnumerable<PlayerSoldier> playerSoldiers,
@@ -247,6 +255,11 @@ namespace OnlyWar.Helpers.Database.GameState
                     foreach(IRequest request in requests)
                     {
                         _requestDataAccess.SaveRequest(transaction, request);
+                    }
+
+                    foreach (Pledge pledge in pledges ?? [])
+                    {
+                        _pledgeDataAccess.SavePledge(transaction, pledge);
                     }
 
                     foreach(TaskForce fleet in fleets)

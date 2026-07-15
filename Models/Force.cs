@@ -4,6 +4,7 @@ using OnlyWar.Models.Fleets;
 using OnlyWar.Models.Soldiers;
 using OnlyWar.Models.Squads;
 using OnlyWar.Models.Units;
+using OnlyWar.Models.Supply;
 
 namespace OnlyWar.Models
 {
@@ -95,6 +96,7 @@ namespace OnlyWar.Models
         public Character Leader { get; }
         public Fleet Fleet { get; }
         public List<IRequest> Requests { get; }
+        public List<Pledge> Pledges { get; }
         public SectorForce(Faction faction, Character leader, Army army, Fleet fleet)
         {
             Faction = faction;
@@ -103,6 +105,7 @@ namespace OnlyWar.Models
             Fleet = fleet;
             _battleHistory = [];
             Requests = [];
+            Pledges = [];
         }
 
         public void AddToBattleHistory(Date date, string title, List<string> events)

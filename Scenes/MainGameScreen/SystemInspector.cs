@@ -86,7 +86,8 @@ public partial class SystemInspector : Control
             .OrderByDescending(fleet => fleet.Faction == GameDataSingleton.Instance.Sector.PlayerForce.Faction)
             .ThenBy(fleet => fleet.Id));
         int openRequests = GameDataSingleton.Instance.Sector.PlayerForce.Requests
-            .Count(request => request.TargetPlanet == planet && request.DateRequestFulfilled == null);
+            .Count(request => request.TargetPlanet == planet
+                && request.Status is RequestStatus.Open or RequestStatus.InProgress);
 
         _nameLabel.Text = BuildSystemNameLabel(planet);
         _controlLabel.Text = controllingFaction != null

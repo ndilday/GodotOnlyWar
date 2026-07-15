@@ -32,6 +32,7 @@ namespace OnlyWar.Helpers.Storage
                 force.Army.MedicalProcedures,
                 game.Sector.Characters,
                 force.Requests,
+                force.Pledges,
                 game.Sector.Planets.Values,
                 game.Sector.Fleets.Values,
                 units,

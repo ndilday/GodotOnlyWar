@@ -1,5 +1,6 @@
 ﻿using OnlyWar.Models;
 using OnlyWar.Models.Planets;
+using OnlyWar.Models.Supply;
 
 namespace OnlyWar.Builders
 {
@@ -30,6 +31,26 @@ namespace OnlyWar.Builders
         {
             return new PresenceRequest(_nextId++, planet, requester, threatFaction,
                                        dateRequestMade, fulfilledDate);
+        }
+
+        public IRequest GenerateNewRequest(
+            Planet planet,
+            Character requester,
+            Faction threatFaction,
+            Date dateRequestMade,
+            Date deadline,
+            ForceCommitmentPackage commitment,
+            int offeredRequisition,
+            PledgeScheduleKind offeredScheduleKind,
+            int offeredCadenceWeeks,
+            int offeredDeliveryDelayWeeks,
+            RequestSeverity severity,
+            RequestHazard hazard)
+        {
+            return new PresenceRequest(
+                _nextId++, planet, requester, threatFaction, dateRequestMade, deadline,
+                commitment, offeredRequisition, offeredScheduleKind, offeredCadenceWeeks,
+                offeredDeliveryDelayWeeks, severity, hazard);
         }
     }
 }

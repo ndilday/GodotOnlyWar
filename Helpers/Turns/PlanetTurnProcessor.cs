@@ -27,8 +27,6 @@ namespace OnlyWar.Helpers.Turns
         private const float ActiveAssaultGarrisonDraftRate = 0.15f;
         private const float OverrunRemnantGarrisonArmingRate = 1.0f;
         private const double OccupiedDefenseDecayPerTurn = 0.25;
-        private const int RequisitionPerRequestFulfilled = 100;
-
         private const double BiomassReferenceAvailability = 1_000_000.0;
         private const double BiomassAppetitePerTroop = 0.5;
         private const double ConsumptionDiminishingExponent = 0.5;
@@ -46,6 +44,7 @@ namespace OnlyWar.Helpers.Turns
         private readonly GameSession _session;
         private readonly List<Mission> _specialMissions;
         private readonly TurnIntelLedger _intelLedger;
+        private readonly GovernorTurnProcessor _governorTurnProcessor;
 
         internal PlanetTurnProcessor(
             GameSession session,
@@ -55,6 +54,7 @@ namespace OnlyWar.Helpers.Turns
             _session = session ?? throw new ArgumentNullException(nameof(session));
             _specialMissions = specialMissions ?? throw new ArgumentNullException(nameof(specialMissions));
             _intelLedger = intelLedger ?? new TurnIntelLedger();
+            _governorTurnProcessor = new GovernorTurnProcessor(_session);
         }
 
         internal void ClearTurnIntelGains()
@@ -133,7 +133,7 @@ namespace OnlyWar.Helpers.Turns
                 }
                 else if (planetFaction.Leader != null)
                 {
-                    EndOfTurnLeaderUpdate(planet, planetFaction);
+                    _governorTurnProcessor.ProcessGovernor(planet, planetFaction);
                 }
             }
 
@@ -773,112 +773,6 @@ namespace OnlyWar.Helpers.Turns
                 }
             }
             return strength;
-        }
-
-        private void EndOfTurnLeaderUpdate(Planet planet, PlanetFaction planetFaction)
-        {
-            if (AgeAndCheckForDeath(planet, planetFaction))
-            {
-                return;
-            }
-
-            if (planetFaction.Leader.ActiveRequest != null)
-            {
-                if (planetFaction.Leader.ActiveRequest.IsRequestCompleted())
-                {
-                    _session.Sector.PlayerForce.Requests.Remove(planetFaction.Leader.ActiveRequest);
-                    planetFaction.Leader.ActiveRequest = null;
-                    planetFaction.Leader.OpinionOfPlayerForce +=
-                        planetFaction.Leader.Appreciation * (1 - planetFaction.Leader.OpinionOfPlayerForce);
-                    _session.Sector.PlayerForce.Army.Requisition += RequisitionPerRequestFulfilled;
-                }
-                else
-                {
-                    planetFaction.Leader.OpinionOfPlayerForce -= 0.005f / planetFaction.Leader.Patience;
-                }
-            }
-            else if (planetFaction.Leader.OpinionOfPlayerForce > 0)
-            {
-                GenerateRequests(planet, planetFaction);
-            }
-        }
-
-        private bool AgeAndCheckForDeath(Planet planet, PlanetFaction planetFaction)
-        {
-            Character leader = planetFaction.Leader;
-            if (_session.CurrentDate.Week == 1)
-            {
-                leader.Age++;
-            }
-
-            float ageFactor = Math.Max(0, leader.Age - 50) / 50f;
-            float importanceFactor = 1f - (Math.Min(planet.Importance, 6000) / 12000f);
-            float weeklyDeathChance = ageFactor * 0.002f * importanceFactor;
-            if (_session.Random.GetLinearDouble() >= weeklyDeathChance)
-            {
-                return false;
-            }
-
-            if (leader.ActiveRequest != null)
-            {
-                _session.Sector.PlayerForce.Requests.Remove(leader.ActiveRequest);
-                leader.ActiveRequest = null;
-            }
-            List<Character> characters = _session.Sector.Characters;
-            characters.Remove(leader);
-            int newId = characters.Count == 0 ? 0 : characters.Max(c => c.Id) + 1;
-            Character successor = CharacterBuilder.GenerateCharacter(newId, planetFaction.Faction);
-            characters.Add(successor);
-            planetFaction.Leader = successor;
-            return true;
-        }
-
-        private void GenerateRequests(Planet planet, PlanetFaction planetFaction)
-        {
-            Faction threatFaction = FindPublicHostileFaction(planet, planetFaction);
-            bool generate = false;
-
-            if (threatFaction != null)
-            {
-                if (_session.Random.GetLinearDouble() < planetFaction.Leader.Investigation)
-                {
-                    generate = true;
-                }
-            }
-            else
-            {
-                if (_session.Random.GetLinearDouble() < planetFaction.Leader.Paranoia)
-                {
-                    generate = true;
-                }
-            }
-
-            if (generate)
-            {
-                float chance = planetFaction.Leader.Neediness * planetFaction.Leader.OpinionOfPlayerForce;
-                if (_session.Random.GetLinearDouble() < chance)
-                {
-                    IRequest request = RequestFactory.Instance.GenerateNewRequest(
-                        planet, planetFaction.Leader, threatFaction, _session.CurrentDate);
-                    planetFaction.Leader.ActiveRequest = request;
-                    _session.Sector.PlayerForce.Requests.Add(request);
-                }
-            }
-        }
-
-        private static Faction FindPublicHostileFaction(Planet planet, PlanetFaction planetFaction)
-        {
-            foreach (PlanetFaction other in planet.PlanetFactionMap.Values)
-            {
-                if (other.Faction.Id != planetFaction.Faction.Id
-                    && other.IsPublic
-                    && !other.Faction.IsDefaultFaction
-                    && !other.Faction.IsPlayerFaction)
-                {
-                    return other.Faction;
-                }
-            }
-            return null;
         }
 
         private void UpdateRegionIntel(Planet planet)

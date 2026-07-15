@@ -5,6 +5,7 @@ using OnlyWar.Models.Equippables;
 using OnlyWar.Models.Planets;
 using OnlyWar.Models.Soldiers;
 using OnlyWar.Models.Soldiers.Ratings;
+using OnlyWar.Models.Supply;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -45,6 +46,7 @@ namespace OnlyWar.Models
         public IReadOnlyDictionary<int, TrainingProfile> TrainingProfiles { get; }
         public IReadOnlyList<RatingDefinition> RatingDefinitions { get; }
         public IReadOnlyList<RatingAwardTier> RatingAwardTiers { get; }
+        public SupplyEconomyRules SupplyEconomyRules { get; }
 
         // Validated registry of base skills that game logic references by name
         // (see TDD §8.3). Resolved and validated at load; fails fast if missing.
@@ -83,6 +85,7 @@ namespace OnlyWar.Models
             TrainingProfiles = gameBlob.TrainingProfiles;
             RatingDefinitions = gameBlob.RatingDefinitions;
             RatingAwardTiers = gameBlob.RatingAwardTiers;
+            SupplyEconomyRules = gameBlob.SupplyEconomyRules;
             PlayerFaction = _factions.First(f => f.IsPlayerFaction);
             DefaultFaction = _factions.First(f => f.IsDefaultFaction);
             Skills = new NamedSkillRegistry(_baseSkillMap);

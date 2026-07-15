@@ -13,6 +13,7 @@ using OnlyWar.Models.Soldiers;
 using OnlyWar.Models.Soldiers.Ratings;
 using OnlyWar.Models.Squads;
 using OnlyWar.Models.Units;
+using OnlyWar.Models.Supply;
 using OnlyWar.Tests.Fixtures;
 using Xunit;
 
@@ -49,6 +50,51 @@ public class SaveLoadRoundTripTests
         sector.PlayerForce.Army.Requisition = 777;
         sector.PlayerForce.GeneseedStockpile = 13;
         sector.PlayerForce.GeneseedPurity = 0.83f;
+
+        Character pledgeAuthority = sector.Characters.First(character => character.Id >= 0);
+        Planet pledgeSource = sector.Planets.Values.First(planet => planet.Id >= 0);
+        Pledge originalPledge = new(
+            0,
+            pledgeSource.Id,
+            pledgeAuthority.Id,
+            PledgePayload.Requisition(75),
+            PledgeScheduleKind.Standing,
+            new Date(39, 501, 1),
+            cadenceWeeks: 52);
+        sector.PlayerForce.Pledges.Add(originalPledge);
+        Pledge successionPledge = new(
+            1,
+            pledgeSource.Id,
+            grantingAuthorityId: 999999,
+            PledgePayload.Requisition(40),
+            PledgeScheduleKind.OneOff,
+            new Date(39, 500, 10));
+        sector.PlayerForce.Pledges.Add(successionPledge);
+
+        int requestId = sector.PlayerForce.Requests.Count == 0
+            ? 0
+            : sector.PlayerForce.Requests.Max(request => request.Id) + 1;
+        ForceCommitmentPackage savedCommitment = new(
+            "scout-investigation",
+            "Reconnaissance investigation",
+            "Scout squad",
+            1,
+            4,
+            6,
+            _data.ChapterTemplates.ScoutSquad.BattleValue,
+            ["Scout", "Covert"]);
+        PresenceRequest savedRequest = new(
+            requestId,
+            pledgeSource,
+            pledgeAuthority,
+            null,
+            _date,
+            new Date(39, 500, 7),
+            savedCommitment,
+            offeredRequisition: 145,
+            progressBattleValueTime: savedCommitment.ReferenceBattleValuePerPackage,
+            status: RequestStatus.InProgress);
+        sector.PlayerForce.Requests.Add(savedRequest);
 
         CampaignScenario originalScenario = sector.Scenario;
         Assert.NotNull(originalScenario);
@@ -145,6 +191,23 @@ public class SaveLoadRoundTripTests
             Assert.Equal(sector.Planets.Count, loaded.Planets.Count);
             Assert.Equal(sector.Characters.Count(), loaded.Characters.Count);
             Assert.Equal(sector.PlayerForce.Requests.Count, loaded.Requests.Count);
+            IRequest loadedRequest = loaded.Requests.Single(request => request.Id == requestId);
+            Assert.Equal(RequestStatus.InProgress, loadedRequest.Status);
+            Assert.Equal("Reconnaissance investigation", loadedRequest.Commitment.DisplayName);
+            Assert.Equal(new[] { "Scout", "Covert" }, loadedRequest.Commitment.QualificationTags);
+            Assert.Equal(savedCommitment.ReferenceBattleValuePerPackage,
+                loadedRequest.ProgressBattleValueTime);
+            Assert.Equal(145, loadedRequest.OfferedRequisition);
+            Assert.Equal(new Date(39, 500, 7), loadedRequest.Deadline);
+            Assert.Equal(2, loaded.Pledges.Count);
+            Pledge loadedPledge = loaded.Pledges.Single(pledge => pledge.Id == originalPledge.Id);
+            Assert.Equal(originalPledge.SourcePlanetId, loadedPledge.SourcePlanetId);
+            Assert.Equal(originalPledge.GrantingAuthorityId, loadedPledge.GrantingAuthorityId);
+            Assert.Equal(75, loadedPledge.Payload.Amount);
+            Assert.Equal(PledgeScheduleKind.Standing, loadedPledge.ScheduleKind);
+            Assert.Equal(new Date(39, 501, 1), loadedPledge.NextDeliveryDate);
+            Assert.Equal(999999,
+                loaded.Pledges.Single(pledge => pledge.Id == successionPledge.Id).GrantingAuthorityId);
 
             int originalShips = sector.Fleets.Values.SelectMany(tf => tf.Ships).Count();
             int loadedShips = loaded.Fleets.SelectMany(tf => tf.Ships).Count();

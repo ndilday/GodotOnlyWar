@@ -47,7 +47,7 @@
    - 5.4 [Alpha 0.7.1 — Stretch Goals](#54-alpha-071--stretch-goals)
    - 5.5 [Alpha 0.8 — Command, Narrative & Continuity](#55-alpha-08--command-narrative--continuity)
    - 5.6 [Alpha 0.8+ — Cross-Faction Simulation (Relationships, Intel, Orks)](#56-alpha-08--cross-faction-simulation-relationships-intel-orks)
-   - 5.7 [Post-0.7 Backlog](#57-post-07-backlog)
+   - 5.7 [Post-0.8 Backlog](#57-post-08-backlog)
 6. [Open Design Questions](#6-open-design-questions)
    - 6.1 [Aggression Axis Split — DEFERRED](#61-aggression-axis-split--deferred)
    - 6.2 [Morale](#62-morale)
@@ -1043,12 +1043,14 @@ This is a behavioral specification. It depends on §4.21 (behavior flags, growth
 
 **Description.** The top-level System Options action must provide the campaign-control and presentation settings expected of a deployable desktop game. These controls are release infrastructure, not simulation features.
 
-**Acceptance Criteria (0.7.1):**
+**Acceptance Criteria (0.7.1 — Implemented):**
 - The System Options button opens a working modal with Resume, Save, Load, Return to Title, and Quit. Destructive navigation prompts when unsaved progress would be lost. Escape opens/closes the System menu globally during campaign play; X closes the top gameplay dialog while text fields retain normal typing behavior.
-- Fullscreen/windowed mode and UI/text scaling are a separate follow-up body of work and are not part of this coding session.
 - End Turn uses a conditional preflight only when there is meaningful unresolved attention: idle deployable squads, actionable fleets without orders, or unassigned special missions at risk. Special missions are described accurately as having an independent 25% disappearance chance per turn while visible (and being cleared at zero intelligence), not as having a fixed expiry. The player can proceed immediately and may configure global warning preferences; routine turns do not require a redundant confirmation.
 - The System menu can export a diagnostic bundle containing the game/build version, global settings, and recent logs, with a fresh current-campaign snapshot included only through an explicit player choice.
 - Headless scene-wiring smoke tests instantiate the release-control surfaces and verify that required top-level actions have subscribers and can open their intended surfaces. A visible but inert button is a release-blocking failure.
+
+**Acceptance Criteria (Planned — 0.8):**
+- Add fullscreen/windowed display mode and UI/text scaling, with an implementation and visual-QA pass across all supported screens.
 
 ---
 
@@ -1149,7 +1151,6 @@ The following must ship in 0.7. Status reflects the current codebase (✅ done �
 Alpha 0.7.1 is deliberately limited to protecting and operating the released campaign. It does not add a new faction or major simulation system.
 
 - ✅ **System menu and release-support baseline** — the specialized Save button has been removed in favor of a global System menu with Resume/Save/Load/Return to Title/Quit, dirty-state prompts, global Escape toggle, X-to-close gameplay dialogs, global End Turn warning preferences, and diagnostic export. Title Load is now an explicit chooser; title Options/Quit use the same release-support surfaces (§4.27). *(Implemented.)*
-- ⬜ **Display mode and UI/text scaling** — deliberately separated from the System menu work and deferred to its own implementation/visual-QA pass across the supported screens (§4.27).
 - ✅ **Save confidence** — unlimited named manual slots; visible manual/autosave chooser; initial, protected pre-turn, and three rolling post-turn recovery points; atomic save/metadata replacement; explicit corrupt/incompatible states; and recoverability-aware destructive navigation (§4.18). The save format remains version 1 and speculative migration support is deferred until the first intentional format change. *(Implemented.)*
 - ✅ **Conditional End Turn preflight** — warns only for combat-capable idle squads that can deploy now, actionable in-orbit task forces without destinations, and unassigned special missions at their real independent 25% per-turn disappearance risk; allows immediate override and has global per-category preferences. Routine turns advance without confirmation; governor-request expiry is outside this body of work (§4.27). *(Implemented.)*
 - ✅ **Scene-wiring release tests** — the Godot 4.7 headless smoke instantiates the campaign/title release controls and exercises the real System Options, Save, Load, Resume, Diagnostics, End Turn, title Load, and title Options buttons plus Escape/X input behavior. Visible-but-inert controls or broken scene paths fail the smoke. *(Implemented — `Scenes/Debug/release_scene_wiring_smoke.tscn`.)*
@@ -1170,7 +1171,7 @@ Alpha 0.7.1 is deliberately limited to protecting and operating the released cam
 
 ### 5.5 Alpha 0.8 — Command, Narrative & Continuity
 
-The connective pass that turns 0.7's broad simulation into a legible, felt, sustainable sandbox campaign. The first half makes existing state understandable and memorable; the second closes the Chapter recovery loop and supplies a medium-term horizon. See §§4.19 and 4.25–4.26 for the governing specifications.
+The connective pass that turns 0.7's broad simulation into a legible, felt, sustainable sandbox campaign. The first half makes existing state understandable and memorable; the second closes the Chapter recovery loop and supplies a medium-term horizon. See §§4.19 and 4.25–4.27 for the governing specifications.
 
 **Implementation prerequisite — structured soldier event log.** Soldier history was an unstructured `List<string>` of free-text lines, written from only a handful of sites (founding, promotion/transfer, ratings/awards, a per-battle summary, and a thin death line); non-combat missions (recon, sabotage, assassination, infiltration, fortification) recorded nothing. Before any narration work, this is being replaced with a **structured, queryable event log** — typed events carrying date, location, faction, weapon, magnitude, and related-soldier references — that serves as both the substrate the notability classifier queries and the source the narrator renders to text. Audit findings driving this:
 
@@ -1188,6 +1189,7 @@ The connective pass that turns 0.7's broad simulation into a legible, felt, sust
 - ⬜ **(6) Planet tactical-map legibility redesign** — approve a visual baseline and replace the current tiny-glyph information hierarchy, including honest multi-faction presentation (§4.26).
 - ⬜ **(7) Recruitment v1** — connect recruitment rights, governor relationships, Requisition, gene-seed, training capacity, and the aspirant/neophyte-to-Scout pipeline (§4.9, §6.3).
 - ⬜ **(8) Chapter Mandates** — add state-aware, non-terminal medium-term objectives after the Promised World (§4.25).
+- ⬜ **(9) Display mode and UI/text scaling** — add fullscreen/windowed presentation settings and visually verify scaling across all supported screens (§4.27).
 
 - **Narrative Voice baseline:** Apply the 4.19 authoring principles and notability classifier across the Turn Report, Soldier history log, and death/apothecary records — named individuals, specificity, continuity callbacks, and outcomes framed against the player's orders.
 - **Eulogy-style death records:** Where, how, final tally, years served, and geneseed recovered or lost (with lost geneseed narrated as a compounding loss).
@@ -1214,7 +1216,7 @@ A simulation expansion that lifts the sector beyond a binary Imperial-vs-everyon
   for by the Tyranid/PDF opening-scenario work; named player forces remain tactical. Spec:
   `Design/Reference/LargeScaleNpcCombat.md`.
 
-### 5.7 Post-0.7 Backlog
+### 5.7 Post-0.8 Backlog
 
 Documented for planning purposes; not scheduled:
 
@@ -1232,6 +1234,8 @@ Documented for planning purposes; not scheduled:
 **Soldier Screen — awards as icons.** Replace the textual awards list on the Soldier Screen (§4.7) with an icon strip in the screen's top panel: one icon per award the marine holds, with the date the award was earned shown as hover text. The existing display rule still applies — for a multi-tier award type, only the most recent / highest tier is shown (one icon, not one per tier). Small UI/presentation item; depends on an icon set for the award types.
 
 **Infrastructure:** Full mod support (XML data, moddable factions, name lists, planet data, chapter generation); data-layer decoupling to replace hardcoded rules-data display-name references with stable keys, validated registries, and data-driven rule profiles; graphics work beyond the scheduled planet tactical-map redesign; and UX work beyond the 0.7.1 system/accessibility baseline and 0.8 Command Brief.
+
+**Parallel turn processing.** Investigate bounded multithreading for the planet-scoped portions of campaign turn resolution once profiling shows that turn latency warrants the added complexity. Planets are the preferred concurrency boundary: resolve each planet's local simulation on a worker with deterministic per-planet/per-phase randomness and planet-local output buffers, then merge generated requests, characters, missions, intelligence gains, logs, requisition changes, and identifiers in stable planet-ID order. Region-level parallelism should be limited to explicitly local subphases; expansion, migration, cult relocation, revolts, and other neighbor- or planet-wide logic require phase barriers or snapshot-and-apply processing. Before enabling parallel execution, remove or isolate the current shared RNG streams, static ID allocators, process-wide scenario metrics, and mutable turn-result collections. A separate, lower-risk interim improvement is to move otherwise single-threaded turn resolution off the Godot main thread so the progress UI remains responsive.
 
 **Rules Data / Modding:** Move tunable simulation rules out of code where practical. Priority candidates include soldier work-experience training profiles, scout training focus profiles, mission skill requirements, sector-generation faction selection, chapter organization roles, and soldier rating formulas. The goal is that renaming a displayed skill, faction, template, or unit does not break game logic.
 

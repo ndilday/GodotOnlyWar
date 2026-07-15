@@ -7,7 +7,7 @@ PRAGMA foreign_keys = off;
 BEGIN TRANSACTION;
 
 -- Table: Character
-CREATE TABLE Character (Id INTEGER PRIMARY KEY UNIQUE NOT NULL, Name STRING NOT NULL, Age INTEGER NOT NULL, Investigation REAL NOT NULL, Paranoia REAL NOT NULL, Neediness REAL NOT NULL, Patience REAL NOT NULL, Appreciation REAL NOT NULL, Influence REAL NOT NULL, LoyalFactionId INTEGER NOT NULL, OpinionOfPlayer REAL NOT NULL);
+CREATE TABLE Character (Id INTEGER PRIMARY KEY UNIQUE NOT NULL, Name STRING NOT NULL, Age INTEGER NOT NULL, Investigation REAL NOT NULL, Paranoia REAL NOT NULL, Neediness REAL NOT NULL, Patience REAL NOT NULL, Appreciation REAL NOT NULL, Influence REAL NOT NULL, LoyalFactionId INTEGER NOT NULL, OpinionOfPlayer REAL NOT NULL, NextRequestEligibleDate INTEGER);
 
 -- Table: Fleet
 CREATE TABLE Fleet (Id INTEGER PRIMARY KEY UNIQUE NOT NULL, FactionId INTEGER NOT NULL, x REAL NOT NULL, y REAL NOT NULL, DestinationPlanetId INTEGER REFERENCES Planet (Id), TravelWeeksRemaining INTEGER NOT NULL DEFAULT 0, OriginPlanetId INTEGER REFERENCES Planet (Id), TravelPhase INTEGER NOT NULL DEFAULT 0, CurrentPhaseWeeksRemaining INTEGER NOT NULL DEFAULT 0, WarpSubjectiveWeeks REAL NOT NULL DEFAULT 0, WarpObjectiveWeeks REAL NOT NULL DEFAULT 0, WarpSubjectiveTrainingApplied BOOLEAN NOT NULL DEFAULT 1);
@@ -81,7 +81,9 @@ CREATE TABLE PlayerSoldierMeleeWeaponCasualtyCount (PlayerSoldierId INTEGER REFE
 CREATE TABLE PlayerSoldierRangedWeaponCasualtyCount (PlayerSoldierId INTEGER REFERENCES PlayerSoldier (SoldierId) NOT NULL, RangedWeaponTemplateId INTEGER, Count INTEGER NOT NULL);
 
 -- Table: Request
-CREATE TABLE Request (Id INTEGER PRIMARY KEY UNIQUE NOT NULL, CharacterId INTEGER REFERENCES Character (Id) NOT NULL, PlanetId INTEGER REFERENCES Planet (Id) NOT NULL, ThreatFactionId INTEGER, RequestDate     INTEGER NOT NULL, FulfillmentDate INTEGER);
+CREATE TABLE Request (Id INTEGER PRIMARY KEY UNIQUE NOT NULL, CharacterId INTEGER REFERENCES Character (Id) NOT NULL, PlanetId INTEGER REFERENCES Planet (Id) NOT NULL, ThreatFactionId INTEGER, RequestDate INTEGER NOT NULL, ResolutionDate INTEGER, Deadline INTEGER NOT NULL, Status INTEGER NOT NULL, CommitmentKey TEXT NOT NULL, CommitmentDisplayName TEXT NOT NULL, CommitmentDisplayUnit TEXT NOT NULL, PackageCount INTEGER NOT NULL, ServiceWeeks INTEGER NOT NULL, DeadlineWeeks INTEGER NOT NULL, ReferenceBattleValue INTEGER NOT NULL, MaximumEffectivePackageCount INTEGER NOT NULL, QualificationTags TEXT, ProgressBattleValueTime INTEGER NOT NULL, OfferedRequisition INTEGER NOT NULL, OfferedScheduleKind INTEGER NOT NULL, OfferedCadenceWeeks INTEGER NOT NULL, OfferedDeliveryDelayWeeks INTEGER NOT NULL, Severity INTEGER NOT NULL, Hazard INTEGER NOT NULL, HasPlayerResponded BOOLEAN NOT NULL);
+
+CREATE TABLE Pledge (Id INTEGER PRIMARY KEY UNIQUE NOT NULL, SourcePlanetId INTEGER REFERENCES Planet (Id) NOT NULL, GrantingAuthorityId INTEGER NOT NULL, PayloadKind INTEGER NOT NULL, PayloadAmount INTEGER NOT NULL, ScheduleKind INTEGER NOT NULL, CadenceWeeks INTEGER NOT NULL, Status INTEGER NOT NULL, NextDeliveryDate INTEGER NOT NULL);
 
 -- Table: Ship
 CREATE TABLE Ship (Id INTEGER PRIMARY KEY UNIQUE NOT NULL, ShipTemplateId INTEGER NOT NULL, FleetId INTEGER REFERENCES Fleet (Id) NOT NULL, Name STRING NOT NULL);

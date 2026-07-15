@@ -25,6 +25,9 @@ public class RulesDatabaseValidationTests
         Assert.NotEmpty(rules.RatingDefinitions);
         Assert.NotEmpty(rules.RatingAwardTiers);
         Assert.NotEmpty(rules.TrainingProfiles);
+        Assert.NotNull(rules.SupplyEconomyRules);
+        Assert.NotEmpty(rules.SupplyEconomyRules.RequestValuation.ThroughputBands);
+        Assert.True(rules.SupplyEconomyRules.RequestValuation.RequisitionPerBattleValueTime > 0);
         Assert.NotNull(rules.PlayerFaction);
         Assert.NotNull(rules.DefaultFaction);
     }

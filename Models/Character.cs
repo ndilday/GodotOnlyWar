@@ -37,5 +37,8 @@ namespace OnlyWar.Models
 
         // requests this character has made of the player
         public IRequest ActiveRequest { get; set; }
+
+        // Governors cannot immediately issue a replacement request after one resolves.
+        public Date NextRequestEligibleDate { get; set; }
     }
 }

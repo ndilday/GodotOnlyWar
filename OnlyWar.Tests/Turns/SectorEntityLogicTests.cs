@@ -3,6 +3,7 @@ using OnlyWar.Helpers.Extensions;
 using OnlyWar.Models;
 using OnlyWar.Models.Missions;
 using OnlyWar.Models.Planets;
+using OnlyWar.Models.Supply;
 using OnlyWar.Tests.Fixtures;
 using System.Linq;
 using Xunit;
@@ -235,7 +236,7 @@ public class SectorEntityLogicTests
     }
 
     [Fact]
-    public void ProcessTurn_FulfilledRequest_GrantsRequisition()
+    public void ProcessTurn_FulfilledRequest_CreatesDelayedPledge()
     {
         RNG.Reset(1);
         SectorSimulationFixture fixture = SectorSimulationFixture.Create();
@@ -249,10 +250,75 @@ public class SectorEntityLogicTests
 
         fixture.ProcessTurn();
 
-        // fulfilling the request fires the Requisition faucet (PRD 4.23) and clears the request
-        Assert.True(fixture.Sector.PlayerForce.Army.Requisition > before);
+        // Phase 2 replaces the instant faucet with a source-bound promise. The one-off
+        // delivery arrives on its scheduled future turn rather than at fulfillment.
+        Assert.Equal(before, fixture.Sector.PlayerForce.Army.Requisition);
+        Assert.Single(fixture.Sector.PlayerForce.Pledges);
+        Assert.Equal(request.OfferedRequisition, fixture.Sector.PlayerForce.Pledges[0].Payload.Amount);
         Assert.Null(governor.ActiveRequest);
-        Assert.DoesNotContain(request, fixture.Sector.PlayerForce.Requests);
+        Assert.Contains(request, fixture.Sector.PlayerForce.Requests);
+        Assert.Equal(RequestStatus.Fulfilled, request.Status);
+    }
+
+    [Fact]
+    public void ProcessTurn_OneOffPledge_DeliversOnScheduledWeek()
+    {
+        RNG.Reset(1);
+        SectorSimulationFixture fixture = SectorSimulationFixture.Create();
+        Character governor = fixture.InstallGovernor(investigation: 0f, neediness: 0f, opinion: 1f);
+        PresenceRequest request = new(
+            1, fixture.Planet, governor, null, new Date(1, 1, 1), new Date(1, 1, 1));
+        governor.ActiveRequest = request;
+        fixture.Sector.PlayerForce.Requests.Add(request);
+
+        fixture.ProcessTurn();
+        int beforeDelivery = fixture.Sector.PlayerForce.Army.Requisition;
+        Assert.Single(fixture.Sector.PlayerForce.Pledges);
+
+        fixture.ProcessTurn();
+        fixture.ProcessTurn();
+        fixture.ProcessTurn();
+        Assert.Equal(beforeDelivery, fixture.Sector.PlayerForce.Army.Requisition);
+
+        fixture.ProcessTurn();
+
+        Assert.Equal(beforeDelivery + request.OfferedRequisition,
+            fixture.Sector.PlayerForce.Army.Requisition);
+        Assert.Equal(OnlyWar.Models.Supply.PledgeStatus.Completed,
+            fixture.Sector.PlayerForce.Pledges[0].Status);
+    }
+
+    [Fact]
+    public void ProcessTurn_FulfilledStandingRequest_UsesSnapshottedOfferTerms()
+    {
+        RNG.Reset(1);
+        SectorSimulationFixture fixture = SectorSimulationFixture.Create();
+        Character governor = fixture.InstallGovernor(investigation: 0f, neediness: 0f, opinion: 0.1f);
+        ForceCommitmentPackage commitment = new(
+            "standing-test", "Standing test", "squad", 1, 4, 8, 100);
+        PresenceRequest request = new(
+            1,
+            fixture.Planet,
+            governor,
+            null,
+            new Date(1, 1, 1),
+            new Date(1, 1, 8),
+            commitment,
+            offeredRequisition: 60,
+            offeredScheduleKind: PledgeScheduleKind.Standing,
+            offeredCadenceWeeks: 52,
+            offeredDeliveryDelayWeeks: 52,
+            status: RequestStatus.Fulfilled,
+            resolvedDate: new Date(1, 1, 1));
+        governor.ActiveRequest = request;
+        fixture.Sector.PlayerForce.Requests.Add(request);
+
+        fixture.ProcessTurn();
+
+        Pledge pledge = Assert.Single(fixture.Sector.PlayerForce.Pledges);
+        Assert.Equal(PledgeScheduleKind.Standing, pledge.ScheduleKind);
+        Assert.Equal(60, pledge.Payload.Amount);
+        Assert.Equal(52, pledge.CadenceWeeks);
     }
 
     // Design/MultiFactionRegions.md WI-4: the special-mission opportunity budget is split across a

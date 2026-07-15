@@ -347,6 +347,9 @@ namespace OnlyWar.Helpers.Database.GameState
                     float influence = Convert.ToSingle(reader[8]);
                     int factionId = reader.GetInt32(9);
                     float opinionOfPlayer = Convert.ToSingle(reader[10]);
+                    Date nextRequestEligibleDate = reader.FieldCount > 11 && reader[11] is not DBNull
+                        ? Date.FromTotalWeeks(reader.GetInt32(11))
+                        : null;
 
                     Character character = new Character()
                     {
@@ -360,7 +363,8 @@ namespace OnlyWar.Helpers.Database.GameState
                         Neediness = neediness,
                         OpinionOfPlayerForce = opinionOfPlayer,
                         Paranoia = paranoia,
-                        Patience = patience
+                        Patience = patience,
+                        NextRequestEligibleDate = nextRequestEligibleDate
                     };
 
                     characterMap[id] = character;
@@ -401,9 +405,10 @@ namespace OnlyWar.Helpers.Database.GameState
                 command.Transaction = transaction;
                 command.CommandText = @"INSERT INTO Character
                     (Id, Name, Age, Investigation, Paranoia, Neediness, Patience, Appreciation,
-                     Influence, LoyalFactionId, OpinionOfPlayer) VALUES
+                     Influence, LoyalFactionId, OpinionOfPlayer, NextRequestEligibleDate) VALUES
                     (@id, @name, @age, @investigation, @paranoia, @neediness, @patience,
-                     @appreciation, @influence, @loyalFactionId, @opinionOfPlayer);";
+                     @appreciation, @influence, @loyalFactionId, @opinionOfPlayer,
+                     @nextRequestEligibleDate);";
                 command.AddParam("@id", character.Id);
                 command.AddParam("@name", character.Name);
                 command.AddParam("@age", character.Age);
@@ -415,6 +420,8 @@ namespace OnlyWar.Helpers.Database.GameState
                 command.AddParam("@influence", character.Influence);
                 command.AddParam("@loyalFactionId", character.Loyalty.Id);
                 command.AddParam("@opinionOfPlayer", character.OpinionOfPlayerForce);
+                command.AddParam("@nextRequestEligibleDate",
+                    character.NextRequestEligibleDate?.GetTotalWeeks());
                 command.ExecuteNonQuery();
             }
         }

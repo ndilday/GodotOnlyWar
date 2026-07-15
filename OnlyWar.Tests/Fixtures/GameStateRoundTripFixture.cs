@@ -80,6 +80,7 @@ internal sealed class GameStateRoundTripFixture
             sector.PlayerForce.Army.MedicalProcedures,
             sector.Characters,
             sector.PlayerForce.Requests,
+            sector.PlayerForce.Pledges,
             sector.Planets.Values,
             sector.Fleets.Values,
             units,
