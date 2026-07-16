@@ -14,6 +14,7 @@ using Xunit;
 
 namespace OnlyWar.Tests.Battles;
 
+[Collection(OnlyWar.Tests.TestCollections.SharedState)]
 public class AreaAttackActionTests
 {
     [Fact]
