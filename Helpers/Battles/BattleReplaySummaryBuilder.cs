@@ -323,7 +323,7 @@ namespace OnlyWar.Helpers.Battles
         private static string BuildPhaseLabel(BattleTurn turn)
         {
             if (turn.Actions.Any(action => action is MeleeAttackAction)) return "Melee phase";
-            if (turn.Actions.Any(action => action is ShootAction or AreaAttackAction)) return "Fire phase";
+            if (turn.Actions.Any(action => action is ShootAction or AreaAttackAction or BlastAttackAction)) return "Fire phase";
             if (turn.Actions.Any(action => action is MoveAction)) return "Maneuver phase";
             return turn.TurnNumber == 0 ? "Deployment" : "Battle phase";
         }
@@ -352,6 +352,7 @@ namespace OnlyWar.Helpers.Battles
             {
                 ShootAction => "Volley",
                 AreaAttackAction => "Volley",
+                BlastAttackAction => "Volley",
                 MeleeAttackAction => "Melee",
                 MoveAction => "Movement",
                 AimAction => "Targeting",
@@ -378,6 +379,7 @@ namespace OnlyWar.Helpers.Battles
             {
                 ShootAction shootAction => shootAction.WoundResolutions.Count,
                 AreaAttackAction areaAttackAction => areaAttackAction.WoundResolutions.Count,
+                BlastAttackAction blastAttackAction => blastAttackAction.WoundResolutions.Count,
                 MeleeAttackAction meleeAttackAction => meleeAttackAction.WoundResolutions.Count,
                 _ => 0
             };

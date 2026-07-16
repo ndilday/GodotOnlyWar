@@ -248,7 +248,7 @@ namespace OnlyWar.Helpers.Database.GameRules
             Dictionary<int, MeleeWeaponTemplate> meleeWeaponMap,
             Dictionary<int, RangedWeaponTemplate> rangedWeaponMap)
         {
-            RangedWeaponTemplate primaryRanged, secondaryRanged;
+            RangedWeaponTemplate primaryRanged, secondaryRanged, grenade;
             MeleeWeaponTemplate primaryMelee, secondaryMelee;
             Dictionary<int, WeaponSet> weaponSetMap = [];
 
@@ -298,8 +298,17 @@ namespace OnlyWar.Helpers.Database.GameRules
                         secondaryMelee = null;
                     }
 
+                    if (reader[7].GetType() != typeof(DBNull))
+                    {
+                        grenade = rangedWeaponMap[reader.GetInt32(7)];
+                    }
+                    else
+                    {
+                        grenade = null;
+                    }
+
                     WeaponSet weaponSet = new WeaponSet(id, name, primaryRanged, secondaryRanged,
-                                                        primaryMelee, secondaryMelee);
+                                                        primaryMelee, secondaryMelee, grenade);
                     weaponSetMap[id] = weaponSet;
                 }
             }

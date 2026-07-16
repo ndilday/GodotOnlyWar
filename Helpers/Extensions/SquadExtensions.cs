@@ -100,6 +100,7 @@ public static class SquadExtensions
     public static WeaponSet DeepCopy(this WeaponSet originalSet)
     {
         return new WeaponSet(originalSet.Id, originalSet.Name, originalSet.PrimaryRangedWeapon,
-            originalSet.SecondaryRangedWeapon, originalSet.PrimaryMeleeWeapon, originalSet.SecondaryMeleeWeapon);
+            originalSet.SecondaryRangedWeapon, originalSet.PrimaryMeleeWeapon, originalSet.SecondaryMeleeWeapon,
+            originalSet.GrenadeWeapon);
     }
 }

@@ -67,7 +67,11 @@ namespace OnlyWar.Models.Equippables
         public byte TemplateType { get; }
         public float AreaRadius { get; }
         public ushort FuelPerBurst { get; }
+        // TemplateType: 0 normal, 1 cone (flamer), 2 launched blast, 3 thrown blast
         public bool IsTemplateWeapon => TemplateType != 0;
+        public bool IsConeWeapon => TemplateType == 1;
+        public bool IsBlastWeapon => TemplateType == 2 || TemplateType == 3;
+        public bool IsThrown => TemplateType == 3;
 
         public RangedWeaponTemplate(int id, string name, EquipLocation location,
                               BaseSkill skill, float accuracy,

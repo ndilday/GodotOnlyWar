@@ -58,6 +58,32 @@ public class BattleValueCalculatorTests
     }
 
     [Fact]
+    public void BlastWeapons_DoNotCrashAndAreValuedAtZeroPendingDesignDecision()
+    {
+        // Blast valuation is an explicitly deferred design decision: the template
+        // branch's fuel duty cycle zeroes out any weapon with FuelPerBurst 0, so a
+        // grenade (TemplateType 3) or grenade launcher (TemplateType 2) currently
+        // contributes nothing to the bearer's battle value.
+        MeleeWeaponTemplate knife = TestModelFactory.DefaultWeapons.PrimaryMeleeWeapon;
+        RangedWeaponTemplate launcher = new(
+            99, "Test Grenade Launcher", EquipLocation.TwoHand, TestSkills.Ranged,
+            accuracy: 0, armorMultiplier: 1, penetrationMultiplier: 1,
+            requiredStrength: 0, baseDamage: 6, maxDistance: 1_000, rof: 1, ammo: 12,
+            recoil: 0, bulk: 2, doesDamageDegradeWithRange: false, reloadTime: 3,
+            templateType: 2, areaRadius: 6, fuelPerBurst: 0);
+
+        BattleValueCalculator.Result bare = BattleValueCalculator.Calculate(BaselineInput(knife));
+        BattleValueCalculator.Result thrown = BattleValueCalculator.Calculate(
+            BaselineInput(knife, TestModelFactory.FragGrenadeTemplate));
+        BattleValueCalculator.Result launched = BattleValueCalculator.Calculate(
+            BaselineInput(knife, launcher));
+
+        Assert.True(bare.BattleValue > 0);
+        Assert.Equal(bare.BattleValue, thrown.BattleValue);
+        Assert.Equal(bare.BattleValue, launched.BattleValue);
+    }
+
+    [Fact]
     public void NullInput_ReturnsZeroProfile()
     {
         BattleValueCalculator.Result result = BattleValueCalculator.Calculate(null);

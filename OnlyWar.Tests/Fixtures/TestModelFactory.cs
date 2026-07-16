@@ -127,6 +127,35 @@ internal static class TestModelFactory
             0,
             1));
 
+    // Thrown blast weapon (TemplateType 3): MaximumRange holds meters-per-Strength-point.
+    public static RangedWeaponTemplate FragGrenadeTemplate { get; } = new(
+        3,
+        "Test Frag Grenade",
+        EquipLocation.OneHand,
+        TestSkills.Ranged,
+        0,
+        1,
+        1,
+        4,
+        5,
+        3,
+        1,
+        1,
+        0,
+        0,
+        false,
+        1,
+        3,
+        6,
+        0);
+
+    public static WeaponSet GrenadierWeapons { get; } = new(
+        2,
+        "Test Grenadier Weapons",
+        primaryRanged: DefaultWeapons.PrimaryRangedWeapon,
+        primaryMelee: DefaultWeapons.PrimaryMeleeWeapon,
+        grenadeWeapon: FragGrenadeTemplate);
+
     public static SquadTemplate SquadTemplate { get; } = new(
         1,
         "Test Squad",

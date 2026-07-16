@@ -159,20 +159,23 @@ namespace OnlyWar.Helpers.Battles
                 MeleeWeapons.AddRange(meleeWeapons);
             }
 
-            if (RangedWeapons.Count > 0)
+            // thrown weapons (grenades) ride on the belt and are thrown directly from
+            // it, so they never occupy a hand or compete for the equipped slots
+            List<RangedWeapon> handRangedWeapons = RangedWeapons.Where(w => !w.Template.IsThrown).ToList();
+            if (handRangedWeapons.Count > 0)
             {
-                if (RangedWeapons.Count == 1 )
+                if (handRangedWeapons.Count == 1 )
                 {
-                    EquippedRangedWeapons.AddRange(RangedWeapons);
+                    EquippedRangedWeapons.AddRange(handRangedWeapons);
                 }
-                else if (RangedWeapons[0].Template.Location == EquipLocation.OneHand && RangedWeapons[1].Template.Location == EquipLocation.OneHand)
+                else if (handRangedWeapons[0].Template.Location == EquipLocation.OneHand && handRangedWeapons[1].Template.Location == EquipLocation.OneHand)
                 {
-                    EquippedRangedWeapons.Add(RangedWeapons[0]);
-                    EquippedRangedWeapons.Add(RangedWeapons[1]);
+                    EquippedRangedWeapons.Add(handRangedWeapons[0]);
+                    EquippedRangedWeapons.Add(handRangedWeapons[1]);
                 }
                 else
                 {
-                    EquippedRangedWeapons.Add(RangedWeapons[0]);
+                    EquippedRangedWeapons.Add(handRangedWeapons[0]);
                 }
             }
             if (MeleeWeapons.Count > 0)

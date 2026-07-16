@@ -10,16 +10,22 @@ namespace OnlyWar.Models.Equippables
         public RangedWeaponTemplate SecondaryRangedWeapon { get; }
         public MeleeWeaponTemplate PrimaryMeleeWeapon { get; }
         public MeleeWeaponTemplate SecondaryMeleeWeapon { get; }
+        public RangedWeaponTemplate GrenadeWeapon { get; }
         public IReadOnlyCollection<RangedWeapon> GetRangedWeapons()
         {
-            if (PrimaryRangedWeapon == null) return null;
-            List<RangedWeapon> list =
-            [
-                new RangedWeapon(PrimaryRangedWeapon)
-            ];
+            if (PrimaryRangedWeapon == null && GrenadeWeapon == null) return null;
+            List<RangedWeapon> list = [];
+            if (PrimaryRangedWeapon != null)
+            {
+                list.Add(new RangedWeapon(PrimaryRangedWeapon));
+            }
             if (SecondaryRangedWeapon != null)
             {
                 list.Add(new RangedWeapon(SecondaryRangedWeapon));
+            }
+            if (GrenadeWeapon != null)
+            {
+                list.Add(new RangedWeapon(GrenadeWeapon));
             }
             return list;
         }
@@ -36,9 +42,10 @@ namespace OnlyWar.Models.Equippables
             }
             return list;
         }
-        public WeaponSet(int id, string name, 
+        public WeaponSet(int id, string name,
                          RangedWeaponTemplate primaryRanged = null, RangedWeaponTemplate secondaryRanged = null,
-                         MeleeWeaponTemplate primaryMelee = null, MeleeWeaponTemplate secondaryMelee = null)
+                         MeleeWeaponTemplate primaryMelee = null, MeleeWeaponTemplate secondaryMelee = null,
+                         RangedWeaponTemplate grenadeWeapon = null)
         {
             Id = id;
             Name = name;
@@ -46,6 +53,7 @@ namespace OnlyWar.Models.Equippables
             SecondaryRangedWeapon = secondaryRanged;
             PrimaryMeleeWeapon = primaryMelee;
             SecondaryMeleeWeapon = secondaryMelee;
+            GrenadeWeapon = grenadeWeapon;
         }
     }
 }

@@ -10,6 +10,11 @@ namespace OnlyWar.Helpers.Battles
     {
         private const float TargetTakeOutConfidenceThreshold = MeleeMath.TakeOutConfidenceTarget;
         private const int RangedTargetSquadCandidateCount = 3;
+        // TUNABLE: the grenade is a sidearm, not the main gun. A blast throw must beat the
+        // soldier's best conventional action (rifle shot or cone burst) by more than this
+        // expected-battle-value margin before it is chosen. 0 keeps any strict improvement;
+        // raise it to reserve grenades for clearly better (clustered) opportunities.
+        private const float BlastOverConventionalScoreMargin = 0f;
 
         private readonly BattleGridManager _grid;
         private readonly ICollection<IAction> _shootActions;
@@ -217,7 +222,7 @@ namespace OnlyWar.Helpers.Battles
                     float targetEvasion = closestSquad.GetAverageRangedEvasion();
                     float preferredHitDistance = BattleModifiersUtil.CalculateOptimalDistance(soldier, targetSize, targetArmor, targetCon, targetEvasion);
                     float templateMaximumRange = soldier.RangedWeapons
-                        .Where(weapon => weapon.Template.IsTemplateWeapon)
+                        .Where(weapon => weapon.Template.IsConeWeapon)
                         .Select(weapon => weapon.Template.MaximumRange)
                         .DefaultIfEmpty(0)
                         .Max();
@@ -344,7 +349,7 @@ namespace OnlyWar.Helpers.Battles
             float range = _grid.GetNearestEnemy(soldier.Soldier.Id, out int closestEnemyId);
             float speed = _soldierMap[closestEnemyId].BattleSquad.AbleSoldiers.First().GetMoveSpeed();
             bool hasLoadedTemplateWeapon = soldier.EquippedRangedWeapons.Any(
-                weapon => weapon.Template.IsTemplateWeapon && weapon.LoadedAmmo > 0);
+                weapon => weapon.Template.IsConeWeapon && weapon.LoadedAmmo > 0);
             // see if the enemy is within charging range and the soldier doesn't already have a target lined up
             if (!hasLoadedTemplateWeapon
                 && speed >= range
@@ -1083,6 +1088,28 @@ namespace OnlyWar.Helpers.Battles
         {
             TemplateFiringLineEvaluation templateLine = SelectBestTemplateFiringLine(soldier);
             RangedTargetEvaluation targetEvaluation = SelectBestRangedTarget(soldier, isMoving);
+            TemplateFiringLineEvaluation blastThrow = SelectBestBlastThrow(soldier);
+            float bestConventionalScore = Math.Max(
+                templateLine?.Score ?? float.MinValue,
+                targetEvaluation?.Score ?? float.MinValue);
+            // SelectBestBlastThrow already requires a positive score (more enemy value
+            // removed than friendly value lost, thrower included); the sidearm rule adds
+            // that the throw must also beat the soldier's best conventional action.
+            if (blastThrow != null
+                && blastThrow.Score > bestConventionalScore + BlastOverConventionalScoreMargin)
+            {
+                soldier.TargetId = blastThrow.Target.Soldier.Id;
+                _shootActions.Add(new BlastAttackAction(
+                    soldier.Soldier.Id,
+                    blastThrow.Target.Soldier.Id,
+                    blastThrow.Weapon.Template.Id,
+                    blastThrow.Range,
+                    useBulk: isMoving,
+                    _grid,
+                    _random));
+                return;
+            }
+
             if (templateLine != null
                 && templateLine.Score >= (targetEvaluation?.Score ?? float.MinValue))
             {
@@ -1099,9 +1126,23 @@ namespace OnlyWar.Helpers.Battles
             if (targetEvaluation == null)
             {
                 if (!isMoving && soldier.EquippedRangedWeapons.Any(
-                    weapon => weapon.Template.IsTemplateWeapon && weapon.LoadedAmmo > 0))
+                    weapon => weapon.Template.IsConeWeapon && weapon.LoadedAmmo > 0))
                 {
                     AddClosingMoveToBag(soldier);
+                    return;
+                }
+
+                // No shot available this turn: restock a spent grenade from the belt
+                // (ReloadTime 1, so it is back in hand next turn). Reloading while moving
+                // follows the existing mid-move reload precedent; a soldier partway
+                // through another weapon's reload must not restart his phase counter.
+                RangedWeapon emptyBlastWeapon = soldier.EquippedRangedWeapons
+                    .Concat(soldier.RangedWeapons)
+                    .FirstOrDefault(weapon => weapon.Template.IsBlastWeapon
+                        && weapon.LoadedAmmo == 0);
+                if (soldier.ReloadingPhase == 0 && emptyBlastWeapon != null)
+                {
+                    _shootActions.Add(new ReloadRangedWeaponAction(soldier, emptyBlastWeapon));
                 }
                 return;
             }
@@ -1241,7 +1282,7 @@ namespace OnlyWar.Helpers.Battles
                     soldier.Soldier.Id,
                     target.Soldier.Id);
                 foreach (RangedWeapon weapon in soldier.EquippedRangedWeapons
-                    .Where(weapon => weapon.Template.IsTemplateWeapon
+                    .Where(weapon => weapon.Template.IsConeWeapon
                         && weapon.LoadedAmmo > 0
                         && range <= weapon.Template.MaximumRange)
                     .OrderBy(weapon => weapon.Template.Id))
@@ -1309,6 +1350,148 @@ namespace OnlyWar.Helpers.Battles
             return best;
         }
 
+        /// <summary>
+        /// Scores every enemy soldier within blast (grenade) range as a candidate impact
+        /// point, using the nominal unscattered impact — the target's footprint cell
+        /// nearest the thrower, exactly as <see cref="BlastAttackAction"/> resolves it.
+        /// Everyone inside the circle is auto-hit, so the score is the falloff-scaled
+        /// expected enemy battle value removed minus the expected friendly battle value
+        /// lost, with the thrower's own exposure included (danger-close is legal).
+        /// Returns null when no throw removes more value than it costs.
+        /// </summary>
+        internal TemplateFiringLineEvaluation SelectBestBlastThrow(BattleSoldier soldier)
+        {
+            if (soldier == null || !IsPlaced(soldier))
+            {
+                return null;
+            }
+
+            List<RangedWeapon> blastWeapons = GetLoadedBlastWeapons(soldier);
+            if (blastWeapons.Count == 0)
+            {
+                return null;
+            }
+
+            float maximumEffectiveRange = blastWeapons.Max(weapon =>
+                BattleModifiersUtil.GetEffectiveMaxRange(soldier.Soldier, weapon.Template));
+            bool shooterSide = _grid.GetSoldierSide(soldier.Soldier.Id);
+            TemplateFiringLineEvaluation best = null;
+            foreach (BattleSoldier target in GetNearestEnemySquadsWithinRange(soldier, maximumEffectiveRange)
+                .SelectMany(candidateSquad => candidateSquad.AbleSoldiers)
+                .Where(target => target != null && target.CanFight && IsPlaced(target))
+                .GroupBy(target => target.Soldier.Id)
+                .Select(group => group.First())
+                .OrderBy(target => target.Soldier.Id))
+            {
+                float range = _grid.GetDistanceBetweenSoldiers(
+                    soldier.Soldier.Id,
+                    target.Soldier.Id);
+                foreach (RangedWeapon weapon in blastWeapons
+                    .Where(weapon => range <= BattleModifiersUtil.GetEffectiveMaxRange(
+                        soldier.Soldier,
+                        weapon.Template)))
+                {
+                    Tuple<int, int> impactCell = BlastTemplate.ResolveImpactCell(
+                        _grid,
+                        soldier.Soldier.Id,
+                        target.Soldier.Id,
+                        margin: 0,
+                        directionRoll: 0);
+                    IReadOnlyList<BlastTemplate.BlastVictim> victims = BlastTemplate.GetVictims(
+                        _grid,
+                        impactCell,
+                        weapon.Template.AreaRadius);
+                    float expectedEnemyBattleValueRemoved = 0;
+                    float expectedFriendlyBattleValueLost = 0;
+                    List<int> victimIds = new(victims.Count);
+                    foreach (BlastTemplate.BlastVictim blastVictim in victims)
+                    {
+                        victimIds.Add(blastVictim.SoldierId);
+                        if (!_soldierMap.TryGetValue(blastVictim.SoldierId, out BattleSoldier victim))
+                        {
+                            continue;
+                        }
+                        if (!victim.CanFight)
+                        {
+                            // Incapacitated figures are still physically inside the blast,
+                            // but their battle value has already been removed from the fight.
+                            continue;
+                        }
+
+                        float armor = victim.Armor?.Template.ArmorProvided ?? 0;
+                        float woundRatio = Math.Clamp(
+                            CalculateExpectedBlastDamage(
+                                weapon,
+                                blastVictim.DistanceFromImpact,
+                                armor,
+                                victim.Soldier.Constitution),
+                            0,
+                            1);
+                        float expectedBattleValueRemoval = woundRatio * GetBattleValue(victim);
+                        if (_grid.GetSoldierSide(blastVictim.SoldierId) == shooterSide)
+                        {
+                            expectedFriendlyBattleValueLost += expectedBattleValueRemoval;
+                        }
+                        else
+                        {
+                            expectedEnemyBattleValueRemoved += expectedBattleValueRemoval;
+                        }
+                    }
+
+                    TemplateFiringLineEvaluation evaluation = new(
+                        target,
+                        weapon,
+                        range,
+                        victimIds,
+                        expectedEnemyBattleValueRemoved,
+                        expectedFriendlyBattleValueLost);
+                    // A throw that trades away as much friendly value (self included) as
+                    // it removes is never worth the grenade.
+                    if (evaluation.Score > 0 && (best == null || evaluation.Score > best.Score))
+                    {
+                        best = evaluation;
+                    }
+                }
+            }
+
+            return best;
+        }
+
+        /// <summary>
+        /// Blast weapons ride on the belt (<see cref="BattleSoldier.RangedWeapons"/>)
+        /// without occupying a hand, so both lists are candidates.
+        /// </summary>
+        private static List<RangedWeapon> GetLoadedBlastWeapons(BattleSoldier soldier)
+        {
+            return soldier.EquippedRangedWeapons
+                .Concat(soldier.RangedWeapons)
+                .Where(weapon => weapon.Template.IsBlastWeapon && weapon.LoadedAmmo > 0)
+                .GroupBy(weapon => weapon.Template.Id)
+                .Select(group => group.First())
+                .OrderBy(weapon => weapon.Template.Id)
+                .ToList();
+        }
+
+        /// <summary>
+        /// Mirror of <see cref="BlastAttackAction"/>'s damage math at the planning
+        /// expectation used by CalculateExpectedDamage: the quadratic falloff scales the
+        /// damage roll before armor subtraction, and everyone caught is auto-hit.
+        /// </summary>
+        private static float CalculateExpectedBlastDamage(
+            RangedWeapon weapon,
+            float distanceFromImpact,
+            float armor,
+            float con)
+        {
+            float falloff = 1f - (distanceFromImpact / weapon.Template.AreaRadius);
+            float damage = weapon.Template.DamageMultiplier * 4.25f * falloff * falloff;
+            float effectiveArmor = armor * weapon.Template.ArmorMultiplier;
+            float penetratingDamage = Math.Max(0, damage - effectiveArmor);
+            return con <= 0
+                ? 1
+                : (penetratingDamage * weapon.Template.WoundMultiplier) / con;
+        }
+
         internal RangedTargetEvaluation EvaluateRangedTarget(
             BattleSoldier soldier,
             BattleSoldier target,
@@ -1364,11 +1547,22 @@ namespace OnlyWar.Helpers.Battles
 
         private IReadOnlyList<BattleSquad> GetNearestInRangeEnemySquads(BattleSoldier shooter)
         {
+            // Effective range matters for thrown weapons (a grenade's reach scales with
+            // the thrower's Strength); every other weapon reads its raw MaximumRange.
             float maximumRange = shooter.EquippedRangedWeapons
                 .Where(weapon => weapon.LoadedAmmo > 0)
-                .Select(weapon => weapon.Template.MaximumRange)
+                .Select(weapon => BattleModifiersUtil.GetEffectiveMaxRange(
+                    shooter.Soldier,
+                    weapon.Template))
                 .DefaultIfEmpty(0)
                 .Max();
+            return GetNearestEnemySquadsWithinRange(shooter, maximumRange);
+        }
+
+        private IReadOnlyList<BattleSquad> GetNearestEnemySquadsWithinRange(
+            BattleSoldier shooter,
+            float maximumRange)
+        {
             if (maximumRange <= 0 || !IsPlaced(shooter)) return [];
 
             bool shooterSide = _grid.GetSoldierSide(shooter.Soldier.Id);

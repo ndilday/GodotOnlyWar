@@ -220,6 +220,13 @@ namespace OnlyWar.Helpers.Battles
                         _woundResolver.WoundQueue.Add(wound);
                     }
                 }
+                else if (action is BlastAttackAction blastAttackAction)
+                {
+                    foreach (WoundResolution wound in blastAttackAction.WoundResolutions)
+                    {
+                        _woundResolver.WoundQueue.Add(wound);
+                    }
+                }
                 executedActions.Add(action);
             }
         }

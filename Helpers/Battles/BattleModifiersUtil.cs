@@ -30,6 +30,17 @@ namespace OnlyWar.Helpers.Battles
             return (float)(Math.Log(rateOfFire, 2));
         }
 
+        /// <summary>
+        /// A thrown weapon's template stores meters-per-Strength-point in MaximumRange,
+        /// so its reach scales with the thrower; every other weapon uses MaximumRange as-is.
+        /// </summary>
+        public static float GetEffectiveMaxRange(ISoldier soldier, RangedWeaponTemplate template)
+        {
+            return template.IsThrown
+                ? soldier.Strength * template.MaximumRange
+                : template.MaximumRange;
+        }
+
         public static float CalculateDamageAtRange(RangedWeapon weapon, float range)
         {
             return weapon.Template.DoesDamageDegradeWithRange ?
