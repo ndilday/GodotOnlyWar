@@ -93,6 +93,7 @@ namespace OnlyWar.Models.Battles
         public bool IsPlayerSquad { get; }
         public bool IsPlayerAligned { get; }
         public bool IsInMelee { get; }
+        public SquadMovementTier MovementTier { get; }
         public Squad Squad { get; }
         public IReadOnlyList<BattleSoldierSnapshot> Soldiers { get; }
 
@@ -103,6 +104,7 @@ namespace OnlyWar.Models.Battles
             IsPlayerSquad = squad.IsPlayerSquad;
             IsPlayerAligned = squad.IsPlayerAligned;
             IsInMelee = squad.IsInMelee;
+            MovementTier = squad.MovementTier;
             Squad = squad.Squad;
             Soldiers = soldiers;
         }
@@ -119,6 +121,7 @@ namespace OnlyWar.Models.Battles
         public int Width { get; }
         public int Depth { get; }
         public bool IsInMelee { get; }
+        public float LeftoverMovement { get; }
         public float TurnsRunning { get; }
         public ushort TurnsShooting { get; }
 
@@ -137,7 +140,7 @@ namespace OnlyWar.Models.Battles
             SquadName = soldier.BattleSquad?.Name ?? "Unknown formation";
             X = soldier.TopLeft?.Item1 ?? 0;
             Y = soldier.TopLeft?.Item2 ?? 0;
-            bool isRotated = soldier.Orientation % 2 != 0;
+            bool isRotated = BattleOrientation.IsFootprintRotated(soldier.Orientation);
             Width = isRotated
                 ? soldier.Soldier.Template.Species.Depth
                 : soldier.Soldier.Template.Species.Width;
@@ -145,6 +148,7 @@ namespace OnlyWar.Models.Battles
                 ? soldier.Soldier.Template.Species.Width
                 : soldier.Soldier.Template.Species.Depth;
             IsInMelee = soldier.IsInMelee;
+            LeftoverMovement = soldier.LeftoverMovement;
             TurnsRunning = soldier.TurnsRunning;
             TurnsShooting = soldier.TurnsShooting;
         }

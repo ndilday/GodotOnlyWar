@@ -34,6 +34,7 @@ namespace OnlyWar.Helpers.Battles
         // use it to distinguish player-controlled missions from NPC missions.
         public bool IsPlayerAligned => IsPlayerSquad || Squad?.Faction?.IsDefaultFaction == true;
         public bool IsInMelee { get; set; }
+        public SquadMovementTier MovementTier { get; set; }
 
         public Squad Squad { get; }
 
@@ -89,6 +90,7 @@ namespace OnlyWar.Helpers.Battles
             Soldiers = squad.Members.Select(s => new BattleSoldier(s, this)).ToList();
             IsPlayerSquad = isPlayerSquad;
             IsInMelee = false;
+            MovementTier = SquadMovementTier.Stationary;
             // order weapon sets by strength of primary weapon
             AllocateEquipment();
         }
@@ -101,6 +103,7 @@ namespace OnlyWar.Helpers.Battles
             Squad = original.Squad;
             IsPlayerSquad = original.IsPlayerSquad;
             IsInMelee = original.IsInMelee;
+            MovementTier = original.MovementTier;
             // because of the circular reference, the clone function won't work,
             // so I made a custom BattleSoldier constructor that does basically the same thing
             Soldiers = original.Soldiers.Select(s => new BattleSoldier(s, this)).ToList();

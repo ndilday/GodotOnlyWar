@@ -41,7 +41,7 @@ namespace OnlyWar.Helpers.Battles.Actions
         // unhittable) while keeping the smooth Gaussian tails.
         public const float MeleeRollStandardDeviation = 6.0f;
 
-        private const float MovementAttackPenalty = 2.0f;
+        public const float MovementAttackPenalty = 2.0f;
         private static readonly float OpposedRollSigma =
             (float)(MeleeRollStandardDeviation * Math.Sqrt(2.0));
 
@@ -51,6 +51,7 @@ namespace OnlyWar.Helpers.Battles.Actions
         private readonly bool _didMove;
         private readonly IRNG _random;
         private readonly IReadOnlyDictionary<int, MeleeWeaponTemplate> _meleeWeaponTemplates;
+        private IReadOnlySet<int> _chargingSoldierIds = new HashSet<int>();
         private bool _wasExecuted;
 
         public List<WoundResolution> WoundResolutions { get; }
@@ -59,17 +60,25 @@ namespace OnlyWar.Helpers.Battles.Actions
         private readonly HashSet<int> _targetedDefenderIds;
 
         public int ActorId => _attackerId;
+        public bool IsCharge { get; }
+        public bool UsesMovementAttackPenalty => _didMove;
+        internal bool TreatsDefenderAsCharging(int defenderId) =>
+            _chargingSoldierIds.Contains(defenderId);
 
         public MeleeAttackAction(BattleSoldier attacker,
                                  IReadOnlyList<PlannedMeleeStrike> strikePlans,
                                  bool didMove,
                                  Action<string> log,
                                  IRNG random,
-                                 IReadOnlyDictionary<int, MeleeWeaponTemplate> meleeWeaponTemplates)
+                                 IReadOnlyDictionary<int, MeleeWeaponTemplate> meleeWeaponTemplates,
+                                 bool isCharge = false)
         {
             _attackerId = attacker.Soldier.Id;
             _attackerName = attacker.Soldier.Name;
-            _didMove = didMove;
+            IsCharge = isCharge;
+            // A charge always uses the existing moved-attack penalty, even if its
+            // movement ultimately fails to change the attacker's grid position.
+            _didMove = didMove || isCharge;
             _log = log;
             _random = random ?? throw new ArgumentNullException(nameof(random));
             _meleeWeaponTemplates = meleeWeaponTemplates
@@ -85,7 +94,8 @@ namespace OnlyWar.Helpers.Battles.Actions
                                  bool didMove,
                                  Action<string> log,
                                  IRNG random,
-                                 IReadOnlyDictionary<int, MeleeWeaponTemplate> meleeWeaponTemplates)
+                                 IReadOnlyDictionary<int, MeleeWeaponTemplate> meleeWeaponTemplates,
+                                 bool isCharge = false)
             : this(attacker,
                    [new PlannedMeleeStrike(target.Soldier.Id,
                                            weapon.Template.Id,
@@ -94,7 +104,8 @@ namespace OnlyWar.Helpers.Battles.Actions
                    didMove,
                    log,
                    random,
-                   meleeWeaponTemplates)
+                   meleeWeaponTemplates,
+                   isCharge)
         {
         }
 
@@ -138,7 +149,9 @@ namespace OnlyWar.Helpers.Battles.Actions
                 MeleeWeapon weapon = ResolveWeapon(attacker, strikePlan.WeaponTemplateId);
                 float attackSkill = attacker.Soldier.GetTotalSkillValue(weapon.Template.RelatedSkill);
                 float defenderSkill = GetDefenderMeleeSkill(target, weapon.Template.RelatedSkill);
-                float defenderDefenseModifier = GetDefenderDefenseModifier(target);
+                float defenderDefenseModifier = GetDefenderDefenseModifier(
+                    target,
+                    _chargingSoldierIds.Contains(target.Soldier.Id));
                 bool hit = RollMeleeHit(attackSkill,
                                         weapon.Template.Accuracy,
                                         _didMove,
@@ -222,7 +235,41 @@ namespace OnlyWar.Helpers.Battles.Actions
 
         public static float GetDefenderDefenseModifier(BattleSoldier defender)
         {
-            return GetDefenderDefenseModifier(defender, defender?.EquippedMeleeWeapons);
+            return GetDefenderDefenseModifier(defender, forfeitsWeaponParry: false);
+        }
+
+        /// <summary>
+        /// Applies the turn's charge declarations to every planned melee action so
+        /// defense is independent of melee execution order. Call once after all melee
+        /// actions for both sides have been planned and before any are executed.
+        /// </summary>
+        public static void ApplyChargeParryForfeitures(IEnumerable<MeleeAttackAction> turnActions)
+        {
+            List<MeleeAttackAction> actions = turnActions?.ToList() ?? [];
+            IReadOnlySet<int> chargingSoldierIds = actions
+                .Where(action => action.IsCharge)
+                .Select(action => action.ActorId)
+                .ToHashSet();
+
+            foreach (MeleeAttackAction action in actions)
+            {
+                action._chargingSoldierIds = chargingSoldierIds;
+            }
+        }
+
+        /// <summary>
+        /// Returns the defender's weapon-parry modifier. A soldier marked as charging
+        /// for this battle turn forfeits weapon parry, without suffering any additional
+        /// defense penalty.
+        /// </summary>
+        public static float GetDefenderDefenseModifier(
+            BattleSoldier defender,
+            bool forfeitsWeaponParry)
+        {
+            return GetDefenderDefenseModifier(
+                defender,
+                defender?.EquippedMeleeWeapons,
+                forfeitsWeaponParry);
         }
 
         /// <summary>
@@ -232,8 +279,14 @@ namespace OnlyWar.Helpers.Battles.Actions
         /// </summary>
         internal static float GetDefenderDefenseModifier(
             BattleSoldier defender,
-            IReadOnlyCollection<MeleeWeapon> projectedMeleeWeapons)
+            IReadOnlyCollection<MeleeWeapon> projectedMeleeWeapons,
+            bool forfeitsWeaponParry = false)
         {
+            if (forfeitsWeaponParry)
+            {
+                return 0;
+            }
+
             // Defensive value of the weapons in hand is expressed solely through their
             // parry modifiers (summed across equipped weapons); a second weapon helps
             // defense only if it is actually a parrying tool. No flat dual-wield bonus.

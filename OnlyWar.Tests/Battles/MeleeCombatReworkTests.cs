@@ -98,6 +98,79 @@ public class MeleeCombatReworkTests
     }
 
     [Fact]
+    public void ChargingSoldier_ForfeitsWeaponParryWithoutAdditionalDefensePenalty()
+    {
+        BattleSoldier defender = CreateBattleSoldier("Charging Defender", 2);
+        defender.AddWeapons([],
+        [
+            CreateMeleeWeapon(23, "Primary Blade", PrimaryParrySkill, parryModifier: 2),
+            CreateMeleeWeapon(24, "Off-Hand Blade", OffHandParrySkill, parryModifier: 1)
+        ]);
+
+        Assert.Equal(3f, MeleeAttackAction.GetDefenderDefenseModifier(defender));
+        Assert.Equal(0f, MeleeAttackAction.GetDefenderDefenseModifier(
+            defender,
+            forfeitsWeaponParry: true));
+    }
+
+    [Fact]
+    public void ChargeAction_IsMarkedAndAlwaysUsesExistingMovedAttackPenalty()
+    {
+        BattleSoldier attacker = CreateBattleSoldier("Charger", 1);
+        BattleSoldier defender = CreateBattleSoldier("Defender", 2);
+        MeleeWeapon weapon = CreateMeleeWeapon(25, "Charge Blade", AttackSkill);
+        attacker.AddWeapons([], [weapon]);
+
+        MeleeAttackAction action = new(
+            attacker,
+            defender,
+            weapon,
+            didMove: false,
+            log: null,
+            random: new SeededRNG(12345),
+            meleeWeaponTemplates: CreateMeleeTemplateMap(attacker, defender),
+            isCharge: true);
+
+        Assert.True(action.IsCharge);
+        Assert.True(action.UsesMovementAttackPenalty);
+        Assert.Equal(2f, MeleeAttackAction.MovementAttackPenalty);
+    }
+
+    [Fact]
+    public void ApplyChargeParryForfeitures_IsSafeRegardlessOfMeleeExecutionOrder()
+    {
+        BattleSoldier charger = CreateBattleSoldier("Charger", 1);
+        BattleSoldier opponent = CreateBattleSoldier("Opponent", 2);
+        MeleeWeapon chargeWeapon = CreateMeleeWeapon(26, "Charge Blade", AttackSkill, parryModifier: 3);
+        MeleeWeapon opponentWeapon = CreateMeleeWeapon(27, "Opponent Blade", AttackSkill);
+        charger.AddWeapons([], [chargeWeapon]);
+        opponent.AddWeapons([], [opponentWeapon]);
+
+        MeleeAttackAction chargeAction = new(
+            charger,
+            opponent,
+            chargeWeapon,
+            didMove: true,
+            log: null,
+            random: new SeededRNG(1),
+            meleeWeaponTemplates: CreateMeleeTemplateMap(charger, opponent),
+            isCharge: true);
+        MeleeAttackAction opponentAction = new(
+            opponent,
+            charger,
+            opponentWeapon,
+            didMove: false,
+            log: null,
+            random: new SeededRNG(2),
+            meleeWeaponTemplates: CreateMeleeTemplateMap(charger, opponent));
+
+        MeleeAttackAction.ApplyChargeParryForfeitures([opponentAction, chargeAction]);
+
+        Assert.True(opponentAction.TreatsDefenderAsCharging(charger.Soldier.Id));
+        Assert.False(chargeAction.TreatsDefenderAsCharging(opponent.Soldier.Id));
+    }
+
+    [Fact]
     public void MeleeAttackAction_IncrementsTurnsSwingingOnceWhenExecuted()
     {
         BattleSquad attacker = CreateBattleSquad("Attackers", 1, "Attacker");

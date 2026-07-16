@@ -376,6 +376,32 @@ public class BattleGridManagerTests
         Assert.False(clone.IsSpaceAvailable(new Tuple<int, int>(9, 9)));
     }
 
+    [Theory]
+    [InlineData(0, 1, 2)]
+    [InlineData(1, 1, 2)]
+    [InlineData(2, 2, 1)]
+    [InlineData(3, 1, 2)]
+    [InlineData(4, 1, 2)]
+    [InlineData(5, 1, 2)]
+    [InlineData(6, 2, 1)]
+    [InlineData(7, 1, 2)]
+    public void BattleOrientation_EightWayFacingKeepsFootprintAxisAligned(
+        ushort orientation,
+        int expectedWidth,
+        int expectedDepth)
+    {
+        Soldier model = TestModelFactory.CreateSoldier(template: CreateNonSquareTemplate());
+        BattleSoldier soldier = new(model, squad: null)
+        {
+            TopLeft = new Tuple<int, int>(10, 10),
+            Orientation = orientation
+        };
+
+        Assert.Equal(expectedWidth * expectedDepth, soldier.PositionList.Count);
+        Assert.Equal(10 + expectedWidth, soldier.BottomRight.Item1);
+        Assert.Equal(10 - expectedDepth, soldier.BottomRight.Item2);
+    }
+
     private static SoldierTemplate CreateNonSquareTemplate()
     {
         static NormalizedValueTemplate Value(float value) => new()

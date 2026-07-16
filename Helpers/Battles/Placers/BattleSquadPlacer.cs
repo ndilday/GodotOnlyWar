@@ -101,7 +101,7 @@ namespace OnlyWar.Helpers.Battles.Placers
                 manager.PlaceSoldier(squad.AbleSoldiers[i], tacticalSide, soldierLocations);
 
                 squad.AbleSoldiers[i].TopLeft = GetTopLeft(soldierLocations);
-                squad.AbleSoldiers[i].Orientation = 1;
+                squad.AbleSoldiers[i].Orientation = 2;
             }
 
             return startingLocation;

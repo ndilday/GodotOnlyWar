@@ -243,6 +243,8 @@ namespace OnlyWar.Helpers.Battles
 
         private void HandleMelee(List<IAction> meleeActions, List<IAction> executedActions, ISet<int> defendingSoldierIds)
         {
+            MeleeAttackAction.ApplyChargeParryForfeitures(
+                meleeActions.OfType<MeleeAttackAction>());
             // Reverse before the stable sort so the old bag order is retained if an actor ever
             // contributes more than one melee action in a segment.
             foreach (IAction action in meleeActions.AsEnumerable().Reverse().OrderBy(action => action.ActorId))

@@ -21,6 +21,7 @@ public class BattleSoldierCloneTests
         source.ReloadingPhase = 2;
         source.Stance = Stance.Kneeling;
         source.CurrentSpeed = 4.5f;
+        source.LeftoverMovement = 1.75f;
         source.TurnsRunning = 2;
         source.TurnsShooting = 3;
         source.TurnsSwinging = 4;
@@ -42,6 +43,7 @@ public class BattleSoldierCloneTests
         Assert.Equal(source.ReloadingPhase, clone.ReloadingPhase);
         Assert.Equal(source.Stance, clone.Stance);
         Assert.Equal(source.CurrentSpeed, clone.CurrentSpeed);
+        Assert.Equal(source.LeftoverMovement, clone.LeftoverMovement);
         Assert.Equal(source.TurnsRunning, clone.TurnsRunning);
         Assert.Equal(source.TurnsShooting, clone.TurnsShooting);
         Assert.Equal(source.TurnsSwinging, clone.TurnsSwinging);

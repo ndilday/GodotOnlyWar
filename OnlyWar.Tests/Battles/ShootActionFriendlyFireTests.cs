@@ -43,6 +43,57 @@ public class ShootActionFriendlyFireTests
             precision: 4);
     }
 
+    [Fact]
+    public void CalculateToHitModifiers_WalkHalvesBulkAndAppliedAimBonus()
+    {
+        BattleSquad shooters = CreateSquad(true, (1, "Shooter"));
+        BattleSquad targets = CreateSquad(false, (2, "Target"));
+        BattleSoldier shooter = shooters.Soldiers[0];
+        BattleSoldier target = targets.Soldiers[0];
+        var weapon = shooter.EquippedRangedWeapons[0];
+        shooter.Aim = new Tuple<int, Models.Equippables.RangedWeapon, int>(
+            target.Soldier.Id,
+            weapon,
+            0);
+        float skill = shooter.Soldier.GetTotalSkillValue(weapon.Template.RelatedSkill);
+        float fullAimBonus = System.Math.Min(weapon.Template.Accuracy, skill) + 1;
+
+        ShootAction stationary = new(
+            1, 2, weapon.Template.Id, 5, 1,
+            bulkMultiplier: 0,
+            aimMultiplier: 1,
+            grid: null,
+            StaticRNG.Instance);
+        ShootAction walking = new(
+            1, 2, weapon.Template.Id, 5, 1,
+            bulkMultiplier: 0.5f,
+            aimMultiplier: 0.5f,
+            grid: null,
+            StaticRNG.Instance);
+        ShootAction jogging = new(
+            1, 2, weapon.Template.Id, 5, 1,
+            bulkMultiplier: 1,
+            aimMultiplier: 0,
+            grid: null,
+            StaticRNG.Instance);
+
+        float stationaryModifier = stationary.CalculateToHitModifiers(
+            shooter, target, weapon, skill, false);
+        float walkingModifier = walking.CalculateToHitModifiers(
+            shooter, target, weapon, skill, false);
+        float joggingModifier = jogging.CalculateToHitModifiers(
+            shooter, target, weapon, skill, false);
+
+        Assert.Equal(
+            stationaryModifier - (fullAimBonus * 0.5f) - (weapon.Template.Bulk * 0.5f),
+            walkingModifier,
+            precision: 4);
+        Assert.Equal(
+            stationaryModifier - fullAimBonus - weapon.Template.Bulk,
+            joggingModifier,
+            precision: 4);
+    }
+
     [Theory]
     [InlineData(0, true)]
     [InlineData(-0.5, true)]

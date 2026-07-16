@@ -149,6 +149,191 @@ public class BattleSquadPlannerTests
         return weapon;
     }
 
+    [Fact]
+    public void PrepareActions_FlamerInRangeSelectsStationaryTier()
+    {
+        BattleSquad shooters = CreateSquad("Stationary Flamer", 90_001);
+        BattleSquad enemies = CreateSquad("Nearby Enemy", 90_002);
+        BattleSoldier shooter = shooters.Soldiers[0];
+        EquipTemplateWeapon(shooter, maximumRange: 5);
+        shooter.LeftoverMovement = 3.25f;
+        BattleGridManager grid = new();
+        Place(grid, shooter, true, 0, 0);
+        Place(grid, enemies.Soldiers[0], false, 3, 0);
+        List<IAction> shootActions = [];
+        BattleSquadPlanner planner = CreatePlanner(
+            grid, shootActions, [], [], shooters, enemies);
+
+        planner.PrepareActions(shooters);
+
+        Assert.Equal(SquadMovementTier.Stationary, shooters.MovementTier);
+        Assert.Equal(0, shooter.CurrentSpeed);
+        Assert.Equal(0, shooter.LeftoverMovement);
+        Assert.IsType<AreaAttackAction>(Assert.Single(shootActions));
+    }
+
+    [Fact]
+    public void PrepareActions_FlamerOutOfRangeSelectsRunWithoutFiring()
+    {
+        BattleSquad shooters = CreateSquad("Running Flamer", 90_011);
+        BattleSquad enemies = CreateSquad("Distant Enemy", 90_012);
+        BattleSoldier shooter = shooters.Soldiers[0];
+        EquipTemplateWeapon(shooter, maximumRange: 3);
+        BattleGridManager grid = new();
+        Place(grid, shooter, true, 0, 0);
+        Place(grid, enemies.Soldiers[0], false, 20, 0);
+        List<IAction> shootActions = [];
+        List<IAction> moveActions = [];
+        BattleSquadPlanner planner = CreatePlanner(
+            grid, shootActions, moveActions, [], shooters, enemies);
+
+        planner.PrepareActions(shooters);
+
+        Assert.Equal(SquadMovementTier.Run, shooters.MovementTier);
+        Assert.Equal(shooter.GetMoveSpeed(), shooter.CurrentSpeed);
+        Assert.Empty(shootActions.OfType<AreaAttackAction>());
+        Assert.IsType<MoveAction>(Assert.Single(moveActions));
+    }
+
+    [Fact]
+    public void PrepareActions_EnemyInsidePreferredRangeSelectsWalk()
+    {
+        BattleSquad shooters = CreateSquad("Walking Rifle", 90_015);
+        BattleSquad enemies = CreateSquad("Close Enemy", 90_016);
+        BattleSoldier shooter = shooters.Soldiers[0];
+        ((Soldier)shooter.Soldier).Dexterity = 20;
+        RangedWeapon rifle = new(new RangedWeaponTemplate(
+            99_215,
+            "Accurate Rifle",
+            EquipLocation.TwoHand,
+            TestSkills.Ranged,
+            accuracy: 0,
+            armorMultiplier: 1,
+            penetrationMultiplier: 1,
+            requiredStrength: 0,
+            baseDamage: 100,
+            maxDistance: 100,
+            rof: 1,
+            ammo: 10,
+            recoil: 0,
+            bulk: 4,
+            doesDamageDegradeWithRange: false,
+            reloadTime: 1));
+        shooter.RangedWeapons.Clear();
+        shooter.EquippedRangedWeapons.Clear();
+        shooter.RangedWeapons.Add(rifle);
+        shooter.EquippedRangedWeapons.Add(rifle);
+        BattleGridManager grid = new();
+        Place(grid, shooter, true, 0, 0);
+        Place(grid, enemies.Soldiers[0], false, 10, 0);
+        List<IAction> moveActions = [];
+        BattleSquadPlanner planner = CreatePlanner(
+            grid, [], moveActions, [], shooters, enemies);
+
+        planner.PrepareActions(shooters);
+
+        Assert.Equal(SquadMovementTier.Walk, shooters.MovementTier);
+        Assert.Equal(shooter.GetMoveSpeed() / 5f, shooter.CurrentSpeed, precision: 4);
+        Assert.IsType<MoveAction>(Assert.Single(moveActions));
+    }
+
+    [Fact]
+    public void PrepareActions_ClosingSquadWithWorthwhileUnaimedShotSelectsJog()
+    {
+        BattleSquad shooters = CreateSquad("Jogging Rifle", 90_017);
+        BattleSquad enemies = CreateSquad("Far Enemy", 90_018);
+        BattleSoldier shooter = shooters.Soldiers[0];
+        ((Soldier)shooter.Soldier).Dexterity = 16;
+        RangedWeapon rifle = new(new RangedWeaponTemplate(
+            99_217,
+            "Mobile Rifle",
+            EquipLocation.TwoHand,
+            TestSkills.Ranged,
+            accuracy: 0,
+            armorMultiplier: 1,
+            penetrationMultiplier: 1,
+            requiredStrength: 0,
+            baseDamage: 100,
+            maxDistance: 1_000,
+            rof: 1,
+            ammo: 10,
+            recoil: 0,
+            bulk: 1,
+            doesDamageDegradeWithRange: false,
+            reloadTime: 1));
+        shooter.RangedWeapons.Clear();
+        shooter.EquippedRangedWeapons.Clear();
+        shooter.RangedWeapons.Add(rifle);
+        shooter.EquippedRangedWeapons.Add(rifle);
+        BattleSoldier enemy = enemies.Soldiers[0];
+        ((Soldier)enemy.Soldier).Dexterity = 20;
+        RangedWeapon longRifle = new(new RangedWeaponTemplate(
+            99_218,
+            "Long Rifle",
+            EquipLocation.TwoHand,
+            TestSkills.Ranged,
+            accuracy: 6,
+            armorMultiplier: 1,
+            penetrationMultiplier: 1,
+            requiredStrength: 0,
+            baseDamage: 100,
+            maxDistance: 1_000,
+            rof: 1,
+            ammo: 10,
+            recoil: 0,
+            bulk: 0,
+            doesDamageDegradeWithRange: false,
+            reloadTime: 1));
+        enemy.RangedWeapons.Clear();
+        enemy.EquippedRangedWeapons.Clear();
+        enemy.RangedWeapons.Add(longRifle);
+        enemy.EquippedRangedWeapons.Add(longRifle);
+        float preferredDistance = BattleModifiersUtil.CalculateOptimalDistance(
+            shooter,
+            enemies.GetAverageSize(),
+            enemies.GetAverageArmor(),
+            enemies.GetAverageConstitution(),
+            enemies.GetAverageRangedEvasion());
+        int enemyX = (int)System.Math.Ceiling(preferredDistance * 1.5f);
+        BattleGridManager grid = new();
+        Place(grid, shooter, true, 0, 0);
+        Place(grid, enemies.Soldiers[0], false, enemyX, 0);
+        List<IAction> shootActions = [];
+        List<IAction> moveActions = [];
+        BattleSquadPlanner planner = CreatePlanner(
+            grid, shootActions, moveActions, [], shooters, enemies);
+
+        planner.PrepareActions(shooters);
+
+        Assert.Equal(SquadMovementTier.Jog, shooters.MovementTier);
+        Assert.Equal(shooter.GetMoveSpeed() / 2f, shooter.CurrentSpeed, precision: 4);
+        ShootAction shot = Assert.IsType<ShootAction>(Assert.Single(shootActions));
+        Assert.Equal(1f, shot.BulkMultiplier);
+        Assert.Equal(0f, shot.AimMultiplier);
+        Assert.IsType<MoveAction>(Assert.Single(moveActions));
+    }
+
+    [Fact]
+    public void PrepareActions_EngagedSquadUsesInMeleeTierAndClosesSeparatedMembers()
+    {
+        BattleSquad attackers = CreateSquad("Engaging Squad", 90_021);
+        BattleSquad enemies = CreateSquad("Melee Target", 90_022);
+        BattleSoldier attacker = attackers.Soldiers[0];
+        BattleGridManager grid = new();
+        Place(grid, attacker, true, 0, 0);
+        Place(grid, enemies.Soldiers[0], false, 3, 0);
+        attackers.IsInMelee = true;
+        List<IAction> moveActions = [];
+        BattleSquadPlanner planner = CreatePlanner(
+            grid, [], moveActions, [], attackers, enemies);
+
+        planner.PrepareActions(attackers);
+
+        Assert.Equal(SquadMovementTier.InMelee, attackers.MovementTier);
+        Assert.Equal(attacker.GetMoveSpeed(), attacker.CurrentSpeed);
+        Assert.IsType<MoveAction>(Assert.Single(moveActions));
+    }
+
     private static EngagedDecisionScenario CreateEngagedDecisionScenario(int attackerCount)
     {
         BattleSquad shooterSquad = CreateSquad("Engaged Shooter", 500, battleValue: 10);

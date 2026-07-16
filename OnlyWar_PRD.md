@@ -448,20 +448,29 @@ Each feature is described as a behavioral specification: what the system does, a
 - Opposing forces begin at an engagement range that scales with the battle type: ambushes begin at shorter range; ranged-dominant forces prefer longer initial ranges.
 
 **Turn Structure**
-- Each battle turn, every able soldier selects an action based on their situation and aggression setting.
-- Available actions: move (at a chosen movement tier toward a destination), fire, aim (stationary only, accumulates accuracy bonus), charge into melee, melee attack, reload, ready a weapon, or change stance.
+- Each battle turn, every able squad selects a movement tier based on its tactical situation and aggression setting. Individual soldiers then select legal actions within that squad tier.
+- Available actions include movement toward a destination, fire, aim, charge into melee, melee attack, reload, ready or swap a weapon, or change stance. Recovering from Prone consumes the soldier's full action and cannot be combined with movement; other future utility actions specify their own tier restrictions case by case.
+- Fire resolves before movement. A soldier therefore fires from their starting position, then carries out the movement selected for the turn.
 
-**Movement Tiers**
-- Movement is modeled as four discrete tiers, each a fraction of the soldier's `MoveSpeed`. The tier chosen determines which combat actions are available that turn. A soldier may change tier freely each turn with no transition cost, except that a crouching or prone soldier must return to standing before moving.
+**Movement Tiers — Battle Logic Phase 4A**
+- Movement is modeled as five squad-level tactical tiers: Stationary, Walk, Jog, Run, and In Melee. A tier is primarily a set of restrictions: it defines the maximum distance each soldier may travel and which other activities may be combined with that movement. The squad may change tiers freely each turn with no transition cost.
+- Stationary prioritizes volume and accuracy of fire. Walk supports small range adjustments while retaining reduced accuracy. Jog closes or opens distance while unaimed fire remains worthwhile. Run prioritizes changing distance over ranged fire. In Melee keeps engaged soldiers fighting while the rest of the squad closes to support them.
 
-| Tier | Speed | Aim | Shoot | Melee | Notes |
+| Tier | Maximum movement | Aim | Ranged attack | Melee | Notes |
 |---|---|---|---|---|---|
-| Stationary | 0 | Yes | Yes | Yes | Stance effects apply |
-| Walk | 1/5 MoveSpeed | Yes | Yes | Yes | Aim state is preserved between walk turns |
-| Jog | 1/2 MoveSpeed | No | Yes (no aim bonus) | Yes | Entering jog or faster resets any accumulated aim |
-| Run | Full MoveSpeed | No | No | No | Turning restricted to 30 degrees per turn |
+| Stationary | 0 | Yes; full bonus | Yes; no movement `Bulk` penalty | Yes | Selecting Stationary resets banked movement; stance effects apply |
+| Walk | 1/5 MoveSpeed | Yes; half applied bonus | Yes; half `Bulk` penalty | Yes | Accumulated aim is preserved |
+| Jog | 1/2 MoveSpeed | No | Yes; no aim bonus and full `Bulk` penalty | Yes | Entering Jog resets accumulated aim |
+| Run | Full MoveSpeed | No | No | Charge only | Entering Run resets accumulated aim; turning is limited to 45 degrees (one facing step) |
+| In Melee | Per soldier | No squad-wide aim behavior | Per the soldier's effective movement and engagement | Yes | Adjacent soldiers hold and fight; separated soldiers close or charge |
 
-- Shooting while running is not permitted in the initial implementation; a high-penalty shoot-while-running variant may be added later.
+- **Declared tier and target speed.** The declared tier sets each soldier's `CurrentSpeed` for ranged-defense calculations: 0 for Stationary, 1/5 `MoveSpeed` for Walk, 1/2 for Jog, and full `MoveSpeed` for Run. It applies even when the soldier's actual displacement is shorter or movement fails, because the movement choice has already constrained the soldier's actions. In Melee derives `CurrentSpeed` per soldier: an adjacent combatant who holds position has speed 0, while a soldier closing or charging has the speed of that movement.
+- **Banked movement.** Each soldier stores `LeftoverMovement`. A moving turn's available distance is the tier allowance plus the full banked amount; Euclidean distance actually traveled is subtracted, and all unused distance remains banked for a later moving turn. The bank is not capped and is not lost when movement is shortened or blocked by another soldier. Selecting Stationary resets it to 0. This preserves fractional grid movement over time: a Move 6 soldier walking receives 1.2 distance per turn and can eventually spend accumulated fractions on a diagonal move.
+- **Walking accuracy.** Walk does not cap or discard stored aim. Instead, it halves the entire aim-derived accuracy bonus when a shot is resolved: weapon `Accuracy` plus accumulated aim. For example, an Accuracy 3 weapon fired after one turn of aiming receives +4 while Stationary and +2 while Walking, regardless of whether that aim was accumulated while Stationary or Walking. Returning to Stationary restores the full effect of preserved aim. Jog and Run provide no aim bonus and reset accumulated aim.
+- **Movement `Bulk`.** Walk applies one-half of the weapon's `Bulk` penalty; Jog applies the full `Bulk` penalty. Stationary applies none. Run prohibits every ranged attack, including ordinary firearms, flamers, thrown grenades, and grenade launchers; none receive a special Run exception. Reloading and readying or swapping a weapon remain legal at Walk, Jog, and Run.
+- **Charge.** Run may culminate in a melee attack only for a soldier entering a new engagement; a soldier who began adjacent to an enemy cannot use Run to make an ordinary melee attack. A charging attack uses the existing −2 moved-attack accuracy penalty. The charger forfeits all weapon `ParryModifier` benefit for the remainder of that turn, but receives no additional defensive penalty because their movement speed already makes them harder to hit at range.
+- **In Melee.** This tier is a squad tactical mode rather than a uniform movement rate. A soldier already adjacent to an enemy stays in place and chooses a legal melee or point-blank action. A separated soldier moves toward an available engagement position, using up to Run allowance and charging if they can enter melee this turn; if they cannot reach melee, they continue closing without ranged fire. The selected squad tier is stored in battle state, while `CurrentSpeed` and `LeftoverMovement` remain per-soldier state.
+- **Deferred interactions.** Phase 4A does not implement the later leg-wound movement changes or true stance behavior. Battle Value recalibration caused by the tier system is a separate balance body of work.
 
 **Stance**
 - Stance is only mechanically relevant when a soldier is stationary, and represents body position: Standing, Crouching, or Prone. Stance affects both incoming ranged hit probability and melee effectiveness.
@@ -1172,7 +1181,7 @@ Alpha 0.7.1 is deliberately limited to protecting and operating the released cam
 
 ### 5.4 Alpha 0.7.1 — To-Do
 
-- **Battle Logic Phase 4:** Morale, on-fire damage-over-time/panic (§4.14 gated follow-on), sprint/fire tradeoff, the full covered-withdrawal/rout/pursuit mechanic (including immediate disengagement for burrowing- and flight-capable squads), and post-battle loadout recalculation. *(Flamers/cone templates were pulled forward to §5.2; grenades shipped as their own item in §5.3.)*
+- **Battle Logic Phase 4:** Morale, on-fire damage-over-time/panic (§4.14 gated follow-on), explicit movement tiers and the sprint/fire tradeoff (**Phase 4A**, specified in §4.14), the full covered-withdrawal/rout/pursuit mechanic (including immediate disengagement for burrowing- and flight-capable squads), and post-battle loadout recalculation. *(Flamers/cone templates were pulled forward to §5.2; grenades shipped as their own item in §5.3. Phase 4A deliberately defers leg-wound/true-stance integration and Battle Value recalibration.)*
 - **Leg Wound & Prone-Combat Realism (maybe):** Rework the leg-hit outcome so a single solid hit staggers rather than reliably felling. Motivated by combat GSW data: even for 40k-tier energies (nothing softer than .45/7.62), only ~45–55% of solid leg hits fracture bone/joint or major vessel and actually prevent movement; the rest slow but don't stop. Scope:
   - **Raise the "can no longer walk" bar one level to Massive.** Motive (leg/foot) locations currently drop a soldier at their *cripple* threshold (Critical, i.e. damage ≥ Constitution); require the higher *Massive* band instead so a Critical leg wound impairs but does not fell. Torso/vital lethality is unchanged; this narrows the current asymmetry where a leg is fight-ending at half the damage the torso needs to be decisive.
   - **Downed-but-armed enemies keep firing prone.** A soldier felled by a motive-location wound who still holds a ranged weapon may continue firing from prone, after a short delay (a few rounds) to represent going down and re-orienting rather than instantly returning accurate fire.
@@ -1380,7 +1389,7 @@ This is a post-0.7 design item. Navigator quality should be designed as a chapte
 | Battle Brother | A full Space Marine belonging to the player's chapter. |
 | Battle Value | A numeric score representing the approximate combat power of a squad template. Used to generate balanced opposing forces. |
 | Chapter | The player's Space Marine organization: nominally 1,000 Battle Brothers organized into ten companies. |
-| Combat Pace | The jog movement tier. The soldier moves at half their MoveSpeed. Shooting is permitted but aiming is not. Entering jog speed or faster resets any accumulated aim state. |
+| Combat Pace | The Jog movement tier. The soldier moves at half their MoveSpeed. Shooting is permitted with the full weapon `Bulk` penalty, but no aim bonus applies. Entering Jog resets accumulated aim. |
 | Contentment | A per-region 0–100 scalar on the default-Imperial RegionFaction representing civilian loyalty/stability. Eroded by overcrowding, war-weariness, hidden-faction drain, thin garrison, and governor temperament; low Contentment drives revolt (§4.20). Presented at planet level as a population-weighted rollup. |
 | Crouching | A stance available to stationary soldiers. Lower body hit locations are excluded from ranged hit rolls. Melee offense is penalized; the soldier is easier to hit in melee. Requires one turn to enter or exit. A crouching soldier must stand before moving. |
 | Disposition | The tactical posture of a squad on an order: Mobile (active operations), Dug In (defensive), or Raiding (moving to engage and then returning). |
@@ -1402,7 +1411,9 @@ This is a post-0.7 design item. Navigator quality should be designed as a chapte
 | Pledge | A promise of material support generated when the chapter fulfills a request, in addition to the opinion change. Carries a source, type (Requisition, wargear, vehicle, ship, recruits, raw materials, recruitment rights, or intelligence hook), payload, and delivery schedule. May be a standing tithe, a one-off, a rights grant, or a hook (§4.23). |
 | Pop | (Proposed, §6.7) A subdivision of a region's population carrying its own loyalty/affiliation that drifts over time. Not implemented; raised as the possible long-term substrate unifying conversion, revolt, and corruption. |
 | Mission | A specific operational objective assigned to one or more squads: Recon, Advance, Ambush, Assassination, Sabotage, Extermination, Defense, Patrol, Construction, or Diversion. |
-| Movement Tier | One of four discrete movement states available to a soldier each battle turn: Stationary, Walk (1/5 MoveSpeed), Jog (1/2 MoveSpeed), or Run (full MoveSpeed). Tier determines shooting and aiming availability. |
+| In Melee | A squad-level movement tier for maintaining and completing an engagement. Soldiers already adjacent to an enemy hold and fight; separated squad members close toward an engagement position and charge when they can reach it. |
+| Leftover Movement | Per-soldier unused movement distance banked without a cap across consecutive moving turns. It is added to the next moving turn's tier allowance and reduced only by distance actually traveled; selecting Stationary resets it. |
+| Movement Tier | One of five squad-level tactical states selected each battle turn: Stationary, Walk (1/5 MoveSpeed), Jog (1/2 MoveSpeed), Run (full MoveSpeed), or In Melee (hold engaged soldiers while separated soldiers close). The tier determines movement allowance, action restrictions, aim treatment, and defensive `CurrentSpeed`. |
 | Order | The assignment of one or more squads to a Mission, specifying disposition and aggression level. |
 | Order of Battle | The full hierarchical structure of the chapter: Chapter HQ → Companies → Squads → Marines. |
 | OpFor | Opposing Force. Any non-player faction unit encountered in a mission or battle. |
@@ -1413,7 +1424,7 @@ This is a post-0.7 design item. Navigator quality should be designed as a chapte
 | Region | A sub-area of a planet. Each region has its own faction presences, garrison counts, intelligence level, and infrastructure ratings. |
 | RegionFaction | The presence of a specific faction in a specific region, with its own population, garrison, organization, listening-post, entrenchment, and anti-air values. Holds the list of squads of that faction currently landed in the region. |
 | Requisition | The chapter's abstract favor/supply-credit pool — the universal currency of the supply economy and the "political capital" pillar made concrete. Earned from most request fulfillments and spent on procedures, recruitment, wargear, and repairs (§4.23). |
-| Run | The fastest movement tier. The soldier moves at full MoveSpeed. No shooting or melee is permitted. Turning is restricted to 30 degrees per turn. |
+| Run | The fastest ordinary movement tier. The soldier moves at full MoveSpeed and may reload or swap weapons, but cannot make a ranged attack of any kind. A soldier not already engaged may finish the Run with a penalized charge into melee. Turning is restricted to 45 degrees (one facing step) per turn. |
 | Spare Troops | The portion of a faction's organized military force in a region that exceeds the required garrison, available for offensive operations or construction. |
 | Squad | A group of marines operating as a unit, assigned to a specific template that defines their role and composition. |
 | Squad Template | The definition of a squad type: roles, minimum and maximum member counts, battle value, and permitted weapon options. |
@@ -1428,6 +1439,6 @@ This is a post-0.7 design item. Navigator quality should be designed as a chapte
 | Supply Line | The route along which a pledging world's materiel deliveries reach the chapter. Bound to the fate of its source world (a world that revolts or falls suspends or defaults its pledges) and, post-factional-fleets, potentially interdictable in transit (§4.23, §6.10). |
 | Task Force | A grouping of ships within the chapter's fleet. |
 | Turn | One in-game week. The smallest unit of strategic time. |
-| Walk | The slowest movement tier above stationary. The soldier moves at 1/5 MoveSpeed. Shooting and aiming are both permitted. Accumulated aim state is preserved between walk turns. |
+| Walk | The slowest movement tier above Stationary. The soldier moves at 1/5 MoveSpeed. Shooting and aiming are permitted, and accumulated aim is preserved, but the applied bonus from weapon Accuracy plus accumulated aim is halved and only half the weapon's `Bulk` penalty applies. |
 | Warp Lane | An established, well-traveled route between two planets through the Warp. Lane travel has lower transit time variance than charting a direct route. Within a subsector, all lanes radiate from the subsector capital. Cross-subsector lanes connect primarily between subsector capitals. |
 | Wound Severity | A classification of how badly a hit location has been damaged: Negligible, Minor, Moderate, Major, Critical, Massive, Mortal, or Unsurvivable. |

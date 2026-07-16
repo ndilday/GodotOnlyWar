@@ -16,7 +16,9 @@ public class BattleStateSnapshotTests
             TestModelFactory.CreateSoldier(name: "Snapshot Soldier")));
         BattleSoldier sourceSoldier = squad.Soldiers[0];
         sourceSoldier.TopLeft = new System.Tuple<int, int>(3, 7);
+        sourceSoldier.LeftoverMovement = 1.25f;
         sourceSoldier.TurnsRunning = 2;
+        squad.MovementTier = SquadMovementTier.Walk;
         BattleState liveState = new(
             new Dictionary<int, BattleSquad> { [squad.Id] = squad },
             new Dictionary<int, BattleSquad>());
@@ -26,14 +28,18 @@ public class BattleStateSnapshotTests
         BattleSoldierSnapshot snapshot = turn.State.Soldiers[liveSoldier.Soldier.Id];
 
         liveSoldier.TopLeft = new System.Tuple<int, int>(20, 20);
+        liveSoldier.LeftoverMovement = 4.5f;
         liveSoldier.TurnsRunning = 9;
+        liveState.GetSquad(squad.Id).MovementTier = SquadMovementTier.Run;
         liveState.GetSquad(squad.Id).Soldiers.Clear();
         liveState.AdvanceTurn();
 
         Assert.Equal(0, turn.TurnNumber);
         Assert.Equal(3, snapshot.X);
         Assert.Equal(7, snapshot.Y);
+        Assert.Equal(1.25f, snapshot.LeftoverMovement);
         Assert.Equal(2, snapshot.TurnsRunning);
+        Assert.Equal(SquadMovementTier.Walk, turn.State.AttackerSquads[squad.Id].MovementTier);
         Assert.Single(turn.State.AttackerSquads[squad.Id].Soldiers);
     }
 

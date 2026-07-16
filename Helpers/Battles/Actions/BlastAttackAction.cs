@@ -32,7 +32,8 @@ namespace OnlyWar.Helpers.Battles.Actions
         public int TargetId { get; }
         public int WeaponId { get; }
         public float Range { get; }
-        public bool UseBulk { get; }
+        public bool UseBulk => BulkMultiplier > 0;
+        public float BulkMultiplier { get; }
         public Tuple<int, int> ImpactCell { get; private set; }
         public bool DidScatter { get; private set; }
         public IReadOnlyList<int> VictimIds { get; private set; } = [];
@@ -48,12 +49,31 @@ namespace OnlyWar.Helpers.Battles.Actions
             bool useBulk,
             BattleGridManager grid,
             IRNG random)
+            : this(
+                shooterId,
+                targetId,
+                weaponId,
+                range,
+                useBulk ? 1f : 0f,
+                grid,
+                random)
+        {
+        }
+
+        public BlastAttackAction(
+            int shooterId,
+            int targetId,
+            int weaponId,
+            float range,
+            float bulkMultiplier,
+            BattleGridManager grid,
+            IRNG random)
         {
             ShooterId = shooterId;
             TargetId = targetId;
             WeaponId = weaponId;
             Range = range;
-            UseBulk = useBulk;
+            BulkMultiplier = Math.Max(0, bulkMultiplier);
             _grid = grid ?? throw new ArgumentNullException(nameof(grid));
             _random = random ?? throw new ArgumentNullException(nameof(random));
         }
@@ -84,9 +104,9 @@ namespace OnlyWar.Helpers.Battles.Actions
             // modifiers do not.
             float skill = shooter.Soldier.GetTotalSkillValue(weapon.Template.RelatedSkill);
             float modifier = BattleModifiersUtil.CalculateRangeModifier(Range, 0f);
-            if (UseBulk)
+            if (BulkMultiplier > 0)
             {
-                modifier -= weapon.Template.Bulk;
+                modifier -= weapon.Template.Bulk * BulkMultiplier;
             }
             float roll = 10.5f + (3.0f * (float)_random.NextRandomZValue());
             float margin = skill + modifier - roll;

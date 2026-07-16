@@ -96,7 +96,7 @@ namespace OnlyWar.Helpers.Battles
             List<Tuple<int, int>> cells = [];
             int width;
             int depth;
-            if (orientation % 2 == 0)
+            if (!BattleOrientation.IsFootprintRotated(orientation))
             {
                 width = soldier.Soldier.Template.Species.Width;
                 depth = soldier.Soldier.Template.Species.Depth;

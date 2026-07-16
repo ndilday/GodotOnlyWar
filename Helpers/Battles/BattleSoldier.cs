@@ -27,6 +27,7 @@ namespace OnlyWar.Helpers.Battles
         public ushort ReloadingPhase { get; set; }
         public Stance Stance { get; set; }
         public float CurrentSpeed { get; set; }
+        public float LeftoverMovement { get; set; }
 
         public float TurnsRunning { get; set; }
         public ushort TurnsShooting { get; set; }
@@ -58,7 +59,7 @@ namespace OnlyWar.Helpers.Battles
         {
             get
             {
-                if(Orientation % 2 == 0)
+                if(!BattleOrientation.IsFootprintRotated(Orientation))
                 {
                     return new Tuple<int, int>(TopLeft.Item1 + Soldier.Template.Species.Width,
                                                TopLeft.Item2 - Soldier.Template.Species.Depth);
@@ -103,6 +104,7 @@ namespace OnlyWar.Helpers.Battles
             IsInMelee = false;
             Stance = Stance.Standing;
             CurrentSpeed = 0;
+            LeftoverMovement = 0;
             EnemiesTakenDown = 0;
             ReloadingPhase = 0;
             TargetId = null;
@@ -126,6 +128,7 @@ namespace OnlyWar.Helpers.Battles
             ReloadingPhase = soldier.ReloadingPhase;
             Stance = soldier.Stance;
             CurrentSpeed = soldier.CurrentSpeed;
+            LeftoverMovement = soldier.LeftoverMovement;
             TurnsRunning = soldier.TurnsRunning;
             TurnsShooting = soldier.TurnsShooting;
             TurnsSwinging = soldier.TurnsSwinging;

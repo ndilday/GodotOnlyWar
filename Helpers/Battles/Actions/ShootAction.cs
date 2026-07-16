@@ -24,7 +24,9 @@ namespace OnlyWar.Helpers.Battles.Actions
         public int WeaponId { get; }
         public float Range { get; }
         public int NumberOfShots { get; }
-        public bool UseBulk { get; }
+        public bool UseBulk => BulkMultiplier > 0;
+        public float BulkMultiplier { get; }
+        public float AimMultiplier { get; }
         public int? StrayTargetId { get; private set; }
         public bool IsFriendlyFire => StrayTargetId.HasValue && _strayHitWasFriendly;
         public List<WoundResolution> WoundResolutions { get; }
@@ -38,13 +40,37 @@ namespace OnlyWar.Helpers.Battles.Actions
             bool useBulk,
             BattleGridManager grid,
             IRNG random)
+            : this(
+                shooterId,
+                targetId,
+                weaponId,
+                range,
+                numberOfShots,
+                useBulk ? 1f : 0f,
+                useBulk ? 0f : 1f,
+                grid,
+                random)
+        {
+        }
+
+        public ShootAction(
+            int shooterId,
+            int targetId,
+            int weaponId,
+            float range,
+            int numberOfShots,
+            float bulkMultiplier,
+            float aimMultiplier,
+            BattleGridManager grid,
+            IRNG random)
         {
             ShooterId = shooterId;
             TargetId = targetId;
             WeaponId = weaponId;
             Range = range;
             NumberOfShots = numberOfShots;
-            UseBulk = useBulk;
+            BulkMultiplier = Math.Max(0, bulkMultiplier);
+            AimMultiplier = Math.Clamp(aimMultiplier, 0, 1);
             _grid = grid;
             _random = random ?? throw new ArgumentNullException(nameof(random));
             WoundResolutions = new List<WoundResolution>();
@@ -118,16 +144,19 @@ namespace OnlyWar.Helpers.Battles.Actions
         {
             float totalModifier = 0;
             // the bulky weapon penalty is usually added when the weapon is fired while moving
-            if (UseBulk)
+            if (BulkMultiplier > 0)
             {
-                totalModifier -= weapon.Template.Bulk;
+                totalModifier -= weapon.Template.Bulk * BulkMultiplier;
             }
             // if the soldier is aiming at the current target with the current weapon, add the accuracy bonus
             if (shooter.Aim?.Item1 == target.Soldier.Id && shooter.Aim?.Item2 == weapon)
             {
                 // accuracy of the weapon is limited by the soldier skill
                 // TODO: take this into account with enemies, rather than using high attribute, low skill
-                totalModifier += shooter.Aim.Item3 + Math.Min(weapon.Template.Accuracy, soldierSkill) + 1;
+                float fullAimBonus = shooter.Aim.Item3
+                    + Math.Min(weapon.Template.Accuracy, soldierSkill)
+                    + 1;
+                totalModifier += fullAimBonus * AimMultiplier;
             }
             // apply modifiers for rate of fire, taget size, and range
             totalModifier += BattleModifiersUtil.CalculateRateOfFireModifier(NumberOfShots);

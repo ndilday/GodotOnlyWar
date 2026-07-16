@@ -9,6 +9,33 @@ namespace OnlyWar.Tests.Battles;
 public class BattleStateTests
 {
     [Fact]
+    public void CopyConstructor_PreservesMovementStateIndependently()
+    {
+        BattleSquad squad = new(false, TestModelFactory.CreateSquad(
+            "Moving Squad",
+            TestModelFactory.CreateSoldier(name: "Walker")));
+        PlaceSquad(squad, 0);
+        BattleState original = new(
+            new Dictionary<int, BattleSquad> { [squad.Id] = squad },
+            new Dictionary<int, BattleSquad>());
+        BattleSquad originalSquad = original.GetSquad(squad.Id);
+        BattleSoldier originalSoldier = originalSquad.Soldiers[0];
+        originalSquad.MovementTier = SquadMovementTier.Walk;
+        originalSoldier.LeftoverMovement = 2.4f;
+
+        BattleState copy = new(original);
+        BattleSquad copiedSquad = copy.GetSquad(squad.Id);
+        BattleSoldier copiedSoldier = copiedSquad.Soldiers[0];
+
+        originalSquad.MovementTier = SquadMovementTier.Run;
+        originalSoldier.LeftoverMovement = 0;
+
+        Assert.Equal(SquadMovementTier.Walk, copiedSquad.MovementTier);
+        Assert.Equal(2.4f, copiedSoldier.LeftoverMovement);
+        Assert.Same(copiedSquad, copiedSoldier.BattleSquad);
+    }
+
+    [Fact]
     public void RemoveSquad_RemovesNpcSquadFromMissionSide()
     {
         BattleSquad npcAttacker = new(false, TestModelFactory.CreateSquad(
