@@ -20,6 +20,7 @@ namespace OnlyWar.Models.Battles
         // Closing facts (casualties, who held the field) rendered after the per-turn log. Populated
         // once by BattleTurnResolver at the end of the battle, via BattleSummaryBuilder.
         public List<string> ClosingSummary { get; }
+        public BattleOutcome Outcome { get; set; }
 
         public BattleHistory()
         {

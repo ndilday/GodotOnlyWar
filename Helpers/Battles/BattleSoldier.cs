@@ -219,7 +219,7 @@ namespace OnlyWar.Helpers.Battles
         {
             float baseMoveSpeed = Soldier.MoveSpeed;
             bool isSlow = Soldier.Body.HitLocations.Where(hl => hl.Template.IsMotive)
-                                                       .Any(hl => hl.Wounds.MajorWounds >= 0);
+                                                       .Any(hl => hl.Wounds.WoundTotal >= (uint)WoundLevel.Major);
 
             // if leg/foot injuries, slow soldier down
             if (isSlow)

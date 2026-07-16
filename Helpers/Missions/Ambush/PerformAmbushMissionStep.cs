@@ -1,4 +1,5 @@
 using OnlyWar.Models.Missions;
+using OnlyWar.Models.Battles;
 using OnlyWar.Models.Planets;
 using OnlyWar.Models.Soldiers;
 using OnlyWar.Models;
@@ -71,7 +72,9 @@ namespace OnlyWar.Helpers.Missions.Ambush
                     missionSquads,
                     opposingSquads,
                     context.Order.Mission.RegionFaction.Region,
-                    execution.Battle);
+                    execution.Battle,
+                    context.CreateMissionBattleProfile(BattleRole.Ambusher),
+                    MissionContext.CreateOpposingBattleProfile(opposingSquads, BattleRole.Ambushed));
                 bool battleDone = false;
                 resolver.OnBattleComplete += (sender, e) => { battleDone = true; };
                 while (!battleDone)
@@ -80,6 +83,17 @@ namespace OnlyWar.Helpers.Missions.Ambush
                 }
                 context.RecordBattleOutcome(resolver.BattleHistory);
                 context.AddBattleLog(resolver.BattleHistory.GetBattleLog(), resolver.BattleHistory);
+                if (!context.MissionSquads.Any(squad => squad.AbleSoldiers.Count > 0))
+                {
+                    context.ForceWithdrewUnderFire = true;
+                    context.AddLog($"Day {context.DaysElapsed}: Force combat-ineffective; mission ended.");
+                    return;
+                }
+                if (context.ForceWithdrewUnderFire)
+                {
+                    context.AddLog($"Day {context.DaysElapsed}: Force withdrew from the ambush under fire.");
+                    return;
+                }
                 new ExfiltrateMissionStep().ExecuteMissionStep(execution, 0, null);
             }
             else

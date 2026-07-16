@@ -2,6 +2,7 @@
 using OnlyWar.Helpers.Battles.Placers;
 using OnlyWar.Helpers.Extensions;
 using OnlyWar.Models.Missions;
+using OnlyWar.Models.Battles;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -60,7 +61,9 @@ namespace OnlyWar.Helpers.Missions
                 missionSquads,
                 opposingSquads,
                 context.Order.Mission.RegionFaction.Region,
-                execution.Battle);
+                execution.Battle,
+                context.CreateMissionBattleProfile(BattleRole.Attacker),
+                MissionContext.CreateOpposingBattleProfile(opposingSquads, BattleRole.Defender));
             bool battleDone = false;
             resolver.OnBattleComplete += (sender, e) => { battleDone = true; };
             while (!battleDone)
@@ -73,10 +76,15 @@ namespace OnlyWar.Helpers.Missions
             // recursing into steps that assume a manned squad (placement/checks index into
             // AbleSoldiers and would throw). Mirrors InfiltrateMissionStep.ShouldContinue's
             // casualty abort, applied at the point the battle actually depletes the squad.
-            if (!context.MissionSquads.Any(s => s.ShouldContinueMission()))
+            if (!context.MissionSquads.Any(squad => squad.AbleSoldiers.Count > 0))
             {
                 context.ForceWithdrewUnderFire = true;
                 context.AddLog($"Day {context.DaysElapsed}: Force combat-ineffective; mission ended.");
+                return;
+            }
+            if (context.ForceWithdrewUnderFire)
+            {
+                context.AddLog($"Day {context.DaysElapsed}: Force withdrew from the engagement under fire.");
                 return;
             }
             if(returnStep == null)

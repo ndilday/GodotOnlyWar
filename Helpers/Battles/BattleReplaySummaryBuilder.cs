@@ -31,7 +31,8 @@ namespace OnlyWar.Helpers.Battles
                 history.Turns[^1].TurnNumber,
                 "Battle Chronicle",
                 BuildPhaseLabel(currentTurn),
-                BuildResultLabel(baselineState, currentTurn.State, currentTurnIndex == history.Turns.Count - 1 && currentTurnIndex > 0),
+                BuildResultLabel(history, baselineState, currentTurn.State,
+                    currentTurnIndex == history.Turns.Count - 1 && currentTurnIndex > 0),
                 resolvedSelection,
                 hierarchy,
                 selectedFormation,
@@ -184,6 +185,9 @@ namespace OnlyWar.Helpers.Battles
 
             List<string> effects = [];
             if (currentSquad?.IsInMelee == true) effects.Add("Engaged in melee");
+            if (currentSquad?.Status == BattleSquadStatus.Disengaged) effects.Add("Disengaged");
+            if (currentSquad?.Status == BattleSquadStatus.Eliminated) effects.Add("Eliminated");
+            if (currentSquad?.WithdrawalRole == WithdrawalRole.Routing) effects.Add("Routing");
             if (lossPercent >= 0.5f) effects.Add("Severe losses");
             if (effects.Count == 0) effects.Add("No notable effects tracked");
 
@@ -197,7 +201,7 @@ namespace OnlyWar.Helpers.Battles
                 startingStrength,
                 currentStrength,
                 BuildFatigueLabel(source),
-                BuildMoraleLabel(lossPercent, currentStrength),
+                BuildMoraleLabel(currentSquad, lossPercent, currentStrength),
                 BuildAmmunitionLabel(source),
                 BuildActiveWeaponSets(source, startingStrength),
                 effects);
@@ -241,6 +245,24 @@ namespace OnlyWar.Helpers.Battles
         {
             List<BattleEventEntry> entries = [];
             int sequence = 0;
+            foreach (BattleEvent battleEvent in turn.Events)
+            {
+                sequence++;
+                BattleSquadSnapshot squad = battleEvent.PrimarySquadId.HasValue
+                    ? TryGetSquad(turn.State, battleEvent.PrimarySquadId.Value)
+                    : null;
+                entries.Add(new BattleEventEntry(
+                    turn.TurnNumber,
+                    $"{turn.TurnNumber:00}:{sequence:00}",
+                    "Battlefield",
+                    squad?.Name ?? BuildSideName(battleEvent.Side, turn.State),
+                    BuildEventType(battleEvent.Type),
+                    string.IsNullOrWhiteSpace(battleEvent.Description)
+                        ? BuildEventType(battleEvent.Type)
+                        : battleEvent.Description,
+                    BuildSeverity(battleEvent.Type)));
+            }
+
             foreach (IAction action in turn.Actions)
             {
                 sequence++;
@@ -279,9 +301,7 @@ namespace OnlyWar.Helpers.Battles
             {
                 BattleTurn turn = history.Turns[i];
                 int woundCount = turn.Actions.Sum(CountWounds);
-                string summary = turn.Actions.Count == 0
-                    ? "Initial deployment"
-                    : $"{turn.Actions.Count} actions, {woundCount} wounds";
+                string summary = BuildTimelineSummary(turn, woundCount);
                 entries.Add(new BattleTimelineEntry(
                     i,
                     turn.TurnNumber,
@@ -328,9 +348,18 @@ namespace OnlyWar.Helpers.Battles
             return turn.TurnNumber == 0 ? "Deployment" : "Battle phase";
         }
 
-        private static string BuildResultLabel(BattleStateSnapshot initialState, BattleStateSnapshot currentState, bool isFinalRound)
+        private static string BuildResultLabel(
+            BattleHistory history,
+            BattleStateSnapshot initialState,
+            BattleStateSnapshot currentState,
+            bool isFinalRound)
         {
             if (!isFinalRound) return "Battle in progress";
+            if (history.Outcome != null)
+            {
+                return BuildOutcomeResultLabel(history.Outcome, currentState);
+            }
+
             int playerCurrent = CountAble(GetPlayerSquads(currentState));
             int opposingCurrent = CountAble(GetOpposingSquads(currentState));
             if (playerCurrent == 0 && opposingCurrent == 0) return "Mutual destruction";
@@ -344,6 +373,64 @@ namespace OnlyWar.Helpers.Battles
             if (opposingLosses > playerLosses) return "Advantage: player force";
             if (playerLosses > opposingLosses) return "Advantage: opposing force";
             return "Battle unresolved";
+        }
+
+        private static string BuildOutcomeResultLabel(BattleOutcome outcome, BattleStateSnapshot state)
+        {
+            string holder = outcome.SideHoldingField.HasValue
+                ? BuildForceName(outcome.SideHoldingField.Value, state)
+                : null;
+            string departing = outcome.SideHoldingField.HasValue
+                ? BuildForceName(Opposite(outcome.SideHoldingField.Value), state)
+                : null;
+
+            return outcome.EndReason switch
+            {
+                BattleEndReason.Withdrawal when holder != null =>
+                    $"{departing} withdrew; {holder} held the field",
+                BattleEndReason.Rout when holder != null =>
+                    $"{departing} routed; {holder} held the field",
+                BattleEndReason.MutualDisengagement => "Mutual disengagement; field contested",
+                BattleEndReason.TurnCap => "Turn cap reached; field contested",
+                BattleEndReason.Annihilation when holder != null => $"{holder} held the field",
+                BattleEndReason.Annihilation => "Mutual destruction",
+                _ when holder != null => $"{holder} held the field",
+                _ => "Battle unresolved"
+            };
+        }
+
+        private static string BuildForceName(BattleSide side, BattleStateSnapshot state)
+        {
+            IEnumerable<BattleSquadSnapshot> squads = side == BattleSide.Attacker
+                ? state.AttackerSquads.Values
+                : state.OpposingSquads.Values;
+            return squads.Any(squad => squad.IsPlayerAligned) ? "Player force" : "Opposing force";
+        }
+
+        private static string BuildSideName(BattleSide side, BattleStateSnapshot state) =>
+            BuildForceName(side, state);
+
+        private static BattleSide Opposite(BattleSide side) =>
+            side == BattleSide.Attacker ? BattleSide.Opposing : BattleSide.Attacker;
+
+        private static string BuildTimelineSummary(BattleTurn turn, int woundCount)
+        {
+            if (turn.Actions.Count == 0 && turn.Events.Count == 0)
+            {
+                return turn.TurnNumber == 0 ? "Initial deployment" : "No recorded activity";
+            }
+
+            List<string> facts = [];
+            if (turn.Events.Count > 0)
+            {
+                facts.Add($"{turn.Events.Count} battle {(turn.Events.Count == 1 ? "event" : "events")}");
+            }
+            if (turn.Actions.Count > 0)
+            {
+                facts.Add($"{turn.Actions.Count} {(turn.Actions.Count == 1 ? "action" : "actions")}");
+            }
+            facts.Add($"{woundCount} wounds");
+            return string.Join(", ", facts);
         }
 
         private static string BuildEventType(IAction action)
@@ -360,6 +447,32 @@ namespace OnlyWar.Helpers.Battles
                 ReadyRangedWeaponAction => "Ready",
                 ReadyMeleeWeaponAction => "Ready",
                 _ => "Action"
+            };
+        }
+
+        private static string BuildEventType(BattleEventType type)
+        {
+            return type switch
+            {
+                BattleEventType.WithdrawalOrdered => "Withdrawal",
+                BattleEventType.CoverAssigned => "Cover",
+                BattleEventType.RearGuardAssigned => "Rear guard",
+                BattleEventType.PursuitStarted => "Pursuit",
+                BattleEventType.PursuitEnded => "Pursuit",
+                BattleEventType.SquadDisengaged => "Disengagement",
+                BattleEventType.SquadRouted => "Rout",
+                BattleEventType.ForceDisengaged => "Disengagement",
+                _ => "Battle event"
+            };
+        }
+
+        private static BattleEventSeverity BuildSeverity(BattleEventType type)
+        {
+            return type switch
+            {
+                BattleEventType.RearGuardAssigned => BattleEventSeverity.Warning,
+                BattleEventType.SquadRouted => BattleEventSeverity.Critical,
+                _ => BattleEventSeverity.Normal
             };
         }
 
@@ -429,7 +542,9 @@ namespace OnlyWar.Helpers.Battles
             // The compact snapshot list is pruned as casualties occur, so its count is the
             // historically correct strength for that turn even though campaign soldier identity
             // references are shared.
-            return squad?.Soldiers.Count ?? 0;
+            return squad == null || squad.Status == BattleSquadStatus.Eliminated
+                ? 0
+                : squad.Soldiers.Count;
         }
 
         private static int CountAble(IEnumerable<BattleSquadSnapshot> squads)
@@ -479,8 +594,11 @@ namespace OnlyWar.Helpers.Battles
             return "Low";
         }
 
-        private static string BuildMoraleLabel(float lossPercent, int currentStrength)
+        private static string BuildMoraleLabel(BattleSquadSnapshot squad, float lossPercent, int currentStrength)
         {
+            if (squad?.WithdrawalRole == WithdrawalRole.Routing) return "Routing";
+            if (squad?.Status == BattleSquadStatus.Disengaged) return "Disengaged";
+            if (squad?.Status == BattleSquadStatus.Eliminated) return "Collapsed";
             if (currentStrength == 0) return "Collapsed";
             if (lossPercent >= 0.5f) return "Wavering";
             if (lossPercent >= 0.25f) return "Pressed";

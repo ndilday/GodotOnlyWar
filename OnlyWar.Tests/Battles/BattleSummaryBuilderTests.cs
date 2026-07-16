@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using OnlyWar.Tests.Fixtures;
 using OnlyWar.Helpers.Battles;
 using OnlyWar.Helpers.Extensions;
 using OnlyWar.Models.Battles;
@@ -76,6 +77,68 @@ public class BattleSummaryBuilderTests
         Assert.Equal(
             "Both forces still held positions when the fighting broke off; the field was left contested.",
             lines[3]);
+    }
+
+    [Theory]
+    [InlineData(BattleEndReason.Withdrawal, BattleSide.Attacker,
+        "Cult Mob withdrew; Blood Ravens held the field.")]
+    [InlineData(BattleEndReason.Rout, BattleSide.Opposing,
+        "Blood Ravens routed; Cult Mob held the field.")]
+    [InlineData(BattleEndReason.MutualDisengagement, null,
+        "Both forces disengaged; the field was left contested.")]
+    [InlineData(BattleEndReason.TurnCap, null,
+        "Both forces still held positions when the fighting broke off; the field was left contested.")]
+    [InlineData(BattleEndReason.Annihilation, BattleSide.Attacker,
+        "Blood Ravens held the field.")]
+    public void Build_UsesTypedOutcomeForClosingDisposition(
+        BattleEndReason reason,
+        BattleSide? holder,
+        string expected)
+    {
+        List<string> lines = BattleSummaryBuilder.Build(
+            "Blood Ravens", "Cult Mob", 10, 6, 8, 2, 5, false,
+            new BattleOutcome(reason, holder));
+
+        Assert.Equal(expected, lines[3]);
+    }
+
+    [Fact]
+    public void Build_FromHistoryCountsDisengagedRosterAsSurvivorsAndEliminatedRosterAsCasualties()
+    {
+        BattleSquad withdrawing = new(true, TestModelFactory.CreateSquad(
+            "Withdrawal",
+            TestModelFactory.CreateSoldier(name: "First survivor"),
+            TestModelFactory.CreateSoldier(name: "Second survivor")));
+        BattleSquad eliminated = new(false, TestModelFactory.CreateSquad(
+            "Eliminated",
+            TestModelFactory.CreateSoldier(name: "First casualty"),
+            TestModelFactory.CreateSoldier(name: "Second casualty")));
+        foreach (BattleSoldier soldier in withdrawing.Soldiers)
+        {
+            soldier.TopLeft = new System.Tuple<int, int>(0, 0);
+        }
+        foreach (BattleSoldier soldier in eliminated.Soldiers)
+        {
+            soldier.TopLeft = new System.Tuple<int, int>(10, 0);
+        }
+        BattleState initial = new(
+            new Dictionary<int, BattleSquad> { [withdrawing.Id] = withdrawing },
+            new Dictionary<int, BattleSquad> { [eliminated.Id] = eliminated });
+        BattleState final = new(initial);
+        final.DisengageSquad(final.GetSquad(withdrawing.Id));
+        final.RemoveSquad(final.GetSquad(eliminated.Id));
+        BattleHistory history = new()
+        {
+            Outcome = new BattleOutcome(BattleEndReason.Withdrawal, BattleSide.Attacker)
+        };
+        history.Turns.Add(new BattleTurn(initial, []));
+        history.Turns.Add(new BattleTurn(final, []));
+
+        List<string> lines = BattleSummaryBuilder.Build("Blood Ravens", "Cult Mob", history);
+
+        Assert.Equal("Blood Ravens suffered 0 casualties out of 2 combatants.", lines[1]);
+        Assert.Equal("Cult Mob suffered 2 casualties out of 2 combatants.", lines[2]);
+        Assert.Equal("Cult Mob withdrew; Blood Ravens held the field.", lines[3]);
     }
 
     [Fact]

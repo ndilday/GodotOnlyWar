@@ -130,6 +130,90 @@ public class BattleReplaySummaryBuilderTests
     }
 
     [Fact]
+    public void Build_TypedEventsPrecedeActionChronology()
+    {
+        BattleSquad playerSquad = CreateBattleSquad(true, "Alpha", "Sergeant Alpha");
+        BattleSquad opposingSquad = CreateBattleSquad(false, "Cult Mob", "Cultist One");
+        BattleState initialState = CreateState(playerSquad, opposingSquad);
+        BattleState currentState = new(initialState);
+        FakeAction action = new(currentState.GetSquad(playerSquad.Id).Soldiers[0].Soldier.Id,
+            "Sergeant Alpha opened fire.");
+        BattleEvent withdrawal = new(
+            BattleEventType.WithdrawalOrdered,
+            currentState.TurnNumber,
+            BattleSide.Opposing,
+            opposingSquad.Id,
+            [],
+            "Cult Mob began an orderly withdrawal.");
+        BattleHistory history = new();
+        history.Turns.Add(new BattleTurn(initialState, []));
+        history.Turns.Add(new BattleTurn(currentState, [action], [withdrawal]));
+
+        BattleReplayDisplay display = new BattleReplaySummaryBuilder().Build(history, 1);
+
+        Assert.Equal(2, display.CurrentTurnEvents.Count);
+        Assert.Equal("Withdrawal", display.CurrentTurnEvents[0].EventType);
+        Assert.Equal("Cult Mob", display.CurrentTurnEvents[0].FormationName);
+        Assert.Equal("01:01", display.CurrentTurnEvents[0].Timestamp);
+        Assert.Equal("Action", display.CurrentTurnEvents[1].EventType);
+        Assert.Equal("01:02", display.CurrentTurnEvents[1].Timestamp);
+        Assert.Equal("1 battle event, 1 action, 0 wounds", display.Timeline[1].Summary);
+    }
+
+    [Fact]
+    public void Build_DisengagedSoldiersRemainSurvivorsWhileEliminatedRosterCountsAsCasualties()
+    {
+        BattleSquad playerSquad = CreateBattleSquad(true, "Alpha", "Sergeant Alpha", "Brother Alpha");
+        BattleSquad opposingSquad = CreateBattleSquad(false, "Cult Mob", "Cultist One", "Cultist Two");
+        BattleState initialState = CreateState(playerSquad, opposingSquad);
+        BattleState finalState = new(initialState);
+        finalState.DisengageSquad(finalState.GetSquad(playerSquad.Id));
+        finalState.RemoveSquad(finalState.GetSquad(opposingSquad.Id));
+        BattleHistory history = new();
+        history.Turns.Add(new BattleTurn(initialState, []));
+        history.Turns.Add(new BattleTurn(finalState, []));
+
+        BattleReplayDisplay display = new BattleReplaySummaryBuilder().Build(history, 1, playerSquad.Id);
+
+        BattleForceHierarchyNode playerRoot = Assert.Single(display.ForceHierarchy, node => node.IsPlayerForce);
+        BattleForceHierarchyNode opposingRoot = Assert.Single(display.ForceHierarchy, node => !node.IsPlayerForce);
+        Assert.Equal(2, playerRoot.CurrentStrength);
+        Assert.Equal(0, playerRoot.Losses);
+        Assert.Equal(0, opposingRoot.CurrentStrength);
+        Assert.Equal(2, opposingRoot.Losses);
+        Assert.Equal(0, display.CasualtiesByRound[1].PlayerCumulativeLosses);
+        Assert.Equal(2, display.CasualtiesByRound[1].OpposingCumulativeLosses);
+        Assert.Equal("Disengaged", display.SelectedFormation.MoraleLabel);
+        Assert.Contains("Disengaged", display.SelectedFormation.NotableEffects);
+    }
+
+    [Theory]
+    [InlineData(BattleEndReason.Withdrawal, BattleSide.Attacker, "Opposing force withdrew; Player force held the field")]
+    [InlineData(BattleEndReason.Rout, BattleSide.Opposing, "Player force routed; Opposing force held the field")]
+    [InlineData(BattleEndReason.MutualDisengagement, null, "Mutual disengagement; field contested")]
+    [InlineData(BattleEndReason.TurnCap, null, "Turn cap reached; field contested")]
+    [InlineData(BattleEndReason.Annihilation, BattleSide.Attacker, "Player force held the field")]
+    public void Build_FinalResultUsesTypedOutcome(
+        BattleEndReason reason,
+        BattleSide? holder,
+        string expected)
+    {
+        BattleSquad playerSquad = CreateBattleSquad(true, "Alpha", "Sergeant Alpha");
+        BattleSquad opposingSquad = CreateBattleSquad(false, "Cult Mob", "Cultist One");
+        BattleState initialState = CreateState(playerSquad, opposingSquad);
+        BattleHistory history = new()
+        {
+            Outcome = new BattleOutcome(reason, holder)
+        };
+        history.Turns.Add(new BattleTurn(initialState, []));
+        history.Turns.Add(new BattleTurn(new BattleState(initialState), []));
+
+        BattleReplayDisplay display = new BattleReplaySummaryBuilder().Build(history, 1);
+
+        Assert.Equal(expected, display.ResultLabel);
+    }
+
+    [Fact]
     public void Build_UsesSquadTypeIconForOpposingFormation()
     {
         BattleSquad playerSquad = CreateBattleSquad(true, "Alpha", "Sergeant Alpha", "Brother Alpha");

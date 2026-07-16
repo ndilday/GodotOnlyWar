@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using OnlyWar.Helpers.Battles.Actions;
 using OnlyWar.Models.Equippables;
+using OnlyWar.Models.Battles;
 
 namespace OnlyWar.Helpers.Battles
 {
@@ -389,6 +390,156 @@ namespace OnlyWar.Helpers.Battles
             }
         }
 
+        /// <summary>Plans the stationary firing element of a leapfrog withdrawal.</summary>
+        public void PrepareCoverActions(BattleSquad squad)
+        {
+            squad.WithdrawalRole = WithdrawalRole.Cover;
+            squad.MovementTier = SquadMovementTier.Stationary;
+            ApplyDeclaredMovementState(squad);
+            foreach (BattleSoldier soldier in squad.AbleSoldiers.OrderBy(s => s.Soldier.Id))
+            {
+                AddStandingActionsToBag(soldier, allowCharge: false);
+            }
+        }
+
+        /// <summary>Plans a full-speed bound along the force's fixed withdrawal heading.</summary>
+        public void PrepareBoundActions(BattleSquad squad, ushort withdrawalHeading)
+        {
+            squad.WithdrawalRole = WithdrawalRole.Bound;
+            squad.MovementTier = SquadMovementTier.Run;
+            ApplyDeclaredMovementState(squad);
+            Tuple<int, int> direction = BattleForcePlanner.GetHeadingVector(withdrawalHeading);
+            Tuple<int, int> movementLine = new(direction.Item1 * 10_000, direction.Item2 * 10_000);
+            foreach (BattleSoldier soldier in squad.AbleSoldiers.OrderBy(s => s.Soldier.Id))
+            {
+                AddMoveAction(
+                    soldier,
+                    GetMovementBudget(soldier, SquadMovementTier.Run),
+                    movementLine,
+                    SquadMovementTier.Run);
+                AddPermittedRunUtilityActionToBag(soldier);
+            }
+        }
+
+        /// <summary>Plans a rear guard holding in place, or continuing an existing melee.</summary>
+        public void PrepareRearGuardActions(BattleSquad squad)
+        {
+            squad.WithdrawalRole = WithdrawalRole.RearGuard;
+            if (squad.IsInMelee)
+            {
+                squad.MovementTier = SquadMovementTier.InMelee;
+                ApplyDeclaredMovementState(squad);
+                foreach (BattleSoldier soldier in squad.AbleSoldiers.OrderBy(s => s.Soldier.Id))
+                {
+                    if (_grid.IsAdjacentToEnemy(soldier.Soldier.Id))
+                    {
+                        AddMeleeActionsToBag(soldier);
+                    }
+                    else
+                    {
+                        AddChargeActionsToBag(soldier);
+                    }
+                }
+                return;
+            }
+
+            squad.MovementTier = SquadMovementTier.Stationary;
+            ApplyDeclaredMovementState(squad);
+            foreach (BattleSoldier soldier in squad.AbleSoldiers.OrderBy(s => s.Soldier.Id))
+            {
+                AddStandingActionsToBag(soldier, allowCharge: false);
+            }
+        }
+
+        /// <summary>Plans pursuit against the supplied active withdrawing formations.</summary>
+        public void PreparePursuitActions(
+            BattleSquad squad,
+            PursuitPosture posture,
+            IReadOnlyCollection<BattleSquad> withdrawingTargets)
+        {
+            squad.WithdrawalRole = WithdrawalRole.None;
+            switch (posture)
+            {
+                case PursuitPosture.BreakOff:
+                    squad.MovementTier = SquadMovementTier.Stationary;
+                    ApplyDeclaredMovementState(squad);
+                    return;
+                case PursuitPosture.Follow:
+                    PrepareFollowingActions(squad, withdrawingTargets);
+                    return;
+                case PursuitPosture.Press:
+                    PreparePressingActions(squad, withdrawingTargets);
+                    return;
+                default:
+                    throw new ArgumentOutOfRangeException(nameof(posture), posture, null);
+            }
+        }
+
+        private void PrepareFollowingActions(
+            BattleSquad squad,
+            IReadOnlyCollection<BattleSquad> withdrawingTargets)
+        {
+            squad.MovementTier = SquadMovementTier.Jog;
+            ApplyDeclaredMovementState(squad);
+            foreach (BattleSoldier soldier in squad.AbleSoldiers.OrderBy(s => s.Soldier.Id))
+            {
+                BattleSoldier target = FindNearestTarget(soldier, withdrawingTargets);
+                if (target == null) continue;
+                Tuple<int, int> line = new(
+                    target.TopLeft.Item1 - soldier.TopLeft.Item1,
+                    target.TopLeft.Item2 - soldier.TopLeft.Item2);
+                Tuple<int, int> movementDirection = AddMoveAction(
+                    soldier,
+                    GetMovementBudget(soldier, SquadMovementTier.Jog),
+                    line,
+                    SquadMovementTier.Jog);
+                AddRangedActionToBag(
+                    soldier,
+                    FullBulkMultiplier,
+                    aimMultiplier: 0,
+                    movementDirection: movementDirection);
+            }
+        }
+
+        private void PreparePressingActions(
+            BattleSquad squad,
+            IReadOnlyCollection<BattleSquad> withdrawingTargets)
+        {
+            squad.MovementTier = SquadMovementTier.Run;
+            ApplyDeclaredMovementState(squad);
+            foreach (BattleSoldier soldier in squad.AbleSoldiers.OrderBy(s => s.Soldier.Id))
+            {
+                BattleSoldier target = FindNearestTarget(soldier, withdrawingTargets);
+                if (target == null) continue;
+                Tuple<int, int> line = new(
+                    target.TopLeft.Item1 - soldier.TopLeft.Item1,
+                    target.TopLeft.Item2 - soldier.TopLeft.Item2);
+                AddMoveAction(
+                    soldier,
+                    GetMovementBudget(soldier, SquadMovementTier.Run),
+                    line,
+                    SquadMovementTier.Run);
+                AddPermittedRunUtilityActionToBag(soldier);
+            }
+        }
+
+        private BattleSoldier FindNearestTarget(
+            BattleSoldier pursuer,
+            IReadOnlyCollection<BattleSquad> withdrawingTargets)
+        {
+            if (withdrawingTargets == null) return null;
+
+            return withdrawingTargets
+                .Where(squad => squad != null && squad.Status == BattleSquadStatus.Active)
+                .SelectMany(squad => squad.AbleSoldiers)
+                .Where(target => _soldierMap.ContainsKey(target.Soldier.Id))
+                .OrderBy(target => _grid.GetDistanceBetweenSoldiers(
+                    pursuer.Soldier.Id,
+                    target.Soldier.Id))
+                .ThenBy(target => target.Soldier.Id)
+                .FirstOrDefault();
+        }
+
         private void ApplyDeclaredMovementState(BattleSquad squad)
         {
             foreach (BattleSoldier soldier in squad.AbleSoldiers)
@@ -425,11 +576,15 @@ namespace OnlyWar.Helpers.Battles
             int worthwhileShots = 0;
             foreach (BattleSoldier soldier in squad.AbleSoldiers)
             {
+                Tuple<int, int> movementDirection = GetDirectionToNearestEnemy(soldier);
                 RangedTargetEvaluation conventionalShot = SelectBestRangedTarget(
                     soldier,
-                    useBulk: true);
-                bool hasShot = SelectBestTemplateFiringLine(soldier) != null
-                    || SelectBestBlastThrow(soldier) != null
+                    useBulk: true,
+                    movementDirection: movementDirection);
+                bool hasShot = SelectBestTemplateFiringLine(
+                        soldier,
+                        movementDirection: movementDirection) != null
+                    || SelectBestBlastThrow(soldier, movementDirection) != null
                     || (conventionalShot?.Score > 0
                         && conventionalShot.HitProbability > 0.1f);
                 if (hasShot)
@@ -442,14 +597,15 @@ namespace OnlyWar.Helpers.Battles
                 && worthwhileShots * 2 >= squad.AbleSoldiers.Count;
         }
 
-        private void AddStandingActionsToBag(BattleSoldier soldier)
+        private void AddStandingActionsToBag(BattleSoldier soldier, bool allowCharge = true)
         {
             float range = _grid.GetNearestEnemy(soldier.Soldier.Id, out int closestEnemyId);
             float speed = _soldierMap[closestEnemyId].BattleSquad.AbleSoldiers.First().GetMoveSpeed();
             bool hasLoadedTemplateWeapon = soldier.EquippedRangedWeapons.Any(
                 weapon => weapon.Template.IsConeWeapon && weapon.LoadedAmmo > 0);
             // see if the enemy is within charging range and the soldier doesn't already have a target lined up
-            if (!hasLoadedTemplateWeapon
+            if (allowCharge
+                && !hasLoadedTemplateWeapon
                 && speed >= range
                 && (soldier.Aim == null || soldier.RangedWeapons[0].LoadedAmmo == 0))
             {
@@ -575,11 +731,15 @@ namespace OnlyWar.Helpers.Battles
             Tuple<int, int> line = new Tuple<int, int>(
                 (short)(enemyPosition.Item1 - soldier.TopLeft.Item1),
                 (short)(enemyPosition.Item2 - soldier.TopLeft.Item2));
-            AddMoveAction(soldier, moveSpeed, line, tier);
+            Tuple<int, int> movementDirection = AddMoveAction(soldier, moveSpeed, line, tier);
 
             if (tier == SquadMovementTier.Jog)
             {
-                AddRangedActionToBag(soldier, FullBulkMultiplier, aimMultiplier: 0);
+                AddRangedActionToBag(
+                    soldier,
+                    FullBulkMultiplier,
+                    aimMultiplier: 0,
+                    movementDirection: movementDirection);
             }
             else
             {
@@ -592,7 +752,12 @@ namespace OnlyWar.Helpers.Battles
             float moveSpeed = GetMovementBudget(soldier, tier);
 
             int newY = (int)(_grid.GetSoldierSide(soldier.Soldier.Id) ? -moveSpeed : moveSpeed);
-            AddMoveAction(soldier, moveSpeed, new Tuple<int, int>(0, newY), tier);
+            Tuple<int, int> intendedDirection = new(0, newY);
+            Tuple<int, int> movementDirection = AddMoveAction(
+                soldier,
+                moveSpeed,
+                intendedDirection,
+                tier);
 
             if (tier == SquadMovementTier.Walk)
             {
@@ -600,7 +765,11 @@ namespace OnlyWar.Helpers.Battles
             }
             else if (tier == SquadMovementTier.Jog)
             {
-                AddRangedActionToBag(soldier, FullBulkMultiplier, aimMultiplier: 0);
+                AddRangedActionToBag(
+                    soldier,
+                    FullBulkMultiplier,
+                    aimMultiplier: 0,
+                    movementDirection: movementDirection);
             }
             else
             {
@@ -1238,7 +1407,8 @@ namespace OnlyWar.Helpers.Battles
         private void AddRangedActionToBag(
             BattleSoldier soldier,
             float bulkMultiplier,
-            float aimMultiplier)
+            float aimMultiplier,
+            Tuple<int, int> movementDirection = null)
         {
             if (soldier.RangedWeapons.Count == 0) return;
             if (soldier.EquippedRangedWeapons.Count == 0)
@@ -1251,18 +1421,30 @@ namespace OnlyWar.Helpers.Battles
             }
             else
             {
-                AddShootOrAimActionToBag(soldier, bulkMultiplier, aimMultiplier);
+                AddShootOrAimActionToBag(
+                    soldier,
+                    bulkMultiplier,
+                    aimMultiplier,
+                    movementDirection);
             }
         }
 
         private void AddShootOrAimActionToBag(
             BattleSoldier soldier,
             float bulkMultiplier,
-            float aimMultiplier)
+            float aimMultiplier,
+            Tuple<int, int> movementDirection = null)
         {
-            TemplateFiringLineEvaluation templateLine = SelectBestTemplateFiringLine(soldier);
-            RangedTargetEvaluation targetEvaluation = SelectBestRangedTarget(soldier, bulkMultiplier);
-            TemplateFiringLineEvaluation blastThrow = SelectBestBlastThrow(soldier);
+            TemplateFiringLineEvaluation templateLine = SelectBestTemplateFiringLine(
+                soldier,
+                movementDirection: movementDirection);
+            RangedTargetEvaluation targetEvaluation = SelectBestRangedTarget(
+                soldier,
+                bulkMultiplier,
+                movementDirection: movementDirection);
+            TemplateFiringLineEvaluation blastThrow = SelectBestBlastThrow(
+                soldier,
+                movementDirection);
             float bestConventionalScore = Math.Max(
                 templateLine?.Score ?? float.MinValue,
                 targetEvaluation?.Score ?? float.MinValue);
@@ -1385,18 +1567,21 @@ namespace OnlyWar.Helpers.Battles
         internal RangedTargetEvaluation SelectBestRangedTarget(
             BattleSoldier soldier,
             bool useBulk,
-            bool includeExistingAim = false)
+            bool includeExistingAim = false,
+            Tuple<int, int> movementDirection = null)
         {
             return SelectBestRangedTarget(
                 soldier,
                 useBulk ? FullBulkMultiplier : 0,
-                includeExistingAim);
+                includeExistingAim,
+                movementDirection);
         }
 
         internal RangedTargetEvaluation SelectBestRangedTarget(
             BattleSoldier soldier,
             float bulkMultiplier,
-            bool includeExistingAim = false)
+            bool includeExistingAim = false,
+            Tuple<int, int> movementDirection = null)
         {
             if (soldier?.EquippedRangedWeapons == null || soldier.EquippedRangedWeapons.Count == 0)
             {
@@ -1404,10 +1589,13 @@ namespace OnlyWar.Helpers.Battles
             }
 
             RangedTargetEvaluation best = null;
-            foreach (BattleSquad candidateSquad in GetNearestInRangeEnemySquads(soldier))
+            foreach (BattleSquad candidateSquad in GetNearestInRangeEnemySquads(
+                soldier,
+                movementDirection))
             {
                 foreach (BattleSoldier target in candidateSquad.AbleSoldiers
-                    .Where(IsPlaced)
+                    .Where(target => IsPlaced(target)
+                        && IsWithinJogFiringArc(soldier, target, movementDirection))
                     .OrderBy(candidate => candidate.Soldier.Id))
                 {
                     float range = _grid.GetDistanceBetweenSoldiers(soldier.Soldier.Id, target.Soldier.Id);
@@ -1446,7 +1634,8 @@ namespace OnlyWar.Helpers.Battles
 
         internal TemplateFiringLineEvaluation SelectBestTemplateFiringLine(
             BattleSoldier soldier,
-            IEnumerable<BattleSoldier> candidateTargets = null)
+            IEnumerable<BattleSoldier> candidateTargets = null,
+            Tuple<int, int> movementDirection = null)
         {
             if (soldier?.EquippedRangedWeapons == null
                 || soldier.EquippedRangedWeapons.Count == 0
@@ -1456,7 +1645,7 @@ namespace OnlyWar.Helpers.Battles
             }
 
             IEnumerable<BattleSoldier> targets = candidateTargets
-                ?? GetNearestInRangeEnemySquads(soldier)
+                ?? GetNearestInRangeEnemySquads(soldier, movementDirection)
                     .SelectMany(candidateSquad => candidateSquad.AbleSoldiers);
             bool shooterSide = _grid.GetSoldierSide(soldier.Soldier.Id);
             TemplateFiringLineEvaluation best = null;
@@ -1464,6 +1653,7 @@ namespace OnlyWar.Helpers.Battles
                 .Where(target => target != null
                     && target.CanFight
                     && IsPlaced(target)
+                    && IsWithinJogFiringArc(soldier, target, movementDirection)
                     && _grid.GetSoldierSide(target.Soldier.Id) != shooterSide)
                 .GroupBy(target => target.Soldier.Id)
                 .Select(group => group.First())
@@ -1550,7 +1740,9 @@ namespace OnlyWar.Helpers.Battles
         /// lost, with the thrower's own exposure included (danger-close is legal).
         /// Returns null when no throw removes more value than it costs.
         /// </summary>
-        internal TemplateFiringLineEvaluation SelectBestBlastThrow(BattleSoldier soldier)
+        internal TemplateFiringLineEvaluation SelectBestBlastThrow(
+            BattleSoldier soldier,
+            Tuple<int, int> movementDirection = null)
         {
             if (soldier == null || !IsPlaced(soldier))
             {
@@ -1567,9 +1759,15 @@ namespace OnlyWar.Helpers.Battles
                 BattleModifiersUtil.GetEffectiveMaxRange(soldier.Soldier, weapon.Template));
             bool shooterSide = _grid.GetSoldierSide(soldier.Soldier.Id);
             TemplateFiringLineEvaluation best = null;
-            foreach (BattleSoldier target in GetNearestEnemySquadsWithinRange(soldier, maximumEffectiveRange)
+            foreach (BattleSoldier target in GetNearestEnemySquadsWithinRange(
+                    soldier,
+                    maximumEffectiveRange,
+                    movementDirection)
                 .SelectMany(candidateSquad => candidateSquad.AbleSoldiers)
-                .Where(target => target != null && target.CanFight && IsPlaced(target))
+                .Where(target => target != null
+                    && target.CanFight
+                    && IsPlaced(target)
+                    && IsWithinJogFiringArc(soldier, target, movementDirection))
                 .GroupBy(target => target.Soldier.Id)
                 .Select(group => group.First())
                 .OrderBy(target => target.Soldier.Id))
@@ -1736,7 +1934,9 @@ namespace OnlyWar.Helpers.Battles
             return result;
         }
 
-        private IReadOnlyList<BattleSquad> GetNearestInRangeEnemySquads(BattleSoldier shooter)
+        private IReadOnlyList<BattleSquad> GetNearestInRangeEnemySquads(
+            BattleSoldier shooter,
+            Tuple<int, int> movementDirection = null)
         {
             // Effective range matters for thrown weapons (a grenade's reach scales with
             // the thrower's Strength); every other weapon reads its raw MaximumRange.
@@ -1747,12 +1947,16 @@ namespace OnlyWar.Helpers.Battles
                     weapon.Template))
                 .DefaultIfEmpty(0)
                 .Max();
-            return GetNearestEnemySquadsWithinRange(shooter, maximumRange);
+            return GetNearestEnemySquadsWithinRange(
+                shooter,
+                maximumRange,
+                movementDirection);
         }
 
         private IReadOnlyList<BattleSquad> GetNearestEnemySquadsWithinRange(
             BattleSoldier shooter,
-            float maximumRange)
+            float maximumRange,
+            Tuple<int, int> movementDirection = null)
         {
             if (maximumRange <= 0 || !IsPlaced(shooter)) return [];
 
@@ -1761,7 +1965,11 @@ namespace OnlyWar.Helpers.Battles
                 .Where(id => id != shooter.Soldier.Id
                     && _soldierMap.ContainsKey(id)
                     && _grid.GetSoldierSide(id) != shooterSide
-                    && _soldierMap[id].CanFight)
+                    && _soldierMap[id].CanFight
+                    && IsWithinJogFiringArc(
+                        shooter,
+                        _soldierMap[id],
+                        movementDirection))
                 .GroupBy(id => _soldierMap[id].BattleSquad)
                 .Select(group => new
                 {
@@ -2050,7 +2258,7 @@ namespace OnlyWar.Helpers.Battles
             return hitContext.CalculatePreRollHitTotal(numberOfShots);
         }
 
-        private void AddMoveAction(
+        private Tuple<int, int> AddMoveAction(
             BattleSoldier soldier,
             float moveSpeed,
             Tuple<int, int> line,
@@ -2070,6 +2278,44 @@ namespace OnlyWar.Helpers.Battles
                 newLocation,
                 orientation,
                 moveSpeed));
+            Tuple<int, int> actualDirection = new(
+                newLocation.Item1 - soldier.TopLeft.Item1,
+                newLocation.Item2 - soldier.TopLeft.Item2);
+            return actualDirection.Item1 == 0 && actualDirection.Item2 == 0
+                ? line
+                : actualDirection;
+        }
+
+        private Tuple<int, int> GetDirectionToNearestEnemy(BattleSoldier soldier)
+        {
+            _grid.GetNearestEnemy(soldier.Soldier.Id, out int closestEnemyId);
+            if (closestEnemyId == -1)
+            {
+                return null;
+            }
+
+            Tuple<int, int> enemyPosition = _grid.GetSoldierPosition(closestEnemyId)[0];
+            return new Tuple<int, int>(
+                enemyPosition.Item1 - soldier.TopLeft.Item1,
+                enemyPosition.Item2 - soldier.TopLeft.Item2);
+        }
+
+        private static bool IsWithinJogFiringArc(
+            BattleSoldier shooter,
+            BattleSoldier target,
+            Tuple<int, int> movementDirection)
+        {
+            if (movementDirection == null
+                || (movementDirection.Item1 == 0 && movementDirection.Item2 == 0))
+            {
+                return true;
+            }
+
+            int targetX = target.TopLeft.Item1 - shooter.TopLeft.Item1;
+            int targetY = target.TopLeft.Item2 - shooter.TopLeft.Item2;
+            long dotProduct = ((long)movementDirection.Item1 * targetX)
+                + ((long)movementDirection.Item2 * targetY);
+            return dotProduct >= 0;
         }
 
         private Tuple<int, int> CalculateMovementAlongLine(Tuple<int, int> line, float moveSpeed)

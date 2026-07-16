@@ -7,6 +7,7 @@ using OnlyWar.Models.Equippables;
 using OnlyWar.Models.Orders;
 using OnlyWar.Models.Soldiers;
 using OnlyWar.Models.Squads;
+using OnlyWar.Models.Battles;
 
 namespace OnlyWar.Helpers.Battles
 {
@@ -35,6 +36,8 @@ namespace OnlyWar.Helpers.Battles
         public bool IsPlayerAligned => IsPlayerSquad || Squad?.Faction?.IsDefaultFaction == true;
         public bool IsInMelee { get; set; }
         public SquadMovementTier MovementTier { get; set; }
+        public BattleSquadStatus Status { get; set; }
+        public WithdrawalRole WithdrawalRole { get; set; }
 
         public Squad Squad { get; }
 
@@ -91,6 +94,8 @@ namespace OnlyWar.Helpers.Battles
             IsPlayerSquad = isPlayerSquad;
             IsInMelee = false;
             MovementTier = SquadMovementTier.Stationary;
+            Status = BattleSquadStatus.Active;
+            WithdrawalRole = WithdrawalRole.None;
             // order weapon sets by strength of primary weapon
             AllocateEquipment();
         }
@@ -104,6 +109,8 @@ namespace OnlyWar.Helpers.Battles
             IsPlayerSquad = original.IsPlayerSquad;
             IsInMelee = original.IsInMelee;
             MovementTier = original.MovementTier;
+            Status = original.Status;
+            WithdrawalRole = original.WithdrawalRole;
             // because of the circular reference, the clone function won't work,
             // so I made a custom BattleSoldier constructor that does basically the same thing
             Soldiers = original.Soldiers.Select(s => new BattleSoldier(s, this)).ToList();

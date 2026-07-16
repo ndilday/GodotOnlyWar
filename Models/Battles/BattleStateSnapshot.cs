@@ -18,17 +18,23 @@ namespace OnlyWar.Models.Battles
         public IReadOnlyDictionary<int, BattleSoldierSnapshot> Soldiers { get; }
         public IReadOnlyDictionary<int, BattleSquadSnapshot> AttackerSquads { get; }
         public IReadOnlyDictionary<int, BattleSquadSnapshot> OpposingSquads { get; }
+        public BattleSideStateSnapshot AttackerSide { get; }
+        public BattleSideStateSnapshot OpposingSide { get; }
 
         private BattleStateSnapshot(
             int turnNumber,
             IReadOnlyDictionary<int, BattleSoldierSnapshot> soldiers,
             IReadOnlyDictionary<int, BattleSquadSnapshot> attackerSquads,
-            IReadOnlyDictionary<int, BattleSquadSnapshot> opposingSquads)
+            IReadOnlyDictionary<int, BattleSquadSnapshot> opposingSquads,
+            BattleSideStateSnapshot attackerSide,
+            BattleSideStateSnapshot opposingSide)
         {
             TurnNumber = turnNumber;
             Soldiers = soldiers;
             AttackerSquads = attackerSquads;
             OpposingSquads = opposingSquads;
+            AttackerSide = attackerSide;
+            OpposingSide = opposingSide;
         }
 
         public static BattleStateSnapshot Capture(BattleState state)
@@ -46,11 +52,11 @@ namespace OnlyWar.Models.Battles
                 return snapshot;
             }
 
-            Dictionary<int, BattleSquadSnapshot> attackerSquads = state.AttackerSquads
+            Dictionary<int, BattleSquadSnapshot> attackerSquads = state.AllAttackerSquads
                 .ToDictionary(
                     pair => pair.Key,
                     pair => new BattleSquadSnapshot(pair.Value, pair.Value.Soldiers.Select(CaptureSoldier).ToList()));
-            Dictionary<int, BattleSquadSnapshot> opposingSquads = state.OpposingSquads
+            Dictionary<int, BattleSquadSnapshot> opposingSquads = state.AllOpposingSquads
                 .ToDictionary(
                     pair => pair.Key,
                     pair => new BattleSquadSnapshot(pair.Value, pair.Value.Soldiers.Select(CaptureSoldier).ToList()));
@@ -67,7 +73,9 @@ namespace OnlyWar.Models.Battles
                 state.TurnNumber,
                 soldierSnapshots,
                 attackerSquads,
-                opposingSquads);
+                opposingSquads,
+                new BattleSideStateSnapshot(state.AttackerSide),
+                new BattleSideStateSnapshot(state.OpposingSide));
         }
 
         internal static BattleStateSnapshot FromSquads(
@@ -82,7 +90,7 @@ namespace OnlyWar.Models.Battles
                 .SelectMany(squad => squad.Soldiers)
                 .GroupBy(soldier => soldier.Id)
                 .ToDictionary(group => group.Key, group => group.First());
-            return new BattleStateSnapshot(turnNumber, soldiers, attackerMap, opposingMap);
+            return new BattleStateSnapshot(turnNumber, soldiers, attackerMap, opposingMap, null, null);
         }
     }
 
@@ -94,6 +102,8 @@ namespace OnlyWar.Models.Battles
         public bool IsPlayerAligned { get; }
         public bool IsInMelee { get; }
         public SquadMovementTier MovementTier { get; }
+        public BattleSquadStatus Status { get; }
+        public WithdrawalRole WithdrawalRole { get; }
         public Squad Squad { get; }
         public IReadOnlyList<BattleSoldierSnapshot> Soldiers { get; }
 
@@ -105,8 +115,36 @@ namespace OnlyWar.Models.Battles
             IsPlayerAligned = squad.IsPlayerAligned;
             IsInMelee = squad.IsInMelee;
             MovementTier = squad.MovementTier;
+            Status = squad.Status;
+            WithdrawalRole = squad.WithdrawalRole;
             Squad = squad.Squad;
             Soldiers = soldiers;
+        }
+    }
+
+    public sealed class BattleSideStateSnapshot
+    {
+        public BattleSideIntent Intent { get; }
+        public Models.Orders.Aggression Aggression { get; }
+        public BattleRole BattleRole { get; }
+        public int StartingBattleValue { get; }
+        public int StartingSoldierCount { get; }
+        public ushort? WithdrawalHeading { get; }
+        public int? CoveringSquadId { get; }
+        public int? RearGuardSquadId { get; }
+        public int? WithdrawalStartedTurn { get; }
+
+        internal BattleSideStateSnapshot(BattleSideState state)
+        {
+            Intent = state.Intent;
+            Aggression = state.Aggression;
+            BattleRole = state.BattleRole;
+            StartingBattleValue = state.StartingBattleValue;
+            StartingSoldierCount = state.StartingSoldierCount;
+            WithdrawalHeading = state.WithdrawalHeading;
+            CoveringSquadId = state.CoveringSquadId;
+            RearGuardSquadId = state.RearGuardSquadId;
+            WithdrawalStartedTurn = state.WithdrawalStartedTurn;
         }
     }
 

@@ -124,6 +124,53 @@ namespace OnlyWar.Models.Missions
             {
                 TargetEliminated = true;
             }
+
+            if (MissionSideWithdrewOrRouted(battleHistory.Outcome))
+            {
+                ForceWithdrewUnderFire = true;
+            }
+        }
+
+        public BattleSideProfile CreateMissionBattleProfile(BattleRole role) =>
+            new(Order?.LevelOfAggression ?? Aggression.Normal, role);
+
+        public static BattleSideProfile CreateOpposingBattleProfile(
+            IEnumerable<BattleSquad> opposingSquads,
+            BattleRole role)
+        {
+            List<Aggression> aggressions = (opposingSquads ?? Enumerable.Empty<BattleSquad>())
+                .Select(squad => squad.Squad?.CurrentOrders)
+                .Where(order => order != null)
+                .Select(order => order.LevelOfAggression)
+                .Distinct()
+                .OrderBy(aggression => aggression)
+                .ToList();
+            Aggression aggression = aggressions.Count == 1 ? aggressions[0] : Aggression.Normal;
+            return new BattleSideProfile(aggression, role);
+        }
+
+        private bool MissionSideWithdrewOrRouted(BattleOutcome outcome)
+        {
+            if (outcome == null)
+            {
+                return false;
+            }
+
+            HashSet<int> missionSquadIds = MissionSquads.Select(squad => squad.Id).ToHashSet();
+            if (outcome.DisengagedSquadIds.Any(missionSquadIds.Contains)
+                || outcome.RoutingSquadIds.Any(missionSquadIds.Contains))
+            {
+                return true;
+            }
+
+            if (outcome.EndReason == BattleEndReason.MutualDisengagement)
+            {
+                return true;
+            }
+
+            bool withdrawalEnding = outcome.EndReason is BattleEndReason.Withdrawal
+                or BattleEndReason.Rout;
+            return withdrawalEnding && outcome.SideHoldingField == BattleSide.Opposing;
         }
     }
 }

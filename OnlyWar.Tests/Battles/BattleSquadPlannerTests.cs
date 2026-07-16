@@ -242,6 +242,10 @@ public class BattleSquadPlannerTests
     {
         BattleSquad shooters = CreateSquad("Jogging Rifle", 90_017);
         BattleSquad enemies = CreateSquad("Far Enemy", 90_018);
+        BattleSquad valuableBehindEnemies = CreateSquad(
+            "Valuable Enemy Behind",
+            90_019,
+            battleValue: 10_000);
         BattleSoldier shooter = shooters.Soldiers[0];
         ((Soldier)shooter.Soldier).Dexterity = 16;
         RangedWeapon rifle = new(new RangedWeaponTemplate(
@@ -298,19 +302,52 @@ public class BattleSquadPlannerTests
         BattleGridManager grid = new();
         Place(grid, shooter, true, 0, 0);
         Place(grid, enemies.Soldiers[0], false, enemyX, 0);
+        Place(grid, valuableBehindEnemies.Soldiers[0], false, -enemyX - 1, 0);
         List<IAction> shootActions = [];
         List<IAction> moveActions = [];
         BattleSquadPlanner planner = CreatePlanner(
-            grid, shootActions, moveActions, [], shooters, enemies);
+            grid,
+            shootActions,
+            moveActions,
+            [],
+            shooters,
+            enemies,
+            valuableBehindEnemies);
 
         planner.PrepareActions(shooters);
 
         Assert.Equal(SquadMovementTier.Jog, shooters.MovementTier);
         Assert.Equal(shooter.GetMoveSpeed() / 2f, shooter.CurrentSpeed, precision: 4);
         ShootAction shot = Assert.IsType<ShootAction>(Assert.Single(shootActions));
+        Assert.Equal(enemies.Soldiers[0].Soldier.Id, shot.TargetId);
         Assert.Equal(1f, shot.BulkMultiplier);
         Assert.Equal(0f, shot.AimMultiplier);
         Assert.IsType<MoveAction>(Assert.Single(moveActions));
+    }
+
+    [Theory]
+    [InlineData(0, 4, true)]
+    [InlineData(4, 0, true)]
+    [InlineData(0, -4, false)]
+    public void SelectBestRangedTarget_JogFiringArcIncludesNinetyDegreesButNotBehind(
+        int targetX,
+        int targetY,
+        bool expectsTarget)
+    {
+        BattleSquad shooters = CreateSquad("Jog Arc Shooter", 90_031);
+        BattleSquad enemies = CreateSquad("Jog Arc Target", 90_032);
+        BattleSoldier shooter = shooters.Soldiers[0];
+        BattleGridManager grid = new();
+        Place(grid, shooter, true, 0, 0);
+        Place(grid, enemies.Soldiers[0], false, targetX, targetY);
+        BattleSquadPlanner planner = CreatePlanner(grid, shooters, enemies);
+
+        BattleSquadPlanner.RangedTargetEvaluation target = planner.SelectBestRangedTarget(
+            shooter,
+            useBulk: true,
+            movementDirection: new Tuple<int, int>(0, 1));
+
+        Assert.Equal(expectsTarget, target != null);
     }
 
     [Fact]

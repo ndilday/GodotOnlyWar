@@ -3,6 +3,7 @@ using OnlyWar.Helpers.Battles;
 using OnlyWar.Models.Battles;
 using OnlyWar.Tests.Fixtures;
 using Xunit;
+using System.Linq;
 
 namespace OnlyWar.Tests.Battles;
 
@@ -41,6 +42,62 @@ public class BattleStateSnapshotTests
         Assert.Equal(2, snapshot.TurnsRunning);
         Assert.Equal(SquadMovementTier.Walk, turn.State.AttackerSquads[squad.Id].MovementTier);
         Assert.Single(turn.State.AttackerSquads[squad.Id].Soldiers);
+    }
+
+    [Fact]
+    public void Capture_RetainsDisengagedRosterAndWithdrawalState()
+    {
+        BattleSquad squad = new(false, TestModelFactory.CreateSquad(
+            "Withdrawing Squad",
+            TestModelFactory.CreateSoldier(name: "Survivor")));
+        BattleSoldier soldier = squad.Soldiers[0];
+        soldier.TopLeft = new System.Tuple<int, int>(5, 6);
+        BattleState state = new(
+            new Dictionary<int, BattleSquad> { [squad.Id] = squad },
+            new Dictionary<int, BattleSquad>());
+        BattleSquad stateSquad = state.GetSquad(squad.Id);
+        stateSquad.WithdrawalRole = WithdrawalRole.Bound;
+        state.AttackerSide.Intent = BattleSideIntent.FightingWithdrawal;
+        state.AttackerSide.WithdrawalHeading = 6;
+        state.DisengageSquad(stateSquad);
+
+        BattleTurn turn = new(state, [],
+        [
+            new BattleEvent(BattleEventType.SquadDisengaged, state.TurnNumber,
+                BattleSide.Attacker, squad.Id, [], "Withdrawing Squad broke contact.")
+        ]);
+
+        BattleSquadSnapshot snapshot = turn.State.AttackerSquads[squad.Id];
+        Assert.Equal(BattleSquadStatus.Disengaged, snapshot.Status);
+        Assert.Equal(WithdrawalRole.None, snapshot.WithdrawalRole);
+        Assert.Single(snapshot.Soldiers);
+        Assert.Single(turn.State.Soldiers);
+        Assert.Empty(state.Soldiers);
+        Assert.Equal(BattleSideIntent.FightingWithdrawal, turn.State.AttackerSide.Intent);
+        Assert.Equal((ushort)6, turn.State.AttackerSide.WithdrawalHeading);
+        BattleEvent battleEvent = Assert.Single(turn.Events);
+        Assert.Equal(BattleEventType.SquadDisengaged, battleEvent.Type);
+        Assert.Equal(squad.Id, battleEvent.PrimarySquadId);
+    }
+
+    [Fact]
+    public void BattleOutcome_CopiesAndOrdersStatusIds()
+    {
+        BattleOutcome outcome = new(
+            BattleEndReason.Withdrawal,
+            BattleSide.Opposing,
+            disengagedSquadIds: [9, 2, 9],
+            eliminatedSquadIds: [7],
+            routingSquadIds: [5],
+            rearGuardSquadIds: [3]);
+        BattleHistory history = new() { Outcome = outcome };
+
+        Assert.Equal(BattleEndReason.Withdrawal, history.Outcome.EndReason);
+        Assert.Equal(BattleSide.Opposing, history.Outcome.SideHoldingField);
+        Assert.Equal([2, 9], history.Outcome.DisengagedSquadIds.ToArray());
+        Assert.Equal([7], history.Outcome.EliminatedSquadIds.ToArray());
+        Assert.Equal([5], history.Outcome.RoutingSquadIds.ToArray());
+        Assert.Equal([3], history.Outcome.RearGuardSquadIds.ToArray());
     }
 
     [Fact]

@@ -66,6 +66,80 @@ public class MissionStepOutcomeSignalTests
         Assert.Equal(3, context.EnemyKillCredits);
     }
 
+    [Theory]
+    [InlineData(BattleEndReason.Withdrawal)]
+    [InlineData(BattleEndReason.Rout)]
+    public void RecordBattleOutcome_MissionSideWithdrawalOrRout_SetsUnderFire(
+        BattleEndReason reason)
+    {
+        MissionContext context = CreateContext(MissionType.Advance);
+        BattleHistory history = new()
+        {
+            Outcome = new BattleOutcome(reason, BattleSide.Opposing)
+        };
+
+        context.RecordBattleOutcome(history);
+
+        Assert.True(context.ForceWithdrewUnderFire);
+    }
+
+    [Fact]
+    public void RecordBattleOutcome_OpposingSideWithdrawal_DoesNotSetUnderFire()
+    {
+        MissionContext context = CreateContext(MissionType.Advance);
+        BattleHistory history = new()
+        {
+            Outcome = new BattleOutcome(BattleEndReason.Withdrawal, BattleSide.Attacker)
+        };
+
+        context.RecordBattleOutcome(history);
+
+        Assert.False(context.ForceWithdrewUnderFire);
+    }
+
+    [Fact]
+    public void RecordBattleOutcome_MutualDisengagement_RecordsMissionWithdrawal()
+    {
+        MissionContext context = CreateContext(MissionType.Advance);
+        BattleHistory history = new()
+        {
+            Outcome = new BattleOutcome(BattleEndReason.MutualDisengagement, null)
+        };
+
+        context.RecordBattleOutcome(history);
+
+        Assert.True(context.ForceWithdrewUnderFire);
+    }
+
+    [Fact]
+    public void BattleProfiles_UseMissionAggressionAndCommonOpposingOrders()
+    {
+        MissionContext context = CreateContext(MissionType.Advance);
+        BattleSquad first = CreateOrderedBattleSquad(Aggression.Aggressive);
+        BattleSquad second = CreateOrderedBattleSquad(Aggression.Aggressive);
+
+        BattleSideProfile mission = context.CreateMissionBattleProfile(BattleRole.Ambusher);
+        BattleSideProfile opposing = MissionContext.CreateOpposingBattleProfile(
+            [second, first], BattleRole.Ambushed);
+
+        Assert.Equal(Aggression.Cautious, mission.Aggression);
+        Assert.Equal(BattleRole.Ambusher, mission.BattleRole);
+        Assert.Equal(Aggression.Aggressive, opposing.Aggression);
+        Assert.Equal(BattleRole.Ambushed, opposing.BattleRole);
+    }
+
+    [Fact]
+    public void OpposingProfile_MixedOrMissingOrders_FallsBackToNormal()
+    {
+        BattleSquad cautious = CreateOrderedBattleSquad(Aggression.Cautious);
+        BattleSquad aggressive = CreateOrderedBattleSquad(Aggression.Aggressive);
+
+        Assert.Equal(Aggression.Normal,
+            MissionContext.CreateOpposingBattleProfile([], BattleRole.Defender).Aggression);
+        Assert.Equal(Aggression.Normal,
+            MissionContext.CreateOpposingBattleProfile([cautious, aggressive], BattleRole.Defender).Aggression);
+    }
+
     [Fact]
     public void InfiltrateShouldContinue_WeekElapsed_SetsObjectiveAborted()
     {
@@ -132,6 +206,15 @@ public class MissionStepOutcomeSignalTests
 
     private static MissionExecutionContext CreateExecution(MissionContext context) =>
         TestExecutionContextFactory.CreateMission(context, StaticRNG.Instance);
+
+    private static BattleSquad CreateOrderedBattleSquad(Aggression aggression)
+    {
+        Squad squad = TestModelFactory.CreateSquad(
+            $"{aggression} Squad", TestModelFactory.CreateSoldier(name: $"{aggression} Soldier"));
+        Mission mission = new(MissionType.Advance, CreateRegionFaction(), 0);
+        _ = new Order([squad], Disposition.Mobile, false, true, aggression, mission);
+        return new BattleSquad(false, squad);
+    }
 
     private static RegionFaction CreateRegionFaction()
     {

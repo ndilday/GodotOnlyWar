@@ -21,6 +21,7 @@ public partial class BattleReviewController : DialogController
     private static readonly Color ProjectileColor = OnlyWarStyle.Gold;
     private static readonly Color ChargeColor = new(0.58f, 0.9f, 0.68f, 0.95f);
     private static readonly Color RoutColor = OnlyWarStyle.MedicalWarning;
+    private static readonly Color DepartureColor = OnlyWarStyle.MedicalStable;
     private const double SecondsPerRoundAtNormalSpeed = 1.0;
 
     private readonly BattleReplaySummaryBuilder _summaryBuilder = new();
@@ -241,11 +242,17 @@ public partial class BattleReviewController : DialogController
 
         foreach (BattleSquadSnapshot squad in state.AttackerSquads.Values.OrderBy(squad => squad.Id))
         {
-            DrawSquad(squad, _mapOffset, selectedFormationId == squad.Id);
+            if (ShouldDrawSquad(squad))
+            {
+                DrawSquad(squad, _mapOffset, selectedFormationId == squad.Id);
+            }
         }
         foreach (BattleSquadSnapshot squad in state.OpposingSquads.Values.OrderBy(squad => squad.Id))
         {
-            DrawSquad(squad, _mapOffset, selectedFormationId == squad.Id);
+            if (ShouldDrawSquad(squad))
+            {
+                DrawSquad(squad, _mapOffset, selectedFormationId == squad.Id);
+            }
         }
 
         // Frame the deployment so every participant is visible, but only on open —
@@ -411,7 +418,7 @@ public partial class BattleReviewController : DialogController
         }
 
         DrawCasualtyMarkers(previousState, currentState, topLeftOffset);
-        DrawRoutMarkers(previousState, currentState, topLeftOffset);
+        DrawSquadTransitionMarkers(previousState, currentState, currentTurn.Events, topLeftOffset);
         DrawActionCallouts(previousState, currentState, currentTurn, topLeftOffset);
     }
 
@@ -432,7 +439,11 @@ public partial class BattleReviewController : DialogController
         }
     }
 
-    private void DrawRoutMarkers(BattleStateSnapshot previousState, BattleStateSnapshot currentState, Vector2I topLeftOffset)
+    private void DrawSquadTransitionMarkers(
+        BattleStateSnapshot previousState,
+        BattleStateSnapshot currentState,
+        IReadOnlyList<BattleEvent> events,
+        Vector2I topLeftOffset)
     {
         foreach (BattleSquadSnapshot previousSquad in previousState.AttackerSquads.Values.Concat(previousState.OpposingSquads.Values).OrderBy(squad => squad.Id))
         {
@@ -442,16 +453,53 @@ public partial class BattleReviewController : DialogController
             }
 
             BattleSquadSnapshot currentSquad = TryGetSquad(currentState, previousSquad.Id);
-            if (currentSquad?.Soldiers.Count > 0)
+            ReplaySquadOverlay overlay = ClassifySquadOverlay(previousSquad, currentSquad, events);
+            if (overlay == ReplaySquadOverlay.None || overlay == ReplaySquadOverlay.Casualty)
             {
                 continue;
             }
 
             Vector2 centroid = GetSquadCentroid(previousSquad, topLeftOffset);
-            DrawCalloutLabel("ROUT", centroid + new Vector2(-22, -42), RoutColor, 13, 12);
-            DrawLine(centroid + new Vector2(-20, 14), centroid + new Vector2(18, 34), RoutColor, 2.0f, 8);
-            DrawLine(centroid + new Vector2(-6, 18), centroid + new Vector2(32, 38), RoutColor, 2.0f, 8);
+            Color color = overlay == ReplaySquadOverlay.Departure ? DepartureColor : RoutColor;
+            string label = overlay == ReplaySquadOverlay.Departure ? "DEPART" : "ROUT";
+            DrawCalloutLabel(label, centroid + new Vector2(-22, -42), color, 13, 12);
+            DrawLine(centroid + new Vector2(-20, 14), centroid + new Vector2(18, 34), color, 2.0f, 8);
+            DrawLine(centroid + new Vector2(-6, 18), centroid + new Vector2(32, 38), color, 2.0f, 8);
         }
+    }
+
+    internal static bool ShouldDrawSquad(BattleSquadSnapshot squad) =>
+        squad?.Status == BattleSquadStatus.Active;
+
+    internal static ReplaySquadOverlay ClassifySquadOverlay(
+        BattleSquadSnapshot previousSquad,
+        BattleSquadSnapshot currentSquad,
+        IReadOnlyList<BattleEvent> events)
+    {
+        bool HasEvent(BattleEventType type) => (events ?? Array.Empty<BattleEvent>()).Any(battleEvent =>
+            battleEvent.Type == type &&
+            (battleEvent.PrimarySquadId == previousSquad.Id ||
+             battleEvent.RelatedSquadIds.Contains(previousSquad.Id)));
+
+        if (HasEvent(BattleEventType.SquadDisengaged) || HasEvent(BattleEventType.ForceDisengaged))
+            return ReplaySquadOverlay.Departure;
+        if (HasEvent(BattleEventType.SquadRouted))
+            return ReplaySquadOverlay.Rout;
+        if (currentSquad?.Status == BattleSquadStatus.Disengaged)
+            return previousSquad.Status != BattleSquadStatus.Disengaged
+                ? ReplaySquadOverlay.Departure
+                : ReplaySquadOverlay.None;
+        if (currentSquad?.Status == BattleSquadStatus.Eliminated)
+            return ReplaySquadOverlay.Casualty;
+        if (currentSquad?.WithdrawalRole == WithdrawalRole.Routing &&
+            previousSquad.WithdrawalRole != WithdrawalRole.Routing)
+            return ReplaySquadOverlay.Rout;
+        if (currentSquad?.Soldiers.Count > 0)
+            return ReplaySquadOverlay.None;
+
+        // Histories captured before typed statuses/events represented departure only by
+        // removing the formation. Retain their old visual interpretation.
+        return ReplaySquadOverlay.Rout;
     }
 
     private void DrawActionCallouts(BattleStateSnapshot previousState, BattleStateSnapshot currentState, BattleTurn currentTurn, Vector2I topLeftOffset)
@@ -672,4 +720,12 @@ public partial class BattleReviewController : DialogController
         if (state.OpposingSquads.TryGetValue(squadId, out BattleSquadSnapshot opposingSquad)) return opposingSquad;
         return null;
     }
+}
+
+internal enum ReplaySquadOverlay
+{
+    None,
+    Casualty,
+    Rout,
+    Departure
 }

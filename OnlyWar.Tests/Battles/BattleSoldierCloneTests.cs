@@ -1,6 +1,7 @@
 using System;
 using OnlyWar.Helpers.Battles;
 using OnlyWar.Models.Soldiers;
+using OnlyWar.Models.Battles;
 using OnlyWar.Tests.Fixtures;
 using Xunit;
 
@@ -30,8 +31,11 @@ public class BattleSoldierCloneTests
         source.WoundsTaken = 6;
         source.EnemiesTakenDown = 7;
         source.TargetId = 42;
+        squad.Status = BattleSquadStatus.Disengaged;
+        squad.WithdrawalRole = WithdrawalRole.RearGuard;
 
-        BattleSoldier clone = new BattleSoldier(source, squad);
+        BattleSquad clonedSquad = (BattleSquad)squad.Clone();
+        BattleSoldier clone = clonedSquad.Soldiers[0];
 
         Assert.NotSame(source, clone);
         // The copy constructor is the single copy path; it shares the underlying
@@ -52,5 +56,8 @@ public class BattleSoldierCloneTests
         Assert.Equal(source.WoundsTaken, clone.WoundsTaken);
         Assert.Equal(source.EnemiesTakenDown, clone.EnemiesTakenDown);
         Assert.Equal(source.TargetId, clone.TargetId);
+        Assert.Equal(BattleSquadStatus.Disengaged, clonedSquad.Status);
+        Assert.Equal(WithdrawalRole.RearGuard, clonedSquad.WithdrawalRole);
+        Assert.Same(clonedSquad, clone.BattleSquad);
     }
 }
