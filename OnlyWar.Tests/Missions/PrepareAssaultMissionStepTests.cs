@@ -15,6 +15,7 @@ using Xunit;
 
 namespace OnlyWar.Tests.Missions;
 
+[Collection(OnlyWar.Tests.TestCollections.SharedState)]
 public class PrepareAssaultMissionStepTests
 {
     [Fact]

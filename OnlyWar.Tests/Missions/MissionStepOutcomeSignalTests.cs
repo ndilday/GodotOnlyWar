@@ -21,6 +21,7 @@ namespace OnlyWar.Tests.Missions;
 // resolve (rather than relying on Log wording). Only the step branches reachable without the full
 // game-data/battle machinery are exercised here; the classifier's interpretation of the signals is
 // covered by MissionOutcomeClassifierTests.
+[Collection(OnlyWar.Tests.TestCollections.SharedState)]
 public class MissionStepOutcomeSignalTests
 {
     [Fact]
