@@ -4,7 +4,6 @@ using Xunit;
 
 namespace OnlyWar.Tests.Math;
 
-[Collection(OnlyWar.Tests.TestCollections.SharedState)]
 public class GaussianCalculatorTests
 {
     [Theory]
@@ -45,15 +44,13 @@ public class GaussianCalculatorTests
     [Fact]
     public void DetermineMarginOfSuccessZvalue_IsDeterministicForSeededRng()
     {
-        RNG.Reset(123);
         float first = GaussianCalculator.DetermineMarginOfSuccessZvalue(
             0.25f,
-            StaticRNG.Instance);
+            new SeededRNG(123));
 
-        RNG.Reset(123);
         float second = GaussianCalculator.DetermineMarginOfSuccessZvalue(
             0.25f,
-            StaticRNG.Instance);
+            new SeededRNG(123));
 
         Assert.Equal(first, second);
     }

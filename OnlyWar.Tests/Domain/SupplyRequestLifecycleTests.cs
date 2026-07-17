@@ -5,13 +5,12 @@ using Xunit;
 
 namespace OnlyWar.Tests.Domain;
 
-[Collection(OnlyWar.Tests.TestCollections.SharedState)]
 public class SupplyRequestLifecycleTests
 {
     [Fact]
     public void ProcessTurn_AfterDeadline_FailsBeforeLateOutcomeCanFulfill()
     {
-        SectorSimulationFixture fixture = SectorSimulationFixture.Create();
+        SectorSimulationFixture fixture = SectorSimulationFixture.CreateDetached();
         Character governor = fixture.InstallGovernor(investigation: 0f, neediness: 0f, opinion: 1f);
         Faction threat = fixture.AddControllingFaction(1, "Threat", 100).PlanetFaction.Faction;
         ForceCommitmentPackage commitment = new(

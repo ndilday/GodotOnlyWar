@@ -9,7 +9,6 @@ using Xunit;
 
 namespace OnlyWar.Tests.Battles;
 
-[Collection(OnlyWar.Tests.TestCollections.SharedState)]
 public class BattleForceEvaluatorTests
 {
     [Theory]
@@ -155,37 +154,7 @@ public class BattleForceEvaluatorTests
             result.Trace.Render());
     }
 
-    [Fact]
-    public void Evaluate_WritesTraceOnlyWhenBattleLoggingIsEnabled()
-    {
-        List<string> logged = [];
-        Action<string> originalSink = BattleLog.Sink;
-        try
-        {
-            BattleLog.Sink = logged.Add;
-
-            BattleForceEvaluationResult result = BattleForceEvaluator.Evaluate(Input(
-                Aggression.Normal,
-                friendly: Metrics(40),
-                enemy: Metrics(50)));
-
-            Assert.Single(logged);
-            Assert.Equal(result.Trace.Render(), logged[0]);
-
-            BattleLog.Sink = null;
-            BattleForceEvaluator.Evaluate(Input(
-                Aggression.Normal,
-                friendly: Metrics(40),
-                enemy: Metrics(50)));
-            Assert.Single(logged);
-        }
-        finally
-        {
-            BattleLog.Sink = originalSink;
-        }
-    }
-
-    private static BattleForceEvaluationInput Input(
+    internal static BattleForceEvaluationInput Input(
         Aggression aggression,
         BattleForceMetrics friendly,
         BattleForceMetrics enemy)
@@ -198,7 +167,7 @@ public class BattleForceEvaluatorTests
             Enemy: enemy);
     }
 
-    private static BattleForceMetrics Metrics(
+    internal static BattleForceMetrics Metrics(
         int currentBattleValue,
         int loss = 0,
         bool viableDamage = true,
@@ -215,5 +184,40 @@ public class BattleForceEvaluatorTests
             AnySquadInMelee: false,
             HasViableDamagingActionRecently: viableDamage,
             CanAnySquadProsecuteMission: canProsecute);
+    }
+}
+
+[Collection(OnlyWar.Tests.TestCollections.SharedState)]
+public class BattleForceEvaluatorSharedStateTests
+{
+    [Fact]
+    public void Evaluate_WritesTraceOnlyWhenBattleLoggingIsEnabled()
+    {
+        List<string> logged = [];
+        Action<string> originalSink = BattleLog.Sink;
+        try
+        {
+            BattleLog.Sink = logged.Add;
+
+            BattleForceEvaluationResult result = BattleForceEvaluator.Evaluate(
+                BattleForceEvaluatorTests.Input(
+                    Aggression.Normal,
+                    friendly: BattleForceEvaluatorTests.Metrics(40),
+                    enemy: BattleForceEvaluatorTests.Metrics(50)));
+
+            Assert.Single(logged);
+            Assert.Equal(result.Trace.Render(), logged[0]);
+
+            BattleLog.Sink = null;
+            BattleForceEvaluator.Evaluate(BattleForceEvaluatorTests.Input(
+                Aggression.Normal,
+                friendly: BattleForceEvaluatorTests.Metrics(40),
+                enemy: BattleForceEvaluatorTests.Metrics(50)));
+            Assert.Single(logged);
+        }
+        finally
+        {
+            BattleLog.Sink = originalSink;
+        }
     }
 }

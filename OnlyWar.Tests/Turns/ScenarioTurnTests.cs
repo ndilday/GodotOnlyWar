@@ -217,15 +217,31 @@ public class ScenarioTurnTests
     public void ProcessTurn_PlayerConstructionOrderPersistsAfterTurn()
     {
         RNG.Reset(20250628);
-        Sector sector = SectorBuilder.GenerateSector(12, _data, _date, "Mason Chapter");
+        SectorSimulationFixture fixture = SectorSimulationFixture.Create();
+        Sector sector = fixture.Sector;
         GameDataSingleton.Instance.LoadGameDataFromBlob(_data, _date, sector);
 
-        Planet promised = sector.GetPlanet(sector.Scenario.PromisedPlanetId);
-        Region region = promised.Regions.First();
-        RegionFaction playerRegionFaction = AddPlayerRegionFaction(sector, promised, region);
+        Planet planet = fixture.Planet;
+        Region region = planet.Regions.First();
+        RegionFaction playerRegionFaction = AddPlayerRegionFaction(sector, planet, region);
 
-        Squad squad = sector.PlayerForce.Army.OrderOfBattle.GetAllSquads()
-            .First(s => s.Members.Any(m => m.CanFight));
+        BaseSkill engineering = _data.Skills.EngineeringFortification;
+        Soldier builder = TestModelFactory.CreateSoldier(
+            name: "Brother Mason",
+            skills: new Skill(engineering, 20));
+        SquadTemplate squadTemplate = new(
+            90_001,
+            "Test Engineering Squad",
+            TestModelFactory.DefaultWeapons,
+            [],
+            TestModelFactory.TestArmor,
+            [new SquadTemplateElement(TestModelFactory.MarineTemplate, 0, 1)],
+            SquadTypes.None)
+        {
+            Faction = sector.PlayerForce.Faction
+        };
+        Squad squad = new("Mason Squad", null, squadTemplate);
+        squad.AddSquadMember(builder);
         squad.CurrentRegion = region;
         playerRegionFaction.LandedSquads.Add(squad);
 
@@ -302,6 +318,7 @@ public class ScenarioTurnTests
         Assert.Contains(promised.Name, controller.ScenarioNotification);
     }
 
+    [Trait("Category", "Slow")]
     [Fact]
     public void ProcessTurn_PromisedWorldLogsImperialRegionMetrics()
     {

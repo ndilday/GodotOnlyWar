@@ -331,6 +331,16 @@ namespace OnlyWar.Helpers.Battles
                     }
                 }
 
+                // A Shaken squad will not advance toward the enemy (Design/Active/
+                // MoraleAndRout.md §6): advance/charge impulses collapse into holding ground.
+                // The state is recomputed every turn, so this is not sticky.
+                if (squad.MoraleState == MoraleState.Shaken && advanceVotes > 0)
+                {
+                    standVotes += advanceVotes;
+                    advanceVotes = 0;
+                    chargeVotes = 0;
+                }
+
                 if (advanceVotes > standVotes
                     && advanceVotes > retreatVotes
                     && advanceVotes > walkVotes)
@@ -448,6 +458,44 @@ namespace OnlyWar.Helpers.Battles
             foreach (BattleSoldier soldier in squad.AbleSoldiers.OrderBy(s => s.Soldier.Id))
             {
                 AddStandingActionsToBag(soldier, allowCharge: false);
+            }
+        }
+
+        /// <summary>
+        /// Plans a routing squad (Design/Active/WithdrawalAndPursuit.md §10): Run directly away
+        /// from the nearest enemy; no shooting or voluntary utility action; an engaged routing
+        /// soldier cannot simply leave melee and remains subject to normal enemy attacks.
+        /// </summary>
+        public void PrepareRoutingActions(BattleSquad squad)
+        {
+            squad.WithdrawalRole = WithdrawalRole.Routing;
+            squad.MovementTier = SquadMovementTier.Run;
+            ApplyDeclaredMovementState(squad);
+            foreach (BattleSoldier soldier in squad.AbleSoldiers.OrderBy(s => s.Soldier.Id))
+            {
+                if (_grid.IsAdjacentToEnemy(soldier.Soldier.Id))
+                {
+                    // Pinned in melee — he fights because he cannot flee, not because he wants to.
+                    AddMeleeActionsToBag(soldier);
+                    continue;
+                }
+
+                float distance = _grid.GetNearestEnemy(soldier.Soldier.Id, out int closestEnemyId);
+                if (closestEnemyId == -1) continue;
+                Tuple<int, int> enemyPosition = _grid.GetSoldierPosition(closestEnemyId)[0];
+                Tuple<int, int> awayLine = new(
+                    soldier.TopLeft.Item1 - enemyPosition.Item1,
+                    soldier.TopLeft.Item2 - enemyPosition.Item2);
+                if (awayLine.Item1 == 0 && awayLine.Item2 == 0)
+                {
+                    awayLine = new Tuple<int, int>(0, 1);
+                }
+                AddMoveAction(
+                    soldier,
+                    GetMovementBudget(soldier, SquadMovementTier.Run),
+                    awayLine,
+                    SquadMovementTier.Run);
+                // Deliberately no run-utility action: routing permits no voluntary actions.
             }
         }
 

@@ -14,7 +14,6 @@ using Xunit;
 
 namespace OnlyWar.Tests.Battles;
 
-[Collection(OnlyWar.Tests.TestCollections.SharedState)]
 public class AreaAttackActionTests
 {
     [Fact]
@@ -31,9 +30,7 @@ public class AreaAttackActionTests
         battle.Place(1, true, 0, 0);
         battle.Place(2, false, 5, 0);
         battle.Place(3, false, 6, 1);
-        RNG.Reset(1);
-
-        AreaAttackAction action = battle.ExecuteAreaAttack(1, 2);
+        AreaAttackAction action = battle.ExecuteAreaAttack(1, 2, seed: 1);
 
         Assert.Equal(1_000, battle.State.GetSoldier(3).Soldier.Size);
         Assert.Equal(1_000, battle.State.GetSoldier(3).Soldier.Template.Species.RangedEvasion);
@@ -55,9 +52,7 @@ public class AreaAttackActionTests
         battle.Place(1, true, 0, 0);
         battle.Place(2, false, 5, 0);
         battle.Place(3, false, 6, 1);
-        RNG.Reset(2);
-
-        AreaAttackAction action = battle.ExecuteAreaAttack(1, 2);
+        AreaAttackAction action = battle.ExecuteAreaAttack(1, 2, seed: 2);
 
         Assert.Equal(new[] { 2, 3 }, action.VictimIds);
         WoundResolution wound = Assert.Single(action.WoundResolutions);
@@ -79,7 +74,7 @@ public class AreaAttackActionTests
         RangedWeapon weapon = battle.State.GetSoldier(1).EquippedRangedWeapons.Single();
         weapon.LoadedAmmo = (ushort)loadedFuel;
 
-        battle.ExecuteAreaAttack(1, 2);
+        battle.ExecuteAreaAttack(1, 2, seed: 1);
 
         Assert.Equal(expectedFuel, weapon.LoadedAmmo);
     }
@@ -97,9 +92,7 @@ public class AreaAttackActionTests
         battle.Place(1, true, 0, 0);
         battle.Place(3, true, 3, 0);
         battle.Place(2, false, 5, 0);
-        RNG.Reset(3);
-
-        AreaAttackAction action = battle.ExecuteAreaAttack(1, 2);
+        AreaAttackAction action = battle.ExecuteAreaAttack(1, 2, seed: 3);
 
         Assert.True(action.IsFriendlyFire);
         Assert.Equal(new[] { 3 }, action.FriendlyVictimIds);
@@ -120,14 +113,12 @@ public class AreaAttackActionTests
         battle.SetArmor(2, 0);
         battle.Place(1, true, 0, 0);
         battle.Place(2, false, 5, 0);
-        RNG.Reset(4);
-        AreaAttackAction action = battle.ExecuteAreaAttack(1, 2);
+        AreaAttackAction action = battle.ExecuteAreaAttack(1, 2, seed: 4);
         WoundResolution originalWound = Assert.Single(action.WoundResolutions);
         RangedWeapon weapon = battle.State.GetSoldier(1).EquippedRangedWeapons.Single();
         ushort remainingFuel = weapon.LoadedAmmo;
         ushort turnsShooting = battle.State.GetSoldier(1).TurnsShooting;
 
-        RNG.Reset(999);
         action.Execute(battle.State);
 
         Assert.Same(originalWound, Assert.Single(action.WoundResolutions));
@@ -265,7 +256,7 @@ public class AreaAttackActionTests
                 [new Tuple<int, int>(x, y)]);
         }
 
-        public AreaAttackAction ExecuteAreaAttack(int shooterId, int targetId)
+        public AreaAttackAction ExecuteAreaAttack(int shooterId, int targetId, int seed)
         {
             int weaponId = State.GetSoldier(shooterId)
                 .EquippedRangedWeapons.Single().Template.Id;
@@ -274,7 +265,7 @@ public class AreaAttackActionTests
                 targetId,
                 weaponId,
                 Grid,
-                StaticRNG.Instance);
+                new SeededRNG(seed));
             action.Execute(State);
             return action;
         }

@@ -165,6 +165,11 @@ namespace OnlyWar.Helpers.Battles.Actions
             // elusive targets (serpentine Raveners, weaving Genestealers, camo-caped
             // Scouts) are flatly harder to hit — see Design/EvasionBurrowAndAmbush.md
             totalModifier -= target.Soldier.Template.Species.RangedEvasion;
+            // a Shaken squad's fire is degraded (Design/Active/MoraleAndRout.md §6)
+            if (shooter.BattleSquad?.MoraleState == MoraleState.Shaken)
+            {
+                totalModifier -= MoraleConstants.ShakenRangedAccuracyPenalty;
+            }
             if (firingIntoMelee)
             {
                 totalModifier += RangedFriendlyFireRules.FiringIntoMeleePenalty;

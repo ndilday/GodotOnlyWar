@@ -12,7 +12,6 @@ namespace OnlyWar.Tests.Battles;
 /// on purpose; they exist to catch a formula regression, not to pin an exact
 /// probability.
 /// </summary>
-[Collection(OnlyWar.Tests.TestCollections.SharedState)]
 public class MeleeHitRateTests
 {
     private const int Trials = 200_000;
@@ -21,14 +20,14 @@ public class MeleeHitRateTests
                                   float defenderSkill, float defenderEvasion,
                                   float defenderDefenseModifier = 0)
     {
-        RNG.Reset(12345);
+        SeededRNG random = new(12345);
         int hits = 0;
         for (int i = 0; i < Trials; i++)
         {
             if (MeleeAttackAction.RollMeleeHit(attackSkill, weaponAccuracy, didMove,
                                                defenderSkill, defenderEvasion,
                                                defenderDefenseModifier,
-                                               StaticRNG.Instance))
+                                               random))
             {
                 hits++;
             }

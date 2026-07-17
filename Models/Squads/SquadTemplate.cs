@@ -57,6 +57,17 @@ namespace OnlyWar.Models.Squads
         // A squad's point value is the sum of its members' battle values at full strength (PRD
         // §4.24). Previously a stored column; now derived so it can never drift from the roster.
         public int BattleValue => Elements?.Sum(e => e.SoldierTemplate.BattleValue * e.MaximumNumber) ?? 0;
+        // Derived, not stored (Design/Active/MoraleAndRout.md §4.1): true iff any element's
+        // species carries SpeciesAbilities.Synapse. Adding a new synapse creature to the DB
+        // works automatically.
+        public bool ProvidesSynapse => Elements?.Any(
+            e => e.SoldierTemplate.Species.Abilities.HasFlag(SpeciesAbilities.Synapse)) ?? false;
+        // Squads are species-homogeneous (§3.1), so "squad Ego" is the shared Ego of every
+        // member's species — read from the first element. Used by force generation's
+        // coverage-needing gate and (Phase 4) the rear-guard predicate.
+        public float SquadEgo => Elements != null && Elements.Count > 0
+            ? Elements.First().SoldierTemplate.Species.Ego.BaseValue
+            : 0f;
         public Faction Faction { get; set;  }
         public SquadTemplate BodyguardSquadTemplate { get; set; }
         // Work-experience training a squad leader develops toward while commanding this

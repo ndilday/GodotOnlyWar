@@ -9,7 +9,6 @@ namespace OnlyWar.Tests.Turns;
 // Coverage for the combat-model corrections (PRD §4.24): casualties reduce a faction's fighting
 // strength from the correct pool (Population for a horde, Garrison for a faction with civilians),
 // and a victorious invader establishes a foothold from its survivors rather than dissolving.
-[Collection(OnlyWar.Tests.TestCollections.SharedState)]
 public class CombatModelTests
 {
     [Fact]
@@ -23,7 +22,7 @@ public class CombatModelTests
     [Fact]
     public void FactionDefaults_PopulationIsMilitary_OnlyForNpcHordes()
     {
-        SectorSimulationFixture fixture = SectorSimulationFixture.Create();
+        SectorSimulationFixture fixture = SectorSimulationFixture.CreateDetached();
         Faction tyranids = fixture.AddConsumptionFaction(0, population: 1_000, organization: 100)
             .PlanetFaction.Faction;
         Faction cult = fixture.AddHiddenFaction(1, GrowthType.Logistic, population: 1_000)
@@ -37,7 +36,7 @@ public class CombatModelTests
     [Fact]
     public void FactionDefaults_InvadesOnVictory_OnlyForConsumptionFactions()
     {
-        SectorSimulationFixture fixture = SectorSimulationFixture.Create();
+        SectorSimulationFixture fixture = SectorSimulationFixture.CreateDetached();
         Faction tyranids = fixture.AddConsumptionFaction(0, population: 1_000, organization: 100)
             .PlanetFaction.Faction;
         Faction cult = fixture.AddHiddenFaction(1, GrowthType.Logistic, population: 1_000)
@@ -51,7 +50,7 @@ public class CombatModelTests
     [Fact]
     public void ApplyMilitaryCasualties_HordeLosesPopulation_CivilianLosesGarrison()
     {
-        SectorSimulationFixture fixture = SectorSimulationFixture.Create();
+        SectorSimulationFixture fixture = SectorSimulationFixture.CreateDetached();
         RegionFaction horde = fixture.AddConsumptionFaction(0, population: 10_000, organization: 100);
         horde.Garrison = 500;
         RegionFaction civilian = fixture.DefaultRegionFaction(0);
@@ -73,7 +72,7 @@ public class CombatModelTests
     [Fact]
     public void ApplyMilitaryCasualties_ClampsAtZero()
     {
-        SectorSimulationFixture fixture = SectorSimulationFixture.Create();
+        SectorSimulationFixture fixture = SectorSimulationFixture.CreateDetached();
         RegionFaction horde = fixture.AddConsumptionFaction(0, population: 1_000, organization: 100);
 
         horde.RemoveMilitaryStrength(5_000);
@@ -84,7 +83,7 @@ public class CombatModelTests
     [Fact]
     public void EstablishInvaderPresence_SeedsANewPublicFootholdFromSurvivors()
     {
-        SectorSimulationFixture fixture = SectorSimulationFixture.Create();
+        SectorSimulationFixture fixture = SectorSimulationFixture.CreateDetached();
         Faction tyranids = fixture.AddConsumptionFaction(0, population: 1_000, organization: 100)
             .PlanetFaction.Faction;
         Region target = fixture.Planet.Regions[5];
@@ -101,7 +100,7 @@ public class CombatModelTests
     [Fact]
     public void EstablishInvaderPresence_ReinforcesAnExistingFoothold()
     {
-        SectorSimulationFixture fixture = SectorSimulationFixture.Create();
+        SectorSimulationFixture fixture = SectorSimulationFixture.CreateDetached();
         RegionFaction existing = fixture.AddConsumptionFaction(3, population: 1_000, organization: 100);
         Faction tyranids = existing.PlanetFaction.Faction;
 

@@ -78,6 +78,34 @@ internal static class TestModelFactory
         0,
         Array.Empty<Tuple<BaseSkill, float>>());
 
+    // A synapse-providing species (Design/Active/MoraleAndRout.md §4) — used to exercise
+    // squad-to-squad synapse coverage. Radius is well inside the small integer distances
+    // BattleGridManager tests place soldiers at, so "in range" / "out of range" cases stay
+    // legible.
+    public static Species SynapseProviderSpecies { get; } = new(
+        3,
+        "Test Synapse Provider",
+        Value(10), Value(10), Value(10), Value(10), Value(10), Value(10), Value(10),
+        Value(0), Value(10), Value(6), Value(1),
+        1,
+        1,
+        0f,
+        0f,
+        SpeciesAbilities.Synapse,
+        HumanBodyTemplate.Instance,
+        DefaultUnarmedWeapon,
+        synapseRadius: 10f);
+
+    public static SoldierTemplate SynapseProviderTemplate { get; } = new(
+        4,
+        SynapseProviderSpecies,
+        "Test Synapse Provider",
+        1,
+        1,
+        false,
+        0,
+        Array.Empty<Tuple<BaseSkill, float>>());
+
     public static SoldierTemplate SergeantTemplate { get; } = new(
         2,
         HumanSpecies,

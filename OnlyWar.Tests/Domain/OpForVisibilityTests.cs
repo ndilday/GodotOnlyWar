@@ -8,13 +8,12 @@ namespace OnlyWar.Tests.Domain;
 // Covers the fog-of-war grading the UI relies on: enemy population is hidden until recon
 // raises player-visible RegionIntel, and defensive values are only ever shown as fuzzy
 // descriptions (RegionFactionExtensions).
-[Collection(OnlyWar.Tests.TestCollections.SharedState)]
 public class OpForVisibilityTests
 {
     [Fact]
     public void GetPopulationDescription_HiddenFaction_RevealsNothing()
     {
-        SectorSimulationFixture fixture = SectorSimulationFixture.Create();
+        SectorSimulationFixture fixture = SectorSimulationFixture.CreateDetached();
         RegionFaction cult = fixture.AddHiddenFaction(0, OnlyWar.Models.GrowthType.Logistic, population: 50000);
         fixture.DefaultPlanetFaction.SetRegionIntel(fixture.Planet.Regions[0], 6f);
 
@@ -25,7 +24,7 @@ public class OpForVisibilityTests
     [Fact]
     public void GetPopulationDescription_PublicFactionWithNoIntelligence_IsUnknown()
     {
-        SectorSimulationFixture fixture = SectorSimulationFixture.Create();
+        SectorSimulationFixture fixture = SectorSimulationFixture.CreateDetached();
         RegionFaction enemy = fixture.AddControllingFaction(1, "Rebels", population: 12345);
         fixture.DefaultPlanetFaction.SetRegionIntel(fixture.Planet.Regions[1], 0f);
 
@@ -35,7 +34,7 @@ public class OpForVisibilityTests
     [Fact]
     public void GetPopulationDescription_PartialIntelligence_RoundsToPrecision()
     {
-        SectorSimulationFixture fixture = SectorSimulationFixture.Create();
+        SectorSimulationFixture fixture = SectorSimulationFixture.CreateDetached();
         RegionFaction enemy = fixture.AddControllingFaction(1, "Rebels", population: 12345);
         // intelligence 3 => divisor 10^(6-3) = 1000 => 12345 rounded down to 12000
         fixture.DefaultPlanetFaction.SetRegionIntel(fixture.Planet.Regions[1], 3f);
@@ -46,7 +45,7 @@ public class OpForVisibilityTests
     [Fact]
     public void GetPopulationDescription_FullIntelligence_RevealsExactCount()
     {
-        SectorSimulationFixture fixture = SectorSimulationFixture.Create();
+        SectorSimulationFixture fixture = SectorSimulationFixture.CreateDetached();
         RegionFaction enemy = fixture.AddControllingFaction(1, "Rebels", population: 12345);
         fixture.DefaultPlanetFaction.SetRegionIntel(fixture.Planet.Regions[1], 6f);
 
@@ -56,7 +55,7 @@ public class OpForVisibilityTests
     [Fact]
     public void GetVisibleCivilianPopulation_HiddenDefaultFaction_RevealsNoCivilianCount()
     {
-        SectorSimulationFixture fixture = SectorSimulationFixture.Create(defaultRegionPopulation: 20000);
+        SectorSimulationFixture fixture = SectorSimulationFixture.CreateDetached(defaultRegionPopulation: 20000);
         Region region = fixture.Planet.Regions[0];
         fixture.DefaultRegionFaction(0).IsPublic = false;
 
@@ -67,7 +66,7 @@ public class OpForVisibilityTests
     [Fact]
     public void PlanetaryDefenseForces_HiddenDefaultFaction_DoesNotCountAsActiveGarrison()
     {
-        SectorSimulationFixture fixture = SectorSimulationFixture.Create(defaultRegionPopulation: 20000);
+        SectorSimulationFixture fixture = SectorSimulationFixture.CreateDetached(defaultRegionPopulation: 20000);
         Region region = fixture.Planet.Regions[0];
         RegionFaction remnant = fixture.DefaultRegionFaction(0);
         remnant.Garrison = 5000;
@@ -80,7 +79,7 @@ public class OpForVisibilityTests
     [Fact]
     public void GetVisibleEnemyRegionFaction_PublicEnemyTakesPriorityOverHiddenEnemy()
     {
-        SectorSimulationFixture fixture = SectorSimulationFixture.Create();
+        SectorSimulationFixture fixture = SectorSimulationFixture.CreateDetached();
         RegionFaction hiddenCult = fixture.AddHiddenFaction(0, OnlyWar.Models.GrowthType.Conversion, population: 5000);
         RegionFaction tyranids = fixture.AddConsumptionFaction(0, population: 12000, organization: 100);
 

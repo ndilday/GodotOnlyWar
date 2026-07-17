@@ -28,6 +28,18 @@ namespace OnlyWar.Helpers.Battles
         private readonly Dictionary<BattleSide, Queue<int>> _battleValueHistory = [];
         private readonly Dictionary<BattleSide, Queue<bool>> _damageActionHistory = [];
         private readonly Dictionary<int, float> _rearGuardStartingSeparation = [];
+        // Morale (Design/Active/MoraleAndRout.md §5). Starting able strength per squad drives the
+        // cumulative-casualty term; the turn-start able counts drive the this-turn casualty term;
+        // the turn-start routing snapshot drives the propagation term (§5.1 — read prior-turn
+        // results, never routs rolled this turn); the leader set flags squads that began with a
+        // squad leader so a later leader loss reads as a command-loss shock.
+        private readonly Dictionary<int, int> _startingAbleCount = [];
+        private readonly Dictionary<int, int> _ableCountAtTurnStart = [];
+        private readonly HashSet<int> _routingAtTurnStart = [];
+        private readonly HashSet<int> _squadStartedWithLeader = [];
+        // Every squad that ever routed this battle. BattleOutcome.RoutingSquadIds must report
+        // them even after DisengageSquad/RemoveSquad clears the live WithdrawalRole.
+        private readonly HashSet<int> _everRoutedSquadIds = [];
         private readonly List<BattleEvent> _turnEvents = [];
         private readonly Stopwatch _stopwatch = Stopwatch.StartNew();
 
@@ -88,6 +100,15 @@ namespace OnlyWar.Helpers.Battles
             _damageActionHistory[BattleSide.Attacker] = new Queue<bool>();
             _damageActionHistory[BattleSide.Opposing] = new Queue<bool>();
 
+            foreach (BattleSquad squad in attackerBattleSquads.Concat(opposingBattleSquads))
+            {
+                _startingAbleCount[squad.Id] = squad.AbleSoldiers.Count;
+                if (squad.Soldiers.Any(soldier => soldier.Soldier.Template.IsSquadLeader))
+                {
+                    _squadStartedWithLeader.Add(squad.Id);
+                }
+            }
+
             GameLog.Debug(() =>
                 $"Battle start in {_region?.Name}: {_aftermathContext.FirstSideStartingSoldierCount} "
                 + $"{_aftermathContext.FirstSideFaction.Name} vs "
@@ -129,6 +150,8 @@ namespace OnlyWar.Helpers.Battles
 
             Log(false, "Turn " + _currentState.TurnNumber.ToString());
 
+            SnapshotTurnStartMoraleState();
+
             List<IAction> moveSegmentActions = [];
             List<IAction> shootSegmentActions = [];
             List<IAction> meleeSegmentActions = [];
@@ -169,7 +192,15 @@ namespace OnlyWar.Helpers.Battles
             if (_currentState.ActiveAttackerSquads.Count > 0
                 && _currentState.ActiveOpposingSquads.Count > 0)
             {
-                EvaluateContinuation(events);
+                // Stage 6 (Design/Active/WithdrawalAndPursuit.md §11): a rout preempts the plan,
+                // so the morale check runs BEFORE the continuation/rear-guard decision.
+                EvaluateMorale(events);
+                if (BattleHistory.Outcome == null
+                    && _currentState.ActiveAttackerSquads.Count > 0
+                    && _currentState.ActiveOpposingSquads.Count > 0)
+                {
+                    EvaluateContinuation(events);
+                }
             }
 
             BattleHistory.Turns.Add(new BattleTurn(_currentState, executedActions, events));
@@ -226,7 +257,7 @@ namespace OnlyWar.Helpers.Battles
             ICollection<IAction> meleeActions,
             Action<string> log)
         {
-            IReadOnlyCollection<BattleSquad> friendly = GetActiveSquads(side);
+            IReadOnlyCollection<BattleSquad> allFriendly = GetActiveSquads(side);
             IReadOnlyCollection<BattleSquad> enemy = GetActiveSquads(Opposite(side));
             BattleSideState sideState = GetSideState(side);
             BattleSquadPlanner squadPlanner = new(
@@ -239,6 +270,23 @@ namespace OnlyWar.Helpers.Battles
                 _execution.Rules.MeleeWeaponTemplates,
                 _execution.Random);
             BattleForcePlanner forcePlanner = new(squadPlanner);
+
+            // Routing squads flee through their own planner path regardless of side intent
+            // (Design/Active/WithdrawalAndPursuit.md §10) and are removed from the cover
+            // rotation and rear-guard candidate set — hence excluded from the force planner.
+            List<BattleSquad> friendly = [];
+            foreach (BattleSquad squad in allFriendly.OrderBy(squad => squad.Id))
+            {
+                if (squad.WithdrawalRole == WithdrawalRole.Routing)
+                {
+                    squadPlanner.PrepareRoutingActions(squad);
+                }
+                else
+                {
+                    friendly.Add(squad);
+                }
+            }
+            if (friendly.Count == 0) return;
 
             if (sideState.Intent == BattleSideIntent.FightingWithdrawal)
             {
@@ -261,7 +309,7 @@ namespace OnlyWar.Helpers.Battles
                 return;
             }
 
-            foreach (BattleSquad squad in friendly.OrderBy(squad => squad.Id))
+            foreach (BattleSquad squad in friendly)
             {
                 squad.WithdrawalRole = WithdrawalRole.None;
                 squadPlanner.PrepareActions(squad);
@@ -353,6 +401,296 @@ namespace OnlyWar.Helpers.Battles
             }
         }
 
+        private void SnapshotTurnStartMoraleState()
+        {
+            _ableCountAtTurnStart.Clear();
+            _routingAtTurnStart.Clear();
+            foreach (BattleSquad squad in GetActiveSquads(BattleSide.Attacker)
+                .Concat(GetActiveSquads(BattleSide.Opposing)))
+            {
+                _ableCountAtTurnStart[squad.Id] = squad.AbleSoldiers.Count;
+                if (squad.WithdrawalRole == WithdrawalRole.Routing)
+                {
+                    _routingAtTurnStart.Add(squad.Id);
+                }
+            }
+        }
+
+        // Design/Active/MoraleAndRout.md §5-6. Both sides are evaluated from the same post-round
+        // physical state; propagation (§5.1) reads the turn-start routing snapshot, so iteration
+        // order does not change results and a rout this turn only pressures neighbours next turn.
+        private void EvaluateMorale(List<BattleEvent> events)
+        {
+            // Metrics for both sides are captured before either side's outcomes apply, and the
+            // propagation term reads the turn-start routing snapshot (§5.1), so evaluating the
+            // sides in sequence cannot change either side's results.
+            BattleForceMetrics attackerMetrics = BuildMetrics(BattleSide.Attacker);
+            BattleForceMetrics opposingMetrics = BuildMetrics(BattleSide.Opposing);
+            EvaluateMoraleForSide(BattleSide.Attacker, attackerMetrics, opposingMetrics, events);
+            if (BattleHistory.Outcome == null)
+            {
+                EvaluateMoraleForSide(BattleSide.Opposing, opposingMetrics, attackerMetrics, events);
+            }
+        }
+
+        private void EvaluateMoraleForSide(
+            BattleSide side,
+            BattleForceMetrics friendlyMetrics,
+            BattleForceMetrics enemyMetrics,
+            List<BattleEvent> events)
+        {
+            List<BattleSquad> friendly = GetActiveSquads(side).OrderBy(squad => squad.Id).ToList();
+            List<BattleSquad> enemy = GetActiveSquads(Opposite(side)).ToList();
+            float forceDisadvantage = BattleMoraleEvaluator.ComputeForceDisadvantage(
+                friendlyMetrics.CurrentBattleValue,
+                enemyMetrics.CurrentBattleValue,
+                friendlyMetrics.BattleValueLostPreviousTwoRounds,
+                enemyMetrics.BattleValueLostPreviousTwoRounds);
+
+            foreach (BattleSquad squad in friendly)
+            {
+                BattleMoraleEvaluator.MoraleSkipReason skip =
+                    BattleMoraleEvaluator.ShouldCheckMorale(squad, friendly, _grid);
+                if (skip != BattleMoraleEvaluator.MoraleSkipReason.Check)
+                {
+                    // A synapse provider or covered squad is not shaken — hold it Steady. An
+                    // already-routing squad is sticky (§6): leave its state untouched.
+                    if (skip != BattleMoraleEvaluator.MoraleSkipReason.AlreadyRouting)
+                    {
+                        squad.MoraleState = MoraleState.Steady;
+                    }
+                    LogMoraleSkip(side, squad, skip);
+                    continue;
+                }
+
+                int startingAble = _startingAbleCount.GetValueOrDefault(
+                    squad.Id, squad.AbleSoldiers.Count);
+                int turnStartAble = _ableCountAtTurnStart.GetValueOrDefault(
+                    squad.Id, squad.AbleSoldiers.Count);
+                int currentAble = squad.AbleSoldiers.Count;
+                float casualtyThisTurn = turnStartAble > 0
+                    ? Math.Clamp((float)(turnStartAble - currentAble) / turnStartAble, 0f, 1f)
+                    : 0f;
+                float cumulativeCasualty = startingAble > 0
+                    ? Math.Clamp((float)(startingAble - currentAble) / startingAble, 0f, 1f)
+                    : 0f;
+                bool leaderDead = _squadStartedWithLeader.Contains(squad.Id)
+                    && squad.SquadLeader == null;
+                float routingVisible = BattleMoraleEvaluator.ComputeRoutingVisibleFriendlyFraction(
+                    squad, friendly, _routingAtTurnStart, _grid, MoraleConstants.VisualRange);
+                float localOutnumber = BattleMoraleEvaluator.ComputeLocalOutnumberRatio(
+                    squad, friendly, enemy, _grid, MoraleConstants.VisualRange);
+                float commandAura = CommandAuraSupport(squad, side);
+
+                BattleSoldier leader = squad.SquadLeader;
+                List<BattleMoraleEvaluator.SoldierMoraleInput> soldiers = squad.AbleSoldiers
+                    .OrderBy(soldier => soldier.Soldier.Id)
+                    .Select(soldier => new BattleMoraleEvaluator.SoldierMoraleInput(
+                        soldier.Soldier.Id,
+                        soldier.Soldier.Ego,
+                        leader != null && soldier.Soldier.Id == leader.Soldier.Id))
+                    .ToList();
+
+                BattleMoraleEvaluator.MoraleCheckResult result = BattleMoraleEvaluator.Evaluate(
+                    new BattleMoraleEvaluator.MoraleCheckInput(
+                        soldiers,
+                        casualtyThisTurn,
+                        cumulativeCasualty,
+                        leaderDead,
+                        routingVisible,
+                        localOutnumber,
+                        commandAura,
+                        forceDisadvantage),
+                    _execution.Random);
+
+                squad.MoraleState = result.Outcome;
+                if (result.Outcome == MoraleState.Routing)
+                {
+                    squad.WithdrawalRole = WithdrawalRole.Routing;
+                    _everRoutedSquadIds.Add(squad.Id);
+                    events.Add(new BattleEvent(
+                        BattleEventType.SquadRouted,
+                        _currentState.TurnNumber,
+                        side,
+                        squad.Id,
+                        null,
+                        $"{squad.Name} broke and routed."));
+                }
+                LogMoraleEval(
+                    side,
+                    squad,
+                    result,
+                    casualtyThisTurn,
+                    cumulativeCasualty,
+                    leaderDead,
+                    routingVisible,
+                    localOutnumber,
+                    commandAura,
+                    forceDisadvantage);
+            }
+
+            // If every remaining active squad on the side is Routing, the side reflects Rout
+            // intent so the existing contact-break machinery (which treats Rout as a withdrawal
+            // intent) disengages it. Individual routs on an otherwise-fighting side keep the
+            // side's intent; those squads flee via the planner's routing path.
+            List<BattleSquad> active = GetActiveSquads(side).ToList();
+            BattleSideState state = GetSideState(side);
+            if (active.Count > 0
+                && active.All(squad => squad.WithdrawalRole == WithdrawalRole.Routing)
+                && state.Intent != BattleSideIntent.Rout
+                && state.Intent != BattleSideIntent.Disengaged)
+            {
+                state.Intent = BattleSideIntent.Rout;
+                state.WithdrawalStartedTurn ??= _currentState.TurnNumber;
+                state.CoveringSquadId = null;
+                state.RearGuardSquadId = null;
+                events.Add(new BattleEvent(
+                    BattleEventType.WithdrawalOrdered,
+                    _currentState.TurnNumber,
+                    side,
+                    null,
+                    active.Select(squad => squad.Id),
+                    $"{SideName(side)} broke and routed."));
+                // Without a posture the contact-break default (BreakOff) would let the routed
+                // side escape instantly; the enemy decides whether to run it down.
+                EvaluatePursuitResponse(side, events);
+            }
+        }
+
+        // §4.3 command aura (Phase 6): signed, stateless, recomputed per turn like every other
+        // morale input. Reads the side's FULL roster (not just active squads) because the
+        // HQ-loss reading — every fielded HQ squad destroyed applies +CommandLossStress of
+        // stress — needs destroyed HQ squads to stay visible. See CommandAuraEvaluator.
+        private float CommandAuraSupport(BattleSquad squad, BattleSide side) =>
+            CommandAuraEvaluator.ComputeCommandAuraModifier(squad, GetAllSquads(side), _grid);
+
+        // Squads are species-homogeneous (§3.1), so squad Ego is the shared per-soldier Ego;
+        // averaging over able soldiers is robust to a future mixed template. Used by the §7
+        // rear-guard predicate and the §9 coverage-needing gate.
+        private static float SquadEgo(BattleSquad squad)
+        {
+            List<BattleSoldier> able = squad.AbleSoldiers;
+            return able.Count > 0 ? able.Average(soldier => soldier.Soldier.Ego) : 0f;
+        }
+
+        // §8.2 closed-form command-collapse estimate: would <paramref name="squad"/> rout at
+        // ordinary morale — synapse immunity ignored, the §4.3 command-aura term set to
+        // <paramref name="commandAuraSupport"/>? Builds the same MoraleCheckInput the live check
+        // builds (EvaluateMoraleForSide) but resolves it deterministically via
+        // BattleMoraleEvaluator's RNG-free estimator — no battle RNG is consumed, so it is safe
+        // inside the forecast. Callers pick the aura term per branch: the squad's live value for
+        // the synapse-severance verdict, or -CommandLossStress for the every-HQ-lost verdict.
+        // Every other stress input is the squad's real current state.
+        private bool EstimateRoutsAtOrdinaryMorale(
+            BattleSquad squad,
+            IReadOnlyList<BattleSquad> friendly,
+            IReadOnlyList<BattleSquad> enemy,
+            float forceDisadvantage,
+            float commandAuraSupport)
+        {
+            int startingAble = _startingAbleCount.GetValueOrDefault(squad.Id, squad.AbleSoldiers.Count);
+            int turnStartAble = _ableCountAtTurnStart.GetValueOrDefault(squad.Id, squad.AbleSoldiers.Count);
+            int currentAble = squad.AbleSoldiers.Count;
+            float casualtyThisTurn = turnStartAble > 0
+                ? Math.Clamp((float)(turnStartAble - currentAble) / turnStartAble, 0f, 1f)
+                : 0f;
+            float cumulativeCasualty = startingAble > 0
+                ? Math.Clamp((float)(startingAble - currentAble) / startingAble, 0f, 1f)
+                : 0f;
+            bool leaderDead = _squadStartedWithLeader.Contains(squad.Id) && squad.SquadLeader == null;
+            float routingVisible = BattleMoraleEvaluator.ComputeRoutingVisibleFriendlyFraction(
+                squad, friendly, _routingAtTurnStart, _grid, MoraleConstants.VisualRange);
+            float localOutnumber = BattleMoraleEvaluator.ComputeLocalOutnumberRatio(
+                squad, friendly, enemy, _grid, MoraleConstants.VisualRange);
+            BattleSoldier leader = squad.SquadLeader;
+            List<BattleMoraleEvaluator.SoldierMoraleInput> soldiers = squad.AbleSoldiers
+                .OrderBy(soldier => soldier.Soldier.Id)
+                .Select(soldier => new BattleMoraleEvaluator.SoldierMoraleInput(
+                    soldier.Soldier.Id,
+                    soldier.Soldier.Ego,
+                    leader != null && soldier.Soldier.Id == leader.Soldier.Id))
+                .ToList();
+
+            return BattleMoraleEvaluator.EstimateOutcome(
+                new BattleMoraleEvaluator.MoraleCheckInput(
+                    soldiers,
+                    casualtyThisTurn,
+                    cumulativeCasualty,
+                    leaderDead,
+                    routingVisible,
+                    localOutnumber,
+                    commandAuraSupport,
+                    forceDisadvantage)) == MoraleState.Routing;
+        }
+
+        private void LogMoraleSkip(
+            BattleSide side,
+            BattleSquad squad,
+            BattleMoraleEvaluator.MoraleSkipReason skip)
+        {
+            if (!BattleLog.IsEnabled) return;
+            BattleDecisionTrace trace = new("MORALE_EVAL", new List<KeyValuePair<string, string>>
+            {
+                BattleDecisionTrace.Field("turn", _currentState.TurnNumber),
+                BattleDecisionTrace.Field("side", side == BattleSide.Attacker ? "first" : "second"),
+                BattleDecisionTrace.Field("squad", squad.Id),
+                BattleDecisionTrace.Field("skip", RenderSkip(skip)),
+                BattleDecisionTrace.Field("outcome", squad.MoraleState)
+            });
+            BattleLog.Write(trace.Render());
+        }
+
+        private void LogMoraleEval(
+            BattleSide side,
+            BattleSquad squad,
+            BattleMoraleEvaluator.MoraleCheckResult result,
+            float casualtyThisTurn,
+            float cumulativeCasualty,
+            bool leaderDead,
+            float routingVisible,
+            float localOutnumber,
+            float commandAura,
+            float forceDisadvantage)
+        {
+            if (!BattleLog.IsEnabled) return;
+            BattleDecisionTrace trace = new("MORALE_EVAL", new List<KeyValuePair<string, string>>
+            {
+                BattleDecisionTrace.Field("turn", _currentState.TurnNumber),
+                BattleDecisionTrace.Field("side", side == BattleSide.Attacker ? "first" : "second"),
+                BattleDecisionTrace.Field("squad", squad.Id),
+                BattleDecisionTrace.Field("skip", "none"),
+                BattleDecisionTrace.Field("casualty_this_turn", casualtyThisTurn),
+                BattleDecisionTrace.Field("cumulative_casualty", cumulativeCasualty),
+                BattleDecisionTrace.Field("leader_dead", leaderDead),
+                BattleDecisionTrace.Field("routing_visible", routingVisible),
+                BattleDecisionTrace.Field("local_outnumber", localOutnumber),
+                // Signed §4.3 aura contribution: positive = support from a living HQ in
+                // radius; negative = command-loss stress (every fielded HQ destroyed).
+                BattleDecisionTrace.Field("command_aura", commandAura),
+                BattleDecisionTrace.Field("force_disadvantage", forceDisadvantage),
+                BattleDecisionTrace.Field("shock", result.Shock),
+                BattleDecisionTrace.Field("context", result.Context),
+                BattleDecisionTrace.Field("stress", result.Stress),
+                BattleDecisionTrace.Field("able", result.AbleSoldiers),
+                BattleDecisionTrace.Field("fails", result.Fails),
+                BattleDecisionTrace.Field("fail_fraction", result.FailFraction),
+                BattleDecisionTrace.Field("leader_held", result.LeaderHeld),
+                BattleDecisionTrace.Field("rout_threshold", result.RoutThreshold),
+                BattleDecisionTrace.Field("shaken_threshold", result.ShakenThreshold),
+                BattleDecisionTrace.Field("outcome", result.Outcome)
+            });
+            BattleLog.Write(trace.Render());
+        }
+
+        private static string RenderSkip(BattleMoraleEvaluator.MoraleSkipReason skip) => skip switch
+        {
+            BattleMoraleEvaluator.MoraleSkipReason.NoAbleSoldiers => "no_able_soldiers",
+            BattleMoraleEvaluator.MoraleSkipReason.AlreadyRouting => "already_routing",
+            BattleMoraleEvaluator.MoraleSkipReason.ProvidesSynapse => "provides_synapse",
+            BattleMoraleEvaluator.MoraleSkipReason.SynapseCovered => "synapse_covered",
+            _ => "none"
+        };
+
         private void EvaluateContinuation(List<BattleEvent> events)
         {
             BattleForceMetrics attacker = BuildMetrics(BattleSide.Attacker);
@@ -395,7 +733,6 @@ namespace OnlyWar.Helpers.Battles
         {
             BattleSide pursuingSide = Opposite(withdrawingSide);
             BattleSideState withdrawing = GetSideState(withdrawingSide);
-            BattleSideState pursuing = GetSideState(pursuingSide);
             withdrawing.Intent = BattleSideIntent.FightingWithdrawal;
             withdrawing.WithdrawalStartedTurn ??= _currentState.TurnNumber;
             withdrawing.WithdrawalHeading ??= BattleForcePlanner.SelectWithdrawalHeading(
@@ -416,6 +753,16 @@ namespace OnlyWar.Helpers.Battles
                 return;
             }
 
+            EvaluatePursuitResponse(withdrawingSide, events);
+        }
+
+        // Decides the enemy's pursuit posture toward a side that has just started withdrawing
+        // or routing. BreakOff completes the withdrawal immediately; otherwise the enemy's
+        // intent becomes Pursuing. Shared by voluntary withdrawal and the morale rout path.
+        private void EvaluatePursuitResponse(BattleSide withdrawingSide, List<BattleEvent> events)
+        {
+            BattleSide pursuingSide = Opposite(withdrawingSide);
+            BattleSideState pursuing = GetSideState(pursuingSide);
             BattleForceMetrics pursuitMetrics = BuildMetrics(pursuingSide);
             BattleForceMetrics withdrawalMetrics = BuildMetrics(withdrawingSide);
             float separation = MinimumSeparation(pursuingSide, withdrawingSide);
@@ -557,16 +904,66 @@ namespace OnlyWar.Helpers.Battles
                 return;
             }
 
-            List<BattleSquad> squads = GetActiveSquads(withdrawingSide).OrderBy(squad => squad.Id).ToList();
+            // Routing squads are removed from the rear-guard candidate set
+            // (Design/Active/WithdrawalAndPursuit.md §10).
+            List<BattleSquad> squads = GetActiveSquads(withdrawingSide)
+                .Where(squad => squad.WithdrawalRole != WithdrawalRole.Routing)
+                .OrderBy(squad => squad.Id)
+                .ToList();
             if (squads.Count < 2) return;
-            float fastestPursuer = BuildMetrics(pursuerSide).FastestPursuitSquadSpeed;
+            // All active friendly squads (including any routing ones) — the propagation and
+            // local-outnumber morale terms read the full local picture, not just candidates.
+            List<BattleSquad> friendly = GetActiveSquads(withdrawingSide).ToList();
+            List<BattleSquad> enemy = GetActiveSquads(pursuerSide).ToList();
+            BattleForceMetrics friendlyMetrics = BuildMetrics(withdrawingSide);
+            BattleForceMetrics enemyMetrics = BuildMetrics(pursuerSide);
+            float fastestPursuer = enemyMetrics.FastestPursuitSquadSpeed;
             float attackReach = MaximumOneTurnAttackReach(pursuerSide);
-            List<WithdrawalForecast.SquadGeometry> geometry = squads.Select(squad => new WithdrawalForecast.SquadGeometry(
-                squad.Id,
-                squad.AbleSoldiers.Count,
-                CurrentBattleValue(squad),
-                MinimumSquadToForceSeparation(squad, GetActiveSquads(pursuerSide)),
-                squad.GetSquadMove())).ToList();
+            // §8.2 command collapse: force disadvantage feeds the closed-form rout estimate used
+            // to price a severed dependent's collapse (see EstimateRoutsIfUncovered).
+            float forceDisadvantage = BattleMoraleEvaluator.ComputeForceDisadvantage(
+                friendlyMetrics.CurrentBattleValue,
+                enemyMetrics.CurrentBattleValue,
+                friendlyMetrics.BattleValueLostPreviousTwoRounds,
+                enemyMetrics.BattleValueLostPreviousTwoRounds);
+            List<WithdrawalForecast.SquadGeometry> geometry = squads.Select(squad =>
+            {
+                float squadEgo = SquadEgo(squad);
+                bool provides = squad.SquadProvidesSynapse;
+                // A squad needs coverage iff it neither provides synapse nor clears the Ego gate —
+                // the same "independent-willed" definition force generation uses (§9).
+                bool depends = !provides && squadEgo < MoraleConstants.RearGuardEgoThreshold;
+                bool providesCommand = squad.SquadProvidesCommandAura;
+                float commandAura = CommandAuraSupport(squad, withdrawingSide);
+                // §4.3/§8.2 second consumer: only a squad CURRENTLY steadied by a living HQ has
+                // support to lose in a branch. Synapse dependents are priced by the synapse path
+                // (what the branch strips from them is the check skip, not a stress modifier), so
+                // the two dependent sets stay disjoint; cross-aura coupling (a Hive Tyrant that
+                // is both synapse provider and HQ) is not chased — the §8.2 one-level cap applies
+                // to aura interactions too, and each verdict reads the squad's live state for the
+                // other aura.
+                bool dependsOnCommand = !provides && !depends && !providesCommand && commandAura > 0f;
+                return new WithdrawalForecast.SquadGeometry(
+                    squad.Id,
+                    squad.AbleSoldiers.Count,
+                    CurrentBattleValue(squad),
+                    MinimumSquadToForceSeparation(squad, enemy),
+                    squad.GetSquadMove(),
+                    provides,
+                    depends,
+                    // Precompute the RNG-free rout verdict once per dependent: what §4.2 severance
+                    // produces if this squad loses its provider this turn (command aura at its
+                    // live value).
+                    depends && EstimateRoutsAtOrdinaryMorale(
+                        squad, friendly, enemy, forceDisadvantage, commandAura),
+                    providesCommand,
+                    dependsOnCommand,
+                    // The every-HQ-lost branch verdict: support replaced by the loss term, per
+                    // the stateless reading in CommandAuraEvaluator.
+                    dependsOnCommand && EstimateRoutsAtOrdinaryMorale(
+                        squad, friendly, enemy, forceDisadvantage,
+                        -MoraleConstants.CommandLossStress));
+            }).ToList();
             WithdrawalForecast.Projection baseline = WithdrawalForecast.ProjectOpenGround(
                 geometry, fastestPursuer, attackReach);
             float closest = geometry.Min(item => item.CurrentEnemySeparation);
@@ -592,7 +989,13 @@ namespace OnlyWar.Helpers.Battles
                     squads.Count - 1,
                     item.CurrentEnemySeparation,
                     delay,
-                    projection);
+                    projection,
+                    SquadEgo: SquadEgo(squad),
+                    IsShaken: squad.MoraleState == MoraleState.Shaken,
+                    // The live planner holds one squad while its providers withdraw with the main
+                    // body, so a covered dependent's coverage always lapses mid-hold (§7). This
+                    // arm stays false until composite rear guards (§12); Warriors pass on Ego.
+                    WillRemainSynapseCoveredWhileHolding: false);
             }).ToList();
             WithdrawalForecast.Result result = WithdrawalForecast.Evaluate(new(
                 _currentState.TurnNumber,
@@ -654,10 +1057,15 @@ namespace OnlyWar.Helpers.Battles
         private void CompleteWithdrawal(BattleSide side, List<BattleEvent> events)
         {
             BattleSide holder = Opposite(side);
+            // Read intent before DisengageForce overwrites it: a side whose every squad broke
+            // (BattleSideIntent.Rout) records the typed Rout end reason, not Withdrawal.
+            bool wasRouting = GetSideState(side).Intent == BattleSideIntent.Rout;
             DisengageForce(side, events, $"{SideName(side)} broke contact.");
             GetSideState(holder).Intent = BattleSideIntent.Engaged;
             _pursuitPostures.Remove(holder);
-            BattleHistory.Outcome = BuildOutcome(BattleEndReason.Withdrawal, holder);
+            BattleHistory.Outcome = BuildOutcome(
+                wasRouting ? BattleEndReason.Rout : BattleEndReason.Withdrawal,
+                holder);
         }
 
         private void DisengageForce(BattleSide side, List<BattleEvent> events, string description)
@@ -732,7 +1140,9 @@ namespace OnlyWar.Helpers.Battles
                 holder,
                 squads.Where(squad => squad.Status == BattleSquadStatus.Disengaged).Select(squad => squad.Id),
                 squads.Where(squad => squad.Status == BattleSquadStatus.Eliminated).Select(squad => squad.Id),
-                squads.Where(squad => squad.WithdrawalRole == WithdrawalRole.Routing).Select(squad => squad.Id),
+                squads.Where(squad => squad.WithdrawalRole == WithdrawalRole.Routing)
+                    .Select(squad => squad.Id)
+                    .Concat(_everRoutedSquadIds),
                 squads.Where(squad => squad.WithdrawalRole == WithdrawalRole.RearGuard
                     || GetSideState(BattleSide.Attacker).RearGuardSquadId == squad.Id
                     || GetSideState(BattleSide.Opposing).RearGuardSquadId == squad.Id)

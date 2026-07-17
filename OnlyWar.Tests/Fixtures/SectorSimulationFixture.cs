@@ -35,7 +35,28 @@ internal sealed class SectorSimulationFixture
 
     public static SectorSimulationFixture Create(long defaultRegionPopulation = 20000)
     {
-        Directory.SetCurrentDirectory(RulesDatabaseFixture.RepositoryRoot);
+        return CreateCore(defaultRegionPopulation, loadGlobalGameData: true);
+    }
+
+    /// <summary>
+    /// Builds the same compact model without changing the process current directory or loading it
+    /// into <see cref="GameDataSingleton"/>. Use this for pure model/service tests so they can run
+    /// in parallel with tests that own the production singleton.
+    /// </summary>
+    public static SectorSimulationFixture CreateDetached(long defaultRegionPopulation = 20000)
+    {
+        return CreateCore(defaultRegionPopulation, loadGlobalGameData: false);
+    }
+
+    private static SectorSimulationFixture CreateCore(
+        long defaultRegionPopulation,
+        bool loadGlobalGameData)
+    {
+        if (loadGlobalGameData)
+        {
+            Directory.SetCurrentDirectory(RulesDatabaseFixture.RepositoryRoot);
+        }
+
         SectorSimulationFixture fixture = new()
         {
             Default = BuildFaction(1, "Imperium", isPlayer: false, isDefault: true, GrowthType.None)
@@ -61,7 +82,11 @@ internal sealed class SectorSimulationFixture
         Army army = new("Test Army", null, null, null, []);
         PlayerForce playerForce = new(player, army, new Fleet("Test Fleet", null, null));
         fixture.Sector = new Sector(playerForce, [], [fixture.Planet], []);
-        GameDataSingleton.Instance.LoadGameDataFromBlob(new GameRulesData(), new Date(1, 1, 1), fixture.Sector);
+        if (loadGlobalGameData)
+        {
+            GameDataSingleton.Instance.LoadGameDataFromBlob(new GameRulesData(), new Date(1, 1, 1), fixture.Sector);
+        }
+
         return fixture;
     }
 

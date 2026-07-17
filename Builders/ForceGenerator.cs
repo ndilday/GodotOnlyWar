@@ -131,6 +131,17 @@ namespace OnlyWar.Builders
 
             if (!availableTemplates.Any()) return new List<Squad>();
 
+            // §9 synapse ratio (Design/Active/MoraleAndRout.md): only factions that field at
+            // least one synapse-providing squad template are affected. Every other faction's
+            // generation is exactly the loop that existed before this pass.
+            List<SquadTemplate> synapseTemplates = usableTemplates
+                .Where(st => st.ProvidesSynapse)
+                .OrderBy(st => st.BattleValue)
+                .ToList();
+            bool factionHasSynapse = synapseTemplates.Count > 0;
+            float coverageNeedingBvPurchased = 0f;
+            int synapseSquadsPurchased = 0;
+
             long remainingValue = request.TargetBattleValue;
             Squad hqSquad = GenerateGenericHqSquad(
                 hqTemplates,
@@ -141,56 +152,115 @@ namespace OnlyWar.Builders
             if (hqSquad != null)
             {
                 generatedSquads.Add(hqSquad);
-                remainingValue -= SquadBattleValue(hqSquad);
+                long hqValue = SquadBattleValue(hqSquad);
+                remainingValue -= hqValue;
+                if (factionHasSynapse)
+                {
+                    TrackSynapseAccounting(
+                        hqSquad.SquadTemplate, hqValue,
+                        ref coverageNeedingBvPurchased, ref synapseSquadsPurchased);
+                }
             }
 
             HashSet<int> usedTemplateIds = [];
 
             while (remainingValue > 0)
             {
-                List<SquadTemplate> affordableTemplates = availableTemplates
-                    .Where(t => t.BattleValue <= remainingValue)
-                    .ToList();
-                if (!affordableTemplates.Any())
+                // Ratio purchase, interleaved here so budget accounting stays in the one
+                // remainingValue variable (§9). Only fires when coverage-needing BV bought
+                // so far is owed another synapse squad and one is currently affordable;
+                // otherwise generation falls through to the pre-existing selection logic
+                // unchanged.
+                SquadTemplate chosenTemplate = null;
+                if (factionHasSynapse
+                    && SynapseSquadsOwed(coverageNeedingBvPurchased, synapseSquadsPurchased) > 0)
                 {
-                    Squad partialSquad = GeneratePartialRemainderSquad(
-                        availableTemplates,
-                        remainingValue,
-                        random,
-                        entityIds);
-                    if (partialSquad != null)
+                    List<SquadTemplate> affordableSynapse = synapseTemplates
+                        .Where(t => t.BattleValue <= remainingValue)
+                        .ToList();
+                    if (affordableSynapse.Any())
                     {
-                        generatedSquads.Add(partialSquad);
-                        remainingValue -= SquadBattleValue(partialSquad);
+                        chosenTemplate = affordableSynapse[
+                            random.GetIntBelowMax(0, affordableSynapse.Count)];
                     }
-                    break;
                 }
 
-                List<SquadTemplate> viableTemplates = affordableTemplates
-                    .Where(t => LeavesUsableRemainder(availableTemplates, remainingValue - t.BattleValue))
-                    .ToList();
-                if (viableTemplates.Any())
+                if (chosenTemplate == null)
                 {
-                    affordableTemplates = viableTemplates;
+                    List<SquadTemplate> affordableTemplates = availableTemplates
+                        .Where(t => t.BattleValue <= remainingValue)
+                        .ToList();
+                    if (!affordableTemplates.Any())
+                    {
+                        Squad partialSquad = GeneratePartialRemainderSquad(
+                            availableTemplates,
+                            remainingValue,
+                            random,
+                            entityIds);
+                        if (partialSquad != null)
+                        {
+                            generatedSquads.Add(partialSquad);
+                            long partialValue = SquadBattleValue(partialSquad);
+                            remainingValue -= partialValue;
+                            if (factionHasSynapse)
+                            {
+                                TrackSynapseAccounting(
+                                    partialSquad.SquadTemplate, partialValue,
+                                    ref coverageNeedingBvPurchased, ref synapseSquadsPurchased);
+                            }
+                        }
+                        break;
+                    }
+
+                    List<SquadTemplate> viableTemplates = affordableTemplates
+                        .Where(t => LeavesUsableRemainder(availableTemplates, remainingValue - t.BattleValue))
+                        .ToList();
+                    if (viableTemplates.Any())
+                    {
+                        affordableTemplates = viableTemplates;
+                    }
+
+                    List<SquadTemplate> unusedTemplates = affordableTemplates
+                        .Where(t => !usedTemplateIds.Contains(t.Id))
+                        .ToList();
+                    if (!unusedTemplates.Any())
+                    {
+                        usedTemplateIds.Clear();
+                        unusedTemplates = affordableTemplates;
+                    }
+
+                    chosenTemplate = unusedTemplates[
+                        random.GetIntBelowMax(0, unusedTemplates.Count)];
+                    usedTemplateIds.Add(chosenTemplate.Id);
                 }
 
-                List<SquadTemplate> unusedTemplates = affordableTemplates
-                    .Where(t => !usedTemplateIds.Contains(t.Id))
-                    .ToList();
-                if (!unusedTemplates.Any())
-                {
-                    usedTemplateIds.Clear();
-                    unusedTemplates = affordableTemplates;
-                }
-
-                SquadTemplate affordableTemplate = unusedTemplates[
-                    random.GetIntBelowMax(0, unusedTemplates.Count)];
-                usedTemplateIds.Add(affordableTemplate.Id);
                 generatedSquads.Add(SquadFactory.GenerateSquad(
-                    affordableTemplate,
+                    chosenTemplate,
                     random,
                     entityIds));
-                remainingValue -= affordableTemplate.BattleValue;
+                remainingValue -= chosenTemplate.BattleValue;
+                if (factionHasSynapse)
+                {
+                    TrackSynapseAccounting(
+                        chosenTemplate, chosenTemplate.BattleValue,
+                        ref coverageNeedingBvPurchased, ref synapseSquadsPurchased);
+                }
+            }
+
+            // §9 minimum-force floor: a force that actually bought coverage-needing squads
+            // but was too small to afford even the cheapest synapse-providing squad via the
+            // ratio still gets one, which can push it above its budgeted BV. Accepted quirk
+            // (§9, "Accepted quirk (2026-07-16)") pending a deployment / instinctive-behavior
+            // pass, not a bug to fix here. A force with no coverage-needing BV at all (e.g. a
+            // pure independent-willed roster) buys no synapse escort it does not need.
+            if (factionHasSynapse && synapseSquadsPurchased == 0 && coverageNeedingBvPurchased > 0)
+            {
+                SquadTemplate cheapestSynapseTemplate = synapseTemplates[0];
+                generatedSquads.Add(SquadFactory.GenerateSquad(
+                    cheapestSynapseTemplate,
+                    random,
+                    entityIds));
+                synapseSquadsPurchased++;
             }
 
             // Force-scale trace: one squad is added per unit of BV budget, so a pool-sized budget
@@ -201,6 +271,35 @@ namespace OnlyWar.Builders
                 + $"squads={generatedSquads.Count}, soldiers={generatedSquads.Sum(s => s.Members.Count)}");
 
             return generatedSquads;
+        }
+
+        // §9: a squad "needs coverage" iff it neither provides synapse nor passes the §7 Ego
+        // gate. Reusing RearGuardEgoThreshold keeps "independent-willed" defined once.
+        private static bool SquadNeedsCoverage(SquadTemplate template) =>
+            !template.ProvidesSynapse && template.SquadEgo < MoraleConstants.RearGuardEgoThreshold;
+
+        private static void TrackSynapseAccounting(
+            SquadTemplate template,
+            long squadValue,
+            ref float coverageNeedingBvPurchased,
+            ref int synapseSquadsPurchased)
+        {
+            if (template.ProvidesSynapse)
+            {
+                synapseSquadsPurchased++;
+            }
+            else if (SquadNeedsCoverage(template))
+            {
+                coverageNeedingBvPurchased += squadValue;
+            }
+        }
+
+        // One synapse-providing squad owed per MoraleConstants.SynapseRatioBV of
+        // coverage-needing BV purchased so far, net of synapse squads already bought.
+        private static int SynapseSquadsOwed(float coverageNeedingBvPurchased, int synapseSquadsPurchased)
+        {
+            int owed = (int)(coverageNeedingBvPurchased / MoraleConstants.SynapseRatioBV) - synapseSquadsPurchased;
+            return owed > 0 ? owed : 0;
         }
 
         private static Squad GenerateGenericHqSquad(

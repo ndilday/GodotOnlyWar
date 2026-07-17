@@ -39,6 +39,7 @@ public class ScenarioBuilderTests
             .ToList();
     }
 
+    [Trait("Category", "Slow")]
     [Fact]
     public void GenerateSector_Seed1ProducesPlayablePromisedWorldInvariants()
     {
@@ -133,8 +134,9 @@ public class ScenarioBuilderTests
     // The opening now plays out as a pre-/post-landing simulation during generation, so the promised
     // world's final state is the product of several scoped turns of combat and growth. This guards
     // both the stamped metadata and the final simulated board for deterministic replay.
+    [Trait("Category", "Slow")]
     [Fact]
-    public void GenerateSector_SameSeedProducesSameOpeningOutcome()
+    public void GenerateSector_SameSeedProducesSameOpeningOutcome_AndScopedSimulationStaysOnTargetPlanet()
     {
         (GameRulesData firstData, Sector first) = GenerateFreshSector(7);
         (GameRulesData secondData, Sector second) = GenerateFreshSector(7);
@@ -156,6 +158,19 @@ public class ScenarioBuilderTests
             .Select(r => r.Id).OrderBy(id => id).ToList();
         Assert.Equal(firstStamped, secondStamped);
         Assert.Equal(FactionPopulationTotals(first), FactionPopulationTotals(second));
+
+        GameDataSingleton.Instance.LoadGameDataFromBlob(firstData, _date, first);
+        Planet promised = first.GetPlanet(first.Scenario.PromisedPlanetId);
+
+        // Reuse the already-generated deterministic sector to verify that the planet-scoped
+        // simulation does not leak into the rest of the campaign. This used to generate a third
+        // seed-7 sector in a separate test.
+        Planet other = first.Planets.Values.First(p => p.Id != promised.Id);
+        List<((int, int), long)> before = RegionFactionPopulations(other);
+
+        new TurnController().SimulatePlanetForward(first, promised, turns: 5);
+
+        Assert.Equal(before, RegionFactionPopulations(other));
     }
 
     private (GameRulesData Data, Sector Sector) GenerateFreshSector(int seed)
@@ -181,13 +196,26 @@ public class ScenarioBuilderTests
             .ToList();
     }
 
+    private static List<((int RegionId, int FactionId), long Population)> RegionFactionPopulations(Planet planet)
+    {
+        return planet.Regions
+            .SelectMany(region => region.RegionFactionMap.Values
+                .Select(regionFaction => (
+                    (region.Id, regionFaction.PlanetFaction.Faction.Id),
+                    regionFaction.Population)))
+            .OrderBy(item => item.Item1.Item1)
+            .ThenBy(item => item.Item1.Item2)
+            .ToList();
+    }
+
     // Regression: the opening now runs a scoped pre-/post-landing simulation during generation,
     // which drives real NPC recon/combat on the promised world. A recon that is detected by a region
     // with no squads to scramble produced an empty OpFor, and the downstream battle steps assumed a
     // non-empty OpposingSquads and threw, so generation itself crashed for some seeds. Keep the
-    // first repro seed plus a known-good baseline in the normal suite.
+    // first repro seed in the slow integration lane. Seed 1 is already covered by the stronger
+    // playable-opening invariant test above, so repeating it here only paid for another full build.
+    [Trait("Category", "Slow")]
     [Theory]
-    [InlineData(1)]
     [InlineData(3)]
     public void GenerateSector_KeyScopedSimSeedsRunWithoutThrowing(int seed)
     {
@@ -217,31 +245,4 @@ public class ScenarioBuilderTests
         Assert.NotNull(sector.GetPlanet(sector.Scenario.PromisedPlanetId));
     }
 
-    // The planet-scoped sim must touch only the target world: a second planet's populations are left
-    // exactly as generated.
-    [Fact]
-    public void SimulatePlanetForward_LeavesOtherPlanetsUntouched()
-    {
-        Sector sector = SectorBuilder.GenerateSector(7, _data, _date, "Scoped Chapter");
-        GameDataSingleton.Instance.LoadGameDataFromBlob(_data, _date, sector);
-        Planet promised = sector.GetPlanet(sector.Scenario.PromisedPlanetId);
-
-        // A different world to guard against the sim leaking across planets.
-        Planet other = sector.Planets.Values.First(p => p.Id != promised.Id);
-        List<((int, int), long)> before = other.Regions
-            .SelectMany(r => r.RegionFactionMap.Values
-                .Select(rf => ((r.Id, rf.PlanetFaction.Faction.Id), rf.Population)))
-            .OrderBy(t => t.Item1.Item1).ThenBy(t => t.Item1.Item2)
-            .ToList();
-
-        new TurnController().SimulatePlanetForward(sector, promised, turns: 5);
-
-        List<((int, int), long)> after = other.Regions
-            .SelectMany(r => r.RegionFactionMap.Values
-                .Select(rf => ((r.Id, rf.PlanetFaction.Faction.Id), rf.Population)))
-            .OrderBy(t => t.Item1.Item1).ThenBy(t => t.Item1.Item2)
-            .ToList();
-
-        Assert.Equal(before, after);
-    }
 }

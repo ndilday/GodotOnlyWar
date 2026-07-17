@@ -11,7 +11,6 @@ using Xunit;
 
 namespace OnlyWar.Tests.Battles;
 
-[Collection(OnlyWar.Tests.TestCollections.SharedState)]
 public class ShootActionFriendlyFireTests
 {
     [Fact]
@@ -29,7 +28,7 @@ public class ShootActionFriendlyFireTests
             1,
             false,
             grid: null,
-            StaticRNG.Instance);
+            new SeededRNG(1));
         float skill = shooter.Soldier.GetTotalSkillValue(shooter.EquippedRangedWeapons[0].Template.RelatedSkill);
 
         float cleanModifier = action.CalculateToHitModifiers(
@@ -63,19 +62,19 @@ public class ShootActionFriendlyFireTests
             bulkMultiplier: 0,
             aimMultiplier: 1,
             grid: null,
-            StaticRNG.Instance);
+            new SeededRNG(1));
         ShootAction walking = new(
             1, 2, weapon.Template.Id, 5, 1,
             bulkMultiplier: 0.5f,
             aimMultiplier: 0.5f,
             grid: null,
-            StaticRNG.Instance);
+            new SeededRNG(1));
         ShootAction jogging = new(
             1, 2, weapon.Template.Id, 5, 1,
             bulkMultiplier: 1,
             aimMultiplier: 0,
             grid: null,
-            StaticRNG.Instance);
+            new SeededRNG(1));
 
         float stationaryModifier = stationary.CalculateToHitModifiers(
             shooter, target, weapon, skill, false);
@@ -156,8 +155,11 @@ public class ShootActionFriendlyFireTests
 
         // With the same attack roll but no scrum penalty, the total is three points higher
         // and is therefore a normal hit rather than a near miss.
-        RNG.Reset(seed);
-        ShootAction cleanShot = CreateAction(shooters.Soldiers[0], targets.Soldiers[0], grid: null);
+        ShootAction cleanShot = CreateAction(
+            shooters.Soldiers[0],
+            targets.Soldiers[0],
+            grid: null,
+            new SeededRNG(seed));
         cleanShot.Execute(state);
         Assert.Null(cleanShot.StrayTargetId);
 
@@ -175,8 +177,7 @@ public class ShootActionFriendlyFireTests
     {
         for (int seed = 0; seed < 10_000; seed++)
         {
-            RNG.Reset(seed);
-            ShootAction action = CreateAction(shooter, target, grid);
+            ShootAction action = CreateAction(shooter, target, grid, new SeededRNG(seed));
             action.Execute(state);
             if (action.StrayTargetId.HasValue)
             {
@@ -191,7 +192,8 @@ public class ShootActionFriendlyFireTests
     private static ShootAction CreateAction(
         BattleSoldier shooter,
         BattleSoldier target,
-        BattleGridManager grid)
+        BattleGridManager grid,
+        IRNG random)
     {
         return new ShootAction(
             shooter.Soldier.Id,
@@ -201,7 +203,7 @@ public class ShootActionFriendlyFireTests
             numberOfShots: 1,
             useBulk: false,
             grid: grid,
-            random: StaticRNG.Instance);
+            random);
     }
 
     private static BattleSquad CreateSquad(bool isPlayerSquad, params (int Id, string Name)[] members)

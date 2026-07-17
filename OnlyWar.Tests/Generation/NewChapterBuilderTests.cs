@@ -199,6 +199,45 @@ public class NewChapterBuilderTests
     }
 
     [Fact]
+    public void CreateChapter_LibrariusIsLedByItsStrongestPsykerAndRanksByEgoOrder()
+    {
+        // Regression: rank was gated on an absolute Ego >= 18, which for a marine (base 14 /
+        // SD 1.4) is a 2.86 sigma roll (~0.21%). With only ~6 psykers per chapter, ~99% of
+        // chapters founded a leaderless, all-Lexicanium Librarius even though the squad
+        // template requires a Master of the Librarium. Rank is relative to the psykers rolled.
+        RNG.Reset(20260716);
+        PlayerForce chapter = NewChapterBuilder.CreateChapter(
+            _data, CreateTrainingService(), new Date(39, 496, 1), new Date(39, 500, 1), "Crimson Sentinels");
+        Unit oob = chapter.Army.OrderOfBattle;
+
+        Squad librarius = oob.Squads.First(s => s.SquadTemplate.Name == "Librarius");
+        Assert.NotEmpty(librarius.Members);
+
+        // Exactly one leader, and it is the Master of the Librarium.
+        Assert.NotNull(librarius.SquadLeader);
+        Assert.Equal("Master of the Librarium", librarius.SquadLeader.Template.Name);
+        Assert.Single(librarius.Members, m => m.Template.IsSquadLeader);
+
+        // The Master is the best psyker the founding produced, whatever his absolute Ego.
+        Assert.Equal(librarius.Members.Max(m => m.Ego), librarius.SquadLeader.Ego);
+
+        // Seniority tracks Ego order: no Lexicanium outranks a Codicier on Ego.
+        float weakestCodicierEgo = librarius.Members
+            .Where(m => m.Template.Name == "Codiciers")
+            .Select(m => m.Ego)
+            .DefaultIfEmpty(float.MaxValue)
+            .Min();
+        Assert.All(librarius.Members.Where(m => m.Template.Name == "Lexicanium"),
+            m => Assert.True(m.Ego <= weakestCodicierEgo,
+                $"Lexicanium {m.Name} (Ego {m.Ego}) outranks a Codicier (Ego {weakestCodicierEgo})."));
+
+        // Everyone in the squad is a psyker, and every psyker in the chapter is in the squad.
+        Assert.All(librarius.Members, m => Assert.True(m.PsychicPower > 0));
+        Assert.All(oob.GetAllMembers().Where(m => m.PsychicPower > 0),
+            m => Assert.Equal(librarius, m.AssignedSquad));
+    }
+
+    [Fact]
     public void CreateChapter_VeteransRequireTacticalBaselineAndAdamantiumCombatSpike()
     {
         PlayerForce chapter = NewChapterBuilder.CreateChapter(
@@ -225,6 +264,7 @@ public class NewChapterBuilderTests
         }
     }
 
+    [Trait("Category", "Slow")]
     [Fact]
     public void GenerateSector_ThreadsSeedAndChapterNameThroughToAGeneratedSector()
     {

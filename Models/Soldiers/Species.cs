@@ -36,6 +36,10 @@ namespace OnlyWar.Models.Soldiers
         // Design/EvasionBurrowAndAmbush.md.
         public float MeleeEvasion { get; }
         public float RangedEvasion { get; }
+        // Synapse aura radius in the same distance units as weapon MaximumRange and grid
+        // position deltas (Design/Active/MoraleAndRout.md §4.1). Zero for every species
+        // that does not carry SpeciesAbilities.Synapse.
+        public float SynapseRadius { get; }
         public SpeciesAbilities Abilities { get; }
         public BodyTemplate BodyTemplate { get; }
         public int DefaultUnarmedWeaponTemplateId { get; }
@@ -49,7 +53,7 @@ namespace OnlyWar.Models.Soldiers
                        NormalizedValueTemplate mov, NormalizedValueTemplate siz,
                        ushort width, ushort depth, float meleeEvasion, float rangedEvasion,
                        SpeciesAbilities abilities, BodyTemplate bodyTemplate,
-                       MeleeWeaponTemplate defaultUnarmedWeapon)
+                       MeleeWeaponTemplate defaultUnarmedWeapon, float synapseRadius = 0f)
         {
             Id = id;
             Name = name;
@@ -68,6 +72,7 @@ namespace OnlyWar.Models.Soldiers
             Depth = depth;
             MeleeEvasion = meleeEvasion;
             RangedEvasion = rangedEvasion;
+            SynapseRadius = synapseRadius;
             Abilities = abilities;
             BodyTemplate = bodyTemplate;
             DefaultUnarmedWeapon = defaultUnarmedWeapon

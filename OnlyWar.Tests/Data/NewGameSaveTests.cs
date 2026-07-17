@@ -16,32 +16,30 @@ namespace OnlyWar.Tests.Data;
 // OrderOfBattle root on Faction.Units, otherwise the save writes no Soldier rows and the first
 // PlayerSoldier insert violates PlayerSoldier.SoldierId -> Soldier.Id.
 [Collection(OnlyWar.Tests.TestCollections.SharedState)]
-public class NewGameSaveTests
+public class NewGameSaveTests : IClassFixture<NewGameSaveFixture>
 {
     private readonly GameRulesData _data;
-    private readonly Date _date = new(39, 500, 1);
+    private readonly Date _date;
     private readonly GameStateRoundTripFixture _roundTrip;
+    private readonly Sector _sector;
 
-    public NewGameSaveTests()
+    public NewGameSaveTests(NewGameSaveFixture fixture)
     {
-        Directory.SetCurrentDirectory(RulesDatabaseFixture.RepositoryRoot);
-        _data = new GameRulesData();
-        GameDataSingleton.Instance.LoadGameDataFromBlob(_data, _date, null);
-        _roundTrip = new GameStateRoundTripFixture(_data, _date);
+        _data = fixture.Data;
+        _date = fixture.Date;
+        _roundTrip = fixture.RoundTrip;
+        _sector = fixture.Sector;
     }
 
-    [Fact]
-    public void GeneratedChapter_RegistersRootUnitOnPlayerFaction()
-    {
-        Sector sector = SectorBuilder.GenerateSector(1, _data, _date, "Registration Chapter");
-        Assert.Contains(sector.PlayerForce.Army.OrderOfBattle, _data.PlayerFaction.Units);
-    }
-
+    [Trait("Category", "Slow")]
     [Fact]
     public void NewGame_SavesThroughProductionPath_WithoutManualRegistration()
     {
-        Sector sector = SectorBuilder.GenerateSector(1, _data, _date, "New Game Save Chapter");
-        GameDataSingleton.Instance.LoadGameDataFromBlob(_data, _date, sector);
+        GameDataSingleton.Instance.LoadGameDataFromBlob(_data, _date, _sector);
+
+        // The production-path save below depends on generation registering the root unit. Keep the
+        // direct assertion here rather than generating a second sector in a registration-only test.
+        Assert.Contains(_sector.PlayerForce.Army.OrderOfBattle, _data.PlayerFaction.Units);
 
         // Match CurrentCampaignSaveWriter's unit selection: no manual Units.Add.
         List<Unit> units = _data.Factions.SelectMany(f => f.Units).ToList();
@@ -49,7 +47,7 @@ public class NewGameSaveTests
         string dbPath = GameStateRoundTripFixture.CreateTempDbPath("onlywar_newgame");
         try
         {
-            _roundTrip.Save(sector, dbPath, units);
+            _roundTrip.Save(_sector, dbPath, units);
 
             // Sanity: the player's soldiers actually made it into the file.
             Assert.True(File.Exists(dbPath));
@@ -62,11 +60,11 @@ public class NewGameSaveTests
         }
     }
 
+    [Trait("Category", "Slow")]
     [Fact]
     public void FailedSave_LeavesPreviousSaveIntact_AndNoTempFiles()
     {
-        Sector sector = SectorBuilder.GenerateSector(1, _data, _date, "Atomic Save Chapter");
-        GameDataSingleton.Instance.LoadGameDataFromBlob(_data, _date, sector);
+        GameDataSingleton.Instance.LoadGameDataFromBlob(_data, _date, _sector);
         List<Unit> units = _data.Factions.SelectMany(f => f.Units).ToList();
 
         string dir = Path.Combine(Path.GetTempPath(), $"onlywar_atomic_{Guid.NewGuid():N}");
@@ -75,14 +73,14 @@ public class NewGameSaveTests
         try
         {
             // First, a good save.
-            _roundTrip.Save(sector, dbPath, units);
+            _roundTrip.Save(_sector, dbPath, units);
             long originalSoldiers = GameStateRoundTripFixture.CountRows(dbPath, "Soldier");
             Assert.True(originalSoldiers > 0);
 
             // Now a save guaranteed to fail mid-write: duplicating the root unit forces a
             // primary-key violation on the Unit insert, after the schema is created.
             List<Unit> corruptUnits = units.Concat(units).ToList();
-            Assert.ThrowsAny<Exception>(() => _roundTrip.Save(sector, dbPath, corruptUnits));
+            Assert.ThrowsAny<Exception>(() => _roundTrip.Save(_sector, dbPath, corruptUnits));
 
             // The prior good save must survive untouched.
             Assert.True(File.Exists(dbPath), "previous save file was destroyed by a failed save");
@@ -97,5 +95,22 @@ public class NewGameSaveTests
             Microsoft.Data.Sqlite.SqliteConnection.ClearAllPools();
             try { Directory.Delete(dir, recursive: true); } catch (IOException) { }
         }
+    }
+}
+
+public sealed class NewGameSaveFixture
+{
+    internal GameRulesData Data { get; }
+    internal Date Date { get; } = new(39, 500, 1);
+    internal GameStateRoundTripFixture RoundTrip { get; }
+    internal Sector Sector { get; }
+
+    public NewGameSaveFixture()
+    {
+        Directory.SetCurrentDirectory(RulesDatabaseFixture.RepositoryRoot);
+        Data = new GameRulesData();
+        GameDataSingleton.Instance.LoadGameDataFromBlob(Data, Date, null);
+        Sector = SectorBuilder.GenerateSector(1, Data, Date, "New Game Save Fixture Chapter");
+        RoundTrip = new GameStateRoundTripFixture(Data, Date);
     }
 }

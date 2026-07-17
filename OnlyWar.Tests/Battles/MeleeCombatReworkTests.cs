@@ -14,7 +14,6 @@ using SoldierAttribute = OnlyWar.Models.Soldiers.Attribute;
 
 namespace OnlyWar.Tests.Battles;
 
-[Collection(OnlyWar.Tests.TestCollections.SharedState)]
 public class MeleeCombatReworkTests
 {
     private static readonly BaseSkill PrimaryParrySkill = new(701, SkillCategory.Melee, "Primary Parry", SoldierAttribute.Strength, 0);
@@ -242,12 +241,12 @@ public class MeleeCombatReworkTests
         Assert.Equal(1, MeleeMath.CalculateGuaranteedAttackCount(15, 1));
         Assert.Equal(0.5f, MeleeMath.CalculateFractionalAttackChance(15, 1), precision: 4);
 
-        RNG.Reset(12345);
+        SeededRNG random = new(12345);
         int secondSwingCount = 0;
         for (int trial = 0; trial < 10_000; trial++)
         {
             int attacks = MeleeMath.CalculateGuaranteedAttackCount(15, 1);
-            if (RNG.GetLinearDouble() < MeleeMath.CalculateFractionalAttackChance(15, 1))
+            if (random.GetLinearDouble() < MeleeMath.CalculateFractionalAttackChance(15, 1))
             {
                 attacks++;
             }

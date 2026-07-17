@@ -38,6 +38,10 @@ namespace OnlyWar.Helpers.Battles
         public SquadMovementTier MovementTier { get; set; }
         public BattleSquadStatus Status { get; set; }
         public WithdrawalRole WithdrawalRole { get; set; }
+        // Latest morale outcome (Design/Active/MoraleAndRout.md §6). Set each turn by the
+        // resolver's morale stage. Steady/Shaken are non-sticky; Routing is mirrored onto
+        // WithdrawalRole.Routing. Read by the planner to degrade a Shaken squad's actions.
+        public MoraleState MoraleState { get; set; }
 
         public Squad Squad { get; }
 
@@ -85,6 +89,46 @@ namespace OnlyWar.Helpers.Battles
             }
         }
 
+        // A squad "provides synapse" iff any of its soldier templates' species carries the
+        // ability (Design/Active/MoraleAndRout.md §4.1). This reads the full roster, not
+        // AbleSoldiers — it describes squad composition, not current combat capability.
+        // Squads are species-homogeneous (§3.1), so in practice this is all-or-nothing, but
+        // it is written to tolerate a future mixed template without change.
+        public bool SquadProvidesSynapse
+        {
+            get
+            {
+                return Soldiers.Any(s => s.Soldier.Template.Species.Abilities.HasFlag(SpeciesAbilities.Synapse));
+            }
+        }
+
+        // An HQ squad projects the §4.3 command aura (Design/Active/MoraleAndRout.md; Phase
+        // 6). Unlike synapse, SquadTypes.HQ IS the right set for command (§3.2) — a Tyranid
+        // Warrior squad provides synapse but no command aura, while every faction's HQ
+        // (Captain, Warboss, Hive Tyrant) provides command. Radius and strength are
+        // morale-owned code constants (MoraleConstants), never DB data.
+        public bool SquadProvidesCommandAura =>
+            Squad?.SquadTemplate?.SquadType.HasFlag(SquadTypes.HQ) == true;
+
+        // The aura radius this squad projects if it provides synapse, else 0. When multiple
+        // synapse-carrying species could coexist in one squad, the largest radius governs.
+        public float SynapseRadius
+        {
+            get
+            {
+                float max = 0f;
+                foreach (BattleSoldier soldier in Soldiers)
+                {
+                    if (soldier.Soldier.Template.Species.Abilities.HasFlag(SpeciesAbilities.Synapse)
+                        && soldier.Soldier.Template.Species.SynapseRadius > max)
+                    {
+                        max = soldier.Soldier.Template.Species.SynapseRadius;
+                    }
+                }
+                return max;
+            }
+        }
+
         public BattleSquad(bool isPlayerSquad, Squad squad)
         {
             Id = squad.Id;
@@ -96,6 +140,7 @@ namespace OnlyWar.Helpers.Battles
             MovementTier = SquadMovementTier.Stationary;
             Status = BattleSquadStatus.Active;
             WithdrawalRole = WithdrawalRole.None;
+            MoraleState = MoraleState.Steady;
             // order weapon sets by strength of primary weapon
             AllocateEquipment();
         }
@@ -111,6 +156,7 @@ namespace OnlyWar.Helpers.Battles
             MovementTier = original.MovementTier;
             Status = original.Status;
             WithdrawalRole = original.WithdrawalRole;
+            MoraleState = original.MoraleState;
             // because of the circular reference, the clone function won't work,
             // so I made a custom BattleSoldier constructor that does basically the same thing
             Soldiers = original.Soldiers.Select(s => new BattleSoldier(s, this)).ToList();

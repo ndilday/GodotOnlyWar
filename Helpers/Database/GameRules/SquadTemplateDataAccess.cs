@@ -527,6 +527,12 @@ namespace OnlyWar.Helpers.Database.GameRules
                             $"Species {id} ('{name}') does not define a default unarmed weapon template.");
                     }
                     int defaultUnarmedWeaponTemplateId = reader.GetInt32(20);
+                    // Column appended by the synapse-data pass (Design/Active/MoraleAndRout.md
+                    // §4.1), after DefaultUnarmedWeaponTemplateId. Older schemas without it
+                    // default to no synapse radius.
+                    float synapseRadius = reader.FieldCount > 21 && reader[21].GetType() != typeof(DBNull)
+                        ? (float)reader.GetDouble(21)
+                        : 0f;
                     MeleeWeaponTemplate defaultUnarmedWeapon = ResolveDefaultUnarmedWeapon(
                         id, name, defaultUnarmedWeaponTemplateId, meleeWeaponTemplateMap);
                     Species species = new Species(id, name,
@@ -547,7 +553,8 @@ namespace OnlyWar.Helpers.Database.GameRules
                                                   rangedEvasion,
                                                   abilities,
                                                   new BodyTemplate(hitLocationTemplateMap[bodyId]),
-                                                  defaultUnarmedWeapon);
+                                                  defaultUnarmedWeapon,
+                                                  synapseRadius);
 
                     if (!speciesMap.ContainsKey(factionId))
                     {

@@ -218,21 +218,29 @@ namespace OnlyWar.Builders
         {
             // assume for now that there's a single unit to hold all of the Librarians as a squad on the chapter
             Squad library = chapter.Squads.First(s => s.SquadTemplate == templates.Librarius);
-            IOrderedEnumerable<PlayerSoldier> psychers = 
-                unassignedSoldierMap.Values.Where(s => s.PsychicPower > 0).OrderByDescending(s => s.Ego);
+            List<PlayerSoldier> psychers =
+                unassignedSoldierMap.Values.Where(s => s.PsychicPower > 0)
+                                           .OrderByDescending(s => s.Ego)
+                                           .ToList();
             // TODO: add 24 points
-            foreach (PlayerSoldier soldier in psychers)
+
+            // Librarius rank is relative to the psykers the founding actually produced, never an
+            // absolute Ego score. Marine Ego is base 14 / SD 1.4, so any gate high enough to feel
+            // exceptional is one a chapter's handful of psykers essentially never clears, and the
+            // Librarius founds leaderless and all-Lexicanium. The best psyker leads it whoever he
+            // is - the squad template requires a Master of the Librarium - and the seniority split
+            // below him follows the template's own Codicier:Lexicanium capacity ratio.
+            int codicierCount = GetFoundingCodicierCount(psychers.Count - 1, templates);
+            for (int i = 0; i < psychers.Count; i++)
             {
-                if (soldier.Ego >= 18)
+                PlayerSoldier soldier = psychers[i];
+                if (i == 0)
                 {
-                    if (library.SquadLeader == null)
-                    {
-                        soldier.Template = templates.MasterOfTheLibrarium;
-                    }
-                    else
-                    {
-                        soldier.Template = templates.Codicier;
-                    }
+                    soldier.Template = templates.MasterOfTheLibrarium;
+                }
+                else if (i <= codicierCount)
+                {
+                    soldier.Template = templates.Codicier;
                 }
                 else
                 {
@@ -243,6 +251,29 @@ namespace OnlyWar.Builders
                     "Promoted to " + soldier.Template.Name + " and assigned to " + soldier.AssignedSquad.Name));
                 unassignedSoldierMap.Remove(soldier.Id);
             }
+        }
+
+        // Splits the non-leader psykers between Codicier and Lexicanium in proportion to the
+        // seats the Librarius template allots each rank, so the rank pyramid's shape lives in
+        // the rules DB rather than in a threshold here.
+        private static int GetFoundingCodicierCount(int nonLeaderPsykerCount,
+                                                    ChapterGenerationTemplates templates)
+        {
+            if (nonLeaderPsykerCount <= 0) return 0;
+            int codicierSeats = GetTemplateSeats(templates.Librarius, templates.Codicier);
+            int lexicaniumSeats = GetTemplateSeats(templates.Librarius, templates.Lexicanium);
+            if (codicierSeats + lexicaniumSeats == 0) return 0;
+            int codicierCount = (int)Math.Round(
+                nonLeaderPsykerCount * codicierSeats / (double)(codicierSeats + lexicaniumSeats),
+                MidpointRounding.AwayFromZero);
+            return Math.Min(codicierCount, codicierSeats);
+        }
+
+        private static int GetTemplateSeats(SquadTemplate squadTemplate, SoldierTemplate soldierTemplate)
+        {
+            return squadTemplate.Elements
+                .Where(e => e.SoldierTemplate == soldierTemplate)
+                .Sum(e => (int)e.MaximumNumber);
         }
 
         private static void AssignTechMarines(Dictionary<int, PlayerSoldier> unassignedSoldierMap, 

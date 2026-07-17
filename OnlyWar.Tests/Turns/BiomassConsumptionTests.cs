@@ -12,13 +12,12 @@ namespace OnlyWar.Tests.Turns;
 // consumers are excluded from the crowding that limits ordinary growth, and stripped land slowly
 // heals toward its natural ceiling. The biomass methods are exercised directly (not through a full
 // ProcessTurn) so the conservation arithmetic can be asserted exactly.
-[Collection(OnlyWar.Tests.TestCollections.SharedState)]
 public class BiomassConsumptionTests
 {
     [Fact]
     public void ResolveBiomassConsumption_FeedsHalfOfAllBiomassEatenToTheSwarm()
     {
-        SectorSimulationFixture fixture = SectorSimulationFixture.Create();
+        SectorSimulationFixture fixture = SectorSimulationFixture.CreateDetached();
         Region region = fixture.Planet.Regions[0];
         region.CarryingCapacity = 1_000_000;
         region.MaximumCarryingCapacity = 1_000_000;
@@ -48,7 +47,7 @@ public class BiomassConsumptionTests
     [Fact]
     public void ResolveBiomassConsumption_WithNoPrey_OnlyStripsCapacity()
     {
-        SectorSimulationFixture fixture = SectorSimulationFixture.Create();
+        SectorSimulationFixture fixture = SectorSimulationFixture.CreateDetached();
         Region region = fixture.Planet.Regions[0];
         region.CarryingCapacity = 1_000_000;
         region.MaximumCarryingCapacity = 1_000_000;
@@ -68,7 +67,7 @@ public class BiomassConsumptionTests
     [Fact]
     public void ResolveBiomassConsumption_WithNoBiomass_OnlyPredates()
     {
-        SectorSimulationFixture fixture = SectorSimulationFixture.Create();
+        SectorSimulationFixture fixture = SectorSimulationFixture.CreateDetached();
         Region region = fixture.Planet.Regions[0];
         // A region whose land is already stripped bare: only headcount is left to eat.
         region.CarryingCapacity = 0;
@@ -89,7 +88,7 @@ public class BiomassConsumptionTests
     [Fact]
     public void ResolveBiomassConsumption_DistributesKillsAcrossPreyByPopulationShare()
     {
-        SectorSimulationFixture fixture = SectorSimulationFixture.Create();
+        SectorSimulationFixture fixture = SectorSimulationFixture.CreateDetached();
         Region region = fixture.Planet.Regions[0];
         region.CarryingCapacity = 0; // force all effort into predation for a clean split check
         region.MaximumCarryingCapacity = 0;
@@ -110,7 +109,7 @@ public class BiomassConsumptionTests
     [Fact]
     public void NonConsumerPopulation_ExcludesBiomassConsumers()
     {
-        SectorSimulationFixture fixture = SectorSimulationFixture.Create();
+        SectorSimulationFixture fixture = SectorSimulationFixture.CreateDetached();
         Region region = fixture.Planet.Regions[0];
         fixture.DefaultRegionFaction(0).Population = 20_000;
         fixture.AddConsumptionFaction(0, population: 1_000_000, organization: 100);
@@ -124,7 +123,7 @@ public class BiomassConsumptionTests
     [Fact]
     public void RecoverCarryingCapacity_HealsFractionOfGapTowardMaximum()
     {
-        SectorSimulationFixture fixture = SectorSimulationFixture.Create();
+        SectorSimulationFixture fixture = SectorSimulationFixture.CreateDetached();
         Region region = fixture.Planet.Regions[0];
         region.MaximumCarryingCapacity = 1_000_000;
         region.CarryingCapacity = 500_000;
@@ -138,7 +137,7 @@ public class BiomassConsumptionTests
     [Fact]
     public void RecoverCarryingCapacity_AtMaximum_IsNoOp()
     {
-        SectorSimulationFixture fixture = SectorSimulationFixture.Create();
+        SectorSimulationFixture fixture = SectorSimulationFixture.CreateDetached();
         Region region = fixture.Planet.Regions[0];
         region.MaximumCarryingCapacity = 1_000_000;
         region.CarryingCapacity = 1_000_000;
@@ -151,7 +150,7 @@ public class BiomassConsumptionTests
     [Fact]
     public void RecoverCarryingCapacity_TinyGap_StillHealsByAtLeastOne()
     {
-        SectorSimulationFixture fixture = SectorSimulationFixture.Create();
+        SectorSimulationFixture fixture = SectorSimulationFixture.CreateDetached();
         Region region = fixture.Planet.Regions[0];
         region.MaximumCarryingCapacity = 100;
         region.CarryingCapacity = 99; // 1% of a gap of 1 rounds to zero; must still heal
@@ -166,7 +165,7 @@ public class BiomassConsumptionTests
     [Fact]
     public void RecoverCarryingCapacity_DoesNotHealWhilePublicSwarmPresent()
     {
-        SectorSimulationFixture fixture = SectorSimulationFixture.Create();
+        SectorSimulationFixture fixture = SectorSimulationFixture.CreateDetached();
         Region region = fixture.Planet.Regions[0];
         region.MaximumCarryingCapacity = 1_000_000;
         region.CarryingCapacity = 500_000;
@@ -181,7 +180,7 @@ public class BiomassConsumptionTests
     [Fact]
     public void RecoverCarryingCapacity_HealsOnceSwarmIsGone()
     {
-        SectorSimulationFixture fixture = SectorSimulationFixture.Create();
+        SectorSimulationFixture fixture = SectorSimulationFixture.CreateDetached();
         Region region = fixture.Planet.Regions[0];
         region.MaximumCarryingCapacity = 1_000_000;
         region.CarryingCapacity = 500_000;
@@ -197,7 +196,7 @@ public class BiomassConsumptionTests
     [Fact]
     public void ResolveTyranidExpansion_StrippedRegion_PushesForceToARicherNeighbor()
     {
-        SectorSimulationFixture fixture = SectorSimulationFixture.Create();
+        SectorSimulationFixture fixture = SectorSimulationFixture.CreateDetached();
         Region home = fixture.Planet.Regions[0];
         // Home is bare: no land and no prey left to eat.
         home.CarryingCapacity = 0;
@@ -224,7 +223,7 @@ public class BiomassConsumptionTests
     [Fact]
     public void ResolveTyranidExpansion_RichRegion_KeepsTheSwarmHomeToGorge()
     {
-        SectorSimulationFixture fixture = SectorSimulationFixture.Create();
+        SectorSimulationFixture fixture = SectorSimulationFixture.CreateDetached();
         Region home = fixture.Planet.Regions[0];
         // Home is untouched and richer than its (poorer, default) neighbors.
         home.CarryingCapacity = 1_000_000;

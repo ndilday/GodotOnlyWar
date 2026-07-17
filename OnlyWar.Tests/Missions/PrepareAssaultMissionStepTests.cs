@@ -15,7 +15,6 @@ using Xunit;
 
 namespace OnlyWar.Tests.Missions;
 
-[Collection(OnlyWar.Tests.TestCollections.SharedState)]
 public class PrepareAssaultMissionStepTests
 {
     [Fact]
@@ -56,7 +55,7 @@ public class PrepareAssaultMissionStepTests
             .AssembleDefendingForce(
                 target,
                 attackerMarginOfSuccess: 0f,
-                StaticRNG.Instance);
+                new SeededRNG(1));
 
         long generatedBattleValue = defenders
             .SelectMany(squad => squad.Squad.Members)

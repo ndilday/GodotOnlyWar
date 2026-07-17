@@ -19,5 +19,12 @@ namespace OnlyWar.Models.Soldiers
         /// the normal withdrawal sequence (PRD §6.4).
         /// </summary>
         Burrow = 1 << 0,
+        /// <summary>
+        /// The species projects a synapse aura: a living, same-faction squad carrying
+        /// this ability grants morale-check immunity to friendly squads within its
+        /// <see cref="Species.SynapseRadius"/> (Design/Active/MoraleAndRout.md §4).
+        /// Coverage is derived per turn from post-round state, never stored.
+        /// </summary>
+        Synapse = 1 << 1,
     }
 }

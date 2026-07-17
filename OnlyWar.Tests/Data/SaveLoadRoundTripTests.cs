@@ -39,6 +39,7 @@ public class SaveLoadRoundTripTests
         _roundTrip = new GameStateRoundTripFixture(_data, _date);
     }
 
+    [Trait("Category", "Slow")]
     [Fact]
     public void SaveThenLoad_MutatedGeneratedSector_PreservesRoundTripFeatures()
     {
@@ -363,6 +364,7 @@ public class SaveLoadRoundTripTests
         }
     }
 
+    [Trait("Category", "Slow")]
     [Fact]
     public void Load_LegacySave_HasCompatibleCivilStateDefaults()
     {
@@ -440,6 +442,7 @@ public class SaveLoadRoundTripTests
         Microsoft.Data.Sqlite.SqliteConnection.ClearAllPools();
     }
 
+    [Trait("Category", "Slow")]
     [Fact]
     public void Load_LegacyRegionIntelligence_MigratesToPlayerAndDefaultRegionIntel()
     {
@@ -490,6 +493,7 @@ public class SaveLoadRoundTripTests
         }
     }
 
+    [Trait("Category", "Slow")]
     [Fact]
     public void Load_ReconstructsArmy_WithoutPreSeedingFactionUnits()
     {
@@ -529,6 +533,7 @@ public class SaveLoadRoundTripTests
         }
     }
 
+    [Trait("Category", "Slow")]
     [Fact]
     public void Load_RepopulatesSectorOrders_FromLoadedPlayerSquads()
     {

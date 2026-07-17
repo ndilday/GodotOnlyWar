@@ -21,7 +21,6 @@ namespace OnlyWar.Tests.Missions;
 // resolve (rather than relying on Log wording). Only the step branches reachable without the full
 // game-data/battle machinery are exercised here; the classifier's interpretation of the signals is
 // covered by MissionOutcomeClassifierTests.
-[Collection(OnlyWar.Tests.TestCollections.SharedState)]
 public class MissionStepOutcomeSignalTests
 {
     [Fact]
@@ -205,7 +204,7 @@ public class MissionStepOutcomeSignalTests
     }
 
     private static MissionExecutionContext CreateExecution(MissionContext context) =>
-        TestExecutionContextFactory.CreateMission(context, StaticRNG.Instance);
+        TestExecutionContextFactory.CreateMission(context, new SeededRNG(1));
 
     private static BattleSquad CreateOrderedBattleSquad(Aggression aggression)
     {

@@ -14,7 +14,6 @@ using Xunit;
 
 namespace OnlyWar.Tests.Missions;
 
-[Collection(OnlyWar.Tests.TestCollections.SharedState)]
 public class ReconDetectionTests
 {
     [Fact]
@@ -48,8 +47,8 @@ public class ReconDetectionTests
         RegionFaction sleeper = AddEnemy(region, CreateFaction(21, "Sleepers"),
             population: 1_000, organization: 100, intel: 1f);
 
-        RNG.Reset(1234);
-        (int watcherHits, int sleeperHits) = TallySpotters(region, watcher, sleeper, 4000);
+        (int watcherHits, int sleeperHits) = TallySpotters(
+            region, watcher, sleeper, 4000, new SeededRNG(1234));
 
         double watcherShare = watcherHits / (double)(watcherHits + sleeperHits);
         Assert.True(watcherHits > sleeperHits);
@@ -68,8 +67,8 @@ public class ReconDetectionTests
         RegionFaction weak = AddEnemy(region, CreateFaction(21, "Cell"),
             population: 1_000, organization: 100, intel: 0f);
 
-        RNG.Reset(4321);
-        (int strongHits, int weakHits) = TallySpotters(region, strong, weak, 4000);
+        (int strongHits, int weakHits) = TallySpotters(
+            region, strong, weak, 4000, new SeededRNG(4321));
 
         double strongShare = strongHits / (double)(strongHits + weakHits);
         Assert.True(strongHits > weakHits);
@@ -87,21 +86,24 @@ public class ReconDetectionTests
             population: 1_000, organization: 0, intel: 0f);
         AddEnemy(region, CreateFaction(21, "Beta"), population: 1_000, organization: 0, intel: 0f);
 
-        RNG.Reset(7);
-        RegionFaction spotter = region.SelectSpotter(StaticRNG.Instance);
+        RegionFaction spotter = region.SelectSpotter(new SeededRNG(7));
 
         Assert.NotNull(spotter);
         Assert.Contains(spotter, region.RegionFactionMap.Values);
     }
 
     private static (int first, int second) TallySpotters(
-        Region region, RegionFaction first, RegionFaction second, int iterations)
+        Region region,
+        RegionFaction first,
+        RegionFaction second,
+        int iterations,
+        IRNG random)
     {
         int firstHits = 0;
         int secondHits = 0;
         for (int i = 0; i < iterations; i++)
         {
-            RegionFaction spotter = region.SelectSpotter(StaticRNG.Instance);
+            RegionFaction spotter = region.SelectSpotter(random);
             if (spotter == first) firstHits++;
             else if (spotter == second) secondHits++;
         }
