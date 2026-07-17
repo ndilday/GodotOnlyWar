@@ -50,8 +50,7 @@ namespace OnlyWar.Helpers
 
         public static string ToValue(string type, ushort level) => $"{type}|{level}";
 
-        // Splits a stored filter value back into its Type and Level. Level is null for
-        // legacy values that predate honor tiers (a bare type name with no "|level").
+        // Splits a stored filter value back into its Type and Level.
         public static bool TryParse(string value, out string type, out ushort? level)
         {
             type = null;

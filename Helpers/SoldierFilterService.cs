@@ -171,9 +171,8 @@ namespace OnlyWar.Helpers
                 return false;
             }
 
-            // "Has" means "at least this tier": a Gold award satisfies a Silver threshold.
-            // Legacy conditions with no level match any award of the type.
-            return !level.HasValue || award.Level >= level.Value;
+            // "Has" means "at least this tier": a Gold award satisfies a Silver threshold..
+            return award.Level >= level.Value;
         }
 
         private static bool MatchesDuration(ISoldier soldier, SoldierFilterCondition condition, Date currentDate)

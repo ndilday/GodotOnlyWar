@@ -8,7 +8,7 @@ namespace OnlyWar.Helpers.Database.GameState
     // The single-row GlobalData table holds chapter-wide scalars that aren't owned by any
     // other aggregate: the current date, the Requisition pool (PRD 4.23), the gene-seed
     // stockpile count and aggregate purity (PRD 4.8), and the optional Opening Scenario
-    // state (Design/OpeningScenario.md §7). Scenario is null for legacy saves and sandbox sectors.
+    // state (Design/OpeningScenario.md §7). Scenario is null for sandbox sectors.
     public sealed record GlobalState(Date Date, int Requisition, int GeneseedStockpile,
                                      float GeneseedPurity, CampaignScenario Scenario);
 
@@ -55,23 +55,17 @@ namespace OnlyWar.Helpers.Database.GameState
                     int geneseedStockpile = reader.GetInt32(5);
                     float geneseedPurity = (float)reader.GetDouble(6);
 
-                    // Scenario columns are appended after GeneseedPurity. A legacy save that
-                    // predates them has fewer columns, so guard on the column count and treat
-                    // such saves (and any ScenarioType.None row) as having no scenario.
                     CampaignScenario scenario = null;
-                    if (reader.FieldCount > 7)
+                    ScenarioType type = (ScenarioType)reader.GetInt32(7);
+                    if (type != ScenarioType.None)
                     {
-                        ScenarioType type = (ScenarioType)reader.GetInt32(7);
-                        if (type != ScenarioType.None)
-                        {
-                            int promisedPlanetId = reader.GetInt32(8);
-                            ObjectiveState scenarioState = (ObjectiveState)reader.GetInt32(9);
-                            bool briefingAcknowledged = reader.GetBoolean(10);
-                            string briefingText = reader[11] is DBNull ? null : reader.GetString(11);
-                            int authorityId = reader.GetInt32(12);
-                            scenario = new CampaignScenario(type, promisedPlanetId, briefingText,
-                                authorityId, scenarioState, briefingAcknowledged);
-                        }
+                        int promisedPlanetId = reader.GetInt32(8);
+                        ObjectiveState scenarioState = (ObjectiveState)reader.GetInt32(9);
+                        bool briefingAcknowledged = reader.GetBoolean(10);
+                        string briefingText = reader[11] is DBNull ? null : reader.GetString(11);
+                        int authorityId = reader.GetInt32(12);
+                        scenario = new CampaignScenario(type, promisedPlanetId, briefingText,
+                            authorityId, scenarioState, briefingAcknowledged);
                     }
 
                     state = new GlobalState(new Date(millenium, year, week), requisition,

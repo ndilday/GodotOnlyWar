@@ -364,52 +364,6 @@ public class SaveLoadRoundTripTests
         }
     }
 
-    [Trait("Category", "Slow")]
-    [Fact]
-    public void Load_LegacySave_HasCompatibleCivilStateDefaults()
-    {
-        Sector sector = SectorBuilder.GenerateSector(1, _data, _date, "Legacy Save Chapter");
-        GameDataSingleton.Instance.LoadGameDataFromBlob(_data, _date, sector);
-        _roundTrip.RegisterPlayerArmy(sector);
-
-        string dbPath = GameStateRoundTripFixture.CreateTempDbPath("onlywar_roundtrip_legacy");
-        try
-        {
-            _roundTrip.Save(sector, dbPath, _roundTrip.CurrentUnits);
-            // Rewrite the save into a pre-scenario ("legacy") shape: a GlobalData row without
-            // the Scenario* columns, and a RegionFaction table without GrowthMultiplier. The
-            // column-count guards in GlobalDataAccess / PlanetDataAccess must then yield a null
-            // scenario and a default 1.0 multiplier.
-            DowngradeToLegacySchema(dbPath);
-
-            GameStateDataBlob loaded = _roundTrip.Load(dbPath);
-
-            Assert.Null(loaded.Scenario);
-            IEnumerable<RegionFaction> allRegionFactions = loaded.Planets
-                .SelectMany(p => p.Regions)
-                .SelectMany(r => r.RegionFactionMap.Values);
-            Assert.NotEmpty(allRegionFactions);
-            Assert.All(allRegionFactions, rf => Assert.Equal(1.0f, rf.GrowthMultiplier));
-            Assert.All(allRegionFactions, rf => Assert.Equal(70f, rf.Contentment));
-            Assert.All(allRegionFactions, rf => Assert.Equal(0, rf.ArmedCivilians));
-            Assert.All(allRegionFactions, rf => Assert.False(rf.HasEmergenceAdvantage));
-            Assert.All(loaded.Characters, character => Assert.Equal(0.5f, character.Competence));
-            Assert.All(loaded.Characters, character => Assert.Equal(0.5f, character.Severity));
-            Assert.All(loaded.Planets, planet =>
-            {
-                Region expectedCapital = planet.Regions
-                    .OrderByDescending(region => region.Population)
-                    .ThenBy(region => region.Id)
-                    .First();
-                Assert.Equal(expectedCapital.Id, planet.CapitalRegionId);
-            });
-        }
-        finally
-        {
-            GameStateRoundTripFixture.CleanupDb(dbPath);
-        }
-    }
-
     // Strips the columns added by the Opening Scenario work from an existing save, reproducing a
     // database written before those columns existed. GlobalData is recreated with its original
     // 7-column shape; RegionFaction's GrowthMultiplier column is dropped in place.
@@ -440,57 +394,6 @@ public class SaveLoadRoundTripTests
         }
         connection.Close();
         Microsoft.Data.Sqlite.SqliteConnection.ClearAllPools();
-    }
-
-    [Trait("Category", "Slow")]
-    [Fact]
-    public void Load_LegacyRegionIntelligence_MigratesToPlayerAndDefaultRegionIntel()
-    {
-        Sector sector = SectorBuilder.GenerateSector(1, _data, _date, "Legacy Intel Migration Chapter");
-        GameDataSingleton.Instance.LoadGameDataFromBlob(_data, _date, sector);
-
-        Planet planet = sector.Planets.Values
-            .First(p => p.PlanetFactionMap.Values.Any(pf => pf.Faction.IsDefaultFaction)
-                && p.Regions.Any(r => r != null));
-        Region region = planet.Regions.First(r => r != null);
-        planet.PlanetFactionMap[sector.PlayerForce.Faction.Id] = new PlanetFaction(sector.PlayerForce.Faction);
-
-        string dbPath = GameStateRoundTripFixture.CreateTempDbPath("onlywar_legacy_regionintel");
-        try
-        {
-            _roundTrip.Save(sector, dbPath, _roundTrip.CurrentUnits);
-            using (var connection = new Microsoft.Data.Sqlite.SqliteConnection($"Data Source={dbPath}"))
-            {
-                connection.Open();
-                using (var command = connection.CreateCommand())
-                {
-                    command.CommandText = "DELETE FROM PlanetFactionRegionIntel WHERE RegionId = $regionId";
-                    command.Parameters.AddWithValue("$regionId", region.Id);
-                    command.ExecuteNonQuery();
-                }
-                using (var command = connection.CreateCommand())
-                {
-                    command.CommandText = "UPDATE Region SET IntelligenceLevel = $intel WHERE Id = $regionId";
-                    command.Parameters.AddWithValue("$intel", 4.5f);
-                    command.Parameters.AddWithValue("$regionId", region.Id);
-                    command.ExecuteNonQuery();
-                }
-            }
-
-            GameStateDataBlob loaded = _roundTrip.Load(dbPath);
-
-            Planet loadedPlanet = loaded.Planets.Single(p => p.Id == planet.Id);
-            Region loadedRegion = loadedPlanet.Regions.Single(r => r != null && r.Id == region.Id);
-            PlanetFaction loadedDefault = loadedPlanet.PlanetFactionMap.Values.Single(pf => pf.Faction.IsDefaultFaction);
-            PlanetFaction loadedPlayer = loadedPlanet.PlanetFactionMap[sector.PlayerForce.Faction.Id];
-
-            Assert.Equal(4.5f, loadedDefault.GetRegionIntel(loadedRegion), 3);
-            Assert.Equal(4.5f, loadedPlayer.GetRegionIntel(loadedRegion), 3);
-        }
-        finally
-        {
-            GameStateRoundTripFixture.CleanupDb(dbPath);
-        }
     }
 
     [Trait("Category", "Slow")]

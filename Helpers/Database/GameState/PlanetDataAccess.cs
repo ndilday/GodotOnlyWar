@@ -87,11 +87,7 @@ namespace OnlyWar.Helpers.Database.GameState
                         ? Convert.ToSingle(reader[intelligenceLevelOrdinal])
                         : 0f;
                     long carryingCapacity = reader.GetInt64(carryingCapacityOrdinal);
-                    // MaximumCarryingCapacity was appended after CarryingCapacity; legacy rows that
-                    // predate it default to the current capacity (an undegraded region). See PRD §4.24.
-                    long maximumCarryingCapacity = maximumCarryingCapacityOrdinal >= 0
-                        ? reader.GetInt64(maximumCarryingCapacityOrdinal)
-                        : carryingCapacity;
+                    long maximumCarryingCapacity = reader.GetInt64(maximumCarryingCapacityOrdinal);
 
                     Planet planet = planets.First(p => p.Id == planetId);
                     Region region = new Region(id, planet, regionType, regionName, RegionExtensions.GetCoordinatesFromRegionNumber(regionNumber), intelligenceLevel, carryingCapacity, maximumCarryingCapacity);
@@ -222,14 +218,10 @@ namespace OnlyWar.Helpers.Database.GameState
                     long population = reader.GetInt64(3);
                     long garrison = reader.GetInt64(4);
                     int organization = Math.Max(1, reader.GetInt32(5));
-                    // Defense stats are doubles (fractional build/decay); GetDouble also reads the
-                    // whole-number values legacy saves stored when these were ints.
                     double entrenchment = reader.GetDouble(6);
                     double listeningPost = reader.GetDouble(7);
                     double antiAir = reader.GetDouble(8);
-                    // GrowthMultiplier was appended after AntiAir; legacy rows that predate it
-                    // default to 1.0 (no throttle). See Design/OpeningScenario.md §2.2 / §7.
-                    float growthMultiplier = reader.FieldCount > 9 ? (float)reader.GetDouble(9) : 1.0f;
+                    float growthMultiplier = (float)reader.GetDouble(9);
                     int contentmentOrdinal = GetOrdinalOrDefault(reader, "Contentment");
                     int armedCiviliansOrdinal = GetOrdinalOrDefault(reader, "ArmedCivilians");
                     int emergenceOrdinal = GetOrdinalOrDefault(reader, "HasEmergenceAdvantage");
@@ -272,7 +264,7 @@ namespace OnlyWar.Helpers.Database.GameState
                 }
             }
 
-            // A legacy save has no stored capital. Region populations are not available until this
+            // Region populations are not available until this
             // method completes, so establish the capital here rather than during GetRegions.
             // The next save persists the choice and later demographic changes cannot move it.
             foreach (Planet planet in regionMap.Values.Select(region => region.Planet).Distinct()
@@ -293,7 +285,6 @@ namespace OnlyWar.Helpers.Database.GameState
             }
 
             PopulateRegionIntel(connection, regionMap);
-            MigrateLegacyRegionIntelligence(regionMap.Values);
         }
 
         // Loads each planet faction's per-region awareness onto its RegionIntel map. Tolerant of the
@@ -331,26 +322,6 @@ namespace OnlyWar.Helpers.Database.GameState
             }
         }
 
-        private static void MigrateLegacyRegionIntelligence(IEnumerable<Region> regions)
-        {
-            foreach (Region region in regions)
-            {
-                if (region.IntelligenceLevel <= 0) continue;
-
-                foreach (PlanetFaction planetFaction in region.Planet.PlanetFactionMap.Values)
-                {
-                    if (!planetFaction.Faction.IsPlayerFaction && !planetFaction.Faction.IsDefaultFaction)
-                    {
-                        continue;
-                    }
-
-                    planetFaction.SetRegionIntel(
-                        region,
-                        Math.Max(planetFaction.GetRegionIntel(region), region.IntelligenceLevel));
-                }
-            }
-        }
-
         private static int GetOrdinalOrDefault(IDataRecord reader, string columnName)
         {
             for (int i = 0; i < reader.FieldCount; i++)
@@ -362,7 +333,6 @@ namespace OnlyWar.Helpers.Database.GameState
             }
             return -1;
         }
-
 
         public Dictionary<int, Character> GetCharacterMap(IDbConnection connection, 
                                                            IReadOnlyDictionary<int, Faction> factionMap)

@@ -57,7 +57,7 @@ namespace OnlyWar.Helpers
             playerForce.Requests.AddRange(gameState.Requests ?? []);
             playerForce.Pledges.AddRange(gameState.Pledges ?? []);
             Sector sector = new Sector(playerForce, gameState.Characters, gameState.Planets, gameState.Fleets);
-            // Reattach the Opening Scenario state (null for legacy/sandbox saves), which rides on the
+            // Reattach the Opening Scenario state (null for sandbox saves), which rides on the
             // GlobalData row rather than being derived (Design/OpeningScenario.md §7).
             sector.Scenario = gameState.Scenario;
 

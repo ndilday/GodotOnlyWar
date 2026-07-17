@@ -10,9 +10,6 @@ using System.Linq;
 
 public partial class RegionScreenView : CommandWorkspaceView
 {
-    private Panel _legacyDataPanel;
-    private Panel _legacySquadTreePanel;
-    private Panel _legacyOrdersPanel;
     private Panel _boardPanel;
     private PanelContainer _shellContextPanel;
     private PanelContainer _shellCommandPanel;
@@ -56,9 +53,6 @@ public partial class RegionScreenView : CommandWorkspaceView
         base._Ready();
         ClipContents = true;
 
-        _legacyDataPanel = GetNodeOrNull<Panel>("DataPanel");
-        _legacySquadTreePanel = GetNodeOrNull<Panel>("SquadTreePanel");
-        _legacyOrdersPanel = GetNodeOrNull<Panel>("OrdersPanel");
         _boardPanel = GetNode<Panel>("RegionPanel");
 
         _centerRegionController = GetNode<TacticalRegionController>("RegionPanel/TacticalRegionCenter");
@@ -77,7 +71,6 @@ public partial class RegionScreenView : CommandWorkspaceView
         ConnectHexSignals(_southwestRegionController);
         ConnectHexSignals(_northwestRegionController);
 
-        HideLegacyPanels();
         BuildWorkspaceShell(0.755f, 0.785f);
 
         // The shared shell built a ContextPanel and CommandPanel we don't use for this screen's
@@ -281,13 +274,6 @@ public partial class RegionScreenView : CommandWorkspaceView
         if (controller == null) return;
         controller.TacticalRegionPressed += (sender, region) => TargetRegionSelected?.Invoke(this, region);
         controller.TacticalRegionDoubleClicked += (sender, region) => AdjacentRegionClicked?.Invoke(this, region);
-    }
-
-    private void HideLegacyPanels()
-    {
-        if (_legacyDataPanel != null) _legacyDataPanel.Visible = false;
-        if (_legacySquadTreePanel != null) _legacySquadTreePanel.Visible = false;
-        if (_legacyOrdersPanel != null) _legacyOrdersPanel.Visible = false;
     }
 
     private void ConfigureBoardPanel()
