@@ -4,31 +4,17 @@ using System.Collections.Generic;
 
 public partial class PlanetTacticalScreenView : CommandWorkspaceView
 {
-    private Panel _legacyDataPanel;
-    private Panel _legacyOrbitPanel;
-    private Panel _legacyButtonPanel;
     private Control _tacticalRegionPanel;
 
     public override void _Ready()
     {
         base._Ready();
         ClipContents = true;
-        _legacyDataPanel = GetNodeOrNull<Panel>("DataPanel");
-        _legacyOrbitPanel = GetNodeOrNull<Panel>("OrbitPanel");
-        _legacyButtonPanel = GetNodeOrNull<Panel>("ButtonPanel");
         _tacticalRegionPanel = GetNode<Control>("TacticalRegionPanel");
 
-        HideLegacyPanels();
         ConfigureMapPanel();
         BuildWorkspaceShell(0.705f, 0.91f, 0.755f);
         CallDeferred(nameof(LayoutRegionHexGrid));
-    }
-
-    private void HideLegacyPanels()
-    {
-        if (_legacyDataPanel != null) _legacyDataPanel.Visible = false;
-        if (_legacyOrbitPanel != null) _legacyOrbitPanel.Visible = false;
-        if (_legacyButtonPanel != null) _legacyButtonPanel.Visible = false;
     }
 
     private void ConfigureMapPanel()
