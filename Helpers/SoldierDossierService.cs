@@ -22,7 +22,7 @@ namespace OnlyWar.Helpers
         {
             return new SoldierDossier(
                 BuildSoldierData(soldier, currentDate, sector),
-                history ?? soldier.SoldierHistory.ToList(),
+                history ?? soldier.SoldierEvents.Select(e => e.Render()).ToList(),
                 BuildAwardLines(soldier),
                 BuildSergeantReport(soldier),
                 GenerateSoldierInjurySummary(soldier, richTextInjury),

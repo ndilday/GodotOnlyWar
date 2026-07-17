@@ -160,25 +160,6 @@ public class SoldierTransferServiceTests
     }
 
     [Fact]
-    public void PreviewHistory_DoesNotMutateSoldierHistory()
-    {
-        SquadTemplate template = CreateSquadTemplate(
-            "Line Squad",
-            (TestModelFactory.SergeantTemplate, 0, 1),
-            (TestModelFactory.MarineTemplate, 0, 4));
-        Unit chapter = CreateUnit("Chapter");
-        Squad source = AddSquad(chapter, "Source Squad", template);
-        PlayerSoldier soldier = AddPlayerSoldier(source, TestModelFactory.MarineTemplate, "Brother Marius");
-        Squad target = AddSquad(chapter, "Target Squad", template);
-        SoldierTransferOption option = new(target.Id, TestModelFactory.SergeantTemplate, "Test Sergeant, Target Squad, Chapter");
-
-        IReadOnlyList<string> preview = _service.PreviewHistory(soldier, option, _date);
-
-        Assert.Equal(2, preview.Count);
-        Assert.Empty(soldier.SoldierHistory);
-    }
-
-    [Fact]
     public void ApplyTransfer_MovesSoldierPromotesAndRecordsHistoryOnce()
     {
         SquadTemplate template = CreateSquadTemplate(
@@ -199,9 +180,18 @@ public class SoldierTransferServiceTests
         Assert.Contains(soldier, target.Members);
         Assert.Equal(target, soldier.AssignedSquad);
         Assert.Equal(TestModelFactory.SergeantTemplate, soldier.Template);
-        Assert.Equal(2, soldier.SoldierHistory.Count);
-        Assert.Contains($"{_date}: promoted to Test Sergeant", soldier.SoldierHistory);
-        Assert.Contains($"{_date}: transferred to Test Sergeant, Target Squad, Chapter", soldier.SoldierHistory);
+        Assert.Collection(
+            soldier.SoldierEvents,
+            soldierEvent =>
+            {
+                Assert.Equal(SoldierEventType.Promotion, soldierEvent.Type);
+                Assert.Equal("promoted to Test Sergeant", soldierEvent.Detail);
+            },
+            soldierEvent =>
+            {
+                Assert.Equal(SoldierEventType.Transfer, soldierEvent.Type);
+                Assert.Equal("transferred to Test Sergeant, Target Squad, Chapter", soldierEvent.Detail);
+            });
     }
 
     [Fact]

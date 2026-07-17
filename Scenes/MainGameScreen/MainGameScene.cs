@@ -89,7 +89,7 @@ public partial class MainGameScene : Control
 		RefreshTopMenuStatus();
 		// Start with the world the chapter fleet is orbiting selected (the promised world at game
 		// start), mirroring the camera's initial centring in SectorMap. Fall back to the first
-		// planet if there's no fleet/orbit (e.g. legacy saves with a fleet in deep space).
+		// planet if there's no fleet/orbit
 		Planet initialPlanet =
 			GameDataSingleton.Instance.Sector.PlayerForce.Fleet.TaskForces.FirstOrDefault()?.Planet
 			?? GameDataSingleton.Instance.Sector.Planets.Values.FirstOrDefault();

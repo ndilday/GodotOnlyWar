@@ -59,29 +59,6 @@ namespace OnlyWar.Helpers
             return openings;
         }
 
-        public IReadOnlyList<string> PreviewHistory(
-            PlayerSoldier soldier,
-            SoldierTransferOption option,
-            Date date)
-        {
-            List<string> history = soldier.SoldierHistory.ToList();
-            if (option == null || option.IsCurrentAssignment)
-            {
-                return history;
-            }
-
-            if (soldier.Template != option.SoldierTemplate)
-            {
-                history.Add($"{date}: promoted to {option.SoldierTemplate.Name}");
-            }
-            if (soldier.AssignedSquad.Id != option.SquadId)
-            {
-                history.Add($"{date}: transferred to {option.DisplayName}");
-            }
-
-            return history;
-        }
-
         // A transfer never changes how many soldiers are aboard a ship if the soldier is
         // already stationed on that same ship (moving between squads that share a boat is a
         // lateral reshuffle, not a new arrival). Otherwise, boarding a squad that's out of

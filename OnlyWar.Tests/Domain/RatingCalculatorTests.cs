@@ -123,7 +123,9 @@ public class RatingCalculatorTests
         calculator.ApplyAwards(soldier, eval, Date);
 
         Assert.Empty(soldier.SoldierAwards);
-        Assert.Contains(soldier.SoldierHistory, e => e.Contains("Flagged for potential training as Apothecary"));
+        Assert.Contains(soldier.SoldierEvents,
+            e => e.Type == SoldierEventType.RatingFlag
+                 && e.Detail == "Flagged for potential training as Apothecary");
     }
 
     [Fact]

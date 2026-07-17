@@ -22,21 +22,21 @@ namespace OnlyWar.Models.Soldiers
         // (PRD 4.8 / 4.12). Recorded at roster removal, distinct from the Death note.
         GeneseedRecovery = 9,
 
-        // Reserved for step 2 (not yet emitted):
+        // Reserved for planned notable career events:
         FirstBlood = 100,
         KillMilestone = 101,
         LastSurvivor = 102,
         MentorAssigned = 103,
         Oath = 104,
         NearDeathRecovery = 105,
+
+        // Recorded when a player-run non-battle mission finishes.
         MissionOutcome = 106
     }
 
-    // A single, queryable entry in a soldier's history. Carries the structured fields the
-    // notability classifier and narrator (PRD 0.8 steps 3-4) query — date, faction,
-    // weapon, magnitude, location, related soldiers — alongside a rendered Detail clause
-    // that reproduces the legacy free-text line. Render() is the display source of truth
-    // for this pass; later passes narrate from the structured fields instead.
+    // A single, queryable entry in a soldier's history. Date, type, faction, weapon,
+    // magnitude, location, and related soldiers support event-based career queries, while
+    // Detail supplies the authored one-line summary shown in the service record.
     public class SoldierEvent
     {
         private readonly List<int> _relatedSoldierIds;
@@ -66,8 +66,8 @@ namespace OnlyWar.Models.Soldiers
             _relatedSoldierIds = relatedSoldierIds?.ToList() ?? [];
         }
 
-        // Reproduces the legacy history line. Every event is stamped with its date except
-        // the death note, which historically carried none.
+        // Formats the service-record line. Career events are date-stamped; death notes are
+        // kept as standalone epitaphs because their detail is already a complete record.
         public string Render() =>
             Type == SoldierEventType.Death ? Detail : $"{Date}: {Detail}";
     }

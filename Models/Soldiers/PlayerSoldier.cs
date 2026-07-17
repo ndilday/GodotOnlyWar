@@ -20,10 +20,6 @@ namespace OnlyWar.Models.Soldiers
 
         public Date ProgenoidImplantDate { get; set; }
         public IReadOnlyList<SoldierEvent> SoldierEvents { get => _soldierEvents; }
-        // Display projection over the structured events, preserving the legacy
-        // free-text history surface for callers that still render strings.
-        public IReadOnlyCollection<string> SoldierHistory =>
-            _soldierEvents.Select(e => e.Render()).ToList();
         public IReadOnlyDictionary<int, ushort> RangedWeaponCasualtyCountMap { get => _rangedWeaponCasualtyCountMap; }
         public IReadOnlyDictionary<int, ushort> MeleeWeaponCasualtyCountMap { get => _meleeWeaponCasualtyCountMap; }
         public IReadOnlyDictionary<int, ushort> FactionCasualtyCountMap { get => _factionCasualtyCountMap; }

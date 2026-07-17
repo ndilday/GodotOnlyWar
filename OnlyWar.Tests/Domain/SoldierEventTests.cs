@@ -4,9 +4,8 @@ using Xunit;
 
 namespace OnlyWar.Tests.Domain;
 
-// The structured event log replaced free-text soldier history (PRD 0.8 step 1).
-// Render() must reproduce the legacy display lines so the existing history surface is
-// unchanged: every event is date-stamped except the death note, which never was.
+// Render() formats structured events for the service-record display: career events are
+// date-stamped, while the death note is presented as a standalone epitaph.
 public class SoldierEventTests
 {
     private readonly Date _date = new(41, 999, 12);
@@ -27,7 +26,7 @@ public class SoldierEventTests
     }
 
     [Fact]
-    public void Render_DeathEvent_OmitsDateStampToMatchLegacyLine()
+    public void Render_DeathEvent_OmitsDateStampForStandaloneEpitaph()
     {
         SoldierEvent death = new(_date, SoldierEventType.Death,
             "Killed in battle with the Tyranids by a Scything Talon");

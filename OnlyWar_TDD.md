@@ -239,7 +239,9 @@ HitLocation          (SoldierId, HitLocationTemplateId, IsCybernetic,
                       Armor, WoundTotal, WeeksOfHealing)
 
 PlayerSoldier        (SoldierId, ImplantMillenium, ImplantYear, ImplantWeek)
-PlayerSoldierHistory (PlayerSoldierId, Entry)
+PlayerSoldierEvent   (PlayerSoldierId, Millenium, Year, Week, EventType,
+                      FactionId, WeaponTemplateId, Magnitude, LocationName,
+                      Detail, RelatedSoldierIds)
 SoldierEvaluation       (SoldierId, Millenium, Year, Week)   -- identity only
 SoldierEvaluationRating (SoldierId, Millenium, Year, Week, RatingKey, Value)
                                                             -- open-ended: one row per rating
@@ -326,7 +328,7 @@ Soldier
 PlayerSoldier  (wraps Soldier, adds player-tracking data)
   ├─ _soldier : Soldier                    (private delegate target)
   ├─ ProgenoidImplantDate : Date
-  ├─ SoldierHistory : List<string>
+  ├─ SoldierEvents : IReadOnlyList<SoldierEvent>
   ├─ SoldierEvaluationHistory : List<SoldierEvaluation>
   ├─ SoldierAwards : List<SoldierAward>
   ├─ RangedWeaponCasualtyCountMap : Dictionary<int, ushort>
@@ -335,6 +337,9 @@ PlayerSoldier  (wraps Soldier, adds player-tracking data)
 ```
 
 `PlayerSoldier` implements `ISoldier` by delegating all attribute and skill reads to its inner `Soldier`.
+Its career history is stored as structured `SoldierEvent` records. Event metadata supports
+queries by type, date, faction, weapon, magnitude, location, and related soldiers; `Detail`
+holds the authored service-record summary, and `Render()` formats that summary for display.
 
 #### Wound Model
 
