@@ -38,7 +38,6 @@ public partial class ApothecariumScreenView : DialogView
     {
         Theme = GD.Load<Theme>("res://Scenes/OnlyWarTheme.tres");
         base._Ready();
-        RemoveLegacyNodes();
         BuildLayout();
     }
 
@@ -549,19 +548,6 @@ public partial class ApothecariumScreenView : DialogView
 
         Vector2I meta = selected.GetMetadata(0).As<Vector2I>();
         TreeSelectionChanged?.Invoke(this, new ApothecariumSelection((ApothecariumSelectionKind)meta.X, meta.Y));
-    }
-
-    private void RemoveLegacyNodes()
-    {
-        foreach (string nodeName in new[] { "GeneseedPanel", "InjuryReportPanel", "Header" })
-        {
-            Node node = GetNodeOrNull(nodeName);
-            if (node != null)
-            {
-                RemoveChild(node);
-                node.QueueFree();
-            }
-        }
     }
 
     private static void ClearContainer(Container container)
