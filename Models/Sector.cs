@@ -30,7 +30,7 @@ namespace OnlyWar.Models
         public PlayerForce PlayerForce { get; }
 
         // The framed opening scenario stamped onto this sector at generation
-        // (Design/OpeningScenario.md §2.1). Null for legacy saves and plain-sandbox sectors,
+        // (Design/OpeningScenario.md §2.1). Null for plain-sandbox sectors,
         // in which case the game behaves as it did before the Opening Scenario work.
         public CampaignScenario Scenario { get; set; }
         

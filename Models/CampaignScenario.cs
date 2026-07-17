@@ -1,7 +1,7 @@
 namespace OnlyWar.Models
 {
-    // Which framed opening a campaign was started with. None covers legacy saves and a
-    // future plain-sandbox mode; when Sector.Scenario is null the game behaves as it did
+    // Which framed opening a campaign was started with. None covers a future
+    // plain-sandbox mode; when Sector.Scenario is null the game behaves as it did
     // before the Opening Scenario work (Design/OpeningScenario.md §2.1).
     public enum ScenarioType { None = 0, PromisedWorld = 1 }
 

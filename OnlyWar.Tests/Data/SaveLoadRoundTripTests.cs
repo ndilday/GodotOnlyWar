@@ -364,38 +364,6 @@ public class SaveLoadRoundTripTests
         }
     }
 
-    // Strips the columns added by the Opening Scenario work from an existing save, reproducing a
-    // database written before those columns existed. GlobalData is recreated with its original
-    // 7-column shape; RegionFaction's GrowthMultiplier column is dropped in place.
-    private static void DowngradeToLegacySchema(string dbPath)
-    {
-        var builder = new Microsoft.Data.Sqlite.SqliteConnectionStringBuilder
-        {
-            DataSource = dbPath
-        };
-        using var connection = new Microsoft.Data.Sqlite.SqliteConnection(builder.ToString());
-        connection.Open();
-        using (var command = connection.CreateCommand())
-        {
-            command.CommandText = @"
-                CREATE TABLE GlobalData_legacy (Millenium INTEGER NOT NULL, Year INTEGER NOT NULL, Week INTEGER NOT NULL, SaveVersion INTEGER NOT NULL, Requisition INTEGER NOT NULL DEFAULT 0, GeneseedStockpile INTEGER NOT NULL DEFAULT 0, GeneseedPurity REAL NOT NULL DEFAULT 1.0);
-                INSERT INTO GlobalData_legacy (Millenium, Year, Week, SaveVersion, Requisition, GeneseedStockpile, GeneseedPurity)
-                    SELECT Millenium, Year, Week, SaveVersion, Requisition, GeneseedStockpile, GeneseedPurity FROM GlobalData;
-                DROP TABLE GlobalData;
-                ALTER TABLE GlobalData_legacy RENAME TO GlobalData;
-                ALTER TABLE RegionFaction DROP COLUMN GrowthMultiplier;
-                ALTER TABLE RegionFaction DROP COLUMN Contentment;
-                ALTER TABLE RegionFaction DROP COLUMN ArmedCivilians;
-                ALTER TABLE RegionFaction DROP COLUMN HasEmergenceAdvantage;
-                ALTER TABLE Character DROP COLUMN Competence;
-                ALTER TABLE Character DROP COLUMN Severity;
-                ALTER TABLE Planet DROP COLUMN CapitalRegionId;";
-            command.ExecuteNonQuery();
-        }
-        connection.Close();
-        Microsoft.Data.Sqlite.SqliteConnection.ClearAllPools();
-    }
-
     [Trait("Category", "Slow")]
     [Fact]
     public void Load_ReconstructsArmy_WithoutPreSeedingFactionUnits()

@@ -43,61 +43,6 @@ namespace OnlyWar.Helpers.Storage
         internal static void InitializeUserStorage()
         {
             Directory.CreateDirectory(SaveDirectory);
-
-            string[] legacyCandidates =
-            {
-                Path.Combine(InstallDirectory, DefaultSaveFileName),
-                Path.Combine(Directory.GetCurrentDirectory(), DefaultSaveFileName)
-            };
-
-            try
-            {
-                MigrateLegacyDefaultSave(SaveDirectory, legacyCandidates);
-            }
-            catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
-            {
-                GD.PushWarning($"Could not migrate the legacy save: {exception.Message}");
-            }
-        }
-
-        internal static bool MigrateLegacyDefaultSave(
-            string saveDirectory,
-            IEnumerable<string> legacyCandidates)
-        {
-            Directory.CreateDirectory(saveDirectory);
-            string targetPath = Path.GetFullPath(Path.Combine(saveDirectory, DefaultSaveFileName));
-            if (File.Exists(targetPath))
-            {
-                return false;
-            }
-
-            string legacyPath = legacyCandidates
-                .Where(path => !string.IsNullOrWhiteSpace(path))
-                .Select(Path.GetFullPath)
-                .Distinct(StringComparer.OrdinalIgnoreCase)
-                .FirstOrDefault(path =>
-                    !string.Equals(path, targetPath, StringComparison.OrdinalIgnoreCase)
-                    && File.Exists(path));
-
-            if (legacyPath == null)
-            {
-                return false;
-            }
-
-            string tempPath = targetPath + ".migration.tmp";
-            try
-            {
-                File.Copy(legacyPath, tempPath, overwrite: true);
-                File.Move(tempPath, targetPath, overwrite: false);
-                return true;
-            }
-            finally
-            {
-                if (File.Exists(tempPath))
-                {
-                    File.Delete(tempPath);
-                }
-            }
         }
 
         private static string LocateInstallDirectory()

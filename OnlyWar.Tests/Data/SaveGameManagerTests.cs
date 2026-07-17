@@ -200,20 +200,6 @@ public sealed class SaveGameManagerTests : IDisposable
         Assert.False(File.Exists(SaveGameMetadataStore.GetPath(save.FilePath)));
     }
 
-    [Fact]
-    public void Catalog_LegacyDefaultHasUsefulFallbackLabelsAndLocalWriteTime()
-    {
-        string path = Path.Combine(_tempDirectory, GameStorage.DefaultSaveFileName);
-        WriteMetadataSave(path, "Legacy Chapter", 5, 999, 52);
-
-        SaveGameEntry entry = Assert.Single(new SaveGameCatalog(_tempDirectory).Discover());
-
-        Assert.True(entry.IsLegacyDefault);
-        Assert.Equal("Legacy Save", entry.DisplayName);
-        Assert.Equal("Legacy Chapter", entry.CampaignName);
-        Assert.Equal(entry.LastWriteTimeUtc.ToLocalTime(), entry.LastWriteTimeLocal);
-    }
-
     public void Dispose()
     {
         SqliteConnection.ClearAllPools();

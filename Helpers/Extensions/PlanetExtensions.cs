@@ -38,8 +38,7 @@ namespace OnlyWar.Helpers.Extensions
             Region capital = planet.Regions.FirstOrDefault(region => region?.Id == planet.CapitalRegionId);
             if (capital == null)
             {
-                // Legacy saves predate CapitalRegionId. Establish a stable fallback on first use;
-                // the next save persists it.
+                // Establish a stable fallback on first use; the next save persists it.
                 capital = planet.Regions
                     .Where(region => region != null)
                     .OrderByDescending(region => region.Population)

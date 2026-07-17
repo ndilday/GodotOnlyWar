@@ -71,24 +71,6 @@ public sealed class DeploymentStorageTests : IDisposable
         Assert.Contains("not supported", exception.Message);
     }
 
-    [Fact]
-    public void LegacyDefaultSave_IsCopiedOnceAndNeverOverwritesUserSave()
-    {
-        string legacyDirectory = Path.Combine(_tempDirectory, "legacy");
-        string saveDirectory = Path.Combine(_tempDirectory, "user", "saves");
-        Directory.CreateDirectory(legacyDirectory);
-        string legacyPath = Path.Combine(legacyDirectory, GameStorage.DefaultSaveFileName);
-        File.WriteAllText(legacyPath, "legacy-save");
-
-        Assert.True(GameStorage.MigrateLegacyDefaultSave(saveDirectory, [legacyPath]));
-        string migratedPath = Path.Combine(saveDirectory, GameStorage.DefaultSaveFileName);
-        Assert.Equal("legacy-save", File.ReadAllText(migratedPath));
-
-        File.WriteAllText(legacyPath, "changed-legacy-save");
-        Assert.False(GameStorage.MigrateLegacyDefaultSave(saveDirectory, [legacyPath]));
-        Assert.Equal("legacy-save", File.ReadAllText(migratedPath));
-    }
-
     public void Dispose()
     {
         SqliteConnection.ClearAllPools();
