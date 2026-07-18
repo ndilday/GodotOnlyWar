@@ -201,7 +201,13 @@ text = "Transfer"
 layout_mode = 2
 size_flags_vertical = 3
 
-[node name="DetailCardGrid" type="GridContainer" parent="ChapterView/Content/MainLayout/DetailPanel/Panel/MarginContainer/DetailStack/DetailScroll"]
+[node name="DetailCardLayout" type="HBoxContainer" parent="ChapterView/Content/MainLayout/DetailPanel/Panel/MarginContainer/DetailStack/DetailScroll"]
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 3
+theme_override_constants/separation = 8
+
+[node name="DetailCardGrid" type="GridContainer" parent="ChapterView/Content/MainLayout/DetailPanel/Panel/MarginContainer/DetailStack/DetailScroll/DetailCardLayout"]
 layout_mode = 2
 size_flags_horizontal = 3
 theme_override_constants/h_separation = 8

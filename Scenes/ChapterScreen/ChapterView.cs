@@ -25,6 +25,7 @@ public partial class ChapterView : Control
     private Label _detailTitleLabel;
     private Label _detailSubtitleLabel;
     private GridContainer _metricGrid;
+    private HBoxContainer _detailCardLayout;
     private GridContainer _detailCardGrid;
     private Button _detailActionButton;
     private MenuButton _transferButton;
@@ -48,7 +49,8 @@ public partial class ChapterView : Control
         _detailTitleLabel = GetNode<Label>("Content/MainLayout/DetailPanel/Panel/MarginContainer/DetailStack/Hero/TitleStack/TitleLabel");
         _detailSubtitleLabel = GetNode<Label>("Content/MainLayout/DetailPanel/Panel/MarginContainer/DetailStack/Hero/TitleStack/SubtitleLabel");
         _metricGrid = GetNode<GridContainer>("Content/MainLayout/DetailPanel/Panel/MarginContainer/DetailStack/Hero/MetricGrid");
-        _detailCardGrid = GetNode<GridContainer>("Content/MainLayout/DetailPanel/Panel/MarginContainer/DetailStack/DetailScroll/DetailCardGrid");
+        _detailCardLayout = GetNode<HBoxContainer>("Content/MainLayout/DetailPanel/Panel/MarginContainer/DetailStack/DetailScroll/DetailCardLayout");
+        _detailCardGrid = GetNode<GridContainer>("Content/MainLayout/DetailPanel/Panel/MarginContainer/DetailStack/DetailScroll/DetailCardLayout/DetailCardGrid");
         _detailActionButton = GetNode<Button>("Content/MainLayout/DetailPanel/Panel/MarginContainer/DetailStack/DetailActionButton");
         _transferButton = GetNode<MenuButton>("Content/MainLayout/DetailPanel/Panel/MarginContainer/DetailStack/Hero/TransferButton");
         _closeButton = GetNode<Button>("Content/CloseButton");
@@ -126,10 +128,32 @@ public partial class ChapterView : Control
         }
 
         ClearContainer(_detailCardGrid);
+        foreach (Node child in _detailCardLayout.GetChildren())
+        {
+            if (child != _detailCardGrid)
+            {
+                _detailCardLayout.RemoveChild(child);
+                child.QueueFree();
+            }
+        }
+
+        bool hasFullHeightCard = false;
         foreach (ChapterBrowserDetailCard card in detail.Cards)
         {
-            _detailCardGrid.AddChild(CreateDetailCard(card));
+            if (card.FullHeight)
+            {
+                hasFullHeightCard = true;
+                _detailCardLayout.AddChild(CreateDetailCard(card));
+            }
+            else
+            {
+                _detailCardGrid.AddChild(CreateDetailCard(card));
+            }
         }
+
+        // Full-height cards claim the right third of the panel; the grid narrows to two columns.
+        _detailCardGrid.Columns = hasFullHeightCard ? 2 : 3;
+        _detailCardGrid.SizeFlagsStretchRatio = 2f;
 
         bool hasAction = !string.IsNullOrWhiteSpace(detail.PrimaryActionText);
         _detailActionButton.Visible = hasAction;
@@ -281,6 +305,11 @@ public partial class ChapterView : Control
             CustomMinimumSize = new Vector2(0, 112),
             SizeFlagsHorizontal = SizeFlags.ExpandFill
         };
+        if (card.FullHeight)
+        {
+            panel.SizeFlagsVertical = SizeFlags.ExpandFill;
+            panel.SizeFlagsStretchRatio = 1f;
+        }
         OnlyWarStyle.ApplyInsetPanel(panel);
 
         VBoxContainer stack = new VBoxContainer();
@@ -325,7 +354,23 @@ public partial class ChapterView : Control
             AutowrapMode = TextServer.AutowrapMode.WordSmart
         };
         body.AddThemeFontSizeOverride("font_size", 13);
-        stack.AddChild(body);
+
+        if (card.Scrollable)
+        {
+            body.SizeFlagsHorizontal = SizeFlags.ExpandFill;
+            ScrollContainer bodyScroll = new ScrollContainer
+            {
+                CustomMinimumSize = new Vector2(0, 48),
+                SizeFlagsVertical = SizeFlags.ExpandFill,
+                HorizontalScrollMode = ScrollContainer.ScrollMode.Disabled
+            };
+            bodyScroll.AddChild(body);
+            stack.AddChild(bodyScroll);
+        }
+        else
+        {
+            stack.AddChild(body);
+        }
 
         return panel;
     }

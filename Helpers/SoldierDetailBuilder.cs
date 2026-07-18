@@ -20,14 +20,14 @@ public class SoldierDetailBuilder
                 richTextInjury: false,
                 currentDate: GameDataSingleton.Instance.Date,
                 sector: GameDataSingleton.Instance.Sector);
-            // Top row
+            // Left grid, two columns: Posting/Sergeant, Battle/Honors, Injury.
+            // Service Record is full-height on the right with its own scroll.
             cards.Add(new ChapterBrowserDetailCard("map_pin", "Posting", "Assignment", FormatPairs(dossier.Data)));
-            cards.Add(new ChapterBrowserDetailCard("award", "Honors", "Awards", FormatLines(dossier.Awards, "No awards recorded.", 5)));
-            cards.Add(new ChapterBrowserDetailCard("threat", "Battle History", "Combat record", FormatPairs(dossier.CombatRecord)));
-            // Second row
-            cards.Add(new ChapterBrowserDetailCard("medical", "Injury Report", playerSoldier.CanFight ? "Fit report" : "Recovery report", dossier.InjuryReport));
             cards.Add(new ChapterBrowserDetailCard("training", "Sergeant Report", "Recommendation", dossier.SergeantReport));
-            cards.Add(new ChapterBrowserDetailCard("archive", "Service Record", "Recent entries", FormatLines(dossier.History, "No history recorded.", 5)));
+            cards.Add(new ChapterBrowserDetailCard("threat", "Battle History", "Combat record", FormatPairs(dossier.CombatRecord)));
+            cards.Add(new ChapterBrowserDetailCard("award", "Honors", "Awards", FormatLines(dossier.Awards, "No awards recorded."), Scrollable: true));
+            cards.Add(new ChapterBrowserDetailCard("medical", "Injury Report", playerSoldier.CanFight ? "Fit report" : "Recovery report", dossier.InjuryReport));
+            cards.Add(new ChapterBrowserDetailCard("archive", "Service Record", "Full history", FormatLines(dossier.History, "No history recorded."), Scrollable: true, FullHeight: true));
         }
         else
         {
@@ -69,13 +69,13 @@ public class SoldierDetailBuilder
         return string.Join("\n", pairs.Select(pair => $"{pair.Item1}: {pair.Item2}"));
     }
 
-    private static string FormatLines(IReadOnlyList<string> lines, string emptyText, int maxLines)
+    private static string FormatLines(IReadOnlyList<string> lines, string emptyText)
     {
         if (lines == null || lines.Count == 0)
         {
             return emptyText;
         }
 
-        return string.Join("\n", lines.Reverse().Take(maxLines).Reverse());
+        return string.Join("\n", lines);
     }
 }

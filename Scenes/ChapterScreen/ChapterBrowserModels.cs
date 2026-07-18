@@ -112,7 +112,13 @@ public sealed record ChapterBrowserMenuItem(
 
 public sealed record ChapterBrowserMetric(string Value, string Label);
 
-public sealed record ChapterBrowserDetailCard(string IconKey, string Title, string Subtitle, string Body);
+public sealed record ChapterBrowserDetailCard(
+    string IconKey,
+    string Title,
+    string Subtitle,
+    string Body,
+    bool Scrollable = false,
+    bool FullHeight = false);
 
 public sealed record ChapterBrowserDetail(
     string IconKey,
