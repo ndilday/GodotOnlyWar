@@ -16,7 +16,7 @@ namespace OnlyWar.Builders
             public float RadiusSquared;
         }
 
-        public static List<Subsector> BuildSubsectors(IEnumerable<Planet> planets, Vector2I gridDimensions)
+        public static List<Subsector> BuildSubsectors(IEnumerable<Planet> planets, Vector2I gridDimensions, ushort maxDiameter)
         {
             Dictionary<ushort, List<Planet>> subsectorPlanetMap = [];
             Dictionary<ushort, Circle> subsectorCircleMap;
@@ -32,7 +32,6 @@ namespace OnlyWar.Builders
                 subsectorId++;
             }
 
-            ushort maxDiameter = GameDataSingleton.Instance.GameRulesData.MaxSubsectorCellDiameter;
             CombineSubsectors(subsectorPlanetMap, maxDiameter);
             subsectorCircleMap = CalculateSubsectorCircles(subsectorPlanetMap);
             //subsectorRadiusSquaredMap = CalculateSubsectorSquaredRadii(subsectorPlanetMap, subsectorCenterMap);

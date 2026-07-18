@@ -8,6 +8,9 @@ namespace OnlyWar.Helpers
     {
         Rank,           // Template.Name; Equals / NotEquals
         Honor,          // award Type + minimum Level; Has (at least) / DoesNotHave
+        Novice,         // RatingFlag history; Equals / NotEquals Yes/No
+        MedicalAptitude, // latest medical rating; AtLeast / AtMost
+        TechnicalAptitude, // latest tech rating; AtLeast / AtMost
         TimeInService,  // weeks; AtLeast / AtMost
         TimeInRank,     // weeks; AtLeast / AtMost
         TimeInSquad     // weeks; AtLeast / AtMost
@@ -76,8 +79,8 @@ namespace OnlyWar.Helpers
         }
     }
 
-    // A single filter row: field + operator + value. TextValue carries the role name (Rank)
-    // or honor Type+Level key (Honor); NumberValue/Unit carry the threshold for duration fields.
+    // A single filter row: field + operator + value. TextValue carries a choice value;
+    // NumberValue carries aptitude/duration thresholds and Unit qualifies durations.
     public sealed class SoldierFilterCondition
     {
         public SoldierFilterField Field { get; set; }
@@ -93,5 +96,9 @@ namespace OnlyWar.Helpers
             field == SoldierFilterField.TimeInService
             || field == SoldierFilterField.TimeInRank
             || field == SoldierFilterField.TimeInSquad;
+
+        public static bool IsAptitudeField(SoldierFilterField field) =>
+            field == SoldierFilterField.MedicalAptitude
+            || field == SoldierFilterField.TechnicalAptitude;
     }
 }

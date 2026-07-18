@@ -144,7 +144,7 @@ public partial class SectorMap : Node2D
 		HasPlanet = new bool[GridDimensions.X * GridDimensions.Y];
 		PlacePlanets();
 		RefreshFleets();
-		List<Subsector> subsectors = SubsectorBuilder.BuildSubsectors(GameDataSingleton.Instance.Sector.Planets.Values, GridDimensions);
+		List<Subsector> subsectors = SubsectorBuilder.BuildSubsectors(GameDataSingleton.Instance.Sector.Planets.Values, GridDimensions, GameDataSingleton.Instance.GameRulesData.MaxSubsectorCellDiameter);
         foreach(Subsector subsector in subsectors)
         {
             foreach (Vector2I cell in subsector.Cells)

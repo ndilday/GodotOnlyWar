@@ -264,6 +264,76 @@ public class NewChapterBuilderTests
         }
     }
 
+    [Fact]
+    public void CreateChapter_DoesNotStaffCompanyHQsWithoutLineSquads()
+    {
+        // Regression: reserve companies used to found as "ghost companies" — a fully
+        // staffed HQ (captain, chaplain, apothecary, champion, ancient) commanding zero
+        // line squads, because captains were assigned before line supply was known.
+        // A company HQ is now staffed only when at least one line squad seeds; a small
+        // founding cohort forces several companies to run out of line marines.
+        RNG.Reset(20260717);
+        const int foundingSoldierCount = 300;
+        PlayerForce chapter = NewChapterBuilder.CreateChapter(
+            _data,
+            CreateTrainingService(),
+            new Date(39, 496, 1),
+            new Date(39, 500, 1),
+            "Crimson Sentinels",
+            foundingSoldierCount: foundingSoldierCount);
+        Unit oob = chapter.Army.OrderOfBattle;
+
+        foreach (Unit company in oob.ChildUnits)
+        {
+            bool hasLineSquad = company.Squads
+                .Any(s => (s.SquadTemplate.SquadType & SquadTypes.HQ) == 0 && s.Members.Count > 0);
+            if (!hasLineSquad)
+            {
+                Assert.True(company.HQSquad == null || company.HQSquad.Members.Count == 0,
+                    $"{company.Name} has a staffed HQ ({company.HQSquad?.Members.Count} members) " +
+                    "but no line squads.");
+            }
+        }
+
+        // The skipped companies' soldiers still land somewhere: nobody is lost.
+        Assert.Equal(foundingSoldierCount, oob.GetAllMembers().Count());
+    }
+
+    [Fact]
+    public void CreateChapter_SpillsSurplusAssaultCandidatesIntoVacantDevastatorSeats()
+    {
+        // The whole cohort has an assault profile (melee > 90, 95 < ranged < 105) and
+        // nobody qualifies as a devastator (melee must be 80..90). Assault seats are
+        // capped chapter-wide, so the surplus must spill into vacant devastator seats
+        // as Devastator Marines (ranged > 80) rather than fall through to the scouts.
+        RNG.Reset(20260718);
+        PlayerForce chapter = NewChapterBuilder.CreateChapter(
+            _data, new AssaultHeavyTrainingService(), new Date(39, 496, 1), new Date(39, 500, 1),
+            "Crimson Sentinels", foundingSoldierCount: 300);
+        Unit oob = chapter.Army.OrderOfBattle;
+
+        var devastators = oob.GetAllMembers()
+            .OfType<PlayerSoldier>()
+            .Where(s => s.Template.Name == "Devastator Marine")
+            .ToList();
+        Assert.NotEmpty(devastators);
+        // Every spilled devastator keeps his assault-profile evaluation, proving he
+        // came through the spill pass rather than a devastator eligibility filter.
+        Assert.All(devastators, d =>
+            Assert.True(d.SoldierEvaluationHistory[0].MeleeRating > 90,
+                $"{d.Name} does not have the assault profile expected of spilled devastators."));
+
+        // A company that only gained line squads through spill still gets its HQ
+        // staffed at that point.
+        Unit devastatorCompany = oob.ChildUnits.First(c => c.UnitTemplate.Name == "Devastator Company");
+        bool devCompanyHasSquads = devastatorCompany.Squads
+            .Any(s => (s.SquadTemplate.SquadType & SquadTypes.HQ) == 0 && s.Members.Count > 0);
+        if (devCompanyHasSquads)
+        {
+            Assert.NotNull(devastatorCompany.HQSquad.SquadLeader);
+        }
+    }
+
     [Trait("Category", "Slow")]
     [Fact]
     public void GenerateSector_ThreadsSeedAndChapterNameThroughToAGeneratedSector()
@@ -282,6 +352,40 @@ public class NewChapterBuilderTests
                                                 _data.BaseSkillMap, StaticRNG.Instance);
         return new SoldierTrainingCalculator(_data.BaseSkillMap.Values, _data.TrainingProfiles.Values,
                                              ratingCalculator);
+    }
+
+    // Every soldier rates as an assault candidate (and nothing heavier); the first
+    // thirty also rate as sergeants. No one is devastator-eligible, so any Devastator
+    // Marine must have arrived via the spill pass.
+    private sealed class AssaultHeavyTrainingService : ISoldierTrainingService
+    {
+        private int _initialEvaluationIndex;
+
+        public void UpdateRatings(Date date, PlayerSoldier soldier)
+        {
+            EvaluateSoldier(soldier, date);
+        }
+
+        public void EvaluateSoldier(PlayerSoldier soldier, Date trainingFinishedYear)
+        {
+            if (soldier.SoldierEvaluationHistory.Count > 0)
+            {
+                soldier.AddEvaluation(soldier.SoldierEvaluationHistory[0]);
+                return;
+            }
+            int index = _initialEvaluationIndex++;
+            float lead = index < 30 ? 55 : 40;
+            soldier.AddEvaluation(new SoldierEvaluation(trainingFinishedYear,
+                melee: 95, ranged: 100, lead: lead, med: 0, tech: 0, piety: 0, ancient: 0));
+        }
+
+        public void ApplySoldierWorkExperience(ISoldier soldier, Squad squad, float points)
+        {
+        }
+
+        public void TrainScouts(IEnumerable<Squad> scoutSquads, Dictionary<int, TrainingFocuses> squadFocusMap, float points = 0.2f)
+        {
+        }
     }
 
     private sealed class VeteranCandidateTrainingService : ISoldierTrainingService

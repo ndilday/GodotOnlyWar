@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -14,6 +14,8 @@ namespace OnlyWar.Tests.Generation;
 [Collection(OnlyWar.Tests.TestCollections.SharedState)]
 public class SubsectorBuilderTests
 {
+    private const ushort MaxDiameter = 20;
+
     public SubsectorBuilderTests()
     {
         Directory.SetCurrentDirectory(RulesDatabaseFixture.RepositoryRoot);
@@ -26,7 +28,7 @@ public class SubsectorBuilderTests
         Planet first = CreatePlanet(1, 10, 10);
         Planet second = CreatePlanet(2, 15, 10);
 
-        List<Subsector> subsectors = SubsectorBuilder.BuildSubsectors([first, second], new Vector2I(50, 50));
+        List<Subsector> subsectors = SubsectorBuilder.BuildSubsectors([first, second], new Vector2I(50, 50), MaxDiameter);
 
         Subsector containingFirst = Assert.Single(subsectors, s => s.Planets.Contains(first));
         Assert.Contains(second, containingFirst.Planets);
@@ -38,7 +40,7 @@ public class SubsectorBuilderTests
         Planet first = CreatePlanet(1, 10, 10);
         Planet second = CreatePlanet(2, 40, 40);
 
-        List<Subsector> subsectors = SubsectorBuilder.BuildSubsectors([first, second], new Vector2I(60, 60));
+        List<Subsector> subsectors = SubsectorBuilder.BuildSubsectors([first, second], new Vector2I(60, 60), MaxDiameter);
 
         Assert.Equal(2, subsectors.Count);
         Assert.All([first, second], planet => Assert.Single(subsectors, s => s.Planets.Contains(planet)));
@@ -55,7 +57,7 @@ public class SubsectorBuilderTests
             CreatePlanet(4, 45, 40)
         ];
 
-        List<Subsector> subsectors = SubsectorBuilder.BuildSubsectors(planets, new Vector2I(60, 60));
+        List<Subsector> subsectors = SubsectorBuilder.BuildSubsectors(planets, new Vector2I(60, 60), MaxDiameter);
 
         foreach (Planet planet in planets)
         {
@@ -68,7 +70,7 @@ public class SubsectorBuilderTests
     {
         Planet planet = CreatePlanet(1, 10, 10);
 
-        Subsector subsector = Assert.Single(SubsectorBuilder.BuildSubsectors([planet], new Vector2I(30, 30)));
+        Subsector subsector = Assert.Single(SubsectorBuilder.BuildSubsectors([planet], new Vector2I(30, 30), MaxDiameter));
 
         Assert.Contains(new Vector2I(10, 10), subsector.Cells);
         Assert.NotEmpty(subsector.Cells);

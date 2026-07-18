@@ -17,6 +17,9 @@ public partial class ChapterFilterDialog : AcceptDialog
     [
         SoldierFilterField.Rank,
         SoldierFilterField.Honor,
+        SoldierFilterField.Novice,
+        SoldierFilterField.MedicalAptitude,
+        SoldierFilterField.TechnicalAptitude,
         SoldierFilterField.TimeInService,
         SoldierFilterField.TimeInRank,
         SoldierFilterField.TimeInSquad
@@ -26,6 +29,9 @@ public partial class ChapterFilterDialog : AcceptDialog
     {
         SoldierFilterField.Rank => "Rank / role",
         SoldierFilterField.Honor => "Honor",
+        SoldierFilterField.Novice => "Novice",
+        SoldierFilterField.MedicalAptitude => "Medical aptitude",
+        SoldierFilterField.TechnicalAptitude => "Technical aptitude",
         SoldierFilterField.TimeInService => "Time in service",
         SoldierFilterField.TimeInRank => "Time in rank",
         SoldierFilterField.TimeInSquad => "Time in squad",
@@ -249,6 +255,7 @@ public partial class ChapterFilterDialog : AcceptDialog
             {
                 SoldierFilterField.Rank => RankOps,
                 SoldierFilterField.Honor => HonorOps,
+                SoldierFilterField.Novice => EqualityOps,
                 _ => DurationOps
             };
             _operatorOption.Clear();
@@ -271,6 +278,10 @@ public partial class ChapterFilterDialog : AcceptDialog
             {
                 BuildDurationValue(seed);
             }
+            else if (SoldierFilterCondition.IsAptitudeField(field))
+            {
+                BuildAptitudeValue(seed);
+            }
             else
             {
                 BuildChoiceValue(field, seed);
@@ -283,6 +294,18 @@ public partial class ChapterFilterDialog : AcceptDialog
             {
                 SizeFlagsHorizontal = Control.SizeFlags.ExpandFill
             };
+            if (field == SoldierFilterField.Novice)
+            {
+                _valueOption.AddItem("Yes");
+                _valueOption.AddItem("No");
+                if (string.Equals(seed?.TextValue, "No", StringComparison.OrdinalIgnoreCase))
+                {
+                    _valueOption.Selected = 1;
+                }
+                _valueSlot.AddChild(_valueOption);
+                return;
+            }
+
             int optionCount = field == SoldierFilterField.Rank ? _roles.Count : _honors.Count;
             if (optionCount == 0)
             {
@@ -346,6 +369,20 @@ public partial class ChapterFilterDialog : AcceptDialog
             _valueSlot.AddChild(_unitOption);
         }
 
+        private void BuildAptitudeValue(SoldierFilterCondition seed)
+        {
+            _amountSpin = new SpinBox
+            {
+                MinValue = 0,
+                MaxValue = 9999,
+                Step = 1,
+                Value = seed?.NumberValue ?? 100,
+                CustomMinimumSize = new Vector2(120, 0),
+                SizeFlagsHorizontal = Control.SizeFlags.ShrinkBegin
+            };
+            _valueSlot.AddChild(_amountSpin);
+        }
+
         public SoldierFilterCondition ReadCondition()
         {
             SoldierFilterField field = SelectedField;
@@ -359,6 +396,15 @@ public partial class ChapterFilterDialog : AcceptDialog
                     Operator = op,
                     NumberValue = (int)_amountSpin.Value,
                     Unit = _unitOption.Selected == 1 ? SoldierDurationUnit.Weeks : SoldierDurationUnit.Years
+                };
+            }
+            if (SoldierFilterCondition.IsAptitudeField(field))
+            {
+                return new SoldierFilterCondition
+                {
+                    Field = field,
+                    Operator = op,
+                    NumberValue = (int)_amountSpin.Value
                 };
             }
 

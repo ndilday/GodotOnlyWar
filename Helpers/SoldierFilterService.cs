@@ -112,6 +112,22 @@ namespace OnlyWar.Helpers
                         && player.SoldierAwards.Any(a => MatchesHonor(a, condition.TextValue));
                     return condition.Operator == SoldierFilterOperator.DoesNotHave ? !hasHonor : hasHonor;
 
+                case SoldierFilterField.Novice:
+                    bool isNovice = soldier is PlayerSoldier novice
+                        && novice.SoldierEvents.Any(e => e.Type == SoldierEventType.RatingFlag
+                            && e.Detail?.EndsWith("declared a Novice",
+                                System.StringComparison.OrdinalIgnoreCase) == true);
+                    bool expectsNovice = !string.Equals(condition.TextValue, "No",
+                        System.StringComparison.OrdinalIgnoreCase);
+                    bool noviceMatches = isNovice == expectsNovice;
+                    return condition.Operator == SoldierFilterOperator.NotEquals
+                        ? !noviceMatches
+                        : noviceMatches;
+
+                case SoldierFilterField.MedicalAptitude:
+                case SoldierFilterField.TechnicalAptitude:
+                    return MatchesAptitude(soldier, condition);
+
                 case SoldierFilterField.TimeInService:
                 case SoldierFilterField.TimeInRank:
                 case SoldierFilterField.TimeInSquad:
@@ -172,7 +188,9 @@ namespace OnlyWar.Helpers
             }
 
             // "Has" means "at least this tier": a Gold award satisfies a Silver threshold..
-            return award.Level >= level.Value;
+            // Legacy/type-only values mean any tier of that honor; tiered values apply
+            // the normal "at least" comparison.
+            return !level.HasValue || award.Level >= level.Value;
         }
 
         private static bool MatchesDuration(ISoldier soldier, SoldierFilterCondition condition, Date currentDate)
@@ -201,6 +219,29 @@ namespace OnlyWar.Helpers
             return condition.Operator == SoldierFilterOperator.AtMost
                 ? weeks <= condition.ThresholdWeeks
                 : weeks >= condition.ThresholdWeeks;
+        }
+
+        private static bool MatchesAptitude(ISoldier soldier, SoldierFilterCondition condition)
+        {
+            if (soldier is not PlayerSoldier player)
+            {
+                return false;
+            }
+
+            SoldierEvaluation latest = player.SoldierEvaluationHistory
+                .OrderByDescending(evaluation => evaluation.EvaluationDate)
+                .FirstOrDefault();
+            if (latest == null)
+            {
+                return false;
+            }
+
+            float aptitude = condition.Field == SoldierFilterField.MedicalAptitude
+                ? latest[RatingKeys.Medical]
+                : latest[RatingKeys.Tech];
+            return condition.Operator == SoldierFilterOperator.AtMost
+                ? aptitude <= condition.NumberValue
+                : aptitude >= condition.NumberValue;
         }
 
         private readonly record struct RoleRank(byte Rank, byte Subrank)

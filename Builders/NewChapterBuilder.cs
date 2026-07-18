@@ -24,6 +24,12 @@ namespace OnlyWar.Builders
         // each captained company, forming the chaplaincy's pool of aspirants.
         private const int RECLUSIUM_JUDICIAR_RESERVE = 2;
         private const int DEFAULT_FOUNDING_SOLDIER_COUNT = 1000;
+        private const int MAX_TECHMARINES = 50;
+        // A company only staffs its HQ if at least one line squad can be seeded from the
+        // remaining pool: this many sergeants and members of a matching squad type.
+        // Tuning knobs for how top-heavy a small company is allowed to found.
+        private const int MIN_SEED_SERGEANTS = 1;
+        private const int MIN_SEED_MEMBERS = 4;
         private delegate void TrainingFunction(PlayerSoldier playerSoldier);
 
         internal static PlayerForce CreateChapter(GameRulesData data,
@@ -126,39 +132,349 @@ namespace OnlyWar.Builders
                                                   Dictionary<int, PlayerSoldier> unassignedSoldierMap,
                                                   Unit oob, ChapterGenerationTemplates templates)
         {
-            // first, assign the Librarians
+            // Rank every non-psyker for every founding role up front (score → derive
+            // demand → consume; Design/FoundingRoleAssignment.md). Each list is consumed
+            // best-first; a soldier taken for one role is skipped by every other list.
+            RoleSuitabilityService suitability = new(unassignedSoldierMap.Values.ToList());
+            Dictionary<FoundingRole, List<PlayerSoldier>> roleLists =
+                Enum.GetValues<FoundingRole>()
+                    .ToDictionary(role => role, suitability.CreateCandidateList);
+
+            // Psykers are categorically Librarius material and appear in no role list.
             AssignLibrarians(unassignedSoldierMap, oob, year, templates);
-            // then, assign up to the top 50 as Techmarines
-            AssignTechMarines(unassignedSoldierMap, oob, year, templates);
-            // then, assign the top leader as Chapter Master
-            AssignChapterMaster(unassignedSoldierMap, oob, year, templates);
-            // then, assign Captains
-            AssignCaptains(unassignedSoldierMap, oob, year, templates);
-            // then, assign an apothecary to each captained company, the rest to the Apothecarion
-            AssignApothecaries(unassignedSoldierMap, oob, year, templates);
-            // then, assign twenty Chaplains
-            AssignChaplains(unassignedSoldierMap, oob, year, templates);
-            // tactical-baseline marines with an Adamantium-level combat spike are assigned to the first company
-            AssignVeterans(unassignedSoldierMap, oob, year, templates);
+            AssignTechMarines(unassignedSoldierMap, oob, year, templates, roleLists);
+            AssignChapterHQ(unassignedSoldierMap, oob, year, templates, roleLists);
+            AssignApothecarionLeader(unassignedSoldierMap, oob, year, templates, roleLists);
+            AssignReclusiumLeaders(unassignedSoldierMap, oob, year, templates, roleLists);
 
-            // assign Champtions to the CM and each Company
-            List<PlayerSoldier> champions = unassignedSoldierMap.Values
-                                                .OrderByDescending(s => s.SoldierEvaluationHistory[0].MeleeRating)
-                                                .ToList();
-            SoldierTemplate championType = templates.Champion;
-            AssignSpecialistsToUnit(unassignedSoldierMap, oob, year, championType, champions);
+            // The Scout Company's captain is chosen before the battle companies' so the
+            // chapter's next generation trains under the best remaining leader.
+            Unit scoutCompany = oob.ChildUnits
+                .FirstOrDefault(u => u.UnitTemplate == templates.ScoutCompany);
+            if (scoutCompany != null
+                && unassignedSoldierMap.Count >= MIN_SEED_SERGEANTS + MIN_SEED_MEMBERS)
+            {
+                StaffCompanyHQ(unassignedSoldierMap, scoutCompany, year, templates, roleLists,
+                    isVeteranCompany: false);
+            }
 
-            // assign Ancients to the CM and each Company
-            List<PlayerSoldier> ancients = unassignedSoldierMap.Values
-                                               .OrderByDescending(s => s.SoldierEvaluationHistory[0].AncientRating)
-                                               .ToList();
-            SoldierTemplate ancientType = templates.Ancient;
-            AssignSpecialistsToUnit(unassignedSoldierMap, oob, year, ancientType, ancients);
+            PopulateCompanies(year, unassignedSoldierMap, oob, templates, roleLists);
 
-            // assign all other soldiers who got at least bronze in one skill, starting with the second company
-            AssignMarines(unassignedSoldierMap, oob, year, templates);
-            //Assign excess to scouts
+            // Remainder sweep: every unconsumed medical candidate staffs the Apothecarion...
+            Squad apothecarion = oob.Squads.First(s => s.SquadTemplate == templates.Apothecarion);
+            List<PlayerSoldier> apothecaries = roleLists[FoundingRole.Apothecary];
+            while (CountAvailable(unassignedSoldierMap, apothecaries) > 0)
+            {
+                AssignSoldier(unassignedSoldierMap, apothecaries, apothecarion,
+                    templates.Apothecary, year);
+            }
+            // ...and the Reclusium holds a small Judiciar reserve of chaplain aspirants.
+            Squad reclusium = oob.Squads.First(s => s.SquadTemplate == templates.Reclusium);
+            List<PlayerSoldier> chaplains = roleLists[FoundingRole.Chaplain];
+            for (int i = 0; i < RECLUSIUM_JUDICIAR_RESERVE
+                && CountAvailable(unassignedSoldierMap, chaplains) > 0; i++)
+            {
+                AssignSoldier(unassignedSoldierMap, chaplains, reclusium, templates.Judiciar, year);
+            }
+
+            // Everyone left becomes a scout.
             AssignExcessToScouts(unassignedSoldierMap, oob, year, templates);
+        }
+
+        // Companies are populated in order-of-battle order, so earlier companies draw
+        // better soldiers — a deliberate quality gradient. A company's HQ is staffed
+        // only when at least one line squad can be seeded; otherwise the company is
+        // skipped entirely and its (always-present) HQ squad founds empty, to be
+        // staffed later through the promotion/transfer flow like the First Company.
+        private static void PopulateCompanies(Date year,
+                                              Dictionary<int, PlayerSoldier> unassignedSoldierMap,
+                                              Unit chapter, ChapterGenerationTemplates templates,
+                                              Dictionary<FoundingRole, List<PlayerSoldier>> roleLists)
+        {
+            int veteranSquadSize = CalculateVeteranSquadSize(roleLists);
+            bool lineListsBalanced = false;
+
+            foreach (Unit company in chapter.ChildUnits)
+            {
+                // The scout company's HQ is staffed up front and its squads are filled
+                // by the excess-to-scouts sweep at the end.
+                if (company.UnitTemplate == templates.ScoutCompany)
+                {
+                    continue;
+                }
+
+                List<SlotAssignment> seedable = new();
+                foreach (SquadTemplateSlot slot in company.UnitTemplate.GetChildSquadSlots())
+                {
+                    if (slot.Template == templates.ScoutSquad)
+                    {
+                        continue;
+                    }
+                    bool isElite = (slot.Template.SquadType & SquadTypes.Elite) > 0;
+                    if (!isElite && !lineListsBalanced)
+                    {
+                        // Line lists are balanced only once the veteran company has
+                        // consumed its soldiers, mirroring the old veterans-before-
+                        // marines ordering.
+                        BalanceLineLists(unassignedSoldierMap, roleLists);
+                        lineListsBalanced = true;
+                    }
+                    SlotAssignment assignment =
+                        ResolveSlotAssignment(slot, templates, roleLists, veteranSquadSize);
+                    if (assignment == null)
+                    {
+                        continue;
+                    }
+                    if (CountAvailable(unassignedSoldierMap, assignment.SergeantList) >= MIN_SEED_SERGEANTS
+                        && CountAvailable(unassignedSoldierMap, assignment.MemberList) >= MIN_SEED_MEMBERS)
+                    {
+                        seedable.Add(assignment);
+                    }
+                }
+
+                if (seedable.Count == 0)
+                {
+                    continue;
+                }
+
+                StaffCompanyHQ(unassignedSoldierMap, company, year, templates, roleLists,
+                    isVeteranCompany: company.UnitTemplate == templates.VeteranCompany);
+                foreach (SlotAssignment assignment in seedable)
+                {
+                    FillCompanyWithSquads(unassignedSoldierMap, company, assignment.SquadTemplate,
+                        assignment.MemberList, assignment.SergeantList,
+                        assignment.MemberTemplate, assignment.SergeantTemplate,
+                        assignment.SquadSizeFunc, year);
+                }
+            }
+
+            SpillIntoVacantSeats(year, unassignedSoldierMap, chapter, templates, roleLists);
+        }
+
+        // Ports the old AssignMarines overflow cascades: surplus tactical candidates
+        // backfill vacant assault seats, then surplus assault (and tactical) candidates
+        // with serviceable ranged ratings backfill vacant devastator seats. Vacancies
+        // only, leftovers only — nobody already assigned is displaced.
+        private static void SpillIntoVacantSeats(Date year,
+                                                 Dictionary<int, PlayerSoldier> unassignedSoldierMap,
+                                                 Unit chapter, ChapterGenerationTemplates templates,
+                                                 Dictionary<FoundingRole, List<PlayerSoldier>> roleLists)
+        {
+            FillVacancies(year, unassignedSoldierMap, chapter, templates, roleLists,
+                templates.AssaultSquad, roleLists[FoundingRole.TacticalMarine],
+                roleLists[FoundingRole.AssaultSergeant], templates.AssaultMarine);
+
+            // The devastator spill pool is whoever is left from the assault and tactical
+            // pools with enough ranged skill to man a heavy weapon (the old ranged > 80
+            // gate), best shots first.
+            List<PlayerSoldier> devastatorSpill = roleLists[FoundingRole.AssaultMarine]
+                .Concat(roleLists[FoundingRole.TacticalMarine])
+                .Where(s => unassignedSoldierMap.ContainsKey(s.Id)
+                    && s.SoldierEvaluationHistory[0].RangedRating > 80)
+                .OrderByDescending(s => s.SoldierEvaluationHistory[0].RangedRating)
+                .ToList();
+            FillVacancies(year, unassignedSoldierMap, chapter, templates, roleLists,
+                templates.DevastatorSquad, devastatorSpill,
+                roleLists[FoundingRole.DevastatorSergeant], templates.DevastatorMarine);
+        }
+
+        private static void FillVacancies(Date year,
+                                          Dictionary<int, PlayerSoldier> unassignedSoldierMap,
+                                          Unit chapter, ChapterGenerationTemplates templates,
+                                          Dictionary<FoundingRole, List<PlayerSoldier>> roleLists,
+                                          SquadTemplate squadTemplate,
+                                          List<PlayerSoldier> memberList,
+                                          List<PlayerSoldier> sergeantList,
+                                          SoldierTemplate memberTemplate)
+        {
+            foreach (Unit company in chapter.ChildUnits)
+            {
+                if (company.UnitTemplate == templates.ScoutCompany)
+                {
+                    continue;
+                }
+                if (CountAvailable(unassignedSoldierMap, memberList) == 0)
+                {
+                    return;
+                }
+                int vacancies = GetSquadCap(company, squadTemplate)
+                    - company.Squads.Count(s => s.SquadTemplate == squadTemplate);
+                if (vacancies <= 0)
+                {
+                    continue;
+                }
+                // A company that gains its first line squad through spill deserves a
+                // staffed HQ. As in the main pass, the HQ is staffed before the squads
+                // fill so the captain is not consumed as a spill member first.
+                bool hasLineSquad = company.Squads.Any(s =>
+                    (s.SquadTemplate.SquadType & SquadTypes.HQ) == 0 && s.Members.Count > 0);
+                if (company.HQSquad != null && company.HQSquad.SquadLeader == null
+                    && (hasLineSquad
+                        || CountAvailable(unassignedSoldierMap, memberList) >= MIN_SEED_MEMBERS))
+                {
+                    StaffCompanyHQ(unassignedSoldierMap, company, year, templates, roleLists,
+                        isVeteranCompany: company.UnitTemplate == templates.VeteranCompany);
+                }
+                FillCompanyWithSquads(unassignedSoldierMap, company, squadTemplate,
+                    memberList, sergeantList, memberTemplate, templates.Sergeant,
+                    CalculateSquadSize, year);
+            }
+        }
+
+        // The lists and templates that fill one company squad slot.
+        private sealed class SlotAssignment
+        {
+            public SquadTemplate SquadTemplate;
+            public List<PlayerSoldier> MemberList;
+            public List<PlayerSoldier> SergeantList;
+            public SoldierTemplate MemberTemplate;
+            public SoldierTemplate SergeantTemplate;
+            public Func<List<PlayerSoldier>, List<PlayerSoldier>, int> SquadSizeFunc;
+        }
+
+        private static SlotAssignment ResolveSlotAssignment(SquadTemplateSlot slot,
+                                                            ChapterGenerationTemplates templates,
+                                                            Dictionary<FoundingRole, List<PlayerSoldier>> roleLists,
+                                                            int veteranSquadSize)
+        {
+            if ((slot.Template.SquadType & SquadTypes.Elite) > 0)
+            {
+                return new SlotAssignment
+                {
+                    SquadTemplate = slot.Template,
+                    MemberList = roleLists[FoundingRole.Veteran],
+                    SergeantList = roleLists[FoundingRole.VeteranSergeant],
+                    MemberTemplate = templates.Veteran,
+                    SergeantTemplate = templates.VeteranSergeant,
+                    SquadSizeFunc = (_, _) => veteranSquadSize
+                };
+            }
+            if (slot.Template == templates.TacticalSquad)
+            {
+                return LineSlot(slot, roleLists, FoundingRole.TacticalMarine,
+                    FoundingRole.TacticalSergeant, templates.TacticalMarine, templates.Sergeant);
+            }
+            if (slot.Template == templates.AssaultSquad)
+            {
+                return LineSlot(slot, roleLists, FoundingRole.AssaultMarine,
+                    FoundingRole.AssaultSergeant, templates.AssaultMarine, templates.Sergeant);
+            }
+            if (slot.Template == templates.DevastatorSquad)
+            {
+                return LineSlot(slot, roleLists, FoundingRole.DevastatorMarine,
+                    FoundingRole.DevastatorSergeant, templates.DevastatorMarine, templates.Sergeant);
+            }
+            return null;
+        }
+
+        private static SlotAssignment LineSlot(SquadTemplateSlot slot,
+                                               Dictionary<FoundingRole, List<PlayerSoldier>> roleLists,
+                                               FoundingRole memberRole, FoundingRole sergeantRole,
+                                               SoldierTemplate memberTemplate, SoldierTemplate sergeantTemplate)
+        {
+            return new SlotAssignment
+            {
+                SquadTemplate = slot.Template,
+                MemberList = roleLists[memberRole],
+                SergeantList = roleLists[sergeantRole],
+                MemberTemplate = memberTemplate,
+                SergeantTemplate = sergeantTemplate,
+                SquadSizeFunc = CalculateSquadSize
+            };
+        }
+
+        // Veteran squad size is derived from the founding cohort's veteran-to-sergeant
+        // ratio, clamped to 5..10, as before the role-list rework.
+        private static int CalculateVeteranSquadSize(Dictionary<FoundingRole, List<PlayerSoldier>> roleLists)
+        {
+            int veteranCount = roleLists[FoundingRole.Veteran].Count;
+            int sergeantCount = roleLists[FoundingRole.VeteranSergeant].Count;
+            if (sergeantCount == 0)
+            {
+                return 5;
+            }
+            int squadSize = (veteranCount / sergeantCount) + 1;
+            return Math.Clamp(squadSize, 5, 10);
+        }
+
+        private static void BalanceLineLists(Dictionary<int, PlayerSoldier> unassignedSoldierMap,
+                                             Dictionary<FoundingRole, List<PlayerSoldier>> roleLists)
+        {
+            // Prune already-assigned soldiers so the cohort ratios BalanceLists reasons
+            // about reflect who is actually still available.
+            CountAvailable(unassignedSoldierMap, roleLists[FoundingRole.TacticalMarine]);
+            CountAvailable(unassignedSoldierMap, roleLists[FoundingRole.TacticalSergeant]);
+            CountAvailable(unassignedSoldierMap, roleLists[FoundingRole.AssaultMarine]);
+            CountAvailable(unassignedSoldierMap, roleLists[FoundingRole.AssaultSergeant]);
+            CountAvailable(unassignedSoldierMap, roleLists[FoundingRole.DevastatorMarine]);
+            CountAvailable(unassignedSoldierMap, roleLists[FoundingRole.DevastatorSergeant]);
+            BalanceLists(roleLists[FoundingRole.AssaultMarine], roleLists[FoundingRole.DevastatorMarine],
+                roleLists[FoundingRole.TacticalMarine], roleLists[FoundingRole.AssaultSergeant],
+                roleLists[FoundingRole.DevastatorSergeant], roleLists[FoundingRole.TacticalSergeant]);
+        }
+
+        // Staffs a company HQ squad: the captain first (so he outranks his sergeants),
+        // then the support elements the HQ squad template defines. If no qualified
+        // captain is available the HQ is left entirely empty.
+        private static void StaffCompanyHQ(Dictionary<int, PlayerSoldier> unassignedSoldierMap,
+                                           Unit company, Date year,
+                                           ChapterGenerationTemplates templates,
+                                           Dictionary<FoundingRole, List<PlayerSoldier>> roleLists,
+                                           bool isVeteranCompany)
+        {
+            Squad hq = company.HQSquad;
+            if (hq == null || hq.SquadLeader != null)
+            {
+                return;
+            }
+            SquadTemplateElement leaderElement = hq.SquadTemplate.Elements
+                .FirstOrDefault(e => e.SoldierTemplate.IsSquadLeader);
+            if (leaderElement == null)
+            {
+                return;
+            }
+            List<PlayerSoldier> captains =
+                roleLists[isVeteranCompany ? FoundingRole.VeteranCaptain : FoundingRole.Captain];
+            if (!AssignSoldier(unassignedSoldierMap, captains, hq, leaderElement.SoldierTemplate, year))
+            {
+                return;
+            }
+            StaffHQSupport(unassignedSoldierMap, hq, year, templates, roleLists);
+        }
+
+        // Fills the non-leader elements of an HQ squad template (Chaplain, Judiciar,
+        // Apothecary, Champion, Ancient) from the matching role lists, up to each
+        // element's maximum. A Judiciar is the next-most-pious after the Chaplain, so
+        // both draw from the Chaplain list in element order.
+        private static void StaffHQSupport(Dictionary<int, PlayerSoldier> unassignedSoldierMap,
+                                           Squad hq, Date year,
+                                           ChapterGenerationTemplates templates,
+                                           Dictionary<FoundingRole, List<PlayerSoldier>> roleLists)
+        {
+            // minor hack to avoid assigning non-veteran champions/ancients to veteran HQ squads
+            bool isElite = (hq.SquadTemplate.SquadType & SquadTypes.Elite) > 0;
+            foreach (SquadTemplateElement element in hq.SquadTemplate.Elements
+                .Where(e => !e.SoldierTemplate.IsSquadLeader))
+            {
+                FoundingRole? role = null;
+                if (element.SoldierTemplate == templates.Chaplain) role = FoundingRole.Chaplain;
+                else if (element.SoldierTemplate == templates.Judiciar) role = FoundingRole.Chaplain;
+                else if (element.SoldierTemplate == templates.Apothecary) role = FoundingRole.Apothecary;
+                else if (element.SoldierTemplate == templates.Champion && !isElite) role = FoundingRole.Champion;
+                else if (element.SoldierTemplate == templates.Ancient && !isElite) role = FoundingRole.Ancient;
+                if (role == null)
+                {
+                    continue;
+                }
+                for (int i = 0; i < element.MaximumNumber; i++)
+                {
+                    if (!AssignSoldier(unassignedSoldierMap, roleLists[role.Value], hq,
+                        element.SoldierTemplate, year))
+                    {
+                        break;
+                    }
+                }
+            }
         }
 
         private static PlayerForce BuildChapterFromUnitTemplate(Faction faction, UnitTemplate rootTemplate, IEnumerable<PlayerSoldier> soldiers, string chapterName)
@@ -202,15 +518,20 @@ namespace OnlyWar.Builders
             }
         }
 
-        private static void AssignChapterMaster(Dictionary<int, PlayerSoldier> unassignedSoldierMap, 
-                                                Unit chapter, Date year, ChapterGenerationTemplates templates)
+        private static void AssignChapterHQ(Dictionary<int, PlayerSoldier> unassignedSoldierMap,
+                                            Unit chapter, Date year,
+                                            ChapterGenerationTemplates templates,
+                                            Dictionary<FoundingRole, List<PlayerSoldier>> roleLists)
         {
-            PlayerSoldier master = unassignedSoldierMap.Values.OrderByDescending(s => s.SoldierEvaluationHistory[0].LeadershipRating).First();
+            PlayerSoldier master =
+                TakeTop(unassignedSoldierMap, roleLists[FoundingRole.ChapterMaster]);
             master.Template = templates.ChapterMaster;
             chapter.HQSquad.AddSquadMember(master);
             master.AddEvent(new SoldierEvent(year, SoldierEventType.Founding,
                 "voted by the chapter to become the first Chapter Master"));
             unassignedSoldierMap.Remove(master.Id);
+            // The Chapter Champion and Chapter Ancient, per the HQ squad's elements.
+            StaffHQSupport(unassignedSoldierMap, chapter.HQSquad, year, templates, roleLists);
         }
 
         private static void AssignLibrarians(Dictionary<int, PlayerSoldier> unassignedSoldierMap, 
@@ -276,202 +597,77 @@ namespace OnlyWar.Builders
                 .Sum(e => (int)e.MaximumNumber);
         }
 
-        private static void AssignTechMarines(Dictionary<int, PlayerSoldier> unassignedSoldierMap, 
-                                              Unit chapter, Date year, ChapterGenerationTemplates templates)
+        private static void AssignTechMarines(Dictionary<int, PlayerSoldier> unassignedSoldierMap,
+                                              Unit chapter, Date year,
+                                              ChapterGenerationTemplates templates,
+                                              Dictionary<FoundingRole, List<PlayerSoldier>> roleLists)
         {
-            IEnumerable<PlayerSoldier> techMarines = 
-                unassignedSoldierMap.Values.Where(s => s.SoldierEvaluationHistory[0].TechRating > 75).OrderByDescending(s => s.SoldierEvaluationHistory[0].TechRating).Take(50);
             // assume for now that there's a single unit to hold all of the Techmarines
             Squad armory = chapter.Squads.First(s => s.SquadTemplate == templates.Armory);
-            foreach (PlayerSoldier soldier in techMarines)
+            int assigned = 0;
+            PlayerSoldier master =
+                TakeTop(unassignedSoldierMap, roleLists[FoundingRole.MasterOfTheForge]);
+            if (master != null)
             {
-                if (armory.SquadLeader == null && soldier.SoldierEvaluationHistory[0].TechRating > 100 && soldier.SoldierEvaluationHistory[0].LeadershipRating > 60)
+                AssignTechMarine(unassignedSoldierMap, armory, master, templates.MasterOfTheForge, year);
+                assigned++;
+            }
+            List<PlayerSoldier> techmarines = roleLists[FoundingRole.Techmarine];
+            while (assigned < MAX_TECHMARINES)
+            {
+                PlayerSoldier techmarine = TakeTop(unassignedSoldierMap, techmarines);
+                if (techmarine == null)
                 {
-                    soldier.Template = templates.MasterOfTheForge;
+                    break;
                 }
-                else
-                {
-                    soldier.Template = templates.Techmarine;
-                }
-                armory.AddSquadMember(soldier);
-                soldier.AddEvent(new SoldierEvent(year, SoldierEventType.Promotion,
-                    "Returned from Mars, promoted to "
-                    + soldier.Template.Name + " and assigned to " + soldier.AssignedSquad.Name));
-                unassignedSoldierMap.Remove(soldier.Id);
+                AssignTechMarine(unassignedSoldierMap, armory, techmarine, templates.Techmarine, year);
+                assigned++;
             }
         }
 
-        private static void AssignApothecaries(Dictionary<int, PlayerSoldier> unassignedSoldierMap, 
-                                               Unit chapter, Date year, ChapterGenerationTemplates templates)
+        private static void AssignTechMarine(Dictionary<int, PlayerSoldier> unassignedSoldierMap,
+                                             Squad armory, PlayerSoldier soldier,
+                                             SoldierTemplate template, Date year)
         {
-            List<PlayerSoldier> apothecaries = unassignedSoldierMap.Values
-                                                   .Where(s => s.SoldierEvaluationHistory[0].MedicalRating > 95)
-                                                   .OrderByDescending(s => s.SoldierEvaluationHistory[0].MedicalRating)
-                                                   .ToList();
-            // The Apothecarion is the chapter's home for the medical corps: it holds the
-            // Master of the Apothecarion and any apothecaries beyond the one seconded to
-            // each company.
+            soldier.Template = template;
+            armory.AddSquadMember(soldier);
+            soldier.AddEvent(new SoldierEvent(year, SoldierEventType.Promotion,
+                "Returned from Mars, promoted to "
+                + soldier.Template.Name + " and assigned to " + soldier.AssignedSquad.Name));
+            unassignedSoldierMap.Remove(soldier.Id);
+        }
+
+        // The most skilled initiate leads the Apothecarion as Master of the
+        // Apothecarion, if he is also a capable leader; otherwise the chapter founds
+        // without one for now. Company apothecaries are seconded when each company's
+        // HQ is staffed; the remaining medical candidates return to the Apothecarion
+        // in the remainder sweep.
+        private static void AssignApothecarionLeader(Dictionary<int, PlayerSoldier> unassignedSoldierMap,
+                                                     Unit chapter, Date year,
+                                                     ChapterGenerationTemplates templates,
+                                                     Dictionary<FoundingRole, List<PlayerSoldier>> roleLists)
+        {
             Squad apo = chapter.Squads.First(s => s.SquadTemplate == templates.Apothecarion);
-
-            // The most skilled initiate leads the Apothecarion as Master of the
-            // Apothecarion, if he is also a capable leader; otherwise the chapter founds
-            // without one for now.
-            if (apothecaries.Count > 0
-                && apothecaries[0].SoldierEvaluationHistory[0].MedicalRating > 115
-                && apothecaries[0].SoldierEvaluationHistory[0].LeadershipRating > 60)
-            {
-                AssignSoldier(unassignedSoldierMap, apothecaries, apo, templates.MasterOfTheApothecarion, year);
-            }
-
-            // An Apothecary is seconded to each captained company's HQ, mirroring the
-            // Chaplaincy; a company left without a Captain gets none.
-            List<Squad> captainedHQs = chapter.ChildUnits
-                .Select(company => company.HQSquad)
-                .Where(hq => hq != null && hq.SquadLeader != null)
-                .ToList();
-            foreach (Squad companyHQ in captainedHQs)
-            {
-                if (apothecaries.Count == 0) break;
-                AssignSoldier(unassignedSoldierMap, apothecaries, companyHQ, templates.Apothecary, year);
-            }
-
-            // The remainder stay in the Apothecarion.
-            while (apothecaries.Count > 0)
-            {
-                AssignSoldier(unassignedSoldierMap, apothecaries, apo, templates.Apothecary, year);
-            }
+            AssignSoldier(unassignedSoldierMap, roleLists[FoundingRole.MasterOfTheApothecarion],
+                apo, templates.MasterOfTheApothecarion, year);
         }
 
-        private static void AssignChaplains(Dictionary<int, PlayerSoldier> unassignedSoldierMap,
-                                            Unit chapter, Date year, ChapterGenerationTemplates templates)
+        // The Reclusium is the chaplaincy's home: it holds the Master of Sanctity, the
+        // Reclusiarch, and a reserve of Judiciars (chaplains in training) beyond the one
+        // seconded to each company. The most pious qualified initiate leads the
+        // chaplaincy as Master of Sanctity; if no one qualifies, the chapter founds
+        // without one for now. The next-most pious becomes the Reclusiarch. Company
+        // chaplains and judiciars are seconded when each company's HQ is staffed.
+        private static void AssignReclusiumLeaders(Dictionary<int, PlayerSoldier> unassignedSoldierMap,
+                                                   Unit chapter, Date year,
+                                                   ChapterGenerationTemplates templates,
+                                                   Dictionary<FoundingRole, List<PlayerSoldier>> roleLists)
         {
-            List<PlayerSoldier> chaplains = unassignedSoldierMap.Values.Where(s => s.SoldierEvaluationHistory[0].PietyRating > 50)
-                                                    .OrderByDescending(s => s.SoldierEvaluationHistory[0].PietyRating)
-                                                    .ToList();
-            // The Reclusium is the chaplaincy's home: it holds the Master of Sanctity, the
-            // Reclusiarch, and a reserve of Judiciars (chaplains in training) beyond the one
-            // seconded to each company.
             Squad reclusium = chapter.Squads.First(s => s.SquadTemplate == templates.Reclusium);
-
-            // The most pious initiate leads the chaplaincy as Master of Sanctity, if he is
-            // also a capable leader; otherwise the chapter founds without one for now.
-            if (chaplains.Count > 0
-                && chaplains[0].SoldierEvaluationHistory[0].PietyRating > 65
-                && chaplains[0].SoldierEvaluationHistory[0].LeadershipRating > 60)
-            {
-                AssignSoldier(unassignedSoldierMap, chaplains, reclusium, templates.MasterOfSanctity, year);
-            }
-            // The next-most pious becomes the Reclusiarch, the Master of Sanctity's second.
-            if (chaplains.Count > 0)
-            {
-                AssignSoldier(unassignedSoldierMap, chaplains, reclusium, templates.Reclusiarch, year);
-            }
-
-            // A company only has an HQ once it has a Captain, so a Chaplain and his Judiciar
-            // understudy are seconded to each captained company; a company left without a
-            // Captain (e.g. an under-strength First Company) gets neither.
-            List<Squad> captainedHQs = chapter.ChildUnits
-                .Select(company => company.HQSquad)
-                .Where(hq => hq != null && hq.SquadLeader != null)
-                .ToList();
-            foreach (Squad companyHQ in captainedHQs)
-            {
-                if (chaplains.Count == 0) break;
-                AssignSoldier(unassignedSoldierMap, chaplains, companyHQ, templates.Chaplain, year);
-            }
-            foreach (Squad companyHQ in captainedHQs)
-            {
-                if (chaplains.Count == 0) break;
-                AssignSoldier(unassignedSoldierMap, chaplains, companyHQ, templates.Judiciar, year);
-            }
-
-            // Only Judiciars beyond the company slots are kept back in the Reclusium, as the
-            // chaplaincy's pool of aspirants.
-            for (int i = 0; i < RECLUSIUM_JUDICIAR_RESERVE && chaplains.Count > 0; i++)
-            {
-                AssignSoldier(unassignedSoldierMap, chaplains, reclusium, templates.Judiciar, year);
-            }
-        }
-
-        private static void AssignCaptains(Dictionary<int, PlayerSoldier> unassignedSoldierMap, 
-                                           Unit chapter, Date year, ChapterGenerationTemplates templates)
-        {
-            // see if there is an impressive enough leader to be the Veteran Captain
-            List<PlayerSoldier> veteranLeaders = 
-                unassignedSoldierMap.Values
-                                    .Where(s => s.SoldierEvaluationHistory[0].LeadershipRating > 75 && s.SoldierEvaluationHistory[0].MeleeRating > 105 && s.SoldierEvaluationHistory[0].RangedRating > 110)
-                                    .OrderByDescending(s => s.SoldierEvaluationHistory[0].LeadershipRating)
-                                    .ToList();
-            if (veteranLeaders.Count > 0)
-            {
-                Unit firstCompany = chapter.ChildUnits.First(u => u.UnitTemplate == templates.VeteranCompany);
-                AssignSoldier(unassignedSoldierMap, veteranLeaders, firstCompany.HQSquad,
-                    templates.Captain, year);
-            }
-            List<PlayerSoldier> leaders = unassignedSoldierMap.Values.OrderByDescending(s => s.SoldierEvaluationHistory[0].LeadershipRating).Take(20).ToList();
-            // assign the Scout Company's Captain next (assuming Tenth Company for now)
-            Unit tenthCompany = chapter.ChildUnits.First(u => u.UnitTemplate == templates.ScoutCompany);
-            AssignSoldier(unassignedSoldierMap, leaders, tenthCompany.HQSquad,
-                templates.Captain, year);
-
-            foreach (Unit company in chapter.ChildUnits)
-            {
-                if (company.HQSquad.SquadLeader == null && company.UnitTemplate != templates.VeteranCompany)
-                {
-                    // is a true company, needs a captain
-                    AssignSoldier(unassignedSoldierMap, leaders, company.HQSquad,
-                        templates.Captain, year);
-                }
-            }
-        }
-    
-        private static void AssignVeterans(Dictionary<int, PlayerSoldier> unassignedSoldierMap, 
-                                           Unit chapter, Date year, ChapterGenerationTemplates templates)
-        {
-            IEnumerable<PlayerSoldier> veterans = unassignedSoldierMap.Values.Where(IsVeteranCandidate);
-            List<PlayerSoldier> veteranLeaders = veterans.Where(IsVeteranSergeantCandidate).OrderByDescending(s => s.SoldierEvaluationHistory[0].LeadershipRating).ToList();
-            // if there are no veteran sgts, leave First Company empty for now
-            if (veteranLeaders.Count == 0) return;
-            List<PlayerSoldier> vetList = veterans.Except(veteranLeaders).OrderByDescending(s => s.SoldierEvaluationHistory[0].MeleeRating).ToList();
-            int squadSize = (vetList.Count / veteranLeaders.Count) + 1;
-            if(squadSize < 5)
-            {
-                // set squad size to five, and we'll use the other veteran sgts elsewhere
-                squadSize = 5;
-            }
-            if(squadSize > 10)
-            {
-                // set squad size to ten, and we'll use the other veterans elsewhere
-                squadSize = 10;
-            }
-
-            // Create veteran (Elite) squads on demand in any company whose template
-            // allows them, up to that company's cap.
-            foreach (Unit company in chapter.ChildUnits)
-            {
-                foreach (SquadTemplateSlot slot in company.UnitTemplate.GetChildSquadSlots())
-                {
-                    if ((slot.Template.SquadType & SquadTypes.Elite) > 0)
-                    {
-                        FillCompanyWithSquads(unassignedSoldierMap, company, slot.Template,
-                            vetList, veteranLeaders, templates.Veteran, templates.VeteranSergeant,
-                            (_, _) => squadSize, year);
-                    }
-                }
-            }
-        }
-
-        private static bool IsVeteranCandidate(PlayerSoldier soldier)
-        {
-            SoldierEvaluation evaluation = soldier.SoldierEvaluationHistory[0];
-            bool tacticalBaseline = evaluation.MeleeRating > 90 && evaluation.RangedRating > 105;
-            bool adamantiumCombatSpike = evaluation.MeleeRating > 115 || evaluation.RangedRating > 120;
-            return tacticalBaseline && adamantiumCombatSpike;
-        }
-
-        private static bool IsVeteranSergeantCandidate(PlayerSoldier soldier)
-        {
-            return IsVeteranCandidate(soldier) && soldier.SoldierEvaluationHistory[0].LeadershipRating > 60;
+            AssignSoldier(unassignedSoldierMap, roleLists[FoundingRole.MasterOfSanctity],
+                reclusium, templates.MasterOfSanctity, year);
+            AssignSoldier(unassignedSoldierMap, roleLists[FoundingRole.Chaplain],
+                reclusium, templates.Reclusiarch, year);
         }
 
         // Capacity of a company for a given squad template, per its unit template's
@@ -505,8 +701,12 @@ namespace OnlyWar.Builders
             Date year)
         {
             int cap = GetSquadCap(company, squadTemplate);
-            int created = 0;
-            while (created < cap && (soldierList.Count > 0 || sgtList.Count > 0))
+            // Count squads of this template the company already holds (e.g. from the
+            // main pass, when this is a spill pass) so the cap is never exceeded.
+            int created = company.Squads.Count(s => s.SquadTemplate == squadTemplate);
+            while (created < cap
+                && (CountAvailable(unassignedSoldierMap, soldierList) > 0
+                    || CountAvailable(unassignedSoldierMap, sgtList) > 0))
             {
                 Squad squad = new Squad(squadTemplate.Name, company, squadTemplate);
                 company.AddSquad(squad);
@@ -516,9 +716,9 @@ namespace OnlyWar.Builders
                     AssignSoldier(unassignedSoldierMap, sgtList, squad, sgtType, year);
                 }
                 int squadSize = squadSizeFunc(soldierList, sgtList);
-                while (soldierList.Count > 0 && squad.Members.Count < squadSize)
+                while (squad.Members.Count < squadSize
+                    && AssignSoldier(unassignedSoldierMap, soldierList, squad, soldierType, year))
                 {
-                    AssignSoldier(unassignedSoldierMap, soldierList, squad, soldierType, year);
                 }
                 if (squad.Members.Count == 0)
                 {
@@ -574,156 +774,6 @@ namespace OnlyWar.Builders
             if (unassignedSoldierMap.Count > 0) Debug.WriteLine("Still did it wrong");
         }
 
-        private static void AssignSpecialistsToUnit(Dictionary<int, PlayerSoldier> unassignedSoldierMap,
-                                             Unit chapter,
-                                             Date year,
-                                             SoldierTemplate specialistType,
-                                             List<PlayerSoldier> sortedCandidates)
-        {
-            // Note: Unit.Squads already includes the HQ squad (HQSquad is just a
-            // computed lookup into the same list), so iterating Squads covers it.
-            // Don't process HQSquad separately or specialists get assigned twice.
-            foreach (Squad squad in chapter.Squads)
-            {
-                AssignSpecialistsToSquad(unassignedSoldierMap, squad, year,
-                                         specialistType, sortedCandidates);
-            }
-            foreach (Unit company in chapter.ChildUnits)
-            {
-                foreach (Squad squad in company.Squads)
-                {
-                    AssignSpecialistsToSquad(unassignedSoldierMap, squad, year,
-                                             specialistType, sortedCandidates);
-                }
-            }
-        }
-
-        private static void AssignSpecialistsToSquad(Dictionary<int, PlayerSoldier> unassignedSoldierMap,
-                                                     Squad squad,
-                                                     Date year,
-                                                     SoldierTemplate specialistType,
-                                                     List<PlayerSoldier> sortedCandidates)
-        {
-            // minor hack to avoid assigning non-veteran specialists to veteran HQ squads
-            if (squad == null 
-                || sortedCandidates.Count == 0 
-                || (squad.SquadTemplate.SquadType & SquadTypes.Elite) > 0) return;
-            IEnumerable<SquadTemplateElement> elements = squad.SquadTemplate.Elements
-                .Where(e => e.SoldierTemplate == specialistType);
-            foreach (SquadTemplateElement element in elements)
-            {
-                if (sortedCandidates.Count == 0) return;
-                for (int i = 0; i < element.MinimumNumber; i++)
-                {
-                    if (sortedCandidates.Count == 0) return;
-                    // assign top to HQ
-                    AssignSoldier(unassignedSoldierMap, sortedCandidates, squad,
-                        specialistType, year);
-                }
-            }
-        }
-
-        private static void AssignMarines(Dictionary<int, PlayerSoldier> unassignedSoldierMap, 
-                                          Unit chapter, Date year, ChapterGenerationTemplates templates)
-        {
-            List<PlayerSoldier> devList = unassignedSoldierMap.Values.Where(s => s.SoldierEvaluationHistory[0].MeleeRating > 80 
-                                                              && s.SoldierEvaluationHistory[0].MeleeRating < 90
-                                                              && s.SoldierEvaluationHistory[0].RangedRating > 95
-                                                              && s.SoldierEvaluationHistory[0].LeadershipRating < 50)
-                                                     .OrderByDescending(s => s.SoldierEvaluationHistory[0].RangedRating)
-                                                     .ToList();
-
-            List<PlayerSoldier> assList = unassignedSoldierMap.Values.Where(s => s.SoldierEvaluationHistory[0].MeleeRating > 90 
-                                                              && s.SoldierEvaluationHistory[0].RangedRating > 95
-                                                              && s.SoldierEvaluationHistory[0].RangedRating < 105
-                                                              && s.SoldierEvaluationHistory[0].LeadershipRating < 50)
-                                                     .OrderByDescending(s => s.SoldierEvaluationHistory[0].MeleeRating)
-                                                     .ToList();
-            
-            List<PlayerSoldier> tactList = unassignedSoldierMap.Values.Where(s => s.SoldierEvaluationHistory[0].MeleeRating > 90
-                                                               && s.SoldierEvaluationHistory[0].RangedRating > 105 
-                                                               && s.SoldierEvaluationHistory[0].LeadershipRating < 50)
-                                                      .ToList();
-            
-            List<PlayerSoldier> devSgtList = unassignedSoldierMap.Values.Where(s => s.SoldierEvaluationHistory[0].MeleeRating > 80
-                                                                 && s.SoldierEvaluationHistory[0].MeleeRating < 90
-                                                                 && s.SoldierEvaluationHistory[0].RangedRating > 95
-                                                                 && s.SoldierEvaluationHistory[0].LeadershipRating > 50)
-                                                        .OrderByDescending(s => s.SoldierEvaluationHistory[0].LeadershipRating)
-                                                        .ToList();
-            
-            List<PlayerSoldier> assSgtList = unassignedSoldierMap.Values.Where(s => s.SoldierEvaluationHistory[0].MeleeRating > 90
-                                                                 && s.SoldierEvaluationHistory[0].RangedRating > 95
-                                                                 && s.SoldierEvaluationHistory[0].RangedRating < 105
-                                                                 && s.SoldierEvaluationHistory[0].LeadershipRating > 50)
-                                                        .OrderByDescending(s => s.SoldierEvaluationHistory[0].LeadershipRating)
-                                                        .ToList();
-            
-            List<PlayerSoldier> tactSgtList = unassignedSoldierMap.Values.Where(s => s.SoldierEvaluationHistory[0].MeleeRating > 90 
-                                                                  && s.SoldierEvaluationHistory[0].RangedRating > 105 
-                                                                  && s.SoldierEvaluationHistory[0].LeadershipRating > 50)
-                                                         .OrderByDescending(s => s.SoldierEvaluationHistory[0].LeadershipRating)
-                                                         .ToList();
-
-            BalanceLists(assList, devList, tactList, assSgtList, devSgtList, tactSgtList);
-            AssignTacticalMarines(unassignedSoldierMap, chapter, year, templates, tactList, tactSgtList);
-            assList.AddRange(tactList);
-            AssignAssaultMarines(unassignedSoldierMap, chapter, year, templates, assList, assSgtList);
-            if (assList.Count > 0)
-            {
-                devList.AddRange(assList.Where(a => a.SoldierEvaluationHistory[0].RangedRating > 80));
-                devList = devList.OrderByDescending(s => s.SoldierEvaluationHistory[0].RangedRating).ToList();
-            }
-            AssignDevastatorMarines(unassignedSoldierMap, chapter, year, templates, devList, devSgtList);
-        }
-
-        private static void AssignDevastatorMarines(Dictionary<int, PlayerSoldier> unassignedSoldierMap, 
-                                                    Unit chapter, Date year, ChapterGenerationTemplates templates,
-                                                    List<PlayerSoldier> devList, 
-                                                    List<PlayerSoldier> devSgtList)
-        {
-            // since Devastators are assigned last, make sure the dev to sgt list is reasonable
-            while (devSgtList.Count() * 9 >= devList.Count())
-            {
-                // turn the last Sgt into a dev
-                PlayerSoldier demote = devSgtList[devSgtList.Count - 1];
-                devList.Add(demote);
-                devSgtList.Remove(demote);
-            }
-            foreach (Unit company in chapter.ChildUnits)
-            {
-                FillCompanyWithSquads(unassignedSoldierMap, company, templates.DevastatorSquad,
-                    devList, devSgtList, templates.DevastatorMarine, templates.Sergeant,
-                    CalculateSquadSize, year);
-            }
-        }
-
-        private static void AssignAssaultMarines(Dictionary<int, PlayerSoldier> unassignedSoldierMap, 
-                                                 Unit chapter, Date year, ChapterGenerationTemplates templates,
-                                                 List<PlayerSoldier> assList, 
-                                                 List<PlayerSoldier> assSgtList)
-        {
-            foreach (Unit company in chapter.ChildUnits)
-            {
-                FillCompanyWithSquads(unassignedSoldierMap, company, templates.AssaultSquad,
-                    assList, assSgtList, templates.AssaultMarine, templates.Sergeant,
-                    CalculateSquadSize, year);
-            }
-        }
-
-        private static void AssignTacticalMarines(Dictionary<int, PlayerSoldier> unassignedSoldierMap, 
-                                                  Unit chapter, Date year, ChapterGenerationTemplates templates,
-                                                  List<PlayerSoldier> tactList, 
-                                                  List<PlayerSoldier> tactSgtList)
-        {
-            foreach (Unit company in chapter.ChildUnits)
-            {
-                FillCompanyWithSquads(unassignedSoldierMap, company, templates.TacticalSquad,
-                    tactList, tactSgtList, templates.TacticalMarine, templates.Sergeant,
-                    CalculateSquadSize, year);
-            }
-        }
-
         private static int CalculateSquadSize(List<PlayerSoldier> soldierList, List<PlayerSoldier> sgtList)
         {
             if ((soldierList.Count - 9) >= (sgtList.Count * 4))
@@ -740,13 +790,21 @@ namespace OnlyWar.Builders
             }
         }
 
-        private static void AssignSoldier(Dictionary<int, PlayerSoldier> unassignedSoldierMap, 
-                                                   List<PlayerSoldier> soldierList, 
-                                                   Squad squad, 
-                                                   SoldierTemplate type, 
+        // Takes the best still-unassigned soldier from a candidate list and assigns
+        // him. Candidate lists overlap (one soldier ranks for many roles), so soldiers
+        // consumed elsewhere are skipped and dropped as they are encountered. Returns
+        // false when the list has no available soldier left.
+        private static bool AssignSoldier(Dictionary<int, PlayerSoldier> unassignedSoldierMap,
+                                                   List<PlayerSoldier> soldierList,
+                                                   Squad squad,
+                                                   SoldierTemplate type,
                                                    Date year)
         {
-            PlayerSoldier soldier = soldierList[0];
+            PlayerSoldier soldier = TakeTop(unassignedSoldierMap, soldierList);
+            if (soldier == null)
+            {
+                return false;
+            }
             soldier.Template = type;
             squad.AddSquadMember(soldier);
             soldier.AddEvent(new SoldierEvent(year, SoldierEventType.Promotion,
@@ -754,7 +812,35 @@ namespace OnlyWar.Builders
                 + " and assigned to " + soldier.AssignedSquad.Name
                 + ", " + soldier.AssignedSquad.ParentUnit.Name));
             unassignedSoldierMap.Remove(soldier.Id);
+            return true;
+        }
+
+        // Pops the best available (still-unassigned) soldier from a candidate list,
+        // or null if none remain. Does not remove him from the unassigned map; the
+        // caller assigns him and removes him.
+        private static PlayerSoldier TakeTop(Dictionary<int, PlayerSoldier> unassignedSoldierMap,
+                                             List<PlayerSoldier> soldierList)
+        {
+            while (soldierList.Count > 0 && !unassignedSoldierMap.ContainsKey(soldierList[0].Id))
+            {
+                soldierList.RemoveAt(0);
+            }
+            if (soldierList.Count == 0)
+            {
+                return null;
+            }
+            PlayerSoldier soldier = soldierList[0];
             soldierList.RemoveAt(0);
+            return soldier;
+        }
+
+        // Prunes soldiers assigned through other role lists, then reports how many
+        // candidates remain available.
+        private static int CountAvailable(Dictionary<int, PlayerSoldier> unassignedSoldierMap,
+                                          List<PlayerSoldier> soldierList)
+        {
+            soldierList.RemoveAll(s => !unassignedSoldierMap.ContainsKey(s.Id));
+            return soldierList.Count;
         }
 
         private static void BalanceLists(List<PlayerSoldier> assList, List<PlayerSoldier> devList, List<PlayerSoldier> tactList, 

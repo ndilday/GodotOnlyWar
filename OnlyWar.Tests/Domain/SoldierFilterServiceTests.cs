@@ -188,6 +188,43 @@ public class SoldierFilterServiceTests
     }
 
     [Fact]
+    public void Apply_Novice_FiltersBySpecialistTrainingFlag()
+    {
+        Squad squad = CreateSquad();
+        PlayerSoldier novice = BuildVeteran(squad);
+        PlayerSoldier other = BuildRecruit(squad);
+        novice.AddEvent(new SoldierEvent(new Date(41, 999, 1), SoldierEventType.RatingFlag,
+            "Awarded Devout badge and declared a Novice"));
+
+        var novices = _service.Apply([novice, other],
+            [Condition(SoldierFilterField.Novice, SoldierFilterOperator.Equals, text: "Yes")], CurrentDate);
+        var nonNovices = _service.Apply([novice, other],
+            [Condition(SoldierFilterField.Novice, SoldierFilterOperator.Equals, text: "No")], CurrentDate);
+
+        Assert.Equal([novice], novices);
+        Assert.Equal([other], nonNovices);
+    }
+
+    [Fact]
+    public void Apply_SpecialistAptitudes_UseLatestEvaluation()
+    {
+        Squad squad = CreateSquad();
+        PlayerSoldier medic = BuildVeteran(squad);
+        PlayerSoldier tech = BuildRecruit(squad);
+        medic.AddEvaluation(Evaluation(new Date(41, 998, 1), medical: 70, technical: 120));
+        medic.AddEvaluation(Evaluation(new Date(41, 999, 1), medical: 125, technical: 75));
+        tech.AddEvaluation(Evaluation(new Date(41, 999, 1), medical: 80, technical: 110));
+
+        var medicalCandidates = _service.Apply([medic, tech],
+            [Condition(SoldierFilterField.MedicalAptitude, SoldierFilterOperator.AtLeast, number: 100)], CurrentDate);
+        var technicalCandidates = _service.Apply([medic, tech],
+            [Condition(SoldierFilterField.TechnicalAptitude, SoldierFilterOperator.AtLeast, number: 100)], CurrentDate);
+
+        Assert.Equal([medic], medicalCandidates);
+        Assert.Equal([tech], technicalCandidates);
+    }
+
+    [Fact]
     public void Apply_MultipleConditions_AreAndedTogether()
     {
         Squad squad = CreateSquad();
@@ -278,6 +315,15 @@ public class SoldierFilterServiceTests
             NumberValue = number,
             Unit = unit
         };
+    }
+
+    private static SoldierEvaluation Evaluation(Date date, float medical, float technical)
+    {
+        return new SoldierEvaluation(date, new Dictionary<string, float>
+        {
+            [RatingKeys.Medical] = medical,
+            [RatingKeys.Tech] = technical
+        });
     }
 
     private static Squad CreateSquad()

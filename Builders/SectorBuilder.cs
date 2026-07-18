@@ -69,7 +69,7 @@ namespace OnlyWar.Builders
         public static void GenerateWarpNetwork(Sector sector, GameRulesData data)
         {
             Godot.Vector2I gridDimensions = new(data.SectorSize.X, data.SectorSize.Y);
-            List<Subsector> subsectors = SubsectorBuilder.BuildSubsectors(sector.Planets.Values, gridDimensions);
+            List<Subsector> subsectors = SubsectorBuilder.BuildSubsectors(sector.Planets.Values, gridDimensions, data.MaxSubsectorCellDiameter);
             List<WarpLane> warpLanes = WarpLaneBuilder.BuildWarpLanes(subsectors, data.MaxSubsectorCellDiameter * 2.5);
             sector.InitializeWarpNetwork(subsectors, warpLanes);
             AssignGovernance(sector);

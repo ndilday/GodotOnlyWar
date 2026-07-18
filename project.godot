@@ -16,9 +16,9 @@ compatibility/default_parent_skeleton_in_mesh_instance_3d=true
 
 config/name="Only War"
 config/version="Alpha 0.7.1"
+run/main_scene="uid://b5sny34jdvj4p"
 config/use_custom_user_dir=true
 config/custom_user_dir_name="OnlyWar"
-run/main_scene="uid://b5sny34jdvj4p"
 config/features=PackedStringArray("4.7", "C#", "GL Compatibility")
 run/max_fps=60
 run/low_processor_mode=true
