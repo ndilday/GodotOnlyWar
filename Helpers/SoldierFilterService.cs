@@ -55,9 +55,9 @@ namespace OnlyWar.Helpers
             IReadOnlyList<RatingAwardTier> awardTiers = null)
         {
             Dictionary<(string Type, ushort Level), string> labels = BuildTierLabelLookup(awardTiers);
+            List<PlayerSoldier> playerSoldiers = soldiers.OfType<PlayerSoldier>().ToList();
 
-            return soldiers
-                .OfType<PlayerSoldier>()
+            List<SoldierHonorFilterOption> options = playerSoldiers
                 .SelectMany(s => s.SoldierAwards)
                 .GroupBy(a => new { a.Type, a.Level })
                 .OrderBy(g => g.Key.Type)
@@ -69,7 +69,47 @@ namespace OnlyWar.Helpers
                         ? label
                         : g.OrderByDescending(a => a.DateAwarded).FirstOrDefault()?.Name))
                 .ToList();
+
+            options.AddRange(GetAvailableFlagHonors(playerSoldiers, awardTiers));
+            return options;
         }
+
+        // Yes/no rating flags (Novice piety, medical/technical aptitude) are offered as
+        // honor entries too. Like awards, a flag is only offered when someone in scope
+        // carries it. The flag text matched is the tier's NameTemplate — exactly what
+        // RatingCalculator wrote into the soldier's history.
+        private static IEnumerable<SoldierHonorFilterOption> GetAvailableFlagHonors(
+            IReadOnlyList<PlayerSoldier> soldiers,
+            IReadOnlyList<RatingAwardTier> awardTiers)
+        {
+            if (awardTiers == null)
+            {
+                return [];
+            }
+
+            HashSet<string> flagsInScope = soldiers
+                .SelectMany(s => s.SoldierEvents)
+                .Where(e => e.Type == SoldierEventType.RatingFlag)
+                .Select(e => e.Detail)
+                .ToHashSet();
+
+            return awardTiers
+                .Where(t => t.Effect == RatingAwardEffect.HistoryFlag
+                            && flagsInScope.Contains(t.NameTemplate))
+                .OrderBy(t => t.RatingKey)
+                .Select(t => SoldierHonorFilterOption.FromFlag(
+                    t.NameTemplate, FlagLabel(t)));
+        }
+
+        // Short player-facing names for the known flag ratings; anything new falls back
+        // to the flag text itself.
+        private static string FlagLabel(RatingAwardTier tier) => tier.RatingKey switch
+        {
+            RatingKeys.Piety => "Novice (Devout)",
+            RatingKeys.Medical => "Medical aptitude",
+            RatingKeys.Tech => "Technical aptitude",
+            _ => tier.NameTemplate
+        };
 
         // Maps each award Type+Level to a display name taken from the tier's NameTemplate with
         // the {bestSkillInCategory} placeholder swapped for the (generic) award Type, so e.g.
@@ -106,27 +146,21 @@ namespace OnlyWar.Helpers
                     return MatchesRank(soldier, condition, roleRanks);
 
                 case SoldierFilterField.Honor:
-                    // Has = holds an award of the selected type at or above the selected tier;
-                    // DoesNotHave is its negation.
-                    bool hasHonor = soldier is PlayerSoldier player
-                        && player.SoldierAwards.Any(a => MatchesHonor(a, condition.TextValue));
+                    // Has = holds an award of the selected type at or above the selected
+                    // tier, or carries the selected rating flag; DoesNotHave is its negation.
+                    bool hasHonor;
+                    if (SoldierHonorFilterOption.TryParseFlag(condition.TextValue, out string flagText))
+                    {
+                        hasHonor = soldier is PlayerSoldier flagged
+                            && flagged.SoldierEvents.Any(e => e.Type == SoldierEventType.RatingFlag
+                                                              && e.Detail == flagText);
+                    }
+                    else
+                    {
+                        hasHonor = soldier is PlayerSoldier player
+                            && player.SoldierAwards.Any(a => MatchesHonor(a, condition.TextValue));
+                    }
                     return condition.Operator == SoldierFilterOperator.DoesNotHave ? !hasHonor : hasHonor;
-
-                case SoldierFilterField.Novice:
-                    bool isNovice = soldier is PlayerSoldier novice
-                        && novice.SoldierEvents.Any(e => e.Type == SoldierEventType.RatingFlag
-                            && e.Detail?.EndsWith("declared a Novice",
-                                System.StringComparison.OrdinalIgnoreCase) == true);
-                    bool expectsNovice = !string.Equals(condition.TextValue, "No",
-                        System.StringComparison.OrdinalIgnoreCase);
-                    bool noviceMatches = isNovice == expectsNovice;
-                    return condition.Operator == SoldierFilterOperator.NotEquals
-                        ? !noviceMatches
-                        : noviceMatches;
-
-                case SoldierFilterField.MedicalAptitude:
-                case SoldierFilterField.TechnicalAptitude:
-                    return MatchesAptitude(soldier, condition);
 
                 case SoldierFilterField.TimeInService:
                 case SoldierFilterField.TimeInRank:
@@ -219,29 +253,6 @@ namespace OnlyWar.Helpers
             return condition.Operator == SoldierFilterOperator.AtMost
                 ? weeks <= condition.ThresholdWeeks
                 : weeks >= condition.ThresholdWeeks;
-        }
-
-        private static bool MatchesAptitude(ISoldier soldier, SoldierFilterCondition condition)
-        {
-            if (soldier is not PlayerSoldier player)
-            {
-                return false;
-            }
-
-            SoldierEvaluation latest = player.SoldierEvaluationHistory
-                .OrderByDescending(evaluation => evaluation.EvaluationDate)
-                .FirstOrDefault();
-            if (latest == null)
-            {
-                return false;
-            }
-
-            float aptitude = condition.Field == SoldierFilterField.MedicalAptitude
-                ? latest[RatingKeys.Medical]
-                : latest[RatingKeys.Tech];
-            return condition.Operator == SoldierFilterOperator.AtMost
-                ? aptitude <= condition.NumberValue
-                : aptitude >= condition.NumberValue;
         }
 
         private readonly record struct RoleRank(byte Rank, byte Subrank)

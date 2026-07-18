@@ -382,6 +382,54 @@ public class SoldierTransferServiceTests
         return squad;
     }
 
+    [Fact]
+    public void ApplyTransfer_RenamesLineSquadAfterItsNewSergeant()
+    {
+        SquadTemplate lineTemplate = CreateSquadTemplate(
+            "Tactical Squad",
+            (TestModelFactory.SergeantTemplate, 0, 1),
+            (TestModelFactory.MarineTemplate, 0, 4));
+        Unit chapter = CreateUnit("Chapter");
+        Squad source = AddSquad(chapter, "Source Squad", lineTemplate);
+        PlayerSoldier soldier = AddPlayerSoldier(source, TestModelFactory.MarineTemplate, "Brother Marius");
+        AddPlayerSoldier(source, TestModelFactory.MarineTemplate, "Brother Quintus");
+        Squad target = AddSquad(chapter, "Tactical Squad", lineTemplate);
+        Dictionary<int, Squad> squadMap = chapter.GetAllSquads().ToDictionary(squad => squad.Id);
+        SoldierTransferOption option = new(target.Id, TestModelFactory.SergeantTemplate,
+            "Sergeant, Tactical Squad, Chapter");
+
+        _service.ApplyTransfer(soldier, option, squadMap, _date);
+
+        Assert.Equal("Marius Squad", target.Name);
+    }
+
+    [Fact]
+    public void ApplyTransfer_KeepsSpecialistSquadNameWhenSpecialistLeaderArrives()
+    {
+        // The chapter offices (Apothecarion, Librarius, etc.) are led by a specialist
+        // leader template; unlike line squads, they never take their leader's name.
+        const byte apothecaryType = 1;
+        SoldierTemplate master = CreateTemplate(50, "Master of the Apothecarion", 6, true, apothecaryType);
+        SoldierTemplate apothecary = CreateTemplate(51, "Apothecary", 5, false, apothecaryType);
+        SquadTemplate apothecarionTemplate = CreateSquadTemplate(
+            "Apothecarion",
+            (master, 1, 1),
+            (apothecary, 0, 50));
+        SquadTemplate lineTemplate = CreateSquadTemplate("Line Squad", (TestModelFactory.MarineTemplate, 0, 4));
+        Unit chapter = CreateUnit("Chapter");
+        Squad source = AddSquad(chapter, "Source Squad", lineTemplate);
+        PlayerSoldier soldier = AddPlayerSoldier(source, TestModelFactory.MarineTemplate, "Brother Marius");
+        Squad apothecarion = AddSquad(chapter, "Apothecarion", apothecarionTemplate);
+        Dictionary<int, Squad> squadMap = chapter.GetAllSquads().ToDictionary(squad => squad.Id);
+        SoldierTransferOption option = new(apothecarion.Id, master,
+            "Master of the Apothecarion, Apothecarion, Chapter");
+
+        _service.ApplyTransfer(soldier, option, squadMap, _date);
+
+        Assert.Equal("Apothecarion", apothecarion.Name);
+        Assert.Equal(master, soldier.Template);
+    }
+
     private static PlayerSoldier AddPlayerSoldier(Squad squad, SoldierTemplate template, string name)
     {
         PlayerSoldier soldier = new(TestModelFactory.CreateSoldier(template, name), name);

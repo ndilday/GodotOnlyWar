@@ -7,10 +7,7 @@ namespace OnlyWar.Helpers
     public enum SoldierFilterField
     {
         Rank,           // Template.Name; Equals / NotEquals
-        Honor,          // award Type + minimum Level; Has (at least) / DoesNotHave
-        Novice,         // RatingFlag history; Equals / NotEquals Yes/No
-        MedicalAptitude, // latest medical rating; AtLeast / AtMost
-        TechnicalAptitude, // latest tech rating; AtLeast / AtMost
+        Honor,          // award Type + minimum Level, or a rating flag; Has / DoesNotHave
         TimeInService,  // weeks; AtLeast / AtMost
         TimeInRank,     // weeks; AtLeast / AtMost
         TimeInSquad     // weeks; AtLeast / AtMost
@@ -36,6 +33,10 @@ namespace OnlyWar.Helpers
 
     public sealed class SoldierHonorFilterOption
     {
+        // Prefix marking a filter value that refers to a RatingFlag history entry (a
+        // yes/no distinction like Novice or aptitude flags) rather than a tiered award.
+        private const string FlagPrefix = "flag:";
+
         public string Value { get; }
         public string Label { get; }
         public string Type { get; }
@@ -49,6 +50,27 @@ namespace OnlyWar.Helpers
             Label = string.IsNullOrWhiteSpace(sampleName)
                 ? $"{type} Level {level}"
                 : $"{sampleName} (Level {level})";
+        }
+
+        private SoldierHonorFilterOption(string flagText, string label)
+        {
+            Value = FlagPrefix + flagText;
+            Label = label;
+        }
+
+        // A flag option's value carries the exact RatingFlag event text it matches.
+        public static SoldierHonorFilterOption FromFlag(string flagText, string label) =>
+            new(flagText, label);
+
+        public static bool TryParseFlag(string value, out string flagText)
+        {
+            if (value != null && value.StartsWith(FlagPrefix))
+            {
+                flagText = value.Substring(FlagPrefix.Length);
+                return true;
+            }
+            flagText = null;
+            return false;
         }
 
         public static string ToValue(string type, ushort level) => $"{type}|{level}";
@@ -96,9 +118,5 @@ namespace OnlyWar.Helpers
             field == SoldierFilterField.TimeInService
             || field == SoldierFilterField.TimeInRank
             || field == SoldierFilterField.TimeInSquad;
-
-        public static bool IsAptitudeField(SoldierFilterField field) =>
-            field == SoldierFilterField.MedicalAptitude
-            || field == SoldierFilterField.TechnicalAptitude;
     }
 }

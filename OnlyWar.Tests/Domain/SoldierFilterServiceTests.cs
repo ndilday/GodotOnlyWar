@@ -188,40 +188,22 @@ public class SoldierFilterServiceTests
     }
 
     [Fact]
-    public void Apply_Novice_FiltersBySpecialistTrainingFlag()
+    public void Apply_HonorFlag_FiltersByRatingFlagHistory()
     {
+        const string noviceFlag = "Awarded Devout badge and declared a Novice";
         Squad squad = CreateSquad();
         PlayerSoldier novice = BuildVeteran(squad);
         PlayerSoldier other = BuildRecruit(squad);
-        novice.AddEvent(new SoldierEvent(new Date(41, 999, 1), SoldierEventType.RatingFlag,
-            "Awarded Devout badge and declared a Novice"));
+        novice.AddEvent(new SoldierEvent(new Date(41, 999, 1), SoldierEventType.RatingFlag, noviceFlag));
 
+        SoldierHonorFilterOption option = SoldierHonorFilterOption.FromFlag(noviceFlag, "Novice (Devout)");
         var novices = _service.Apply([novice, other],
-            [Condition(SoldierFilterField.Novice, SoldierFilterOperator.Equals, text: "Yes")], CurrentDate);
+            [Condition(SoldierFilterField.Honor, SoldierFilterOperator.Has, text: option.Value)], CurrentDate);
         var nonNovices = _service.Apply([novice, other],
-            [Condition(SoldierFilterField.Novice, SoldierFilterOperator.Equals, text: "No")], CurrentDate);
+            [Condition(SoldierFilterField.Honor, SoldierFilterOperator.DoesNotHave, text: option.Value)], CurrentDate);
 
         Assert.Equal([novice], novices);
         Assert.Equal([other], nonNovices);
-    }
-
-    [Fact]
-    public void Apply_SpecialistAptitudes_UseLatestEvaluation()
-    {
-        Squad squad = CreateSquad();
-        PlayerSoldier medic = BuildVeteran(squad);
-        PlayerSoldier tech = BuildRecruit(squad);
-        medic.AddEvaluation(Evaluation(new Date(41, 998, 1), medical: 70, technical: 120));
-        medic.AddEvaluation(Evaluation(new Date(41, 999, 1), medical: 125, technical: 75));
-        tech.AddEvaluation(Evaluation(new Date(41, 999, 1), medical: 80, technical: 110));
-
-        var medicalCandidates = _service.Apply([medic, tech],
-            [Condition(SoldierFilterField.MedicalAptitude, SoldierFilterOperator.AtLeast, number: 100)], CurrentDate);
-        var technicalCandidates = _service.Apply([medic, tech],
-            [Condition(SoldierFilterField.TechnicalAptitude, SoldierFilterOperator.AtLeast, number: 100)], CurrentDate);
-
-        Assert.Equal([medic], medicalCandidates);
-        Assert.Equal([tech], technicalCandidates);
     }
 
     [Fact]
@@ -304,6 +286,33 @@ public class SoldierFilterServiceTests
         Assert.Equal("Gold Gun of the Emperor (Level 3)", option.Label);
     }
 
+    [Fact]
+    public void GetAvailableHonors_OffersFlagsCarriedInScope()
+    {
+        Squad squad = CreateSquad();
+        PlayerSoldier medic = BuildVeteran(squad);
+        PlayerSoldier other = BuildRecruit(squad);
+        medic.AddEvent(new SoldierEvent(new Date(41, 999, 1), SoldierEventType.RatingFlag,
+            "Flagged for potential training as Apothecary"));
+
+        RatingAwardTier[] tiers =
+        [
+            new(17, RatingKeys.Medical, 1, 95, RatingAwardEffect.HistoryFlag, null,
+                "Flagged for potential training as Apothecary"),
+            new(18, RatingKeys.Tech, 1, 80, RatingAwardEffect.HistoryFlag, null,
+                "Flagged for potential training as Techmarine")
+        ];
+
+        var honors = _service.GetAvailableHonors([medic, other], tiers);
+
+        // The medical flag is carried in scope; the tech flag is not, so it isn't offered.
+        SoldierHonorFilterOption flagOption = Assert.Single(honors,
+            option => SoldierHonorFilterOption.TryParseFlag(option.Value, out _));
+        Assert.Equal("Medical aptitude", flagOption.Label);
+        Assert.True(SoldierHonorFilterOption.TryParseFlag(flagOption.Value, out string flagText));
+        Assert.Equal("Flagged for potential training as Apothecary", flagText);
+    }
+
     private static SoldierFilterCondition Condition(SoldierFilterField field, SoldierFilterOperator op,
         string text = null, int number = 0, SoldierDurationUnit unit = SoldierDurationUnit.Years)
     {
@@ -315,15 +324,6 @@ public class SoldierFilterServiceTests
             NumberValue = number,
             Unit = unit
         };
-    }
-
-    private static SoldierEvaluation Evaluation(Date date, float medical, float technical)
-    {
-        return new SoldierEvaluation(date, new Dictionary<string, float>
-        {
-            [RatingKeys.Medical] = medical,
-            [RatingKeys.Tech] = technical
-        });
     }
 
     private static Squad CreateSquad()

@@ -145,8 +145,7 @@ namespace OnlyWar.Helpers
 
             Squad currentSquad = soldier.AssignedSquad;
             currentSquad.RemoveSquadMember(soldier);
-            if (soldier.Template.IsSquadLeader &&
-                (currentSquad.SquadTemplate.SquadType & SquadTypes.HQ) == 0)
+            if (IsNamedAfterLeader(soldier.Template, currentSquad))
             {
                 currentSquad.Name = currentSquad.SquadTemplate.Name;
             }
@@ -161,8 +160,7 @@ namespace OnlyWar.Helpers
                 soldier.Template = option.SoldierTemplate;
             }
 
-            if (soldier.Template.IsSquadLeader &&
-                (newSquad.SquadTemplate.SquadType & SquadTypes.HQ) == 0)
+            if (IsNamedAfterLeader(soldier.Template, newSquad))
             {
                 soldier.AssignedSquad.Name = soldier.Name.Split(' ')[1] + " Squad";
             }
@@ -184,6 +182,16 @@ namespace OnlyWar.Helpers
             }
 
             return true;
+        }
+
+        // Only line squads carry their sergeant's name ("Obiareus Squad"). HQ squads and
+        // the chapter offices led by a specialist (Apothecarion, Librarius, Reclusium,
+        // Armory) keep their institutional names no matter who leads them.
+        private static bool IsNamedAfterLeader(SoldierTemplate leaderTemplate, Squad squad)
+        {
+            return leaderTemplate.IsSquadLeader &&
+                   leaderTemplate.SpecialistType == 0 &&
+                   (squad.SquadTemplate.SquadType & SquadTypes.HQ) == 0;
         }
 
         private static void UpdateSquadLocations(Squad oldSquad, Squad newSquad)
