@@ -38,6 +38,7 @@ public partial class Camera2D : Godot.Camera2D
 
 	public override void _UnhandledInput(InputEvent @event)
 	{
+
         // Hidden full-screen views and visible dialogs both make the map non-interactive.
         // The dialog check is also a defensive backstop for wheel events released by a
         // ScrollContainer after it reaches the end of its scroll range.
@@ -76,7 +77,9 @@ public partial class Camera2D : Godot.Camera2D
         }
         else if (@event is InputEventMouseMotion emm && emm.ButtonMask == MouseButtonMask.Right)
 		{
-            Position -= emm.Relative;
+            // Relative is in screen pixels; convert to world units so the map
+            // tracks the cursor 1:1 at any zoom level.
+            Position -= emm.Relative / Zoom.X;
             ClampCamera();
         }
 	}

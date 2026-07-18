@@ -71,7 +71,9 @@ public partial class RegionScreenView : CommandWorkspaceView
         ConnectHexSignals(_southwestRegionController);
         ConnectHexSignals(_northwestRegionController);
 
-        BuildWorkspaceShell(0.755f, 0.785f);
+        // No header bar: the app's top menu already names the region, so the panels start at the
+        // top of the dialog and reclaim the old breadcrumb band.
+        BuildWorkspaceShell(0.755f, 0.785f, includeHeader: false, topAnchor: 0.015f);
 
         // The shared shell built a ContextPanel and CommandPanel we don't use for this screen's
         // mission-centric layout (a custom dossier and pinned commit bar replace them) - hide
@@ -236,6 +238,17 @@ public partial class RegionScreenView : CommandWorkspaceView
         }
     }
 
+    // The aggression (disposition) selector only means something once a mission is picked, so the
+    // controller disables it until then.
+    public void SetAggressionEnabled(bool enabled)
+    {
+        foreach (Button button in _aggressionButtons.Values)
+        {
+            button.Disabled = !enabled;
+            button.MouseDefaultCursorShape = enabled ? CursorShape.PointingHand : CursorShape.Arrow;
+        }
+    }
+
     public void SetTargetFactionOptions(IReadOnlyList<(string Name, int Id)> options, bool visible)
     {
         _targetFactionOption.Visible = visible;
@@ -279,9 +292,12 @@ public partial class RegionScreenView : CommandWorkspaceView
     private void ConfigureBoardPanel()
     {
         _boardPanel.AnchorLeft = 0.245f;
-        _boardPanel.AnchorTop = 0.08f;
+        _boardPanel.AnchorTop = 0.015f;
         _boardPanel.AnchorRight = 0.755f;
-        _boardPanel.AnchorBottom = 0.91f;
+        // Stops above the commit bar, which is now a sibling panel (0.815-0.91) rather than a
+        // child pinned inside this panel - the nested near-coincident borders read as a broken
+        // partial overlap.
+        _boardPanel.AnchorBottom = 0.80f;
         _boardPanel.OffsetLeft = 0;
         _boardPanel.OffsetTop = 0;
         _boardPanel.OffsetRight = 0;
@@ -343,10 +359,9 @@ public partial class RegionScreenView : CommandWorkspaceView
             OffsetLeft = 6,
             OffsetTop = 0,
             OffsetRight = -6,
-            // Runs down to just above the pinned commit bar (top at -74). Previously stopped at
-            // -168 to clear the active-orders strip that sat between it and the commit bar; that
-            // strip moved to the dossier's Inbound Orders card, so the mission list reclaims the band.
-            OffsetBottom = -78
+            // The commit bar lives in its own panel below the board now, so the mission list can
+            // run all the way to the board's bottom edge.
+            OffsetBottom = -6
         };
         section.AddThemeConstantOverride("separation", 4);
         _boardPanel.AddChild(section);
@@ -405,25 +420,11 @@ public partial class RegionScreenView : CommandWorkspaceView
         return panel;
     }
 
-    // Pinned via a fixed pixel offset from the board's bottom edge rather than an anchor
-    // fraction, so it stays fully visible regardless of board height - this is the fix for the
-    // mockup's one flaw (the commit bar overflowing the panel).
+    // Its own sibling panel under the board (same horizontal band), so its border never overlaps
+    // the board panel's border or the mission list.
     private void BuildCommitBar()
     {
-        PanelContainer commitBar = new()
-        {
-            Name = "CommitBar",
-            AnchorLeft = 0f,
-            AnchorTop = 1f,
-            AnchorRight = 1f,
-            AnchorBottom = 1f,
-            OffsetLeft = 4,
-            OffsetTop = -74,
-            OffsetRight = -4,
-            OffsetBottom = -4
-        };
-        OnlyWarStyle.ApplyContentPanel(commitBar);
-        _boardPanel.AddChild(commitBar);
+        PanelContainer commitBar = CreatePanel("CommitBar", 0.245f, 0.815f, 0.755f, 0.91f);
 
         VBoxContainer stack = new();
         stack.AddThemeConstantOverride("separation", 4);
@@ -499,16 +500,42 @@ public partial class RegionScreenView : CommandWorkspaceView
 
     private void BuildDossierPanel()
     {
-        _dossierPanel = CreatePanel("DossierPanel", 0.765f, 0.08f, 0.99f, 0.91f);
+        _dossierPanel = CreatePanel("DossierPanel", 0.765f, 0.015f, 0.99f, 0.91f);
 
         VBoxContainer outer = new() { SizeFlagsHorizontal = SizeFlags.ExpandFill, SizeFlagsVertical = SizeFlags.ExpandFill };
         outer.AddThemeConstantOverride("separation", 8);
         _dossierPanel.AddChild(outer);
 
-        Label caption = new() { Text = "SELECTED TARGET" };
+        HBoxContainer captionRow = new();
+        captionRow.AddThemeConstantOverride("separation", 8);
+        outer.AddChild(captionRow);
+
+        Label caption = new()
+        {
+            Text = "SELECTED TARGET",
+            SizeFlagsHorizontal = SizeFlags.ExpandFill,
+            VerticalAlignment = VerticalAlignment.Center
+        };
         caption.AddThemeFontSizeOverride("font_size", 13);
         caption.AddThemeColorOverride("font_color", OnlyWarStyle.MutedText);
-        outer.AddChild(caption);
+        captionRow.AddChild(caption);
+
+        // The dialog's stock close button floats at the screen's top-right, where this
+        // panel overlaps it and swallows most of its clicks (GUI picking follows tree
+        // order, not z-index). Adopt it into the caption row instead so it sits fully
+        // inside the frame and stays clickable.
+        Button closeButton = GetNode<Button>("CloseButton");
+        closeButton.GetParent().RemoveChild(closeButton);
+        closeButton.SetAnchorsPreset(LayoutPreset.TopLeft);
+        closeButton.OffsetLeft = 0;
+        closeButton.OffsetTop = 0;
+        closeButton.OffsetRight = 0;
+        closeButton.OffsetBottom = 0;
+        closeButton.CustomMinimumSize = new Vector2(28, 28);
+        closeButton.SizeFlagsHorizontal = SizeFlags.ShrinkEnd;
+        closeButton.SizeFlagsVertical = SizeFlags.ShrinkCenter;
+        OnlyWarStyle.ApplyAccentButtonRow(closeButton, true, OnlyWarStyle.Gold);
+        captionRow.AddChild(closeButton);
 
         _dossierTitleLabel = new Label { ClipText = true, TextOverrunBehavior = TextServer.OverrunBehavior.TrimEllipsis };
         _dossierTitleLabel.AddThemeFontSizeOverride("font_size", 22);

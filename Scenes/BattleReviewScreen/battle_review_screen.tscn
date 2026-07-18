@@ -68,6 +68,7 @@ horizontal_scroll_mode = 0
 layout_mode = 2
 size_flags_horizontal = 3
 theme_override_constants/separation = 5
+clip_contents = true
 
 [node name="CenterPanel" type="VBoxContainer" parent="DialogView/Layout"]
 layout_mode = 2

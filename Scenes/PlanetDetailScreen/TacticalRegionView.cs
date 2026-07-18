@@ -153,5 +153,11 @@ public partial class TacticalRegionView : Control
 			label.AddThemeFontSizeOverride("normal_font_size", 11);
 			label.AddThemeColorOverride("default_color", new Color(0.76f, 0.72f, 0.62f));
 		}
+		// These labels are sized tightly to the hex, so overflowing text would otherwise draw a
+		// tiny vertical scrollbar floating next to the tile.
+		foreach (RichTextLabel label in new[] { _regionName, _playerPopulation, _civilianPopulation, _xenosPopulation })
+		{
+			label.ScrollActive = false;
+		}
 	}
 }

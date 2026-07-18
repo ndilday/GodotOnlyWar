@@ -18,7 +18,6 @@ public partial class PlanetTacticalScreenController : DialogController
     private const string ActionOpenSquad = "open_squad";
     private const string ActionLand = "land";
     private const string ActionLoad = "load";
-    private const string ActionEditOrders = "edit_orders";
 
     private static readonly (MapLayer Layer, string Label, string IconKey)[] MapLayerOptions =
     [
@@ -39,7 +38,6 @@ public partial class PlanetTacticalScreenController : DialogController
     private PlanetTacticalScreenView _view;
     private TacticalRegionController[] _tacticalRegions;
     private ButtonGroup _buttonGroup;
-    private OrderDialogController _orderDialog;
 
     private Planet _selectedPlanet;
     private MapLayer _activeLayers = MapLayer.Forces | MapLayer.Orders;
@@ -69,9 +67,6 @@ public partial class PlanetTacticalScreenController : DialogController
         _view.SetActiveMapLayers(_activeLayers);
         _view.SetRosterFilters(RosterFilters);
         _view.SetActiveRosterFilter(_rosterFilter);
-
-        _orderDialog = GetNode<OrderDialogController>("PlanetTacticalScreenView/OrderDialogController");
-        _orderDialog.OrdersConfirmed += OnOrdersConfirmed;
 
         _tacticalRegions = new TacticalRegionController[16];
         for (int i = 1; i <= 16; i++)
@@ -164,9 +159,6 @@ public partial class PlanetTacticalScreenController : DialogController
                     OrbitalSquadDoubleClicked?.Invoke(this, squad);
                 }
                 break;
-            case ActionEditOrders:
-                OpenOrdersDialog();
-                break;
             case ActionLand:
                 LandSelectedForces();
                 break;
@@ -174,19 +166,6 @@ public partial class PlanetTacticalScreenController : DialogController
                 LoadSelectedForces();
                 break;
         }
-    }
-
-    private void OpenOrdersDialog()
-    {
-        if (_selectedLandedSquad == null) return;
-        _orderDialog.PopulateOrderData(_selectedLandedSquad);
-        _orderDialog.Visible = true;
-    }
-
-    private void OnOrdersConfirmed(object sender, EventArgs e)
-    {
-        CampaignChanged?.Invoke(this, EventArgs.Empty);
-        RefreshWorkspace();
     }
 
     public void RefreshFromExternalChange()
@@ -394,14 +373,39 @@ public partial class PlanetTacticalScreenController : DialogController
         return cards;
     }
 
-    // Mirrors the Region Ops dossier ordering: hostile faction(s) first, then the local Imperial
-    // force, then the region summary - so the same data reads consistently across both screens.
+    // Mirrors the Region Ops dossier ordering: region summary first, then the local Imperial
+    // force, then hostile faction(s) - so the same data reads consistently across both screens.
     private IReadOnlyList<DossierCardData> BuildRegionCards(Region region)
     {
         List<DossierCardData> cards = [];
         float visibleIntel = region.GetPlayerVisibleIntel();
         RegionFaction playerRegionFaction = GetPlayerRegionFaction(region);
         List<RegionFaction> enemyFactions = GetPublicEnemyRegionFactions(region);
+
+        List<Tuple<string, string>> regionRows =
+        [
+            Row("Control", GetRegionControlLabel(region)),
+            Row("Coordinates", $"({region.Coordinates.X}, {region.Coordinates.Y})"),
+            Row("Intel Rating", $"{visibleIntel:0.##}")
+        ];
+        if (region.HasHiddenDefaultFaction())
+        {
+            regionRows.Add(Row("Civilians", "Unknown"));
+        }
+        else
+        {
+            long civilianPopulation = region.GetVisibleCivilianPopulation();
+            regionRows.Add(Row("Civilians", civilianPopulation > 0 ? civilianPopulation.ToString("N0") : "None"));
+        }
+        cards.Add(new DossierCardData("Region", null, regionRows, OnlyWarStyle.Gold));
+
+        List<Tuple<string, string>> localRows =
+        [
+            Row("Marines", playerRegionFaction?.LandedSquads.Sum(squad => squad.Members.Count).ToString() ?? "0"),
+            Row("Assigned Orders", playerRegionFaction?.LandedSquads.Count(squad => squad.CurrentOrders != null).ToString() ?? "0"),
+            Row("PDF Garrison", region.PlanetaryDefenseForces > 0 ? region.PlanetaryDefenseForces.ToString("N0") : "None")
+        ];
+        cards.Add(new DossierCardData("Local Force", "Imperial Presence", localRows, OnlyWarStyle.PlayerAccent));
 
         if (enemyFactions.Count > 0)
         {
@@ -422,35 +426,10 @@ public partial class PlanetTacticalScreenController : DialogController
             cards.Add(new DossierCardData("Hostile Faction", "None Detected", Array.Empty<Tuple<string, string>>(), OnlyWarStyle.OpposingAccent));
         }
 
-        List<Tuple<string, string>> localRows =
-        [
-            Row("Marines", playerRegionFaction?.LandedSquads.Sum(squad => squad.Members.Count).ToString() ?? "0"),
-            Row("Assigned Orders", playerRegionFaction?.LandedSquads.Count(squad => squad.CurrentOrders != null).ToString() ?? "0"),
-            Row("PDF Garrison", region.PlanetaryDefenseForces > 0 ? region.PlanetaryDefenseForces.ToString("N0") : "None")
-        ];
-        cards.Add(new DossierCardData("Local Force", "Imperial Presence", localRows, OnlyWarStyle.PlayerAccent));
-
-        List<Tuple<string, string>> regionRows =
-        [
-            Row("Control", GetRegionControlLabel(region)),
-            Row("Coordinates", $"({region.Coordinates.X}, {region.Coordinates.Y})"),
-            Row("Intel Rating", $"{visibleIntel:0.##}")
-        ];
-        if (region.HasHiddenDefaultFaction())
-        {
-            regionRows.Add(Row("Civilians", "Unknown"));
-        }
-        else
-        {
-            long civilianPopulation = region.GetVisibleCivilianPopulation();
-            regionRows.Add(Row("Civilians", civilianPopulation > 0 ? civilianPopulation.ToString("N0") : "None"));
-        }
-        cards.Add(new DossierCardData("Region", null, regionRows, OnlyWarStyle.Gold));
-
         // Mirrors the Region Ops dossier's Inbound Orders card: every player order aimed at this
         // region from anywhere in the sector, so recon/advance converging from a different region
         // is visible here too. Static (informational) to match this screen's card idiom - orders
-        // are edited via the command bar's "Edit Orders" rather than by clicking the card.
+        // are edited on the Region Ops screen ("Open Region").
         List<InboundOrderInfo> inbound = InboundOrders.ForRegion(region);
         List<Tuple<string, string>> inboundRows = inbound
             .Select(info => Row(
@@ -506,7 +485,6 @@ public partial class PlanetTacticalScreenController : DialogController
         [
             new(ActionOpenRegion, "Open Region", "map_pin", _selectedRegion != null),
             new(ActionOpenSquad, "Open Squad", "player_forces", GetSelectedSquad() != null),
-            new(ActionEditOrders, "Edit Orders", "objective", _selectedLandedSquad != null),
             new(ActionLand, GetLandCommandText(), "land_squads", CanLand()),
             new(ActionLoad, GetLoadCommandText(), "load_squads", CanLoad())
         ];
@@ -517,8 +495,8 @@ public partial class PlanetTacticalScreenController : DialogController
         IReadOnlyList<CommandAction> commands = BuildCommands();
         return
         [
-            [commands[0], commands[1], commands[2]],
-            [commands[3], commands[4]]
+            [commands[0], commands[1]],
+            [commands[2], commands[3]]
         ];
     }
 

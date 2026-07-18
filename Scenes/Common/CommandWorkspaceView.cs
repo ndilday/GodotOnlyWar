@@ -12,8 +12,9 @@ public partial class CommandWorkspaceView : DialogView
     private Label _headerBreadcrumbLabel;
     private HBoxContainer _layerToggleRow;
     private Label _headerBadgeLabel;
+    private PanelContainer _headerBadgePanel;
     private Label _selectionTitleLabel;
-    private HBoxContainer _filterRow;
+    private HFlowContainer _filterRow;
     private Tree _selectionTree;
     private Label _selectionHintLabel;
     private Label _contextTitleLabel;
@@ -58,6 +59,25 @@ public partial class CommandWorkspaceView : DialogView
     public void ClearSelection()
     {
         _selectionTree.DeselectAll();
+    }
+
+    // Programmatically replaces the roster Tree's selection with the rows whose metadata keys are
+    // in the given set (used when jumping to an order's origin region to pre-select its squads).
+    public void SetSelectedKeys(IReadOnlyCollection<string> keys)
+    {
+        HashSet<string> wanted = [.. keys];
+        _selectionTree.DeselectAll();
+        TreeItem root = _selectionTree.GetRoot();
+        if (root == null) return;
+
+        foreach (TreeItem item in EnumerateTreeItems(root.GetFirstChild()))
+        {
+            string key = item.GetMetadata(0).AsString();
+            if (!string.IsNullOrEmpty(key) && wanted.Contains(key))
+            {
+                item.Select(0);
+            }
+        }
     }
 
     private static void CollectSelectedKeys(TreeItem item, List<string> keys)
@@ -152,9 +172,11 @@ public partial class CommandWorkspaceView : DialogView
 
     public void SetHeader(string breadcrumb, string badgeText = null)
     {
+        if (_headerBreadcrumbLabel == null) return;
         _headerBreadcrumbLabel.Text = breadcrumb;
         _headerBadgeLabel.Visible = !string.IsNullOrEmpty(badgeText);
         _headerBadgeLabel.Text = badgeText ?? "";
+        _headerBadgePanel.Visible = _headerBadgeLabel.Visible;
     }
 
     public void SetMapLayerOptions(IReadOnlyList<(MapLayer Layer, string Label, string IconKey)> options)
@@ -226,11 +248,17 @@ public partial class CommandWorkspaceView : DialogView
         }
     }
 
-    protected void BuildWorkspaceShell(float mapRightAnchor, float contextBottomAnchor, float commandTopAnchor = 0.805f)
+    // includeHeader=false skips the breadcrumb/layer-toggle header bar entirely (for screens whose
+    // identity already lives in the app's top menu, e.g. Region Ops); topAnchor lets those screens
+    // reclaim the header band by starting their panels higher.
+    protected void BuildWorkspaceShell(float mapRightAnchor, float contextBottomAnchor, float commandTopAnchor = 0.805f, bool includeHeader = true, float topAnchor = 0.08f)
     {
-        BuildHeaderBar();
+        if (includeHeader)
+        {
+            BuildHeaderBar();
+        }
 
-        PanelContainer leftPanel = CreatePanel("RosterPanel", 0.01f, 0.08f, 0.235f, 0.91f);
+        PanelContainer leftPanel = CreatePanel("RosterPanel", 0.01f, topAnchor, 0.235f, 0.91f);
         VBoxContainer leftStack = new();
         leftStack.AddThemeConstantOverride("separation", 8);
         leftPanel.AddChild(leftStack);
@@ -238,7 +266,9 @@ public partial class CommandWorkspaceView : DialogView
         _selectionTitleLabel = CreateCaption("ROSTER");
         leftStack.AddChild(_selectionTitleLabel);
 
-        _filterRow = new HBoxContainer();
+        // A flow container so a filter set wider than the roster panel wraps onto a second
+        // row instead of forcing the panel's minimum width past its anchors and under the map.
+        _filterRow = new HFlowContainer();
         _filterRow.AddThemeConstantOverride("separation", 4);
         leftStack.AddChild(_filterRow);
 
@@ -271,7 +301,7 @@ public partial class CommandWorkspaceView : DialogView
         _selectionHintLabel.AddThemeColorOverride("font_color", OnlyWarStyle.MutedText);
         leftStack.AddChild(_selectionHintLabel);
 
-        PanelContainer contextPanel = CreatePanel("ContextPanel", mapRightAnchor + 0.01f, 0.08f, 0.99f, contextBottomAnchor);
+        PanelContainer contextPanel = CreatePanel("ContextPanel", mapRightAnchor + 0.01f, topAnchor, 0.99f, contextBottomAnchor);
         VBoxContainer contextOuter = new()
         {
             SizeFlagsHorizontal = SizeFlags.ExpandFill,
@@ -370,12 +400,15 @@ public partial class CommandWorkspaceView : DialogView
         _layerToggleRow.AddThemeConstantOverride("separation", 4);
         headerRow.AddChild(_layerToggleRow);
 
-        PanelContainer badgePanel = new()
+        // Hidden until a badge is set; otherwise the empty inset panel renders as a
+        // small dark box at the header's right edge.
+        _headerBadgePanel = new PanelContainer
         {
-            SizeFlagsVertical = SizeFlags.ShrinkCenter
+            SizeFlagsVertical = SizeFlags.ShrinkCenter,
+            Visible = false
         };
-        OnlyWarStyle.ApplyInsetPanel(badgePanel);
-        headerRow.AddChild(badgePanel);
+        OnlyWarStyle.ApplyInsetPanel(_headerBadgePanel);
+        headerRow.AddChild(_headerBadgePanel);
 
         _headerBadgeLabel = new Label
         {
@@ -383,7 +416,7 @@ public partial class CommandWorkspaceView : DialogView
         };
         _headerBadgeLabel.AddThemeFontSizeOverride("font_size", 12);
         _headerBadgeLabel.AddThemeColorOverride("font_color", OnlyWarStyle.Gold);
-        badgePanel.AddChild(_headerBadgeLabel);
+        _headerBadgePanel.AddChild(_headerBadgeLabel);
     }
 
     protected PanelContainer CreatePanel(string name, float left, float top, float right, float bottom)

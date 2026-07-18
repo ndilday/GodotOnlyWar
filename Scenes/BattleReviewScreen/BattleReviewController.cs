@@ -71,6 +71,7 @@ public partial class BattleReviewController : DialogController
             _selectedFormationId = formationId;
             DisplayTurn(_currentTurnIndex);
         };
+        _view.ReplayPressed += (_, mapPosition) => SelectFormationAt(mapPosition);
 
         if (GameDataSingleton.Instance?.IsInitialized == true)
         {
@@ -338,6 +339,40 @@ public partial class BattleReviewController : DialogController
 
         Vector2 centroid = markerPositions.Aggregate(Vector2.Zero, (sum, position) => sum + position) / markerPositions.Count;
         DrawFormationLabel(squad, centroid, selected);
+    }
+
+    private void SelectFormationAt(Vector2 mapPosition)
+    {
+        if (_history == null || _history.Turns.Count == 0)
+        {
+            return;
+        }
+
+        BattleStateSnapshot state = _history.Turns[_currentTurnIndex].State;
+        float hitRadius = Math.Max(
+            Math.Min(_pixelsPerGrid.X, _pixelsPerGrid.Y) * 0.45f,
+            8.0f / Math.Max(_view.ReplayCamera.Zoom.X, 0.01f));
+        float hitRadiusSquared = hitRadius * hitRadius;
+        BattleSquadSnapshot closestSquad = state.AttackerSquads.Values
+            .Concat(state.OpposingSquads.Values)
+            .Where(ShouldDrawSquad)
+            .SelectMany(squad => squad.Soldiers.Select(soldier => new
+            {
+                Squad = squad,
+                DistanceSquared = mapPosition.DistanceSquaredTo(GetSoldierMapPosition(soldier, _mapOffset))
+            }))
+            .Where(candidate => candidate.DistanceSquared <= hitRadiusSquared)
+            .OrderBy(candidate => candidate.DistanceSquared)
+            .Select(candidate => candidate.Squad)
+            .FirstOrDefault();
+
+        if (closestSquad == null)
+        {
+            return;
+        }
+
+        _selectedFormationId = closestSquad.Id;
+        DisplayTurn(_currentTurnIndex);
     }
 
     private void DrawFormationBanner(BattleSquadSnapshot squad, Vector2 centroid, bool selected)
@@ -685,7 +720,7 @@ public partial class BattleReviewController : DialogController
             Math.Min(
                 viewportSize.X / Math.Max(contentSize.X, 1.0f),
                 viewportSize.Y / Math.Max(contentSize.Y, 1.0f)) * framingPadding,
-            0.35f,
+            0.05f,
             3.0f);
         _view.ReplayCamera.Zoom = new Vector2(zoom, zoom);
         _view.ReplayCamera.Position = contentCenter - viewportSize / (2.0f * zoom);

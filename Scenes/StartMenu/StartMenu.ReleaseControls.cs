@@ -33,6 +33,7 @@ public partial class StartMenu
 		_titleSaveChooser.CancelRequested += OnTitleSaveChooserCancelled;
 		_titleSaveChooser.RefreshRequested += OnTitleSaveChooserRefreshRequested;
 		_titleSaveChooser.LoadRequested += OnTitleLoadRequested;
+		_titleSaveChooser.DeleteRequested += OnTitleSaveDeleteRequested;
 
 		_titleOptionsMenu.CloseRequested += OnTitleOptionsClosed;
 		_titleOptionsMenu.QuitRequested += OnTitleQuitRequested;
@@ -143,6 +144,24 @@ public partial class StartMenu
 			_isTransitioning = false;
 			ShowTitleLoadChooser();
 			_titleSaveChooser.SetOperationError($"Load failed: {exception.Message}");
+		}
+	}
+
+	private void OnTitleSaveDeleteRequested(object sender, SaveSlotSelectionEventArgs args)
+	{
+		if (args?.Slot == null) return;
+
+		try
+		{
+			SaveGameManager manager = new(GameStorage.SaveDirectory);
+			manager.DeleteManualSave(args.Slot.FilePath);
+			_titleFeedback.ShowSuccess($"Deleted {args.Slot.DisplayName}.");
+			OnTitleSaveChooserRefreshRequested(this, EventArgs.Empty);
+		}
+		catch (Exception exception)
+		{
+			GD.PushError($"Could not delete manual save: {exception}");
+			_titleSaveChooser.SetOperationError($"Delete failed: {exception.Message}");
 		}
 	}
 

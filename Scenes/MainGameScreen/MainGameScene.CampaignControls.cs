@@ -194,18 +194,6 @@ public partial class MainGameScene
             .Where(node => node is CanvasItem item && item.IsVisibleInTree())
             .ToList();
 
-        // Embedded order dialogs enter the scene tree before their parent screen, so group order
-        // alone would close the parent first. Always dismiss the focused sub-dialog before a
-        // full-screen DialogController.
-        for (int index = blockers.Count - 1; index >= 0; index--)
-        {
-            if (blockers[index] is OrderDialogController orderDialog)
-            {
-                orderDialog.RequestClose();
-                return true;
-            }
-        }
-
         for (int index = blockers.Count - 1; index >= 0; index--)
         {
             switch (blockers[index])

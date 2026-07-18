@@ -10,7 +10,7 @@ public partial class BattleReviewView : DialogView
     private const float KeyboardPanSpeed = 520.0f;
     private const float WheelZoomFactor = 1.12f;
     private const float KeyboardZoomSpeed = 1.6f;
-    private const float MinZoom = 0.35f;
+    private const float MinZoom = 0.05f;
     private const float MaxZoom = 3.0f;
     private Label _battleTitleLabel;
     private Label _roundLabel;
@@ -41,6 +41,7 @@ public partial class BattleReviewView : DialogView
     public event EventHandler NextRoundPressed;
     public event EventHandler SpeedPressed;
     public event EventHandler<int> FormationSelected;
+    public event EventHandler<Vector2> ReplayPressed;
 
     public Node2D MapRoot { get; private set; }
     public Godot.Camera2D ReplayCamera { get; private set; }
@@ -94,12 +95,30 @@ public partial class BattleReviewView : DialogView
                 ZoomAtPoint(button.Position, factor);
                 _replayViewportContainer.AcceptEvent();
             }
+            else if (button.Pressed && button.ButtonIndex == MouseButton.Left)
+            {
+                ReplayPressed?.Invoke(this, ScreenToReplayPosition(button.Position));
+                _replayViewportContainer.AcceptEvent();
+            }
         }
         else if (inputEvent is InputEventMouseMotion motion && _isPanning)
         {
             ReplayCamera.Position -= motion.Relative / ReplayCamera.Zoom;
             _replayViewportContainer.AcceptEvent();
         }
+    }
+
+    private Vector2 ScreenToReplayPosition(Vector2 screenPoint)
+    {
+        Vector2 viewportSize = ReplayCamera.GetViewportRect().Size;
+        Vector2 containerSize = _replayViewportContainer.Size;
+        Vector2 viewportPoint = screenPoint;
+        if (containerSize.X > 0.0f && containerSize.Y > 0.0f)
+        {
+            viewportPoint *= viewportSize / containerSize;
+        }
+
+        return ReplayCamera.Position + viewportPoint / ReplayCamera.Zoom;
     }
 
     public override void _Process(double delta)
@@ -179,6 +198,7 @@ public partial class BattleReviewView : DialogView
             Text = BuildForceRowText(node, depth, isCollapsed),
             TooltipText = BuildForceRowTooltip(node, isCollapsed),
             Alignment = HorizontalAlignment.Left,
+            ClipText = true,
             Icon = IconAtlas.GetIcon(node.IconKey),
             IconAlignment = HorizontalAlignment.Left,
             ExpandIcon = false,

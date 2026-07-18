@@ -4,6 +4,7 @@ using OnlyWar.Helpers.Missions;
 using OnlyWar.Helpers.Orders;
 using OnlyWar.Helpers.UI;
 using OnlyWar.Models;
+using OnlyWar.Models.Missions;
 using OnlyWar.Models.Orders;
 using OnlyWar.Models.Planets;
 using OnlyWar.Models.Squads;
@@ -27,7 +28,6 @@ public partial class RegionScreenController : DialogController
     private AvailableMission _selectedMission;
     private Aggression _aggression = Aggression.Normal;
     private int _selectedTargetFactionId = -1;
-    private OrderDialogController _orderDialog;
     private string _rosterFilter = "all";
 
     public event EventHandler<Squad> SquadDoubleClicked;
@@ -38,7 +38,6 @@ public partial class RegionScreenController : DialogController
     {
         base._Ready();
         _view = GetNode<RegionScreenView>("DialogView");
-        _orderDialog = GetNode<OrderDialogController>("DialogView/OrderDialogController");
 
         _view.SelectionTreeItemSelected += OnSelectionTreeItemSelected;
         _view.SelectionTreeItemActivated += OnSelectionTreeItemActivated;
@@ -51,7 +50,6 @@ public partial class RegionScreenController : DialogController
         _view.TargetFactionSelected += OnTargetFactionSelected;
         _view.InboundOrderActivated += OnInboundOrderActivated;
         _view.RosterFilterSelected += OnRosterFilterSelected;
-        _orderDialog.OrdersConfirmed += OnOrdersConfirmed;
 
         _view.SetRosterFilters(RosterFilters);
         _view.SetActiveRosterFilter(_rosterFilter);
@@ -73,10 +71,6 @@ public partial class RegionScreenController : DialogController
             _view.TargetFactionSelected -= OnTargetFactionSelected;
             _view.InboundOrderActivated -= OnInboundOrderActivated;
             _view.RosterFilterSelected -= OnRosterFilterSelected;
-        }
-        if (GodotObject.IsInstanceValid(_orderDialog))
-        {
-            _orderDialog.OrdersConfirmed -= OnOrdersConfirmed;
         }
     }
 
@@ -162,12 +156,72 @@ public partial class RegionScreenController : DialogController
         RefreshCommitBar();
     }
 
+    // Clicking an inbound-order row jumps to the region the order's squads operate from, with the
+    // order's squads, mission, and aggression pre-selected in the workspace - the surviving edit
+    // affordance now that the old order dialog is gone.
     private void OnInboundOrderActivated(object sender, Order order)
     {
-        Squad squad = order.AssignedSquads.FirstOrDefault();
-        if (squad == null) return;
+        Region origin = order.AssignedSquads
+            .Select(squad => squad.CurrentRegion)
+            .FirstOrDefault(region => region != null);
+        Region target = order.Mission?.RegionFaction?.Region;
+        if (origin == null || target == null) return;
 
-        OpenOrdersDialog(squad);
+        if (origin != _currentRegion)
+        {
+            // Route through the same event adjacent-hex navigation uses so the host screen
+            // (MainGameScene) updates its title; its handler calls DisplayRegion(origin).
+            AdjacentRegionChangeRequested?.Invoke(this, origin);
+        }
+
+        _targetRegion = target;
+        _aggression = order.LevelOfAggression;
+        _selectedMission = FindMissionForOrder(order);
+        _selectedTargetFactionId = _selectedMission != null
+            && (_selectedMission.Kind == MissionAvailabilityKind.Attack || _selectedMission.Kind == MissionAvailabilityKind.Diversion)
+            ? order.Mission.RegionFaction.PlanetFaction.Faction.Id
+            : -1;
+        RefreshWorkspace();
+
+        _view.SetSelectedKeys(order.AssignedSquads.Select(squad => SquadKey(squad.Id)).ToList());
+        RecomputeSelectedSquads();
+        UpdateSelectionSummary();
+        RefreshCommitBar();
+    }
+
+    // Maps an existing Order's Mission back onto the AvailableMission descriptor the mission list
+    // offers for the (origin, target) pair, so the workspace shows it as the selected mission.
+    private AvailableMission FindMissionForOrder(Order order)
+    {
+        IReadOnlyList<AvailableMission> missions = MissionAvailability.GetAvailableMissions(_currentRegion, _targetRegion);
+
+        AvailableMission special = missions.FirstOrDefault(m => m.Kind == MissionAvailabilityKind.Special && m.SpecialMission == order.Mission);
+        if (special != null) return special;
+
+        switch (order.Mission.MissionType)
+        {
+            case MissionType.Recon:
+                return missions.FirstOrDefault(m => m.Kind == MissionAvailabilityKind.Recon);
+            case MissionType.Advance:
+                return missions.FirstOrDefault(m => m.Kind == MissionAvailabilityKind.Attack)
+                    ?? missions.FirstOrDefault(m => m.Kind == MissionAvailabilityKind.Move);
+            case MissionType.DefenseInDepth:
+                return missions.FirstOrDefault(m => m.Kind == MissionAvailabilityKind.Defend);
+            case MissionType.Patrol:
+                return missions.FirstOrDefault(m => m.Kind == MissionAvailabilityKind.Patrol);
+            case MissionType.Diversion:
+                return missions.FirstOrDefault(m => m.Kind == MissionAvailabilityKind.Diversion);
+            case MissionType.Construction:
+                MissionAvailabilityKind kind = ((ConstructionMission)order.Mission).ConstructionType switch
+                {
+                    DefenseType.ListeningPost => MissionAvailabilityKind.BuildListeningPost,
+                    DefenseType.AntiAir => MissionAvailabilityKind.BuildAntiAir,
+                    _ => MissionAvailabilityKind.FortifyEntrenchment
+                };
+                return missions.FirstOrDefault(m => m.Kind == kind);
+            default:
+                return null;
+        }
     }
 
     private void OnAssignPressed(object sender, EventArgs e)
@@ -189,17 +243,10 @@ public partial class RegionScreenController : DialogController
         RefreshWorkspace();
     }
 
-    private void OnOrdersConfirmed(object sender, EventArgs e)
-    {
-        CampaignChanged?.Invoke(this, EventArgs.Empty);
-        RefreshWorkspace();
-    }
-
     private void RefreshWorkspace()
     {
         if (_currentRegion == null) return;
 
-        _view.SetHeader($"{_currentRegion.Planet.Name} / {_currentRegion.Name}");
         _view.SetSelectionTitle("ROSTER", "Select squads. Pick a target hex and mission, then assign.");
         _view.PopulateSelectionTree(BuildRoster());
         RecomputeSelectedSquads();
@@ -280,6 +327,7 @@ public partial class RegionScreenController : DialogController
     private void RefreshCommitBar()
     {
         _view.SetAggression(_aggression);
+        _view.SetAggressionEnabled(_selectedMission != null);
         int count = _selectedSquads.Count;
         bool enabled = count > 0 && _selectedMission != null;
         _view.SetAssignButton(count == 1 ? "Assign 1 Squad" : $"Assign {count} Squads", enabled);
@@ -434,19 +482,6 @@ public partial class RegionScreenController : DialogController
         if (string.IsNullOrWhiteSpace(key) || !key.StartsWith("squad:")) return null;
         int squadId = int.Parse(key.Split(':')[1]);
         return GetPlayerRegionFaction()?.LandedSquads.FirstOrDefault(squad => squad.Id == squadId);
-    }
-
-    private void OpenOrdersDialog(Squad squad)
-    {
-        if (squad != null)
-        {
-            _orderDialog.PopulateOrderData(squad);
-            _orderDialog.Visible = true;
-        }
-        else
-        {
-            GD.PrintErr("Cannot open orders dialog: No squad selected.");
-        }
     }
 
     private void UnassignSelectedSquads()

@@ -199,8 +199,25 @@ public partial class MainGameScene : Control
 		_topMenu.SetDebugText(actionKey);
 	}
 
+	// The bottom menu stays clickable while a map-overlay surface (planet, region,
+	// squad, soldier screen) is open. Push the visible surface before opening a
+	// bottom-menu screen so closing it returns there, instead of restoring the
+	// sector map underneath the still-visible surface.
+	private void PushVisibleOverlaySurface()
+	{
+		foreach (Control surface in new Control[] { _squadScreen, _soldierScreen, _regionScreen, _planetTacticalScreen })
+		{
+			if (surface?.Visible == true)
+			{
+				_previousScreenStack.Push(surface);
+				surface.Visible = false;
+			}
+		}
+	}
+
 	private void OnChapterButtonPressed(object sender, EventArgs e)
 	{
+		PushVisibleOverlaySurface();
 		if(_chapterScreen == null)
 		{
 			PackedScene chapterScene = GD.Load<PackedScene>("res://Scenes/ChapterScreen/chapter_screen.tscn");
@@ -253,6 +270,7 @@ public partial class MainGameScene : Control
 
 	private void OnApothecariumButtonPressed(object sender, EventArgs e)
 	{
+		PushVisibleOverlaySurface();
 		// open the Apothecarium screen
 		if (_apothecariumScreen == null)
 		{
@@ -268,6 +286,7 @@ public partial class MainGameScene : Control
 
 	private void OnTrainingUnitButtonPressed(object sender, EventArgs e)
 	{
+		PushVisibleOverlaySurface();
 		if (_trainingUnitScreen == null)
 		{
 			PackedScene trainingUnitScene = GD.Load<PackedScene>("res://Scenes/TrainingUnitScreen/training_unit_screen.tscn");
@@ -283,6 +302,7 @@ public partial class MainGameScene : Control
 
 	private void OnFleetButtonPressed(object sender, EventArgs e)
 	{
+		PushVisibleOverlaySurface();
 		if (_fleetScreen == null)
 		{
 			PackedScene fleetScene = GD.Load<PackedScene>("res://Scenes/FleetScreen/fleet_screen.tscn");
@@ -298,6 +318,7 @@ public partial class MainGameScene : Control
 
 	private void OnDiplomacyButtonPressed(object sender, EventArgs e)
 	{
+		PushVisibleOverlaySurface();
 		if (_diplomacyScreen == null)
 		{
 			PackedScene diplomacyScene = GD.Load<PackedScene>("res://Scenes/DiplomacyScreen/diplomacy_screen.tscn");

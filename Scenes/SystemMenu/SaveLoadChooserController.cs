@@ -91,7 +91,7 @@ public partial class SaveLoadChooserController : Control
         bool saving = mode == SaveChooserMode.Save;
         _titleLabel.Text = saving ? "SAVE CAMPAIGN" : "LOAD CAMPAIGN";
         _saveControls.Visible = saving;
-        _deleteButton.Visible = saving;
+        _deleteButton.Visible = true;
         _primaryButton.Visible = !saving;
         _primaryButton.Text = "Load Selected";
         ClearSelection();
@@ -233,7 +233,7 @@ public partial class SaveLoadChooserController : Control
             _saveName.CaretColumn = _saveName.Text.Length;
         }
 
-        _deleteButton.Disabled = _mode != SaveChooserMode.Save || entry?.Kind != SaveSlotKind.Manual;
+        _deleteButton.Disabled = entry?.Kind != SaveSlotKind.Manual;
         _primaryButton.Disabled = _mode != SaveChooserMode.Load || entry?.IsCompatible != true;
         ClearValidation();
     }

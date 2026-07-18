@@ -4,7 +4,6 @@
 [ext_resource type="Texture2D" uid="uid://pnufw7hg5y5o" path="res://Assets/aliens_in_range.png" id="2_utl52"]
 [ext_resource type="Script" uid="uid://b6uu2mbfxillj" path="res://Scenes/PlanetDetailScreen/PlanetTacticalScreenView.cs" id="2_xcjox"]
 [ext_resource type="PackedScene" uid="uid://bgmsb5cki6qvk" path="res://Scenes/PlanetDetailScreen/tactical_region.tscn" id="3_b2wt2"]
-[ext_resource type="PackedScene" uid="uid://ctlbf6wo4jcii" path="res://Scenes/SquadScreen/order_dialog.tscn" id="4_orderdlg"]
 
 [node name="PlanetTacticalScreenController" type="Control" unique_id=1373937144]
 layout_mode = 3
@@ -228,7 +227,3 @@ offset_top = 10.0
 offset_right = -10.0
 offset_bottom = 50.0
 text = "X"
-
-[node name="OrderDialogController" parent="PlanetTacticalScreenView" index="3" instance=ExtResource("4_orderdlg")]
-visible = false
-layout_mode = 1

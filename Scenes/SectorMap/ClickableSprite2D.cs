@@ -9,11 +9,14 @@ namespace OnlyWar.Scenes.MainGameScreen
         public event EventHandler DoublePressed;
         public event EventHandler RightPressed;
 
-        public override void _Input(InputEvent @event)
+        // _UnhandledInput, not _Input: GUI controls (and the dialog input blocker)
+        // must get first claim on clicks, or map sprites steal clicks aimed at
+        // overlapping UI panels.
+        public override void _UnhandledInput(InputEvent @event)
         {
             if (@event is InputEventMouseButton emb)
             {
-                if (!emb.IsPressed() || !IsPixelOpaque(GetLocalMousePosition())) return;
+                if (!emb.IsPressed() || !IsVisibleInTree() || !IsPixelOpaque(GetLocalMousePosition())) return;
 
                 if (emb.ButtonIndex == MouseButton.Left)
                 {
