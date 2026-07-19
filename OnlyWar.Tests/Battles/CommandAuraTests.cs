@@ -85,6 +85,28 @@ public class CommandAuraTests
 
     // --- CommandAuraEvaluator geometry ---
 
+    // Radius is personal now: best able soldier's (Ego + Tactics total) * per-point
+    // constant. Test soldiers have Int 10 and untrained Tactics (total 10 - 4 = 6).
+    private static int AuraRadius(BattleSquad hq) =>
+        (int)hq.GetCommandAuraRadius(TestSkills.Tactics);
+
+    [Fact]
+    public void CommandAuraRadius_ScalesWithEgoAndTactics_AndIsZeroForNonHq()
+    {
+        BattleSquad hq = CreateSquad("Captain", 81_071, SquadTypes.HQ, ego: 14f, soldierCount: 1);
+        BattleSquad troops = CreateSquad("Troops", 81_072, SquadTypes.None, ego: 14f, soldierCount: 1);
+
+        // Ego 14 + Tactics total (Int 10, untrained: 10 - 4 = 6) = 20 points.
+        Assert.Equal(
+            20f * MoraleConstants.CommandAuraRadiusPerPoint,
+            hq.GetCommandAuraRadius(TestSkills.Tactics));
+        Assert.Equal(0f, troops.GetCommandAuraRadius(TestSkills.Tactics));
+
+        // A wiped HQ projects nothing.
+        Destroy(hq);
+        Assert.Equal(0f, hq.GetCommandAuraRadius(TestSkills.Tactics));
+    }
+
     [Fact]
     public void SquadWithinLivingHqRadius_GetsSupport_BeyondRadiusGetsNothing()
     {
@@ -94,14 +116,16 @@ public class CommandAuraTests
         BattleSquad far = CreateSquad("Far Troops", 81_003, SquadTypes.None, ego: 10f, soldierCount: 5);
         PlaceSquad(grid, hq, 0, 0);
         PlaceSquad(grid, near, 50, 0);
-        PlaceSquad(grid, far, (int)MoraleConstants.CommandAuraRadius + 100, 0);
+        PlaceSquad(grid, far, AuraRadius(hq) + 100, 0);
         BattleSquad[] roster = [hq, near, far];
 
         Assert.Equal(
             MoraleConstants.CommandAuraSupportStrength,
-            CommandAuraEvaluator.ComputeCommandAuraModifier(near, roster, grid));
+            CommandAuraEvaluator.ComputeCommandAuraModifier(near, roster, grid, TestSkills.Tactics));
         // A living commander who is merely out of range is no aura — and no death shock.
-        Assert.Equal(0f, CommandAuraEvaluator.ComputeCommandAuraModifier(far, roster, grid));
+        Assert.Equal(
+            0f,
+            CommandAuraEvaluator.ComputeCommandAuraModifier(far, roster, grid, TestSkills.Tactics));
     }
 
     [Fact]
@@ -118,7 +142,8 @@ public class CommandAuraTests
         // Two HQs in radius still supply exactly one CommandAuraSupportStrength (max, not sum).
         Assert.Equal(
             MoraleConstants.CommandAuraSupportStrength,
-            CommandAuraEvaluator.ComputeCommandAuraModifier(troops, [hqA, hqB, troops], grid));
+            CommandAuraEvaluator.ComputeCommandAuraModifier(
+                troops, [hqA, hqB, troops], grid, TestSkills.Tactics));
     }
 
     [Fact]
@@ -129,20 +154,22 @@ public class CommandAuraTests
         BattleSquad farHq = CreateSquad("Far Captain", 81_022, SquadTypes.HQ, ego: 14f, soldierCount: 1);
         BattleSquad troops = CreateSquad("Troops", 81_023, SquadTypes.None, ego: 10f, soldierCount: 5);
         PlaceSquad(grid, deadHq, 0, 0);
-        PlaceSquad(grid, farHq, (int)MoraleConstants.CommandAuraRadius + 100, 0);
+        PlaceSquad(grid, farHq, AuraRadius(farHq) + 100, 0);
         PlaceSquad(grid, troops, 20, 0);
         Destroy(deadHq);
 
         // Another HQ survives (even far out of range): command is not gone, no loss term.
         Assert.Equal(
             0f,
-            CommandAuraEvaluator.ComputeCommandAuraModifier(troops, [deadHq, farHq, troops], grid));
+            CommandAuraEvaluator.ComputeCommandAuraModifier(
+                troops, [deadHq, farHq, troops], grid, TestSkills.Tactics));
 
         // Every fielded HQ destroyed: the stateless loss reading kicks in for the side.
         Destroy(farHq);
         Assert.Equal(
             -MoraleConstants.CommandLossStress,
-            CommandAuraEvaluator.ComputeCommandAuraModifier(troops, [deadHq, farHq, troops], grid));
+            CommandAuraEvaluator.ComputeCommandAuraModifier(
+                troops, [deadHq, farHq, troops], grid, TestSkills.Tactics));
     }
 
     [Fact]
@@ -155,7 +182,9 @@ public class CommandAuraTests
         PlaceSquad(grid, troopsB, 10, 0);
 
         Assert.Equal(
-            0f, CommandAuraEvaluator.ComputeCommandAuraModifier(troopsA, [troopsA, troopsB], grid));
+            0f,
+            CommandAuraEvaluator.ComputeCommandAuraModifier(
+                troopsA, [troopsA, troopsB], grid, TestSkills.Tactics));
     }
 
     [Fact]
@@ -165,7 +194,9 @@ public class CommandAuraTests
         BattleSquad hq = CreateSquad("Captain", 81_041, SquadTypes.HQ, ego: 14f, soldierCount: 1);
         PlaceSquad(grid, hq, 0, 0);
 
-        Assert.Equal(0f, CommandAuraEvaluator.ComputeCommandAuraModifier(hq, [hq], grid));
+        Assert.Equal(
+            0f,
+            CommandAuraEvaluator.ComputeCommandAuraModifier(hq, [hq], grid, TestSkills.Tactics));
     }
 
     // --- signed w6 stress term (§5.2): support lowers stress, loss raises it ---

@@ -21,6 +21,16 @@ namespace OnlyWar.Helpers.Battles
         private const float WalkBulkMultiplier = 0.5f;
         private const float FullBulkMultiplier = 1f;
         private const float WalkAimMultiplier = 0.5f;
+        // Blast throw evaluation integrates over the delivery check's scatter distribution
+        // (margin = skill + modifiers - roll, roll ~ N(10.5, 3), matching BlastAttackAction)
+        // instead of assuming a perfect unscattered impact. Margins are sampled at the
+        // midpoint z-quantiles of seven equal-probability bands; each failed-check sample
+        // averages over evenly spaced scatter directions. Deterministic: no RNG at plan time.
+        private static readonly float[] BlastMarginZSamples =
+            [-1.465f, -0.792f, -0.366f, 0f, 0.366f, 0.792f, 1.465f];
+        private const int BlastScatterDirectionSamples = 8;
+        private const float BlastDeliveryRollMean = 10.5f;
+        private const float BlastDeliveryRollStdDev = 3.0f;
 
         private readonly BattleGridManager _grid;
         private readonly ICollection<IAction> _shootActions;
@@ -167,7 +177,11 @@ namespace OnlyWar.Helpers.Battles
             _log = log;
         }
 
-        public void PrepareActions(BattleSquad squad)
+        // How far behind the friendly fighting line an HQ squad tries to stay. Matches the
+        // placers' HQ rear offset so a rear-deployed HQ starts the battle already satisfied.
+        private const float HqLineBuffer = 10f;
+
+        public void PrepareActions(BattleSquad squad, IReadOnlyCollection<BattleSquad> friendlySquads = null)
         {
             // If no living enemy remains on the grid, this squad has nothing to plan against: every
             // targeting helper below resolves the "nearest enemy" to -1 and then indexes
@@ -201,6 +215,56 @@ namespace OnlyWar.Helpers.Battles
             }
             else
             {
+                // An HQ squad with line troops still standing keeps itself behind them
+                // ("stay behind the troop wall") and only joins a melee once the troops are
+                // stuck in. Everything below is skipped if the HQ decides to hold or fall
+                // back; otherwise it plans like any other squad, minus the charge impulse.
+                bool suppressCharge = false;
+                if (squad.Squad?.SquadTemplate?.SquadType.HasFlag(Models.Squads.SquadTypes.HQ) == true
+                    && friendlySquads != null)
+                {
+                    List<BattleSquad> wall = friendlySquads
+                        .Where(s => s.Id != squad.Id
+                            && s.Status == BattleSquadStatus.Active
+                            && s.AbleSoldiers.Count > 0
+                            && s.Squad?.SquadTemplate?.SquadType.HasFlag(Models.Squads.SquadTypes.HQ) != true)
+                        .ToList();
+                    if (wall.Count > 0)
+                    {
+                        bool wallEngaged = wall.Any(s => s.IsInMelee);
+                        suppressCharge = !wallEngaged;
+                        if (!wallEngaged)
+                        {
+                            float wallDistance = wall.Min(NearestEnemyDistance);
+                            float ownDistance = NearestEnemyDistance(squad);
+                            if (ownDistance < wallDistance + HqLineBuffer)
+                            {
+                                // At or ahead of the wall: back off at a walk, weapons up.
+                                squad.MovementTier = SquadMovementTier.Walk;
+                                ApplyDeclaredMovementState(squad);
+                                foreach (BattleSoldier soldier in squad.AbleSoldiers)
+                                {
+                                    AddRetreatingActionsToBag(soldier, SquadMovementTier.Walk);
+                                }
+                                return;
+                            }
+                            float jogReach = squad.GetSquadMove() * JogSpeedMultiplier;
+                            if (ownDistance < wallDistance + HqLineBuffer + jogReach)
+                            {
+                                // Comfortably tucked behind the line: hold and shoot rather
+                                // than jitter across the buffer boundary every turn.
+                                squad.MovementTier = SquadMovementTier.Stationary;
+                                ApplyDeclaredMovementState(squad);
+                                foreach (BattleSoldier soldier in squad.AbleSoldiers)
+                                {
+                                    AddStandingActionsToBag(soldier, allowCharge: false);
+                                }
+                                return;
+                            }
+                        }
+                    }
+                }
+
                 // need some concept of squad disposition... stance, whether they're actively aiming
                 // determine closest enemy
                 // determine our optimal range
@@ -331,6 +395,13 @@ namespace OnlyWar.Helpers.Battles
                     }
                 }
 
+                // "If I want to melee, let the troops get stuck in first": an HQ behind an
+                // unengaged wall folds its charge impulse into a plain advance.
+                if (suppressCharge)
+                {
+                    chargeVotes = 0;
+                }
+
                 // A Shaken squad will not advance toward the enemy (Design/Active/
                 // MoraleAndRout.md §6): advance/charge impulses collapse into holding ground.
                 // The state is recomputed every turn, so this is not sticky.
@@ -398,6 +469,20 @@ namespace OnlyWar.Helpers.Battles
                     }
                 }
             }
+        }
+
+        private float NearestEnemyDistance(BattleSquad squad)
+        {
+            float min = float.MaxValue;
+            foreach (BattleSoldier soldier in squad.AbleSoldiers)
+            {
+                float distance = _grid.GetNearestEnemy(soldier.Soldier.Id, out int enemyId);
+                if (enemyId != -1 && distance < min)
+                {
+                    min = distance;
+                }
+            }
+            return min;
         }
 
         /// <summary>Plans the stationary firing element of a leapfrog withdrawal.</summary>
@@ -527,6 +612,31 @@ namespace OnlyWar.Helpers.Battles
             BattleSquad squad,
             IReadOnlyCollection<BattleSquad> withdrawingTargets)
         {
+            // Following is a firing pursuit, and the jog only pays while the guns are
+            // actually worth firing. Out of effective range the squad runs to regain it —
+            // otherwise any quarry faster than a jog simply walks away from the pursuit —
+            // and drops back to jog-and-shoot once shots are worthwhile again.
+            if (!ShouldJogAndShoot(squad))
+            {
+                squad.MovementTier = SquadMovementTier.Run;
+                ApplyDeclaredMovementState(squad);
+                foreach (BattleSoldier soldier in squad.AbleSoldiers.OrderBy(s => s.Soldier.Id))
+                {
+                    BattleSoldier target = FindNearestTarget(soldier, withdrawingTargets);
+                    if (target == null) continue;
+                    Tuple<int, int> line = new(
+                        target.TopLeft.Item1 - soldier.TopLeft.Item1,
+                        target.TopLeft.Item2 - soldier.TopLeft.Item2);
+                    AddMoveAction(
+                        soldier,
+                        GetMovementBudget(soldier, SquadMovementTier.Run),
+                        line,
+                        SquadMovementTier.Run);
+                    AddPermittedRunUtilityActionToBag(soldier);
+                }
+                return;
+            }
+
             squad.MovementTier = SquadMovementTier.Jog;
             ApplyDeclaredMovementState(squad);
             foreach (BattleSoldier soldier in squad.AbleSoldiers.OrderBy(s => s.Soldier.Id))
@@ -632,7 +742,7 @@ namespace OnlyWar.Helpers.Battles
                 bool hasShot = SelectBestTemplateFiringLine(
                         soldier,
                         movementDirection: movementDirection) != null
-                    || SelectBestBlastThrow(soldier, movementDirection) != null
+                    || SelectBestBlastThrow(soldier, movementDirection, FullBulkMultiplier) != null
                     || (conventionalShot?.Score > 0
                         && conventionalShot.HitProbability > 0.1f);
                 if (hasShot)
@@ -1492,7 +1602,8 @@ namespace OnlyWar.Helpers.Battles
                 movementDirection: movementDirection);
             TemplateFiringLineEvaluation blastThrow = SelectBestBlastThrow(
                 soldier,
-                movementDirection);
+                movementDirection,
+                bulkMultiplier);
             float bestConventionalScore = Math.Max(
                 templateLine?.Score ?? float.MinValue,
                 targetEvaluation?.Score ?? float.MinValue);
@@ -1781,16 +1892,19 @@ namespace OnlyWar.Helpers.Battles
 
         /// <summary>
         /// Scores every enemy soldier within blast (grenade) range as a candidate impact
-        /// point, using the nominal unscattered impact — the target's footprint cell
-        /// nearest the thrower, exactly as <see cref="BlastAttackAction"/> resolves it.
-        /// Everyone inside the circle is auto-hit, so the score is the falloff-scaled
-        /// expected enemy battle value removed minus the expected friendly battle value
-        /// lost, with the thrower's own exposure included (danger-close is legal).
-        /// Returns null when no throw removes more value than it costs.
+        /// point, integrating over the delivery check's outcome distribution exactly as
+        /// <see cref="BlastAttackAction"/> resolves it: successful checks land on the
+        /// target's footprint cell nearest the thrower, failures scatter by margin in a
+        /// uniform direction. Everyone inside each sampled circle is auto-hit, so the
+        /// score is the probability-weighted falloff-scaled expected enemy battle value
+        /// removed minus the expected friendly battle value lost, with the thrower's own
+        /// exposure included (danger-close is legal, and scatter toward friends counts).
+        /// Returns null when no throw removes more value than it costs in expectation.
         /// </summary>
         internal TemplateFiringLineEvaluation SelectBestBlastThrow(
             BattleSoldier soldier,
-            Tuple<int, int> movementDirection = null)
+            Tuple<int, int> movementDirection = null,
+            float bulkMultiplier = 0)
         {
             if (soldier == null || !IsPlaced(soldier))
             {
@@ -1828,58 +1942,74 @@ namespace OnlyWar.Helpers.Battles
                         soldier.Soldier,
                         weapon.Template)))
                 {
-                    Tuple<int, int> impactCell = BlastTemplate.ResolveImpactCell(
-                        _grid,
-                        soldier.Soldier.Id,
-                        target.Soldier.Id,
-                        margin: 0,
-                        directionRoll: 0);
-                    IReadOnlyList<BlastTemplate.BlastVictim> victims = BlastTemplate.GetVictims(
-                        _grid,
-                        impactCell,
-                        weapon.Template.AreaRadius);
+                    // Same to-hit total BlastAttackAction rolls against: Throwing skill
+                    // plus the range penalty vs a stationary point, minus Bulk if moving.
+                    float toHit = soldier.Soldier.GetTotalSkillValue(weapon.Template.RelatedSkill)
+                        + BattleModifiersUtil.CalculateRangeModifier(range, 0f)
+                        - (weapon.Template.Bulk * bulkMultiplier);
+                    float meanMargin = toHit - BlastDeliveryRollMean;
+
                     float expectedEnemyBattleValueRemoved = 0;
                     float expectedFriendlyBattleValueLost = 0;
-                    List<int> victimIds = new(victims.Count);
-                    foreach (BlastTemplate.BlastVictim blastVictim in victims)
+                    // Distinct margin samples can resolve to the same impact cell (every
+                    // successful check lands on the aim cell), so memoize per cell.
+                    Dictionary<Tuple<int, int>, (float Enemy, float Friendly)> impactCache = [];
+                    foreach (float z in BlastMarginZSamples)
                     {
-                        victimIds.Add(blastVictim.SoldierId);
-                        if (!_soldierMap.TryGetValue(blastVictim.SoldierId, out BattleSoldier victim))
+                        float margin = meanMargin + (BlastDeliveryRollStdDev * z);
+                        if (margin >= 0)
                         {
-                            continue;
-                        }
-                        if (!victim.CanFight)
-                        {
-                            // Incapacitated figures are still physically inside the blast,
-                            // but their battle value has already been removed from the fight.
-                            continue;
-                        }
-
-                        float armor = victim.Armor?.Template.ArmorProvided ?? 0;
-                        float woundRatio = Math.Clamp(
-                            CalculateExpectedBlastDamage(
+                            (float enemy, float friendly) = ScoreBlastImpact(
+                                soldier,
+                                target,
                                 weapon,
-                                blastVictim.DistanceFromImpact,
-                                armor,
-                                victim.Soldier.Constitution),
-                            0,
-                            1);
-                        float expectedBattleValueRemoval = woundRatio * GetBattleValue(victim);
-                        if (_grid.GetSoldierSide(blastVictim.SoldierId) == shooterSide)
-                        {
-                            expectedFriendlyBattleValueLost += expectedBattleValueRemoval;
+                                margin,
+                                directionRoll: 0,
+                                shooterSide,
+                                impactCache);
+                            expectedEnemyBattleValueRemoved += enemy;
+                            expectedFriendlyBattleValueLost += friendly;
                         }
                         else
                         {
-                            expectedEnemyBattleValueRemoved += expectedBattleValueRemoval;
+                            float enemySum = 0;
+                            float friendlySum = 0;
+                            for (int direction = 0; direction < BlastScatterDirectionSamples; direction++)
+                            {
+                                (float enemy, float friendly) = ScoreBlastImpact(
+                                    soldier,
+                                    target,
+                                    weapon,
+                                    margin,
+                                    (direction + 0.5) / BlastScatterDirectionSamples,
+                                    shooterSide,
+                                    impactCache);
+                                enemySum += enemy;
+                                friendlySum += friendly;
+                            }
+                            expectedEnemyBattleValueRemoved += enemySum / BlastScatterDirectionSamples;
+                            expectedFriendlyBattleValueLost += friendlySum / BlastScatterDirectionSamples;
                         }
                     }
+                    expectedEnemyBattleValueRemoved /= BlastMarginZSamples.Length;
+                    expectedFriendlyBattleValueLost /= BlastMarginZSamples.Length;
 
+                    // Reported victims are the nominal on-target impact's; the score
+                    // above is the scatter-weighted expectation.
+                    IReadOnlyList<BlastTemplate.BlastVictim> nominalVictims = BlastTemplate.GetVictims(
+                        _grid,
+                        BlastTemplate.ResolveImpactCell(
+                            _grid,
+                            soldier.Soldier.Id,
+                            target.Soldier.Id,
+                            margin: 0,
+                            directionRoll: 0),
+                        weapon.Template.AreaRadius);
                     TemplateFiringLineEvaluation evaluation = new(
                         target,
                         weapon,
                         range,
-                        victimIds,
+                        nominalVictims.Select(victim => victim.SoldierId).ToList(),
                         expectedEnemyBattleValueRemoved,
                         expectedFriendlyBattleValueLost);
                     // A throw that trades away as much friendly value (self included) as
@@ -1892,6 +2022,74 @@ namespace OnlyWar.Helpers.Battles
             }
 
             return best;
+        }
+
+        /// <summary>
+        /// Expected battle value removed/lost for one sampled delivery outcome: resolves
+        /// the impact cell for the given margin and scatter direction, then sums the
+        /// falloff-scaled expected removal for everyone caught, split by side.
+        /// </summary>
+        private (float Enemy, float Friendly) ScoreBlastImpact(
+            BattleSoldier soldier,
+            BattleSoldier target,
+            RangedWeapon weapon,
+            float margin,
+            double directionRoll,
+            bool shooterSide,
+            Dictionary<Tuple<int, int>, (float Enemy, float Friendly)> impactCache)
+        {
+            Tuple<int, int> impactCell = BlastTemplate.ResolveImpactCell(
+                _grid,
+                soldier.Soldier.Id,
+                target.Soldier.Id,
+                margin,
+                directionRoll);
+            if (impactCache.TryGetValue(impactCell, out (float Enemy, float Friendly) cached))
+            {
+                return cached;
+            }
+
+            float enemyBattleValueRemoved = 0;
+            float friendlyBattleValueLost = 0;
+            foreach (BlastTemplate.BlastVictim blastVictim in BlastTemplate.GetVictims(
+                _grid,
+                impactCell,
+                weapon.Template.AreaRadius))
+            {
+                if (!_soldierMap.TryGetValue(blastVictim.SoldierId, out BattleSoldier victim))
+                {
+                    continue;
+                }
+                if (!victim.CanFight)
+                {
+                    // Incapacitated figures are still physically inside the blast,
+                    // but their battle value has already been removed from the fight.
+                    continue;
+                }
+
+                float armor = victim.Armor?.Template.ArmorProvided ?? 0;
+                float woundRatio = Math.Clamp(
+                    CalculateExpectedBlastDamage(
+                        weapon,
+                        blastVictim.DistanceFromImpact,
+                        armor,
+                        victim.Soldier.Constitution),
+                    0,
+                    1);
+                float expectedBattleValueRemoval = woundRatio * GetBattleValue(victim);
+                if (_grid.GetSoldierSide(blastVictim.SoldierId) == shooterSide)
+                {
+                    friendlyBattleValueLost += expectedBattleValueRemoval;
+                }
+                else
+                {
+                    enemyBattleValueRemoved += expectedBattleValueRemoval;
+                }
+            }
+
+            (float, float) result = (enemyBattleValueRemoved, friendlyBattleValueLost);
+            impactCache[impactCell] = result;
+            return result;
         }
 
         /// <summary>

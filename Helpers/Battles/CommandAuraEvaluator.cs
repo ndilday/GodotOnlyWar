@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 
 using OnlyWar.Models.Battles;
+using OnlyWar.Models.Soldiers;
 
 namespace OnlyWar.Helpers.Battles
 {
@@ -27,7 +28,7 @@ namespace OnlyWar.Helpers.Battles
         /// The signed §5.2 commandAuraSupport term for <paramref name="squad"/>:
         /// +<see cref="MoraleConstants.CommandAuraSupportStrength"/> when a living,
         /// same-faction HQ squad other than itself has an able soldier within
-        /// <see cref="MoraleConstants.CommandAuraRadius"/> of one of its able soldiers
+        /// that HQ's <see cref="BattleSquad.GetCommandAuraRadius"/> of one of its able soldiers
         /// (NOT stacking — one HQ is enough and multiple HQs never sum; every source
         /// supplies the same constant, so first-hit == max);
         /// -<see cref="MoraleConstants.CommandLossStress"/> when the side fielded HQ
@@ -44,14 +45,20 @@ namespace OnlyWar.Helpers.Battles
         /// own aura.
         /// </param>
         /// <param name="grid">Grid used to measure soldier-to-soldier distance.</param>
+        /// <param name="tacticsSkill">
+        /// The Tactics base skill, used to derive each provider's personal aura radius
+        /// (see <see cref="BattleSquad.GetCommandAuraRadius"/>).
+        /// </param>
         public static float ComputeCommandAuraModifier(
             BattleSquad squad,
             IEnumerable<BattleSquad> friendlySquads,
-            BattleGridManager grid)
+            BattleGridManager grid,
+            BaseSkill tacticsSkill)
         {
             ArgumentNullException.ThrowIfNull(squad);
             ArgumentNullException.ThrowIfNull(friendlySquads);
             ArgumentNullException.ThrowIfNull(grid);
+            ArgumentNullException.ThrowIfNull(tacticsSkill);
 
             List<BattleSoldier> receivers = squad.AbleSoldiers;
             if (receivers.Count == 0)
@@ -89,7 +96,10 @@ namespace OnlyWar.Helpers.Battles
                 anySurvivingHq = true;
                 if (provider.Status == BattleSquadStatus.Active
                     && IsWithinRadius(
-                        receivers, provider.AbleSoldiers, MoraleConstants.CommandAuraRadius, grid))
+                        receivers,
+                        provider.AbleSoldiers,
+                        provider.GetCommandAuraRadius(tacticsSkill),
+                        grid))
                 {
                     return MoraleConstants.CommandAuraSupportStrength;
                 }

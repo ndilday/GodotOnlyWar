@@ -318,7 +318,7 @@ namespace OnlyWar.Helpers.Battles
             foreach (BattleSquad squad in friendly)
             {
                 squad.WithdrawalRole = WithdrawalRole.None;
-                squadPlanner.PrepareActions(squad);
+                squadPlanner.PrepareActions(squad, friendly);
             }
         }
 
@@ -568,7 +568,8 @@ namespace OnlyWar.Helpers.Battles
         // HQ-loss reading — every fielded HQ squad destroyed applies +CommandLossStress of
         // stress — needs destroyed HQ squads to stay visible. See CommandAuraEvaluator.
         private float CommandAuraSupport(BattleSquad squad, BattleSide side) =>
-            CommandAuraEvaluator.ComputeCommandAuraModifier(squad, GetAllSquads(side), _grid);
+            CommandAuraEvaluator.ComputeCommandAuraModifier(
+                squad, GetAllSquads(side), _grid, _execution.Rules.Skills.Tactics);
 
         // Squads are species-homogeneous (§3.1), so squad Ego is the shared per-soldier Ego;
         // averaging over able soldiers is robust to a future mixed template. Used by the §7
@@ -776,6 +777,14 @@ namespace OnlyWar.Helpers.Battles
                 0.01f,
                 pursuitMetrics.FastestPursuitSquadSpeed - withdrawalMetrics.SlowestMainBodySquadSpeed);
             float pressTurns = separation / speedAdvantage;
+            // The withdrawer "returns fire" only if some non-routing element still carries a
+            // ranged weapon: a fully routed side shoots at no one, and a melee-only force
+            // never could. Routing roles are already set when a rout triggers this
+            // evaluation, so the flag reads the current turn's reality.
+            bool withdrawerReturnsFire = GetActiveSquads(withdrawingSide).Any(
+                squad => squad.WithdrawalRole != WithdrawalRole.Routing
+                    && squad.AbleSoldiers.Any(
+                        soldier => soldier.EquippedRangedWeapons.Count > 0));
             BattlePursuitPlanner.Result result = BattlePursuitPlanner.Evaluate(new(
                 _currentState.TurnNumber,
                 pursuingSide == BattleSide.Attacker,
@@ -785,7 +794,8 @@ namespace OnlyWar.Helpers.Battles
                 pursuitMetrics.FastestPursuitSquadSpeed,
                 withdrawalMetrics.SlowestMainBodySquadSpeed,
                 pressTurns,
-                ProjectedFollowShotTurns(pursuingSide, separation)));
+                ProjectedFollowShotTurns(pursuingSide, separation),
+                withdrawerReturnsFire));
             _pursuitPostures[pursuingSide] = result.Posture;
             if (result.Posture == PursuitPosture.BreakOff)
             {

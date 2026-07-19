@@ -79,7 +79,7 @@ namespace OnlyWar.Helpers.Battles
         // w5: local outnumbering beyond parity within visual range.
         public const float ShockLocalOutnumberWeight = 0.15f;
         // w6: command-aura term (§4.3, Phase 6). SIGNED: a living same-faction HQ squad
-        // within CommandAuraRadius supplies +CommandAuraSupportStrength (support, subtracted
+        // within its command aura radius supplies +CommandAuraSupportStrength (support, subtracted
         // from shock); a side whose every HQ squad has been destroyed supplies
         // -CommandLossStress, which ADDS w6 * CommandLossStress of shock ("whose loss
         // supplies a positive one"). Never a check skip — that is synapse-only.
@@ -88,10 +88,12 @@ namespace OnlyWar.Helpers.Battles
         // --- §4.3 command auras (Phase 6): the weak-coefficient generalisation of synapse.
         // Derived entirely from SquadTypes.HQ plus these code constants — no DB data. All
         // Phase 7 calibration targets. ---
-        // Radius an HQ squad projects command over. Deliberately WEAKER AND SHORTER than
-        // synapse (Species.SynapseRadius is 1000 for every synapse creature): command is
-        // presence and voice, not a hive link.
-        public const float CommandAuraRadius = 500f;
+        // Radius an HQ squad projects command over, per point of the commander's
+        // (Ego + Tactics skill total): radius = best able soldier's (Ego + Tactics) * this.
+        // A marine captain (~14 Ego, ~14 Tactics total) projects ~170; a poor officer far
+        // less. Deliberately WEAKER AND SHORTER than synapse (Species.SynapseRadius is 1000
+        // for every synapse creature): command is presence and voice, not a hive link.
+        public const float CommandAuraRadiusPerPoint = 6f;
         // Support while a living HQ is in radius. NOT stacking: one HQ suffices, and
         // multiple HQs still supply exactly this value (max, never a sum). Net shock
         // reduction = w6 * this = 0.25.

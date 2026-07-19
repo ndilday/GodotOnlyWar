@@ -164,6 +164,10 @@ public class GrenadePlannerTests
         BattleSquad troopers = CreateSquad("Weak Thrower", 801);
         ((Soldier)marines.Soldiers[0].Soldier).Strength = 15;   // 15 × 3.0 = 45m reach
         ((Soldier)troopers.Soldiers[0].Soldier).Strength = 10;  // 10 × 3.0 = 30m reach
+        // Skilled enough arms that the long delivery check has real success odds;
+        // an untrained thrower would rightly score a 40-cell lob as worthless.
+        ((Soldier)marines.Soldiers[0].Soldier).Dexterity = 22;
+        ((Soldier)troopers.Soldiers[0].Soldier).Dexterity = 22;
         AddBeltGrenade(marines.Soldiers[0]);
         AddBeltGrenade(troopers.Soldiers[0]);
         BattleSquad enemies = CreateSquad("Distant Enemy", 810);
@@ -180,6 +184,82 @@ public class GrenadePlannerTests
         Assert.NotNull(marineThrow);
         Assert.Equal(TestModelFactory.FragGrenadeTemplate.Id, marineThrow.Weapon.Template.Id);
         Assert.Null(planner.SelectBestBlastThrow(troopers.Soldiers[0]));
+    }
+
+    [Fact]
+    public void BlastThrowScore_IsDiscountedByScatterRiskAtLongRange()
+    {
+        // Perfect-impact scoring gave a lone-target throw the same score at any range;
+        // the probabilistic evaluation must discount the long throw, whose delivery
+        // check will usually fail and scatter the blast off target.
+        BattleSquad closeShooters = CreateSquad("Close Thrower", 900);
+        ((Soldier)closeShooters.Soldiers[0].Soldier).Dexterity = 22;
+        AddBeltGrenade(closeShooters.Soldiers[0]);
+        BattleSquad closeEnemies = CreateSquad("Close Enemy", 910);
+        BattleGridManager closeGrid = new();
+        Place(closeGrid, closeShooters.Soldiers[0], true, 0, 0);
+        Place(closeGrid, closeEnemies.Soldiers[0], false, 8, 0);
+        BattleSquadPlanner closePlanner = CreatePlanner(
+            closeGrid, [], [], [], closeShooters, closeEnemies);
+
+        BattleSquad farShooters = CreateSquad("Far Thrower", 901);
+        ((Soldier)farShooters.Soldiers[0].Soldier).Dexterity = 22;
+        AddBeltGrenade(farShooters.Soldiers[0]);
+        BattleSquad farEnemies = CreateSquad("Far Enemy", 911);
+        BattleGridManager farGrid = new();
+        Place(farGrid, farShooters.Soldiers[0], true, 0, 0);
+        Place(farGrid, farEnemies.Soldiers[0], false, 28, 0);
+        BattleSquadPlanner farPlanner = CreatePlanner(
+            farGrid, [], [], [], farShooters, farEnemies);
+
+        BattleSquadPlanner.TemplateFiringLineEvaluation closeThrow =
+            closePlanner.SelectBestBlastThrow(closeShooters.Soldiers[0]);
+        BattleSquadPlanner.TemplateFiringLineEvaluation farThrow =
+            farPlanner.SelectBestBlastThrow(farShooters.Soldiers[0]);
+
+        Assert.NotNull(closeThrow);
+        if (farThrow != null)
+        {
+            Assert.True(
+                farThrow.Score < closeThrow.Score,
+                $"Long throw ({farThrow.Score}) must score below short throw ({closeThrow.Score}).");
+        }
+    }
+
+    [Fact]
+    public void BlastThrowScore_RewardsThrowingSkill()
+    {
+        // Perfect-impact scoring ignored the thrower entirely; the probabilistic
+        // evaluation must expect more value from a skilled arm at the same range.
+        BattleSquad cleverShooters = CreateSquad("Skilled Thrower", 920);
+        ((Soldier)cleverShooters.Soldiers[0].Soldier).Dexterity = 22;
+        AddBeltGrenade(cleverShooters.Soldiers[0]);
+        BattleSquad firstEnemies = CreateSquad("Enemy", 930);
+        BattleGridManager firstGrid = new();
+        Place(firstGrid, cleverShooters.Soldiers[0], true, 0, 0);
+        Place(firstGrid, firstEnemies.Soldiers[0], false, 20, 0);
+        BattleSquadPlanner firstPlanner = CreatePlanner(
+            firstGrid, [], [], [], cleverShooters, firstEnemies);
+
+        BattleSquad clumsyShooters = CreateSquad("Unskilled Thrower", 921);
+        AddBeltGrenade(clumsyShooters.Soldiers[0]);
+        BattleSquad secondEnemies = CreateSquad("Enemy", 931);
+        BattleGridManager secondGrid = new();
+        Place(secondGrid, clumsyShooters.Soldiers[0], true, 0, 0);
+        Place(secondGrid, secondEnemies.Soldiers[0], false, 20, 0);
+        BattleSquadPlanner secondPlanner = CreatePlanner(
+            secondGrid, [], [], [], clumsyShooters, secondEnemies);
+
+        BattleSquadPlanner.TemplateFiringLineEvaluation skilledThrow =
+            firstPlanner.SelectBestBlastThrow(cleverShooters.Soldiers[0]);
+        BattleSquadPlanner.TemplateFiringLineEvaluation unskilledThrow =
+            secondPlanner.SelectBestBlastThrow(clumsyShooters.Soldiers[0]);
+
+        Assert.NotNull(skilledThrow);
+        float unskilledScore = unskilledThrow?.Score ?? 0;
+        Assert.True(
+            skilledThrow.Score > unskilledScore,
+            $"Skilled throw ({skilledThrow.Score}) must out-score unskilled ({unskilledScore}).");
     }
 
     [Fact]

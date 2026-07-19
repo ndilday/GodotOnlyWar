@@ -110,6 +110,30 @@ namespace OnlyWar.Helpers.Battles
         public bool SquadProvidesCommandAura =>
             Squad?.SquadTemplate?.SquadType.HasFlag(SquadTypes.HQ) == true;
 
+        // The aura radius this squad projects if it provides command, else 0. Command reach
+        // is personal: the best able soldier's (Ego + Tactics skill total) scaled by
+        // MoraleConstants.CommandAuraRadiusPerPoint. Using the best ABLE soldier means a
+        // downed Captain's surviving Lieutenant still projects a (smaller) aura, and the
+        // radius degrades naturally as the command squad is whittled down.
+        public float GetCommandAuraRadius(BaseSkill tacticsSkill)
+        {
+            if (!SquadProvidesCommandAura || tacticsSkill == null)
+            {
+                return 0f;
+            }
+            float best = 0f;
+            foreach (BattleSoldier soldier in AbleSoldiers)
+            {
+                float points = soldier.Soldier.Ego
+                    + soldier.Soldier.GetTotalSkillValue(tacticsSkill);
+                if (points > best)
+                {
+                    best = points;
+                }
+            }
+            return best * MoraleConstants.CommandAuraRadiusPerPoint;
+        }
+
         // The aura radius this squad projects if it provides synapse, else 0. When multiple
         // synapse-carrying species could coexist in one squad, the largest radius governs.
         public float SynapseRadius

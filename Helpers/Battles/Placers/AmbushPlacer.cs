@@ -19,6 +19,10 @@ namespace OnlyWar.Helpers.Battles.Placers
         // caps one end as the short leg.
         private const double LongLegFrontageShare = 0.6;
         private const int MaxFormationStandoff = 200;
+        // How far behind a firing leg an ambushing HQ squad deploys (away from the kill
+        // zone). Modest: enough that the counter-fire finds the line first, small enough
+        // to keep the HQ inside its command aura and weapon reach.
+        private const int HqRearOffset = 10;
 
         private readonly BattleGridManager _grid;
         private readonly ushort _engagementRange;
@@ -51,9 +55,30 @@ namespace OnlyWar.Helpers.Battles.Placers
                                                                     IReadOnlyList<BattleSquad> ambushingSquads)
         {
             Dictionary<BattleSquad, Tuple<int, int>> result = [];
-            KillZone killZone = PlaceAmbushedSquads(ambushedSquads, 0, 0, result);
+            KillZone killZone = PlaceAmbushedSquads(OrderColumnHqMid(ambushedSquads), 0, 0, result);
             PlaceAmbushingSquads(ambushingSquads, killZone, result);
             return result;
+        }
+
+        private static bool IsHqSquad(BattleSquad squad) =>
+            squad.Squad?.SquadTemplate?.SquadType.HasFlag(Models.Squads.SquadTypes.HQ) == true;
+
+        // A marching column keeps its command element mid-column, not at the head where the
+        // ambush's short leg fires first: line squads front and rear, HQs between them.
+        private static IReadOnlyList<BattleSquad> OrderColumnHqMid(IReadOnlyList<BattleSquad> squads)
+        {
+            List<BattleSquad> line = squads.Where(s => !IsHqSquad(s)).ToList();
+            List<BattleSquad> hq = squads.Where(IsHqSquad).ToList();
+            if (hq.Count == 0 || line.Count == 0)
+            {
+                return squads;
+            }
+            List<BattleSquad> ordered = [];
+            int lead = (line.Count + 1) / 2;
+            ordered.AddRange(line.Take(lead));
+            ordered.AddRange(hq);
+            ordered.AddRange(line.Skip(lead));
+            return ordered;
         }
 
         private KillZone PlaceAmbushedSquads(IReadOnlyList<BattleSquad> squads, int xMid, int top,
@@ -92,8 +117,18 @@ namespace OnlyWar.Helpers.Battles.Placers
                 return;
             }
 
+            // HQ squads deploy behind the firing legs, not on them; if the ambush force is
+            // nothing but HQs, they take the line themselves.
+            List<BattleSquad> hqSquads = ambushingSquads.Where(IsHqSquad).ToList();
+            List<BattleSquad> lineSquads = ambushingSquads.Where(s => !IsHqSquad(s)).ToList();
+            if (lineSquads.Count == 0)
+            {
+                lineSquads = hqSquads;
+                hqSquads = [];
+            }
+
             // Anchor the biggest squads on the main firing line first.
-            List<BattleSquad> sorted = ambushingSquads
+            List<BattleSquad> sorted = lineSquads
                 .OrderByDescending(s => s.AbleSoldiers.Count)
                 .ToList();
 
@@ -121,6 +156,71 @@ namespace OnlyWar.Helpers.Battles.Placers
 
             PlaceLongLeg(longLeg, killZone, squadPositionMap);
             PlaceShortLeg(shortLeg, killZone, squadPositionMap);
+            PlaceHqSquads(hqSquads, longLeg, shortLeg, killZone, squadPositionMap);
+        }
+
+        // Each HQ deploys one rear offset behind a firing leg, on the side away from the
+        // kill zone, spread evenly along the leg's span. HQs are split between the legs in
+        // proportion to how much line each leg holds (a large two-leg ambush gets command
+        // presence behind both faces; a one-leg ambush keeps them all behind that leg).
+        private void PlaceHqSquads(IReadOnlyList<BattleSquad> hqSquads,
+                                   IReadOnlyList<BattleSquad> longLeg,
+                                   IReadOnlyList<BattleSquad> shortLeg,
+                                   KillZone killZone,
+                                   Dictionary<BattleSquad, Tuple<int, int>> squadPositionMap)
+        {
+            if (hqSquads.Count == 0)
+            {
+                return;
+            }
+
+            int shortLegShare = shortLeg.Count == 0
+                ? 0
+                : hqSquads.Count * shortLeg.Count / (longLeg.Count + shortLeg.Count);
+            List<BattleSquad> behindLong = hqSquads.Take(hqSquads.Count - shortLegShare).ToList();
+            List<BattleSquad> behindShort = hqSquads.Skip(hqSquads.Count - shortLegShare).ToList();
+            int standoff = FormationStandoff();
+
+            // Behind the long (west) leg: further west. The leg's thickest squad sets the
+            // west face; HQs spread down the leg's length (the kill zone's Y span).
+            if (behindLong.Count > 0)
+            {
+                int legThickness = longLeg.Max(s => (int)s.GetSquadBoxSize().Y);
+                int westFace = killZone.MinX - standoff - legThickness;
+                int ySpan = Math.Max(0, killZone.MaxY - killZone.MinY);
+                for (int i = 0; i < behindLong.Count; i++)
+                {
+                    BattleSquad squad = behindLong[i];
+                    Coordinate squadSize = squad.GetSquadBoxSize();
+                    int left = westFace - HqRearOffset - squadSize.Y;
+                    int centerY = killZone.MaxY - ySpan * (i + 1) / (behindLong.Count + 1);
+                    int bottom = centerY - squadSize.X / 2;
+                    Tuple<int, int> position = new(left, bottom);
+                    squadPositionMap[squad] = position;
+                    BattleSquadPlacer.PlaceBattleSquad(_grid, squad, position, false, false, false);
+                }
+            }
+
+            // Behind the short (north) leg: further north, spread across the leg's width.
+            if (behindShort.Count > 0)
+            {
+                int legThickness = shortLeg.Max(s => (int)s.GetSquadBoxSize().Y);
+                int northFace = killZone.MaxY + standoff + legThickness;
+                int legLength = shortLeg.Sum(s => s.GetSquadBoxSize().X)
+                    + Math.Max(0, shortLeg.Count - 1);
+                int legWest = Math.Max(killZone.MinX, killZone.CenterX - legLength / 2);
+                for (int i = 0; i < behindShort.Count; i++)
+                {
+                    BattleSquad squad = behindShort[i];
+                    Coordinate squadSize = squad.GetSquadBoxSize();
+                    int centerX = legWest + legLength * (i + 1) / (behindShort.Count + 1);
+                    int left = centerX - squadSize.X / 2;
+                    int bottom = northFace + HqRearOffset;
+                    Tuple<int, int> position = new(left, bottom);
+                    squadPositionMap[squad] = position;
+                    BattleSquadPlacer.PlaceBattleSquad(_grid, squad, position, true, false, false);
+                }
+            }
         }
 
         private void PlaceLongLeg(IReadOnlyList<BattleSquad> squads, KillZone killZone,

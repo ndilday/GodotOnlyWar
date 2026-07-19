@@ -12,10 +12,7 @@ public partial class BattleReviewView : DialogView
     private const float KeyboardZoomSpeed = 1.6f;
     private const float MinZoom = 0.05f;
     private const float MaxZoom = 3.0f;
-    private Label _battleTitleLabel;
     private Label _roundLabel;
-    private Label _phaseLabel;
-    private Label _resultLabel;
     private VBoxContainer _forceTreeVBox;
     private SubViewportContainer _replayViewportContainer;
     private bool _isPanning;
@@ -49,10 +46,7 @@ public partial class BattleReviewView : DialogView
     public override void _Ready()
     {
         base._Ready();
-        _battleTitleLabel = GetNode<Label>("Layout/CenterPanel/HeaderPanel/HeaderMargin/HeaderStack/TitleRow/BattleTitleLabel");
         _roundLabel = GetNode<Label>("Layout/CenterPanel/HeaderPanel/HeaderMargin/HeaderStack/TitleRow/RoundLabel");
-        _phaseLabel = GetNode<Label>("Layout/CenterPanel/HeaderPanel/HeaderMargin/HeaderStack/TitleRow/PhaseLabel");
-        _resultLabel = GetNode<Label>("Layout/CenterPanel/HeaderPanel/HeaderMargin/HeaderStack/TitleRow/ResultLabel");
         _forceTreeVBox = GetNode<VBoxContainer>("Layout/LeftPanel/LeftMargin/LeftStack/ForceScroll/ForceTreeVBox");
         _selectedNameLabel = GetNode<Label>("Layout/RightPanel/SelectedPanel/SelectedMargin/SelectedStack/SelectedNameLabel");
         _selectedMetaLabel = GetNode<Label>("Layout/RightPanel/SelectedPanel/SelectedMargin/SelectedStack/SelectedMetaLabel");
@@ -157,10 +151,7 @@ public partial class BattleReviewView : DialogView
 
     public void SetDisplay(BattleReplayDisplay display)
     {
-        _battleTitleLabel.Text = display.BattleTitle;
         _roundLabel.Text = $"ROUND {display.CurrentTurnNumber} / {display.LastTurnNumber}";
-        _phaseLabel.Text = display.PhaseLabel.ToUpperInvariant();
-        _resultLabel.Text = display.ResultLabel.ToUpperInvariant();
         SetForceHierarchy(display.ForceHierarchy);
         SetSelectedFormation(display.SelectedFormation);
         SetEvents(display.CurrentTurnEvents);

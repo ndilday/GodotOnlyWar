@@ -39,6 +39,29 @@ public class BattlePursuitActionPlannerTests
     }
 
     [Fact]
+    public void Follow_RunsToRegainRange_WhenNoWorthwhileShotExists()
+    {
+        // The withdrawer is far beyond the test rifle's 100-yd maximum range: a jog-and-fire
+        // follow would just fall further behind, so the squad sprints to regain effective
+        // range instead of shooting at nothing.
+        BattleSquad pursuer = CreateSquad("Pursuer", 72_031);
+        BattleSquad withdrawing = CreateSquad("Withdrawer", 72_032);
+        Fixture fixture = CreateFixture(
+            (pursuer, true, 0, 0),
+            (withdrawing, false, 400, 0));
+
+        fixture.Planner.PreparePursuitActions(
+            pursuer,
+            PursuitPosture.Follow,
+            [withdrawing]);
+
+        Assert.Equal(SquadMovementTier.Run, pursuer.MovementTier);
+        Assert.Empty(fixture.ShootActions);
+        MoveAction move = Assert.IsType<MoveAction>(Assert.Single(fixture.MoveActions));
+        Assert.Matches(@"to \([1-9]\d*, -?\d+\)", move.Description());
+    }
+
+    [Fact]
     public void Press_RunsTowardNearestWithdrawerWithoutShooting()
     {
         BattleSquad pursuer = CreateSquad("Pursuer", 72_011);
