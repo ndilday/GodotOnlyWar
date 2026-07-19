@@ -38,7 +38,7 @@ public partial class BattleReviewController : DialogController
     private double _playbackElapsed;
     private Vector2I _mapOffset;
     private Vector2 _mapSize = Vector2.One;
-    private bool _hasFramedCamera;
+    private bool _cameraFramePending;
 
     public override void _Ready()
     {
@@ -91,6 +91,15 @@ public partial class BattleReviewController : DialogController
     public override void _Process(double delta)
     {
         base._Process(delta);
+
+        // The stretched SubViewport receives its final size during layout. Histories are often
+        // loaded from _Ready(), while it still reports the scene's authored 900x560 size.
+        if (_cameraFramePending)
+        {
+            FrameInitialDeployment();
+            _cameraFramePending = false;
+        }
+
         if (!_isPlaying || _history == null || _history.Turns.Count == 0)
         {
             return;
@@ -117,7 +126,7 @@ public partial class BattleReviewController : DialogController
         StopPlayback();
         _history = history;
         _selectedFormationId = null;
-        _hasFramedCamera = false;
+        _cameraFramePending = true;
         ComputeMapBounds();
         DisplayTurn(0);
     }
@@ -128,7 +137,7 @@ public partial class BattleReviewController : DialogController
     private void ComputeMapBounds()
     {
         List<Tuple<int, int>> allPositions = _history.Turns
-            .SelectMany(turn => GetBoundaryPositions(turn.State))
+            .SelectMany(turn => GetDeployedBoundaryPositions(turn.State))
             .ToList();
 
         if (allPositions.Count == 0)
@@ -258,27 +267,25 @@ public partial class BattleReviewController : DialogController
 
         // Frame the deployment so every participant is visible, but only on open —
         // afterward the player's manual pan/zoom is preserved across rounds.
-        if (!_hasFramedCamera)
-        {
-            FrameParticipants(GetAllReplayPositions(state, previousState));
-            _hasFramedCamera = true;
-        }
+        // The actual fit is deferred until the stretchable replay viewport has its final size.
     }
 
-    private static IReadOnlyList<Tuple<int, int>> GetAllReplayPositions(BattleStateSnapshot currentState, BattleStateSnapshot previousState)
+    private void FrameInitialDeployment()
     {
-        List<Tuple<int, int>> positions = GetBoundaryPositions(currentState).ToList();
-        if (previousState != null)
+        if (_history == null || _history.Turns.Count == 0)
         {
-            positions.AddRange(GetBoundaryPositions(previousState));
+            return;
         }
 
-        return positions;
+        FrameParticipants(GetDeployedBoundaryPositions(_history.Turns[0].State).ToList());
     }
 
-    private static IEnumerable<Tuple<int, int>> GetBoundaryPositions(BattleStateSnapshot state)
+    internal static IEnumerable<Tuple<int, int>> GetDeployedBoundaryPositions(BattleStateSnapshot state)
     {
-        foreach (BattleSoldierSnapshot soldier in state.Soldiers.Values)
+        IEnumerable<BattleSquadSnapshot> deployedSquads = state.AttackerSquads.Values
+            .Concat(state.OpposingSquads.Values)
+            .Where(ShouldDrawSquad);
+        foreach (BattleSoldierSnapshot soldier in deployedSquads.SelectMany(squad => squad.Soldiers))
         {
             yield return new Tuple<int, int>(soldier.MinX, soldier.MinY);
             yield return new Tuple<int, int>(soldier.MaxX, soldier.MaxY);

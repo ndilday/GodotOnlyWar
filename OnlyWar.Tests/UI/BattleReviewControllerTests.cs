@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Linq;
 using OnlyWar.Helpers.Battles;
 using OnlyWar.Models.Battles;
 using OnlyWar.Tests.Fixtures;
@@ -74,5 +75,35 @@ public class BattleReviewControllerTests
 
         Assert.Equal(ReplaySquadOverlay.Rout,
             BattleReviewController.ClassifySquadOverlay(previous, null, []));
+    }
+
+    [Fact]
+    public void DeploymentFraming_ExcludesSquadsThatAreNotDeployed()
+    {
+        BattleSquad deployed = new(false, TestModelFactory.CreateSquad(
+            "Deployed Squad", TestModelFactory.CreateSoldier(name: "Deployed")));
+        deployed.Soldiers[0].TopLeft = new System.Tuple<int, int>(3, 5);
+        BattleSquad withdrawn = new(false, TestModelFactory.CreateSquad(
+            "Withdrawn Squad", TestModelFactory.CreateSoldier(name: "Withdrawn")));
+        withdrawn.Soldiers[0].TopLeft = new System.Tuple<int, int>(200, 200);
+        BattleState state = new(
+            new Dictionary<int, BattleSquad>
+            {
+                [deployed.Id] = deployed,
+                [withdrawn.Id] = withdrawn
+            },
+            new Dictionary<int, BattleSquad>());
+        state.DisengageSquad(state.GetSquad(withdrawn.Id));
+        BattleStateSnapshot snapshot = new BattleTurn(state, []).State;
+
+        List<System.Tuple<int, int>> positions =
+            BattleReviewController.GetDeployedBoundaryPositions(snapshot).ToList();
+
+        Assert.NotEmpty(positions);
+        Assert.All(positions, position =>
+        {
+            Assert.InRange(position.Item1, -10, 10);
+            Assert.InRange(position.Item2, -10, 10);
+        });
     }
 }
