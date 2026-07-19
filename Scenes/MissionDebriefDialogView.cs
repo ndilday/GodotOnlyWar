@@ -1,4 +1,5 @@
 using Godot;
+using OnlyWar.Helpers.Battles;
 using OnlyWar.Helpers.UI;
 using OnlyWar.Models.Battles;
 using OnlyWar.Models.Missions;
@@ -63,33 +64,43 @@ public partial class MissionDebriefDialogView : DialogView
         stack.AddThemeConstantOverride("separation", 6);
         margin.AddChild(stack);
 
-        RichTextLabel text = new()
-        {
-            Text = line.Text ?? "",
-            FitContent = true,
-            AutowrapMode = TextServer.AutowrapMode.WordSmart,
-            BbcodeEnabled = false,
-            SizeFlagsHorizontal = SizeFlags.ExpandFill
-        };
-
         if (line.HasBattle)
         {
-            text.Visible = false;
+            BattleDebriefReport report = line.BattleReport ?? BattleDebriefReportBuilder.Build(line.BattleHistory);
+            Label summary = new()
+            {
+                Text = $"Friendly dead: {report.PlayerDeaths}    Opposing dead: {report.OpposingDeaths}",
+                AutowrapMode = TextServer.AutowrapMode.WordSmart
+            };
+            summary.AddThemeColorOverride("font_color",
+                report.PlayerDeaths > 0 ? OnlyWarStyle.MedicalWarning : OnlyWarStyle.MutedText);
+            stack.AddChild(summary);
+
             HBoxContainer controls = new();
             controls.AddThemeConstantOverride("separation", 8);
 
-            Button logButton = new()
+            Button casualtyButton = new()
             {
-                Text = "SHOW BATTLE LOG",
+                Text = "DEAD & INJURED",
                 CustomMinimumSize = new Vector2(190, 34),
-                TooltipText = "Expand the raw event log for this engagement"
+                TooltipText = "Show Chapter casualties and recovery requirements"
             };
-            logButton.Pressed += () =>
+            VBoxContainer casualtyList = null;
+            casualtyButton.Pressed += () =>
             {
-                text.Visible = !text.Visible;
-                logButton.Text = text.Visible ? "HIDE BATTLE LOG" : "SHOW BATTLE LOG";
+                if (casualtyList == null)
+                {
+                    casualtyList = BuildCasualtyList(report);
+                    stack.AddChild(casualtyList);
+                }
+                else
+                {
+                    casualtyList.Visible = !casualtyList.Visible;
+                }
+
+                casualtyButton.Text = casualtyList.Visible ? "HIDE DEAD & INJURED" : "DEAD & INJURED";
             };
-            controls.AddChild(logButton);
+            controls.AddChild(casualtyButton);
 
             Button reviewButton = new()
             {
@@ -101,11 +112,90 @@ public partial class MissionDebriefDialogView : DialogView
             reviewButton.Pressed += () => BattleReviewRequested?.Invoke(this, battleHistory);
             controls.AddChild(reviewButton);
             stack.AddChild(controls);
+            _lineList.AddChild(panel);
+            return;
         }
 
+        RichTextLabel text = new()
+        {
+            Text = line.Text ?? "",
+            FitContent = true,
+            AutowrapMode = TextServer.AutowrapMode.WordSmart,
+            BbcodeEnabled = false,
+            SizeFlagsHorizontal = SizeFlags.ExpandFill
+        };
         stack.AddChild(text);
-
         _lineList.AddChild(panel);
+    }
+
+    private static VBoxContainer BuildCasualtyList(BattleDebriefReport report)
+    {
+        VBoxContainer list = new();
+        list.AddThemeConstantOverride("separation", 5);
+        if (report.PlayerCasualties.Count == 0)
+        {
+            Label empty = new() { Text = "No player soldiers were wounded or killed in this engagement." };
+            empty.AddThemeColorOverride("font_color", OnlyWarStyle.MedicalStable);
+            list.AddChild(empty);
+            return list;
+        }
+
+        foreach (BattleCasualtyEntry casualty in report.PlayerCasualties)
+        {
+            PanelContainer row = new();
+            OnlyWarStyle.ApplyEventPanel(row,
+                casualty.Disposition == BattleCasualtyDisposition.Dead
+                    ? OnlyWarEventTone.Critical
+                    : OnlyWarEventTone.Warning);
+            HBoxContainer content = new();
+            content.AddThemeConstantOverride("separation", 12);
+            row.AddChild(content);
+
+            VBoxContainer identity = new() { SizeFlagsHorizontal = SizeFlags.ExpandFill };
+            Label name = new()
+            {
+                Text = $"{casualty.Rank} {casualty.Name}",
+                ClipText = true,
+                TextOverrunBehavior = TextServer.OverrunBehavior.TrimEllipsis
+            };
+            Label assignment = new()
+            {
+                Text = $"{casualty.Squad}  •  {casualty.Company}",
+                ClipText = true,
+                TextOverrunBehavior = TextServer.OverrunBehavior.TrimEllipsis
+            };
+            assignment.AddThemeFontSizeOverride("font_size", 12);
+            assignment.AddThemeColorOverride("font_color", OnlyWarStyle.MutedText);
+            identity.AddChild(name);
+            identity.AddChild(assignment);
+            content.AddChild(identity);
+
+            Label status = new()
+            {
+                Text = BuildCasualtyStatus(casualty),
+                CustomMinimumSize = new Vector2(190, 0),
+                HorizontalAlignment = HorizontalAlignment.Right,
+                VerticalAlignment = VerticalAlignment.Center
+            };
+            status.AddThemeColorOverride("font_color",
+                casualty.Disposition == BattleCasualtyDisposition.Dead
+                    ? OnlyWarStyle.Critical
+                    : OnlyWarStyle.MedicalWarning);
+            content.AddChild(status);
+            list.AddChild(row);
+        }
+
+        return list;
+    }
+
+    private static string BuildCasualtyStatus(BattleCasualtyEntry casualty)
+    {
+        return casualty.Disposition switch
+        {
+            BattleCasualtyDisposition.Dead => "DEAD",
+            BattleCasualtyDisposition.ReplacementRequired => "LIMB REPLACEMENT REQUIRED",
+            _ => $"{casualty.RecoveryWeeks} {(casualty.RecoveryWeeks == 1 ? "WEEK" : "WEEKS")} RECOVERY"
+        };
     }
 
     private void ClearLines()

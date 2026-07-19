@@ -219,9 +219,8 @@ public partial class EndOfTurnDialogController : DialogController
 
         // The player's soldiers fought real battles here - the same BattleHistory a player mission
         // would show - so those specific battles may be opened for review. Only the battle-bearing
-        // lines pass through: their text is GetBattleLog() combat-event output (what the "SHOW BATTLE
-        // LOG" toggle displays), which the player's soldiers witnessed first-hand. The non-battle
-        // lines are what narrate the enemy's actual intent, and those are filtered out here.
+        // lines pass through: they contain casualty totals and the player's dead/injured roster.
+        // The non-battle lines narrate the enemy's actual intent and are filtered out here.
         List<MissionDebriefLine> battleLines = context.DebriefLines.Where(line => line.HasBattle).ToList();
         bool canOpenDebrief = playerForcesEngaged && battleLines.Count > 0;
         string engagementStatus = canOpenDebrief ? "ENGAGEMENT REPORT" : "";

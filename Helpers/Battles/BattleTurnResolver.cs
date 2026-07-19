@@ -78,6 +78,7 @@ namespace OnlyWar.Helpers.Battles
             _execution = execution ?? throw new ArgumentNullException(nameof(execution));
             _woundResolver = new WoundResolver();
             _woundResolver.OnSoldierDeath += WoundResolver_OnSoldierDeath;
+            _woundResolver.OnSoldierWounded += WoundResolver_OnSoldierWounded;
             _woundResolver.OnSoldierFall += WoundResolver_OnSoldierFall;
             _casualtyMap = new Dictionary<int, BattleSoldier>();
             BattleHistory = new BattleHistory();
@@ -134,6 +135,11 @@ namespace OnlyWar.Helpers.Battles
                 }
             }
             _aftermathPolicy.OnSoldierKilled(wound, woundLevel);
+        }
+
+        private void WoundResolver_OnSoldierWounded(WoundResolution wound, WoundLevel woundLevel)
+        {
+            BattleHistory.DamagedSoldierIds.Add(wound.Suffererer.Soldier.Id);
         }
 
         private void WoundResolver_OnSoldierFall(WoundResolution wound, WoundLevel woundLevel)

@@ -82,7 +82,7 @@ namespace OnlyWar.Helpers.Missions.Ambush
                     resolver.ProcessNextTurn();
                 }
                 context.RecordBattleOutcome(resolver.BattleHistory);
-                context.AddBattleLog(resolver.BattleHistory.GetBattleLog(), resolver.BattleHistory);
+                context.AddBattleReport(resolver.BattleHistory);
                 if (!context.MissionSquads.Any(squad => squad.AbleSoldiers.Count > 0))
                 {
                     context.ForceWithdrewUnderFire = true;

@@ -71,7 +71,7 @@ namespace OnlyWar.Helpers.Missions
                 resolver.ProcessNextTurn();
             }
             context.RecordBattleOutcome(resolver.BattleHistory);
-            context.AddBattleLog(resolver.BattleHistory.GetBattleLog(), resolver.BattleHistory);
+            context.AddBattleReport(resolver.BattleHistory);
             // A force left combat-ineffective by the engagement ends its mission here rather than
             // recursing into steps that assume a manned squad (placement/checks index into
             // AbleSoldiers and would throw). Mirrors InfiltrateMissionStep.ShouldContinue's

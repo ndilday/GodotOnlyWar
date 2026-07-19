@@ -9,8 +9,10 @@ namespace OnlyWar.Helpers.Battles.Resolutions
     {
         public delegate void SoldierDeathHandler(WoundResolution wound, WoundLevel level);
         public delegate void SoldierFallHandler(WoundResolution wound, WoundLevel level);
+        public delegate void SoldierWoundedHandler(WoundResolution wound, WoundLevel level);
         public event SoldierDeathHandler OnSoldierDeath;
         public event SoldierFallHandler OnSoldierFall;
+        public event SoldierWoundedHandler OnSoldierWounded;
 
         public string ResolutionLog { get; private set; }
         public LifoBuffer<WoundResolution> WoundQueue { get; private set; }
@@ -79,6 +81,7 @@ namespace OnlyWar.Helpers.Battles.Resolutions
                     woundLevel = WoundLevel.Negligible;
                 }
                 wound.HitLocation.Wounds.AddWound(woundLevel);
+                OnSoldierWounded?.Invoke(wound, woundLevel);
                 wound.Suffererer.BattleSquad?.InvalidateAbleSoldiers();
                 wound.Description = $"{wound.Suffererer.Soldier.Name} suffers {woundLevel.ToString()} wound to {wound.HitLocation.Template.Name}\n";
 

@@ -13,14 +13,37 @@ namespace OnlyWar.Models.Missions
     {
         public string Text { get; }
         public BattleHistory BattleHistory { get; }
+        public BattleDebriefReport BattleReport { get; }
         public bool HasBattle => BattleHistory != null;
 
-        public MissionDebriefLine(string text, BattleHistory battleHistory = null)
+        public MissionDebriefLine(string text, BattleHistory battleHistory = null, BattleDebriefReport battleReport = null)
         {
             Text = text ?? "";
             BattleHistory = battleHistory;
+            BattleReport = battleReport;
         }
     }
+
+    public enum BattleCasualtyDisposition
+    {
+        Dead,
+        ReplacementRequired,
+        Recovering
+    }
+
+    public sealed record BattleCasualtyEntry(
+        int SoldierId,
+        string Name,
+        string Rank,
+        string Squad,
+        string Company,
+        BattleCasualtyDisposition Disposition,
+        int RecoveryWeeks);
+
+    public sealed record BattleDebriefReport(
+        int PlayerDeaths,
+        int OpposingDeaths,
+        IReadOnlyList<BattleCasualtyEntry> PlayerCasualties);
 
     public class MissionContext
     {
@@ -109,10 +132,12 @@ namespace OnlyWar.Models.Missions
             DebriefLines.Add(new MissionDebriefLine(text));
         }
 
-        public void AddBattleLog(string text, BattleHistory battleHistory)
+        public void AddBattleReport(BattleHistory battleHistory)
         {
-            Log.Add(text);
-            DebriefLines.Add(new MissionDebriefLine(text, battleHistory));
+            BattleDebriefReport report = BattleDebriefReportBuilder.Build(battleHistory);
+            string summary = $"Friendly dead: {report.PlayerDeaths}    Opposing dead: {report.OpposingDeaths}";
+            Log.Add(summary);
+            DebriefLines.Add(new MissionDebriefLine(summary, battleHistory, report));
         }
 
         public void RecordBattleOutcome(BattleHistory battleHistory)
