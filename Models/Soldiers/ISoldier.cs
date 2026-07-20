@@ -26,7 +26,9 @@ namespace OnlyWar.Models.Soldiers
         bool CanFight { get; }
         IReadOnlyCollection<Skill> Skills { get; }
 
+        IReadOnlyList<int> FunctioningHandGroupIds { get; }
         int FunctioningHands { get; }
+        bool CanUseTwoHandedWeapon { get; }
         void AddSkillPoints(BaseSkill skill, float points);
         void AddAttributePoints(Attribute attribute, float points);
         float GetTotalSkillValue(BaseSkill skill);

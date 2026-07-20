@@ -33,6 +33,26 @@ public class RulesDatabaseValidationTests
     }
 
     [Fact]
+    public void BodyTemplates_DefinePhysicalHandGroups()
+    {
+        var rules = RulesDatabaseFixture.LoadRules();
+
+        var marine = rules.Factions
+            .Where(faction => faction.Species != null)
+            .SelectMany(faction => faction.Species.Values)
+            .Single(species => species.Name == "Space Marine");
+        var groups = marine.BodyTemplate.HitLocations
+            .Where(location => location.HandGroupId.HasValue)
+            .GroupBy(location => location.HandGroupId.Value)
+            .OrderBy(group => group.Key)
+            .ToList();
+
+        Assert.Equal(2, groups.Count);
+        Assert.Equal(["Left Arm", "Left Hand"], groups[0].Select(location => location.Name));
+        Assert.Equal(["Right Arm", "Right Hand"], groups[1].Select(location => location.Name));
+    }
+
+    [Fact]
     public void RangedWeaponTemplates_LoadTemplateWeaponColumnsFromShippedDatabase()
     {
         var rules = RulesDatabaseFixture.LoadRules();

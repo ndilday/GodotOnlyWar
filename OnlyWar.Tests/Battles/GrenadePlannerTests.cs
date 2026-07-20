@@ -187,11 +187,10 @@ public class GrenadePlannerTests
     }
 
     [Fact]
-    public void BlastThrowScore_IsDiscountedByScatterRiskAtLongRange()
+    public void BlastThrowScore_DiscountsNominalValueByDeliveryConfidence()
     {
-        // Perfect-impact scoring gave a lone-target throw the same score at any range;
-        // the probabilistic evaluation must discount the long throw, whose delivery
-        // check will usually fail and scatter the blast off target.
+        // Both targets have the same nominal blast value. The planner should inspect that
+        // impact once and vary only the cheap on-target confidence for the delivery check.
         BattleSquad closeShooters = CreateSquad("Close Thrower", 900);
         ((Soldier)closeShooters.Soldiers[0].Soldier).Dexterity = 22;
         AddBeltGrenade(closeShooters.Soldiers[0]);
@@ -218,12 +217,28 @@ public class GrenadePlannerTests
             farPlanner.SelectBestBlastThrow(farShooters.Soldiers[0]);
 
         Assert.NotNull(closeThrow);
-        if (farThrow != null)
-        {
-            Assert.True(
-                farThrow.Score < closeThrow.Score,
-                $"Long throw ({farThrow.Score}) must score below short throw ({closeThrow.Score}).");
-        }
+        Assert.NotNull(farThrow);
+
+        float closeToHit = closeShooters.Soldiers[0].Soldier.GetTotalSkillValue(
+                closeThrow.Weapon.Template.RelatedSkill)
+            + BattleModifiersUtil.CalculateBlastRangeModifier(
+                closeShooters.Soldiers[0].Soldier,
+                closeThrow.Weapon.Template,
+                closeThrow.Range);
+        float farToHit = farShooters.Soldiers[0].Soldier.GetTotalSkillValue(
+                farThrow.Weapon.Template.RelatedSkill)
+            + BattleModifiersUtil.CalculateBlastRangeModifier(
+                farShooters.Soldiers[0].Soldier,
+                farThrow.Weapon.Template,
+                farThrow.Range);
+        float closeConfidence = GaussianCalculator.ApproximateNormalCDF((closeToHit - 10.5f) / 3f);
+        float farConfidence = GaussianCalculator.ApproximateNormalCDF((farToHit - 10.5f) / 3f);
+
+        Assert.True(farThrow.Score < closeThrow.Score);
+        Assert.Equal(
+            closeThrow.Score / closeConfidence,
+            farThrow.Score / farConfidence,
+            precision: 3);
     }
 
     [Fact]

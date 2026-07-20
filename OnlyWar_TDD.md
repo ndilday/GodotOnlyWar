@@ -361,7 +361,7 @@ WoundLevel enum (bitmask):
 
 `WeeksOfHealing` encodes healing progress across tiers using nibble offsets. The `Wounds.WeeksToHeal` property reads the appropriate nibble for the highest active tier to determine remaining weeks.
 
-`HitLocationTemplate` defines per-location properties: `NaturalArmor`, `WoundMultiplier`, `CrippleWound` threshold, `SeverWound` threshold, `IsMotive`, `IsRangedWeaponHolder`, `IsMeleeWeaponHolder`, `IsVital`, and `HitProbabilityMap` (a 3-element int array for short/medium/long range bands).
+`HitLocationTemplate` defines per-location properties: `NaturalArmor`, `WoundMultiplier`, `CrippleWound` threshold, `SeverWound` threshold, `IsMotive`, nullable `HandGroupId`, `IsVital`, and `HitProbabilityMap` (a 3-element int array for short/medium/long range bands). An arm and its hand share a hand group; disabling either disables that physical hand.
 
 #### Skill Model
 
@@ -629,7 +629,7 @@ All checks: `zAdvantage = (skillValue − difficulty) / 5.0`, then `GaussianCalc
 - Iterates members, allocating weapons from the squad `Loadout` (weapon sets).
 - One-hand weapons allow dual-wielding; two-hand weapons consume both slots.
 - A one-hand ranged weapon leaves the off-hand available for a one-hand melee weapon.
-- A soldier with a crippled ranged-weapon-holding arm fires two-handed weapons at a penalty (tracked via `FunctioningHands`).
+- Equipped weapons are bound to physical hand groups. Disabling an arm or hand drops the weapon gripped by that group; two-handed weapons require two functioning groups and drop if either group is disabled.
 
 **Hit location resolution:**
 - `HitProbabilityMap` is a 3-element array for short, medium, and long range bands.

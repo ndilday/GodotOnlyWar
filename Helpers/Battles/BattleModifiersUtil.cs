@@ -97,19 +97,14 @@ namespace OnlyWar.Helpers.Battles
             return range;
         }
 
-        public static float EstimateHitDistance(ISoldier soldier, RangedWeapon weapon, float targetSize, int freeHands, float targetRangedEvasion = 0)
+        public static float EstimateHitDistance(ISoldier soldier, RangedWeapon weapon, float targetSize, int functioningHands, float targetRangedEvasion = 0)
         {
-            float baseTotal = soldier.GetTotalSkillValue(weapon.Template.RelatedSkill);
-
-            if (weapon.Template.Location == EquipLocation.TwoHand && freeHands == 1)
+            if ((int)weapon.Template.Location > functioningHands)
             {
-                // unless the soldier is strong enough, the weapon can't be used one-handed
-                if (weapon.Template.RequiredStrength * 1.5f > soldier.Strength) return 0;
-                if (weapon.Template.RequiredStrength * 2 > soldier.Strength)
-                {
-                    baseTotal -= (weapon.Template.RequiredStrength * 2) - soldier.Strength;
-                }
+                return 0;
             }
+
+            float baseTotal = soldier.GetTotalSkillValue(weapon.Template.RelatedSkill);
 
             // we'd like to get to a range where at least 1 bullet will hit more often than not when we aim
             // +1 for all-out attack, - ROF after the first shot

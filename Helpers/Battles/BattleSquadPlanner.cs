@@ -21,14 +21,8 @@ namespace OnlyWar.Helpers.Battles
         private const float WalkBulkMultiplier = 0.5f;
         private const float FullBulkMultiplier = 1f;
         private const float WalkAimMultiplier = 0.5f;
-        // Blast throw evaluation integrates over the delivery check's scatter distribution
-        // (margin = skill + modifiers - roll, roll ~ N(10.5, 3), matching BlastAttackAction)
-        // instead of assuming a perfect unscattered impact. Margins are sampled at the
-        // midpoint z-quantiles of seven equal-probability bands; each failed-check sample
-        // averages over evenly spaced scatter directions. Deterministic: no RNG at plan time.
-        private static readonly float[] BlastMarginZSamples =
-            [-1.465f, -0.792f, -0.366f, 0f, 0.366f, 0.792f, 1.465f];
-        private const int BlastScatterDirectionSamples = 8;
+        // Blast planning uses the delivery check's on-target probability to discount one
+        // nominal impact evaluation. Actual scatter remains stochastic at execution time.
         private const float BlastDeliveryRollMean = 10.5f;
         private const float BlastDeliveryRollStdDev = 3.0f;
 
@@ -333,7 +327,7 @@ namespace OnlyWar.Helpers.Battles
                         {
                             float desperateHitDistance = EstimateArmorPenDistance(soldier.EquippedRangedWeapons[0], targetArmor);
                             desperateHitDistance = Math.Min(desperateHitDistance,
-                                                            BattleModifiersUtil.EstimateHitDistance(soldier.Soldier, soldier.EquippedRangedWeapons[0], targetSize, soldier.HandsFree, targetEvasion));
+                                                            BattleModifiersUtil.EstimateHitDistance(soldier.Soldier, soldier.EquippedRangedWeapons[0], targetSize, soldier.Soldier.FunctioningHands, targetEvasion));
                             if (desperateHitDistance > 0)
                             {
                                 float targetPreferredDistance = BattleModifiersUtil.CalculateOptimalDistance(closestSquad.GetRandomSquadMember(_random),
@@ -742,7 +736,7 @@ namespace OnlyWar.Helpers.Battles
                 bool hasShot = SelectBestTemplateFiringLine(
                         soldier,
                         movementDirection: movementDirection) != null
-                    || SelectBestBlastThrow(soldier, movementDirection, FullBulkMultiplier) != null
+                    || HasBlastTargetInRange(soldier)
                     || (conventionalShot?.Score > 0
                         && conventionalShot.HitProbability > 0.1f);
                 if (hasShot)
@@ -857,18 +851,20 @@ namespace OnlyWar.Helpers.Battles
 
         private void AddEquipRangedWeaponActionToBag(BattleSoldier soldier)
         {
-            int handsFree = soldier.HandsFree;
+            List<RangedWeapon> usableWeapons = soldier.RangedWeapons
+                .Where(weapon => (int)weapon.Template.Location <= soldier.Soldier.FunctioningHands)
+                .ToList();
             // we're standing here without a readied ranged weapon; we should do something about that
-            if (soldier.RangedWeapons.Count == 1 && handsFree >= 1)
+            if (usableWeapons.Count == 1)
             {
                 // the easiest case... ready our one ranged weapon
-                _shootActions.Add(new ReadyRangedWeaponAction(soldier, soldier.RangedWeapons[0]));
+                _shootActions.Add(new ReadyRangedWeaponAction(soldier, usableWeapons[0]));
             }
-            else if (soldier.RangedWeapons.Count > 1 && handsFree >= 1)
+            else if (usableWeapons.Count > 1)
             {
                 // ugh, this is a decision with a lot of factors that will only come up rarely
                 // for now, let's go with the longer ranged weapon
-                _shootActions.Add(new ReadyRangedWeaponAction(soldier, soldier.RangedWeapons.OrderByDescending(w => w.Template.MaximumRange).First()));
+                _shootActions.Add(new ReadyRangedWeaponAction(soldier, usableWeapons.OrderByDescending(w => w.Template.MaximumRange).First()));
 
             }
         }
@@ -1057,9 +1053,10 @@ namespace OnlyWar.Helpers.Battles
             // Preserve the existing action economy: choosing a melee weapon that is not yet in
             // hand spends this turn readying it; an already-ready (or unarmed default) loadout
             // attacks using the exact strike plan that was scored above.
-            if (soldier.EquippedMeleeWeapons.Count == 0 && soldier.MeleeWeapons.Count > 0)
+            MeleeWeapon meleeWeaponToReady = GetFirstUsableMeleeWeapon(soldier);
+            if (soldier.EquippedMeleeWeapons.Count == 0 && meleeWeaponToReady != null)
             {
-                _shootActions.Add(new ReadyMeleeWeaponAction(soldier, soldier.MeleeWeapons[0]));
+                _shootActions.Add(new ReadyMeleeWeaponAction(soldier, meleeWeaponToReady));
             }
             else if (projectedStrikePlans.Count > 0)
             {
@@ -1080,11 +1077,12 @@ namespace OnlyWar.Helpers.Battles
                 return soldier.EquippedMeleeWeapons.ToList();
             }
 
-            if (soldier.MeleeWeapons.Count > 0)
+            MeleeWeapon usableWeapon = GetFirstUsableMeleeWeapon(soldier);
+            if (usableWeapon != null)
             {
                 // ReadyMeleeWeaponAction currently draws the first owned weapon. Score that same
                 // future state rather than treating a two-handed gunner's melee alternative as zero.
-                return [soldier.MeleeWeapons[0]];
+                return [usableWeapon];
             }
 
             MeleeWeapon unarmedWeapon = MeleeAttackAction.GetUnarmedWeapon(soldier);
@@ -1098,6 +1096,12 @@ namespace OnlyWar.Helpers.Battles
                 && loadout[1].Template.Location == EquipLocation.OneHand
                     ? loadout[1]
                     : null;
+        }
+
+        private static MeleeWeapon GetFirstUsableMeleeWeapon(BattleSoldier soldier)
+        {
+            return soldier.MeleeWeapons.FirstOrDefault(
+                weapon => (int)weapon.Template.Location <= soldier.Soldier.FunctioningHands);
         }
 
         private RangedTargetEvaluation SelectBestPointBlankRangedTarget(
@@ -1361,9 +1365,10 @@ namespace OnlyWar.Helpers.Battles
                     newPos,
                     orientation,
                     moveSpeed));
-                if (soldier.EquippedMeleeWeapons.Count == 0 && soldier.MeleeWeapons.Count > 0)
+                MeleeWeapon meleeWeaponToReady = GetFirstUsableMeleeWeapon(soldier);
+                if (soldier.EquippedMeleeWeapons.Count == 0 && meleeWeaponToReady != null)
                 {
-                    _shootActions.Add(new ReadyMeleeWeaponAction(soldier, soldier.MeleeWeapons[0]));
+                    _shootActions.Add(new ReadyMeleeWeaponAction(soldier, meleeWeaponToReady));
                 }
                 else
                 {
@@ -1753,8 +1758,7 @@ namespace OnlyWar.Helpers.Battles
                 movementDirection))
             {
                 foreach (BattleSoldier target in candidateSquad.AbleSoldiers
-                    .Where(target => IsPlaced(target)
-                        && IsWithinJogFiringArc(soldier, target, movementDirection))
+                    .Where(IsPlaced)
                     .OrderBy(candidate => candidate.Soldier.Id))
                 {
                     float range = _grid.GetDistanceBetweenSoldiers(soldier.Soldier.Id, target.Soldier.Id);
@@ -1806,13 +1810,18 @@ namespace OnlyWar.Helpers.Battles
             IEnumerable<BattleSoldier> targets = candidateTargets
                 ?? GetNearestInRangeEnemySquads(soldier, movementDirection)
                     .SelectMany(candidateSquad => candidateSquad.AbleSoldiers);
+            if (candidateTargets != null && HasRestrictedJogFiringArc(movementDirection))
+            {
+                ValueTuple<int, int> firingDirection = movementDirection.Value;
+                targets = targets.Where(target => target != null
+                    && IsWithinJogFiringArc(soldier, target, firingDirection));
+            }
             bool shooterSide = _grid.GetSoldierSide(soldier.Soldier.Id);
             TemplateFiringLineEvaluation best = null;
             foreach (BattleSoldier target in targets
                 .Where(target => target != null
                     && target.CanFight
                     && IsPlaced(target)
-                    && IsWithinJogFiringArc(soldier, target, movementDirection)
                     && _grid.GetSoldierSide(target.Soldier.Id) != shooterSide)
                 .GroupBy(target => target.Soldier.Id)
                 .Select(group => group.First())
@@ -1892,13 +1901,10 @@ namespace OnlyWar.Helpers.Battles
 
         /// <summary>
         /// Scores every enemy soldier within blast (grenade) range as a candidate impact
-        /// point, integrating over the delivery check's outcome distribution exactly as
-        /// <see cref="BlastAttackAction"/> resolves it: successful checks land on the
-        /// target's footprint cell nearest the thrower, failures scatter by margin in a
-        /// uniform direction. Everyone inside each sampled circle is auto-hit, so the
-        /// score is the probability-weighted falloff-scaled expected enemy battle value
-        /// removed minus the expected friendly battle value lost, with the thrower's own
-        /// exposure included (danger-close is legal, and scatter toward friends counts).
+        /// point. Each candidate is evaluated once at its nominal impact cell, then its
+        /// expected enemy value is discounted by the delivery check's on-target probability.
+        /// Nominal friendly losses are not discounted, keeping danger-close decisions
+        /// conservative without simulating the complete scatter distribution at plan time.
         /// Returns null when no throw removes more value than it costs in expectation.
         /// </summary>
         internal TemplateFiringLineEvaluation SelectBestBlastThrow(
@@ -1928,8 +1934,7 @@ namespace OnlyWar.Helpers.Battles
                 .SelectMany(candidateSquad => candidateSquad.AbleSoldiers)
                 .Where(target => target != null
                     && target.CanFight
-                    && IsPlaced(target)
-                    && IsWithinJogFiringArc(soldier, target, movementDirection))
+                    && IsPlaced(target))
                 .GroupBy(target => target.Soldier.Id)
                 .Select(group => group.First())
                 .OrderBy(target => target.Soldier.Id))
@@ -1949,64 +1954,53 @@ namespace OnlyWar.Helpers.Battles
                         + BattleModifiersUtil.CalculateBlastRangeModifier(
                             soldier.Soldier, weapon.Template, range)
                         - (weapon.Template.Bulk * bulkMultiplier);
-                    float meanMargin = toHit - BlastDeliveryRollMean;
+                    float deliveryConfidence = GaussianCalculator.ApproximateNormalCDF(
+                        (toHit - BlastDeliveryRollMean) / BlastDeliveryRollStdDev);
 
                     float expectedEnemyBattleValueRemoved = 0;
                     float expectedFriendlyBattleValueLost = 0;
-                    // Distinct margin samples can resolve to the same impact cell (every
-                    // successful check lands on the aim cell), so memoize per cell.
-                    Dictionary<ValueTuple<int, int>, (float Enemy, float Friendly)> impactCache = [];
-                    foreach (float z in BlastMarginZSamples)
+                    ValueTuple<int, int> impactCell = BlastTemplate.ResolveImpactCell(
+                        _grid,
+                        soldier.Soldier.Id,
+                        target.Soldier.Id,
+                        margin: 0,
+                        directionRoll: 0);
+                    IReadOnlyList<BlastTemplate.BlastVictim> nominalVictims =
+                        BlastTemplate.GetVictims(
+                            _grid,
+                            impactCell,
+                            weapon.Template.AreaRadius);
+                    foreach (BlastTemplate.BlastVictim blastVictim in nominalVictims)
                     {
-                        float margin = meanMargin + (BlastDeliveryRollStdDev * z);
-                        if (margin >= 0)
+                        if (!_soldierMap.TryGetValue(
+                            blastVictim.SoldierId,
+                            out BattleSoldier victim)
+                            || !victim.CanFight)
                         {
-                            (float enemy, float friendly) = ScoreBlastImpact(
-                                soldier,
-                                target,
+                            continue;
+                        }
+
+                        float armor = victim.Armor?.Template.ArmorProvided ?? 0;
+                        float woundRatio = Math.Clamp(
+                            CalculateExpectedBlastDamage(
                                 weapon,
-                                margin,
-                                directionRoll: 0,
-                                shooterSide,
-                                impactCache);
-                            expectedEnemyBattleValueRemoved += enemy;
-                            expectedFriendlyBattleValueLost += friendly;
+                                blastVictim.DistanceFromImpact,
+                                armor,
+                                victim.Soldier.Constitution),
+                            0,
+                            1);
+                        float expectedBattleValueRemoval = woundRatio * GetBattleValue(victim);
+                        if (_grid.GetSoldierSide(blastVictim.SoldierId) == shooterSide)
+                        {
+                            expectedFriendlyBattleValueLost += expectedBattleValueRemoval;
                         }
                         else
                         {
-                            float enemySum = 0;
-                            float friendlySum = 0;
-                            for (int direction = 0; direction < BlastScatterDirectionSamples; direction++)
-                            {
-                                (float enemy, float friendly) = ScoreBlastImpact(
-                                    soldier,
-                                    target,
-                                    weapon,
-                                    margin,
-                                    (direction + 0.5) / BlastScatterDirectionSamples,
-                                    shooterSide,
-                                    impactCache);
-                                enemySum += enemy;
-                                friendlySum += friendly;
-                            }
-                            expectedEnemyBattleValueRemoved += enemySum / BlastScatterDirectionSamples;
-                            expectedFriendlyBattleValueLost += friendlySum / BlastScatterDirectionSamples;
+                            expectedEnemyBattleValueRemoved += expectedBattleValueRemoval;
                         }
                     }
-                    expectedEnemyBattleValueRemoved /= BlastMarginZSamples.Length;
-                    expectedFriendlyBattleValueLost /= BlastMarginZSamples.Length;
+                    expectedEnemyBattleValueRemoved *= deliveryConfidence;
 
-                    // Reported victims are the nominal on-target impact's; the score
-                    // above is the scatter-weighted expectation.
-                    IReadOnlyList<BlastTemplate.BlastVictim> nominalVictims = BlastTemplate.GetVictims(
-                        _grid,
-                        BlastTemplate.ResolveImpactCell(
-                            _grid,
-                            soldier.Soldier.Id,
-                            target.Soldier.Id,
-                            margin: 0,
-                            directionRoll: 0),
-                        weapon.Template.AreaRadius);
                     TemplateFiringLineEvaluation evaluation = new(
                         target,
                         weapon,
@@ -2026,72 +2020,21 @@ namespace OnlyWar.Helpers.Battles
             return best;
         }
 
-        /// <summary>
-        /// Expected battle value removed/lost for one sampled delivery outcome: resolves
-        /// the impact cell for the given margin and scatter direction, then sums the
-        /// falloff-scaled expected removal for everyone caught, split by side.
-        /// </summary>
-        private (float Enemy, float Friendly) ScoreBlastImpact(
-            BattleSoldier soldier,
-            BattleSoldier target,
-            RangedWeapon weapon,
-            float margin,
-            double directionRoll,
-            bool shooterSide,
-            Dictionary<ValueTuple<int, int>, (float Enemy, float Friendly)> impactCache)
+        private bool HasBlastTargetInRange(BattleSoldier soldier)
         {
-            ValueTuple<int, int> impactCell = BlastTemplate.ResolveImpactCell(
-                _grid,
-                soldier.Soldier.Id,
-                target.Soldier.Id,
-                margin,
-                directionRoll);
-            if (impactCache.TryGetValue(impactCell, out (float Enemy, float Friendly) cached))
+            if (soldier == null || !IsPlaced(soldier))
             {
-                return cached;
+                return false;
             }
 
-            float enemyBattleValueRemoved = 0;
-            float friendlyBattleValueLost = 0;
-            foreach (BlastTemplate.BlastVictim blastVictim in BlastTemplate.GetVictims(
-                _grid,
-                impactCell,
-                weapon.Template.AreaRadius))
-            {
-                if (!_soldierMap.TryGetValue(blastVictim.SoldierId, out BattleSoldier victim))
-                {
-                    continue;
-                }
-                if (!victim.CanFight)
-                {
-                    // Incapacitated figures are still physically inside the blast,
-                    // but their battle value has already been removed from the fight.
-                    continue;
-                }
-
-                float armor = victim.Armor?.Template.ArmorProvided ?? 0;
-                float woundRatio = Math.Clamp(
-                    CalculateExpectedBlastDamage(
-                        weapon,
-                        blastVictim.DistanceFromImpact,
-                        armor,
-                        victim.Soldier.Constitution),
-                    0,
-                    1);
-                float expectedBattleValueRemoval = woundRatio * GetBattleValue(victim);
-                if (_grid.GetSoldierSide(blastVictim.SoldierId) == shooterSide)
-                {
-                    friendlyBattleValueLost += expectedBattleValueRemoval;
-                }
-                else
-                {
-                    enemyBattleValueRemoved += expectedBattleValueRemoval;
-                }
-            }
-
-            (float, float) result = (enemyBattleValueRemoved, friendlyBattleValueLost);
-            impactCache[impactCell] = result;
-            return result;
+            float maximumEffectiveRange = GetLoadedBlastWeapons(soldier)
+                .Select(weapon => BattleModifiersUtil.GetEffectiveMaxRange(
+                    soldier.Soldier,
+                    weapon.Template))
+                .DefaultIfEmpty(0)
+                .Max();
+            return maximumEffectiveRange > 0
+                && _grid.GetNearestEnemy(soldier.Soldier.Id, out _) <= maximumEffectiveRange;
         }
 
         /// <summary>
@@ -2218,15 +2161,21 @@ namespace OnlyWar.Helpers.Battles
             }
 
             bool shooterSide = _grid.GetSoldierSide(shooter.Soldier.Id);
-            return _grid.GetSoldierPositions().Keys
+            IEnumerable<int> enemyIds = _grid.GetSoldierPositions().Keys
                 .Where(id => id != shooter.Soldier.Id
                     && _soldierMap.ContainsKey(id)
                     && _grid.GetSoldierSide(id) != shooterSide
-                    && _soldierMap[id].CanFight
-                    && IsWithinJogFiringArc(
-                        shooter,
-                        _soldierMap[id],
-                        movementDirection))
+                    && _soldierMap[id].CanFight);
+            if (HasRestrictedJogFiringArc(movementDirection))
+            {
+                ValueTuple<int, int> firingDirection = movementDirection.Value;
+                enemyIds = enemyIds.Where(id => IsWithinJogFiringArc(
+                    shooter,
+                    _soldierMap[id],
+                    firingDirection));
+            }
+
+            return enemyIds
                 .GroupBy(id => _soldierMap[id].BattleSquad)
                 .Select(group => new
                 {
@@ -2557,21 +2506,23 @@ namespace OnlyWar.Helpers.Battles
                 enemyPosition.Item2 - soldier.TopLeft.Value.Item2);
         }
 
+        private static bool HasRestrictedJogFiringArc(
+            ValueTuple<int, int>? movementDirection)
+        {
+            return movementDirection.HasValue
+                && (movementDirection.Value.Item1 != 0
+                    || movementDirection.Value.Item2 != 0);
+        }
+
         private static bool IsWithinJogFiringArc(
             BattleSoldier shooter,
             BattleSoldier target,
-            ValueTuple<int, int>? movementDirection)
+            ValueTuple<int, int> movementDirection)
         {
-            if (movementDirection == null
-                || (movementDirection.Value.Item1 == 0 && movementDirection.Value.Item2 == 0))
-            {
-                return true;
-            }
-
             int targetX = target.TopLeft.Value.Item1 - shooter.TopLeft.Value.Item1;
             int targetY = target.TopLeft.Value.Item2 - shooter.TopLeft.Value.Item2;
-            long dotProduct = ((long)movementDirection.Value.Item1 * targetX)
-                + ((long)movementDirection.Value.Item2 * targetY);
+            long dotProduct = ((long)movementDirection.Item1 * targetX)
+                + ((long)movementDirection.Item2 * targetY);
             return dotProduct >= 0;
         }
 

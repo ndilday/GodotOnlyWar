@@ -18,18 +18,19 @@ namespace OnlyWar.Helpers.Database.GameRules
                 var reader = command.ExecuteReader();
                 while (reader.Read())
                 {
-                    int id = reader.GetInt32(0);
-                    int bodyId = reader.GetInt32(1);
-                    string name = reader[2].ToString();
-                    float naturalArmor = Convert.ToSingle(reader[3]);
-                    float woundMultiplier = Convert.ToSingle(reader[4]);
-                    int crippleLevel = Convert.ToInt32(reader[5]);
-                    int severLevel = Convert.ToInt32(reader[6]);
-                    bool isMotive = Convert.ToBoolean(reader[7]);
-                    bool isRanged = Convert.ToBoolean(reader[8]);
-                    bool isMelee = Convert.ToBoolean(reader[9]);
-                    bool isVital = Convert.ToBoolean(reader[10]);
+                    int id = Convert.ToInt32(reader["Id"]);
+                    int bodyId = Convert.ToInt32(reader["BodyId"]);
+                    string name = reader["Name"].ToString();
+                    float naturalArmor = Convert.ToSingle(reader["NaturalArmor"]);
+                    float woundMultiplier = Convert.ToSingle(reader["WoundMultiplier"]);
+                    int crippleLevel = Convert.ToInt32(reader["CrippleWoundLevel"]);
+                    int severLevel = Convert.ToInt32(reader["SeverWoundLevel"]);
+                    bool isMotive = Convert.ToBoolean(reader["IsMotive"]);
+                    bool isVital = Convert.ToBoolean(reader["IsVital"]);
                     bool holdsProgenoid = Convert.ToBoolean(reader["HoldsProgenoid"]);
+                    int? handGroupId = reader["HandGroupId"].GetType() == typeof(DBNull)
+                        ? null
+                        : Convert.ToInt32(reader["HandGroupId"]);
                     int[] hitProbabilityMap = stanceProbabilityMap[id];
                     HitLocationTemplate hitLocationTemplate =
                         new HitLocationTemplate
@@ -41,8 +42,7 @@ namespace OnlyWar.Helpers.Database.GameRules
                             CrippleWound = (uint)crippleLevel,
                             SeverWound = (uint)severLevel,
                             IsMotive = isMotive,
-                            IsRangedWeaponHolder = isRanged,
-                            IsMeleeWeaponHolder = isMelee,
+                            HandGroupId = handGroupId,
                             IsVital = isVital,
                             HoldsProgenoid = holdsProgenoid,
                             HitProbabilityMap = hitProbabilityMap

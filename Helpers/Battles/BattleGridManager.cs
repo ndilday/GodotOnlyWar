@@ -197,8 +197,7 @@ namespace OnlyWar.Helpers.Battles
 
             List<int> adjacentSoldiers = _grid.GetAdjacentObjects(soldierId)
                 .Where(_soldiers.ContainsKey)
-                .OrderBy(otherSoldierId => GetDistanceBetweenSoldiers(soldierId, otherSoldierId))
-                .ThenBy(otherSoldierId => otherSoldierId)
+                .OrderBy(otherSoldierId => otherSoldierId)
                 .ToList();
             _adjacentSoldierCache[soldierId] = adjacentSoldiers;
             return adjacentSoldiers;

@@ -41,22 +41,22 @@ namespace OnlyWar.Models.Soldiers
             return newSoldier;
         }
 
-        public int FunctioningHands
+        public IReadOnlyList<int> FunctioningHandGroupIds
         {
             get
             {
-                int functioningHands = 2;
-                if (Body.HitLocations.Any(hl => hl.Template.IsMeleeWeaponHolder && hl.IsCrippled))
-                {
-                    functioningHands--;
-                }
-                if (Body.HitLocations.Any(hl => hl.Template.IsRangedWeaponHolder && hl.IsCrippled))
-                {
-                    functioningHands--;
-                }
-                return functioningHands;
+                return Body.HitLocations
+                    .Where(location => location.Template.HandGroupId.HasValue)
+                    .GroupBy(location => location.Template.HandGroupId.Value)
+                    .Where(group => group.All(location => !location.IsCrippled && !location.IsSevered))
+                    .Select(group => group.Key)
+                    .OrderBy(groupId => groupId)
+                    .ToList();
             }
         }
+
+        public int FunctioningHands => FunctioningHandGroupIds.Count;
+        public bool CanUseTwoHandedWeapon => FunctioningHands >= 2;
 
         public float Strength { get; set; }
         public float Dexterity { get; set; }
@@ -81,15 +81,25 @@ namespace OnlyWar.Models.Soldiers
         {
             get
             {
-                bool canWalk = !Body.HitLocations.Where(hl => hl.Template.IsMotive)
-                                                        .Any(hl => hl.IsCrippled || hl.IsSevered);
-                bool canFuncion = !Body.HitLocations.Where(hl => hl.Template.IsVital)
-                                                           .Any(hl => hl.IsCrippled || hl.IsSevered);
-                bool canShoot = !Body.HitLocations.Where(hl => hl.Template.IsRangedWeaponHolder)
-                                                        .All(hl => hl.IsCrippled || hl.IsSevered);
-                bool canFight = !Body.HitLocations.Where(hl => hl.Template.IsMeleeWeaponHolder)
-                                                        .All(hl => hl.IsCrippled || hl.IsSevered);
-                return canWalk && canFuncion && canShoot && canFight;
+                foreach (HitLocation location in Body.HitLocations)
+                {
+                    HitLocationTemplate template = location.Template;
+                    uint wounds = location.Wounds.WoundTotal;
+
+                    bool disabled =
+                        wounds >= template.CrippleWound ||
+                        wounds >= template.SeverWound;
+
+                    if (disabled)
+                    {
+                        if (template.IsMotive || template.IsVital)
+                        {
+                            return false;
+                        }
+                    }
+                }
+
+                return FunctioningHands > 0;
             }
         }
 

@@ -57,7 +57,9 @@ namespace OnlyWar.Models.Soldiers
 
         public Body Body => _soldier.Body;
 
+        public IReadOnlyList<int> FunctioningHandGroupIds => _soldier.FunctioningHandGroupIds;
         public int FunctioningHands => _soldier.FunctioningHands;
+        public bool CanUseTwoHandedWeapon => _soldier.CanUseTwoHandedWeapon;
 
         public IReadOnlyCollection<Skill> Skills => _soldier.Skills;
 

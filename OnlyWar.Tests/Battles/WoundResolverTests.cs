@@ -32,8 +32,7 @@ public class WoundResolverTests
         uint severWound = uint.MaxValue,
         bool isVital = false,
         bool isMotive = false,
-        bool isRangedWeaponHolder = false,
-        bool isMeleeWeaponHolder = false)
+        int? handGroupId = null)
     {
         return new HitLocationTemplate
         {
@@ -46,8 +45,7 @@ public class WoundResolverTests
             HitProbabilityMap = [1, 1, 1],
             IsVital = isVital,
             IsMotive = isMotive,
-            IsRangedWeaponHolder = isRangedWeaponHolder,
-            IsMeleeWeaponHolder = isMeleeWeaponHolder
+            HandGroupId = handGroupId
         };
     }
 
@@ -183,12 +181,10 @@ public class WoundResolverTests
 
         HitLocation weaponHolder = new(Template(
             crippleWound: (uint)WoundLevel.Critical,
-            isRangedWeaponHolder: rangedHolder,
-            isMeleeWeaponHolder: !rangedHolder));
+            handGroupId: rangedHolder ? 0 : 1));
         HitLocation otherWeaponHolder = new(Template(
             crippleWound: (uint)WoundLevel.Critical,
-            isRangedWeaponHolder: !rangedHolder,
-            isMeleeWeaponHolder: rangedHolder));
+            handGroupId: rangedHolder ? 1 : 0));
         BattleSoldier sufferer = CreateSufferer(weaponHolder, otherWeaponHolder);
         WoundResolution wound = Enqueue(resolver, weaponHolder, 10f, sufferer);
 

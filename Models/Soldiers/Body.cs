@@ -1,4 +1,4 @@
-﻿using System.Collections.Generic;
+using System.Collections.Generic;
 using System.Linq;
 
 namespace OnlyWar.Models.Soldiers
@@ -237,8 +237,10 @@ namespace OnlyWar.Models.Soldiers
         public uint CrippleWound;
         public uint SeverWound;
         public bool IsMotive;
-        public bool IsRangedWeaponHolder;
-        public bool IsMeleeWeaponHolder;
+        // Locations in the same hand group form one functional chain. For example,
+        // a left arm and left hand share a group, so crippling either disables that
+        // hand without counting injuries to both locations twice.
+        public int? HandGroupId;
         public bool IsVital;
         // A location holding a progenoid gland destroys the soldier's geneseed when severed.
         public bool HoldsProgenoid;
@@ -277,8 +279,7 @@ namespace OnlyWar.Models.Soldiers
             get
             {
                 bool canMatterForFunction = Template.IsMotive
-                    || Template.IsRangedWeaponHolder
-                    || Template.IsMeleeWeaponHolder
+                    || Template.HandGroupId.HasValue
                     || Template.IsVital;
                 return canMatterForFunction && (IsSevered || IsCrippled);
             }
@@ -386,8 +387,6 @@ namespace OnlyWar.Models.Soldiers
                     CrippleWound = (uint)WoundLevel.Critical,
                     SeverWound = (uint) WoundLevel.Massive,
                     IsMotive = false,
-                    IsRangedWeaponHolder = false,
-                    IsMeleeWeaponHolder = false,
                     IsVital = true
                 },
 
@@ -401,8 +400,6 @@ namespace OnlyWar.Models.Soldiers
                     CrippleWound = (uint)WoundLevel.Moderate,
                     SeverWound = (uint)WoundLevel.Major,
                     IsMotive = false,
-                    IsRangedWeaponHolder = false,
-                    IsMeleeWeaponHolder = false,
                     IsVital = false
                 },
 
@@ -416,8 +413,6 @@ namespace OnlyWar.Models.Soldiers
                     CrippleWound = (uint)WoundLevel.Critical,
                     SeverWound = (uint)WoundLevel.Massive,
                     IsMotive = false,
-                    IsRangedWeaponHolder = false,
-                    IsMeleeWeaponHolder = false,
                     IsVital = true,
                     HoldsProgenoid = true
                 },
@@ -432,8 +427,6 @@ namespace OnlyWar.Models.Soldiers
                     CrippleWound = (uint)WoundLevel.Massive,
                     SeverWound = (uint)WoundLevel.Unsurvivable,
                     IsMotive = false,
-                    IsRangedWeaponHolder = false,
-                    IsMeleeWeaponHolder = false,
                     IsVital = true,
                     HoldsProgenoid = true
                 },
@@ -448,8 +441,7 @@ namespace OnlyWar.Models.Soldiers
                     CrippleWound = 3 * (uint)WoundLevel.Major,
                     SeverWound = 3 * (uint)WoundLevel.Critical,
                     IsMotive = false,
-                    IsRangedWeaponHolder = true,
-                    IsMeleeWeaponHolder = false,
+                    HandGroupId = 0,
                     IsVital = false
                 },
 
@@ -463,8 +455,7 @@ namespace OnlyWar.Models.Soldiers
                     CrippleWound = 3 * (uint)WoundLevel.Major,
                     SeverWound = 3 * (uint)WoundLevel.Critical,
                     IsMotive = false,
-                    IsRangedWeaponHolder = false,
-                    IsMeleeWeaponHolder = true,
+                    HandGroupId = 1,
                     IsVital = false
                 },
 
@@ -478,8 +469,7 @@ namespace OnlyWar.Models.Soldiers
                     CrippleWound = (uint)WoundLevel.Major,
                     SeverWound = (uint)WoundLevel.Critical,
                     IsMotive = false,
-                    IsRangedWeaponHolder = true,
-                    IsMeleeWeaponHolder = false,
+                    HandGroupId = 0,
                     IsVital = false
                 },
 
@@ -493,8 +483,7 @@ namespace OnlyWar.Models.Soldiers
                     CrippleWound = (uint)WoundLevel.Major,
                     SeverWound = (uint)WoundLevel.Critical,
                     IsMotive = false,
-                    IsRangedWeaponHolder = false,
-                    IsMeleeWeaponHolder = true,
+                    HandGroupId = 1,
                     IsVital = false
                 },
 
@@ -508,8 +497,6 @@ namespace OnlyWar.Models.Soldiers
                     CrippleWound = (uint)WoundLevel.Critical,
                     SeverWound = (uint)WoundLevel.Massive,
                     IsMotive = false,
-                    IsRangedWeaponHolder = false,
-                    IsMeleeWeaponHolder = false,
                     IsVital = true
                 },
 
@@ -523,8 +510,6 @@ namespace OnlyWar.Models.Soldiers
                     CrippleWound = (uint)WoundLevel.Critical,
                     SeverWound = (uint)WoundLevel.Massive,
                     IsMotive = true,
-                    IsRangedWeaponHolder = false,
-                    IsMeleeWeaponHolder = false,
                     IsVital = false
                 },
 
@@ -538,8 +523,6 @@ namespace OnlyWar.Models.Soldiers
                     CrippleWound = (uint)WoundLevel.Critical,
                     SeverWound = (uint)WoundLevel.Massive,
                     IsMotive = true,
-                    IsRangedWeaponHolder = false,
-                    IsMeleeWeaponHolder = false,
                     IsVital = false
                 },
 
@@ -553,8 +536,6 @@ namespace OnlyWar.Models.Soldiers
                     CrippleWound = (uint)WoundLevel.Major,
                     SeverWound = (uint)WoundLevel.Critical,
                     IsMotive = true,
-                    IsRangedWeaponHolder = false,
-                    IsMeleeWeaponHolder = false,
                     IsVital = false
                 },
 
@@ -568,8 +549,6 @@ namespace OnlyWar.Models.Soldiers
                     CrippleWound = (uint)WoundLevel.Major,
                     SeverWound = (uint)WoundLevel.Critical,
                     IsMotive = true,
-                    IsRangedWeaponHolder = false,
-                    IsMeleeWeaponHolder = false,
                     IsVital = false
                 }
             ];
@@ -605,8 +584,6 @@ namespace OnlyWar.Models.Soldiers
                     CrippleWound = (uint)WoundLevel.Critical,
                     SeverWound = (uint) WoundLevel.Massive,
                     IsMotive = false,
-                    IsRangedWeaponHolder = false,
-                    IsMeleeWeaponHolder = false,
                     IsVital = true
                 },
 
@@ -620,8 +597,6 @@ namespace OnlyWar.Models.Soldiers
                     CrippleWound = (uint)WoundLevel.Moderate,
                     SeverWound = (uint)WoundLevel.Major,
                     IsMotive = false,
-                    IsRangedWeaponHolder = false,
-                    IsMeleeWeaponHolder = false,
                     IsVital = false
                 },
 
@@ -635,8 +610,6 @@ namespace OnlyWar.Models.Soldiers
                     CrippleWound = (uint)WoundLevel.Critical,
                     SeverWound = (uint)WoundLevel.Massive,
                     IsMotive = false,
-                    IsRangedWeaponHolder = false,
-                    IsMeleeWeaponHolder = false,
                     IsVital = true,
                     HoldsProgenoid = true
                 },
@@ -651,8 +624,6 @@ namespace OnlyWar.Models.Soldiers
                     CrippleWound = (uint)WoundLevel.Massive,
                     SeverWound = (uint)WoundLevel.Unsurvivable,
                     IsMotive = false,
-                    IsRangedWeaponHolder = false,
-                    IsMeleeWeaponHolder = false,
                     IsVital = true,
                     HoldsProgenoid = true
                 },
@@ -667,8 +638,7 @@ namespace OnlyWar.Models.Soldiers
                     CrippleWound = 3 * (uint)WoundLevel.Major,
                     SeverWound = 3 * (uint)WoundLevel.Critical,
                     IsMotive = false,
-                    IsRangedWeaponHolder = true,
-                    IsMeleeWeaponHolder = false,
+                    HandGroupId = 0,
                     IsVital = false
                 },
 
@@ -682,8 +652,6 @@ namespace OnlyWar.Models.Soldiers
                     CrippleWound = 2 * (uint)WoundLevel.Major,
                     SeverWound = 2 * (uint)WoundLevel.Critical,
                     IsMotive = false,
-                    IsRangedWeaponHolder = false,
-                    IsMeleeWeaponHolder = false,
                     IsVital = false
                 },
 
@@ -697,8 +665,7 @@ namespace OnlyWar.Models.Soldiers
                     CrippleWound = 3 * (uint)WoundLevel.Major,
                     SeverWound = 3 * (uint)WoundLevel.Critical,
                     IsMotive = false,
-                    IsRangedWeaponHolder = false,
-                    IsMeleeWeaponHolder = true,
+                    HandGroupId = 1,
                     IsVital = false
                 },
 
@@ -712,8 +679,6 @@ namespace OnlyWar.Models.Soldiers
                     CrippleWound = 2 * (uint)WoundLevel.Major,
                     SeverWound = 2 * (uint)WoundLevel.Critical,
                     IsMotive = false,
-                    IsRangedWeaponHolder = false,
-                    IsMeleeWeaponHolder = false,
                     IsVital = false
                 },
 
@@ -727,8 +692,7 @@ namespace OnlyWar.Models.Soldiers
                     CrippleWound = (uint)WoundLevel.Major,
                     SeverWound = (uint)WoundLevel.Critical,
                     IsMotive = false,
-                    IsRangedWeaponHolder = true,
-                    IsMeleeWeaponHolder = false,
+                    HandGroupId = 0,
                     IsVital = false
                 },
 
@@ -742,8 +706,7 @@ namespace OnlyWar.Models.Soldiers
                     CrippleWound = (uint)WoundLevel.Major,
                     SeverWound = (uint)WoundLevel.Critical,
                     IsMotive = false,
-                    IsRangedWeaponHolder = false,
-                    IsMeleeWeaponHolder = true,
+                    HandGroupId = 1,
                     IsVital = false
                 },
 
@@ -757,8 +720,6 @@ namespace OnlyWar.Models.Soldiers
                     CrippleWound = (uint)WoundLevel.Critical,
                     SeverWound = (uint)WoundLevel.Massive,
                     IsMotive = false,
-                    IsRangedWeaponHolder = false,
-                    IsMeleeWeaponHolder = false,
                     IsVital = true
                 },
 
@@ -772,8 +733,6 @@ namespace OnlyWar.Models.Soldiers
                     CrippleWound = (uint)WoundLevel.Critical,
                     SeverWound = (uint)WoundLevel.Massive,
                     IsMotive = true,
-                    IsRangedWeaponHolder = false,
-                    IsMeleeWeaponHolder = false,
                     IsVital = false
                 },
 
@@ -787,8 +746,6 @@ namespace OnlyWar.Models.Soldiers
                     CrippleWound = (uint)WoundLevel.Critical,
                     SeverWound = (uint)WoundLevel.Massive,
                     IsMotive = true,
-                    IsRangedWeaponHolder = false,
-                    IsMeleeWeaponHolder = false,
                     IsVital = false
                 },
 
@@ -802,8 +759,6 @@ namespace OnlyWar.Models.Soldiers
                     CrippleWound = (uint)WoundLevel.Major,
                     SeverWound = (uint)WoundLevel.Critical,
                     IsMotive = true,
-                    IsRangedWeaponHolder = false,
-                    IsMeleeWeaponHolder = false,
                     IsVital = false
                 },
 
@@ -817,8 +772,6 @@ namespace OnlyWar.Models.Soldiers
                     CrippleWound = (uint)WoundLevel.Major,
                     SeverWound = (uint)WoundLevel.Critical,
                     IsMotive = true,
-                    IsRangedWeaponHolder = false,
-                    IsMeleeWeaponHolder = false,
                     IsVital = false
                 }
             ];

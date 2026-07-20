@@ -217,13 +217,7 @@ public partial class SquadScreenController : DialogController
 
     private bool CanFight(ISoldier soldier)
     {
-        bool canWalk = !soldier.Body.HitLocations.Where(hl => hl.Template.IsMotive)
-                                                .Any(hl => hl.IsCrippled || hl.IsSevered);
-        bool canFuncion = !soldier.Body.HitLocations.Where(hl => hl.Template.IsVital)
-                                                    .Any(hl => hl.IsCrippled || hl.IsSevered);
-        bool canFight = !soldier.Body.HitLocations.Where(hl => hl.Template.IsRangedWeaponHolder)
-                                                .All(hl => hl.IsCrippled || hl.IsSevered);
-        return canWalk && canFuncion && canFight;
+        return soldier.CanFight;
     }
 
     private Dictionary<string, TacticalRegionController> GetAdjacentRegionDisplayMap()
