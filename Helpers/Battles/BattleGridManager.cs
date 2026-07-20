@@ -10,11 +10,25 @@ namespace OnlyWar.Helpers.Battles
         readonly private Dictionary<int, IList<ValueTuple<int, int>>> _soldierPositionsMap;
         readonly private Dictionary<int, bool> _soldierSideMap;
         readonly private Grid _grid;
-        readonly private Dictionary<(int FirstId, int SecondId), float> _distanceCache;
-        readonly private Dictionary<int, (float Distance, int SoldierId)> _nearestEnemyCache;
+        readonly private Dictionary<int, int> _soldierPositionRevisions;
+        readonly private Dictionary<int, int> _squadPositionRevisions;
+        readonly private Dictionary<bool, int> _sidePositionRevisions;
+        readonly private Dictionary<int, int> _soldierPlacementOrder;
+        readonly private Dictionary<(int FirstId, int SecondId),
+            (float Distance, int FirstRevision, int SecondRevision)> _distanceCache;
+        readonly private Dictionary<int,
+            (IReadOnlyList<(int SoldierId, float Distance)> Enemies,
+             int SoldierRevision,
+             int EnemySideRevision)> _enemyProximityCache;
+        readonly private Dictionary<(int FirstSquadId, int SecondSquadId),
+            (float Distance, int FirstRevision, int SecondRevision)> _squadDistanceCache;
+        readonly private Dictionary<(int SquadId, int SoldierId),
+            (float Distance, int SquadRevision, int SoldierRevision)> _squadToSoldierDistanceCache;
         readonly private Dictionary<int, IReadOnlyList<int>> _adjacentSoldierCache;
         readonly private Dictionary<(bool ShooterSide, int TargetId), bool> _engagementCache;
         readonly private Dictionary<int, IReadOnlyList<int>> _meleeScrumCache;
+        private int _nextPositionRevision;
+        private int _nextPlacementOrder;
 
         public BattleGridManager()
         {
@@ -22,8 +36,14 @@ namespace OnlyWar.Helpers.Battles
             _soldierPositionsMap = [];
             _soldierSideMap = [];
             _grid = new Grid();
+            _soldierPositionRevisions = [];
+            _squadPositionRevisions = [];
+            _sidePositionRevisions = [];
+            _soldierPlacementOrder = [];
             _distanceCache = [];
-            _nearestEnemyCache = [];
+            _enemyProximityCache = [];
+            _squadDistanceCache = [];
+            _squadToSoldierDistanceCache = [];
             _adjacentSoldierCache = [];
             _engagementCache = [];
             _meleeScrumCache = [];
@@ -60,8 +80,10 @@ namespace OnlyWar.Helpers.Battles
 
             _soldiers[soldier.Soldier.Id] = soldier;
             _soldierSideMap[soldier.Soldier.Id] = side;
+            _soldierPlacementOrder[soldier.Soldier.Id] = _nextPlacementOrder++;
             _grid.OccupyCells(cells, soldier.Soldier.Id);
             _soldierPositionsMap[soldier.Soldier.Id] = cells;
+            TouchPositionRevisions(soldier);
             InvalidateLayoutQueries();
         }
 
@@ -73,6 +95,7 @@ namespace OnlyWar.Helpers.Battles
             _grid.FreeCells(_soldierPositionsMap[soldier.Soldier.Id]);
             _grid.OccupyCells(newLocation, soldier.Soldier.Id);
             _soldierPositionsMap[soldier.Soldier.Id] = newLocation;
+            TouchPositionRevisions(soldier);
             InvalidateLayoutQueries();
         }
 
@@ -87,6 +110,7 @@ namespace OnlyWar.Helpers.Battles
             _grid.FreeCells(_soldierPositionsMap[soldier.Soldier.Id]);
             _grid.OccupyCells(newLocation, soldier.Soldier.Id);
             _soldierPositionsMap[soldier.Soldier.Id] = newLocation;
+            TouchPositionRevisions(soldier);
             InvalidateLayoutQueries();
             return true;
         }
@@ -146,10 +170,17 @@ namespace OnlyWar.Helpers.Battles
         {
             if (_soldiers.ContainsKey(soldierId))
             {
+                BattleSoldier soldier = _soldiers[soldierId];
+                bool side = _soldierSideMap[soldierId];
                 _grid.FreeCells(_soldierPositionsMap[soldierId]);
                 _soldiers.Remove(soldierId);
                 _soldierPositionsMap.Remove(soldierId);
                 _soldierSideMap.Remove(soldierId);
+                _soldierPositionRevisions.Remove(soldierId);
+                _soldierPlacementOrder.Remove(soldierId);
+                _enemyProximityCache.Remove(soldierId);
+                TouchSidePositionRevision(side);
+                TouchSquadPositionRevision(soldier.BattleSquad?.Id);
                 InvalidateLayoutQueries();
             }
         }
@@ -285,40 +316,68 @@ namespace OnlyWar.Helpers.Battles
                 throw new ArgumentException("Soldier not found");
             }
 
-            if (_nearestEnemyCache.TryGetValue(soldierId, out var cached))
-            {
-                closestSoldierId = cached.SoldierId;
-                return cached.Distance;
-            }
-
-            bool soldierTeam = _soldierSideMap[soldierId];
             closestSoldierId = -1;
-            float distance = (float)Math.Sqrt(float.MaxValue);
-            foreach (KeyValuePair<int, IList<ValueTuple<int, int>>> kvp in _soldierPositionsMap)
+            float closestDistance = (float)Math.Sqrt(float.MaxValue);
+            foreach ((int enemyId, float distance) in GetOrBuildEnemyDistances(soldierId))
             {
-                if (_soldierSideMap[kvp.Key] != soldierTeam)
+                if (distance < closestDistance)
                 {
-                    float candidateDistance = GetDistanceBetweenSoldiers(soldierId, kvp.Key);
-                    if (candidateDistance < distance)
-                    {
-                        distance = candidateDistance;
-                        closestSoldierId = kvp.Key;
-                    }
+                    closestSoldierId = enemyId;
+                    closestDistance = distance;
                 }
             }
+            return closestDistance;
+        }
 
-            _nearestEnemyCache[soldierId] = (distance, closestSoldierId);
-            return distance;
+        /// <summary>
+        /// Returns opposing soldiers ordered by distance, preserving grid insertion order for ties.
+        /// Each soldier's row is rebuilt lazily when that soldier or anyone on the opposing side
+        /// moves, avoiding battlefield-wide proximity maintenance after every movement.
+        /// </summary>
+        public IReadOnlyList<(int SoldierId, float Distance)> GetEnemiesByDistance(int soldierId)
+        {
+            if (!_soldiers.ContainsKey(soldierId))
+            {
+                throw new ArgumentException("Soldier not found");
+            }
+
+            return GetOrBuildEnemyDistances(soldierId)
+                .OrderBy(enemy => enemy.Distance)
+                .ThenBy(enemy => _soldierPlacementOrder[enemy.SoldierId])
+                .ToArray();
+        }
+
+        /// <summary>
+        /// Returns opposing soldiers and their distances without imposing an order. Hot-path
+        /// callers should select only the minimum or small candidate set they actually need.
+        /// </summary>
+        internal IReadOnlyList<(int SoldierId, float Distance)> GetEnemyDistances(int soldierId)
+        {
+            if (!_soldiers.ContainsKey(soldierId))
+            {
+                throw new ArgumentException("Soldier not found");
+            }
+
+            return GetOrBuildEnemyDistances(soldierId);
         }
 
         public float GetDistanceBetweenSoldiers(int soldierId1, int soldierId2)
         {
+            return GetOrCalculateDistance(soldierId1, soldierId2);
+        }
+
+        private float GetOrCalculateDistance(int soldierId1, int soldierId2)
+        {
             var cacheKey = soldierId1 <= soldierId2
                 ? (soldierId1, soldierId2)
                 : (soldierId2, soldierId1);
-            if (_distanceCache.TryGetValue(cacheKey, out float cached))
+            int firstRevision = _soldierPositionRevisions[cacheKey.Item1];
+            int secondRevision = _soldierPositionRevisions[cacheKey.Item2];
+            if (_distanceCache.TryGetValue(cacheKey, out var cached)
+                && cached.FirstRevision == firstRevision
+                && cached.SecondRevision == secondRevision)
             {
-                return cached;
+                return cached.Distance;
             }
 
             IList<ValueTuple<int, int>> pos1 = _soldierPositionsMap[soldierId1];
@@ -336,7 +395,77 @@ namespace OnlyWar.Helpers.Battles
                 }
             }
             float distance = (float)Math.Sqrt(distanceSq);
-            _distanceCache[cacheKey] = distance;
+            _distanceCache[cacheKey] = (distance, firstRevision, secondRevision);
+            return distance;
+        }
+
+        public float GetMinimumDistanceBetweenSquads(BattleSquad first, BattleSquad second)
+        {
+            ArgumentNullException.ThrowIfNull(first);
+            ArgumentNullException.ThrowIfNull(second);
+            var cacheKey = first.Id <= second.Id
+                ? (first.Id, second.Id)
+                : (second.Id, first.Id);
+            int firstRevision = GetSquadPositionRevision(cacheKey.Item1);
+            int secondRevision = GetSquadPositionRevision(cacheKey.Item2);
+            if (_squadDistanceCache.TryGetValue(cacheKey, out var cached)
+                && cached.FirstRevision == firstRevision
+                && cached.SecondRevision == secondRevision)
+            {
+                return cached.Distance;
+            }
+
+            float distance = float.MaxValue;
+            foreach (BattleSoldier firstSoldier in first.AbleSoldiers)
+            {
+                if (!_soldierPositionsMap.ContainsKey(firstSoldier.Soldier.Id)) continue;
+                foreach (BattleSoldier secondSoldier in second.AbleSoldiers)
+                {
+                    if (!_soldierPositionsMap.ContainsKey(secondSoldier.Soldier.Id)) continue;
+                    float candidate = GetOrCalculateDistance(
+                        firstSoldier.Soldier.Id,
+                        secondSoldier.Soldier.Id);
+                    if (candidate < distance)
+                    {
+                        distance = candidate;
+                    }
+                }
+            }
+
+            _squadDistanceCache[cacheKey] = (distance, firstRevision, secondRevision);
+            return distance;
+        }
+
+        public float GetMinimumDistanceBetweenSquadAndSoldier(BattleSquad squad, int soldierId)
+        {
+            ArgumentNullException.ThrowIfNull(squad);
+            if (!_soldierPositionsMap.ContainsKey(soldierId))
+            {
+                throw new ArgumentException("Soldier not found");
+            }
+
+            var cacheKey = (squad.Id, soldierId);
+            int squadRevision = GetSquadPositionRevision(squad.Id);
+            int soldierRevision = _soldierPositionRevisions[soldierId];
+            if (_squadToSoldierDistanceCache.TryGetValue(cacheKey, out var cached)
+                && cached.SquadRevision == squadRevision
+                && cached.SoldierRevision == soldierRevision)
+            {
+                return cached.Distance;
+            }
+
+            float distance = float.MaxValue;
+            foreach (BattleSoldier squadSoldier in squad.AbleSoldiers)
+            {
+                if (!_soldierPositionsMap.ContainsKey(squadSoldier.Soldier.Id)) continue;
+                float candidate = GetOrCalculateDistance(squadSoldier.Soldier.Id, soldierId);
+                if (candidate < distance)
+                {
+                    distance = candidate;
+                }
+            }
+
+            _squadToSoldierDistanceCache[cacheKey] = (distance, squadRevision, soldierRevision);
             return distance;
         }
 
@@ -405,10 +534,64 @@ namespace OnlyWar.Helpers.Battles
             return (xDistance * xDistance) + (yDistance * yDistance);
         }
 
+        private IReadOnlyList<(int SoldierId, float Distance)> GetOrBuildEnemyDistances(
+            int soldierId)
+        {
+            int soldierRevision = _soldierPositionRevisions[soldierId];
+            bool enemySide = !_soldierSideMap[soldierId];
+            int enemySideRevision = _sidePositionRevisions.GetValueOrDefault(enemySide);
+            if (_enemyProximityCache.TryGetValue(soldierId, out var cached)
+                && cached.SoldierRevision == soldierRevision
+                && cached.EnemySideRevision == enemySideRevision)
+            {
+                return cached.Enemies;
+            }
+
+            List<(int SoldierId, float Distance)> enemies = [];
+            foreach (int otherSoldierId in _soldiers.Keys)
+            {
+                if (_soldierSideMap[otherSoldierId] == enemySide)
+                {
+                    enemies.Add((
+                        otherSoldierId,
+                        GetOrCalculateDistance(soldierId, otherSoldierId)));
+                }
+            }
+
+            _enemyProximityCache[soldierId] = (
+                enemies,
+                soldierRevision,
+                enemySideRevision);
+            return enemies;
+        }
+
+        private void TouchPositionRevisions(BattleSoldier soldier)
+        {
+            _soldierPositionRevisions[soldier.Soldier.Id] = ++_nextPositionRevision;
+            TouchSidePositionRevision(_soldierSideMap[soldier.Soldier.Id]);
+            TouchSquadPositionRevision(soldier.BattleSquad?.Id);
+        }
+
+        private void TouchSidePositionRevision(bool side)
+        {
+            _sidePositionRevisions[side] = ++_nextPositionRevision;
+        }
+
+        private void TouchSquadPositionRevision(int? squadId)
+        {
+            if (squadId.HasValue)
+            {
+                _squadPositionRevisions[squadId.Value] = ++_nextPositionRevision;
+            }
+        }
+
+        private int GetSquadPositionRevision(int squadId)
+        {
+            return _squadPositionRevisions.GetValueOrDefault(squadId);
+        }
+
         private void InvalidateLayoutQueries()
         {
-            _distanceCache.Clear();
-            _nearestEnemyCache.Clear();
             _adjacentSoldierCache.Clear();
             _engagementCache.Clear();
             _meleeScrumCache.Clear();

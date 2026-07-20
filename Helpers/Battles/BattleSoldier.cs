@@ -9,8 +9,8 @@ namespace OnlyWar.Helpers.Battles
 {
     public class BattleSoldier
     {
-        private List<RangedWeapon> _equippedRangedWeapons;
-        private List<MeleeWeapon> _equippedMeleeWeapons;
+        private readonly List<RangedWeapon> _equippedRangedWeapons = [];
+        private readonly List<MeleeWeapon> _equippedMeleeWeapons = [];
         private readonly Dictionary<RangedWeapon, IReadOnlyList<int>> _rangedWeaponHandGroups = [];
         private readonly Dictionary<MeleeWeapon, IReadOnlyList<int>> _meleeWeaponHandGroups = [];
         private IReadOnlyList<int> _functioningHandGroupIds = Array.Empty<int>();
@@ -19,7 +19,13 @@ namespace OnlyWar.Helpers.Battles
         private bool _isSlow;
         private Body _cachedInjuryBody;
         private int _cachedInjuryRevision = -1;
+        private Body _weaponGripInjuryBody;
+        private int _weaponGripInjuryRevision = -1;
         private bool _synchronizingWeaponGrips;
+        private readonly List<RangedWeapon> _rangedWeaponGripWorklist = [];
+        private readonly List<MeleeWeapon> _meleeWeaponGripWorklist = [];
+        private readonly List<RangedWeapon> _rangedWeaponDropWorklist = [];
+        private readonly List<MeleeWeapon> _meleeWeaponDropWorklist = [];
 
         public ISoldier Soldier { get; private set; }
 
@@ -27,24 +33,22 @@ namespace OnlyWar.Helpers.Battles
         public ushort Orientation { get; set; }
         public BattleSquad BattleSquad { get; private set; }
 
-        public List<RangedWeapon> EquippedRangedWeapons
+        public IReadOnlyList<RangedWeapon> EquippedRangedWeapons
         {
             get
             {
                 SynchronizeWeaponGrips();
                 return _equippedRangedWeapons;
             }
-            private set => _equippedRangedWeapons = value;
         }
 
-        public List<MeleeWeapon> EquippedMeleeWeapons
+        public IReadOnlyList<MeleeWeapon> EquippedMeleeWeapons
         {
             get
             {
                 SynchronizeWeaponGrips();
                 return _equippedMeleeWeapons;
             }
-            private set => _equippedMeleeWeapons = value;
         }
 
         public List<MeleeWeapon> MeleeWeapons { get; private set; }
@@ -163,8 +167,6 @@ namespace OnlyWar.Helpers.Battles
             BattleSquad = squad;
             MeleeWeapons = [];
             RangedWeapons = [];
-            EquippedMeleeWeapons = [];
-            EquippedRangedWeapons = [];
             TopLeft = null;
             Aim = null;
             IsInMelee = false;
@@ -208,8 +210,8 @@ namespace OnlyWar.Helpers.Battles
             WoundsTaken = soldier.WoundsTaken;
             EnemiesTakenDown = soldier.EnemiesTakenDown;
             Aim = soldier.Aim;
-            EquippedMeleeWeapons = soldier.EquippedMeleeWeapons.ToList();
-            EquippedRangedWeapons = soldier.EquippedRangedWeapons.ToList();
+            _equippedMeleeWeapons.AddRange(soldier.EquippedMeleeWeapons);
+            _equippedRangedWeapons.AddRange(soldier.EquippedRangedWeapons);
             foreach (MeleeWeapon weapon in EquippedMeleeWeapons)
             {
                 _meleeWeaponHandGroups[weapon] = soldier.GetHandGroupIds(weapon).ToArray();
@@ -389,12 +391,22 @@ namespace OnlyWar.Helpers.Battles
 
         public bool ReadyWeapon(RangedWeapon weapon, IReadOnlyCollection<int> handGroupIds = null)
         {
-            if (weapon == null || weapon.Template.IsThrown)
+            if (weapon == null)
             {
                 return false;
             }
 
             SynchronizeWeaponGrips();
+            if (weapon.Template.IsThrown)
+            {
+                if (!_equippedRangedWeapons.Contains(weapon))
+                {
+                    _equippedRangedWeapons.Add(weapon);
+                }
+                _rangedWeaponHandGroups[weapon] = [];
+                return true;
+            }
+
             IReadOnlyList<int> selectedGroups = SelectHandGroups(weapon.Template, handGroupIds);
             if (selectedGroups.Count == 0)
             {
@@ -430,29 +442,52 @@ namespace OnlyWar.Helpers.Battles
         public void DropWeaponsUsingHandGroup(int handGroupId)
         {
             SynchronizeWeaponGrips();
-            foreach (RangedWeapon weapon in _rangedWeaponHandGroups
-                .Where(entry => entry.Value.Contains(handGroupId))
-                .Select(entry => entry.Key)
-                .ToList())
+            _rangedWeaponDropWorklist.Clear();
+            foreach (KeyValuePair<RangedWeapon, IReadOnlyList<int>> entry in _rangedWeaponHandGroups)
+            {
+                if (entry.Value.Contains(handGroupId))
+                {
+                    _rangedWeaponDropWorklist.Add(entry.Key);
+                }
+            }
+            foreach (RangedWeapon weapon in _rangedWeaponDropWorklist)
             {
                 _equippedRangedWeapons.Remove(weapon);
                 _rangedWeaponHandGroups.Remove(weapon);
             }
-            foreach (MeleeWeapon weapon in _meleeWeaponHandGroups
-                .Where(entry => entry.Value.Contains(handGroupId))
-                .Select(entry => entry.Key)
-                .ToList())
+            _rangedWeaponDropWorklist.Clear();
+
+            _meleeWeaponDropWorklist.Clear();
+            foreach (KeyValuePair<MeleeWeapon, IReadOnlyList<int>> entry in _meleeWeaponHandGroups)
+            {
+                if (entry.Value.Contains(handGroupId))
+                {
+                    _meleeWeaponDropWorklist.Add(entry.Key);
+                }
+            }
+            foreach (MeleeWeapon weapon in _meleeWeaponDropWorklist)
             {
                 _equippedMeleeWeapons.Remove(weapon);
                 _meleeWeaponHandGroups.Remove(weapon);
             }
+            _meleeWeaponDropWorklist.Clear();
         }
 
         public void ClearReadiedWeapons()
         {
+            ClearReadiedRangedWeapons();
+            ClearReadiedMeleeWeapons();
+        }
+
+        public void ClearReadiedRangedWeapons()
+        {
             _equippedRangedWeapons.Clear();
-            _equippedMeleeWeapons.Clear();
             _rangedWeaponHandGroups.Clear();
+        }
+
+        public void ClearReadiedMeleeWeapons()
+        {
+            _equippedMeleeWeapons.Clear();
             _meleeWeaponHandGroups.Clear();
         }
 
@@ -502,8 +537,18 @@ namespace OnlyWar.Helpers.Battles
 
         private void SynchronizeWeaponGrips()
         {
+            Body body = Soldier.Body;
+            bool injuryStateChanged = !ReferenceEquals(_weaponGripInjuryBody, body)
+                || _weaponGripInjuryRevision != body.InjuryRevision;
             EnsureInjuryState();
             if (_synchronizingWeaponGrips || _equippedRangedWeapons == null || _equippedMeleeWeapons == null)
+            {
+                return;
+            }
+
+            // Equipment changes are routed through this class and keep the grip mappings
+            // synchronized eagerly. Getter reads only need to react to injury changes.
+            if (!injuryStateChanged)
             {
                 return;
             }
@@ -511,38 +556,25 @@ namespace OnlyWar.Helpers.Battles
             _synchronizingWeaponGrips = true;
             try
             {
-                foreach (RangedWeapon stale in _rangedWeaponHandGroups.Keys
-                    .Where(weapon => !_equippedRangedWeapons.Contains(weapon))
-                    .ToList())
-                {
-                    _rangedWeaponHandGroups.Remove(stale);
-                }
-                foreach (MeleeWeapon stale in _meleeWeaponHandGroups.Keys
-                    .Where(weapon => !_equippedMeleeWeapons.Contains(weapon))
-                    .ToList())
-                {
-                    _meleeWeaponHandGroups.Remove(stale);
-                }
+                RemoveStaleOrUnusableWeapons(
+                    _equippedRangedWeapons,
+                    _rangedWeaponHandGroups,
+                    _rangedWeaponGripWorklist);
+                RemoveStaleOrUnusableWeapons(
+                    _equippedMeleeWeapons,
+                    _meleeWeaponHandGroups,
+                    _meleeWeaponGripWorklist);
 
-                foreach (RangedWeapon unusable in _rangedWeaponHandGroups
-                    .Where(entry => entry.Value.Any(groupId => !_functioningHandGroupIdSet.Contains(groupId)))
-                    .Select(entry => entry.Key)
-                    .ToList())
-                {
-                    _equippedRangedWeapons.Remove(unusable);
-                    _rangedWeaponHandGroups.Remove(unusable);
-                }
-                foreach (MeleeWeapon unusable in _meleeWeaponHandGroups
-                    .Where(entry => entry.Value.Any(groupId => !_functioningHandGroupIdSet.Contains(groupId)))
-                    .Select(entry => entry.Key)
-                    .ToList())
-                {
-                    _equippedMeleeWeapons.Remove(unusable);
-                    _meleeWeaponHandGroups.Remove(unusable);
-                }
-
-                BindUntrackedWeapons(_equippedRangedWeapons, _rangedWeaponHandGroups);
-                BindUntrackedWeapons(_equippedMeleeWeapons, _meleeWeaponHandGroups);
+                BindUntrackedWeapons(
+                    _equippedRangedWeapons,
+                    _rangedWeaponHandGroups,
+                    _rangedWeaponGripWorklist);
+                BindUntrackedWeapons(
+                    _equippedMeleeWeapons,
+                    _meleeWeaponHandGroups,
+                    _meleeWeaponGripWorklist);
+                _weaponGripInjuryBody = body;
+                _weaponGripInjuryRevision = body.InjuryRevision;
             }
             finally
             {
@@ -552,10 +584,20 @@ namespace OnlyWar.Helpers.Battles
 
         private void BindUntrackedWeapons<TWeapon>(
             List<TWeapon> weapons,
-            Dictionary<TWeapon, IReadOnlyList<int>> grips)
+            Dictionary<TWeapon, IReadOnlyList<int>> grips,
+            List<TWeapon> worklist)
             where TWeapon : class
         {
-            foreach (TWeapon weapon in weapons.Where(candidate => !grips.ContainsKey(candidate)).ToList())
+            worklist.Clear();
+            foreach (TWeapon weapon in weapons)
+            {
+                if (!grips.ContainsKey(weapon))
+                {
+                    worklist.Add(weapon);
+                }
+            }
+
+            foreach (TWeapon weapon in worklist)
             {
                 if (weapon is RangedWeapon thrownWeapon && thrownWeapon.Template.IsThrown)
                 {
@@ -583,6 +625,39 @@ namespace OnlyWar.Helpers.Battles
                 }
                 grips[weapon] = selectedGroups;
             }
+            worklist.Clear();
+        }
+
+        private void RemoveStaleOrUnusableWeapons<TWeapon>(
+            List<TWeapon> weapons,
+            Dictionary<TWeapon, IReadOnlyList<int>> grips,
+            List<TWeapon> worklist)
+            where TWeapon : class
+        {
+            worklist.Clear();
+            foreach (KeyValuePair<TWeapon, IReadOnlyList<int>> entry in grips)
+            {
+                bool unusable = false;
+                foreach (int groupId in entry.Value)
+                {
+                    if (!_functioningHandGroupIdSet.Contains(groupId))
+                    {
+                        unusable = true;
+                        break;
+                    }
+                }
+                if (!weapons.Contains(entry.Key) || unusable)
+                {
+                    worklist.Add(entry.Key);
+                }
+            }
+
+            foreach (TWeapon weapon in worklist)
+            {
+                weapons.Remove(weapon);
+                grips.Remove(weapon);
+            }
+            worklist.Clear();
         }
 
         private static int GetHandsForWeapon(WeaponTemplate template)

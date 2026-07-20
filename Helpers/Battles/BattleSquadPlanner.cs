@@ -681,15 +681,27 @@ namespace OnlyWar.Helpers.Battles
         {
             if (withdrawingTargets == null) return null;
 
-            return withdrawingTargets
+            HashSet<int> targetIds = withdrawingTargets
                 .Where(squad => squad != null && squad.Status == BattleSquadStatus.Active)
                 .SelectMany(squad => squad.AbleSoldiers)
                 .Where(target => _soldierMap.ContainsKey(target.Soldier.Id))
-                .OrderBy(target => _grid.GetDistanceBetweenSoldiers(
-                    pursuer.Soldier.Id,
-                    target.Soldier.Id))
-                .ThenBy(target => target.Soldier.Id)
-                .FirstOrDefault();
+                .Select(target => target.Soldier.Id)
+                .ToHashSet();
+            int bestTargetId = -1;
+            float bestDistance = float.MaxValue;
+            foreach ((int enemyId, float distance) in
+                _grid.GetEnemyDistances(pursuer.Soldier.Id))
+            {
+                if (targetIds.Contains(enemyId)
+                    && (distance < bestDistance
+                        || (distance == bestDistance
+                            && (bestTargetId == -1 || enemyId < bestTargetId))))
+                {
+                    bestTargetId = enemyId;
+                    bestDistance = distance;
+                }
+            }
+            return bestTargetId == -1 ? null : _soldierMap[bestTargetId];
         }
 
         private void ApplyDeclaredMovementState(BattleSquad squad)
@@ -2151,43 +2163,100 @@ namespace OnlyWar.Helpers.Battles
         {
             if (maximumRange <= 0 || !IsPlaced(shooter)) return [];
 
-            // Cheap cached bail-out before the full enemy scan: if even the nearest
-            // enemy (ignoring firing arc) is beyond max range, nothing qualifies.
-            // Matters most for grenades, whose Strength-capped range is tiny compared
-            // to typical engagement distances.
-            if (_grid.GetNearestEnemy(shooter.Soldier.Id, out _) > maximumRange)
+            bool restrictFiringArc = HasRestrictedJogFiringArc(movementDirection);
+            ValueTuple<int, int> firingDirection = movementDirection.GetValueOrDefault();
+
+            // Keep only the three best squads while scanning. The previous LINQ pipeline
+            // grouped every enemy, allocated a projection for every squad, sorted all of
+            // them, and materialized the result on every firing evaluation.
+            List<(BattleSquad Squad, float Distance)> candidates =
+                new(RangedTargetSquadCandidateCount);
+            foreach ((int enemyId, float distance) in
+                _grid.GetEnemyDistances(shooter.Soldier.Id))
+            {
+                if (distance > maximumRange)
+                {
+                    continue;
+                }
+                if (!_soldierMap.TryGetValue(enemyId, out BattleSoldier enemy)
+                    || !enemy.CanFight
+                    || enemy.BattleSquad == null
+                    || (restrictFiringArc && !IsWithinJogFiringArc(
+                        shooter,
+                        enemy,
+                        firingDirection)))
+                {
+                    continue;
+                }
+
+                int existingIndex = -1;
+                for (int i = 0; i < candidates.Count; i++)
+                {
+                    if (ReferenceEquals(candidates[i].Squad, enemy.BattleSquad))
+                    {
+                        existingIndex = i;
+                        break;
+                    }
+                }
+
+                if (existingIndex >= 0)
+                {
+                    if (distance >= candidates[existingIndex].Distance)
+                    {
+                        continue;
+                    }
+                    candidates.RemoveAt(existingIndex);
+                }
+                else if (candidates.Count == RangedTargetSquadCandidateCount
+                    && CompareSquadRange(
+                        distance,
+                        enemy.BattleSquad.Id,
+                        candidates[^1].Distance,
+                        candidates[^1].Squad.Id) >= 0)
+                {
+                    continue;
+                }
+
+                int insertionIndex = 0;
+                while (insertionIndex < candidates.Count
+                    && CompareSquadRange(
+                        candidates[insertionIndex].Distance,
+                        candidates[insertionIndex].Squad.Id,
+                        distance,
+                        enemy.BattleSquad.Id) <= 0)
+                {
+                    insertionIndex++;
+                }
+                candidates.Insert(insertionIndex, (enemy.BattleSquad, distance));
+                if (candidates.Count > RangedTargetSquadCandidateCount)
+                {
+                    candidates.RemoveAt(candidates.Count - 1);
+                }
+            }
+
+            if (candidates.Count == 0)
             {
                 return [];
             }
 
-            bool shooterSide = _grid.GetSoldierSide(shooter.Soldier.Id);
-            IEnumerable<int> enemyIds = _grid.GetSoldierPositions().Keys
-                .Where(id => id != shooter.Soldier.Id
-                    && _soldierMap.ContainsKey(id)
-                    && _grid.GetSoldierSide(id) != shooterSide
-                    && _soldierMap[id].CanFight);
-            if (HasRestrictedJogFiringArc(movementDirection))
+            BattleSquad[] result = new BattleSquad[candidates.Count];
+            for (int i = 0; i < candidates.Count; i++)
             {
-                ValueTuple<int, int> firingDirection = movementDirection.Value;
-                enemyIds = enemyIds.Where(id => IsWithinJogFiringArc(
-                    shooter,
-                    _soldierMap[id],
-                    firingDirection));
+                result[i] = candidates[i].Squad;
             }
+            return result;
+        }
 
-            return enemyIds
-                .GroupBy(id => _soldierMap[id].BattleSquad)
-                .Select(group => new
-                {
-                    Squad = group.Key,
-                    Distance = group.Min(id => _grid.GetDistanceBetweenSoldiers(shooter.Soldier.Id, id))
-                })
-                .Where(candidate => candidate.Squad != null && candidate.Distance <= maximumRange)
-                .OrderBy(candidate => candidate.Distance)
-                .ThenBy(candidate => candidate.Squad.Id)
-                .Take(RangedTargetSquadCandidateCount)
-                .Select(candidate => candidate.Squad)
-                .ToList();
+        private static int CompareSquadRange(
+            float leftDistance,
+            int leftSquadId,
+            float rightDistance,
+            int rightSquadId)
+        {
+            int distanceComparison = leftDistance.CompareTo(rightDistance);
+            return distanceComparison != 0
+                ? distanceComparison
+                : leftSquadId.CompareTo(rightSquadId);
         }
 
         private float CalculateExpectedFriendlyStrayCost(
@@ -2259,14 +2328,10 @@ namespace OnlyWar.Helpers.Battles
 
         private float CalculateSquadImminence(BattleSquad attackerSquad, BattleSquad targetSquad)
         {
-            List<BattleSoldier> attackers = attackerSquad.AbleSoldiers.Where(IsPlaced).ToList();
-            List<BattleSoldier> targets = targetSquad.AbleSoldiers.Where(IsPlaced).ToList();
-            if (attackers.Count == 0 || targets.Count == 0) return 0;
+            if (!attackerSquad.AbleSoldiers.Any(IsPlaced)
+                || !targetSquad.AbleSoldiers.Any(IsPlaced)) return 0;
 
-            float distance = attackers
-                .SelectMany(attacker => targets.Select(target =>
-                    _grid.GetDistanceBetweenSoldiers(attacker.Soldier.Id, target.Soldier.Id)))
-                .Min();
+            float distance = _grid.GetMinimumDistanceBetweenSquads(attackerSquad, targetSquad);
             float preferredRange = Math.Max(
                 1,
                 targetSquad.GetPreferredEngagementRange(

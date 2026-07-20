@@ -170,6 +170,23 @@ public class HandGroupTests
         Assert.Equal(1, battleSoldier.HandsFree);
     }
 
+    [Fact]
+    public void ReplacingEquippedWeaponAtSameIndex_RebuildsGripMapping()
+    {
+        Soldier soldier = TestModelFactory.CreateSoldier();
+        BattleSoldier battleSoldier = new(soldier, null);
+        RangedWeapon original = new(CreatePistol());
+        RangedWeapon replacement = new(CreatePistol());
+        Assert.True(battleSoldier.ReadyWeapon(original, [0]));
+
+        battleSoldier.ClearReadiedRangedWeapons();
+        Assert.True(battleSoldier.ReadyWeapon(replacement, [0]));
+
+        Assert.Empty(battleSoldier.GetHandGroupIds(original));
+        Assert.Equal([0], battleSoldier.GetHandGroupIds(replacement));
+        Assert.Equal(replacement, Assert.Single(battleSoldier.EquippedRangedWeapons));
+    }
+
     private static HitLocation Find(Soldier soldier, string name)
     {
         return soldier.Body.HitLocations.Single(location => location.Template.Name == name);

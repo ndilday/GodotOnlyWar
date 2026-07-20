@@ -416,7 +416,7 @@ public class BlastAttackActionTests
             // BattleState snapshots require placed battle coordinates during cloning. The
             // concrete grid positions are assigned by each test immediately afterward.
             soldier.TopLeft = new ValueTuple<int, int>(0, 0);
-            soldier.EquippedRangedWeapons.Clear();
+            soldier.ClearReadiedRangedWeapons();
             soldier.RangedWeapons.Clear();
             soldier.AddWeapons([new RangedWeapon(weaponTemplate)], []);
         }

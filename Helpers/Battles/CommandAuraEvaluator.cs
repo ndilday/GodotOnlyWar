@@ -95,38 +95,14 @@ namespace OnlyWar.Helpers.Battles
                 }
                 anySurvivingHq = true;
                 if (provider.Status == BattleSquadStatus.Active
-                    && IsWithinRadius(
-                        receivers,
-                        provider.AbleSoldiers,
-                        provider.GetCommandAuraRadius(tacticsSkill),
-                        grid))
+                    && grid.GetMinimumDistanceBetweenSquads(squad, provider)
+                        <= provider.GetCommandAuraRadius(tacticsSkill))
                 {
                     return MoraleConstants.CommandAuraSupportStrength;
                 }
             }
 
             return sawHq && !anySurvivingHq ? -MoraleConstants.CommandLossStress : 0f;
-        }
-
-        private static bool IsWithinRadius(
-            List<BattleSoldier> receivers,
-            List<BattleSoldier> providerSoldiers,
-            float radius,
-            BattleGridManager grid)
-        {
-            foreach (BattleSoldier receiver in receivers)
-            {
-                foreach (BattleSoldier provider in providerSoldiers)
-                {
-                    float distance = grid.GetDistanceBetweenSoldiers(
-                        receiver.Soldier.Id, provider.Soldier.Id);
-                    if (distance <= radius)
-                    {
-                        return true;
-                    }
-                }
-            }
-            return false;
         }
     }
 }

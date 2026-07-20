@@ -343,7 +343,7 @@ namespace OnlyWar.Helpers.Battles
                 bool companionRouting = routingSquadIdsAtTurnStart.Contains(companion.Id);
                 foreach (BattleSoldier soldier in companion.AbleSoldiers)
                 {
-                    if (!IsWithinRange(observers, soldier, grid, visualRange))
+                    if (!IsWithinRange(squad, soldier, grid, visualRange))
                     {
                         continue;
                     }
@@ -389,7 +389,7 @@ namespace OnlyWar.Helpers.Battles
                     continue;
                 }
                 friendlyLocal += companion.AbleSoldiers
-                    .Count(soldier => IsWithinRange(observers, soldier, grid, visualRange));
+                    .Count(soldier => IsWithinRange(squad, soldier, grid, visualRange));
             }
 
             int enemyLocal = 0;
@@ -400,7 +400,7 @@ namespace OnlyWar.Helpers.Battles
                     continue;
                 }
                 enemyLocal += enemy.AbleSoldiers
-                    .Count(soldier => IsWithinRange(observers, soldier, grid, visualRange));
+                    .Count(soldier => IsWithinRange(squad, soldier, grid, visualRange));
             }
 
             if (enemyLocal == 0 || friendlyLocal == 0)
@@ -413,20 +413,14 @@ namespace OnlyWar.Helpers.Battles
         }
 
         private static bool IsWithinRange(
-            List<BattleSoldier> observers,
+            BattleSquad observerSquad,
             BattleSoldier target,
             BattleGridManager grid,
             float visualRange)
         {
-            foreach (BattleSoldier observer in observers)
-            {
-                if (grid.GetDistanceBetweenSoldiers(observer.Soldier.Id, target.Soldier.Id)
-                    <= visualRange)
-                {
-                    return true;
-                }
-            }
-            return false;
+            return grid.GetMinimumDistanceBetweenSquadAndSoldier(
+                observerSquad,
+                target.Soldier.Id) <= visualRange;
         }
     }
 }

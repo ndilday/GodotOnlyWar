@@ -284,9 +284,9 @@ public class GrenadePlannerTests
         BattleSoldier shooter = shooters.Soldiers[0];
         RangedWeapon grenade = new(TestModelFactory.FragGrenadeTemplate) { LoadedAmmo = 0 };
         shooter.RangedWeapons.Clear();
-        shooter.EquippedRangedWeapons.Clear();
+        shooter.ClearReadiedRangedWeapons();
         shooter.RangedWeapons.Add(grenade);
-        shooter.EquippedRangedWeapons.Add(grenade);
+        shooter.ReadyWeapon(grenade);
         BattleSquad enemies = CreateSquad("Enemy", 830);
 
         BattleGridManager grid = new();
@@ -420,9 +420,9 @@ public class GrenadePlannerTests
             doesDamageDegradeWithRange: false,
             reloadTime: 1));
         soldier.RangedWeapons.Clear();
-        soldier.EquippedRangedWeapons.Clear();
+        soldier.ClearReadiedRangedWeapons();
         soldier.RangedWeapons.Add(rifle);
-        soldier.EquippedRangedWeapons.Add(rifle);
+        soldier.ReadyWeapon(rifle);
         return AddBeltGrenade(soldier);
     }
 
@@ -456,9 +456,9 @@ public class GrenadePlannerTests
             areaRadius: 5,
             fuelPerBurst: 10));
         soldier.RangedWeapons.Clear();
-        soldier.EquippedRangedWeapons.Clear();
+        soldier.ClearReadiedRangedWeapons();
         soldier.RangedWeapons.Add(flamer);
-        soldier.EquippedRangedWeapons.Add(flamer);
+        soldier.ReadyWeapon(flamer);
     }
 
     /// <summary>

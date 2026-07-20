@@ -33,9 +33,8 @@ public class GrenadeReportingTests
         // Skilled enough that a mean roll from the scripted RNG lands on the aim cell.
         ((Soldier)thrower.Soldier).Dexterity = 20;
         thrower.RangedWeapons.Clear();
-        thrower.EquippedRangedWeapons.Clear();
+        thrower.ClearReadiedRangedWeapons();
         thrower.RangedWeapons.Add(grenade);
-        thrower.EquippedRangedWeapons.Add(grenade);
         foreach (BattleSoldier soldier in throwers.Soldiers.Concat(victims.Soldiers))
         {
             soldier.Armor = new Armor(new ArmorTemplate(990 + soldier.Soldier.Id, "Cloth", 0, 0));
@@ -119,16 +118,16 @@ public class GrenadeReportingTests
             areaRadius: 6,
             fuelPerBurst: 0));
         grenadier.RangedWeapons.Clear();
-        grenadier.EquippedRangedWeapons.Clear();
+        grenadier.ClearReadiedRangedWeapons();
         grenadier.RangedWeapons.Add(grenade);
-        grenadier.EquippedRangedWeapons.Add(grenade);
+        grenadier.ReadyWeapon(grenade);
 
         BattleSquad victims = CreateResolverSquad(
             CreateFaction(81_002, "Victims"), "Victims", 81_201, 3);
         foreach (BattleSoldier victim in victims.Soldiers)
         {
             victim.RangedWeapons.Clear();
-            victim.EquippedRangedWeapons.Clear();
+            victim.ClearReadiedRangedWeapons();
         }
 
         BattleGridManager grid = new();

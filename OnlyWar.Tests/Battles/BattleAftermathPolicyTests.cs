@@ -182,7 +182,7 @@ public class BattleAftermathPolicyTests
         BattleSquad defenders = CreateBattleSquad(enemyFaction, "Phalanx", CreateSoldier("Warrior"));
         BattleSoldier battleSoldier = attackers.Soldiers[0];
         battleSoldier.MeleeWeapons.Clear();
-        battleSoldier.EquippedMeleeWeapons.Clear();
+        battleSoldier.ClearReadiedMeleeWeapons();
         battleSoldier.TurnsSwinging = 2;
         BattleAftermathContext context = new(
             [attackers],

@@ -290,9 +290,9 @@ public class MeleeCombatReworkTests
         BattleSquad secondDefenderSquad = CreateBattleSquad("Second Defender", 30, "Second Defender");
 
         BattleSoldier attacker = attackerSquad.Soldiers[0];
-        attacker.EquippedRangedWeapons.Clear();
-        attacker.EquippedMeleeWeapons.Clear();
-        attacker.EquippedMeleeWeapons.Add(attacker.MeleeWeapons[0]);
+        attacker.ClearReadiedRangedWeapons();
+        attacker.ClearReadiedMeleeWeapons();
+        attacker.ReadyWeapon(attacker.MeleeWeapons[0]);
 
         BattleSoldier firstDefender = firstDefenderSquad.Soldiers[0];
         BattleSoldier secondDefender = secondDefenderSquad.Soldiers[0];
@@ -366,13 +366,13 @@ public class MeleeCombatReworkTests
         BattleSoldier attacker = attackerSquad.Soldiers.Single();
         BattleSoldier defender = defenderSquad.Soldiers.Single();
         attacker.RangedWeapons.Clear();
-        attacker.EquippedRangedWeapons.Clear();
+        attacker.ClearReadiedRangedWeapons();
         attacker.MeleeWeapons.Clear();
-        attacker.EquippedMeleeWeapons.Clear();
+        attacker.ClearReadiedMeleeWeapons();
         defender.RangedWeapons.Clear();
-        defender.EquippedRangedWeapons.Clear();
+        defender.ClearReadiedRangedWeapons();
         defender.MeleeWeapons.Clear();
-        defender.EquippedMeleeWeapons.Clear();
+        defender.ClearReadiedMeleeWeapons();
         attacker.TopLeft = (0, 0);
         defender.TopLeft = (1, 0);
 

@@ -207,6 +207,108 @@ public class BattleGridManagerTests
     }
 
     [Fact]
+    public void GetNearestEnemy_EqualDistancePreservesPlacementOrder()
+    {
+        BattleGridManager grid = new();
+        grid.PlaceSoldier(CreateBattleSoldier(1), true, Cell(0, 0));
+        grid.PlaceSoldier(CreateBattleSoldier(99), false, Cell(-2, 0));
+        grid.PlaceSoldier(CreateBattleSoldier(2), false, Cell(2, 0));
+
+        float distance = grid.GetNearestEnemy(1, out int closest);
+
+        Assert.Equal(2f, distance, precision: 4);
+        Assert.Equal(99, closest);
+    }
+
+    [Fact]
+    public void GetEnemiesByDistance_UpdatesBothSidesAfterMovement()
+    {
+        BattleGridManager grid = new();
+        BattleSoldier attacker = CreateBattleSoldier(1);
+        BattleSoldier nearEnemy = CreateBattleSoldier(2);
+        BattleSoldier farEnemy = CreateBattleSoldier(3);
+        grid.PlaceSoldier(attacker, true, Cell(0, 0));
+        grid.PlaceSoldier(nearEnemy, false, Cell(2, 0));
+        grid.PlaceSoldier(farEnemy, false, Cell(6, 0));
+
+        Assert.Equal([2, 3], grid.GetEnemiesByDistance(1).Select(enemy => enemy.SoldierId));
+        Assert.Equal([1], grid.GetEnemiesByDistance(2).Select(enemy => enemy.SoldierId));
+
+        grid.MoveSoldier(nearEnemy, new ValueTuple<int, int>(10, 0), 0);
+
+        Assert.Equal([3, 2], grid.GetEnemiesByDistance(1).Select(enemy => enemy.SoldierId));
+        Assert.Equal(10f, grid.GetEnemiesByDistance(2)[0].Distance, precision: 4);
+    }
+
+    [Fact]
+    public void GetEnemiesByDistance_LazyRebuildPreservesPlacementOrderForNewTie()
+    {
+        BattleGridManager grid = new();
+        BattleSoldier subject = CreateBattleSoldier(1);
+        BattleSoldier firstPlacedEnemy = CreateBattleSoldier(99);
+        BattleSoldier secondPlacedEnemy = CreateBattleSoldier(2);
+        grid.PlaceSoldier(subject, true, Cell(0, 0));
+        grid.PlaceSoldier(firstPlacedEnemy, false, Cell(-5, 0));
+        grid.PlaceSoldier(secondPlacedEnemy, false, Cell(2, 0));
+
+        Assert.Equal([2, 99], grid.GetEnemiesByDistance(1).Select(enemy => enemy.SoldierId));
+
+        grid.MoveSoldier(firstPlacedEnemy, new ValueTuple<int, int>(-2, 0), 0);
+
+        Assert.Equal([99, 2], grid.GetEnemiesByDistance(1).Select(enemy => enemy.SoldierId));
+    }
+
+    [Fact]
+    public void GetMinimumDistanceBetweenSquads_InvalidatesAfterMemberMovement()
+    {
+        BattleGridManager grid = new();
+        BattleSquad first = CreateBattleSquad("First", 1);
+        BattleSquad second = CreateBattleSquad("Second", 2);
+        BattleSoldier firstSoldier = first.Soldiers[0];
+        BattleSoldier secondSoldier = second.Soldiers[0];
+        grid.PlaceSoldier(firstSoldier, true, Cell(0, 0));
+        grid.PlaceSoldier(secondSoldier, false, Cell(3, 4));
+
+        Assert.Equal(5f, grid.GetMinimumDistanceBetweenSquads(first, second), precision: 4);
+
+        grid.MoveSoldier(secondSoldier, new ValueTuple<int, int>(0, 2), 0);
+
+        Assert.Equal(2f, grid.GetMinimumDistanceBetweenSquads(first, second), precision: 4);
+    }
+
+    [Fact]
+    public void GetMinimumDistanceBetweenSquadAndSoldier_TracksObserverAndTargetMovement()
+    {
+        BattleGridManager grid = new();
+        BattleSquad observers = CreateBattleSquadWithSoldiers("Observers", 10, 2, true);
+        BattleSoldier firstObserver = observers.Soldiers[0];
+        BattleSoldier secondObserver = observers.Soldiers[1];
+        BattleSoldier target = CreateBattleSoldier(20);
+        grid.PlaceSoldier(firstObserver, true, Cell(0, 0));
+        grid.PlaceSoldier(secondObserver, true, Cell(10, 0));
+        grid.PlaceSoldier(target, false, Cell(5, 0));
+
+        Assert.Equal(
+            5f,
+            grid.GetMinimumDistanceBetweenSquadAndSoldier(observers, target.Soldier.Id),
+            precision: 4);
+
+        grid.MoveSoldier(firstObserver, new ValueTuple<int, int>(4, 0), 0);
+
+        Assert.Equal(
+            1f,
+            grid.GetMinimumDistanceBetweenSquadAndSoldier(observers, target.Soldier.Id),
+            precision: 4);
+
+        grid.MoveSoldier(target, new ValueTuple<int, int>(8, 0), 0);
+
+        Assert.Equal(
+            2f,
+            grid.GetMinimumDistanceBetweenSquadAndSoldier(observers, target.Soldier.Id),
+            precision: 4);
+    }
+
+    [Fact]
     public void IsAdjacentToEnemy_UsesTacticalSide()
     {
         BattleGridManager grid = new();

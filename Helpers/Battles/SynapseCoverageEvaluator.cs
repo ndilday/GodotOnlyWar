@@ -75,32 +75,12 @@ namespace OnlyWar.Helpers.Battles
                     continue;
                 }
 
-                if (IsWithinRadius(coveredSoldiers, providerSoldiers, radius, grid))
+                if (grid.GetMinimumDistanceBetweenSquads(squad, provider) <= radius)
                 {
                     return true;
                 }
             }
 
-            return false;
-        }
-
-        private static bool IsWithinRadius(
-            List<BattleSoldier> coveredSoldiers,
-            List<BattleSoldier> providerSoldiers,
-            float radius,
-            BattleGridManager grid)
-        {
-            foreach (BattleSoldier covered in coveredSoldiers)
-            {
-                foreach (BattleSoldier provider in providerSoldiers)
-                {
-                    float distance = grid.GetDistanceBetweenSoldiers(covered.Soldier.Id, provider.Soldier.Id);
-                    if (distance <= radius)
-                    {
-                        return true;
-                    }
-                }
-            }
             return false;
         }
     }

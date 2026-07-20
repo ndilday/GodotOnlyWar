@@ -143,9 +143,9 @@ public class BattleSquadPlannerTests
             areaRadius: areaRadius,
             fuelPerBurst: 10));
         soldier.RangedWeapons.Clear();
-        soldier.EquippedRangedWeapons.Clear();
+        soldier.ClearReadiedRangedWeapons();
         soldier.RangedWeapons.Add(weapon);
-        soldier.EquippedRangedWeapons.Add(weapon);
+        soldier.ReadyWeapon(weapon);
         return weapon;
     }
 
@@ -220,9 +220,9 @@ public class BattleSquadPlannerTests
             doesDamageDegradeWithRange: false,
             reloadTime: 1));
         shooter.RangedWeapons.Clear();
-        shooter.EquippedRangedWeapons.Clear();
+        shooter.ClearReadiedRangedWeapons();
         shooter.RangedWeapons.Add(rifle);
-        shooter.EquippedRangedWeapons.Add(rifle);
+        shooter.ReadyWeapon(rifle);
         BattleGridManager grid = new();
         Place(grid, shooter, true, 0, 0);
         Place(grid, enemies.Soldiers[0], false, 10, 0);
@@ -266,9 +266,9 @@ public class BattleSquadPlannerTests
             doesDamageDegradeWithRange: false,
             reloadTime: 1));
         shooter.RangedWeapons.Clear();
-        shooter.EquippedRangedWeapons.Clear();
+        shooter.ClearReadiedRangedWeapons();
         shooter.RangedWeapons.Add(rifle);
-        shooter.EquippedRangedWeapons.Add(rifle);
+        shooter.ReadyWeapon(rifle);
         BattleSoldier enemy = enemies.Soldiers[0];
         ((Soldier)enemy.Soldier).Dexterity = 20;
         RangedWeapon longRifle = new(new RangedWeaponTemplate(
@@ -289,9 +289,9 @@ public class BattleSquadPlannerTests
             doesDamageDegradeWithRange: false,
             reloadTime: 1));
         enemy.RangedWeapons.Clear();
-        enemy.EquippedRangedWeapons.Clear();
+        enemy.ClearReadiedRangedWeapons();
         enemy.RangedWeapons.Add(longRifle);
-        enemy.EquippedRangedWeapons.Add(longRifle);
+        enemy.ReadyWeapon(longRifle);
         float preferredDistance = BattleModifiersUtil.CalculateOptimalDistance(
             shooter,
             enemies.GetAverageSize(),
@@ -407,11 +407,11 @@ public class BattleSquadPlannerTests
             parryMod: 4,
             attackSpeedMultiplier: 1));
         shooter.RangedWeapons.Clear();
-        shooter.EquippedRangedWeapons.Clear();
+        shooter.ClearReadiedRangedWeapons();
         shooter.RangedWeapons.Add(pointBlankWeapon);
-        shooter.EquippedRangedWeapons.Add(pointBlankWeapon);
+        shooter.ReadyWeapon(pointBlankWeapon);
         shooter.MeleeWeapons.Clear();
-        shooter.EquippedMeleeWeapons.Clear();
+        shooter.ClearReadiedMeleeWeapons();
         shooter.MeleeWeapons.Add(projectedMeleeWeapon);
 
         MeleeWeaponTemplate attackerWeaponTemplate = new(
@@ -441,11 +441,11 @@ public class BattleSquadPlannerTests
             BattleSoldier attacker = attackerSquad.Soldiers[0];
             MeleeWeapon attackerWeapon = new(attackerWeaponTemplate);
             attacker.RangedWeapons.Clear();
-            attacker.EquippedRangedWeapons.Clear();
+            attacker.ClearReadiedRangedWeapons();
             attacker.MeleeWeapons.Clear();
-            attacker.EquippedMeleeWeapons.Clear();
+            attacker.ClearReadiedMeleeWeapons();
             attacker.MeleeWeapons.Add(attackerWeapon);
-            attacker.EquippedMeleeWeapons.Add(attackerWeapon);
+            attacker.ReadyWeapon(attackerWeapon);
             Place(
                 grid,
                 attacker,
@@ -620,7 +620,7 @@ public class BattleSquadPlannerTests
     {
         BattleSquad shooters = CreateSquad("Shooter", 301);
         BattleSquad meleeEnemy = CreateSquad("Melee Enemy", 310);
-        meleeEnemy.Soldiers[0].EquippedRangedWeapons.Clear();
+        meleeEnemy.Soldiers[0].ClearReadiedRangedWeapons();
         meleeEnemy.Soldiers[0].RangedWeapons.Clear();
 
         BattleGridManager grid = new();
@@ -659,8 +659,8 @@ public class BattleSquadPlannerTests
             bulk: 0,
             doesDamageDegradeWithRange: false,
             reloadTime: 1));
-        shooter.EquippedRangedWeapons.Clear();
-        shooter.EquippedRangedWeapons.Add(burstWeapon);
+        shooter.ClearReadiedRangedWeapons();
+        shooter.ReadyWeapon(burstWeapon);
 
         BattleGridManager grid = new();
         Place(grid, shooter, true, 0, 0);

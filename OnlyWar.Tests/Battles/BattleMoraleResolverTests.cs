@@ -67,7 +67,7 @@ public class BattleMoraleResolverTests
         {
             BattleSoldier soldier = victims.Soldiers[i];
             soldier.RangedWeapons.Clear();
-            soldier.EquippedRangedWeapons.Clear();
+            soldier.ClearReadiedRangedWeapons();
             Place(grid, soldier, side: true, x: 60 + (i % 5), y: i / 5);
         }
         for (int i = 0; i < marines.Soldiers.Count; i++)
@@ -75,9 +75,9 @@ public class BattleMoraleResolverTests
             BattleSoldier soldier = marines.Soldiers[i];
             RangedWeapon weapon = new(heavyRifle);
             soldier.RangedWeapons.Clear();
-            soldier.EquippedRangedWeapons.Clear();
+            soldier.ClearReadiedRangedWeapons();
             soldier.RangedWeapons.Add(weapon);
-            soldier.EquippedRangedWeapons.Add(weapon);
+            soldier.ReadyWeapon(weapon);
             Place(grid, soldier, side: false, x: i, y: 0);
         }
 
