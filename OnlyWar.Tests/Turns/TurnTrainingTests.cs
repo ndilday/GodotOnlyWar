@@ -316,7 +316,7 @@ public class TurnTrainingTests
                 1,
                 false,
                 0,
-                Array.Empty<Tuple<BaseSkill, float>>(),
+                Array.Empty<ValueTuple<BaseSkill, float>>(),
                 profile);
         }
 

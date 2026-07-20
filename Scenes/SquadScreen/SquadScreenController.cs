@@ -48,7 +48,7 @@ public partial class SquadScreenController : DialogController
 
     }
 
-    private void OnWeaponSetSelectionWeaponSetCountChanged(object sender, Tuple<string, int> args)
+    private void OnWeaponSetSelectionWeaponSetCountChanged(object sender, ValueTuple<string, int> args)
     {
         WeaponSetSelectionView view = (WeaponSetSelectionView)sender;
         string optionName = view.OptionName;
@@ -90,30 +90,30 @@ public partial class SquadScreenController : DialogController
 
     private void PopulateSquadDetails()
     {
-        List<Tuple<string, string>> lines = [];
-        lines.Add(new Tuple<string, string>("Squad Name", _squad.Name));
-        lines.Add(new Tuple<string, string>("Squad Type", _squad.SquadTemplate.Name));
+        List<ValueTuple<string, string>> lines = [];
+        lines.Add(new ValueTuple<string, string>("Squad Name", _squad.Name));
+        lines.Add(new ValueTuple<string, string>("Squad Type", _squad.SquadTemplate.Name));
         if (_squad.CurrentRegion != null)
         {
-            lines.Add(new Tuple<string, string>("Location", _squad.CurrentRegion.Name));
+            lines.Add(new ValueTuple<string, string>("Location", _squad.CurrentRegion.Name));
         }
         else if (_squad.BoardedLocation != null)
         {
-            lines.Add(new Tuple<string, string>("Ship", _squad.BoardedLocation.Name));
+            lines.Add(new ValueTuple<string, string>("Ship", _squad.BoardedLocation.Name));
         }
         else
         {
-            lines.Add(new Tuple<string, string>("Location", "Unknown"));
+            lines.Add(new ValueTuple<string, string>("Location", "Unknown"));
         }
-        lines.Add(new Tuple<string, string>("Squad Size", _squad.Members.Count.ToString()));
-        lines.Add(new Tuple<string, string>("Combat Ready Brothers", _squad.Members.Where(s => CanFight(s)).Count().ToString()));
+        lines.Add(new ValueTuple<string, string>("Squad Size", _squad.Members.Count.ToString()));
+        lines.Add(new ValueTuple<string, string>("Combat Ready Brothers", _squad.Members.Where(s => CanFight(s)).Count().ToString()));
 
         _view.PopulateSquadData(lines);
     }
 
     private void PopulateSquadLoadout()
     {
-        List<Tuple<List<Tuple<string, int>>, string, int, int>> weaponSets = new List<Tuple<List<Tuple<string, int>>, string, int, int>>();
+        List<ValueTuple<List<ValueTuple<string, int>>, string, int, int>> weaponSets = new List<ValueTuple<List<ValueTuple<string, int>>, string, int, int>>();
         WeaponSet defaultWs = _squad.SquadTemplate.DefaultWeapons;
         
         Dictionary<string, int> weaponSetCounts = new Dictionary<string, int>();
@@ -133,7 +133,7 @@ public partial class SquadScreenController : DialogController
         }
         foreach (var weaponOptions in _squad.SquadTemplate.WeaponOptions)
         {
-            List <Tuple<string, int>> choices = new List<Tuple<string, int>>();
+            List <ValueTuple<string, int>> choices = new List<ValueTuple<string, int>>();
             foreach(var option in weaponOptions.Options)
             {
                 int count = 0;
@@ -141,11 +141,11 @@ public partial class SquadScreenController : DialogController
                 {
                     count = weaponSetCounts[option.Name];
                 }
-                choices.Add(new Tuple<string, int>(option.Name, count));
+                choices.Add(new ValueTuple<string, int>(option.Name, count));
             }
 
-            Tuple<List<Tuple<string, int>>, string, int, int> options =
-                new Tuple<List<Tuple<string, int>>, string, int, int>(
+            ValueTuple<List<ValueTuple<string, int>>, string, int, int> options =
+                new ValueTuple<List<ValueTuple<string, int>>, string, int, int>(
                     choices,
                     weaponOptions.Name,
                     weaponOptions.MinNumber,
@@ -153,7 +153,7 @@ public partial class SquadScreenController : DialogController
             weaponSets.Add(options);
         }
         int defaultCount = _ableBodied - weaponSetCounts.Values.Sum();
-        Tuple<string, int> defaultOptions = new Tuple<string, int>(defaultWs.Name, defaultCount);
+        ValueTuple<string, int> defaultOptions = new ValueTuple<string, int>(defaultWs.Name, defaultCount);
         _view.PopulateSquadLoadout(weaponSets, defaultOptions);
     }
 

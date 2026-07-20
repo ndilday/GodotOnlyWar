@@ -26,7 +26,7 @@ public class BattleTurnResolverWithdrawalTests
     {
         BattleSquad attackers = CreateSquad("Eliminated", 73_001, TestModelFactory.MarineTemplate);
         BattleSquad defenders = CreateSquad("Holder", 73_002, TestModelFactory.MarineTemplate);
-        attackers.Soldiers[0].TopLeft = new Tuple<int, int>(0, 0);
+        attackers.Soldiers[0].TopLeft = (0, 0);
         attackers.Status = BattleSquadStatus.Eliminated;
         BattleGridManager grid = new();
         Place(grid, defenders.Soldiers[0], false, 20, 0);
@@ -57,7 +57,7 @@ public class BattleTurnResolverWithdrawalTests
             1,
             false,
             0,
-            Array.Empty<Tuple<BaseSkill, float>>(),
+            Array.Empty<ValueTuple<BaseSkill, float>>(),
             battleValue: 0);
         BattleSquad withdrawing = CreateSquad("Withdrawing", 73_011, zeroValueHuman);
         BattleSquad holder = CreateSquad("Holder", 73_012, TestModelFactory.MarineTemplate);
@@ -189,8 +189,8 @@ public class BattleTurnResolverWithdrawalTests
         int x,
         int y)
     {
-        soldier.TopLeft = new Tuple<int, int>(x, y);
-        grid.PlaceSoldier(soldier, side, [soldier.TopLeft]);
+        soldier.TopLeft = new ValueTuple<int, int>(x, y);
+        grid.PlaceSoldier(soldier, side, [soldier.TopLeft.Value]);
     }
 
     private static Faction CreateFaction(int id, string name, SoldierTemplate template)

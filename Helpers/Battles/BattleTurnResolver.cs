@@ -1221,8 +1221,8 @@ namespace OnlyWar.Helpers.Battles
         {
             return first.AbleSoldiers.SelectMany(a => second.AbleSoldiers.Select(b =>
             {
-                float dx = a.TopLeft.Item1 - b.TopLeft.Item1;
-                float dy = a.TopLeft.Item2 - b.TopLeft.Item2;
+                float dx = a.TopLeft.Value.Item1 - b.TopLeft.Value.Item1;
+                float dy = a.TopLeft.Value.Item2 - b.TopLeft.Value.Item2;
                 return MathF.Sqrt((dx * dx) + (dy * dy));
             })).DefaultIfEmpty(float.MaxValue).Min();
         }

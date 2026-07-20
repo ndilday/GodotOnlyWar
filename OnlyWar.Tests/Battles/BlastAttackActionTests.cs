@@ -34,7 +34,7 @@ public class BlastAttackActionTests
             1, 2, Range, CreateRng(battle, marginZ: 0.5f));
 
         Assert.False(action.DidScatter);
-        Assert.Equal(new Tuple<int, int>(10, 0), action.ImpactCell);
+        Assert.Equal(new ValueTuple<int, int>(10, 0), action.ImpactCell);
         Assert.Contains(2, action.VictimIds);
         Assert.DoesNotContain("goes wide", action.Description());
     }
@@ -55,7 +55,7 @@ public class BlastAttackActionTests
             1, 2, Range, CreateRng(battle, marginZ: -4f, directionRoll: 0.25));
 
         Assert.True(action.DidScatter);
-        Assert.Equal(new Tuple<int, int>(10, 4), action.ImpactCell);
+        Assert.Equal(new ValueTuple<int, int>(10, 4), action.ImpactCell);
         Assert.Contains("goes wide, landing 4 cells off target", action.Description());
     }
 
@@ -186,7 +186,7 @@ public class BlastAttackActionTests
         battle.Place(1, true, 0, 0);
         battle.Place(2, false, 10, 0);
         BattleSoldier thrower = battle.State.GetSoldier(1);
-        thrower.Aim = new Tuple<int, RangedWeapon, int>(
+        thrower.Aim = new ValueTuple<int, RangedWeapon, int>(
             2, GetBlastWeapon(thrower), 2);
 
         battle.ExecuteBlast(1, 2, Range, CreateRng(battle, marginZ: 0.5f));
@@ -254,7 +254,7 @@ public class BlastAttackActionTests
         BlastAttackAction action = battle.ExecuteBlast(
             1, 2, Range, CreateRng(battle, marginZ: 0.5f));
         WoundResolution originalWound = Assert.Single(action.WoundResolutions);
-        Tuple<int, int> originalImpact = action.ImpactCell;
+        ValueTuple<int, int> originalImpact = action.ImpactCell;
         RangedWeapon weapon = GetBlastWeapon(battle.State.GetSoldier(1));
         ushort remainingAmmo = weapon.LoadedAmmo;
         ushort turnsShooting = battle.State.GetSoldier(1).TurnsShooting;
@@ -396,7 +396,7 @@ public class BlastAttackActionTests
             1,
             false,
             0,
-            Array.Empty<Tuple<BaseSkill, float>>());
+            Array.Empty<ValueTuple<BaseSkill, float>>());
     }
 
     private static TestBattle CreateBattle(
@@ -415,7 +415,7 @@ public class BlastAttackActionTests
         {
             // BattleState snapshots require placed battle coordinates during cloning. The
             // concrete grid positions are assigned by each test immediately afterward.
-            soldier.TopLeft = new Tuple<int, int>(0, 0);
+            soldier.TopLeft = new ValueTuple<int, int>(0, 0);
             soldier.EquippedRangedWeapons.Clear();
             soldier.RangedWeapons.Clear();
             soldier.AddWeapons([new RangedWeapon(weaponTemplate)], []);
@@ -482,12 +482,12 @@ public class BlastAttackActionTests
         public void Place(int soldierId, bool side, int x, int y)
         {
             BattleSoldier soldier = FindOriginal(soldierId);
-            soldier.TopLeft = new Tuple<int, int>(x, y);
+            soldier.TopLeft = new ValueTuple<int, int>(x, y);
             State.GetSoldier(soldierId).TopLeft = soldier.TopLeft;
             Grid.PlaceSoldier(
                 soldier,
                 side,
-                [new Tuple<int, int>(x, y)]);
+                [new ValueTuple<int, int>(x, y)]);
         }
 
         public BlastAttackAction ExecuteBlast(

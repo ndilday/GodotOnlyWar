@@ -120,8 +120,8 @@ public class BattlePursuitActionPlannerTests
         foreach ((BattleSquad squad, bool side, int x, int y) in placements)
         {
             BattleSoldier soldier = squad.Soldiers[0];
-            soldier.TopLeft = new Tuple<int, int>(x, y);
-            grid.PlaceSoldier(soldier, side, [soldier.TopLeft]);
+            soldier.TopLeft = new ValueTuple<int, int>(x, y);
+            grid.PlaceSoldier(soldier, side, [soldier.TopLeft.Value]);
         }
 
         Dictionary<int, BattleSoldier> soldiers = placements

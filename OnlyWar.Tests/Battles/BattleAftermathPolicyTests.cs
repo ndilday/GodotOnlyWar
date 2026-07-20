@@ -245,7 +245,7 @@ public class BattleAftermathPolicyTests
         BattleSquad battleSquad = new(faction.IsPlayerFaction, squad);
         foreach (BattleSoldier soldier in battleSquad.Soldiers)
         {
-            soldier.TopLeft = new System.Tuple<int, int>(_nextId++, 2);
+            soldier.TopLeft = (_nextId++, 2);
             soldier.Orientation = 0;
         }
         return battleSquad;

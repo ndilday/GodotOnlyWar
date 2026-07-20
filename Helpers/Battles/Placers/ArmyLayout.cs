@@ -6,9 +6,9 @@ namespace OnlyWar.Helpers.Battles.Placers
 {
     public class ArmyLayout
     {
-        public Dictionary<int, Tuple<int, int>> SquadPositionMap { get; set; }
+        public Dictionary<int, ValueTuple<int, int>> SquadPositionMap { get; set; }
         public Dictionary<int,BattleSquadLayout> SquadLayoutMap { get; set; }
-        public Tuple<int, int> ArmyDimension { get; set; }
+        public ValueTuple<int, int> ArmyDimension { get; set; }
 
         public ArmyLayout()
         {
@@ -108,7 +108,7 @@ namespace OnlyWar.Helpers.Battles.Placers
                     layout.SquadLayoutMap[hqSquad.Id] = squadLayout;
                     
                     layout.SquadPositionMap[squad.Id] = 
-                        new Tuple<int, int>(lineLeft + (spacing * (i+1)), y);
+                        new ValueTuple<int, int>(lineLeft + (spacing * (i+1)), y);
                     if (squadLayout.SquadDimension.Item2 + y > maxY)
                     {
                         maxY = squadLayout.SquadDimension.Item2 + y;
@@ -118,7 +118,7 @@ namespace OnlyWar.Helpers.Battles.Placers
 
             }
 
-            layout.ArmyDimension = new Tuple<int, int>(maxX, maxY);
+            layout.ArmyDimension = new ValueTuple<int, int>(maxX, maxY);
             return layout;
         }
 
@@ -134,7 +134,7 @@ namespace OnlyWar.Helpers.Battles.Placers
                     BattleSquadLayoutHelper.Instance.LayoutBattleSquad(squad, isLoose, random);
                 layout.SquadLayoutMap[squad.Id] = squadLayout;
                 lineLeft = lineLeft - 3 - squadLayout.SquadDimension.Item1;
-                layout.SquadPositionMap[squad.Id] = new Tuple<int, int>(lineLeft, y);
+                layout.SquadPositionMap[squad.Id] = new ValueTuple<int, int>(lineLeft, y);
                 if (squadLayout.SquadDimension.Item2 + y > maxY)
                 {
                     maxY = squadLayout.SquadDimension.Item2 + y;
@@ -149,7 +149,7 @@ namespace OnlyWar.Helpers.Battles.Placers
                         BattleSquadLayoutHelper.Instance.LayoutBattleSquad(squad, isLoose, random);
                     layout.SquadLayoutMap[squad.Id] = squadLayout;
                     layout.SquadPositionMap[squad.Id] =
-                        new Tuple<int, int>(lineRight + 3, y);
+                        new ValueTuple<int, int>(lineRight + 3, y);
                     lineRight += squadLayout.SquadDimension.Item1;
                     if (squadLayout.SquadDimension.Item2 + y > maxY)
                     {

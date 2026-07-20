@@ -9,11 +9,11 @@ public class DossierCardData
 {
     public string Title { get; }
     public string Subtitle { get; }
-    public IReadOnlyList<Tuple<string, string>> Rows { get; }
+    public IReadOnlyList<ValueTuple<string, string>> Rows { get; }
     public Color AccentColor { get; }
     public float? BarFraction { get; }
 
-    public DossierCardData(string title, string subtitle, IReadOnlyList<Tuple<string, string>> rows, Color accentColor, float? barFraction = null)
+    public DossierCardData(string title, string subtitle, IReadOnlyList<ValueTuple<string, string>> rows, Color accentColor, float? barFraction = null)
     {
         Title = title;
         Subtitle = subtitle;
@@ -51,7 +51,7 @@ public static class DossierCard
             cardStack.AddChild(subtitleLabel);
         }
 
-        foreach (Tuple<string, string> row in card.Rows)
+        foreach (ValueTuple<string, string> row in card.Rows)
         {
             HBoxContainer rowBox = new() { SizeFlagsHorizontal = Control.SizeFlags.ExpandFill };
             Label label = new() { Text = row.Item1, SizeFlagsHorizontal = Control.SizeFlags.ExpandFill };

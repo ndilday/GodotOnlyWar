@@ -19,7 +19,7 @@ public partial class SquadScreenView : DialogView
     private Button _pasteLoadoutButton;
     private List<WeaponSetSelectionView> _weaponSets;
 
-    public event EventHandler<Tuple<string, int>> WeaponSetSelectionWeaponSetCountChanged;
+    public event EventHandler<ValueTuple<string, int>> WeaponSetSelectionWeaponSetCountChanged;
     public event EventHandler CopyLoadout;
     public event EventHandler PasteLoadout;
 
@@ -66,16 +66,16 @@ public partial class SquadScreenView : DialogView
         }
     }
 
-    public void PopulateSquadData(IReadOnlyList<Tuple<string, string>> stringPairs)
+    public void PopulateSquadData(IReadOnlyList<ValueTuple<string, string>> stringPairs)
     {
         ClearSquadData();
-        foreach (Tuple<string, string> line in stringPairs)
+        foreach (ValueTuple<string, string> line in stringPairs)
         {
             AddLine(_squadDetailsVBox, line.Item1, line.Item2);
         }
     }
 
-    public void PopulateSquadLoadout(List<Tuple<List<Tuple<string, int>>, string, int, int>> weaponSets, Tuple<string, int> defaultWeaponSet)
+    public void PopulateSquadLoadout(List<ValueTuple<List<ValueTuple<string, int>>, string, int, int>> weaponSets, ValueTuple<string, int> defaultWeaponSet)
     {
         ClearSquadLoadout();
         PackedScene weaponSetSelectionScene = GD.Load<PackedScene>("res://Scenes/SquadScreen/weapon_set_selection.tscn");
@@ -157,7 +157,7 @@ public partial class SquadScreenView : DialogView
         _pasteLoadoutButton.Disabled = disable;
     }
 
-    private void OnWeaponSetCountChanged(object sender, Tuple<string, int> args)
+    private void OnWeaponSetCountChanged(object sender, ValueTuple<string, int> args)
     {
         WeaponSetSelectionWeaponSetCountChanged?.Invoke(sender, args);
     }

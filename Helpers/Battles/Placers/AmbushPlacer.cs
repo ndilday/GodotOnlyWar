@@ -51,10 +51,10 @@ namespace OnlyWar.Helpers.Battles.Placers
             _engagementRange = engagementRange;
         }
 
-        public Dictionary<BattleSquad, Tuple<int, int>> PlaceSquads(IReadOnlyList<BattleSquad> ambushedSquads,
+        public Dictionary<BattleSquad, ValueTuple<int, int>> PlaceSquads(IReadOnlyList<BattleSquad> ambushedSquads,
                                                                     IReadOnlyList<BattleSquad> ambushingSquads)
         {
-            Dictionary<BattleSquad, Tuple<int, int>> result = [];
+            Dictionary<BattleSquad, ValueTuple<int, int>> result = [];
             KillZone killZone = PlaceAmbushedSquads(OrderColumnHqMid(ambushedSquads), 0, 0, result);
             PlaceAmbushingSquads(ambushingSquads, killZone, result);
             return result;
@@ -82,7 +82,7 @@ namespace OnlyWar.Helpers.Battles.Placers
         }
 
         private KillZone PlaceAmbushedSquads(IReadOnlyList<BattleSquad> squads, int xMid, int top,
-                                             Dictionary<BattleSquad, Tuple<int, int>> squadPositionMap)
+                                             Dictionary<BattleSquad, ValueTuple<int, int>> squadPositionMap)
         {
             // Center each squad on the midpoint, stacked one behind the other down the Y axis.
             int topLimit = top;
@@ -93,8 +93,8 @@ namespace OnlyWar.Helpers.Battles.Placers
                 Coordinate squadSize = squad.GetSquadBoxSize();
                 int left = xMid - squadSize.X / 2;
                 int bottom = topLimit - squadSize.Y;
-                squadPositionMap[squad] = new Tuple<int, int>(left, bottom);
-                BattleSquadPlacer.PlaceBattleSquad(_grid, squad, new Tuple<int, int>(left, bottom), true, true, true);
+                squadPositionMap[squad] = new ValueTuple<int, int>(left, bottom);
+                BattleSquadPlacer.PlaceBattleSquad(_grid, squad, new ValueTuple<int, int>(left, bottom), true, true, true);
 
                 // the squad occupies X in [left, left + width) and Y in [bottom, topLimit]
                 minX = Math.Min(minX, left);
@@ -110,7 +110,7 @@ namespace OnlyWar.Helpers.Battles.Placers
 
         private void PlaceAmbushingSquads(IReadOnlyList<BattleSquad> ambushingSquads,
                                           KillZone killZone,
-                                          Dictionary<BattleSquad, Tuple<int, int>> squadPositionMap)
+                                          Dictionary<BattleSquad, ValueTuple<int, int>> squadPositionMap)
         {
             if (ambushingSquads.Count == 0)
             {
@@ -167,7 +167,7 @@ namespace OnlyWar.Helpers.Battles.Placers
                                    IReadOnlyList<BattleSquad> longLeg,
                                    IReadOnlyList<BattleSquad> shortLeg,
                                    KillZone killZone,
-                                   Dictionary<BattleSquad, Tuple<int, int>> squadPositionMap)
+                                   Dictionary<BattleSquad, ValueTuple<int, int>> squadPositionMap)
         {
             if (hqSquads.Count == 0)
             {
@@ -195,7 +195,7 @@ namespace OnlyWar.Helpers.Battles.Placers
                     int left = westFace - HqRearOffset - squadSize.Y;
                     int centerY = killZone.MaxY - ySpan * (i + 1) / (behindLong.Count + 1);
                     int bottom = centerY - squadSize.X / 2;
-                    Tuple<int, int> position = new(left, bottom);
+                    ValueTuple<int, int> position = new(left, bottom);
                     squadPositionMap[squad] = position;
                     BattleSquadPlacer.PlaceBattleSquad(_grid, squad, position, false, false, false);
                 }
@@ -216,7 +216,7 @@ namespace OnlyWar.Helpers.Battles.Placers
                     int centerX = legWest + legLength * (i + 1) / (behindShort.Count + 1);
                     int left = centerX - squadSize.X / 2;
                     int bottom = northFace + HqRearOffset;
-                    Tuple<int, int> position = new(left, bottom);
+                    ValueTuple<int, int> position = new(left, bottom);
                     squadPositionMap[squad] = position;
                     BattleSquadPlacer.PlaceBattleSquad(_grid, squad, position, true, false, false);
                 }
@@ -224,7 +224,7 @@ namespace OnlyWar.Helpers.Battles.Placers
         }
 
         private void PlaceLongLeg(IReadOnlyList<BattleSquad> squads, KillZone killZone,
-                                  Dictionary<BattleSquad, Tuple<int, int>> squadPositionMap)
+                                  Dictionary<BattleSquad, ValueTuple<int, int>> squadPositionMap)
         {
             // West face: squads placed vertically, running along Y, firing east across the
             // column. Anchored at the kill zone's north edge and filled southward, so the leg
@@ -240,14 +240,14 @@ namespace OnlyWar.Helpers.Battles.Placers
                 // Put its east edge one standoff west of the kill zone.
                 int left = killZone.MinX - standoff - squadSize.Y;
                 int bottom = y - squadSize.X;
-                squadPositionMap[squad] = new Tuple<int, int>(left, bottom);
-                BattleSquadPlacer.PlaceBattleSquad(_grid, squad, new Tuple<int, int>(left, bottom), false, false, false);
+                squadPositionMap[squad] = new ValueTuple<int, int>(left, bottom);
+                BattleSquadPlacer.PlaceBattleSquad(_grid, squad, new ValueTuple<int, int>(left, bottom), false, false, false);
                 y -= squadSize.X + 1;
             }
         }
 
         private void PlaceShortLeg(IReadOnlyList<BattleSquad> squads, KillZone killZone,
-                                   Dictionary<BattleSquad, Tuple<int, int>> squadPositionMap)
+                                   Dictionary<BattleSquad, ValueTuple<int, int>> squadPositionMap)
         {
             if (squads.Count == 0)
             {
@@ -264,8 +264,8 @@ namespace OnlyWar.Helpers.Battles.Placers
             foreach (BattleSquad squad in squads)
             {
                 Coordinate squadSize = squad.GetSquadBoxSize();
-                squadPositionMap[squad] = new Tuple<int, int>(x, bottom);
-                BattleSquadPlacer.PlaceBattleSquad(_grid, squad, new Tuple<int, int>(x, bottom), true, false, false);
+                squadPositionMap[squad] = new ValueTuple<int, int>(x, bottom);
+                BattleSquadPlacer.PlaceBattleSquad(_grid, squad, new ValueTuple<int, int>(x, bottom), true, false, false);
                 x += squadSize.X + 1;
             }
         }

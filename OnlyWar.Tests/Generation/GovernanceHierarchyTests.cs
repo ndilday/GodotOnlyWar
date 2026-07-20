@@ -31,7 +31,6 @@ public class GovernanceHierarchyTests : IClassFixture<GovernanceHierarchyFixture
         _roundTrip = new GameStateRoundTripFixture(_data, _date);
     }
 
-    [Trait("Category", "Slow")]
     [Fact]
     public void GenerateWarpNetwork_TagsExactlyOneSectorCapital()
     {
@@ -43,7 +42,6 @@ public class GovernanceHierarchyTests : IClassFixture<GovernanceHierarchyFixture
         Assert.Same(sectorCapitals[0], _seedOneSector.GetSectorCapital());
     }
 
-    [Trait("Category", "Slow")]
     [Fact]
     public void EachSubsectorWithImperialWorld_HasExactlyOneSeat()
     {
@@ -76,7 +74,6 @@ public class GovernanceHierarchyTests : IClassFixture<GovernanceHierarchyFixture
         }
     }
 
-    [Trait("Category", "Slow")]
     [Fact]
     public void GetSectorLord_ReturnsSectorCapitalGovernor()
     {

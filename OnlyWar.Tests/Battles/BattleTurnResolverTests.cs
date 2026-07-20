@@ -82,8 +82,8 @@ public class BattleTurnResolverTests
 
     private static void Place(BattleGridManager grid, BattleSoldier soldier, bool side, int x, int y)
     {
-        soldier.TopLeft = new System.Tuple<int, int>(x, y);
-        grid.PlaceSoldier(soldier, side, [new System.Tuple<int, int>(x, y)]);
+        soldier.TopLeft = (x, y);
+        grid.PlaceSoldier(soldier, side, [new System.ValueTuple<int, int>(x, y)]);
     }
 
     private static Faction CreateFaction(int id, string name)

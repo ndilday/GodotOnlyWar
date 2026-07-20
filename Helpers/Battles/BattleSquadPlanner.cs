@@ -503,8 +503,8 @@ namespace OnlyWar.Helpers.Battles
             squad.WithdrawalRole = WithdrawalRole.Bound;
             squad.MovementTier = SquadMovementTier.Run;
             ApplyDeclaredMovementState(squad);
-            Tuple<int, int> direction = BattleForcePlanner.GetHeadingVector(withdrawalHeading);
-            Tuple<int, int> movementLine = new(direction.Item1 * 10_000, direction.Item2 * 10_000);
+            ValueTuple<int, int> direction = BattleForcePlanner.GetHeadingVector(withdrawalHeading);
+            ValueTuple<int, int> movementLine = new(direction.Item1 * 10_000, direction.Item2 * 10_000);
             foreach (BattleSoldier soldier in squad.AbleSoldiers.OrderBy(s => s.Soldier.Id))
             {
                 AddMoveAction(
@@ -567,13 +567,13 @@ namespace OnlyWar.Helpers.Battles
 
                 float distance = _grid.GetNearestEnemy(soldier.Soldier.Id, out int closestEnemyId);
                 if (closestEnemyId == -1) continue;
-                Tuple<int, int> enemyPosition = _grid.GetSoldierPosition(closestEnemyId)[0];
-                Tuple<int, int> awayLine = new(
-                    soldier.TopLeft.Item1 - enemyPosition.Item1,
-                    soldier.TopLeft.Item2 - enemyPosition.Item2);
+                ValueTuple<int, int> enemyPosition = _grid.GetSoldierPosition(closestEnemyId)[0];
+                ValueTuple<int, int> awayLine = new(
+                    soldier.TopLeft.Value.Item1 - enemyPosition.Item1,
+                    soldier.TopLeft.Value.Item2 - enemyPosition.Item2);
                 if (awayLine.Item1 == 0 && awayLine.Item2 == 0)
                 {
-                    awayLine = new Tuple<int, int>(0, 1);
+                    awayLine = new ValueTuple<int, int>(0, 1);
                 }
                 AddMoveAction(
                     soldier,
@@ -624,9 +624,9 @@ namespace OnlyWar.Helpers.Battles
                 {
                     BattleSoldier target = FindNearestTarget(soldier, withdrawingTargets);
                     if (target == null) continue;
-                    Tuple<int, int> line = new(
-                        target.TopLeft.Item1 - soldier.TopLeft.Item1,
-                        target.TopLeft.Item2 - soldier.TopLeft.Item2);
+                    ValueTuple<int, int> line = new(
+                        target.TopLeft.Value.Item1 - soldier.TopLeft.Value.Item1,
+                        target.TopLeft.Value.Item2 - soldier.TopLeft.Value.Item2);
                     AddMoveAction(
                         soldier,
                         GetMovementBudget(soldier, SquadMovementTier.Run),
@@ -643,10 +643,10 @@ namespace OnlyWar.Helpers.Battles
             {
                 BattleSoldier target = FindNearestTarget(soldier, withdrawingTargets);
                 if (target == null) continue;
-                Tuple<int, int> line = new(
-                    target.TopLeft.Item1 - soldier.TopLeft.Item1,
-                    target.TopLeft.Item2 - soldier.TopLeft.Item2);
-                Tuple<int, int> movementDirection = AddMoveAction(
+                ValueTuple<int, int> line = new(
+                    target.TopLeft.Value.Item1 - soldier.TopLeft.Value.Item1,
+                    target.TopLeft.Value.Item2 - soldier.TopLeft.Value.Item2);
+                ValueTuple<int, int> movementDirection = AddMoveAction(
                     soldier,
                     GetMovementBudget(soldier, SquadMovementTier.Jog),
                     line,
@@ -669,9 +669,9 @@ namespace OnlyWar.Helpers.Battles
             {
                 BattleSoldier target = FindNearestTarget(soldier, withdrawingTargets);
                 if (target == null) continue;
-                Tuple<int, int> line = new(
-                    target.TopLeft.Item1 - soldier.TopLeft.Item1,
-                    target.TopLeft.Item2 - soldier.TopLeft.Item2);
+                ValueTuple<int, int> line = new(
+                    target.TopLeft.Value.Item1 - soldier.TopLeft.Value.Item1,
+                    target.TopLeft.Value.Item2 - soldier.TopLeft.Value.Item2);
                 AddMoveAction(
                     soldier,
                     GetMovementBudget(soldier, SquadMovementTier.Run),
@@ -734,7 +734,7 @@ namespace OnlyWar.Helpers.Battles
             int worthwhileShots = 0;
             foreach (BattleSoldier soldier in squad.AbleSoldiers)
             {
-                Tuple<int, int> movementDirection = GetDirectionToNearestEnemy(soldier);
+                ValueTuple<int, int>? movementDirection = GetDirectionToNearestEnemy(soldier);
                 RangedTargetEvaluation conventionalShot = SelectBestRangedTarget(
                     soldier,
                     useBulk: true,
@@ -787,24 +787,24 @@ namespace OnlyWar.Helpers.Battles
             // This preserves the value already invested in aiming without allowing TargetId/Aim to pin
             // the squad to a now-inferior target after the battlefield changes.
             else if (soldier.Aim != null
-                && _soldierMap.ContainsKey(soldier.Aim.Item1)
+                && _soldierMap.ContainsKey(soldier.Aim.Value.Item1)
                 && IsExistingAimStillBest(soldier))
             {
-                BattleSoldier target = _soldierMap[soldier.Aim.Item1];
-                range = _grid.GetDistanceBetweenSoldiers(soldier.Soldier.Id, soldier.Aim.Item1);
+                BattleSoldier target = _soldierMap[soldier.Aim.Value.Item1];
+                range = _grid.GetDistanceBetweenSoldiers(soldier.Soldier.Id, soldier.Aim.Value.Item1);
                 // if the aim cannot be improved, go ahead and shoot
-                if (soldier.Aim.Item3 == 3)
+                if (soldier.Aim.Value.Item3 == 3)
                 {
                     RangedTargetEvaluation effectEstimate = EvaluateRangedTarget(
                         soldier,
                         target,
-                        soldier.Aim.Item2,
+                        soldier.Aim.Value.Item2,
                         range,
-                        soldier.Aim.Item2.Template.Accuracy + 4);
+                        soldier.Aim.Value.Item2.Template.Accuracy + 4);
                     soldier.CurrentSpeed = 0;
                     _shootActions.Add(new ShootAction(soldier.Soldier.Id,
-                        soldier.Aim.Item1,
-                        soldier.Aim.Item2.Template.Id,
+                        soldier.Aim.Value.Item1,
+                        soldier.Aim.Value.Item2.Template.Id,
                         range,
                         effectEstimate.ShotsToFire,
                         false,
@@ -815,12 +815,12 @@ namespace OnlyWar.Helpers.Battles
                 {
                     // the aim can be improved
                     // current aim bonus is 1 for all-out attack, plus weapon accuracy, plus aim
-                    float currentModifiers = soldier.Aim.Item2.Template.Accuracy + soldier.Aim.Item3 + 1;
+                    float currentModifiers = soldier.Aim.Value.Item2.Template.Accuracy + soldier.Aim.Value.Item3 + 1;
                     // item1 is the pre-roll to-hit total; item2 is the expected ratio of damage to con, so 1 is a potential killshot
                     RangedTargetEvaluation resultEstimate = EvaluateRangedTarget(
                         soldier,
                         target,
-                        soldier.Aim.Item2,
+                        soldier.Aim.Value.Item2,
                         range,
                         currentModifiers);
                     // it's about to attack, go ahead and shoot, you may not get another chance
@@ -830,8 +830,8 @@ namespace OnlyWar.Helpers.Battles
                     {
                         soldier.CurrentSpeed = 0;
                         _shootActions.Add(new ShootAction(soldier.Soldier.Id,
-                            soldier.Aim.Item1,
-                            soldier.Aim.Item2.Template.Id,
+                            soldier.Aim.Value.Item1,
+                            soldier.Aim.Value.Item2.Template.Id,
                             range,
                             resultEstimate.ShotsToFire,
                             false,
@@ -842,7 +842,7 @@ namespace OnlyWar.Helpers.Battles
                     {
                         // keep aiming
                         soldier.CurrentSpeed = 0;
-                        _shootActions.Add(new AimAction(soldier, target, soldier.Aim.Item2, _log));
+                        _shootActions.Add(new AimAction(soldier, target, soldier.Aim.Value.Item2, _log));
                     }
                 }
             }
@@ -885,11 +885,11 @@ namespace OnlyWar.Helpers.Battles
 
             float distance = _grid.GetNearestEnemy(soldier.Soldier.Id, out int closestEnemyId);
             float moveSpeed = GetMovementBudget(soldier, tier);
-            Tuple<int, int> enemyPosition = _grid.GetSoldierPosition(closestEnemyId)[0];
-            Tuple<int, int> line = new Tuple<int, int>(
-                (short)(enemyPosition.Item1 - soldier.TopLeft.Item1),
-                (short)(enemyPosition.Item2 - soldier.TopLeft.Item2));
-            Tuple<int, int> movementDirection = AddMoveAction(soldier, moveSpeed, line, tier);
+            ValueTuple<int, int> enemyPosition = _grid.GetSoldierPosition(closestEnemyId)[0];
+            ValueTuple<int, int> line = new ValueTuple<int, int>(
+                (short)(enemyPosition.Item1 - soldier.TopLeft.Value.Item1),
+                (short)(enemyPosition.Item2 - soldier.TopLeft.Value.Item2));
+            ValueTuple<int, int> movementDirection = AddMoveAction(soldier, moveSpeed, line, tier);
 
             if (tier == SquadMovementTier.Jog)
             {
@@ -910,8 +910,8 @@ namespace OnlyWar.Helpers.Battles
             float moveSpeed = GetMovementBudget(soldier, tier);
 
             int newY = (int)(_grid.GetSoldierSide(soldier.Soldier.Id) ? -moveSpeed : moveSpeed);
-            Tuple<int, int> intendedDirection = new(0, newY);
-            Tuple<int, int> movementDirection = AddMoveAction(
+            ValueTuple<int, int> intendedDirection = new(0, newY);
+            ValueTuple<int, int> movementDirection = AddMoveAction(
                 soldier,
                 moveSpeed,
                 intendedDirection,
@@ -1279,10 +1279,10 @@ namespace OnlyWar.Helpers.Battles
                 // TODO: probably by letting the one with the lower id have it, and the higher id has to 
                 float distance = _grid.GetNearestEnemy(soldier.Soldier.Id, out int closestEnemyId);
                 float moveSpeed = GetMovementBudget(soldier, SquadMovementTier.InMelee);
-                Tuple<int, int> enemyPosition = _grid.GetSoldierPosition(closestEnemyId)[0];
+                ValueTuple<int, int> enemyPosition = _grid.GetSoldierPosition(closestEnemyId)[0];
                 if (distance > moveSpeed + 1)
                 {
-                    Tuple<int, int> moveVector = new Tuple<int, int>(enemyPosition.Item1 - soldier.TopLeft.Item1, enemyPosition.Item2 - soldier.TopLeft.Item2);
+                    ValueTuple<int, int> moveVector = new ValueTuple<int, int>(enemyPosition.Item1 - soldier.TopLeft.Value.Item1, enemyPosition.Item2 - soldier.TopLeft.Value.Item2);
                     // we can't make it to an enemy in one move
                     // soldier can't get there in one move, advance as far as possible
                     AddMoveAction(soldier, moveSpeed, moveVector, SquadMovementTier.InMelee);
@@ -1290,9 +1290,9 @@ namespace OnlyWar.Helpers.Battles
                 }
                 else
                 {
-                    Tuple<int, int> newPos = _grid.GetClosestOpenAdjacency(soldier.TopLeft, enemyPosition);
+                    ValueTuple<int, int> newPos = _grid.GetClosestOpenAdjacency(soldier.TopLeft.Value, enemyPosition);
                     BattleSquad oppSquad = _soldierMap[closestEnemyId].BattleSquad;
-                    if (newPos == null)
+                    if (newPos == soldier.TopLeft.Value)
                     {
                         // find the next closest
                         // okay, this is one of those times where I made something because it made me feel smart,
@@ -1302,25 +1302,25 @@ namespace OnlyWar.Helpers.Battles
                         // PROTIP: SQRT is a relatively expensive operation, so sort by distance squares when it's about comparative, not absolute, distance
                         var map = oppSquad.AbleSoldiers
                             .Where(s => s.Soldier.Id != closestEnemyId)
-                            .Select(s => new Tuple<int, Tuple<int, int>>(s.Soldier.Id, _grid.GetSoldierPosition(s.Soldier.Id)[0]))
-                            .Select(t => new Tuple<int, Tuple<int, int>, Tuple<int, int>>(t.Item1, t.Item2, new Tuple<int, int>(t.Item2.Item1 - soldier.TopLeft.Item1, t.Item2.Item2 - soldier.TopLeft.Item2)))
-                            .Select(u => new Tuple<int, Tuple<int, int>, int>(u.Item1, u.Item2, (u.Item3.Item1 * u.Item3.Item1 + u.Item3.Item2 * u.Item3.Item2)))
+                            .Select(s => new ValueTuple<int, ValueTuple<int, int>>(s.Soldier.Id, _grid.GetSoldierPosition(s.Soldier.Id)[0]))
+                            .Select(t => new ValueTuple<int, ValueTuple<int, int>, ValueTuple<int, int>>(t.Item1, t.Item2, new ValueTuple<int, int>(t.Item2.Item1 - soldier.TopLeft.Value.Item1, t.Item2.Item2 - soldier.TopLeft.Value.Item2)))
+                            .Select(u => new ValueTuple<int, ValueTuple<int, int>, int>(u.Item1, u.Item2, (u.Item3.Item1 * u.Item3.Item1 + u.Item3.Item2 * u.Item3.Item2)))
                             .OrderBy(u => u.Item3);
-                        foreach (Tuple<int, Tuple<int, int>, int> soldierData in map)
+                        foreach (ValueTuple<int, ValueTuple<int, int>, int> soldierData in map)
                         {
-                            newPos = _grid.GetClosestOpenAdjacency(soldier.TopLeft, soldierData.Item2);
-                            if (newPos != null)
+                            newPos = _grid.GetClosestOpenAdjacency(soldier.TopLeft.Value, soldierData.Item2);
+                            if (newPos != soldier.TopLeft.Value)
                             {
-                                AddChargeActionsHelper(soldier, soldierData.Item1, soldier.TopLeft, (float)Math.Sqrt(soldierData.Item3), oppSquad, newPos);
+                                AddChargeActionsHelper(soldier, soldierData.Item1, soldier.TopLeft.Value, (float)Math.Sqrt(soldierData.Item3), oppSquad, newPos);
                                 break;
                             }
                         }
-                        if (newPos == null)
+                        if (newPos == soldier.TopLeft.Value)
                         {
                             // we weren't able to find an enemy to get near, guess we try to find someone to shoot, instead?
                             //Debug.Log("ISoldier in squad engaged in melee couldn't find anyone to attack");
-                            Tuple<int, int> line = new Tuple<int, int>((short)(enemyPosition.Item1 - soldier.TopLeft.Item1),
-                                                                               (short)(enemyPosition.Item2 - soldier.TopLeft.Item2));
+                            ValueTuple<int, int> line = new ValueTuple<int, int>((short)(enemyPosition.Item1 - soldier.TopLeft.Value.Item1),
+                                                                               (short)(enemyPosition.Item2 - soldier.TopLeft.Value.Item2));
                             // soldier can't get there in one move, advance as far as possible
                             AddMoveAction(soldier, moveSpeed, line, SquadMovementTier.InMelee);
                             AddPermittedRunUtilityActionToBag(soldier);
@@ -1329,22 +1329,22 @@ namespace OnlyWar.Helpers.Battles
                     }
                     else
                     {
-                        AddChargeActionsHelper(soldier, closestEnemyId, soldier.TopLeft, distance, oppSquad, newPos);
+                        AddChargeActionsHelper(soldier, closestEnemyId, soldier.TopLeft.Value, distance, oppSquad, newPos);
                     }
                 }
             }
         }
 
-        private void AddChargeActionsHelper(BattleSoldier soldier, int closestEnemyId, Tuple<int, int> currentPosition, float distance, BattleSquad oppSquad, Tuple<int, int> newPos)
+        private void AddChargeActionsHelper(BattleSoldier soldier, int closestEnemyId, ValueTuple<int, int> currentPosition, float distance, BattleSquad oppSquad, ValueTuple<int, int> newPos)
         {
-            Tuple<int, int> move = new Tuple<int, int>(newPos.Item1 - currentPosition.Item1, newPos.Item2 - currentPosition.Item2);
+            ValueTuple<int, int> move = new ValueTuple<int, int>(newPos.Item1 - currentPosition.Item1, newPos.Item2 - currentPosition.Item2);
             float moveSpeed = GetMovementBudget(soldier, SquadMovementTier.InMelee);
             if (distance > moveSpeed + 1)
             {
                 // we can't make it to an enemy in one move
                 // soldier can't get there in one move, advance as far as possible
                 
-                Tuple<int, int> realMove = CalculateMovementAlongLine(move, moveSpeed);
+                ValueTuple<int, int> realMove = CalculateMovementAlongLine(move, moveSpeed);
                 AddMoveAction(soldier, moveSpeed, realMove, SquadMovementTier.InMelee);
                 AddPermittedRunUtilityActionToBag(soldier);
             }
@@ -1566,7 +1566,7 @@ namespace OnlyWar.Helpers.Battles
             BattleSoldier soldier,
             float bulkMultiplier,
             float aimMultiplier,
-            Tuple<int, int> movementDirection = null)
+            ValueTuple<int, int>? movementDirection = null)
         {
             if (soldier.RangedWeapons.Count == 0) return;
             if (soldier.EquippedRangedWeapons.Count == 0)
@@ -1591,7 +1591,7 @@ namespace OnlyWar.Helpers.Battles
             BattleSoldier soldier,
             float bulkMultiplier,
             float aimMultiplier,
-            Tuple<int, int> movementDirection = null)
+            ValueTuple<int, int>? movementDirection = null)
         {
             TemplateFiringLineEvaluation templateLine = SelectBestTemplateFiringLine(
                 soldier,
@@ -1715,8 +1715,8 @@ namespace OnlyWar.Helpers.Battles
                 includeExistingAim: true);
 
             return bestTarget != null
-                && bestTarget.Target.Soldier.Id == soldier.Aim.Item1
-                && bestTarget.Weapon.Template.Id == soldier.Aim.Item2.Template.Id;
+                && bestTarget.Target.Soldier.Id == soldier.Aim.Value.Item1
+                && bestTarget.Weapon.Template.Id == soldier.Aim.Value.Item2.Template.Id;
         }
 
         /// <summary>
@@ -1727,7 +1727,7 @@ namespace OnlyWar.Helpers.Battles
             BattleSoldier soldier,
             bool useBulk,
             bool includeExistingAim = false,
-            Tuple<int, int> movementDirection = null)
+            ValueTuple<int, int>? movementDirection = null)
         {
             return SelectBestRangedTarget(
                 soldier,
@@ -1740,7 +1740,7 @@ namespace OnlyWar.Helpers.Battles
             BattleSoldier soldier,
             float bulkMultiplier,
             bool includeExistingAim = false,
-            Tuple<int, int> movementDirection = null)
+            ValueTuple<int, int>? movementDirection = null)
         {
             if (soldier?.EquippedRangedWeapons == null || soldier.EquippedRangedWeapons.Count == 0)
             {
@@ -1767,9 +1767,9 @@ namespace OnlyWar.Helpers.Battles
                         float toHitModifier = -weapon.Template.Bulk * bulkMultiplier;
                         if (includeExistingAim
                             && soldier.Aim?.Item1 == target.Soldier.Id
-                            && soldier.Aim.Item2.Template.Id == weapon.Template.Id)
+                            && soldier.Aim?.Item2.Template.Id == weapon.Template.Id)
                         {
-                            toHitModifier += weapon.Template.Accuracy + soldier.Aim.Item3 + 1;
+                            toHitModifier += weapon.Template.Accuracy + soldier.Aim.Value.Item3 + 1;
                         }
 
                         RangedTargetEvaluation evaluation = EvaluateRangedTarget(
@@ -1794,7 +1794,7 @@ namespace OnlyWar.Helpers.Battles
         internal TemplateFiringLineEvaluation SelectBestTemplateFiringLine(
             BattleSoldier soldier,
             IEnumerable<BattleSoldier> candidateTargets = null,
-            Tuple<int, int> movementDirection = null)
+            ValueTuple<int, int>? movementDirection = null)
         {
             if (soldier?.EquippedRangedWeapons == null
                 || soldier.EquippedRangedWeapons.Count == 0
@@ -1903,7 +1903,7 @@ namespace OnlyWar.Helpers.Battles
         /// </summary>
         internal TemplateFiringLineEvaluation SelectBestBlastThrow(
             BattleSoldier soldier,
-            Tuple<int, int> movementDirection = null,
+            ValueTuple<int, int>? movementDirection = null,
             float bulkMultiplier = 0)
         {
             if (soldier == null || !IsPlaced(soldier))
@@ -1955,7 +1955,7 @@ namespace OnlyWar.Helpers.Battles
                     float expectedFriendlyBattleValueLost = 0;
                     // Distinct margin samples can resolve to the same impact cell (every
                     // successful check lands on the aim cell), so memoize per cell.
-                    Dictionary<Tuple<int, int>, (float Enemy, float Friendly)> impactCache = [];
+                    Dictionary<ValueTuple<int, int>, (float Enemy, float Friendly)> impactCache = [];
                     foreach (float z in BlastMarginZSamples)
                     {
                         float margin = meanMargin + (BlastDeliveryRollStdDev * z);
@@ -2038,9 +2038,9 @@ namespace OnlyWar.Helpers.Battles
             float margin,
             double directionRoll,
             bool shooterSide,
-            Dictionary<Tuple<int, int>, (float Enemy, float Friendly)> impactCache)
+            Dictionary<ValueTuple<int, int>, (float Enemy, float Friendly)> impactCache)
         {
-            Tuple<int, int> impactCell = BlastTemplate.ResolveImpactCell(
+            ValueTuple<int, int> impactCell = BlastTemplate.ResolveImpactCell(
                 _grid,
                 soldier.Soldier.Id,
                 target.Soldier.Id,
@@ -2149,7 +2149,7 @@ namespace OnlyWar.Helpers.Battles
                 return cached;
             }
 
-            Tuple<float, float, int> attackEstimate = EstimatePlannedRangedAttack(
+            ValueTuple<float, float, int> attackEstimate = EstimatePlannedRangedAttack(
                 soldier,
                 target,
                 weapon,
@@ -2184,7 +2184,7 @@ namespace OnlyWar.Helpers.Battles
 
         private IReadOnlyList<BattleSquad> GetNearestInRangeEnemySquads(
             BattleSoldier shooter,
-            Tuple<int, int> movementDirection = null)
+            ValueTuple<int, int>? movementDirection = null)
         {
             // Effective range matters for thrown weapons (a grenade's reach scales with
             // the thrower's Strength); every other weapon reads its raw MaximumRange.
@@ -2204,7 +2204,7 @@ namespace OnlyWar.Helpers.Battles
         private IReadOnlyList<BattleSquad> GetNearestEnemySquadsWithinRange(
             BattleSoldier shooter,
             float maximumRange,
-            Tuple<int, int> movementDirection = null)
+            ValueTuple<int, int>? movementDirection = null)
         {
             if (maximumRange <= 0 || !IsPlaced(shooter)) return [];
 
@@ -2402,7 +2402,7 @@ namespace OnlyWar.Helpers.Battles
             return best;
         }
 
-        private Tuple<float, float, int> EstimatePlannedRangedAttack(
+        private ValueTuple<float, float, int> EstimatePlannedRangedAttack(
             BattleSoldier soldier,
             BattleSoldier target,
             RangedWeapon weapon,
@@ -2425,7 +2425,7 @@ namespace OnlyWar.Helpers.Battles
                 range,
                 moveAndAimMod,
                 firingIntoMelee);
-            Tuple<float, float> estimate = null;
+            ValueTuple<float, float> estimate = new(0,0);
             for (int iteration = 0; iteration < 4; iteration++)
             {
                 estimate = EstimateHitAndDamage(
@@ -2438,7 +2438,7 @@ namespace OnlyWar.Helpers.Battles
                     estimate.Item2);
                 if (revisedShots == shotsToFire)
                 {
-                    return new Tuple<float, float, int>(
+                    return new ValueTuple<float, float, int>(
                         estimate.Item1,
                         estimate.Item2,
                         shotsToFire);
@@ -2453,7 +2453,7 @@ namespace OnlyWar.Helpers.Battles
                 hitContext,
                 expectedDamage,
                 shotsToFire);
-            return new Tuple<float, float, int>(estimate.Item1, estimate.Item2, shotsToFire);
+            return new ValueTuple<float, float, int>(estimate.Item1, estimate.Item2, shotsToFire);
         }
 
         private int CalculateShotsToFire(RangedWeapon weapon, float toHitAtPlannedRateOfFire, float damagePerShot)
@@ -2485,7 +2485,7 @@ namespace OnlyWar.Helpers.Battles
 
         }
 
-        private static Tuple<float, float> EstimateHitAndDamage(
+        private static ValueTuple<float, float> EstimateHitAndDamage(
             RangedHitEstimateContext hitContext,
             float expectedDamage,
             int numberOfShots)
@@ -2493,7 +2493,7 @@ namespace OnlyWar.Helpers.Battles
             float preRollHitTotal = hitContext.CalculatePreRollHitTotal(numberOfShots);
             float probability = GaussianCalculator.ApproximateNormalCDF(
                 (preRollHitTotal - 10.5f) / 3f);
-            return new Tuple<float, float>(probability, expectedDamage);
+            return new ValueTuple<float, float>(probability, expectedDamage);
         }
 
         private static float CalculateRangedPreRollHitTotal(
@@ -2515,15 +2515,15 @@ namespace OnlyWar.Helpers.Battles
             return hitContext.CalculatePreRollHitTotal(numberOfShots);
         }
 
-        private Tuple<int, int> AddMoveAction(
+        private ValueTuple<int, int> AddMoveAction(
             BattleSoldier soldier,
             float moveSpeed,
-            Tuple<int, int> line,
+            ValueTuple<int, int> line,
             SquadMovementTier? tier = null)
         {
-            Tuple<int, int> desiredMove = CalculateMovementAlongLine(line, moveSpeed);
-            Tuple<int, int> newLocation = new Tuple<int, int>(soldier.TopLeft.Item1 + desiredMove.Item1, soldier.TopLeft.Item2 + desiredMove.Item2);
-            newLocation = FindBestLocation(soldier.TopLeft, newLocation, moveSpeed);
+            ValueTuple<int, int> desiredMove = CalculateMovementAlongLine(line, moveSpeed);
+            ValueTuple<int, int> newLocation = new ValueTuple<int, int>(soldier.TopLeft.Value.Item1 + desiredMove.Item1, soldier.TopLeft.Value.Item2 + desiredMove.Item2);
+            newLocation = FindBestLocation(soldier.TopLeft.Value, newLocation, moveSpeed);
             SquadMovementTier movementTier = tier ?? soldier.BattleSquad.MovementTier;
             soldier.CurrentSpeed = GetTierSpeed(soldier, movementTier);
             _grid.ReserveSpace(newLocation);
@@ -2531,19 +2531,19 @@ namespace OnlyWar.Helpers.Battles
             _moveActions.Add(new MoveAction(
                 soldier,
                 _grid,
-                soldier.TopLeft,
+                soldier.TopLeft.Value,
                 newLocation,
                 orientation,
                 moveSpeed));
-            Tuple<int, int> actualDirection = new(
-                newLocation.Item1 - soldier.TopLeft.Item1,
-                newLocation.Item2 - soldier.TopLeft.Item2);
+            ValueTuple<int, int> actualDirection = new(
+                newLocation.Item1 - soldier.TopLeft.Value.Item1,
+                newLocation.Item2 - soldier.TopLeft.Value.Item2);
             return actualDirection.Item1 == 0 && actualDirection.Item2 == 0
                 ? line
                 : actualDirection;
         }
 
-        private Tuple<int, int> GetDirectionToNearestEnemy(BattleSoldier soldier)
+        private ValueTuple<int, int>? GetDirectionToNearestEnemy(BattleSoldier soldier)
         {
             _grid.GetNearestEnemy(soldier.Soldier.Id, out int closestEnemyId);
             if (closestEnemyId == -1)
@@ -2551,42 +2551,42 @@ namespace OnlyWar.Helpers.Battles
                 return null;
             }
 
-            Tuple<int, int> enemyPosition = _grid.GetSoldierPosition(closestEnemyId)[0];
-            return new Tuple<int, int>(
-                enemyPosition.Item1 - soldier.TopLeft.Item1,
-                enemyPosition.Item2 - soldier.TopLeft.Item2);
+            ValueTuple<int, int> enemyPosition = _grid.GetSoldierPosition(closestEnemyId)[0];
+            return new ValueTuple<int, int>(
+                enemyPosition.Item1 - soldier.TopLeft.Value.Item1,
+                enemyPosition.Item2 - soldier.TopLeft.Value.Item2);
         }
 
         private static bool IsWithinJogFiringArc(
             BattleSoldier shooter,
             BattleSoldier target,
-            Tuple<int, int> movementDirection)
+            ValueTuple<int, int>? movementDirection)
         {
             if (movementDirection == null
-                || (movementDirection.Item1 == 0 && movementDirection.Item2 == 0))
+                || (movementDirection.Value.Item1 == 0 && movementDirection.Value.Item2 == 0))
             {
                 return true;
             }
 
-            int targetX = target.TopLeft.Item1 - shooter.TopLeft.Item1;
-            int targetY = target.TopLeft.Item2 - shooter.TopLeft.Item2;
-            long dotProduct = ((long)movementDirection.Item1 * targetX)
-                + ((long)movementDirection.Item2 * targetY);
+            int targetX = target.TopLeft.Value.Item1 - shooter.TopLeft.Value.Item1;
+            int targetY = target.TopLeft.Value.Item2 - shooter.TopLeft.Value.Item2;
+            long dotProduct = ((long)movementDirection.Value.Item1 * targetX)
+                + ((long)movementDirection.Value.Item2 * targetY);
             return dotProduct >= 0;
         }
 
-        private Tuple<int, int> CalculateMovementAlongLine(Tuple<int, int> line, float moveSpeed)
+        private ValueTuple<int, int> CalculateMovementAlongLine(ValueTuple<int, int> line, float moveSpeed)
         {
-            Tuple<int, int> targetLocation;
-            if (moveSpeed <= 0) return new Tuple<int, int>(0, 0);   // this shouldn't happen
+            ValueTuple<int, int> targetLocation;
+            if (moveSpeed <= 0) return new ValueTuple<int, int>(0, 0);   // this shouldn't happen
             else if(line.Item1 == 0)
             {
-                targetLocation = new Tuple<int, int>(0, line.Item2 < 0 ? -(int)moveSpeed : (int)moveSpeed);
+                targetLocation = new ValueTuple<int, int>(0, line.Item2 < 0 ? -(int)moveSpeed : (int)moveSpeed);
                 if (_grid.IsSpaceAvailable(targetLocation)) return targetLocation;
             }
             else if(line.Item2 == 0)
             {
-                targetLocation = new Tuple<int, int>(line.Item1 < 0 ? -(int)moveSpeed : (int)moveSpeed, 0);
+                targetLocation = new ValueTuple<int, int>(line.Item1 < 0 ? -(int)moveSpeed : (int)moveSpeed, 0);
                 if (_grid.IsSpaceAvailable(targetLocation)) return targetLocation;
             }
 
@@ -2606,11 +2606,11 @@ namespace OnlyWar.Helpers.Battles
             {
                 if (line.Item1 > line.Item2)
                 {
-                    return new Tuple<int, int>(1, 0);
+                    return new ValueTuple<int, int>(1, 0);
                 }
                 else
                 {
-                    return new Tuple<int, int>(0, 1);
+                    return new ValueTuple<int, int>(0, 1);
                 }
             }
             else
@@ -2626,7 +2626,7 @@ namespace OnlyWar.Helpers.Battles
                     int y = yDistance < 0 ? (int)yDistance -1 : (int)yDistance + 1;
                     if((x * x) + (y * y) < speedSq)
                     {
-                        return new Tuple<int, int>(x, y);
+                        return new ValueTuple<int, int>(x, y);
                     }
                 }
                 else if (line.Item2 != 0 && yLeftover != 0)
@@ -2635,15 +2635,15 @@ namespace OnlyWar.Helpers.Battles
                     int y = (int)yDistance;
                     if ((x * x) + (y * y) < speedSq)
                     {
-                        return new Tuple<int, int>(x, y);
+                        return new ValueTuple<int, int>(x, y);
                     }
                 }
             }
-            return new Tuple<int, int> ((int)xDistance, (int)yDistance);
+            return new ValueTuple<int, int> ((int)xDistance, (int)yDistance);
         }
 
         private ushort CalculateOrientationFromVector(
-            Tuple<int, int> vector,
+            ValueTuple<int, int> vector,
             BattleSoldier soldier = null,
             SquadMovementTier tier = SquadMovementTier.Stationary)
         {
@@ -2680,7 +2680,7 @@ namespace OnlyWar.Helpers.Battles
                 % BattleOrientation.HeadingCount);
         }
 
-        private Tuple<int, int> FindBestLocation(Tuple<int, int> startingPoint, Tuple<int, int> targetPoint, float speed)
+        private ValueTuple<int, int> FindBestLocation(ValueTuple<int, int> startingPoint, ValueTuple<int, int> targetPoint, float speed)
         {
             float speedSq = speed * speed;
             int xMove = targetPoint.Item1 - startingPoint.Item1;
@@ -2698,7 +2698,7 @@ namespace OnlyWar.Helpers.Battles
                     int newY = yMove + ((i / 2) * direction * (i % 1 == 1 ? -1 : 1));
                     while (newY * newY <= speedSq - xMoveSq)
                     {
-                        Tuple<int, int> newTarget = new Tuple<int, int>(startingPoint.Item1 + xMove, startingPoint.Item2 + newY);
+                        ValueTuple<int, int> newTarget = new ValueTuple<int, int>(startingPoint.Item1 + xMove, startingPoint.Item2 + newY);
                         if (_grid.IsSpaceAvailable(newTarget))
                         {
                             return newTarget;
@@ -2722,7 +2722,7 @@ namespace OnlyWar.Helpers.Battles
                     int newX = xMove + ((i / 2) * direction * (i % 1 == 1 ? -1 : 1));
                     while (newX * newX <= speedSq - yMoveSq)
                     {
-                        Tuple<int, int> newTarget = new Tuple<int, int>(startingPoint.Item1 + newX, startingPoint.Item2 + yMove);
+                        ValueTuple<int, int> newTarget = new ValueTuple<int, int>(startingPoint.Item1 + newX, startingPoint.Item2 + yMove);
                         if (_grid.IsSpaceAvailable(newTarget))
                         {
                             return newTarget;

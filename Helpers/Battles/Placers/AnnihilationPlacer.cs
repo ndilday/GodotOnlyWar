@@ -21,10 +21,10 @@ namespace OnlyWar.Helpers.Battles.Placers
             _grid = grid;
             _range = range;
         }
-        public Dictionary<BattleSquad, Tuple<int, int>> PlaceSquads(IEnumerable<BattleSquad> bottomSquads,
+        public Dictionary<BattleSquad, ValueTuple<int, int>> PlaceSquads(IEnumerable<BattleSquad> bottomSquads,
                                                             IEnumerable<BattleSquad> topSquads)
         {
-            Dictionary<BattleSquad, Tuple<int, int>> result = [];
+            Dictionary<BattleSquad, ValueTuple<int, int>> result = [];
             (List<BattleSquad> bottomLine, List<BattleSquad> bottomHq) = SplitOutHqSquads(bottomSquads);
             (List<BattleSquad> topLine, List<BattleSquad> topHq) = SplitOutHqSquads(topSquads);
             int bottomDepth = bottomLine.Select(s => (int)s.GetSquadBoxSize().Y).DefaultIfEmpty(0).Max();
@@ -65,7 +65,7 @@ namespace OnlyWar.Helpers.Battles.Placers
         }
 
         private (int Left, int Right) PlaceSquads(IReadOnlyList<BattleSquad> squads, int facingEdge, bool isTop, bool tacticalSide,
-                                                              Dictionary<BattleSquad, Tuple<int, int>> squadPositionMap)
+                                                              Dictionary<BattleSquad, ValueTuple<int, int>> squadPositionMap)
         {
             const int squadSpacing = 2;
             int totalFrontage = squads.Sum(squad => (int)squad.GetSquadBoxSize().X)
@@ -77,7 +77,7 @@ namespace OnlyWar.Helpers.Battles.Placers
             {
                 Coordinate squadSize = squad.GetSquadBoxSize();
                 int bottom = isTop ? facingEdge - squadSize.Y + 1 : facingEdge;
-                Tuple<int, int> position = new(left, bottom);
+                ValueTuple<int, int> position = new(left, bottom);
                 squadPositionMap[squad] = position;
                 BattleSquadPlacer.PlaceBattleSquad(_grid, squad, position, true, tacticalSide, isTop);
                 left += squadSize.X + squadSpacing;
@@ -91,7 +91,7 @@ namespace OnlyWar.Helpers.Battles.Placers
         // than one cluster in the middle.
         private void PlaceHqRank(IReadOnlyList<BattleSquad> hqSquads,
                                  (int Left, int Right) lineExtent, int facingEdge, bool isTop, bool tacticalSide,
-                                 Dictionary<BattleSquad, Tuple<int, int>> squadPositionMap)
+                                 Dictionary<BattleSquad, ValueTuple<int, int>> squadPositionMap)
         {
             if (hqSquads.Count == 0)
             {
@@ -108,7 +108,7 @@ namespace OnlyWar.Helpers.Battles.Placers
                 int bottom = isTop
                     ? facingEdge + HqRearOffset + 1
                     : facingEdge - HqRearOffset - squadSize.Y;
-                Tuple<int, int> position = new(left, bottom);
+                ValueTuple<int, int> position = new(left, bottom);
                 squadPositionMap[squad] = position;
                 BattleSquadPlacer.PlaceBattleSquad(_grid, squad, position, true, tacticalSide, isTop);
             }

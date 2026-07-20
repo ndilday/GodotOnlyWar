@@ -28,8 +28,8 @@ public partial class TrainingUnitScreenController : Control
 
     private void PopulateScoutSquadList()
     {
-        List<Tuple<int, string>> squadList = GetScoutSquads()
-            .Select(squad => new Tuple<int, string>(squad.Id, $"{squad.Name} ({GetTrainingFocusName(squad.TrainingFocus)})"))
+        List<ValueTuple<int, string>> squadList = GetScoutSquads()
+            .Select(squad => new ValueTuple<int, string>(squad.Id, $"{squad.Name} ({GetTrainingFocusName(squad.TrainingFocus)})"))
             .ToList();
         _view.PopulateSquadList(squadList);
     }

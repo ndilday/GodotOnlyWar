@@ -16,7 +16,7 @@ public class BattleSoldierCloneTests
             "Test Squad",
             TestModelFactory.CreateSoldier(name: "Clone Source")));
         BattleSoldier source = squad.Soldiers[0];
-        source.TopLeft = new Tuple<int, int>(3, 7);
+        source.TopLeft = (3, 7);
         source.Orientation = 1;
         source.IsInMelee = true;
         source.ReloadingPhase = 2;

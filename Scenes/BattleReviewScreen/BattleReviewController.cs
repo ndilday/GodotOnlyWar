@@ -136,7 +136,7 @@ public partial class BattleReviewController : DialogController
     // would make the player's manual pan/zoom jump between rounds).
     private void ComputeMapBounds()
     {
-        List<Tuple<int, int>> allPositions = _history.Turns
+        List<ValueTuple<int, int>> allPositions = _history.Turns
             .SelectMany(turn => GetDeployedBoundaryPositions(turn.State))
             .ToList();
 
@@ -280,15 +280,15 @@ public partial class BattleReviewController : DialogController
         FrameParticipants(GetDeployedBoundaryPositions(_history.Turns[0].State).ToList());
     }
 
-    internal static IEnumerable<Tuple<int, int>> GetDeployedBoundaryPositions(BattleStateSnapshot state)
+    internal static IEnumerable<ValueTuple<int, int>> GetDeployedBoundaryPositions(BattleStateSnapshot state)
     {
         IEnumerable<BattleSquadSnapshot> deployedSquads = state.AttackerSquads.Values
             .Concat(state.OpposingSquads.Values)
             .Where(ShouldDrawSquad);
         foreach (BattleSoldierSnapshot soldier in deployedSquads.SelectMany(squad => squad.Soldiers))
         {
-            yield return new Tuple<int, int>(soldier.MinX, soldier.MinY);
-            yield return new Tuple<int, int>(soldier.MaxX, soldier.MaxY);
+            yield return new ValueTuple<int, int>(soldier.MinX, soldier.MinY);
+            yield return new ValueTuple<int, int>(soldier.MaxX, soldier.MaxY);
         }
     }
 
@@ -648,7 +648,7 @@ public partial class BattleReviewController : DialogController
         _view.MapRoot.AddChild(label);
     }
 
-    private Vector2 GridToMapPosition(Tuple<int, int> gridPosition, Vector2I topLeftOffset)
+    private Vector2 GridToMapPosition(ValueTuple<int, int> gridPosition, Vector2I topLeftOffset)
     {
         Vector2I adjustedPosition = new(gridPosition.Item1 - topLeftOffset.X, gridPosition.Item2 - topLeftOffset.Y);
         return new Vector2(
@@ -695,7 +695,7 @@ public partial class BattleReviewController : DialogController
     // Centers on and zooms in as tightly as possible while keeping every participant
     // position visible. The camera uses FixedTopLeft anchoring, so Position is the
     // top-left world corner of the view (not its center).
-    private void FrameParticipants(IReadOnlyList<Tuple<int, int>> positions)
+    private void FrameParticipants(IReadOnlyList<ValueTuple<int, int>> positions)
     {
         Vector2 contentMin;
         Vector2 contentMax;
@@ -709,8 +709,8 @@ public partial class BattleReviewController : DialogController
         {
             Vector2I topLeft = GetTopLeftOfPositions(positions);
             Vector2I bottomRight = GetBottomRightOfPositions(positions);
-            contentMin = GridToMapPosition(Tuple.Create(topLeft.X, topLeft.Y), _mapOffset) - halfCell;
-            contentMax = GridToMapPosition(Tuple.Create(bottomRight.X, bottomRight.Y), _mapOffset) + halfCell;
+            contentMin = GridToMapPosition(ValueTuple.Create(topLeft.X, topLeft.Y), _mapOffset) - halfCell;
+            contentMax = GridToMapPosition(ValueTuple.Create(bottomRight.X, bottomRight.Y), _mapOffset) + halfCell;
         }
 
         Vector2 contentSize = contentMax - contentMin;
@@ -742,14 +742,14 @@ public partial class BattleReviewController : DialogController
         }
     }
 
-    private static Vector2I GetTopLeftOfPositions(IReadOnlyList<Tuple<int, int>> positions)
+    private static Vector2I GetTopLeftOfPositions(IReadOnlyList<ValueTuple<int, int>> positions)
     {
         return new Vector2I(
             positions.Min(position => position.Item1),
             positions.Min(position => position.Item2));
     }
 
-    private static Vector2I GetBottomRightOfPositions(IReadOnlyList<Tuple<int, int>> positions)
+    private static Vector2I GetBottomRightOfPositions(IReadOnlyList<ValueTuple<int, int>> positions)
     {
         return new Vector2I(
             positions.Max(position => position.Item1),

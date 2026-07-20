@@ -107,10 +107,10 @@ namespace OnlyWar.Helpers.Database.GameRules
             return profileMap;
         }
 
-        private Dictionary<int, List<Tuple<BaseSkill, float>>> GetSoldierMosTrainingBySoldierTemplateId(
+        private Dictionary<int, List<ValueTuple<BaseSkill, float>>> GetSoldierMosTrainingBySoldierTemplateId(
             IDbConnection connection, Dictionary<int, BaseSkill> baseSkillMap)
         {
-            Dictionary<int, List<Tuple<BaseSkill, float>>> soldierTemplateMosMap =
+            Dictionary<int, List<ValueTuple<BaseSkill, float>>> soldierTemplateMosMap =
                 [];
             using (var command = connection.CreateCommand())
             {
@@ -124,7 +124,7 @@ namespace OnlyWar.Helpers.Database.GameRules
 
                     BaseSkill baseSkill = baseSkillMap[baseSkillId];
 
-                    Tuple<BaseSkill, float> training = new Tuple<BaseSkill, float>(baseSkill, points);
+                    ValueTuple<BaseSkill, float> training = new ValueTuple<BaseSkill, float>(baseSkill, points);
 
                     if (!soldierTemplateMosMap.ContainsKey(soldierTemplateId))
                     {
@@ -401,7 +401,7 @@ namespace OnlyWar.Helpers.Database.GameRules
             return elementsMap;
         }
 
-        private Tuple<Dictionary<int, List<SquadTemplate>>, Dictionary<int, SquadTemplate>> GetSquadTemplatesById(
+        private ValueTuple<Dictionary<int, List<SquadTemplate>>, Dictionary<int, SquadTemplate>> GetSquadTemplatesById(
             IDbConnection connection,
             Dictionary<int, List<SquadTemplateElement>> elementMap,
             Dictionary<int, WeaponSet> weaponSetMap,
@@ -458,7 +458,7 @@ namespace OnlyWar.Helpers.Database.GameRules
                     squadTemplateMap[kvp.Key].BodyguardSquadTemplate = squadTemplateMap[kvp.Value];
                 }
             }
-            return new Tuple<Dictionary<int, List<SquadTemplate>>, Dictionary<int, SquadTemplate>>(squadTemplatesByFactionId, squadTemplateMap);
+            return new ValueTuple<Dictionary<int, List<SquadTemplate>>, Dictionary<int, SquadTemplate>>(squadTemplatesByFactionId, squadTemplateMap);
         }
 
         private Dictionary<int, NormalizedValueTemplate> GetAttributeTemplates(IDbConnection connection)
@@ -586,7 +586,7 @@ namespace OnlyWar.Helpers.Database.GameRules
 
         private Dictionary<int, List<SoldierTemplate>> GetSoldierTemplatesByFactionId(
             IDbConnection connection,
-            Dictionary<int, List<Tuple<BaseSkill, float>>> soldierTemplateTrainingMap,
+            Dictionary<int, List<ValueTuple<BaseSkill, float>>> soldierTemplateTrainingMap,
             Dictionary<int, List<Species>> speciesMap,
             Dictionary<int, TrainingProfile> trainingProfileMap)
         {
@@ -616,7 +616,7 @@ namespace OnlyWar.Helpers.Database.GameRules
                     int battleValue = reader.FieldCount > 9 && reader[9].GetType() != typeof(DBNull)
                         ? reader.GetInt32(9)
                         : 0;
-                    List<Tuple<BaseSkill, float>> trainingList = null;
+                    List<ValueTuple<BaseSkill, float>> trainingList = null;
                     if (soldierTemplateTrainingMap.ContainsKey(id))
                     {
                         trainingList = soldierTemplateTrainingMap[id];

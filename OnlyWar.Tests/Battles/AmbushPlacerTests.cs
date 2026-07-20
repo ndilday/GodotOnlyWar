@@ -42,7 +42,7 @@ public class AmbushPlacerTests
         int minX = int.MaxValue, maxX = int.MinValue, minY = int.MaxValue, maxY = int.MinValue;
         foreach (BattleSoldier s in squad.AbleSoldiers)
         {
-            foreach (Tuple<int, int> c in grid.GetSoldierPosition(s.Soldier.Id))
+            foreach (ValueTuple<int, int> c in grid.GetSoldierPosition(s.Soldier.Id))
             {
                 minX = global::System.Math.Min(minX, c.Item1); maxX = global::System.Math.Max(maxX, c.Item1);
                 minY = global::System.Math.Min(minY, c.Item2); maxY = global::System.Math.Max(maxY, c.Item2);
@@ -69,7 +69,7 @@ public class AmbushPlacerTests
         ];
 
         AmbushPlacer placer = new(grid, 70);
-        Dictionary<BattleSquad, Tuple<int, int>> map = placer.PlaceSquads(ambushed, ambushing);
+        Dictionary<BattleSquad, ValueTuple<int, int>> map = placer.PlaceSquads(ambushed, ambushing);
 
         // Every squad on both sides makes it into the returned position map...
         Assert.Equal(ambushed.Count + ambushing.Count, map.Count);
@@ -145,7 +145,7 @@ public class AmbushPlacerTests
         ];
 
         AmbushPlacer placer = new(grid, ushort.MaxValue);
-        Dictionary<BattleSquad, Tuple<int, int>> map = placer.PlaceSquads(ambushed, ambushing);
+        Dictionary<BattleSquad, ValueTuple<int, int>> map = placer.PlaceSquads(ambushed, ambushing);
 
         Assert.Equal(ambushed.Count + ambushing.Count, map.Count);
     }

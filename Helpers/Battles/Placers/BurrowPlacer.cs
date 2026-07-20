@@ -83,16 +83,16 @@ namespace OnlyWar.Helpers.Battles.Placers
 
         private static void EruptAroundSquad(BattleGridManager grid, BattleSquad burrowers, BattleSquad target)
         {
-            List<List<Tuple<int, int>>> rings = BuildRings(grid, target);
+            List<List<ValueTuple<int, int>>> rings = BuildRings(grid, target);
             if (rings.Count == 0)
             {
                 return;
             }
-            HashSet<Tuple<int, int>> adjacentRing = new(rings[0]);
+            HashSet<ValueTuple<int, int>> adjacentRing = new(rings[0]);
 
             foreach (BattleSoldier soldier in burrowers.AbleSoldiers)
             {
-                IList<Tuple<int, int>> currentCells = grid.GetSoldierPosition(soldier.Soldier.Id);
+                IList<ValueTuple<int, int>> currentCells = grid.GetSoldierPosition(soldier.Soldier.Id);
                 if (currentCells == null)
                 {
                     continue;
@@ -102,7 +102,7 @@ namespace OnlyWar.Helpers.Battles.Placers
                 {
                     continue;
                 }
-                foreach (List<Tuple<int, int>> ring in rings)
+                foreach (List<ValueTuple<int, int>> ring in rings)
                 {
                     if (TryPlaceInRing(grid, soldier, ring))
                     {
@@ -119,12 +119,12 @@ namespace OnlyWar.Helpers.Battles.Placers
         /// placement is deterministic. Occupancy is not checked here — it changes as
         /// burrowers land, so it is tested at placement time.
         /// </summary>
-        private static List<List<Tuple<int, int>>> BuildRings(BattleGridManager grid, BattleSquad target)
+        private static List<List<ValueTuple<int, int>>> BuildRings(BattleGridManager grid, BattleSquad target)
         {
-            HashSet<Tuple<int, int>> visited = [];
+            HashSet<ValueTuple<int, int>> visited = [];
             foreach (int soldierId in GetPlacedSoldierIds(grid, target))
             {
-                foreach (Tuple<int, int> cell in grid.GetSoldierPosition(soldierId))
+                foreach (ValueTuple<int, int> cell in grid.GetSoldierPosition(soldierId))
                 {
                     visited.Add(cell);
                 }
@@ -134,15 +134,15 @@ namespace OnlyWar.Helpers.Battles.Placers
                 return [];
             }
 
-            List<List<Tuple<int, int>>> rings = [];
+            List<List<ValueTuple<int, int>>> rings = [];
             // snapshot: visited grows inside the loop below
-            List<Tuple<int, int>> frontier = visited.ToList();
+            List<ValueTuple<int, int>> frontier = visited.ToList();
             for (int radius = 0; radius < MaxEruptionRadius; radius++)
             {
-                HashSet<Tuple<int, int>> nextRing = [];
-                foreach (Tuple<int, int> cell in frontier)
+                HashSet<ValueTuple<int, int>> nextRing = [];
+                foreach (ValueTuple<int, int> cell in frontier)
                 {
-                    foreach (Tuple<int, int> neighbor in GetOrthogonalNeighbors(cell))
+                    foreach (ValueTuple<int, int> neighbor in GetOrthogonalNeighbors(cell))
                     {
                         if (visited.Add(neighbor))
                         {
@@ -150,7 +150,7 @@ namespace OnlyWar.Helpers.Battles.Placers
                         }
                     }
                 }
-                List<Tuple<int, int>> orderedRing = nextRing
+                List<ValueTuple<int, int>> orderedRing = nextRing
                     .OrderBy(cell => cell.Item1)
                     .ThenBy(cell => cell.Item2)
                     .ToList();
@@ -161,9 +161,9 @@ namespace OnlyWar.Helpers.Battles.Placers
         }
 
         private static bool TryPlaceInRing(BattleGridManager grid, BattleSoldier soldier,
-                                           List<Tuple<int, int>> ring)
+                                           List<ValueTuple<int, int>> ring)
         {
-            foreach (Tuple<int, int> cell in ring)
+            foreach (ValueTuple<int, int> cell in ring)
             {
                 if (!grid.IsSpaceAvailable(cell))
                 {
@@ -189,12 +189,12 @@ namespace OnlyWar.Helpers.Battles.Placers
                 .ToList();
         }
 
-        private static IEnumerable<Tuple<int, int>> GetOrthogonalNeighbors(Tuple<int, int> cell)
+        private static IEnumerable<ValueTuple<int, int>> GetOrthogonalNeighbors(ValueTuple<int, int> cell)
         {
-            yield return new Tuple<int, int>(cell.Item1, (short)(cell.Item2 - 1));
-            yield return new Tuple<int, int>(cell.Item1, (short)(cell.Item2 + 1));
-            yield return new Tuple<int, int>((short)(cell.Item1 - 1), cell.Item2);
-            yield return new Tuple<int, int>((short)(cell.Item1 + 1), cell.Item2);
+            yield return new ValueTuple<int, int>(cell.Item1, (short)(cell.Item2 - 1));
+            yield return new ValueTuple<int, int>(cell.Item1, (short)(cell.Item2 + 1));
+            yield return new ValueTuple<int, int>((short)(cell.Item1 - 1), cell.Item2);
+            yield return new ValueTuple<int, int>((short)(cell.Item1 + 1), cell.Item2);
         }
     }
 }

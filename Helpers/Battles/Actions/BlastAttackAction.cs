@@ -34,7 +34,7 @@ namespace OnlyWar.Helpers.Battles.Actions
         public float Range { get; }
         public bool UseBulk => BulkMultiplier > 0;
         public float BulkMultiplier { get; }
-        public Tuple<int, int> ImpactCell { get; private set; }
+        public ValueTuple<int, int> ImpactCell { get; private set; }
         public bool DidScatter { get; private set; }
         public IReadOnlyList<int> VictimIds { get; private set; } = [];
         public IReadOnlyList<int> FriendlyVictimIds { get; private set; } = [];

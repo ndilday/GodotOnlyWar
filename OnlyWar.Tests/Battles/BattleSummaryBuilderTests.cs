@@ -115,11 +115,11 @@ public class BattleSummaryBuilderTests
             TestModelFactory.CreateSoldier(name: "Second casualty")));
         foreach (BattleSoldier soldier in withdrawing.Soldiers)
         {
-            soldier.TopLeft = new System.Tuple<int, int>(0, 0);
+            soldier.TopLeft = (0, 0);
         }
         foreach (BattleSoldier soldier in eliminated.Soldiers)
         {
-            soldier.TopLeft = new System.Tuple<int, int>(10, 0);
+            soldier.TopLeft = new System.ValueTuple<int, int>(10, 0);
         }
         BattleState initial = new(
             new Dictionary<int, BattleSquad> { [withdrawing.Id] = withdrawing },

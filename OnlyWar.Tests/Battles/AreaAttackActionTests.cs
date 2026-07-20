@@ -199,7 +199,7 @@ public class AreaAttackActionTests
             1,
             false,
             0,
-            Array.Empty<Tuple<BaseSkill, float>>());
+            Array.Empty<ValueTuple<BaseSkill, float>>());
     }
 
     private static TestBattle CreateBattle(
@@ -218,7 +218,7 @@ public class AreaAttackActionTests
         {
             // BattleState snapshots require placed battle coordinates during cloning. The
             // concrete grid positions are assigned by each test immediately afterward.
-            soldier.TopLeft = new Tuple<int, int>(0, 0);
+            soldier.TopLeft = new ValueTuple<int, int>(0, 0);
             soldier.EquippedRangedWeapons.Clear();
             soldier.RangedWeapons.Clear();
             soldier.AddWeapons([new RangedWeapon(weaponTemplate)], []);
@@ -248,12 +248,12 @@ public class AreaAttackActionTests
         public void Place(int soldierId, bool side, int x, int y)
         {
             BattleSoldier soldier = FindOriginal(soldierId);
-            soldier.TopLeft = new Tuple<int, int>(x, y);
+            soldier.TopLeft = new ValueTuple<int, int>(x, y);
             State.GetSoldier(soldierId).TopLeft = soldier.TopLeft;
             Grid.PlaceSoldier(
                 soldier,
                 side,
-                [new Tuple<int, int>(x, y)]);
+                [new ValueTuple<int, int>(x, y)]);
         }
 
         public AreaAttackAction ExecuteAreaAttack(int shooterId, int targetId, int seed)

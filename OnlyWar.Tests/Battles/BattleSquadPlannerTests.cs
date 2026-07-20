@@ -38,7 +38,7 @@ public class BattleSquadPlannerTests
             1,
             false,
             0,
-            Array.Empty<Tuple<BaseSkill, float>>(),
+            Array.Empty<ValueTuple<BaseSkill, float>>(),
             battleValue: battleValue);
         Soldier soldier = TestModelFactory.CreateSoldier(template, name);
         soldier.Id = soldierId;
@@ -61,7 +61,7 @@ public class BattleSquadPlannerTests
                     1,
                     false,
                     0,
-                    Array.Empty<Tuple<BaseSkill, float>>(),
+                    Array.Empty<ValueTuple<BaseSkill, float>>(),
                     battleValue: member.BattleValue);
                 Soldier soldier = TestModelFactory.CreateSoldier(
                     template,
@@ -80,8 +80,8 @@ public class BattleSquadPlannerTests
         int x,
         int y)
     {
-        soldier.TopLeft = new Tuple<int, int>(x, y);
-        grid.PlaceSoldier(soldier, side, [new Tuple<int, int>(x, y)]);
+        soldier.TopLeft = (x, y);
+        grid.PlaceSoldier(soldier, side, [new ValueTuple<int, int>(x, y)]);
     }
 
     private static BattleSquadPlanner CreatePlanner(
@@ -345,7 +345,7 @@ public class BattleSquadPlannerTests
         BattleSquadPlanner.RangedTargetEvaluation target = planner.SelectBestRangedTarget(
             shooter,
             useBulk: true,
-            movementDirection: new Tuple<int, int>(0, 1));
+            movementDirection: new ValueTuple<int, int>(0, 1));
 
         Assert.Equal(expectsTarget, target != null);
     }

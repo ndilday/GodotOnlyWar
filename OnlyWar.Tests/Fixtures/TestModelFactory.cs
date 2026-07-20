@@ -51,7 +51,7 @@ internal static class TestModelFactory
         1,
         false,
         0,
-        Array.Empty<Tuple<BaseSkill, float>>(),
+        Array.Empty<ValueTuple<BaseSkill, float>>(),
         battleValue: 2);
 
     // A 1x1 species that tunnels — used to exercise burrow-arrival placement.
@@ -76,7 +76,7 @@ internal static class TestModelFactory
         1,
         false,
         0,
-        Array.Empty<Tuple<BaseSkill, float>>());
+        Array.Empty<ValueTuple<BaseSkill, float>>());
 
     // A synapse-providing species (Design/Active/MoraleAndRout.md §4) — used to exercise
     // squad-to-squad synapse coverage. Radius is well inside the small integer distances
@@ -104,7 +104,7 @@ internal static class TestModelFactory
         1,
         false,
         0,
-        Array.Empty<Tuple<BaseSkill, float>>());
+        Array.Empty<ValueTuple<BaseSkill, float>>());
 
     public static SoldierTemplate SergeantTemplate { get; } = new(
         2,
@@ -114,7 +114,7 @@ internal static class TestModelFactory
         1,
         true,
         0,
-        Array.Empty<Tuple<BaseSkill, float>>(),
+        Array.Empty<ValueTuple<BaseSkill, float>>(),
         battleValue: 2);
 
     public static ArmorTemplate TestArmor { get; } = new(1, "Test Armor", 5, 0);

@@ -5,6 +5,7 @@ using OnlyWar.Models.Soldiers;
 using OnlyWar.Models.Squads;
 using OnlyWar.Models.Units;
 using OnlyWar.Tests.Fixtures;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using Xunit;
@@ -42,7 +43,7 @@ public class BattleDebriefReportBuilderTests
         BattleSquad enemyBattleSquad = new(false, enemySquad);
         foreach (BattleSoldier soldier in playerBattleSquad.Soldiers.Concat(enemyBattleSquad.Soldiers))
         {
-            soldier.TopLeft = new System.Tuple<int, int>(soldier.Soldier.Id, 1);
+            soldier.TopLeft = (soldier.Soldier.Id, 1);
         }
 
         BattleState state = new(
@@ -77,7 +78,7 @@ public class BattleDebriefReportBuilderTests
         Squad squad = new("Healthy Squad", null, TestModelFactory.SquadTemplate);
         squad.AddSquadMember(healthy);
         BattleSquad battleSquad = new(true, squad);
-        battleSquad.Soldiers[0].TopLeft = new System.Tuple<int, int>(1, 1);
+        battleSquad.Soldiers[0].TopLeft = new System.ValueTuple<int, int>(1, 1);
         BattleState state = new(
             new Dictionary<int, BattleSquad> { [battleSquad.Id] = battleSquad },
             new Dictionary<int, BattleSquad>());

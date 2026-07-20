@@ -22,8 +22,8 @@ public class BattleForcePlannerTests
     {
         BattleSquad friendly = CreateSquad("Friendly", 71_001);
         BattleSquad enemy = CreateSquad("Enemy", 71_002);
-        friendly.Soldiers[0].TopLeft = new Tuple<int, int>(10, 0);
-        enemy.Soldiers[0].TopLeft = new Tuple<int, int>(0, 0);
+        friendly.Soldiers[0].TopLeft = (10, 0);
+        enemy.Soldiers[0].TopLeft = (0, 0);
 
         ushort heading = BattleForcePlanner.SelectWithdrawalHeading([friendly], [enemy]);
 
@@ -35,8 +35,8 @@ public class BattleForcePlannerTests
     {
         BattleSquad friendly = CreateSquad("Friendly", 71_011);
         BattleSquad enemy = CreateSquad("Enemy", 71_012);
-        friendly.Soldiers[0].TopLeft = new Tuple<int, int>(0, 0);
-        enemy.Soldiers[0].TopLeft = new Tuple<int, int>(0, 0);
+        friendly.Soldiers[0].TopLeft = (0, 0);
+        enemy.Soldiers[0].TopLeft = (0, 0);
 
         ushort heading = BattleForcePlanner.SelectWithdrawalHeading([friendly], [enemy]);
 
@@ -180,8 +180,8 @@ public class BattleForcePlannerTests
         foreach ((BattleSquad squad, bool side, int x, int y) in placements)
         {
             BattleSoldier soldier = squad.Soldiers[0];
-            soldier.TopLeft = new Tuple<int, int>(x, y);
-            grid.PlaceSoldier(soldier, side, [soldier.TopLeft]);
+            soldier.TopLeft = new ValueTuple<int, int>(x, y);
+            grid.PlaceSoldier(soldier, side, [soldier.TopLeft.Value]);
         }
 
         Dictionary<int, BattleSoldier> soldiers = placements

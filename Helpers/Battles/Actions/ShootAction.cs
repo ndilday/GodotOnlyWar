@@ -153,7 +153,7 @@ namespace OnlyWar.Helpers.Battles.Actions
             {
                 // accuracy of the weapon is limited by the soldier skill
                 // TODO: take this into account with enemies, rather than using high attribute, low skill
-                float fullAimBonus = shooter.Aim.Item3
+                float fullAimBonus = shooter.Aim.Value.Item3
                     + Math.Min(weapon.Template.Accuracy, soldierSkill)
                     + 1;
                 totalModifier += fullAimBonus * AimMultiplier;

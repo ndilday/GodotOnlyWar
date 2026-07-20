@@ -181,8 +181,8 @@ public class MeleeCombatReworkTests
         attackerSoldier.Soldier.AddSkillPoints(AttackSkill, 1_000_000);
         attackerSoldier.AddWeapons([], [attackerWeapon]);
         defenderSoldier.AddWeapons([], [CreateMeleeWeapon(31, "Knife", PrimaryParrySkill)]);
-        attackerSoldier.TopLeft = new Tuple<int, int>(0, 0);
-        defenderSoldier.TopLeft = new Tuple<int, int>(1, 0);
+        attackerSoldier.TopLeft = (0, 0);
+        defenderSoldier.TopLeft = (1, 0);
 
         BattleState state = CreateState(attacker, defender);
         MeleeAttackAction action = new(
@@ -212,8 +212,8 @@ public class MeleeCombatReworkTests
         MeleeWeapon attackerWeapon = CreateMeleeWeapon(32, "Power Knife", AttackSkill, strengthMultiplier: 1);
         attackerSoldier.AddWeapons([], [attackerWeapon]);
         defenderSoldier.AddWeapons([], [CreateMeleeWeapon(33, "Knife", PrimaryParrySkill)]);
-        attackerSoldier.TopLeft = new Tuple<int, int>(0, 0);
-        defenderSoldier.TopLeft = new Tuple<int, int>(1, 0);
+        attackerSoldier.TopLeft = (0, 0);
+        defenderSoldier.TopLeft = (1, 0);
 
         BattleState state = CreateState(attacker, defender);
         MeleeAttackAction action = new(
@@ -296,9 +296,9 @@ public class MeleeCombatReworkTests
 
         BattleSoldier firstDefender = firstDefenderSquad.Soldiers[0];
         BattleSoldier secondDefender = secondDefenderSquad.Soldiers[0];
-        attacker.TopLeft = new Tuple<int, int>(0, 0);
-        firstDefender.TopLeft = new Tuple<int, int>(1, 0);
-        secondDefender.TopLeft = new Tuple<int, int>(0, 1);
+        attacker.TopLeft = (0, 0);
+        firstDefender.TopLeft = (1, 0);
+        secondDefender.TopLeft = (0, 1);
 
         BattleGridManager grid = new();
         grid.PlaceSoldier(attacker, true, attacker.PositionList.ToList());
@@ -373,8 +373,8 @@ public class MeleeCombatReworkTests
         defender.EquippedRangedWeapons.Clear();
         defender.MeleeWeapons.Clear();
         defender.EquippedMeleeWeapons.Clear();
-        attacker.TopLeft = new Tuple<int, int>(0, 0);
-        defender.TopLeft = new Tuple<int, int>(1, 0);
+        attacker.TopLeft = (0, 0);
+        defender.TopLeft = (1, 0);
 
         BattleGridManager grid = new();
         grid.PlaceSoldier(attacker, true, attacker.PositionList.ToList());

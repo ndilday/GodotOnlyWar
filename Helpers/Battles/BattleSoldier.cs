@@ -11,7 +11,7 @@ namespace OnlyWar.Helpers.Battles
     {
         public ISoldier Soldier { get; private set; }
 
-        public Tuple<int, int> TopLeft { get; set; }
+        public ValueTuple<int, int>? TopLeft { get; set; }
         public ushort Orientation { get; set; }
         public BattleSquad BattleSquad { get; private set; }
 
@@ -55,33 +55,37 @@ namespace OnlyWar.Helpers.Battles
             }
         }
 
-        public Tuple<int, int> BottomRight
+        public ValueTuple<int, int>? BottomRight
         {
             get
             {
+                if (TopLeft == null) return null;
                 if(!BattleOrientation.IsFootprintRotated(Orientation))
                 {
-                    return new Tuple<int, int>(TopLeft.Item1 + Soldier.Template.Species.Width,
-                                               TopLeft.Item2 - Soldier.Template.Species.Depth);
+                    return new ValueTuple<int, int>(TopLeft.Value.Item1 + Soldier.Template.Species.Width,
+                                               TopLeft.Value.Item2 - Soldier.Template.Species.Depth);
                 }
                 else
                 {
-                    return new Tuple<int, int>(TopLeft.Item1 + Soldier.Template.Species.Depth,
-                                               TopLeft.Item2 - Soldier.Template.Species.Width);
+                    return new ValueTuple<int, int>(TopLeft.Value.Item1 + Soldier.Template.Species.Depth,
+                                               TopLeft.Value.Item2 - Soldier.Template.Species.Width);
                 }
             }
         }
 
-        public IReadOnlyList<Tuple<int, int>> PositionList
+        public IReadOnlyList<ValueTuple<int, int>> PositionList
         {
             get
             {
-                List<Tuple<int, int>> list = [];
-                for (int w = TopLeft.Item1; w < BottomRight.Item1; w++)
+                List<ValueTuple<int, int>> list = [];
+                if (TopLeft != null)
                 {
-                    for (int d = BottomRight.Item2; d < TopLeft.Item2; d++)
+                    for (int w = TopLeft.Value.Item1; w < BottomRight.Value.Item1; w++)
                     {
-                        list.Add(new Tuple<int, int>(w, d));
+                        for (int d = BottomRight.Value.Item2; d < TopLeft.Value.Item2; d++)
+                        {
+                            list.Add(new ValueTuple<int, int>(w, d));
+                        }
                     }
                 }
                 return list;
@@ -89,7 +93,7 @@ namespace OnlyWar.Helpers.Battles
         }
 
         // aim stores the target, aiming weapon, and addiional seconds the aim has been maintained
-        public Tuple<int, RangedWeapon, int> Aim { get; set; }
+        public ValueTuple<int, RangedWeapon, int>? Aim { get; set; }
 
         public BattleSoldier(ISoldier soldier, BattleSquad squad)
         {
@@ -121,7 +125,7 @@ namespace OnlyWar.Helpers.Battles
         {
             Soldier = soldier.Soldier;
             BattleSquad = squad;
-            TopLeft = new Tuple<int, int>(soldier.TopLeft.Item1, soldier.TopLeft.Item2);
+            TopLeft = soldier.TopLeft;
             Orientation = soldier.Orientation;
             Armor = soldier.Armor;
             IsInMelee = soldier.IsInMelee;
@@ -136,7 +140,7 @@ namespace OnlyWar.Helpers.Battles
             TurnsAiming = soldier.TurnsAiming;
             WoundsTaken = soldier.WoundsTaken;
             EnemiesTakenDown = soldier.EnemiesTakenDown;
-            Aim = soldier.Aim == null ? null : new Tuple<int, RangedWeapon, int>(soldier.Aim.Item1, soldier.Aim.Item2, soldier.Aim.Item3);
+            Aim = soldier.Aim;
             EquippedMeleeWeapons = soldier.EquippedMeleeWeapons.ToList();
             EquippedRangedWeapons = soldier.EquippedRangedWeapons.ToList();
             MeleeWeapons = soldier.MeleeWeapons;

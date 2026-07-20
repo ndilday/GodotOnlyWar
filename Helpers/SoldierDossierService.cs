@@ -8,12 +8,12 @@ using System.Text.RegularExpressions;
 namespace OnlyWar.Helpers
 {
     public sealed record SoldierDossier(
-        IReadOnlyList<Tuple<string, string>> Data,
+        IReadOnlyList<ValueTuple<string, string>> Data,
         IReadOnlyList<string> History,
         IReadOnlyList<string> Awards,
         string SergeantReport,
         string InjuryReport,
-        IReadOnlyList<Tuple<string, string>> CombatRecord);
+        IReadOnlyList<ValueTuple<string, string>> CombatRecord);
 
     public class SoldierDossierService
     {
@@ -31,7 +31,7 @@ namespace OnlyWar.Helpers
 
         // The Battle History card surfaces aggregate combat stats rather than the
         // chronological event log (which now lives under the Service Record card).
-        public IReadOnlyList<Tuple<string, string>> BuildCombatRecord(PlayerSoldier soldier)
+        public IReadOnlyList<ValueTuple<string, string>> BuildCombatRecord(PlayerSoldier soldier)
         {
             int operations = soldier.SoldierEvents
                 .Count(e => e.Type == SoldierEventType.BattleParticipation);
@@ -48,17 +48,17 @@ namespace OnlyWar.Helpers
             ];
         }
 
-        public IReadOnlyList<Tuple<string, string>> BuildSoldierData(PlayerSoldier soldier,
+        public IReadOnlyList<ValueTuple<string, string>> BuildSoldierData(PlayerSoldier soldier,
                                                                      Date currentDate = null, Sector sector = null)
         {
-            List<Tuple<string, string>> soldierData =
+            List<ValueTuple<string, string>> soldierData =
             [
                 new("Time in Service", FormatDurationSince(GetEnlistmentDate(soldier), currentDate)),
                 new("Time in Rank", FormatTimeSinceLastEvent(soldier, SoldierEventType.Promotion, currentDate)),
                 new("Time in Squad", FormatTimeSinceLastEvent(soldier, SoldierEventType.Transfer, currentDate))
             ];
 
-            soldierData.Add(new Tuple<string, string>(
+            soldierData.Add(new ValueTuple<string, string>(
                 "Location",
                 SquadLocationFormatter.Format(soldier.AssignedSquad)));
 

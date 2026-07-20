@@ -177,7 +177,7 @@ public class GrenadeReportingTests
         BattleSquad battleSquad = new(isPlayerSquad, squad);
         foreach (BattleSoldier soldier in battleSquad.Soldiers)
         {
-            soldier.TopLeft = new Tuple<int, int>(0, 0);
+            soldier.TopLeft = (0, 0);
         }
 
         return battleSquad;
@@ -213,8 +213,8 @@ public class GrenadeReportingTests
 
     private static void Place(BattleGridManager grid, BattleSoldier soldier, bool side, int x, int y)
     {
-        soldier.TopLeft = new Tuple<int, int>(x, y);
-        grid.PlaceSoldier(soldier, side, [new Tuple<int, int>(x, y)]);
+        soldier.TopLeft = new ValueTuple<int, int>(x, y);
+        grid.PlaceSoldier(soldier, side, [new ValueTuple<int, int>(x, y)]);
     }
 
     private static Faction CreateFaction(int id, string name)

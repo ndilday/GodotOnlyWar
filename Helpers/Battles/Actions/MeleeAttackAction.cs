@@ -336,15 +336,15 @@ namespace OnlyWar.Helpers.Battles.Actions
 
         private static bool IsAdjacent(BattleSoldier attacker, BattleSoldier target)
         {
-            int topLimit = attacker.TopLeft.Item2 + 1;
-            int leftLimit = attacker.TopLeft.Item1 - 1;
-            int bottomLimit = attacker.BottomRight.Item2 - 1;
-            int rightLimit = attacker.BottomRight.Item1 + 1;
+            int topLimit = attacker.TopLeft.Value.Item2 + 1;
+            int leftLimit = attacker.TopLeft.Value.Item1 - 1;
+            int bottomLimit = attacker.BottomRight.Value.Item2 - 1;
+            int rightLimit = attacker.BottomRight.Value.Item1 + 1;
 
-            bool targetIsAbove = target.BottomRight.Item2 > topLimit;
-            bool targetIsBelow = target.TopLeft.Item2 < bottomLimit;
-            bool targetIsLeft = target.BottomRight.Item1 < leftLimit;
-            bool targetIsRight = target.TopLeft.Item1 > rightLimit;
+            bool targetIsAbove = target.BottomRight.Value.Item2 > topLimit;
+            bool targetIsBelow = target.TopLeft.Value.Item2 < bottomLimit;
+            bool targetIsLeft = target.BottomRight.Value.Item1 < leftLimit;
+            bool targetIsRight = target.TopLeft.Value.Item1 > rightLimit;
 
             return !targetIsAbove && !targetIsBelow && !targetIsLeft && !targetIsRight;
         }
@@ -386,10 +386,10 @@ namespace OnlyWar.Helpers.Battles.Actions
 
         public string Description()
         {
-            Dictionary<Tuple<int, int>, int> hitCountByTargetAndWeapon = [];
+            Dictionary<ValueTuple<int, int>, int> hitCountByTargetAndWeapon = [];
             foreach (WoundResolution wound in WoundResolutions)
             {
-                Tuple<int, int> key = new Tuple<int, int>(wound.Suffererer.Soldier.Id, wound.Weapon.Id);
+                ValueTuple<int, int> key = new ValueTuple<int, int>(wound.Suffererer.Soldier.Id, wound.Weapon.Id);
                 if (hitCountByTargetAndWeapon.ContainsKey(key))
                 {
                     hitCountByTargetAndWeapon[key]++;
@@ -400,11 +400,11 @@ namespace OnlyWar.Helpers.Battles.Actions
                 }
             }
 
-            HashSet<Tuple<int, int>> describedKeys = [];
+            HashSet<ValueTuple<int, int>> describedKeys = [];
             string desc = "";
             foreach (PlannedMeleeStrike strikePlan in StrikePlans)
             {
-                Tuple<int, int> key = new Tuple<int, int>(strikePlan.TargetId, strikePlan.WeaponTemplateId);
+                ValueTuple<int, int> key = new ValueTuple<int, int>(strikePlan.TargetId, strikePlan.WeaponTemplateId);
                 if (!describedKeys.Add(key))
                 {
                     continue;

@@ -338,7 +338,7 @@ public partial class PlanetTacticalScreenController : DialogController
         Faction controllingFaction = planet.GetControllingFaction();
         bool imperialOrPlayer = controllingFaction != null && (controllingFaction.IsDefaultFaction || controllingFaction.IsPlayerFaction);
 
-        List<Tuple<string, string>> worldRows = [Row("Control", controllingFaction?.Name ?? "Unknown")];
+        List<ValueTuple<string, string>> worldRows = [Row("Control", controllingFaction?.Name ?? "Unknown")];
         if (imperialOrPlayer)
         {
             worldRows.Add(Row("Classification", planet.Template.Name));
@@ -360,7 +360,7 @@ public partial class PlanetTacticalScreenController : DialogController
             Character governor = planet.PlanetFactionMap[controllingFaction.Id].Leader;
             if (governor != null)
             {
-                List<Tuple<string, string>> governorRows =
+                List<ValueTuple<string, string>> governorRows =
                 [
                     Row("Opinion", ConvertOpinionToString(governor.OpinionOfPlayerForce)),
                     Row("Civil Assessment", GovernorCivilAssessmentService.Assess(planet, governor)),
@@ -382,7 +382,7 @@ public partial class PlanetTacticalScreenController : DialogController
         RegionFaction playerRegionFaction = GetPlayerRegionFaction(region);
         List<RegionFaction> enemyFactions = GetPublicEnemyRegionFactions(region);
 
-        List<Tuple<string, string>> regionRows =
+        List<ValueTuple<string, string>> regionRows =
         [
             Row("Control", GetRegionControlLabel(region)),
             Row("Coordinates", $"({region.Coordinates.X}, {region.Coordinates.Y})"),
@@ -399,7 +399,7 @@ public partial class PlanetTacticalScreenController : DialogController
         }
         cards.Add(new DossierCardData("Region", null, regionRows, OnlyWarStyle.Gold));
 
-        List<Tuple<string, string>> localRows =
+        List<ValueTuple<string, string>> localRows =
         [
             Row("Marines", playerRegionFaction?.LandedSquads.Sum(squad => squad.Members.Count).ToString() ?? "0"),
             Row("Assigned Orders", playerRegionFaction?.LandedSquads.Count(squad => squad.CurrentOrders != null).ToString() ?? "0"),
@@ -411,7 +411,7 @@ public partial class PlanetTacticalScreenController : DialogController
         {
             foreach (RegionFaction enemyFaction in enemyFactions)
             {
-                List<Tuple<string, string>> enemyRows = [Row("Force Magnitude", enemyFaction.GetForceMagnitudeDescription())];
+                List<ValueTuple<string, string>> enemyRows = [Row("Force Magnitude", enemyFaction.GetForceMagnitudeDescription())];
                 if (visibleIntel > 1)
                 {
                     enemyRows.Add(Row("Entrenchment", RegionFactionExtensions.GetDefenseLevelDescription(enemyFaction.Entrenchment)));
@@ -423,7 +423,7 @@ public partial class PlanetTacticalScreenController : DialogController
         }
         else
         {
-            cards.Add(new DossierCardData("Hostile Faction", "None Detected", Array.Empty<Tuple<string, string>>(), OnlyWarStyle.OpposingAccent));
+            cards.Add(new DossierCardData("Hostile Faction", "None Detected", Array.Empty<ValueTuple<string, string>>(), OnlyWarStyle.OpposingAccent));
         }
 
         // Mirrors the Region Ops dossier's Inbound Orders card: every player order aimed at this
@@ -431,7 +431,7 @@ public partial class PlanetTacticalScreenController : DialogController
         // is visible here too. Static (informational) to match this screen's card idiom - orders
         // are edited on the Region Ops screen ("Open Region").
         List<InboundOrderInfo> inbound = InboundOrders.ForRegion(region);
-        List<Tuple<string, string>> inboundRows = inbound
+        List<ValueTuple<string, string>> inboundRows = inbound
             .Select(info => Row(
                 $"{info.MissionLabel} · from {info.OriginLabel}",
                 info.SquadCount == 1 ? "1 squad" : $"{info.SquadCount} squads"))
@@ -447,7 +447,7 @@ public partial class PlanetTacticalScreenController : DialogController
 
     private static IReadOnlyList<DossierCardData> BuildSquadCards(Squad squad)
     {
-        List<Tuple<string, string>> rows =
+        List<ValueTuple<string, string>> rows =
         [
             Row("Unit", squad.ParentUnit?.Name ?? "Unknown"),
             Row("Fighting Strength", $"{squad.Members.Count(member => member.CanFight)}/{squad.Members.Count}"),
@@ -467,7 +467,7 @@ public partial class PlanetTacticalScreenController : DialogController
 
     private static IReadOnlyList<DossierCardData> BuildShipCards(Ship ship)
     {
-        List<Tuple<string, string>> rows =
+        List<ValueTuple<string, string>> rows =
         [
             Row("Loaded", $"{ship.LoadedSoldierCount}/{ship.Template.SoldierCapacity}"),
             Row("Available Capacity", ship.AvailableCapacity.ToString()),
@@ -726,9 +726,9 @@ public partial class PlanetTacticalScreenController : DialogController
         return region.ControllingFaction?.PlanetFaction.Faction.Name ?? "Contested";
     }
 
-    private static Tuple<string, string> Row(string label, string value)
+    private static ValueTuple<string, string> Row(string label, string value)
     {
-        return new Tuple<string, string>(label, value);
+        return new ValueTuple<string, string>(label, value);
     }
 
     private static string RegionKey(int regionId) => $"region:{regionId}";

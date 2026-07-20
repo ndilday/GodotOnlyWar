@@ -12,7 +12,7 @@ namespace OnlyWar.Models.Soldiers
         public byte Rank { get; }
         public byte Subrank { get; }
         public Species Species { get; }
-        public IReadOnlyCollection<Tuple<BaseSkill, float>> MosTraining { get; }
+        public IReadOnlyCollection<ValueTuple<BaseSkill, float>> MosTraining { get; }
         public TrainingProfile WorkExperienceTrainingProfile { get; }
         // The soldier's point value — its weight in force generation and in casualty/survivor
         // accounting against the strategic pools. A squad's battle value is the sum of its members'
@@ -21,7 +21,7 @@ namespace OnlyWar.Models.Soldiers
 
         public SoldierTemplate(int id, Species species, string name, byte rank, byte subrank,
                                bool isSquadLeader, byte specialistType,
-                               IReadOnlyCollection<Tuple<BaseSkill, float>> mosTraining,
+                               IReadOnlyCollection<ValueTuple<BaseSkill, float>> mosTraining,
                                TrainingProfile workExperienceTrainingProfile = null,
                                int battleValue = 0)
         {

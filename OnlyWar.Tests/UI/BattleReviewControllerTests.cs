@@ -13,7 +13,7 @@ public class BattleReviewControllerTests
     {
         BattleSquad squad = new(false, TestModelFactory.CreateSquad(
             "Review Squad", TestModelFactory.CreateSoldier(name: "Reviewer")));
-        squad.Soldiers[0].TopLeft = new System.Tuple<int, int>(2, 4);
+        squad.Soldiers[0].TopLeft = new System.ValueTuple<int, int>(2, 4);
         return (new BattleState(new Dictionary<int, BattleSquad> { [squad.Id] = squad },
             new Dictionary<int, BattleSquad>()), squad.Id);
     }
@@ -82,10 +82,10 @@ public class BattleReviewControllerTests
     {
         BattleSquad deployed = new(false, TestModelFactory.CreateSquad(
             "Deployed Squad", TestModelFactory.CreateSoldier(name: "Deployed")));
-        deployed.Soldiers[0].TopLeft = new System.Tuple<int, int>(3, 5);
+        deployed.Soldiers[0].TopLeft = new System.ValueTuple<int, int>(3, 5);
         BattleSquad withdrawn = new(false, TestModelFactory.CreateSquad(
             "Withdrawn Squad", TestModelFactory.CreateSoldier(name: "Withdrawn")));
-        withdrawn.Soldiers[0].TopLeft = new System.Tuple<int, int>(200, 200);
+        withdrawn.Soldiers[0].TopLeft = new System.ValueTuple<int, int>(200, 200);
         BattleState state = new(
             new Dictionary<int, BattleSquad>
             {
@@ -96,7 +96,7 @@ public class BattleReviewControllerTests
         state.DisengageSquad(state.GetSquad(withdrawn.Id));
         BattleStateSnapshot snapshot = new BattleTurn(state, []).State;
 
-        List<System.Tuple<int, int>> positions =
+        List<System.ValueTuple<int, int>> positions =
             BattleReviewController.GetDeployedBoundaryPositions(snapshot).ToList();
 
         Assert.NotEmpty(positions);

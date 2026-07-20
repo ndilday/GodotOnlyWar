@@ -314,7 +314,7 @@ public class BattleReplaySummaryBuilderTests
         BattleSquad squad = new(isPlayerSquad, sourceSquad);
         for (int i = 0; i < squad.Soldiers.Count; i++)
         {
-            squad.Soldiers[i].TopLeft = new Tuple<int, int>(i + 1, 2);
+            squad.Soldiers[i].TopLeft = (i + 1, 2);
             squad.Soldiers[i].Orientation = 0;
         }
 

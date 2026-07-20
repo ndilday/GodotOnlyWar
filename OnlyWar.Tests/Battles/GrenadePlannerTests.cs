@@ -368,7 +368,7 @@ public class GrenadePlannerTests
                     1,
                     false,
                     0,
-                    Array.Empty<Tuple<BaseSkill, float>>(),
+                    Array.Empty<ValueTuple<BaseSkill, float>>(),
                     battleValue: member.BattleValue);
                 Soldier soldier = TestModelFactory.CreateSoldier(
                     template,
@@ -465,8 +465,8 @@ public class GrenadePlannerTests
         int x,
         int y)
     {
-        soldier.TopLeft = new Tuple<int, int>(x, y);
-        grid.PlaceSoldier(soldier, side, [new Tuple<int, int>(x, y)]);
+        soldier.TopLeft = new ValueTuple<int, int>(x, y);
+        grid.PlaceSoldier(soldier, side, [new ValueTuple<int, int>(x, y)]);
     }
 
     private static BattleSquadPlanner CreatePlanner(

@@ -5,7 +5,7 @@ using System.Linq;
 
 public partial class WeaponSetSelectionView : PanelContainer
 {
-    private List<Tuple<string, int>> _weaponSets;
+    private List<ValueTuple<string, int>> _weaponSets;
     private List<WeaponSetRowView> _weaponSetRows;
     private VBoxContainer _weaponSetVBox;
     private RichTextLabel _header;
@@ -14,7 +14,7 @@ public partial class WeaponSetSelectionView : PanelContainer
     private int _temporaryMaximumCount;
     public string OptionName { get; private set; }
 
-    public event EventHandler<Tuple<string, int>> WeaponSetCountChanged;
+    public event EventHandler<ValueTuple<string, int>> WeaponSetCountChanged;
     public override void _Ready()
     {
         _weaponSetVBox = GetNode<VBoxContainer>("VBoxContainer");
@@ -22,7 +22,7 @@ public partial class WeaponSetSelectionView : PanelContainer
         _weaponSetRows = new List<WeaponSetRowView>();
     }
 
-    public void Initialize(List<Tuple<string, int>> weaponSets, string name, int minimumCount, int maximumCount)
+    public void Initialize(List<ValueTuple<string, int>> weaponSets, string name, int minimumCount, int maximumCount)
     {
         OptionName = name;
         ClearWeaponSetRows();
@@ -30,7 +30,7 @@ public partial class WeaponSetSelectionView : PanelContainer
         _minimumCount = minimumCount;
         _maximumCount = maximumCount;
         
-        foreach(Tuple<string, int> weaponSet in _weaponSets)
+        foreach(ValueTuple<string, int> weaponSet in _weaponSets)
         {
             PackedScene weaponSetRowScene = GD.Load<PackedScene>("res://Scenes/SquadScreen/weapon_set_row.tscn");
             WeaponSetRowView row = (WeaponSetRowView)weaponSetRowScene.Instantiate();
@@ -46,12 +46,12 @@ public partial class WeaponSetSelectionView : PanelContainer
         UpdateHeaderText();
     }
 
-    public List<Tuple<string, int>> GetWeaponSetCounts()
+    public List<ValueTuple<string, int>> GetWeaponSetCounts()
     {
-        List<Tuple<string, int>> weaponSetCounts = new List<Tuple<string, int>>();
+        List<ValueTuple<string, int>> weaponSetCounts = new List<ValueTuple<string, int>>();
         foreach (WeaponSetRowView row in _weaponSetRows)
         {
-            weaponSetCounts.Add(new Tuple<string, int>(row.WeaponSetName, row.Count));
+            weaponSetCounts.Add(new ValueTuple<string, int>(row.WeaponSetName, row.Count));
         }
         return weaponSetCounts;
     }
@@ -124,7 +124,7 @@ public partial class WeaponSetSelectionView : PanelContainer
             }
         }
         UpdateHeaderText();
-        Tuple<string, int> eventData = new Tuple<string, int>(row.WeaponSetName, newCount);
+        ValueTuple<string, int> eventData = new ValueTuple<string, int>(row.WeaponSetName, newCount);
         WeaponSetCountChanged.Invoke(this, eventData);
     }
 }

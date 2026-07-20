@@ -64,7 +64,7 @@ public class SoldierDetailBuilder
         return "rank_battle_brother";
     }
 
-    private static string FormatPairs(IReadOnlyList<Tuple<string, string>> pairs)
+    private static string FormatPairs(IReadOnlyList<ValueTuple<string, string>> pairs)
     {
         return string.Join("\n", pairs.Select(pair => $"{pair.Item1}: {pair.Item2}"));
     }

@@ -50,7 +50,7 @@ public class ShootActionFriendlyFireTests
         BattleSoldier shooter = shooters.Soldiers[0];
         BattleSoldier target = targets.Soldiers[0];
         var weapon = shooter.EquippedRangedWeapons[0];
-        shooter.Aim = new Tuple<int, Models.Equippables.RangedWeapon, int>(
+        shooter.Aim = new ValueTuple<int, Models.Equippables.RangedWeapon, int>(
             target.Soldier.Id,
             weapon,
             0);
@@ -239,7 +239,7 @@ public class ShootActionFriendlyFireTests
         int x,
         int y)
     {
-        soldier.TopLeft = new Tuple<int, int>(x, y);
+        soldier.TopLeft = new ValueTuple<int, int>(x, y);
         soldier.Orientation = 0;
         grid.PlaceSoldier(soldier, side, soldier.PositionList.ToList());
     }

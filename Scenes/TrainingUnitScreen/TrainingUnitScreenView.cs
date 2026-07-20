@@ -30,10 +30,10 @@ public partial class TrainingUnitScreenView : Control
         _squadButtonGroup = new ButtonGroup();
     }
 
-    public void PopulateSquadList(IReadOnlyList<Tuple<int, string>> squads)
+    public void PopulateSquadList(IReadOnlyList<ValueTuple<int, string>> squads)
     {
         ClearVBox(_squadVBox);
-        foreach (Tuple<int, string> squad in squads)
+        foreach (ValueTuple<int, string> squad in squads)
         {
             AddSquad(squad.Item1, squad.Item2);
         }

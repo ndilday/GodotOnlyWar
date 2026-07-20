@@ -21,8 +21,8 @@ public class BurrowPlacerTests
                                        bool side, int x, int y)
     {
         BattleSoldier soldier = squad.AbleSoldiers[index];
-        Tuple<int, int> cell = new(x, y);
-        grid.PlaceSoldier(soldier, side, new List<Tuple<int, int>> { cell });
+        ValueTuple<int, int> cell = new(x, y);
+        grid.PlaceSoldier(soldier, side, new List<ValueTuple<int, int>> { cell });
         soldier.TopLeft = cell;
         return soldier;
     }
@@ -73,7 +73,7 @@ public class BurrowPlacerTests
 
         BurrowPlacer.PlaceBurrowers(grid, new[] { marines, enemy });
 
-        Assert.Equal(new Tuple<int, int>(10, 10), grid.GetSoldierPosition(marine.Soldier.Id)[0]);
+        Assert.Equal(new ValueTuple<int, int>(10, 10), grid.GetSoldierPosition(marine.Soldier.Id)[0]);
     }
 
     [Fact]

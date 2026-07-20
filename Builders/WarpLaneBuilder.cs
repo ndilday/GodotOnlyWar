@@ -34,11 +34,11 @@ namespace OnlyWar.Builders
                 {
                     if (planet == capital) continue;
                     lanes.Add(new WarpLane(nextLaneId++, IntraSubsectorQuality,
-                        new Tuple<Planet, Planet>(capital, planet)));
+                        new ValueTuple<Planet, Planet>(capital, planet)));
                 }
             }
 
-            foreach (Tuple<Planet, Planet> connection in BuildCapitalConnections(capitals, adjacencyThreshold))
+            foreach (ValueTuple<Planet, Planet> connection in BuildCapitalConnections(capitals, adjacencyThreshold))
             {
                 lanes.Add(new WarpLane(nextLaneId++, InterSubsectorQuality, connection));
             }
@@ -56,7 +56,7 @@ namespace OnlyWar.Builders
                 .First();
         }
 
-        private static IEnumerable<Tuple<Planet, Planet>> BuildCapitalConnections(
+        private static IEnumerable<ValueTuple<Planet, Planet>> BuildCapitalConnections(
             IReadOnlyList<Planet> capitals, double adjacencyThreshold)
         {
             int count = capitals.Count;
@@ -107,7 +107,7 @@ namespace OnlyWar.Builders
 
             foreach ((int i, int j) in edges)
             {
-                yield return new Tuple<Planet, Planet>(capitals[i], capitals[j]);
+                yield return new ValueTuple<Planet, Planet>(capitals[i], capitals[j]);
             }
         }
 

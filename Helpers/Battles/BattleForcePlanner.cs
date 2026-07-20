@@ -148,18 +148,18 @@ namespace OnlyWar.Helpers.Battles
                 .Heading;
         }
 
-        public static Tuple<int, int> GetHeadingVector(ushort heading)
+        public static ValueTuple<int, int> GetHeadingVector(ushort heading)
         {
             return (heading % BattleOrientation.HeadingCount) switch
             {
-                0 => new Tuple<int, int>(0, 1),
-                1 => new Tuple<int, int>(1, 1),
-                2 => new Tuple<int, int>(1, 0),
-                3 => new Tuple<int, int>(1, -1),
-                4 => new Tuple<int, int>(0, -1),
-                5 => new Tuple<int, int>(-1, -1),
-                6 => new Tuple<int, int>(-1, 0),
-                _ => new Tuple<int, int>(-1, 1)
+                0 => new ValueTuple<int, int>(0, 1),
+                1 => new ValueTuple<int, int>(1, 1),
+                2 => new ValueTuple<int, int>(1, 0),
+                3 => new ValueTuple<int, int>(1, -1),
+                4 => new ValueTuple<int, int>(0, -1),
+                5 => new ValueTuple<int, int>(-1, -1),
+                6 => new ValueTuple<int, int>(-1, 0),
+                _ => new ValueTuple<int, int>(-1, 1)
             };
         }
 
@@ -173,7 +173,7 @@ namespace OnlyWar.Helpers.Battles
                 {
                     double distance = squad.AbleSoldiers
                         .SelectMany(friendly => enemies.Select(enemy =>
-                            Distance(friendly.TopLeft, enemy.TopLeft)))
+                            Distance(friendly.TopLeft.Value, enemy.TopLeft.Value)))
                         .DefaultIfEmpty(double.PositiveInfinity)
                         .Min();
                     bool eligible = !squad.IsInMelee
@@ -263,13 +263,13 @@ namespace OnlyWar.Helpers.Battles
 
         private static (double X, double Y) Centroid(IReadOnlyCollection<BattleSoldier> soldiers)
         {
-            return (soldiers.Average(soldier => soldier.TopLeft.Item1),
-                soldiers.Average(soldier => soldier.TopLeft.Item2));
+            return (soldiers.Average(soldier => soldier.TopLeft.Value.Item1),
+                soldiers.Average(soldier => soldier.TopLeft.Value.Item2));
         }
 
         private static double HeadingDot(ushort heading, double x, double y)
         {
-            Tuple<int, int> vector = GetHeadingVector(heading);
+            ValueTuple<int, int> vector = GetHeadingVector(heading);
             double length = Math.Sqrt((vector.Item1 * vector.Item1) + (vector.Item2 * vector.Item2));
             return ((vector.Item1 * x) + (vector.Item2 * y)) / length;
         }
@@ -279,19 +279,19 @@ namespace OnlyWar.Helpers.Battles
             IReadOnlyCollection<BattleSoldier> enemies,
             ushort heading)
         {
-            Tuple<int, int> vector = GetHeadingVector(heading);
+            ValueTuple<int, int> vector = GetHeadingVector(heading);
             double vectorLength = Math.Sqrt(
                 (vector.Item1 * vector.Item1) + (vector.Item2 * vector.Item2));
             return friendly
                 .SelectMany(soldier =>
                 {
                     double speed = soldier.GetMoveSpeed();
-                    double projectedX = soldier.TopLeft.Item1 + (vector.Item1 * speed / vectorLength);
-                    double projectedY = soldier.TopLeft.Item2 + (vector.Item2 * speed / vectorLength);
+                    double projectedX = soldier.TopLeft.Value.Item1 + (vector.Item1 * speed / vectorLength);
+                    double projectedY = soldier.TopLeft.Value.Item2 + (vector.Item2 * speed / vectorLength);
                     return enemies.Select(enemy =>
                     {
-                        double dx = projectedX - enemy.TopLeft.Item1;
-                        double dy = projectedY - enemy.TopLeft.Item2;
+                        double dx = projectedX - enemy.TopLeft.Value.Item1;
+                        double dy = projectedY - enemy.TopLeft.Value.Item2;
                         return Math.Sqrt((dx * dx) + (dy * dy));
                     });
                 })
@@ -299,7 +299,7 @@ namespace OnlyWar.Helpers.Battles
                 .Min();
         }
 
-        private static double Distance(Tuple<int, int> first, Tuple<int, int> second)
+        private static double Distance(ValueTuple<int, int> first, ValueTuple<int, int> second)
         {
             int dx = first.Item1 - second.Item1;
             int dy = first.Item2 - second.Item2;

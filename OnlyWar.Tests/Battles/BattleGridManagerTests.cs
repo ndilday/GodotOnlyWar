@@ -39,7 +39,7 @@ public class BattleGridManagerTests
         return new BattleSquad(isPlayerSquad, TestModelFactory.CreateSquad(name, soldiers));
     }
 
-    private static List<Tuple<int, int>> Cell(int x, int y) => [new Tuple<int, int>(x, y)];
+    private static List<ValueTuple<int, int>> Cell(int x, int y) => [new ValueTuple<int, int>(x, y)];
 
     [Fact]
     public void PlaceSoldier_RecordsPositionAndOccupiesCell()
@@ -49,8 +49,8 @@ public class BattleGridManagerTests
 
         grid.PlaceSoldier(soldier, true, Cell(2, 3));
 
-        Assert.Equal(new Tuple<int, int>(2, 3), grid.GetSoldierPosition(1)[0]);
-        Assert.False(grid.IsSpaceAvailable(new Tuple<int, int>(2, 3)));
+        Assert.Equal(new ValueTuple<int, int>(2, 3), grid.GetSoldierPosition(1)[0]);
+        Assert.False(grid.IsSpaceAvailable(new ValueTuple<int, int>(2, 3)));
     }
 
     [Fact]
@@ -78,7 +78,7 @@ public class BattleGridManagerTests
     public void PlaceSoldier_ThrowsWhenCellReserved()
     {
         BattleGridManager grid = new();
-        grid.ReserveSpace(new Tuple<int, int>(7, 7));
+        grid.ReserveSpace(new ValueTuple<int, int>(7, 7));
 
         Assert.Throws<InvalidOperationException>(
             () => grid.PlaceSoldier(CreateBattleSoldier(1), true, Cell(7, 7)));
@@ -91,10 +91,10 @@ public class BattleGridManagerTests
         BattleSoldier soldier = CreateBattleSoldier(1);
         grid.PlaceSoldier(soldier, true, Cell(0, 0));
 
-        grid.MoveSoldier(soldier, new Tuple<int, int>(3, 3), 0);
+        grid.MoveSoldier(soldier, new ValueTuple<int, int>(3, 3), 0);
 
-        Assert.True(grid.IsSpaceAvailable(new Tuple<int, int>(0, 0)));
-        Assert.Equal(new Tuple<int, int>(3, 3), grid.GetSoldierPosition(1)[0]);
+        Assert.True(grid.IsSpaceAvailable(new ValueTuple<int, int>(0, 0)));
+        Assert.Equal(new ValueTuple<int, int>(3, 3), grid.GetSoldierPosition(1)[0]);
     }
 
     [Fact]
@@ -106,7 +106,7 @@ public class BattleGridManagerTests
         grid.PlaceSoldier(CreateBattleSoldier(2), false, Cell(1, 0));
 
         Assert.Throws<InvalidOperationException>(
-            () => grid.MoveSoldier(mover, new Tuple<int, int>(1, 0), 0));
+            () => grid.MoveSoldier(mover, new ValueTuple<int, int>(1, 0), 0));
     }
 
     [Fact]
@@ -117,10 +117,10 @@ public class BattleGridManagerTests
         grid.PlaceSoldier(mover, true, Cell(0, 0));
         grid.PlaceSoldier(CreateBattleSoldier(2), false, Cell(1, 0));
 
-        bool moved = grid.TryMoveSoldier(mover, new Tuple<int, int>(1, 0), 0);
+        bool moved = grid.TryMoveSoldier(mover, new ValueTuple<int, int>(1, 0), 0);
 
         Assert.False(moved);
-        Assert.Equal(new Tuple<int, int>(0, 0), grid.GetSoldierPosition(1)[0]);
+        Assert.Equal(new ValueTuple<int, int>(0, 0), grid.GetSoldierPosition(1)[0]);
     }
 
     [Fact]
@@ -137,14 +137,14 @@ public class BattleGridManagerTests
         BattleSquadPlacer.PlaceBattleSquad(
             grid,
             squad,
-            new Tuple<int, int>(0, 0),
+            new ValueTuple<int, int>(0, 0),
             longHorizontal: false,
             tacticalSide: false,
             formationSide: false);
 
-        Assert.Equal(new[] { new Tuple<int, int>(1, 0), new Tuple<int, int>(2, 0) },
+        Assert.Equal(new[] { new ValueTuple<int, int>(1, 0), new ValueTuple<int, int>(2, 0) },
             grid.GetSoldierPosition(1));
-        Assert.Equal(new[] { new Tuple<int, int>(1, 1), new Tuple<int, int>(2, 1) },
+        Assert.Equal(new[] { new ValueTuple<int, int>(1, 1), new ValueTuple<int, int>(2, 1) },
             grid.GetSoldierPosition(2));
     }
 
@@ -156,7 +156,7 @@ public class BattleGridManagerTests
 
         grid.RemoveSoldier(1);
 
-        Assert.True(grid.IsSpaceAvailable(new Tuple<int, int>(2, 2)));
+        Assert.True(grid.IsSpaceAvailable(new ValueTuple<int, int>(2, 2)));
     }
 
     [Fact]
@@ -200,7 +200,7 @@ public class BattleGridManagerTests
         Assert.Equal(2f, grid.GetNearestEnemy(1, out int firstClosest), precision: 4);
         Assert.Equal(2, firstClosest);
 
-        grid.MoveSoldier(initiallyNear, new Tuple<int, int>(10, 0), 0);
+        grid.MoveSoldier(initiallyNear, new ValueTuple<int, int>(10, 0), 0);
 
         Assert.Equal(5f, grid.GetNearestEnemy(1, out int secondClosest), precision: 4);
         Assert.Equal(3, secondClosest);
@@ -229,7 +229,7 @@ public class BattleGridManagerTests
 
         Assert.True(grid.IsAdjacentToEnemy(1));
 
-        grid.MoveSoldier(enemy, new Tuple<int, int>(4, 0), 0);
+        grid.MoveSoldier(enemy, new ValueTuple<int, int>(4, 0), 0);
 
         Assert.False(grid.IsAdjacentToEnemy(1));
     }
@@ -272,7 +272,7 @@ public class BattleGridManagerTests
 
         Assert.Equal(new[] { 1, 2 }, grid.GetMeleeScrumParticipants(1));
 
-        grid.MoveSoldier(second, new Tuple<int, int>(5, 0), 0);
+        grid.MoveSoldier(second, new ValueTuple<int, int>(5, 0), 0);
 
         Assert.Equal(new[] { 1 }, grid.GetMeleeScrumParticipants(1));
         Assert.Equal(new[] { 2 }, grid.GetMeleeScrumParticipants(2));
@@ -317,7 +317,7 @@ public class BattleGridManagerTests
         BattleGridManager grid = new();
         BattleSquad squad = CreateBattleSquadWithSoldiers("Nine", 300, 9, true);
 
-        BattleSquadPlacer.PlaceBattleSquad(grid, squad, new Tuple<int, int>(0, 0),
+        BattleSquadPlacer.PlaceBattleSquad(grid, squad, new ValueTuple<int, int>(0, 0),
             longHorizontal: true, tacticalSide: true, formationSide: false);
 
         int frontY = squad.Soldiers.Max(soldier => grid.GetSoldierPosition(soldier.Soldier.Id)[0].Item2);
@@ -341,25 +341,25 @@ public class BattleGridManagerTests
     public void GetClosestOpenAdjacency_PicksUnoccupiedNeighborNearestStart()
     {
         BattleGridManager grid = new();
-        Tuple<int, int> target = new(5, 5);
-        Tuple<int, int> start = new(5, 0); // below the target
+        ValueTuple<int, int> target = new(5, 5);
+        ValueTuple<int, int> start = new(5, 0); // below the target
 
-        Tuple<int, int> adjacency = grid.GetClosestOpenAdjacency(start, target);
+        ValueTuple<int, int> adjacency = grid.GetClosestOpenAdjacency(start, target);
 
         // the neighbor at (5,4) is closest to a start below the target
-        Assert.Equal(new Tuple<int, int>(5, 4), adjacency);
+        Assert.Equal(new ValueTuple<int, int>(5, 4), adjacency);
     }
 
     [Fact]
     public void GetClosestOpenAdjacency_SkipsReservedNeighbors()
     {
         BattleGridManager grid = new();
-        Tuple<int, int> target = new(5, 5);
-        grid.ReserveSpace(new Tuple<int, int>(5, 4)); // would-be closest
+        ValueTuple<int, int> target = new(5, 5);
+        grid.ReserveSpace(new ValueTuple<int, int>(5, 4)); // would-be closest
 
-        Tuple<int, int> adjacency = grid.GetClosestOpenAdjacency(new Tuple<int, int>(5, 0), target);
+        ValueTuple<int, int> adjacency = grid.GetClosestOpenAdjacency(new ValueTuple<int, int>(5, 0), target);
 
-        Assert.NotEqual(new Tuple<int, int>(5, 4), adjacency);
+        Assert.NotEqual(new ValueTuple<int, int>(5, 4), adjacency);
         Assert.NotNull(adjacency);
     }
 
@@ -368,12 +368,12 @@ public class BattleGridManagerTests
     {
         BattleGridManager grid = new();
         grid.PlaceSoldier(CreateBattleSoldier(1), true, Cell(1, 1));
-        grid.ReserveSpace(new Tuple<int, int>(9, 9));
+        grid.ReserveSpace(new ValueTuple<int, int>(9, 9));
 
         BattleGridManager clone = (BattleGridManager)grid.Clone();
 
-        Assert.Equal(new Tuple<int, int>(1, 1), clone.GetSoldierPosition(1)[0]);
-        Assert.False(clone.IsSpaceAvailable(new Tuple<int, int>(9, 9)));
+        Assert.Equal(new ValueTuple<int, int>(1, 1), clone.GetSoldierPosition(1)[0]);
+        Assert.False(clone.IsSpaceAvailable(new ValueTuple<int, int>(9, 9)));
     }
 
     [Theory]
@@ -393,13 +393,13 @@ public class BattleGridManagerTests
         Soldier model = TestModelFactory.CreateSoldier(template: CreateNonSquareTemplate());
         BattleSoldier soldier = new(model, squad: null)
         {
-            TopLeft = new Tuple<int, int>(10, 10),
+            TopLeft = new ValueTuple<int, int>(10, 10),
             Orientation = orientation
         };
 
         Assert.Equal(expectedWidth * expectedDepth, soldier.PositionList.Count);
-        Assert.Equal(10 + expectedWidth, soldier.BottomRight.Item1);
-        Assert.Equal(10 - expectedDepth, soldier.BottomRight.Item2);
+        Assert.Equal(10 + expectedWidth, soldier.BottomRight.Value.Item1);
+        Assert.Equal(10 - expectedDepth, soldier.BottomRight.Value.Item2);
     }
 
     private static SoldierTemplate CreateNonSquareTemplate()
@@ -440,6 +440,6 @@ public class BattleGridManagerTests
             1,
             false,
             0,
-            Array.Empty<Tuple<BaseSkill, float>>());
+            Array.Empty<ValueTuple<BaseSkill, float>>());
     }
 }

@@ -25,7 +25,7 @@ namespace OnlyWar.Helpers.Battles
                 return [];
             }
 
-            (Tuple<int, int> origin, Tuple<int, int> aimPoint) = FindNearestCellPair(
+            (ValueTuple<int, int> origin, ValueTuple<int, int> aimPoint) = FindNearestCellPair(
                 grid.GetSoldierPosition(shooterId),
                 grid.GetSoldierPosition(targetId));
 
@@ -54,8 +54,8 @@ namespace OnlyWar.Helpers.Battles
         }
 
         private static bool IsCellInside(
-            Tuple<int, int> cell,
-            Tuple<int, int> origin,
+            ValueTuple<int, int> cell,
+            ValueTuple<int, int> origin,
             double directionX,
             double directionY,
             double maximumRange,
@@ -75,17 +75,17 @@ namespace OnlyWar.Helpers.Battles
             return lateralDistance <= allowedHalfWidth;
         }
 
-        private static (Tuple<int, int> First, Tuple<int, int> Second) FindNearestCellPair(
-            IEnumerable<Tuple<int, int>> firstCells,
-            IEnumerable<Tuple<int, int>> secondCells)
+        private static (ValueTuple<int, int> First, ValueTuple<int, int> Second) FindNearestCellPair(
+            IEnumerable<ValueTuple<int, int>> firstCells,
+            IEnumerable<ValueTuple<int, int>> secondCells)
         {
-            Tuple<int, int> bestFirst = null;
-            Tuple<int, int> bestSecond = null;
+            ValueTuple<int, int>? bestFirst = null;
+            ValueTuple<int, int>? bestSecond = null;
             long bestDistanceSquared = long.MaxValue;
 
-            foreach (Tuple<int, int> first in firstCells.OrderBy(cell => cell.Item1).ThenBy(cell => cell.Item2))
+            foreach (ValueTuple<int, int> first in firstCells.OrderBy(cell => cell.Item1).ThenBy(cell => cell.Item2))
             {
-                foreach (Tuple<int, int> second in secondCells.OrderBy(cell => cell.Item1).ThenBy(cell => cell.Item2))
+                foreach (ValueTuple<int, int> second in secondCells.OrderBy(cell => cell.Item1).ThenBy(cell => cell.Item2))
                 {
                     long deltaX = second.Item1 - first.Item1;
                     long deltaY = second.Item2 - first.Item2;
@@ -104,7 +104,7 @@ namespace OnlyWar.Helpers.Battles
                 throw new ArgumentException("Shooter and target must each occupy at least one grid cell.");
             }
 
-            return (bestFirst, bestSecond);
+            return (bestFirst.Value, bestSecond.Value);
         }
     }
 }

@@ -7,8 +7,8 @@ namespace OnlyWar.Helpers.Battles
 {
     public class BattleSquadLayout
     {
-        public Dictionary<int, Tuple<int, int>> BattleSoldierPositionMap { get; set; }
-        public Tuple<int, int> SquadDimension { get; set; }
+        public Dictionary<int, ValueTuple<int, int>> BattleSoldierPositionMap { get; set; }
+        public ValueTuple<int, int> SquadDimension { get; set; }
     }
 
     public class BattleSquadLayoutHelper
@@ -43,7 +43,7 @@ namespace OnlyWar.Helpers.Battles
             int soldiersPerRow = ableSoldiers.Count / rows;
             foreach (BattleSoldier soldier in ableSoldiers.OrderBy(s => random.GetLinearDouble()))
             {
-                Tuple<int, int> position = new(x, y);
+                ValueTuple<int, int> position = new(x, y);
                 layout.BattleSoldierPositionMap[soldier.Soldier.Id] = position;
 
                 if(x > maxX)
@@ -75,7 +75,7 @@ namespace OnlyWar.Helpers.Battles
                 }
             }
 
-            layout.SquadDimension = new Tuple<int, int>(maxX, maxY);
+            layout.SquadDimension = new ValueTuple<int, int>(maxX, maxY);
             return layout;
         }
     }

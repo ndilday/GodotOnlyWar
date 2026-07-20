@@ -16,7 +16,7 @@ public class BattleStateSnapshotTests
             "Snapshot Squad",
             TestModelFactory.CreateSoldier(name: "Snapshot Soldier")));
         BattleSoldier sourceSoldier = squad.Soldiers[0];
-        sourceSoldier.TopLeft = new System.Tuple<int, int>(3, 7);
+        sourceSoldier.TopLeft = (3, 7);
         sourceSoldier.LeftoverMovement = 1.25f;
         sourceSoldier.TurnsRunning = 2;
         squad.MovementTier = SquadMovementTier.Walk;
@@ -28,7 +28,7 @@ public class BattleStateSnapshotTests
         BattleTurn turn = new(liveState, []);
         BattleSoldierSnapshot snapshot = turn.State.Soldiers[liveSoldier.Soldier.Id];
 
-        liveSoldier.TopLeft = new System.Tuple<int, int>(20, 20);
+        liveSoldier.TopLeft = (20, 20);
         liveSoldier.LeftoverMovement = 4.5f;
         liveSoldier.TurnsRunning = 9;
         liveState.GetSquad(squad.Id).MovementTier = SquadMovementTier.Run;
@@ -51,7 +51,7 @@ public class BattleStateSnapshotTests
             "Withdrawing Squad",
             TestModelFactory.CreateSoldier(name: "Survivor")));
         BattleSoldier soldier = squad.Soldiers[0];
-        soldier.TopLeft = new System.Tuple<int, int>(5, 6);
+        soldier.TopLeft = (5, 6);
         BattleState state = new(
             new Dictionary<int, BattleSquad> { [squad.Id] = squad },
             new Dictionary<int, BattleSquad>());
@@ -107,7 +107,7 @@ public class BattleStateSnapshotTests
             "Casualty Squad",
             TestModelFactory.CreateSoldier(name: "Casualty")));
         BattleSoldier liveSoldier = squad.Soldiers[0];
-        liveSoldier.TopLeft = new System.Tuple<int, int>(0, 0);
+        liveSoldier.TopLeft = (0, 0);
         BattleState liveState = new(
             new Dictionary<int, BattleSquad> { [squad.Id] = squad },
             new Dictionary<int, BattleSquad>());

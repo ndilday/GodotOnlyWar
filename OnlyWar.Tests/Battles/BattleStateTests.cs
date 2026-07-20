@@ -171,7 +171,7 @@ public class BattleStateTests
     {
         foreach (BattleSoldier soldier in squad.Soldiers)
         {
-            soldier.TopLeft = new System.Tuple<int, int>(x, 0);
+            soldier.TopLeft = (x, 0);
         }
     }
 }

@@ -18,9 +18,9 @@ namespace OnlyWar.Tests.Domain;
 public class MedicalProcedureServiceTests
 {
     private static readonly SoldierTemplate ApothecaryTemplate =
-        new(10, TestModelFactory.HumanSpecies, "Apothecary", 1, 1, false, 0, Array.Empty<Tuple<BaseSkill, float>>());
+        new(10, TestModelFactory.HumanSpecies, "Apothecary", 1, 1, false, 0, Array.Empty<ValueTuple<BaseSkill, float>>());
     private static readonly SoldierTemplate TechmarineTemplate =
-        new(11, TestModelFactory.HumanSpecies, "Techmarine", 1, 1, false, 0, Array.Empty<Tuple<BaseSkill, float>>());
+        new(11, TestModelFactory.HumanSpecies, "Techmarine", 1, 1, false, 0, Array.Empty<ValueTuple<BaseSkill, float>>());
 
     private static ReplacementOption CyberneticLeftArm(int cost = 40) =>
         new(4, MedicalProcedureType.Cybernetic, "Left Arm", "Cybernetic Left Arm", "desc", 6, cost, true);

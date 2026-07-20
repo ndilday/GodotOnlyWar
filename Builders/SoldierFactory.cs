@@ -39,7 +39,7 @@ namespace OnlyWar.Builders
         {
             Soldier soldier = GenerateNewSoldier(template.Species, null, random, entityIds);
 
-            foreach (Tuple<BaseSkill, float> skillBoost in template.MosTraining)
+            foreach (ValueTuple<BaseSkill, float> skillBoost in template.MosTraining)
             {
                 soldier.AddSkillPoints(skillBoost.Item1, skillBoost.Item2);
             }

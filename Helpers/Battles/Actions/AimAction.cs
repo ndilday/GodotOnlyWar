@@ -30,15 +30,15 @@ namespace OnlyWar.Helpers.Battles.Actions
             if (soldier.Aim?.Item1 != _targetId)
             {
                 // this is a new target
-                soldier.Aim = new Tuple<int, RangedWeapon, int>(_targetId, _weapon, 0);
+                soldier.Aim = new ValueTuple<int, RangedWeapon, int>(_targetId, _weapon, 0);
                 _isNew = true;
             }
             else
             {
                 _isNew = false;
                 // containing aim, increment the bonus
-                int curAim = soldier.Aim.Item3;
-                soldier.Aim = new Tuple<int, RangedWeapon, int>(_targetId, _weapon, curAim + 1);
+                int curAim = soldier.Aim.Value.Item3;
+                soldier.Aim = new ValueTuple<int, RangedWeapon, int>(_targetId, _weapon, curAim + 1);
             }
             soldier.TurnsAiming++;
         }

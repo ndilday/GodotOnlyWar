@@ -69,8 +69,8 @@ public class CommandAuraTests
         for (int i = 0; i < squad.Soldiers.Count; i++)
         {
             BattleSoldier soldier = squad.Soldiers[i];
-            Tuple<int, int> cell = new(x + i, y);
-            grid.PlaceSoldier(soldier, true, new List<Tuple<int, int>> { cell });
+            ValueTuple<int, int> cell = new(x + i, y);
+            grid.PlaceSoldier(soldier, true, new List<ValueTuple<int, int>> { cell });
             soldier.TopLeft = cell;
         }
     }

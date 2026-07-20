@@ -233,8 +233,8 @@ public class BattleMoraleResolverTests
         int x,
         int y)
     {
-        soldier.TopLeft = new Tuple<int, int>(x, y);
-        grid.PlaceSoldier(soldier, side, [soldier.TopLeft]);
+        soldier.TopLeft = new ValueTuple<int, int>(x, y);
+        grid.PlaceSoldier(soldier, side, [soldier.TopLeft.Value]);
     }
 
     private static Faction CreateFaction(int id, string name, SoldierTemplate template)

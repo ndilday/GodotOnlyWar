@@ -19,7 +19,7 @@ public class BlastTemplateTests
         Place(grid, 3, false, (7, 0));
 
         IReadOnlyList<BlastTemplate.BlastVictim> victims =
-            BlastTemplate.GetVictims(grid, new Tuple<int, int>(0, 0), 6);
+            BlastTemplate.GetVictims(grid, new ValueTuple<int, int>(0, 0), 6);
 
         Assert.Equal(new[] { 1, 2 }, victims.Select(victim => victim.SoldierId));
     }
@@ -32,7 +32,7 @@ public class BlastTemplateTests
         Place(grid, 2, false, (7, 1), (8, 1));
 
         IReadOnlyList<BlastTemplate.BlastVictim> victims =
-            BlastTemplate.GetVictims(grid, new Tuple<int, int>(0, 0), 6);
+            BlastTemplate.GetVictims(grid, new ValueTuple<int, int>(0, 0), 6);
 
         Assert.Equal(new[] { 1 }, victims.Select(victim => victim.SoldierId));
     }
@@ -45,7 +45,7 @@ public class BlastTemplateTests
         Place(grid, 2, false, (4, 0));
 
         IReadOnlyList<BlastTemplate.BlastVictim> victims =
-            BlastTemplate.GetVictims(grid, new Tuple<int, int>(4, 0), 6);
+            BlastTemplate.GetVictims(grid, new ValueTuple<int, int>(4, 0), 6);
 
         Assert.Equal(new[] { 1, 2 }, victims.Select(victim => victim.SoldierId));
     }
@@ -59,7 +59,7 @@ public class BlastTemplateTests
         Place(grid, 13, true, (0, 1));
 
         IReadOnlyList<BlastTemplate.BlastVictim> victims =
-            BlastTemplate.GetVictims(grid, new Tuple<int, int>(0, 0), 6);
+            BlastTemplate.GetVictims(grid, new ValueTuple<int, int>(0, 0), 6);
 
         Assert.Equal(new[] { 7, 13, 20 }, victims.Select(victim => victim.SoldierId));
     }
@@ -72,7 +72,7 @@ public class BlastTemplateTests
         Place(grid, 2, false, (0, 0));
 
         IReadOnlyList<BlastTemplate.BlastVictim> victims =
-            BlastTemplate.GetVictims(grid, new Tuple<int, int>(0, 0), 6);
+            BlastTemplate.GetVictims(grid, new ValueTuple<int, int>(0, 0), 6);
 
         Assert.Equal(0f, victims.Single(victim => victim.SoldierId == 2).DistanceFromImpact);
         Assert.Equal(3f, victims.Single(victim => victim.SoldierId == 1).DistanceFromImpact);
@@ -85,9 +85,9 @@ public class BlastTemplateTests
         Place(grid, 1, true, (0, 0));
         Place(grid, 2, false, (10, 0), (11, 0));
 
-        Tuple<int, int> impact = BlastTemplate.ResolveImpactCell(grid, 1, 2, 0f, 0.75);
+        ValueTuple<int, int> impact = BlastTemplate.ResolveImpactCell(grid, 1, 2, 0f, 0.75);
 
-        Assert.Equal(new Tuple<int, int>(10, 0), impact);
+        Assert.Equal(new ValueTuple<int, int>(10, 0), impact);
     }
 
     [Fact]
@@ -97,9 +97,9 @@ public class BlastTemplateTests
         Place(grid, 1, true, (0, 0));
         Place(grid, 2, false, (10, 0));
 
-        Tuple<int, int> impact = BlastTemplate.ResolveImpactCell(grid, 1, 2, -4f, 0.0);
+        ValueTuple<int, int> impact = BlastTemplate.ResolveImpactCell(grid, 1, 2, -4f, 0.0);
 
-        Assert.Equal(new Tuple<int, int>(14, 0), impact);
+        Assert.Equal(new ValueTuple<int, int>(14, 0), impact);
     }
 
     [Theory]
@@ -115,9 +115,9 @@ public class BlastTemplateTests
         Place(grid, 1, true, (0, 0));
         Place(grid, 2, false, (10, 0));
 
-        Tuple<int, int> impact = BlastTemplate.ResolveImpactCell(grid, 1, 2, -4f, directionRoll);
+        ValueTuple<int, int> impact = BlastTemplate.ResolveImpactCell(grid, 1, 2, -4f, directionRoll);
 
-        Assert.Equal(new Tuple<int, int>(expectedX, expectedY), impact);
+        Assert.Equal(new ValueTuple<int, int>(expectedX, expectedY), impact);
     }
 
     private static void Place(
@@ -129,10 +129,10 @@ public class BlastTemplateTests
         Soldier soldier = TestModelFactory.CreateSoldier(name: $"Soldier {id}");
         soldier.Id = id;
         BattleSoldier battleSoldier = new(soldier, null);
-        List<Tuple<int, int>> footprint = [];
+        List<ValueTuple<int, int>> footprint = [];
         foreach ((int x, int y) in cells)
         {
-            footprint.Add(new Tuple<int, int>(x, y));
+            footprint.Add(new ValueTuple<int, int>(x, y));
         }
 
         grid.PlaceSoldier(battleSoldier, side, footprint);

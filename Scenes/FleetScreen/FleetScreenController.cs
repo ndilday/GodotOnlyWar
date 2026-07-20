@@ -118,7 +118,7 @@ public partial class FleetScreenController : DialogController
         return CanTransferSquadToShip(FindSquad(squadId), FindShip(shipId));
     }
 
-    private void OnSquadDroppedOnShip(object sender, Tuple<int, int> args)
+    private void OnSquadDroppedOnShip(object sender, ValueTuple<int, int> args)
     {
         Squad squad = FindSquad(args.Item1);
         Ship destination = FindShip(args.Item2);

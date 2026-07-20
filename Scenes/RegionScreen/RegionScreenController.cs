@@ -346,7 +346,7 @@ public partial class RegionScreenController : DialogController
         // Region first, then the single Local Force card, then any number of hostile faction
         // cards last - so the fixed cards stay anchored at the top regardless of how many
         // enemies contest the region.
-        List<Tuple<string, string>> regionRows =
+        List<ValueTuple<string, string>> regionRows =
         [
             Row("Control", GetRegionControlLabel(target)),
             Row("Intel rating", $"{visibleIntel:0.##}"),
@@ -355,7 +355,7 @@ public partial class RegionScreenController : DialogController
         cards.Add(new DossierCardData("Region", target.Name, regionRows, OnlyWarStyle.Gold));
 
         long garrison = target.PlanetaryDefenseForces;
-        List<Tuple<string, string>> localRows = [Row("Strength", garrison > 0 ? garrison.ToString("N0") : "None")];
+        List<ValueTuple<string, string>> localRows = [Row("Strength", garrison > 0 ? garrison.ToString("N0") : "None")];
         RegionFaction alliedFaction = target.RegionFactionMap.Values
             .FirstOrDefault(rf => rf.PlanetFaction.Faction.IsDefaultFaction);
         if (alliedFaction != null)
@@ -370,7 +370,7 @@ public partial class RegionScreenController : DialogController
 
         foreach (RegionFaction enemyFaction in enemyFactions)
         {
-            List<Tuple<string, string>> rows = [Row("Force magnitude", enemyFaction.GetForceMagnitudeDescription())];
+            List<ValueTuple<string, string>> rows = [Row("Force magnitude", enemyFaction.GetForceMagnitudeDescription())];
             if (visibleIntel > 1)
             {
                 rows.Add(Row("Entrenchment", RegionFactionExtensions.GetDefenseLevelDescription(enemyFaction.Entrenchment)));
@@ -531,9 +531,9 @@ public partial class RegionScreenController : DialogController
         return region.ControllingFaction?.PlanetFaction.Faction.Name ?? "Contested";
     }
 
-    private static Tuple<string, string> Row(string label, string value)
+    private static ValueTuple<string, string> Row(string label, string value)
     {
-        return new Tuple<string, string>(label, value);
+        return new ValueTuple<string, string>(label, value);
     }
 
     private static string SquadKey(int squadId) => $"squad:{squadId}";

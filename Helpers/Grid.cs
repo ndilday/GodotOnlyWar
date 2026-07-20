@@ -6,8 +6,8 @@ namespace OnlyWar.Helpers
     public class Grid
     {
         private readonly Dictionary<(int X, int Y), int> _cellObjectMap;
-        private readonly Dictionary<int, IList<Tuple<int, int>>> _objectCellsMap;
-        private readonly HashSet<Tuple<int, int>> _reservedCells;
+        private readonly Dictionary<int, IList<ValueTuple<int, int>>> _objectCellsMap;
+        private readonly HashSet<ValueTuple<int, int>> _reservedCells;
 
         public Grid()
         {
@@ -16,24 +16,24 @@ namespace OnlyWar.Helpers
             _reservedCells = [];
         }
 
-        public void OccupyCells(IList<Tuple<int, int>> cells, int objectId)
+        public void OccupyCells(IList<ValueTuple<int, int>> cells, int objectId)
         {
             // confirm all desired cells are free
-            foreach (Tuple<int, int> cell in cells)
+            foreach (ValueTuple<int, int> cell in cells)
             {
                 if (_cellObjectMap.ContainsKey((cell.Item1, cell.Item2)))
                 {
                     throw new InvalidOperationException($"Cell {cell} is already occupied.");
                 }
             }
-            foreach (Tuple<int, int> cell in cells)
+            foreach (ValueTuple<int, int> cell in cells)
             {
                 _cellObjectMap[(cell.Item1, cell.Item2)] = objectId;
             }
             _objectCellsMap[objectId] = cells;
         }
 
-        public void OccupyCell(Tuple<int, int> cell, int objectId)
+        public void OccupyCell(ValueTuple<int, int> cell, int objectId)
         {
             if (_cellObjectMap.ContainsKey((cell.Item1, cell.Item2)))
             {
@@ -43,15 +43,15 @@ namespace OnlyWar.Helpers
             _objectCellsMap[objectId] = [cell];
         }
 
-        public void FreeCells(IEnumerable<Tuple<int, int>> cells)
+        public void FreeCells(IEnumerable<ValueTuple<int, int>> cells)
         {
-            foreach (Tuple<int, int> cell in cells)
+            foreach (ValueTuple<int, int> cell in cells)
             {
                 _cellObjectMap.Remove((cell.Item1, cell.Item2));
             }
         }
 
-        public int? GetCellObject(Tuple<int, int> cell)
+        public int? GetCellObject(ValueTuple<int, int> cell)
         {
             return GetCellObject(cell.Item1, cell.Item2);
         }
@@ -63,7 +63,7 @@ namespace OnlyWar.Helpers
                 : null;
         }
 
-        public IList<Tuple<int, int>> GetObjectCells(int objectId)
+        public IList<ValueTuple<int, int>> GetObjectCells(int objectId)
         {
             if (!_objectCellsMap.ContainsKey(objectId))
             {
@@ -79,13 +79,13 @@ namespace OnlyWar.Helpers
         /// </summary>
         public IReadOnlyCollection<int> GetAdjacentObjects(int objectId)
         {
-            if (!_objectCellsMap.TryGetValue(objectId, out IList<Tuple<int, int>> cells))
+            if (!_objectCellsMap.TryGetValue(objectId, out IList<ValueTuple<int, int>> cells))
             {
                 return Array.Empty<int>();
             }
 
             HashSet<int> adjacentObjects = [];
-            foreach (Tuple<int, int> cell in cells)
+            foreach (ValueTuple<int, int> cell in cells)
             {
                 AddOccupier(cell.Item1 - 1, cell.Item2);
                 AddOccupier(cell.Item1 + 1, cell.Item2);
@@ -105,17 +105,17 @@ namespace OnlyWar.Helpers
             }
         }
 
-        public bool IsCellReserved(Tuple<int, int> cell)
+        public bool IsCellReserved(ValueTuple<int, int> cell)
         {
             return _reservedCells.Contains(cell);
         }
 
-        public void ReserveCell(Tuple<int, int> cell)
+        public void ReserveCell(ValueTuple<int, int> cell)
         {
             _reservedCells.Add(cell);
         }
 
-        public void UnreserveCell(Tuple<int, int> cell)
+        public void UnreserveCell(ValueTuple<int, int> cell)
         {
             _reservedCells.Remove(cell);
         }
@@ -125,7 +125,7 @@ namespace OnlyWar.Helpers
             _reservedCells.Clear();
         }
 
-        public HashSet<Tuple<int, int>> GetReservedCells()
+        public HashSet<ValueTuple<int, int>> GetReservedCells()
         {
             return _reservedCells;
         }

@@ -6,9 +6,9 @@ namespace OnlyWar.Models.Planets
     {
         public readonly int Id;
         public readonly int Quality;
-        public readonly Tuple<Planet, Planet> Path;
+        public readonly ValueTuple<Planet, Planet> Path;
 
-        public WarpLane(int id, int quality, Tuple<Planet, Planet> path)
+        public WarpLane(int id, int quality, ValueTuple<Planet, Planet> path)
         {
             Id = id;
             Quality = quality;

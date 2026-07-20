@@ -101,10 +101,10 @@ public class ConeTemplateTests
         Soldier soldier = TestModelFactory.CreateSoldier(name: $"Soldier {id}");
         soldier.Id = id;
         BattleSoldier battleSoldier = new(soldier, null);
-        List<Tuple<int, int>> footprint = [];
+        List<ValueTuple<int, int>> footprint = [];
         foreach ((int x, int y) in cells)
         {
-            footprint.Add(new Tuple<int, int>(x, y));
+            footprint.Add(new ValueTuple<int, int>(x, y));
         }
 
         grid.PlaceSoldier(battleSoldier, side, footprint);

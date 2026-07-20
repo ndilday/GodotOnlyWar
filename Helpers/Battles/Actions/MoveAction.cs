@@ -7,13 +7,13 @@ namespace OnlyWar.Helpers.Battles.Actions
     {
         private readonly BattleSoldier _soldier;
         private readonly BattleGridManager _grid;
-        private readonly Tuple<int, int> _newTopLeft, _currentTopLeft;
+        private readonly ValueTuple<int, int> _newTopLeft, _currentTopLeft;
         private readonly ushort _newOrientation;
         private readonly float _movementBudget;
 
         public int ActorId => _soldier.Soldier.Id;
 
-        public MoveAction(BattleSoldier soldier, BattleGridManager grid, Tuple<int, int> currentTopLeft, Tuple<int, int> newTopLeft, ushort orientation)
+        public MoveAction(BattleSoldier soldier, BattleGridManager grid, ValueTuple<int, int> currentTopLeft, ValueTuple<int, int> newTopLeft, ushort orientation)
             : this(
                 soldier,
                 grid,
@@ -27,8 +27,8 @@ namespace OnlyWar.Helpers.Battles.Actions
         public MoveAction(
             BattleSoldier soldier,
             BattleGridManager grid,
-            Tuple<int, int> currentTopLeft,
-            Tuple<int, int> newTopLeft,
+            ValueTuple<int, int> currentTopLeft,
+            ValueTuple<int, int> newTopLeft,
             ushort orientation,
             float movementBudget)
         {
@@ -60,7 +60,7 @@ namespace OnlyWar.Helpers.Battles.Actions
             }
         }
 
-        private static float CalculateDistance(Tuple<int, int> from, Tuple<int, int> to)
+        private static float CalculateDistance(ValueTuple<int, int> from, ValueTuple<int, int> to)
         {
             int x = to.Item1 - from.Item1;
             int y = to.Item2 - from.Item2;

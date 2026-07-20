@@ -73,10 +73,10 @@ public class FleetRouteCalculatorTests
         FleetRouteCalculator calculator = new();
         WarpLane[] lanes =
         [
-            new(1, 1, new Tuple<Planet, Planet>(origin, middle)),
-            new(2, 1, new Tuple<Planet, Planet>(middle, destination)),
-            new(3, 1, new Tuple<Planet, Planet>(origin, distant)),
-            new(4, 1, new Tuple<Planet, Planet>(distant, destination))
+            new(1, 1, new ValueTuple<Planet, Planet>(origin, middle)),
+            new(2, 1, new ValueTuple<Planet, Planet>(middle, destination)),
+            new(3, 1, new ValueTuple<Planet, Planet>(origin, distant)),
+            new(4, 1, new ValueTuple<Planet, Planet>(distant, destination))
         ];
 
         FleetRoute route = calculator.CreateLaneRoute(
@@ -99,7 +99,7 @@ public class FleetRouteCalculatorTests
         Planet origin = CreatePlanet(1, 0, 0);
         Planet destination = CreatePlanet(2, 16, 0);
         FleetRouteCalculator calculator = new();
-        WarpLane lane = new(1, 1, new Tuple<Planet, Planet>(origin, destination));
+        WarpLane lane = new(1, 1, new ValueTuple<Planet, Planet>(origin, destination));
 
         FleetRoute route = calculator.CalculateBestRoute(
             origin,

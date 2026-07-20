@@ -195,13 +195,13 @@ namespace OnlyWar.Models.Battles
             TurnsShooting = soldier.TurnsShooting;
         }
 
-        public IEnumerable<Tuple<int, int>> GetPositions()
+        public IEnumerable<ValueTuple<int, int>> GetPositions()
         {
             for (int x = MinX; x <= MaxX; x++)
             {
                 for (int y = MinY; y <= MaxY; y++)
                 {
-                    yield return new Tuple<int, int>(x, y);
+                    yield return new ValueTuple<int, int>(x, y);
                 }
             }
         }

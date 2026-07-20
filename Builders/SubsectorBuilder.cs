@@ -46,7 +46,7 @@ namespace OnlyWar.Builders
         private static void CombineSubsectors(Dictionary<ushort, List<Planet>> subsectorPlanetMap, ushort subsectorMaxDiameter)
         {
             int maxDistanceSquared = subsectorMaxDiameter * subsectorMaxDiameter;
-            Dictionary<Tuple<ushort, ushort>, int> subsectorPairDistanceSquaredMap = [];
+            Dictionary<ValueTuple<ushort, ushort>, int> subsectorPairDistanceSquaredMap = [];
             Dictionary<ushort, List<ushort>> subsectorPairMap = [];
             Dictionary<ushort, int> subsectorInternalDistanceSquaredMap = [];
 
@@ -65,7 +65,7 @@ namespace OnlyWar.Builders
                     // only keep results that could potentially merge
                     if (longestSquaredDistance < maxDistanceSquared)
                     {
-                        Tuple<ushort, ushort> sectorPairId = new Tuple<ushort, ushort>(kvp.Key, kvp2.Key);
+                        ValueTuple<ushort, ushort> sectorPairId = new ValueTuple<ushort, ushort>(kvp.Key, kvp2.Key);
                         // store the distance squared between these two subsectors
                         subsectorPairDistanceSquaredMap[sectorPairId] = longestSquaredDistance;
                         // associate each subsector with the other as a potential match
@@ -103,11 +103,11 @@ namespace OnlyWar.Builders
                     // the smaller subsector id is always the first item
                     if (otherSubsector < shortestDistance.Key.Item2)
                     {
-                        subsectorPairDistanceSquaredMap.Remove(new Tuple<ushort, ushort>(otherSubsector, shortestDistance.Key.Item2));
+                        subsectorPairDistanceSquaredMap.Remove(new ValueTuple<ushort, ushort>(otherSubsector, shortestDistance.Key.Item2));
                     }
                     else
                     {
-                        subsectorPairDistanceSquaredMap.Remove(new Tuple<ushort, ushort>(shortestDistance.Key.Item2, otherSubsector));
+                        subsectorPairDistanceSquaredMap.Remove(new ValueTuple<ushort, ushort>(shortestDistance.Key.Item2, otherSubsector));
                     }
                     subsectorPairMap[otherSubsector].Remove(shortestDistance.Key.Item2);
                 }
@@ -116,14 +116,14 @@ namespace OnlyWar.Builders
                 // recalculate squared distances for the new combined subsector
                 foreach (ushort otherSubsector in subsectorPairMap[shortestDistance.Key.Item1].ToList())
                 {
-                    Tuple<ushort, ushort> pair;
+                    ValueTuple<ushort, ushort> pair;
                     if (otherSubsector < shortestDistance.Key.Item1)
                     {
-                        pair = new Tuple<ushort, ushort>(otherSubsector, shortestDistance.Key.Item1);
+                        pair = new ValueTuple<ushort, ushort>(otherSubsector, shortestDistance.Key.Item1);
                     }
                     else if (otherSubsector > shortestDistance.Key.Item1)
                     {
-                        pair = new Tuple<ushort, ushort>(shortestDistance.Key.Item1, otherSubsector);
+                        pair = new ValueTuple<ushort, ushort>(shortestDistance.Key.Item1, otherSubsector);
                     }
                     else
                     {

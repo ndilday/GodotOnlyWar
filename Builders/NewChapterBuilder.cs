@@ -952,7 +952,7 @@ namespace OnlyWar.Builders
 
         private static void ApplySoldierTypeTraining(PlayerSoldier soldier)
         {
-            foreach(Tuple<BaseSkill, float> tuple in soldier.Template.MosTraining)
+            foreach(ValueTuple<BaseSkill, float> tuple in soldier.Template.MosTraining)
             {
                 soldier.AddSkillPoints(tuple.Item1, tuple.Item2);
             }

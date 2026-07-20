@@ -25,7 +25,7 @@ namespace OnlyWar.Helpers.Battles
         /// direction <paramref name="directionRoll"/> × 2π, rounded to a grid cell.
         /// The grid is sparse and unbounded, so no clamping is required.
         /// </summary>
-        public static Tuple<int, int> ResolveImpactCell(
+        public static ValueTuple<int, int> ResolveImpactCell(
             BattleGridManager grid,
             int shooterId,
             int targetId,
@@ -34,7 +34,7 @@ namespace OnlyWar.Helpers.Battles
         {
             ArgumentNullException.ThrowIfNull(grid);
 
-            Tuple<int, int> aimCell = FindNearestCell(
+            ValueTuple<int, int> aimCell = FindNearestCell(
                 grid.GetSoldierPosition(shooterId),
                 grid.GetSoldierPosition(targetId));
             if (margin >= 0)
@@ -46,7 +46,7 @@ namespace OnlyWar.Helpers.Battles
             double angle = directionRoll * 2.0 * Math.PI;
             int impactX = (int)Math.Round(aimCell.Item1 + (scatterDistance * Math.Cos(angle)));
             int impactY = (int)Math.Round(aimCell.Item2 + (scatterDistance * Math.Sin(angle)));
-            return new Tuple<int, int>(impactX, impactY);
+            return new ValueTuple<int, int>(impactX, impactY);
         }
 
         /// <summary>
@@ -57,7 +57,7 @@ namespace OnlyWar.Helpers.Battles
         /// </summary>
         public static IReadOnlyList<BlastVictim> GetVictims(
             BattleGridManager grid,
-            Tuple<int, int> impactCell,
+            ValueTuple<int, int> impactCell,
             float areaRadius)
         {
             ArgumentNullException.ThrowIfNull(grid);
@@ -125,18 +125,18 @@ namespace OnlyWar.Helpers.Battles
             }
         }
 
-        private static Tuple<int, int> FindNearestCell(
-            IEnumerable<Tuple<int, int>> shooterCells,
-            IEnumerable<Tuple<int, int>> targetCells)
+        private static ValueTuple<int, int> FindNearestCell(
+            IEnumerable<ValueTuple<int, int>> shooterCells,
+            IEnumerable<ValueTuple<int, int>> targetCells)
         {
-            Tuple<int, int> bestTarget = null;
+            ValueTuple<int, int>? bestTarget = null;
             long bestDistanceSquared = long.MaxValue;
 
             // Ties break to the lexicographically smallest target cell so the result is
             // deterministic without sorting the (tiny) footprints on every call.
-            foreach (Tuple<int, int> shooterCell in shooterCells)
+            foreach (ValueTuple<int, int> shooterCell in shooterCells)
             {
-                foreach (Tuple<int, int> targetCell in targetCells)
+                foreach (ValueTuple<int, int> targetCell in targetCells)
                 {
                     long deltaX = targetCell.Item1 - shooterCell.Item1;
                     long deltaY = targetCell.Item2 - shooterCell.Item2;
@@ -155,13 +155,13 @@ namespace OnlyWar.Helpers.Battles
                 throw new ArgumentException("Shooter and target must each occupy at least one grid cell.");
             }
 
-            return bestTarget;
+            return bestTarget.Value;
         }
 
-        private static bool IsLexicographicallySmaller(Tuple<int, int> candidate, Tuple<int, int> incumbent)
+        private static bool IsLexicographicallySmaller(ValueTuple<int, int>? candidate, ValueTuple<int, int>? incumbent)
         {
-            return candidate.Item1 < incumbent.Item1
-                || (candidate.Item1 == incumbent.Item1 && candidate.Item2 < incumbent.Item2);
+            return candidate?.Item1 < incumbent?.Item1
+                || (candidate?.Item1 == incumbent?.Item1 && candidate?.Item2 < incumbent?.Item2);
         }
     }
 }
