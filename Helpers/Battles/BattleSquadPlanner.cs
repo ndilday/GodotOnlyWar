@@ -327,7 +327,7 @@ namespace OnlyWar.Helpers.Battles
                         {
                             float desperateHitDistance = EstimateArmorPenDistance(soldier.EquippedRangedWeapons[0], targetArmor);
                             desperateHitDistance = Math.Min(desperateHitDistance,
-                                                            BattleModifiersUtil.EstimateHitDistance(soldier.Soldier, soldier.EquippedRangedWeapons[0], targetSize, soldier.Soldier.FunctioningHands, targetEvasion));
+                                                            BattleModifiersUtil.EstimateHitDistance(soldier.Soldier, soldier.EquippedRangedWeapons[0], targetSize, soldier.FunctioningHands, targetEvasion));
                             if (desperateHitDistance > 0)
                             {
                                 float targetPreferredDistance = BattleModifiersUtil.CalculateOptimalDistance(closestSquad.GetRandomSquadMember(_random),
@@ -852,7 +852,7 @@ namespace OnlyWar.Helpers.Battles
         private void AddEquipRangedWeaponActionToBag(BattleSoldier soldier)
         {
             List<RangedWeapon> usableWeapons = soldier.RangedWeapons
-                .Where(weapon => (int)weapon.Template.Location <= soldier.Soldier.FunctioningHands)
+                .Where(weapon => (int)weapon.Template.Location <= soldier.FunctioningHands)
                 .ToList();
             // we're standing here without a readied ranged weapon; we should do something about that
             if (usableWeapons.Count == 1)
@@ -1101,7 +1101,7 @@ namespace OnlyWar.Helpers.Battles
         private static MeleeWeapon GetFirstUsableMeleeWeapon(BattleSoldier soldier)
         {
             return soldier.MeleeWeapons.FirstOrDefault(
-                weapon => (int)weapon.Template.Location <= soldier.Soldier.FunctioningHands);
+                weapon => (int)weapon.Template.Location <= soldier.FunctioningHands);
         }
 
         private RangedTargetEvaluation SelectBestPointBlankRangedTarget(

@@ -8,6 +8,8 @@ namespace OnlyWar.Models.Soldiers
     public class Soldier : ISoldier
     {
         protected readonly Dictionary<int, Skill> _skills;
+        private Body _body;
+        private KeyValuePair<int, HitLocation[]>[] _handLocationsByGroupId = [];
 
         public Soldier(BodyTemplate body)
         {
@@ -45,13 +47,28 @@ namespace OnlyWar.Models.Soldiers
         {
             get
             {
-                return Body.HitLocations
-                    .Where(location => location.Template.HandGroupId.HasValue)
-                    .GroupBy(location => location.Template.HandGroupId.Value)
-                    .Where(group => group.All(location => !location.IsCrippled && !location.IsSevered))
-                    .Select(group => group.Key)
-                    .OrderBy(groupId => groupId)
-                    .ToList();
+                List<int> functioningGroupIds = [];
+                foreach ((int groupId, HitLocation[] locations) in _handLocationsByGroupId)
+                {
+                    bool isFunctioning = true;
+                    foreach (HitLocation location in locations)
+                    {
+                        uint wounds = location.Wounds.WoundTotal;
+                        if (wounds >= location.Template.CrippleWound
+                            || wounds >= location.Template.SeverWound)
+                        {
+                            isFunctioning = false;
+                            break;
+                        }
+                    }
+
+                    if (isFunctioning)
+                    {
+                        functioningGroupIds.Add(groupId);
+                    }
+                }
+
+                return functioningGroupIds;
             }
         }
 
@@ -69,7 +86,20 @@ namespace OnlyWar.Models.Soldiers
         public float AttackSpeed { get; set; }
         public float Size { get; set; }
         public float MoveSpeed { get; set; }
-        public Body Body { get; set; }
+        public Body Body
+        {
+            get => _body;
+            set
+            {
+                _body = value;
+                _handLocationsByGroupId = value.HitLocations
+                    .Where(location => location.Template.HandGroupId.HasValue)
+                    .GroupBy(location => location.Template.HandGroupId.Value)
+                    .OrderBy(group => group.Key)
+                    .Select(group => new KeyValuePair<int, HitLocation[]>(group.Key, group.ToArray()))
+                    .ToArray();
+            }
+        }
         public int Id { get; set; }
         public string Name { get; set; }
         public SoldierTemplate Template { get; set; }

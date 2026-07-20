@@ -79,7 +79,7 @@ namespace OnlyWar.Helpers.Battles
 
         public static float CalculateOptimalDistance(BattleSoldier soldier, float targetSize, float targetArmor, float targetCon, float targetRangedEvasion = 0)
         {
-            int freeHands = soldier.Soldier.FunctioningHands;
+            int freeHands = soldier.FunctioningHands;
             if (freeHands == 0)
             {
                 // with no hands free, there's not much combat left for this soldier

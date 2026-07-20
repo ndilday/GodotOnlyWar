@@ -13,6 +13,12 @@ namespace OnlyWar.Helpers.Battles
         private List<MeleeWeapon> _equippedMeleeWeapons;
         private readonly Dictionary<RangedWeapon, IReadOnlyList<int>> _rangedWeaponHandGroups = [];
         private readonly Dictionary<MeleeWeapon, IReadOnlyList<int>> _meleeWeaponHandGroups = [];
+        private IReadOnlyList<int> _functioningHandGroupIds = Array.Empty<int>();
+        private HashSet<int> _functioningHandGroupIdSet = [];
+        private bool _canFight;
+        private bool _isSlow;
+        private Body _cachedInjuryBody;
+        private int _cachedInjuryRevision = -1;
         private bool _synchronizingWeaponGrips;
 
         public ISoldier Soldier { get; private set; }
@@ -60,6 +66,43 @@ namespace OnlyWar.Helpers.Battles
 
         public ushort EnemiesTakenDown { get; set; }
 
+        public bool CanFight
+        {
+            get
+            {
+                EnsureInjuryState();
+                return _canFight;
+            }
+        }
+
+        public bool IsSlow
+        {
+            get
+            {
+                EnsureInjuryState();
+                return _isSlow;
+            }
+        }
+
+        public IReadOnlyList<int> FunctioningHandGroupIds
+        {
+            get
+            {
+                EnsureInjuryState();
+                return _functioningHandGroupIds;
+            }
+        }
+
+        public int FunctioningHands
+        {
+            get
+            {
+                EnsureInjuryState();
+                return _functioningHandGroupIds.Count;
+            }
+        }
+        public bool CanUseTwoHandedWeapon => FunctioningHands >= 2;
+
         public int HandsFree
         {
             get
@@ -70,7 +113,7 @@ namespace OnlyWar.Helpers.Battles
                     .SelectMany(groupIds => groupIds)
                     .Distinct()
                     .Count();
-                return Soldier.FunctioningHands - occupiedHands;
+                return FunctioningHands - occupiedHands;
             }
         }
 
@@ -131,6 +174,7 @@ namespace OnlyWar.Helpers.Battles
             EnemiesTakenDown = 0;
             ReloadingPhase = 0;
             TargetId = null;
+            RefreshInjuryState();
         }
 
 
@@ -144,6 +188,10 @@ namespace OnlyWar.Helpers.Battles
         {
             Soldier = soldier.Soldier;
             BattleSquad = squad;
+            // Equipped-weapon getters synchronize their grip assignments. Initialize the
+            // injury cache before copying those collections so synchronization sees the
+            // soldier's actual functioning hand groups instead of the empty defaults.
+            RefreshInjuryState();
             TopLeft = soldier.TopLeft;
             Orientation = soldier.Orientation;
             Armor = soldier.Armor;
@@ -173,13 +221,6 @@ namespace OnlyWar.Helpers.Battles
             MeleeWeapons = soldier.MeleeWeapons;
             RangedWeapons = soldier.RangedWeapons;
             TargetId = soldier.TargetId;
-        }
-        public bool CanFight
-        {
-            get
-            {
-                return Soldier.CanFight;
-            }
         }
         
         public void AddWeapons(IReadOnlyCollection<RangedWeapon> rangedWeapons, IReadOnlyCollection<MeleeWeapon> meleeWeapons)
@@ -255,15 +296,46 @@ namespace OnlyWar.Helpers.Battles
         public float GetMoveSpeed()
         {
             float baseMoveSpeed = Soldier.MoveSpeed;
-            bool isSlow = Soldier.Body.HitLocations.Where(hl => hl.Template.IsMotive)
-                                                       .Any(hl => hl.Wounds.WoundTotal >= (uint)WoundLevel.Major);
 
             // if leg/foot injuries, slow soldier down
-            if (isSlow)
+            if (IsSlow)
             {
                 return baseMoveSpeed * 0.75f;
             }
             return baseMoveSpeed;
+        }
+
+        internal void RefreshInjuryState()
+        {
+            Body body = Soldier.Body;
+            int[] functioningHandGroupIds = Soldier.FunctioningHandGroupIds.ToArray();
+            _functioningHandGroupIds = Array.AsReadOnly(functioningHandGroupIds);
+            _functioningHandGroupIdSet = functioningHandGroupIds.ToHashSet();
+            _canFight = Soldier.CanFight;
+
+            _isSlow = false;
+            foreach (HitLocation location in body.HitLocations)
+            {
+                if (location.Template.IsMotive
+                    && location.Wounds.WoundTotal >= (uint)WoundLevel.Major)
+                {
+                    _isSlow = true;
+                    break;
+                }
+            }
+
+            _cachedInjuryBody = body;
+            _cachedInjuryRevision = body.InjuryRevision;
+        }
+
+        private void EnsureInjuryState()
+        {
+            Body body = Soldier.Body;
+            if (!ReferenceEquals(_cachedInjuryBody, body)
+                || _cachedInjuryRevision != body.InjuryRevision)
+            {
+                RefreshInjuryState();
+            }
         }
 
         public MeleeWeapon GetPrimaryMeleeWeapon(MeleeWeapon defaultWeapon)
@@ -394,7 +466,7 @@ namespace OnlyWar.Helpers.Battles
             IReadOnlyCollection<int> requestedGroupIds)
         {
             int requiredHands = GetHandsForWeapon(template);
-            IReadOnlyList<int> functioningGroups = Soldier.FunctioningHandGroupIds;
+            IReadOnlyList<int> functioningGroups = FunctioningHandGroupIds;
             if (requiredHands == 0 || functioningGroups.Count < requiredHands)
             {
                 return [];
@@ -404,7 +476,7 @@ namespace OnlyWar.Helpers.Battles
             {
                 int[] requested = requestedGroupIds.Distinct().ToArray();
                 return requested.Length == requiredHands
-                    && requested.All(functioningGroups.Contains)
+                    && requested.All(_functioningHandGroupIdSet.Contains)
                         ? requested
                         : [];
             }
@@ -430,6 +502,7 @@ namespace OnlyWar.Helpers.Battles
 
         private void SynchronizeWeaponGrips()
         {
+            EnsureInjuryState();
             if (_synchronizingWeaponGrips || _equippedRangedWeapons == null || _equippedMeleeWeapons == null)
             {
                 return;
@@ -451,9 +524,8 @@ namespace OnlyWar.Helpers.Battles
                     _meleeWeaponHandGroups.Remove(stale);
                 }
 
-                HashSet<int> functioningGroups = Soldier.FunctioningHandGroupIds.ToHashSet();
                 foreach (RangedWeapon unusable in _rangedWeaponHandGroups
-                    .Where(entry => entry.Value.Any(groupId => !functioningGroups.Contains(groupId)))
+                    .Where(entry => entry.Value.Any(groupId => !_functioningHandGroupIdSet.Contains(groupId)))
                     .Select(entry => entry.Key)
                     .ToList())
                 {
@@ -461,7 +533,7 @@ namespace OnlyWar.Helpers.Battles
                     _rangedWeaponHandGroups.Remove(unusable);
                 }
                 foreach (MeleeWeapon unusable in _meleeWeaponHandGroups
-                    .Where(entry => entry.Value.Any(groupId => !functioningGroups.Contains(groupId)))
+                    .Where(entry => entry.Value.Any(groupId => !_functioningHandGroupIdSet.Contains(groupId)))
                     .Select(entry => entry.Key)
                     .ToList())
                 {

@@ -12,6 +12,8 @@ namespace OnlyWar.Models.Soldiers
 
     public class Wounds
     {
+        internal event System.Action Changed;
+
         public uint WoundTotal { get; private set; }
         public const byte WOUND_MAX = 5;
         public uint WeeksOfHealing { get; set; }
@@ -125,6 +127,7 @@ namespace OnlyWar.Models.Soldiers
                 WoundTotal &= 0xf0ffffff;
                 WoundTotal += (uint)WoundLevel.Unsurvivable;
             }
+            Changed?.Invoke();
         }
 
         public void ApplyWeekOfHealing()
@@ -174,6 +177,7 @@ namespace OnlyWar.Models.Soldiers
                 WoundTotal &= 0xfffff0ff;
                 WoundTotal += (uint)(newMinorWounds * 0x00000010);
             }
+            Changed?.Invoke();
         }
 
         public byte RecoveryTimeLeft()
@@ -212,6 +216,7 @@ namespace OnlyWar.Models.Soldiers
         public void HealWounds()
         {
             WoundTotal = 0;
+            Changed?.Invoke();
         }
     }
 
@@ -249,7 +254,27 @@ namespace OnlyWar.Models.Soldiers
 
     public class HitLocation
     {
-        public Wounds Wounds;
+        private Wounds _wounds;
+        internal event System.Action InjuryChanged;
+
+        public Wounds Wounds
+        {
+            get => _wounds;
+            set
+            {
+                if (_wounds != null)
+                {
+                    _wounds.Changed -= Wounds_Changed;
+                }
+
+                _wounds = value;
+                if (_wounds != null)
+                {
+                    _wounds.Changed += Wounds_Changed;
+                }
+                InjuryChanged?.Invoke();
+            }
+        }
         public bool IsCybernetic;
         public float Armor;
         
@@ -301,6 +326,11 @@ namespace OnlyWar.Models.Soldiers
             IsCybernetic = isCybernetic;
             Armor = armor;
             Template = template;
+        }
+
+        private void Wounds_Changed()
+        {
+            InjuryChanged?.Invoke();
         }
 
         public override string ToString()
@@ -783,10 +813,12 @@ namespace OnlyWar.Models.Soldiers
     {
         public HitLocation[] HitLocations { get; private set; }
         public Dictionary<Stance, int> TotalProbabilityMap { get; private set; }
+        public int InjuryRevision { get; private set; }
 
         public Body(List<HitLocation> hitLocations)
         {
             HitLocations = hitLocations.ToArray();
+            SubscribeToInjuries();
             TotalProbabilityMap = new Dictionary<Stance, int>
             {
                 [Stance.Standing] = HitLocations.Sum(hl => hl.Template.HitProbabilityMap[(int)Stance.Standing]),
@@ -798,12 +830,26 @@ namespace OnlyWar.Models.Soldiers
         public Body(BodyTemplate template)
         {
             HitLocations = template.HitLocations.Select(hlt => new HitLocation(hlt)).ToArray();
+            SubscribeToInjuries();
             TotalProbabilityMap = new Dictionary<Stance, int>
             {
                 [Stance.Standing] = HitLocations.Sum(hl => hl.Template.HitProbabilityMap[(int)Stance.Standing]),
                 [Stance.Kneeling] = HitLocations.Sum(hl => hl.Template.HitProbabilityMap[(int)Stance.Kneeling]),
                 [Stance.Prone] = HitLocations.Sum(hl => hl.Template.HitProbabilityMap[(int)Stance.Prone])
             };
+        }
+
+        private void SubscribeToInjuries()
+        {
+            foreach (HitLocation location in HitLocations)
+            {
+                location.InjuryChanged += OnInjuryChanged;
+            }
+        }
+
+        private void OnInjuryChanged()
+        {
+            InjuryRevision++;
         }
     }
 }

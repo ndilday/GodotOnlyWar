@@ -81,6 +81,7 @@ namespace OnlyWar.Helpers.Battles.Resolutions
                     woundLevel = WoundLevel.Negligible;
                 }
                 wound.HitLocation.Wounds.AddWound(woundLevel);
+                wound.Suffererer.RefreshInjuryState();
                 OnSoldierWounded?.Invoke(wound, woundLevel);
                 wound.Suffererer.BattleSquad?.InvalidateAbleSoldiers();
                 wound.Description = $"{wound.Suffererer.Soldier.Name} suffers {woundLevel.ToString()} wound to {wound.HitLocation.Template.Name}\n";

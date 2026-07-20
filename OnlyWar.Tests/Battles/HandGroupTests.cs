@@ -36,6 +36,16 @@ public class HandGroupTests
         Assert.False(soldier.CanFight);
     }
 
+    [Fact]
+    public void ReplacingBody_RebuildsHandGroupCache()
+    {
+        Soldier soldier = TestModelFactory.CreateSoldier();
+
+        soldier.Body = new Body([]);
+
+        Assert.Empty(soldier.FunctioningHandGroupIds);
+    }
+
     [Theory]
     [InlineData(true)]
     [InlineData(false)]
@@ -93,7 +103,56 @@ public class HandGroupTests
         resolver.Resolve();
 
         Assert.Empty(battleSoldier.EquippedRangedWeapons);
-        Assert.Equal(1, soldier.FunctioningHands);
+        Assert.Equal(1, battleSoldier.FunctioningHands);
+        Assert.Equal([0], battleSoldier.FunctioningHandGroupIds);
+    }
+
+    [Fact]
+    public void WoundResolution_RefreshesCachedBattleInjuryState()
+    {
+        Soldier soldier = TestModelFactory.CreateSoldier();
+        BattleSoldier battleSoldier = new(soldier, null);
+        Assert.True(battleSoldier.CanFight);
+        Assert.False(battleSoldier.IsSlow);
+
+        WoundResolver resolver = new();
+        resolver.OnSoldierFall += (_, _) => { };
+        resolver.WoundQueue.Add(new WoundResolution(
+            null,
+            null,
+            battleSoldier,
+            float.MaxValue,
+            Find(soldier, "Left Leg")));
+
+        resolver.Resolve();
+
+        Assert.False(battleSoldier.CanFight);
+        Assert.True(battleSoldier.IsSlow);
+        Assert.Equal(soldier.MoveSpeed * 0.75f, battleSoldier.GetMoveSpeed());
+    }
+
+    [Fact]
+    public void SharedSoldierInjury_RefreshesEveryBattleWrapper()
+    {
+        Soldier soldier = TestModelFactory.CreateSoldier();
+        BattleSoldier retainedWrapper = new(soldier, null);
+        BattleSoldier activeWrapper = new(retainedWrapper, null);
+        Assert.True(retainedWrapper.CanFight);
+
+        WoundResolver resolver = new();
+        resolver.OnSoldierFall += (_, _) => { };
+        resolver.WoundQueue.Add(new WoundResolution(
+            null,
+            null,
+            activeWrapper,
+            float.MaxValue,
+            Find(soldier, "Left Leg")));
+
+        resolver.Resolve();
+
+        Assert.False(activeWrapper.CanFight);
+        Assert.False(retainedWrapper.CanFight);
+        Assert.True(retainedWrapper.IsSlow);
     }
 
     [Fact]
