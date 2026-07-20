@@ -52,6 +52,8 @@ namespace OnlyWar.Helpers.Battles
         /// <summary>
         /// Every soldier with ANY footprint cell within <paramref name="areaRadius"/> of
         /// the impact cell, ordered by soldier id. Includes the thrower when caught.
+        /// Queries the grid's cell-occupancy map over the blast disc, so cost scales
+        /// with the template area rather than the number of soldiers on the field.
         /// </summary>
         public static IReadOnlyList<BlastVictim> GetVictims(
             BattleGridManager grid,
@@ -66,28 +68,61 @@ namespace OnlyWar.Helpers.Battles
                 return [];
             }
 
-            List<BlastVictim> victims = [];
-            foreach (KeyValuePair<int, IList<Tuple<int, int>>> entry in grid.GetSoldierPositions())
+            DiscOffset[] disc = GetDiscOffsets(areaRadius);
+            Dictionary<int, float> nearestBySoldier = [];
+            foreach (DiscOffset offset in disc)
             {
-                float nearestDistance = float.MaxValue;
-                foreach (Tuple<int, int> cell in entry.Value)
+                int? occupant = grid.GetCellOccupant(
+                    impactCell.Item1 + offset.DeltaX,
+                    impactCell.Item2 + offset.DeltaY);
+                if (occupant.HasValue)
                 {
-                    float deltaX = cell.Item1 - impactCell.Item1;
-                    float deltaY = cell.Item2 - impactCell.Item2;
-                    float distance = (float)Math.Sqrt((deltaX * deltaX) + (deltaY * deltaY));
-                    if (distance < nearestDistance)
-                    {
-                        nearestDistance = distance;
-                    }
-                }
-
-                if (nearestDistance <= areaRadius)
-                {
-                    victims.Add(new BlastVictim(entry.Key, nearestDistance));
+                    // Offsets are sorted by distance, so the first cell seen for a
+                    // soldier is their nearest caught cell.
+                    nearestBySoldier.TryAdd(occupant.Value, offset.Distance);
                 }
             }
 
-            return victims.OrderBy(victim => victim.SoldierId).ToList();
+            return nearestBySoldier
+                .OrderBy(entry => entry.Key)
+                .Select(entry => new BlastVictim(entry.Key, entry.Value))
+                .ToList();
+        }
+
+        private readonly record struct DiscOffset(int DeltaX, int DeltaY, float Distance);
+
+        private static readonly Dictionary<float, DiscOffset[]> _discOffsetCache = [];
+
+        /// <summary>All integer cell offsets within <paramref name="areaRadius"/> of the
+        /// origin, sorted nearest-first. Memoized per radius (weapon data uses a handful).</summary>
+        private static DiscOffset[] GetDiscOffsets(float areaRadius)
+        {
+            lock (_discOffsetCache)
+            {
+                if (_discOffsetCache.TryGetValue(areaRadius, out DiscOffset[] cached))
+                {
+                    return cached;
+                }
+
+                int cellRadius = (int)Math.Floor(areaRadius);
+                float radiusSquared = areaRadius * areaRadius;
+                List<DiscOffset> offsets = [];
+                for (int deltaX = -cellRadius; deltaX <= cellRadius; deltaX++)
+                {
+                    for (int deltaY = -cellRadius; deltaY <= cellRadius; deltaY++)
+                    {
+                        float distanceSquared = (deltaX * deltaX) + (deltaY * deltaY);
+                        if (distanceSquared <= radiusSquared)
+                        {
+                            offsets.Add(new DiscOffset(deltaX, deltaY, (float)Math.Sqrt(distanceSquared)));
+                        }
+                    }
+                }
+
+                DiscOffset[] result = offsets.OrderBy(offset => offset.Distance).ToArray();
+                _discOffsetCache[areaRadius] = result;
+                return result;
+            }
         }
 
         private static Tuple<int, int> FindNearestCell(
@@ -97,14 +132,17 @@ namespace OnlyWar.Helpers.Battles
             Tuple<int, int> bestTarget = null;
             long bestDistanceSquared = long.MaxValue;
 
-            foreach (Tuple<int, int> shooterCell in shooterCells.OrderBy(cell => cell.Item1).ThenBy(cell => cell.Item2))
+            // Ties break to the lexicographically smallest target cell so the result is
+            // deterministic without sorting the (tiny) footprints on every call.
+            foreach (Tuple<int, int> shooterCell in shooterCells)
             {
-                foreach (Tuple<int, int> targetCell in targetCells.OrderBy(cell => cell.Item1).ThenBy(cell => cell.Item2))
+                foreach (Tuple<int, int> targetCell in targetCells)
                 {
                     long deltaX = targetCell.Item1 - shooterCell.Item1;
                     long deltaY = targetCell.Item2 - shooterCell.Item2;
                     long distanceSquared = (deltaX * deltaX) + (deltaY * deltaY);
-                    if (distanceSquared < bestDistanceSquared)
+                    if (distanceSquared < bestDistanceSquared
+                        || (distanceSquared == bestDistanceSquared && IsLexicographicallySmaller(targetCell, bestTarget)))
                     {
                         bestTarget = targetCell;
                         bestDistanceSquared = distanceSquared;
@@ -118,6 +156,12 @@ namespace OnlyWar.Helpers.Battles
             }
 
             return bestTarget;
+        }
+
+        private static bool IsLexicographicallySmaller(Tuple<int, int> candidate, Tuple<int, int> incumbent)
+        {
+            return candidate.Item1 < incumbent.Item1
+                || (candidate.Item1 == incumbent.Item1 && candidate.Item2 < incumbent.Item2);
         }
     }
 }

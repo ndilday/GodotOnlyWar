@@ -53,7 +53,12 @@ namespace OnlyWar.Helpers
 
         public int? GetCellObject(Tuple<int, int> cell)
         {
-            return _cellObjectMap.TryGetValue((cell.Item1, cell.Item2), out int objectId)
+            return GetCellObject(cell.Item1, cell.Item2);
+        }
+
+        public int? GetCellObject(int x, int y)
+        {
+            return _cellObjectMap.TryGetValue((x, y), out int objectId)
                 ? objectId
                 : null;
         }

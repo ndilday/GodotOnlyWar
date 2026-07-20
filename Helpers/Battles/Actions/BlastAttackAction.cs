@@ -101,9 +101,11 @@ namespace OnlyWar.Helpers.Battles.Actions
 
             // A grenade is thrown at a spot, not a person: range vs a stationary point
             // and Bulk while moving apply; size, RangedEvasion, aim, and rate-of-fire
-            // modifiers do not.
+            // modifiers do not. Thrown blasts use the Strength-relative range penalty,
+            // launched blasts the firearm curve — see CalculateBlastRangeModifier.
             float skill = shooter.Soldier.GetTotalSkillValue(weapon.Template.RelatedSkill);
-            float modifier = BattleModifiersUtil.CalculateRangeModifier(Range, 0f);
+            float modifier = BattleModifiersUtil.CalculateBlastRangeModifier(
+                shooter.Soldier, weapon.Template, Range);
             if (BulkMultiplier > 0)
             {
                 modifier -= weapon.Template.Bulk * BulkMultiplier;

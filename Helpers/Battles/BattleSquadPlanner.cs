@@ -1943,9 +1943,11 @@ namespace OnlyWar.Helpers.Battles
                         weapon.Template)))
                 {
                     // Same to-hit total BlastAttackAction rolls against: Throwing skill
-                    // plus the range penalty vs a stationary point, minus Bulk if moving.
+                    // plus the blast range penalty (Strength-relative for thrown,
+                    // firearm curve for launched), minus Bulk if moving.
                     float toHit = soldier.Soldier.GetTotalSkillValue(weapon.Template.RelatedSkill)
-                        + BattleModifiersUtil.CalculateRangeModifier(range, 0f)
+                        + BattleModifiersUtil.CalculateBlastRangeModifier(
+                            soldier.Soldier, weapon.Template, range)
                         - (weapon.Template.Bulk * bulkMultiplier);
                     float meanMargin = toHit - BlastDeliveryRollMean;
 
@@ -2205,6 +2207,15 @@ namespace OnlyWar.Helpers.Battles
             Tuple<int, int> movementDirection = null)
         {
             if (maximumRange <= 0 || !IsPlaced(shooter)) return [];
+
+            // Cheap cached bail-out before the full enemy scan: if even the nearest
+            // enemy (ignoring firing arc) is beyond max range, nothing qualifies.
+            // Matters most for grenades, whose Strength-capped range is tiny compared
+            // to typical engagement distances.
+            if (_grid.GetNearestEnemy(shooter.Soldier.Id, out _) > maximumRange)
+            {
+                return [];
+            }
 
             bool shooterSide = _grid.GetSoldierSide(shooter.Soldier.Id);
             return _grid.GetSoldierPositions().Keys

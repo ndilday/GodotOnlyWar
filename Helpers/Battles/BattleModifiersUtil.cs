@@ -41,6 +41,35 @@ namespace OnlyWar.Helpers.Battles
                 : template.MaximumRange;
         }
 
+        /// <summary>Accuracy penalty at the thrower's maximum range. Balance knob: throws
+        /// near the limit of the thrower's Strength are desperate heaves, so the penalty
+        /// grows quadratically with the fraction of max range used, not absolute distance.</summary>
+        public const float ThrownRangePenaltyAtMax = 12f;
+
+        /// <summary>
+        /// The range portion of a blast delivery check. Launched blasts are aimed like
+        /// firearms and use the standard logarithmic range curve; thrown blasts instead
+        /// take −<see cref="ThrownRangePenaltyAtMax"/> × (range / effective max range)²,
+        /// so a stronger thrower is more accurate at the same distance, short lobs are
+        /// nearly automatic, and max-range heaves scatter badly.
+        /// </summary>
+        public static float CalculateBlastRangeModifier(ISoldier soldier, RangedWeaponTemplate template, float range)
+        {
+            if (!template.IsThrown)
+            {
+                return CalculateRangeModifier(range, 0f);
+            }
+
+            float effectiveMaxRange = GetEffectiveMaxRange(soldier, template);
+            if (effectiveMaxRange <= 0)
+            {
+                return float.MinValue;
+            }
+
+            float rangeFraction = range / effectiveMaxRange;
+            return -ThrownRangePenaltyAtMax * rangeFraction * rangeFraction;
+        }
+
         public static float CalculateDamageAtRange(RangedWeapon weapon, float range)
         {
             return weapon.Template.DoesDamageDegradeWithRange ?

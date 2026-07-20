@@ -95,6 +95,17 @@ namespace OnlyWar.Models
             ValidateRatingDefinitions();
         }
 
+        // Test hook: shrinks the generated sector so tests that need a real
+        // SectorBuilder.GenerateSector run (e.g. save/load round trips) don't pay for the
+        // full 200x200 / ~800-planet production sector. Keep the grid large enough relative
+        // to MaxSubsectorCellDiameter that not every planet becomes a governance capital,
+        // or ScenarioBuilder.SelectPromisedWorld can run out of eligible worlds.
+        internal void OverrideSectorGeometryForTesting(Coordinate sectorSize, float planetChance)
+        {
+            SectorSize = sectorSize;
+            PlanetChance = planetChance;
+        }
+
         // Fail fast at load if the rules database is missing any base skill the training
         // logic still references by name (work-experience / scout training); see TDD §8.3.
         private void ValidateTrainingSkills()

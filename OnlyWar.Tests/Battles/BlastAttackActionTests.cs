@@ -312,7 +312,8 @@ public class BlastAttackActionTests
         BattleSoldier shooter = battle.State.GetSoldier(1);
         RangedWeapon weapon = GetBlastWeapon(shooter);
         float skill = shooter.Soldier.GetTotalSkillValue(weapon.Template.RelatedSkill);
-        float modifier = BattleModifiersUtil.CalculateRangeModifier(range, 0f);
+        float modifier = BattleModifiersUtil.CalculateBlastRangeModifier(
+            shooter.Soldier, weapon.Template, range);
         double scatterZ = (skill + modifier - 10.5f - marginZ) / 3.0;
         return new ScriptedRNG(scatterZ, directionRoll);
     }

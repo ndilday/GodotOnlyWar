@@ -341,6 +341,11 @@ namespace OnlyWar.Helpers.Battles
             return distance;
         }
 
+        public int? GetCellOccupant(int x, int y)
+        {
+            return _grid.GetCellObject(x, y);
+        }
+
         public IList<Tuple<int, int>> GetSoldierPosition(int soldierId)
         {
             return _grid.GetObjectCells(soldierId);
