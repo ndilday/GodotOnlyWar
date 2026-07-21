@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
 
@@ -12,12 +13,12 @@ namespace OnlyWar.Helpers.Battles
         // compact battle-local slots and a flat, symmetric distance matrix.
         private readonly Dictionary<int, int> _soldierSlots = [];
         private readonly Dictionary<int, List<int>> _squadSlots = [];
-        private readonly Dictionary<int, AbleSquadSlotCache> _ableSquadSlotCaches = [];
+        private readonly ConcurrentDictionary<int, AbleSquadSlotCache> _ableSquadSlotCaches = [];
         private readonly Stack<int> _freeSlots = [];
         private readonly Grid _grid = new();
-        private readonly Dictionary<int, IReadOnlyList<int>> _adjacentSoldierCache = [];
-        private readonly Dictionary<(bool ShooterSide, int TargetId), bool> _engagementCache = [];
-        private readonly Dictionary<int, IReadOnlyList<int>> _meleeScrumCache = [];
+        private readonly ConcurrentDictionary<int, IReadOnlyList<int>> _adjacentSoldierCache = [];
+        private readonly ConcurrentDictionary<(bool ShooterSide, int TargetId), bool> _engagementCache = [];
+        private readonly ConcurrentDictionary<int, IReadOnlyList<int>> _meleeScrumCache = [];
 
         private BattleSoldier[] _slotSoldiers = new BattleSoldier[InitialSlotCapacity];
         private IList<ValueTuple<int, int>>[] _slotPositions =
@@ -94,7 +95,7 @@ namespace OnlyWar.Helpers.Battles
                     _squadSlots.Add(_slotSquadIds[slot], squadSlots);
                 }
                 squadSlots.Add(slot);
-                _ableSquadSlotCaches.Remove(_slotSquadIds[slot]);
+                _ableSquadSlotCaches.TryRemove(_slotSquadIds[slot], out _);
             }
             _grid.OccupyCells(cells, soldierId);
             RecalculateDistanceRow(slot);
@@ -186,7 +187,7 @@ namespace OnlyWar.Helpers.Battles
             {
                 squadSlots.Remove(slot);
                 if (squadSlots.Count == 0) _squadSlots.Remove(squadId);
-                _ableSquadSlotCaches.Remove(squadId);
+                _ableSquadSlotCaches.TryRemove(squadId, out _);
             }
             _slotActive[slot] = false;
             _slotSoldiers[slot] = null;
@@ -223,16 +224,12 @@ namespace OnlyWar.Helpers.Battles
         public IReadOnlyList<int> GetAdjacentSoldiers(int soldierId)
         {
             GetSlot(soldierId);
-            if (_adjacentSoldierCache.TryGetValue(soldierId, out IReadOnlyList<int> cached))
-            {
-                return cached;
-            }
-            List<int> adjacent = _grid.GetAdjacentObjects(soldierId)
-                .Where(_soldierSlots.ContainsKey)
-                .OrderBy(id => id)
-                .ToList();
-            _adjacentSoldierCache[soldierId] = adjacent;
-            return adjacent;
+            return _adjacentSoldierCache.GetOrAdd(
+                soldierId,
+                id => _grid.GetAdjacentObjects(id)
+                    .Where(_soldierSlots.ContainsKey)
+                    .OrderBy(adjacentId => adjacentId)
+                    .ToArray());
         }
 
         public bool IsTargetEngagedWithShootersAllies(int shooterId, int targetId)
@@ -250,7 +247,7 @@ namespace OnlyWar.Helpers.Battles
                         break;
                     }
                 }
-                _engagementCache[cacheKey] = engaged;
+                _engagementCache.TryAdd(cacheKey, engaged);
             }
             return engaged;
         }
@@ -276,7 +273,7 @@ namespace OnlyWar.Helpers.Battles
                     frontier.Enqueue(adjacentId);
                 }
             }
-            IReadOnlyList<int> result = participants.OrderBy(id => id).ToList();
+            IReadOnlyList<int> result = participants.OrderBy(id => id).ToArray();
             foreach (int participantId in result) _meleeScrumCache[participantId] = result;
             return result;
         }
@@ -346,8 +343,8 @@ namespace OnlyWar.Helpers.Battles
         {
             ArgumentNullException.ThrowIfNull(first);
             ArgumentNullException.ThrowIfNull(second);
-            List<int> firstSlots = GetAbleSquadSlots(first);
-            List<int> secondSlots = GetAbleSquadSlots(second);
+            IReadOnlyList<int> firstSlots = GetAbleSquadSlots(first);
+            IReadOnlyList<int> secondSlots = GetAbleSquadSlots(second);
             if (firstSlots.Count == 0 || secondSlots.Count == 0)
             {
                 return float.MaxValue;
@@ -373,7 +370,7 @@ namespace OnlyWar.Helpers.Battles
         {
             ArgumentNullException.ThrowIfNull(squad);
             int targetSlot = GetSlot(soldierId);
-            List<int> memberSlots = GetAbleSquadSlots(squad);
+            IReadOnlyList<int> memberSlots = GetAbleSquadSlots(squad);
             if (memberSlots.Count == 0)
             {
                 return float.MaxValue;
@@ -390,7 +387,7 @@ namespace OnlyWar.Helpers.Battles
             return distance;
         }
 
-        private List<int> GetAbleSquadSlots(BattleSquad squad)
+        private IReadOnlyList<int> GetAbleSquadSlots(BattleSquad squad)
         {
             int generation = BattleSquad.AbleSoldiersGeneration;
             int sourceCount = squad.Soldiers.Count;
@@ -401,24 +398,22 @@ namespace OnlyWar.Helpers.Battles
                 return cache.Slots;
             }
 
-            if (cache == null)
-            {
-                cache = new AbleSquadSlotCache();
-                _ableSquadSlotCaches[squad.Id] = cache;
-            }
-            cache.Slots.Clear();
             List<BattleSoldier> ableSoldiers = squad.AbleSoldiers;
+            List<int> slots = new(ableSoldiers.Count);
             for (int index = 0; index < ableSoldiers.Count; index++)
             {
                 int soldierId = ableSoldiers[index].Soldier.Id;
                 if (_soldierSlots.TryGetValue(soldierId, out int slot))
                 {
-                    cache.Slots.Add(slot);
+                    slots.Add(slot);
                 }
             }
-            cache.Generation = BattleSquad.AbleSoldiersGeneration;
-            cache.SourceCount = sourceCount;
-            return cache.Slots;
+            AbleSquadSlotCache replacement = new(
+                BattleSquad.AbleSoldiersGeneration,
+                sourceCount,
+                slots.ToArray());
+            _ableSquadSlotCaches[squad.Id] = replacement;
+            return replacement.Slots;
         }
 
         public int? GetCellOccupant(int x, int y) => _grid.GetCellObject(x, y);
@@ -635,12 +630,10 @@ namespace OnlyWar.Helpers.Battles
             _meleeScrumCache.Clear();
         }
 
-        private sealed class AbleSquadSlotCache
-        {
-            internal readonly List<int> Slots = [];
-            internal int Generation = -1;
-            internal int SourceCount = -1;
-        }
+        private sealed record AbleSquadSlotCache(
+            int Generation,
+            int SourceCount,
+            IReadOnlyList<int> Slots);
 
         internal readonly struct EnemyDistanceEnumerable
         {

@@ -12,6 +12,8 @@ namespace OnlyWar.Helpers.Battles.Actions
         private readonly float _movementBudget;
 
         public int ActorId => _soldier.Soldier.Id;
+        internal ValueTuple<int, int> Origin => _currentTopLeft;
+        internal ValueTuple<int, int> Destination => _newTopLeft;
 
         public MoveAction(BattleSoldier soldier, BattleGridManager grid, ValueTuple<int, int> currentTopLeft, ValueTuple<int, int> newTopLeft, ushort orientation)
             : this(

@@ -14,15 +14,20 @@ namespace OnlyWar.Helpers.Battles
         internal GameRulesData Rules { get; }
         public IRNG Random { get; }
         internal BattleAftermathDependencies Aftermath { get; }
+        internal int MaxPlanningDegreeOfParallelism { get; }
 
         internal BattleExecutionContext(
             GameRulesData rules,
             IRNG random,
-            BattleAftermathDependencies aftermath)
+            BattleAftermathDependencies aftermath,
+            int maxPlanningDegreeOfParallelism = 0)
         {
             Rules = rules ?? throw new ArgumentNullException(nameof(rules));
             Random = random ?? throw new ArgumentNullException(nameof(random));
             Aftermath = aftermath ?? throw new ArgumentNullException(nameof(aftermath));
+            MaxPlanningDegreeOfParallelism = maxPlanningDegreeOfParallelism <= 0
+                ? Math.Max(1, Environment.ProcessorCount)
+                : maxPlanningDegreeOfParallelism;
 
             if (!ReferenceEquals(random, aftermath.Random))
             {

@@ -220,6 +220,13 @@ namespace OnlyWar.Helpers.Battles
             return ableSoldiers[random.GetIntBelowMax(0, ableSoldiers.Count)];
         }
 
+        /// <summary>Warms lazy squad views before concurrent soldier evaluation begins.</summary>
+        internal void PrepareForParallelPlanning()
+        {
+            _ = AbleSoldiers;
+            EnsureStatistics();
+        }
+
         public float GetAverageArmor()
         {
             EnsureStatistics();

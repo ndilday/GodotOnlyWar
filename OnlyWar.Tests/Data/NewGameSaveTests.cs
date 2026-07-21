@@ -31,7 +31,6 @@ public class NewGameSaveTests : IClassFixture<NewGameSaveFixture>
         _sector = fixture.Sector;
     }
 
-    [Trait("Category", "Slow")]
     [Fact]
     public void NewGame_SavesThroughProductionPath_WithoutManualRegistration()
     {
@@ -60,7 +59,6 @@ public class NewGameSaveTests : IClassFixture<NewGameSaveFixture>
         }
     }
 
-    [Trait("Category", "Slow")]
     [Fact]
     public void FailedSave_LeavesPreviousSaveIntact_AndNoTempFiles()
     {

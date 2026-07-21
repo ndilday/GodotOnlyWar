@@ -4,6 +4,7 @@ using System.Linq;
 using OnlyWar.Helpers;
 using OnlyWar.Helpers.Battles;
 using OnlyWar.Helpers.Battles.Actions;
+using OnlyWar.Models.Battles;
 using OnlyWar.Models.Equippables;
 using OnlyWar.Models.Soldiers;
 using OnlyWar.Tests.Fixtures;
@@ -886,5 +887,102 @@ public class BattleSquadPlannerTests
 
         Assert.True(singleRisk > 0);
         Assert.Equal(singleRisk * 3, tripleRisk, precision: 4);
+    }
+
+    [Fact]
+    public void PrepareCoverActions_ParallelPlanningMatchesSerialPlanning()
+    {
+        var serial = RunParallelPlanningScenario(1);
+
+        for (int repetition = 0; repetition < 20; repetition++)
+        {
+            var parallel = RunParallelPlanningScenario(8);
+            Assert.Equal(serial.Actions, parallel.Actions);
+            Assert.Equal(serial.SoldierState, parallel.SoldierState);
+        }
+    }
+
+    [Fact]
+    public void PrepareFollowingActions_ParallelMovingFireMatchesSerialPlanning()
+    {
+        var serial = RunParallelPlanningScenario(1, pursuit: true);
+
+        for (int repetition = 0; repetition < 20; repetition++)
+        {
+            var parallel = RunParallelPlanningScenario(8, pursuit: true);
+            Assert.Equal(serial.Actions, parallel.Actions);
+            Assert.Equal(serial.SoldierState, parallel.SoldierState);
+        }
+    }
+
+    private static (string[] Actions, string[] SoldierState) RunParallelPlanningScenario(
+        int maxDegreeOfParallelism,
+        bool pursuit = false)
+    {
+        BattleSquad shooters = CreateSquad(
+            "Parallel Shooters",
+            Enumerable.Range(0, 12)
+                .Select(index => (80_000 + index, 5))
+                .ToArray());
+        BattleSquad enemies = CreateSquad(
+            "Parallel Targets",
+            Enumerable.Range(0, 12)
+                .Select(index => (81_000 + index, 5 + index))
+                .ToArray());
+        BattleGridManager grid = new();
+        for (int index = 0; index < shooters.Soldiers.Count; index++)
+        {
+            BattleSoldier shooter = shooters.Soldiers[index];
+            BattleSoldier enemy = enemies.Soldiers[index];
+            EquipTemplateWeapon(shooter, areaRadius: 3, maximumRange: 30);
+            Place(grid, shooter, true, index * 2, 0);
+            Place(grid, enemy, false, index * 2, 10);
+            shooter.PrepareForParallelPlanning();
+            enemy.PrepareForParallelPlanning();
+        }
+        shooters.PrepareForParallelPlanning();
+        enemies.PrepareForParallelPlanning();
+
+        List<IAction> shootActions = [];
+        List<IAction> moveActions = [];
+        Dictionary<int, BattleSoldier> soldierMap = shooters.Soldiers
+            .Concat(enemies.Soldiers)
+            .ToDictionary(soldier => soldier.Soldier.Id);
+        BattleSquadPlanner planner = new(
+            grid,
+            soldierMap,
+            shootActions,
+            moveActions,
+            [],
+            null,
+            CreateMeleeTemplateMap(soldierMap.Values),
+            new SeededRNG(12_345),
+            maxDegreeOfParallelism);
+
+        if (pursuit)
+        {
+            planner.PreparePursuitActions(shooters, PursuitPosture.Follow, [enemies]);
+        }
+        else
+        {
+            planner.PrepareCoverActions(shooters);
+        }
+
+        string[] actions = shootActions.Select(action => action switch
+        {
+            AreaAttackAction area =>
+                $"Area:{area.ActorId}:{area.TargetId}:{area.WeaponId}",
+            ShootAction shot =>
+                $"Shoot:{shot.ActorId}:{shot.TargetId}:{shot.WeaponId}:{shot.NumberOfShots}",
+            _ => $"{action.GetType().Name}:{action.ActorId}"
+        })
+            .Concat(moveActions.Select(action => action is MoveAction move
+                ? $"Move:{move.ActorId}:{move.Origin}:{move.Destination}"
+                : $"{action.GetType().Name}:{action.ActorId}"))
+            .ToArray();
+        string[] state = shooters.Soldiers.Select(soldier =>
+            $"{soldier.Soldier.Id}:{soldier.CurrentSpeed}:{soldier.TargetId}:{soldier.Aim}")
+            .ToArray();
+        return (actions, state);
     }
 }

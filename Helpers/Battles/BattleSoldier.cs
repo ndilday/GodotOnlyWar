@@ -330,6 +330,17 @@ namespace OnlyWar.Helpers.Battles
             _cachedInjuryRevision = body.InjuryRevision;
         }
 
+        /// <summary>
+        /// Materializes every lazily maintained value that battle planners may read from another
+        /// worker. Battle planning runs against a frozen turn-start state, so these values remain
+        /// valid until action execution begins.
+        /// </summary>
+        internal void PrepareForParallelPlanning()
+        {
+            RefreshInjuryState();
+            SynchronizeWeaponGrips();
+        }
+
         private void EnsureInjuryState()
         {
             Body body = Soldier.Body;

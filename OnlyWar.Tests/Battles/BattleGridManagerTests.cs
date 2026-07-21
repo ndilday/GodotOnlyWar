@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading.Tasks;
 using OnlyWar.Helpers.Battles;
 using OnlyWar.Helpers.Battles.Placers;
 using OnlyWar.Helpers.Battles.Resolutions;
@@ -41,6 +42,37 @@ public class BattleGridManagerTests
     }
 
     private static List<ValueTuple<int, int>> Cell(int x, int y) => [new ValueTuple<int, int>(x, y)];
+
+    [Fact]
+    public void FrozenGrid_ColdProximityCachesSupportConcurrentReaders()
+    {
+        BattleGridManager grid = new();
+        BattleSquad first = CreateBattleSquadWithSoldiers("First", 70_000, 4, false);
+        BattleSquad second = CreateBattleSquadWithSoldiers("Second", 71_000, 4, false);
+        for (int index = 0; index < first.Soldiers.Count; index++)
+        {
+            BattleSoldier friendly = first.Soldiers[index];
+            BattleSoldier enemy = second.Soldiers[index];
+            friendly.TopLeft = (index * 3, 0);
+            enemy.TopLeft = (index * 3, 1);
+            grid.PlaceSoldier(friendly, true, Cell(index * 3, 0));
+            grid.PlaceSoldier(enemy, false, Cell(index * 3, 1));
+        }
+
+        string[] adjacency = new string[2_000];
+        float[] squadDistances = new float[2_000];
+        Parallel.For(0, adjacency.Length, new ParallelOptions { MaxDegreeOfParallelism = 8 }, index =>
+        {
+            int soldierId = 70_000 + (index % 4);
+            adjacency[index] = string.Join(",", grid.GetAdjacentSoldiers(soldierId));
+            _ = grid.IsTargetEngagedWithShootersAllies(soldierId, 71_000 + (index % 4));
+            _ = grid.GetMeleeScrumParticipants(soldierId);
+            squadDistances[index] = grid.GetMinimumDistanceBetweenSquads(first, second);
+        });
+
+        Assert.All(adjacency, value => Assert.NotNull(value));
+        Assert.All(squadDistances, value => Assert.Equal(1f, value));
+    }
 
     [Fact]
     public void PlaceSoldier_RecordsPositionAndOccupiesCell()

@@ -42,6 +42,9 @@ namespace OnlyWar.Helpers.Battles
         private readonly HashSet<int> _everRoutedSquadIds = [];
         private readonly List<BattleEvent> _turnEvents = [];
         private readonly Stopwatch _stopwatch = Stopwatch.StartNew();
+        private TimeSpan _planningElapsed;
+
+        internal TimeSpan PlanningElapsed => _planningElapsed;
 
         public event EventHandler<BattleHistory> OnBattleComplete;
 
@@ -164,7 +167,9 @@ namespace OnlyWar.Helpers.Battles
             _turnEvents.Clear();
             List<string> log = BattleLog.IsEnabled ? [] : null;
             Action<string> logSink = log == null ? null : log.Add;
+            long planningStarted = Stopwatch.GetTimestamp();
             Plan(shootSegmentActions, moveSegmentActions, meleeSegmentActions, logSink);
+            _planningElapsed += Stopwatch.GetElapsedTime(planningStarted);
             if (log != null)
             {
                 foreach (string line in log)
@@ -229,7 +234,9 @@ namespace OnlyWar.Helpers.Battles
             _stopwatch.Stop();
             GameLog.Debug(() =>
                 $"Battle end in {_region?.Name}: {_currentState.TurnNumber} turns, "
-                + $"{_stopwatch.ElapsedMilliseconds}ms, started "
+                + $"{_stopwatch.ElapsedMilliseconds}ms "
+                + $"({_planningElapsed.TotalMilliseconds:F0}ms planning, "
+                + $"{_execution.MaxPlanningDegreeOfParallelism} planning workers), started "
                 + $"{_aftermathContext.FirstSideStartingSoldierCount} vs "
                 + $"{_aftermathContext.SecondSideStartingSoldierCount} soldiers");
             int firstSideRemaining = _currentState.AllAttackerSquads.Values.Sum(s => s.AbleSoldiers.Count);
@@ -252,8 +259,25 @@ namespace OnlyWar.Helpers.Battles
                           List<IAction> meleeSegmentActions,
                           Action<string> log)
         {
+            PrepareParallelPlanningState();
             PlanSide(BattleSide.Attacker, shootSegmentActions, moveSegmentActions, meleeSegmentActions, log);
             PlanSide(BattleSide.Opposing, shootSegmentActions, moveSegmentActions, meleeSegmentActions, log);
+        }
+
+        private void PrepareParallelPlanningState()
+        {
+            // Planning workers may inspect the same target and squad concurrently. Materialize all
+            // lazy injury, equipment, roster, and aggregate views before the parallel sections so
+            // worker reads cannot trigger mutations of shared cache state.
+            foreach (BattleSoldier soldier in _currentState.Soldiers.Values)
+            {
+                soldier.PrepareForParallelPlanning();
+            }
+            foreach (BattleSquad squad in GetActiveSquads(BattleSide.Attacker)
+                .Concat(GetActiveSquads(BattleSide.Opposing)))
+            {
+                squad.PrepareForParallelPlanning();
+            }
         }
 
         private void PlanSide(
@@ -274,7 +298,8 @@ namespace OnlyWar.Helpers.Battles
                 meleeActions,
                 log,
                 _execution.Rules.MeleeWeaponTemplates,
-                _execution.Random);
+                _execution.Random,
+                _execution.MaxPlanningDegreeOfParallelism);
             BattleForcePlanner forcePlanner = new(squadPlanner);
 
             // Routing squads flee through their own planner path regardless of side intent

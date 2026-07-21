@@ -318,7 +318,6 @@ public class ScenarioTurnTests
         Assert.Contains(promised.Name, controller.ScenarioNotification);
     }
 
-    [Trait("Category", "Slow")]
     [Fact]
     public void ProcessTurn_PromisedWorldLogsImperialRegionMetrics()
     {

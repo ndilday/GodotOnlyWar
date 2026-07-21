@@ -114,7 +114,6 @@ public class GovernanceHierarchyTests : IClassFixture<GovernanceHierarchyFixture
         }
     }
 
-    [Trait("Category", "Slow")]
     [Fact]
     public void Governance_RederivesIdenticallyAfterSaveLoad()
     {
