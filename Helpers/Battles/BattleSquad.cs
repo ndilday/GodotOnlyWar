@@ -14,6 +14,9 @@ namespace OnlyWar.Helpers.Battles
     public class BattleSquad : ICloneable
     {
         private static int _globalAbleSoldiersVersion;
+
+        internal static int AbleSoldiersGeneration =>
+            System.Threading.Volatile.Read(ref _globalAbleSoldiersVersion);
         private List<BattleSoldier> _ableSoldiers;
         private int _ableSoldiersSourceCount = -1;
         private int _cachedGlobalAbleSoldiersVersion = -1;

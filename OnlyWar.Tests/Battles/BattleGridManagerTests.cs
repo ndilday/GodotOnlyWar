@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using OnlyWar.Helpers.Battles;
 using OnlyWar.Helpers.Battles.Placers;
+using OnlyWar.Helpers.Battles.Resolutions;
 using OnlyWar.Models;
 using OnlyWar.Models.Soldiers;
 using OnlyWar.Tests.Fixtures;
@@ -274,6 +275,10 @@ public class BattleGridManagerTests
         grid.MoveSoldier(secondSoldier, new ValueTuple<int, int>(0, 2), 0);
 
         Assert.Equal(2f, grid.GetMinimumDistanceBetweenSquads(first, second), precision: 4);
+
+        grid.MoveSoldier(firstSoldier, new ValueTuple<int, int>(0, 1), 0);
+
+        Assert.Equal(1f, grid.GetMinimumDistanceBetweenSquads(first, second), precision: 4);
     }
 
     [Fact]
@@ -304,6 +309,39 @@ public class BattleGridManagerTests
 
         Assert.Equal(
             2f,
+            grid.GetMinimumDistanceBetweenSquadAndSoldier(observers, target.Soldier.Id),
+            precision: 4);
+    }
+
+    [Fact]
+    public void GetMinimumDistanceBetweenSquadAndSoldier_RebuildsAbleSlotsAfterInjury()
+    {
+        BattleGridManager grid = new();
+        BattleSquad observers = CreateBattleSquadWithSoldiers("Observers", 10, 2, true);
+        BattleSoldier initiallyNearest = observers.Soldiers[0];
+        BattleSoldier remainingObserver = observers.Soldiers[1];
+        BattleSoldier target = CreateBattleSoldier(20);
+        grid.PlaceSoldier(initiallyNearest, true, Cell(1, 0));
+        grid.PlaceSoldier(remainingObserver, true, Cell(5, 0));
+        grid.PlaceSoldier(target, false, Cell(0, 0));
+        Assert.Equal(1f,
+            grid.GetMinimumDistanceBetweenSquadAndSoldier(observers, target.Soldier.Id),
+            precision: 4);
+
+        WoundResolver resolver = new();
+        resolver.OnSoldierFall += (_, _) => { };
+        HitLocation leftLeg = initiallyNearest.Soldier.Body.HitLocations
+            .First(location => location.Template.Name == "Left Leg");
+        resolver.WoundQueue.Add(new WoundResolution(
+            null,
+            null,
+            initiallyNearest,
+            float.MaxValue,
+            leftLeg));
+        resolver.Resolve();
+
+        Assert.False(initiallyNearest.CanFight);
+        Assert.Equal(5f,
             grid.GetMinimumDistanceBetweenSquadAndSoldier(observers, target.Soldier.Id),
             precision: 4);
     }
@@ -440,6 +478,118 @@ public class BattleGridManagerTests
     }
 
     [Fact]
+    public void DistanceMatrix_IsSymmetricAndUpdatesWhenEitherSoldierMoves()
+    {
+        BattleGridManager grid = new();
+        BattleSoldier first = CreateBattleSoldier(1);
+        BattleSoldier second = CreateBattleSoldier(2);
+        grid.PlaceSoldier(first, true, Cell(0, 0));
+        grid.PlaceSoldier(second, false, Cell(3, 4));
+
+        Assert.Equal(5f, grid.GetDistanceBetweenSoldiers(1, 2), precision: 4);
+        Assert.Equal(5f, grid.GetDistanceBetweenSoldiers(2, 1), precision: 4);
+
+        grid.MoveSoldier(first, new ValueTuple<int, int>(0, 4), 0);
+
+        Assert.Equal(3f, grid.GetDistanceBetweenSoldiers(1, 2), precision: 4);
+        Assert.Equal(3f, grid.GetDistanceBetweenSoldiers(2, 1), precision: 4);
+
+        grid.MoveSoldier(second, new ValueTuple<int, int>(0, 10), 0);
+
+        Assert.Equal(6f, grid.GetDistanceBetweenSoldiers(1, 2), precision: 4);
+        Assert.Equal(6f, grid.GetDistanceBetweenSoldiers(2, 1), precision: 4);
+    }
+
+    [Fact]
+    public void RemoveThenPlace_ReusesCapacityWithoutLeakingDistanceOrPlacementOrder()
+    {
+        BattleGridManager grid = new();
+        BattleSoldier subject = CreateBattleSoldier(1);
+        BattleSoldier removed = CreateBattleSoldier(2);
+        BattleSoldier earlierSurvivor = CreateBattleSoldier(3);
+        BattleSoldier replacement = CreateBattleSoldier(4);
+        grid.PlaceSoldier(subject, true, Cell(0, 0));
+        grid.PlaceSoldier(removed, false, Cell(10, 0));
+        grid.PlaceSoldier(earlierSurvivor, false, Cell(-2, 0));
+
+        grid.RemoveSoldier(2);
+        grid.PlaceSoldier(replacement, false, Cell(2, 0));
+
+        Assert.Equal(2f, grid.GetNearestEnemy(1, out int closest), precision: 4);
+        Assert.Equal(3, closest);
+        Assert.Equal(2f, grid.GetDistanceBetweenSoldiers(1, 4), precision: 4);
+        Assert.Throws<ArgumentException>(() => grid.GetDistanceBetweenSoldiers(1, 2));
+    }
+
+    [Fact]
+    public void DistanceMatrix_GrowsAndRetainsExistingDistances()
+    {
+        BattleGridManager grid = new();
+        BattleSoldier first = CreateBattleSoldier(1);
+        grid.PlaceSoldier(first, true, Cell(0, 0));
+        for (int id = 2; id <= 20; id++)
+        {
+            grid.PlaceSoldier(CreateBattleSoldier(id), false, Cell(id, 0));
+        }
+
+        Assert.Equal(2f, grid.GetDistanceBetweenSoldiers(1, 2), precision: 4);
+        Assert.Equal(20f, grid.GetDistanceBetweenSoldiers(1, 20), precision: 4);
+
+        grid.MoveSoldier(first, new ValueTuple<int, int>(0, 3), 0);
+
+        Assert.Equal((float)System.Math.Sqrt(13),
+            grid.GetDistanceBetweenSoldiers(2, 1), precision: 4);
+    }
+
+    [Fact]
+    public void RectangleDistance_HandlesNonSquareMultiCellFootprints()
+    {
+        BattleGridManager grid = new();
+        List<ValueTuple<int, int>> firstFootprint =
+            [new(0, 0), new(0, -1), new(1, 0), new(1, -1)];
+        List<ValueTuple<int, int>> secondFootprint =
+            [new(4, 0), new(4, -1), new(4, -2)];
+        grid.PlaceSoldier(CreateBattleSoldier(1), true, firstFootprint);
+        grid.PlaceSoldier(CreateBattleSoldier(2), false, secondFootprint);
+
+        Assert.Equal(3f, grid.GetDistanceBetweenSoldiers(1, 2), precision: 4);
+    }
+
+    [Theory]
+    [InlineData(0, 0, 1, 1, 3, 4, 1, 1)]
+    [InlineData(-4, 7, 3, 2, 2, 1, 2, 5)]
+    [InlineData(10, -3, 5, 1, 12, 4, 2, 3)]
+    [InlineData(-8, -6, 2, 4, -5, -2, 6, 2)]
+    public void RectangleDistance_EqualsOccupiedCellMinimum(
+        int firstX, int firstY, int firstWidth, int firstHeight,
+        int secondX, int secondY, int secondWidth, int secondHeight)
+    {
+        List<ValueTuple<int, int>> firstCells = RectangleCells(
+            firstX, firstY, firstWidth, firstHeight);
+        List<ValueTuple<int, int>> secondCells = RectangleCells(
+            secondX, secondY, secondWidth, secondHeight);
+        BattleGridManager grid = new();
+        grid.PlaceSoldier(CreateBattleSoldier(1), true, firstCells);
+        grid.PlaceSoldier(CreateBattleSoldier(2), false, secondCells);
+
+        Assert.Equal(
+            OccupiedCellMinimum(firstCells, secondCells),
+            grid.GetDistanceBetweenSoldiers(1, 2),
+            precision: 4);
+    }
+
+    [Fact]
+    public void IrregularFootprint_UsesExactOccupiedCellDistanceFallback()
+    {
+        BattleGridManager grid = new();
+        List<ValueTuple<int, int>> irregular = [new(0, 0), new(1, 0), new(0, 1)];
+        grid.PlaceSoldier(CreateBattleSoldier(1), true, irregular);
+        grid.PlaceSoldier(CreateBattleSoldier(2), false, Cell(1, 1));
+
+        Assert.Equal(1f, grid.GetDistanceBetweenSoldiers(1, 2), precision: 4);
+    }
+
+    [Fact]
     public void GetClosestOpenAdjacency_PicksUnoccupiedNeighborNearestStart()
     {
         BattleGridManager grid = new();
@@ -476,6 +626,51 @@ public class BattleGridManagerTests
 
         Assert.Equal(new ValueTuple<int, int>(1, 1), clone.GetSoldierPosition(1)[0]);
         Assert.False(clone.IsSpaceAvailable(new ValueTuple<int, int>(9, 9)));
+    }
+
+    [Fact]
+    public void Clone_RebuildsDistancesSidesAndPlacementOrder()
+    {
+        BattleGridManager grid = new();
+        grid.PlaceSoldier(CreateBattleSoldier(1), true, Cell(0, 0));
+        grid.PlaceSoldier(CreateBattleSoldier(99), false, Cell(-2, 0));
+        grid.PlaceSoldier(CreateBattleSoldier(2), false, Cell(2, 0));
+
+        BattleGridManager clone = (BattleGridManager)grid.Clone();
+
+        Assert.Equal(2f, clone.GetDistanceBetweenSoldiers(1, 99), precision: 4);
+        Assert.Equal(2f, clone.GetNearestEnemy(1, out int closest), precision: 4);
+        Assert.Equal(99, closest);
+        Assert.True(clone.GetSoldierSide(1));
+        Assert.False(clone.GetSoldierSide(99));
+    }
+
+    private static List<ValueTuple<int, int>> RectangleCells(
+        int left, int top, int width, int height)
+    {
+        List<ValueTuple<int, int>> cells = [];
+        for (int x = left; x < left + width; x++)
+        {
+            for (int y = top; y < top + height; y++) cells.Add(new(x, y));
+        }
+        return cells;
+    }
+
+    private static float OccupiedCellMinimum(
+        IReadOnlyList<ValueTuple<int, int>> first,
+        IReadOnlyList<ValueTuple<int, int>> second)
+    {
+        long minimumSquared = long.MaxValue;
+        foreach (ValueTuple<int, int> firstCell in first)
+        {
+            foreach (ValueTuple<int, int> secondCell in second)
+            {
+                long x = firstCell.Item1 - secondCell.Item1;
+                long y = firstCell.Item2 - secondCell.Item2;
+                minimumSquared = System.Math.Min(minimumSquared, (x * x) + (y * y));
+            }
+        }
+        return (float)System.Math.Sqrt(minimumSquared);
     }
 
     [Theory]

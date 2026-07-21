@@ -2352,7 +2352,7 @@ namespace OnlyWar.Helpers.Battles
         private bool IsPlaced(BattleSoldier soldier)
         {
             return soldier != null
-                && _grid.GetSoldierPositions().ContainsKey(soldier.Soldier.Id);
+                && _grid.IsSoldierPlaced(soldier.Soldier.Id);
         }
 
         private static float GetBattleValue(BattleSoldier soldier)
