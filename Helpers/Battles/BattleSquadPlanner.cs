@@ -36,16 +36,10 @@ namespace OnlyWar.Helpers.Battles
         private readonly IRNG _random;
         private readonly Action<string> _log;
         private readonly int _maxPlanningDegreeOfParallelism;
-        private readonly Dictionary<(int AttackerSquadId, int TargetSquadId), float> _squadImminenceCache = [];
-        private readonly Dictionary<
-            (int ShooterId,
-             int TargetId,
-             int WeaponId,
-             int RangeBits,
-             int ModifierBits,
-             int TargetSpeedBits,
-             int LoadedAmmo),
-            RangedTargetEvaluation> _rangedEvaluationCache = [];
+        // Shared, frozen-state memo for the pure targeting computations below. Handed in by the
+        // resolver so the per-side planner and every worker sub-planner reuse each other's results;
+        // a standalone planner (tests) gets its own. See BattlePlanningContext for the invariant.
+        private readonly BattlePlanningContext _context;
 
         internal sealed class RangedTargetEvaluation
         {
@@ -150,10 +144,10 @@ namespace OnlyWar.Helpers.Battles
             }
         }
 
-        internal int CachedSquadImminenceCount => _squadImminenceCache.Count;
-        internal int CachedRangedEvaluationCount => _rangedEvaluationCache.Count;
+        internal int CachedSquadImminenceCount => _context.SquadImminence.Count;
+        internal int CachedRangedEvaluationCount => _context.RangedEvaluations.Count;
 
-        public BattleSquadPlanner(BattleGridManager grid, 
+        public BattleSquadPlanner(BattleGridManager grid,
                                   IReadOnlyDictionary<int, BattleSoldier> soldiers,
                                   ICollection<IAction> shootActions,
                                   ICollection<IAction> moveActions,
@@ -161,7 +155,8 @@ namespace OnlyWar.Helpers.Battles
                                   Action<string> log,
                                   IReadOnlyDictionary<int, MeleeWeaponTemplate> meleeWeaponTemplates,
                                   IRNG random,
-                                  int maxPlanningDegreeOfParallelism = 1)
+                                  int maxPlanningDegreeOfParallelism = 1,
+                                  BattlePlanningContext context = null)
         {
             _grid = grid;
             _shootActions = shootActions;
@@ -173,6 +168,9 @@ namespace OnlyWar.Helpers.Battles
             _random = random ?? throw new ArgumentNullException(nameof(random));
             _log = log;
             _maxPlanningDegreeOfParallelism = Math.Max(1, maxPlanningDegreeOfParallelism);
+            // A standalone planner (unit tests, one-off callers) gets a private context, which
+            // reproduces the previous per-planner cache scope exactly.
+            _context = context ?? new BattlePlanningContext();
         }
 
         private sealed class WorkerPlan
@@ -193,7 +191,8 @@ namespace OnlyWar.Helpers.Battles
                     owner._log,
                     owner._meleeWeaponTemplates,
                     owner._random,
-                    1);
+                    1,
+                    owner._context);
             }
         }
 
@@ -2315,7 +2314,7 @@ namespace OnlyWar.Helpers.Battles
                 BitConverter.SingleToInt32Bits(additionalToHitModifier),
                 BitConverter.SingleToInt32Bits(target.CurrentSpeed),
                 (int)weapon.LoadedAmmo);
-            if (_rangedEvaluationCache.TryGetValue(cacheKey, out RangedTargetEvaluation cached))
+            if (_context.RangedEvaluations.TryGetValue(cacheKey, out RangedTargetEvaluation cached))
             {
                 return cached;
             }
@@ -2349,7 +2348,7 @@ namespace OnlyWar.Helpers.Battles
                 attackEstimate.Item2,
                 enemyBattleValueRemoved,
                 friendlyBattleValueLost);
-            _rangedEvaluationCache[cacheKey] = result;
+            _context.RangedEvaluations[cacheKey] = result;
             return result;
         }
 
@@ -2357,6 +2356,16 @@ namespace OnlyWar.Helpers.Battles
             BattleSoldier shooter,
             ValueTuple<int, int>? movementDirection = null)
         {
+            // The nearest in-range enemy squads are a pure function of the frozen layout, the
+            // shooter, and the firing direction, yet SelectBestRangedTarget and
+            // SelectBestTemplateFiringLine each request them with the same arguments (and again
+            // across planning phases). Memoize per (shooter, direction) for the turn.
+            var cacheKey = (shooter.Soldier.Id, movementDirection);
+            if (_context.NearestInRangeSquads.TryGetValue(cacheKey, out IReadOnlyList<BattleSquad> cached))
+            {
+                return cached;
+            }
+
             // Effective range matters for thrown weapons (a grenade's reach scales with
             // the thrower's Strength); every other weapon reads its raw MaximumRange.
             float maximumRange = shooter.EquippedRangedWeapons
@@ -2366,10 +2375,12 @@ namespace OnlyWar.Helpers.Battles
                     weapon.Template))
                 .DefaultIfEmpty(0)
                 .Max();
-            return GetNearestEnemySquadsWithinRange(
+            IReadOnlyList<BattleSquad> nearest = GetNearestEnemySquadsWithinRange(
                 shooter,
                 maximumRange,
                 movementDirection);
+            _context.NearestInRangeSquads[cacheKey] = nearest;
+            return nearest;
         }
 
         private IReadOnlyList<BattleSquad> GetNearestEnemySquadsWithinRange(
@@ -2532,13 +2543,13 @@ namespace OnlyWar.Helpers.Battles
             if (attackerSquad == null || targetSquad == null) return 0;
 
             var cacheKey = (attackerSquad.Id, targetSquad.Id);
-            if (_squadImminenceCache.TryGetValue(cacheKey, out float cached))
+            if (_context.SquadImminence.TryGetValue(cacheKey, out float cached))
             {
                 return cached;
             }
 
             float calculated = CalculateSquadImminence(attackerSquad, targetSquad);
-            _squadImminenceCache[cacheKey] = calculated;
+            _context.SquadImminence[cacheKey] = calculated;
             return calculated;
         }
 

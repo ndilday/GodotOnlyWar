@@ -260,8 +260,12 @@ namespace OnlyWar.Helpers.Battles
                           Action<string> log)
         {
             PrepareParallelPlanningState();
-            PlanSide(BattleSide.Attacker, shootSegmentActions, moveSegmentActions, meleeSegmentActions, log);
-            PlanSide(BattleSide.Opposing, shootSegmentActions, moveSegmentActions, meleeSegmentActions, log);
+            // One shared memo for the whole planning pass. The grid layout is frozen until
+            // execution begins (below), so both sides' planners can safely reuse each other's
+            // pure targeting computations. Rebuilt every turn, so nothing survives a layout change.
+            BattlePlanningContext planningContext = new();
+            PlanSide(BattleSide.Attacker, shootSegmentActions, moveSegmentActions, meleeSegmentActions, log, planningContext);
+            PlanSide(BattleSide.Opposing, shootSegmentActions, moveSegmentActions, meleeSegmentActions, log, planningContext);
         }
 
         private void PrepareParallelPlanningState()
@@ -285,7 +289,8 @@ namespace OnlyWar.Helpers.Battles
             ICollection<IAction> shootActions,
             ICollection<IAction> moveActions,
             ICollection<IAction> meleeActions,
-            Action<string> log)
+            Action<string> log,
+            BattlePlanningContext planningContext)
         {
             IReadOnlyCollection<BattleSquad> allFriendly = GetActiveSquads(side);
             IReadOnlyCollection<BattleSquad> enemy = GetActiveSquads(Opposite(side));
@@ -299,7 +304,8 @@ namespace OnlyWar.Helpers.Battles
                 log,
                 _execution.Rules.MeleeWeaponTemplates,
                 _execution.Random,
-                _execution.MaxPlanningDegreeOfParallelism);
+                _execution.MaxPlanningDegreeOfParallelism,
+                planningContext);
             BattleForcePlanner forcePlanner = new(squadPlanner);
 
             // Routing squads flee through their own planner path regardless of side intent
