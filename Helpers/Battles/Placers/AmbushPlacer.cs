@@ -133,7 +133,7 @@ namespace OnlyWar.Helpers.Battles.Placers
                 .ToList();
 
             // A squad's "frontage" is how many soldiers stand across its firing line -- the
-            // width of its box (GetSquadBoxSize().X) -- regardless of which leg it lands on.
+            // width of its loose formation -- regardless of which leg it lands on.
             int totalFrontage = sorted.Sum(s => s.GetSquadBoxSize().X);
             List<BattleSquad> longLeg = [];
             List<BattleSquad> shortLeg = [];

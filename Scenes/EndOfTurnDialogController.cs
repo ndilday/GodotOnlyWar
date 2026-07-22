@@ -117,9 +117,27 @@ public partial class EndOfTurnDialogController : DialogController
         IEnumerable<StrategicCombatResult> strategicCombatResults)
     {
         List<EndOfTurnReportEntry> entries = [];
+        HashSet<MissionContext> reportedContexts = [];
 
         foreach (MissionContext context in missionContexts)
         {
+            if (!reportedContexts.Add(context)) continue;
+
+            bool isPlayerRecon = context.Order?.Mission?.MissionType == MissionType.Recon
+                && context.MissionSquads.Any(squad => squad?.Squad?.Faction?.IsPlayerFaction == true);
+            if (isPlayerRecon)
+            {
+                List<MissionContext> orderElements = missionContexts
+                    .Where(candidate => ReferenceEquals(candidate.Order, context.Order))
+                    .ToList();
+                foreach (MissionContext element in orderElements)
+                {
+                    reportedContexts.Add(element);
+                }
+                entries.Add(BuildPlayerReconEntry(orderElements));
+                continue;
+            }
+
             EndOfTurnReportEntry entry = BuildMissionEntry(context);
             if (entry != null)
             {
@@ -155,6 +173,43 @@ public partial class EndOfTurnDialogController : DialogController
         }
 
         return entries;
+    }
+
+    private static EndOfTurnReportEntry BuildPlayerReconEntry(
+        IReadOnlyList<MissionContext> elementContexts)
+    {
+        MissionContext first = elementContexts[0];
+        Mission mission = first.Order.Mission;
+        Region region = mission.RegionFaction?.Region;
+        string location = region == null ? "Unknown location" : $"{region.Name}, {region.Planet?.Name}";
+        List<string> squadNames = elementContexts
+            .SelectMany(context => context.MissionSquads)
+            .Select(squad => squad?.Squad?.Name)
+            .Where(name => !string.IsNullOrWhiteSpace(name))
+            .Distinct()
+            .ToList();
+        string subtitle = MissionReportHeadlineBuilder.Build(
+            MissionType.Recon,
+            squadNames,
+            mission.RegionFaction?.PlanetFaction?.Faction?.Name,
+            region?.Name,
+            region?.Planet?.Name);
+        ReconOperationReport report = ReconOperationReportBuilder.Build(elementContexts, location);
+        IReadOnlyList<MissionDebriefLine> lines = elementContexts
+            .SelectMany(context => context.DebriefLines.Count > 0
+                ? context.DebriefLines
+                : context.Log.Select(line => new MissionDebriefLine(line)))
+            .OrderBy(line => line.Day ?? ushort.MaxValue)
+            .ThenBy(line => line.SquadName)
+            .ToList();
+
+        return new EndOfTurnReportEntry(
+            "Recon",
+            subtitle,
+            report.Summary,
+            true,
+            report.OutcomeStatus,
+            lines);
     }
 
     private static EndOfTurnReportEntry BuildMissionEntry(MissionContext context)

@@ -69,6 +69,11 @@ namespace OnlyWar.Helpers.Turns
             _intelLedger.RecordGain(planetFaction, region, gain);
         }
 
+        internal void RecordReconEvidence(PlanetFaction planetFaction, Region region, float evidence)
+        {
+            _intelLedger.RecordReconEvidence(planetFaction, region, evidence);
+        }
+
         internal void UpdatePlanets(IEnumerable<Planet> planets)
         {
             foreach (Planet planet in planets)

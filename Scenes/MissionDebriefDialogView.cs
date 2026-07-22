@@ -1,10 +1,12 @@
 using Godot;
+using OnlyWar.Helpers;
 using OnlyWar.Helpers.Battles;
 using OnlyWar.Helpers.UI;
 using OnlyWar.Models.Battles;
 using OnlyWar.Models.Missions;
 using System;
 using System.Collections.Generic;
+using System.Linq;
 
 public partial class MissionDebriefDialogView : DialogView
 {
@@ -46,10 +48,49 @@ public partial class MissionDebriefDialogView : DialogView
             return;
         }
 
+        foreach (MissionDebriefLineGroup group in MissionDebriefLineGrouper.GroupByDay(lines))
+        {
+            if (group.Day.HasValue)
+            {
+                AddDayGroup(group.Day.Value, group.Lines);
+            }
+            else
+            {
+                AddTextLine(group.Lines[0]);
+            }
+        }
+    }
+
+    private void AddDayGroup(ushort day, IReadOnlyList<MissionDebriefLine> lines)
+    {
+        PanelContainer panel = new();
+        bool hasBattle = lines.Any(line => line.HasBattle);
+        OnlyWarStyle.ApplyEventPanel(panel, hasBattle ? OnlyWarEventTone.Warning : OnlyWarEventTone.Normal);
+
+        MarginContainer margin = new();
+        panel.AddChild(margin);
+
+        VBoxContainer stack = new();
+        stack.AddThemeConstantOverride("separation", 8);
+        margin.AddChild(stack);
+
+        Label heading = new() { Text = $"DAY {day}" };
+        heading.AddThemeColorOverride("font_color", OnlyWarStyle.MutedText);
+        stack.AddChild(heading);
+
         foreach (MissionDebriefLine line in lines)
         {
-            AddTextLine(line);
+            if (line.HasBattle)
+            {
+                AddBattleContent(stack, line, BuildActivityPrefix(line));
+            }
+            else
+            {
+                AddNarrative(stack, BuildActivityText(line, day));
+            }
         }
+
+        _lineList.AddChild(panel);
     }
 
     private void AddTextLine(MissionDebriefLine line)
@@ -64,68 +105,129 @@ public partial class MissionDebriefDialogView : DialogView
         stack.AddThemeConstantOverride("separation", 6);
         margin.AddChild(stack);
 
-        if (line.HasBattle)
+        if (line.Day.HasValue || !string.IsNullOrWhiteSpace(line.SquadName))
         {
-            BattleDebriefReport report = line.BattleReport ?? BattleDebriefReportBuilder.Build(line.BattleHistory);
-            Label summary = new()
+            string day = line.Day.HasValue ? $"DAY {line.Day.Value}" : "";
+            string separator = line.Day.HasValue && !string.IsNullOrWhiteSpace(line.SquadName)
+                ? "  ·  "
+                : "";
+            Label attribution = new()
             {
-                Text = $"Friendly dead: {report.PlayerDeaths}    Opposing dead: {report.OpposingDeaths}",
+                Text = $"{day}{separator}{line.SquadName}".ToUpperInvariant(),
                 AutowrapMode = TextServer.AutowrapMode.WordSmart
             };
-            summary.AddThemeColorOverride("font_color",
-                report.PlayerDeaths > 0 ? OnlyWarStyle.MedicalWarning : OnlyWarStyle.MutedText);
-            stack.AddChild(summary);
+            attribution.AddThemeColorOverride("font_color", OnlyWarStyle.MutedText);
+            stack.AddChild(attribution);
+        }
 
-            HBoxContainer controls = new();
-            controls.AddThemeConstantOverride("separation", 8);
-
-            Button casualtyButton = new()
-            {
-                Text = "DEAD & INJURED",
-                CustomMinimumSize = new Vector2(190, 34),
-                TooltipText = "Show Chapter casualties and recovery requirements"
-            };
-            VBoxContainer casualtyList = null;
-            casualtyButton.Pressed += () =>
-            {
-                if (casualtyList == null)
-                {
-                    casualtyList = BuildCasualtyList(report);
-                    stack.AddChild(casualtyList);
-                }
-                else
-                {
-                    casualtyList.Visible = !casualtyList.Visible;
-                }
-
-                casualtyButton.Text = casualtyList.Visible ? "HIDE DEAD & INJURED" : "DEAD & INJURED";
-            };
-            controls.AddChild(casualtyButton);
-
-            Button reviewButton = new()
-            {
-                Text = "VIEW BATTLE",
-                CustomMinimumSize = new Vector2(170, 34),
-                TooltipText = "Open the battle replay for this engagement"
-            };
-            BattleHistory battleHistory = line.BattleHistory;
-            reviewButton.Pressed += () => BattleReviewRequested?.Invoke(this, battleHistory);
-            controls.AddChild(reviewButton);
-            stack.AddChild(controls);
+        if (line.HasBattle)
+        {
+            AddBattleContent(stack, line);
             _lineList.AddChild(panel);
             return;
         }
 
+        AddNarrative(stack, line.Text);
+        _lineList.AddChild(panel);
+    }
+
+    private static void AddNarrative(VBoxContainer stack, string content)
+    {
         RichTextLabel text = new()
         {
-            Text = line.Text ?? "",
+            Text = content ?? "",
             FitContent = true,
             AutowrapMode = TextServer.AutowrapMode.WordSmart,
             BbcodeEnabled = false,
             SizeFlagsHorizontal = SizeFlags.ExpandFill
         };
         stack.AddChild(text);
-        _lineList.AddChild(panel);
+    }
+
+    private void AddBattleContent(VBoxContainer stack, MissionDebriefLine line, string prefix = "")
+    {
+        BattleDebriefReport report = line.BattleReport ?? BattleDebriefReportBuilder.Build(line.BattleHistory);
+        Label summary = new()
+        {
+            Text = $"{prefix}Friendly dead: {report.PlayerDeaths}    Opposing dead: {report.OpposingDeaths}",
+            AutowrapMode = TextServer.AutowrapMode.WordSmart
+        };
+        summary.AddThemeColorOverride("font_color",
+            report.PlayerDeaths > 0 ? OnlyWarStyle.MedicalWarning : OnlyWarStyle.MutedText);
+        stack.AddChild(summary);
+
+        HBoxContainer controls = new();
+        controls.AddThemeConstantOverride("separation", 8);
+
+        Button casualtyButton = new()
+        {
+            Text = "DEAD & INJURED",
+            CustomMinimumSize = new Vector2(190, 34),
+            TooltipText = "Show Chapter casualties and recovery requirements"
+        };
+        VBoxContainer casualtyList = null;
+        casualtyButton.Pressed += () =>
+        {
+            if (casualtyList == null)
+            {
+                casualtyList = BuildCasualtyList(report);
+                stack.AddChild(casualtyList);
+            }
+            else
+            {
+                casualtyList.Visible = !casualtyList.Visible;
+            }
+
+            casualtyButton.Text = casualtyList.Visible ? "HIDE DEAD & INJURED" : "DEAD & INJURED";
+        };
+        controls.AddChild(casualtyButton);
+
+        Button reviewButton = new()
+        {
+            Text = "VIEW BATTLE",
+            CustomMinimumSize = new Vector2(170, 34),
+            TooltipText = "Open the battle replay for this engagement"
+        };
+        BattleHistory battleHistory = line.BattleHistory;
+        reviewButton.Pressed += () => BattleReviewRequested?.Invoke(this, battleHistory);
+        controls.AddChild(reviewButton);
+        stack.AddChild(controls);
+    }
+
+    private static string BuildActivityPrefix(MissionDebriefLine line) =>
+        string.IsNullOrWhiteSpace(line.SquadName)
+            ? "• "
+            : $"• {line.SquadName} — ";
+
+    private static string BuildActivityText(MissionDebriefLine line, ushort day)
+    {
+        string activity = StripDayPrefix(line.Text, day);
+        if (string.IsNullOrWhiteSpace(line.SquadName))
+        {
+            return $"• {activity}";
+        }
+
+        const string forcePrefix = "Force ";
+        if (activity.StartsWith(forcePrefix, StringComparison.OrdinalIgnoreCase))
+        {
+            string action = activity[forcePrefix.Length..];
+            if (action.Length > 0)
+            {
+                action = char.ToLowerInvariant(action[0]) + action[1..];
+            }
+            return $"• {line.SquadName} {action}";
+        }
+
+        return $"• {line.SquadName} — {activity}";
+    }
+
+    private static string StripDayPrefix(string text, ushort day)
+    {
+        string value = text ?? "";
+        string prefix = $"Day {day}:";
+        return value.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)
+            ? value[prefix.Length..].TrimStart()
+            : value;
     }
 
     private static VBoxContainer BuildCasualtyList(BattleDebriefReport report)

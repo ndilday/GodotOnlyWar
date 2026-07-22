@@ -53,7 +53,7 @@ namespace OnlyWar.Helpers
                 _planetTurnProcessor.RecordIntelGain,
                 ScenarioMetricsCollector.RecordScenarioPdfLost);
             _missionAftermathProcessor = new MissionAftermathProcessor(
-                _planetTurnProcessor.RecordIntelGain,
+                _planetTurnProcessor.RecordReconEvidence,
                 ScenarioMetricsCollector.RecordScenarioPdfLost);
             _planetForwardSimulator = new PlanetForwardSimulator(
                 _session,

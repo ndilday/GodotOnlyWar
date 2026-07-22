@@ -42,7 +42,6 @@ namespace OnlyWar.Helpers.Missions.Recon
                 return;
             }
             context.DaysElapsed++;
-            context.AddLog($"Day {context.DaysElapsed}: Force attempting to infiltrate into {context.Order.Mission.RegionFaction.Region.Name}");
             // modifiers should include: size of enemy forces, size of player force, terrain, some notion of enemy focus (hunting, defending, hiding), whether enemy is hidden or public
             float bestStealth = context.MissionSquads
                 .SelectMany(s => s.AbleSoldiers)
@@ -59,6 +58,9 @@ namespace OnlyWar.Helpers.Missions.Recon
                 + $"bestStealthSkill={bestStealth:F2}, margin={margin:F2} -> {(margin > 0 ? "INFILTRATED" : "DETECTED")}");
             if (margin > 0.0f)
             {
+                context.AddLog(
+                    $"Day {context.DaysElapsed}: Force succeeded in infiltrating "
+                    + $"{context.Order.Mission.RegionFaction.Region.Name} undetected.");
                 MissionStepOrchestrator.GetMainInitialStep(execution)
                     .ExecuteMissionStep(execution, margin, returnStep);
             }

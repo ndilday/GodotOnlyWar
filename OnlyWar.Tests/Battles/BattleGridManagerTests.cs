@@ -177,7 +177,7 @@ public class BattleGridManagerTests
 
         Assert.Equal(new[] { new ValueTuple<int, int>(1, 0), new ValueTuple<int, int>(2, 0) },
             grid.GetSoldierPosition(1));
-        Assert.Equal(new[] { new ValueTuple<int, int>(1, 1), new ValueTuple<int, int>(2, 1) },
+        Assert.Equal(new[] { new ValueTuple<int, int>(1, 2), new ValueTuple<int, int>(2, 2) },
             grid.GetSoldierPosition(2));
     }
 
@@ -524,6 +524,70 @@ public class BattleGridManagerTests
             grid.GetSoldierPosition(soldier.Soldier.Id)[0].Item2 == frontY);
 
         Assert.Equal(5, soldiersInFrontRank);
+    }
+
+    [Fact]
+    public void PlaceBattleSquad_UsesLooseSawtoothRanks()
+    {
+        BattleGridManager grid = new();
+        BattleSquad squad = CreateBattleSquadWithSoldiers("Ten", 400, 10, true);
+
+        BattleSquadPlacer.PlaceBattleSquad(grid, squad, new ValueTuple<int, int>(0, 0),
+            longHorizontal: true, tacticalSide: true, formationSide: false);
+
+        int[][] ranks = squad.Soldiers
+            .GroupBy(soldier => grid.GetSoldierPosition(soldier.Soldier.Id)[0].Item2)
+            .OrderBy(group => group.Key)
+            .Select(group => group
+                .Select(soldier => grid.GetSoldierPosition(soldier.Soldier.Id)[0].Item1)
+                .OrderBy(x => x)
+                .ToArray())
+            .ToArray();
+
+        Assert.Equal(new[] { 0, 2, 4, 6, 8 }, ranks[0]);
+        Assert.Equal(new[] { 1, 3, 5, 7, 9 }, ranks[1]);
+        Assert.Equal(new Coordinate(10, 2), squad.GetSquadBoxSize());
+    }
+
+    [Fact]
+    public void PlaceBattleSquad_RotatesLooseSawtoothRanks()
+    {
+        BattleGridManager grid = new();
+        BattleSquad squad = CreateBattleSquadWithSoldiers("Ten", 500, 10, true);
+
+        BattleSquadPlacer.PlaceBattleSquad(grid, squad, new ValueTuple<int, int>(0, 0),
+            longHorizontal: false, tacticalSide: true, formationSide: false);
+
+        int[][] ranks = squad.Soldiers
+            .GroupBy(soldier => grid.GetSoldierPosition(soldier.Soldier.Id)[0].Item1)
+            .OrderBy(group => group.Key)
+            .Select(group => group
+                .Select(soldier => grid.GetSoldierPosition(soldier.Soldier.Id)[0].Item2)
+                .OrderBy(y => y)
+                .ToArray())
+            .ToArray();
+
+        Assert.Equal(new[] { 0, 2, 4, 6, 8 }, ranks[0]);
+        Assert.Equal(new[] { 1, 3, 5, 7, 9 }, ranks[1]);
+    }
+
+    [Fact]
+    public void AnnihilationPlacer_SeparatesSquadsUsingLooseFormationBounds()
+    {
+        BattleGridManager grid = new();
+        BattleSquad left = CreateBattleSquadWithSoldiers("Left", 600, 10, true);
+        BattleSquad right = CreateBattleSquadWithSoldiers("Right", 700, 10, true);
+        BattleSquad opponent = CreateBattleSquad("Opponent", 800);
+
+        new AnnihilationPlacer(grid, range: 12)
+            .PlaceSquads([left, right], [opponent]);
+
+        int leftMax = left.Soldiers.Max(soldier =>
+            grid.GetSoldierPosition(soldier.Soldier.Id).Max(cell => cell.Item1));
+        int rightMin = right.Soldiers.Min(soldier =>
+            grid.GetSoldierPosition(soldier.Soldier.Id).Min(cell => cell.Item1));
+
+        Assert.Equal(3, rightMin - leftMax);
     }
 
     [Fact]

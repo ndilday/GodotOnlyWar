@@ -20,7 +20,7 @@ namespace OnlyWar.Helpers.Missions.Recon
             BaseSkill tactics = execution.Rules.Tactics;
             LeaderMissionTest missionTest = new LeaderMissionTest(tactics, 10.0f);
             // move the generation of new missions to the turn controller, rather than the individual mission steps
-            context.AddLog($"Day {context.DaysElapsed}: Force performs reconnisance in {context.Order.Mission.RegionFaction.Region.Name}");
+            context.AddLog($"Day {context.DaysElapsed}: Force performs reconnaissance in {context.Order.Mission.RegionFaction.Region.Name}");
             float margin = missionTest.RunMissionCheck(context.MissionSquads, execution.Random);
             // a particularly bad result means bad intel
             if(margin > 0 || margin < -0.5f)

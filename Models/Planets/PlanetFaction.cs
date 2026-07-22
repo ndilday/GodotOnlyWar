@@ -1,6 +1,8 @@
 ﻿using OnlyWar.Models.Squads;
 using System.Collections.Generic;
 
+using System;
+
 namespace OnlyWar.Models.Planets
 {
     public class PlanetFaction
@@ -35,12 +37,12 @@ namespace OnlyWar.Models.Planets
         public float GetRegionIntel(Region region) =>
             RegionIntel.TryGetValue(region, out float level) ? level : 0f;
 
-        // Raises this faction's awareness of a region (a recon/patrol result, or a passive sensor
-        // top-up). Ignores non-positive amounts so a failed sweep never erodes prior knowledge.
+        // Applies a signed adjustment to this faction's awareness of a region. Recon can corrupt
+        // an existing assessment, while patrols and passive sensors normally add positive amounts.
+        // Awareness is belief confidence and therefore cannot fall below zero.
         public void AddRegionIntel(Region region, float amount)
         {
-            if (amount <= 0) return;
-            RegionIntel[region] = GetRegionIntel(region) + amount;
+            SetRegionIntel(region, Math.Max(0f, GetRegionIntel(region) + amount));
         }
 
         // Overwrites this faction's awareness of a region (scenario seeding, decay). A value of

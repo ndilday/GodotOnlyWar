@@ -14,13 +14,22 @@ namespace OnlyWar.Models.Missions
         public string Text { get; }
         public BattleHistory BattleHistory { get; }
         public BattleDebriefReport BattleReport { get; }
+        public ushort? Day { get; }
+        public string SquadName { get; }
         public bool HasBattle => BattleHistory != null;
 
-        public MissionDebriefLine(string text, BattleHistory battleHistory = null, BattleDebriefReport battleReport = null)
+        public MissionDebriefLine(
+            string text,
+            BattleHistory battleHistory = null,
+            BattleDebriefReport battleReport = null,
+            ushort? day = null,
+            string squadName = null)
         {
             Text = text ?? "";
             BattleHistory = battleHistory;
             BattleReport = battleReport;
+            Day = day;
+            SquadName = squadName;
         }
     }
 
@@ -129,7 +138,10 @@ namespace OnlyWar.Models.Missions
         public void AddLog(string text)
         {
             Log.Add(text);
-            DebriefLines.Add(new MissionDebriefLine(text));
+            DebriefLines.Add(new MissionDebriefLine(
+                text,
+                day: GetElementDay(),
+                squadName: GetElementSquadName()));
         }
 
         public void AddBattleReport(BattleHistory battleHistory)
@@ -137,8 +149,22 @@ namespace OnlyWar.Models.Missions
             BattleDebriefReport report = BattleDebriefReportBuilder.Build(battleHistory);
             string summary = $"Friendly dead: {report.PlayerDeaths}    Opposing dead: {report.OpposingDeaths}";
             Log.Add(summary);
-            DebriefLines.Add(new MissionDebriefLine(summary, battleHistory, report));
+            DebriefLines.Add(new MissionDebriefLine(
+                summary,
+                battleHistory,
+                report,
+                GetElementDay(),
+                GetElementSquadName()));
         }
+
+        private string GetElementSquadName() =>
+            IsIndependentReconElement() ? MissionSquads[0].Squad?.Name : null;
+
+        private ushort? GetElementDay() =>
+            IsIndependentReconElement() ? DaysElapsed : null;
+
+        private bool IsIndependentReconElement() =>
+            Order?.Mission?.MissionType == MissionType.Recon && MissionSquads.Count == 1;
 
         public void RecordBattleOutcome(BattleHistory battleHistory)
         {

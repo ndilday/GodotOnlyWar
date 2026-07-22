@@ -27,6 +27,7 @@ namespace OnlyWar.Helpers.Battles
         private float _averageRangedEvasion;
         private float _averageConstitution;
         private float _squadMove;
+        private readonly int _missionStartingAbleSoldierCount;
 
         public int Id { get; private set; }
         public string Name { get; private set; }
@@ -162,6 +163,7 @@ namespace OnlyWar.Helpers.Battles
             Name = squad.Name;
             Squad = squad;
             Soldiers = squad.Members.Select(s => new BattleSoldier(s, this)).ToList();
+            _missionStartingAbleSoldierCount = AbleSoldiers.Count;
             IsPlayerSquad = isPlayerSquad;
             IsInMelee = false;
             MovementTier = SquadMovementTier.Stationary;
@@ -184,6 +186,7 @@ namespace OnlyWar.Helpers.Battles
             Status = original.Status;
             WithdrawalRole = original.WithdrawalRole;
             MoraleState = original.MoraleState;
+            _missionStartingAbleSoldierCount = original._missionStartingAbleSoldierCount;
             // because of the circular reference, the clone function won't work,
             // so I made a custom BattleSoldier constructor that does basically the same thing
             Soldiers = original.Soldiers.Select(s => new BattleSoldier(s, this)).ToList();
@@ -196,22 +199,7 @@ namespace OnlyWar.Helpers.Battles
 
         public Coordinate GetSquadBoxSize()
         {
-            List<BattleSoldier> ableSoldiers = AbleSoldiers;
-            int numberOfRows = 1;
-            if (ableSoldiers.Count >= 30)
-            {
-                numberOfRows = 3;
-            }
-            else if (ableSoldiers.Count > 7)
-            {
-                numberOfRows = 2;
-            }
-            // membersPerRow is how many soldiers are in each row (back row may be smaller)
-            ushort membersPerRow = (ushort)Math.Ceiling((float)ableSoldiers.Count / numberOfRows);
-            ushort maxWidth = ableSoldiers.Max(s => s.Soldier.Template.Species.Width);
-            ushort maxDepth = ableSoldiers.Max(s => s.Soldier.Template.Species.Depth);
-            return new Coordinate((ushort)(membersPerRow * maxWidth),
-                                             (ushort)(numberOfRows * maxDepth));
+            return Placers.SquadFormationGeometry.For(this).Bounds;
         }
 
         public BattleSoldier GetRandomSquadMember(IRNG random)
@@ -291,9 +279,12 @@ namespace OnlyWar.Helpers.Battles
             }
             else
             {
-                // see how large the squad currently is compared to its maximum size
+                // Aggression measures the losses this particular mission element will tolerate.
+                // Under-strength squads must not abort merely because their template has empty
+                // positions, so compare against the combat-capable roster captured when this
+                // BattleSquad was created rather than the template's theoretical maximum.
                 // TODO: adjust based on whether the squad leader is still around?
-                float ratio = (float)ableSoldierCount / Squad.SquadTemplate.Elements.Sum(e => e.MaximumNumber);
+                float ratio = (float)ableSoldierCount / _missionStartingAbleSoldierCount;
                 switch (Squad.CurrentOrders.LevelOfAggression)
                 {
                     case Aggression.Avoid:

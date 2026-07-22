@@ -559,6 +559,7 @@ Non-deployed non-Scout marines receive weekly work-experience training through `
 
 **Intelligence Decay:**
 - Regions with `IntelligenceLevel > 0` have it multiplied by 0.75 each turn.
+- Recon produces signed evidence: strong failures can reduce the observer's regional belief, but the stored value is clamped at zero. All positive and negative recon evidence produced by an intel-sharing group in the same region during a week is pooled separately, transformed through `D(x) = 6 * (1 - exp(-x / 6))`, and combined as `D(positive) - D(negative)`. Passive listening-post, patrol, and battle-contact gains remain linear. Pooling before the transform makes the result independent of order grouping and prevents allied factions from bypassing diminishing returns.
 - While intelligence remains, hidden faction cells may be revealed as `Extermination` missions; public faction intelligence may generate `Ambush`, `Sabotage`, or `Assassination` special missions.
 - Each unconsumed special mission has a 25% chance of expiring each turn.
 
@@ -590,6 +591,10 @@ Step chains by mission type:
 | Ambush / Extermination | `PositionAmbushMissionStep` → `AmbushBattleStep` |
 | Assassination | `AssassinateStealthMissionStep` → `AssassinateBattleStep` |
 | Sabotage | `SabotageStealthMissionStep` → `PerformSabotageMissionStep` (loops 6 days) → `ExfiltrateMissionStep` |
+
+Mission force topology defaults to `UnifiedForce`. Recon explicitly uses `IndependentSquads`: every assigned squad receives its own `MissionContext`, stealth checks, interception state, battles, field experience, and soldier outcome record. The shared `Order` is only an organizational/reporting container. The end-of-turn view groups those element contexts back into one order-level recon entry while retaining squad/day attribution and each battle replay. Raids, assassinations, sabotage, advances, and other mass-force missions continue to resolve all assigned squads in one unified context.
+
+Mission continuation thresholds measure casualties relative to the combat-capable members present when each `BattleSquad` mission element is created, not the squad template's maximum roster. An under-strength squad therefore begins at 100% mission strength; subsequent losses are compared with that starting force according to the order's aggression setting.
 
 Detection during any stealth phase routes to `DetectedMissionStep`, which dispatches to `AmbushedMissionStep` or `MeetingEngagementMissionStep` depending on context.
 

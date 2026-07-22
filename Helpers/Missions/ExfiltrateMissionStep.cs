@@ -55,7 +55,6 @@ namespace OnlyWar.Helpers.Missions
             float margin = missionTest.RunMissionCheck(context.MissionSquads, execution.Random);
             if (margin > 0.0f)
             {
-                context.ForceBrokeContact = true;
                 context.AddLog($"Day {context.DaysElapsed}: Force has returned to base.");
                 GameLog.Trace(() =>
                     $"Exfiltrate {context.Order.Mission.RegionFaction.Region.Planet.Name}/"

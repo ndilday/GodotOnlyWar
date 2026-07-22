@@ -15,41 +15,40 @@ namespace OnlyWar.Helpers.Battles.Placers
         {
             // if any squad member is already on the map, we have a problem
             //if (squad.Soldiers.Any(s => _soldierLocationsMap.ContainsKey(s.Soldier.Id))) throw new InvalidOperationException(squad.Name + " has soldiers already on BattleGrid");
-            if (squad.AbleSoldiers.Count == 0) throw new InvalidOperationException("No soldiers in " + squad.Name + " to place");
-            Coordinate squadBoxSize = squad.GetSquadBoxSize();
+            SquadFormationGeometry geometry = SquadFormationGeometry.For(squad);
             ValueTuple<int, int> startingLocation;
             if (longHorizontal)
             {
-                startingLocation = PlaceSquadHorizontally(manager, squad, bottomLeft, squadBoxSize, formationSide, tacticalSide);
+                startingLocation = PlaceSquadHorizontally(manager, squad, bottomLeft, geometry, formationSide, tacticalSide);
             }
             else
             {
-                startingLocation = PlaceSquadVertically(manager, squad, bottomLeft, squadBoxSize, formationSide, tacticalSide);
+                startingLocation = PlaceSquadVertically(manager, squad, bottomLeft, geometry, formationSide, tacticalSide);
             }
             OnSquadPlaced?.Invoke(squad, startingLocation);
         }
 
         private static ValueTuple<int, int> PlaceSquadHorizontally(BattleGridManager manager, BattleSquad squad,
-                                                              ValueTuple<int, int> bottomLeft, Coordinate squadBoxSize,
+                                                              ValueTuple<int, int> bottomLeft, SquadFormationGeometry geometry,
                                                               bool formationSide, bool tacticalSide)
         {
+            Coordinate squadBoxSize = geometry.Bounds;
             ValueTuple<int, int> startingLocation = new ValueTuple<int, int>((short)(bottomLeft.Item1 + ((squadBoxSize.X - 1) / 2)),
                                                                            (short)(bottomLeft.Item2 + squadBoxSize.Y - 1));
-            int cellWidth = squad.AbleSoldiers.Max(s => s.Soldier.Template.Species.Width);
-            int cellDepth = squad.AbleSoldiers.Max(s => s.Soldier.Template.Species.Depth);
-            int membersPerRow = Math.Max(1, squadBoxSize.X / cellWidth);
-            int rowCount = (int)Math.Ceiling((double)squad.AbleSoldiers.Count / membersPerRow);
-            int emptyRearRankSlots = rowCount * membersPerRow - squad.AbleSoldiers.Count;
+            int emptyRearRankSlots = geometry.RankCount * geometry.MembersPerRank
+                - squad.AbleSoldiers.Count;
             for (int i = 0; i < squad.AbleSoldiers.Count; i++)
             {
                 ushort width = squad.AbleSoldiers[i].Soldier.Template.Species.Width;
                 ushort depth = squad.AbleSoldiers[i].Soldier.Template.Species.Depth;
                 int formationIndex = i + emptyRearRankSlots;
-                int rowIndex = formationIndex / membersPerRow;
-                int columnIndex = formationIndex % membersPerRow;
-                int yMod = rowIndex * cellDepth * (formationSide ? -1 : 1);
-                int xMod = (columnIndex * cellWidth) - ((squadBoxSize.X - cellWidth) / 2)
-                           + ((cellWidth - width) / 2);
+                int rowIndex = formationIndex / geometry.MembersPerRank;
+                int columnIndex = formationIndex % geometry.MembersPerRank;
+                int yMod = rowIndex * geometry.CellDepth * (formationSide ? -1 : 1);
+                int xMod = (columnIndex * geometry.LateralPitch)
+                           + (rowIndex % 2)
+                           + ((geometry.CellWidth - width) / 2)
+                           - ((squadBoxSize.X - 1) / 2);
 
                 List<ValueTuple<int, int>> soldierLocations = [];
                 for (int w = 0; w < width; w++)
@@ -71,23 +70,26 @@ namespace OnlyWar.Helpers.Battles.Placers
 
 
         private static ValueTuple<int, int> PlaceSquadVertically(BattleGridManager manager, BattleSquad squad,
-                                                            ValueTuple<int, int> bottomLeft, Coordinate squadBoxSize,
+                                                            ValueTuple<int, int> bottomLeft, SquadFormationGeometry geometry,
                                                             bool formationSide, bool tacticalSide)
         {
+            Coordinate squadBoxSize = geometry.Bounds;
             ValueTuple<int, int> startingLocation = new ValueTuple<int, int>((short)(bottomLeft.Item1 + squadBoxSize.Y - 1),
                                                                    (short)(bottomLeft.Item2 + ((squadBoxSize.X - 1) / 2)));
-            int cellWidth = squad.AbleSoldiers.Max(s => s.Soldier.Template.Species.Depth);
-            int cellDepth = squad.AbleSoldiers.Max(s => s.Soldier.Template.Species.Width);
+            int emptyRearRankSlots = geometry.RankCount * geometry.MembersPerRank
+                - squad.AbleSoldiers.Count;
             for (int i = 0; i < squad.AbleSoldiers.Count; i++)
             {
                 ushort width = squad.AbleSoldiers[i].Soldier.Template.Species.Width;
                 ushort depth = squad.AbleSoldiers[i].Soldier.Template.Species.Depth;
-                int membersPerColumn = Math.Max(1, squadBoxSize.X / cellDepth);
-                int rowIndex = i / membersPerColumn;
-                int columnIndex = i % membersPerColumn;
-                int xMod = rowIndex * cellWidth * (formationSide ? -1 : 1);
-                int yMod = (columnIndex * cellDepth) - ((squadBoxSize.X - cellDepth) / 2)
-                           + ((cellDepth - width) / 2);
+                int formationIndex = i + emptyRearRankSlots;
+                int rowIndex = formationIndex / geometry.MembersPerRank;
+                int columnIndex = formationIndex % geometry.MembersPerRank;
+                int xMod = rowIndex * geometry.CellDepth * (formationSide ? -1 : 1);
+                int yMod = (columnIndex * geometry.LateralPitch)
+                           + (rowIndex % 2)
+                           + ((geometry.CellWidth - width) / 2)
+                           - ((squadBoxSize.X - 1) / 2);
 
                 List<ValueTuple<int, int>> soldierLocations = [];
                 for (int w = 0; w < depth; w++)

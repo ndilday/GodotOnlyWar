@@ -150,6 +150,32 @@ public class BattleSquadPlannerTests
         return weapon;
     }
 
+    private static RangedWeapon EquipAimTestRifle(BattleSoldier soldier, int templateId)
+    {
+        RangedWeapon rifle = new(new RangedWeaponTemplate(
+            templateId,
+            "Aim Test Rifle",
+            EquipLocation.TwoHand,
+            TestSkills.Ranged,
+            accuracy: 6,
+            armorMultiplier: 1,
+            penetrationMultiplier: 1,
+            requiredStrength: 0,
+            baseDamage: 100,
+            maxDistance: 100,
+            rof: 1,
+            ammo: 10,
+            recoil: 0,
+            bulk: 4,
+            doesDamageDegradeWithRange: false,
+            reloadTime: 1));
+        soldier.RangedWeapons.Clear();
+        soldier.ClearReadiedRangedWeapons();
+        soldier.RangedWeapons.Add(rifle);
+        soldier.ReadyWeapon(rifle);
+        return rifle;
+    }
+
     [Fact]
     public void PrepareActions_FlamerInRangeSelectsStationaryTier()
     {
@@ -236,6 +262,58 @@ public class BattleSquadPlannerTests
         Assert.Equal(SquadMovementTier.Walk, shooters.MovementTier);
         Assert.Equal(shooter.GetMoveSpeed() / 5f, shooter.CurrentSpeed, precision: 4);
         Assert.IsType<MoveAction>(Assert.Single(moveActions));
+    }
+
+    [Fact]
+    public void PrepareActions_WalkingShooterAtAimCapFiresInsteadOfContinuingToAim()
+    {
+        BattleSquad shooters = CreateSquad("Walking Aimed Rifle", 90_041);
+        BattleSquad enemies = CreateSquad("Close Aim Target", 90_042);
+        BattleSoldier shooter = shooters.Soldiers[0];
+        ((Soldier)shooter.Soldier).Dexterity = 20;
+        RangedWeapon rifle = EquipAimTestRifle(shooter, 99_241);
+        BattleSoldier target = enemies.Soldiers[0];
+        shooter.TargetId = target.Soldier.Id;
+        shooter.Aim = new ValueTuple<int, RangedWeapon, int>(target.Soldier.Id, rifle, 3);
+        BattleGridManager grid = new();
+        Place(grid, shooter, true, 0, 0);
+        Place(grid, target, false, 10, 0);
+        List<IAction> shootActions = [];
+        BattleSquadPlanner planner = CreatePlanner(
+            grid, shootActions, [], [], shooters, enemies);
+
+        planner.PrepareActions(shooters);
+
+        Assert.Equal(SquadMovementTier.Walk, shooters.MovementTier);
+        ShootAction shot = Assert.IsType<ShootAction>(Assert.Single(shootActions));
+        Assert.Equal(target.Soldier.Id, shot.TargetId);
+        Assert.Equal(rifle.Template.Id, shot.WeaponId);
+        Assert.Equal(0.5f, shot.AimMultiplier);
+    }
+
+    [Fact]
+    public void PrepareCoverActions_AimPastCapStillForcesShot()
+    {
+        BattleSquad shooters = CreateSquad("Overshot Aim Rifle", 90_043);
+        BattleSquad enemies = CreateSquad("Overshot Aim Target", 90_044);
+        BattleSoldier shooter = shooters.Soldiers[0];
+        ((Soldier)shooter.Soldier).Dexterity = 20;
+        RangedWeapon rifle = EquipAimTestRifle(shooter, 99_243);
+        BattleSoldier target = enemies.Soldiers[0];
+        shooter.TargetId = target.Soldier.Id;
+        shooter.Aim = new ValueTuple<int, RangedWeapon, int>(target.Soldier.Id, rifle, 7);
+        BattleGridManager grid = new();
+        Place(grid, shooter, true, 0, 0);
+        Place(grid, target, false, 20, 0);
+        List<IAction> shootActions = [];
+        BattleSquadPlanner planner = CreatePlanner(
+            grid, shootActions, [], [], shooters, enemies);
+
+        planner.PrepareCoverActions(shooters);
+
+        ShootAction shot = Assert.IsType<ShootAction>(Assert.Single(shootActions));
+        Assert.Equal(target.Soldier.Id, shot.TargetId);
+        Assert.Equal(rifle.Template.Id, shot.WeaponId);
     }
 
     [Fact]

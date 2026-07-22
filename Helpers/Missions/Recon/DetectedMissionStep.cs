@@ -41,6 +41,9 @@ namespace OnlyWar.Helpers.Missions.Recon
             // region holds several enemy factions. Fall back to the mission's target for flows that do
             // not resolve a spotter (special missions carry a concrete target of their own).
             RegionFaction spotter = context.Spotter ?? context.Order.Mission.RegionFaction;
+            context.Spotter = spotter;
+            context.AddLog(
+                $"Day {context.DaysElapsed}: Force was detected and intercepted in {spotter.Region.Name}.");
 
             // shouldn't all be the same squad type
             // a flexible, but verbose method would be to define a table in the game rules that maps some concept of "situation" and faction ID to "lottery balls".

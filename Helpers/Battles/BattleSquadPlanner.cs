@@ -26,6 +26,13 @@ namespace OnlyWar.Helpers.Battles
         // nominal impact evaluation. Actual scatter remains stochastic at execution time.
         private const float BlastDeliveryRollMean = 10.5f;
         private const float BlastDeliveryRollStdDev = 3.0f;
+        // TUNABLE (Phase 2 sticky targeting): a soldier keeps engaging the target it already
+        // committed to (soldier.TargetId / soldier.Aim) across turns rather than rescanning the whole
+        // field every turn, re-acquiring only when that target stops being a viable, worthwhile shot
+        // or an un-engaged enemy is about to reach melee. "Worthwhile" reuses the planner's existing
+        // floor: positive expected value and better than a one-in-ten chance to hit. Raising this
+        // makes soldiers abandon marginal targets (and rescan) sooner.
+        private const float StickyMinimumHitProbability = 0.1f;
 
         private readonly BattleGridManager _grid;
         private readonly ICollection<IAction> _shootActions;
@@ -921,17 +928,18 @@ namespace OnlyWar.Helpers.Battles
             {
                 AddReloadRangedWeaponActionToBag(soldier);
             }
-            // Keep an established aim only while its target and weapon remain the best ranged option.
-            // This preserves the value already invested in aiming without allowing TargetId/Aim to pin
-            // the squad to a now-inferior target after the battlefield changes.
+            // Sticky targeting (Phase 2): keep an established aim while it remains a viable,
+            // worthwhile shot instead of rescanning the whole field every turn to confirm it is still
+            // the single best option. The soldier re-acquires only once the aimed target dies, leaves
+            // range, stops being worth shooting, or an un-engaged enemy is about to reach melee.
             else if (soldier.Aim != null
                 && _soldierMap.ContainsKey(soldier.Aim.Value.Item1)
-                && IsExistingAimStillBest(soldier))
+                && IsExistingAimStillViable(soldier))
             {
                 BattleSoldier target = _soldierMap[soldier.Aim.Value.Item1];
                 range = _grid.GetDistanceBetweenSoldiers(soldier.Soldier.Id, soldier.Aim.Value.Item1);
                 // if the aim cannot be improved, go ahead and shoot
-                if (soldier.Aim.Value.Item3 == 3)
+                if (soldier.Aim.Value.Item3 >= 3)
                 {
                     RangedTargetEvaluation effectEstimate = EvaluateRangedTarget(
                         soldier,
@@ -1812,10 +1820,14 @@ namespace OnlyWar.Helpers.Battles
             TemplateFiringLineEvaluation templateLine = SelectBestTemplateFiringLine(
                 soldier,
                 movementDirection: movementDirection);
-            RangedTargetEvaluation targetEvaluation = SelectBestRangedTarget(
-                soldier,
-                bulkMultiplier,
-                movementDirection: movementDirection);
+            // Sticky targeting (Phase 2): stay on the already-committed target when it is still a
+            // worthwhile shot, falling back to the full-field scan only to re-acquire.
+            RangedTargetEvaluation targetEvaluation =
+                EvaluateStickyTarget(soldier, bulkMultiplier, movementDirection)
+                ?? SelectBestRangedTarget(
+                    soldier,
+                    bulkMultiplier,
+                    movementDirection: movementDirection);
             TemplateFiringLineEvaluation blastThrow = SelectBestBlastThrow(
                 soldier,
                 movementDirection,
@@ -1875,6 +1887,38 @@ namespace OnlyWar.Helpers.Battles
             soldier.TargetId = target.Soldier.Id;
 
             float range = _grid.GetDistanceBetweenSoldiers(soldier.Soldier.Id, target.Soldier.Id);
+            // Walking soldiers retain their aim, but they reach this general ranged path rather than
+            // AddStandingActionsToBag. Apply the same cap here so movement cannot let the accumulated
+            // aim pass 3 (after which the stationary cap would also have been missed historically).
+            if (soldier.Aim is ValueTuple<int, RangedWeapon, int> existingAim
+                && existingAim.Item3 >= 3
+                && existingAim.Item1 == target.Soldier.Id
+                && existingAim.Item2.LoadedAmmo > 0
+                && soldier.EquippedRangedWeapons.Contains(existingAim.Item2)
+                && range <= existingAim.Item2.Template.MaximumRange)
+            {
+                float forcedShotModifier = -(existingAim.Item2.Template.Bulk * bulkMultiplier)
+                    + ((existingAim.Item2.Template.Accuracy + existingAim.Item3 + 1)
+                        * aimMultiplier);
+                RangedTargetEvaluation forcedShot = EvaluateRangedTarget(
+                    soldier,
+                    target,
+                    existingAim.Item2,
+                    range,
+                    forcedShotModifier);
+                _shootActions.Add(new ShootAction(
+                    soldier.Soldier.Id,
+                    target.Soldier.Id,
+                    existingAim.Item2.Template.Id,
+                    range,
+                    forcedShot.ShotsToFire,
+                    bulkMultiplier,
+                    aimMultiplier,
+                    _grid,
+                    _random));
+                return;
+            }
+
             // decide whether to shoot or aim
             // calculate the expected number of hits if the soldier shoots now
             // calculate the expected number of hits if the soldier aims for a turn, then shoots
@@ -1923,16 +1967,127 @@ namespace OnlyWar.Helpers.Battles
             }
         }
 
-        private bool IsExistingAimStillBest(BattleSoldier soldier)
+        // Phase 2 sticky targeting. Replaces the former IsExistingAimStillBest, which reran the full
+        // SelectBestRangedTarget scan every turn just to confirm the aim was still globally optimal.
+        // Here the aim is kept while it stays viable and worthwhile — a hysteresis band that both
+        // preserves the invested aim and skips the scan.
+        private bool IsExistingAimStillViable(BattleSoldier soldier)
         {
-            RangedTargetEvaluation bestTarget = SelectBestRangedTarget(
-                soldier,
-                useBulk: false,
-                includeExistingAim: true);
+            if (soldier.Aim is not ValueTuple<int, RangedWeapon, int> aim
+                || !_soldierMap.TryGetValue(aim.Item1, out BattleSoldier target)
+                || !target.CanFight
+                || !IsPlaced(target)
+                || _grid.GetSoldierSide(aim.Item1) == _grid.GetSoldierSide(soldier.Soldier.Id))
+            {
+                return false;
+            }
 
-            return bestTarget != null
-                && bestTarget.Target.Soldier.Id == soldier.Aim.Value.Item1
-                && bestTarget.Weapon.Template.Id == soldier.Aim.Value.Item2.Template.Id;
+            RangedWeapon weapon = aim.Item2;
+            if (weapon.LoadedAmmo <= 0 || !soldier.EquippedRangedWeapons.Contains(weapon))
+            {
+                return false;
+            }
+
+            float range = _grid.GetDistanceBetweenSoldiers(soldier.Soldier.Id, aim.Item1);
+            if (range > weapon.Template.MaximumRange
+                || ShouldInterruptStickyTarget(soldier, target))
+            {
+                return false;
+            }
+
+            // The evaluation here shares the context cache with the aim branch's own re-evaluation
+            // (identical key), so keeping the aim viable costs nothing extra.
+            RangedTargetEvaluation evaluation = EvaluateRangedTarget(
+                soldier,
+                target,
+                weapon,
+                range,
+                weapon.Template.Accuracy + aim.Item3 + 1);
+            return evaluation.Score > 0 && evaluation.HitProbability > StickyMinimumHitProbability;
+        }
+
+        // Evaluates only the target the soldier already committed to (soldier.TargetId), skipping the
+        // whole-field SelectBestRangedTarget scan. Returns the shot to take, or null to signal
+        // "re-acquire" — the caller then falls back to a full scan. The per-target/weapon scoring
+        // mirrors SelectBestRangedTarget's inner loop exactly, so a stuck result is identical to what
+        // the scan would have produced for that target; only the target-selection hysteresis differs.
+        private RangedTargetEvaluation EvaluateStickyTarget(
+            BattleSoldier soldier,
+            float bulkMultiplier,
+            ValueTuple<int, int>? movementDirection)
+        {
+            if (soldier.TargetId is not int committedId
+                || !_soldierMap.TryGetValue(committedId, out BattleSoldier target)
+                || !target.CanFight
+                || !IsPlaced(target)
+                || _grid.GetSoldierSide(committedId) == _grid.GetSoldierSide(soldier.Soldier.Id))
+            {
+                return null;
+            }
+            if (HasRestrictedJogFiringArc(movementDirection)
+                && !IsWithinJogFiringArc(soldier, target, movementDirection.Value))
+            {
+                return null;
+            }
+            if (ShouldInterruptStickyTarget(soldier, target))
+            {
+                return null;
+            }
+
+            float range = _grid.GetDistanceBetweenSoldiers(soldier.Soldier.Id, committedId);
+            RangedTargetEvaluation best = null;
+            IReadOnlyList<RangedWeapon> sortedWeapons =
+                OrderRangedByTemplateId(soldier.EquippedRangedWeapons);
+            for (int weaponIndex = 0; weaponIndex < sortedWeapons.Count; weaponIndex++)
+            {
+                RangedWeapon weapon = sortedWeapons[weaponIndex];
+                if (weapon.LoadedAmmo <= 0
+                    || weapon.Template.IsTemplateWeapon
+                    || range > weapon.Template.MaximumRange)
+                {
+                    continue;
+                }
+
+                float toHitModifier = -weapon.Template.Bulk * bulkMultiplier;
+                RangedTargetEvaluation evaluation = EvaluateRangedTarget(
+                    soldier,
+                    target,
+                    weapon,
+                    range,
+                    toHitModifier);
+                if (best == null || evaluation.Score > best.Score)
+                {
+                    best = evaluation;
+                }
+            }
+
+            // Re-acquire once the committed target is no longer a worthwhile shot.
+            return best != null
+                && best.Score > 0
+                && best.HitProbability > StickyMinimumHitProbability
+                    ? best
+                    : null;
+        }
+
+        // Emergency re-acquire trigger: an enemy other than the committed target is about to reach
+        // melee this soldier while the committed target sits farther away. A soldier already adjacent
+        // to an enemy is routed to the melee/charge planner upstream, so this only covers the turn
+        // before contact — it stops a soldier from calmly plinking a distant target while a different
+        // enemy closes the last stretch into his face.
+        private bool ShouldInterruptStickyTarget(BattleSoldier soldier, BattleSoldier committedTarget)
+        {
+            float nearestRange = _grid.GetNearestEnemy(soldier.Soldier.Id, out int nearestId);
+            if (nearestId == -1
+                || nearestId == committedTarget.Soldier.Id
+                || !_soldierMap.TryGetValue(nearestId, out BattleSoldier nearest))
+            {
+                return false;
+            }
+
+            float committedRange = _grid.GetDistanceBetweenSoldiers(
+                soldier.Soldier.Id,
+                committedTarget.Soldier.Id);
+            return nearestRange < committedRange && nearest.GetMoveSpeed() >= nearestRange;
         }
 
         /// <summary>
@@ -2129,7 +2284,9 @@ namespace OnlyWar.Helpers.Battles
         /// <summary>
         /// Scores every enemy soldier within blast (grenade) range as a candidate impact
         /// point. Each candidate is evaluated once at its nominal impact cell, then its
-        /// expected enemy value is discounted by the delivery check's on-target probability.
+        /// expected enemy value is discounted by the delivery check's on-target probability
+        /// and, per victim, by their squad's engagement imminence (matching the conventional
+        /// ranged path so the throw competes with the rifle on the same scale).
         /// Nominal friendly losses are not discounted, keeping danger-close decisions
         /// conservative without simulating the complete scatter distribution at plan time.
         /// Returns null when no throw removes more value than it costs in expectation.
@@ -2219,11 +2376,22 @@ namespace OnlyWar.Helpers.Battles
                         float expectedBattleValueRemoval = woundRatio * GetBattleValue(victim);
                         if (_grid.GetSoldierSide(blastVictim.SoldierId) == shooterSide)
                         {
+                            // Friendly (and self) losses are a real, immediate cost no
+                            // matter how far off the enemy is, so they are never discounted
+                            // by engagement timing.
                             expectedFriendlyBattleValueLost += expectedBattleValueRemoval;
                         }
                         else
                         {
-                            expectedEnemyBattleValueRemoved += expectedBattleValueRemoval;
+                            // Discount each enemy victim by how imminent their squad's
+                            // engagement is, exactly as the conventional ranged path does
+                            // (EvaluateRangedTarget), so a grenade and a rifle shot compete
+                            // on the same scale instead of the throw winning purely because
+                            // the rifle's value was cut for a still-approaching enemy.
+                            float imminence = GetSquadImminence(
+                                soldier.BattleSquad, victim.BattleSquad);
+                            expectedEnemyBattleValueRemoved +=
+                                imminence * expectedBattleValueRemoval;
                         }
                     }
                     expectedEnemyBattleValueRemoved *= deliveryConfidence;

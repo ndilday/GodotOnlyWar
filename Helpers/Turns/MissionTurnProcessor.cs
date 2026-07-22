@@ -116,27 +116,47 @@ namespace OnlyWar.Helpers.Turns
                     + $"{order.Mission.MissionType} -> {DescribeRegionFaction(order.Mission.RegionFaction)}: "
                     + $"squads={order.AssignedSquads.Count}, soldiers={order.AssignedSquads.Sum(s => s.Members.Count)}, "
                     + $"battleValue={SquadBattleValue(order.AssignedSquads)}");
-                MissionContext context = new(order, involvedBattleSquads, new List<BattleSquad>());
-                var execution = new MissionExecutionContext(
-                    context,
-                    _missionRules,
-                    _session.Random,
-                    _battleExecution,
-                    new TacticalEntityIdAllocator());
-                MissionStepOrchestrator.GetStartingStep(execution)
-                    .ExecuteMissionStep(execution, 0, null);
-                missionContexts.Add(context);
-                if (isPlayerOrder)
+                IEnumerable<List<BattleSquad>> missionElements =
+                    BuildMissionElements(order.Mission.MissionType, involvedBattleSquads);
+
+                foreach (List<BattleSquad> elementSquads in missionElements)
                 {
-                    MissionOutcomeRecorder.RecordMissionOutcome(context, _session.CurrentDate);
+                    MissionContext context = new(order, elementSquads, new List<BattleSquad>());
+                    var execution = new MissionExecutionContext(
+                        context,
+                        _missionRules,
+                        _session.Random,
+                        _battleExecution,
+                        new TacticalEntityIdAllocator());
+                    MissionStepOrchestrator.GetStartingStep(execution)
+                        .ExecuteMissionStep(execution, 0, null);
+                    missionContexts.Add(context);
+                    if (isPlayerOrder)
+                    {
+                        MissionOutcomeRecorder.RecordMissionOutcome(context, _session.CurrentDate);
+                    }
+                    GameLog.Debug(() =>
+                        $"Combat mission result {order.AssignedSquads.First().Faction.Name} "
+                        + $"{order.Mission.MissionType} -> {DescribeRegionFaction(order.Mission.RegionFaction)}: "
+                        + $"elementSquads={elementSquads.Count}, impact={context.Impact:F2}, "
+                        + $"enemiesKilled={context.EnemiesKilled}, days={context.DaysElapsed}, "
+                        + $"killCredits={context.EnemyKillCredits}, "
+                        + $"logEntries={context.Log.Count}");
                 }
-                GameLog.Debug(() =>
-                    $"Combat mission result {order.AssignedSquads.First().Faction.Name} "
-                    + $"{order.Mission.MissionType} -> {DescribeRegionFaction(order.Mission.RegionFaction)}: "
-                    + $"impact={context.Impact:F2}, enemiesKilled={context.EnemiesKilled}, days={context.DaysElapsed}, "
-                    + $"killCredits={context.EnemyKillCredits}, "
-                    + $"logEntries={context.Log.Count}");
             }
+        }
+
+        internal static IReadOnlyList<List<BattleSquad>> BuildMissionElements(
+            MissionType missionType,
+            List<BattleSquad> involvedBattleSquads)
+        {
+            if (MissionForcePolicy.GetMode(missionType) == MissionForceMode.IndependentSquads)
+            {
+                return involvedBattleSquads
+                    .Select(squad => new List<BattleSquad> { squad })
+                    .ToList();
+            }
+            return new List<List<BattleSquad>> { involvedBattleSquads };
         }
 
         // Diversions resolve in the pre-planning shaping phase so the projected threat already

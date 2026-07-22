@@ -234,10 +234,16 @@ public class GrenadePlannerTests
         float closeConfidence = GaussianCalculator.ApproximateNormalCDF((closeToHit - 10.5f) / 3f);
         float farConfidence = GaussianCalculator.ApproximateNormalCDF((farToHit - 10.5f) / 3f);
 
+        // Enemy value is also discounted per victim by their squad's engagement imminence
+        // (mirroring the conventional ranged path), which varies with distance, so divide
+        // it out alongside confidence to isolate the identical nominal blast value.
+        float closeImminence = closePlanner.GetSquadImminence(closeShooters, closeEnemies);
+        float farImminence = farPlanner.GetSquadImminence(farShooters, farEnemies);
+
         Assert.True(farThrow.Score < closeThrow.Score);
         Assert.Equal(
-            closeThrow.Score / closeConfidence,
-            farThrow.Score / farConfidence,
+            closeThrow.Score / (closeConfidence * closeImminence),
+            farThrow.Score / (farConfidence * farImminence),
             precision: 3);
     }
 
