@@ -223,6 +223,51 @@ public class BattleSquadPlannerTests
     }
 
     [Fact]
+    public void PrepareActions_HeavyWeaponInsidePreferredRangeHoldsInsteadOfWalking()
+    {
+        // A step-back applies half Bulk to every shot that turn. For a Bulk-8 heavy weapon
+        // that guts the soldier's firepower, so he should plant and fire (Stationary) rather
+        // than kite back the way a light-weapon squad would. Same geometry as
+        // PrepareActions_EnemyInsidePreferredRangeSelectsWalk, only the weapon is heavier.
+        BattleSquad shooters = CreateSquad("Heavy Gunner", 90_045);
+        BattleSquad enemies = CreateSquad("Close Enemy", 90_046);
+        BattleSoldier shooter = shooters.Soldiers[0];
+        ((Soldier)shooter.Soldier).Dexterity = 20;
+        RangedWeapon heavy = new(new RangedWeaponTemplate(
+            99_245,
+            "Heavy Weapon",
+            EquipLocation.TwoHand,
+            TestSkills.Ranged,
+            accuracy: 0,
+            armorMultiplier: 1,
+            penetrationMultiplier: 1,
+            requiredStrength: 0,
+            baseDamage: 100,
+            maxDistance: 100,
+            rof: 1,
+            ammo: 10,
+            recoil: 0,
+            bulk: 8,
+            doesDamageDegradeWithRange: false,
+            reloadTime: 1));
+        shooter.RangedWeapons.Clear();
+        shooter.ClearReadiedRangedWeapons();
+        shooter.RangedWeapons.Add(heavy);
+        shooter.ReadyWeapon(heavy);
+        BattleGridManager grid = new();
+        Place(grid, shooter, true, 0, 0);
+        Place(grid, enemies.Soldiers[0], false, 10, 0);
+        List<IAction> moveActions = [];
+        BattleSquadPlanner planner = CreatePlanner(
+            grid, [], moveActions, [], shooters, enemies);
+
+        planner.PrepareActions(shooters);
+
+        Assert.Equal(SquadMovementTier.Stationary, shooters.MovementTier);
+        Assert.Empty(moveActions);
+    }
+
+    [Fact]
     public void PrepareActions_EnemyInsidePreferredRangeSelectsWalk()
     {
         BattleSquad shooters = CreateSquad("Walking Rifle", 90_015);

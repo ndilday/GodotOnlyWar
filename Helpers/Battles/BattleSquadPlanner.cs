@@ -22,6 +22,17 @@ namespace OnlyWar.Helpers.Battles
         private const float WalkBulkMultiplier = 0.5f;
         private const float FullBulkMultiplier = 1f;
         private const float WalkAimMultiplier = 0.5f;
+        // TUNABLE: a step-back (kite) applies WalkBulkMultiplier x Bulk to every shot that
+        // turn. For a light weapon that cost is negligible and repositioning to the sweet
+        // spot is worthwhile; for a heavy, high-Bulk weapon it guts the soldier's firepower,
+        // so backpedaling to "optimal" range is self-defeating -- he removes more value
+        // planting his feet and firing (Bulk 0). A soldier only votes to walk back when the
+        // walking shot preserves at least this fraction of his stationary shot's value;
+        // otherwise he votes to hold. Calibrated so standard infantry rifles (Bulk 4:
+        // Boltgun, Lasgun) keep kiting while genuine heavy weapons (Bulk 6-8: Heavy Bolter,
+        // Lascannon, Autocannon, Missile Launcher) plant and fire. 1.0 forbids any bulk
+        // loss; 0 restores the old bulk-blind kiting.
+        private const float WalkBulkShootingRetention = 0.4f;
         // Blast planning uses the delivery check's on-target probability to discount one
         // nominal impact evaluation. Actual scatter remains stochastic at execution time.
         private const float BlastDeliveryRollMean = 10.5f;
@@ -498,7 +509,17 @@ namespace OnlyWar.Helpers.Battles
                     }
                     else if (distance < preferredHitDistance)
                     {
-                        walkVotes++;
+                        // The enemy is inside this soldier's sweet spot, so geometry wants a
+                        // step back. Only take it if the walk's Bulk penalty doesn't gut his
+                        // firepower -- otherwise a high-Bulk shooter is better off holding.
+                        if (WalkBackPreservesShooting(soldier))
+                        {
+                            walkVotes++;
+                        }
+                        else
+                        {
+                            standVotes++;
+                        }
                     }
                     else
                     {
@@ -862,6 +883,29 @@ namespace OnlyWar.Helpers.Battles
                         break;
                 }
             }
+        }
+
+        /// <summary>
+        /// Whether stepping back is worth the Bulk penalty it imposes on this soldier's
+        /// shooting this turn. Both shots are scored against the current (unmoved) layout so
+        /// only the Bulk multiplier differs: a stationary shot (Bulk 0) versus a walking shot
+        /// (<see cref="WalkBulkMultiplier"/>). A light weapon keeps nearly all its value and
+        /// the kite is fine; a heavy, high-Bulk weapon loses too much and the soldier is
+        /// better off holding and firing. When there is no worthwhile stationary shot to
+        /// protect (no ranged weapon, or a non-positive score), the step-back is about
+        /// spacing rather than firepower, so it is left unchanged.
+        /// </summary>
+        private bool WalkBackPreservesShooting(BattleSoldier soldier)
+        {
+            RangedTargetEvaluation standing = SelectBestRangedTarget(soldier, 0f);
+            if (standing == null || standing.Score <= 0)
+            {
+                return true;
+            }
+
+            RangedTargetEvaluation walking = SelectBestRangedTarget(soldier, WalkBulkMultiplier);
+            float walkingScore = walking?.Score ?? 0f;
+            return walkingScore >= standing.Score * WalkBulkShootingRetention;
         }
 
         private bool ShouldJogAndShoot(BattleSquad squad)
