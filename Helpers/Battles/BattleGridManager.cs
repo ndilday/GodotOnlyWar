@@ -2,6 +2,7 @@ using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading;
 
 namespace OnlyWar.Helpers.Battles
 {
@@ -16,9 +17,12 @@ namespace OnlyWar.Helpers.Battles
         private readonly ConcurrentDictionary<int, AbleSquadSlotCache> _ableSquadSlotCaches = [];
         private readonly Stack<int> _freeSlots = [];
         private readonly Grid _grid = new();
-        private readonly ConcurrentDictionary<int, IReadOnlyList<int>> _adjacentSoldierCache = [];
-        private readonly ConcurrentDictionary<(bool ShooterSide, int TargetId), bool> _engagementCache = [];
-        private readonly ConcurrentDictionary<int, IReadOnlyList<int>> _meleeScrumCache = [];
+        private readonly ConcurrentDictionary<int, LayoutCacheEntry<IReadOnlyList<int>>>
+            _adjacentSoldierCache = [];
+        private readonly ConcurrentDictionary<(bool ShooterSide, int TargetId), LayoutCacheEntry<bool>>
+            _engagementCache = [];
+        private readonly ConcurrentDictionary<int, LayoutCacheEntry<IReadOnlyList<int>>>
+            _meleeScrumCache = [];
 
         private BattleSoldier[] _slotSoldiers = new BattleSoldier[InitialSlotCapacity];
         private IList<ValueTuple<int, int>>[] _slotPositions =
@@ -38,6 +42,12 @@ namespace OnlyWar.Helpers.Battles
         private int _slotCapacity = InitialSlotCapacity;
         private int _slotCount;
         private int _nextPlacementOrder;
+        private long _layoutGeneration;
+
+        internal long LayoutGeneration => Volatile.Read(ref _layoutGeneration);
+        internal int CachedAdjacencyCount => _adjacentSoldierCache.Count;
+        internal int CachedEngagementCount => _engagementCache.Count;
+        internal int CachedMeleeScrumCount => _meleeScrumCache.Count;
 
         public object Clone()
         {
@@ -224,12 +234,30 @@ namespace OnlyWar.Helpers.Battles
         public IReadOnlyList<int> GetAdjacentSoldiers(int soldierId)
         {
             GetSlot(soldierId);
-            return _adjacentSoldierCache.GetOrAdd(
-                soldierId,
-                id => _grid.GetAdjacentObjects(id)
+            while (true)
+            {
+                long generation = Volatile.Read(ref _layoutGeneration);
+                if (_adjacentSoldierCache.TryGetValue(
+                    soldierId,
+                    out LayoutCacheEntry<IReadOnlyList<int>> cached)
+                    && cached.Generation == generation)
+                {
+                    return cached.Value;
+                }
+
+                IReadOnlyList<int> adjacent = _grid.GetAdjacentObjects(soldierId)
                     .Where(_soldierSlots.ContainsKey)
                     .OrderBy(adjacentId => adjacentId)
-                    .ToArray());
+                    .ToArray();
+                if (Volatile.Read(ref _layoutGeneration) != generation) continue;
+
+                LayoutCacheEntry<IReadOnlyList<int>> replacement = new(generation, adjacent);
+                LayoutCacheEntry<IReadOnlyList<int>> published = _adjacentSoldierCache.AddOrUpdate(
+                    soldierId,
+                    replacement,
+                    (_, existing) => existing.Generation >= generation ? existing : replacement);
+                if (published.Generation == generation) return published.Value;
+            }
         }
 
         public bool IsTargetEngagedWithShootersAllies(int shooterId, int targetId)
@@ -237,8 +265,18 @@ namespace OnlyWar.Helpers.Battles
             bool shooterSide = _slotSides[GetSlot(shooterId)];
             GetSlot(targetId);
             var cacheKey = (shooterSide, targetId);
-            if (!_engagementCache.TryGetValue(cacheKey, out bool engaged))
+            while (true)
             {
+                long generation = Volatile.Read(ref _layoutGeneration);
+                if (_engagementCache.TryGetValue(
+                    cacheKey,
+                    out LayoutCacheEntry<bool> cached)
+                    && cached.Generation == generation)
+                {
+                    return cached.Value;
+                }
+
+                bool engaged = false;
                 foreach (int adjacentId in GetAdjacentSoldiers(targetId))
                 {
                     if (_slotSides[GetSlot(adjacentId)] == shooterSide)
@@ -247,35 +285,60 @@ namespace OnlyWar.Helpers.Battles
                         break;
                     }
                 }
-                _engagementCache.TryAdd(cacheKey, engaged);
+                if (Volatile.Read(ref _layoutGeneration) != generation) continue;
+
+                LayoutCacheEntry<bool> replacement = new(generation, engaged);
+                LayoutCacheEntry<bool> published = _engagementCache.AddOrUpdate(
+                    cacheKey,
+                    replacement,
+                    (_, existing) => existing.Generation >= generation ? existing : replacement);
+                if (published.Generation == generation) return published.Value;
             }
-            return engaged;
         }
 
         public IReadOnlyList<int> GetMeleeScrumParticipants(int soldierId)
         {
             GetSlot(soldierId);
-            if (_meleeScrumCache.TryGetValue(soldierId, out IReadOnlyList<int> cached))
+            while (true)
             {
-                return cached;
-            }
-            HashSet<int> participants = [soldierId];
-            Queue<int> frontier = new();
-            frontier.Enqueue(soldierId);
-            while (frontier.Count > 0)
-            {
-                int currentId = frontier.Dequeue();
-                bool currentSide = _slotSides[GetSlot(currentId)];
-                foreach (int adjacentId in GetAdjacentSoldiers(currentId))
+                long generation = Volatile.Read(ref _layoutGeneration);
+                if (_meleeScrumCache.TryGetValue(
+                    soldierId,
+                    out LayoutCacheEntry<IReadOnlyList<int>> cached)
+                    && cached.Generation == generation)
                 {
-                    if (_slotSides[GetSlot(adjacentId)] == currentSide
-                        || !participants.Add(adjacentId)) continue;
-                    frontier.Enqueue(adjacentId);
+                    return cached.Value;
                 }
+
+                HashSet<int> participants = [soldierId];
+                Queue<int> frontier = new();
+                frontier.Enqueue(soldierId);
+                while (frontier.Count > 0)
+                {
+                    int currentId = frontier.Dequeue();
+                    bool currentSide = _slotSides[GetSlot(currentId)];
+                    foreach (int adjacentId in GetAdjacentSoldiers(currentId))
+                    {
+                        if (_slotSides[GetSlot(adjacentId)] == currentSide
+                            || !participants.Add(adjacentId)) continue;
+                        frontier.Enqueue(adjacentId);
+                    }
+                }
+                if (Volatile.Read(ref _layoutGeneration) != generation) continue;
+
+                IReadOnlyList<int> result = participants.OrderBy(id => id).ToArray();
+                LayoutCacheEntry<IReadOnlyList<int>> replacement = new(generation, result);
+                foreach (int participantId in result)
+                {
+                    _meleeScrumCache.AddOrUpdate(
+                        participantId,
+                        replacement,
+                        (_, existing) => existing.Generation >= generation
+                            ? existing
+                            : replacement);
+                }
+                if (Volatile.Read(ref _layoutGeneration) == generation) return result;
             }
-            IReadOnlyList<int> result = participants.OrderBy(id => id).ToArray();
-            foreach (int participantId in result) _meleeScrumCache[participantId] = result;
-            return result;
         }
 
         public bool GetSoldierSide(int soldierId) => _slotSides[GetSlot(soldierId)];
@@ -625,10 +688,10 @@ namespace OnlyWar.Helpers.Battles
 
         private void InvalidateLayoutQueries()
         {
-            _adjacentSoldierCache.Clear();
-            _engagementCache.Clear();
-            _meleeScrumCache.Clear();
+            Interlocked.Increment(ref _layoutGeneration);
         }
+
+        private sealed record LayoutCacheEntry<T>(long Generation, T Value);
 
         private sealed record AbleSquadSlotCache(
             int Generation,

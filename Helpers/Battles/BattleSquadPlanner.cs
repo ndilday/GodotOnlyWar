@@ -1315,17 +1315,23 @@ namespace OnlyWar.Helpers.Battles
             IReadOnlyList<BattleSoldier> adjacentEnemies)
         {
             RangedTargetEvaluation best = null;
+            IReadOnlyList<RangedWeapon> sortedWeapons =
+                OrderRangedByTemplateId(soldier.EquippedRangedWeapons);
             foreach (BattleSoldier target in adjacentEnemies.OrderBy(enemy => enemy.Soldier.Id))
             {
                 float range = _grid.GetDistanceBetweenSoldiers(
                     soldier.Soldier.Id,
                     target.Soldier.Id);
-                foreach (RangedWeapon weapon in soldier.EquippedRangedWeapons
-                    .Where(candidate => candidate.LoadedAmmo > 0
-                        && !candidate.Template.IsTemplateWeapon
-                        && range <= candidate.Template.MaximumRange)
-                    .OrderBy(candidate => candidate.Template.Id))
+                for (int weaponIndex = 0; weaponIndex < sortedWeapons.Count; weaponIndex++)
                 {
+                    RangedWeapon weapon = sortedWeapons[weaponIndex];
+                    if (weapon.LoadedAmmo <= 0
+                        || weapon.Template.IsTemplateWeapon
+                        || range > weapon.Template.MaximumRange)
+                    {
+                        continue;
+                    }
+
                     RangedTargetEvaluation evaluation = EvaluateRangedTarget(
                         soldier,
                         target,
@@ -1953,10 +1959,16 @@ namespace OnlyWar.Helpers.Battles
             bool includeExistingAim = false,
             ValueTuple<int, int>? movementDirection = null)
         {
-            if (soldier?.EquippedRangedWeapons == null || soldier.EquippedRangedWeapons.Count == 0)
+            IReadOnlyList<RangedWeapon> equippedRanged = soldier?.EquippedRangedWeapons;
+            if (equippedRanged == null || equippedRanged.Count == 0)
             {
                 return null;
             }
+            // The equipped list is tiny and its Template.Id ordering does not depend on the
+            // per-target range, so sort it once here instead of rebuilding a LINQ Where/OrderBy
+            // pipeline for every candidate target in the innermost loop. Ordering is preserved
+            // exactly, keeping seeded tie-breaking stable.
+            IReadOnlyList<RangedWeapon> sortedWeapons = OrderRangedByTemplateId(equippedRanged);
 
             RangedTargetEvaluation best = null;
             foreach (BattleSquad candidateSquad in GetNearestInRangeEnemySquads(
@@ -1968,12 +1980,16 @@ namespace OnlyWar.Helpers.Battles
                     .OrderBy(candidate => candidate.Soldier.Id))
                 {
                     float range = _grid.GetDistanceBetweenSoldiers(soldier.Soldier.Id, target.Soldier.Id);
-                    foreach (RangedWeapon weapon in soldier.EquippedRangedWeapons
-                        .Where(candidate => candidate.LoadedAmmo > 0
-                            && !candidate.Template.IsTemplateWeapon
-                            && range <= candidate.Template.MaximumRange)
-                        .OrderBy(candidate => candidate.Template.Id))
+                    for (int weaponIndex = 0; weaponIndex < sortedWeapons.Count; weaponIndex++)
                     {
+                        RangedWeapon weapon = sortedWeapons[weaponIndex];
+                        if (weapon.LoadedAmmo <= 0
+                            || weapon.Template.IsTemplateWeapon
+                            || range > weapon.Template.MaximumRange)
+                        {
+                            continue;
+                        }
+
                         float toHitModifier = -weapon.Template.Bulk * bulkMultiplier;
                         if (includeExistingAim
                             && soldier.Aim?.Item1 == target.Soldier.Id
@@ -2006,12 +2022,14 @@ namespace OnlyWar.Helpers.Battles
             IEnumerable<BattleSoldier> candidateTargets = null,
             ValueTuple<int, int>? movementDirection = null)
         {
-            if (soldier?.EquippedRangedWeapons == null
-                || soldier.EquippedRangedWeapons.Count == 0
+            IReadOnlyList<RangedWeapon> equippedRanged = soldier?.EquippedRangedWeapons;
+            if (equippedRanged == null
+                || equippedRanged.Count == 0
                 || !IsPlaced(soldier))
             {
                 return null;
             }
+            IReadOnlyList<RangedWeapon> sortedWeapons = OrderRangedByTemplateId(equippedRanged);
 
             IEnumerable<BattleSoldier> targets = candidateTargets
                 ?? GetNearestInRangeEnemySquads(soldier, movementDirection)
@@ -2036,12 +2054,16 @@ namespace OnlyWar.Helpers.Battles
                 float range = _grid.GetDistanceBetweenSoldiers(
                     soldier.Soldier.Id,
                     target.Soldier.Id);
-                foreach (RangedWeapon weapon in soldier.EquippedRangedWeapons
-                    .Where(weapon => weapon.Template.IsConeWeapon
-                        && weapon.LoadedAmmo > 0
-                        && range <= weapon.Template.MaximumRange)
-                    .OrderBy(weapon => weapon.Template.Id))
+                for (int weaponIndex = 0; weaponIndex < sortedWeapons.Count; weaponIndex++)
                 {
+                    RangedWeapon weapon = sortedWeapons[weaponIndex];
+                    if (!weapon.Template.IsConeWeapon
+                        || weapon.LoadedAmmo <= 0
+                        || range > weapon.Template.MaximumRange)
+                    {
+                        continue;
+                    }
+
                     IReadOnlyList<int> victimIds = ConeTemplate.GetVictimIds(
                         _grid,
                         soldier.Soldier.Id,
@@ -2578,8 +2600,11 @@ namespace OnlyWar.Helpers.Battles
         {
             RangedTargetEvaluation best = null;
             float bestScore = float.MinValue;
-            foreach(RangedWeapon weapon in soldier.EquippedRangedWeapons.OrderByDescending(w => w.Template.DamageMultiplier))
+            IReadOnlyList<RangedWeapon> orderedWeapons =
+                OrderRangedByDamageMultiplierDescending(soldier.EquippedRangedWeapons);
+            for (int weaponIndex = 0; weaponIndex < orderedWeapons.Count; weaponIndex++)
             {
+                RangedWeapon weapon = orderedWeapons[weaponIndex];
                 if (weapon.Template.IsTemplateWeapon
                     || range > weapon.Template.MaximumRange
                     || weapon.LoadedAmmo <= 0)
@@ -2608,6 +2633,47 @@ namespace OnlyWar.Helpers.Battles
                 }
             }
             return best;
+        }
+
+        // Equipped-weapon lists are tiny (usually a single weapon), yet the innermost targeting
+        // loops previously rebuilt a LINQ Where/OrderBy pipeline over them for every candidate
+        // target, allocating an enumerator and an ordering buffer each pass. These helpers
+        // materialize the deterministic ordering once per planning call; the single-weapon fast
+        // path returns the source list without allocating.
+        private static IReadOnlyList<RangedWeapon> OrderRangedByTemplateId(
+            IReadOnlyList<RangedWeapon> equipped)
+        {
+            if (equipped.Count <= 1) return equipped;
+            RangedWeapon[] ordered = new RangedWeapon[equipped.Count];
+            for (int i = 0; i < equipped.Count; i++) ordered[i] = equipped[i];
+            // Template.Id is unique, so this total ordering reproduces the previous OrderBy exactly.
+            Array.Sort(ordered, static (first, second) =>
+                first.Template.Id.CompareTo(second.Template.Id));
+            return ordered;
+        }
+
+        private static IReadOnlyList<RangedWeapon> OrderRangedByDamageMultiplierDescending(
+            IReadOnlyList<RangedWeapon> equipped)
+        {
+            if (equipped.Count <= 1) return equipped;
+            RangedWeapon[] ordered = new RangedWeapon[equipped.Count];
+            for (int i = 0; i < equipped.Count; i++) ordered[i] = equipped[i];
+            // Stable insertion sort by descending DamageMultiplier, preserving the original relative
+            // order on ties to match LINQ's stable OrderByDescending exactly. Equal keys must not be
+            // reordered: the chosen weapon feeds seeded battle resolution.
+            for (int i = 1; i < ordered.Length; i++)
+            {
+                RangedWeapon key = ordered[i];
+                float keyMultiplier = key.Template.DamageMultiplier;
+                int j = i - 1;
+                while (j >= 0 && ordered[j].Template.DamageMultiplier < keyMultiplier)
+                {
+                    ordered[j + 1] = ordered[j];
+                    j--;
+                }
+                ordered[j + 1] = key;
+            }
+            return ordered;
         }
 
         private ValueTuple<float, float, int> EstimatePlannedRangedAttack(

@@ -407,6 +407,33 @@ public class BattleGridManagerTests
     }
 
     [Fact]
+    public void LayoutInvalidation_AdvancesGenerationWithoutPhysicallyClearingCaches()
+    {
+        BattleGridManager grid = new();
+        BattleSoldier subject = CreateBattleSoldier(1);
+        BattleSoldier enemy = CreateBattleSoldier(2);
+        grid.PlaceSoldier(subject, true, Cell(0, 0));
+        grid.PlaceSoldier(enemy, false, Cell(1, 0));
+        _ = grid.GetAdjacentSoldiers(1);
+        _ = grid.IsTargetEngagedWithShootersAllies(1, 2);
+        _ = grid.GetMeleeScrumParticipants(1);
+        long generation = grid.LayoutGeneration;
+        int adjacencyCount = grid.CachedAdjacencyCount;
+        int engagementCount = grid.CachedEngagementCount;
+        int scrumCount = grid.CachedMeleeScrumCount;
+
+        grid.MoveSoldier(enemy, new ValueTuple<int, int>(5, 0), 0);
+
+        Assert.Equal(generation + 1, grid.LayoutGeneration);
+        Assert.Equal(adjacencyCount, grid.CachedAdjacencyCount);
+        Assert.Equal(engagementCount, grid.CachedEngagementCount);
+        Assert.Equal(scrumCount, grid.CachedMeleeScrumCount);
+        Assert.Empty(grid.GetAdjacentSoldiers(1));
+        Assert.False(grid.IsTargetEngagedWithShootersAllies(1, 2));
+        Assert.Equal(new[] { 1 }, grid.GetMeleeScrumParticipants(1));
+    }
+
+    [Fact]
     public void IsTargetEngagedWithShootersAllies_OnlyCountsShootersTacticalSide()
     {
         BattleGridManager grid = new();
