@@ -33,6 +33,7 @@ public partial class MainGameScene
     private EndTurnWarningPreferences _warningPreferences;
     private PendingNavigationKind _pendingNavigation;
     private string _pendingLoadPath;
+    private string _pendingLoadName;
     private string _startupWarning;
     private string _lastSaveStatus;
 
@@ -235,6 +236,7 @@ public partial class MainGameScene
         if (_diagnosticsExportDialog != null) _diagnosticsExportDialog.Visible = false;
         _pendingNavigation = PendingNavigationKind.None;
         _pendingLoadPath = null;
+        _pendingLoadName = null;
         _systemMenu?.CloseMenu();
     }
 
@@ -370,6 +372,7 @@ public partial class MainGameScene
         BeginDestructiveNavigation(
             PendingNavigationKind.Load,
             args.Slot.FilePath,
+            args.Slot.DisplayName,
             "loading the selected campaign");
     }
 
@@ -378,21 +381,24 @@ public partial class MainGameScene
         BeginDestructiveNavigation(
             PendingNavigationKind.ReturnToTitle,
             null,
+            null,
             "returning to the title screen");
     }
 
     private void OnQuitRequested(object sender, EventArgs e)
     {
-        BeginDestructiveNavigation(PendingNavigationKind.Quit, null, "quitting the game");
+        BeginDestructiveNavigation(PendingNavigationKind.Quit, null, null, "quitting the game");
     }
 
     private void BeginDestructiveNavigation(
         PendingNavigationKind kind,
         string loadPath,
+        string loadName,
         string actionName)
     {
         _pendingNavigation = kind;
         _pendingLoadPath = loadPath;
+        _pendingLoadName = loadName;
         if (!GameDataSingleton.Instance.Recoverability.IsDirty)
         {
             ExecutePendingNavigation();
@@ -419,19 +425,22 @@ public partial class MainGameScene
         _destructiveNavigationDialog.Visible = false;
         _pendingNavigation = PendingNavigationKind.None;
         _pendingLoadPath = null;
+        _pendingLoadName = null;
     }
 
     private void ExecutePendingNavigation()
     {
         PendingNavigationKind action = _pendingNavigation;
         string loadPath = _pendingLoadPath;
+        string loadName = _pendingLoadName;
         _pendingNavigation = PendingNavigationKind.None;
         _pendingLoadPath = null;
+        _pendingLoadName = null;
 
         switch (action)
         {
             case PendingNavigationKind.Load:
-                LoadSelectedCampaign(loadPath);
+                LoadSelectedCampaign(loadPath, loadName);
                 break;
             case PendingNavigationKind.ReturnToTitle:
                 ReturnToTitle();
@@ -442,13 +451,13 @@ public partial class MainGameScene
         }
     }
 
-    private async void LoadSelectedCampaign(string savePath)
+    private async void LoadSelectedCampaign(string savePath, string saveName)
     {
         if (string.IsNullOrWhiteSpace(savePath) || _isProcessingTurn) return;
 
         _isProcessingTurn = true;
         CloseSystemMenuAndChildren();
-        ShowActivity("LOADING CAMPAIGN", "Restoring the selected sector, forces, and orders...");
+        ShowActivity("LOADING CAMPAIGN", $"Loading Game: {saveName}");
         await YieldForActivityOverlay();
 
         try
@@ -488,7 +497,7 @@ public partial class MainGameScene
     {
         if (what == NotificationWMCloseRequest && !_isProcessingTurn)
         {
-            BeginDestructiveNavigation(PendingNavigationKind.Quit, null, "quitting the game");
+            BeginDestructiveNavigation(PendingNavigationKind.Quit, null, null, "quitting the game");
         }
     }
 

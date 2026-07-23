@@ -49,7 +49,10 @@ public partial class ApothecariumScreenController : DialogController
     {
         _selectedKind = selection.Kind;
         _selectedId = selection.Id;
-        Render();
+        // Do not rebuild (and therefore Clear) the Tree while it is dispatching its
+        // selection signal. The clicked row already has the correct visual selection;
+        // only the detail panel needs to change here.
+        RenderSelectedDetail();
     }
 
     private void OnReplacementOptionPressed(object sender, ReplacementOption option)
@@ -74,6 +77,16 @@ public partial class ApothecariumScreenController : DialogController
         }
     }
 
+    /// <summary>
+    /// Rebuilds the roster and detail panel from the current campaign state while preserving
+    /// the user's selection. The screen instance is reused between openings, so callers use
+    /// this after another campaign screen may have moved a squad or changed its medical state.
+    /// </summary>
+    public void RefreshFromExternalChange()
+    {
+        Render();
+    }
+
     private void Render()
     {
         PlayerForce force = GameDataSingleton.Instance?.Sector?.PlayerForce;
@@ -85,7 +98,19 @@ public partial class ApothecariumScreenController : DialogController
 
         _apothecariumView.SetVaultSelected(_selectedKind == ApothecariumSelectionKind.Vault);
         _apothecariumView.SetTree(_recordBuilder.BuildTree(chapter, _selectedKind, _selectedId, woundedOnly: true));
+        RenderSelectedDetail(chapter, force);
+    }
 
+    private void RenderSelectedDetail(Unit chapter = null, PlayerForce force = null)
+    {
+        force ??= GameDataSingleton.Instance?.Sector?.PlayerForce;
+        chapter ??= force?.Army?.OrderOfBattle;
+        if (force == null || chapter == null)
+        {
+            return;
+        }
+
+        _apothecariumView.SetVaultSelected(_selectedKind == ApothecariumSelectionKind.Vault);
         switch (_selectedKind)
         {
             case ApothecariumSelectionKind.Unit:

@@ -280,6 +280,7 @@ public partial class MainGameScene : Control
 			_apothecariumScreen.CampaignChanged += OnCampaignChanged;
 			_mainUILayer.AddChild(_apothecariumScreen);
 		}
+		_apothecariumScreen.RefreshFromExternalChange();
 		_apothecariumScreen.Visible = true;
 		SetMainScreenVisibility(false);
 	}

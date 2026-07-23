@@ -117,12 +117,13 @@ namespace OnlyWar.Helpers
             MedicalSeverity worstSeverity = wounds.Count == 0 ? MedicalSeverity.None : wounds.Max(w => w.Severity);
             int maxRecovery = wounds.Select(w => ParseRecoveryWeeks(w.Recovery)).DefaultIfEmpty(0).Max();
             string geneSeedStatus = BuildGeneSeedStatus(wounds);
+            Squad squad = soldier.AssignedSquad;
 
             return new MedicalSoldierSummary(
                 soldier.Id,
                 GetSoldierIconKey(soldier),
                 $"{soldier.Template?.Name ?? "Battle-Brother"} {soldier.Name}",
-                $"{soldier.AssignedSquad?.Name ?? "Unassigned"}, {soldier.AssignedSquad?.ParentUnit?.Name ?? "No Company"}",
+                $"{squad?.Name ?? "Unassigned"}, {squad?.ParentUnit?.Name ?? "No Company"} - {SquadLocationFormatter.Format(squad)}",
                 soldier.CanFight,
                 maxRecovery,
                 geneSeedStatus,

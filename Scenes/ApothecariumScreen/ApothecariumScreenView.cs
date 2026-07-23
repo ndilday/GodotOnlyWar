@@ -22,7 +22,6 @@ public partial class ApothecariumScreenView : DialogView
     private Label _soldierSubtitle;
     private TextureRect _soldierIcon;
     private VBoxContainer _soldierMetrics;
-    private WoundDiagramView _woundDiagram;
     private VBoxContainer _woundRows;
     private VBoxContainer _replacementRows;
     private Control _vaultPanel;
@@ -126,8 +125,6 @@ public partial class ApothecariumScreenView : DialogView
             ("Wounds", summary.Wounds.Count(w => w.Severity > MedicalSeverity.None).ToString(), summary.WorstSeverity)
         ]);
 
-        _woundDiagram.SetWounds(summary.Wounds);
-
         ClearContainer(_woundRows);
         foreach (WoundLocationSummary wound in summary.Wounds.Where(w => w.Severity > MedicalSeverity.None || w.HoldsProgenoid || w.IsCybernetic))
         {
@@ -211,7 +208,9 @@ public partial class ApothecariumScreenView : DialogView
             HideRoot = true,
             Columns = 2,
             SizeFlagsVertical = SizeFlags.ExpandFill,
-            SelectMode = Tree.SelectModeEnum.Single
+            // The status is presentation within the roster row, not a second interaction
+            // target. Row mode makes clicks in either visual column select the same item.
+            SelectMode = Tree.SelectModeEnum.Row
         };
         _unitTree.SetColumnTitle(0, "Unit");
         _unitTree.SetColumnTitle(1, "Status");
@@ -285,16 +284,6 @@ public partial class ApothecariumScreenView : DialogView
         HBoxContainer columns = new() { SizeFlagsVertical = SizeFlags.ExpandFill };
         columns.AddThemeConstantOverride("separation", 12);
         stack.AddChild(columns);
-
-        PanelContainer diagramPanel = CreateInsetPanel();
-        diagramPanel.CustomMinimumSize = new Vector2(360, 0);
-        VBoxContainer diagramStack = new();
-        diagramStack.AddThemeConstantOverride("separation", 8);
-        diagramPanel.AddChild(diagramStack);
-        diagramStack.AddChild(CreateSectionLabel("Vitruvian Wound Status"));
-        _woundDiagram = new WoundDiagramView { SizeFlagsVertical = SizeFlags.ExpandFill, CustomMinimumSize = new Vector2(340, 360) };
-        diagramStack.AddChild(_woundDiagram);
-        columns.AddChild(diagramPanel);
 
         _woundRows = CreateSection(columns, "Wound Ledger");
         _replacementRows = CreateSection(columns, "Replacement Assignment");
@@ -525,7 +514,7 @@ public partial class ApothecariumScreenView : DialogView
         node.SetTooltipText(0, item.Subtitle);
         node.SetTooltipText(1, item.Status);
         node.SetIcon(0, IconAtlas.GetIcon(item.IconKey));
-        node.SetIconMaxWidth(0, 64);
+        node.SetIconMaxWidth(0, 48);
         node.SetMetadata(0, Variant.From(new Vector2I((int)item.Kind, item.Id)));
         node.SetCustomColor(1, ColorFor(item.Severity));
         if (item.IsSelected)

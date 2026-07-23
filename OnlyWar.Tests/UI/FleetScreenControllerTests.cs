@@ -31,7 +31,7 @@ public class FleetScreenControllerTests
 
         Assert.Equal(["Second Company", "Third Company"], shipNode.Children.Select(node => node.Name));
         Assert.False(shipNode.Children[0].Selectable);
-        Assert.Equal(["Boreas Squad", "Ardent Squad"], shipNode.Children[0].Children.Select(node => node.Name));
+        Assert.Equal(["Ardent Squad", "Boreas Squad"], shipNode.Children[0].Children.Select(node => node.Name));
         Assert.Equal(["Aquila Squad"], shipNode.Children[1].Children.Select(node => node.Name));
     }
 
@@ -51,7 +51,7 @@ public class FleetScreenControllerTests
     }
 
     [Fact]
-    public void CreateLoadedUnitNodes_UsesOrderOfBattleAndSquadOrderBeforeNames()
+    public void CreateLoadedUnitNodes_PreservesSquadTypeOrderAndSortsNamesWithinType()
     {
         Unit chapter = CreateUnit(1, "Chapter");
         Unit secondCompany = CreateUnit(2, "Second Company");
@@ -59,19 +59,31 @@ public class FleetScreenControllerTests
         AddChildUnit(chapter, secondCompany);
         AddChildUnit(chapter, firstCompany);
 
+        SquadTemplate assaultTemplate = new(
+            2,
+            "Assault Squad",
+            TestModelFactory.DefaultWeapons,
+            [],
+            TestModelFactory.TestArmor,
+            [new SquadTemplateElement(TestModelFactory.MarineTemplate, 0, 4)],
+            SquadTypes.Fast);
         Squad betaSquad = CreateSquad(11, "Beta Squad", secondCompany);
+        Squad assaultSquad = CreateSquad(13, "Aardvark Squad", secondCompany, template: assaultTemplate);
         Squad alphaSquad = CreateSquad(12, "Alpha Squad", secondCompany);
         Squad firstCompanySquad = CreateSquad(21, "First Company Squad", firstCompany);
         Ship ship = CreateShip();
 
         ship.LoadSquad(firstCompanySquad);
         ship.LoadSquad(alphaSquad);
+        ship.LoadSquad(assaultSquad);
         ship.LoadSquad(betaSquad);
 
         IReadOnlyList<TreeNode> unitNodes = FleetScreenController.CreateLoadedUnitNodes(ship);
 
         Assert.Equal(["Second Company", "First Company"], unitNodes.Select(node => node.Name));
-        Assert.Equal(["Beta Squad", "Alpha Squad"], unitNodes[0].Children.Select(node => node.Name));
+        Assert.Equal(
+            ["Alpha Squad", "Beta Squad", "Aardvark Squad"],
+            unitNodes[0].Children.Select(node => node.Name));
     }
 
     [Fact]
@@ -202,9 +214,14 @@ public class FleetScreenControllerTests
         child.ParentUnit = parent;
     }
 
-    private static Squad CreateSquad(int id, string name, Unit unit, int memberCount = 1)
+    private static Squad CreateSquad(
+        int id,
+        string name,
+        Unit unit,
+        int memberCount = 1,
+        SquadTemplate template = null)
     {
-        Squad squad = new(id, name, unit, TestModelFactory.SquadTemplate);
+        Squad squad = new(id, name, unit, template ?? TestModelFactory.SquadTemplate);
         for (int i = 0; i < memberCount; i++)
         {
             squad.AddSquadMember(TestModelFactory.CreateSoldier(name: $"{name} Marine {i + 1}"));

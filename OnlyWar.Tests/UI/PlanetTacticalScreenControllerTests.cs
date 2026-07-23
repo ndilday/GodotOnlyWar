@@ -35,7 +35,7 @@ public class PlanetTacticalScreenControllerTests
         IReadOnlyList<CommandTreeNode> unitNodes = PlanetTacticalScreenController.CreateLoadedUnitNodes(ship, "all");
 
         Assert.Equal(["Second Company | 2 aboard", "First Company | 1 aboard"], unitNodes.Select(node => node.Text));
-        Assert.Equal(["Beta Squad | 1/1 | Unassigned", "Alpha Squad | 1/1 | Unassigned"], unitNodes[0].Children.Select(node => node.Text));
+        Assert.Equal(["Alpha Squad | 1/1 | Unassigned", "Beta Squad | 1/1 | Unassigned"], unitNodes[0].Children.Select(node => node.Text));
     }
 
     [Fact]
@@ -55,7 +55,68 @@ public class PlanetTacticalScreenControllerTests
         IReadOnlyList<CommandTreeNode> unitNodes = PlanetTacticalScreenController.CreateSurfaceUnitNodes(5, regionFaction, "all");
 
         Assert.Equal(["Second Company | 2 on surface", "First Company | 1 on surface"], unitNodes.Select(node => node.Text));
-        Assert.Equal(["Beta Squad | 1/1 | Unassigned", "Alpha Squad | 1/1 | Unassigned"], unitNodes[0].Children.Select(node => node.Text));
+        Assert.Equal(["Alpha Squad | 1/1 | Unassigned", "Beta Squad | 1/1 | Unassigned"], unitNodes[0].Children.Select(node => node.Text));
+    }
+
+    [Theory]
+    [InlineData(true, 1, "Bastion", "Land Squad in Bastion")]
+    [InlineData(false, 1, "Bastion", "Land 1 Squad in Bastion")]
+    [InlineData(false, 3, "Bastion", "Land 3 Squads in Bastion")]
+    public void BuildLandCommandText_DescribesSelectionAndDestination(
+        bool singleSquadSelected,
+        int squadCount,
+        string regionName,
+        string expected)
+    {
+        Assert.Equal(
+            expected,
+            PlanetTacticalScreenController.BuildLandCommandText(singleSquadSelected, squadCount, regionName));
+    }
+
+    [Theory]
+    [InlineData(true, 1, "Bastion", "Embark Squad From Bastion")]
+    [InlineData(false, 1, "Bastion", "Embark 1 Squad From Bastion")]
+    [InlineData(false, 3, "Bastion", "Embark 3 Squads From Bastion")]
+    public void BuildEmbarkCommandText_DescribesSelectionAndOrigin(
+        bool singleSquadSelected,
+        int squadCount,
+        string regionName,
+        string expected)
+    {
+        Assert.Equal(
+            expected,
+            PlanetTacticalScreenController.BuildEmbarkCommandText(singleSquadSelected, squadCount, regionName));
+    }
+
+    [Theory]
+    [InlineData("region:5", true)]
+    [InlineData("surface-unit:5:2", true)]
+    [InlineData("surface-squad:5:11", true)]
+    [InlineData("ship:7", false)]
+    [InlineData("loaded-unit:7:2", false)]
+    [InlineData("loaded-squad:7:11", false)]
+    [InlineData("group:orbit", false)]
+    public void IsSurfaceRosterSelectionKey_OnlyAcceptsLandedTreeSelections(string key, bool expected)
+    {
+        Assert.Equal(expected, PlanetTacticalScreenController.IsSurfaceRosterSelectionKey(key));
+    }
+
+    [Fact]
+    public void FindSquadById_ResolvesFromDisplayedRosterWithoutGlobalSquadMap()
+    {
+        Unit unit = CreateUnit(1, "Company");
+        Squad expected = CreateSquad(11, "Alpha Squad", unit);
+
+        Squad result = PlanetTacticalScreenController.FindSquadById([expected], expected.Id);
+
+        Assert.Same(expected, result);
+    }
+
+    [Fact]
+    public void FindSquadById_ReturnsNullWhenRosterOrSquadIsUnavailable()
+    {
+        Assert.Null(PlanetTacticalScreenController.FindSquadById(null, 11));
+        Assert.Null(PlanetTacticalScreenController.FindSquadById([], 11));
     }
 
     private static Ship CreateShip()

@@ -127,7 +127,7 @@ public partial class StartMenu
 		_activityOverlay.MoveToFront();
 		_activityOverlay.ShowBusy(
 			"LOADING CAMPAIGN",
-			$"Restoring {args.Slot.DisplayName}, its forces, and orders...");
+			$"Loading Game: {args.Slot.DisplayName}");
 		await ToSignal(GetTree(), "process_frame");
 		await ToSignal(GetTree(), "process_frame");
 

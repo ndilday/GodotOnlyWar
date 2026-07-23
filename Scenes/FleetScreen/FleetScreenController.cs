@@ -64,8 +64,9 @@ public partial class FleetScreenController : DialogController
         return ship.LoadedSquads
             .Where(squad => squad.Members.Count > 0)
             .OrderBy(squad => GetUnitOrderKey(squad.ParentUnit))
-            .ThenBy(squad => GetSquadOrder(squad))
-            .ThenBy(squad => squad.Name)
+            .ThenBy(squad => GetSquadTypeOrder(squad))
+            .ThenBy(squad => squad.Name, StringComparer.OrdinalIgnoreCase)
+            .ThenBy(squad => squad.Id)
             .GroupBy(squad => squad.ParentUnit)
             .Select(group =>
             {
@@ -187,12 +188,13 @@ public partial class FleetScreenController : DialogController
         return string.Join("/", segments);
     }
 
-    internal static int GetSquadOrder(Squad squad)
+    internal static int GetSquadTypeOrder(Squad squad)
     {
         if (squad?.ParentUnit?.Squads == null) return int.MaxValue;
 
         List<Squad> orderedSquads = squad.ParentUnit.Squads.ToList();
-        int index = orderedSquads.IndexOf(squad);
+        int index = orderedSquads.FindIndex(candidate =>
+            candidate.SquadTemplate?.Id == squad.SquadTemplate?.Id);
         return index >= 0 ? index : int.MaxValue;
     }
 

@@ -316,13 +316,14 @@ public partial class ChapterController : Control
     {
         Unit selectedCompany = TryGetSelectedCompany();
         Squad selectedSquad = TryGetSelectedSquad();
+        List<Squad> orderedSquads = OrderSquads(chapter.Squads).ToList();
         if (selectedCompany == null && selectedSquad == null)
         {
-            selectedSquad = chapter.Squads.FirstOrDefault();
+            selectedSquad = orderedSquads.FirstOrDefault();
             selectedCompany = selectedSquad == null ? chapter.ChildUnits.FirstOrDefault() : null;
         }
 
-        List<ChapterBrowserMenuItem> chapterItems = chapter.Squads
+        List<ChapterBrowserMenuItem> chapterItems = orderedSquads
             .Select(squad => new ChapterBrowserMenuItem(
                 ChapterBrowserLevel.Squad,
                 squad.Id,
@@ -353,9 +354,10 @@ public partial class ChapterController : Control
 
     private void RenderCompanyLevel(Unit company)
     {
-        Squad selectedSquad = TryGetSelectedSquad() ?? company.Squads.FirstOrDefault();
+        List<Squad> orderedSquads = OrderSquads(company.Squads).ToList();
+        Squad selectedSquad = TryGetSelectedSquad() ?? orderedSquads.FirstOrDefault();
 
-        List<ChapterBrowserMenuItem> squads = company.Squads
+        List<ChapterBrowserMenuItem> squads = orderedSquads
             .Select(squad => new ChapterBrowserMenuItem(
                 ChapterBrowserLevel.Squad,
                 squad.Id,
@@ -370,6 +372,14 @@ public partial class ChapterController : Control
         ChapterView.SetLeftMenu($"{company.Name} Squads", squads);
 
         ChapterView.SetDetail(BuildCompanyDetail(company, selectedSquad));
+    }
+
+    internal static IEnumerable<Squad> OrderSquads(IEnumerable<Squad> squads)
+    {
+        return squads
+            .OrderBy(FleetScreenController.GetSquadTypeOrder)
+            .ThenBy(squad => squad.Name, StringComparer.OrdinalIgnoreCase)
+            .ThenBy(squad => squad.Id);
     }
 
     private void RenderSquadLevel(Squad squad)

@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using System.Linq;
 using OnlyWar.Helpers;
 using OnlyWar.Models;
+using OnlyWar.Models.Fleets;
 using OnlyWar.Models.Soldiers;
 using OnlyWar.Models.Squads;
 using OnlyWar.Models.Units;
@@ -48,6 +49,21 @@ public class ApothecariumMedicalRecordBuilderTests
         Assert.Contains(summary.ReplacementOptions, o => o.LocationName == "Left Arm" && o.Type == MedicalProcedureType.Cybernetic);
         Assert.Contains(summary.ReplacementOptions, o => o.LocationName == "Left Arm" && o.Type == MedicalProcedureType.VatGrown);
         Assert.Equal("Safe", summary.GeneSeedStatus);
+    }
+
+    [Fact]
+    public void BuildSoldierSummary_IncludesCurrentLocationInAssignmentHeader()
+    {
+        Date currentDate = new(20_000);
+        PlayerSoldier soldier = CreatePlayerSoldier(12, "Orest", currentDate.GetTotalWeeks() - 6 * 52);
+        PlayerForce force = CreateForce(currentDate, soldier);
+        Squad squad = force.Army.OrderOfBattle.GetAllSquads().Single();
+        squad.BoardedLocation = new Ship(7, "Glory of Terra", new ShipTemplate(7, "Strike Cruiser", 20, 0, 0));
+        ApothecariumMedicalRecordBuilder builder = new();
+
+        MedicalSoldierSummary summary = builder.BuildSoldierSummary(soldier);
+
+        Assert.Equal("Test Squad, 1st Company - Glory of Terra, in transit", summary.Assignment);
     }
 
     [Fact]

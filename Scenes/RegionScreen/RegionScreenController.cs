@@ -423,6 +423,9 @@ public partial class RegionScreenController : DialogController
             {
                 List<CommandTreeNode> squadNodes = group
                     .Where(squad => RosterFormat.MatchesFilter(squad, _rosterFilter))
+                    .OrderBy(FleetScreenController.GetSquadTypeOrder)
+                    .ThenBy(squad => squad.Name, StringComparer.OrdinalIgnoreCase)
+                    .ThenBy(squad => squad.Id)
                     .Select(squad => new CommandTreeNode(
                         SquadKey(squad.Id),
                         SquadRosterLabel(squad),
