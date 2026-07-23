@@ -311,6 +311,18 @@ namespace OnlyWar.Helpers.Battles
             return (int)AbleSoldiers.Average(s => BattleModifiersUtil.CalculateOptimalDistance(s, targetSize, targetArmor, targetCon, targetRangedEvasion));
         }
 
+        /// <summary>
+        /// The range at which this squad prefers to open a meeting engagement. Differs from
+        /// <see cref="GetPreferredEngagementRange"/> only in how it treats members with no standoff
+        /// range: hit-limited standoff weapons (e.g. missile launchers) open far and plink rather
+        /// than being dragged toward a close start. See
+        /// <see cref="BattleModifiersUtil.CalculateOpeningDistance"/>.
+        /// </summary>
+        public int GetPreferredOpeningRange(float targetSize, float targetArmor, float targetCon, float targetRangedEvasion = 0)
+        {
+            return (int)AbleSoldiers.Average(s => BattleModifiersUtil.CalculateOpeningDistance(s, targetSize, targetArmor, targetCon, targetRangedEvasion));
+        }
+
         private void AllocateEquipment()
         {
             List<BattleSoldier> tempSquad = new List<BattleSoldier>(AbleSoldiers);

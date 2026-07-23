@@ -53,5 +53,47 @@ namespace OnlyWar.Helpers.Battles
         internal ConcurrentDictionary<
             (int ShooterId, ValueTuple<int, int>? Direction),
             IReadOnlyList<BattleSquad>> NearestInRangeSquads { get; } = new();
+
+        // SquadId -> its firing geometry for the turn (Phase 3 fire distribution). Squad-level and
+        // identical for every member, so computed once per squad.
+        internal ConcurrentDictionary<int, SquadEngagementGeometry> SquadGeometry { get; } = new();
+    }
+
+    /// <summary>
+    /// A squad's engagement frame for one turn: the axis from the squad's centroid toward the enemy
+    /// centroid, its perpendicular ("lateral") direction, and the spread strength (base coefficient
+    /// scaled by the faction's fire discipline). The lateral direction lets each soldier prefer the
+    /// enemy in its own firing lane, spreading a squad's fire across the frontage. A default
+    /// (Valid = false) instance carries no preference — targeting falls back to pure value.
+    /// </summary>
+    internal readonly struct SquadEngagementGeometry
+    {
+        internal bool Valid { get; }
+        internal float CentroidX { get; }
+        internal float CentroidY { get; }
+        internal float EnemyCentroidX { get; }
+        internal float EnemyCentroidY { get; }
+        internal float PerpX { get; }
+        internal float PerpY { get; }
+        internal float SpreadCoefficient { get; }
+
+        internal SquadEngagementGeometry(
+            float centroidX,
+            float centroidY,
+            float enemyCentroidX,
+            float enemyCentroidY,
+            float perpX,
+            float perpY,
+            float spreadCoefficient)
+        {
+            Valid = true;
+            CentroidX = centroidX;
+            CentroidY = centroidY;
+            EnemyCentroidX = enemyCentroidX;
+            EnemyCentroidY = enemyCentroidY;
+            PerpX = perpX;
+            PerpY = perpY;
+            SpreadCoefficient = spreadCoefficient;
+        }
     }
 }

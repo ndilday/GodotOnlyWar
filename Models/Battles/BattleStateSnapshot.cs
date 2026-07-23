@@ -37,7 +37,9 @@ namespace OnlyWar.Models.Battles
             OpposingSide = opposingSide;
         }
 
-        public static BattleStateSnapshot Capture(BattleState state)
+        public static BattleStateSnapshot Capture(
+            BattleState state,
+            IEnumerable<BattleSoldier> retainedSoldiers = null)
         {
             if (state == null) throw new ArgumentNullException(nameof(state));
 
@@ -61,10 +63,17 @@ namespace OnlyWar.Models.Battles
                     pair => pair.Key,
                     pair => new BattleSquadSnapshot(pair.Value, pair.Value.Soldiers.Select(CaptureSoldier).ToList()));
 
-            // The live BattleState intentionally retains soldiers incapacitated during the current
-            // turn until after its replay snapshot is captured. They may have recorded actions and
-            // the chronicle still needs their identity and last position for that round.
+            // Active soldiers that are not represented by a squad are retained as a defensive
+            // fallback for state transitions such as disengagement.
             foreach (BattleSoldier soldier in state.Soldiers.Values)
+            {
+                CaptureSoldier(soldier);
+            }
+            // Casualty cleanup removes a soldier from both the squad roster and the active lookup
+            // before the end-of-round snapshot is built. Retain those wrappers in the soldier
+            // lookup only, so actions they took earlier in the round can still resolve their name,
+            // formation, and last position without inflating the formation's surviving strength.
+            foreach (BattleSoldier soldier in retainedSoldiers ?? [])
             {
                 CaptureSoldier(soldier);
             }

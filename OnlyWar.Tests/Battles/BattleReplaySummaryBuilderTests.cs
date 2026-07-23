@@ -130,6 +130,30 @@ public class BattleReplaySummaryBuilderTests
     }
 
     [Fact]
+    public void Build_ActionByCasualtyRetainsActorAndFormationIdentity()
+    {
+        BattleSquad playerSquad = CreateBattleSquad(true, "Alpha", "Sergeant Alpha");
+        BattleSquad opposingSquad = CreateBattleSquad(false, "Cult Mob", "Neophyte Hybrid 15");
+        BattleState initialState = CreateState(playerSquad, opposingSquad);
+        BattleState currentState = new(initialState);
+        BattleSoldier casualty = currentState.GetSquad(opposingSquad.Id).Soldiers[0];
+        FakeAction action = new(casualty.Soldier.Id, "Neophyte Hybrid 15 readies Autopistol.");
+
+        currentState.GetSquad(opposingSquad.Id).RemoveSoldier(casualty);
+        currentState.RemoveSoldier(casualty.Soldier.Id);
+        BattleHistory history = new();
+        history.Turns.Add(new BattleTurn(initialState, []));
+        history.Turns.Add(new BattleTurn(currentState, [action], null, [casualty]));
+
+        BattleEventEntry eventEntry = Assert.Single(
+            new BattleReplaySummaryBuilder().Build(history, 1).CurrentTurnEvents);
+
+        Assert.Equal("Neophyte Hybrid 15", eventEntry.ActorName);
+        Assert.Equal("Cult Mob", eventEntry.FormationName);
+        Assert.Equal("Neophyte Hybrid 15 readies Autopistol.", eventEntry.Text);
+    }
+
+    [Fact]
     public void Build_TypedEventsPrecedeActionChronology()
     {
         BattleSquad playerSquad = CreateBattleSquad(true, "Alpha", "Sergeant Alpha");

@@ -214,7 +214,11 @@ namespace OnlyWar.Helpers.Battles
                 }
             }
 
-            BattleHistory.Turns.Add(new BattleTurn(_currentState, executedActions, events));
+            BattleHistory.Turns.Add(new BattleTurn(
+                _currentState,
+                executedActions,
+                events,
+                _casualtyMap.Values));
             if (_currentState.ActiveAttackerSquads.Count == 0 || _currentState.ActiveOpposingSquads.Count == 0)
             {
                 EnsureTerminalOutcome();

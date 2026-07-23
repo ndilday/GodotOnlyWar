@@ -49,6 +49,13 @@ namespace OnlyWar.Models
         // Public human insurgents may suspend their war with Imperial forces while a public external
         // enemy is present on the planet. Cults deliberately do not receive this public truce.
         public bool OffersExternalEnemyTruce { get; set; }
+        // How strongly a squad of this faction distributes its fire across the enemy frontage rather
+        // than piling every weapon onto the single most valuable target (Phase 3 fire distribution).
+        // 1 = tight sector discipline; 0 = an undisciplined mob that dogpiles. Interim derivation
+        // (see PopulationIsMilitary): the Imperium fights to Codex doctrine, synaptic Tyranid broods
+        // (Consumption) coordinate through the hive mind, and everything else is a horde. Overridable
+        // once rules data carry it explicitly, and refinable to live synapse coverage per squad.
+        public float FireDiscipline { get; set; }
         public IReadOnlyDictionary<int, Species> Species { get; }
         public IReadOnlyDictionary<int, SoldierTemplate> SoldierTemplates { get; }
         public IReadOnlyDictionary<int, SquadTemplate> SquadTemplates { get; }
@@ -97,6 +104,10 @@ namespace OnlyWar.Models
             DefendsHostWhileHidden = growthType == GrowthType.Conversion
                 || growthType == GrowthType.Unrest;
             OffersExternalEnemyTruce = growthType == GrowthType.Unrest;
+            FireDiscipline =
+                isPlayerFaction || isDefaultFaction || growthType == GrowthType.Consumption
+                    ? 1.0f
+                    : 0.3f;
             Species = species;
             SoldierTemplates = soldierTemplates;
             SquadTemplates = squadTemplates;

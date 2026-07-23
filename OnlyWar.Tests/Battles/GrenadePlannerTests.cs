@@ -54,7 +54,11 @@ public class GrenadePlannerTests
         BattleSquad enemies = CreateSquad("Cluster", (730, 2), (731, 2), (732, 2), (733, 2));
         foreach (BattleSoldier enemy in enemies.Soldiers)
         {
-            MakeToughSharpshooter(enemy, constitution: 40);
+            // Durable, but not so tanky that a single frag barely dents each: the point is that
+            // catching a whole cluster clearly out-values a lone rifle shot. (At constitution 40 a
+            // frag's per-victim damage is marginal enough that a confident rifle shot is a defensible
+            // choice, so that no longer makes an unambiguous "throw at the cluster" fixture.)
+            MakeToughSharpshooter(enemy, constitution: 20);
         }
 
         BattleGridManager grid = new();
@@ -187,10 +191,13 @@ public class GrenadePlannerTests
     }
 
     [Fact]
-    public void BlastThrowScore_DiscountsNominalValueByDeliveryConfidence()
+    public void BlastThrowScore_FallsWithDeliveryConfidence()
     {
-        // Both targets have the same nominal blast value. The planner should inspect that
-        // impact once and vary only the cheap on-target confidence for the delivery check.
+        // Same lone target value, two ranges. The far throw is both less likely to land on
+        // target (lower delivery confidence -> more of its value integrated over wider scatter)
+        // and less imminent, so it must score strictly lower than the close throw. The old exact
+        // "score = nominal x confidence x imminence" factorization no longer holds now that the
+        // score integrates enemy value over the full scatter distribution rather than one impact.
         BattleSquad closeShooters = CreateSquad("Close Thrower", 900);
         ((Soldier)closeShooters.Soldiers[0].Soldier).Dexterity = 22;
         AddBeltGrenade(closeShooters.Soldiers[0]);
@@ -218,33 +225,9 @@ public class GrenadePlannerTests
 
         Assert.NotNull(closeThrow);
         Assert.NotNull(farThrow);
-
-        float closeToHit = closeShooters.Soldiers[0].Soldier.GetTotalSkillValue(
-                closeThrow.Weapon.Template.RelatedSkill)
-            + BattleModifiersUtil.CalculateBlastRangeModifier(
-                closeShooters.Soldiers[0].Soldier,
-                closeThrow.Weapon.Template,
-                closeThrow.Range);
-        float farToHit = farShooters.Soldiers[0].Soldier.GetTotalSkillValue(
-                farThrow.Weapon.Template.RelatedSkill)
-            + BattleModifiersUtil.CalculateBlastRangeModifier(
-                farShooters.Soldiers[0].Soldier,
-                farThrow.Weapon.Template,
-                farThrow.Range);
-        float closeConfidence = GaussianCalculator.ApproximateNormalCDF((closeToHit - 10.5f) / 3f);
-        float farConfidence = GaussianCalculator.ApproximateNormalCDF((farToHit - 10.5f) / 3f);
-
-        // Enemy value is also discounted per victim by their squad's engagement imminence
-        // (mirroring the conventional ranged path), which varies with distance, so divide
-        // it out alongside confidence to isolate the identical nominal blast value.
-        float closeImminence = closePlanner.GetSquadImminence(closeShooters, closeEnemies);
-        float farImminence = farPlanner.GetSquadImminence(farShooters, farEnemies);
-
-        Assert.True(farThrow.Score < closeThrow.Score);
-        Assert.Equal(
-            closeThrow.Score / (closeConfidence * closeImminence),
-            farThrow.Score / (farConfidence * farImminence),
-            precision: 3);
+        Assert.True(
+            farThrow.Score < closeThrow.Score,
+            $"Far throw ({farThrow.Score}) must score below the close throw ({closeThrow.Score}).");
     }
 
     [Fact]

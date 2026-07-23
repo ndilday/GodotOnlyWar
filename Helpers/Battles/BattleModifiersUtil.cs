@@ -97,6 +97,47 @@ namespace OnlyWar.Helpers.Battles
             return range;
         }
 
+        /// <summary>
+        /// Preferred distance for a soldier at the START of a meeting engagement. Unlike
+        /// <see cref="CalculateOptimalDistance"/>, a zero standoff range is disambiguated by *why*
+        /// it is zero. A weapon that can wound but cannot reliably hit at range (a single-shot heavy
+        /// weapon such as a missile launcher) still wants to open far and take its low-odds shots,
+        /// so it contributes its killing reach. A weapon that hits fine but cannot wound the target
+        /// at any range (a light weapon vs heavy armor) gains nothing by standing off and opens
+        /// close (0), where a rush or a lucky penetration is at least possible. Kept separate from
+        /// CalculateOptimalDistance because squad imminence depends on that function's meaning.
+        /// </summary>
+        public static float CalculateOpeningDistance(BattleSoldier soldier, float targetSize, float targetArmor, float targetCon, float targetRangedEvasion = 0)
+        {
+            int freeHands = soldier.FunctioningHands;
+            if (freeHands == 0)
+            {
+                return 0;
+            }
+            float best = 0;
+            var weapons = soldier.EquippedRangedWeapons.Where(w => (int)w.Template.Location <= freeHands);
+            foreach (RangedWeapon weapon in weapons)
+            {
+                float hitRange = EstimateHitDistance(soldier.Soldier, weapon, targetSize, freeHands, targetRangedEvasion);
+                float killRange = EstimateKillDistance(weapon, targetArmor, targetCon);
+                float optimal = Math.Min(hitRange, killRange);
+                if (optimal > best)
+                {
+                    best = optimal;
+                }
+                else if (optimal <= 0 && hitRange <= 0 && killRange > 0)
+                {
+                    // Hit-limited, not wound-limited: this weapon could kill at range but rarely
+                    // hits there. It still prefers to open far and plink rather than close in.
+                    if (killRange > best)
+                    {
+                        best = killRange;
+                    }
+                }
+            }
+            return best;
+        }
+
         public static float EstimateHitDistance(ISoldier soldier, RangedWeapon weapon, float targetSize, int functioningHands, float targetRangedEvasion = 0)
         {
             if ((int)weapon.Template.Location > functioningHands)

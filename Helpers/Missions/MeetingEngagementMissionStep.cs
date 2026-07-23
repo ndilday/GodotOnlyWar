@@ -42,8 +42,8 @@ namespace OnlyWar.Helpers.Missions
                 .GetRandomSquadMember(execution.Random);
             BattleSoldier attackerSoldier = missionSquads.First()
                 .GetRandomSquadMember(execution.Random);
-            double attackerRange = missionSquads.Average(s => s.GetPreferredEngagementRange(defenderSoldier.Soldier.Size, defenderSoldier.Armor.Template.ArmorProvided, defenderSoldier.Soldier.Constitution, defenderSoldier.Soldier.Template.Species.RangedEvasion));
-            double defenderRange = opposingSquads.Average(s => s.GetPreferredEngagementRange(attackerSoldier.Soldier.Size, attackerSoldier.Armor.Template.ArmorProvided, attackerSoldier.Soldier.Constitution, attackerSoldier.Soldier.Template.Species.RangedEvasion));
+            double attackerRange = missionSquads.Average(s => s.GetPreferredOpeningRange(defenderSoldier.Soldier.Size, defenderSoldier.Armor.Template.ArmorProvided, defenderSoldier.Soldier.Constitution, defenderSoldier.Soldier.Template.Species.RangedEvasion));
+            double defenderRange = opposingSquads.Average(s => s.GetPreferredOpeningRange(attackerSoldier.Soldier.Size, attackerSoldier.Armor.Template.ArmorProvided, attackerSoldier.Soldier.Constitution, attackerSoldier.Soldier.Template.Species.RangedEvasion));
             ushort range = (ushort)(defenderRange + (attackerRange - defenderRange) * rangeModifier);
             // set up meeting engagement battle
             BattleGridManager bgm = new BattleGridManager();

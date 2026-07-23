@@ -18,8 +18,17 @@ namespace OnlyWar.Models.Battles
         }
 
         public BattleTurn(BattleState state, IReadOnlyList<IAction> actions, IReadOnlyList<BattleEvent> events)
+            : this(state, actions, events, null)
         {
-            State = BattleStateSnapshot.Capture(state);
+        }
+
+        internal BattleTurn(
+            BattleState state,
+            IReadOnlyList<IAction> actions,
+            IReadOnlyList<BattleEvent> events,
+            IEnumerable<BattleSoldier> retainedSoldiers)
+        {
+            State = BattleStateSnapshot.Capture(state, retainedSoldiers);
             Actions = (actions ?? new List<IAction>()).ToArray();
             Events = (events ?? new List<BattleEvent>()).ToArray();
         }

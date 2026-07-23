@@ -177,6 +177,85 @@ public class BattleSquadPlannerTests
     }
 
     [Fact]
+    public void CalculateOpeningDistance_HitLimitedHeavyWeaponOpensFarWhileOptimalIsZero()
+    {
+        // A single-shot heavy weapon (missile-launcher-like) can wound at any range but rarely
+        // hits a small target at range in ordinary hands, so CalculateOptimalDistance collapses
+        // to 0 ("no standoff range"). The opening-range variant recognizes this is hit-limited,
+        // not wound-limited, and keeps the squad opening far to take its low-odds shots rather
+        // than being dragged toward a close start where its bulk and single shot are wasted.
+        BattleSquad squad = CreateSquad("Missile Gunner", 91_001);
+        BattleSoldier shooter = squad.Soldiers[0];
+        RangedWeapon launcher = new(new RangedWeaponTemplate(
+            99_301,
+            "Missile Launcher",
+            EquipLocation.TwoHand,
+            TestSkills.Ranged,
+            accuracy: 0,
+            armorMultiplier: 0.5f,
+            penetrationMultiplier: 1,
+            requiredStrength: 0,
+            baseDamage: 100,
+            maxDistance: 500,
+            rof: 1,
+            ammo: 4,
+            recoil: 0,
+            bulk: 8,
+            doesDamageDegradeWithRange: false,
+            reloadTime: 1));
+        shooter.RangedWeapons.Clear();
+        shooter.ClearReadiedRangedWeapons();
+        shooter.RangedWeapons.Add(launcher);
+        shooter.ReadyWeapon(launcher);
+
+        float optimal = BattleModifiersUtil.CalculateOptimalDistance(shooter, 1f, 15f, 30f);
+        float opening = BattleModifiersUtil.CalculateOpeningDistance(shooter, 1f, 15f, 30f);
+
+        Assert.Equal(0f, optimal);
+        Assert.True(opening > 0f, $"expected hit-limited weapon to open far, got {opening}");
+    }
+
+    [Fact]
+    public void CalculateOpeningDistance_WoundLimitedWeaponStaysCloseLikeOptimal()
+    {
+        // A weapon that hits fine but cannot wound the target at any range gains nothing by
+        // standing off, so both the optimal and opening distances are 0 (open/stay close, where
+        // a rush or lucky penetration is at least possible). This is the case that must NOT be
+        // pushed outward by the hit-limited exception.
+        BattleSquad squad = CreateSquad("Light Gunner", 91_002);
+        BattleSoldier shooter = squad.Soldiers[0];
+        ((Soldier)shooter.Soldier).Dexterity = 20; // accurate enough to hit at range
+        RangedWeapon popgun = new(new RangedWeaponTemplate(
+            99_302,
+            "Popgun",
+            EquipLocation.TwoHand,
+            TestSkills.Ranged,
+            accuracy: 5,
+            armorMultiplier: 1,
+            penetrationMultiplier: 1,
+            requiredStrength: 0,
+            baseDamage: 2,
+            maxDistance: 300,
+            rof: 3,
+            ammo: 30,
+            recoil: 0,
+            bulk: 4,
+            doesDamageDegradeWithRange: true,
+            reloadTime: 1));
+        shooter.RangedWeapons.Clear();
+        shooter.ClearReadiedRangedWeapons();
+        shooter.RangedWeapons.Add(popgun);
+        shooter.ReadyWeapon(popgun);
+
+        // Armor 30 the 2-damage popgun can never overcome: DamageMultiplier*6 = 12 < 30.
+        float optimal = BattleModifiersUtil.CalculateOptimalDistance(shooter, 1f, 30f, 30f);
+        float opening = BattleModifiersUtil.CalculateOpeningDistance(shooter, 1f, 30f, 30f);
+
+        Assert.Equal(0f, optimal);
+        Assert.Equal(0f, opening);
+    }
+
+    [Fact]
     public void PrepareActions_FlamerInRangeSelectsStationaryTier()
     {
         BattleSquad shooters = CreateSquad("Stationary Flamer", 90_001);
