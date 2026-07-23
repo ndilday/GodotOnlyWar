@@ -15,7 +15,7 @@ compatibility/default_parent_skeleton_in_mesh_instance_3d=true
 [application]
 
 config/name="Only War"
-config/version="Alpha 0.7.1"
+config/version="Alpha 0.7.2"
 run/main_scene="uid://b5sny34jdvj4p"
 config/use_custom_user_dir=true
 config/custom_user_dir_name="OnlyWar"
