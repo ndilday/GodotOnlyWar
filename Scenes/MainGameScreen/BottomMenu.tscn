@@ -49,13 +49,13 @@ text = "Chapter"
 [node name="ApothecariumButton" type="Button" parent="Panel/MarginContainer/HBoxContainer"]
 custom_minimum_size = Vector2(96, 0)
 layout_mode = 2
-text = "Apoth."
+text = "Apothecarion"
 
 [node name="ReclusiumButton" type="Button" parent="Panel/MarginContainer/HBoxContainer"]
 custom_minimum_size = Vector2(92, 0)
 layout_mode = 2
 disabled = true
-text = "Reclus."
+text = "Reclusiam"
 
 [node name="LibraryButton" type="Button" parent="Panel/MarginContainer/HBoxContainer"]
 custom_minimum_size = Vector2(92, 0)

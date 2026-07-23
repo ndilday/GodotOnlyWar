@@ -525,6 +525,7 @@ public partial class ApothecariumScreenView : DialogView
         node.SetTooltipText(0, item.Subtitle);
         node.SetTooltipText(1, item.Status);
         node.SetIcon(0, IconAtlas.GetIcon(item.IconKey));
+        node.SetIconMaxWidth(0, 64);
         node.SetMetadata(0, Variant.From(new Vector2I((int)item.Kind, item.Id)));
         node.SetCustomColor(1, ColorFor(item.Severity));
         if (item.IsSelected)

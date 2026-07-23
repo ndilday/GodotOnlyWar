@@ -42,6 +42,27 @@ namespace OnlyWar.Helpers.Battles
             List<BattleSquad> enemies = ActiveSquads(enemySquads);
 
             sideState.WithdrawalHeading ??= SelectWithdrawalHeading(friendly, enemies);
+
+            // A fighting withdrawal is a leapfrog: a cover squad only accomplishes something if
+            // there is a main body for it to cover. With a single squad, designating it as cover
+            // makes it stand and fire — nobody withdraws — while the enemy has already committed
+            // to pursuit off the withdrawal order. Fall back to the §6.2.5 unsupported withdrawal:
+            // the lone squad Runs along the fixed heading and the contact-break rules decide
+            // whether it escapes.
+            if (friendly.Count < 2)
+            {
+                sideState.CoveringSquadId = null;
+                foreach (BattleSquad squad in friendly)
+                {
+                    _squadPlanner.PrepareBoundActions(squad, sideState.WithdrawalHeading.Value);
+                }
+                return new CoverAssignment(
+                    null,
+                    false,
+                    "single_squad_unsupported",
+                    BuildCoverCandidates(friendly, enemies));
+            }
+
             CoverAssignment assignment = SelectCover(
                 BuildCoverCandidates(friendly, enemies),
                 sideState.CoveringSquadId);

@@ -110,6 +110,34 @@ public class BattleForcePlannerTests
     }
 
     [Fact]
+    public void PrepareFightingWithdrawal_SingleSquadRunsInsteadOfCovering()
+    {
+        // A lone squad has no main body to cover. Designating it as cover would make it stand
+        // and fire while nobody withdraws, even though the enemy has already begun pursuit off
+        // the withdrawal order. It falls back to the unsupported withdrawal: it Runs.
+        BattleSquad lone = CreateSquad("Lone", 71_061);
+        BattleSquad enemy = CreateSquad("Enemy", 71_062);
+        PlannerFixture fixture = CreatePlannerFixture(
+            (lone, true, 10, 0),
+            (enemy, false, 0, 0));
+        BattleSideState side = SideState();
+        BattleForcePlanner planner = new(fixture.SquadPlanner);
+
+        BattleForcePlanner.CoverAssignment result = planner.PrepareFightingWithdrawal(
+            side, [lone], [enemy]);
+
+        Assert.Null(result.SquadId);
+        Assert.Equal("single_squad_unsupported", result.Reason);
+        Assert.Null(side.CoveringSquadId);
+        Assert.Equal(WithdrawalRole.Bound, lone.WithdrawalRole);
+        Assert.Equal(SquadMovementTier.Run, lone.MovementTier);
+        Assert.Single(fixture.MoveActions);
+        Assert.DoesNotContain(
+            fixture.ShootActions,
+            action => action.ActorId == lone.Soldiers[0].Soldier.Id);
+    }
+
+    [Fact]
     public void PrepareBoundActions_RunsAlongHeadingWithoutAttacking()
     {
         BattleSquad bound = CreateSquad("Bound", 71_031);
