@@ -5,6 +5,7 @@ using OnlyWar.Helpers;
 using OnlyWar.Helpers.Battles;
 using OnlyWar.Helpers.Battles.Actions;
 using OnlyWar.Models.Battles;
+using OnlyWar.Models.Equippables;
 using OnlyWar.Models.Soldiers;
 using OnlyWar.Tests.Fixtures;
 using Xunit;
@@ -13,6 +14,28 @@ namespace OnlyWar.Tests.Battles;
 
 public class ShootActionFriendlyFireTests
 {
+    [Fact]
+    public void Description_UsesSingularTimeAndReportsArmorStoppedHit()
+    {
+        BattleSquad shooters = CreateSquad(true, (1, "Shooter"));
+        BattleSquad targets = CreateSquad(false, (2, "Target"));
+        BattleSoldier shooter = shooters.Soldiers[0];
+        BattleSoldier target = targets.Soldiers[0];
+        shooter.Soldier.AddSkillPoints(
+            shooter.EquippedRangedWeapons[0].Template.RelatedSkill,
+            1_000_000);
+        target.Armor = new Armor(new ArmorTemplate(999, "Heavy Armor", byte.MaxValue, 0));
+        BattleState state = CreateState(shooters, targets);
+        ShootAction action = CreateAction(shooter, target, grid: null, new SeededRNG(1));
+
+        action.Execute(state);
+
+        Assert.Equal(1, action.HitCount);
+        Assert.Empty(action.WoundResolutions);
+        Assert.Contains("fires a Test Rifle 1 time at Target", action.Description());
+        Assert.Contains("Hitting 1 time, but doing no damage", action.Description());
+    }
+
     [Fact]
     public void CalculateToHitModifiers_FiringIntoMeleeAppliesSharedFlatPenalty()
     {

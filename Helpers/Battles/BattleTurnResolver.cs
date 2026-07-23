@@ -1288,8 +1288,10 @@ namespace OnlyWar.Helpers.Battles
             return jogSpeed <= 0 ? null : (separation - maximumRange) / jogSpeed;
         }
 
-        private static string SideName(BattleSide side) =>
-            side == BattleSide.Attacker ? "First side" : "Second side";
+        private string SideName(BattleSide side) =>
+            GetAllSquads(side).Any(squad => squad.IsPlayerAligned)
+                ? "Player force"
+                : "Opposing force";
 
         private void LogCoverAssignment(
             BattleSide side,

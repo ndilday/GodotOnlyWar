@@ -60,7 +60,11 @@ public class BattleTurnResolverWithdrawalTests
             Array.Empty<ValueTuple<BaseSkill, float>>(),
             battleValue: 0);
         BattleSquad withdrawing = CreateSquad("Withdrawing", 73_011, zeroValueHuman);
-        BattleSquad holder = CreateSquad("Holder", 73_012, TestModelFactory.MarineTemplate);
+        BattleSquad holder = CreateSquad(
+            "Holder",
+            73_012,
+            TestModelFactory.MarineTemplate,
+            isPlayerSquad: true);
         BattleGridManager grid = new();
         Place(grid, withdrawing.Soldiers[0], true, 0, 0);
         Place(grid, holder.Soldiers[0], false, 1_000, 0);
@@ -80,10 +84,12 @@ public class BattleTurnResolverWithdrawalTests
         IReadOnlyList<BattleEvent> events = resolver.BattleHistory.Turns.Last().Events;
         Assert.Contains(events, battleEvent =>
             battleEvent.Type == BattleEventType.WithdrawalOrdered
-            && battleEvent.Side == BattleSide.Attacker);
+            && battleEvent.Side == BattleSide.Attacker
+            && battleEvent.Description == "Opposing force ordered a fighting withdrawal.");
         Assert.Contains(events, battleEvent =>
             battleEvent.Type == BattleEventType.PursuitEnded
-            && battleEvent.Side == BattleSide.Opposing);
+            && battleEvent.Side == BattleSide.Opposing
+            && battleEvent.Description == "Player force declined pursuit.");
         Assert.Contains(events, battleEvent =>
             battleEvent.Type == BattleEventType.SquadDisengaged
             && battleEvent.PrimarySquadId == withdrawing.Id);
@@ -161,7 +167,8 @@ public class BattleTurnResolverWithdrawalTests
     private static BattleSquad CreateSquad(
         string name,
         int soldierId,
-        SoldierTemplate soldierTemplate)
+        SoldierTemplate soldierTemplate,
+        bool isPlayerSquad = false)
     {
         Faction faction = CreateFaction(soldierId + 10_000, name, soldierTemplate);
         SquadTemplate squadTemplate = new(
@@ -179,7 +186,7 @@ public class BattleTurnResolverWithdrawalTests
         soldier.Id = soldierId;
         Squad squad = new(name, null, squadTemplate);
         squad.AddSquadMember(soldier);
-        return new BattleSquad(false, squad);
+        return new BattleSquad(isPlayerSquad, squad);
     }
 
     private static void Place(

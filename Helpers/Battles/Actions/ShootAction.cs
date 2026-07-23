@@ -29,6 +29,7 @@ namespace OnlyWar.Helpers.Battles.Actions
         public float AimMultiplier { get; }
         public int? StrayTargetId { get; private set; }
         public bool IsFriendlyFire => StrayTargetId.HasValue && _strayHitWasFriendly;
+        public int HitCount { get; private set; }
         public List<WoundResolution> WoundResolutions { get; }
 
         public ShootAction(
@@ -101,6 +102,7 @@ namespace OnlyWar.Helpers.Battles.Actions
                     int numberOfShots = NumberOfShots;
                     do
                     {
+                        HitCount++;
                         WoundResolution woundResolution = HandleHit(shooter, weapon, target);
                         if(woundResolution != null)
                         {
@@ -124,6 +126,7 @@ namespace OnlyWar.Helpers.Battles.Actions
                         == _grid.GetSoldierSide(strayTarget.Soldier.Id);
                     _strayTargetName = strayTarget.Soldier.Name;
 
+                    HitCount++;
                     WoundResolution woundResolution = HandleHit(shooter, weapon, strayTarget);
                     if (woundResolution != null)
                     {
@@ -198,21 +201,39 @@ namespace OnlyWar.Helpers.Battles.Actions
 
         public string Description()
         {
-            string desc = $"{_soldierName} fires a {_weaponName} {NumberOfShots} times at {_targetName}\n";
+            string desc = $"{_soldierName} fires a {_weaponName} {NumberOfShots} {TimeWord(NumberOfShots)} at {_targetName}\n";
             if (StrayTargetId.HasValue)
             {
                 string allegiance = IsFriendlyFire ? "friendly fire" : "a stray hit";
                 desc += $"The shot misses its mark and strikes {_strayTargetName} ({allegiance})\n";
             }
-            else
-            {
-                desc += $"Hitting {WoundResolutions.Count} times\n";
-            }
+
+            desc += DescribeHits(HitCount, WoundResolutions.Count);
             foreach (WoundResolution wound in WoundResolutions)
             {
                 desc += wound.Description;
             }
             return desc;
         }
+
+        internal static string DescribeHits(int hitCount, int damagingHitCount)
+        {
+            int noDamageHitCount = Math.Max(0, hitCount - damagingHitCount);
+            if (hitCount > 0 && damagingHitCount == 0)
+            {
+                return $"Hitting {hitCount} {TimeWord(hitCount)}, but doing no damage\n";
+            }
+
+            if (noDamageHitCount > 0)
+            {
+                return $"Hitting {hitCount} {TimeWord(hitCount)}, with {noDamageHitCount} {HitWord(noDamageHitCount)} doing no damage\n";
+            }
+
+            return $"Hitting {hitCount} {TimeWord(hitCount)}\n";
+        }
+
+        internal static string TimeWord(int count) => count == 1 ? "time" : "times";
+
+        private static string HitWord(int count) => count == 1 ? "hit" : "hits";
     }
 }

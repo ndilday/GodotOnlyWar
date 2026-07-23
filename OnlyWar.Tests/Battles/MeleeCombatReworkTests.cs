@@ -235,6 +235,38 @@ public class MeleeCombatReworkTests
     }
 
     [Fact]
+    public void MeleeAttackAction_DescriptionUsesSingularTimeAndReportsArmorStoppedHit()
+    {
+        BattleSquad attacker = CreateBattleSquad("Attackers", 1, "Attacker");
+        BattleSquad defender = CreateBattleSquad("Defenders", 2, "Defender");
+        BattleSoldier attackerSoldier = attacker.Soldiers[0];
+        BattleSoldier defenderSoldier = defender.Soldiers[0];
+        MeleeWeapon weapon = CreateMeleeWeapon(34, "Knife", AttackSkill);
+        attackerSoldier.Soldier.AddSkillPoints(AttackSkill, 1_000_000);
+        attackerSoldier.AddWeapons([], [weapon]);
+        defenderSoldier.Armor = new Armor(
+            new ArmorTemplate(999, "Heavy Armor", byte.MaxValue, 0));
+        attackerSoldier.TopLeft = (0, 0);
+        defenderSoldier.TopLeft = (1, 0);
+        MeleeAttackAction action = new(
+            attackerSoldier,
+            [new PlannedMeleeStrike(
+                defenderSoldier.Soldier.Id,
+                weapon.Template.Id,
+                defenderSoldier.Soldier.Name,
+                weapon.Template.Name)],
+            didMove: false,
+            log: null,
+            random: new SeededRNG(1),
+            meleeWeaponTemplates: CreateMeleeTemplateMap(attackerSoldier, defenderSoldier));
+
+        action.Execute(CreateState(attacker, defender));
+
+        Assert.Empty(action.WoundResolutions);
+        Assert.Contains("Hitting 1 time, but doing no damage", action.Description());
+    }
+
+    [Fact]
     public void AttackSpeed_10_YieldsOneBaseAttack_And15HasASubstantialSecondSwingChance()
     {
         Assert.Equal(1.0f, MeleeMath.CalculateBaseAttackCount(10, 1), precision: 4);

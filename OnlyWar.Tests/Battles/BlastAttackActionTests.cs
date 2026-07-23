@@ -106,6 +106,9 @@ public class BlastAttackActionTests
 
         WoundResolution wound = Assert.Single(action.WoundResolutions);
         Assert.Equal(2, wound.Suffererer.Soldier.Id);
+        Assert.Contains(
+            "Hitting 2 times, with 1 hit doing no damage",
+            action.Description());
     }
 
     [Fact]

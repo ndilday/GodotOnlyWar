@@ -57,6 +57,9 @@ public class AreaAttackActionTests
         Assert.Equal(new[] { 2, 3 }, action.VictimIds);
         WoundResolution wound = Assert.Single(action.WoundResolutions);
         Assert.Equal(2, wound.Suffererer.Soldier.Id);
+        Assert.Contains(
+            "Hitting 2 times, with 1 hit doing no damage",
+            action.Description());
     }
 
     [Theory]

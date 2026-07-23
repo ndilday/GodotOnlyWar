@@ -53,6 +53,7 @@ namespace OnlyWar.Helpers.Battles.Actions
         private readonly IReadOnlyDictionary<int, MeleeWeaponTemplate> _meleeWeaponTemplates;
         private IReadOnlySet<int> _chargingSoldierIds = new HashSet<int>();
         private bool _wasExecuted;
+        private readonly Dictionary<ValueTuple<int, int>, int> _hitCountByTargetAndWeapon = [];
 
         public List<WoundResolution> WoundResolutions { get; }
         public IReadOnlyList<PlannedMeleeStrike> StrikePlans { get; }
@@ -164,6 +165,9 @@ namespace OnlyWar.Helpers.Battles.Actions
                 if (hit)
                 {
                     _log?.Invoke(attacker.Soldier.Name + " strikes " + target.Soldier);
+                    ValueTuple<int, int> key = new(target.Soldier.Id, weapon.Template.Id);
+                    _hitCountByTargetAndWeapon.TryGetValue(key, out int hitCount);
+                    _hitCountByTargetAndWeapon[key] = hitCount + 1;
                     HandleHit(attacker, weapon, target);
                 }
             }
@@ -386,17 +390,17 @@ namespace OnlyWar.Helpers.Battles.Actions
 
         public string Description()
         {
-            Dictionary<ValueTuple<int, int>, int> hitCountByTargetAndWeapon = [];
+            Dictionary<ValueTuple<int, int>, int> damagingHitCountByTargetAndWeapon = [];
             foreach (WoundResolution wound in WoundResolutions)
             {
                 ValueTuple<int, int> key = new ValueTuple<int, int>(wound.Suffererer.Soldier.Id, wound.Weapon.Id);
-                if (hitCountByTargetAndWeapon.ContainsKey(key))
+                if (damagingHitCountByTargetAndWeapon.ContainsKey(key))
                 {
-                    hitCountByTargetAndWeapon[key]++;
+                    damagingHitCountByTargetAndWeapon[key]++;
                 }
                 else
                 {
-                    hitCountByTargetAndWeapon[key] = 1;
+                    damagingHitCountByTargetAndWeapon[key] = 1;
                 }
             }
 
@@ -410,9 +414,10 @@ namespace OnlyWar.Helpers.Battles.Actions
                     continue;
                 }
 
-                hitCountByTargetAndWeapon.TryGetValue(key, out int hitCount);
+                _hitCountByTargetAndWeapon.TryGetValue(key, out int hitCount);
+                damagingHitCountByTargetAndWeapon.TryGetValue(key, out int damagingHitCount);
                 desc += $"{_attackerName} attacks {strikePlan.TargetName} with {strikePlan.WeaponName}\n";
-                desc += $"Hitting {hitCount} times.\n";
+                desc += ShootAction.DescribeHits(hitCount, damagingHitCount);
             }
 
             foreach (WoundResolution wound in WoundResolutions)

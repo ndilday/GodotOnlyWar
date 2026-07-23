@@ -208,6 +208,7 @@ namespace OnlyWar.Helpers.Battles.Actions
                 description += $"Friendly fire: {JoinNames(_friendlyVictimNames)} caught in the blast\n";
             }
 
+            description += ShootAction.DescribeHits(VictimIds.Count, WoundResolutions.Count);
             foreach (WoundResolution wound in WoundResolutions)
             {
                 description += wound.Description;

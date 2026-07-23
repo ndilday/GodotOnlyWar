@@ -21,6 +21,7 @@ public partial class BattleReviewView : DialogView
     private RichTextLabel _selectedStatsLabel;
     private VBoxContainer _activeWeaponSetsVBox;
     private VBoxContainer _effectsVBox;
+    private ScrollContainer _eventScroll;
     private VBoxContainer _eventListVBox;
     private Button _previousRoundButton;
     private Button _stepBackButton;
@@ -53,6 +54,7 @@ public partial class BattleReviewView : DialogView
         _selectedStatsLabel = GetNode<RichTextLabel>("Layout/RightPanel/SelectedPanel/SelectedMargin/SelectedStack/SelectedStatsLabel");
         _activeWeaponSetsVBox = GetNode<VBoxContainer>("Layout/RightPanel/SelectedPanel/SelectedMargin/SelectedStack/ActiveWeaponSetsVBox");
         _effectsVBox = GetNode<VBoxContainer>("Layout/RightPanel/SelectedPanel/SelectedMargin/SelectedStack/EffectsVBox");
+        _eventScroll = GetNode<ScrollContainer>("Layout/RightPanel/EventPanel/EventMargin/EventStack/EventScroll");
         _eventListVBox = GetNode<VBoxContainer>("Layout/RightPanel/EventPanel/EventMargin/EventStack/EventScroll/EventListVBox");
         _previousRoundButton = GetNode<Button>("Layout/CenterPanel/HeaderPanel/HeaderMargin/HeaderStack/PlaybackRow/PreviousRoundButton");
         _stepBackButton = GetNode<Button>("Layout/CenterPanel/HeaderPanel/HeaderMargin/HeaderStack/PlaybackRow/StepBackButton");
@@ -339,6 +341,8 @@ public partial class BattleReviewView : DialogView
             stack.AddChild(body);
             _eventListVBox.AddChild(panel);
         }
+
+        _eventScroll.ScrollVertical = 0;
     }
 
     private static Color GetSeverityColor(BattleEventSeverity severity)
