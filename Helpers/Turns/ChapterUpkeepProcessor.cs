@@ -51,16 +51,26 @@ namespace OnlyWar.Helpers.Turns
 
             List<Squad> scoutSquads = squads.Where(s => IsScoutSquad(s) && CanTrainThisCampaignWeek(s)).ToList();
             Dictionary<int, TrainingFocuses> scoutFocusMap = scoutSquads.ToDictionary(s => s.Id, s => s.TrainingFocus);
+            Dictionary<int, SoldierProgressLog.ProgressSnapshot> scoutSnapshots =
+                scoutSquads.ToDictionary(s => s.Id, s => SoldierProgressLog.Capture(s.Members));
             trainingService.TrainScouts(scoutSquads, scoutFocusMap, WeeklyTrainingPoints);
+            foreach (Squad squad in scoutSquads)
+            {
+                SoldierProgressLog.LogDelta(
+                    $"Training XP [scout drills] {squad.Name}", squad.Members, scoutSnapshots[squad.Id]);
+            }
 
             foreach (Squad squad in squads.Where(s => !IsScoutSquad(s) && CanTrainThisCampaignWeek(s)))
             {
                 if (squad.CurrentOrders != null) continue;
 
+                SoldierProgressLog.ProgressSnapshot before = SoldierProgressLog.Capture(squad.Members);
                 foreach (ISoldier soldier in squad.Members)
                 {
                     trainingService.ApplySoldierWorkExperience(soldier, squad, WeeklyTrainingPoints);
                 }
+                SoldierProgressLog.LogDelta(
+                    $"Training XP [garrison] {squad.Name}", squad.Members, before);
             }
         }
 
@@ -77,14 +87,26 @@ namespace OnlyWar.Helpers.Turns
 
             List<Squad> scoutSquads = embarkedSquads.Where(IsScoutSquad).ToList();
             Dictionary<int, TrainingFocuses> scoutFocusMap = scoutSquads.ToDictionary(s => s.Id, s => s.TrainingFocus);
+            Dictionary<int, SoldierProgressLog.ProgressSnapshot> scoutSnapshots =
+                scoutSquads.ToDictionary(s => s.Id, s => SoldierProgressLog.Capture(s.Members));
             trainingService.TrainScouts(scoutSquads, scoutFocusMap, points);
+            foreach (Squad squad in scoutSquads)
+            {
+                SoldierProgressLog.LogDelta(
+                    $"Training XP [scout drills, {subjectiveWeeks:F1}w warp] {squad.Name}",
+                    squad.Members, scoutSnapshots[squad.Id]);
+            }
 
             foreach (Squad squad in embarkedSquads.Where(squad => !IsScoutSquad(squad)))
             {
+                SoldierProgressLog.ProgressSnapshot before = SoldierProgressLog.Capture(squad.Members);
                 foreach (ISoldier soldier in squad.Members)
                 {
                     trainingService.ApplySoldierWorkExperience(soldier, squad, points);
                 }
+                SoldierProgressLog.LogDelta(
+                    $"Training XP [garrison, {subjectiveWeeks:F1}w warp] {squad.Name}",
+                    squad.Members, before);
             }
         }
 

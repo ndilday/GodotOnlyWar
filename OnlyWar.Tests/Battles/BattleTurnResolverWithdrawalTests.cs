@@ -101,10 +101,23 @@ public class BattleTurnResolverWithdrawalTests
     [Fact]
     public void ProcessNextTurn_BurrowCapableWithdrawingSquadDisengagesImmediately()
     {
+        // Valueless so the force evaluator elects to withdraw, the same way the BreakOff case
+        // above does — stated locally rather than leaning on a fixture's BattleValue, so the
+        // premise of the test is visible at the point of use.
+        SoldierTemplate zeroValueBurrower = new(
+            73_020,
+            TestModelFactory.BurrowerSpecies,
+            "Zero Value Burrower",
+            1,
+            1,
+            false,
+            0,
+            Array.Empty<ValueTuple<BaseSkill, float>>(),
+            battleValue: 0);
         BattleSquad burrowers = CreateSquad(
             "Burrowers",
             73_021,
-            TestModelFactory.BurrowerTemplate);
+            zeroValueBurrower);
         BattleSquad pursuers = CreateSquad("Pursuers", 73_022, TestModelFactory.MarineTemplate);
         BattleGridManager grid = new();
         Place(grid, burrowers.Soldiers[0], true, 0, 0);

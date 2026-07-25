@@ -95,6 +95,10 @@ namespace OnlyWar.Helpers.Battles.Actions
                 var modifier = CalculateToHitModifiers(shooter, target, weapon, skill, firingIntoMelee);
                 var roll = 10.5f + (3.0f * (float)_random.NextRandomZValue());
                 var total = skill + modifier - roll;
+                // Capture the to-hit margin (in roll-sigma z-units) before the recoil loop mutates
+                // `total`. Every shot — hit or miss — teaches the shooter's ranged skill scaled by how
+                // close it was to the hit threshold (BattleExperienceCalculator); applied in aftermath.
+                shooter.RangedSkillXp += BattleExperienceCalculator.CalculatePointsForMargin(total / 3.0f);
                 shooter.Aim = null;
                 if (total > 0)
                 {

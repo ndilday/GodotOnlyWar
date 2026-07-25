@@ -4,9 +4,11 @@ using System.Drawing;
 using System.IO;
 using System.Linq;
 
+using OnlyWar.Builders;
 using OnlyWar.Helpers;
 using OnlyWar.Helpers.Battles;
 using OnlyWar.Helpers.Battles.Aftermath;
+using OnlyWar.Helpers.Database.GameRules;
 using OnlyWar.Models;
 using OnlyWar.Models.Battles;
 using OnlyWar.Models.Equippables;
@@ -28,63 +30,62 @@ namespace OnlyWar.Tests.Battles;
 [Collection(OnlyWar.Tests.TestCollections.SharedState)]
 public class BattleMoraleResolverTests
 {
+    // Rules-database ids for the battle-ready NPC forces this test fights. Non-player
+    // templates carry their own MOS training, weapon set, armour and BattleValue, so squads
+    // built from them behave like real combatants. Hand-rolled player-side templates
+    // (TestModelFactory.MarineTemplate) do NOT: they have empty MosTraining (nobody can shoot)
+    // and a nominal BattleValue, which silently breaks the morale force-context math.
+    private const int TyranidFactionId = 2;
+    // Termagaunt Squad: 10-30 Devourer gaunts in 5mm chitin, BattleValue 6, Ego 8 — the exact
+    // gaunt case MoraleConstants' hand-calculation is written around, and leaderless (no
+    // sergeant), so it gets no LeaderThresholdBonus.
+    private const int TermagauntSquadTemplateId = 18;
+    private const long TermagauntBroodBudget = 60L; // 10 gaunts
+    // PDF Infantry Squad: a fixed 1 sergeant + 9 autogun troopers, BattleValue 5, Ego 10.
+    private const int PdfInfantrySquadTemplateId = 34;
+    // Four platoons (40 men, 200 BV) against the 60 BV brood: enough massed autogun fire to
+    // inflict real casualties, and enough of a BattleValue/headcount gap that the gaunts read as
+    // decisively losing rather than mauling one isolated platoon into breaking first.
+    private const int PdfPlatoonCount = 4;
+
     [Fact]
     public void LowEgoSquadUnderSustainedFire_RoutsAndBattleEndsInRout()
     {
-        // Ten unarmed low-Ego (8) troopers advance across open ground into withering
-        // heavy-bolter-grade fire from four crack marines. The troopers take heavy
-        // casualties while losing the exchange; morale must break them (Routing,
-        // SquadRouted event) rather than fighting to the last man. The marines' Avoid
-        // aggression then declines pursuit, so the routed side disengages and the battle
-        // records the typed Rout outcome.
-        BattleSquad victims = CreateSquad(
-            "Gaunt Analog", 74_101, TestModelFactory.MarineTemplate, count: 10, ego: 8f);
-        BattleSquad marines = CreateSquad(
-            "Marines", 74_201, TestModelFactory.MarineTemplate, count: 4, ego: 14f,
-            dexterity: 20f);
-        RangedWeaponTemplate heavyRifle = new(
-            99_500,
-            "Test Heavy Rifle",
-            EquipLocation.TwoHand,
-            TestSkills.Ranged,
-            accuracy: 10,
-            armorMultiplier: 1,
-            penetrationMultiplier: 1,
-            requiredStrength: 1,
-            baseDamage: 20,
-            maxDistance: 200,
-            rof: 3,
-            ammo: 30,
-            recoil: 0,
-            bulk: 0,
-            doesDamageDegradeWithRange: false,
-            reloadTime: 1,
-            templateType: 0,
-            areaRadius: 0,
-            fuelPerBurst: 0);
+        // A leaderless Termagaunt brood (10 gaunts, 60 BV) advances across open ground into
+        // massed autogun fire from four PDF platoons (40 men, 200 BV). The gaunts are both
+        // outgunned in BattleValue and locally outnumbered 4:1, and they take the casualties, so
+        // the §5.2 context multiplier climbs and morale must break them (Routing, SquadRouted
+        // event) rather than let them close and swarm the line. The PDF's Avoid aggression then
+        // declines pursuit, so the routed side disengages and the battle records the typed Rout
+        // outcome.
+        GameRulesBlob blob = RulesDatabaseFixture.LoadRules();
+        Faction tyranids = blob.Factions.Single(faction => faction.Id == TyranidFactionId);
+        Faction imperial = blob.Factions.Single(faction => faction.IsDefaultFaction);
+
+        // Seeded separately from the battle: CreateResolver re-seeds for the fight itself, so
+        // soldier generation and combat are both deterministic.
+        RNG.Reset(74_050);
+        BattleSquad victims = CreateNpcSquad(
+            tyranids, TermagauntSquadTemplateId, "Termagaunt Brood", TermagauntBroodBudget);
+        List<BattleSquad> platoons = Enumerable.Range(0, PdfPlatoonCount)
+            .Select(i => CreateNpcSquad(
+                imperial, PdfInfantrySquadTemplateId, $"PDF Platoon {i + 1}"))
+            .ToList();
+
         BattleGridManager grid = new();
         for (int i = 0; i < victims.Soldiers.Count; i++)
         {
-            BattleSoldier soldier = victims.Soldiers[i];
-            soldier.RangedWeapons.Clear();
-            soldier.ClearReadiedRangedWeapons();
-            Place(grid, soldier, side: true, x: 60 + (i % 5), y: i / 5);
+            Place(grid, victims.Soldiers[i], side: true, x: 60 + (i % 5), y: i / 5);
         }
-        for (int i = 0; i < marines.Soldiers.Count; i++)
+        for (int i = 0; i < platoons.Count; i++)
         {
-            BattleSoldier soldier = marines.Soldiers[i];
-            RangedWeapon weapon = new(heavyRifle);
-            soldier.RangedWeapons.Clear();
-            soldier.ClearReadiedRangedWeapons();
-            soldier.RangedWeapons.Add(weapon);
-            soldier.ReadyWeapon(weapon);
-            Place(grid, soldier, side: false, x: i, y: 0);
+            PlaceLine(grid, platoons[i], y: i);
         }
 
         BattleTurnResolver resolver = CreateResolver(
             grid,
             [victims],
-            [marines],
+            platoons,
             attackerAggression: Aggression.Aggressive,
             defenderAggression: Aggression.Avoid);
         bool completed = false;
@@ -103,7 +104,8 @@ public class BattleMoraleResolverTests
         Assert.True(routed != null,
             $"end={outcome.EndReason} turns={resolver.BattleHistory.Turns.Count} "
             + $"events=[{string.Join("; ", events.Select(e => $"{e.TurnNumber}:{e.Type}:{e.PrimarySquadId}"))}] "
-            + $"victimsAble={victims.AbleSoldiers.Count} marinesAble={marines.AbleSoldiers.Count}");
+            + $"victimsAble={victims.AbleSoldiers.Count} "
+            + $"pdfAble={platoons.Sum(p => p.AbleSoldiers.Count)}");
         Assert.Equal(victims.Id, routed.PrimarySquadId);
         Assert.Contains(victims.Id, outcome.RoutingSquadIds);
         Assert.Equal(BattleEndReason.Rout, outcome.EndReason);
@@ -123,10 +125,17 @@ public class BattleMoraleResolverTests
     }
 
     [Fact]
-    public void MarineSquadsExchangingFire_NeverRout()
+    public void HighEgoSquadsFightingToAnnihilation_NeverRout()
     {
-        // Marines vs marines, both taking real casualties: high Ego (14) must hold both
-        // sides Steady to the end — no SquadRouted event on either side (§2, §10 Phase 7).
+        // Evenly matched high-Ego (14) squads grind each other down until one is wiped out:
+        // §2 requires that ordinary attrition never breaks marine-grade morale, so neither side
+        // may emit SquadRouted even as the loser is annihilated (§2, §10 Phase 7).
+        //
+        // These squads are built from the hand-rolled player-side MarineTemplate, which has no
+        // MosTraining — so nobody can shoot and the casualties all come from melee. That is
+        // fine for this test (the assertion is about morale under casualties, whatever inflicts
+        // them) but it is why this case is NOT named for exchanging fire: it provides no ranged
+        // attrition coverage. See CreateNpcSquad above for the battle-ready alternative.
         BattleSquad first = CreateSquad(
             "First Marines", 74_301, TestModelFactory.MarineTemplate, count: 5, ego: 14f);
         BattleSquad second = CreateSquad(
@@ -156,6 +165,34 @@ public class BattleMoraleResolverTests
             resolver.BattleHistory.Turns.SelectMany(turn => turn.Events),
             e => e.Type == BattleEventType.SquadRouted);
         Assert.Empty(resolver.BattleHistory.Outcome.RoutingSquadIds);
+    }
+
+    /// <summary>
+    /// Builds a battle-ready squad the way a non-player force is actually raised — through
+    /// SquadFactory, which fills the squad template's elements with soldiers carrying their
+    /// MosTraining, and BattleSquad's constructor, which allocates the template's default weapon
+    /// set and armour. No hand-grafted skills, weapons or BattleValue.
+    /// </summary>
+    private static BattleSquad CreateNpcSquad(
+        Faction faction,
+        int squadTemplateId,
+        string name,
+        long? battleValueBudget = null)
+    {
+        SquadTemplate squadTemplate = faction.SquadTemplates[squadTemplateId];
+        Squad squad = battleValueBudget.HasValue
+            ? SquadFactory.GenerateSquadWithinBudget(
+                squadTemplate, battleValueBudget.Value, StaticRNG.Instance, name)
+            : SquadFactory.GenerateSquad(squadTemplate, StaticRNG.Instance, name);
+        return new BattleSquad(false, squad);
+    }
+
+    private static void PlaceLine(BattleGridManager grid, BattleSquad squad, int y)
+    {
+        for (int i = 0; i < squad.Soldiers.Count; i++)
+        {
+            Place(grid, squad.Soldiers[i], side: false, x: i, y: y);
+        }
     }
 
     private static BattleTurnResolver CreateResolver(

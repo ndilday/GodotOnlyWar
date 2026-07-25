@@ -183,7 +183,9 @@ public class BattleAftermathPolicyTests
         BattleSoldier battleSoldier = attackers.Soldiers[0];
         battleSoldier.MeleeWeapons.Clear();
         battleSoldier.ClearReadiedMeleeWeapons();
-        battleSoldier.TurnsSwinging = 2;
+        // Melee skill XP is now the roll-based accrual banked on the BattleSoldier, not a function of
+        // TurnsSwinging; an unarmed fighter's accrual must still route to the species default weapon skill.
+        battleSoldier.MeleeSkillXp = 0.05f;
         BattleAftermathContext context = new(
             [attackers],
             [defenders],
@@ -201,7 +203,7 @@ public class BattleAftermathPolicyTests
         Skill awardedSkill = Assert.Single(
             player.Skills,
             skill => ReferenceEquals(skill.BaseSkill, unarmedSkill));
-        Assert.Equal(0.001f, awardedSkill.PointsInvested, 6);
+        Assert.Equal(0.05f, awardedSkill.PointsInvested, 6);
     }
 
     private static BattleAftermathDependencies CreateDependencies() =>

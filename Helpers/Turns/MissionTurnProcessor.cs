@@ -122,6 +122,9 @@ namespace OnlyWar.Helpers.Turns
                 foreach (List<BattleSquad> elementSquads in missionElements)
                 {
                     MissionContext context = new(order, elementSquads, new List<BattleSquad>());
+                    var xpBefore = isPlayerOrder
+                        ? MissionFieldExperienceLog.Snapshot(context.StartingPlayerParticipants)
+                        : null;
                     var execution = new MissionExecutionContext(
                         context,
                         _missionRules,
@@ -134,6 +137,7 @@ namespace OnlyWar.Helpers.Turns
                     if (isPlayerOrder)
                     {
                         MissionOutcomeRecorder.RecordMissionOutcome(context, _session.CurrentDate);
+                        MissionFieldExperienceLog.LogGains(context, xpBefore);
                     }
                     GameLog.Debug(() =>
                         $"Combat mission result {order.AssignedSquads.First().Faction.Name} "
@@ -175,6 +179,9 @@ namespace OnlyWar.Helpers.Turns
                 if (involvedBattleSquads.Count == 0) continue;
 
                 MissionContext context = new(order, involvedBattleSquads, new List<BattleSquad>());
+                var xpBefore = isPlayerOrder
+                    ? MissionFieldExperienceLog.Snapshot(context.StartingPlayerParticipants)
+                    : null;
                 var execution = new MissionExecutionContext(
                     context,
                     _missionRules,
@@ -187,6 +194,7 @@ namespace OnlyWar.Helpers.Turns
                 if (isPlayerOrder)
                 {
                     MissionOutcomeRecorder.RecordMissionOutcome(context, _session.CurrentDate);
+                    MissionFieldExperienceLog.LogGains(context, xpBefore);
                 }
                 ApplyDiversionEffect(order, context);
             }

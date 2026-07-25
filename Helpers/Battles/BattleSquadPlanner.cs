@@ -76,6 +76,11 @@ namespace OnlyWar.Helpers.Battles
         private const float BaseLaneSpreadCoefficient = 1.0f;
         // Fire discipline used when a squad has no faction (test fixtures, stray battle squads).
         private const float DefaultFireDiscipline = 0.5f;
+        // Aim bonus a pre-sprung ambusher opens with. Matches the planner's own "aim can no
+        // longer be improved" ceiling (the >= 3 checks in the standing/forced-shot paths), so a
+        // seeded ambusher is indistinguishable from a soldier who spent three turns lining up the
+        // shot. See SeedAmbushAim and Design/Active/EvasionBurrowAndAmbush.md.
+        private const int FullAimBonusTurns = 3;
 
         private readonly BattleGridManager _grid;
         private readonly ICollection<IAction> _shootActions;
@@ -351,6 +356,42 @@ namespace OnlyWar.Helpers.Battles
         // How far behind the friendly fighting line an HQ squad tries to stay. Matches the
         // placers' HQ rear offset so a rear-deployed HQ starts the battle already satisfied.
         private const float HqLineBuffer = 10f;
+
+        // Ambush opener (Design/Active/EvasionBurrowAndAmbush.md): an ambushing squad springs the
+        // trap with weapons already trained on the kill zone. Called once, before the first turn is
+        // planned, for each squad on the ambushing side. Every soldier holding a loaded conventional
+        // ranged weapon is pre-seeded to the full aim bonus against the target the planner itself
+        // would pick this turn -- SelectBestRangedTarget applies the same lane-spread bias the squad
+        // uses every turn, so the opening volley fans across the enemy line instead of piling every
+        // rifle onto the nearest man. The sticky/forced-shot paths then fire that seeded aim on turn
+        // one rather than spending it lining up. Soldiers with only melee or template (cone/blast)
+        // weapons, or no clear shot, keep a null aim and plan normally.
+        public void SeedAmbushAim(BattleSquad squad)
+        {
+            // Player soldiers earn learn-by-doing credit for the aiming that notionally happened
+            // while the ambush was being set; enemy factions accrue the counter but no aftermath
+            // policy converts it (PlayerChapterBattleAftermathPolicy is the only consumer).
+            bool creditAimingXp = squad.Squad?.Faction?.IsPlayerFaction == true;
+            foreach (BattleSoldier soldier in squad.AbleSoldiers)
+            {
+                if (soldier.EquippedRangedWeapons.Count == 0 || !IsPlaced(soldier))
+                {
+                    continue;
+                }
+                RangedTargetEvaluation evaluation = SelectBestRangedTarget(soldier, bulkMultiplier: 0f);
+                if (evaluation?.Weapon == null)
+                {
+                    continue;
+                }
+                soldier.Aim = new ValueTuple<int, RangedWeapon, int>(
+                    evaluation.Target.Soldier.Id, evaluation.Weapon, FullAimBonusTurns);
+                soldier.CurrentSpeed = 0;
+                if (creditAimingXp)
+                {
+                    soldier.TurnsAiming += FullAimBonusTurns;
+                }
+            }
+        }
 
         public void PrepareActions(BattleSquad squad, IReadOnlyCollection<BattleSquad> friendlySquads = null)
         {

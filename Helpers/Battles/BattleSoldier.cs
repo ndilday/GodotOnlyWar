@@ -68,6 +68,12 @@ namespace OnlyWar.Helpers.Battles
         public ushort TurnsAiming { get; set; }
         public uint WoundsTaken { get; set; }
 
+        // Margin-scaled "learn by doing" skill XP accrued from this battle's attack rolls
+        // (BattleExperienceCalculator), summed here per roll and applied once in the aftermath.
+        // Separate ranged/melee buckets so each lands on the right weapon's related skill.
+        public float RangedSkillXp { get; set; }
+        public float MeleeSkillXp { get; set; }
+
         public ushort EnemiesTakenDown { get; set; }
 
         public bool CanFight
@@ -208,6 +214,8 @@ namespace OnlyWar.Helpers.Battles
             TurnsDefending = soldier.TurnsDefending;
             TurnsAiming = soldier.TurnsAiming;
             WoundsTaken = soldier.WoundsTaken;
+            RangedSkillXp = soldier.RangedSkillXp;
+            MeleeSkillXp = soldier.MeleeSkillXp;
             EnemiesTakenDown = soldier.EnemiesTakenDown;
             Aim = soldier.Aim;
             _equippedMeleeWeapons.AddRange(soldier.EquippedMeleeWeapons);

@@ -16,6 +16,8 @@ namespace OnlyWar.Helpers.Battles.Aftermath
         private readonly BattleAftermathDependencies _dependencies;
         private readonly Dictionary<int, BattleSoldier> _latestPlayerSoldierSnapshots = new();
         private readonly Dictionary<int, GeneseedRecoveryResult> _geneseedResults = new();
+        // Dev-facing skill/attribute growth log: snapshot before the fight, diffed once it ends.
+        private readonly SoldierProgressLog.ProgressSnapshot _progressBefore;
 
         public PlayerChapterBattleAftermathPolicy(
             BattleAftermathContext context,
@@ -27,6 +29,8 @@ namespace OnlyWar.Helpers.Battles.Aftermath
             {
                 RememberPlayerSnapshot(soldier);
             }
+            _progressBefore = SoldierProgressLog.Capture(
+                context.StartingPlayerSoldiers.Select(soldier => soldier.Soldier));
         }
 
         public void OnSoldierDowned(WoundResolution wound, WoundLevel woundLevel)
@@ -68,6 +72,10 @@ namespace OnlyWar.Helpers.Battles.Aftermath
             RememberFinalPlayerSnapshots(finalState);
             ProcessSoldierHistoryForBattle();
             ApplySoldierExperienceForBattle(finalState);
+            SoldierProgressLog.LogDelta(
+                $"Battle XP [{_context.Region.Name}, {_context.Region.Planet.Name}]",
+                _context.StartingPlayerSoldiers.Select(soldier => soldier.Soldier),
+                _progressBefore);
             List<PlayerSoldier> dead = RemoveSoldiersKilledInBattle();
             LogBattleToChapterHistory(dead);
         }
@@ -149,35 +157,37 @@ namespace OnlyWar.Helpers.Battles.Aftermath
                         continue;
                     }
 
-                    if (soldier.RangedWeapons.Count > 0)
+                    // Skills are "learn by doing", roll-based: each attack this battle accrued
+                    // margin-scaled skill XP onto the BattleSoldier (BattleExperienceCalculator),
+                    // banked here to the weapon's related skill. Aiming grants no skill XP on its own
+                    // - the shot it enables carries the margin (and a well-aimed shot is an easier one,
+                    // so it teaches less), consistent with the mission field-XP model.
+                    if (soldier.RangedSkillXp > 0 && soldier.RangedWeapons.Count > 0)
                     {
-                        if (soldier.TurnsAiming > 0)
-                        {
-                            soldier.Soldier.AddSkillPoints(soldier.RangedWeapons[0].Template.RelatedSkill, soldier.TurnsAiming * 0.0005f);
-                        }
-                        if (soldier.TurnsShooting > 0)
-                        {
-                            soldier.Soldier.AddSkillPoints(soldier.RangedWeapons[0].Template.RelatedSkill, soldier.TurnsShooting * 0.0005f);
-                            soldier.Soldier.AddAttributePoints(OnlyWar.Models.Soldiers.Attribute.Dexterity, soldier.TurnsShooting * 0.0005f);
-                        }
+                        soldier.Soldier.AddSkillPoints(soldier.RangedWeapons[0].Template.RelatedSkill, soldier.RangedSkillXp);
+                    }
+                    if (soldier.MeleeSkillXp > 0)
+                    {
+                        BaseSkill meleeSkill = soldier.MeleeWeapons.Count > 0
+                            ? soldier.MeleeWeapons[0].Template.RelatedSkill
+                            : soldier.Soldier.Template.Species.DefaultUnarmedWeapon.RelatedSkill;
+                        soldier.Soldier.AddSkillPoints(meleeSkill, soldier.MeleeSkillXp);
+                    }
+
+                    // Attributes are physical conditioning, NOT roll-based: they accrue from the reps
+                    // and the punishment taken, regardless of how hard any single roll was. Kept on the
+                    // existing use-count model (per-turn / per-wound), unchanged by the skill rework.
+                    if (soldier.TurnsShooting > 0)
+                    {
+                        soldier.Soldier.AddAttributePoints(OnlyWar.Models.Soldiers.Attribute.Dexterity, soldier.TurnsShooting * 0.0005f);
+                    }
+                    if (soldier.TurnsSwinging > 0)
+                    {
+                        soldier.Soldier.AddAttributePoints(OnlyWar.Models.Soldiers.Attribute.Strength, soldier.TurnsSwinging * 0.0005f);
                     }
                     if (soldier.WoundsTaken > 0)
                     {
                         soldier.Soldier.AddAttributePoints(OnlyWar.Models.Soldiers.Attribute.Constitution, soldier.WoundsTaken * 0.0005f);
-                    }
-                    if (soldier.TurnsSwinging > 0)
-                    {
-                        if (soldier.MeleeWeapons.Count > 0)
-                        {
-                            soldier.Soldier.AddSkillPoints(soldier.MeleeWeapons[0].Template.RelatedSkill, soldier.TurnsSwinging * 0.0005f);
-                        }
-                        else
-                        {
-                            BaseSkill baseMeleeSkill = soldier.Soldier.Template.Species
-                                .DefaultUnarmedWeapon.RelatedSkill;
-                            soldier.Soldier.AddSkillPoints(baseMeleeSkill, soldier.TurnsSwinging * 0.0005f);
-                        }
-                        soldier.Soldier.AddAttributePoints(OnlyWar.Models.Soldiers.Attribute.Strength, soldier.TurnsSwinging * 0.0005f);
                     }
                 }
             }

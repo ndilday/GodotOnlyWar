@@ -153,13 +153,24 @@ namespace OnlyWar.Helpers.Battles.Actions
                 float defenderDefenseModifier = GetDefenderDefenseModifier(
                     target,
                     _chargingSoldierIds.Contains(target.Soldier.Id));
-                bool hit = RollMeleeHit(attackSkill,
+                float strikeMargin = RollMeleeStrike(attackSkill,
                                         weapon.Template.Accuracy,
                                         _didMove,
                                         defenderSkill,
                                         target.Soldier.Template.Species.MeleeEvasion,
                                         defenderDefenseModifier,
                                         _random);
+                bool hit = strikeMargin > 0;
+                // Every swing — hit or miss — teaches the attacker's melee skill scaled by how close
+                // the contested roll was to the failure point (BattleExperienceCalculator); applied in
+                // the aftermath. Normalize the raw gap to z-units via the opposed-roll sigma.
+                attacker.MeleeSkillXp += BattleExperienceCalculator.CalculatePointsForMargin(
+                    strikeMargin / OpposedRollSigma);
+                // The defender learns too: actively parrying/evading is a use of melee skill. Their
+                // margin is the negation of the attacker's (a hard-turned near-miss teaches most),
+                // discounted since defending is secondary to attacking.
+                target.MeleeSkillXp += BattleExperienceCalculator.MeleeDefenderShare
+                    * BattleExperienceCalculator.CalculatePointsForMargin(-strikeMargin / OpposedRollSigma);
 
                 _log?.Invoke(attacker.Soldier.Name + " swings at " + target.Soldier);
                 if (hit)
@@ -215,13 +226,37 @@ namespace OnlyWar.Helpers.Battles.Actions
                                         float defenderDefenseModifier,
                                         IRNG random)
         {
+            return RollMeleeStrike(attackSkill,
+                                   weaponAccuracy,
+                                   didMove,
+                                   defenderSkill,
+                                   defenderEvasion,
+                                   defenderDefenseModifier,
+                                   random) > 0;
+        }
+
+        /// <summary>
+        /// The contested melee roll's realized margin: attacker total minus defender total. Positive
+        /// is a hit; the magnitude is how comfortably it hit or missed. Exposed (alongside the bool
+        /// <see cref="RollMeleeHit"/>) so callers can scale "learn by doing" skill XP by closeness to
+        /// the failure point. Divide by <see cref="OpposedRollSigma"/> for a z-margin comparable to
+        /// the ranged roll and the mission checks.
+        /// </summary>
+        public static float RollMeleeStrike(float attackSkill,
+                                            float weaponAccuracy,
+                                            bool didMove,
+                                            float defenderSkill,
+                                            float defenderEvasion,
+                                            float defenderDefenseModifier,
+                                            IRNG random)
+        {
             if (random == null) throw new ArgumentNullException(nameof(random));
             float attackTotal = attackSkill + weaponAccuracy + (didMove ? -MovementAttackPenalty : 0)
                                 + (MeleeRollStandardDeviation * (float)random.NextRandomZValue());
             float defendTotal = defenderSkill + defenderEvasion + MeleeDefenderAdvantage
                                 + defenderDefenseModifier
                                 + (MeleeRollStandardDeviation * (float)random.NextRandomZValue());
-            return attackTotal > defendTotal;
+            return attackTotal - defendTotal;
         }
 
         public static float EstimateHitProbability(float attackSkill,

@@ -201,6 +201,36 @@ public class MeleeCombatReworkTests
     }
 
     [Fact]
+    public void MeleeAttackAction_AwardsMeleeSkillXpToBothAttackerAndDefender()
+    {
+        BattleSquad attacker = CreateBattleSquad("Attackers", 1, "Attacker");
+        BattleSquad defender = CreateBattleSquad("Defenders", 2, "Defender");
+        BattleSoldier attackerSoldier = attacker.Soldiers[0];
+        BattleSoldier defenderSoldier = defender.Soldiers[0];
+
+        MeleeWeapon attackerWeapon = CreateMeleeWeapon(34, "Knife", AttackSkill);
+        attackerSoldier.AddWeapons([], [attackerWeapon]);
+        defenderSoldier.AddWeapons([], [CreateMeleeWeapon(35, "Knife", PrimaryParrySkill)]);
+        attackerSoldier.TopLeft = (0, 0);
+        defenderSoldier.TopLeft = (1, 0);
+
+        BattleState state = CreateState(attacker, defender);
+        MeleeAttackAction action = new(
+            attackerSoldier,
+            [new PlannedMeleeStrike(defenderSoldier.Soldier.Id, attackerWeapon.Template.Id, defenderSoldier.Soldier.Name, attackerWeapon.Template.Name)],
+            false,
+            null,
+            new SeededRNG(12345),
+            CreateMeleeTemplateMap(attackerSoldier, defenderSoldier));
+
+        action.Execute(state);
+
+        // The attacker learns from the swing; the defender learns from actively turning it aside.
+        Assert.True(state.GetSoldier(attackerSoldier.Soldier.Id).MeleeSkillXp > 0);
+        Assert.True(state.GetSoldier(defenderSoldier.Soldier.Id).MeleeSkillXp > 0);
+    }
+
+    [Fact]
     public void MeleeAttackAction_RepeatedExecute_DoesNotDuplicateWounds()
     {
         BattleSquad attacker = CreateBattleSquad("Attackers", 1, "Attacker",

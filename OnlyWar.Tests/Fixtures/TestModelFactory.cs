@@ -6,6 +6,13 @@ using OnlyWar.Models.Squads;
 
 namespace OnlyWar.Tests.Fixtures;
 
+// Every SoldierTemplate here must pass a non-zero battleValue. BattleValue defaults to 0, and a
+// side whose total BattleValue is 0 degenerates the force math in BattleTurnResolver: bvShare
+// comes out 0, so BattleMoraleEvaluator.ComputeForceDisadvantage reports maximum disadvantage and
+// the morale context multiplier pins at its ceiling. Harmless in the pure-function tests that
+// pass their own inputs, but silently wrong in any test that runs a full battle through
+// BattleTurnResolver. A test that WANTS a valueless side should declare its own battleValue: 0
+// template locally, the way BattleTurnResolverWithdrawalTests does, so the intent is explicit.
 internal static class TestModelFactory
 {
     public static MeleeWeaponTemplate DefaultUnarmedWeapon { get; } = new(
@@ -76,7 +83,8 @@ internal static class TestModelFactory
         1,
         false,
         0,
-        Array.Empty<ValueTuple<BaseSkill, float>>());
+        Array.Empty<ValueTuple<BaseSkill, float>>(),
+        battleValue: 2);
 
     // A synapse-providing species (Design/Active/MoraleAndRout.md §4) — used to exercise
     // squad-to-squad synapse coverage. Radius is well inside the small integer distances
@@ -104,7 +112,8 @@ internal static class TestModelFactory
         1,
         false,
         0,
-        Array.Empty<ValueTuple<BaseSkill, float>>());
+        Array.Empty<ValueTuple<BaseSkill, float>>(),
+        battleValue: 2);
 
     public static SoldierTemplate SergeantTemplate { get; } = new(
         2,

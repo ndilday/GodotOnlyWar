@@ -36,7 +36,7 @@ namespace OnlyWar.Helpers.Missions
     {
         // Peak per-check, per-soldier award, hit when margin == BumpCenterMargin. Calibrated to
         // clear an equivalent week of garrison training in the exercised skill. Weekly
-        // work-experience training (TurnController.WeeklyTrainingPoints = 0.2) is a *shared*
+        // work-experience training (ChapterUpkeepProcessor.WeeklyTrainingPoints = 0.2) is a *shared*
         // budget split across every entry in a soldier's training profile (commonly 3-5
         // skill/attribute entries via SoldierTrainingCalculator.ApplyTrainingProfile), so any one
         // skill typically nets on the order of 0.04-0.07 points/week from drilling. A single
@@ -44,7 +44,11 @@ namespace OnlyWar.Helpers.Missions
         // and a mission runs several checks, so an eventful mission clearly outpaces a week of
         // garrison drills for the tested skill — while a mission's checks are spread across
         // whichever skills actually got exercised, same as training spreads across a profile.
-        public const float BasePointsPerCheck = 0.08f;
+        //
+        // Retuned 2026-07-24 from 0.08 -> 0.053 (~33% cut): a full-week in-game trace showed a
+        // recon squad netting ~0.44 combined pts/soldier (Tactics ~0.29 + Stealth ~0.15), against
+        // a ~0.30/week target for the exercised skills.
+        public const float BasePointsPerCheck = 0.053f;
 
         // The margin at which award is maximal. Slightly negative so a narrow failure teaches
         // at least as much as an equally-narrow success — we're not rewarding failure *as such*,

@@ -118,6 +118,44 @@ namespace OnlyWar.Helpers.Battles
                 + $"{_aftermathContext.FirstSideFaction.Name} vs "
                 + $"{_aftermathContext.SecondSideStartingSoldierCount}  "
                 + $"{_aftermathContext.SecondSideFaction.Name}");
+
+            SeedAmbushAim();
+        }
+
+        // An ambushing side opens fire from concealment with weapons already trained on the kill
+        // zone. Before the first turn is planned, pre-seed every ranged ambusher to the full aim
+        // bonus so the trap is sprung with a fully-aimed opening volley on turn one instead of the
+        // side spending turn one lining up shots. Only the side flagged BattleRole.Ambusher is
+        // seeded; if neither side is an ambusher (a normal engagement) this is a no-op. The seeding
+        // scan draws no battle RNG, so it does not perturb the seeded action stream -- but the
+        // seeded aim does change turn-one planning, so ambush battles diverge from pre-change
+        // baselines by design.
+        private void SeedAmbushAim()
+        {
+            BattleSide? ambushSide =
+                _currentState.AttackerSide.BattleRole == BattleRole.Ambusher ? BattleSide.Attacker
+                : _currentState.OpposingSide.BattleRole == BattleRole.Ambusher ? BattleSide.Opposing
+                : (BattleSide?)null;
+            if (ambushSide == null) return;
+
+            // Materialize the lazy per-soldier/per-squad views the target scan reads, exactly as a
+            // planning pass would, so the seeding scan sees the same consistent state.
+            PrepareParallelPlanningState();
+            BattleSquadPlanner planner = new(
+                _grid,
+                _currentState.Soldiers,
+                // Seeding writes only soldier aim state, never actions; give it throwaway sinks.
+                new List<IAction>(),
+                new List<IAction>(),
+                new List<IAction>(),
+                null,
+                _execution.Rules.MeleeWeaponTemplates,
+                _execution.Random,
+                _execution.MaxPlanningDegreeOfParallelism);
+            foreach (BattleSquad squad in GetActiveSquads(ambushSide.Value))
+            {
+                planner.SeedAmbushAim(squad);
+            }
         }
 
         private void WoundResolver_OnSoldierDeath(WoundResolution wound, WoundLevel woundLevel)

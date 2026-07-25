@@ -1,12 +1,17 @@
 using System;
 using System.Collections.Generic;
+using System.Drawing;
 using System.Linq;
 using OnlyWar.Helpers;
 using OnlyWar.Helpers.Battles;
 using OnlyWar.Helpers.Battles.Actions;
+using OnlyWar.Models;
 using OnlyWar.Models.Battles;
 using OnlyWar.Models.Equippables;
+using OnlyWar.Models.Fleets;
 using OnlyWar.Models.Soldiers;
+using OnlyWar.Models.Squads;
+using OnlyWar.Models.Units;
 using OnlyWar.Tests.Fixtures;
 using Xunit;
 
@@ -1186,5 +1191,196 @@ public class BattleSquadPlannerTests
             $"{soldier.Soldier.Id}:{soldier.CurrentSpeed}:{soldier.TargetId}:{soldier.Aim}")
             .ToArray();
         return (actions, state);
+    }
+
+    [Fact]
+    public void SeedAmbushAim_RangedAmbushers_OpenAtFullAimAndSpreadAcrossTargets()
+    {
+        // West-leg ambush: three ambushers stacked along Y at x=0, firing east at a parallel
+        // enemy column at x=10. Each ambusher's own firing lane lines up with a different enemy.
+        BattleSquad ambushers = CreateSquad(
+            "Ambushers", (70_001, 2), (70_002, 2), (70_003, 2));
+        BattleSquad enemies = CreateSquad(
+            "Column", (70_101, 2), (70_102, 2), (70_103, 2));
+        BattleGridManager grid = new();
+        for (int i = 0; i < ambushers.Soldiers.Count; i++)
+        {
+            BattleSoldier ambusher = ambushers.Soldiers[i];
+            ((Soldier)ambusher.Soldier).Dexterity = 20;
+            EquipAimTestRifle(ambusher, 99_501 + i);
+            Place(grid, ambusher, true, 0, i * 2);
+        }
+        for (int i = 0; i < enemies.Soldiers.Count; i++)
+        {
+            Place(grid, enemies.Soldiers[i], false, 10, i * 2);
+        }
+        List<IAction> shootActions = [];
+        BattleSquadPlanner planner = CreatePlanner(
+            grid, shootActions, [], [], ambushers, enemies);
+
+        planner.SeedAmbushAim(ambushers);
+
+        HashSet<int> enemyIds = enemies.Soldiers.Select(s => s.Soldier.Id).ToHashSet();
+        foreach (BattleSoldier ambusher in ambushers.Soldiers)
+        {
+            Assert.NotNull(ambusher.Aim);
+            // Seeded to the planner's "aim can no longer be improved" ceiling.
+            Assert.Equal(3, ambusher.Aim.Value.Item3);
+            Assert.Equal(0f, ambusher.CurrentSpeed);
+            Assert.Contains(ambusher.Aim.Value.Item1, enemyIds);
+            Assert.Contains(ambusher.Aim.Value.Item2, ambusher.EquippedRangedWeapons);
+        }
+        // Lane-spread acquisition distributes the opening volley instead of piling every rifle
+        // onto the nearest man.
+        int distinctSeededTargets = ambushers.Soldiers
+            .Select(s => s.Aim.Value.Item1)
+            .Distinct()
+            .Count();
+        Assert.True(distinctSeededTargets >= 2,
+            $"expected ambushers to spread aim; all pointed at {distinctSeededTargets} target(s)");
+
+        // Turn one: the seeded ambushers open fire rather than spending the turn lining up.
+        planner.PrepareActions(ambushers);
+        Assert.Empty(shootActions.OfType<AimAction>());
+        List<ShootAction> shots = shootActions.OfType<ShootAction>().ToList();
+        Assert.True(shots.Count >= 2, $"expected an opening volley, got {shots.Count} shots");
+        Assert.True(shots.Select(shot => shot.TargetId).Distinct().Count() >= 2,
+            "expected the opening volley to hit more than one target");
+    }
+
+    [Fact]
+    public void SeedAmbushAim_PlayerFactionAmbushers_CreditAimingExperience()
+    {
+        Faction player = BuildFaction(1, "Test Chapter", isPlayer: true);
+        BattleSquad ambushers = CreateFactionSquad(
+            "Player Ambushers", player, (71_001, 2), (71_002, 2));
+        BattleSquad enemies = CreateSquad("Targets", (71_101, 2), (71_102, 2));
+        BattleGridManager grid = new();
+        for (int i = 0; i < ambushers.Soldiers.Count; i++)
+        {
+            BattleSoldier ambusher = ambushers.Soldiers[i];
+            ((Soldier)ambusher.Soldier).Dexterity = 20;
+            EquipAimTestRifle(ambusher, 99_601 + i);
+            Place(grid, ambusher, true, 0, i * 2);
+        }
+        for (int i = 0; i < enemies.Soldiers.Count; i++)
+        {
+            Place(grid, enemies.Soldiers[i], false, 10, i * 2);
+        }
+        BattleSquadPlanner planner = CreatePlanner(grid, ambushers, enemies);
+
+        planner.SeedAmbushAim(ambushers);
+
+        // Ambushers open the battle already aimed: SeedAmbushAim credits pre-trap aim turns so the
+        // opening volley fires at full aim bonus. (Aim no longer grants skill XP directly — battle
+        // skill XP is roll-based now — but the seeded TurnsAiming still drives the aimed opening shot.)
+        Assert.All(ambushers.Soldiers,
+            soldier => Assert.Equal((ushort)3, soldier.TurnsAiming));
+    }
+
+    [Fact]
+    public void SeedAmbushAim_NonPlayerAmbushers_DoNotAccrueAimingExperience()
+    {
+        BattleSquad ambushers = CreateSquad("Enemy Ambushers", (72_001, 2), (72_002, 2));
+        BattleSquad enemies = CreateSquad("Prey", (72_101, 2), (72_102, 2));
+        BattleGridManager grid = new();
+        for (int i = 0; i < ambushers.Soldiers.Count; i++)
+        {
+            BattleSoldier ambusher = ambushers.Soldiers[i];
+            ((Soldier)ambusher.Soldier).Dexterity = 20;
+            EquipAimTestRifle(ambusher, 99_701 + i);
+            Place(grid, ambusher, true, 0, i * 2);
+        }
+        for (int i = 0; i < enemies.Soldiers.Count; i++)
+        {
+            Place(grid, enemies.Soldiers[i], false, 10, i * 2);
+        }
+        BattleSquadPlanner planner = CreatePlanner(grid, ambushers, enemies);
+
+        planner.SeedAmbushAim(ambushers);
+
+        // Aim is still seeded (they fire fully-aimed), but no aftermath policy pays out the
+        // counter for a non-player faction, so it stays clean.
+        Assert.All(ambushers.Soldiers, soldier => Assert.NotNull(soldier.Aim));
+        Assert.All(ambushers.Soldiers,
+            soldier => Assert.Equal((ushort)0, soldier.TurnsAiming));
+    }
+
+    [Fact]
+    public void SeedAmbushAim_MeleeOnlyAmbusher_KeepsNullAim()
+    {
+        BattleSquad ambushers = CreateSquad("Melee Ambushers", 73_001);
+        BattleSquad enemies = CreateSquad("Prey", 73_101);
+        BattleSoldier ambusher = ambushers.Soldiers[0];
+        ambusher.RangedWeapons.Clear();
+        ambusher.ClearReadiedRangedWeapons();
+        BattleGridManager grid = new();
+        Place(grid, ambusher, true, 0, 0);
+        Place(grid, enemies.Soldiers[0], false, 5, 0);
+        BattleSquadPlanner planner = CreatePlanner(grid, ambushers, enemies);
+
+        planner.SeedAmbushAim(ambushers);
+
+        Assert.Null(ambusher.Aim);
+        Assert.Equal((ushort)0, ambusher.TurnsAiming);
+    }
+
+    // Builds an ambushing squad on a dedicated template carrying the given faction, so
+    // SeedAmbushAim can read squad.Squad.Faction.IsPlayerFaction. Reuses the fixture's default
+    // weapon set and armor (AllocateEquipment requires both) before the aim-test rifle is swapped
+    // in by the caller.
+    private static BattleSquad CreateFactionSquad(
+        string name,
+        Faction faction,
+        params (int SoldierId, int BattleValue)[] members)
+    {
+        SquadTemplate template = new(
+            40_000 + faction.Id,
+            $"{name} Template",
+            TestModelFactory.DefaultWeapons,
+            [],
+            TestModelFactory.TestArmor,
+            [],
+            SquadTypes.None)
+        {
+            Faction = faction
+        };
+        Squad squad = new(name, null, template);
+        foreach ((int soldierId, int battleValue) in members)
+        {
+            SoldierTemplate soldierTemplate = new(
+                40_000 + soldierId,
+                TestModelFactory.HumanSpecies,
+                $"{name} {soldierId} Template",
+                1,
+                1,
+                false,
+                0,
+                Array.Empty<ValueTuple<BaseSkill, float>>(),
+                battleValue: battleValue);
+            Soldier soldier = TestModelFactory.CreateSoldier(soldierTemplate, $"{name} {soldierId}");
+            soldier.Id = soldierId;
+            squad.AddSquadMember(soldier);
+        }
+        return new BattleSquad(false, squad);
+    }
+
+    private static Faction BuildFaction(int id, string name, bool isPlayer)
+    {
+        return new Faction(
+            id,
+            name,
+            Color.Red,
+            isPlayer,
+            isDefaultFaction: false,
+            canInfiltrate: false,
+            GrowthType.Logistic,
+            new Dictionary<int, Species> { [TestModelFactory.HumanSpecies.Id] = TestModelFactory.HumanSpecies },
+            new Dictionary<int, SoldierTemplate>(),
+            new Dictionary<int, SquadTemplate>(),
+            new Dictionary<int, UnitTemplate>(),
+            new Dictionary<int, BoatTemplate>(),
+            new Dictionary<int, ShipTemplate>(),
+            new Dictionary<int, FleetTemplate>());
     }
 }
