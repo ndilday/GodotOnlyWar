@@ -1,5 +1,6 @@
 using OnlyWar.Builders;
 using OnlyWar.Helpers.Extensions;
+using OnlyWar.Helpers.Missions;
 using OnlyWar.Helpers.Simulation;
 using OnlyWar.Models;
 using OnlyWar.Models.Missions;
@@ -886,8 +887,14 @@ namespace OnlyWar.Helpers.Turns
 
         private void GenerateAmbushMission(RegionFaction enemyRegionFaction)
         {
-            double maxSize = Math.Log10(enemyRegionFaction.Garrison);
-            int size = Math.Min(Math.Max((int)_session.Random.NextRandomZValue() + 1, 1), (int)maxSize);
+            // Mission size is an order-of-magnitude band of the force being ambushed. Reading raw
+            // Garrison made this Log10(0) = -infinity for a PopulationIsMilitary horde (Tyranids,
+            // cults) whose army is its Population; the cast saturates to int.MinValue, so the
+            // ambush was created with a wildly negative size that PositionAmbushMissionStep then
+            // raised 10 to - producing a target battle value of 0, an ambush with no ambushers.
+            int maxSize = (int)MissionStealthDifficulty.TroopMagnitude(
+                enemyRegionFaction.GetDeployedStrength());
+            int size = ClampMissionSize((int)_session.Random.NextRandomZValue() + 1, maxSize);
             Mission ambush = new Mission(MissionType.Ambush, enemyRegionFaction, size);
             enemyRegionFaction.Region.SpecialMissions.Add(ambush);
             _specialMissions.Add(ambush);
@@ -921,8 +928,8 @@ namespace OnlyWar.Helpers.Turns
             DefenseType defenseType,
             double defenseLevel)
         {
-            int size = Math.Min(
-                Math.Max((int)_session.Random.NextRandomZValue() + 1, 1),
+            int size = ClampMissionSize(
+                (int)_session.Random.NextRandomZValue() + 1,
                 (int)Math.Ceiling(defenseLevel));
             SabotageMission sabotage = new SabotageMission(defenseType, size, enemyRegionFaction);
             enemyRegionFaction.Region.SpecialMissions.Add(sabotage);
@@ -931,12 +938,26 @@ namespace OnlyWar.Helpers.Turns
 
         private void GenerateAssassinationMission(RegionFaction enemyRegionFaction)
         {
-            int max = (int)Math.Log10(enemyRegionFaction.Population);
-            int size = Math.Min(Math.Max((int)_session.Random.NextRandomZValue() + 1, 1), max);
+            // Size selects the target's rank from the faction's HQ ladder (1: Prime, 2: Broodlord,
+            // 3: Hive Tyrant), so it scales with the faction's whole presence here rather than the
+            // portion it has fielded - Population is the right pool. It still needs the same guard:
+            // a region faction can be reduced to zero population and still be walked here by
+            // HandlePublicFactionIntelligence, and Log10(0) casts to int.MinValue.
+            int max = (int)MissionStealthDifficulty.TroopMagnitude(enemyRegionFaction.Population);
+            int size = ClampMissionSize((int)_session.Random.NextRandomZValue() + 1, max);
             Mission assassination = new Mission(MissionType.Assassination, enemyRegionFaction, size);
             enemyRegionFaction.Region.SpecialMissions.Add(assassination);
             _specialMissions.Add(assassination);
         }
+
+        // A generated mission's size, capped by how much there is to act against but never below 1.
+        // The cap is derived from world state that can legitimately be zero (a spent garrison, an
+        // undamaged-but-unbuilt defense), and a size of 0 or less is not a small mission - it is a
+        // broken one: MissionAftermathProcessor clamps sabotage impact to the size, so nothing the
+        // force achieves can ever count, and PositionAmbushMissionStep raises 10 to it to pick the
+        // opposing force's battle value.
+        private static int ClampMissionSize(int rolled, int maximum) =>
+            Math.Clamp(rolled, 1, Math.Max(1, maximum));
 
         private static string DescribeRegionFaction(RegionFaction regionFaction)
         {

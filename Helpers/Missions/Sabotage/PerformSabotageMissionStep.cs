@@ -1,10 +1,9 @@
-using OnlyWar.Helpers.Missions.Recon;
+using OnlyWar.Helpers.Extensions;
 using OnlyWar.Models;
 using OnlyWar.Models.Missions;
 using OnlyWar.Models.Orders;
 using OnlyWar.Models.Planets;
 using OnlyWar.Models.Soldiers;
-using System;
 using System.Linq;
 
 namespace OnlyWar.Helpers.Missions.Sabotage
@@ -18,8 +17,16 @@ namespace OnlyWar.Helpers.Missions.Sabotage
             MissionContext context = execution.State;
             BaseSkill tactics = execution.Rules.Tactics;
             RegionFaction enemyFaction = context.Order.Mission.RegionFaction;
+            // Unlike the stealth checks this stays anchored to the mission's target faction: it is a
+            // Tactics check against the works being demolished, and those - like the Entrenchment
+            // protecting them - belong to the target, not to whichever other factions happen to also
+            // hold the region. Region-wide presence is already priced in by the stealth step that got
+            // the force here. It does read deployed strength rather than raw Garrison, so a
+            // PopulationIsMilitary horde (Tyranids, cults) whose army is its Population puts a real
+            // guard force on its installations instead of the Log10(0) = -infinity that made every
+            // sabotage attempt against one succeed for free.
             float difficulty = (float)(enemyFaction.Entrenchment * 0.5);
-            difficulty += (float)Math.Log10(enemyFaction.Garrison);
+            difficulty += MissionStealthDifficulty.TroopMagnitude(enemyFaction.GetDeployedStrength());
             LeaderMissionTest missionTest = new LeaderMissionTest(tactics, difficulty);
 
             Order order = context.MissionSquads.First().Squad.CurrentOrders;
@@ -31,23 +38,22 @@ namespace OnlyWar.Helpers.Missions.Sabotage
                 context.Impact += margin;
             }
 
-            if (context.DaysElapsed >= 6)
+            if (context.OperatingDaysSpent)
             {
                 // time to go home
-                if (context.Order.Mission.RegionFaction.Region != context.MissionSquads.First().Squad.CurrentRegion)
+                if (context.MustExfiltrate)
                 {
                     new ExfiltrateMissionStep().ExecuteMissionStep(execution, 0.0f, this);
                 }
-                else if (context.DaysElapsed >= 7)
-                {
-                    //we don't have to go anywhere so just exit.
-                    return;
-                }
+                // otherwise we don't have to go anywhere, so just exit.
+                return;
             }
-            else
-            {
-                new ReconStealthMissionStep().ExecuteMissionStep(execution, marginOfSuccess, this);
-            }
+
+            // Continue the SABOTAGE loop. This used to chain to ReconStealthMissionStep, whose success
+            // branch runs PerformReconMissionStep - so after its first successful day a sabotage
+            // mission silently turned into a recon mission: it stopped planting explosives and started
+            // accruing recon Impact instead.
+            new SabotageStealthMissionStep().ExecuteMissionStep(execution, marginOfSuccess, this);
         }
     }
 }

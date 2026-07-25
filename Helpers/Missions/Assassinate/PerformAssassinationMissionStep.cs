@@ -4,7 +4,6 @@ using OnlyWar.Models.Planets;
 using OnlyWar.Models.Soldiers;
 using OnlyWar.Models.Squads;
 using OnlyWar.Models;
-using System;
 using System.Linq;
 using OnlyWar.Builders;
 using OnlyWar.Helpers.Battles;
@@ -23,8 +22,14 @@ namespace OnlyWar.Helpers.Missions.Assassinate
             // size 2: Broodlord
             // size 3: Hive Tyrant
             RegionFaction enemyFaction = context.Order.Mission.RegionFaction;
+            // Like PerformSabotageMissionStep this stays anchored to the mission's target faction:
+            // it is a check against the target's own protection, and region-wide presence was already
+            // priced in by the stealth step that got the force here. It reads deployed strength
+            // rather than raw Garrison so a PopulationIsMilitary horde (Tyranids, cults) whose army
+            // is its Population puts a real screen around its HQ, instead of the Log10(0) =
+            // -infinity that made every assassination attempt against one succeed for free.
             float difficulty = (float)((enemyFaction.Entrenchment + enemyFaction.GetOwnRegionIntel()) * 0.5)
-                + (float)Math.Log10(enemyFaction.Garrison);
+                + MissionStealthDifficulty.TroopMagnitude(enemyFaction.GetDeployedStrength());
             LeaderMissionTest missionTest = new LeaderMissionTest(tactics, difficulty);
             float margin = missionTest.RunMissionCheck(context.MissionSquads, execution.Random);
             

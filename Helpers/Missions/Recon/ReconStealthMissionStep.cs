@@ -4,8 +4,6 @@ using OnlyWar.Models;
 using OnlyWar.Models.Missions;
 using OnlyWar.Models.Planets;
 using OnlyWar.Models.Soldiers;
-using System;
-using System.Collections.Generic;
 using System.Linq;
 
 namespace OnlyWar.Helpers.Missions.Recon
@@ -19,17 +17,18 @@ namespace OnlyWar.Helpers.Missions.Recon
         public void ExecuteMissionStep(MissionExecutionContext execution, float marginOfSuccess, IMissionStep returnStep)
         {
             MissionContext context = execution.State;
-            // The mission runs for at most a week. This cap is the safety net for the detect->evade
-            // loop: the graceful day check lives in PerformReconMissionStep and only fires on a
-            // *successful* infiltration, so a scout that keeps failing stealth would otherwise loop
-            // indefinitely (see MissionContext.MissionDurationDays). Once the week is spent, break
-            // contact — exfiltrate if we infiltrated the target region, otherwise the sortie is over.
-            if (context.DaysElapsed >= MissionContext.MissionDurationDays)
+            // The mission runs for at most a week, and a force that infiltrated owes a day to get back
+            // out, so it stops scouting after day 6 (see MissionContext.OperatingDaysSpent). This is
+            // also the safety net for the detect->engage->continue loop: a scout that keeps failing
+            // stealth, or that is intercepted and stays on mission, re-enters here rather than through
+            // PerformReconMissionStep, and would otherwise scout past its budget - or loop
+            // indefinitely. Once the days are spent, break contact.
+            if (context.OperatingDaysSpent)
             {
                 GameLog.Trace(() =>
                     $"Recon stealth {DescribeFaction(context)} -> {DescribeTarget(context)}: "
-                    + $"week elapsed at day {context.DaysElapsed}; breaking contact");
-                if (context.Order.Mission.RegionFaction.Region != context.MissionSquads.First().Squad.CurrentRegion)
+                    + $"operating days spent at day {context.DaysElapsed}; breaking contact");
+                if (context.MustExfiltrate)
                 {
                     new ExfiltrateMissionStep().ExecuteMissionStep(execution, 0.0f, null);
                 }
@@ -42,14 +41,13 @@ namespace OnlyWar.Helpers.Missions.Recon
             // mod for equipment
             BaseSkill stealth = execution.Rules.Stealth;
             Region region = context.Order.Mission.RegionFaction.Region;
-            // the scout's own knowledge of the region makes it easier to find a stealthy route
             Faction scout = context.MissionSquads.FirstOrDefault()?.Squad.Faction;
             int scoutHeadcount = context.MissionSquads.Sum(s => s.AbleSoldiers.Count);
             // Detection aggregates across every enemy faction in the region (one stealth check per
             // day, not N independent rolls); the terms are broken out for the trace.
-            float difficulty = CalculateStealthDifficulty(region, scoutHeadcount, scout,
-                out float detection, out float ownTroopMod, out float garrisonMod, out float intelMod,
-                out int enemyCount);
+            StealthDifficultyTerms terms =
+                MissionStealthDifficulty.Calculate(region, scoutHeadcount, scout);
+            float difficulty = terms.Total;
             SquadMissionTest missionTest = new SquadMissionTest(stealth, difficulty);
 
             context.DaysElapsed++;
@@ -71,8 +69,9 @@ namespace OnlyWar.Helpers.Missions.Recon
             }
             GameLog.Trace(() =>
                 $"Recon stealth {DescribeFaction(context)} -> {DescribeTarget(context)} day {context.DaysElapsed}: "
-                + $"difficulty={difficulty:F2} (detection={detection:F2} over {enemyCount} enemy faction(s), "
-                + $"+ownTroops={ownTroopMod:F2}, +troops={garrisonMod:F2}, -intel={intelMod:F2}), "
+                + $"difficulty={difficulty:F2} (detection={terms.Detection:F2} over "
+                + $"{terms.EnemyCount} enemy faction(s), +ownTroops={terms.OwnTroopMod:F2}, "
+                + $"+troops={terms.TroopMod:F2}, -intel={terms.IntelMod:F2}), "
                 + $"bestStealthSkill={bestStealth:F2}, margin={margin:F2} -> "
                 + $"{(slippedIn ? "SLIPPED IN" : $"DETECTED by {DescribeSpotter(context.Spotter)}")}");
             if (slippedIn)
@@ -83,30 +82,6 @@ namespace OnlyWar.Helpers.Missions.Recon
             {
                 new DetectedMissionStep().ExecuteMissionStep(execution, margin, this);
             }
-        }
-
-        // Aggregated daily stealth difficulty for a recon in a (possibly multi-faction) region,
-        // exposed as a static so the detection model can be unit-tested without a full mission run.
-        // Both the awareness and troop terms sum over the same enemy set the spotter is later drawn
-        // from (Design/MultiFactionRegions.md WI-3). The Max(1, ...) guard is mandatory: deployed
-        // strength (the horde-correct troop count) can be zero — a PopulationIsMilitary horde carries
-        // no Garrison — and Log(0) is -infinity, which would make a zero-garrison region trivially
-        // infiltrable. The per-term out values feed the trace line.
-        public static float CalculateStealthDifficulty(Region region, int scoutHeadcount, Faction scout,
-            out float detection, out float ownTroopMod, out float garrisonMod, out float intelMod,
-            out int enemyCount)
-        {
-            List<RegionFaction> enemies = region.GetDetectingEnemyFactions();
-            enemyCount = enemies.Count;
-            // The defenders' combined awareness of their own ground (unified intel; a patrol sweeping
-            // the region raises this directly, so a patrolled region is intrinsically harder to scout).
-            detection = enemies.Sum(rf => rf.GetOwnRegionIntel()) * 0.5f;
-            // every degree of magnitude of troops adds one to the difficulty
-            ownTroopMod = (float)Math.Log(scoutHeadcount, 10);
-            // every degree of magnitude of enemy troops fielded in the region adds to the difficulty
-            garrisonMod = (float)Math.Log(Math.Max(1L, enemies.Sum(rf => rf.GetDeployedStrength())), 10);
-            intelMod = scout == null ? 0f : region.GetFactionRegionIntel(scout);
-            return detection + ownTroopMod + garrisonMod - intelMod;
         }
 
         private static string DescribeFaction(MissionContext context) =>

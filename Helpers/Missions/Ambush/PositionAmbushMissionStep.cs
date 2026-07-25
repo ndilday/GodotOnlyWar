@@ -4,7 +4,6 @@ using OnlyWar.Models.Planets;
 using OnlyWar.Models.Soldiers;
 using OnlyWar.Models.Units;
 using OnlyWar.Helpers.Battles;
-using OnlyWar.Helpers.Extensions;
 using OnlyWar.Models;
 using System;
 using System.Collections.Generic;
@@ -28,14 +27,15 @@ namespace OnlyWar.Helpers.Missions.Ambush
             // mod for equipment
             BaseSkill stealth = execution.Rules.Stealth;
             RegionFaction enemyFaction = context.Order.Mission.RegionFaction;
-            float difficulty = enemyFaction.GetOwnRegionIntel() * 0.5f;
-            // every degree of magnitude of troops adds one to the difficulty
-            difficulty += (float)Math.Log(context.MissionSquads.Sum(s => s.AbleSoldiers.Count), 10);
-            // every degree of magnitude of enemy troops garrisoning the region adds to the difficulty
-            difficulty += (float)Math.Log(enemyFaction.Garrison, 10);
-            // the attacker's own knowledge of the region makes it easier to find a good ambush spot
             Faction attacker = context.MissionSquads.FirstOrDefault()?.Squad.Faction;
-            if (attacker != null) difficulty -= enemyFaction.Region.GetFactionRegionIntel(attacker);
+            int headcount = context.MissionSquads.Sum(s => s.AbleSoldiers.Count);
+            // Setting an ambush without being seen first is contested by everyone watching the
+            // ground, not just the faction being ambushed, so this uses the same aggregated model as
+            // ReconStealthMissionStep - and with it the guarded troop log, so a region held by a
+            // zero-Garrison horde faces its deployed strength instead of Log(0) = -infinity, which
+            // used to guarantee the ambushers got into position no matter how badly they rolled.
+            float difficulty = MissionStealthDifficulty
+                .Calculate(enemyFaction.Region, headcount, attacker).Total;
             SquadMissionTest missionTest = new SquadMissionTest(stealth, difficulty);
 
             context.OpposingSquads = PopulateOpposingForce(

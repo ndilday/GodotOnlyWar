@@ -1,10 +1,8 @@
-using OnlyWar.Helpers.Extensions;
 using OnlyWar.Helpers.Missions.Recon;
 using OnlyWar.Models;
 using OnlyWar.Models.Missions;
 using OnlyWar.Models.Planets;
 using OnlyWar.Models.Soldiers;
-using System;
 using System.Linq;
 
 namespace OnlyWar.Helpers.Missions
@@ -24,12 +22,13 @@ namespace OnlyWar.Helpers.Missions
             // mod for enemy recon focus
             // mod for equipment
             BaseSkill stealth = execution.Rules.Stealth;
-            RegionFaction enemyFaction = context.Order.Mission.RegionFaction;
-            float difficulty = enemyFaction.GetOwnRegionIntel() * 0.5f;
-            // every degree of magnitude of troops adds one to the difficulty
-            difficulty += (float)Math.Log(context.MissionSquads.Sum(s => s.AbleSoldiers.Count), 10);
-            // every degree of magnitude of enemy troops garrisoning the region adds to the difficulty
-            difficulty += (float)Math.Log(enemyFaction.Garrison, 10);
+            Region region = context.Order.Mission.RegionFaction.Region;
+            Faction force = context.MissionSquads.FirstOrDefault()?.Squad.Faction;
+            int headcount = context.MissionSquads.Sum(s => s.AbleSoldiers.Count);
+            // Slipping back out is contested by every enemy watching the region, the same aggregated
+            // model as the way in (ReconStealthMissionStep / InfiltrateMissionStep).
+            float difficulty = MissionStealthDifficulty
+                .Calculate(region, headcount, force).Total;
             SquadMissionTest missionTest = new SquadMissionTest(stealth, difficulty);
             if (context.MissionSquads.SelectMany(s => s.AbleSoldiers).Count() == 0)
             {

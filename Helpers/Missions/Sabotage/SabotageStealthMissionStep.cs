@@ -1,10 +1,8 @@
-using OnlyWar.Helpers.Extensions;
 using OnlyWar.Helpers.Missions.Recon;
 using OnlyWar.Models.Missions;
 using OnlyWar.Models.Planets;
 using OnlyWar.Models.Soldiers;
 using OnlyWar.Models;
-using System;
 using System.Linq;
 
 namespace OnlyWar.Helpers.Missions.Sabotage
@@ -18,17 +16,39 @@ namespace OnlyWar.Helpers.Missions.Sabotage
         public void ExecuteMissionStep(MissionExecutionContext execution, float marginOfSuccess, IMissionStep returnStep)
         {
             MissionContext context = execution.State;
+            // The mission runs for at most a week, and a force that infiltrated owes a day to get back
+            // out, so it stops operating after day 6 (see MissionContext.OperatingDaysSpent). Mirrors
+            // ReconStealthMissionStep, and this step is where the cap has to live: DetectedMissionStep
+            // is handed `this` as its returnStep, so an intercepted force that survives its engagement
+            // re-enters the loop here from AmbushedMissionStep / MeetingEngagementMissionStep. With no
+            // check at all, a force that kept being detected but kept surviving incremented DaysElapsed
+            // and rolled stealth again with no upper bound, running until a stealth check finally
+            // succeeded - well past the one-week strategic turn.
+            if (context.OperatingDaysSpent)
+            {
+                GameLog.Trace(() =>
+                    $"Sabotage stealth {DescribeFaction(context)} -> {DescribeTarget(context)}: "
+                    + $"operating days spent at day {context.DaysElapsed}; breaking contact");
+                if (context.MustExfiltrate)
+                {
+                    new ExfiltrateMissionStep().ExecuteMissionStep(execution, 0.0f, null);
+                }
+                return;
+            }
+
             // negative mod for size of enemy force
             // mod for terrain
             // mod for enemy recon focus
             // mod for equipment
             BaseSkill stealth = execution.Rules.Stealth;
-            RegionFaction enemyFaction = context.Order.Mission.RegionFaction;
-            float difficulty = enemyFaction.GetOwnRegionIntel() * 0.5f;
-            // every degree of magnitude of troops adds one to the difficulty
-            difficulty += (float)Math.Log(context.MissionSquads.Sum(s => s.AbleSoldiers.Count), 10);
-            // every degree of magnitude of enemy troops garrisoning the region adds to the difficulty
-            difficulty += (float)Math.Log(enemyFaction.Garrison, 10);
+            Region region = context.Order.Mission.RegionFaction.Region;
+            Faction saboteur = context.MissionSquads.FirstOrDefault()?.Squad.Faction;
+            int headcount = context.MissionSquads.Sum(s => s.AbleSoldiers.Count);
+            // Being seen is a property of the region, not of the faction whose installations are the
+            // target: the same aggregated model as ReconStealthMissionStep, so a saboteur working a
+            // region held by a zero-Garrison horde faces its deployed strength rather than nothing.
+            float difficulty = MissionStealthDifficulty
+                .Calculate(region, headcount, saboteur).Total;
             SquadMissionTest missionTest = new SquadMissionTest(stealth, difficulty);
 
             context.DaysElapsed++;
@@ -41,6 +61,15 @@ namespace OnlyWar.Helpers.Missions.Sabotage
             {
                 new DetectedMissionStep().ExecuteMissionStep(execution, margin, this);
             }
+        }
+
+        private static string DescribeFaction(MissionContext context) =>
+            context.MissionSquads.FirstOrDefault()?.Squad.Faction?.Name ?? "Unknown";
+
+        private static string DescribeTarget(MissionContext context)
+        {
+            RegionFaction target = context.Order.Mission.RegionFaction;
+            return $"{target.Region.Planet.Name}/{target.Region.Name}/{target.PlanetFaction.Faction.Name}";
         }
     }
 }

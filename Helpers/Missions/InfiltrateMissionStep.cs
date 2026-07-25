@@ -4,9 +4,7 @@ using OnlyWar.Models;
 using OnlyWar.Models.Missions;
 using OnlyWar.Models.Planets;
 using OnlyWar.Models.Soldiers;
-using System;
 using System.Linq;
-using System.Net.Mime;
 
 namespace OnlyWar.Helpers.Missions.Recon
 {
@@ -24,18 +22,14 @@ namespace OnlyWar.Helpers.Missions.Recon
             // mod for enemy recon focus
             // mod for equipment
             BaseSkill stealth = execution.Rules.Stealth;
-            RegionFaction enemyFaction = context.Order.Mission.RegionFaction;
-            // The defender's awareness of its own ground (unified intel; a patrol sweeping the region
-            // raises this directly, so a patrolled region is intrinsically harder to slip into).
-            float detection = enemyFaction.GetOwnRegionIntel() * 0.5f;
-            // every degree of magnitude of troops adds one to the difficulty
-            float ownTroopMod = (float)Math.Log(context.MissionSquads.Sum(s => s.AbleSoldiers.Count), 10);
-            // every degree of magnitude of enemy troops garrisoning the region adds to the difficulty
-            float garrisonMod = (float)Math.Log(enemyFaction.Garrison, 10);
-            // the infiltrator's own knowledge of the region makes it easier to find a stealthy route
+            Region region = context.Order.Mission.RegionFaction.Region;
             Faction infiltrator = context.MissionSquads.FirstOrDefault()?.Squad.Faction;
-            float intelMod = infiltrator == null ? 0f : enemyFaction.Region.GetFactionRegionIntel(infiltrator);
-            float difficulty = detection + ownTroopMod + garrisonMod - intelMod;
+            int headcount = context.MissionSquads.Sum(s => s.AbleSoldiers.Count);
+            // Slipping in is contested by everyone watching the ground, not just the faction the
+            // mission is aimed at, so this uses the same aggregated model as ReconStealthMissionStep.
+            StealthDifficultyTerms terms =
+                MissionStealthDifficulty.Calculate(region, headcount, infiltrator);
+            float difficulty = terms.Total;
             SquadMissionTest missionTest = new SquadMissionTest(stealth, difficulty);
             if (!ShouldContinue(context))
             {
@@ -53,8 +47,9 @@ namespace OnlyWar.Helpers.Missions.Recon
             GameLog.Trace(() =>
                 $"Infiltrate {context.MissionSquads.FirstOrDefault()?.Squad.Faction?.Name ?? "?"} -> "
                 + $"{infTarget.Region.Planet.Name}/{infTarget.Region.Name}/{infTarget.PlanetFaction.Faction.Name} "
-                + $"day {context.DaysElapsed}: difficulty={difficulty:F2} (detection={detection:F2}, "
-                + $"+ownTroops={ownTroopMod:F2}, +garrison={garrisonMod:F2}, -intel={intelMod:F2}), "
+                + $"day {context.DaysElapsed}: difficulty={difficulty:F2} (detection={terms.Detection:F2} "
+                + $"over {terms.EnemyCount} enemy faction(s), +ownTroops={terms.OwnTroopMod:F2}, "
+                + $"+troops={terms.TroopMod:F2}, -intel={terms.IntelMod:F2}), "
                 + $"bestStealthSkill={bestStealth:F2}, margin={margin:F2} -> {(margin > 0 ? "INFILTRATED" : "DETECTED")}");
             if (margin > 0.0f)
             {

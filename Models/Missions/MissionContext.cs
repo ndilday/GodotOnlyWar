@@ -64,6 +64,22 @@ namespace OnlyWar.Models.Missions
         public const int MissionDurationDays = 7;
         public const int ExfiltrationGraceDays = 3;
 
+        // True when the force is operating inside a region it does not already hold, so ending the
+        // mission means slipping back out. A force working ground it already stands on just stops.
+        public bool MustExfiltrate =>
+            Order.Mission.RegionFaction.Region != MissionSquads.First().Squad.CurrentRegion;
+
+        // True once the force has spent its operating days and should break off. A force that has to
+        // exfiltrate stops a day early so the trip home still lands inside the week; one with no trip
+        // home works the full week. This budget must be consulted at EVERY re-entry into an operating
+        // step, not just the successful-recon branch: a force that was intercepted and stayed on
+        // mission comes back from the engagement into the stealth step (see AmbushedMissionStep /
+        // MeetingEngagementMissionStep returnStep), which used to test only the hard week cap. It
+        // therefore spent day 7 scouting and could not begin exfiltrating until day 8 - later still
+        // when the exfil itself was contested, up to the grace limit.
+        public bool OperatingDaysSpent =>
+            DaysElapsed >= (MustExfiltrate ? MissionDurationDays - 1 : MissionDurationDays);
+
         public Order Order { get; }
         public List<BattleSquad> MissionSquads { get; }
         public IReadOnlyList<PlayerSoldier> StartingPlayerParticipants { get; }

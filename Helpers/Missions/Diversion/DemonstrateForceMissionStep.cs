@@ -3,7 +3,6 @@ using OnlyWar.Models;
 using OnlyWar.Models.Missions;
 using OnlyWar.Models.Planets;
 using OnlyWar.Models.Soldiers;
-using System;
 
 namespace OnlyWar.Helpers.Missions.Diversion
 {
@@ -20,10 +19,13 @@ namespace OnlyWar.Helpers.Missions.Diversion
             MissionContext context = execution.State;
             BaseSkill tactics = execution.Rules.Tactics;
             RegionFaction enemyFaction = context.Order.Mission.RegionFaction;
-            // The harder the enemy is to bluff (better detection, larger garrison able to
-            // appraise the threat), the harder it is to project a convincing feint.
+            // The harder the enemy is to bluff (better detection, more troops fielded to appraise
+            // the threat), the harder it is to project a convincing feint. This reads deployed
+            // strength rather than raw Garrison: a PopulationIsMilitary horde (Tyranids, cults)
+            // whose army is its Population carries no Garrison at all, so the old read made an
+            // entire hive fleet look like empty ground to feint against.
             float difficulty = enemyFaction.GetOwnRegionIntel() * 0.5f;
-            difficulty += (float)Math.Log10(Math.Max(enemyFaction.Garrison, 1));
+            difficulty += MissionStealthDifficulty.TroopMagnitude(enemyFaction.GetDeployedStrength());
             LeaderMissionTest missionTest = new LeaderMissionTest(tactics, difficulty);
 
             context.DaysElapsed++;

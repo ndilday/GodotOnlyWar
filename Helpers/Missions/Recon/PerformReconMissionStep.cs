@@ -28,23 +28,18 @@ namespace OnlyWar.Helpers.Missions.Recon
                 context.Impact += margin;
             }
 
-            if (context.DaysElapsed >= 6)
+            if (context.OperatingDaysSpent)
             {
                 // time to go home
-                if (context.Order.Mission.RegionFaction.Region != context.MissionSquads.First().Squad.CurrentRegion)
+                if (context.MustExfiltrate)
                 {
                     new ExfiltrateMissionStep().ExecuteMissionStep(execution, 0.0f, this);
                 }
-                else if(context.DaysElapsed >= 7)
-                {
-                    //we don't have to go anywhere so just exit.
-                    return;
-                }
+                // otherwise we don't have to go anywhere, so just exit.
+                return;
             }
-            else
-            {
-                new ReconStealthMissionStep().ExecuteMissionStep(execution, marginOfSuccess, this);
-            }
+
+            new ReconStealthMissionStep().ExecuteMissionStep(execution, marginOfSuccess, this);
         }
     }
 }

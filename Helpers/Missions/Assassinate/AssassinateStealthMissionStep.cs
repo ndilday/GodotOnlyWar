@@ -1,10 +1,8 @@
-using OnlyWar.Helpers.Extensions;
 using OnlyWar.Helpers.Missions.Recon;
 using OnlyWar.Models.Missions;
 using OnlyWar.Models.Planets;
 using OnlyWar.Models.Soldiers;
 using OnlyWar.Models;
-using System;
 using System.Linq;
 
 namespace OnlyWar.Helpers.Missions.Assassinate
@@ -18,20 +16,37 @@ namespace OnlyWar.Helpers.Missions.Assassinate
         public void ExecuteMissionStep(MissionExecutionContext execution, float marginOfSuccess, IMissionStep returnStep)
         {
             MissionContext context = execution.State;
+            // This step is the assassination loop's re-entry point - DetectedMissionStep is handed
+            // `this` as its returnStep - so the day budget has to be consulted here, as in
+            // ReconStealthMissionStep and SabotageStealthMissionStep. Without it the loop has no
+            // upper bound at all: a force that is detected but not intercepted (the region spots it
+            // yet fields no ScoutPatrol) returns straight here and rolls stealth again forever. That
+            // path was unreachable only because the difficulty below used to be -infinity, so the
+            // stealth check could never fail; guarding the log makes it reachable.
+            if (context.OperatingDaysSpent)
+            {
+                if (context.MustExfiltrate)
+                {
+                    new ExfiltrateMissionStep().ExecuteMissionStep(execution, 0.0f, null);
+                }
+                return;
+            }
+
             // negative mod for size of enemy force
             // mod for terrain
             // mod for enemy recon focus
             // mod for equipment
             BaseSkill stealth = execution.Rules.Stealth;
-            RegionFaction enemyFaction = context.Order.Mission.RegionFaction;
-            float difficulty = enemyFaction.GetOwnRegionIntel() * 0.5f;
-            // every degree of magnitude of troops adds one to the difficulty
-            difficulty += (float)Math.Log(context.MissionSquads.Sum(s => s.AbleSoldiers.Count), 10);
-            // every degree of magnitude of enemy troops garrisoning the region adds to the difficulty
-            difficulty += (float)Math.Log(enemyFaction.Garrison, 10);
-            // the attacker's own knowledge of the region makes it easier to find a good ambush spot
-            Faction attacker = context.MissionSquads.FirstOrDefault()?.Squad.Faction;
-            if (attacker != null) difficulty -= enemyFaction.Region.GetFactionRegionIntel(attacker);
+            Region region = context.Order.Mission.RegionFaction.Region;
+            Faction assassin = context.MissionSquads.FirstOrDefault()?.Squad.Faction;
+            int headcount = context.MissionSquads.Sum(s => s.AbleSoldiers.Count);
+            // Getting close to the target unseen is contested by everyone watching the ground, not
+            // just the faction the target belongs to, so this uses the same aggregated model as
+            // ReconStealthMissionStep - and with it the guarded troop log, so a region held by a
+            // zero-Garrison horde faces its deployed strength instead of Log(0) = -infinity, which
+            // used to hand every assassin an infinite margin and a free approach.
+            float difficulty = MissionStealthDifficulty
+                .Calculate(region, headcount, assassin).Total;
             SquadMissionTest missionTest = new SquadMissionTest(stealth, difficulty);
 
             context.DaysElapsed++;

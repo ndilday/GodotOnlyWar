@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using System.Drawing;
 using OnlyWar.Helpers;
 using OnlyWar.Helpers.Extensions;
-using OnlyWar.Helpers.Missions.Recon;
+using OnlyWar.Helpers.Missions;
 using OnlyWar.Models;
 using OnlyWar.Models.Fleets;
 using OnlyWar.Models.Planets;
@@ -25,15 +25,14 @@ public class ReconDetectionTests
         Region region = CreateRegion();
         AddEnemy(region, CreateFaction(20, "Swarm"), population: 100_000, organization: 100, intel: 0f);
 
-        float difficulty = ReconStealthMissionStep.CalculateStealthDifficulty(
-            region, scoutHeadcount: 5, scout: null,
-            out _, out _, out float troopMod, out _, out int enemyCount);
+        StealthDifficultyTerms terms = MissionStealthDifficulty.Calculate(
+            region, intruderHeadcount: 5, intruder: null);
 
-        Assert.Equal(1, enemyCount);
-        Assert.True(troopMod > 0f);
-        Assert.False(float.IsNegativeInfinity(troopMod));
-        Assert.True(float.IsFinite(difficulty));
-        Assert.True(difficulty > 0f);
+        Assert.Equal(1, terms.EnemyCount);
+        Assert.True(terms.TroopMod > 0f);
+        Assert.False(float.IsNegativeInfinity(terms.TroopMod));
+        Assert.True(float.IsFinite(terms.Total));
+        Assert.True(terms.Total > 0f);
     }
 
     [Fact]
