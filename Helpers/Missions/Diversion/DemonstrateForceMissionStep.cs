@@ -24,8 +24,16 @@ namespace OnlyWar.Helpers.Missions.Diversion
             // strength rather than raw Garrison: a PopulationIsMilitary horde (Tyranids, cults)
             // whose army is its Population carries no Garrison at all, so the old read made an
             // entire hive fleet look like empty ground to feint against.
+            //
+            // Deliberately NOT on MissionStealthDifficulty's search-effort model. A feint is overt -
+            // the force is trying to BE seen - so "who is out hunting for intruders" is the wrong
+            // question entirely; what matters is how much force the enemy has on hand to appraise the
+            // threat with, and an idle staff appraises just as well as a patrolling one. Capping that
+            // the way ambient search is capped would make a hive fleet as gullible as a village. It
+            // borrows only Magnitude's log10(1+x) shape so an emptied region reads as 0 rather than
+            // -infinity.
             float difficulty = enemyFaction.GetOwnRegionIntel() * 0.5f;
-            difficulty += MissionStealthDifficulty.TroopMagnitude(enemyFaction.GetDeployedStrength());
+            difficulty += MissionStealthDifficulty.Magnitude(enemyFaction.GetDeployedStrength());
             LeaderMissionTest missionTest = new LeaderMissionTest(tactics, difficulty);
 
             context.DaysElapsed++;

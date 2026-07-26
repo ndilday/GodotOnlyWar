@@ -598,13 +598,38 @@ Mission continuation thresholds measure casualties relative to the combat-capabl
 
 Detection during any stealth phase routes to `DetectedMissionStep`, which dispatches to `AmbushedMissionStep` or `MeetingEngagementMissionStep` depending on context.
 
-**Shared stealth/infiltration/exfiltration difficulty formula:**
+**Shared stealth/infiltration/exfiltration difficulty formula** (`MissionStealthDifficulty`):
+
+Detection is a property of the **region**, not of the mission's chosen target, so both terms sum over `Region.GetDetectingEnemyFactions()` — the same set `Region.SelectSpotter` draws the interceptor from, so difficulty and interceptor always agree on "the enemies present".
+
 ```
-difficulty = enemyFaction.Detection
-           + log10(missionSquad.AbleSoldiers.Count)
-           + log10(enemyFaction.Garrison)
+WatchScore(rf) = SurveillanceWeight × rf.GetOwnRegionIntel()
+               + Magnitude(rf.GetPatrolStrength())
+               + min(AmbientSearchCap, AmbientWeight × Magnitude(staticStrength))
+
+staticStrength = max(0, rf.GetDeployedStrength() − rf.GetPatrolStrength())
+Magnitude(x)   = x ≤ 0 ? 0 : log10(1 + x)
+
+difficulty = Σ WatchScore(enemy) + Magnitude(intruderHeadcount) − intruderRegionIntel
 ```
+
 Skill is compared against difficulty, normalized to a z-score: `(skill − difficulty) / 5.0`.
+
+| Constant | Value | Role |
+|---|---|---|
+| `SurveillanceWeight` | 0.5 | Weight on a faction's own regional intel (listening posts, informants, its own past recon). |
+| `AmbientWeight` | 0.5 | Weight on fielded troops that are *not* out searching — half the patrol term, because standing in a region is a fraction as useful as sweeping it. |
+| `AmbientSearchCap` | 1.5 | Ceiling on the presence term. Load-bearing: without it the mass term alone spans 0..4 (0.8σ) and re-creates the failure the model exists to fix. |
+
+`GetPatrolStrength()` counts squads on `Patrol` or `Recon` orders only — the two orders whose whole content is "cover ground and report what you find". Every other mission type counts as static: a squad fortifying, assaulting, or holding an objective is an obstacle in the region, not a sweep of it.
+
+**Units.** `GetPatrolStrength()` and `GetDeployedStrength()` are both **battle value**, not headcount, because they are subtracted from each other. `Garrison`/`Population` are BV pools (`RegionFaction.AddMilitaryStrength`: *"forces are raised, lost, and returned in the same currency"*), and `FactionStrategyController` seeds `SpareTroops` from `GetDeployedStrength()` then decrements it by `SquadBattleValue`. Summing `Members.Count` for the patrol term would subtract headcount from battle value and compute the patrol term one to two orders of magnitude below its calibrated scale. BV also reads correctly on its own terms: a patrol's worth as a search is not only how many pairs of eyes it has, but how well equipped and trained they are to use them.
+
+**Why `1 + x` inside every log.** It makes every term ≥ 0 by construction. Zero maps to exactly 0 rather than `−∞`, so an empty region yields difficulty 0, and there is no path by which a difficulty of `−∞` becomes a margin of `+∞` and hands an intruder an automatic success. That failure mode was patched in one mission step after another (via `Max(1, …)` guards) before being fixed in the shape of the formula instead. `MissionStealthDifficulty.TroopMagnitude` retains the older unshifted `log10(max(1, x))` form, which is used **only** for order-of-magnitude mission-size banding in `PlanetTurnProcessor` (where 1,000,000 must band to exactly 6), never for difficulty.
+
+**Deliberately not on this model.** `PerformAssassinationMissionStep` and `DemonstrateForceMissionStep` scale with `GetDeployedStrength()` directly. They ask "how well guarded is this target" / "is there a garrison here to be feinted at", not "who is looking for me", so total force present is the right quantity for both.
+
+Calibration (intel 2, no intruder terms): empty region `0.00`; 5,000 BV idle `2.50`; the same 5,000 with 500 BV on patrol `5.20`; a dormant 10⁷ horde `2.50`.
 
 ### 6.5 Mission Checks
 

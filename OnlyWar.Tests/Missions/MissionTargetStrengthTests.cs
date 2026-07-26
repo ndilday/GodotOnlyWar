@@ -37,11 +37,16 @@ public class MissionTargetStrengthTests
     // matter who they were. An untrained squad now gets spotted first and has to take the meeting
     // engagement instead. (Neither branch has an OpFor to fight here - the stub faction has no squad
     // templates - so the two "no combat-capable forces" logs are what distinguish them.)
+    //
+    // The defender has to be actively searching, not merely enormous: under the search-effort model a
+    // dormant hive fleet is genuinely easy to set an ambush against, and the raw population is capped
+    // out of mattering. Watching plus patrolling is what spoils the setup now.
     [Fact]
-    public void PositionAmbush_UntrainedForceAgainstAZeroGarrisonHorde_IsDetected()
+    public void PositionAmbush_UntrainedForceAgainstASearchedRegion_IsDetected()
     {
         MissionContext context = CreateContext(
-            MissionType.Ambush, hordePopulation: 100_000_000, trained: false);
+            MissionType.Ambush, hordePopulation: 100_000_000, trained: false,
+            defenderIntel: 6f, defenderPatrollers: 250);
 
         new PositionAmbushMissionStep().ExecuteMissionStep(CreateExecution(context), 0f, null);
 
@@ -62,14 +67,15 @@ public class MissionTargetStrengthTests
 
     // --- assassination approach ---
 
-    // Same unguarded log in AssassinateStealthMissionStep. The horde's deployed strength now prices
+    // Same unguarded log in AssassinateStealthMissionStep. The defender's search effort now prices
     // the approach, so an untrained force is detected each day instead of walking in, and the loop
     // stops at the day budget rather than recursing forever through DetectedMissionStep.
     [Fact]
-    public void AssassinateStealth_UntrainedForceAgainstAZeroGarrisonHorde_IsDetected()
+    public void AssassinateStealth_UntrainedForceAgainstASearchedRegion_IsDetected()
     {
         MissionContext context = CreateContext(
-            MissionType.Assassination, hordePopulation: 100_000_000, trained: false);
+            MissionType.Assassination, hordePopulation: 100_000_000, trained: false,
+            defenderIntel: 6f, defenderPatrollers: 250);
 
         new AssassinateStealthMissionStep().ExecuteMissionStep(CreateExecution(context), 0f, null);
 
@@ -90,9 +96,12 @@ public class MissionTargetStrengthTests
     }
 
     // PerformAssassinationMissionStep's own Tactics check is target-anchored (like sabotage's), so it
-    // reads the target faction's deployed strength directly rather than the region aggregate. This is
-    // the term it adds: finite, and driven by the Population a horde actually fights with even though
-    // its Garrison is zero.
+    // reads the target faction's deployed strength directly rather than the region aggregate, and it
+    // deliberately stays OFF the search-effort model: a bodyguard is part of the screen around the
+    // target whether it is out patrolling or standing at a door, so neither the ambient cap nor the
+    // patrol/static split belongs here. It takes only Magnitude's log10(1 + x) shape, so the term is
+    // finite, and driven by the Population a horde actually fights with even though its Garrison is
+    // zero.
     [Fact]
     public void PerformAssassination_TargetTroopTerm_ComesFromDeployedStrengthNotGarrison()
     {
@@ -102,7 +111,7 @@ public class MissionTargetStrengthTests
 
         Assert.Equal(0, horde.Garrison);
         Assert.Equal(1_000_000, horde.GetDeployedStrength());
-        Assert.Equal(6.0, MissionStealthDifficulty.TroopMagnitude(horde.GetDeployedStrength()), 4);
+        Assert.Equal(6.0, MissionStealthDifficulty.Magnitude(horde.GetDeployedStrength()), 4);
     }
 
     // --- diversion ---
@@ -121,7 +130,9 @@ public class MissionTargetStrengthTests
         new DemonstrateForceMissionStep().ExecuteMissionStep(CreateExecution(small), 0f, null);
         new DemonstrateForceMissionStep().ExecuteMissionStep(CreateExecution(large), 0f, null);
 
-        const float expectedGap = MissionContext.MissionDurationDays * (6f - 2f) / 5f;
+        float expectedGap = MissionContext.MissionDurationDays
+            * (MissionStealthDifficulty.Magnitude(1_000_000)
+               - MissionStealthDifficulty.Magnitude(100)) / 5f;
         Assert.True(float.IsFinite(large.Impact));
         Assert.True(small.Impact > large.Impact);
         Assert.Equal(expectedGap, small.Impact - large.Impact, 3);
@@ -236,18 +247,46 @@ public class MissionTargetStrengthTests
     // A force standing in the region it is operating against, so there is no infiltration or
     // exfiltration to muddy the day count, facing a PopulationIsMilitary horde whose whole army sits
     // in Population and whose Garrison is therefore zero - the case none of these steps could price.
+    // The horde is dormant unless a test asks for intel and patrollers: MissionStealthDifficulty
+    // scores what a defender is DOING, so "huge" and "hunting" are now separate dials and a test that
+    // wants a hard-to-cross region has to turn the second one.
     private static MissionContext CreateContext(
-        MissionType missionType, long hordePopulation, bool trained)
+        MissionType missionType,
+        long hordePopulation,
+        bool trained,
+        float defenderIntel = 0f,
+        int defenderPatrollers = 0)
     {
         Planet planet = new(1, "Test Planet", new Coordinate(0, 0), 1, null, 0, 0);
         Region region = new(1, planet, 0, "Target Region", new RegionCoordinate(0, 0), 0);
         planet.Regions[0] = region;
         Faction horde = CreateFaction(20, "Swarm");
-        RegionFaction target = new(new PlanetFaction(horde), region)
+        PlanetFaction hordePlanetFaction = new(horde);
+        RegionFaction target = new(hordePlanetFaction, region)
         {
             Population = hordePopulation
         };
+        hordePlanetFaction.SetRegionIntel(region, defenderIntel);
         region.RegionFactionMap[horde.Id] = target;
+        if (defenderPatrollers > 0)
+        {
+            // GetPatrolStrength counts the members of squads landed here under a Patrol or Recon
+            // order; the Order constructor is what wires Squad.CurrentOrders back to the order.
+            Squad patrol = TestModelFactory.CreateSquad("Defender Patrol");
+            for (int i = 0; i < defenderPatrollers; i++)
+            {
+                patrol.AddSquadMember(TestModelFactory.CreateSoldier(name: $"Patroller {i}"));
+            }
+            patrol.CurrentRegion = region;
+            _ = new Order(
+                [patrol],
+                Disposition.Mobile,
+                isQuiet: false,
+                isActivelyEngaging: false,
+                levelOfAggression: Aggression.Normal,
+                mission: new Mission(MissionType.Patrol, target, missionSize: 0));
+            target.LandedSquads.Add(patrol);
+        }
 
         Squad squad = TestModelFactory.CreateSquad(
             "Raider Squad",

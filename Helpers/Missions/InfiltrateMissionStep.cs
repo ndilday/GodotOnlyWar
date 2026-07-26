@@ -48,8 +48,9 @@ namespace OnlyWar.Helpers.Missions.Recon
                 $"Infiltrate {context.MissionSquads.FirstOrDefault()?.Squad.Faction?.Name ?? "?"} -> "
                 + $"{infTarget.Region.Planet.Name}/{infTarget.Region.Name}/{infTarget.PlanetFaction.Faction.Name} "
                 + $"day {context.DaysElapsed}: difficulty={difficulty:F2} (detection={terms.Detection:F2} "
-                + $"over {terms.EnemyCount} enemy faction(s), +ownTroops={terms.OwnTroopMod:F2}, "
-                + $"+troops={terms.TroopMod:F2}, -intel={terms.IntelMod:F2}), "
+                + $"over {terms.EnemyCount} enemy faction(s), +patrol={terms.PatrolMod:F2}, "
+                + $"+ambient={terms.AmbientMod:F2}, +ownTroops={terms.OwnTroopMod:F2}, "
+                + $"-intel={terms.IntelMod:F2}), "
                 + $"bestStealthSkill={bestStealth:F2}, margin={margin:F2} -> {(margin > 0 ? "INFILTRATED" : "DETECTED")}");
             if (margin > 0.0f)
             {

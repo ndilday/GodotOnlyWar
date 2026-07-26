@@ -112,13 +112,30 @@ namespace OnlyWar.Builders
                 : $"Unit {index + 1}";
         }
 
+        // A faction with no squad-template rows in the rules data gets a NULL SquadTemplates map from
+        // GameRulesDataAccess.GetFactions, not an empty one — it only builds the dictionary when the
+        // faction has at least one row. The Insurrectionists are exactly that faction today, and every
+        // profile below then crashed on the dereference instead of taking its own "no usable template"
+        // early-out. That was latent rather than harmless: Region.SelectSpotter simply could not pick a
+        // faction with no region-intel while any other faction in the region had some, so a
+        // template-less faction was never asked to field an interceptor. Weighting the spotter roll by
+        // WatchScore made it reachable, at which point a recon mission against an insurrectionist
+        // region threw a NullReferenceException out of the turn processor.
+        //
+        // Normalizing to an empty sequence is the behaviour the callers already expect: every profile
+        // returns an empty force when it finds nothing suitable, and DetectedMissionStep handles that
+        // explicitly by logging an uncontested intrusion and letting the mission press on.
+        private static IEnumerable<SquadTemplate> AvailableSquadTemplates(
+            ForceGenerationRequest request) =>
+            request.Faction?.SquadTemplates?.Values ?? Enumerable.Empty<SquadTemplate>();
+
         private static List<Squad> GenerateGenericForce(
             ForceGenerationRequest request,
             IRNG random,
             IEntityIdAllocator entityIds)
         {
             var generatedSquads = new List<Squad>();
-            var usableTemplates = request.Faction.SquadTemplates.Values
+            var usableTemplates = AvailableSquadTemplates(request)
                                              .Where(st => st.BattleValue > 0)
                                              .OrderBy(st => st.Id)
                                              .ToList();
@@ -376,7 +393,7 @@ namespace OnlyWar.Builders
             IEntityIdAllocator entityIds)
         {
             var opposingForces = new List<Squad>();
-            var sortedHqSquads = request.Faction.SquadTemplates.Values
+            var sortedHqSquads = AvailableSquadTemplates(request)
                                 .Where(st => (st.SquadType & SquadTypes.HQ) == SquadTypes.HQ)
                                 .OrderBy(st => st.BattleValue)
                                 .ToList();
@@ -407,7 +424,7 @@ namespace OnlyWar.Builders
             IEntityIdAllocator entityIds)
         {
             var opposingForces = new List<Squad>();
-            var scoutTemplates = request.Faction.SquadTemplates.Values
+            var scoutTemplates = AvailableSquadTemplates(request)
                                         .Where(st => (st.SquadType & SquadTypes.Scout) != 0).ToList();
 
             // NOTE: a faction with no Scout-typed squad templates (currently the Genestealer Cults

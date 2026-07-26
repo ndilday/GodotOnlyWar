@@ -41,9 +41,9 @@ namespace OnlyWar.Helpers.Missions.Assassinate
             Faction assassin = context.MissionSquads.FirstOrDefault()?.Squad.Faction;
             int headcount = context.MissionSquads.Sum(s => s.AbleSoldiers.Count);
             // Getting close to the target unseen is contested by everyone watching the ground, not
-            // just the faction the target belongs to, so this uses the same aggregated model as
-            // ReconStealthMissionStep - and with it the guarded troop log, so a region held by a
-            // zero-Garrison horde faces its deployed strength instead of Log(0) = -infinity, which
+            // just the faction the target belongs to, so this uses the same aggregated search-effort
+            // model as ReconStealthMissionStep - and with it that model's log10(1 + x) shape, so a
+            // region held by a zero-Garrison horde can no longer produce Log(0) = -infinity, which
             // used to hand every assassin an infinite margin and a free approach.
             float difficulty = MissionStealthDifficulty
                 .Calculate(region, headcount, assassin).Total;

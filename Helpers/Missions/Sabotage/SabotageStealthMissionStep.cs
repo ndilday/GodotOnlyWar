@@ -45,8 +45,10 @@ namespace OnlyWar.Helpers.Missions.Sabotage
             Faction saboteur = context.MissionSquads.FirstOrDefault()?.Squad.Faction;
             int headcount = context.MissionSquads.Sum(s => s.AbleSoldiers.Count);
             // Being seen is a property of the region, not of the faction whose installations are the
-            // target: the same aggregated model as ReconStealthMissionStep, so a saboteur working a
-            // region held by a zero-Garrison horde faces its deployed strength rather than nothing.
+            // target: the same aggregated search-effort model as ReconStealthMissionStep, so a
+            // saboteur is priced against what the region's occupants are actually doing to find him
+            // (surveillance and patrols, plus a capped allowance for sheer density) rather than
+            // against a raw Garrison that is permanently zero for a horde.
             float difficulty = MissionStealthDifficulty
                 .Calculate(region, headcount, saboteur).Total;
             SquadMissionTest missionTest = new SquadMissionTest(stealth, difficulty);

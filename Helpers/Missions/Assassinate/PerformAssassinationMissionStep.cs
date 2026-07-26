@@ -26,10 +26,17 @@ namespace OnlyWar.Helpers.Missions.Assassinate
             // it is a check against the target's own protection, and region-wide presence was already
             // priced in by the stealth step that got the force here. It reads deployed strength
             // rather than raw Garrison so a PopulationIsMilitary horde (Tyranids, cults) whose army
-            // is its Population puts a real screen around its HQ, instead of the Log10(0) =
-            // -infinity that made every assassination attempt against one succeed for free.
+            // is its Population puts a real screen around its HQ.
+            //
+            // This is deliberately NOT on MissionStealthDifficulty's search-effort model, and must not
+            // be "unified" with it later. The question here is "how well guarded is this one target",
+            // not "who in this region is looking for me": every body around the HQ is part of the
+            // screen whether it is sweeping the countryside or standing at a door, so the ambient cap
+            // and the patrol/static split would both be wrong. It borrows only Magnitude's log10(1+x)
+            // shape, which keeps an empty holding at 0 instead of the Log10(0) = -infinity that made
+            // every assassination attempt against a horde succeed for free.
             float difficulty = (float)((enemyFaction.Entrenchment + enemyFaction.GetOwnRegionIntel()) * 0.5)
-                + MissionStealthDifficulty.TroopMagnitude(enemyFaction.GetDeployedStrength());
+                + MissionStealthDifficulty.Magnitude(enemyFaction.GetDeployedStrength());
             LeaderMissionTest missionTest = new LeaderMissionTest(tactics, difficulty);
             float margin = missionTest.RunMissionCheck(context.MissionSquads, execution.Random);
             

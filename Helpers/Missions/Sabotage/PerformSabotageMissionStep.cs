@@ -23,10 +23,16 @@ namespace OnlyWar.Helpers.Missions.Sabotage
             // hold the region. Region-wide presence is already priced in by the stealth step that got
             // the force here. It does read deployed strength rather than raw Garrison, so a
             // PopulationIsMilitary horde (Tyranids, cults) whose army is its Population puts a real
-            // guard force on its installations instead of the Log10(0) = -infinity that made every
-            // sabotage attempt against one succeed for free.
+            // guard force on its installations.
+            //
+            // Like PerformAssassinationMissionStep it borrows only Magnitude's log10(1 + x) shape and
+            // is deliberately NOT on MissionStealthDifficulty's search-effort model: the question is
+            // "how well guarded are these works", not "who in this region is looking for me", so the
+            // ambient cap and the patrol/static split would both be wrong here. The shifted form is
+            // what keeps an unguarded installation at 0 instead of the Log10(0) = -infinity that made
+            // every sabotage attempt against one succeed for free.
             float difficulty = (float)(enemyFaction.Entrenchment * 0.5);
-            difficulty += MissionStealthDifficulty.TroopMagnitude(enemyFaction.GetDeployedStrength());
+            difficulty += MissionStealthDifficulty.Magnitude(enemyFaction.GetDeployedStrength());
             LeaderMissionTest missionTest = new LeaderMissionTest(tactics, difficulty);
 
             Order order = context.MissionSquads.First().Squad.CurrentOrders;

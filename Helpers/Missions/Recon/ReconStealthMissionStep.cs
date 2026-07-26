@@ -70,8 +70,9 @@ namespace OnlyWar.Helpers.Missions.Recon
             GameLog.Trace(() =>
                 $"Recon stealth {DescribeFaction(context)} -> {DescribeTarget(context)} day {context.DaysElapsed}: "
                 + $"difficulty={difficulty:F2} (detection={terms.Detection:F2} over "
-                + $"{terms.EnemyCount} enemy faction(s), +ownTroops={terms.OwnTroopMod:F2}, "
-                + $"+troops={terms.TroopMod:F2}, -intel={terms.IntelMod:F2}), "
+                + $"{terms.EnemyCount} enemy faction(s), +patrol={terms.PatrolMod:F2}, "
+                + $"+ambient={terms.AmbientMod:F2}, +ownTroops={terms.OwnTroopMod:F2}, "
+                + $"-intel={terms.IntelMod:F2}), "
                 + $"bestStealthSkill={bestStealth:F2}, margin={margin:F2} -> "
                 + $"{(slippedIn ? "SLIPPED IN" : $"DETECTED by {DescribeSpotter(context.Spotter)}")}");
             if (slippedIn)

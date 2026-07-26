@@ -30,10 +30,11 @@ namespace OnlyWar.Helpers.Missions.Ambush
             Faction attacker = context.MissionSquads.FirstOrDefault()?.Squad.Faction;
             int headcount = context.MissionSquads.Sum(s => s.AbleSoldiers.Count);
             // Setting an ambush without being seen first is contested by everyone watching the
-            // ground, not just the faction being ambushed, so this uses the same aggregated model as
-            // ReconStealthMissionStep - and with it the guarded troop log, so a region held by a
-            // zero-Garrison horde faces its deployed strength instead of Log(0) = -infinity, which
-            // used to guarantee the ambushers got into position no matter how badly they rolled.
+            // ground, not just the faction being ambushed, so this uses the same aggregated
+            // search-effort model as ReconStealthMissionStep - and with it that model's log10(1 + x)
+            // shape, so a region held by a zero-Garrison horde can no longer produce Log(0) =
+            // -infinity, which used to guarantee the ambushers got into position however badly they
+            // rolled. Patrolled ground is now the thing that spoils an ambush setup, not raw mass.
             float difficulty = MissionStealthDifficulty
                 .Calculate(enemyFaction.Region, headcount, attacker).Total;
             SquadMissionTest missionTest = new SquadMissionTest(stealth, difficulty);
