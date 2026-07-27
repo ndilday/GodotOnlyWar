@@ -98,6 +98,57 @@ public class EndTurnPreflightTests
     }
 
     [Fact]
+    public void Evaluate_LeaderlessScoutSquadNamesTheTrainingCost()
+    {
+        TestCampaign campaign = CreateCampaign();
+        Squad orphaned = AddTemplatedSquad(
+            campaign, "Odovocar Squad", campaign.ScoutSquadTemplate, withLeader: false, memberCount: 7);
+
+        EndTurnPreflightReport report = EndTurnPreflight.Evaluate(campaign.Sector, LeaderlessOnly());
+
+        EndTurnAttentionItem item = Assert.Single(report.Items);
+        Assert.Equal(EndTurnWarningCategory.LeaderlessSquads, item.Category);
+        Assert.Equal(orphaned.Id, item.EntityId);
+        Assert.Contains("Odovocar Squad", item.Title);
+        Assert.Contains("7 brothers", item.Detail);
+        Assert.Contains("Test Sergeant", item.Detail);
+        Assert.Contains("half rate", item.Detail, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void Evaluate_LeaderlessLineSquadNamesTheMissionAndCommandCostInstead()
+    {
+        TestCampaign campaign = CreateCampaign();
+        AddTemplatedSquad(campaign, "Wayn Squad", campaign.LedSquadTemplate, withLeader: false);
+
+        EndTurnPreflightReport report = EndTurnPreflight.Evaluate(campaign.Sector, LeaderlessOnly());
+
+        EndTurnAttentionItem item = Assert.Single(report.Items);
+        Assert.Contains("1 brother ", item.Detail);
+        Assert.Contains("mission checks", item.Detail, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("half rate", item.Detail, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void Evaluate_DoesNotReportSquadsThatAreLedEmptyOrLeaderlessByTemplate()
+    {
+        TestCampaign campaign = CreateCampaign();
+        AddTemplatedSquad(campaign, "Led Squad", campaign.LedSquadTemplate, withLeader: true);
+        // A template with no leader element (e.g. a Ravener pack) is not missing anything.
+        AddSquad(campaign, "Leaderless By Design", campaign.Region);
+        // An empty squad kept alive for later staffing has nobody to lead.
+        Squad empty = new("Empty Reserve", campaign.RootUnit, campaign.ScoutSquadTemplate)
+        {
+            CurrentRegion = campaign.Region
+        };
+        campaign.RootUnit.AddSquad(empty);
+
+        EndTurnPreflightReport report = EndTurnPreflight.Evaluate(campaign.Sector, LeaderlessOnly());
+
+        Assert.Empty(report.Items);
+    }
+
+    [Fact]
     public void Evaluate_ReportsOnlyInOrbitPlayerTaskForcesWithShipsAndNoDestination()
     {
         TestCampaign campaign = CreateCampaign();
@@ -244,6 +295,7 @@ public class EndTurnPreflightTests
             repository.Save(new EndTurnWarningPreferences
             {
                 WarnIdleDeployableSquads = false,
+                WarnLeaderlessSquads = false,
                 WarnActionableTaskForces = true,
                 WarnSpecialMissionOpportunities = false
             });
@@ -251,6 +303,7 @@ public class EndTurnPreflightTests
             EndTurnWarningPreferences loaded = repository.Load();
 
             Assert.False(loaded.WarnIdleDeployableSquads);
+            Assert.False(loaded.WarnLeaderlessSquads);
             Assert.True(loaded.WarnActionableTaskForces);
             Assert.False(loaded.WarnSpecialMissionOpportunities);
         }
@@ -271,6 +324,7 @@ public class EndTurnPreflightTests
         EndTurnWarningPreferences loaded = new EndTurnWarningPreferencesRepository(path).Load();
 
         Assert.True(loaded.WarnIdleDeployableSquads);
+        Assert.True(loaded.WarnLeaderlessSquads);
         Assert.True(loaded.WarnActionableTaskForces);
         Assert.True(loaded.WarnSpecialMissionOpportunities);
     }
@@ -285,12 +339,16 @@ public class EndTurnPreflightTests
             TestModelFactory.TestArmor,
             [new SquadTemplateElement(TestModelFactory.MarineTemplate, 0, 10)],
             SquadTypes.None);
+        // Two templates that actually call for a leader, so the leaderless-squad warning has
+        // something to fire on; squadTemplate above deliberately defines no leader slot.
+        SquadTemplate ledSquadTemplate = BuildLedTemplate(102, "Led Squad", SquadTypes.None);
+        SquadTemplate scoutSquadTemplate = BuildLedTemplate(103, "Scout Squad", SquadTypes.Scout);
         UnitTemplate unitTemplate = new(101, "Chapter", true, [squadTemplate], []);
         Faction player = BuildFaction(
             1,
             "Test Chapter",
             isPlayer: true,
-            squadTemplate,
+            [squadTemplate, ledSquadTemplate, scoutSquadTemplate],
             unitTemplate);
         Unit rootUnit = new("Test Chapter", unitTemplate);
         Army army = new("Test Army", null, null, rootUnit, []);
@@ -321,10 +379,64 @@ public class EndTurnPreflightTests
             player,
             rootUnit,
             squadTemplate,
+            ledSquadTemplate,
+            scoutSquadTemplate,
             planet,
             region,
             playerPlanetFaction,
             enemyRegionFaction);
+    }
+
+    private static SquadTemplate BuildLedTemplate(int id, string name, SquadTypes squadTypes)
+    {
+        return new SquadTemplate(
+            id,
+            name,
+            TestModelFactory.DefaultWeapons,
+            [],
+            TestModelFactory.TestArmor,
+            [
+                new SquadTemplateElement(TestModelFactory.SergeantTemplate, 0, 1),
+                new SquadTemplateElement(TestModelFactory.MarineTemplate, 0, 9)
+            ],
+            squadTypes);
+    }
+
+    private static Squad AddTemplatedSquad(
+        TestCampaign campaign,
+        string name,
+        SquadTemplate template,
+        bool withLeader,
+        int memberCount = 1)
+    {
+        Squad squad = new(name, campaign.RootUnit, template)
+        {
+            CurrentRegion = campaign.Region
+        };
+        if (withLeader)
+        {
+            squad.AddSquadMember(TestModelFactory.CreateSoldier(
+                TestModelFactory.SergeantTemplate, $"{name} Sergeant"));
+        }
+        for (int i = 0; i < memberCount; i++)
+        {
+            squad.AddSquadMember(TestModelFactory.CreateSoldier(name: $"{name} Marine {i}"));
+        }
+        campaign.RootUnit.AddSquad(squad);
+        GetOrAddPlayerRegionFaction(campaign, campaign.Region).LandedSquads.Add(squad);
+        return squad;
+    }
+
+    // The leaderless check is orthogonal to the other categories, and a landed squad with no
+    // orders would otherwise also trip the idle-squad warning.
+    private static EndTurnWarningPreferences LeaderlessOnly()
+    {
+        return new EndTurnWarningPreferences
+        {
+            WarnIdleDeployableSquads = false,
+            WarnActionableTaskForces = false,
+            WarnSpecialMissionOpportunities = false
+        };
     }
 
     private static Squad AddSquad(TestCampaign campaign, string name, Region region = null)
@@ -383,12 +495,12 @@ public class EndTurnPreflightTests
         int id,
         string name,
         bool isPlayer,
-        SquadTemplate squadTemplate = null,
+        IEnumerable<SquadTemplate> squadTemplates = null,
         UnitTemplate unitTemplate = null)
     {
-        Dictionary<int, SquadTemplate> squads = squadTemplate == null
+        Dictionary<int, SquadTemplate> squads = squadTemplates == null
             ? []
-            : new Dictionary<int, SquadTemplate> { [squadTemplate.Id] = squadTemplate };
+            : squadTemplates.ToDictionary(template => template.Id);
         Dictionary<int, UnitTemplate> units = unitTemplate == null
             ? []
             : new Dictionary<int, UnitTemplate> { [unitTemplate.Id] = unitTemplate };
@@ -415,6 +527,8 @@ public class EndTurnPreflightTests
         Faction PlayerFaction,
         Unit RootUnit,
         SquadTemplate SquadTemplate,
+        SquadTemplate LedSquadTemplate,
+        SquadTemplate ScoutSquadTemplate,
         Planet Planet,
         Region Region,
         PlanetFaction PlayerPlanetFaction,

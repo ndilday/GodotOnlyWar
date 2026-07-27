@@ -206,6 +206,102 @@ public class BattleAftermathPolicyTests
         Assert.Equal(0.05f, awardedSkill.PointsInvested, 6);
     }
 
+    [Fact]
+    public void PlayerBattleCompletion_RecordsOneDeathEventNamingTheFirstMortalWound()
+    {
+        Faction playerFaction = CreateFaction(70, "Chapter", isPlayer: true);
+        Faction enemyFaction = CreateFaction(71, "Genestealer Cult", isPlayer: false);
+        PlayerSoldier player = CreatePlayerSoldier("Brother Twice-Slain");
+        BattleSquad attackers = CreateBattleSquad(playerFaction, "Strike Squad", player);
+        BattleSquad defenders = CreateBattleSquad(enemyFaction, "Brood", CreateSoldier("Acolyte"));
+        BattleAftermathContext context = new(
+            [attackers], [defenders], CreateRegion("Hive Xi", "Brendine II"),
+            new BattleHistory(), CreateDependencies());
+        IBattleAftermathPolicy policy = BattleAftermathPolicyFactory.Create(context);
+        BattleSoldier killer = defenders.Soldiers[0];
+        BattleSoldier victim = attackers.Soldiers[0];
+        WeaponTemplate firstWeapon = killer.EquippedRangedWeapons[0].Template;
+
+        // Several mortal wounds can land before the wound queue drains, but only one brother died.
+        policy.OnSoldierKilled(CreateRangedWound(killer, victim), WoundLevel.Mortal);
+        policy.OnSoldierKilled(CreateMeleeWound(killer, victim), WoundLevel.Unsurvivable);
+        SeverVitalLocation(player);
+
+        policy.OnBattleCompleted(CreateFinalState(attackers, defenders));
+
+        SoldierEvent death = Assert.Single(
+            player.SoldierEvents, soldierEvent => soldierEvent.Type == SoldierEventType.Death);
+        Assert.Equal(enemyFaction.Id, death.FactionId);
+        Assert.Equal(firstWeapon.Id, death.WeaponTemplateId);
+        Assert.Contains("Killed in battle with the Genestealer Cult", death.Render());
+    }
+
+    [Fact]
+    public void PlayerBattleCompletion_SurvivorOfAMortalWoundIsNotRecordedAsKilled()
+    {
+        RecordingPlayerBattleAftermathSink sink = new();
+        BattleAftermathDependencies dependencies = new(new Date(1, 1, 1), new FixedRNG(), sink);
+        Faction playerFaction = CreateFaction(72, "Chapter", isPlayer: true);
+        Faction enemyFaction = CreateFaction(73, "Genestealer Cult", isPlayer: false);
+        PlayerSoldier player = CreatePlayerSoldier("Brother Wayn");
+        BattleSquad attackers = CreateBattleSquad(playerFaction, "Strike Squad", player);
+        BattleSquad defenders = CreateBattleSquad(enemyFaction, "Brood", CreateSoldier("Acolyte"));
+        BattleAftermathContext context = new(
+            [attackers], [defenders], CreateRegion("Hive Xi", "Brendine II"),
+            new BattleHistory(), dependencies);
+        IBattleAftermathPolicy policy = BattleAftermathPolicyFactory.Create(context);
+
+        // The wound resolver raises its death hook on a crippled vital location; nothing here is
+        // severed, so this brother is gravely wounded but alive and must not be buried.
+        policy.OnSoldierKilled(
+            CreateRangedWound(defenders.Soldiers[0], attackers.Soldiers[0]), WoundLevel.Mortal);
+
+        policy.OnBattleCompleted(CreateFinalState(attackers, defenders));
+
+        Assert.DoesNotContain(
+            player.SoldierEvents, soldierEvent => soldierEvent.Type == SoldierEventType.Death);
+        Assert.Empty(sink.FallenBrothers);
+    }
+
+    [Fact]
+    public void PlayerBattleCompletion_DeathWithNoRecordedMortalWoundStillRecordsTheFall()
+    {
+        Faction playerFaction = CreateFaction(74, "Chapter", isPlayer: true);
+        Faction enemyFaction = CreateFaction(75, "Orks", isPlayer: false);
+        PlayerSoldier player = CreatePlayerSoldier("Brother Unwitnessed");
+        BattleSquad attackers = CreateBattleSquad(playerFaction, "Strike Squad", player);
+        BattleSquad defenders = CreateBattleSquad(enemyFaction, "Warband", CreateSoldier("Boy"));
+        BattleAftermathContext context = new(
+            [attackers], [defenders], CreateRegion("Ash Wastes", "Calth"),
+            new BattleHistory(), CreateDependencies());
+        IBattleAftermathPolicy policy = BattleAftermathPolicyFactory.Create(context);
+
+        // A severing blow to an already-crippled location raises no death hook, so there is no
+        // weapon on record -- the fall must still be written down.
+        SeverVitalLocation(player);
+
+        policy.OnBattleCompleted(CreateFinalState(attackers, defenders));
+
+        SoldierEvent death = Assert.Single(
+            player.SoldierEvents, soldierEvent => soldierEvent.Type == SoldierEventType.Death);
+        Assert.Null(death.WeaponTemplateId);
+        Assert.Equal("Killed in battle with the Orks", death.Render());
+    }
+
+    private static void SeverVitalLocation(PlayerSoldier soldier)
+    {
+        soldier.Body.HitLocations
+            .First(location => location.Template.IsVital && !location.Template.HoldsProgenoid)
+            .Wounds.AddWound(WoundLevel.Massive);
+    }
+
+    private static BattleState CreateFinalState(BattleSquad attackers, BattleSquad defenders)
+    {
+        return new BattleState(
+            new Dictionary<int, BattleSquad> { [attackers.Id] = attackers },
+            new Dictionary<int, BattleSquad> { [defenders.Id] = defenders });
+    }
+
     private static BattleAftermathDependencies CreateDependencies() =>
         new(new Date(1, 1, 1), new FixedRNG(), new RecordingPlayerBattleAftermathSink());
 
@@ -222,10 +318,19 @@ public class BattleAftermathPolicyTests
         return new WoundResolution(inflicter, weapon, sufferer, 10, hitLocation);
     }
 
+    private static WoundResolution CreateMeleeWound(BattleSoldier inflicter, BattleSoldier sufferer)
+    {
+        WeaponTemplate weapon = inflicter.MeleeWeapons[0].Template;
+        HitLocation hitLocation = sufferer.Soldier.Body.HitLocations.First();
+        return new WoundResolution(inflicter, weapon, sufferer, 10, hitLocation);
+    }
+
     private static PlayerSoldier CreatePlayerSoldier(string name)
     {
         Soldier soldier = CreateSoldier(name);
-        return new PlayerSoldier(soldier, name);
+        // Geneseed recovery ages the progenoids off this date, so any test whose soldier dies
+        // needs one; give every brother a default that individual tests can override.
+        return new PlayerSoldier(soldier, name) { ProgenoidImplantDate = new Date(1, 1, 1) };
     }
 
     private static Soldier CreateSoldier(string name)

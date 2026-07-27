@@ -16,6 +16,13 @@ namespace OnlyWar.Helpers.Battles.Aftermath
         private readonly BattleAftermathDependencies _dependencies;
         private readonly Dictionary<int, BattleSoldier> _latestPlayerSoldierSnapshots = new();
         private readonly Dictionary<int, GeneseedRecoveryResult> _geneseedResults = new();
+        // The weapon behind each player soldier's first mortal wound. The wound resolver raises
+        // its death hook when a vital location is *crippled*, but a soldier is only actually
+        // removed when a vital location is *severed* -- a stricter bar he may never reach. Banking
+        // the weapon here and writing the event from RemoveSoldiersKilledInBattle keeps the career
+        // log agreeing with who really died, and holds it to one entry however many mortal wounds
+        // landed before the wound queue drained.
+        private readonly Dictionary<int, WeaponTemplate> _mortalWoundWeapons = new();
         // Dev-facing skill/attribute growth log: snapshot before the fight, diffed once it ends.
         private readonly SoldierProgressLog.ProgressSnapshot _progressBefore;
 
@@ -51,13 +58,9 @@ namespace OnlyWar.Helpers.Battles.Aftermath
 
             if (wound.Suffererer.Soldier is PlayerSoldier playerSoldier)
             {
-                Faction opposingFaction = _context.GetOpposingFaction(wound.Suffererer);
-                playerSoldier.AddEvent(new SoldierEvent(
-                    _dependencies.Date,
-                    SoldierEventType.Death,
-                    $"Killed in battle with the {opposingFaction?.Name ?? "enemy"} by a {wound.Weapon.Name}",
-                    factionId: opposingFaction?.Id,
-                    weaponTemplateId: wound.Weapon.Id));
+                // Keep the blow that first proved mortal; whether it actually killed him is
+                // settled at battle end, and the death event is written there.
+                _mortalWoundWeapons.TryAdd(playerSoldier.Id, wound.Weapon);
                 return;
             }
 
@@ -204,6 +207,7 @@ namespace OnlyWar.Helpers.Battles.Aftermath
                     {
                         PlayerSoldier playerSoldier = (PlayerSoldier)soldier.Soldier;
                         dead.Add(playerSoldier);
+                        RecordDeath(playerSoldier, soldier);
                         RecordGeneseedRecovery(playerSoldier);
                         _dependencies.PlayerSink.MoveToFallenBrothers(playerSoldier);
                         break;
@@ -211,6 +215,28 @@ namespace OnlyWar.Helpers.Battles.Aftermath
                 }
             }
             return dead;
+        }
+
+        // Exactly one death entry per fallen brother, written where death is actually decided.
+        // A brother whose vital wound was mortal but not severing lives on, and must not be
+        // recorded as killed.
+        private void RecordDeath(PlayerSoldier soldier, BattleSoldier battleSoldier)
+        {
+            Faction opposingFaction = _context.GetOpposingFaction(battleSoldier);
+            string enemy = opposingFaction?.Name ?? "enemy";
+            // A vital location can be severed by a wound that never raised the death hook (the
+            // location was already crippled), leaving no weapon to name.
+            WeaponTemplate weapon = _mortalWoundWeapons.GetValueOrDefault(soldier.Id);
+            string detail = weapon == null
+                ? $"Killed in battle with the {enemy}"
+                : $"Killed in battle with the {enemy} by a {weapon.Name}";
+
+            soldier.AddEvent(new SoldierEvent(
+                _dependencies.Date,
+                SoldierEventType.Death,
+                detail,
+                factionId: opposingFaction?.Id,
+                weaponTemplateId: weapon?.Id));
         }
 
         private void RecordGeneseedRecovery(PlayerSoldier soldier)

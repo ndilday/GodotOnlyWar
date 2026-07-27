@@ -31,6 +31,15 @@ namespace OnlyWar.Helpers
             "Power Armor", "Teaching"
         ];
 
+        // Instruction-quality tiers for scout drills. A capable sergeant runs training at
+        // full rate; a sub-par one splits the difference between teaching and letting the
+        // scouts practice; a squad that has lost its sergeant has no instructor at all and
+        // falls back to self-directed drill until a replacement is assigned.
+        private const float GoodTeacherSkillThreshold = 12.0f;
+        private const float SubParInstructorLearningRate = 0.75f;
+        private const float NoInstructorLearningRate = 0.5f;
+        private const float InstructorTeachingXpShare = 0.25f;
+
         public SoldierTrainingCalculator(IEnumerable<BaseSkill> baseSkills,
                                          IEnumerable<TrainingProfile> trainingProfiles = null,
                                          RatingCalculator ratingCalculator = null)
@@ -112,7 +121,6 @@ namespace OnlyWar.Helpers
                 // scout squads on active duty don't have time to train, they'll get battle experience
                 if (squad.CurrentOrders == null || squad.CurrentOrders.Mission.MissionType == MissionType.Training)
                 {
-                    bool goodTeacher = false;
                     TrainingFocuses focuses = squadFocusMap[squad.Id];
                     int numberOfAreas = 0;
                     if ((focuses & TrainingFocuses.Melee) != TrainingFocuses.None) numberOfAreas++;
@@ -125,15 +133,22 @@ namespace OnlyWar.Helpers
                         focuses = TrainingFocuses.Melee | TrainingFocuses.Physical | TrainingFocuses.Ranged | TrainingFocuses.Vehicles;
                     }
                     float baseLearning = points;
-                    squad.SquadLeader.AddSkillPoints(_skillsByName["Teaching"], points * 0.25f);
-                    if (squad.SquadLeader.GetTotalSkillValue(_skillsByName["Teaching"]) >= 12.0f)
+                    ISoldier instructor = squad.SquadLeader;
+                    if (instructor == null)
                     {
-                        goodTeacher = true;
+                        // The sergeant is dead or transferred out and no replacement has been
+                        // assigned. The scouts still drill, but with nobody running the training
+                        // they only get the practice half of it.
+                        baseLearning *= NoInstructorLearningRate;
                     }
-                    if (!goodTeacher)
+                    else
                     {
-                        // with a sub-par teacher, learning is halfway between teaching and practicing
-                        baseLearning *= 0.75f;
+                        instructor.AddSkillPoints(_skillsByName["Teaching"], points * InstructorTeachingXpShare);
+                        if (instructor.GetTotalSkillValue(_skillsByName["Teaching"]) < GoodTeacherSkillThreshold)
+                        {
+                            // with a sub-par teacher, learning is halfway between teaching and practicing
+                            baseLearning *= SubParInstructorLearningRate;
+                        }
                     }
                     foreach (ISoldier soldier in squad.Members)
                     {

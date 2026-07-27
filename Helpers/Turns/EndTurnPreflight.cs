@@ -14,6 +14,7 @@ namespace OnlyWar.Helpers.Turns
     public enum EndTurnWarningCategory
     {
         IdleDeployableSquads,
+        LeaderlessSquads,
         ActionableTaskForces,
         SpecialMissionOpportunities
     }
@@ -87,6 +88,15 @@ namespace OnlyWar.Helpers.Turns
                     .Select(BuildSquadItem));
             }
 
+            if (preferences.WarnLeaderlessSquads)
+            {
+                items.AddRange(playerSquads
+                    .Where(IsLeaderlessSquad)
+                    .OrderBy(squad => squad.ParentUnit?.Name)
+                    .ThenBy(squad => squad.Name)
+                    .Select(BuildLeaderlessSquadItem));
+            }
+
             if (preferences.WarnActionableTaskForces)
             {
                 items.AddRange(sector.Fleets.Values
@@ -123,6 +133,7 @@ namespace OnlyWar.Helpers.Turns
             return category switch
             {
                 EndTurnWarningCategory.IdleDeployableSquads => "Idle deployed squads",
+                EndTurnWarningCategory.LeaderlessSquads => "Squads without a leader",
                 EndTurnWarningCategory.ActionableTaskForces => "Task forces awaiting orders",
                 EndTurnWarningCategory.SpecialMissionOpportunities => "Opportunities at risk",
                 _ => "Unresolved attention"
@@ -134,6 +145,7 @@ namespace OnlyWar.Helpers.Turns
             return category switch
             {
                 EndTurnWarningCategory.IdleDeployableSquads => "Warn about idle deployed squads",
+                EndTurnWarningCategory.LeaderlessSquads => "Warn about squads missing a leader",
                 EndTurnWarningCategory.ActionableTaskForces => "Warn about task forces without destinations",
                 EndTurnWarningCategory.SpecialMissionOpportunities => "Warn about unassigned special missions",
                 _ => "Warn about this category"
@@ -161,6 +173,17 @@ namespace OnlyWar.Helpers.Turns
                 && squad.Members.Any(member => member.CanFight);
         }
 
+        // A squad only counts as leaderless if its template actually calls for a leader.
+        // Some formations are defined without one (e.g. Ravener packs), and an empty squad
+        // that is being kept alive for later staffing is not a problem the player must fix.
+        private static bool IsLeaderlessSquad(Squad squad)
+        {
+            return squad?.Faction?.IsPlayerFaction == true
+                && squad.Members.Count > 0
+                && squad.SquadLeader == null
+                && squad.SquadTemplate.Elements.Any(element => element.SoldierTemplate.IsSquadLeader);
+        }
+
         private static bool IsActionableTaskForceWithoutOrders(Sector sector, TaskForce fleet)
         {
             return fleet != null
@@ -183,6 +206,32 @@ namespace OnlyWar.Helpers.Turns
                 squad.Id,
                 $"{squad.Name}{unit}",
                 $"{combatReady}/{squad.Members.Count} combat-ready in {location}; no orders are assigned.");
+        }
+
+        private static EndTurnAttentionItem BuildLeaderlessSquadItem(Squad squad)
+        {
+            string unit = string.IsNullOrWhiteSpace(squad.ParentUnit?.Name)
+                ? string.Empty
+                : $" - {squad.ParentUnit.Name}";
+            string leaderRole = squad.SquadTemplate.Elements
+                .FirstOrDefault(element => element.SoldierTemplate.IsSquadLeader)
+                ?.SoldierTemplate.Name ?? "squad leader";
+            string location = SquadLocationFormatter.Format(squad);
+
+            // Scout squads take a mechanical penalty every week they go unled, so call that
+            // out specifically; for line squads the cost is felt on mission checks and in battle.
+            string consequence = ChapterUpkeepProcessor.IsScoutSquad(squad)
+                ? "With no instructor, the squad trains at half rate and its scouts fall further "
+                  + "behind every week until a new sergeant is assigned."
+                : "Leadership-based mission checks fall back to an ordinary battle-brother, and "
+                  + "the squad fights without a leader's command presence.";
+
+            return new EndTurnAttentionItem(
+                EndTurnWarningCategory.LeaderlessSquads,
+                squad.Id,
+                $"{squad.Name}{unit}",
+                $"{squad.Members.Count} brother{(squad.Members.Count == 1 ? string.Empty : "s")} "
+                + $"in {location} with no {leaderRole}. {consequence}");
         }
 
         private static EndTurnAttentionItem BuildTaskForceItem(TaskForce fleet)

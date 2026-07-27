@@ -9,6 +9,7 @@ namespace OnlyWar.Helpers.Settings
     public sealed class EndTurnWarningPreferences
     {
         public bool WarnIdleDeployableSquads { get; set; } = true;
+        public bool WarnLeaderlessSquads { get; set; } = true;
         public bool WarnActionableTaskForces { get; set; } = true;
         public bool WarnSpecialMissionOpportunities { get; set; } = true;
 
@@ -17,6 +18,7 @@ namespace OnlyWar.Helpers.Settings
             return category switch
             {
                 EndTurnWarningCategory.IdleDeployableSquads => WarnIdleDeployableSquads,
+                EndTurnWarningCategory.LeaderlessSquads => WarnLeaderlessSquads,
                 EndTurnWarningCategory.ActionableTaskForces => WarnActionableTaskForces,
                 EndTurnWarningCategory.SpecialMissionOpportunities => WarnSpecialMissionOpportunities,
                 _ => true
@@ -29,6 +31,9 @@ namespace OnlyWar.Helpers.Settings
             {
                 case EndTurnWarningCategory.IdleDeployableSquads:
                     WarnIdleDeployableSquads = enabled;
+                    break;
+                case EndTurnWarningCategory.LeaderlessSquads:
+                    WarnLeaderlessSquads = enabled;
                     break;
                 case EndTurnWarningCategory.ActionableTaskForces:
                     WarnActionableTaskForces = enabled;
@@ -46,6 +51,7 @@ namespace OnlyWar.Helpers.Settings
             return new EndTurnWarningPreferences
             {
                 WarnIdleDeployableSquads = WarnIdleDeployableSquads,
+                WarnLeaderlessSquads = WarnLeaderlessSquads,
                 WarnActionableTaskForces = WarnActionableTaskForces,
                 WarnSpecialMissionOpportunities = WarnSpecialMissionOpportunities
             };

@@ -93,4 +93,51 @@ public class SoldierTrainingCalculatorTests
         Assert.True(scout.Skills.Single(s => s.BaseSkill == TestSkills.Melee).PointsInvested > 0);
         Assert.True(scout.Skills.Single(s => s.BaseSkill == TestSkills.Ranged).PointsInvested > 0);
     }
+
+    [Fact]
+    public void TrainScouts_CapableSergeantDrillsAtFullRate()
+    {
+        Assert.Equal(8f, TrainScoutsAndGetMeleePoints(sergeantTeachingPoints: 4, points: 8), precision: 4);
+    }
+
+    [Fact]
+    public void TrainScouts_SubParSergeantDrillsAtThreeQuarterRate()
+    {
+        Assert.Equal(6f, TrainScoutsAndGetMeleePoints(sergeantTeachingPoints: 0, points: 8), precision: 4);
+    }
+
+    // Regression: a scout squad whose sergeant was killed in battle used to throw an NRE here,
+    // which killed the whole turn and left the campaign unable to advance.
+    [Fact]
+    public void TrainScouts_SquadWithNoSergeantDrillsAtHalfRateRatherThanThrowing()
+    {
+        Assert.Equal(4f, TrainScoutsAndGetMeleePoints(sergeantTeachingPoints: null, points: 8), precision: 4);
+    }
+
+    // Melee is the only focus, so the points the scout banks equal the squad's learning rate
+    // directly. A null sergeantTeachingPoints means the squad has no sergeant at all.
+    private static float TrainScoutsAndGetMeleePoints(float? sergeantTeachingPoints, float points)
+    {
+        BaseSkill teaching = new(6, SkillCategory.Professional, "Teaching", Attribute.Intelligence, 0);
+        TrainingProfile meleeFocus = new(
+            1, "scout_focus_melee", [new TrainingProfileEntry(TestSkills.Melee, 1)]);
+        Soldier scout = TestModelFactory.CreateSoldier(name: "Scout");
+        Squad squad = sergeantTeachingPoints.HasValue
+            ? TestModelFactory.CreateSquad(
+                "Scout Squad",
+                TestModelFactory.CreateSoldier(
+                    TestModelFactory.SergeantTemplate,
+                    "Sergeant",
+                    skills: new Skill(teaching, sergeantTeachingPoints.Value)),
+                scout)
+            : TestModelFactory.CreateSquad("Scout Squad", scout);
+        SoldierTrainingCalculator calculator = new([TestSkills.Melee, teaching], [meleeFocus]);
+
+        calculator.TrainScouts(
+            [squad],
+            new Dictionary<int, TrainingFocuses> { [squad.Id] = TrainingFocuses.Melee },
+            points);
+
+        return scout.Skills.Single(s => s.BaseSkill == TestSkills.Melee).PointsInvested;
+    }
 }
