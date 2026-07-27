@@ -13,7 +13,7 @@ namespace OnlyWar.Builders
     {
         private PlanetBuilder() 
         {
-            _usedPlanetNameIndexes = [];
+            _shuffledNameIndexes = [];
         }
         private static PlanetBuilder _instance;
         public static PlanetBuilder Instance
@@ -25,21 +25,53 @@ namespace OnlyWar.Builders
             }
         }
 
-        private static HashSet<int> _usedPlanetNameIndexes;
+        // Planet names are drawn without replacement. The pool is shuffled once per
+        // sector and consumed from the tail: O(1) per planet, and it cannot stall the
+        // way rejection sampling does as the pool drains.
+        private static List<int> _shuffledNameIndexes;
 
         private static int _nextPlanetId = 0;
         private static int _nextLeaderId = 0;
 
-        // Clears the per-sector generation state. Planet names are drawn without
-        // replacement from a finite list and the id counters accumulate, so this must
-        // be called at the start of each sector generation. Without it, generating more
-        // than one sector in a single process eventually exhausts the name pool and the
-        // name-selection loop in GenerateNewPlanet spins forever.
+        // Resets the per-sector generation state: reshuffles the planet-name pool and
+        // zeroes the id counters, both of which otherwise accumulate across sectors.
+        // Must be called at the start of each sector generation, and after RNG.Reset so
+        // the shuffle is deterministic for a given seed.
         public void Reset()
         {
-            _usedPlanetNameIndexes.Clear();
+            RefillNameIndexPool();
             _nextPlanetId = 0;
             _nextLeaderId = 0;
+        }
+
+        // Rebuilds the name pool in a fresh random order (Fisher-Yates).
+        private static void RefillNameIndexPool()
+        {
+            _shuffledNameIndexes.Clear();
+            for (int i = 0; i < TempPlanetList.PlanetNames.Length; i++)
+            {
+                _shuffledNameIndexes.Add(i);
+            }
+            for (int i = _shuffledNameIndexes.Count - 1; i > 0; i--)
+            {
+                int j = RNG.GetIntBelowMax(0, i + 1);
+                (_shuffledNameIndexes[i], _shuffledNameIndexes[j]) =
+                    (_shuffledNameIndexes[j], _shuffledNameIndexes[i]);
+            }
+        }
+
+        // Pops the next name index off the shuffled pool. If a sector ever needs more
+        // planets than there are names, the pool is reshuffled and names start repeating,
+        // which is strictly better than failing to place the planet.
+        private static int TakeNextNameIndex()
+        {
+            if (_shuffledNameIndexes.Count == 0)
+            {
+                RefillNameIndexPool();
+            }
+            int nameIndex = _shuffledNameIndexes[^1];
+            _shuffledNameIndexes.RemoveAt(_shuffledNameIndexes.Count - 1);
+            return nameIndex;
         }
 
         public Planet GenerateNewPlanet(IReadOnlyDictionary<int, PlanetTemplate> planetTemplateMap, 
@@ -47,12 +79,7 @@ namespace OnlyWar.Builders
         {
             PlanetTemplate template = DeterminePlanetTemplate(planetTemplateMap);
             Faction leaderFaction = controllingFaction;
-            int nameIndex = RNG.GetIntBelowMax(0, TempPlanetList.PlanetNames.Length);
-            while (_usedPlanetNameIndexes.Contains(nameIndex))
-            {
-                nameIndex = RNG.GetIntBelowMax(0, TempPlanetList.PlanetNames.Length);
-            }
-            _usedPlanetNameIndexes.Add(nameIndex);
+            int nameIndex = TakeNextNameIndex();
             int importance = (int)(template.ImportanceRange.BaseValue)
                 + (int)(RNG.NextRandomZValue() * template.ImportanceRange.StandardDeviation);
             int taxLevel =
