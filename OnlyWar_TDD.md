@@ -911,6 +911,8 @@ Sector generation left a region with a `RegionFaction` whose faction had no corr
 
 **Resolution:** Added `PlanetBuilder.Reset()` (clears the name set and resets the id counters) and call it at the start of `SectorBuilder.GenerateSector`, alongside the existing `RNG.Reset(seed)`.
 
+**Follow-up — name draw replaced:** `Reset()` fixed accumulation *across* sectors but left the rejection-sampling draw in place, so a *single* sector needing more planets than there are names still spun forever. That became a live constraint when the ~1080-entry canon-derived name list was replaced with 1000 authored names, against a production sector of ~800 planets (200×200 grid at `PlanetChance` 0.02). The retry loop is now gone: `Reset()` builds and Fisher-Yates shuffles `_shuffledNameIndexes`, and `GenerateNewPlanet` pops from its tail in O(1) via `TakeNextNameIndex()`. Should a sector ever exhaust the pool, it reshuffles and names begin repeating rather than stalling. The shuffle runs after `RNG.Reset(seed)`, so generation remains deterministic for a given seed — but draw order changed, so a seed produces a different sector than it did before this change. Saved campaigns are unaffected: planet names are persisted through `PlanetDataAccess` and generation only runs on new game.
+
 ### 8.12 End-of-Turn Resolution Bugs — RESOLVED
 
 **Location:** `Helpers/Turns/PlanetTurnProcessor.cs` (`UpdatePlanet`, `UpdateIntelligence`)

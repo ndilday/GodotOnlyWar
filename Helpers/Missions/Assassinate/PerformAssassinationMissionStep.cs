@@ -1,4 +1,5 @@
 using OnlyWar.Helpers.Extensions;
+using OnlyWar.Helpers.Fortifications;
 using OnlyWar.Models.Missions;
 using OnlyWar.Models.Planets;
 using OnlyWar.Models.Soldiers;
@@ -35,7 +36,11 @@ namespace OnlyWar.Helpers.Missions.Assassinate
             // and the patrol/static split would both be wrong. It borrows only Magnitude's log10(1+x)
             // shape, which keeps an empty holding at 0 instead of the Log10(0) = -infinity that made
             // every assassination attempt against a horde succeed for free.
-            float difficulty = (float)((enemyFaction.Entrenchment + enemyFaction.GetOwnRegionIntel()) * 0.5)
+            // Entrenchment is the side's shared position (RegionDefenses): allies holding a region
+            // between them fortify one set of works, and the target shelters behind all of it.
+            float difficulty = (float)((
+                    RegionDefenses.GetShared(enemyFaction, DefenseType.Entrenchment)
+                    + enemyFaction.GetOwnRegionIntel()) * 0.5)
                 + MissionStealthDifficulty.Magnitude(enemyFaction.GetDeployedStrength());
             LeaderMissionTest missionTest = new LeaderMissionTest(tactics, difficulty);
             float margin = missionTest.RunMissionCheck(context.MissionSquads, execution.Random);

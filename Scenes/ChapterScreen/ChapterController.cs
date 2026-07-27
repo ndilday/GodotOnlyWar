@@ -93,6 +93,15 @@ public partial class ChapterController : Control
         RenderCurrentPath();
     }
 
+    public void DisplaySoldier(int soldierId)
+    {
+        ISoldier soldier = GetSoldier(soldierId);
+        Squad squad = soldier.AssignedSquad;
+        _activeFilter = [];
+        _navigator.OpenSoldier(FindCompanyId(squad), squad.Id, soldier.Id);
+        RenderCurrentPath();
+    }
+
     private void OnCloseButtonPressed(object sender, EventArgs e)
     {
         CloseButtonPressed?.Invoke(this, e);
@@ -593,10 +602,7 @@ public partial class ChapterController : Control
     {
         Squad newSquad = soldier.AssignedSquad;
         _activeFilter = [];
-        _navigator.Path.CompanyId = FindCompanyId(newSquad);
-        _navigator.Path.SquadId = newSquad?.Id;
-        _navigator.Path.SoldierId = soldier.Id;
-        _navigator.Select(new ChapterBrowserItemEvent(ChapterBrowserLevel.Soldier, soldier.Id));
+        _navigator.OpenSoldier(FindCompanyId(newSquad), newSquad.Id, soldier.Id);
     }
 
     // The breadcrumb path models companies as direct children of the chapter, so map a squad back

@@ -193,6 +193,6 @@ namespace OnlyWar.Helpers.Turns
             * (1f - (float)Math.Exp(-Math.Max(0f, evidence) / ReconEvidenceSoftCap));
 
         private static bool SharesPlayerVisibleIntel(PlanetFaction planetFaction) =>
-            planetFaction?.Faction.IsPlayerFaction == true || planetFaction?.Faction.IsDefaultFaction == true;
+            FactionDispositionService.IsImperial(planetFaction?.Faction);
     }
 }

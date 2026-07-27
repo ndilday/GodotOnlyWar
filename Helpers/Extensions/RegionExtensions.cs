@@ -18,8 +18,7 @@ namespace OnlyWar.Helpers.Extensions
         public static List<RegionFaction> GetDetectingEnemyFactions(this Region region)
         {
             return region.RegionFactionMap.Values
-                .Where(rf => !rf.PlanetFaction.Faction.IsPlayerFaction
-                             && !rf.PlanetFaction.Faction.IsDefaultFaction
+                .Where(rf => !FactionDispositionService.IsImperial(rf.PlanetFaction.Faction)
                              && (rf.MilitaryStrength > 0 || rf.GetOwnRegionIntel() > 0))
                 .ToList();
         }
@@ -105,8 +104,7 @@ namespace OnlyWar.Helpers.Extensions
         public static RegionFaction GetVisibleEnemyRegionFaction(this Region region)
         {
             List<RegionFaction> enemies = region.RegionFactionMap.Values
-                .Where(rf => !rf.PlanetFaction.Faction.IsPlayerFaction
-                             && !rf.PlanetFaction.Faction.IsDefaultFaction)
+                .Where(rf => !FactionDispositionService.IsImperial(rf.PlanetFaction.Faction))
                 .ToList();
             return enemies.FirstOrDefault(rf => rf.IsPublic) ?? enemies.FirstOrDefault();
         }
@@ -121,8 +119,7 @@ namespace OnlyWar.Helpers.Extensions
         {
             return region.RegionFactionMap.Values
                 .Where(rf => rf.IsPublic
-                             && (rf.PlanetFaction.Faction.IsDefaultFaction
-                                 || rf.PlanetFaction.Faction.IsPlayerFaction))
+                             && FactionDispositionService.IsImperial(rf.PlanetFaction.Faction))
                 .Sum(rf => rf.Population);
         }
 

@@ -29,9 +29,7 @@ public partial class MainGameScene : Control
 	private FleetMergeDialogController _fleetMergeDialog;
 	private PopupMenu _fleetContextMenu;
 	private int _contextFleetId;
-	private SoldierController _soldierScreen;
 	private SquadScreenController _squadScreen;
-	private SoldierView _soldierView;
 	private PlanetTacticalScreenController _planetTacticalScreen;
 	private RegionScreenController _regionScreen;
 	private Stack<Control> _previousScreenStack;
@@ -205,7 +203,7 @@ public partial class MainGameScene : Control
 	// sector map underneath the still-visible surface.
 	private void PushVisibleOverlaySurface()
 	{
-		foreach (Control surface in new Control[] { _squadScreen, _soldierScreen, _regionScreen, _planetTacticalScreen })
+		foreach (Control surface in new Control[] { _squadScreen, _regionScreen, _planetTacticalScreen })
 		{
 			if (surface?.Visible == true)
 			{
@@ -218,17 +216,25 @@ public partial class MainGameScene : Control
 	private void OnChapterButtonPressed(object sender, EventArgs e)
 	{
 		PushVisibleOverlaySurface();
-		if(_chapterScreen == null)
-		{
-			PackedScene chapterScene = GD.Load<PackedScene>("res://Scenes/ChapterScreen/chapter_screen.tscn");
-			_chapterScreen = (ChapterController)chapterScene.Instantiate();
-			_chapterScreen.CloseButtonPressed += OnCloseScreen;
-			_chapterScreen.CampaignChanged += OnCampaignChanged;
-			_mainUILayer.AddChild(_chapterScreen);
-		}
+		EnsureChapterScreen();
+		_chapterScreen.PopulateCompanyList();
 		_chapterScreen.Visible = true;
 		_topMenu.SetScreenText("Chapter Overview");
 		SetMainScreenVisibility(false, keepTopMenuVisible: true);
+	}
+
+	private void EnsureChapterScreen()
+	{
+		if (_chapterScreen != null)
+		{
+			return;
+		}
+
+		PackedScene chapterScene = GD.Load<PackedScene>("res://Scenes/ChapterScreen/chapter_screen.tscn");
+		_chapterScreen = (ChapterController)chapterScene.Instantiate();
+		_chapterScreen.CloseButtonPressed += OnCloseScreen;
+		_chapterScreen.CampaignChanged += OnCampaignChanged;
+		_mainUILayer.AddChild(_chapterScreen);
 	}
 
 	private void OnCloseScreen(object sender, EventArgs e)
@@ -241,6 +247,11 @@ public partial class MainGameScene : Control
 			{
 				_topMenu.SetScreenText("Chapter Overview");
 				_topMenu.Visible = true;
+			}
+			else if (control == _trainingUnitScreen)
+			{
+				_topMenu.Visible = false;
+				_bottomMenu.Visible = false;
 			}
 			else if (control == _planetTacticalScreen)
 			{
@@ -600,7 +611,10 @@ public partial class MainGameScene : Control
 		_endOfTurnDialog.AddData(
 			turnResult.MissionContexts,
 			turnResult.SpecialMissions,
-			turnResult.StrategicCombatResults);
+			turnResult.StrategicCombatResults,
+			turnResult.ConstructionReports,
+			turnResult.FortificationTransfers,
+			turnResult.GovernorRequestReports);
 		_endOfTurnDialog.Visible = true;
 
 		// Surface the opening-scenario resolution (win/lapse) if it fired this turn
@@ -629,32 +643,14 @@ public partial class MainGameScene : Control
 
 	private void OnSoldierSelectedForDisplay(object sender, int soldierId)
 	{
-		if(_soldierScreen == null)
-		{
-			PackedScene soldierScene = GD.Load<PackedScene>("res://Scenes/SoldierScreen/soldier_screen.tscn");
-			_soldierScreen = (SoldierController)soldierScene.Instantiate();
-			_mainUILayer.AddChild(_soldierScreen);
-			_soldierScreen.SoldierTransferred += OnSoldierTransferred;
-			_soldierView = _soldierScreen.GetNode<SoldierView>("SoldierView");
-			_soldierView.CloseButtonPressed += OnSoldierViewCloseButtonPressed;
-		}
-		PlayerSoldier soldier = (PlayerSoldier)GameDataSingleton.Instance.Sector.PlayerForce.Army.OrderOfBattle.GetAllMembers().First(s => s.Id == soldierId);
-		_soldierScreen.DisplaySoldierData(soldier);
-		_soldierScreen.Visible = true;
+		EnsureChapterScreen();
+		_chapterScreen.DisplaySoldier(soldierId);
+		_chapterScreen.Visible = true;
+		_topMenu.SetScreenText("Chapter Overview");
+		SetMainScreenVisibility(false, keepTopMenuVisible: true);
 		Control control = (Control)sender;
 		_previousScreenStack.Push(control);
 		control.Visible = false;
-	}
-
-	private void OnSoldierViewCloseButtonPressed(object sender, EventArgs e)
-	{
-		OnCloseScreen(_soldierScreen, e);
-	}
-
-	private void OnSoldierTransferred(object sender, EventArgs e)
-	{
-		MarkCampaignChanged();
-		_chapterScreen?.PopulateCompanyList();
 	}
 
 	private void OnRegionDoubleClicked(object sender, Region region)

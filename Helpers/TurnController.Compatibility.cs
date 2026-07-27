@@ -5,6 +5,7 @@ using OnlyWar.Models;
 using OnlyWar.Models.Missions;
 using OnlyWar.Models.Orders;
 using OnlyWar.Models.Planets;
+using OnlyWar.Models.Supply;
 using System;
 using System.Collections.Generic;
 
@@ -20,6 +21,9 @@ namespace OnlyWar.Helpers
         public List<MissionContext> MissionContexts => _lastResult.MissionContexts;
         public List<Mission> SpecialMissions => _lastResult.SpecialMissions;
         public List<StrategicCombatResult> StrategicCombatResults => _lastResult.StrategicCombatResults;
+        public List<ConstructionProgressReport> ConstructionReports => _lastResult.ConstructionReports;
+        public List<FortificationTransferReport> FortificationTransfers => _lastResult.FortificationTransfers;
+        public List<GovernorRequestReport> GovernorRequestReports => _lastResult.GovernorRequestReports;
         public string ScenarioNotification => _lastResult.ScenarioNotification;
 
         public void ProcessScenario(Sector sector)

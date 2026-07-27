@@ -1,5 +1,6 @@
 ﻿using System.Collections.Generic;
 using Godot;
+using OnlyWar.Models.Missions;
 using OnlyWar.Models.Squads;
 
 using System;
@@ -143,6 +144,38 @@ namespace OnlyWar.Models.Planets
             else if (PlanetFaction.Faction.PopulationIsMilitary) Population += battleValue;
             else Garrison += battleValue;
         }
+
+        // Indexed access to the three buildable defense stats, so construction, sabotage, decay and
+        // the revolt/insurgency splits stop each carrying their own copy of the same three-way
+        // switch. Organization is deliberately absent: it is an integer percentage with its own
+        // clamp, not a structure on the ground, and nothing that reads a DefenseType level wants it.
+        public double GetDefense(DefenseType defenseType) => defenseType switch
+        {
+            DefenseType.Entrenchment => Entrenchment,
+            DefenseType.ListeningPost => ListeningPost,
+            DefenseType.AntiAir => AntiAir,
+            _ => 0.0
+        };
+
+        public void SetDefense(DefenseType defenseType, double value)
+        {
+            value = Math.Max(0.0, value);
+            switch (defenseType)
+            {
+                case DefenseType.Entrenchment:
+                    Entrenchment = value;
+                    break;
+                case DefenseType.ListeningPost:
+                    ListeningPost = value;
+                    break;
+                case DefenseType.AntiAir:
+                    AntiAir = value;
+                    break;
+            }
+        }
+
+        public void AddDefense(DefenseType defenseType, double delta) =>
+            SetDefense(defenseType, GetDefense(defenseType) + delta);
 
         // A faction beaten into hiding abandons its defensive works to the occupier: half of each
         // structure is wrecked in the collapse or captured. The remainder then rots away each turn

@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using OnlyWar.Helpers;
 using OnlyWar.Helpers.Extensions;
+using OnlyWar.Helpers.Fortifications;
 using OnlyWar.Helpers.Turns;
 using OnlyWar.Models;
 using OnlyWar.Models.Missions;
@@ -55,7 +56,8 @@ namespace OnlyWar.Helpers.StrategicCombat
 
             double attackerLossRate = intensity * Math.Pow(defenderPressure, 0.65);
             double defenderLossRate = intensity * Math.Pow(attackerPressure, 0.65)
-                * StrategicCombatRules.DefenderProtection(target.Entrenchment);
+                * StrategicCombatRules.DefenderProtection(
+                    RegionDefenses.GetShared(target, DefenseType.Entrenchment));
 
             attackerLossRate = Math.Clamp(attackerLossRate, 0.01, 0.60);
             defenderLossRate = Math.Clamp(defenderLossRate, 0.01, 0.75);
@@ -215,7 +217,10 @@ namespace OnlyWar.Helpers.StrategicCombat
             return defenderBattleValue
                 * StrategicCombatRules.DefenderReadiness(defender.Organization)
                 * StrategicCombatRules.FactionQuality(defender.PlanetFaction.Faction)
-                * StrategicCombatRules.EntrenchmentMultiplier(defender.Entrenchment);
+                // The defender fights from the whole position its side holds here, not just the
+                // stretch of trench its own faction dug (RegionDefenses).
+                * StrategicCombatRules.EntrenchmentMultiplier(
+                    RegionDefenses.GetShared(defender, DefenseType.Entrenchment));
         }
 
         private static long ClampLoss(long calculatedLoss, long availableStrength, double opposingEffectiveStrength)
@@ -266,10 +271,15 @@ namespace OnlyWar.Helpers.StrategicCombat
             if (defender.MilitaryStrength > 0) return;
             if (defender.Population <= 0) return;
             defender.IsPublic = false;
-            // The conquest wrecks or captures half of the beaten defender's works; what stands
-            // then decays each turn it sits unmanned under the occupier
-            // (TurnController.DecayUnmannedDefenses).
-            defender.HalveDefensesOnGoingToGround();
+            // An ally still standing in the region takes the works over intact — the trenches did
+            // not stop existing because the faction that dug them was broken, and the merge is
+            // level-preserving for the side (RegionDefenses.TransferToAlly). Only when nobody is
+            // left to man them does the conquest wreck or capture half, with the remainder rotting
+            // each turn it sits unmanned under the occupier (PlanetTurnProcessor.DecayUnmannedDefenses).
+            if (RegionDefenses.TransferToAlly(defender) == null)
+            {
+                defender.HalveDefensesOnGoingToGround();
+            }
         }
     }
 }

@@ -137,7 +137,12 @@ public class SectorEntityLogicTests
     }
 
     [Fact]
-    public void ProcessTurn_PlayerAndDefaultSharingPoolsOnlyThisTurnIntelGains()
+    // Listening posts are structures, so allied installations combine on the same logarithmic
+    // curve as every other kind of works (RegionDefenses/FortificationMath) and each ally reads
+    // the resulting shared coverage. They deliberately do NOT go through TurnIntelLedger's
+    // additive pooling, which would count one shared sensor net once per ally - that pooling is
+    // for activities like recon and patrols, and is covered by TurnIntelLedgerTests.
+    public void ProcessTurn_AlliedListeningPostsCombineIntoOneSharedSensorNet()
     {
         RNG.Reset(1);
         SectorSimulationFixture fixture = SectorSimulationFixture.Create();
@@ -159,8 +164,11 @@ public class SectorEntityLogicTests
 
         fixture.ProcessTurn();
 
-        Assert.Equal(2.5f, playerPlanetFaction.GetRegionIntel(region), precision: 4);
-        Assert.Equal(3.25f, fixture.DefaultPlanetFaction.GetRegionIntel(region), precision: 4);
+        // Chapter LP 3 (111 points) and PDF LP 2 (11 points) pool to 122 points = level 3.041,
+        // worth 0.6082 intel to each ally. Prior intel decays at 0.75 first, and only this turn's
+        // gain is shared - accumulated belief stays each faction's own.
+        Assert.Equal(2.1082f, playerPlanetFaction.GetRegionIntel(region), precision: 4);
+        Assert.Equal(2.8582f, fixture.DefaultPlanetFaction.GetRegionIntel(region), precision: 4);
     }
 
     [Fact]

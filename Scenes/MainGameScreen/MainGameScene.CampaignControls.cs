@@ -205,11 +205,6 @@ public partial class MainGameScene
             }
         }
 
-        if (_soldierScreen?.Visible == true)
-        {
-            OnSoldierViewCloseButtonPressed(_soldierScreen, EventArgs.Empty);
-            return true;
-        }
         if (_trainingUnitScreen?.Visible == true)
         {
             OnCloseScreen(_trainingUnitScreen, EventArgs.Empty);

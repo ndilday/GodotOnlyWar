@@ -1,11 +1,13 @@
 using OnlyWar.Builders;
 using OnlyWar.Helpers.Extensions;
+using OnlyWar.Helpers.Fortifications;
 using OnlyWar.Helpers.Missions;
 using OnlyWar.Helpers.Simulation;
 using OnlyWar.Models;
 using OnlyWar.Models.Missions;
 using OnlyWar.Models.Planets;
 using OnlyWar.Models.Squads;
+using OnlyWar.Models.Supply;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -47,16 +49,20 @@ namespace OnlyWar.Helpers.Turns
         private readonly TurnIntelLedger _intelLedger;
         private readonly GovernorTurnProcessor _governorTurnProcessor;
         private readonly CivilUnrestTurnProcessor _civilUnrestTurnProcessor;
+        private readonly ICollection<FortificationTransferReport> _fortificationTransfers;
 
         internal PlanetTurnProcessor(
             GameSession session,
             List<Mission> specialMissions,
-            TurnIntelLedger intelLedger = null)
+            TurnIntelLedger intelLedger = null,
+            ICollection<FortificationTransferReport> fortificationTransfers = null,
+            ICollection<GovernorRequestReport> governorRequestReports = null)
         {
             _session = session ?? throw new ArgumentNullException(nameof(session));
             _specialMissions = specialMissions ?? throw new ArgumentNullException(nameof(specialMissions));
+            _fortificationTransfers = fortificationTransfers;
             _intelLedger = intelLedger ?? new TurnIntelLedger();
-            _governorTurnProcessor = new GovernorTurnProcessor(_session);
+            _governorTurnProcessor = new GovernorTurnProcessor(_session, governorRequestReports);
             _civilUnrestTurnProcessor = new CivilUnrestTurnProcessor(_session);
         }
 
@@ -106,6 +112,11 @@ namespace OnlyWar.Helpers.Turns
 
                 ResolveBiomassConsumption(region);
                 RecoverCarryingCapacity(region);
+                // Before anything is decayed or swept away: a faction that has left the region but
+                // whose works still stand hands them to an ally still holding the ground. This is
+                // what stops a squad marching out of a region it fortified from stranding those
+                // works on a presence-less RegionFaction that nothing can then use or clear.
+                TransferAbandonedWorksToAllies(region);
                 DecayUnmannedDefenses(region);
                 RemoveEmptyRegionFactions(region);
             }
@@ -256,8 +267,7 @@ namespace OnlyWar.Helpers.Turns
             return regionFaction.Region.RegionFactionMap.Values.Any(other =>
                 other != regionFaction
                 && other.IsPublic
-                && !other.PlanetFaction.Faction.IsPlayerFaction
-                && !other.PlanetFaction.Faction.IsDefaultFaction);
+                && !FactionDispositionService.IsImperial(other.PlanetFaction.Faction));
         }
 
         private float ConvertPopulation(Region region, RegionFaction regionFaction, float newPop)
@@ -480,7 +490,7 @@ namespace OnlyWar.Helpers.Turns
         {
             return region.GetSelfAndAdjacentRegions().Any(r => r.RegionFactionMap.Values.Any(rf =>
                 rf.IsPublic
-                && (rf.PlanetFaction.Faction.IsDefaultFaction || rf.PlanetFaction.Faction.IsPlayerFaction)
+                && FactionDispositionService.IsImperial(rf.PlanetFaction.Faction)
                 && (rf.Garrison > 0 || rf.LandedSquads.Count > 0)));
         }
 
@@ -533,7 +543,14 @@ namespace OnlyWar.Helpers.Turns
                 if (defaultFaction.Garrison <= 0 && publicEnemy)
                 {
                     defaultFaction.IsPublic = false;
-                    defaultFaction.HalveDefensesOnGoingToGround();
+                    // If the Chapter (or another ally) still stands in the region, the works pass
+                    // to it intact rather than being abandoned - a garrison dying under a bastion
+                    // its allies still man does not level the bastion. Only when nobody is left to
+                    // hold them do the works fall to the occupier (RegionDefenses.TransferToAlly).
+                    if (RegionDefenses.TransferToAlly(defaultFaction) == null)
+                    {
+                        defaultFaction.HalveDefensesOnGoingToGround();
+                    }
                 }
             }
             else if (!publicEnemy || LoyalStrengthOutweighsEnemy(region))
@@ -549,7 +566,7 @@ namespace OnlyWar.Helpers.Turns
             foreach (RegionFaction rf in region.RegionFactionMap.Values)
             {
                 Faction faction = rf.PlanetFaction.Faction;
-                if (faction.IsDefaultFaction || faction.IsPlayerFaction)
+                if (FactionDispositionService.IsImperial(faction))
                 {
                     loyal += rf.MilitaryStrength;
                     loyal += SquadBattleValue(rf.LandedSquads);
@@ -574,13 +591,12 @@ namespace OnlyWar.Helpers.Turns
                     continue;
                 }
 
-                bool hiddenIsImperial = regionFaction.PlanetFaction.Faction.IsPlayerFaction
-                    || regionFaction.PlanetFaction.Faction.IsDefaultFaction;
                 bool occupierPresent = region.RegionFactionMap.Values.Any(other =>
                     other.IsPublic
                     && other.MilitaryStrength > 0
-                    && (other.PlanetFaction.Faction.IsPlayerFaction
-                        || other.PlanetFaction.Faction.IsDefaultFaction) != hiddenIsImperial);
+                    && !FactionDispositionService.AreAllied(
+                        other.PlanetFaction.Faction,
+                        regionFaction.PlanetFaction.Faction));
                 if (!occupierPresent) continue;
 
                 regionFaction.Entrenchment = Math.Max(0.0, regionFaction.Entrenchment - OccupiedDefenseDecayPerTurn);
@@ -590,6 +606,40 @@ namespace OnlyWar.Helpers.Turns
                     $"Occupation decay {DescribeRegionFaction(regionFaction)}: "
                     + $"ent={regionFaction.Entrenchment:F2}, lp={regionFaction.ListeningPost:F2}, "
                     + $"aa={regionFaction.AntiAir:F2}");
+            }
+        }
+
+        /// <summary>
+        /// Hands over the works of any faction that still holds fortifications in this region but
+        /// no longer has anyone there to man them.
+        /// </summary>
+        /// <remarks>
+        /// Without this, works outlive their builder's presence indefinitely: CanRemoveRegionFaction
+        /// refuses to clear a RegionFaction while its defenses are above zero, so a squad leaving a
+        /// region it fortified used to strand those works on a presence-less faction where neither
+        /// side could use them and nothing would ever tidy them away. Transferring in point space
+        /// leaves the side's shared position untouched (RegionDefenses.TransferToAlly), so this is
+        /// a change of custody rather than a change of strength.
+        /// </remarks>
+        private void TransferAbandonedWorksToAllies(Region region)
+        {
+            foreach (RegionFaction regionFaction in region.RegionFactionMap.Values.ToList())
+            {
+                if (regionFaction.MilitaryStrength > 0) continue;
+                if (regionFaction.LandedSquads.Count > 0) continue;
+                if (!RegionDefenses.HasAnyWorks(regionFaction)) continue;
+
+                RegionFaction inheritor = RegionDefenses.TransferToAlly(regionFaction);
+                if (inheritor == null) continue;
+
+                _fortificationTransfers?.Add(new FortificationTransferReport(
+                    region,
+                    regionFaction.PlanetFaction.Faction,
+                    inheritor.PlanetFaction.Faction,
+                    RegionDefenses.GetShared(inheritor, DefenseType.Entrenchment)));
+                GameLog.Debug(() =>
+                    $"Fortifications transferred {regionFaction.PlanetFaction.Faction.Name} -> "
+                    + $"{inheritor.PlanetFaction.Faction.Name} in {region.Planet.Name}/{region.Name}");
             }
         }
 
@@ -618,8 +668,7 @@ namespace OnlyWar.Helpers.Turns
         {
             return region.RegionFactionMap.Values.Any(rf =>
                 rf.IsPublic
-                && !rf.PlanetFaction.Faction.IsPlayerFaction
-                && !rf.PlanetFaction.Faction.IsDefaultFaction
+                && !FactionDispositionService.IsImperial(rf.PlanetFaction.Faction)
                 && (rf.Population > 0 || rf.Garrison > 0));
         }
 
@@ -719,17 +768,25 @@ namespace OnlyWar.Helpers.Turns
 
         private void TransferRevoltDefenses(RegionFaction loyalist, RegionFaction revolting)
         {
-            double share = DrawRevoltDefenseShare(loyalist.ListeningPost);
-            loyalist.ListeningPost -= share;
-            revolting.ListeningPost += share;
-            share = DrawRevoltDefenseShare(loyalist.AntiAir);
-            loyalist.AntiAir -= share;
-            revolting.AntiAir += share;
-            share = DrawRevoltDefenseShare(loyalist.Entrenchment);
-            loyalist.Entrenchment -= share;
-            revolting.Entrenchment += share;
+            // A revolt takes the works over to the other side, so this stays a level-space seizure:
+            // what the rebels gain, the loyalists lose outright. The stat order is load-bearing -
+            // each draw pulls from the seeded RNG, so reordering it would silently change every
+            // seeded revolt outcome.
+            foreach (DefenseType defenseType in RevoltSeizureOrder)
+            {
+                double share = DrawRevoltDefenseShare(loyalist.GetDefense(defenseType));
+                loyalist.AddDefense(defenseType, -share);
+                revolting.AddDefense(defenseType, share);
+            }
             loyalist.Organization = (int)(_session.Random.GetLinearDouble() * 100);
         }
+
+        private static readonly DefenseType[] RevoltSeizureOrder =
+        [
+            DefenseType.ListeningPost,
+            DefenseType.AntiAir,
+            DefenseType.Entrenchment
+        ];
 
         private double DrawRevoltDefenseShare(double defense) => defense <= 0
             ? 0
@@ -762,15 +819,32 @@ namespace OnlyWar.Helpers.Turns
             {
                 foreach (RegionFaction regionFaction in region.RegionFactionMap.Values)
                 {
-                    float gain = (float)(regionFaction.ListeningPost * IntelPerListeningPostLevel);
+                    // A listening post is a STRUCTURE, so allied installations pool exactly the way
+                    // every other kind of works does - on the logarithmic curve in RegionDefenses -
+                    // and the result is applied to each ally directly. It deliberately bypasses the
+                    // intel ledger: the ledger sums allied gains, which is right for activities but
+                    // would count the same shared sensor net once per ally.
+                    float sensorGain = (float)(
+                        RegionDefenses.GetShared(regionFaction, DefenseType.ListeningPost)
+                        * IntelPerListeningPostLevel);
+                    if (sensorGain > 0f)
+                    {
+                        regionFaction.PlanetFaction.AddRegionIntel(region, sensorGain);
+                    }
+
+                    // A patrol is an ACTIVITY: two allies each sweeping the ground really do learn
+                    // more between them than either alone, so patrol gains stay on the ledger and
+                    // keep pooling additively.
                     int patrolStrength = regionFaction.LandedSquads
                         .Where(s => s.CurrentOrders?.Mission.MissionType == MissionType.Patrol)
                         .Sum(s => s.Members.Count);
                     if (patrolStrength > 0)
                     {
-                        gain += IntelPatrolBaseGain + (float)Math.Log10(patrolStrength);
+                        RecordIntelGain(
+                            regionFaction.PlanetFaction,
+                            region,
+                            IntelPatrolBaseGain + (float)Math.Log10(patrolStrength));
                     }
-                    RecordIntelGain(regionFaction.PlanetFaction, region, gain);
                 }
             }
 
@@ -790,14 +864,21 @@ namespace OnlyWar.Helpers.Turns
             foreach (Region region in planet.Regions)
             {
                 float visibleIntel = region.GetPlayerVisibleIntel();
+                // Show of Force is not an intelligence find - it is a standing petition from the
+                // world's own governor, delivered by astropath. Losing eyes on the ground does not
+                // withdraw it, and it does not go stale, so it survives both the intel wipe and
+                // the weekly expiry roll that clear ordinary opportunities. Only
+                // GovernorTurnProcessor retires it, when the request resolves.
                 if (visibleIntel <= 0)
                 {
-                    region.SpecialMissions.Clear();
+                    region.SpecialMissions.RemoveAll(
+                        mission => mission.MissionType != MissionType.ShowOfForce);
                     continue;
                 }
 
                 foreach (Mission mission in region.SpecialMissions.ToList())
                 {
+                    if (mission.MissionType == MissionType.ShowOfForce) continue;
                     if (_session.Random.GetIntBelowMax(0, 4) == 0)
                     {
                         region.SpecialMissions.Remove(mission);
@@ -807,8 +888,7 @@ namespace OnlyWar.Helpers.Turns
                 {
                     float regionSpecMissionBudget = (float)Math.Log(visibleIntel, 2) + 1;
                     List<RegionFaction> publicEnemyFactions = region.RegionFactionMap.Values
-                        .Where(rf => !rf.PlanetFaction.Faction.IsPlayerFaction
-                                     && !rf.PlanetFaction.Faction.IsDefaultFaction
+                        .Where(rf => !FactionDispositionService.IsImperial(rf.PlanetFaction.Faction)
                                      && rf.IsPublic)
                         .ToList();
                     long totalDeployedStrength = publicEnemyFactions.Sum(rf => rf.GetDeployedStrength());
@@ -850,9 +930,11 @@ namespace OnlyWar.Helpers.Turns
                 }
                 else if (chance >= 1)
                 {
-                    double defenseTotal = enemyRegionFaction.Entrenchment
-                        + enemyRegionFaction.ListeningPost
-                        + enemyRegionFaction.AntiAir;
+                    // Weighted against the position as it actually stands - what a raider would see
+                    // and pick a target from - which for an allied-held region is the pooled works.
+                    double defenseTotal = RegionDefenses.GetShared(enemyRegionFaction, DefenseType.Entrenchment)
+                        + RegionDefenses.GetShared(enemyRegionFaction, DefenseType.ListeningPost)
+                        + RegionDefenses.GetShared(enemyRegionFaction, DefenseType.AntiAir);
                     if (defenseTotal <= 0)
                     {
                         GenerateAmbushMission(enemyRegionFaction);
@@ -902,24 +984,23 @@ namespace OnlyWar.Helpers.Turns
 
         private void GenerateSabotageMission(RegionFaction enemyRegionFaction, double defenseTotal)
         {
+            double entrenchment = RegionDefenses.GetShared(enemyRegionFaction, DefenseType.Entrenchment);
+            double listeningPost = RegionDefenses.GetShared(enemyRegionFaction, DefenseType.ListeningPost);
             double roll = _session.Random.GetLinearDouble() * defenseTotal;
-            if (roll <= enemyRegionFaction.Entrenchment)
+            if (roll <= entrenchment)
             {
-                AddSabotageMission(
-                    enemyRegionFaction,
-                    DefenseType.Entrenchment,
-                    enemyRegionFaction.Entrenchment);
+                AddSabotageMission(enemyRegionFaction, DefenseType.Entrenchment, entrenchment);
             }
-            else if (roll - enemyRegionFaction.Entrenchment <= enemyRegionFaction.ListeningPost)
+            else if (roll - entrenchment <= listeningPost)
             {
-                AddSabotageMission(
-                    enemyRegionFaction,
-                    DefenseType.ListeningPost,
-                    enemyRegionFaction.ListeningPost);
+                AddSabotageMission(enemyRegionFaction, DefenseType.ListeningPost, listeningPost);
             }
             else
             {
-                AddSabotageMission(enemyRegionFaction, DefenseType.AntiAir, enemyRegionFaction.AntiAir);
+                AddSabotageMission(
+                    enemyRegionFaction,
+                    DefenseType.AntiAir,
+                    RegionDefenses.GetShared(enemyRegionFaction, DefenseType.AntiAir));
             }
         }
 

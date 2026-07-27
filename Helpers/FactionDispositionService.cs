@@ -67,7 +67,39 @@ namespace OnlyWar.Helpers
                     && IsExternalEnemy(regionFaction.PlanetFaction.Faction, rebel));
         }
 
-        private static bool IsImperial(Faction faction) =>
-            faction.IsPlayerFaction || faction.IsDefaultFaction;
+        /// <summary>
+        /// Whether this faction fights on the Imperial side — the player's Chapter and the world's
+        /// own defense forces. The single definition of a check that used to be open-coded as
+        /// "IsPlayerFaction || IsDefaultFaction" in about twenty places.
+        /// </summary>
+        public static bool IsImperial(Faction faction) =>
+            faction != null && (faction.IsPlayerFaction || faction.IsDefaultFaction);
+
+        /// <summary>
+        /// Whether two factions stand together as allies, and so pool the things a side holds in
+        /// common — most importantly the defensive works in a region (RegionDefenses).
+        /// </summary>
+        /// <remarks>
+        /// Until a real diplomacy system exists there is exactly one alliance in the game: the
+        /// player's Chapter and the world's own defence forces. Everyone else stands alone.
+        ///
+        /// Note what this deliberately is NOT. It is not !AreEnemies, and it is not the
+        /// Imperial/non-Imperial split: two non-Imperial factions are not currently modelled as
+        /// fighting each other, but "not at war with" is a long way from "mans the same trench as",
+        /// and conflating them would have a Tyranid swarm sheltering behind a Genestealer Cult's
+        /// earthworks. Widen this only when there is a diplomacy system to widen it from.
+        ///
+        /// A faction is always allied with itself. That is identity rather than diplomacy, and
+        /// callers that sweep a region for "everyone on this side" depend on it to include the
+        /// faction they started from.
+        /// </remarks>
+        public static bool AreAllied(Faction first, Faction second)
+        {
+            if (first == null || second == null) return false;
+            if (first.Id == second.Id) return true;
+
+            return (first.IsPlayerFaction && second.IsDefaultFaction)
+                || (first.IsDefaultFaction && second.IsPlayerFaction);
+        }
     }
 }

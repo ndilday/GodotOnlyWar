@@ -30,7 +30,7 @@ namespace OnlyWar.Helpers.Turns
         {
             GameRulesData rules = _session.Rules;
             IEnumerable<Faction> enemyFactions = rules.Factions
-                .Where(faction => !faction.IsPlayerFaction && !faction.IsDefaultFaction);
+                .Where(faction => !FactionDispositionService.IsImperial(faction));
 
             foreach (Faction faction in enemyFactions)
             {

@@ -1,6 +1,7 @@
 ﻿using OnlyWar.Builders;
 using OnlyWar.Helpers;
 using OnlyWar.Helpers.Extensions;
+using OnlyWar.Helpers.Fortifications;
 using OnlyWar.Helpers.StrategicCombat;
 using OnlyWar.Models;
 using OnlyWar.Models.Missions;
@@ -337,7 +338,7 @@ public class FactionStrategyController
             offensive.AvailableAttackingForce * RaidCommitFraction,
             Math.Max(1, offensive.EstimatedDefenderBattleValue) * 0.5);
         double risk = Math.Max(1.0, offensive.EstimatedDefenderBattleValue
-            * (1.0 + offensive.TargetFaction.Entrenchment * EntrenchmentRiskFactor));
+            * (1.0 + RegionDefenses.GetShared(offensive.TargetFaction, DefenseType.Entrenchment) * EntrenchmentRiskFactor));
         return (offensive.Reward * 0.25 + expectedDamage) / risk;
     }
 
@@ -829,19 +830,42 @@ public class FactionStrategyController
         AddDevelopmentOption(options, DefenseType.Organization, orgCost,
             (100 - projected.Org) / 25.0 + (localEnemy ? 1.0 : 0.0));
 
+        // Cost stays priced off this faction's OWN level - every faction buys construction points
+        // at the same rate, so that is the honest price. Benefit is what has to account for allies:
+        // points added beside works an ally has already built high move the shared position very
+        // little, and without the discount the planner would keep buying cheap levels that change
+        // nothing (FortificationMath.SharedContributionEfficiency).
         AddDevelopmentOption(options, DefenseType.ListeningPost, DefenseBuildCost(CurrentLevelBand(projected.Det)),
-            1.0 + Math.Max(0, GarrisonFullSightIntel - ownIntel) + (adjacentEnemy ? 1.5 : 0.0));
+            (1.0 + Math.Max(0, GarrisonFullSightIntel - ownIntel) + (adjacentEnemy ? 1.5 : 0.0))
+                * SharedEfficiency(rf, DefenseType.ListeningPost, projected.Det));
 
         AddDevelopmentOption(options, DefenseType.Entrenchment, DefenseBuildCost(CurrentLevelBand(projected.Ent)),
-            0.5 + (localEnemy ? 4.0 : 0.0) + (adjacentEnemy ? 2.0 : 0.0));
+            (0.5 + (localEnemy ? 4.0 : 0.0) + (adjacentEnemy ? 2.0 : 0.0))
+                * SharedEfficiency(rf, DefenseType.Entrenchment, projected.Ent));
 
         AddDevelopmentOption(options, DefenseType.AntiAir, DefenseBuildCost(CurrentLevelBand(projected.Aa)),
-            0.25 + (localEnemy || adjacentEnemy ? 0.5 : 0.0));
+            (0.25 + (localEnemy || adjacentEnemy ? 0.5 : 0.0))
+                * SharedEfficiency(rf, DefenseType.AntiAir, projected.Aa));
 
         return options
             .Where(option => option.Cost != long.MaxValue)
             .OrderByDescending(option => option.Score)
             .FirstOrDefault();
+    }
+
+    // 1.0 whenever this faction stands alone in the region, so a faction with no allied works
+    // beside it plans exactly as it did before fortifications became shared.
+    private static double SharedEfficiency(
+        RegionFaction regionFaction,
+        DefenseType defenseType,
+        double projectedOwnLevel)
+    {
+        double alliedPoints = RegionDefenses.GetAlliedPoints(regionFaction, defenseType);
+        if (alliedPoints <= 0.0) return 1.0;
+
+        double shared = FortificationMath.PointsToLevel(
+            FortificationMath.LevelToPoints(projectedOwnLevel) + alliedPoints);
+        return FortificationMath.SharedContributionEfficiency(projectedOwnLevel, shared);
     }
 
     private static void AddDevelopmentOption(
@@ -1248,7 +1272,7 @@ public class FactionStrategyController
         // Risk scales with the estimated defender strength and how dug-in it is: a fortified
         // objective is disproportionately costly to take.
         double risk = offensive.EstimatedDefenderBattleValue
-                      * (1.0 + offensive.TargetFaction.Entrenchment * EntrenchmentRiskFactor);
+                      * (1.0 + RegionDefenses.GetShared(offensive.TargetFaction, DefenseType.Entrenchment) * EntrenchmentRiskFactor);
         double score = offensive.Reward / Math.Max(risk, 1.0);
         // Provocation from a diversion makes the feinting region a more tempting target.
         return score * (1.0 + offensive.TargetFaction.ProvocationLevel * 0.1);

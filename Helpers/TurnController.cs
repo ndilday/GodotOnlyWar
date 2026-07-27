@@ -47,7 +47,9 @@ namespace OnlyWar.Helpers
             _planetTurnProcessor = new PlanetTurnProcessor(
                 _session,
                 _lastResult.SpecialMissions,
-                _intelLedger);
+                _intelLedger,
+                _lastResult.FortificationTransfers,
+                _lastResult.GovernorRequestReports);
             _missionTurnProcessor = new MissionTurnProcessor(
                 _session,
                 _planetTurnProcessor.RecordIntelGain,
@@ -111,7 +113,8 @@ namespace OnlyWar.Helpers
             _missionTurnProcessor.ProcessStrategicCombatMissions(strategicCombatOrders, StrategicCombatResults);
 
             var combatOrders = allOrdersThisTurn.Where(o => o.AssignedSquads.Any());
-            _missionTurnProcessor.ProcessCombatMissions(combatOrders, MissionContexts);
+            _missionTurnProcessor.ProcessCombatMissions(
+                combatOrders, MissionContexts, ConstructionReports);
 
             var constructionOrders = allOrdersThisTurn.Where(o => !o.AssignedSquads.Any() && o.Mission is ConstructionMission);
             MissionTurnProcessor.ProcessConstructionOrders(constructionOrders);

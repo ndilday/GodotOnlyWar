@@ -28,10 +28,10 @@ public partial class TrainingUnitScreenController : Control
 
     private void PopulateScoutSquadList()
     {
-        List<ValueTuple<int, string>> squadList = GetScoutSquads()
+        List<ValueTuple<int, string>> squadList = OrderScoutSquads(GetScoutSquads())
             .Select(squad => new ValueTuple<int, string>(squad.Id, $"{squad.Name} ({GetTrainingFocusName(squad.TrainingFocus)})"))
             .ToList();
-        _view.PopulateSquadList(squadList);
+        _view.PopulateSquadList(squadList, _selectedSquad?.Id);
     }
 
     private void OnSquadButtonPressed(object sender, int squadId)
@@ -77,8 +77,23 @@ public partial class TrainingUnitScreenController : Control
     private static List<Squad> GetScoutSquads()
     {
         return GameDataSingleton.Instance.Sector.PlayerForce.Army.OrderOfBattle.GetAllSquads()
-            .Where(squad => (squad.SquadTemplate.SquadType & SquadTypes.Scout) == SquadTypes.Scout)
+            .Where(IsTrainingSquad)
             .ToList();
+    }
+
+    internal static bool IsTrainingSquad(Squad squad)
+    {
+        SquadTypes type = squad?.SquadTemplate?.SquadType ?? SquadTypes.None;
+        return (type & SquadTypes.Scout) != 0
+            && (type & SquadTypes.HQ) == 0;
+    }
+
+    internal static IEnumerable<Squad> OrderScoutSquads(IEnumerable<Squad> squads)
+    {
+        return squads
+            .OrderBy(FleetScreenController.GetSquadTypeOrder)
+            .ThenBy(squad => squad.Name, StringComparer.OrdinalIgnoreCase)
+            .ThenBy(squad => squad.Id);
     }
 
     private static string GetTrainingFocusName(TrainingFocuses focus)

@@ -328,8 +328,8 @@ namespace OnlyWar.Helpers
                 return false;
             }
             RegionFaction controller = region.ControllingFaction;
-            return controller != null &&
-                   (controller.PlanetFaction.Faction.IsPlayerFaction || controller.PlanetFaction.Faction.IsDefaultFaction);
+            return controller != null
+                   && FactionDispositionService.IsImperial(controller.PlanetFaction.Faction);
         }
 
         private static Planet GetSquadPlanet(Squad squad)

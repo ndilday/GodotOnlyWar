@@ -66,6 +66,14 @@ public sealed class ChapterBrowserNavigator
         SelectedItem = null;
     }
 
+    public void OpenSoldier(int? companyId, int squadId, int soldierId)
+    {
+        Path.CompanyId = companyId;
+        Path.SquadId = squadId;
+        Path.SoldierId = soldierId;
+        SelectedItem = new ChapterBrowserItemEvent(ChapterBrowserLevel.Soldier, soldierId);
+    }
+
     public void Select(ChapterBrowserItemEvent item)
     {
         SelectedItem = item;

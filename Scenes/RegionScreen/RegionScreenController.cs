@@ -1,5 +1,7 @@
 using Godot;
+using OnlyWar.Helpers;
 using OnlyWar.Helpers.Extensions;
+using OnlyWar.Helpers.Fortifications;
 using OnlyWar.Helpers.Missions;
 using OnlyWar.Helpers.Orders;
 using OnlyWar.Helpers.UI;
@@ -334,6 +336,23 @@ public partial class RegionScreenController : DialogController
         _view.SetUnassignButton(_selectedSquads.Any(squad => squad.CurrentOrders != null));
     }
 
+    // Every dossier reads a side's pooled works rather than one faction's stock, so the same
+    // region never reports two different fortification ratings depending on which card you look at.
+    private static string DescribeShared(RegionFaction regionFaction, DefenseType defenseType) =>
+        RegionFactionExtensions.GetDefenseLevelDescription(
+            RegionDefenses.GetShared(regionFaction, defenseType));
+
+    // The player's own position also shows the exact level, which the fuzzy enemy descriptions
+    // deliberately withhold. Without it a commander cannot reconcile "two more weeks to Mediocre"
+    // in the turn report against a card that just says "Minimal" - the bucket hides all the
+    // progress inside it, which is the complaint behind issue #5.
+    private static string DescribeOwnShared(RegionFaction regionFaction, DefenseType defenseType)
+    {
+        double level = RegionDefenses.GetShared(regionFaction, defenseType);
+        string rating = RegionFactionExtensions.GetDefenseLevelDescription(level);
+        return level > 0 ? $"{rating} ({level:F2})" : rating;
+    }
+
     private void RefreshDossier()
     {
         Region target = _targetRegion ?? _currentRegion;
@@ -356,15 +375,20 @@ public partial class RegionScreenController : DialogController
 
         long garrison = target.PlanetaryDefenseForces;
         List<ValueTuple<string, string>> localRows = [Row("Strength", garrison > 0 ? garrison.ToString("N0") : "None")];
+        // The side's own works: the PDF's and the Chapter's pooled into the one position they
+        // actually man between them (RegionDefenses). Reading only the default faction's stock used
+        // to make every fortification the player built invisible, since player construction accrues
+        // on the player's own RegionFaction - the whole of issue #5. Always visible to the player,
+        // with no intel gate, unlike the hostile cards.
         RegionFaction alliedFaction = target.RegionFactionMap.Values
-            .FirstOrDefault(rf => rf.PlanetFaction.Faction.IsDefaultFaction);
+            .FirstOrDefault(rf => rf.PlanetFaction.Faction.IsPlayerFaction)
+            ?? target.RegionFactionMap.Values
+                .FirstOrDefault(rf => rf.PlanetFaction.Faction.IsDefaultFaction);
         if (alliedFaction != null)
         {
-            // Allied (PDF/Imperial) defenses are always visible to the player - no intel gate,
-            // unlike the hostile cards which only reveal fortifications once intel is sufficient.
-            localRows.Add(Row("Entrenchment", RegionFactionExtensions.GetDefenseLevelDescription(alliedFaction.Entrenchment)));
-            localRows.Add(Row("Listening Posts", RegionFactionExtensions.GetDefenseLevelDescription(alliedFaction.ListeningPost)));
-            localRows.Add(Row("Anti-Air", RegionFactionExtensions.GetDefenseLevelDescription(alliedFaction.AntiAir)));
+            localRows.Add(Row("Entrenchment", DescribeOwnShared(alliedFaction, DefenseType.Entrenchment)));
+            localRows.Add(Row("Listening Posts", DescribeOwnShared(alliedFaction, DefenseType.ListeningPost)));
+            localRows.Add(Row("Anti-Air", DescribeOwnShared(alliedFaction, DefenseType.AntiAir)));
         }
         cards.Add(new DossierCardData("Local Force", "PDF Garrison", localRows, OnlyWarStyle.MedicalStable));
 
@@ -373,9 +397,9 @@ public partial class RegionScreenController : DialogController
             List<ValueTuple<string, string>> rows = [Row("Force magnitude", enemyFaction.GetForceMagnitudeDescription())];
             if (visibleIntel > 1)
             {
-                rows.Add(Row("Entrenchment", RegionFactionExtensions.GetDefenseLevelDescription(enemyFaction.Entrenchment)));
-                rows.Add(Row("Listening Posts", RegionFactionExtensions.GetDefenseLevelDescription(enemyFaction.ListeningPost)));
-                rows.Add(Row("Anti-Air", RegionFactionExtensions.GetDefenseLevelDescription(enemyFaction.AntiAir)));
+                rows.Add(Row("Entrenchment", DescribeShared(enemyFaction, DefenseType.Entrenchment)));
+                rows.Add(Row("Listening Posts", DescribeShared(enemyFaction, DefenseType.ListeningPost)));
+                rows.Add(Row("Anti-Air", DescribeShared(enemyFaction, DefenseType.AntiAir)));
             }
             cards.Add(new DossierCardData(
                 "Hostile Faction",
@@ -523,7 +547,7 @@ public partial class RegionScreenController : DialogController
     private static List<RegionFaction> GetPublicEnemyRegionFactions(Region region)
     {
         return region.RegionFactionMap.Values
-            .Where(rf => rf.IsPublic && !rf.PlanetFaction.Faction.IsPlayerFaction && !rf.PlanetFaction.Faction.IsDefaultFaction)
+            .Where(rf => rf.IsPublic && !FactionDispositionService.IsImperial(rf.PlanetFaction.Faction))
             .OrderBy(rf => rf.PlanetFaction.Faction.Name)
             .ThenBy(rf => rf.PlanetFaction.Faction.Id)
             .ToList();

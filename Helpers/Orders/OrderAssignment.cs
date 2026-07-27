@@ -133,8 +133,7 @@ namespace OnlyWar.Helpers.Orders
         private static RegionFaction GetEnemyRegionFaction(Region region)
         {
             return region.RegionFactionMap.Values.FirstOrDefault(rf =>
-                !rf.PlanetFaction.Faction.IsPlayerFaction
-                && !rf.PlanetFaction.Faction.IsDefaultFaction);
+                !FactionDispositionService.IsImperial(rf.PlanetFaction.Faction));
         }
 
         // Looks up the enemy RegionFaction the player picked in the Target Faction dropdown by

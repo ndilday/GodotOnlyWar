@@ -1,7 +1,10 @@
 using Godot;
+using OnlyWar.Helpers;
 using OnlyWar.Helpers.Extensions;
+using OnlyWar.Helpers.Fortifications;
 using OnlyWar.Helpers.UI;
 using OnlyWar.Models;
+using OnlyWar.Models.Missions;
 using OnlyWar.Models.Planets;
 using System;
 using System.Collections.Generic;
@@ -48,7 +51,7 @@ public partial class TacticalRegionController : Control
         // xenos slot, so we surface the strongest public enemy there and fold the rest into the
         // count/tooltip rather than collapsing to whichever faction iterates first.
         List<RegionFaction> publicEnemyFactions = region.RegionFactionMap.Values
-            .Where(rf => rf.IsPublic && !rf.PlanetFaction.Faction.IsPlayerFaction && !rf.PlanetFaction.Faction.IsDefaultFaction)
+            .Where(rf => rf.IsPublic && !FactionDispositionService.IsImperial(rf.PlanetFaction.Faction))
             .ToList();
         bool multiFactionContested = publicEnemyFactions.Count > 1;
         RegionFaction xenosRegionFaction = publicEnemyFactions.Count > 0
@@ -94,7 +97,8 @@ public partial class TacticalRegionController : Control
 
         bool showCivilian = showEntrenchment || garrison > 0 || (showForces && (civilianPopulation > 0 || hiddenImperialPopulation));
         string civilianText = showEntrenchment
-            ? RegionFactionExtensions.GetDefenseLevelDescription(xenosRegionFaction.Entrenchment)
+            ? RegionFactionExtensions.GetDefenseLevelDescription(
+                RegionDefenses.GetShared(xenosRegionFaction, DefenseType.Entrenchment))
             : garrison > 0 ? FormatCompact(garrison) : (hiddenImperialPopulation ? "?" : (showForces ? FormatCompact(civilianPopulation) : ""));
 
         bool showObjective = region.SpecialMissions.Count > 0 || (showOrders && assignedCount > 0);
@@ -143,7 +147,8 @@ public partial class TacticalRegionController : Control
         }
 
         string civilianTooltip = showEntrenchment
-            ? $"Enemy Entrenchment: {RegionFactionExtensions.GetDefenseLevelDescription(xenosRegionFaction.Entrenchment)}"
+            ? $"Enemy Entrenchment: {RegionFactionExtensions.GetDefenseLevelDescription(
+                RegionDefenses.GetShared(xenosRegionFaction, DefenseType.Entrenchment))}"
             : garrison > 0 ? $"PDF Garrison: {garrison:N0}"
             : hiddenImperialPopulation ? "Imperial Population: Unknown"
             : $"Imperial Population: {civilianPopulation:N0}";

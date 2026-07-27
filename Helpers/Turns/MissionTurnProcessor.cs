@@ -1,6 +1,7 @@
 using OnlyWar.Builders;
 using OnlyWar.Helpers.Battles;
 using OnlyWar.Helpers.Battles.Aftermath;
+using OnlyWar.Helpers.Fortifications;
 using OnlyWar.Helpers.Missions;
 using OnlyWar.Helpers.Simulation;
 using OnlyWar.Helpers.StrategicCombat;
@@ -84,7 +85,8 @@ namespace OnlyWar.Helpers.Turns
 
         internal void ProcessCombatMissions(
             IEnumerable<Order> combatOrders,
-            ICollection<MissionContext> missionContexts)
+            ICollection<MissionContext> missionContexts,
+            ICollection<ConstructionProgressReport> constructionReports = null)
         {
             foreach (Order order in combatOrders)
             {
@@ -94,10 +96,13 @@ namespace OnlyWar.Helpers.Turns
                 if (order.Mission.MissionType == MissionType.Diversion) continue;
                 // A patrol is a standing defensive screen, not an active mission.
                 if (order.Mission.MissionType == MissionType.Patrol) continue;
+                // Likewise a show of force: the squads hold position to be seen. They are pulled
+                // into battle only if the region is attacked, via GetRegionalDefensiveSquads.
+                if (order.Mission.MissionType == MissionType.ShowOfForce) continue;
 
                 if (order.Mission is ConstructionMission constructionMission)
                 {
-                    ResolveSquadConstruction(order, constructionMission);
+                    ResolveSquadConstruction(order, constructionMission, constructionReports);
                     continue;
                 }
 
@@ -266,34 +271,77 @@ namespace OnlyWar.Helpers.Turns
             }
         }
 
-        private void ResolveSquadConstruction(Order order, ConstructionMission mission)
+        private void ResolveSquadConstruction(
+            Order order,
+            ConstructionMission mission,
+            ICollection<ConstructionProgressReport> constructionReports)
         {
             BaseSkill engineering = _session.Rules.Skills.EngineeringFortification;
             float totalSkill = order.AssignedSquads
                 .SelectMany(s => s.Members)
                 .Sum(soldier => soldier.GetTotalSkillValue(engineering));
-            ApplyConstruction(mission, totalSkill / EngineeringBuildDivisor);
+            // Construction produces no MissionContext, so the levels captured here are the only
+            // record the end-of-turn report can be built from (issue #5: without them a fortifying
+            // squad is indistinguishable from an idle one). Only the "before" side of the shared
+            // position is captured - the report reads the "after" live, once the whole turn has
+            // settled, so it can never quote a rating the region has already moved past.
+            double before = GetConstructionLevel(mission);
+            double sharedBefore = GetSharedConstructionLevel(mission);
+            ApplyConstructionPoints(mission, totalSkill / EngineeringBuildDivisor);
+            constructionReports?.Add(new ConstructionProgressReport(
+                mission.ConstructionType,
+                mission.RegionFaction,
+                order.AssignedSquads.Select(s => s.Name).ToList(),
+                order.AssignedSquads.Any(s => s.Faction?.IsPlayerFaction == true),
+                before,
+                GetConstructionLevel(mission),
+                sharedBefore));
         }
 
+        /// <summary>
+        /// Applies a squad's weekly engineering output, measured in construction points rather than
+        /// levels.
+        /// </summary>
+        /// <remarks>
+        /// A squad's output does not depend on how good the works already are, so its effort is a
+        /// flat number of points and the level it buys decelerates on the same 10x-per-band curve
+        /// the AI pays through DefenseBuildCost. Adding the raw figure to the level instead - as
+        /// this did before - let a squad buy a level of Massive works for the same week of labour
+        /// that bought its first level of Minimal ones.
+        /// </remarks>
+        internal static void ApplyConstructionPoints(ConstructionMission mission, double points)
+        {
+            if (mission.ConstructionType == DefenseType.Organization)
+            {
+                ApplyConstruction(mission, points);
+                return;
+            }
+
+            double before = GetConstructionLevel(mission);
+            RegionDefenses.Build(mission.RegionFaction, mission.ConstructionType, points);
+            double after = GetConstructionLevel(mission);
+            GameLog.Trace(() =>
+                $"Construction applied {DescribeRegionFaction(mission.RegionFaction)}: "
+                + $"{mission.ConstructionType} {before:F2}->{after:F2} (+{points:F2} points)");
+        }
+
+        /// <summary>
+        /// Applies a level delta directly. Used by the NPC development planner, whose build amounts
+        /// are already priced against the band they are buying into (FactionStrategyController), so
+        /// they arrive as levels rather than points.
+        /// </summary>
         internal static void ApplyConstruction(ConstructionMission mission, double amount)
         {
             double before = GetConstructionLevel(mission);
-            switch (mission.ConstructionType)
+            if (mission.ConstructionType == DefenseType.Organization)
             {
-                case DefenseType.Entrenchment:
-                    mission.RegionFaction.Entrenchment += amount;
-                    break;
-                case DefenseType.ListeningPost:
-                    mission.RegionFaction.ListeningPost += amount;
-                    break;
-                case DefenseType.AntiAir:
-                    mission.RegionFaction.AntiAir += amount;
-                    break;
-                case DefenseType.Organization:
-                    mission.RegionFaction.Organization = Math.Min(
-                        100,
-                        mission.RegionFaction.Organization + (int)Math.Round(amount));
-                    break;
+                mission.RegionFaction.Organization = Math.Min(
+                    100,
+                    mission.RegionFaction.Organization + (int)Math.Round(amount));
+            }
+            else
+            {
+                mission.RegionFaction.AddDefense(mission.ConstructionType, amount);
             }
             double after = GetConstructionLevel(mission);
             GameLog.Trace(() =>
@@ -301,15 +349,17 @@ namespace OnlyWar.Helpers.Turns
                 + $"{mission.ConstructionType} {before:F2}->{after:F2} (requested +{amount:F2})");
         }
 
+        internal static double GetSharedConstructionLevel(ConstructionMission mission) =>
+            mission.ConstructionType == DefenseType.Organization
+                ? mission.RegionFaction.Organization
+                : RegionDefenses.GetShared(mission.RegionFaction, mission.ConstructionType);
+
         internal static double GetConstructionLevel(ConstructionMission mission)
         {
             return mission.ConstructionType switch
             {
-                DefenseType.Entrenchment => mission.RegionFaction.Entrenchment,
-                DefenseType.ListeningPost => mission.RegionFaction.ListeningPost,
-                DefenseType.AntiAir => mission.RegionFaction.AntiAir,
                 DefenseType.Organization => mission.RegionFaction.Organization,
-                _ => 0
+                _ => mission.RegionFaction.GetDefense(mission.ConstructionType)
             };
         }
 

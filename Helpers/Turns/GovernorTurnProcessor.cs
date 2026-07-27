@@ -2,6 +2,7 @@ using OnlyWar.Builders;
 using OnlyWar.Helpers.Simulation;
 using OnlyWar.Helpers.Supply;
 using OnlyWar.Models;
+using OnlyWar.Models.Missions;
 using OnlyWar.Models.Planets;
 using OnlyWar.Models.Supply;
 using OnlyWar.Models.Squads;
@@ -19,10 +20,14 @@ namespace OnlyWar.Helpers.Turns
     internal sealed class GovernorTurnProcessor
     {
         private readonly GameSession _session;
+        private readonly ICollection<GovernorRequestReport> _requestReports;
 
-        internal GovernorTurnProcessor(GameSession session)
+        internal GovernorTurnProcessor(
+            GameSession session,
+            ICollection<GovernorRequestReport> requestReports = null)
         {
             _session = session ?? throw new ArgumentNullException(nameof(session));
+            _requestReports = requestReports;
         }
 
         internal void ProcessGovernor(Planet planet, PlanetFaction planetFaction)
@@ -35,18 +40,26 @@ namespace OnlyWar.Helpers.Turns
             Character governor = planetFaction.Leader;
             if (governor.ActiveRequest != null)
             {
-                governor.ActiveRequest.ProcessTurn(_session.CurrentDate);
-                if (governor.ActiveRequest.Status == RequestStatus.Fulfilled)
+                IRequest request = governor.ActiveRequest;
+                request.ProcessTurn(_session.CurrentDate);
+                if (request.Status == RequestStatus.Fulfilled)
                 {
-                    CreatePledge(governor.ActiveRequest);
+                    CreatePledge(request);
+                    RetireShowOfForceMission(request);
+                    Report(GovernorRequestReportKind.Fulfilled, request);
                     governor.ActiveRequest = null;
                     governor.OpinionOfPlayerForce +=
                         governor.Appreciation * (1 - governor.OpinionOfPlayerForce);
                     governor.NextRequestEligibleDate = AddWeeks(
                         _session.CurrentDate, _session.Rules.SupplyEconomyRules.RequestCooldownWeeks);
                 }
-                else if (governor.ActiveRequest.Status == RequestStatus.Failed)
+                else if (request.Status == RequestStatus.Failed)
                 {
+                    RetireShowOfForceMission(request);
+                    Report(
+                        GovernorRequestReportKind.Failed,
+                        request,
+                        DescribeFailure(request));
                     governor.ActiveRequest = null;
                     governor.OpinionOfPlayerForce -= 0.05f / Math.Max(0.1f, governor.Patience);
                     governor.NextRequestEligibleDate = AddWeeks(
@@ -55,6 +68,7 @@ namespace OnlyWar.Helpers.Turns
                 else
                 {
                     governor.OpinionOfPlayerForce -= 0.005f / governor.Patience;
+                    SyncShowOfForceMission(request);
                 }
             }
             else if (governor.OpinionOfPlayerForce > 0
@@ -83,7 +97,13 @@ namespace OnlyWar.Helpers.Turns
 
             if (leader.ActiveRequest != null)
             {
-                leader.ActiveRequest.Fail(_session.CurrentDate);
+                IRequest request = leader.ActiveRequest;
+                request.Fail(_session.CurrentDate);
+                RetireShowOfForceMission(request);
+                Report(
+                    GovernorRequestReportKind.Failed,
+                    request,
+                    $"{leader.Name} died before the commitment was met; the petition dies with them.");
                 leader.ActiveRequest = null;
             }
             List<Character> characters = _session.Sector.Characters;
@@ -149,6 +169,101 @@ namespace OnlyWar.Helpers.Turns
                 hazard);
             planetFaction.Leader.ActiveRequest = request;
             _session.Sector.PlayerForce.Requests.Add(request);
+            SyncShowOfForceMission(request);
+            Report(GovernorRequestReportKind.Arrived, request);
+        }
+
+        /// <summary>
+        /// Reconciles the Show of Force order that fulfils an effort-based request onto the target
+        /// planet's capital region, so it appears in the order dialog the same way any other
+        /// special mission does. Outcome-based (threat suppression) requests are fulfilled by
+        /// destroying the threat and need no posted order.
+        ///
+        /// This runs every turn the request is open rather than once at generation, and is
+        /// idempotent. Reconciling rather than posting means the mission survives anything that
+        /// legitimately drops it - PruneInvalidSpecialMissions culling a stale anchor after the
+        /// player's RegionFaction is rebuilt, or a save written before Show of Force existed - and
+        /// re-anchors it to the live player RegionFaction instead of leaving the order dialog
+        /// holding a detached one.
+        /// </summary>
+        private void SyncShowOfForceMission(IRequest request)
+        {
+            if (request.FulfillmentKind != RequestFulfillmentKind.ForceCommitment) return;
+            Region capital = GetCapitalRegion(request.TargetPlanet);
+            if (capital == null) return;
+
+            RegionFaction playerRegionFaction = GetOrCreatePlayerRegionFaction(capital);
+            if (playerRegionFaction == null) return;
+
+            // A squad already holding the order keeps the mission it was assigned; re-anchoring
+            // underneath it would orphan that order's target.
+            bool alreadyPosted = capital.SpecialMissions.Any(mission =>
+                mission.MissionType == MissionType.ShowOfForce
+                && ReferenceEquals(mission.RegionFaction, playerRegionFaction));
+            if (alreadyPosted) return;
+
+            capital.SpecialMissions.RemoveAll(
+                mission => mission.MissionType == MissionType.ShowOfForce);
+            capital.SpecialMissions.Add(new Mission(
+                MissionType.ShowOfForce,
+                playerRegionFaction,
+                request.Commitment.PackageCount));
+        }
+
+        /// <summary>
+        /// Clears the posted Show of Force mission once the request leaves the open state, so a
+        /// resolved petition stops advertising an order the player can no longer make progress on.
+        /// Squads already holding the order are released by the normal end-of-turn cleanup.
+        /// </summary>
+        private void RetireShowOfForceMission(IRequest request)
+        {
+            if (request.FulfillmentKind != RequestFulfillmentKind.ForceCommitment) return;
+            Region capital = GetCapitalRegion(request.TargetPlanet);
+            capital?.SpecialMissions.RemoveAll(
+                mission => mission.MissionType == MissionType.ShowOfForce);
+        }
+
+        internal static Region GetCapitalRegion(Planet planet) =>
+            planet?.Regions?.FirstOrDefault(region => region.Id == planet.CapitalRegionId)
+            ?? planet?.Regions?.FirstOrDefault();
+
+        // Mirrors OrderAssignment.GetOrCreatePlayerRegionFaction: the Chapter can be petitioned to
+        // a world it has no presence on yet, and the posted mission has to hang off a player
+        // RegionFaction that exists.
+        private RegionFaction GetOrCreatePlayerRegionFaction(Region region)
+        {
+            Faction playerFaction = _session.Sector.PlayerForce.Faction;
+            if (region.RegionFactionMap.TryGetValue(
+                playerFaction.Id, out RegionFaction existing))
+            {
+                return existing;
+            }
+            if (!region.Planet.PlanetFactionMap.TryGetValue(
+                playerFaction.Id, out PlanetFaction playerPlanetFaction))
+            {
+                return null;
+            }
+            RegionFaction created = new(playerPlanetFaction, region);
+            region.RegionFactionMap[playerFaction.Id] = created;
+            return created;
+        }
+
+        private static string DescribeFailure(IRequest request)
+        {
+            if (request.FulfillmentKind == RequestFulfillmentKind.ThreatSuppressed
+                && !request.HasPlayerResponded)
+            {
+                return "The danger was resolved without the Chapter; the petition is moot.";
+            }
+            return "The deadline passed with the commitment unmet.";
+        }
+
+        private void Report(
+            GovernorRequestReportKind kind,
+            IRequest request,
+            string failureReason = null)
+        {
+            _requestReports?.Add(new GovernorRequestReport(kind, request, failureReason));
         }
 
         private ForceCommitmentPackage BuildCommitmentPackage(Planet planet, Faction threatFaction)

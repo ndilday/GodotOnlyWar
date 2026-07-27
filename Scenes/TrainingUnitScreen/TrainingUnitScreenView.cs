@@ -1,4 +1,5 @@
 using Godot;
+using OnlyWar.Helpers.UI;
 using OnlyWar.Models.Squads;
 using System;
 using System.Collections.Generic;
@@ -18,7 +19,15 @@ public partial class TrainingUnitScreenView : Control
 
     public override void _Ready()
     {
+        Theme = GD.Load<Theme>("res://Scenes/OnlyWarTheme.tres");
+        OnlyWarStyle.ApplyContentPanel(GetNode<Panel>("SquadList"));
+        OnlyWarStyle.ApplyContentPanel(GetNode<Panel>("SquadReportPanel"));
+        OnlyWarStyle.ApplyInsetPanel(GetNode<Panel>("SquadList/Header"));
+        OnlyWarStyle.ApplyInsetPanel(GetNode<Panel>("SquadReportPanel/Header"));
+
         _closeButton = GetNode<Button>("CloseButton");
+        IconAtlas.ApplyIconButton(_closeButton, "close", 40, 28);
+        _closeButton.TooltipText = "Close";
         _closeButton.Pressed += () => CloseButtonPressed?.Invoke(this, EventArgs.Empty);
         _focusOption = GetNode<OptionButton>("SquadReportPanel/FocusHBox/FocusOption");
         PopulateFocusOptions();
@@ -30,12 +39,12 @@ public partial class TrainingUnitScreenView : Control
         _squadButtonGroup = new ButtonGroup();
     }
 
-    public void PopulateSquadList(IReadOnlyList<ValueTuple<int, string>> squads)
+    public void PopulateSquadList(IReadOnlyList<ValueTuple<int, string>> squads, int? selectedSquadId = null)
     {
         ClearVBox(_squadVBox);
         foreach (ValueTuple<int, string> squad in squads)
         {
-            AddSquad(squad.Item1, squad.Item2);
+            AddSquad(squad.Item1, squad.Item2, squad.Item1 == selectedSquadId);
         }
     }
 
@@ -78,15 +87,24 @@ public partial class TrainingUnitScreenView : Control
         }
     }
 
-    private void AddSquad(int id, string name)
+    private void AddSquad(int id, string name, bool selected)
     {
-        Button squadButton = new Button();
-        squadButton.Text = name;
+        Button squadButton = new Button
+        {
+            Text = name,
+            Alignment = HorizontalAlignment.Left,
+            CustomMinimumSize = new Vector2(0, 52),
+            TooltipText = name
+        };
         squadButton.SetMeta("id", id);
         squadButton.MouseDefaultCursorShape = Control.CursorShape.PointingHand;
         squadButton.Pressed += () => SquadButtonPressed?.Invoke(this, id);
         squadButton.ToggleMode = true;
         squadButton.ButtonGroup = _squadButtonGroup;
+        squadButton.Toggled += isPressed => OnlyWarStyle.ApplyListRow(squadButton, isPressed);
+        squadButton.ButtonPressed = selected;
+        OnlyWarStyle.ApplyListRow(squadButton, selected);
+        IconAtlas.Apply(squadButton, "scout");
         _squadVBox.AddChild(squadButton);
     }
 }

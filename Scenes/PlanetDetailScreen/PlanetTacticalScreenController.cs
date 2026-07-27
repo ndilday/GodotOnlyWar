@@ -1,12 +1,16 @@
 using Godot;
+using OnlyWar.Helpers;
 using OnlyWar.Helpers.Extensions;
+using OnlyWar.Helpers.Fortifications;
 using OnlyWar.Helpers.Orders;
 using OnlyWar.Helpers.Simulation;
 using OnlyWar.Helpers.UI;
 using OnlyWar.Models;
 using OnlyWar.Models.Fleets;
+using OnlyWar.Models.Missions;
 using OnlyWar.Models.Planets;
 using OnlyWar.Models.Squads;
+using OnlyWar.Models.Supply;
 using OnlyWar.Models.Units;
 using System;
 using System.Collections.Generic;
@@ -211,7 +215,13 @@ public partial class PlanetTacticalScreenController : DialogController
 		}
 
 		Character governor = _selectedPlanet.PlanetFactionMap[controllingFaction.Id].Leader;
-		return governor?.ActiveRequest != null ? "Governor request pending" : null;
+		IRequest request = governor?.ActiveRequest;
+		if (request == null) return null;
+
+		// "Governor request pending" said only that something existed somewhere, which is what
+		// made this a dead end. Name the deadline so the badge carries the one fact that decides
+		// whether the player needs to act now; the dossier card below carries the terms.
+		return $"Governor's request — due {FormatRequestDate(request.Deadline)}";
 	}
 
 	private void RefreshContextAndCommands()
@@ -357,7 +367,7 @@ public partial class PlanetTacticalScreenController : DialogController
 	{
 		List<DossierCardData> cards = [];
 		Faction controllingFaction = planet.GetControllingFaction();
-		bool imperialOrPlayer = controllingFaction != null && (controllingFaction.IsDefaultFaction || controllingFaction.IsPlayerFaction);
+		bool imperialOrPlayer = FactionDispositionService.IsImperial(controllingFaction);
 
 		List<ValueTuple<string, string>> worldRows = [Row("Control", controllingFaction?.Name ?? "Unknown")];
 		if (imperialOrPlayer)
@@ -388,11 +398,67 @@ public partial class PlanetTacticalScreenController : DialogController
 					Row("Active Request", governor.ActiveRequest != null ? "Yes" : "No")
 				];
 				cards.Add(new DossierCardData("Governor", governor.Name, governorRows, OnlyWarStyle.PlayerAccent));
+
+				// The bare "Active Request: Yes" above used to be the whole story on this screen:
+				// it announced a petition existed and gave the player no way to learn its terms,
+				// its deadline, or how to answer it. The detail lives on the Diplomacy screen, but
+				// nothing pointed there, so the request read as a dead end (issue #3).
+				if (governor.ActiveRequest != null)
+				{
+					cards.Add(BuildGovernorRequestCard(planet, governor.ActiveRequest));
+				}
 			}
 		}
 
 		return cards;
 	}
+
+	private static DossierCardData BuildGovernorRequestCard(Planet planet, IRequest request)
+	{
+		string commitment =
+			$"{request.Commitment.PackageCount} "
+			+ $"{request.Commitment.DisplayUnitName}"
+			+ (request.Commitment.PackageCount == 1 ? "" : "s")
+			+ $" / {request.Commitment.ServiceWeeks} wks";
+		List<ValueTuple<string, string>> rows =
+		[
+			Row("Concern", request.ThreatFaction != null
+				? $"{request.ThreatFaction.Name} in revolt"
+				: "Unverified threat"),
+			Row("Commitment", commitment),
+			Row("Deadline", FormatRequestDate(request.Deadline)),
+			Row("Progress", FormatRequestProgress(planet, request)),
+			Row("Offer", request.OfferedScheduleKind == PledgeScheduleKind.Standing
+				? $"{request.OfferedRequisition:N0} Req / {request.OfferedCadenceWeeks} wks"
+				: $"{request.OfferedRequisition:N0} Req (one-off)"),
+			Row("Full Terms", "Diplomacy screen")
+		];
+		return new DossierCardData(
+			"Governor's Request", request.Requester?.Name ?? "Unknown", rows, OnlyWarStyle.Gold);
+	}
+
+	// Threat-suppression requests have no squad-week meter to report; effort requests do, and the
+	// player also needs telling WHERE the order has to be held, since only the capital region counts.
+	private static string FormatRequestProgress(Planet planet, IRequest request)
+	{
+		if (request.FulfillmentKind == RequestFulfillmentKind.ThreatSuppressed)
+		{
+			return "Suppress the threat";
+		}
+
+		decimal required = request.Commitment.PackageCount * request.Commitment.ServiceWeeks;
+		decimal packageWeeks = request.Commitment.ReferenceBattleValuePerPackage <= 0
+			? 0
+			: (decimal)request.ProgressBattleValueTime
+				/ request.Commitment.ReferenceBattleValuePerPackage;
+		Region capital = planet.Regions.FirstOrDefault(r => r.Id == planet.CapitalRegionId)
+			?? planet.Regions.FirstOrDefault();
+		string where = capital == null ? "" : $" (Show of Force in {capital.Name})";
+		return $"{packageWeeks:0.#}/{required:0.#} squad-wks{where}";
+	}
+
+	private static string FormatRequestDate(Date date) =>
+		date == null ? "Unknown" : $"{date.Year:000}.M{date.Millenium} (wk {date.Week})";
 
 	// Mirrors the Region Ops dossier ordering: region summary first, then the local Imperial
 	// force, then hostile faction(s) - so the same data reads consistently across both screens.
@@ -426,6 +492,16 @@ public partial class PlanetTacticalScreenController : DialogController
 			Row("Assigned Orders", playerRegionFaction?.LandedSquads.Count(squad => squad.CurrentOrders != null).ToString() ?? "0"),
 			Row("PDF Garrison", region.PlanetaryDefenseForces > 0 ? region.PlanetaryDefenseForces.ToString("N0") : "None")
 		];
+		// The Imperial position in this region - the Chapter's works and the PDF's pooled - so
+		// fortifications the player ordered are visible here rather than only in the turn report.
+		RegionFaction imperialFaction = playerRegionFaction
+			?? region.RegionFactionMap.Values.FirstOrDefault(rf => rf.PlanetFaction.Faction.IsDefaultFaction);
+		if (imperialFaction != null)
+		{
+			localRows.Add(Row("Entrenchment", DescribeOwnShared(imperialFaction, DefenseType.Entrenchment)));
+			localRows.Add(Row("Listening Posts", DescribeOwnShared(imperialFaction, DefenseType.ListeningPost)));
+			localRows.Add(Row("Anti-Air", DescribeOwnShared(imperialFaction, DefenseType.AntiAir)));
+		}
 		cards.Add(new DossierCardData("Local Force", "Imperial Presence", localRows, OnlyWarStyle.PlayerAccent));
 
 		if (enemyFactions.Count > 0)
@@ -435,9 +511,9 @@ public partial class PlanetTacticalScreenController : DialogController
 				List<ValueTuple<string, string>> enemyRows = [Row("Force Magnitude", enemyFaction.GetForceMagnitudeDescription())];
 				if (visibleIntel > 1)
 				{
-					enemyRows.Add(Row("Entrenchment", RegionFactionExtensions.GetDefenseLevelDescription(enemyFaction.Entrenchment)));
-					enemyRows.Add(Row("Listening Posts", RegionFactionExtensions.GetDefenseLevelDescription(enemyFaction.ListeningPost)));
-					enemyRows.Add(Row("Anti-Air", RegionFactionExtensions.GetDefenseLevelDescription(enemyFaction.AntiAir)));
+					enemyRows.Add(Row("Entrenchment", DescribeShared(enemyFaction, DefenseType.Entrenchment)));
+					enemyRows.Add(Row("Listening Posts", DescribeShared(enemyFaction, DefenseType.ListeningPost)));
+					enemyRows.Add(Row("Anti-Air", DescribeShared(enemyFaction, DefenseType.AntiAir)));
 				}
 				cards.Add(new DossierCardData("Hostile Faction", enemyFaction.PlanetFaction.Faction.Name, enemyRows, OnlyWarStyle.OpposingAccent));
 			}
@@ -829,9 +905,12 @@ public partial class PlanetTacticalScreenController : DialogController
 	{
 		if (region == null || regionFaction == null || regionFaction.LandedSquads.Count > 0) return;
 
-		if (regionFaction.Entrenchment <= 0
-			&& regionFaction.ListeningPost <= 0
-			&& regionFaction.AntiAir <= 0)
+		// No squads left here, so hand any works to an ally that can still man them - the same rule
+		// the turn loop applies (PlanetTurnProcessor.TransferAbandonedWorksToAllies). Doing it here
+		// too keeps a save loaded mid-campaign consistent with one that played through the turn.
+		RegionDefenses.TransferToAlly(regionFaction);
+
+		if (!RegionDefenses.HasAnyWorks(regionFaction))
 		{
 			region.RegionFactionMap.Remove(regionFaction.PlanetFaction.Faction.Id);
 			return;
@@ -840,10 +919,23 @@ public partial class PlanetTacticalScreenController : DialogController
 		regionFaction.IsPublic = false;
 	}
 
+	private static string DescribeShared(RegionFaction regionFaction, DefenseType defenseType) =>
+		RegionFactionExtensions.GetDefenseLevelDescription(
+			RegionDefenses.GetShared(regionFaction, defenseType));
+
+	// The player's own position carries the exact level too, so the turn report's projection can be
+	// reconciled against the region rather than hidden inside a bucket. Enemy rows stay fuzzy.
+	private static string DescribeOwnShared(RegionFaction regionFaction, DefenseType defenseType)
+	{
+		double level = RegionDefenses.GetShared(regionFaction, defenseType);
+		string rating = RegionFactionExtensions.GetDefenseLevelDescription(level);
+		return level > 0 ? $"{rating} ({level:F2})" : rating;
+	}
+
 	private static List<RegionFaction> GetPublicEnemyRegionFactions(Region region)
 	{
 		return region.RegionFactionMap.Values
-			.Where(rf => rf.IsPublic && !rf.PlanetFaction.Faction.IsPlayerFaction && !rf.PlanetFaction.Faction.IsDefaultFaction)
+			.Where(rf => rf.IsPublic && !FactionDispositionService.IsImperial(rf.PlanetFaction.Faction))
 			.ToList();
 	}
 

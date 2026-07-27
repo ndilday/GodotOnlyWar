@@ -1,4 +1,5 @@
 using OnlyWar.Helpers.Battles;
+using OnlyWar.Helpers.Fortifications;
 using OnlyWar.Models;
 using OnlyWar.Models.Missions;
 using OnlyWar.Models.Orders;
@@ -48,31 +49,18 @@ namespace OnlyWar.Helpers.Turns
                     case MissionType.Sabotage:
                         SabotageMission sabotageMission = (SabotageMission)context.Order.Mission;
                         double impact = Math.Min(context.Impact, sabotageMission.MissionSize);
-                        switch (sabotageMission.DefenseType)
-                        {
-                            case DefenseType.Entrenchment:
-                                regionFaction.Entrenchment = Math.Max(
-                                    0.0,
-                                    regionFaction.Entrenchment - impact);
-                                break;
-                            case DefenseType.ListeningPost:
-                                regionFaction.ListeningPost = Math.Max(
-                                    0.0,
-                                    regionFaction.ListeningPost - impact);
-                                break;
-                            case DefenseType.AntiAir:
-                                regionFaction.AntiAir = Math.Max(
-                                    0.0,
-                                    regionFaction.AntiAir - impact);
-                                break;
-                        }
+                        // Sabotage wrecks the position that is actually there, so the loss comes
+                        // out of the side's pooled works rather than only the nominal target's
+                        // share of them (RegionDefenses.Damage spreads it across contributors).
+                        RegionDefenses.Damage(regionFaction, sabotageMission.DefenseType, impact);
                         break;
                 }
 
                 long defenderCasualties = FallenBattleValue(context.OpposingSquads);
-                if (regionFaction.Entrenchment > 0)
+                double entrenchment = RegionDefenses.GetShared(regionFaction, DefenseType.Entrenchment);
+                if (entrenchment > 0)
                 {
-                    double casualtyMultiplier = 1.0 / (1.0 + regionFaction.Entrenchment / 5.0);
+                    double casualtyMultiplier = 1.0 / (1.0 + entrenchment / 5.0);
                     defenderCasualties = (long)(defenderCasualties * casualtyMultiplier);
                 }
                 long defenderStrengthBefore = regionFaction.MilitaryStrength;
@@ -123,7 +111,11 @@ namespace OnlyWar.Helpers.Turns
 
         internal static bool ShouldPersistPlayerOrder(Order order)
         {
-            return order.Mission is ConstructionMission
+            // Show of Force joins construction as a standing, multi-week commitment: the request
+            // it answers is measured in squad-weeks, so releasing the squads every turn (and
+            // consuming the posted mission with them) would make the commitment unfulfillable.
+            return (order.Mission is ConstructionMission
+                    || order.Mission.MissionType == MissionType.ShowOfForce)
                 && order.AssignedSquads.Any(s => s.Faction?.IsPlayerFaction == true);
         }
 

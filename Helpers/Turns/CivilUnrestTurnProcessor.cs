@@ -1,6 +1,7 @@
 using OnlyWar.Helpers.Extensions;
 using OnlyWar.Helpers.Simulation;
 using OnlyWar.Models;
+using OnlyWar.Models.Missions;
 using OnlyWar.Models.Planets;
 using System;
 using System.Collections.Generic;
@@ -308,19 +309,28 @@ namespace OnlyWar.Helpers.Turns
         {
             RegionFaction defender = region.RegionFactionMap.Values.FirstOrDefault(
                 rf => rf.PlanetFaction.Faction.IsDefaultFaction && rf.IsPublic);
+
             if (defender == null) return;
 
-            double listeningPost = TransferDefense(defender.ListeningPost);
-            defender.ListeningPost -= listeningPost;
-            insurgents.ListeningPost += listeningPost;
-            double antiAir = TransferDefense(defender.AntiAir);
-            defender.AntiAir -= antiAir;
-            insurgents.AntiAir += antiAir;
-            double entrenchment = TransferDefense(defender.Entrenchment);
-            defender.Entrenchment -= entrenchment;
-            insurgents.Entrenchment += entrenchment;
+            // Level-space, as before: the insurgents seize a share of the works they were standing
+            // inside. They are not an ally, so this is a real loss to the Imperial position rather
+            // than the level-preserving handover RegionDefenses.TransferToAlly performs. The stat
+            // order is load-bearing - each draw pulls from the seeded RNG.
+            foreach (DefenseType defenseType in RevealSeizureOrder)
+            {
+                double moved = TransferDefense(defender.GetDefense(defenseType));
+                defender.AddDefense(defenseType, -moved);
+                insurgents.AddDefense(defenseType, moved);
+            }
             defender.Organization = (int)(_session.Random.GetLinearDouble() * 100);
         }
+
+        private static readonly DefenseType[] RevealSeizureOrder =
+        [
+            DefenseType.ListeningPost,
+            DefenseType.AntiAir,
+            DefenseType.Entrenchment
+        ];
 
         private double TransferDefense(double defense)
         {

@@ -101,4 +101,20 @@ public class ChapterBrowserNavigatorTests
         Assert.Null(navigator.Path.CompanyId);
         Assert.Null(navigator.SelectedItem);
     }
+
+    [Fact]
+    public void OpenSoldier_SetsCompleteChapterPathAndSelection()
+    {
+        ChapterBrowserNavigator navigator = new();
+
+        navigator.OpenSoldier(12, 34, 56);
+
+        Assert.Equal(ChapterBrowserLevel.Soldier, navigator.Path.Level);
+        Assert.Equal(12, navigator.Path.CompanyId);
+        Assert.Equal(34, navigator.Path.SquadId);
+        Assert.Equal(56, navigator.Path.SoldierId);
+        Assert.Equal(
+            new ChapterBrowserItemEvent(ChapterBrowserLevel.Soldier, 56),
+            navigator.SelectedItem);
+    }
 }

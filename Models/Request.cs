@@ -1,6 +1,7 @@
 using OnlyWar.Models.Planets;
 using OnlyWar.Models.Supply;
 using System;
+using System.Collections.Generic;
 using System.Linq;
 
 namespace OnlyWar.Models
@@ -193,7 +194,7 @@ namespace OnlyWar.Models
             }
 
             long weeklyStrength = CalculateQualifyingPresenceBattleValue(
-                requireUnassigned: FulfillmentKind == RequestFulfillmentKind.ForceCommitment);
+                requireShowOfForce: FulfillmentKind == RequestFulfillmentKind.ForceCommitment);
             if (weeklyStrength > 0)
             {
                 HasPlayerResponded = true;
@@ -251,14 +252,30 @@ namespace OnlyWar.Models
             DateRequestResolved = Copy(currentDate ?? throw new ArgumentNullException(nameof(currentDate)));
         }
 
-        private long CalculateQualifyingPresenceBattleValue(bool requireUnassigned)
+        /// <summary>
+        /// Sums this week's qualifying Astartes strength on the target world.
+        ///
+        /// An effort-based commitment counts only squads holding an explicit Show of Force order
+        /// in the capital region - the region the petition is posted to. Progress used to accrue
+        /// from any squad anywhere on the planet that happened to have NO orders at all, which was
+        /// invisible in the UI and directly contradicted the end-of-turn preflight's advice to
+        /// assign orders to idle squads: following the game's own prompt silently zeroed the
+        /// request. An outcome-based commitment still counts any landed squad planet-wide, since
+        /// what it measures is whether the Chapter turned up at all.
+        /// </summary>
+        private long CalculateQualifyingPresenceBattleValue(bool requireShowOfForce)
         {
             Faction playerFaction = GameDataSingleton.Instance.GameRulesData.PlayerFaction;
-            return TargetPlanet.Regions
-                .Where(region => region.RegionFactionMap.ContainsKey(playerFaction.Id))
+            IEnumerable<Planets.Region> regions = requireShowOfForce
+                ? [Helpers.Turns.GovernorTurnProcessor.GetCapitalRegion(TargetPlanet)]
+                : TargetPlanet.Regions;
+            return regions
+                .Where(region => region != null
+                    && region.RegionFactionMap.ContainsKey(playerFaction.Id))
                 .SelectMany(region => region.RegionFactionMap[playerFaction.Id].LandedSquads)
                 .Distinct()
-                .Where(squad => !requireUnassigned || squad.CurrentOrders == null)
+                .Where(squad => !requireShowOfForce
+                    || squad.CurrentOrders?.Mission.MissionType == Missions.MissionType.ShowOfForce)
                 .Where(SquadMatchesQualifications)
                 .Sum(squad => squad.Members.Sum(member => (long)member.Template.BattleValue));
         }
@@ -284,7 +301,7 @@ namespace OnlyWar.Models
         }
 
         private bool IsPlayerPresent() =>
-            CalculateQualifyingPresenceBattleValue(requireUnassigned: false) > 0;
+            CalculateQualifyingPresenceBattleValue(requireShowOfForce: false) > 0;
 
         private static Date Copy(Date date) => new(date.Millenium, date.Year, date.Week);
 

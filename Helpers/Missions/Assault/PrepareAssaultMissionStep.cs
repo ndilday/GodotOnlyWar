@@ -68,7 +68,7 @@ namespace OnlyWar.Helpers.Missions.Assault
             // default Imperial faction fight together; hostile non-Imperial forces likewise share
             // a side. Pool every allied presence in the assaulted region.
             List<RegionFaction> alliedDefenders = defendingRegionFaction.Region.RegionFactionMap.Values
-                .Where(rf => AreAllied(rf.PlanetFaction.Faction, defendingRegionFaction.PlanetFaction.Faction))
+                .Where(rf => FactionDispositionService.AreAllied(rf.PlanetFaction.Faction, defendingRegionFaction.PlanetFaction.Faction))
                 .ToList();
 
             // 1. Get all landed squads in the region with defensive orders. A diversion force is
@@ -112,23 +112,18 @@ namespace OnlyWar.Helpers.Missions.Assault
             return defendingForce;
         }
 
-        internal static bool AreAllied(Faction first, Faction second)
-        {
-            if (first == null || second == null) return false;
-            bool firstIsImperial = first.IsPlayerFaction || first.IsDefaultFaction;
-            bool secondIsImperial = second.IsPlayerFaction || second.IsDefaultFaction;
-            return firstIsImperial == secondIsImperial;
-        }
-
         internal static List<Squad> GetRegionalDefensiveSquads(RegionFaction defendingRegionFaction)
         {
             Faction defender = defendingRegionFaction.PlanetFaction.Faction;
             return defendingRegionFaction.Region.RegionFactionMap.Values
-                .Where(rf => AreAllied(rf.PlanetFaction.Faction, defender))
+                .Where(rf => FactionDispositionService.AreAllied(rf.PlanetFaction.Faction, defender))
                 .SelectMany(rf => rf.LandedSquads)
                 .Where(s => s.CurrentOrders?.Mission.MissionType == MissionType.DefenseInDepth
                          || s.CurrentOrders?.Mission.MissionType == MissionType.Diversion
-                         || s.CurrentOrders?.Mission.MissionType == MissionType.Patrol)
+                         || s.CurrentOrders?.Mission.MissionType == MissionType.Patrol
+                         // A show of force that stood by while the region it garrisons was overrun
+                         // would be no show of force at all - it defends like any standing screen.
+                         || s.CurrentOrders?.Mission.MissionType == MissionType.ShowOfForce)
                 .ToList();
         }
 
