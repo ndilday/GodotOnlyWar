@@ -64,9 +64,10 @@ namespace OnlyWar.Helpers.Missions.Assault
             var defendingForce = new List<BattleSquad>();
 
             // A defence order protects the geographic region, not merely one faction's enclave
-            // within it. Under the current two-coalition diplomacy model, the Chapter and the
-            // default Imperial faction fight together; hostile non-Imperial forces likewise share
-            // a side. Pool every allied presence in the assaulted region.
+            // within it, so every allied presence in the assaulted region is pooled into the
+            // defence. Until diplomacy exists that means the Chapter and the world's own defence
+            // forces and nobody else (FactionDispositionService.AreAllied) - two xenos factions
+            // sharing a region do NOT reinforce each other, they each defend alone.
             List<RegionFaction> alliedDefenders = defendingRegionFaction.Region.RegionFactionMap.Values
                 .Where(rf => FactionDispositionService.AreAllied(rf.PlanetFaction.Faction, defendingRegionFaction.PlanetFaction.Faction))
                 .ToList();

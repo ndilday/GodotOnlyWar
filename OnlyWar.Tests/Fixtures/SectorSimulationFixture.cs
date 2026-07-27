@@ -84,7 +84,13 @@ internal sealed class SectorSimulationFixture
         fixture.Sector = new Sector(playerForce, [], [fixture.Planet], []);
         if (loadGlobalGameData)
         {
-            GameDataSingleton.Instance.LoadGameDataFromBlob(new GameRulesData(), new Date(1, 1, 1), fixture.Sector);
+            GameRulesData rules = new();
+            // These are single-planet simulations with one governor, so tests force or suppress a
+            // request through the governor's traits alone. Pin out the sector-wide throttle (which
+            // production sets low enough that a lone governor would almost never petition) so those
+            // trait-driven expectations stay deterministic.
+            rules.SupplyEconomyRules.RequestGenerationRate = 1m;
+            GameDataSingleton.Instance.LoadGameDataFromBlob(rules, new Date(1, 1, 1), fixture.Sector);
         }
 
         return fixture;
@@ -201,6 +207,11 @@ internal sealed class SectorSimulationFixture
         }
         return planet;
     }
+
+    // Bare faction with no planet or region attached, for tests that only need the faction flags
+    // (FactionDispositionServiceTests).
+    public static Faction BuildTestFaction(int id, string name, bool isPlayer, bool isDefault) =>
+        BuildFaction(id, name, isPlayer, isDefault, GrowthType.None);
 
     private static Faction BuildFaction(int id, string name, bool isPlayer, bool isDefault, GrowthType growthType)
     {

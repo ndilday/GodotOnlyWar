@@ -128,7 +128,13 @@ namespace OnlyWar.Helpers.Turns
                 return;
             }
 
-            float chance = planetFaction.Leader.Neediness * planetFaction.Leader.OpinionOfPlayerForce;
+            SupplyEconomyRules supplyRules = _session.Rules.SupplyEconomyRules;
+            // RequestGenerationRate throttles the whole petition economy. Both gates are linear in
+            // the governor's traits, so scaling here changes only how often worlds petition, not
+            // which governors do it (see SupplyEconomyRules.RequestGenerationRate).
+            float chance = (float)supplyRules.RequestGenerationRate
+                * planetFaction.Leader.Neediness
+                * planetFaction.Leader.OpinionOfPlayerForce;
             if (_session.Random.GetLinearDouble() >= chance)
             {
                 return;
@@ -138,7 +144,6 @@ namespace OnlyWar.Helpers.Turns
             (RequestSeverity severity, RequestHazard hazard) = ClassifyRequest(planet, threatFaction);
             int nominalOffer = CalculateOffer(
                 planet, planetFaction.Leader, commitment, severity, hazard);
-            SupplyEconomyRules supplyRules = _session.Rules.SupplyEconomyRules;
             PledgeScheduleKind scheduleKind = nominalOffer >= supplyRules.StandingMinimumOffer
                 && planetFaction.Leader.OpinionOfPlayerForce >= 0.75f
                     ? PledgeScheduleKind.Standing

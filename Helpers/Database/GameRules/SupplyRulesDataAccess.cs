@@ -100,6 +100,7 @@ namespace OnlyWar.Helpers.Database.GameRules
                 Value("StandingDeliveryFraction"),
                 decimal.ToInt32(Value("StandingMinimumOffer")),
                 decimal.ToInt32(Value("RequestCooldownWeeks")),
+                Value("RequestGenerationRate"),
                 qualificationPremiums,
                 LoadMultipliers("SupplyHazardPremium"),
                 LoadMultipliers("SupplyAuthorityPremium"),

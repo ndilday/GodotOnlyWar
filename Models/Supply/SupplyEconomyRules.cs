@@ -14,6 +14,19 @@ namespace OnlyWar.Models.Supply
         public decimal StandingDeliveryFraction { get; }
         public int StandingMinimumOffer { get; }
         public int RequestCooldownWeeks { get; }
+
+        /// <summary>
+        /// Scales how often an eligible governor petitions the Chapter, applied to the
+        /// neediness/opinion roll in GovernorTurnProcessor. The two generation gates are each
+        /// linear in the governor's traits, so sector-wide arrivals per week work out to roughly
+        /// <c>governorCount * 0.125 * RequestGenerationRate</c> - about
+        /// <c>100 * RequestGenerationRate</c> for the ~800-governor production sector. Because the
+        /// scale is applied multiplicatively it changes only the rate, not which governors ask.
+        ///
+        /// The setter is a test hook: SectorSimulationFixture pins this to 1 so single-planet
+        /// simulation tests can still force a request deterministically.
+        /// </summary>
+        public decimal RequestGenerationRate { get; internal set; }
         public IReadOnlyList<QualificationPremium> QualificationPremiums { get; }
         public IReadOnlyDictionary<string, decimal> HazardMultipliers { get; }
         public IReadOnlyDictionary<string, decimal> AuthorityMultipliers { get; }
@@ -32,6 +45,7 @@ namespace OnlyWar.Models.Supply
             decimal standingDeliveryFraction,
             int standingMinimumOffer,
             int requestCooldownWeeks,
+            decimal requestGenerationRate,
             IReadOnlyList<QualificationPremium> qualificationPremiums,
             IReadOnlyDictionary<string, decimal> hazardMultipliers,
             IReadOnlyDictionary<string, decimal> authorityMultipliers,
@@ -49,7 +63,8 @@ namespace OnlyWar.Models.Supply
             StandingDeliveryFraction = standingDeliveryFraction;
             StandingMinimumOffer = standingMinimumOffer;
             RequestCooldownWeeks = requestCooldownWeeks;
-            QualificationPremiums = qualificationPremiums ?? throw new ArgumentNullException(nameof(qualificationPremiums));
+            RequestGenerationRate = requestGenerationRate;
+            QualificationPremiums =qualificationPremiums ?? throw new ArgumentNullException(nameof(qualificationPremiums));
             HazardMultipliers = hazardMultipliers ?? throw new ArgumentNullException(nameof(hazardMultipliers));
             AuthorityMultipliers = authorityMultipliers ?? throw new ArgumentNullException(nameof(authorityMultipliers));
             DesperationMultipliers = desperationMultipliers ?? throw new ArgumentNullException(nameof(desperationMultipliers));
