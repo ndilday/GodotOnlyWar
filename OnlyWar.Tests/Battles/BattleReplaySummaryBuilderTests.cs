@@ -130,6 +130,51 @@ public class BattleReplaySummaryBuilderTests
     }
 
     [Fact]
+    public void Build_RangedAttackTagsChronicleEntryForFiltering()
+    {
+        BattleSquad playerSquad = CreateBattleSquad(true, "Alpha", "Sergeant Alpha");
+        BattleSquad opposingSquad = CreateBattleSquad(false, "Cult Mob", "Cultist One");
+        BattleState state = CreateState(playerSquad, opposingSquad);
+        ShootAction action = new(
+            playerSquad.Soldiers[0].Soldier.Id,
+            opposingSquad.Soldiers[0].Soldier.Id,
+            0,
+            6,
+            1,
+            false,
+            null,
+            new FixedRNG());
+        BattleHistory history = new();
+        history.Turns.Add(new BattleTurn(state, [action]));
+
+        BattleEventEntry entry = Assert.Single(
+            new BattleReplaySummaryBuilder().Build(history, 0).CurrentTurnEvents);
+
+        Assert.True(entry.MatchesAny(BattleEventCategory.Ranged));
+        Assert.False(entry.MatchesAny(BattleEventCategory.Melee));
+        Assert.False(entry.MatchesAny(BattleEventCategory.Damaging));
+    }
+
+    [Fact]
+    public void EventEntry_MultipleActiveFiltersMatchAnySelectedCategory()
+    {
+        BattleEventEntry damagingMelee = new(
+            1,
+            "01:01",
+            "Attacker",
+            "Alpha",
+            "Melee",
+            "A damaging strike.",
+            BattleEventSeverity.Warning,
+            BattleEventCategory.Melee | BattleEventCategory.Damaging);
+
+        Assert.True(damagingMelee.MatchesAny(BattleEventCategory.None));
+        Assert.True(damagingMelee.MatchesAny(BattleEventCategory.Melee));
+        Assert.True(damagingMelee.MatchesAny(BattleEventCategory.Ranged | BattleEventCategory.Damaging));
+        Assert.False(damagingMelee.MatchesAny(BattleEventCategory.Ranged));
+    }
+
+    [Fact]
     public void Build_ActionByCasualtyRetainsActorAndFormationIdentity()
     {
         BattleSquad playerSquad = CreateBattleSquad(true, "Alpha", "Sergeant Alpha");

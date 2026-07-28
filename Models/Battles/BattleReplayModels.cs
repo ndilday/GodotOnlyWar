@@ -9,6 +9,15 @@ namespace OnlyWar.Models.Battles
         Critical
     }
 
+    [System.Flags]
+    public enum BattleEventCategory
+    {
+        None = 0,
+        Melee = 1,
+        Ranged = 2,
+        Damaging = 4
+    }
+
     public sealed class BattleReplayDisplay
     {
         public int CurrentTurnIndex { get; }
@@ -162,6 +171,7 @@ namespace OnlyWar.Models.Battles
         public string EventType { get; }
         public string Text { get; }
         public BattleEventSeverity Severity { get; }
+        public BattleEventCategory Categories { get; }
 
         public BattleEventEntry(
             int turnNumber,
@@ -170,7 +180,8 @@ namespace OnlyWar.Models.Battles
             string formationName,
             string eventType,
             string text,
-            BattleEventSeverity severity)
+            BattleEventSeverity severity,
+            BattleEventCategory categories = BattleEventCategory.None)
         {
             TurnNumber = turnNumber;
             Timestamp = timestamp;
@@ -179,7 +190,11 @@ namespace OnlyWar.Models.Battles
             EventType = eventType;
             Text = text;
             Severity = severity;
+            Categories = categories;
         }
+
+        public bool MatchesAny(BattleEventCategory categories) =>
+            categories == BattleEventCategory.None || (Categories & categories) != 0;
     }
 
     public sealed class BattleTimelineEntry

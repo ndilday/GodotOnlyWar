@@ -23,6 +23,11 @@ public partial class BattleReviewView : DialogView
     private VBoxContainer _effectsVBox;
     private ScrollContainer _eventScroll;
     private VBoxContainer _eventListVBox;
+    private Button _meleeFilterButton;
+    private Button _rangedFilterButton;
+    private Button _damagingFilterButton;
+    private IReadOnlyList<BattleEventEntry> _currentEvents = Array.Empty<BattleEventEntry>();
+    private BattleEventCategory _activeEventFilters;
     private Button _previousRoundButton;
     private Button _stepBackButton;
     private Button _playPauseButton;
@@ -56,6 +61,9 @@ public partial class BattleReviewView : DialogView
         _effectsVBox = GetNode<VBoxContainer>("Layout/RightPanel/SelectedPanel/SelectedMargin/SelectedStack/EffectsVBox");
         _eventScroll = GetNode<ScrollContainer>("Layout/RightPanel/EventPanel/EventMargin/EventStack/EventScroll");
         _eventListVBox = GetNode<VBoxContainer>("Layout/RightPanel/EventPanel/EventMargin/EventStack/EventScroll/EventListVBox");
+        _meleeFilterButton = GetNode<Button>("Layout/RightPanel/EventPanel/EventMargin/EventStack/EventFilterRow/MeleeFilterButton");
+        _rangedFilterButton = GetNode<Button>("Layout/RightPanel/EventPanel/EventMargin/EventStack/EventFilterRow/RangedFilterButton");
+        _damagingFilterButton = GetNode<Button>("Layout/RightPanel/EventPanel/EventMargin/EventStack/EventFilterRow/DamagingFilterButton");
         _previousRoundButton = GetNode<Button>("Layout/CenterPanel/HeaderPanel/HeaderMargin/HeaderStack/PlaybackRow/PreviousRoundButton");
         _stepBackButton = GetNode<Button>("Layout/CenterPanel/HeaderPanel/HeaderMargin/HeaderStack/PlaybackRow/StepBackButton");
         _playPauseButton = GetNode<Button>("Layout/CenterPanel/HeaderPanel/HeaderMargin/HeaderStack/PlaybackRow/PlayPauseButton");
@@ -74,6 +82,9 @@ public partial class BattleReviewView : DialogView
         _stepForwardButton.Pressed += () => StepForwardPressed?.Invoke(this, EventArgs.Empty);
         _nextRoundButton.Pressed += () => NextRoundPressed?.Invoke(this, EventArgs.Empty);
         _speedButton.Pressed += () => SpeedPressed?.Invoke(this, EventArgs.Empty);
+        ConfigureEventFilter(_meleeFilterButton, BattleEventCategory.Melee);
+        ConfigureEventFilter(_rangedFilterButton, BattleEventCategory.Ranged);
+        ConfigureEventFilter(_damagingFilterButton, BattleEventCategory.Damaging);
     }
 
     private void HandleReplayInput(InputEvent inputEvent)
@@ -303,8 +314,36 @@ public partial class BattleReviewView : DialogView
 
     private void SetEvents(IReadOnlyList<BattleEventEntry> events)
     {
+        _currentEvents = events ?? Array.Empty<BattleEventEntry>();
+        RefreshEvents();
+    }
+
+    private void ConfigureEventFilter(Button button, BattleEventCategory category)
+    {
+        button.Toggled += pressed =>
+        {
+            if (pressed)
+            {
+                _activeEventFilters |= category;
+            }
+            else
+            {
+                _activeEventFilters &= ~category;
+            }
+
+            OnlyWarStyle.ApplyAccentButtonRow(button, pressed, OnlyWarStyle.Gold);
+            RefreshEvents();
+        };
+        OnlyWarStyle.ApplyAccentButtonRow(button, false, OnlyWarStyle.Gold);
+    }
+
+    private void RefreshEvents()
+    {
         ClearContainer(_eventListVBox);
-        foreach (BattleEventEntry entry in events)
+        IReadOnlyList<BattleEventEntry> visibleEvents = _currentEvents
+            .Where(entry => entry.MatchesAny(_activeEventFilters))
+            .ToArray();
+        foreach (BattleEventEntry entry in visibleEvents)
         {
             PanelContainer panel = new();
             OnlyWarStyle.ApplyEventPanel(panel, GetEventTone(entry.Severity));
@@ -340,6 +379,19 @@ public partial class BattleReviewView : DialogView
             body.AddThemeFontSizeOverride("font_size", 12);
             stack.AddChild(body);
             _eventListVBox.AddChild(panel);
+        }
+
+        if (visibleEvents.Count == 0)
+        {
+            Label emptyLabel = new()
+            {
+                Text = "No events match the selected filters.",
+                HorizontalAlignment = HorizontalAlignment.Center,
+                AutowrapMode = TextServer.AutowrapMode.WordSmart
+            };
+            emptyLabel.AddThemeColorOverride("font_color", OnlyWarStyle.MutedText);
+            emptyLabel.AddThemeFontSizeOverride("font_size", 12);
+            _eventListVBox.AddChild(emptyLabel);
         }
 
         _eventScroll.ScrollVertical = 0;

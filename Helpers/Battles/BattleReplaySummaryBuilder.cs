@@ -276,7 +276,8 @@ namespace OnlyWar.Helpers.Battles
                     actor?.SquadName ?? "Unknown formation",
                     BuildEventType(action),
                     string.IsNullOrWhiteSpace(text) ? action.GetType().Name : text,
-                    BuildSeverity(text, woundCount)));
+                    BuildSeverity(text, woundCount),
+                    BuildCategories(action, woundCount)));
             }
 
             if (entries.Count == 0)
@@ -496,6 +497,22 @@ namespace OnlyWar.Helpers.Battles
                 MeleeAttackAction meleeAttackAction => meleeAttackAction.WoundResolutions.Count,
                 _ => 0
             };
+        }
+
+        private static BattleEventCategory BuildCategories(IAction action, int woundCount)
+        {
+            BattleEventCategory categories = action switch
+            {
+                MeleeAttackAction => BattleEventCategory.Melee,
+                ShootAction or AreaAttackAction or BlastAttackAction => BattleEventCategory.Ranged,
+                _ => BattleEventCategory.None
+            };
+            if (woundCount > 0)
+            {
+                categories |= BattleEventCategory.Damaging;
+            }
+
+            return categories;
         }
 
         private static string SafeDescription(IAction action)
