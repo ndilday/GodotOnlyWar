@@ -64,7 +64,8 @@ public class RulesDatabaseValidationTests
             Assert.True(flamer.IsTemplateWeapon);
             Assert.Equal(1, flamer.TemplateType);
             Assert.Equal(3.0f, flamer.AreaRadius);
-            Assert.Equal(10, flamer.FuelPerBurst);
+            Assert.Equal(5, flamer.AmmoCapacity);
+            Assert.Equal(1, flamer.FuelPerBurst);
             Assert.Equal(0, flamer.Accuracy);
         }
 

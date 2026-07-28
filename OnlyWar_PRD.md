@@ -265,7 +265,7 @@ Each feature is described as a behavioral specification: what the system does, a
 
 ### 4.9 Recruiter Screen
 
-**Description.** Manages the chapter's Scout Company and the pipeline from initiate to Battle Brother.
+**Description.** Manages the chapter's recruitment programs, living aspirants, ready-to-promote pool, Scout Company, and the full pipeline from planetary candidate to Battle Brother.
 
 **Acceptance Criteria (Implemented):**
 - Displays all Scout squads with their current members.
@@ -278,13 +278,63 @@ Each feature is described as a behavioral specification: what the system does, a
 - The Armory allows the designation of potential Techmarines to be sent to Mars for training.
 
 **Acceptance Criteria (Planned — 0.7.3 Recruitment v1):**
-- Recruitment rights are unlocked through sufficiently strong governor relationships, chapter ownership, or an explicit manpower pledge; they identify which worlds may supply candidates. The Promised World win (§5.2) is the intended first source of *chapter ownership*; whether it is the only unlock a brand-new chapter can reach — and therefore whether recruitment is gated on the opening objective at all — is an open question tracked with the work in §5.4.
-- Starting an intake consumes Requisition and available gene-seed. Both costs are shown before confirmation, and an intake cannot begin if either resource is insufficient.
-- Intake throughput is limited by chapter training capacity: available Scout Sergeants and any future recruitment/training facilities. Recruitment is a pipeline, not an instant purchase.
-- Candidates progress through aspirant/neophyte training into Scout squads before becoming full Battle Brothers. The Recruiter shows source world, elapsed/remaining time, training capacity used, and the expected destination squad or holding pool.
-- Recruitment source and method may affect candidate quality, intake time, population/political cost, or governor opinion. The first implementation needs at least one clearly differentiated trade-off rather than several cosmetically identical buttons.
-- Recruitment is managed through standing assignments and relationships, not a repeatable one-off “find recruits” mission.
-- Advanced methods, detailed population extraction, and specialized recruitment facilities may follow later; v1 must close the Chapter's attrition/recovery loop without requiring the complete typed-materiel economy.
+
+**Rights, source worlds, and the opening unlock**
+- The Promised World win (§5.2) designates the liberated planet as a first-class **Chapter Home World** and grants the new Chapter its first recruitment right. A brand-new Chapter cannot recruit before securing that world.
+- Recruitment rights are per-world. After the opening, a sufficiently strong governor relationship or an explicit manpower pledge may grant recruitment rights on a world the Chapter does not own; this grants access to that world's candidates without making it another Chapter Home World.
+- A recruiting world's surviving population matters directly. Tyranid damage to the Promised World's Population and `CarryingCapacity` (§4.24) therefore makes a slow liberation yield a materially poorer recruiting base than a fast one.
+
+**Continuous recruitment program**
+- Recruitment is a continuous, standing program rather than a sequence of player-initiated intake purchases or repeatable “find recruits” missions. The player sets source-world policies, screening thresholds, and staff assignments; each weekly turn advances screening, admission, training, implantation, and the candidate/aspirant pipeline.
+- The estimated number of children reaching recruitment age in a week is `max(0, weekly population gain + 0.015% of current population)`, using estimated weekly deaths to turn net population growth back into a proxy for births ten years earlier. Half of that cohort is eligible under the Chapter's male-only recruitment rule.
+- The eligible cohort is multiplied by **screening coverage** and **public compliance** before genetic and attribute filters are applied. Coverage reflects assigned staff and their skill; compliance uses the recruiting world's `PlayerReputation`. The Chapter Home World receives an explicit liberation bonus because the Chapter freed it from the xenos practically single-handedly. A potentially decaying form of that bonus is deferred beyond v1.
+- V1 includes recruitment policy and sentiment rather than assuming universal willing participation. At minimum, **Voluntary Presentation** is strongly sentiment-dependent and politically safe, while a **Planetary Tithe** produces steadier access at a public-sentiment cost. More coercive methods may follow later.
+
+**Screening and forecast**
+- Sergeants conduct the non-genetic testing and supply aspirant training capacity. Apothecaries conduct genetic screening and implantation. The relevant skills of assigned personnel affect coverage and capacity, creating a choice between committing the Chapter's best personnel to recruitment or deploying them to battle.
+- Recruitment assignments are program-level standing assignments. Assigned personnel are unavailable for squads, missions, and other duties and must be able to serve the recruiting world. Exact staff-to-capacity ratios are centralized tuning values.
+- The program has a modest operating cost. The initial v1 tuning target is **1 Requisition per assigned Sergeant or Apothecary per week**; the Recruiter displays the current and projected weekly cost.
+- The player may filter independently on **Strength, Constitution, Intelligence, Dexterity, and Ego**. Thresholds use half-sigma steps. Because v1 treats these attributes as independent variables, their individual pass rates multiply. Changing a threshold affects future screenings only and does not retroactively remove candidates or aspirants.
+- Genetic compatibility is a continuous value uniformly distributed from 0 to 1. The UI presents a slider with four or five named policy landmarks while permitting finer adjustment. Each implantation phase makes one survival check against the aspirant's compatibility, even when that phase implants multiple organs.
+- Before confirmation, and whenever policy, filters, or staffing changes, the Recruiter previews the chain from eligible male cohort through coverage, compliance, genetic screening, attribute screening, qualified candidates, intake capacity, expected Phase-12 neophytes, and expected Phase-13 Battle Brothers. Rates below one per week are presented as **“approximately 1 every X weeks”** rather than an opaque decimal.
+
+**Pools, admission, and the founding program**
+- The simulation distinguishes an **unscreened eligible pool** from a **qualified candidate pool**. The former contains age-eligible children not yet reached by screening; the latter contains individually generated children who passed all filters but could not enter Phase 0 because aspirant capacity was full.
+- If weekly screening capacity exceeds that week's newly eligible flow, the excess effort draws from the unscreened pool. If screening falls behind the new flow, the shortfall enters that pool. This is the same mechanism used by the one-time founding survivor program.
+- Claiming the Promised World launches a dialog chain that establishes the initial recruitment policies and assigns the initial Sergeants and Apothecaries. It previews both the finite number of existing survivor children expected to qualify and the sustainable rate of newly eligible children.
+- The founding unscreened pool represents survivor children who were ages 10–12 when the pool was created. After `w` weeks, a child drawn from it has an age uniformly distributed from `10 + w/52` through 12; the pool decays by 1% each week and expires after two years. Drawing older children from this pool bootstraps the Chapter sooner, but their shorter remaining training period produces less impressive neophytes than later six-year entrants.
+- Qualified candidates may wait for an aspirant opening for up to two years before aging out. Their actual age continues advancing, so time spent waiting reduces the training time available before later implantation and promotion deadlines.
+- When the deterministic end-of-turn forecast expects more qualified candidates than available Phase 0 places, the conditional End Turn preflight (§4.27) warns the player and shows expected qualifiers, available places, and expected additions to the candidate pool.
+
+**Aspirant identity, history, and progression**
+- Aspirants are individual simulation records and may reuse the soldier model, attributes, skill progression, and soldier history, but they do not receive Chapter names until they become neophytes. Before then they use stable induction designations such as `27.347.M40-01`.
+- The main Recruiter view groups aspirants into cohorts by current implantation phase and permits drill-down to individual records. Individual aspirant events do not enter the campaign event log; the Recruiter has its own program log, while the individual soldier history records the details for a living aspirant.
+- An aspirant who dies is summarized in the recruitment program log and then removed from persistent individual storage. The game does not retain an ever-growing roster of dead aspirants.
+- Aspirants begin in **Phase 0**, pre-implantation training. Entering Phase 1 consumes one unit of gene-seed: for v1, one mature progenoid produces one complete set of implants for one aspirant. Gene-seed is not charged once per organ.
+- Progress is gated by age, training/capability, Apothecary availability, and implantation capacity. Each numbered phase is one compatibility check and may implant several organs:
+
+| Phase | Organs implanted at the start of the phase | Eligible age |
+|---|---|---:|
+| 1 | Secondary Heart, Ossmodula, Biscopea | 10–12 |
+| 2 | Haemastamen, Larraman's Organ | 12–13 |
+| 3 | Catalepsean Node | 14–16 |
+| 4 | Preomnor, Omophagea, Multi-Lung | 14–16 |
+| 5 | Occulobe | 14–16 |
+| 6 | Lyman's Ear | 14–16 |
+| 7 | Sus-an Membrane | 15–16 |
+| 8 | Melanochrome | 15–16 |
+| 9 | Oolitic Kidney, Neuroglottis | 15–16 |
+| 10 | Mucranoid | 16 |
+| 11 | Betcher's Gland | 16–17 |
+| 12 | Progenoids | 16–18 |
+| 13 | Black Carapace | 16–18 |
+
+- With compatibility `c`, surviving all thirteen phases has probability `c^13`. For example, screening to the top 10% admits candidates with `c >= 0.9`; the least compatible admitted candidate has about a 25% chance to survive all phases, while the admitted group's average survival is about 55%. Gene-seed mutation is not simulated in v1.
+- Surviving Phase 12 makes an aspirant eligible for player-directed promotion to **neophyte**. Promotion requires choosing an eligible Scout squad located on the Chapter Home World; it is not automatic.
+- An eligible but unpromoted aspirant continues to consume training capacity and continues to age. Delay reduces the time available for Scout training: the neophyte must receive the Phase 13 Black Carapace and be promoted to full Battle Brother before turning 19.
+- The Recruiter exposes four connected views: **Overview** (forecast, staffing, costs, compliance, and capacity), **Recruitment** (source worlds, policy, and filters), **Aspirants** (cohorts, phases, histories, and complications), and **Neophytes & Scouts** (ready aspirants, Scout-squad placement, Scout training, and Battle Brother readiness).
+
+Advanced recruitment cultures, specialized facilities, detailed mutation and gene-seed lineage, and the complete typed-materiel economy remain later work. V1 must close the Chapter's attrition/recovery loop with one complete, legible path and meaningful policy, staffing, sentiment, filter-quality, and liberation-speed trade-offs.
 
 ---
 
@@ -1191,13 +1241,15 @@ Alpha 0.7.2 is deliberately limited to protecting and operating the released cam
 
 ### 5.4 Alpha 0.7.3 — To-Do
 
-- **Recruitment v1 (pulled forward from 0.8):** Connect recruitment rights, governor relationships, Requisition, gene-seed, training capacity, and the aspirant/neophyte-to-Scout pipeline (§4.9, §6.3). **Pulled forward because the Promised World win (§5.2) currently pays out in flavor only.** `ReplaceChapterPlanetFaction` installs the player as the planet-wide controlling faction on victory, inheriting the world's population and garrison region by region — but nothing in the model distinguishes *a world the player controls* from *the Chapter's home world*, and no capability reads either. The game's framed opening objective therefore ends in a notification and a reputation tick, and the Chapter's attrition loop stays one-way until recruitment lands. Scheduling this next is what makes the opening's reward mean something.
+- **Recruitment v1 (pulled forward from 0.8):** Implement the continuous, capacity-limited recruitment program specified in §4.9 and close the Chapter's one-way attrition loop. **Pulled forward because the Promised World win (§5.2) currently pays out in flavor only.** The win now needs to designate a first-class Chapter Home World, grant the first per-world recruitment right, and launch the founding recruitment dialog chain; a brand-new Chapter cannot recruit before securing it. Later governor relationships and manpower pledges may grant per-world rights without transferring ownership.
 
-  **Open questions to settle as part of this work:**
-  - **What unlocks recruitment at campaign start — and is the Promised World win the intended first unlock?** §4.9 names three unlock paths: governor relationships, chapter ownership, and manpower pledges. If relationships alone suffice, recruitment is not gated on the objective at all, and a patient player can recruit their way out of the deliberately-understrength opening (§5.2) without ever taking the world. If ownership is meant to be the first gate, the other two paths need a floor a brand-new chapter cannot reach. This is a pacing decision about the opening, not merely a detail of the rights model.
-  - **Does the Chapter's home world need to be a first-class concept, or is planet-wide control enough?** There is no home-world designation in the model today — `ReplaceChapterPlanetFaction` is the only place the idea appears, and it appears as an action rather than as state. Recruitment rights want to name the seat, and so will Chapter Mandates (§4.25) and the Chronicle (§4.19).
-  - **Can the Chapter recruit from a world it does not own?** Decides whether rights are per-world — the shape §4.23 *Rights* pledges already assume — or a single chapter-wide capability. Also decides whether a governor relationship can ever substitute for ownership.
-  - **How does a blighted world affect its recruiting base?** The promised world is eaten before the player ever lands: Tyranid consumption strips population and `CarryingCapacity` across the pre-arrival sim and for however long the liberation takes (§4.24). A fast liberation therefore yields a materially healthier recruiting base than a slow one. That trade-off falls out of systems already shipped and costs nothing to adopt, which makes it a strong candidate for the "at least one clearly differentiated trade-off" §4.9 requires of v1.
+  V1 connects the source world's population, `PlayerReputation`, recruitment policy, screening coverage, five independent attribute filters, genetic-compatibility screening, Requisition, gene-seed, staff skill, aspirant capacity, thirteen age-gated implantation phases, player-directed neophyte promotion, and Scout-squad placement. Recruitment runs from standing policies and assignments each week rather than an intake-purchase button. Sergeants own non-genetic testing and training capacity; Apothecaries own genetic screening and implantation; committing either removes valuable personnel from battle. The initial operating-cost target is 1 Requisition per assigned recruiter per week, and one gene-seed is consumed when an aspirant moves from Phase 0 into Phase 1.
+
+  The screen must make the calculation legible from eligible male cohort through coverage, compliance, filters, capacity, and expected surviving neophytes; sub-one-per-week rates use “approximately 1 every X weeks.” It maintains separate unscreened and qualified-candidate pools, gives qualified candidates a two-year age-out window, groups individually simulated but unnamed aspirants by implantation phase, keeps aspirant events out of the campaign event log, and requires the player to place a Phase-12 survivor into a Home World Scout squad before Phase 13 and full Battle Brother promotion. Expected capacity overflow joins the conditional End Turn preflight.
+
+  The founding program draws from a finite, 1%-per-week-decaying pool of children who were ages 10–12 when the world was claimed. Spare screening capacity searches this pool; delayed discovery or a qualified-candidate wait shortens the child's training runway. The Promised World's actual surviving Population and `CarryingCapacity` determine both this initial opportunity and its sustainable future intake, so liberation speed produces the first source-quality trade-off without a bespoke modifier. V1 includes at least Voluntary Presentation and a Planetary Tithe so `PlayerReputation` and public sentiment matter from the first implementation; the Home World receives a liberation bonus.
+
+  **Implementation-time calibration, not open design:** exact staff-to-capacity ratios and skill coefficients; Phase 0/phase training thresholds and durations within the locked age windows; policy, sentiment, and liberation-bonus coefficients; screening and candidate-pool tuning; and final Requisition costs. Gene-seed mutation and lineage are explicitly deferred to Recruitment v2 after 0.8 (§6.3).
 
 - **Battle Logic Phase 4B:** Morale, on-fire damage-over-time/panic (§4.14 gated follow-on), Rout behavior, Flight disengagement once flying units exist, and post-battle loadout recalculation. *(The organized covered-withdrawal/pursuit/rear-guard system and immediate Burrow disengagement are implemented. Flamers/cone templates were pulled forward to §5.2; grenades and Phase 4A movement tiers shipped in §5.3.)*
 - **Leg Wound & Prone-Combat Realism (maybe):** Rework the leg-hit outcome so a single solid hit staggers rather than reliably felling. Motivated by combat GSW data: even for 40k-tier energies (nothing softer than .45/7.62), only ~45–55% of solid leg hits fracture bone/joint or major vessel and actually prevent movement; the rest slow but don't stop. Scope:
@@ -1325,16 +1377,18 @@ The full behavioral spec, findings, delivery phases, and test plan live in `Desi
 
 ### 6.3 New Recruit Intake — V1 COMMITTED FOR 0.7.3
 
-Recruitment v1 is committed in §4.9 and closes the current one-way attrition loop. The player gains recruitment rights through relationships or chapter ownership, spends Requisition and gene-seed, and moves candidates through a capacity-limited aspirant/neophyte pipeline into Scout squads. It was **pulled forward from 0.8 to 0.7.3** so the Promised World win has something to unlock — see §5.4, which also carries the questions this work must settle first (what gates recruitment at campaign start, whether the Chapter's home world becomes a first-class concept, whether rights are per-world, and how a blighted world's recruiting base is affected).
+Recruitment v1 is committed in §4.9 and closes the current one-way attrition loop. It was **pulled forward from 0.8 to 0.7.3** so the Promised World win has something concrete to unlock. The settled v1 path makes that planet a first-class Chapter Home World and first recruitment source, then uses standing staff assignments, public sentiment, policy, filters, Requisition, gene-seed, and age-gated training/implantation to move candidates through aspirant and neophyte status into Scout squads. Per-world rights earned through later governor relationships or manpower pledges broaden the source list without transferring ownership.
 
-The open design space is how many additional recruitment methods should eventually coexist and how sharply their trade-offs should differ:
+V1 includes meaningful trade-offs in liberation speed, Voluntary Presentation versus a Planetary Tithe, screening strictness versus throughput, candidate waiting versus training time, and assigning skilled Sergeants and Apothecaries to recruitment rather than battle. A broader menu of recruitment cultures, coercive policies, facilities, population consequences, and chapter-specific methods remains later expansion.
 
-- One method might yield more recruits but strain the source planet's population or reduce planetary morale.
-- Achieving a high reputation with a planetary governor could unlock that governor offering recruitment rights on their world, as a relationship reward.
-- Some Scout squads or Sergeants may be assigned to recruitment duties rather than training or deployment, representing the chapter's active effort to identify and select candidates.
-- A dedicated scouting mission purely to find recruits is not planned; recruitment is managed through standing assignments and governor relationships rather than one-off missions.
+**Recruitment v2 — gene-seed mutation and lineage (post-0.8):** V1 uses genetic compatibility only for survival checks and treats one progenoid as one complete set of implants. V2 should make low compatibility threaten mutation as well as survival and connect the result to stored gene-seed purity and lineage. Its open questions are:
 
-V1 needs one complete, legible path and at least one meaningful source/method trade-off. A broader menu of recruitment cultures, facilities, population consequences, and chapter-specific methods remains later expansion rather than a blocker for 0.7.3.
+- Is mutation checked at each implantation phase, once when implantation completes, or only when the implanted progenoids mature?
+- Does mutation belong to a specific implanted organ, to the aspirant's entire implant set, or to the descendant gene-seed lineage recovered from that marine?
+- When does the Chapter learn that mutation occurred: immediately through Apothecary testing, during later development, or only when progenoids mature or are recovered?
+- How do Apothecary skill, screening policy, and facilities modify mutation risk or detection without duplicating the survival calculation?
+- Which mutations merely reduce purity, which alter the resulting marine, and which make future recovered gene-seed unusable?
+- Can failed or dead aspirants yield any recoverable material, and how does recovered material propagate mutation into later generations?
 
 ### 6.4 Imperial Guard Interactions
 
