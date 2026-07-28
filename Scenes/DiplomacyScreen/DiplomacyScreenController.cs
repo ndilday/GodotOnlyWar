@@ -1,5 +1,8 @@
 using Godot;
+using OnlyWar.Helpers;
+using OnlyWar.Helpers.Narrative;
 using OnlyWar.Models;
+using OnlyWar.Models.Planets;
 using OnlyWar.Models.Supply;
 using System;
 using System.Collections.Generic;
@@ -20,7 +23,9 @@ public partial class DiplomacyScreenController : DialogController
     {
         if (_view == null) return;
 
-        List<IRequest> activeRequests = GameDataSingleton.Instance.Sector.PlayerForce.Requests
+        Sector sector = GameDataSingleton.Instance.Sector;
+
+        List<IRequest> activeRequests = sector.PlayerForce.Requests
             .Where(request => request.Status is RequestStatus.Open or RequestStatus.InProgress)
             .OrderBy(request => request.DateRequestMade.GetTotalWeeks())
             .ToList();
@@ -29,7 +34,7 @@ public partial class DiplomacyScreenController : DialogController
             ? [new TreeNode(0, "No outstanding requests from the sector's governors.", [], selectable: false)]
             : activeRequests.Select(CreateRequestNode).ToList();
 
-        List<Pledge> pledges = GameDataSingleton.Instance.Sector.PlayerForce.Pledges
+        List<Pledge> pledges = sector.PlayerForce.Pledges
             .Where(pledge => pledge.Status != PledgeStatus.Completed)
             .OrderBy(pledge => pledge.NextDeliveryDate)
             .ToList();
@@ -42,7 +47,102 @@ public partial class DiplomacyScreenController : DialogController
                 selectable: false));
         }
 
+        // The Sector Lord's promise sits above the governors' petitions: it is the standing
+        // obligation the whole opening is framed around, and until now it was only ever visible in
+        // the one-shot briefing popup, which the player cannot get back once dismissed.
+        TreeNode promiseNode = CreatePromisedWorldNode(sector);
+        if (promiseNode != null)
+        {
+            nodes.Insert(0, promiseNode);
+        }
+
         _view.PopulateRequestTree(nodes);
+    }
+
+    /// <summary>
+    /// The standing "Promised World" obligation, or null when there is nothing live to show —
+    /// a plain-sandbox sector, or a scenario that has already resolved (a settled promise belongs
+    /// to the Chapter's history, not to the board of outstanding business).
+    /// </summary>
+    private static TreeNode CreatePromisedWorldNode(Sector sector)
+    {
+        CampaignScenario scenario = sector.Scenario;
+        if (scenario is not { Type: ScenarioType.PromisedWorld, State: ObjectiveState.Pending })
+        {
+            return null;
+        }
+
+        Planet promised = sector.Planets.TryGetValue(scenario.PromisedPlanetId, out Planet planet)
+            ? planet
+            : null;
+        string planetName = promised?.Name ?? "Unknown world";
+
+        // The obligation follows the seat, not the person, so this resolves whoever holds it now
+        // rather than the character who originally made the promise.
+        Planet capital = sector.GetSectorCapital();
+        Character lord = capital?.Governor;
+        string authority = lord == null
+            ? "Pledged by: the sector throne (currently vacant)"
+            : $"Pledged by: {BriefingComposer.GetAuthorityTitle(capital.GovernanceTier)} {lord.Name}";
+
+        List<TreeNode> details =
+        [
+            new TreeNode(0, authority, [], selectable: false),
+            new TreeNode(0, $"Terms: liberate {planetName} and it is granted to the Chapter as its home world", [], selectable: false),
+            new TreeNode(0, "Fulfilled when: no enemy holds ground openly anywhere on the world", [], selectable: false),
+            .. DescribeLiberationProgress(promised)
+        ];
+
+        return new TreeNode(0, $"The Promised World — {planetName}", details, selectable: false);
+    }
+
+    /// <summary>
+    /// How far the liberation has actually got, measured the same way the objective resolves it
+    /// (ScenarioTurnProcessor): by which regions an enemy still openly holds.
+    /// </summary>
+    private static List<TreeNode> DescribeLiberationProgress(Planet promised)
+    {
+        if (promised == null)
+        {
+            return [new TreeNode(0, "Progress: unknown — no report from the world", [], selectable: false)];
+        }
+
+        List<RegionFaction> enemyHoldings = promised.Regions
+            .SelectMany(region => region.RegionFactionMap.Values)
+            .Where(regionFaction => regionFaction.IsPublic
+                && !FactionDispositionService.IsImperial(regionFaction.PlanetFaction.Faction)
+                && (regionFaction.Population > 0 || regionFaction.Garrison > 0))
+            .ToList();
+
+        int contestedRegions = enemyHoldings.Select(rf => rf.Region).Distinct().Count();
+        if (contestedRegions == 0)
+        {
+            return
+            [
+                new TreeNode(0,
+                    "Progress: no enemy holds ground — the world is liberated as of the coming turn",
+                    [], selectable: false)
+            ];
+        }
+
+        List<TreeNode> byFaction = enemyHoldings
+            .GroupBy(rf => rf.PlanetFaction.Faction.Name)
+            .OrderByDescending(group => group.Count())
+            .ThenBy(group => group.Key, StringComparer.Ordinal)
+            .Select(group => new TreeNode(
+                0,
+                $"{group.Key}: {group.Count()} {Pluralize("region", group.Count())}",
+                [],
+                selectable: false))
+            .ToList();
+
+        return
+        [
+            new TreeNode(0,
+                $"Progress: enemy holds {contestedRegions} of {promised.Regions.Length} regions",
+                byFaction,
+                selectable: false)
+        ];
     }
 
     private static TreeNode CreateRequestNode(IRequest request)

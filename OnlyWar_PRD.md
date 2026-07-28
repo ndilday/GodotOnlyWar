@@ -46,12 +46,12 @@
    - 5.3 [Alpha 0.7.2 — Committed](#53-alpha-072--committed)
    - 5.4 [Alpha 0.7.3 — To-Do](#54-alpha-073--to-do)
    - 5.5 [Alpha 0.8 — Command, Narrative & Continuity](#55-alpha-08--command-narrative--continuity)
-   - 5.6 [Alpha 0.8+ — Cross-Faction Simulation (Relationships, Intel, Orks)](#56-alpha-08--cross-faction-simulation-relationships-intel-orks)
+   - 5.6 [Alpha 0.8+ — Cross-Faction Simulation (Relationships, Intel, Tyranids)](#56-alpha-08--cross-faction-simulation-relationships-intel-tyranids)
    - 5.7 [Post-0.8 Backlog](#57-post-08-backlog)
 6. [Open Design Questions](#6-open-design-questions)
    - 6.1 [Aggression Axis Split — DEFERRED](#61-aggression-axis-split--deferred)
    - 6.2 [Morale](#62-morale)
-   - 6.3 [New Recruit Intake — V1 COMMITTED FOR 0.8](#63-new-recruit-intake--v1-committed-for-08)
+   - 6.3 [New Recruit Intake — V1 COMMITTED FOR 0.7.3](#63-new-recruit-intake--v1-committed-for-073)
    - 6.4 [Imperial Guard Interactions](#64-imperial-guard-interactions)
    - 6.5 [Inquisition Role](#65-inquisition-role)
    - 6.6 [Navis Nobilite Relations (Post-0.7 Backlog)](#66-navis-nobilite-relations-post-07-backlog)
@@ -277,8 +277,8 @@ Each feature is described as a behavioral specification: what the system does, a
 - **Sergeant training cap.** A Sergeant's own skill level in a category is a hard cap on how far he can train a scout in that category — a scout cannot be trained beyond his instructor's level. Soldier ratings are updated every four turns; each time ratings update and a scout remains at his Sergeant's instructional limit in one or more skills, the Recruiter surfaces a notification. The player then has three options: leave the scout in the squad and accept no further improvement in the capped skill; transfer him to a Scout squad whose Sergeant has a higher level in that area; or promote him to a line squad, where development continues through deployment and combat experience rather than structured training.
 - The Armory allows the designation of potential Techmarines to be sent to Mars for training.
 
-**Acceptance Criteria (Planned — 0.8 Recruitment v1):**
-- Recruitment rights are unlocked through sufficiently strong governor relationships, chapter ownership, or an explicit manpower pledge; they identify which worlds may supply candidates.
+**Acceptance Criteria (Planned — 0.7.3 Recruitment v1):**
+- Recruitment rights are unlocked through sufficiently strong governor relationships, chapter ownership, or an explicit manpower pledge; they identify which worlds may supply candidates. The Promised World win (§5.2) is the intended first source of *chapter ownership*; whether it is the only unlock a brand-new chapter can reach — and therefore whether recruitment is gated on the opening objective at all — is an open question tracked with the work in §5.4.
 - Starting an intake consumes Requisition and available gene-seed. Both costs are shown before confirmation, and an intake cannot begin if either resource is insufficient.
 - Intake throughput is limited by chapter training capacity: available Scout Sergeants and any future recruitment/training facilities. Recruitment is a pipeline, not an instant purchase.
 - Candidates progress through aspirant/neophyte training into Scout squads before becoming full Battle Brothers. The Recruiter shows source world, elapsed/remaining time, training capacity used, and the expected destination squad or holding pool.
@@ -835,7 +835,7 @@ This behavioral specification is **implemented for Alpha 0.7.1** (see §5.3) on 
 
 These are specified together because they share the same per-faction-pair shape and the same consumers (offensive planning, garrison sizing, the fog-of-war/intelligence UI, governor requests).
 
-This is a behavioral specification. It is scoped as the **substrate prerequisite** for Orks (see §5.6) and is designed so the Revolt and governor systems can adopt it without rework.
+This is a behavioral specification. It is scoped as the **substrate prerequisite** for Orks (now scheduled in 0.8 — see §5.5) and for the Tyranid line (§5.6), and is designed so the Revolt and governor systems can adopt it without rework.
 
 **Acceptance Criteria:**
 
@@ -869,7 +869,7 @@ This is a behavioral specification. It is scoped as the **substrate prerequisite
 
 **Description.** Orks are a fungal xenos whose biology makes them categorically different from the factions modeled so far: once their spores take root in a region they **cannot be eradicated** by force — exterminating every Ork only resets a decades-long regrowth, never clears the ground. They spend their feral phase fighting amongst themselves, growing but squandering their numbers, until a population coalesces and a Warboss unites it into a WAAAGH! that erupts outward and acts as a beacon drawing yet more Orks across the sector. This section specifies that lifecycle on top of the cross-faction substrate (§4.21), which it requires.
 
-This is a behavioral specification. It depends on §4.21 (relationships + intelligence) and is scoped as the dependent Ork line item in §5.6.
+This is a behavioral specification. It depends on §4.21 (relationships + intelligence) and is scoped as the Ork line item in Alpha 0.8 (§5.5).
 
 **Acceptance Criteria:**
 
@@ -1191,6 +1191,14 @@ Alpha 0.7.2 is deliberately limited to protecting and operating the released cam
 
 ### 5.4 Alpha 0.7.3 — To-Do
 
+- **Recruitment v1 (pulled forward from 0.8):** Connect recruitment rights, governor relationships, Requisition, gene-seed, training capacity, and the aspirant/neophyte-to-Scout pipeline (§4.9, §6.3). **Pulled forward because the Promised World win (§5.2) currently pays out in flavor only.** `ReplaceChapterPlanetFaction` installs the player as the planet-wide controlling faction on victory, inheriting the world's population and garrison region by region — but nothing in the model distinguishes *a world the player controls* from *the Chapter's home world*, and no capability reads either. The game's framed opening objective therefore ends in a notification and a reputation tick, and the Chapter's attrition loop stays one-way until recruitment lands. Scheduling this next is what makes the opening's reward mean something.
+
+  **Open questions to settle as part of this work:**
+  - **What unlocks recruitment at campaign start — and is the Promised World win the intended first unlock?** §4.9 names three unlock paths: governor relationships, chapter ownership, and manpower pledges. If relationships alone suffice, recruitment is not gated on the objective at all, and a patient player can recruit their way out of the deliberately-understrength opening (§5.2) without ever taking the world. If ownership is meant to be the first gate, the other two paths need a floor a brand-new chapter cannot reach. This is a pacing decision about the opening, not merely a detail of the rights model.
+  - **Does the Chapter's home world need to be a first-class concept, or is planet-wide control enough?** There is no home-world designation in the model today — `ReplaceChapterPlanetFaction` is the only place the idea appears, and it appears as an action rather than as state. Recruitment rights want to name the seat, and so will Chapter Mandates (§4.25) and the Chronicle (§4.19).
+  - **Can the Chapter recruit from a world it does not own?** Decides whether rights are per-world — the shape §4.23 *Rights* pledges already assume — or a single chapter-wide capability. Also decides whether a governor relationship can ever substitute for ownership.
+  - **How does a blighted world affect its recruiting base?** The promised world is eaten before the player ever lands: Tyranid consumption strips population and `CarryingCapacity` across the pre-arrival sim and for however long the liberation takes (§4.24). A fast liberation therefore yields a materially healthier recruiting base than a slow one. That trade-off falls out of systems already shipped and costs nothing to adopt, which makes it a strong candidate for the "at least one clearly differentiated trade-off" §4.9 requires of v1.
+
 - **Battle Logic Phase 4B:** Morale, on-fire damage-over-time/panic (§4.14 gated follow-on), Rout behavior, Flight disengagement once flying units exist, and post-battle loadout recalculation. *(The organized covered-withdrawal/pursuit/rear-guard system and immediate Burrow disengagement are implemented. Flamers/cone templates were pulled forward to §5.2; grenades and Phase 4A movement tiers shipped in §5.3.)*
 - **Leg Wound & Prone-Combat Realism (maybe):** Rework the leg-hit outcome so a single solid hit staggers rather than reliably felling. Motivated by combat GSW data: even for 40k-tier energies (nothing softer than .45/7.62), only ~45–55% of solid leg hits fracture bone/joint or major vessel and actually prevent movement; the rest slow but don't stop. Scope:
   - **Raise the "can no longer walk" bar one level to Massive.** Motive (leg/foot) locations currently drop a soldier at their *cripple* threshold (Critical, i.e. damage ≥ Constitution); require the higher *Massive* band instead so a Critical leg wound impairs but does not fell. Torso/vital lethality is unchanged; this narrows the current asymmetry where a leg is fight-ending at half the damage the torso needs to be decisive.
@@ -1204,7 +1212,7 @@ Alpha 0.7.2 is deliberately limited to protecting and operating the released cam
 
 ### 5.5 Alpha 0.8 — Command, Narrative & Continuity
 
-The connective pass that turns 0.7's broad simulation into a legible, felt, sustainable sandbox campaign. The first half makes existing state understandable and memorable; the second closes the Chapter recovery loop and supplies a medium-term horizon. See §§4.19 and 4.25–4.27 for the governing specifications.
+The connective pass that turns 0.7's broad simulation into a legible, felt, sustainable sandbox campaign. The first half makes existing state understandable and memorable; the second supplies a medium-term horizon. (Closing the Chapter's recovery loop was the other half of this pass, and has moved earlier: Recruitment v1 now ships in 0.7.3 — §5.4.) See §§4.19 and 4.25–4.27 for the governing specifications.
 
 **Implementation prerequisite — structured soldier event log.** Soldier history was an unstructured `List<string>` of free-text lines, written from only a handful of sites (founding, promotion/transfer, ratings/awards, a per-battle summary, and a thin death line); non-combat missions (recon, sabotage, assassination, infiltration, fortification) recorded nothing. Before any narration work, this is being replaced with a **structured, queryable event log** — typed events carrying date, location, faction, weapon, magnitude, and related-soldier references — that serves as both the substrate the notability classifier queries and the source the narrator renders to text. Audit findings driving this:
 
@@ -1220,9 +1228,10 @@ The connective pass that turns 0.7's broad simulation into a legible, felt, sust
 - ⬜ **(4) Narrator / voice pass** rendering events and report lines.
 - ⬜ **(5) Command Brief & Chapter Chronicle** — commit the persistent two-lens command/narrative surface in §4.19, including deep links and the first-turn checklist.
 - ⬜ **(6) Planet tactical-map legibility redesign** — approve a visual baseline and replace the current tiny-glyph information hierarchy, including honest multi-faction presentation (§4.26).
-- ⬜ **(7) Recruitment v1** — connect recruitment rights, governor relationships, Requisition, gene-seed, training capacity, and the aspirant/neophyte-to-Scout pipeline (§4.9, §6.3).
-- ⬜ **(8) Chapter Mandates** — add state-aware, non-terminal medium-term objectives after the Promised World (§4.25).
-- ⬜ **(9) Display mode and UI/text scaling** — add fullscreen/windowed presentation settings and visually verify scaling across all supported screens (§4.27).
+- ⬜ **(7) Chapter Mandates** — add state-aware, non-terminal medium-term objectives after the Promised World (§4.25).
+- ⬜ **(8) Display mode and UI/text scaling** — add fullscreen/windowed presentation settings and visually verify scaling across all supported screens (§4.27).
+
+*Recruitment v1 was pulled forward from this sequence to 0.7.3 (§5.4), so the Promised World win has something to unlock; the open questions it must settle are listed there. Chapter Mandates (7) is unaffected — it still follows the Promised World rather than recruitment.*
 
 - **Narrative Voice baseline:** Apply the 4.19 authoring principles and notability classifier across the Turn Report, Soldier history log, and death/apothecary records — named individuals, specificity, continuity callbacks, and outcomes framed against the player's orders.
 - **Eulogy-style death records:** Where, how, final tally, years served, and geneseed recovered or lost (with lost geneseed narrated as a compounding loss).
@@ -1233,14 +1242,17 @@ The connective pass that turns 0.7's broad simulation into a legible, felt, sust
 - **Wider-Imperium dispatches (initial):** Voiced notifications for major uncontrolled-Imperium actions in the sector (Battlefleet priorities, worlds the Imperium addresses without the chapter), establishing the relevance/legacy stakes framing.
 - **Command Brief & Chapter Chronicle:** Implement the committed persistent operations/saga surface defined in §4.19. The Chronicle records what mattered; the Brief shows what now requires command attention.
 
+**Orks & Indelible Infestation** — `UniversallyHostile | Indelible` Ork faction; indelible `RegionFaction` with pop-0 → non-public → regrow-to-1; logistic growth with an Ork multiplier and a feral efficiency penalty; two-dimensional state (awareness × expansion) yielding unnoticed-feral / noticed-feral / WAAAGH!; feral amassing migration and internal-scale WAAAGH! emergence; imperfect Imperial cull of noticed-feral Orks (gated on `Confirmed` intel and spare capacity); and WAAAGH!-as-beacon spawning unmapped Ork worlds in empty tiles plus reinforcing fleets. Spec: §4.22. Open question: terminal Ork-controlled world state (§6.8).
+
+> **Sequencing note.** Orks depend on the Faction Relationships & Inter-Faction Intelligence substrate (§4.21), which is still listed under §5.6. Pulling Orks into 0.8 therefore pulls the substrate's *prerequisite* portions with it — at minimum the pair-wise Stance store, the `FactionBehavior` flags (`UniversallyHostile`, `Indelible`), and the v1 sparse regional intel value that gates the Imperial cull. Either that substrate work is scheduled ahead of Orks inside 0.8, or the whole of §5.6 moves forward with it.
+
 **Engineering follow-through supporting 0.8:** Finish the simulation seams documented in TDD §8: split the remaining large `PlanetTurnProcessor` by domain, replace the production-wide random sequence with deterministic named streams that can be reproduced from saved campaign/turn inputs, and retire transitional `TurnController` compatibility shims and unused prototypes as callers migrate. These are enabling changes, not separate player-facing features.
 
-### 5.6 Alpha 0.8+ — Cross-Faction Simulation (Relationships, Intel, Orks)
+### 5.6 Alpha 0.8+ — Cross-Faction Simulation (Relationships, Intel, Tyranids)
 
-A simulation expansion that lifts the sector beyond a binary Imperial-vs-everyone model. Sequenced **substrate first**, because the Ork feature depends on it and because the substrate independently benefits Revolt (§4.20) and future Chaos content. Full behavioral specs in §4.21 and §4.22.
+A simulation expansion that lifts the sector beyond a binary Imperial-vs-everyone model. Sequenced **substrate first**, because the dependent features build on it and because the substrate independently benefits Revolt (§4.20) and future Chaos content. Note that Orks have moved forward to 0.8 (§5.5) while the substrate they require is still listed here — see the sequencing note there. Full behavioral spec for the substrate in §4.21.
 
 - **Substrate (prerequisite): Faction Relationships & Inter-Faction Intelligence** — replace the binary `AreFactionsEnemies` test with a per-faction-pair Stance store (default Hostile; player↔Imperial seeded Allied); consolidate `Faction`'s ad-hoc booleans into a `[Flags] FactionBehavior` field (folding in `CanInfiltrate`, adding `UniversallyHostile` and `Indelible`); and build the per-faction graded **intelligence-as-belief** model (v1 sparse numeric `PlanetFaction.RegionIntel`, later target-specific `IntelLevel` ladder, false positives via paranoia/disinformation), generalizing the existing governor-detection and OpFor fog-of-war as the default-Imperial special case. Spec: §4.21.
-- **Orks & Indelible Infestation** (depends on the substrate) — `UniversallyHostile | Indelible` Ork faction; indelible `RegionFaction` with pop-0 → non-public → regrow-to-1; logistic growth with an Ork multiplier and a feral efficiency penalty; two-dimensional state (awareness × expansion) yielding unnoticed-feral / noticed-feral / WAAAGH!; feral amassing migration and internal-scale WAAAGH! emergence; imperfect Imperial cull of noticed-feral Orks (gated on `Confirmed` intel and spare capacity); and WAAAGH!-as-beacon spawning unmapped Ork worlds in empty tiles plus reinforcing fleets. Spec: §4.22. Open question: terminal Ork-controlled world state (§6.8).
 - **Tyranid Invasion & Biomass Consumption** (depends on the substrate) — `UniversallyHostile` Tyranid faction on a new `GrowthType.Consumption` (no birthrate; grows only by eating); Predate (proportional headcount kills) vs. Consume (degrade `CarryingCapacity` toward a new `MaximumCarryingCapacity`, slow recovery); depletion-driven troop allocation (fight → expand → predate+consume); doomed Genestealer Cult uprising (reveal-on-inbound, seeded insider belief, relocate to active-PDF neighbors, sacrificial predation with no growth); region-level Imperial hide/unhide with civilian emigration; the PDF made a defensive strategic actor (fortify/hold, weaker than the Guard §6.4); a strategic attrition combat model distinct from the tactical Battle engine; and the opening-scenario sequencing (cult reveal → seed insider belief → pre-landing sim → authored beachhead → Navy strands the swarm → Gaussian post-landing sim → player arrival). Spec: §4.24. Open questions: breeding structures (§6.11), region-level going-public generalization (§6.12).
 - **Large-Scale NPC Combat** — NPC-only regional assaults above tactical scale resolve in
   battle-value space against `RegionFaction.MilitaryStrength`, applying weekly attrition,
@@ -1253,7 +1265,7 @@ A simulation expansion that lifts the sector beyond a binary Imperial-vs-everyon
 
 Documented for planning purposes; not scheduled:
 
-**Content:** Dreadnoughts, Chaplains, Psykers, Chaos Troops, Necrons, Tau, Vehicles, Flying Units, Drop Pods, Fortifications, Relics, Poison Weapons, Geneseed Mutation, Power Armor Variants, The Inquisition. *(Orks are now scheduled — see §5.6. When Vehicles arrive, add krak grenades alongside them — thrown single-target anti-armor attacks, not blast templates; deferred from the §4.14 grenade work because they matter little without armored targets.)*
+**Content:** Dreadnoughts, Chaplains, Psykers, Chaos Troops, Necrons, Tau, Vehicles, Flying Units, Drop Pods, Fortifications, Relics, Poison Weapons, Geneseed Mutation, Power Armor Variants, The Inquisition. *(Orks are now scheduled — see §5.5. When Vehicles arrive, add krak grenades alongside them — thrown single-target anti-armor attacks, not blast templates; deferred from the §4.14 grenade work because they matter little without armored targets.)*
 
 **Enemy-generated diversions.** Give `FactionStrategyController` the ability to run its own diversion feints, rather than only being the target of the player's. Deferred from 0.7: it adds little to the 0.7 experience, and player/NPC order-structure symmetry — while desirable — is not blocking. Two distinct problems hide here, and they should be scoped separately:
 
@@ -1302,9 +1314,9 @@ The full behavioral spec, findings, delivery phases, and test plan live in `Desi
 
 **Still open (calibration, not design):** every constant — the resolve curve, stress weights, context coefficient, roll sigma, both thresholds, synapse radius, and the force-generation synapse ratio. All live in code; no calibration pass should require a rules-DB edit.
 
-### 6.3 New Recruit Intake — V1 COMMITTED FOR 0.8
+### 6.3 New Recruit Intake — V1 COMMITTED FOR 0.7.3
 
-Recruitment v1 is committed in §4.9 and closes the current one-way attrition loop. The player gains recruitment rights through relationships or chapter ownership, spends Requisition and gene-seed, and moves candidates through a capacity-limited aspirant/neophyte pipeline into Scout squads.
+Recruitment v1 is committed in §4.9 and closes the current one-way attrition loop. The player gains recruitment rights through relationships or chapter ownership, spends Requisition and gene-seed, and moves candidates through a capacity-limited aspirant/neophyte pipeline into Scout squads. It was **pulled forward from 0.8 to 0.7.3** so the Promised World win has something to unlock — see §5.4, which also carries the questions this work must settle first (what gates recruitment at campaign start, whether the Chapter's home world becomes a first-class concept, whether rights are per-world, and how a blighted world's recruiting base is affected).
 
 The open design space is how many additional recruitment methods should eventually coexist and how sharply their trade-offs should differ:
 
@@ -1313,7 +1325,7 @@ The open design space is how many additional recruitment methods should eventual
 - Some Scout squads or Sergeants may be assigned to recruitment duties rather than training or deployment, representing the chapter's active effort to identify and select candidates.
 - A dedicated scouting mission purely to find recruits is not planned; recruitment is managed through standing assignments and governor relationships rather than one-off missions.
 
-V1 needs one complete, legible path and at least one meaningful source/method trade-off. A broader menu of recruitment cultures, facilities, population consequences, and chapter-specific methods remains later expansion rather than a blocker for 0.8.
+V1 needs one complete, legible path and at least one meaningful source/method trade-off. A broader menu of recruitment cultures, facilities, population consequences, and chapter-specific methods remains later expansion rather than a blocker for 0.7.3.
 
 ### 6.4 Imperial Guard Interactions
 

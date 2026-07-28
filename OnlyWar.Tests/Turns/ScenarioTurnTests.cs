@@ -81,8 +81,8 @@ public class ScenarioTurnTests
         Assert.Equal(20012, cult.Population); // 20000 * 0.0006 = 12, exactly as before the throttle
     }
 
-    // §6.2 win — no enemy presence left (swarm AND cult cleared): the world is granted to the
-    // player and the current Sector Lord's opinion rises.
+    // §6.2 win — no enemy openly holds ground (swarm AND cult driven off the board): the world is
+    // granted to the player and the current Sector Lord's opinion rises.
     [Fact]
     public void ProcessScenario_Win_GrantsWorldAndRaisesSectorLordOpinion()
     {
@@ -94,9 +94,9 @@ public class ScenarioTurnTests
         Assert.NotNull(lord);
         float opinionBefore = lord.OpinionOfPlayerForce;
 
-        // Liberate the world FULLY: clear every hostile faction (Tyranid swarm, the revealed
-        // Genestealer Cult, anything else) — not just the Tyranids. A surviving cult would keep the
-        // objective Pending.
+        // Liberate the world: drive every hostile faction (Tyranid swarm, the revealed Genestealer
+        // Cult, anything else) off the board — not just the Tyranids. A cult still holding ground
+        // openly would keep the objective Pending.
         foreach (Region region in promised.Regions)
         {
             foreach (int hostileId in region.RegionFactionMap.Values
@@ -122,10 +122,73 @@ public class ScenarioTurnTests
                      sector.GetSectorLord().OpinionOfPlayerForce, precision: 4);
     }
 
-    // §6.2 — clearing the Tyranids is NOT enough: while the revealed Genestealer Cult still holds
-    // ground the world is not back in Imperial control, so the objective stays Pending (not Won).
+    // §6.2 — a cult driven back underground does NOT block liberation. This is the whole point of
+    // measuring public control rather than headcount: a suppressed cult goes to ground with its
+    // population intact (CheckForRevoltSuppression) and can no longer be targeted, so requiring it
+    // to reach zero made the objective unwinnable. The surviving cell rides along into the grant
+    // and becomes the player's problem on their own Chapter World.
     [Fact]
-    public void ProcessScenario_TyranidsGoneButCultRemains_StaysPending()
+    public void ProcessScenario_Win_HiddenCultRemnantDoesNotBlockLiberation()
+    {
+        ScenarioFixture fixture = CreateScenarioFixture();
+        Sector sector = fixture.Sector;
+        Planet promised = fixture.Promised;
+        Faction player = sector.PlayerForce.Faction;
+        Faction cult = _data.SectorFactions.Infiltrator;
+
+        foreach (Region region in promised.Regions)
+        {
+            region.RegionFactionMap.Remove(Tyranids.Id);
+        }
+        // The cult survives in strength, but has gone to ground.
+        RegionFaction hiddenCult = promised.Regions
+            .Select(r => r.RegionFactionMap.TryGetValue(cult.Id, out RegionFaction rf) ? rf : null)
+            .First(rf => rf != null);
+        hiddenCult.IsPublic = false;
+        Assert.True(hiddenCult.Population > 0);
+
+        new TurnController().ProcessScenario(sector);
+
+        Assert.Equal(ObjectiveState.Won, sector.Scenario.State);
+        Assert.True(promised.PlanetFactionMap.ContainsKey(player.Id));
+        // The cell is still there, waiting, on the world the Chapter now calls home.
+        Assert.Same(hiddenCult, hiddenCult.Region.RegionFactionMap[cult.Id]);
+        Assert.False(hiddenCult.IsPublic);
+    }
+
+    // §6.2 lapse — a hidden Imperial remnant does not keep the promise alive. The stamp leaves a
+    // displaced, non-public civilian remnant in every overrun region (ImperialRemnantFraction), so
+    // a rule reading raw presence could never see the world as lost.
+    [Fact]
+    public void ProcessScenario_Lapse_HiddenImperialRemnantDoesNotBlockLapse()
+    {
+        ScenarioFixture fixture = CreateScenarioFixture();
+        Sector sector = fixture.Sector;
+        Planet promised = fixture.Promised;
+        Faction imperial = Imperial;
+
+        // The PDF is broken everywhere: population survives, but nobody holds ground openly.
+        foreach (Region region in promised.Regions)
+        {
+            if (region.RegionFactionMap.TryGetValue(imperial.Id, out RegionFaction remnant))
+            {
+                remnant.IsPublic = false;
+                remnant.Garrison = 0;
+            }
+        }
+        Assert.Contains(promised.Regions, r =>
+            r.RegionFactionMap.TryGetValue(imperial.Id, out RegionFaction rf) && rf.Population > 0);
+
+        new TurnController().ProcessScenario(sector);
+
+        Assert.Equal(ObjectiveState.Lapsed, sector.Scenario.State);
+        Assert.False(promised.PlanetFactionMap.ContainsKey(sector.PlayerForce.Faction.Id));
+    }
+
+    // §6.2 — clearing the Tyranids is NOT enough: while the revealed Genestealer Cult still holds
+    // ground openly the world is not back in Imperial control, so the objective stays Pending.
+    [Fact]
+    public void ProcessScenario_TyranidsGoneButPublicCultRemains_StaysPending()
     {
         ScenarioFixture fixture = CreateScenarioFixture();
         Sector sector = fixture.Sector;
@@ -138,10 +201,10 @@ public class ScenarioTurnTests
         {
             region.RegionFactionMap.Remove(Tyranids.Id);
         }
-        // Sanity: a cult presence really does remain on the world to block the liberation.
+        // Sanity: a cult really does still hold ground openly, blocking the liberation.
         Assert.Contains(promised.Regions, r =>
             r.RegionFactionMap.TryGetValue(cult.Id, out RegionFaction rf)
-            && (rf.Population > 0 || rf.Garrison > 0));
+            && rf.IsPublic && (rf.Population > 0 || rf.Garrison > 0));
 
         new TurnController().ProcessScenario(sector);
 
