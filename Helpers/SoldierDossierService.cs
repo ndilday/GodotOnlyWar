@@ -96,6 +96,14 @@ namespace OnlyWar.Helpers
             return GetWeeksSince(GetLastMilestoneDate(soldier, SoldierEventType.Transfer), currentDate);
         }
 
+        // The date the marine last changed rank, or his enlistment date if he never has. Shared
+        // with SoldierSeniority, which orders by this date directly instead of by weeks-in-rank
+        // so it can rank soldiers in contexts that have no campaign date to measure against.
+        public static Date GetLastPromotionDate(PlayerSoldier soldier)
+        {
+            return GetLastMilestoneDate(soldier, SoldierEventType.Promotion);
+        }
+
         // Time in rank (Promotion) / time in squad (Transfer) is anchored to the most recent
         // milestone of that kind, or to enlistment if the marine has held his current rank /
         // posting since he first joined.

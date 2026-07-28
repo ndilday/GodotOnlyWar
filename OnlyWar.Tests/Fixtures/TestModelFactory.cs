@@ -126,6 +126,32 @@ internal static class TestModelFactory
         Array.Empty<ValueTuple<BaseSkill, float>>(),
         battleValue: 2);
 
+    // Two more squad-leader templates so command-seniority ordering can be exercised on both of
+    // its keys: the veteran sergeant outranks the sergeant on subrank alone (same Rank), and the
+    // captain outranks both on rank. Mirrors the shape of the real chapter, where Rank 5 holds
+    // Sergeant/Scout Sergeant/Veteran Sergeant and Rank 6 holds Captain.
+    public static SoldierTemplate VeteranSergeantTemplate { get; } = new(
+        5,
+        HumanSpecies,
+        "Test Veteran Sergeant",
+        2,
+        2,
+        true,
+        0,
+        Array.Empty<ValueTuple<BaseSkill, float>>(),
+        battleValue: 2);
+
+    public static SoldierTemplate CaptainTemplate { get; } = new(
+        6,
+        HumanSpecies,
+        "Test Captain",
+        3,
+        1,
+        true,
+        0,
+        Array.Empty<ValueTuple<BaseSkill, float>>(),
+        battleValue: 2);
+
     public static ArmorTemplate TestArmor { get; } = new(1, "Test Armor", 5, 0);
 
     public static WeaponSet DefaultWeapons { get; } = new(

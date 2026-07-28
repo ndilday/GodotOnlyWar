@@ -117,14 +117,30 @@ namespace OnlyWar.Helpers.Missions
 
         public override float RunMissionCheck(List<BattleSquad> squads, IRNG random)
         {
-            if (!squads.Any(s => s.Squad.SquadLeader != null))
+            // The senior officer present calls the shots, not the most talented one: a mediocre
+            // Captain still commands over a gifted Sergeant, and the force lives with his judgment.
+            // Skill only breaks ties between equals in rank, subrank, and time in rank; soldier id
+            // is the final tiebreak so the choice is deterministic under a fixed seed.
+            //
+            // Candidates come from BattleSquad.SquadLeader, which is already restricted to able
+            // soldiers. Filtering nulls out is load-bearing: the old guard tested Squad.SquadLeader
+            // (the roster) while the selection below read the able-only property, so a force whose
+            // sergeants were all down passed the guard and then ran the check on a null leader —
+            // an automatic -5 sigma failure instead of falling back on the best brother standing.
+            List<BattleSoldier> leaders = squads
+                .Select(s => s.SquadLeader)
+                .Where(leader => leader != null)
+                .ToList();
+            if (leaders.Count == 0)
             {
                 return base.RunMissionCheck(squads, random);
             }
-            BattleSoldier bestLeader = squads.Select(s => s.SquadLeader)
-                .OrderByDescending(soldier => soldier?.Soldier.GetTotalSkillValue(SkillUsed))
-                .FirstOrDefault();
-            float margin = RunCheckInternal(bestLeader, random);
+            BattleSoldier commander = SoldierSeniority
+                .OrderBySeniority(leaders, leader => leader.Soldier)
+                .ThenByDescending(leader => leader.Soldier.GetTotalSkillValue(SkillUsed))
+                .ThenBy(leader => leader.Soldier.Id)
+                .First();
+            float margin = RunCheckInternal(commander, random);
             if (MissionExperienceAwarder.ShouldAwardFieldExperience(squads))
             {
                 MissionExperienceAwarder.AwardFieldExperience(squads, SkillUsed, margin);

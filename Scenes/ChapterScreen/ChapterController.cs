@@ -394,7 +394,7 @@ public partial class ChapterController : Control
     private void RenderSquadLevel(Squad squad)
     {
         List<ISoldier> orderedMembers =
-            OrderByRankAndTenure(squad.Members, GameDataSingleton.Instance.Date).ToList();
+            OrderByRankAndTenure(squad.Members).ToList();
         ISoldier selectedSoldier = TryGetSelectedSoldier() ?? orderedMembers.FirstOrDefault();
 
         List<ChapterBrowserMenuItem> soldiers = orderedMembers
@@ -428,7 +428,7 @@ public partial class ChapterController : Control
     {
         Squad squad = soldier.AssignedSquad;
         List<ChapterBrowserMenuItem> soldiers =
-            OrderByRankAndTenure(squad.Members, GameDataSingleton.Instance.Date)
+            OrderByRankAndTenure(squad.Members)
             .Select(squadMember => new ChapterBrowserMenuItem(
                 ChapterBrowserLevel.Soldier,
                 squadMember.Id,
@@ -519,22 +519,17 @@ public partial class ChapterController : Control
             ChapterBrowserLevel.Soldier => GetSoldier(_navigator.Path.SoldierId.Value).AssignedSquad.Members,
             _ => GetChapter().GetAllMembers()
         };
-        return OrderByRankAndTenure(members, GameDataSingleton.Instance.Date);
+        return OrderByRankAndTenure(members);
     }
 
     // Rosters and filter results are presented rank-first (most senior at the top), then by
     // time in rank so the longest-tenured brother within a rank leads. Subrank breaks the tie
     // for roles that share a Rank (e.g. a Veteran Sergeant outranks a Veteran at Rank 5), so a
-    // squad leader always sorts above his brothers. Only PlayerSoldiers carry the promotion
-    // history the tenure sort needs; anyone else sorts as zero weeks.
-    private static IEnumerable<ISoldier> OrderByRankAndTenure(IEnumerable<ISoldier> soldiers, Date currentDate)
+    // squad leader always sorts above his brothers. SoldierSeniority holds the ordering itself,
+    // shared with mission command resolution so the roster and the field agree on who is senior.
+    private static IEnumerable<ISoldier> OrderByRankAndTenure(IEnumerable<ISoldier> soldiers)
     {
-        return soldiers
-            .OrderByDescending(soldier => soldier.Template.Rank)
-            .ThenByDescending(soldier => soldier.Template.Subrank)
-            .ThenByDescending(soldier => soldier is PlayerSoldier player
-                ? SoldierDossierService.GetWeeksInRank(player, currentDate)
-                : 0);
+        return SoldierSeniority.OrderBySeniority(soldiers);
     }
 
     // The ordered soldier ids currently shown in the left menu, so a transfer can pick the
@@ -550,15 +545,14 @@ public partial class ChapterController : Control
                 .ToList();
         }
 
-        Date currentDate = GameDataSingleton.Instance.Date;
         switch (_navigator.Path.Level)
         {
             case ChapterBrowserLevel.Squad:
-                return OrderByRankAndTenure(GetSquad(_navigator.Path.SquadId.Value).Members, currentDate)
+                return OrderByRankAndTenure(GetSquad(_navigator.Path.SquadId.Value).Members)
                     .Select(soldier => soldier.Id).ToList();
             case ChapterBrowserLevel.Soldier:
                 return OrderByRankAndTenure(
-                        GetSoldier(_navigator.Path.SoldierId.Value).AssignedSquad.Members, currentDate)
+                        GetSoldier(_navigator.Path.SoldierId.Value).AssignedSquad.Members)
                     .Select(soldier => soldier.Id).ToList();
             default:
                 return [];

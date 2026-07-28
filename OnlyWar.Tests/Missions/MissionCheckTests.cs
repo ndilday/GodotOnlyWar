@@ -3,6 +3,7 @@ using OnlyWar.Helpers.Battles;
 using OnlyWar.Helpers.Missions;
 using OnlyWar.Models.Soldiers;
 using OnlyWar.Tests.Fixtures;
+using System.Linq;
 using Xunit;
 
 namespace OnlyWar.Tests.Missions;
@@ -26,8 +27,10 @@ public class MissionCheckTests
         Assert.Equal(expected, actual, precision: 5);
     }
 
+    // Skill no longer selects the commander outright — it only separates leaders of equal rank,
+    // subrank, and tenure, which is the case here (two sergeants of the same template).
     [Fact]
-    public void LeaderMissionTest_UsesBestSquadLeaderWhenPresent()
+    public void LeaderMissionTest_SkillBreaksTieBetweenLeadersOfEqualRank()
     {
         BattleSquad firstSquad = CreateBattleSquad(
             TestModelFactory.CreateSoldier(TestModelFactory.SergeantTemplate, "Decent Leader", charisma: 11, skills: new Skill(TestSkills.Leadership, 4)),
@@ -44,6 +47,88 @@ public class MissionCheckTests
             StaticRNG.Instance);
 
         Assert.Equal(expected, actual, precision: 5);
+    }
+
+    // A bad captain still outranks a good sergeant: the force lives with the senior officer's
+    // judgment rather than fielding whichever leader happens to be most talented.
+    [Fact]
+    public void LeaderMissionTest_HigherRankCommandsOverMoreSkilledJuniorLeader()
+    {
+        Soldier captain = TestModelFactory.CreateSoldier(
+            TestModelFactory.CaptainTemplate, "Mediocre Captain",
+            charisma: 10, skills: new Skill(TestSkills.Leadership, 1));
+        Soldier sergeant = TestModelFactory.CreateSoldier(
+            TestModelFactory.SergeantTemplate, "Gifted Sergeant",
+            charisma: 18, skills: new Skill(TestSkills.Leadership, 64));
+        LeaderMissionTest missionTest = new(TestSkills.Leadership, difficulty: 5);
+        RecordingRng random = new(0.75);
+
+        float actual = missionTest.RunMissionCheck(
+            [CreateBattleSquad(captain), CreateBattleSquad(sergeant)],
+            random);
+
+        Assert.Equal(ExpectedMarginFor(captain, TestSkills.Leadership, difficulty: 5, zDraw: 0.75),
+            actual, precision: 5);
+    }
+
+    // Subrank separates leaders sharing a Rank, mirroring the chapter's Veteran Sergeant (subrank
+    // 15) over plain Sergeant (12) at Rank 5.
+    [Fact]
+    public void LeaderMissionTest_HigherSubrankCommandsWithinSameRank()
+    {
+        Soldier veteranSergeant = TestModelFactory.CreateSoldier(
+            TestModelFactory.VeteranSergeantTemplate, "Veteran Sergeant",
+            charisma: 10, skills: new Skill(TestSkills.Leadership, 1));
+        Soldier sergeant = TestModelFactory.CreateSoldier(
+            TestModelFactory.SergeantTemplate, "Gifted Sergeant",
+            charisma: 18, skills: new Skill(TestSkills.Leadership, 64));
+        LeaderMissionTest missionTest = new(TestSkills.Leadership, difficulty: 5);
+        RecordingRng random = new(0.75);
+
+        float actual = missionTest.RunMissionCheck(
+            [CreateBattleSquad(veteranSergeant), CreateBattleSquad(sergeant)],
+            random);
+
+        Assert.Equal(
+            ExpectedMarginFor(veteranSergeant, TestSkills.Leadership, difficulty: 5, zDraw: 0.75),
+            actual, precision: 5);
+    }
+
+    // A force whose only sergeant is down falls back on its best remaining brother. Previously the
+    // roster-level guard let this through and the check ran on a null leader, auto-failing at
+    // -5 sigma regardless of who was still standing.
+    [Fact]
+    public void LeaderMissionTest_FallsBackToBestIndividualWhenLeaderIsIncapacitated()
+    {
+        Soldier sergeant = TestModelFactory.CreateSoldier(
+            TestModelFactory.SergeantTemplate, "Downed Sergeant",
+            charisma: 10, skills: new Skill(TestSkills.Leadership, 1));
+        Soldier survivor = TestModelFactory.CreateSoldier(
+            name: "Senior Brother", charisma: 18, skills: new Skill(TestSkills.Leadership, 64));
+        Incapacitate(sergeant);
+        LeaderMissionTest missionTest = new(TestSkills.Leadership, difficulty: 5);
+        RecordingRng random = new(0.75);
+
+        float actual = missionTest.RunMissionCheck(
+            [CreateBattleSquad(sergeant, survivor)],
+            random);
+
+        Assert.Equal(ExpectedMarginFor(survivor, TestSkills.Leadership, difficulty: 5, zDraw: 0.75),
+            actual, precision: 5);
+    }
+
+    private static void Incapacitate(Soldier soldier)
+    {
+        soldier.Body.HitLocations
+            .First(location => location.Template.IsVital && !location.Template.HoldsProgenoid)
+            .Wounds.AddWound(WoundLevel.Massive);
+        Assert.False(soldier.CanFight);
+    }
+
+    private static float ExpectedMarginFor(
+        Soldier soldier, BaseSkill skill, float difficulty, double zDraw)
+    {
+        return ((soldier.GetTotalSkillValue(skill) - difficulty) / 5.0f) - (float)zDraw;
     }
 
     [Fact]
