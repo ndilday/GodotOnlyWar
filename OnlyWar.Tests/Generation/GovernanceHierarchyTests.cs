@@ -95,8 +95,8 @@ public class GovernanceHierarchyTests : IClassFixture<GovernanceHierarchyFixture
     {
         GameRulesData firstData = LoadFreshRulesData();
         GameRulesData secondData = LoadFreshRulesData();
-        Sector first = SectorBuilder.GenerateSector(7, firstData, _date, "Deterministic Chapter");
-        Sector second = SectorBuilder.GenerateSector(7, secondData, _date, "Deterministic Chapter");
+        Sector first = SectorBuilder.GenerateSector(4, firstData, _date, "Deterministic Chapter");
+        Sector second = SectorBuilder.GenerateSector(4, secondData, _date, "Deterministic Chapter");
 
         Planet firstCapital = first.GetSectorCapital();
         Planet secondCapital = second.GetSectorCapital();

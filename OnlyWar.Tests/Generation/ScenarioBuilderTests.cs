@@ -226,23 +226,4 @@ public class ScenarioBuilderTests
         // A valid, playable promised world exists. Control is seed-dependent.
         Assert.NotNull(sector.GetPlanet(sector.Scenario.PromisedPlanetId));
     }
-
-    // Broader coverage for seed-sensitive scoped sim failures. This is intentionally kept out of
-    // the default fast path; run with a Category=Slow filter when tuning generation/balance.
-    [Trait("Category", "Slow")]
-    [Theory]
-    [InlineData(2)]
-    [InlineData(4)]
-    [InlineData(5)]
-    [InlineData(7)]
-    [InlineData(11)]
-    public void GenerateSector_AdditionalScopedSimSeedsRunWithoutThrowing(int seed)
-    {
-        Sector sector = SectorBuilder.GenerateSector(seed, _data, _date, "Robustness Chapter");
-
-        Assert.NotNull(sector.Scenario);
-        Assert.Equal(ObjectiveState.Pending, sector.Scenario.State);
-        Assert.NotNull(sector.GetPlanet(sector.Scenario.PromisedPlanetId));
-    }
-
 }

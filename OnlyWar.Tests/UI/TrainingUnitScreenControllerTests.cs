@@ -1,5 +1,7 @@
 using System.Collections.Generic;
 using System.Linq;
+using OnlyWar.Models.Missions;
+using OnlyWar.Models.Orders;
 using OnlyWar.Models.Squads;
 using OnlyWar.Models.Units;
 using OnlyWar.Tests.Fixtures;
@@ -48,6 +50,30 @@ public class TrainingUnitScreenControllerTests
         Assert.Equal(
             ["Alpha Scouts", "Beta Scouts", "Aquila Neophytes"],
             ordered.Select(squad => squad.Name));
+    }
+
+    [Fact]
+    public void GetSquadListLabel_UnassignedSquad_ShowsTrainingFocus()
+    {
+        Squad squad = new(1, "Alpha Scouts", null, CreateScoutTemplate(101, "Scout Squad"))
+        {
+            TrainingFocus = TrainingFocuses.Melee
+        };
+
+        Assert.Equal("Alpha Scouts (Melee)", TrainingUnitScreenController.GetSquadListLabel(squad));
+    }
+
+    [Fact]
+    public void GetSquadListLabel_SquadAssignedToMission_ShowsOnMission()
+    {
+        Squad squad = new(1, "Alpha Scouts", null, CreateScoutTemplate(101, "Scout Squad"))
+        {
+            TrainingFocus = TrainingFocuses.Melee
+        };
+        Mission mission = new(MissionType.Patrol, null, 1);
+        _ = new Order([squad], Disposition.Mobile, false, true, Aggression.Normal, mission);
+
+        Assert.Equal("Alpha Scouts (On Mission)", TrainingUnitScreenController.GetSquadListLabel(squad));
     }
 
     private static SquadTemplate CreateScoutTemplate(

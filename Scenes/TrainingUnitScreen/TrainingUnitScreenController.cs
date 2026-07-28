@@ -29,7 +29,7 @@ public partial class TrainingUnitScreenController : Control
     private void PopulateScoutSquadList()
     {
         List<ValueTuple<int, string>> squadList = OrderScoutSquads(GetScoutSquads())
-            .Select(squad => new ValueTuple<int, string>(squad.Id, $"{squad.Name} ({GetTrainingFocusName(squad.TrainingFocus)})"))
+            .Select(squad => new ValueTuple<int, string>(squad.Id, GetSquadListLabel(squad)))
             .ToList();
         _view.PopulateSquadList(squadList, _selectedSquad?.Id);
     }
@@ -94,6 +94,14 @@ public partial class TrainingUnitScreenController : Control
             .OrderBy(FleetScreenController.GetSquadTypeOrder)
             .ThenBy(squad => squad.Name, StringComparer.OrdinalIgnoreCase)
             .ThenBy(squad => squad.Id);
+    }
+
+    internal static string GetSquadListLabel(Squad squad)
+    {
+        string status = squad.CurrentOrders?.Mission != null
+            ? "On Mission"
+            : GetTrainingFocusName(squad.TrainingFocus);
+        return $"{squad.Name} ({status})";
     }
 
     private static string GetTrainingFocusName(TrainingFocuses focus)
