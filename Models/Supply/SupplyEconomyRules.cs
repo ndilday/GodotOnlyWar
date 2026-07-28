@@ -8,6 +8,11 @@ namespace OnlyWar.Models.Supply
         public RequestValuationRules RequestValuation { get; }
         public GovernorOfferRules GovernorOffers { get; }
         public int DefaultServiceWeeks { get; }
+
+        /// <summary>
+        /// Fallback deadline, used only when <see cref="SeverityDeadlineWeeks"/> has no entry for
+        /// a severity. Live requests take their deadline from that table instead.
+        /// </summary>
         public int DefaultDeadlineWeeks { get; }
         public int DefaultDeliveryWeeks { get; }
         public int StandingCadenceWeeks { get; }
@@ -27,6 +32,16 @@ namespace OnlyWar.Models.Supply
         /// simulation tests can still force a request deterministically.
         /// </summary>
         public decimal RequestGenerationRate { get; internal set; }
+        /// <summary>
+        /// How long a governor will wait, keyed by <c>RequestSeverity</c>. The deadline is a
+        /// property of the petitioning world's situation, not of where the Chapter happens to be:
+        /// a world asking for a reassuring show of the flag can wait the better part of a year,
+        /// one facing collapse cannot. That keeps the Chapter's dispersal out of the governor's
+        /// reasoning while still making urgent petitions answerable only from nearby - a round
+        /// trip costs 4 weeks of system transit before any warp travel, so short fuses are
+        /// implicitly a proximity requirement.
+        /// </summary>
+        public IReadOnlyDictionary<string, int> SeverityDeadlineWeeks { get; }
         public IReadOnlyList<QualificationPremium> QualificationPremiums { get; }
         public IReadOnlyDictionary<string, decimal> HazardMultipliers { get; }
         public IReadOnlyDictionary<string, decimal> AuthorityMultipliers { get; }
@@ -46,6 +61,7 @@ namespace OnlyWar.Models.Supply
             int standingMinimumOffer,
             int requestCooldownWeeks,
             decimal requestGenerationRate,
+            IReadOnlyDictionary<string, int> severityDeadlineWeeks,
             IReadOnlyList<QualificationPremium> qualificationPremiums,
             IReadOnlyDictionary<string, decimal> hazardMultipliers,
             IReadOnlyDictionary<string, decimal> authorityMultipliers,
@@ -64,6 +80,7 @@ namespace OnlyWar.Models.Supply
             StandingMinimumOffer = standingMinimumOffer;
             RequestCooldownWeeks = requestCooldownWeeks;
             RequestGenerationRate = requestGenerationRate;
+            SeverityDeadlineWeeks = severityDeadlineWeeks ?? throw new ArgumentNullException(nameof(severityDeadlineWeeks));
             QualificationPremiums =qualificationPremiums ?? throw new ArgumentNullException(nameof(qualificationPremiums));
             HazardMultipliers = hazardMultipliers ?? throw new ArgumentNullException(nameof(hazardMultipliers));
             AuthorityMultipliers = authorityMultipliers ?? throw new ArgumentNullException(nameof(authorityMultipliers));

@@ -47,6 +47,20 @@ namespace OnlyWar.Helpers.Database.GameRules
                 }
             }
 
+            // Week counts rather than multipliers, so this gets its own columns and loader
+            // instead of reusing the MultiplierKey/Multiplier shape.
+            Dictionary<string, int> severityDeadlines = new(StringComparer.OrdinalIgnoreCase);
+            using (IDbCommand command = connection.CreateCommand())
+            {
+                command.CommandText = "SELECT Severity, Weeks FROM SupplySeverityDeadline";
+                using IDataReader reader = command.ExecuteReader();
+                while (reader.Read())
+                {
+                    severityDeadlines[reader.GetString(0)] = Convert.ToInt32(
+                        reader.GetValue(1), CultureInfo.InvariantCulture);
+                }
+            }
+
             Dictionary<string, decimal> LoadMultipliers(string tableName)
             {
                 Dictionary<string, decimal> result = new(StringComparer.OrdinalIgnoreCase);
@@ -101,6 +115,7 @@ namespace OnlyWar.Helpers.Database.GameRules
                 decimal.ToInt32(Value("StandingMinimumOffer")),
                 decimal.ToInt32(Value("RequestCooldownWeeks")),
                 Value("RequestGenerationRate"),
+                severityDeadlines,
                 qualificationPremiums,
                 LoadMultipliers("SupplyHazardPremium"),
                 LoadMultipliers("SupplyAuthorityPremium"),

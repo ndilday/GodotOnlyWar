@@ -244,6 +244,49 @@ public class SectorEntityLogicTests
     }
 
     [Fact]
+    public void ProcessTurn_NoThreatRequest_TakesConcernedDeadlineFromRulesTable()
+    {
+        RNG.Reset(1);
+        SectorSimulationFixture fixture = SectorSimulationFixture.Create();
+        // no public hostile faction => Concerned severity, so generation rolls against Paranoia
+        Character governor = fixture.InstallGovernor(investigation: 0f, neediness: 1f, opinion: 1f);
+        governor.Paranoia = 1f;
+
+        fixture.ProcessTurn();
+
+        IRequest request = governor.ActiveRequest;
+        Assert.NotNull(request);
+        Assert.Equal(RequestSeverity.Concerned, request.Severity);
+        // a world merely asking for a show of the flag can wait the better part of a year
+        Assert.Equal(39, request.Deadline.GetWeeksDifference(request.DateRequestMade));
+        // the commitment is priced against the same deadline it is judged by, so
+        // RequestValueCalculator's throughput premium reflects the real fuse length
+        Assert.Equal(39, request.Commitment.CompletionDeadlineWeeks);
+    }
+
+    [Fact]
+    public void ProcessTurn_ThreatRequest_TakesShorterDeadlineMatchingItsSeverity()
+    {
+        RNG.Reset(1);
+        SectorSimulationFixture fixture = SectorSimulationFixture.Create();
+        fixture.AddControllingFaction(1, "Heretic Rebels", population: 5000);
+        Character governor = fixture.InstallGovernor(investigation: 1f, neediness: 1f, opinion: 1f);
+
+        fixture.ProcessTurn();
+
+        IRequest request = governor.ActiveRequest;
+        Assert.NotNull(request);
+        int deadlineWeeks = request.Deadline.GetWeeksDifference(request.DateRequestMade);
+        // a world under threat gets a shorter fuse than one that is merely uneasy
+        Assert.True(deadlineWeeks < 39, $"expected a threat deadline under 39 weeks, got {deadlineWeeks}");
+        // whatever severity was classified, the deadline is the one the rules table names for it
+        int expected = GameDataSingleton.Instance.GameRulesData
+            .SupplyEconomyRules.SeverityDeadlineWeeks[request.Severity.ToString()];
+        Assert.Equal(expected, deadlineWeeks);
+        Assert.Equal(expected, request.Commitment.CompletionDeadlineWeeks);
+    }
+
+    [Fact]
     public void ProcessTurn_FulfilledRequest_CreatesDelayedPledge()
     {
         RNG.Reset(1);

@@ -567,7 +567,10 @@ Non-deployed non-Scout marines receive weekly work-experience training through `
 
 **Governor Requests:**
 - For each planetary leader with positive opinion of the player: check for a real threat via Investigation vs. hidden faction population ratio; check for a false alarm via Paranoia.
-- If a threat (real or imagined) is detected: roll `Neediness × OpinionOfPlayerForce`. On success, `RequestFactory.GenerateNewRequest` creates a `PresenceRequest` and adds it to `PlayerForce.Requests`.
+- If a threat (real or imagined) is detected: roll `RequestGenerationRate × Neediness × OpinionOfPlayerForce`. On success, `RequestFactory.GenerateNewRequest` creates a `PresenceRequest` and adds it to `PlayerForce.Requests`.
+- `RequestGenerationRate` (`SupplyRule`) throttles the whole petition economy. Both gates are linear in the governor's traits, so it scales only how often worlds petition, not which ones do. Sector-wide arrivals per week ≈ `governorCount × 0.125 × RequestGenerationRate`; at the shipped 0.006 that is ~0.6/week for the ~800-governor production sector, holding ~13 petitions open at a time.
+- The deadline comes from `SupplySeverityDeadline`, keyed by the `RequestSeverity` that `ClassifyRequest` derives from the local threat ratio: Concerned 39 weeks, Serious 26, Desperate 13, Existential 13. It is deliberately a property of the petitioning world, not of where the Chapter's forces are — the Chapter may be spread across several task forces, so there is no single position to measure against, and keying off the nearest asset would tighten every deadline as the player expanded. Reachability instead falls out of geography: a round trip costs 4 weeks of system transit before any warp travel (`TaskForce.SystemTransitWeeksPerEnd`), so a short fuse is implicitly a proximity requirement and only urgent petitions near a standing force can be answered.
+- Severity is classified before the commitment package is built, so `ForceCommitmentPackage.CompletionDeadlineWeeks` carries the real fuse length and `RequestValueCalculator`'s throughput premium prices urgent petitions higher without any separate urgency term.
 
 ### 6.4 Mission Step State Machine
 

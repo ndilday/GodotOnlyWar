@@ -67,7 +67,12 @@ namespace OnlyWar.Helpers.Turns
                 }
                 else
                 {
-                    governor.OpinionOfPlayerForce -= 0.005f / governor.Patience;
+                    // Same floor as the failure penalty below. Patience is drawn from
+                    // Random.NextDouble(), so it can be arbitrarily close to (or exactly) zero;
+                    // unguarded, a governor with Patience 0.001 bleeds 5 opinion a week and is
+                    // permanently silenced by their first unanswered petition, and Patience 0
+                    // drives opinion to -Infinity.
+                    governor.OpinionOfPlayerForce -= 0.005f / Math.Max(0.1f, governor.Patience);
                     SyncShowOfForceMission(request);
                 }
             }
@@ -140,8 +145,13 @@ namespace OnlyWar.Helpers.Turns
                 return;
             }
 
-            ForceCommitmentPackage commitment = BuildCommitmentPackage(planet, threatFaction);
+            // Classify first: the deadline follows from severity, and the deadline is what the
+            // commitment package is priced against (RequestValueCalculator derives its throughput
+            // premium from effort/CompletionDeadlineWeeks, so a short fuse pays more on its own).
             (RequestSeverity severity, RequestHazard hazard) = ClassifyRequest(planet, threatFaction);
+            int deadlineWeeks = ResolveDeadlineWeeks(severity);
+            ForceCommitmentPackage commitment = BuildCommitmentPackage(
+                planet, threatFaction, deadlineWeeks);
             int nominalOffer = CalculateOffer(
                 planet, planetFaction.Leader, commitment, severity, hazard);
             PledgeScheduleKind scheduleKind = nominalOffer >= supplyRules.StandingMinimumOffer
@@ -164,7 +174,7 @@ namespace OnlyWar.Helpers.Turns
                 planetFaction.Leader,
                 threatFaction,
                 _session.CurrentDate,
-                AddWeeks(_session.CurrentDate, _session.Rules.SupplyEconomyRules.DefaultDeadlineWeeks),
+                AddWeeks(_session.CurrentDate, deadlineWeeks),
                 commitment,
                 offeredAmount,
                 scheduleKind,
@@ -271,7 +281,24 @@ namespace OnlyWar.Helpers.Turns
             _requestReports?.Add(new GovernorRequestReport(kind, request, failureReason));
         }
 
-        private ForceCommitmentPackage BuildCommitmentPackage(Planet planet, Faction threatFaction)
+        /// <summary>
+        /// How long this governor will wait, from the severity of their situation. Deliberately
+        /// independent of where the Chapter's forces are: the Chapter may be dispersed across
+        /// several task forces, so there is no single "player position" to measure against, and
+        /// tying the deadline to the nearest asset would perversely tighten every deadline as the
+        /// player expanded. Instead the fuse length reflects the world, and reachability falls out
+        /// of geography - only a nearby force can answer a short one.
+        /// </summary>
+        private int ResolveDeadlineWeeks(RequestSeverity severity)
+        {
+            SupplyEconomyRules rules = _session.Rules.SupplyEconomyRules;
+            return rules.SeverityDeadlineWeeks.TryGetValue(severity.ToString(), out int weeks)
+                ? weeks
+                : rules.DefaultDeadlineWeeks;
+        }
+
+        private ForceCommitmentPackage BuildCommitmentPackage(
+            Planet planet, Faction threatFaction, int deadlineWeeks)
         {
             SquadTemplate reference = _session.Rules.ChapterTemplates.TacticalSquad;
             SupplyEconomyRules rules = _session.Rules.SupplyEconomyRules;
@@ -288,7 +315,7 @@ namespace OnlyWar.Helpers.Turns
                 "squad",
                 packageCount,
                 rules.DefaultServiceWeeks,
-                rules.DefaultDeadlineWeeks,
+                deadlineWeeks,
                 reference.BattleValue,
                 ["Astartes"],
                 maximumEffectivePackageCount: Math.Min(10, packageCount * 2));

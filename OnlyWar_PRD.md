@@ -622,8 +622,14 @@ Blast templates extend the cone-template machinery with a second delivery mode: 
 - Each week, a governor with a positive opinion of the chapter may generate an aid request if they have detected (or believe they have detected) a threat on their planet.
 - Detection is a probability check weighted by the governor's Investigation trait and the size of the hidden faction's population relative to the planet's total population.
 - A governor with no real detected threat may still generate a request based on their Paranoia trait alone.
-- A governor generates a request by multiplying their Neediness by their current Opinion to determine the final probability.
+- A governor generates a request by multiplying their Neediness by their current Opinion to determine the final probability, scaled by a sector-wide generation rate that sets how busy the petition economy is overall. The rate is a flat multiplier, so it changes how often worlds petition without changing which governors are the ones who do.
 - Only one active request per governor is permitted at a time.
+
+**Request Deadlines**
+- Every request carries a deadline, after which it fails and the governor's opinion suffers.
+- The deadline is set by how urgent the petitioning world's situation is, not by where the chapter's forces happen to be: a governor asking for a reassuring show of the flag will wait the better part of a year, while a world facing collapse cannot. The chapter may be dispersed across several task forces, so there is no single "chapter position" a governor could reasonably reason about, and tying deadlines to the nearest force would perversely tighten every deadline as the player expanded.
+- Because a round trip costs four weeks of system transit before any warp travel, urgency doubles as a proximity requirement: routine petitions are answerable from anywhere in the sector, while an emergency can only be answered by a force already nearby. Deciding where to keep a standing presence is therefore a real strategic choice, and some petitions are meant to be unanswerable.
+- A shorter deadline demands higher throughput from the committed force, so urgent requests automatically carry a larger requisition offer.
 
 **Request Fulfillment**
 - For the current `PresenceRequest` type, a request is fulfilled when at least one player squad lands on the planet surface, regardless of the squad's assigned orders or mission target — a squad landing for an entirely unrelated reason satisfies the request.
