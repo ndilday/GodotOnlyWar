@@ -12,10 +12,10 @@ namespace OnlyWar.Models.Planets
         public readonly string Name;
         public readonly RegionCoordinate Coordinates;
         public float IntelligenceLevel { get; set; }
-        // The total population (in thousands) the region's land can sustain across all
-        // factions. Organic growth slows as the region's combined population approaches
-        // this value. A value of 0 (or less) is treated as uncapped. Tyranid Consumption
-        // temporarily degrades this below MaximumCarryingCapacity (PRD §4.24).
+        // The total population the region's land can sustain across all factions.
+        // Organic growth slows as the region's combined population approaches this value.
+        // A value of 0 (or less) is treated as uncapped. Tyranid Consumption temporarily
+        // degrades this below MaximumCarryingCapacity (PRD §4.24).
         public long CarryingCapacity { get; set; }
         // The region's natural (undegraded) carrying capacity — the ceiling CarryingCapacity
         // recovers toward after biomass consumption. Equal to CarryingCapacity at generation.

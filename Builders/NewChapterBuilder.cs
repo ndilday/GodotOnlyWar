@@ -91,13 +91,17 @@ namespace OnlyWar.Builders
             int foundingSoldierCount)
         {
             SoldierTemplate soldierTemplate = data.PlayerFaction.SoldierTemplates[0];
-            List<PlayerSoldier> soldiers =
-                SoldierFactory.Instance.GenerateNewSoldiers(
-                    foundingSoldierCount,
-                    soldierTemplate.Species,
-                    data.SkillTemplateList,
-                    StaticRNG.Instance)
-                .Select(s => new PlayerSoldier(s, $"{NameGenerator.GetName()} {NameGenerator.GetName()}"))
+            Soldier[] generatedSoldiers = SoldierFactory.Instance.GenerateNewSoldiers(
+                foundingSoldierCount,
+                soldierTemplate.Species,
+                data.SkillTemplateList,
+                StaticRNG.Instance);
+
+            // A founding starts a fresh, shuffled draw from each name pool. With the
+            // production 1,000-soldier chapter, neither component repeats.
+            NameGenerator.Reset();
+            List<PlayerSoldier> soldiers = generatedSoldiers
+                .Select(s => new PlayerSoldier(s, NameGenerator.GetFullName()))
                 .ToList();
 
             foreach (PlayerSoldier soldier in soldiers)

@@ -75,6 +75,46 @@ public class WarpLaneBuilderTests
         Assert.Equal(lanes.Count, lanes.Select(lane => lane.Id).Distinct().Count());
     }
 
+    [Fact]
+    public void SelectCapital_PrefersImportanceOverPopulationAmongImperialWorlds()
+    {
+        Faction imperium = CreateFaction(1, "Imperium", isDefault: true);
+        Planet important = CreateControlledPlanet(1, importance: 20, population: 100, imperium);
+        Planet populous = CreateControlledPlanet(2, importance: 10, population: 1000, imperium);
+        Subsector subsector = CreateSubsector(1, important, populous);
+
+        Planet capital = WarpLaneBuilder.SelectCapital(subsector);
+
+        Assert.Same(important, capital);
+    }
+
+    [Fact]
+    public void SelectCapital_PrefersImperialWorldOverMoreImportantEnemyWorld()
+    {
+        Faction imperium = CreateFaction(1, "Imperium", isDefault: true);
+        Faction enemy = CreateFaction(2, "Enemy");
+        Planet imperialWorld = CreateControlledPlanet(1, importance: 10, population: 100, imperium);
+        Planet enemyWorld = CreateControlledPlanet(2, importance: 20, population: 1000, enemy);
+        Subsector subsector = CreateSubsector(1, imperialWorld, enemyWorld);
+
+        Planet capital = WarpLaneBuilder.SelectCapital(subsector);
+
+        Assert.Same(imperialWorld, capital);
+    }
+
+    [Fact]
+    public void SelectCapital_FallsBackToMostImportantWorldWhenNoImperialWorldExists()
+    {
+        Faction enemy = CreateFaction(2, "Enemy");
+        Planet important = CreateControlledPlanet(1, importance: 20, population: 100, enemy);
+        Planet populous = CreateControlledPlanet(2, importance: 10, population: 1000, enemy);
+        Subsector subsector = CreateSubsector(1, important, populous);
+
+        Planet capital = WarpLaneBuilder.SelectCapital(subsector);
+
+        Assert.Same(important, capital);
+    }
+
     private static bool Connects(WarpLane lane, Planet a, Planet b)
     {
         return (lane.Path.Item1 == a && lane.Path.Item2 == b)
@@ -88,13 +128,35 @@ public class WarpLaneBuilderTests
 
     private static Planet CreatePlanet(int id, ushort x, ushort y, int importance)
     {
-        // Population is 0 for every planet here (regions carry no factions), so capital
-        // selection falls through to the Importance tie-break that these tests drive.
+        // These topology-only fixtures have no controlling faction, exercising the fallback
+        // used when a subsector has no Imperial-controlled world.
         Planet planet = new(id, $"Planet {id}", new Coordinate(x, y), 1, null, importance, 0);
         for (int i = 0; i < planet.Regions.Length; i++)
         {
             planet.Regions[i] = new Region(i + (id * 100), planet, 0, $"Region {i}", new RegionCoordinate(0, 0), 0);
         }
         return planet;
+    }
+
+    private static Planet CreateControlledPlanet(
+        int id, int importance, long population, Faction controller)
+    {
+        Planet planet = CreatePlanet(id, (ushort)id, 0, importance);
+        PlanetFaction planetFaction = new(controller);
+        planet.PlanetFactionMap[controller.Id] = planetFaction;
+        Region capitalRegion = planet.Regions[0];
+        capitalRegion.RegionFactionMap[controller.Id] = new RegionFaction(planetFaction, capitalRegion)
+        {
+            IsPublic = true,
+            Population = population
+        };
+        planet.SetCapitalRegion(capitalRegion.Id);
+        return planet;
+    }
+
+    private static Faction CreateFaction(int id, string name, bool isDefault = false)
+    {
+        return new Faction(id, name, System.Drawing.Color.Red, false, isDefault, false,
+            GrowthType.None, null, null, null, null, null, null, null);
     }
 }

@@ -1,4 +1,5 @@
 using Godot;
+using OnlyWar.Builders;
 using OnlyWar.Helpers.Extensions;
 using OnlyWar.Helpers.UI;
 using OnlyWar.Models;
@@ -121,13 +122,7 @@ public partial class SystemInspector : Control
         {
             return planet.Name;
         }
-        // The subsector capital is the most important planet in the subsector (PRD §4.1:
-        // population drives capital selection, matching WarpLaneBuilder.SelectCapital).
-        Planet capital = subsector.Planets
-            .OrderByDescending(p => p.Population)
-            .ThenByDescending(p => p.Importance)
-            .ThenBy(p => p.Id)
-            .First();
+        Planet capital = WarpLaneBuilder.SelectCapital(subsector);
         return $"{planet.Name}, Subsector {capital.Name}";
     }
 
@@ -214,7 +209,7 @@ public partial class SystemInspector : Control
         if (_landSquadsButton != null) _landSquadsButton.Disabled = !hasActionableFleet;
         if (_loadSquadsButton != null) _loadSquadsButton.Disabled = !hasActionableFleet;
 
-        RefreshSelectedFleetDetail(selectedFleet, hasActionableFleet, canDivide, canMerge);
+        RefreshSelectedFleetDetail(selectedFleet);
         RefreshActionTooltips(selectedFleet, hasPlanet, hasActionableFleet, canDivide, canMerge);
     }
 
@@ -239,7 +234,7 @@ public partial class SystemInspector : Control
         handler?.Invoke(this, fleet.Id);
     }
 
-    private void RefreshSelectedFleetDetail(TaskForce selectedFleet, bool hasActionableFleet, bool canDivide, bool canMerge)
+    private void RefreshSelectedFleetDetail(TaskForce selectedFleet)
     {
         if (_selectedFleetDetailLabel == null) return;
 
@@ -256,12 +251,8 @@ public partial class SystemInspector : Control
             : selectedFleet.Faction.Name;
         int capacity = selectedFleet.Ships.Sum(ship => ship.Template.SoldierCapacity);
         int loaded = selectedFleet.Ships.Sum(ship => ship.LoadedSoldierCount);
-        string commandState = hasActionableFleet
-            ? $"Ready | Divide {(canDivide ? "yes" : "no")} | Merge {(canMerge ? "yes" : "no")}"
-            : "Not commandable from this system";
-
         _selectedFleetDetailLabel.Text =
-            $"TF {selectedFleet.Id} | {ownership} | {selectedFleet.Ships.Count} ships | {loaded}/{capacity} aboard\n{commandState}";
+            $"TF {selectedFleet.Id} | {ownership} | {selectedFleet.Ships.Count} ships | {loaded}/{capacity} aboard";
     }
 
     private void RefreshActionTooltips(TaskForce selectedFleet, bool hasPlanet, bool hasActionableFleet, bool canDivide, bool canMerge)
@@ -281,16 +272,15 @@ public partial class SystemInspector : Control
         _loadSquadsButton.TooltipText = hasActionableFleet ? "Open the tactical screen to load squads." : noFleet;
     }
 
-    private static string FormatPopulation(long populationInThousands)
+    private static string FormatPopulation(long population)
     {
-        double population = populationInThousands * 1000.0;
         if (population >= 1_000_000_000)
         {
-            return $"{population / 1_000_000_000:0.##}B";
+            return $"{population / 1_000_000_000.0:0.##}B";
         }
         if (population >= 1_000_000)
         {
-            return $"{population / 1_000_000:0.##}M";
+            return $"{population / 1_000_000.0:0.##}M";
         }
         return $"{population:N0}";
     }

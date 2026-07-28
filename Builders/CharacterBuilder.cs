@@ -14,7 +14,7 @@ namespace OnlyWar.Builders
                 Id = id,
                 Loyalty = faction,
                 Age = RNG.GetIntBelowMax(30, 100),
-                Name = $"{NameGenerator.GetName()} {NameGenerator.GetName()}",
+                Name = NameGenerator.GetFullName(),
                 Appreciation = (float)RNG.GetLinearDouble(),
                 Influence = (float)RNG.GetLinearDouble(),
                 Investigation = (float)RNG.GetLinearDouble(),

@@ -139,7 +139,7 @@ public partial class DiplomacyScreenController : DialogController
         return
         [
             new TreeNode(0,
-                $"Progress: enemy holds {contestedRegions} of {promised.Regions.Length} regions",
+                $"Progress: enemy present in {contestedRegions} of {promised.Regions.Length} regions",
                 byFaction,
                 selectable: false)
         ];

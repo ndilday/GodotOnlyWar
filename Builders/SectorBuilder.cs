@@ -18,6 +18,7 @@ namespace OnlyWar.Builders
             List<TaskForce> forceList = [];
 
             RNG.Reset(seed);
+            NameGenerator.Reset();
             PlanetBuilder.Instance.Reset();
 
             for (ushort j = 0; j < data.SectorSize.Y; j++)

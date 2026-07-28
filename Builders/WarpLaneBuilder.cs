@@ -1,3 +1,4 @@
+using OnlyWar.Helpers.Extensions;
 using OnlyWar.Models.Planets;
 using System;
 using System.Collections.Generic;
@@ -46,12 +47,23 @@ namespace OnlyWar.Builders
             return lanes;
         }
 
-        private static Planet SelectCapital(Subsector subsector)
+        /// <summary>
+        /// Selects the Imperial warp hub for a subsector. Strategic importance is the primary
+        /// ranking, with population and id providing deterministic tie-breaks. If a subsector
+        /// has no Imperial-controlled world, the same ranking falls back across all worlds so
+        /// a conquered subsector cannot disconnect the derived warp network.
+        /// </summary>
+        public static Planet SelectCapital(Subsector subsector)
         {
-            // PRD §4.1: for 0.7 the importance score driving capital selection is population.
-            return subsector.Planets
-                .OrderByDescending(planet => planet.Population)
-                .ThenByDescending(planet => planet.Importance)
+            IEnumerable<Planet> imperialWorlds = subsector.Planets
+                .Where(planet => planet.GetControllingFaction()?.IsDefaultFaction == true);
+            IEnumerable<Planet> candidates = imperialWorlds.Any()
+                ? imperialWorlds
+                : subsector.Planets;
+
+            return candidates
+                .OrderByDescending(planet => planet.Importance)
+                .ThenByDescending(planet => planet.Population)
                 .ThenBy(planet => planet.Id)
                 .First();
         }

@@ -472,7 +472,6 @@ public partial class PlanetTacticalScreenController : DialogController
 		List<ValueTuple<string, string>> regionRows =
 		[
 			Row("Control", GetRegionControlLabel(region)),
-			Row("Coordinates", $"({region.Coordinates.X}, {region.Coordinates.Y})"),
 			Row("Intel Rating", $"{visibleIntel:0.##}")
 		];
 		if (region.HasHiddenDefaultFaction())

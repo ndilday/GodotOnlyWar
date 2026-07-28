@@ -466,8 +466,8 @@ public partial class ChapterController : Control
     // browse level. Selecting a result previews it; drilling (or navigating) exits filtering.
     private void RenderFilterResults()
     {
-        List<ISoldier> results = _filterService
-            .Apply(GetCurrentScopeMembers(), _activeFilter, GameDataSingleton.Instance.Date)
+        List<ISoldier> results = OrderFilteredSoldiers(_filterService
+                .Apply(GetCurrentScopeMembers(), _activeFilter, GameDataSingleton.Instance.Date))
             .ToList();
 
         int? selectedId = _navigator.SelectedItem?.Level == ChapterBrowserLevel.Soldier
@@ -508,8 +508,29 @@ public partial class ChapterController : Control
         }
     }
 
+    // Filter results span squads and companies, so tenure is less useful than a predictable
+    // alphabetical tie-break. Keep role seniority first, then alphabetize equal-ranked brothers
+    // by surname regardless of the order in which their squads appear in the chapter.
+    internal static IEnumerable<ISoldier> OrderFilteredSoldiers(IEnumerable<ISoldier> soldiers)
+    {
+        return soldiers
+            .OrderByDescending(soldier => soldier.Template.Rank)
+            .ThenByDescending(soldier => soldier.Template.Subrank)
+            .ThenBy(GetSurname, StringComparer.OrdinalIgnoreCase)
+            .ThenBy(soldier => soldier.Name, StringComparer.OrdinalIgnoreCase)
+            .ThenBy(soldier => soldier.Id);
+    }
+
+    private static string GetSurname(ISoldier soldier)
+    {
+        string name = soldier?.Name?.Trim() ?? "";
+        int separatorIndex = name.LastIndexOf(' ');
+        return separatorIndex >= 0 ? name[(separatorIndex + 1)..] : name;
+    }
+
     // Soldiers the filter searches, bound to the current breadcrumb level. Presented in the
-    // same rank-then-tenure order the rosters use, so filter results and squad views agree.
+    // same seniority order the rosters use before the filtered result list applies its own
+    // rank/subrank/surname presentation order.
     private IEnumerable<ISoldier> GetCurrentScopeMembers()
     {
         IEnumerable<ISoldier> members = _navigator.Path.Level switch
@@ -539,8 +560,8 @@ public partial class ChapterController : Control
     {
         if (_activeFilter.Count > 0)
         {
-            return _filterService
-                .Apply(GetCurrentScopeMembers(), _activeFilter, GameDataSingleton.Instance.Date)
+            return OrderFilteredSoldiers(_filterService
+                    .Apply(GetCurrentScopeMembers(), _activeFilter, GameDataSingleton.Instance.Date))
                 .Select(soldier => soldier.Id)
                 .ToList();
         }

@@ -13,4 +13,12 @@
   <ItemGroup>
     <PackageReference Include="Microsoft.Data.Sqlite" Version="9.0.0" />
   </ItemGroup>
+  <ItemGroup>
+    <EmbeddedResource Include="Models\Soldiers\Names\given_names.txt">
+      <LogicalName>OnlyWar.SoldierNames.Given</LogicalName>
+    </EmbeddedResource>
+    <EmbeddedResource Include="Models\Soldiers\Names\surnames.txt">
+      <LogicalName>OnlyWar.SoldierNames.Surnames</LogicalName>
+    </EmbeddedResource>
+  </ItemGroup>
 </Project>

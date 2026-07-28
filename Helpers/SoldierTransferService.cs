@@ -37,14 +37,21 @@ namespace OnlyWar.Helpers
             // Present openings by ascending target rank, so lateral transfers come first,
             // then single-level promotions, then higher jumps. Subrank breaks ties within a
             // rank (e.g. a Veteran move sorts ahead of a Veteran Sergeant promotion, both at
-            // Rank 5). OrderBy is stable, so remaining ties keep the order-of-battle traversal
-            // order. The current assignment, when shown, is pinned to the top regardless.
+            // Rank 5). Within the same role, preserve order-of-battle company and squad-type
+            // order, then alphabetize squads of the same type. The current assignment, when
+            // shown, is pinned to the top regardless.
+            Dictionary<int, Squad> squadMap = orderOfBattle.GetAllSquads()
+                .ToDictionary(squad => squad.Id);
             List<SoldierTransferOption> openings = GetOpeningsInUnit(
                 orderOfBattle,
                 soldier.AssignedSquad,
                 soldier.Template)
                 .OrderBy(option => option.SoldierTemplate.Rank)
                 .ThenBy(option => option.SoldierTemplate.Subrank)
+                .ThenBy(option => GetUnitOrderKey(GetTargetUnit(option, squadMap)))
+                .ThenBy(option => GetSquadTypeOrder(option, squadMap))
+                .ThenBy(option => GetSquadName(option, squadMap), StringComparer.OrdinalIgnoreCase)
+                .ThenBy(option => option.SquadId)
                 .ToList();
 
             if (includeCurrentAssignment)
@@ -57,6 +64,73 @@ namespace OnlyWar.Helpers
             }
 
             return openings;
+        }
+
+        private static Unit GetTargetUnit(
+            SoldierTransferOption option,
+            IReadOnlyDictionary<int, Squad> squadMap)
+        {
+            return option.IsNewSquad
+                ? option.TargetUnit
+                : squadMap.TryGetValue(option.SquadId, out Squad squad) ? squad.ParentUnit : null;
+        }
+
+        private static string GetUnitOrderKey(Unit unit)
+        {
+            if (unit == null)
+            {
+                return "zzzzzzzz";
+            }
+
+            Stack<string> segments = [];
+            Unit current = unit;
+            while (current != null)
+            {
+                Unit parent = current.ParentUnit;
+                if (parent == null)
+                {
+                    segments.Push($"root:{current.Name}:{current.Id:D8}");
+                    break;
+                }
+
+                int index = parent.ChildUnits?.IndexOf(current) ?? -1;
+                segments.Push(index >= 0 ? $"{index:D8}" : $"unknown:{current.Name}:{current.Id:D8}");
+                current = parent;
+            }
+
+            return string.Join("/", segments);
+        }
+
+        private static int GetSquadTypeOrder(
+            SoldierTransferOption option,
+            IReadOnlyDictionary<int, Squad> squadMap)
+        {
+            Unit unit = GetTargetUnit(option, squadMap);
+            SquadTemplate targetTemplate = option.IsNewSquad
+                ? option.TargetSquadTemplate
+                : squadMap.TryGetValue(option.SquadId, out Squad squad) ? squad.SquadTemplate : null;
+            if (unit?.Squads == null || targetTemplate == null)
+            {
+                return int.MaxValue;
+            }
+
+            int index = unit.Squads.ToList().FindIndex(candidate =>
+                candidate.SquadTemplate == targetTemplate);
+            return index >= 0 ? index : int.MaxValue;
+        }
+
+        private static string GetSquadName(
+            SoldierTransferOption option,
+            IReadOnlyDictionary<int, Squad> squadMap)
+        {
+            if (option.IsNewSquad)
+            {
+                return $"New {option.TargetSquadTemplate?.Name}";
+            }
+
+            return squadMap.TryGetValue(option.SquadId, out Squad squad)
+                ? squad.Name
+                : option.DisplayName;
         }
 
         // A transfer never changes how many soldiers are aboard a ship if the soldier is

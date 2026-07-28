@@ -160,6 +160,41 @@ public class SoldierTransferServiceTests
     }
 
     [Fact]
+    public void GetTransferOptions_SortsSameRankByCompanyTypeThenSquadName()
+    {
+        SquadTemplate tacticalTemplate = CreateSquadTemplate(
+            "Tactical Squad",
+            (TestModelFactory.SergeantTemplate, 0, 1),
+            (TestModelFactory.MarineTemplate, 0, 4));
+        SquadTemplate scoutTemplate = CreateSquadTemplate(
+            "Scout Squad",
+            SquadTypes.Scout,
+            (TestModelFactory.SergeantTemplate, 0, 1),
+            (TestModelFactory.MarineTemplate, 0, 4));
+        Unit chapter = CreateUnit("Chapter");
+        Unit ninthCompany = CreateUnit("Ninth Company");
+        Unit tenthCompany = CreateUnit("Tenth Company");
+        AddChildUnit(chapter, ninthCompany);
+        AddChildUnit(chapter, tenthCompany);
+
+        Squad source = AddSquad(chapter, "Source Squad", tacticalTemplate);
+        PlayerSoldier soldier = AddPlayerSoldier(source, TestModelFactory.MarineTemplate, "Brother Marius");
+        AddLedSquad(ninthCompany, "Zulu Squad", scoutTemplate);
+        AddLedSquad(tenthCompany, "Tactical Squad", tacticalTemplate);
+        AddLedSquad(tenthCompany, "Castor Squad", scoutTemplate);
+        AddLedSquad(tenthCompany, "Aquila Squad", scoutTemplate);
+
+        List<string> squadNames = _service.GetTransferOptions(chapter, soldier)
+            .Where(option => option.SoldierTemplate == TestModelFactory.MarineTemplate)
+            .Select(option => chapter.GetAllSquads().Single(squad => squad.Id == option.SquadId).Name)
+            .ToList();
+
+        Assert.Equal(
+            ["Zulu Squad", "Tactical Squad", "Aquila Squad", "Castor Squad"],
+            squadNames);
+    }
+
+    [Fact]
     public void ApplyTransfer_MovesSoldierPromotesAndRecordsHistoryOnce()
     {
         SquadTemplate template = CreateSquadTemplate(
@@ -379,6 +414,19 @@ public class SoldierTransferServiceTests
     {
         Squad squad = new(name, unit, template);
         unit.AddSquad(squad);
+        return squad;
+    }
+
+    private static void AddChildUnit(Unit parent, Unit child)
+    {
+        parent.ChildUnits.Add(child);
+        child.ParentUnit = parent;
+    }
+
+    private static Squad AddLedSquad(Unit unit, string name, SquadTemplate template)
+    {
+        Squad squad = AddSquad(unit, name, template);
+        AddPlayerSoldier(squad, TestModelFactory.SergeantTemplate, $"{name} Sergeant");
         return squad;
     }
 

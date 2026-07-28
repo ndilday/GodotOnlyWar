@@ -1,290 +1,132 @@
-﻿using OnlyWar.Helpers;
+using OnlyWar.Helpers;
+using System;
+using System.Collections.Generic;
+using System.IO;
+using System.Reflection;
 
 namespace OnlyWar
 {
+    /// <summary>
+    /// Builds full soldier names from separate embedded given-name and surname pools.
+    /// Each pool is shuffled once and then drawn without replacement in O(1) time.
+    /// </summary>
     public static class NameGenerator
     {
-        private static readonly string[] _names =
-        {
-            "Abel",
-            "Abronio",
-            "Abronius",
-            "Aburio",
-            "Aburius",
-            "Accio",
-            "Accius",
-            "Acilio",
-            "Acilius",
-            "Aconio",
-            "Aconius",
-            "Actorio",
-            "Actorius",
-            "Acutio",
-            "Acutius",
-            "Aderson",
-            "Agorio",
-            "Agorius",
-            "Agrippa",
-            "Alajos",
-            "Albinio",
-            "Albinius",
-            "Albio",
-            "Ablius",
-            "Alberec",
-            "Alenso",
-            "Alessio",
-            "Alexis",
-            "Allectio",
-            "Allectius",
-            "Amafinio",
-            "Amafinius",
-            "Amandus",
-            "Amatio",
-            "Amatius",
-            "Amulio",
-            "Amulius",
-            "Ancus",
-            "Anval",
-            "Anzio",
-            "Aphael",
-            "Apollo",
-            "Appius",
-            "Armand",
-            "Armaros",
-            "Arvann",
-            "Astoric",
-            "Attio",
-            "Attius",
-            "Aulus",
-            "Aurellian",
-            "Balthus",
-            "Belial",
-            "Belloch",
-            "Boreale",
-            "Borgio",
-            "Brant",
-            "Cadulon",
-            "Caeles",
-            "Caeso",
-            "Caius",
-            "Calas",
-            "Camillo",
-            "Camillus",
-            "Canio",
-            "Canus",
-            "Castigon",
-            "Consultus",
-            "Corien",
-            "Cortez",
-            "Cossio",
-            "Cossus",
-            "Courbray",
-            "Crixus",
-            "Cules",
-            "D'Arquebus",
-            "Daed",
-            "Dantalion",
-            "Darius",
-            "Darnath",
-            "Davian",
-            "Decimo",
-            "Decimus",
-            "Decio",
-            "Decius",
-            "Diomedes",
-            "Donatos",
-            "Draco",
-            "Drusio",
-            "Drusus",
-            "Elam",
-            "Elias",
-            "Erasmus",
-            "Fafnir",
-            "Faustus",
-            "Fidelis",
-            "Flavio",
-            "Flavius",
-            "Folkert",
-            "Furioso",
-            "Gaius",
-            "Galedan",
-            "Gallio",
-            "Gallus",
-            "Garro",
-            "Gessart",
-            "Gnaeus",
-            "Grimmer",
-            "Grulgor",
-            "Grummer",
-            "Heilbron",
-            "Herio",
-            "Herius",
-            "Hostio",
-            "Hostus",
-            "Ignatius",
-            "Indrick",
-            "Iscon",
-            "Julius",
-            "Kaeso",
-            "Kaesoron",
-            "Karcunio",
-            "Karcunus",
-            "Karlaen",
-            "Kerith",
-            "Kolak",
-            "Larce",
-            "Laris",
-            "Larth",
-            "Larsus",
-            "Leandro",
-            "Leitz",
-            "Leonatos",
-            "Lexandro",
-            "Lucius",
-            "Lysander",
-            "Machio",
-            "Machiavi",
-            "Mamercus",
-            "Manio",
-            "Manius",
-            "Marcello",
-            "Marcellus",
-            "Marcio",
-            "Marcus",
-            "Marius",
-            "Melian",
-            "Mettio",
-            "Mettius",
-            "Minato",
-            "Minatus",
-            "Minio",
-            "Minius",
-            "Moriar",
-            "Morleo",
-            "Nadael",
-            "Narth",
-            "Nathaniel",
-            "Nerio",
-            "Nerius",
-            "Nero",
-            "Nerus",
-            "Nonio",
-            "Nonus",
-            "Novio",
-            "Novius",
-            "Numerius",
-            "Numio",
-            "Numus",
-            "Obiareus",
-            "Octavius",
-            "Odovocar",
-            "Opiter",
-            "Oriax",
-            "Orlandra",
-            "Ovio",
-            "Ovius",
-            "Paccio",
-            "Paccius",
-            "Paullus",
-            "Pavel",
-            "Phaeton",
-            "Pheus",
-            "Phobor",
-            "Pollux",
-            "Polux",
-            "Pompo",
-            "Portan",
-            "Postumus",
-            "Proculus",
-            "Publius",
-            "Puplio",
-            "Puplius",
-            "Quentus",
-            "Quintus",
-            "Quirion",
-            "Rann",
-            "Raxiatel",
-            "Reinhart",
-            "Reus",
-            "Roac",
-            "Sable",
-            "Sammael",
-            "Salvio",
-            "Salvius",
-            "Saul",
-            "Sendini",
-            "Sendroth",
-            "Seppio",
-            "Seppius",
-            "Septimus",
-            "Sertor",
-            "Servio",
-            "Servius",
-            "Sethreus",
-            "Sextus",
-            "Sien",
-            "Sigismund",
-            "Sigmund",
-            "Silas",
-            "Slayne",
-            "Solomon",
-            "Soron",
-            "Spurio",
-            "Spurius",
-            "Startio",
-            "Startius",
-            "Statio",
-            "Statius",
-            "Stern",
-            "Sumatris",
-            "Taelos",
-            "Tain",
-            "Taltos",
-            "Tane",
-            "Tawn",
-            "Taremar",
-            "Tarnus",
-            "Tarvitz",
-            "Taurio",
-            "Taurus",
-            "Telamon",
-            "Thawn",
-            "Thule",
-            "Tiberio",
-            "Tiberius",
-            "Titus",
-            "Tragan",
-            "Trebio",
-            "Trebius",
-            "Tullio",
-            "Tullus",
-            "Tyr",
-            "Vairosean",
-            "Valafar",
-            "Vale",
-            "Vettio",
-            "Vettius",
-            "Vibio",
-            "Vibius",
-            "Vilius",
-            "Voleo",
-            "Volero",
-            "Volesus",
-            "Vopio",
-            "Vopiscus",
-            "Wayn",
-            "Xander",
-            "Zander",
-            "Zedrenael",
-            "Zorael",
+        private const string GIVEN_NAMES_RESOURCE = "OnlyWar.SoldierNames.Given";
+        private const string SURNAMES_RESOURCE = "OnlyWar.SoldierNames.Surnames";
 
-        };
+        private static readonly string[] _givenNames = LoadPool(GIVEN_NAMES_RESOURCE);
+        private static readonly string[] _surnames = LoadPool(SURNAMES_RESOURCE);
+        private static readonly int[] _shuffledGivenNameIndexes = new int[_givenNames.Length];
+        private static readonly int[] _shuffledSurnameIndexes = new int[_surnames.Length];
 
-        public static string GetName()
+        private static int _remainingGivenNames;
+        private static int _remainingSurnames;
+
+        internal static int GivenNameCount => _givenNames.Length;
+        internal static int SurnameCount => _surnames.Length;
+
+        /// <summary>
+        /// Starts a fresh naming sequence by independently shuffling both pools.
+        /// Call this once before generating a player chapter. It should be called
+        /// after <see cref="RNG.Reset(int)"/> when seeded determinism is required.
+        /// </summary>
+        public static void Reset()
         {
-            int nameCount = _names.Length;
-            int firstNameNumber = RNG.GetIntBelowMax(0, nameCount);
-            return _names[firstNameNumber];
+            RefillGivenNames();
+            RefillSurnames();
+        }
+
+        /// <summary>
+        /// Returns a two-part name. Given names and surnames do not repeat until their
+        /// respective pool is exhausted, at which point only that pool is reshuffled.
+        /// </summary>
+        public static string GetFullName()
+        {
+            return $"{TakeGivenName()} {TakeSurname()}";
+        }
+
+        private static string TakeGivenName()
+        {
+            if (_remainingGivenNames == 0)
+            {
+                RefillGivenNames();
+            }
+
+            int nameIndex = _shuffledGivenNameIndexes[--_remainingGivenNames];
+            return _givenNames[nameIndex];
+        }
+
+        private static string TakeSurname()
+        {
+            if (_remainingSurnames == 0)
+            {
+                RefillSurnames();
+            }
+
+            int nameIndex = _shuffledSurnameIndexes[--_remainingSurnames];
+            return _surnames[nameIndex];
+        }
+
+        private static void RefillGivenNames()
+        {
+            FillAndShuffle(_shuffledGivenNameIndexes);
+            _remainingGivenNames = _shuffledGivenNameIndexes.Length;
+        }
+
+        private static void RefillSurnames()
+        {
+            FillAndShuffle(_shuffledSurnameIndexes);
+            _remainingSurnames = _shuffledSurnameIndexes.Length;
+        }
+
+        private static void FillAndShuffle(int[] indexes)
+        {
+            for (int i = 0; i < indexes.Length; i++)
+            {
+                indexes[i] = i;
+            }
+
+            for (int i = indexes.Length - 1; i > 0; i--)
+            {
+                int j = RNG.GetIntBelowMax(0, i + 1);
+                (indexes[i], indexes[j]) = (indexes[j], indexes[i]);
+            }
+        }
+
+        private static string[] LoadPool(string resourceName)
+        {
+            Assembly assembly = typeof(NameGenerator).Assembly;
+            using Stream stream = assembly.GetManifestResourceStream(resourceName)
+                ?? throw new InvalidOperationException(
+                    $"Embedded soldier-name resource '{resourceName}' was not found.");
+            using StreamReader reader = new(stream);
+
+            List<string> names = [];
+            HashSet<string> uniqueNames = new(StringComparer.OrdinalIgnoreCase);
+            string line;
+            while ((line = reader.ReadLine()) != null)
+            {
+                string name = line.Trim();
+                if (name.Length == 0)
+                {
+                    continue;
+                }
+                if (!uniqueNames.Add(name))
+                {
+                    throw new InvalidDataException(
+                        $"Soldier-name resource '{resourceName}' contains duplicate name '{name}'.");
+                }
+                names.Add(name);
+            }
+
+            if (names.Count == 0)
+            {
+                throw new InvalidDataException(
+                    $"Soldier-name resource '{resourceName}' contains no names.");
+            }
+
+            return names.ToArray();
         }
     }
 }
