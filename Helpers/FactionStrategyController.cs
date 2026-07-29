@@ -407,7 +407,12 @@ public class FactionStrategyController
         }
 
         Mission mission = new Mission(MissionType.Recon, target.TargetFaction, 0);
-        Order order = new Order(scouts, Disposition.Mobile, true, false, Aggression.Cautious, mission);
+        // Normal, not Cautious. Aggression now trades exposure for effect
+        // (MissionAggressionModifiers): a Cautious recon is harder to spot but learns less, and the
+        // intel it gathers is what sharpens this faction's own garrison sizing against its
+        // neighbours (GarrisonFullSightIntel). Defaulting to Cautious would have the AI quietly
+        // handicap the one thing it runs recon for.
+        Order order = new Order(scouts, Disposition.Mobile, true, false, Aggression.Normal, mission);
         allOrders.Add(order);
         GameLog.Debug(() =>
             $"AI recon {faction.Name}: target={DescribeOffensive(target)}, staging={stagingRegion.Name}, "

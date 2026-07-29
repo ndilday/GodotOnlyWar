@@ -1,5 +1,7 @@
 using OnlyWar.Builders;
 using OnlyWar.Helpers.Battles;
+using OnlyWar.Helpers.Fortifications;
+using OnlyWar.Helpers.Turns;
 using OnlyWar.Models;
 using OnlyWar.Models.Missions;
 using OnlyWar.Models.Planets;
@@ -18,6 +20,17 @@ namespace OnlyWar.Helpers.Missions.Assault
         // resolver; if a tactical order reaches this step after the defender mobilized, cap the
         // generated garrison to the same limits used when deciding tactical-vs-strategic combat.
         private const long MaxTacticalGarrisonBattleValue = StrategicCombatRules.MassCombatBattleValueFloor - 1;
+
+        // Base difficulty of the defenders' preparation check. Mirrors the attacker's own 10.0f so
+        // neither side is structurally favoured: an evenly-matched pair of commanders produces a net
+        // margin near zero, which leaves garrison mobilisation where it would have been before this
+        // contest existed.
+        private const float DefensivePreparationDifficulty = 10.0f;
+
+        // Difficulty reduction per shared level of Entrenchment. Deliberately the same magnitude as
+        // MissionStealthDifficulty.SurveillanceWeight, so a level of works is worth about as much to a
+        // defence as a point of regional intel is to spotting an intruder.
+        private const float EntrenchmentPreparationBonus = 0.5f;
 
         public string Description { get { return "Prepare Assault"; } }
 
@@ -40,7 +53,8 @@ namespace OnlyWar.Helpers.Missions.Assault
                 context.Order.Mission.RegionFaction,
                 margin,
                 execution.Random,
-                execution.EntityIds);
+                execution.EntityIds,
+                tactics);
 
             if (context.OpposingSquads.Count == 0)
             {
@@ -59,7 +73,8 @@ namespace OnlyWar.Helpers.Missions.Assault
             RegionFaction defendingRegionFaction,
             float attackerMarginOfSuccess,
             IRNG random,
-            IEntityIdAllocator entityIds = null)
+            IEntityIdAllocator entityIds = null,
+            BaseSkill defenderTactics = null)
         {
             var defendingForce = new List<BattleSquad>();
 
@@ -78,16 +93,26 @@ namespace OnlyWar.Helpers.Missions.Assault
             // screen posted to engage raiders — it joins the defence of the region it patrols.
             var defendingSquads = GetRegionalDefensiveSquads(defendingRegionFaction);
 
-            if (defendingSquads.Any())
-            {
-                defendingForce.AddRange(defendingSquads.Select(s => new BattleSquad(s.Faction?.IsPlayerFaction == true, s)));
-            }
+            List<BattleSquad> landedDefenders = defendingSquads
+                .Select(s => new BattleSquad(s.Faction?.IsPlayerFaction == true, s))
+                .ToList();
+            defendingForce.AddRange(landedDefenders);
+
+            // 1b. A Defense order means the ground was PREPARED, and prepared ground contests the
+            // attacker's own preparation instead of merely absorbing it.
+            float effectiveAttackerMargin = ContestPreparation(
+                defendingRegionFaction,
+                landedDefenders,
+                attackerMarginOfSuccess,
+                defenderTactics,
+                random);
 
             // 2. Generate squads for each allied faction's abstract garrison.
             foreach (RegionFaction alliedDefender in alliedDefenders.Where(rf => rf.Garrison > 0))
             {
-                // Attacker's success in preparation reduces the effectiveness of the garrison mobilization
-                float cdf = GaussianCalculator.ApproximateNormalCDF(attackerMarginOfSuccess);
+                // Attacker's success in preparation reduces the effectiveness of the garrison
+                // mobilization - net of whatever the defenders' own preparation clawed back.
+                float cdf = GaussianCalculator.ApproximateNormalCDF(effectiveAttackerMargin);
                 float multiplier = (float)Math.Pow(2, 1 - (2 * cdf));
                 long effectiveGarrison = (long)(alliedDefender.Garrison * multiplier);
                 // Garrison already lives in strategic battle-value points; the old x10 conversion
@@ -111,6 +136,68 @@ namespace OnlyWar.Helpers.Missions.Assault
             }
 
             return defendingForce;
+        }
+
+        /// <summary>
+        /// The attacker's preparation margin, net of the defenders' own. This is what finally makes a
+        /// Defense order worth issuing.
+        /// </summary>
+        /// <remarks>
+        /// Before this, Defense and Patrol were mechanically identical - two adjacent `continue`
+        /// statements in MissionTurnProcessor, both pulled into the region's defence by
+        /// GetRegionalDefensiveSquads, neither doing anything else. Patrol additionally granted intel
+        /// and search effort, so Defense was strictly dominated and the "defender advantage applies"
+        /// of PRD §4.13 was never implemented at all.
+        ///
+        /// The advantage lands here rather than inside the battle because
+        /// <see cref="BattleSquad.CoverModifier"/> is declared but never read by the battle engine, so
+        /// there is currently no in-battle channel to attach prepared positions to. Routing it through
+        /// garrison mobilisation keeps the change out of the tactical resolver entirely, which is also
+        /// what keeps seeded battle baselines intact.
+        ///
+        /// Only squads actually holding a Defense order contest. Everything else
+        /// GetRegionalDefensiveSquads returns - a patrol screen, an exposed diversion force, a show of
+        /// force - fights when the region is attacked but did not prepare the ground, so it is present
+        /// without shaping the engagement. That split is the whole point: detection and presence are
+        /// one thing, fighting from prepared positions is another.
+        /// </remarks>
+        internal static float ContestPreparation(
+            RegionFaction defendingRegionFaction,
+            List<BattleSquad> landedDefenders,
+            float attackerMarginOfSuccess,
+            BaseSkill defenderTactics,
+            IRNG random)
+        {
+            // Callers that do not supply the rules' Tactics skill (older test call sites, and any
+            // path that assembles a defence outside a mission execution) keep the previous
+            // uncontested behaviour rather than silently skipping the roll's RNG draw.
+            if (defenderTactics == null || random == null) return attackerMarginOfSuccess;
+
+            List<BattleSquad> prepared = landedDefenders
+                .Where(bs => bs.Squad?.CurrentOrders?.Mission.MissionType == MissionType.DefenseInDepth)
+                .ToList();
+            if (prepared.Count == 0) return attackerMarginOfSuccess;
+
+            // Entrenchment is the physical expression of a prepared defence, so it lowers the
+            // difficulty of the defenders' check. Shared works pool across public allies exactly as
+            // they do everywhere else (RegionDefenses.GetShared).
+            double entrenchment =
+                RegionDefenses.GetShared(defendingRegionFaction, DefenseType.Entrenchment);
+            float difficulty = DefensivePreparationDifficulty
+                - (float)(entrenchment * EntrenchmentPreparationBonus);
+
+            // LeaderMissionTest also routes field experience to player soldiers, so a player Defense
+            // order now earns Tactics XP - previously it earned nothing at all, because the order ran
+            // no checks whatsoever.
+            float defenderMargin = new LeaderMissionTest(defenderTactics, difficulty)
+                .RunMissionCheck(prepared, random);
+            float net = attackerMarginOfSuccess - defenderMargin;
+            GameLog.Debug(() =>
+                $"Defense preparation {MissionTurnProcessor.DescribeRegionFaction(defendingRegionFaction)}: "
+                + $"squads={prepared.Count}, entrenchment={entrenchment:F2}, difficulty={difficulty:F2}, "
+                + $"attackerMargin={attackerMarginOfSuccess:F2}, defenderMargin={defenderMargin:F2} "
+                + $"-> net={net:F2}");
+            return net;
         }
 
         internal static List<Squad> GetRegionalDefensiveSquads(RegionFaction defendingRegionFaction)

@@ -13,7 +13,9 @@ public partial class PlanetTacticalScreenView : CommandWorkspaceView
         _tacticalRegionPanel = GetNode<Control>("TacticalRegionPanel");
 
         ConfigureMapPanel();
-        BuildWorkspaceShell(0.705f, 0.91f, 0.755f);
+        // Planet roster rows do not use the shared tree's badge column, so collapse it and let
+        // ship, company, and squad labels use the full width of the roster panel.
+        BuildWorkspaceShell(0.705f, 0.91f, 0.755f, selectionBadgeColumnWidth: 0);
         CallDeferred(nameof(LayoutRegionHexGrid));
     }
 

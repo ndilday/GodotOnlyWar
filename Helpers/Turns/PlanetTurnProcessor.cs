@@ -42,7 +42,6 @@ namespace OnlyWar.Helpers.Turns
 
         private const float IntelDecayRate = 0.75f;
         private const float IntelPerListeningPostLevel = 0.2f;
-        private const float IntelPatrolBaseGain = 1.0f;
 
         private readonly GameSession _session;
         private readonly List<Mission> _specialMissions;
@@ -853,19 +852,18 @@ namespace OnlyWar.Helpers.Turns
                         regionFaction.PlanetFaction.AddRegionIntel(region, sensorGain);
                     }
 
-                    // A patrol is an ACTIVITY: two allies each sweeping the ground really do learn
-                    // more between them than either alone, so patrol gains stay on the ledger and
-                    // keep pooling additively.
-                    int patrolStrength = regionFaction.LandedSquads
-                        .Where(s => s.CurrentOrders?.Mission.MissionType == MissionType.Patrol)
-                        .Sum(s => s.Members.Count);
-                    if (patrolStrength > 0)
-                    {
-                        RecordIntelGain(
-                            regionFaction.PlanetFaction,
-                            region,
-                            IntelPatrolBaseGain + (float)Math.Log10(patrolStrength));
-                    }
+                    // Patrol deliberately grants NO intelligence (Design/Active/DailyMissionResolution.md
+                    // §5). It used to add a flat 1.0 + log10(headcount) here, which made it a strictly
+                    // better intel source than Recon: this path routes through RecordIntelGain, which
+                    // bypasses the diminishing-returns curve TurnIntelLedger applies to recon evidence,
+                    // and it cost no roll, no risk, and no operating days. Patrolling your own region
+                    // beat reconnoitring it.
+                    //
+                    // Patrol's product is DETECTION, not knowledge: it contributes search effort
+                    // (RegionFaction.GetPatrolStrength -> MissionStealthDifficulty), it decides who
+                    // spots an intruder (Region.SelectSpotter, which gates the player-side contact
+                    // channel in NpcMissionReportBuilder), and it intercepts. Recon is the only source
+                    // of regional intel.
                 }
             }
 

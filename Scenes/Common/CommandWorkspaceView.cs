@@ -251,7 +251,13 @@ public partial class CommandWorkspaceView : DialogView
     // includeHeader=false skips the breadcrumb/layer-toggle header bar entirely (for screens whose
     // identity already lives in the app's top menu, e.g. Region Ops); topAnchor lets those screens
     // reclaim the header band by starting their panels higher.
-    protected void BuildWorkspaceShell(float mapRightAnchor, float contextBottomAnchor, float commandTopAnchor = 0.805f, bool includeHeader = true, float topAnchor = 0.08f)
+    protected void BuildWorkspaceShell(
+        float mapRightAnchor,
+        float contextBottomAnchor,
+        float commandTopAnchor = 0.805f,
+        bool includeHeader = true,
+        float topAnchor = 0.08f,
+        int selectionBadgeColumnWidth = 116)
     {
         if (includeHeader)
         {
@@ -280,10 +286,9 @@ public partial class CommandWorkspaceView : DialogView
         };
         _selectionTree.SetColumnExpand(0, true);
         _selectionTree.SetColumnExpand(1, false);
-        // Wider badge column so target-region names ("Terra Lambda") aren't clipped, and a smaller
-        // per-level indent so squad rows sit closer under their company header — the reclaimed
-        // horizontal space goes to the badge.
-        _selectionTree.SetColumnCustomMinimumWidth(1, 116);
+        // Region Ops reserves room here for target-region badges ("Terra Lambda"). Screens that
+        // do not show badges can pass zero so their roster labels reclaim the empty column.
+        _selectionTree.SetColumnCustomMinimumWidth(1, selectionBadgeColumnWidth);
         _selectionTree.AddThemeConstantOverride("item_margin", 6);
         _selectionTree.ItemSelected += OnSelectionTreeItemSelected;
         // In SELECT_MULTI mode Godot emits multi_selected (not item_selected) for every selection

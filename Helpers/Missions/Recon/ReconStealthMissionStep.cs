@@ -47,7 +47,13 @@ namespace OnlyWar.Helpers.Missions.Recon
             // day, not N independent rolls); the terms are broken out for the trace.
             StealthDifficultyTerms terms =
                 MissionStealthDifficulty.Calculate(region, scoutHeadcount, scout);
-            float difficulty = terms.Total;
+            // Aggression trades exposure for effect (MissionAggressionModifiers): a cautious sweep
+            // keeps its distance and is harder to spot, a bold one presses close and is seen. The
+            // other half of the trade is the intelligence check in PerformReconMissionStep, which
+            // moves the opposite way - neither setting is strictly better than the other.
+            float aggressionMod =
+                MissionAggressionModifiers.ExposureDifficulty(context.Order.LevelOfAggression);
+            float difficulty = terms.Total + aggressionMod;
             SquadMissionTest missionTest = new SquadMissionTest(stealth, difficulty);
 
             context.DaysElapsed++;
@@ -72,7 +78,8 @@ namespace OnlyWar.Helpers.Missions.Recon
                 + $"difficulty={difficulty:F2} (detection={terms.Detection:F2} over "
                 + $"{terms.EnemyCount} enemy faction(s), +patrol={terms.PatrolMod:F2}, "
                 + $"+ambient={terms.AmbientMod:F2}, +ownTroops={terms.OwnTroopMod:F2}, "
-                + $"-intel={terms.IntelMod:F2}), "
+                + $"-intel={terms.IntelMod:F2}, "
+                + $"+aggression={aggressionMod:F2} [{context.Order.LevelOfAggression}]), "
                 + $"bestStealthSkill={bestStealth:F2}, margin={margin:F2} -> "
                 + $"{(slippedIn ? "SLIPPED IN" : $"DETECTED by {DescribeSpotter(context.Spotter)}")}");
             if (slippedIn)
