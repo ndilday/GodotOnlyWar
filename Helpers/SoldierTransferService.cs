@@ -24,6 +24,8 @@ namespace OnlyWar.Helpers
 
     public class SoldierTransferService
     {
+        private readonly SoldierTemplateEligibilityService _eligibilityService = new();
+
         public List<SoldierTransferOption> GetTransferOptions(
             Unit orderOfBattle,
             PlayerSoldier soldier,
@@ -45,7 +47,7 @@ namespace OnlyWar.Helpers
             List<SoldierTransferOption> openings = GetOpeningsInUnit(
                 orderOfBattle,
                 soldier.AssignedSquad,
-                soldier.Template)
+                soldier)
                 .OrderBy(option => option.SoldierTemplate.Rank)
                 .ThenBy(option => option.SoldierTemplate.Subrank)
                 .ThenBy(option => GetUnitOrderKey(GetTargetUnit(option, squadMap)))
@@ -202,6 +204,10 @@ namespace OnlyWar.Helpers
             {
                 throw new InvalidOperationException("Cannot transfer a soldier with no assigned squad.");
             }
+            if (!_eligibilityService.IsEligible(soldier, option.SoldierTemplate))
+            {
+                return false;
+            }
             Squad newSquad;
             if (option.IsNewSquad)
             {
@@ -224,7 +230,6 @@ namespace OnlyWar.Helpers
             {
                 return false;
             }
-
             Squad currentSquad = soldier.AssignedSquad;
             currentSquad.RemoveSquadMember(soldier);
             if (IsNamedAfterLeader(soldier.Template, currentSquad))
@@ -304,7 +309,7 @@ namespace OnlyWar.Helpers
         private List<SoldierTransferOption> GetOpeningsInUnit(
             Unit unit,
             Squad currentSquad,
-            SoldierTemplate soldierTemplate)
+            PlayerSoldier soldier)
         {
             List<SoldierTransferOption> openSlots = [];
             foreach (Squad squad in unit.Squads)
@@ -313,7 +318,7 @@ namespace OnlyWar.Helpers
                 {
                     continue;
                 }
-                IEnumerable<SoldierTemplate> squadSlots = GetOpeningsInSquad(squad, currentSquad, soldierTemplate);
+                IEnumerable<SoldierTemplate> squadSlots = GetOpeningsInSquad(squad, currentSquad, soldier);
                 foreach (SoldierTemplate template in squadSlots)
                 {
                     openSlots.Add(new SoldierTransferOption(
@@ -333,7 +338,7 @@ namespace OnlyWar.Helpers
                 {
                     continue;
                 }
-                foreach (SoldierTemplate template in GetOpeningsInEmptySquad(slot.Template, soldierTemplate))
+                foreach (SoldierTemplate template in GetOpeningsInEmptySquad(slot.Template, soldier))
                 {
                     openSlots.Add(new SoldierTransferOption(
                         0,
@@ -347,7 +352,7 @@ namespace OnlyWar.Helpers
 
             foreach (Unit childUnit in unit.ChildUnits ?? Enumerable.Empty<Unit>())
             {
-                openSlots.AddRange(GetOpeningsInUnit(childUnit, currentSquad, soldierTemplate));
+                openSlots.AddRange(GetOpeningsInUnit(childUnit, currentSquad, soldier));
             }
 
             return openSlots;
@@ -434,9 +439,9 @@ namespace OnlyWar.Helpers
             return squad.BoardedLocation?.Fleet?.Planet;
         }
 
-        private static IEnumerable<SoldierTemplate> GetOpeningsInEmptySquad(
+        private IEnumerable<SoldierTemplate> GetOpeningsInEmptySquad(
             SquadTemplate squadTemplate,
-            SoldierTemplate soldierTemplate)
+            PlayerSoldier soldier)
         {
             List<SoldierTemplate> openSpots = [];
             foreach (SquadTemplateElement element in squadTemplate.Elements)
@@ -446,11 +451,15 @@ namespace OnlyWar.Helpers
                 {
                     continue;
                 }
-                if (!IsRankEligible(element.SoldierTemplate, soldierTemplate))
+                if (!IsRankEligible(element.SoldierTemplate, soldier.Template))
                 {
                     continue;
                 }
-                if (!IsSpecialistEligible(element.SoldierTemplate, soldierTemplate))
+                if (!IsSpecialistEligible(element.SoldierTemplate, soldier.Template))
+                {
+                    continue;
+                }
+                if (!_eligibilityService.IsEligible(soldier, element.SoldierTemplate))
                 {
                     continue;
                 }
@@ -488,10 +497,10 @@ namespace OnlyWar.Helpers
             return true;
         }
 
-        private static IEnumerable<SoldierTemplate> GetOpeningsInSquad(
+        private IEnumerable<SoldierTemplate> GetOpeningsInSquad(
             Squad squad,
             Squad currentSquad,
-            SoldierTemplate soldierTemplate)
+            PlayerSoldier soldier)
         {
             List<SoldierTemplate> openSpots = [];
             bool hasSquadLeader = squad.SquadLeader != null;
@@ -516,15 +525,19 @@ namespace OnlyWar.Helpers
                 {
                     continue;
                 }
-                if (currentSquad == squad && element.SoldierTemplate == soldierTemplate)
+                if (currentSquad == squad && element.SoldierTemplate == soldier.Template)
                 {
                     continue;
                 }
-                if (!IsRankEligible(element.SoldierTemplate, soldierTemplate))
+                if (!IsRankEligible(element.SoldierTemplate, soldier.Template))
                 {
                     continue;
                 }
-                if (!IsSpecialistEligible(element.SoldierTemplate, soldierTemplate))
+                if (!IsSpecialistEligible(element.SoldierTemplate, soldier.Template))
+                {
+                    continue;
+                }
+                if (!_eligibilityService.IsEligible(soldier, element.SoldierTemplate))
                 {
                     continue;
                 }

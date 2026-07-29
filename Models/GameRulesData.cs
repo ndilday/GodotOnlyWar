@@ -93,6 +93,7 @@ namespace OnlyWar.Models
             SectorFactions = new SectorGenerationFactions(_factions);
             ValidateTrainingSkills();
             ValidateRatingDefinitions();
+            ValidateSoldierTemplateRequirements();
         }
 
         // Test hook: shrinks the generated sector so tests that need a real
@@ -168,6 +169,63 @@ namespace OnlyWar.Models
                     throw new InvalidOperationException(
                         $"Rating award tier {tier.Id} references rating '{tier.RatingKey}', "
                         + "which has no definition.");
+                }
+            }
+        }
+
+        private void ValidateSoldierTemplateRequirements()
+        {
+            HashSet<string> ratingKeys = RatingDefinitions.Select(d => d.Key).ToHashSet();
+            foreach (SoldierTemplate template in _factions
+                         .Where(f => f.SoldierTemplates != null)
+                         .SelectMany(f => f.SoldierTemplates.Values))
+            {
+                foreach (SoldierTemplateRequirement requirement in template.PromotionRequirements)
+                {
+                    if (!Enum.IsDefined(requirement.RequirementType))
+                    {
+                        throw new InvalidOperationException(
+                            $"Soldier template '{template.Name}' has unknown requirement type "
+                            + $"{(int)requirement.RequirementType}.");
+                    }
+                    if (!Enum.IsDefined(requirement.Comparison))
+                    {
+                        throw new InvalidOperationException(
+                            $"Soldier template '{template.Name}' has unknown requirement comparison "
+                            + $"{(int)requirement.Comparison}.");
+                    }
+
+                    switch (requirement.RequirementType)
+                    {
+                        case SoldierTemplateRequirementType.SoldierStat:
+                            if (requirement.RequirementKey != SoldierTemplateRequirementKeys.PsychicPower)
+                            {
+                                throw new InvalidOperationException(
+                                    $"Soldier template '{template.Name}' references unknown soldier stat "
+                                    + $"'{requirement.RequirementKey}'.");
+                            }
+                            break;
+                        case SoldierTemplateRequirementType.Rating:
+                            if (!ratingKeys.Contains(requirement.RequirementKey))
+                            {
+                                throw new InvalidOperationException(
+                                    $"Soldier template '{template.Name}' references unknown rating "
+                                    + $"'{requirement.RequirementKey}'.");
+                            }
+                            break;
+                        case SoldierTemplateRequirementType.CurrentSpecialistType:
+                            if (requirement.RequirementKey != SoldierTemplateRequirementKeys.SpecialistType
+                                || requirement.Comparison != SoldierTemplateRequirementComparison.Equal
+                                || requirement.RequiredValue <= 0
+                                || requirement.RequiredValue > byte.MaxValue
+                                || requirement.RequiredValue != MathF.Truncate(requirement.RequiredValue)
+                                || requirement.RequiredValue != template.SpecialistType)
+                            {
+                                throw new InvalidOperationException(
+                                    $"Soldier template '{template.Name}' has an invalid specialist-track requirement.");
+                            }
+                            break;
+                    }
                 }
             }
         }

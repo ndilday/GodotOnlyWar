@@ -33,8 +33,14 @@ namespace OnlyWar.Helpers.Database.GameRules
             var trainingProfiles = GetTrainingProfilesById(connection, baseSkillMap);
             var meleeWeapons = GetMeleeWeaponTemplates(connection, baseSkillMap);
             var species = GetSpeciesByFactionId(connection, attributes, hitLocationMap, meleeWeapons);
+            var soldierTemplateRequirements = GetSoldierTemplateRequirements(connection);
             var soldierTemplates = 
-                GetSoldierTemplatesByFactionId(connection, soldierTemplateSkills, species, trainingProfiles);
+                GetSoldierTemplatesByFactionId(
+                    connection,
+                    soldierTemplateSkills,
+                    species,
+                    trainingProfiles,
+                    soldierTemplateRequirements);
             var armorTemplates = GetArmorTemplates(connection);
             var rangedWeapons = GetRangedWeaponTemplates(connection, baseSkillMap);
             var weaponSets = GetWeaponSetMap(connection, meleeWeapons, rangedWeapons);
@@ -134,6 +140,33 @@ namespace OnlyWar.Helpers.Database.GameRules
                 }
             }
             return soldierTemplateMosMap;
+        }
+
+        private static Dictionary<int, List<SoldierTemplateRequirement>> GetSoldierTemplateRequirements(
+            IDbConnection connection)
+        {
+            Dictionary<int, List<SoldierTemplateRequirement>> requirementMap = [];
+            using var command = connection.CreateCommand();
+            command.CommandText =
+                "SELECT SoldierTemplateId, RequirementType, RequirementKey, Comparison, RequiredValue "
+                + "FROM SoldierTemplateRequirement";
+            var reader = command.ExecuteReader();
+            while (reader.Read())
+            {
+                int soldierTemplateId = reader.GetInt32(0);
+                SoldierTemplateRequirement requirement = new(
+                    (SoldierTemplateRequirementType)reader.GetInt32(1),
+                    reader.GetString(2),
+                    (SoldierTemplateRequirementComparison)reader.GetInt32(3),
+                    Convert.ToSingle(reader[4]));
+
+                if (!requirementMap.ContainsKey(soldierTemplateId))
+                {
+                    requirementMap[soldierTemplateId] = [];
+                }
+                requirementMap[soldierTemplateId].Add(requirement);
+            }
+            return requirementMap;
         }
 
 
@@ -588,7 +621,8 @@ namespace OnlyWar.Helpers.Database.GameRules
             IDbConnection connection,
             Dictionary<int, List<ValueTuple<BaseSkill, float>>> soldierTemplateTrainingMap,
             Dictionary<int, List<Species>> speciesMap,
-            Dictionary<int, TrainingProfile> trainingProfileMap)
+            Dictionary<int, TrainingProfile> trainingProfileMap,
+            Dictionary<int, List<SoldierTemplateRequirement>> requirementMap)
         {
             Dictionary<int, List<SoldierTemplate>> soldierTemplatesByFactionId = 
                 [];
@@ -622,10 +656,15 @@ namespace OnlyWar.Helpers.Database.GameRules
                         trainingList = soldierTemplateTrainingMap[id];
                     }
                     var species = speciesMap[factionId].First(s => s.Id == speciesId);
+                    List<SoldierTemplateRequirement> promotionRequirements =
+                        requirementMap.TryGetValue(id, out List<SoldierTemplateRequirement> requirements)
+                            ? requirements
+                            : [];
                     SoldierTemplate soldierTemplate =
                         new SoldierTemplate(id, species, name, (byte)rank, (byte)subrank,
                                             isSquadLeader, (byte)specialistType, trainingList,
-                                            workExperienceTrainingProfile, battleValue);
+                                            workExperienceTrainingProfile, battleValue,
+                                            promotionRequirements);
 
                     if (!soldierTemplatesByFactionId.ContainsKey(factionId))
                     {

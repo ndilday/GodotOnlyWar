@@ -3,6 +3,7 @@ using OnlyWar.Models;
 using OnlyWar.Models.Fleets;
 using OnlyWar.Models.Planets;
 using OnlyWar.Models.Soldiers;
+using OnlyWar.Models.Soldiers.Ratings;
 using OnlyWar.Models.Squads;
 using OnlyWar.Models.Units;
 using OnlyWar.Tests.Fixtures;
@@ -157,6 +158,157 @@ public class SoldierTransferServiceTests
             .ToList();
 
         Assert.Contains(options, option => option.SoldierTemplate == chaplain);
+    }
+
+    [Fact]
+    public void GetTransferOptions_RequiresDestinationTemplateStatAndRatingRequirements()
+    {
+        SoldierTemplate librarian = CreateTemplate(
+            34,
+            "Lexicanium",
+            5,
+            false,
+            specialistType: 3,
+            requirements:
+            [
+                new(
+                    SoldierTemplateRequirementType.SoldierStat,
+                    SoldierTemplateRequirementKeys.PsychicPower,
+                    SoldierTemplateRequirementComparison.GreaterThan,
+                    0),
+                new(
+                    SoldierTemplateRequirementType.Rating,
+                    RatingKeys.Leadership,
+                    SoldierTemplateRequirementComparison.GreaterThan,
+                    60)
+            ]);
+        SoldierTemplate librarianLeader = CreateTemplate(35, "Librarian Leader", 6, true, 3);
+        SquadTemplate lineTemplate = CreateSquadTemplate(
+            "Line Squad", (TestModelFactory.MarineTemplate, 0, 4));
+        SquadTemplate librariusTemplate = CreateSquadTemplate(
+            "Librarius", (librarianLeader, 0, 1), (librarian, 0, 4));
+        Unit chapter = CreateUnit("Chapter");
+        Squad source = AddSquad(chapter, "Source Squad", lineTemplate);
+        PlayerSoldier ordinaryMarine =
+            AddPlayerSoldier(source, TestModelFactory.MarineTemplate, "Brother Marius");
+        ordinaryMarine.AddEvaluation(new SoldierEvaluation(
+            _date, new Dictionary<string, float> { [RatingKeys.Leadership] = 80 }));
+        Squad target = AddSquad(chapter, "Librarius", librariusTemplate);
+        AddPlayerSoldier(target, librarianLeader, "Master Varro");
+
+        List<SoldierTransferOption> ordinaryOptions =
+            _service.GetTransferOptions(chapter, ordinaryMarine);
+
+        Assert.DoesNotContain(ordinaryOptions, option => option.SoldierTemplate == librarian);
+
+        Soldier rawPsyker = TestModelFactory.CreateSoldier(
+            TestModelFactory.MarineTemplate, "Brother Psyker");
+        rawPsyker.PsychicPower = 1;
+        PlayerSoldier qualifiedPsyker = new(rawPsyker, "Brother Psyker");
+        qualifiedPsyker.AddEvaluation(new SoldierEvaluation(
+            _date, new Dictionary<string, float> { [RatingKeys.Leadership] = 80 }));
+        source.AddSquadMember(qualifiedPsyker);
+
+        List<SoldierTransferOption> psykerOptions =
+            _service.GetTransferOptions(chapter, qualifiedPsyker);
+
+        Assert.Contains(psykerOptions, option => option.SoldierTemplate == librarian);
+    }
+
+    [Fact]
+    public void GetTransferOptions_RequiresExistingTrackForSeniorSpecialistTemplate()
+    {
+        const byte chaplainType = 4;
+        SoldierTemplate judiciar = CreateTemplate(
+            36,
+            "Judiciar",
+            4,
+            false,
+            chaplainType,
+            [
+                new(
+                    SoldierTemplateRequirementType.Rating,
+                    RatingKeys.Piety,
+                    SoldierTemplateRequirementComparison.GreaterThan,
+                    90)
+            ]);
+        SoldierTemplate chaplain = CreateTemplate(
+            37,
+            "Chaplain",
+            5,
+            false,
+            chaplainType,
+            [
+                new(
+                    SoldierTemplateRequirementType.Rating,
+                    RatingKeys.Piety,
+                    SoldierTemplateRequirementComparison.GreaterThan,
+                    90),
+                new(
+                    SoldierTemplateRequirementType.CurrentSpecialistType,
+                    SoldierTemplateRequirementKeys.SpecialistType,
+                    SoldierTemplateRequirementComparison.Equal,
+                    chaplainType)
+            ]);
+        SoldierTemplate leader = CreateTemplate(38, "Reclusiarch", 6, true, chaplainType);
+        SquadTemplate lineTemplate = CreateSquadTemplate(
+            "Line Squad", (TestModelFactory.MarineTemplate, 0, 4));
+        SquadTemplate reclusiumTemplate = CreateSquadTemplate(
+            "Reclusium", (leader, 0, 1), (judiciar, 0, 2), (chaplain, 0, 2));
+        Unit chapter = CreateUnit("Chapter");
+        Squad source = AddSquad(chapter, "Source Squad", lineTemplate);
+        PlayerSoldier devoutMarine =
+            AddPlayerSoldier(source, TestModelFactory.MarineTemplate, "Brother Marius");
+        devoutMarine.AddEvaluation(new SoldierEvaluation(
+            _date, new Dictionary<string, float> { [RatingKeys.Piety] = 100 }));
+        Squad target = AddSquad(chapter, "Reclusium", reclusiumTemplate);
+        AddPlayerSoldier(target, leader, "Reclusiarch Varro");
+
+        List<SoldierTransferOption> options =
+            _service.GetTransferOptions(chapter, devoutMarine);
+
+        Assert.Contains(options, option => option.SoldierTemplate == judiciar);
+        Assert.DoesNotContain(options, option => option.SoldierTemplate == chaplain);
+    }
+
+    [Fact]
+    public void ApplyTransfer_RechecksDestinationTemplateRequirements()
+    {
+        SoldierTemplate librarian = CreateTemplate(
+            39,
+            "Lexicanium",
+            5,
+            false,
+            specialistType: 3,
+            requirements:
+            [
+                new(
+                    SoldierTemplateRequirementType.SoldierStat,
+                    SoldierTemplateRequirementKeys.PsychicPower,
+                    SoldierTemplateRequirementComparison.GreaterThan,
+                    0)
+            ]);
+        SquadTemplate lineTemplate = CreateSquadTemplate(
+            "Line Squad", (TestModelFactory.MarineTemplate, 0, 4));
+        SquadTemplate librariusTemplate = CreateSquadTemplate(
+            "Librarius", (librarian, 0, 4));
+        Unit chapter = CreateUnit("Chapter");
+        Squad source = AddSquad(chapter, "Source Squad", lineTemplate);
+        PlayerSoldier ordinaryMarine =
+            AddPlayerSoldier(source, TestModelFactory.MarineTemplate, "Brother Marius");
+        Squad target = AddSquad(chapter, "Librarius", librariusTemplate);
+        SoldierTransferOption forgedOption = new(
+            target.Id, librarian, "Lexicanium, Librarius, Chapter");
+
+        bool transferred = _service.ApplyTransfer(
+            ordinaryMarine,
+            forgedOption,
+            chapter.GetAllSquads().ToDictionary(squad => squad.Id),
+            _date);
+
+        Assert.False(transferred);
+        Assert.Same(source, ordinaryMarine.AssignedSquad);
+        Assert.Equal(TestModelFactory.MarineTemplate, ordinaryMarine.Template);
     }
 
     [Fact]
@@ -581,7 +733,8 @@ public class SoldierTransferServiceTests
     }
 
     private static SoldierTemplate CreateTemplate(int id, string name, byte rank, bool isSquadLeader,
-                                                  byte specialistType = 0)
+                                                  byte specialistType = 0,
+                                                  IReadOnlyList<SoldierTemplateRequirement> requirements = null)
     {
         return new SoldierTemplate(
             id,
@@ -591,7 +744,8 @@ public class SoldierTransferServiceTests
             1,
             isSquadLeader,
             specialistType,
-            []);
+            [],
+            promotionRequirements: requirements);
     }
 
     private static SquadTemplate CreateSquadTemplate(

@@ -4,6 +4,8 @@ using System.Linq;
 using OnlyWar.Builders;
 using OnlyWar.Helpers;
 using OnlyWar.Models;
+using OnlyWar.Models.Soldiers;
+using OnlyWar.Models.Soldiers.Ratings;
 using OnlyWar.Models.Squads;
 using OnlyWar.Tests.Fixtures;
 using Xunit;
@@ -33,6 +35,74 @@ public class RulesDatabaseValidationTests
     }
 
     [Fact]
+    public void PlayerSpecialistTemplates_LoadDataDrivenPromotionRequirements()
+    {
+        var rules = RulesDatabaseFixture.LoadRules();
+        var player = rules.Factions.Single(faction => faction.IsPlayerFaction);
+        Dictionary<string, SoldierTemplate> templates =
+            player.SoldierTemplates.Values.ToDictionary(template => template.Name);
+        HashSet<string> entryRoles =
+            ["Apothecary", "Techmarine", "Lexicanium", "Judiciar"];
+
+        List<SoldierTemplate> specialistTemplates = templates.Values
+            .Where(template => template.SpecialistType > 0)
+            .ToList();
+        Assert.All(specialistTemplates, template =>
+            Assert.NotEmpty(template.PromotionRequirements));
+        Assert.All(specialistTemplates.Where(template => !entryRoles.Contains(template.Name)), template =>
+            AssertRequirement(
+                template,
+                SoldierTemplateRequirementType.CurrentSpecialistType,
+                SoldierTemplateRequirementKeys.SpecialistType,
+                SoldierTemplateRequirementComparison.Equal,
+                template.SpecialistType));
+
+        AssertRequirement(
+            templates["Lexicanium"],
+            SoldierTemplateRequirementType.SoldierStat,
+            SoldierTemplateRequirementKeys.PsychicPower,
+            SoldierTemplateRequirementComparison.GreaterThan,
+            0);
+        AssertRequirement(
+            templates["Apothecary"],
+            SoldierTemplateRequirementType.Rating,
+            RatingKeys.Medical,
+            SoldierTemplateRequirementComparison.GreaterThan,
+            95);
+        AssertRequirement(
+            templates["Techmarine"],
+            SoldierTemplateRequirementType.Rating,
+            RatingKeys.Tech,
+            SoldierTemplateRequirementComparison.GreaterThan,
+            75);
+        AssertRequirement(
+            templates["Judiciar"],
+            SoldierTemplateRequirementType.Rating,
+            RatingKeys.Piety,
+            SoldierTemplateRequirementComparison.GreaterThan,
+            90);
+
+        AssertRequirement(
+            templates["Master of the Apothecarion"],
+            SoldierTemplateRequirementType.Rating,
+            RatingKeys.Medical,
+            SoldierTemplateRequirementComparison.GreaterThan,
+            115);
+        AssertRequirement(
+            templates["Master of the Apothecarion"],
+            SoldierTemplateRequirementType.Rating,
+            RatingKeys.Leadership,
+            SoldierTemplateRequirementComparison.GreaterThan,
+            60);
+        AssertRequirement(
+            templates["Master of the Apothecarion"],
+            SoldierTemplateRequirementType.CurrentSpecialistType,
+            SoldierTemplateRequirementKeys.SpecialistType,
+            SoldierTemplateRequirementComparison.Equal,
+            1);
+    }
+
+    [Fact]
     public void BodyTemplates_DefinePhysicalHandGroups()
     {
         var rules = RulesDatabaseFixture.LoadRules();
@@ -50,6 +120,20 @@ public class RulesDatabaseValidationTests
         Assert.Equal(2, groups.Count);
         Assert.Equal(["Left Arm", "Left Hand"], groups[0].Select(location => location.Name));
         Assert.Equal(["Right Arm", "Right Hand"], groups[1].Select(location => location.Name));
+    }
+
+    private static void AssertRequirement(
+        SoldierTemplate template,
+        SoldierTemplateRequirementType requirementType,
+        string requirementKey,
+        SoldierTemplateRequirementComparison comparison,
+        float requiredValue)
+    {
+        Assert.Contains(template.PromotionRequirements, requirement =>
+            requirement.RequirementType == requirementType
+            && requirement.RequirementKey == requirementKey
+            && requirement.Comparison == comparison
+            && requirement.RequiredValue == requiredValue);
     }
 
     [Fact]
