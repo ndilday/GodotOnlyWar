@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using System.Linq;
 using OnlyWar.Models.Missions;
 using OnlyWar.Models.Orders;
+using OnlyWar.Models.Recruitment;
 using OnlyWar.Models.Squads;
 using OnlyWar.Models.Units;
 using OnlyWar.Tests.Fixtures;
@@ -11,6 +12,55 @@ namespace OnlyWar.Tests.UI;
 
 public class TrainingUnitScreenControllerTests
 {
+    [Fact]
+    public void IsDoctrineValid_AcceptsConfiguredRecruitmentThresholds()
+    {
+        RecruitmentDoctrineDraft doctrine = new(
+            RecruitmentPolicy.VoluntaryPresentation,
+            0,
+            1,
+            -1,
+            2,
+            0,
+            0.9f);
+
+        Assert.True(TrainingUnitScreenController.IsDoctrineValid(doctrine));
+    }
+
+    [Theory]
+    [InlineData(-5)]
+    [InlineData(7)]
+    public void IsDoctrineValid_RejectsAttributeFilterOutsideRulesRange(int halfSteps)
+    {
+        RecruitmentDoctrineDraft doctrine = new(
+            RecruitmentPolicy.PlanetaryTithe,
+            halfSteps,
+            0,
+            0,
+            0,
+            0,
+            0.9f);
+
+        Assert.False(TrainingUnitScreenController.IsDoctrineValid(doctrine));
+    }
+
+    [Theory]
+    [InlineData(-0.01f)]
+    [InlineData(1.01f)]
+    public void IsDoctrineValid_RejectsGeneticThresholdOutsideUnitInterval(float threshold)
+    {
+        RecruitmentDoctrineDraft doctrine = new(
+            RecruitmentPolicy.PlanetaryTithe,
+            0,
+            0,
+            0,
+            0,
+            0,
+            threshold);
+
+        Assert.False(TrainingUnitScreenController.IsDoctrineValid(doctrine));
+    }
+
     [Fact]
     public void IsTrainingSquad_ExcludesScoutCompanyHq()
     {
@@ -24,6 +74,17 @@ public class TrainingUnitScreenControllerTests
             new Squad(1, "Alpha Scouts", null, trainingTemplate)));
         Assert.False(TrainingUnitScreenController.IsTrainingSquad(
             new Squad(2, "10th Company HQ", null, hqTemplate)));
+    }
+
+    [Fact]
+    public void IsTrainingSquad_ExcludesAdministrativeScoutFormation()
+    {
+        Squad squad = new(1, "Recruitment Staff", null, CreateScoutTemplate(101, "Scout Staff"))
+        {
+            IsAdministrative = true
+        };
+
+        Assert.False(TrainingUnitScreenController.IsTrainingSquad(squad));
     }
 
     [Fact]

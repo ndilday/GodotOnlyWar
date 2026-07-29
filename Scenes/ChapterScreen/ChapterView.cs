@@ -249,6 +249,20 @@ public partial class ChapterView : Control
         subtitle.AddThemeFontSizeOverride("font_size", 12);
         textStack.AddChild(subtitle);
 
+        if (!string.IsNullOrWhiteSpace(item.Location))
+        {
+            Label location = new Label
+            {
+                Text = item.Location,
+                ClipText = true,
+                TextOverrunBehavior = TextServer.OverrunBehavior.TrimEllipsis,
+                TooltipText = item.Location
+            };
+            location.AddThemeColorOverride("font_color", OnlyWarStyle.MutedText);
+            location.AddThemeFontSizeOverride("font_size", 12);
+            textStack.AddChild(location);
+        }
+
         Button drillButton = new Button
         {
             Text = item.CanDrill ? item.DrillText : "i",

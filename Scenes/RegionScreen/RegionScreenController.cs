@@ -196,34 +196,7 @@ public partial class RegionScreenController : DialogController
     private AvailableMission FindMissionForOrder(Order order)
     {
         IReadOnlyList<AvailableMission> missions = MissionAvailability.GetAvailableMissions(_currentRegion, _targetRegion);
-
-        AvailableMission special = missions.FirstOrDefault(m => m.Kind == MissionAvailabilityKind.Special && m.SpecialMission == order.Mission);
-        if (special != null) return special;
-
-        switch (order.Mission.MissionType)
-        {
-            case MissionType.Recon:
-                return missions.FirstOrDefault(m => m.Kind == MissionAvailabilityKind.Recon);
-            case MissionType.Advance:
-                return missions.FirstOrDefault(m => m.Kind == MissionAvailabilityKind.Attack)
-                    ?? missions.FirstOrDefault(m => m.Kind == MissionAvailabilityKind.Move);
-            case MissionType.DefenseInDepth:
-                return missions.FirstOrDefault(m => m.Kind == MissionAvailabilityKind.Defend);
-            case MissionType.Patrol:
-                return missions.FirstOrDefault(m => m.Kind == MissionAvailabilityKind.Patrol);
-            case MissionType.Diversion:
-                return missions.FirstOrDefault(m => m.Kind == MissionAvailabilityKind.Diversion);
-            case MissionType.Construction:
-                MissionAvailabilityKind kind = ((ConstructionMission)order.Mission).ConstructionType switch
-                {
-                    DefenseType.ListeningPost => MissionAvailabilityKind.BuildListeningPost,
-                    DefenseType.AntiAir => MissionAvailabilityKind.BuildAntiAir,
-                    _ => MissionAvailabilityKind.FortifyEntrenchment
-                };
-                return missions.FirstOrDefault(m => m.Kind == kind);
-            default:
-                return null;
-        }
+        return missions.FirstOrDefault(mission => mission.RepresentsOrder(order));
     }
 
     private void OnAssignPressed(object sender, EventArgs e)
@@ -278,13 +251,33 @@ public partial class RegionScreenController : DialogController
         if (_currentRegion == null || _targetRegion == null) return;
 
         IReadOnlyList<AvailableMission> missions = MissionAvailability.GetAvailableMissions(_currentRegion, _targetRegion);
-        if (_selectedMission != null && !missions.Any(m => m.Kind == _selectedMission.Kind && m.Label == _selectedMission.Label))
+        if (_selectedMission != null && !missions.Any(m => m.RepresentsSameOption(_selectedMission)))
         {
             _selectedMission = null;
         }
 
         _view.SetMissionsHeader(_targetRegion.Name, BuildMissionsFlagTexts(_targetRegion));
-        _view.SetMissions(missions, _selectedMission);
+        _view.SetMissions(missions, _selectedMission, BuildAssignedMissionKeys(missions));
+    }
+
+    private IReadOnlySet<string> BuildAssignedMissionKeys(
+        IReadOnlyList<AvailableMission> missions)
+    {
+        Sector sector = GameDataSingleton.Instance.Sector;
+        if (sector == null)
+        {
+            return new HashSet<string>();
+        }
+
+        List<Order> targetOrders = sector.Orders.Values
+            .Where(order => order?.Mission?.RegionFaction?.Region == _targetRegion
+                && order.AssignedSquads.Any(
+                    squad => squad?.Faction?.IsPlayerFaction == true))
+            .ToList();
+        return missions
+            .Where(mission => targetOrders.Any(mission.RepresentsOrder))
+            .Select(mission => mission.IdentityKey)
+            .ToHashSet();
     }
 
     internal static IReadOnlyList<string> BuildMissionsFlagTexts(Region targetRegion)
@@ -442,7 +435,7 @@ public partial class RegionScreenController : DialogController
         if (playerFaction != null)
         {
             foreach (IGrouping<OnlyWar.Models.Units.Unit, Squad> group in playerFaction.LandedSquads
-                .Where(squad => squad.Members.Count > 0)
+                .Where(squad => squad.IsOperational && squad.Members.Count > 0)
                 .GroupBy(squad => squad.ParentUnit))
             {
                 List<CommandTreeNode> squadNodes = group
@@ -501,7 +494,8 @@ public partial class RegionScreenController : DialogController
             .ToHashSet();
         if (selectedIds.Count == 0) return;
 
-        _selectedSquads.AddRange(playerFaction.LandedSquads.Where(squad => selectedIds.Contains(squad.Id)));
+        _selectedSquads.AddRange(playerFaction.LandedSquads.Where(
+            squad => squad.IsOperational && selectedIds.Contains(squad.Id)));
     }
 
     private Squad ResolveSquadFromKey(string key)

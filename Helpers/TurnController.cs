@@ -21,6 +21,7 @@ namespace OnlyWar.Helpers
         private readonly PlanetForwardSimulator _planetForwardSimulator;
         private readonly ScenarioTurnProcessor _scenarioTurnProcessor;
         private readonly ChapterSupplyTurnProcessor _chapterSupplyTurnProcessor;
+        private readonly RecruitmentTurnProcessor _recruitmentTurnProcessor;
         private readonly GameSession _session;
         private readonly TurnIntelLedger _intelLedger;
         private readonly TurnResolutionResult _lastResult;
@@ -67,6 +68,8 @@ namespace OnlyWar.Helpers
                 _lastResult);
             _scenarioTurnProcessor = new ScenarioTurnProcessor(_session);
             _chapterSupplyTurnProcessor = new ChapterSupplyTurnProcessor(_session);
+            _recruitmentTurnProcessor = new RecruitmentTurnProcessor(
+                _session, _planetTurnProcessor);
         }
 
         public TurnResolutionResult ProcessTurn(Sector sector)
@@ -80,6 +83,7 @@ namespace OnlyWar.Helpers
 
             _lastResult.Clear();
             _planetTurnProcessor.ClearTurnIntelGains();
+            _planetTurnProcessor.ClearOrganicPopulationGrowth();
             Faction defaultFaction = _session.Rules.DefaultFaction;
             ScenarioMetricsCollector.BeginScenarioRegionMetrics(
                 ScenarioMetricsCollector.GetScenarioMetricsPlanet(sector),
@@ -126,6 +130,7 @@ namespace OnlyWar.Helpers
             _chapterUpkeepProcessor.TrainNonDeployedPlayerForces(sector);
             _fleetTurnProcessor.AdvanceFleetMovement(sector);
             _planetTurnProcessor.UpdatePlanets(sector.Planets.Values);
+            _lastResult.RecruitmentReport = _recruitmentTurnProcessor.Process();
             MissionAftermathProcessor.PruneInvalidSpecialMissions(sector.Planets.Values);
             _planetTurnProcessor.UpdateIntelligence(sector.Planets.Values);
             _chapterSupplyTurnProcessor.ProcessDeliveries();

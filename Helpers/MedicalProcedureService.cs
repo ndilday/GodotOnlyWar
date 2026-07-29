@@ -76,6 +76,7 @@ namespace OnlyWar.Helpers
             }
             return force.Army.OrderOfBattle.GetAllMembers().Any(member =>
                 member.CanFight
+                && member.AssignedSquad?.IsOperational == true
                 && member.Template != null
                 && templateNames.Contains(member.Template.Name)
                 && SameLocation(member.AssignedSquad, woundedSquad));

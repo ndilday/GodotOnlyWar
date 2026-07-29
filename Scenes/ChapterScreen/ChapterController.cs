@@ -1,5 +1,7 @@
 using Godot;
 using OnlyWar.Helpers;
+using OnlyWar.Helpers.Recruitment;
+using OnlyWar.Helpers.Simulation;
 using OnlyWar.Models;
 using OnlyWar.Models.Soldiers;
 using OnlyWar.Models.Squads;
@@ -19,6 +21,7 @@ public partial class ChapterController : Control
     private SoldierTransferOption _pendingTransferOption;
     private int? _pendingTransferSoldierId;
     private int? _currentDetailSoldierId;
+    private bool _pendingBlackCarapaceSurgery;
     private ConfirmationDialog _transferConfirmationDialog;
     private AcceptDialog _transferBlockedDialog;
     private ChapterFilterDialog _filterDialog;
@@ -193,12 +196,53 @@ public partial class ChapterController : Control
                 GameDataSingleton.Instance.Sector.PlayerForce.Army.SquadMap);
             _transferBlockedDialog.DialogText =
                 $"{transferTarget} has no room aboard its ship. Free up space before transferring {soldier.Name} there.";
+            _transferBlockedDialog.Title = "Transfer Blocked";
             _transferBlockedDialog.PopupCentered();
             return;
         }
 
         _pendingTransferOption = option;
         _pendingTransferSoldierId = soldier.Id;
+        if (SoldierTransferService.RequiresBlackCarapace(soldier, option))
+        {
+            GameRulesData rules = GameDataSingleton.Instance.GameRulesData;
+            if (option.IsNewSquad
+                || option.SoldierTemplate != rules.ChapterTemplates.DevastatorMarine)
+            {
+                _transferBlockedDialog.Title = "Promotion Blocked";
+                _transferBlockedDialog.DialogText =
+                    "A campaign-recruited neophyte must receive the Black Carapace "
+                    + "before changing roles, and his first Battle-Brother posting "
+                    + "must be as a Devastator Marine.";
+                _transferBlockedDialog.PopupCentered();
+                ClearPendingTransfer();
+                return;
+            }
+
+            BlackCarapacePlanResult plan = CreateRecruitmentPromotionService()
+                .EvaluateBlackCarapace(soldier.Id, option.SquadId);
+            if (!plan.Succeeded)
+            {
+                _transferBlockedDialog.Title = "Promotion Blocked";
+                _transferBlockedDialog.DialogText = plan.Message;
+                _transferBlockedDialog.PopupCentered();
+                ClearPendingTransfer();
+                return;
+            }
+
+            _pendingBlackCarapaceSurgery = true;
+            _transferConfirmationDialog.Title = "Confirm Black Carapace Surgery";
+            _transferConfirmationDialog.DialogText =
+                $"Commit {soldier.Name} to a one-week Black Carapace procedure? "
+                + $"{plan.ApothecaryName} will perform the surgery. His genetic "
+                + $"compatibility is {plan.GeneticCompatibility:P0}; failure is fatal. "
+                + $"If he survives, he will join {option.DisplayName}.";
+            _transferConfirmationDialog.PopupCentered();
+            return;
+        }
+
+        _pendingBlackCarapaceSurgery = false;
+        _transferConfirmationDialog.Title = "Confirm Transfer";
         _transferConfirmationDialog.DialogText =
             $"Transfer {soldier.Template.Name} {soldier.Name} to {_pendingTransferOption.DisplayName}?";
         _transferConfirmationDialog.PopupCentered();
@@ -214,6 +258,25 @@ public partial class ChapterController : Control
         if (GetSoldier(_pendingTransferSoldierId.Value) is not PlayerSoldier soldier)
         {
             ClearPendingTransfer();
+            return;
+        }
+        if (_pendingBlackCarapaceSurgery)
+        {
+            RecruitmentPromotionResult result = CreateRecruitmentPromotionService()
+                .ScheduleBlackCarapace(soldier.Id, _pendingTransferOption.SquadId);
+            if (result.Succeeded)
+            {
+                CampaignChanged?.Invoke(this, EventArgs.Empty);
+                _transferBlockedDialog.Title = "Surgery Scheduled";
+            }
+            else
+            {
+                _transferBlockedDialog.Title = "Promotion Blocked";
+            }
+            _transferBlockedDialog.DialogText = result.Message;
+            _transferBlockedDialog.PopupCentered();
+            ClearPendingTransfer();
+            RenderCurrentPath();
             return;
         }
 
@@ -258,6 +321,21 @@ public partial class ChapterController : Control
     {
         _pendingTransferOption = null;
         _pendingTransferSoldierId = null;
+        _pendingBlackCarapaceSurgery = false;
+        if (_transferConfirmationDialog != null)
+        {
+            _transferConfirmationDialog.Title = "Confirm Transfer";
+        }
+    }
+
+    private static RecruitmentPromotionService CreateRecruitmentPromotionService()
+    {
+        GameDataSingleton data = GameDataSingleton.Instance;
+        return new RecruitmentPromotionService(new GameSession(
+            data.GameRulesData,
+            data.Sector,
+            data.Date,
+            StaticRNG.Instance));
     }
 
     private void RenderCurrentPath()
@@ -375,7 +453,7 @@ public partial class ChapterController : Control
                 $"{squad.SquadTemplate.Name} - {squad.Members.Count} soldiers",
                 true,
                 selectedSquad?.Id == squad.Id,
-                ">"))
+                Location: SquadLocationFormatter.Format(squad)))
             .ToList();
 
         ChapterView.SetLeftMenu($"{company.Name} Squads", squads);

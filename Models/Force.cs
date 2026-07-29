@@ -5,6 +5,7 @@ using OnlyWar.Models.Soldiers;
 using OnlyWar.Models.Squads;
 using OnlyWar.Models.Units;
 using OnlyWar.Models.Supply;
+using OnlyWar.Models.Recruitment;
 
 namespace OnlyWar.Models
 {
@@ -127,6 +128,12 @@ namespace OnlyWar.Models
     {
         public ushort GeneseedStockpile { get; set; }
 
+        // The planet granted to the Chapter by the opening scenario. Recruitment v1
+        // deliberately has exactly one source world; later recruitment-right support can
+        // broaden that without weakening the Home World's first-class identity.
+        public int? HomeWorldPlanetId { get; set; }
+        public RecruitmentProgram RecruitmentProgram { get; set; }
+
         // Count-weighted aggregate purity (0..1) of the sealed gene-seed in the vault
         // (PRD 4.8). Tracked and persisted now; consumed when initiate creation lands
         // (PRD 4.9, post-0.7). Defaults to pristine; the stockpile starts empty.
@@ -137,6 +144,8 @@ namespace OnlyWar.Models
         {
             GeneseedStockpile = 0;
             GeneseedPurity = 1.0f;
+            HomeWorldPlanetId = null;
+            RecruitmentProgram = null;
         }
 
         // Adds one recovered gland of the given purity to the stockpile, folding it into the

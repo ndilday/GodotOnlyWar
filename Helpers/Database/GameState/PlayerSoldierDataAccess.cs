@@ -28,12 +28,28 @@ namespace OnlyWar.Helpers.Database.GameState
             using (var command = transaction.Connection.CreateCommand())
             {
                 command.Transaction = transaction;
-                command.CommandText = @"INSERT INTO PlayerSoldier VALUES
-                    (@id, @millenium, @year, @week);";
+                command.CommandText = @"INSERT INTO PlayerSoldier
+                    (SoldierId, ImplantMillenium, ImplantYear, ImplantWeek,
+                     GeneticCompatibility, RecruitmentBirthMillenium,
+                     RecruitmentBirthYear, RecruitmentBirthWeek)
+                    VALUES (@id, @millenium, @year, @week, @compatibility,
+                            @birthMillenium, @birthYear, @birthWeek);";
                 command.AddParam("@id", playerSoldier.Id);
                 command.AddParam("@millenium", playerSoldier.ProgenoidImplantDate.Millenium);
                 command.AddParam("@year", playerSoldier.ProgenoidImplantDate.Year);
                 command.AddParam("@week", playerSoldier.ProgenoidImplantDate.Week);
+                command.AddParam(
+                    "@compatibility",
+                    (object)playerSoldier.GeneticCompatibility ?? DBNull.Value);
+                command.AddParam(
+                    "@birthMillenium",
+                    (object)playerSoldier.RecruitmentBirthDate?.Millenium ?? DBNull.Value);
+                command.AddParam(
+                    "@birthYear",
+                    (object)playerSoldier.RecruitmentBirthDate?.Year ?? DBNull.Value);
+                command.AddParam(
+                    "@birthWeek",
+                    (object)playerSoldier.RecruitmentBirthDate?.Week ?? DBNull.Value);
                 command.ExecuteNonQuery();
             }
 
@@ -361,7 +377,10 @@ namespace OnlyWar.Helpers.Database.GameState
             Dictionary<int, PlayerSoldier> playerSoldierMap = [];
             using (var command = connection.CreateCommand())
             {
-                command.CommandText = "SELECT * FROM PlayerSoldier";
+                command.CommandText = @"SELECT SoldierId, ImplantMillenium,
+                    ImplantYear, ImplantWeek, GeneticCompatibility,
+                    RecruitmentBirthMillenium, RecruitmentBirthYear,
+                    RecruitmentBirthWeek FROM PlayerSoldier";
                 var reader = command.ExecuteReader();
                 while (reader.Read())
                 {
@@ -371,6 +390,16 @@ namespace OnlyWar.Helpers.Database.GameState
                     int implantWeek = reader.GetInt32(3);
 
                     Date implantDate = new Date(implantMillenium, implantYear, implantWeek);
+                    float? geneticCompatibility = reader.IsDBNull(4)
+                        ? null
+                        : Convert.ToSingle(reader[4]);
+                    Date recruitmentBirthDate =
+                        reader.IsDBNull(5) || reader.IsDBNull(6) || reader.IsDBNull(7)
+                            ? null
+                            : new Date(
+                                reader.GetInt32(5),
+                                reader.GetInt32(6),
+                                reader.GetInt32(7));
 
                     List<SoldierEvent> events;
                     if (eventMap.ContainsKey(soldierId))
@@ -434,7 +463,11 @@ namespace OnlyWar.Helpers.Database.GameState
 
                     PlayerSoldier playerSoldier = new PlayerSoldier(baseSoldierMap[soldierId], evals, awards,
                                                                     implantDate, events, rangedWeaponCasualties,
-                                                                    meleeWeaponCasualties, factionCasualties);
+                                                                    meleeWeaponCasualties, factionCasualties)
+                    {
+                        GeneticCompatibility = geneticCompatibility,
+                        RecruitmentBirthDate = recruitmentBirthDate
+                    };
 
                     playerSoldierMap[soldierId] = playerSoldier;
 

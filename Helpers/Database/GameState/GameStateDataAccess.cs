@@ -33,6 +33,10 @@ namespace OnlyWar.Helpers.Database.GameState
         // onto the loaded PlayerForce.
         public int GeneseedStockpile { get; set; }
         public float GeneseedPurity { get; set; }
+        // The first-class Chapter Home World and the recruitment aggregate's primitive
+        // persistence representation. Domain reconstruction happens in SavedGameLoader.
+        public int? HomeWorldPlanetId { get; set; }
+        public RecruitmentSaveData Recruitment { get; set; }
         // Medical procedures in progress (PRD 4.8 / 5.3), restored onto the loaded Army.
         public List<MedicalProcedure> MedicalProcedures { get; set; }
         public Dictionary<Date, List<EventHistory>> History { get; set; }
@@ -55,6 +59,7 @@ namespace OnlyWar.Helpers.Database.GameState
         private readonly PlayerFactionEventDataAccess _playerFactionEventDataAccess;
         private readonly MedicalProcedureDataAccess _medicalProcedureDataAccess;
         private readonly PledgeDataAccess _pledgeDataAccess;
+        private readonly RecruitmentDataAccess _recruitmentDataAccess;
         private static GameStateDataAccess _instance;
         public static GameStateDataAccess Instance
         {
@@ -80,6 +85,7 @@ namespace OnlyWar.Helpers.Database.GameState
             _playerFactionEventDataAccess = new PlayerFactionEventDataAccess();
             _medicalProcedureDataAccess = new MedicalProcedureDataAccess();
             _pledgeDataAccess = new PledgeDataAccess();
+            _recruitmentDataAccess = new RecruitmentDataAccess();
         }
 
         public GameStateDataBlob GetData(string filePath,
@@ -122,7 +128,12 @@ namespace OnlyWar.Helpers.Database.GameState
             var squadMap = squads.Values.SelectMany(s => s).ToDictionary(s => s.Id);
             var soldiers = _soldierDataAccess.GetData(dbCon, hitLocationTemplates, baseSkillMap,
                                                       soldierTemplateMap, squadMap);
-            SoldierFactory.Instance.SetCurrentHighestSoldierId(soldiers.Keys.Max());
+            var recruitment = _recruitmentDataAccess.GetData(dbCon);
+            int highestIdentity = soldiers.Keys
+                .Concat(recruitment.Aspirants.Select(aspirant => aspirant.Id))
+                .DefaultIfEmpty(0)
+                .Max();
+            SoldierFactory.Instance.SetCurrentHighestSoldierId(highestIdentity);
             var playerSoldiers = _playerSoldierDataAccess.GetData(dbCon, soldiers);
             var global = _globalDataAccess.GetGlobalData(dbCon);
             var medicalProcedures = _medicalProcedureDataAccess.GetProcedures(dbCon);
@@ -144,6 +155,8 @@ namespace OnlyWar.Helpers.Database.GameState
                 Requisition = global?.Requisition ?? 0,
                 GeneseedStockpile = global?.GeneseedStockpile ?? 0,
                 GeneseedPurity = global?.GeneseedPurity ?? 1.0f,
+                HomeWorldPlanetId = global?.HomeWorldPlanetId,
+                Recruitment = recruitment,
                 MedicalProcedures = medicalProcedures,
                 History = history,
                 FallenBrothers = fallenBrothers,
@@ -167,7 +180,9 @@ namespace OnlyWar.Helpers.Database.GameState
                              IEnumerable<PlayerSoldier> playerSoldiers,
                              IEnumerable<PlayerSoldier> fallenBrothers,
                              IReadOnlyDictionary<Date, List<EventHistory>> history,
-                             string schemaFilePath = null)
+                             string schemaFilePath = null,
+                             int? homeWorldPlanetId = null,
+                             RecruitmentSaveData recruitment = null)
         {
 
             // Write the whole save to a sibling temp file first and only swap it over the
@@ -192,7 +207,7 @@ namespace OnlyWar.Helpers.Database.GameState
                 WriteSaveData(tempPath, currentDate, requisition, geneseedStockpile,
                               geneseedPurity, scenario, medicalProcedures, characters, requests,
                               pledges, planets, fleets, playerSoldiers, fallenBrothers, history, squads,
-                              ships, units);
+                              ships, units, homeWorldPlanetId, recruitment);
                 // Release the pooled SQLite handles so the temp file can be moved over the
                 // target on Windows (an open handle would block the move).
                 SqliteConnection.ClearAllPools();
@@ -233,7 +248,9 @@ namespace OnlyWar.Helpers.Database.GameState
                                    IReadOnlyDictionary<Date, List<EventHistory>> history,
                                    IEnumerable<Squad> squads,
                                    IEnumerable<Ship> ships,
-                                   IEnumerable<Unit> units)
+                                   IEnumerable<Unit> units,
+                                   int? homeWorldPlanetId,
+                                   RecruitmentSaveData recruitment)
         {
             string connection = BuildConnectionString(filePath, SqliteOpenMode.ReadWriteCreate);
             using IDbConnection dbCon = new SqliteConnection(connection);
@@ -327,8 +344,10 @@ namespace OnlyWar.Helpers.Database.GameState
                     {
                         _medicalProcedureDataAccess.SaveProcedure(transaction, procedure);
                     }
+                    _recruitmentDataAccess.SaveData(transaction, recruitment);
                     _globalDataAccess.SaveGlobalData(transaction, currentDate, requisition,
-                                                     geneseedStockpile, geneseedPurity, scenario);
+                                                     geneseedStockpile, geneseedPurity, scenario,
+                                                     homeWorldPlanetId);
                     _playerFactionEventDataAccess.SaveData(transaction, history);
                 }
                 catch (Exception)

@@ -5,6 +5,7 @@ using System.Linq;
 using OnlyWar.Builders;
 using OnlyWar.Helpers;
 using OnlyWar.Helpers.Extensions;
+using OnlyWar.Helpers.Recruitment;
 using OnlyWar.Models;
 using OnlyWar.Models.Missions;
 using OnlyWar.Models.Orders;
@@ -117,6 +118,13 @@ public class ScenarioTurnTests
         Assert.Equal(1, promised.PlanetFactionMap[player.Id].PlayerReputation);
         Assert.All(promised.Regions, r => Assert.True(r.RegionFactionMap.ContainsKey(player.Id)));
         Assert.Equal(player, promised.GetControllingFaction());
+        Assert.Equal(promised.Id, sector.PlayerForce.HomeWorldPlanetId);
+        Assert.NotNull(sector.PlayerForce.RecruitmentProgram);
+        Assert.False(sector.PlayerForce.RecruitmentProgram.IsSetupComplete);
+        Assert.True(sector.PlayerForce.Army.OrderOfBattle.ChildUnits
+            .Single(unit => unit.UnitTemplate == _data.ChapterTemplates.ScoutCompany)
+            .HQSquad
+            .IsAdministrative);
         // The current Sector Lord's opinion rises (resolved at resolution time).
         Assert.Equal(opinionBefore + ScenarioRules.SectorLordOpinionReward,
                      sector.GetSectorLord().OpinionOfPlayerForce, precision: 4);
@@ -151,6 +159,17 @@ public class ScenarioTurnTests
 
         Assert.Equal(ObjectiveState.Won, sector.Scenario.State);
         Assert.True(promised.PlanetFactionMap.ContainsKey(player.Id));
+        long publicChapterPopulation = promised.Regions.Sum(region =>
+            region.RegionFactionMap.TryGetValue(
+                player.Id, out RegionFaction chapterPresence)
+                && chapterPresence.IsPublic
+                    ? chapterPresence.Population
+                    : 0);
+        Assert.Equal(
+            RecruitmentRules.CalculateFoundingCohortPopulation(publicChapterPopulation),
+            Assert.Single(sector.PlayerForce.RecruitmentProgram.UnscreenedCohorts)
+                .RemainingPopulation,
+            precision: 6);
         // The cell is still there, waiting, on the world the Chapter now calls home.
         Assert.Same(hiddenCult, hiddenCult.Region.RegionFactionMap[cult.Id]);
         Assert.False(hiddenCult.IsPublic);
@@ -472,13 +491,18 @@ public class ScenarioTurnTests
         return new ScenarioFixture(sector, promised);
     }
 
-    private static PlayerForce CreatePlayerForce(Faction player)
+    private PlayerForce CreatePlayerForce(Faction player)
     {
         UnitTemplate template = new(9001, "Test Chapter", true, [], [])
         {
             Faction = player
         };
         Unit root = new(9001, "Test Chapter", template, []);
+        Unit scoutCompany = new("Tenth Company", _data.ChapterTemplates.ScoutCompany)
+        {
+            ParentUnit = root
+        };
+        root.ChildUnits.Add(scoutCompany);
         Army army = new("Test Chapter Ground Forces", null, "Chapter Master", root, []);
         Fleet fleet = new("Test Chapter Fleet", null, "Fleet Master");
         return new PlayerForce(player, army, fleet);

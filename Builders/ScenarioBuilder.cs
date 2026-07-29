@@ -344,7 +344,7 @@ namespace OnlyWar.Builders
         private static void PlaceFleetInOrbit(Sector sector, PlayerForce playerForce, Planet promised)
         {
             IEnumerator<Squad> squads = playerForce.Army.SquadMap.Values
-                .Where(s => s.Members.Count > 0).GetEnumerator();
+                .Where(s => s.IsOperational && s.Members.Count > 0).GetEnumerator();
             bool hasSquad = squads.MoveNext();
             foreach (TaskForce taskForce in playerForce.Fleet.TaskForces)
             {

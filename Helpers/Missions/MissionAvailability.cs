@@ -1,6 +1,7 @@
 using OnlyWar.Helpers.Extensions;
 using OnlyWar.Models;
 using OnlyWar.Models.Missions;
+using OnlyWar.Models.Orders;
 using OnlyWar.Models.Planets;
 using System.Collections.Generic;
 using System.Linq;
@@ -40,6 +41,49 @@ namespace OnlyWar.Helpers.Missions
             Kind = kind;
             SpecialMission = specialMission;
         }
+
+        public bool RepresentsSameOption(AvailableMission other)
+        {
+            if (other == null || Kind != other.Kind) return false;
+            if (Kind != MissionAvailabilityKind.Special) return true;
+
+            return SpecialMission != null
+                && other.SpecialMission != null
+                && SpecialMission.Id == other.SpecialMission.Id;
+        }
+
+        public string IdentityKey => Kind == MissionAvailabilityKind.Special
+            ? $"Special:{SpecialMission?.Id}"
+            : Kind.ToString();
+
+        public bool RepresentsOrder(Order order)
+        {
+            Mission orderMission = order?.Mission;
+            if (orderMission == null) return false;
+
+            return Kind switch
+            {
+                MissionAvailabilityKind.Recon => orderMission.MissionType == MissionType.Recon,
+                MissionAvailabilityKind.Defend => orderMission.MissionType == MissionType.DefenseInDepth,
+                MissionAvailabilityKind.Patrol => orderMission.MissionType == MissionType.Patrol,
+                MissionAvailabilityKind.FortifyEntrenchment =>
+                    orderMission is ConstructionMission construction
+                    && construction.ConstructionType == DefenseType.Entrenchment,
+                MissionAvailabilityKind.BuildListeningPost =>
+                    orderMission is ConstructionMission construction
+                    && construction.ConstructionType == DefenseType.ListeningPost,
+                MissionAvailabilityKind.BuildAntiAir =>
+                    orderMission is ConstructionMission construction
+                    && construction.ConstructionType == DefenseType.AntiAir,
+                MissionAvailabilityKind.Attack or MissionAvailabilityKind.Move =>
+                    orderMission.MissionType == MissionType.Advance,
+                MissionAvailabilityKind.Diversion =>
+                    orderMission.MissionType == MissionType.Diversion,
+                MissionAvailabilityKind.Special =>
+                    SpecialMission != null && SpecialMission.Id == orderMission.Id,
+                _ => false
+            };
+        }
     }
 
     // Pure-logic extraction of OrderDialogController.PopulateMissions' branching, so it can be
@@ -74,6 +118,8 @@ namespace OnlyWar.Helpers.Missions
             {
                 missionOptions.Add(new AvailableMission("Move", MissionAvailabilityKind.Move));
             }
+            IReadOnlyDictionary<int, string> specialMissionLabels =
+                SpecialMissionPresentation.BuildLabels(targetRegion);
             foreach (var mission in targetRegion.SpecialMissions)
             {
                 // Show of Force has no movement step - the squads hold position to be seen - so a
@@ -86,31 +132,11 @@ namespace OnlyWar.Helpers.Missions
                     continue;
                 }
                 missionOptions.Add(new AvailableMission(
-                    BuildSpecialMissionLabel(mission, targetRegion),
+                    specialMissionLabels[mission.Id],
                     MissionAvailabilityKind.Special,
                     mission));
             }
             return missionOptions;
-        }
-
-        // Enum names are adequate labels for intelligence finds, but a Show of Force is posted by
-        // a named governor and the player has no other way to tell which petition it answers -
-        // the enum name alone ("ShowOfForce") says nothing about who asked or why.
-        private static string BuildSpecialMissionLabel(Mission mission, Region region)
-        {
-            if (mission.MissionType != MissionType.ShowOfForce)
-            {
-                return mission.MissionType.ToString();
-            }
-
-            Character governor = region?.Planet?.GetControllingFaction() is Faction controlling
-                && region.Planet.PlanetFactionMap.TryGetValue(
-                    controlling.Id, out PlanetFaction planetFaction)
-                    ? planetFaction.Leader
-                    : null;
-            return governor == null
-                ? "Show of Force (Governor's Request)"
-                : $"Show of Force (Governor {governor.Name}'s Request)";
         }
     }
 }

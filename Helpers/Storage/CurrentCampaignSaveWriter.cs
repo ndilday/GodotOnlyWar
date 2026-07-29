@@ -38,7 +38,9 @@ namespace OnlyWar.Helpers.Storage
                 units,
                 force.Army.PlayerSoldierMap.Values,
                 force.Army.FallenBrothers.Values,
-                force.BattleHistory);
+                force.BattleHistory,
+                homeWorldPlanetId: force.HomeWorldPlanetId,
+                recruitment: RecruitmentSaveMapper.ToSaveData(force.RecruitmentProgram));
         }
     }
 }

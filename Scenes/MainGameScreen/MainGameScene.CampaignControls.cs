@@ -550,10 +550,20 @@ public partial class MainGameScene
     private void RequestEndTurn()
     {
         if (_isProcessingTurn) return;
+        if (GameDataSingleton.Instance.Sector?.PlayerForce?.RecruitmentProgram
+            is { IsSetupComplete: false })
+        {
+            PushVisibleOverlaySurface();
+            OpenTrainingUnitScreen(mandatorySetup: true);
+            _feedbackOverlay.ShowError(
+                "Establish the Home World recruitment program before ending the turn.");
+            return;
+        }
 
-        EndTurnPreflightReport report = EndTurnPreflight.Evaluate(
+        EndTurnPreflightReport report = EndTurnPreflight.EvaluateWithRules(
             GameDataSingleton.Instance.Sector,
-            _warningPreferences);
+            _warningPreferences,
+            GameDataSingleton.Instance.GameRulesData);
         if (!report.RequiresConfirmation)
         {
             ResolveEndTurnWithProtection();

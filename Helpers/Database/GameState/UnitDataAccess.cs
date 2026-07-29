@@ -41,6 +41,9 @@ namespace OnlyWar.Helpers.Database.GameState
                     {
                         squad.TrainingFocus = (TrainingFocuses)reader.GetInt32(6);
                     }
+                    // Set this before restoring ship/region state. Administrative squads
+                    // are non-operational and their setter intentionally clears deployments.
+                    squad.IsAdministrative = reader.GetBoolean(7);
                     squadByIdMap[id] = squad;
 
 
@@ -249,8 +252,11 @@ namespace OnlyWar.Helpers.Database.GameState
             using (var command = transaction.Connection.CreateCommand())
             {
                 command.Transaction = transaction;
-                command.CommandText = @"INSERT INTO Squad VALUES
-                    (@id, @templateId, @parentUnitId, @name, @ship, @region, @trainingFocus);";
+                command.CommandText = @"INSERT INTO Squad
+                    (Id, SquadTemplateId, ParentUnitId, Name, LoadedShipId, LandedRegionId,
+                     TrainingFocus, IsAdministrative) VALUES
+                    (@id, @templateId, @parentUnitId, @name, @ship, @region, @trainingFocus,
+                     @isAdministrative);";
                 command.AddParam("@id", squad.Id);
                 command.AddParam("@templateId", squad.SquadTemplate.Id);
                 command.AddParam("@parentUnitId", squad.ParentUnit.Id);
@@ -258,6 +264,7 @@ namespace OnlyWar.Helpers.Database.GameState
                 command.AddParam("@ship", ship);
                 command.AddParam("@region", region);
                 command.AddParam("@trainingFocus", (int)squad.TrainingFocus);
+                command.AddParam("@isAdministrative", squad.IsAdministrative ? 1 : 0);
                 command.ExecuteNonQuery();
             }
 

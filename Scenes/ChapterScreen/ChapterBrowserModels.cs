@@ -116,7 +116,8 @@ public sealed record ChapterBrowserMenuItem(
     string Subtitle,
     bool CanDrill,
     bool IsSelected,
-    string DrillText = ">");
+    string DrillText = ">",
+    string Location = null);
 
 public sealed record ChapterBrowserMetric(string Value, string Label);
 

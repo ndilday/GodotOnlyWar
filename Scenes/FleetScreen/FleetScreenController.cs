@@ -62,7 +62,7 @@ public partial class FleetScreenController : DialogController
     internal static IReadOnlyList<TreeNode> CreateLoadedUnitNodes(Ship ship)
     {
         return ship.LoadedSquads
-            .Where(squad => squad.Members.Count > 0)
+            .Where(squad => squad.IsOperational && squad.Members.Count > 0)
             .OrderBy(squad => GetUnitOrderKey(squad.ParentUnit))
             .ThenBy(squad => GetSquadTypeOrder(squad))
             .ThenBy(squad => squad.Name, StringComparer.OrdinalIgnoreCase)
@@ -81,7 +81,7 @@ public partial class FleetScreenController : DialogController
 
     internal static bool CanTransferSquadToShip(Squad squad, Ship destinationShip)
     {
-        if (squad == null || destinationShip == null || squad.BoardedLocation == null)
+        if (squad?.IsOperational != true || destinationShip == null || squad.BoardedLocation == null)
         {
             return false;
         }

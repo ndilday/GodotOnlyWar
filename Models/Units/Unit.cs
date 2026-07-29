@@ -33,7 +33,10 @@ namespace OnlyWar.Models.Units
         {
             get
             {
-                return _squads.Sum(s => s.SquadTemplate.BattleValue) + ChildUnits.Sum(u => u.BattleValue);
+                return _squads
+                    .Where(squad => squad.IsOperational)
+                    .Sum(squad => squad.SquadTemplate.BattleValue)
+                    + ChildUnits.Sum(u => u.BattleValue);
             }
         }
 

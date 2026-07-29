@@ -1,4 +1,5 @@
 using OnlyWar.Models;
+using OnlyWar.Helpers.Missions;
 using OnlyWar.Models.Orders;
 using OnlyWar.Models.Planets;
 using OnlyWar.Models.Squads;
@@ -42,7 +43,9 @@ namespace OnlyWar.Helpers.Orders
                 .Where(order => order.Mission?.RegionFaction?.Region == target && order.AssignedSquads.Count > 0)
                 .Select(order => new InboundOrderInfo(
                     order,
-                    order.Mission.MissionType.ToString(),
+                    target.SpecialMissions.Any(mission => mission?.Id == order.Mission.Id)
+                        ? SpecialMissionPresentation.Format(order.Mission, target)
+                        : order.Mission.MissionType.ToString(),
                     BuildOriginLabel(order, target),
                     order.AssignedSquads.Count))
                 .ToList();

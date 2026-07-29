@@ -146,6 +146,21 @@ public class NewChapterBuilderTests
         Unit oob = chapter.Army.OrderOfBattle;
 
         Squad reclusium = oob.Squads.First(s => s.SquadTemplate.Name == "Reclusium");
+        Squad scoutHeadquarters = oob.ChildUnits
+            .Single(unit => unit.UnitTemplate == _data.ChapterTemplates.ScoutCompany)
+            .HQSquad;
+        Assert.Same(_data.ChapterTemplates.ScoutCompanyHeadquarters, scoutHeadquarters.SquadTemplate);
+        foreach (string staffRole in new[] { "Scout Sergeant", "Apothecary", "Chaplain", "Judiciar" })
+        {
+            SquadTemplateElement staffSlot = scoutHeadquarters.SquadTemplate.Elements
+                .Single(element => element.SoldierTemplate.Name == staffRole);
+            Assert.Equal(50, staffSlot.MaximumNumber);
+        }
+        Assert.All(
+            scoutHeadquarters.Members.Where(member =>
+                member.Template.Name is "Apothecary" or "Chaplain" or "Judiciar"),
+            member => Assert.Single(
+                scoutHeadquarters.Members.Where(other => other.Template == member.Template)));
 
         // At most one Master of Sanctity and one Reclusiarch, and both live in the Reclusium.
         var mastersOfSanctity = oob.GetAllMembers().OfType<PlayerSoldier>()

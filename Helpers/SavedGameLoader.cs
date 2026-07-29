@@ -54,6 +54,9 @@ namespace OnlyWar.Helpers
                 fleet);
             playerForce.GeneseedStockpile = (ushort)gameState.GeneseedStockpile;
             playerForce.GeneseedPurity = gameState.GeneseedPurity;
+            playerForce.HomeWorldPlanetId = gameState.HomeWorldPlanetId;
+            playerForce.RecruitmentProgram =
+                RecruitmentSaveMapper.FromSaveData(gameState.Recruitment);
             playerForce.Requests.AddRange(gameState.Requests ?? []);
             playerForce.Pledges.AddRange(gameState.Pledges ?? []);
             Sector sector = new Sector(playerForce, gameState.Characters, gameState.Planets, gameState.Fleets);

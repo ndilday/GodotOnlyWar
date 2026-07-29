@@ -39,7 +39,7 @@ namespace OnlyWar.Helpers
     /// Ranks evaluated soldiers for each founding role: per role, an eligibility filter
     /// and a best-first sort over the soldier's initial evaluation. Ineligibility is
     /// expressed by omission from the role's list — there are no sentinel scores.
-    /// See Design/FoundingRoleAssignment.md for the role criteria table.
+    /// See Design/Reference/FoundingRoleAssignment.md for the role criteria table.
     /// </summary>
     public sealed class RoleSuitabilityService
     {

@@ -292,7 +292,9 @@ public partial class PlanetTacticalScreenController : DialogController
 	internal static IReadOnlyList<CommandTreeNode> CreateLoadedUnitNodes(Ship ship, string rosterFilter)
 	{
 		return ship.LoadedSquads
-			.Where(squad => squad.Members.Count > 0 && RosterFormat.MatchesFilter(squad, rosterFilter))
+			.Where(squad => squad.IsOperational
+				&& squad.Members.Count > 0
+				&& RosterFormat.MatchesFilter(squad, rosterFilter))
 			.OrderBy(squad => FleetScreenController.GetUnitOrderKey(squad.ParentUnit))
 			.ThenBy(squad => FleetScreenController.GetSquadTypeOrder(squad))
 			.ThenBy(squad => squad.Name, StringComparer.OrdinalIgnoreCase)
@@ -316,7 +318,9 @@ public partial class PlanetTacticalScreenController : DialogController
 		if (playerRegionFaction == null) return Array.Empty<CommandTreeNode>();
 
 		return playerRegionFaction.LandedSquads
-			.Where(squad => squad.Members.Count > 0 && RosterFormat.MatchesFilter(squad, rosterFilter))
+			.Where(squad => squad.IsOperational
+				&& squad.Members.Count > 0
+				&& RosterFormat.MatchesFilter(squad, rosterFilter))
 			.OrderBy(squad => FleetScreenController.GetUnitOrderKey(squad.ParentUnit))
 			.ThenBy(squad => FleetScreenController.GetSquadTypeOrder(squad))
 			.ThenBy(squad => squad.Name, StringComparer.OrdinalIgnoreCase)
@@ -797,13 +801,15 @@ public partial class PlanetTacticalScreenController : DialogController
 
 	private IEnumerable<Squad> GetSelectedLoadedSquads()
 	{
-		if (_selectedLoadedSquad != null) return [_selectedLoadedSquad];
+		if (_selectedLoadedSquad != null)
+			return _selectedLoadedSquad.IsOperational ? [_selectedLoadedSquad] : [];
 		if (_selectedShip == null) return [];
 		if (_selectedLoadedUnit != null)
 		{
-			return _selectedShip.LoadedSquads.Where(squad => squad.ParentUnit == _selectedLoadedUnit);
+			return _selectedShip.LoadedSquads.Where(
+				squad => squad.IsOperational && squad.ParentUnit == _selectedLoadedUnit);
 		}
-		return _selectedShip.LoadedSquads;
+		return _selectedShip.LoadedSquads.Where(squad => squad.IsOperational);
 	}
 
 	private IEnumerable<Squad> GetSelectedLandedSquads()
@@ -813,13 +819,17 @@ public partial class PlanetTacticalScreenController : DialogController
 		if (regionFaction == null) return [];
 		if (_selectedLandedSquad != null)
 		{
-			return _selectedLandedSquad.CurrentRegion == _selectedSurfaceRegion ? [_selectedLandedSquad] : [];
+			return _selectedLandedSquad.IsOperational
+				&& _selectedLandedSquad.CurrentRegion == _selectedSurfaceRegion
+				? [_selectedLandedSquad]
+				: [];
 		}
 		if (_selectedLandedUnit != null)
 		{
-			return regionFaction.LandedSquads.Where(squad => squad.ParentUnit == _selectedLandedUnit);
+			return regionFaction.LandedSquads.Where(
+				squad => squad.IsOperational && squad.ParentUnit == _selectedLandedUnit);
 		}
-		return regionFaction.LandedSquads;
+		return regionFaction.LandedSquads.Where(squad => squad.IsOperational);
 	}
 
 	private Squad GetSelectedSquad()

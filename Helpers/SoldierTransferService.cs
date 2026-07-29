@@ -190,6 +190,14 @@ namespace OnlyWar.Helpers
             {
                 return false;
             }
+            // Compatibility-bearing Scouts are campaign-recruited neophytes. A role
+            // change is resolved only by the Black Carapace procedure, which performs
+            // the reserved transfer on success. Founding Scouts have no score and keep
+            // the ordinary immediate transfer flow.
+            if (RequiresBlackCarapace(soldier, option))
+            {
+                return false;
+            }
             if (soldier.AssignedSquad == null)
             {
                 throw new InvalidOperationException("Cannot transfer a soldier with no assigned squad.");
@@ -256,6 +264,17 @@ namespace OnlyWar.Helpers
             }
 
             return true;
+        }
+
+        public static bool RequiresBlackCarapace(
+            PlayerSoldier soldier,
+            SoldierTransferOption option)
+        {
+            return soldier?.GeneticCompatibility.HasValue == true
+                && (soldier.AssignedSquad?.SquadTemplate?.SquadType
+                    & SquadTypes.Scout) != 0
+                && option?.SoldierTemplate != null
+                && option.SoldierTemplate != soldier.Template;
         }
 
         // Only line squads carry their sergeant's name ("Obiareus Squad"). HQ squads and
@@ -488,7 +507,12 @@ namespace OnlyWar.Helpers
                 // occupant is a different leader template than the slot defines (e.g. a
                 // Captain sitting in a slot the template calls "Recruitment Captain")
                 // would still be offered as an opening.
-                if (element.SoldierTemplate.IsSquadLeader == hasSquadLeader)
+                // Administrative squads are the exception: their "leader" elements
+                // are staff qualifications rather than command seats. The 10th Company
+                // HQ therefore accepts multiple Scout Sergeants while its Captain
+                // remains the Master of Recruitment.
+                if (!squad.IsAdministrative
+                    && element.SoldierTemplate.IsSquadLeader == hasSquadLeader)
                 {
                     continue;
                 }

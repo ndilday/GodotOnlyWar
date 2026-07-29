@@ -67,4 +67,111 @@ public class OrderAssignmentTests
         Assert.Same(order, squadOne.CurrentOrders);
         Assert.Same(order, squadTwo.CurrentOrders);
     }
+
+    [Fact]
+    public void AssignSquadsToMission_ExistingPatrol_ReusesOrderAndMission()
+    {
+        SectorSimulationFixture fixture = SectorSimulationFixture.Create();
+        Region targetRegion = fixture.Planet.Regions[0];
+        fixture.Planet.PlanetFactionMap[fixture.Sector.PlayerForce.Faction.Id] =
+            new PlanetFaction(fixture.Sector.PlayerForce.Faction) { IsPublic = true };
+        AvailableMission patrol = new("Patrol", MissionAvailabilityKind.Patrol);
+        Squad first = TestModelFactory.CreateSquad(
+            "First Patrol", TestModelFactory.CreateSoldier());
+        Squad reinforcement = TestModelFactory.CreateSquad(
+            "Patrol Reinforcement", TestModelFactory.CreateSoldier());
+        first.CurrentRegion = targetRegion;
+        reinforcement.CurrentRegion = targetRegion;
+
+        Order original = OrderAssignment.AssignSquadsToMission(
+            [first], targetRegion, patrol, -1, Aggression.Cautious);
+        Mission originalMission = original.Mission;
+        Order reused = OrderAssignment.AssignSquadsToMission(
+            [reinforcement], targetRegion, patrol, -1, Aggression.Aggressive);
+
+        Assert.Same(original, reused);
+        Assert.Same(originalMission, reused.Mission);
+        Assert.Equal(Aggression.Cautious, reused.LevelOfAggression);
+        Assert.Equal(2, reused.AssignedSquads.Count);
+        Assert.Same(reused, first.CurrentOrders);
+        Assert.Same(reused, reinforcement.CurrentOrders);
+        Assert.Single(fixture.Sector.Orders);
+    }
+
+    [Fact]
+    public void AssignSquadsToMission_DifferentSpecialMissionIds_RemainSeparateOrders()
+    {
+        SectorSimulationFixture fixture = SectorSimulationFixture.Create();
+        RegionFaction enemy = fixture.AddPublicCult(
+            region: 0, population: 2_000, organization: 100);
+        Mission firstMission = new(MissionType.Ambush, enemy, missionSize: 1);
+        Mission secondMission = new(MissionType.Ambush, enemy, missionSize: 1);
+        enemy.Region.SpecialMissions.Add(firstMission);
+        enemy.Region.SpecialMissions.Add(secondMission);
+        Squad first = TestModelFactory.CreateSquad(
+            "First Squad", TestModelFactory.CreateSoldier());
+        Squad second = TestModelFactory.CreateSquad(
+            "Second Squad", TestModelFactory.CreateSoldier());
+
+        Order firstOrder = OrderAssignment.AssignSquadsToMission(
+            [first], enemy.Region,
+            new AvailableMission("Ambush A", MissionAvailabilityKind.Special, firstMission),
+            -1, Aggression.Normal);
+        Order secondOrder = OrderAssignment.AssignSquadsToMission(
+            [second], enemy.Region,
+            new AvailableMission("Ambush B", MissionAvailabilityKind.Special, secondMission),
+            -1, Aggression.Normal);
+
+        Assert.NotSame(firstOrder, secondOrder);
+        Assert.Equal(2, fixture.Sector.Orders.Count);
+        Assert.Same(firstMission, firstOrder.Mission);
+        Assert.Same(secondMission, secondOrder.Mission);
+    }
+
+    [Fact]
+    public void AssignSquadsToMission_AttacksAgainstDifferentFactions_RemainSeparateOrders()
+    {
+        SectorSimulationFixture fixture = SectorSimulationFixture.Create();
+        RegionFaction orks = fixture.AddControllingFaction(5, "Orks", 5_000);
+        RegionFaction cult = fixture.AddPublicCult(
+            region: 5, population: 2_000, organization: 100);
+        Region targetRegion = fixture.Planet.Regions[5];
+        AvailableMission attack = new("Attack", MissionAvailabilityKind.Attack);
+        Squad first = TestModelFactory.CreateSquad(
+            "Ork Hunters", TestModelFactory.CreateSoldier());
+        Squad second = TestModelFactory.CreateSquad(
+            "Cult Hunters", TestModelFactory.CreateSoldier());
+
+        Order orkOrder = OrderAssignment.AssignSquadsToMission(
+            [first], targetRegion, attack,
+            orks.PlanetFaction.Faction.Id, Aggression.Normal);
+        Order cultOrder = OrderAssignment.AssignSquadsToMission(
+            [second], targetRegion, attack,
+            cult.PlanetFaction.Faction.Id, Aggression.Normal);
+
+        Assert.NotSame(orkOrder, cultOrder);
+        Assert.Equal(2, fixture.Sector.Orders.Count);
+        Assert.Same(orks, orkOrder.Mission.RegionFaction);
+        Assert.Same(cult, cultOrder.Mission.RegionFaction);
+    }
+
+    [Fact]
+    public void AssignSquadsToMission_AdministrativeSquad_IsRejected()
+    {
+        SectorSimulationFixture fixture = SectorSimulationFixture.Create();
+        RegionFaction enemy = fixture.AddControllingFaction(5, "Orks", 5000);
+        Squad squad = TestModelFactory.CreateSquad(
+            "10th Company HQ", TestModelFactory.CreateSoldier());
+        squad.IsAdministrative = true;
+
+        Order order = OrderAssignment.AssignSquadsToMission(
+            [squad],
+            fixture.Planet.Regions[5],
+            new AvailableMission("Attack", MissionAvailabilityKind.Attack),
+            enemy.PlanetFaction.Faction.Id,
+            Aggression.Normal);
+
+        Assert.Null(order);
+        Assert.Null(squad.CurrentOrders);
+    }
 }

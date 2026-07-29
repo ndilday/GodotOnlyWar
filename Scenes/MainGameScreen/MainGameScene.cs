@@ -3,6 +3,8 @@ using OnlyWar.Helpers;
 using OnlyWar.Helpers.Database.GameState;
 using OnlyWar.Helpers.Storage;
 using OnlyWar.Helpers.Turns;
+using OnlyWar.Helpers.Recruitment;
+using OnlyWar.Helpers.Simulation;
 using OnlyWar.Models;
 using OnlyWar.Models.Fleets;
 using OnlyWar.Models.Planets;
@@ -39,6 +41,8 @@ public partial class MainGameScene : Control
 	private EndOfTurnDialogController _endOfTurnDialog;
 	private BriefingDialogController _briefingDialog;
 	private BriefingDialogController _scenarioNotificationDialog;
+	private PopupMenu _recruitmentPlacementMenu;
+	private int _pendingRecruitmentSubjectId;
 	private CampaignScenario _pendingBriefingScenario;
 	private int? _selectedPlanetId;
 	private int? _selectedFleetId;
@@ -250,6 +254,7 @@ public partial class MainGameScene : Control
 			}
 			else if (control == _trainingUnitScreen)
 			{
+				_trainingUnitScreen.RefreshFromExternalChange();
 				_topMenu.Visible = false;
 				_bottomMenu.Visible = false;
 			}
@@ -299,6 +304,11 @@ public partial class MainGameScene : Control
 	private void OnTrainingUnitButtonPressed(object sender, EventArgs e)
 	{
 		PushVisibleOverlaySurface();
+		OpenTrainingUnitScreen();
+	}
+
+	private void OpenTrainingUnitScreen(bool mandatorySetup = false)
+	{
 		if (_trainingUnitScreen == null)
 		{
 			PackedScene trainingUnitScene = GD.Load<PackedScene>("res://Scenes/TrainingUnitScreen/training_unit_screen.tscn");
@@ -306,10 +316,112 @@ public partial class MainGameScene : Control
 			_trainingUnitScreen.CloseButtonPressed += OnCloseScreen;
 			_trainingUnitScreen.SoldierLinkClicked += OnSoldierSelectedForDisplay;
 			_trainingUnitScreen.CampaignChanged += OnCampaignChanged;
+			_trainingUnitScreen.NeophytePlacementRequested += OnNeophytePlacementRequested;
+			_trainingUnitScreen.Phase13PromotionRequested += OnPhase13PromotionRequested;
+			_trainingUnitScreen.ManageAdministrativeStaffRequested +=
+				OnManageRecruitmentStaffRequested;
 			_mainUILayer.AddChild(_trainingUnitScreen);
 		}
+		_trainingUnitScreen.RefreshFromExternalChange();
 		_trainingUnitScreen.Visible = true;
 		SetMainScreenVisibility(false);
+		if (mandatorySetup)
+		{
+			_trainingUnitScreen.OpenMandatorySetup();
+		}
+	}
+
+	private void OnManageRecruitmentStaffRequested(object sender, EventArgs e)
+	{
+		EnsureChapterScreen();
+		_chapterScreen.PopulateCompanyList();
+		_chapterScreen.Visible = true;
+		_topMenu.SetScreenText("Chapter Overview");
+		SetMainScreenVisibility(false, keepTopMenuVisible: true);
+		Control recruitmentScreen = (Control)sender;
+		_previousScreenStack.Push(recruitmentScreen);
+		recruitmentScreen.Visible = false;
+	}
+
+	private void OnNeophytePlacementRequested(object sender, int aspirantId)
+	{
+		ShowRecruitmentPlacementMenu(aspirantId);
+	}
+
+	private void OnPhase13PromotionRequested(object sender, int soldierId)
+	{
+		OnSoldierSelectedForDisplay(sender, soldierId);
+	}
+
+	private void ShowRecruitmentPlacementMenu(int subjectId)
+	{
+		PlayerForce force = GameDataSingleton.Instance.Sector.PlayerForce;
+		if (force?.RecruitmentProgram == null)
+		{
+			_feedbackOverlay.ShowError("The Chapter has no active recruitment program.");
+			return;
+		}
+
+		ChapterGenerationTemplates templates =
+			GameDataSingleton.Instance.GameRulesData.ChapterTemplates;
+		SquadTemplate targetTemplate = templates.ScoutSquad;
+		List<Squad> targets = force.Army.OrderOfBattle.GetAllSquads()
+			.Where(squad => squad.IsOperational)
+			.Where(squad => squad.SquadTemplate == targetTemplate)
+			.Where(squad =>
+				(squad.CurrentRegion?.Planet
+					?? squad.BoardedLocation?.Fleet?.Planet)?.Id
+				== force.RecruitmentProgram.HomeWorldPlanetId)
+			.OrderBy(squad => squad.ParentUnit?.Name)
+			.ThenBy(squad => squad.Name)
+			.ToList();
+		if (targets.Count == 0)
+		{
+			_feedbackOverlay.ShowError(
+				$"No {targetTemplate.Name} is available on or in orbit of the Home World.");
+			return;
+		}
+
+		if (_recruitmentPlacementMenu == null)
+		{
+			_recruitmentPlacementMenu = new PopupMenu();
+			_recruitmentPlacementMenu.IdPressed += OnRecruitmentTargetSelected;
+			_mainUILayer.AddChild(_recruitmentPlacementMenu);
+		}
+		_recruitmentPlacementMenu.Clear();
+		foreach (Squad squad in targets)
+		{
+			_recruitmentPlacementMenu.AddItem(
+				$"{squad.Name} - {squad.ParentUnit?.Name} ({SquadLocationFormatter.Format(squad)})",
+				squad.Id);
+		}
+		_pendingRecruitmentSubjectId = subjectId;
+		Vector2 mouse = GetGlobalMousePosition();
+		_recruitmentPlacementMenu.Position = new Vector2I((int)mouse.X, (int)mouse.Y);
+		_recruitmentPlacementMenu.Popup();
+	}
+
+	private void OnRecruitmentTargetSelected(long selectedSquadId)
+	{
+		GameDataSingleton data = GameDataSingleton.Instance;
+		GameSession session = new(
+			data.GameRulesData,
+			data.Sector,
+			data.Date,
+			StaticRNG.Instance);
+		RecruitmentPromotionService service = new(session);
+		RecruitmentPromotionResult result = service.PromoteAspirantToNeophyte(
+			_pendingRecruitmentSubjectId, checked((int)selectedSquadId));
+		if (!result.Succeeded)
+		{
+			_feedbackOverlay.ShowError(result.Message);
+			return;
+		}
+
+		MarkCampaignChanged();
+		_trainingUnitScreen.RefreshFromExternalChange();
+		RefreshTopMenuStatus();
+		_feedbackOverlay.ShowSuccess(result.Message);
 	}
 
 	private void OnFleetButtonPressed(object sender, EventArgs e)
@@ -614,7 +726,8 @@ public partial class MainGameScene : Control
 			turnResult.StrategicCombatResults,
 			turnResult.ConstructionReports,
 			turnResult.FortificationTransfers,
-			turnResult.GovernorRequestReports);
+			turnResult.GovernorRequestReports,
+			turnResult.RecruitmentReport);
 		_endOfTurnDialog.Visible = true;
 
 		// Surface the opening-scenario resolution (win/lapse) if it fired this turn
@@ -634,11 +747,25 @@ public partial class MainGameScene : Control
 		{
 			PackedScene briefingScene = GD.Load<PackedScene>("res://Scenes/MainGameScreen/briefing_dialog.tscn");
 			_scenarioNotificationDialog = (BriefingDialogController)briefingScene.Instantiate();
-			_scenarioNotificationDialog.CloseButtonPressed += (s, e) => _scenarioNotificationDialog.Visible = false;
+			_scenarioNotificationDialog.CloseButtonPressed += OnScenarioNotificationClosed;
 			_mainUILayer.AddChild(_scenarioNotificationDialog);
 		}
 		_scenarioNotificationDialog.SetBriefing(text);
 		_scenarioNotificationDialog.Visible = true;
+	}
+
+	private void OnScenarioNotificationClosed(object sender, EventArgs e)
+	{
+		_scenarioNotificationDialog.Visible = false;
+		if (GameDataSingleton.Instance.Sector?.PlayerForce?.RecruitmentProgram
+			is { IsSetupComplete: false })
+		{
+			if (_endOfTurnDialog != null)
+			{
+				_endOfTurnDialog.Visible = false;
+			}
+			OpenTrainingUnitScreen(mandatorySetup: true);
+		}
 	}
 
 	private void OnSoldierSelectedForDisplay(object sender, int soldierId)

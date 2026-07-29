@@ -12,6 +12,7 @@ namespace OnlyWar.Helpers.Settings
         public bool WarnLeaderlessSquads { get; set; } = true;
         public bool WarnActionableTaskForces { get; set; } = true;
         public bool WarnSpecialMissionOpportunities { get; set; } = true;
+        public bool WarnRecruitmentProgram { get; set; } = true;
 
         public bool IsEnabled(EndTurnWarningCategory category)
         {
@@ -21,6 +22,7 @@ namespace OnlyWar.Helpers.Settings
                 EndTurnWarningCategory.LeaderlessSquads => WarnLeaderlessSquads,
                 EndTurnWarningCategory.ActionableTaskForces => WarnActionableTaskForces,
                 EndTurnWarningCategory.SpecialMissionOpportunities => WarnSpecialMissionOpportunities,
+                EndTurnWarningCategory.RecruitmentProgram => WarnRecruitmentProgram,
                 _ => true
             };
         }
@@ -41,6 +43,9 @@ namespace OnlyWar.Helpers.Settings
                 case EndTurnWarningCategory.SpecialMissionOpportunities:
                     WarnSpecialMissionOpportunities = enabled;
                     break;
+                case EndTurnWarningCategory.RecruitmentProgram:
+                    WarnRecruitmentProgram = enabled;
+                    break;
                 default:
                     throw new ArgumentOutOfRangeException(nameof(category), category, null);
             }
@@ -53,7 +58,8 @@ namespace OnlyWar.Helpers.Settings
                 WarnIdleDeployableSquads = WarnIdleDeployableSquads,
                 WarnLeaderlessSquads = WarnLeaderlessSquads,
                 WarnActionableTaskForces = WarnActionableTaskForces,
-                WarnSpecialMissionOpportunities = WarnSpecialMissionOpportunities
+                WarnSpecialMissionOpportunities = WarnSpecialMissionOpportunities,
+                WarnRecruitmentProgram = WarnRecruitmentProgram
             };
         }
     }

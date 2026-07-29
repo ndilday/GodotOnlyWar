@@ -3,7 +3,9 @@ using OnlyWar.Models;
 using OnlyWar.Models.Missions;
 using OnlyWar.Models.Orders;
 using OnlyWar.Models.Planets;
+using OnlyWar.Models.Recruitment;
 using OnlyWar.Models.Squads;
+using OnlyWar.Helpers.Recruitment;
 using System.Collections.Generic;
 using System.Linq;
 
@@ -16,13 +18,12 @@ namespace OnlyWar.Helpers.Orders
     // dependency of its own.
     public static class OrderAssignment
     {
-        // Builds the Mission for the given target region/mission descriptor, then - for every
-        // passed squad - detaches it from any prior order (removing that order from the Sector
-        // if it becomes empty), creates ONE new Order containing all the passed squads, and
-        // registers it with the Sector. Returns null (and creates nothing) if the mission
-        // descriptor can't be resolved to a valid Mission (e.g. Recon/Diversion with no valid
-        // region-faction target) - callers should treat this the same as the dialog's previous
-        // "push a warning and bail" behavior.
+        // Reuses the existing player order for the same effective mission whenever one exists.
+        // "Same" means mission type + target region, plus target faction for Attack/Diversion,
+        // construction type for building orders, or the exact persisted mission id for a special
+        // mission. This keeps one authoritative order (and one aggression setting) per operation.
+        // Otherwise builds and registers one new Order after detaching the squads from prior tasking.
+        // Returns null (and creates nothing) if the mission descriptor can't be resolved.
         //
         // targetFactionId: for Attack/Diversion on a multi-enemy region this selects which enemy
         // faction to target; pass a negative value ("not specified") to auto-resolve the way the
@@ -35,30 +36,152 @@ namespace OnlyWar.Helpers.Orders
             int targetFactionId,
             Aggression aggression)
         {
+            if (squads == null || squads.Count == 0 || squads.Any(squad => squad?.IsOperational != true))
+            {
+                return null;
+            }
+            List<Squad> distinctSquads = squads
+                .GroupBy(squad => squad.Id)
+                .Select(group => group.First())
+                .ToList();
+            RecruitmentProgram program =
+                GameDataSingleton.Instance.Sector?.PlayerForce?.RecruitmentProgram;
+            if (distinctSquads.Any(squad => squad.Members.Any(member =>
+                    RecruitmentPromotionService.IsSoldierInBlackCarapaceProcedure(
+                        program, member.Id))))
+            {
+                return null;
+            }
+
+            Sector sector = GameDataSingleton.Instance.Sector;
+            List<Order> equivalentOrders = sector.Orders.Values
+                .Where(order => IsPlayerOrder(order)
+                    && RepresentsEffectiveMission(
+                        order, targetRegion, mission, targetFactionId))
+                .ToList();
+            if (equivalentOrders.Count > 0)
+            {
+                Order existingOrder = equivalentOrders[0];
+                foreach (Order duplicateOrder in equivalentOrders.Skip(1))
+                {
+                    MoveSquadsToOrder(
+                        duplicateOrder.AssignedSquads.ToList(), existingOrder, sector);
+                    sector.RemoveOrder(duplicateOrder);
+                }
+                MoveSquadsToOrder(distinctSquads, existingOrder, sector);
+                return existingOrder;
+            }
+
             Mission builtMission = BuildMission(targetRegion, mission, targetFactionId);
             if (builtMission == null)
             {
                 return null;
             }
 
-            foreach (Squad squad in squads)
+            foreach (Squad squad in distinctSquads)
             {
-                if (squad.CurrentOrders != null)
-                {
-                    Order oldOrder = squad.CurrentOrders;
-                    oldOrder.AssignedSquads.Remove(squad);
-                    if (oldOrder.AssignedSquads.Count == 0)
-                    {
-                        GameDataSingleton.Instance.Sector.RemoveOrder(oldOrder);
-                    }
-                }
+                DetachFromCurrentOrder(squad, sector);
             }
 
             // The Order constructor sets squad.CurrentOrders = this for every squad passed in,
             // so assigning CurrentOrders separately afterwards is unnecessary.
-            Order newOrder = new Order(squads.ToList(), Disposition.Mobile, true, false, aggression, builtMission);
-            GameDataSingleton.Instance.Sector.AddNewOrder(newOrder);
+            Order newOrder = new Order(
+                distinctSquads, Disposition.Mobile, true, false, aggression, builtMission);
+            sector.AddNewOrder(newOrder);
             return newOrder;
+        }
+
+        private static bool IsPlayerOrder(Order order)
+        {
+            return order?.AssignedSquads?.Count > 0
+                && order.AssignedSquads.All(
+                    squad => squad?.Faction?.IsPlayerFaction != false);
+        }
+
+        private static bool RepresentsEffectiveMission(
+            Order order,
+            Region targetRegion,
+            AvailableMission availableMission,
+            int targetFactionId)
+        {
+            Mission existingMission = order?.Mission;
+            if (existingMission?.RegionFaction?.Region != targetRegion)
+            {
+                return false;
+            }
+
+            if (availableMission.Kind == MissionAvailabilityKind.Special)
+            {
+                return availableMission.SpecialMission != null
+                    && existingMission.Id == availableMission.SpecialMission.Id;
+            }
+
+            return availableMission.Kind switch
+            {
+                MissionAvailabilityKind.Recon =>
+                    existingMission.MissionType == MissionType.Recon,
+                MissionAvailabilityKind.Attack =>
+                    existingMission.MissionType == MissionType.Advance
+                    && existingMission.RegionFaction.PlanetFaction.Faction.Id == targetFactionId,
+                MissionAvailabilityKind.Move =>
+                    existingMission.MissionType == MissionType.Advance
+                    && existingMission.RegionFaction.PlanetFaction.Faction.IsPlayerFaction,
+                MissionAvailabilityKind.Defend =>
+                    existingMission.MissionType == MissionType.DefenseInDepth,
+                MissionAvailabilityKind.Patrol =>
+                    existingMission.MissionType == MissionType.Patrol,
+                MissionAvailabilityKind.FortifyEntrenchment =>
+                    existingMission is ConstructionMission construction
+                    && construction.ConstructionType == DefenseType.Entrenchment,
+                MissionAvailabilityKind.BuildListeningPost =>
+                    existingMission is ConstructionMission construction
+                    && construction.ConstructionType == DefenseType.ListeningPost,
+                MissionAvailabilityKind.BuildAntiAir =>
+                    existingMission is ConstructionMission construction
+                    && construction.ConstructionType == DefenseType.AntiAir,
+                MissionAvailabilityKind.Diversion =>
+                    existingMission.MissionType == MissionType.Diversion
+                    && existingMission.RegionFaction.PlanetFaction.Faction.Id == targetFactionId,
+                _ => false
+            };
+        }
+
+        private static void MoveSquadsToOrder(
+            IReadOnlyList<Squad> squads,
+            Order targetOrder,
+            Sector sector)
+        {
+            foreach (Squad squad in squads)
+            {
+                if (ReferenceEquals(squad.CurrentOrders, targetOrder))
+                {
+                    if (!targetOrder.AssignedSquads.Contains(squad))
+                    {
+                        targetOrder.AssignedSquads.Add(squad);
+                    }
+                    continue;
+                }
+
+                DetachFromCurrentOrder(squad, sector);
+                if (!targetOrder.AssignedSquads.Contains(squad))
+                {
+                    targetOrder.AssignedSquads.Add(squad);
+                }
+                squad.CurrentOrders = targetOrder;
+            }
+        }
+
+        private static void DetachFromCurrentOrder(Squad squad, Sector sector)
+        {
+            if (squad.CurrentOrders == null) return;
+
+            Order oldOrder = squad.CurrentOrders;
+            oldOrder.AssignedSquads.Remove(squad);
+            squad.CurrentOrders = null;
+            if (oldOrder.AssignedSquads.Count == 0)
+            {
+                sector.RemoveOrder(oldOrder);
+            }
         }
 
         private static Mission BuildMission(Region selectedRegion, AvailableMission mission, int targetFactionId)

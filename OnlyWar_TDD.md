@@ -682,6 +682,24 @@ strength = weapon.DamageMultiplier × (1 − range / weapon.MaximumRange)
 ```
 Strength after armor reduction is compared against wound thresholds to determine severity applied to the struck `HitLocation`.
 
+**Ranged planning and friendly fire:**
+
+- `BattleSquadPlanner` scores candidate attacks in Battle Value rather than selecting a random member of the nearest squad. The common shape is `imminence × expected enemy BV removed − expected friendly BV lost`; imminence discounts enemies that cannot engage soon without double-counting their threat, since target BV already represents combat value.
+- Shooting into a melee scrum applies `RangedFriendlyFireRules.FiringIntoMeleePenalty` in both planning and resolution. A miss inside the narrow near-miss band may strike another scrum participant, selected by footprint-size weight. `ShootAction` records the actual victim and whether the result was friendly fire so aftermath and replay do not credit or narrate the nominal target incorrectly.
+- An engaged soldier compares his planned melee sequence against a point-blank ranged action in the same BV currency. The ranged option pays the firing-into-melee and weapon-`Bulk` penalties plus the expected self-BV cost of giving up parry against adjacent attackers.
+- General line-of-fire tracing through friendly formations is not implemented; the scrum distribution is intentionally reusable when terrain and fire lanes are introduced.
+
+**Template weapons:**
+
+`RangedWeaponTemplate.TemplateType` selects normal fire (`0`), a cone (`1`), launched blast (`2`), or thrown blast (`3`). `AreaRadius` carries cone half-width or blast radius, and `FuelPerBurst` carries cone fuel consumption. Template attacks pre-resolve geometry, victims, scatter, and wounds once; replay reuses the stored result rather than consuming new randomness.
+
+- `ConeTemplate` projects the weapon's full-range cone along the shooter-to-target direction. A combatant is caught when any occupied footprint cell lies inside it. `AreaAttackAction` auto-hits every caught friend or foe except the shooter, applies normal armor/hit-location/wound resolution per victim, and consumes `FuelPerBurst`. The planner scores the entire firing line and never aims a cone weapon.
+- `BlastTemplate` resolves an aim cell, then converts a failed normal-curve skill check into margin-proportional scatter in a pre-resolved random direction. A combatant is caught when any footprint cell lies inside `AreaRadius`; the thrower is not excluded. `BlastAttackAction` scales damage quadratically from full at the impact center to zero at the rim before armor.
+- Thrown blast range is `Strength × MaximumRange`; launched blasts use `MaximumRange` directly. `WeaponSet.GrenadeWeapon` is a third ranged slot, and grenades use the ordinary loaded-ammo/reload action economy rather than a separate inventory count.
+- The planner evaluates nominal template victims as expected enemy BV removed minus expected friendly/self BV lost. A grenade must also beat the soldier's best conventional action, with enemy value discounted by delivery confidence and engagement imminence. `WalkBackPreservesShooting` prevents movement geometry from needlessly suppressing a bulky primary weapon and making a grenade appear artificially preferable.
+- `BattleValueCalculator` values cones and blasts through density-scaled expected victims, fuel/ammo duty cycle, template reach, blast falloff, and the same reference-threat panel used for conventional weapons. A grenade is valued as a sidearm (`max(primary, grenade)`), matching the planner's mutually exclusive throw-or-shoot choice.
+- Remaining template/ranged work is tracked in `Design/Active/RangedCombatFollowUps.md`.
+
 **Squad placers:** `AmbushPlacer` and `AnnihilationPlacer` handle initial squad placement for their respective engagement types. Starting range is modified by `marginOfSuccess` from the preceding stealth check.
 
 **Battle continuation (`BattleSquad.ShouldContinueMission`):**
@@ -709,15 +727,19 @@ Strength after armor reduction is compared against wound thresholds to determine
 `NewChapterBuilder.CreateChapter(...)` runs once on new game creation:
 
 1. Generate 1,000 base soldiers via `SoldierFactory`.
-2. Wrap each in `PlayerSoldier` with a generated name from `TempNameGenerator`.
+2. Wrap each in `PlayerSoldier` with a generated name from `NameGenerator`.
 3. Simulate 104 weeks of training via `ISoldierTrainingService.EvaluateSoldier`.
 4. Apply role-specific skill boosts via `ApplySoldierTypeTraining`.
-5. Sort soldiers into role buckets (Tactical, Assault, Devastator, Scout, and their sergeant variants) by evaluation score thresholds.
-6. `BalanceLists` trims sergeant lists to match squad counts (max 18 Dev sgts, 18 Ass sgts, 52 Tact sgts), demoting excess to line roles.
-7. Assign marines to squads in the pre-built chapter structure.
-8. Assign scouts last, creating additional Scout Squads for overflow.
-9. Initialize the fleet with the first available fleet template.
-10. Record a founding history entry.
+5. Remove psykers into the Librarius path, where they are ranked by Ego and assigned relative seniority from the rules-data rank ratio. Build best-first candidate lists for the remaining soldiers with `RoleSuitabilityService`; specialists must cross their rating thresholds, and line/sergeant roles use their documented melee/ranged/leadership bands.
+6. Populate chapter-level organizations in rank order: Chapter HQ, Librarius, Armory, Apothecarion, and Reclusium.
+7. Derive company demand from seedable line squads. A company needs at least one eligible sergeant and four eligible members for a line slot before its HQ is staffed; otherwise its persistent HQ squad remains empty for later promotion/transfer.
+8. Populate seedable companies in order, staffing the Captain and specialists before line squads so leadership is not consumed as line personnel. The Veteran Company requires a qualified veteran captain independently of its line-squad eligibility.
+9. Run the explicit spill pass: surplus tactical candidates fill vacant assault seats, then surplus tactical/assault candidates with sufficient ranged aptitude fill vacant devastator seats. Existing assignments are never displaced.
+10. Sweep remaining specialists into their chapter organizations and remaining soldiers into the Tenth Company, creating overflow Scout Squads as necessary.
+11. Initialize the fleet with the first available fleet template.
+12. Record a founding history entry.
+
+All role lists share the `unassignedSoldierMap` as the single consumption authority, so one soldier may qualify for several roles but can only be assigned once. `ChapterGenerationTemplates` resolves the required rules objects once by stable template identity and fails fast when required data is missing or ambiguous. The detailed founding eligibility and ordering table is retained in `Design/Reference/FoundingRoleAssignment.md`.
 
 ### 6.9 Sector Generation
 

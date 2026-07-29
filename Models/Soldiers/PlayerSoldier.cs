@@ -19,6 +19,11 @@ namespace OnlyWar.Models.Soldiers
         private Squad _assignedSquad;
 
         public Date ProgenoidImplantDate { get; set; }
+        // Null identifies a founding-era brother whose implantation decisions were
+        // made before the campaign began. Recruited neophytes retain the exact score
+        // rolled as aspirants so their Phase 13 risk can be resolved later.
+        public float? GeneticCompatibility { get; set; }
+        public Date RecruitmentBirthDate { get; set; }
         public IReadOnlyList<SoldierEvent> SoldierEvents { get => _soldierEvents; }
         public IReadOnlyDictionary<int, ushort> RangedWeaponCasualtyCountMap { get => _rangedWeaponCasualtyCountMap; }
         public IReadOnlyDictionary<int, ushort> MeleeWeaponCasualtyCountMap { get => _meleeWeaponCasualtyCountMap; }
@@ -160,11 +165,22 @@ namespace OnlyWar.Models.Soldiers
 
         public object Clone()
         {
-            return new PlayerSoldier((Soldier)_soldier.Clone(), _soldierEvaluationHistory.ToList(),
+            PlayerSoldier clone = new(
+                                     (Soldier)_soldier.Clone(), _soldierEvaluationHistory.ToList(),
                                      _soldierAwards.ToList(), ProgenoidImplantDate, _soldierEvents.ToList(),
                                      _rangedWeaponCasualtyCountMap.ToDictionary(kvp => kvp.Key, kvp => kvp.Value),
                                      _meleeWeaponCasualtyCountMap.ToDictionary(kvp => kvp.Key, kvp => kvp.Value),
-                                     _factionCasualtyCountMap.ToDictionary(kvp => kvp.Key, kvp => kvp.Value));
+                                     _factionCasualtyCountMap.ToDictionary(kvp => kvp.Key, kvp => kvp.Value))
+            {
+                GeneticCompatibility = GeneticCompatibility,
+                RecruitmentBirthDate = RecruitmentBirthDate == null
+                    ? null
+                    : new Date(
+                        RecruitmentBirthDate.Millenium,
+                        RecruitmentBirthDate.Year,
+                        RecruitmentBirthDate.Week)
+            };
+            return clone;
         }
 
         public void AddEvent(SoldierEvent soldierEvent)

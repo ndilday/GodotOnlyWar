@@ -4,6 +4,7 @@ using OnlyWar.Helpers.Battles;
 using OnlyWar.Helpers.Extensions;
 using OnlyWar.Helpers.Fortifications;
 using OnlyWar.Helpers.Missions;
+using OnlyWar.Helpers.Turns;
 using OnlyWar.Models;
 using OnlyWar.Models.Battles;
 using OnlyWar.Models.Missions;
@@ -42,12 +43,13 @@ public partial class EndOfTurnDialogController : DialogController
         IEnumerable<StrategicCombatResult> strategicCombatResults,
         IEnumerable<ConstructionProgressReport> constructionReports = null,
         IEnumerable<FortificationTransferReport> fortificationTransfers = null,
-        IEnumerable<GovernorRequestReport> governorRequestReports = null)
+        IEnumerable<GovernorRequestReport> governorRequestReports = null,
+        RecruitmentTurnReport recruitmentReport = null)
     {
         _missionContexts = (missionContexts ?? Enumerable.Empty<MissionContext>()).ToList();
         _reportEntries = BuildReportEntries(
             _missionContexts, specialMissions, strategicCombatResults, constructionReports,
-            fortificationTransfers, governorRequestReports);
+            fortificationTransfers, governorRequestReports, recruitmentReport);
         _view.SetReport(_reportEntries);
     }
 
@@ -124,7 +126,8 @@ public partial class EndOfTurnDialogController : DialogController
         IEnumerable<StrategicCombatResult> strategicCombatResults,
         IEnumerable<ConstructionProgressReport> constructionReports,
         IEnumerable<FortificationTransferReport> fortificationTransfers,
-        IEnumerable<GovernorRequestReport> governorRequestReports = null)
+        IEnumerable<GovernorRequestReport> governorRequestReports = null,
+        RecruitmentTurnReport recruitmentReport = null)
     {
         List<EndOfTurnReportEntry> entries = [];
         HashSet<MissionContext> reportedContexts = [];
@@ -199,6 +202,10 @@ public partial class EndOfTurnDialogController : DialogController
         {
             entries.Add(BuildGovernorRequestEntry(report));
         }
+        if (recruitmentReport != null)
+        {
+            entries.Add(BuildRecruitmentEntry(recruitmentReport));
+        }
 
         if (entries.Count == 0)
         {
@@ -211,6 +218,40 @@ public partial class EndOfTurnDialogController : DialogController
         }
 
         return entries;
+    }
+
+    private static EndOfTurnReportEntry BuildRecruitmentEntry(
+        RecruitmentTurnReport report)
+    {
+        if (!report.Processed)
+        {
+            return new EndOfTurnReportEntry(
+                "Recruitment Paused",
+                "10th Company recruitment program",
+                report.PausedReason ?? "The program made no progress this week.",
+                false,
+                "PAUSED");
+        }
+
+        string summary =
+            $"{report.RequisitionSpent:N0} Requisition spent; "
+            + $"{report.ScreenedCandidates:N0} screened, "
+            + $"{report.QualifiedCandidates:N0} qualified, and "
+            + $"{report.AspirantsAdmitted:N0} admitted. "
+            + $"{report.ImplantationsCompleted:N0} implantation phase"
+            + $"{(report.ImplantationsCompleted == 1 ? "" : "s")} completed.";
+        if (report.AspirantDeaths > 0 || report.CandidatesAgedOut > 0)
+        {
+            summary += $" Losses: {report.AspirantDeaths:N0} dead and "
+                + $"{report.CandidatesAgedOut:N0} candidate"
+                + $"{(report.CandidatesAgedOut == 1 ? "" : "s")} aged out.";
+        }
+        return new EndOfTurnReportEntry(
+            "Recruitment",
+            "10th Company recruitment program",
+            summary,
+            false,
+            "PROCESSED");
     }
 
     private static EndOfTurnReportEntry BuildGovernorRequestEntry(GovernorRequestReport report)

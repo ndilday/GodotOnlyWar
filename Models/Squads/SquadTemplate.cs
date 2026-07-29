@@ -16,7 +16,11 @@ namespace OnlyWar.Models.Squads
         Elite = 0x4,
         Fast = 0x8,
         Heavy = 0x10,
-        Bodyguard = 0x20
+        Bodyguard = 0x20,
+        // Administrative formations hold personnel assigned to Chapter duties rather
+        // than battlefield service. They remain ordinary squads for roster transfers
+        // and persistence, but are never deployable, orderable, or trainable.
+        Administrative = 0x40
     }
 
     [Flags]
@@ -54,9 +58,12 @@ namespace OnlyWar.Models.Squads
         public ArmorTemplate Armor { get; }
         public WeaponSet DefaultWeapons { get; }
         public SquadTypes SquadType { get; }
+        public bool IsOperational => (SquadType & SquadTypes.Administrative) == 0;
         // A squad's point value is the sum of its members' battle values at full strength (PRD
         // §4.24). Previously a stored column; now derived so it can never drift from the roster.
-        public int BattleValue => Elements?.Sum(e => e.SoldierTemplate.BattleValue * e.MaximumNumber) ?? 0;
+        public int BattleValue => IsOperational
+            ? Elements?.Sum(e => e.SoldierTemplate.BattleValue * e.MaximumNumber) ?? 0
+            : 0;
         // Derived, not stored (Design/Active/MoraleAndRout.md §4.1): true iff any element's
         // species carries SpeciesAbilities.Synapse. Adding a new synapse creature to the DB
         // works automatically.

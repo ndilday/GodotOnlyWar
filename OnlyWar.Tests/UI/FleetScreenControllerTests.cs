@@ -122,6 +122,24 @@ public class FleetScreenControllerTests
     }
 
     [Fact]
+    public void AdministrativeSquad_DetachesFromShipAndCannotTransfer()
+    {
+        Unit secondCompany = CreateUnit(2, "Second Company");
+        Ship sourceShip = CreateShip(1, "Source", 20);
+        Ship destinationShip = CreateShip(2, "Destination", 20);
+        _ = new TaskForce(1, CreateFaction(), null, CreatePlanet(1), null, [sourceShip, destinationShip]);
+        Squad squad = CreateSquad(11, "10th Company HQ", secondCompany, memberCount: 5);
+        sourceShip.LoadSquad(squad);
+        squad.BoardedLocation = sourceShip;
+
+        squad.IsAdministrative = true;
+
+        Assert.Null(squad.BoardedLocation);
+        Assert.DoesNotContain(squad, sourceShip.LoadedSquads);
+        Assert.False(FleetScreenController.CanTransferSquadToShip(squad, destinationShip));
+    }
+
+    [Fact]
     public void CanTransferSquadToShip_RejectsShipWithoutCapacity()
     {
         Unit secondCompany = CreateUnit(2, "Second Company");

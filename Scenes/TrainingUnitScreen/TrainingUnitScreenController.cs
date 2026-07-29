@@ -1,73 +1,339 @@
 using Godot;
-using OnlyWar.Models.Squads;
+using OnlyWar.Helpers.Recruitment;
 using OnlyWar.Models;
-using System;
-using System.Linq;
-using OnlyWar.Models.Units;
-using System.Collections.Generic;
+using OnlyWar.Models.Planets;
+using OnlyWar.Models.Recruitment;
 using OnlyWar.Models.Soldiers;
+using OnlyWar.Models.Squads;
+using System;
+using System.Collections.Generic;
+using System.Linq;
+
+public sealed record RecruitmentStaffSummary(
+    int ScoutSergeants,
+    int Apothecaries,
+    int Chaplains)
+{
+    public bool IsComplete =>
+        ScoutSergeants > 0 && Apothecaries > 0 && Chaplains > 0;
+}
+
+public sealed record RecruitmentDoctrineDraft(
+    RecruitmentPolicy Policy,
+    int StrengthHalfSigmaSteps,
+    int ConstitutionHalfSigmaSteps,
+    int IntelligenceHalfSigmaSteps,
+    int DexterityHalfSigmaSteps,
+    int EgoHalfSigmaSteps,
+    float MinimumGeneticCompatibility);
+
+public sealed record RecruitmentAspirantRow(
+    int Id,
+    string Designation,
+    string Phase,
+    string Age,
+    float TrainingProgress,
+    bool CanBecomeNeophyte);
+
+public sealed record RecruitmentCandidateRow(
+    int Id,
+    string Designation,
+    string Age,
+    float GeneticCompatibility);
+
+public sealed record ScoutPromotionRow(
+    int SoldierId,
+    string Name,
+    bool IsReady);
+
+public sealed record ScoutSquadRow(
+    int Id,
+    string Label,
+    TrainingFocuses Focus,
+    string ReadinessReport,
+    IReadOnlyList<ScoutPromotionRow> PromotionRows);
+
+public sealed class RecruitmentScreenSnapshot
+{
+    public bool IsUnlocked { get; init; }
+    public bool IsSetupComplete { get; init; }
+    public string HomeWorldName { get; init; }
+    public long ChapterPopulation { get; init; }
+    public int Requisition { get; init; }
+    public ushort Geneseed { get; init; }
+    public RecruitmentStaffSummary Staff { get; init; }
+    public RecruitmentDoctrineDraft Doctrine { get; init; }
+    public RecruitmentForecast Forecast { get; init; }
+    public IReadOnlyList<RecruitmentCandidateRow> Candidates { get; init; } = [];
+    public IReadOnlyList<RecruitmentAspirantRow> Aspirants { get; init; } = [];
+    public IReadOnlyList<ScoutSquadRow> ScoutSquads { get; init; } = [];
+    public IReadOnlyList<string> RecentEvents { get; init; } = [];
+}
 
 public partial class TrainingUnitScreenController : Control
 {
+    private readonly RecruitmentStaffService _staffService = new();
+    private readonly RecruitmentForecastService _forecastService = new();
     private TrainingUnitScreenView _view;
     private Squad _selectedSquad;
+    private RecruitmentDoctrineDraft _draft;
 
     public event EventHandler CloseButtonPressed;
     public event EventHandler<int> SoldierLinkClicked;
     public event EventHandler CampaignChanged;
+    public event EventHandler ManageAdministrativeStaffRequested;
+    public event EventHandler<int> NeophytePlacementRequested;
+    public event EventHandler<int> Phase13PromotionRequested;
 
     public override void _Ready()
     {
         _view = GetNode<TrainingUnitScreenView>("TrainingUnitScreenView");
-        _view.CloseButtonPressed += (object sender, EventArgs e) => CloseButtonPressed?.Invoke(this, e);
+        _view.CloseButtonPressed += OnCloseButtonPressed;
         _view.LinkClicked += OnLinkClicked;
         _view.SquadButtonPressed += OnSquadButtonPressed;
         _view.TrainingFocusSelected += OnTrainingFocusSelected;
-        PopulateScoutSquadList();
+        _view.DoctrineChanged += OnDoctrineChanged;
+        _view.DoctrineConfirmed += OnDoctrineConfirmed;
+        _view.ManageAdministrativeStaffRequested += (sender, e) =>
+            ManageAdministrativeStaffRequested?.Invoke(this, e);
+        _view.NeophytePlacementRequested += (sender, aspirantId) =>
+            NeophytePlacementRequested?.Invoke(this, aspirantId);
+        _view.Phase13PromotionRequested += (sender, soldierId) =>
+            Phase13PromotionRequested?.Invoke(this, soldierId);
+        RefreshFromExternalChange();
+    }
+
+    public void RefreshFromExternalChange()
+    {
+        PlayerForce force = GameDataSingleton.Instance.Sector?.PlayerForce;
+        RecruitmentProgram program = force?.RecruitmentProgram;
+        if (program == null)
+        {
+            _draft = null;
+            _view.RenderLockedState(
+                "The Chapter has no Home World. The 10th Company will establish its "
+                + "recruitment program when the Promised World is liberated.");
+            PopulateScoutSquadList();
+            return;
+        }
+
+        _staffService.Synchronize(force, GameDataSingleton.Instance.GameRulesData);
+        _draft ??= CreateDraft(program);
+        if (program.IsSetupComplete)
+        {
+            // External changes, including a loaded campaign, become the new baseline.
+            _draft = CreateDraft(program);
+        }
+
+        Planet homeWorld = GetHomeWorld(force, program);
+        long population = GetChapterPopulation(homeWorld, force.Faction.Id);
+        float reputation = GetChapterReputation(homeWorld, force.Faction.Id);
+        RecruitmentProgram previewProgram = CreatePreviewProgram(program, _draft);
+        RecruitmentForecast forecast = _forecastService.Calculate(
+            previewProgram,
+            new RecruitmentForecastInput
+            {
+                ChapterHomeWorldPopulation = population,
+                // Organic growth is recorded inside the active turn processor. Between turns,
+                // the historic birth proxy provides the stable planning estimate.
+                OrganicPopulationGrowth = 0,
+                PlayerReputation = reputation
+            });
+
+        List<ScoutSquadRow> scoutSquads = BuildScoutSquadRows();
+        if (_selectedSquad != null
+            && scoutSquads.All(row => row.Id != _selectedSquad.Id))
+        {
+            _selectedSquad = null;
+        }
+
+        RecruitmentStaffSummary staff = new(
+            program.StaffAssignments.Count(a => a.Role == RecruitmentStaffRole.ScoutSergeant),
+            program.StaffAssignments.Count(a => a.Role == RecruitmentStaffRole.Apothecary),
+            program.StaffAssignments.Count(a => a.Role == RecruitmentStaffRole.Chaplain));
+
+        RecruitmentScreenSnapshot snapshot = new()
+        {
+            IsUnlocked = true,
+            IsSetupComplete = program.IsSetupComplete,
+            HomeWorldName = homeWorld?.Name ?? "Unknown Home World",
+            ChapterPopulation = population,
+            Requisition = force.Army.Requisition,
+            Geneseed = force.GeneseedStockpile,
+            Staff = staff,
+            Doctrine = _draft,
+            Forecast = forecast,
+            Candidates = program.QualifiedCandidates
+                .OrderBy(candidate => candidate.QualifiedDate)
+                .ThenBy(candidate => candidate.Id)
+                .Select(candidate => new RecruitmentCandidateRow(
+                    candidate.Id,
+                    candidate.InductionDesignation,
+                    FormatAge(candidate.BirthDate),
+                    candidate.GeneticCompatibility))
+                .ToList(),
+            Aspirants = program.Aspirants
+                .OrderBy(aspirant => aspirant.Phase)
+                .ThenBy(aspirant => aspirant.BirthDate)
+                .ThenBy(aspirant => aspirant.Id)
+                .Select(aspirant => new RecruitmentAspirantRow(
+                    aspirant.Id,
+                    aspirant.InductionDesignation,
+                    FormatPhase(aspirant.Phase),
+                    FormatAge(aspirant.BirthDate),
+                    aspirant.TrainingProgress,
+                    aspirant.Phase == RecruitmentPhase.Phase12))
+                .ToList(),
+            ScoutSquads = scoutSquads,
+            RecentEvents = program.ProgramEvents
+                .OrderByDescending(programEvent => programEvent.Date)
+                .Take(8)
+                .Select(FormatProgramEvent)
+                .ToList()
+        };
+
+        _view.Render(snapshot, _selectedSquad?.Id);
+    }
+
+    public void OpenMandatorySetup()
+    {
+        RefreshFromExternalChange();
+        RecruitmentProgram program =
+            GameDataSingleton.Instance.Sector?.PlayerForce?.RecruitmentProgram;
+        if (program is { IsSetupComplete: false })
+        {
+            _view.ShowRecruitmentView();
+            _view.SetSetupMode(true);
+        }
+    }
+
+    private void OnCloseButtonPressed(object sender, EventArgs e)
+    {
+        RecruitmentProgram program =
+            GameDataSingleton.Instance.Sector?.PlayerForce?.RecruitmentProgram;
+        if (program is { IsSetupComplete: false })
+        {
+            _view.ShowSetupValidation(
+                "The Master of Recruitment must establish the program before continuing.");
+            return;
+        }
+        CloseButtonPressed?.Invoke(this, e);
+    }
+
+    private void OnDoctrineChanged(object sender, RecruitmentDoctrineDraft doctrine)
+    {
+        _draft = doctrine;
+        RefreshPreviewOnly();
+    }
+
+    private void RefreshPreviewOnly()
+    {
+        // Preserve the staged doctrine through the normal snapshot rebuild.
+        RecruitmentDoctrineDraft draft = _draft;
+        RefreshFromExternalChange();
+        _draft = draft;
+
+        PlayerForce force = GameDataSingleton.Instance.Sector?.PlayerForce;
+        RecruitmentProgram program = force?.RecruitmentProgram;
+        if (force == null || program == null)
+        {
+            return;
+        }
+
+        _staffService.Synchronize(force, GameDataSingleton.Instance.GameRulesData);
+        Planet homeWorld = GetHomeWorld(force, program);
+        RecruitmentProgram preview = CreatePreviewProgram(program, _draft);
+        RecruitmentForecast forecast = _forecastService.Calculate(
+            preview,
+            new RecruitmentForecastInput
+            {
+                ChapterHomeWorldPopulation =
+                    GetChapterPopulation(homeWorld, force.Faction.Id),
+                OrganicPopulationGrowth = 0,
+                PlayerReputation = GetChapterReputation(homeWorld, force.Faction.Id)
+            });
+        _view.UpdateForecast(_draft, forecast);
+    }
+
+    private void OnDoctrineConfirmed(object sender, EventArgs e)
+    {
+        PlayerForce force = GameDataSingleton.Instance.Sector?.PlayerForce;
+        RecruitmentProgram program = force?.RecruitmentProgram;
+        if (force == null || program == null || _draft == null)
+        {
+            return;
+        }
+
+        _staffService.Synchronize(force, GameDataSingleton.Instance.GameRulesData);
+        RecruitmentStaffSummary staff = new(
+            program.StaffAssignments.Count(a => a.Role == RecruitmentStaffRole.ScoutSergeant),
+            program.StaffAssignments.Count(a => a.Role == RecruitmentStaffRole.Apothecary),
+            program.StaffAssignments.Count(a => a.Role == RecruitmentStaffRole.Chaplain));
+        if (!staff.IsComplete)
+        {
+            _view.ShowSetupValidation(
+                "The 10th Company HQ must include at least one Scout Sergeant, "
+                + "one Apothecary, and one Chaplain or Judiciar. Reassign them on "
+                + "the Chapter screen, then return here.");
+            return;
+        }
+        if (!IsDoctrineValid(_draft))
+        {
+            _view.ShowSetupValidation(
+                "All recruitment thresholds must remain within the allowed range.");
+            return;
+        }
+
+        program.Policy = _draft.Policy;
+        program.AttributeFilters.StrengthHalfSigmaSteps = _draft.StrengthHalfSigmaSteps;
+        program.AttributeFilters.ConstitutionHalfSigmaSteps = _draft.ConstitutionHalfSigmaSteps;
+        program.AttributeFilters.IntelligenceHalfSigmaSteps = _draft.IntelligenceHalfSigmaSteps;
+        program.AttributeFilters.DexterityHalfSigmaSteps = _draft.DexterityHalfSigmaSteps;
+        program.AttributeFilters.EgoHalfSigmaSteps = _draft.EgoHalfSigmaSteps;
+        program.MinimumGeneticCompatibility = _draft.MinimumGeneticCompatibility;
+        program.IsSetupComplete = true;
+        CampaignChanged?.Invoke(this, EventArgs.Empty);
+        _view.ShowSetupValidation(string.Empty);
+        RefreshFromExternalChange();
     }
 
     private void PopulateScoutSquadList()
     {
-        List<ValueTuple<int, string>> squadList = OrderScoutSquads(GetScoutSquads())
-            .Select(squad => new ValueTuple<int, string>(squad.Id, GetSquadListLabel(squad)))
+        _view.PopulateScoutSquads(BuildScoutSquadRows(), _selectedSquad?.Id);
+    }
+
+    private List<ScoutSquadRow> BuildScoutSquadRows()
+    {
+        return OrderScoutSquads(GetScoutSquads())
+            .Select(squad => new ScoutSquadRow(
+                squad.Id,
+                GetSquadListLabel(squad),
+                squad.TrainingFocus,
+                BuildReadinessReport(squad),
+                squad.Members
+                    .OfType<PlayerSoldier>()
+                    .Where(soldier => !soldier.Template.IsSquadLeader)
+                    .Where(soldier => soldier.GeneticCompatibility.HasValue)
+                    .Select(soldier => new ScoutPromotionRow(
+                        soldier.Id,
+                        soldier.Name,
+                        GetReadinessLevel(GetLatestEvaluation(soldier)) > 0))
+                    .ToList()))
             .ToList();
-        _view.PopulateSquadList(squadList, _selectedSquad?.Id);
     }
 
     private void OnSquadButtonPressed(object sender, int squadId)
     {
-        Squad squad = GetScoutSquads().First(s => s.Id == squadId);
-        _selectedSquad = squad;
-        _view.SelectTrainingFocus(squad.TrainingFocus);
-        string squadReport = "";
-
-        // should we ignore the SGT here or not?
-        if (squad.Members.Count == 0)
-        {
-            squadReport += "This squad has no members. ";
-        }
-        else
-        {
-            foreach (PlayerSoldier soldier in squad.Members)
-            {
-                if (soldier.Template.IsSquadLeader)
-                {
-                    // TODO: add code to test whether the SGT still feels he has things
-                    // to teach the soldiers
-                }
-                else
-                {
-                    squadReport += GetSergeantDescription(soldier.Id, soldier.Name, soldier.SoldierEvaluationHistory[soldier.SoldierEvaluationHistory.Count - 1]);
-                }
-            }
-        }
-        _view.PopulateSquadReadinessReport(squadReport);
+        _selectedSquad = GetScoutSquads().FirstOrDefault(squad => squad.Id == squadId);
+        PopulateScoutSquadList();
     }
 
     private void OnTrainingFocusSelected(object sender, TrainingFocuses focus)
     {
-        if (_selectedSquad == null) return;
-        if (_selectedSquad.TrainingFocus == focus) return;
+        if (_selectedSquad == null || _selectedSquad.TrainingFocus == focus)
+        {
+            return;
+        }
 
         _selectedSquad.TrainingFocus = focus;
         CampaignChanged?.Invoke(this, EventArgs.Empty);
@@ -84,7 +350,9 @@ public partial class TrainingUnitScreenController : Control
     internal static bool IsTrainingSquad(Squad squad)
     {
         SquadTypes type = squad?.SquadTemplate?.SquadType ?? SquadTypes.None;
-        return (type & SquadTypes.Scout) != 0
+        return squad?.IsOperational == true
+            && !squad.IsAdministrative
+            && (type & SquadTypes.Scout) != 0
             && (type & SquadTypes.HQ) == 0;
     }
 
@@ -116,60 +384,202 @@ public partial class TrainingUnitScreenController : Control
         };
     }
 
-    private string GetSergeantDescription(int id, string name, SoldierEvaluation evaluation)
+    private static string BuildReadinessReport(Squad squad)
     {
-        //determine highest level soldier is rated for
-        // sgt level requires silver gun and sword, plus silver leadership
-        // tactical requires silver level gun and sword skills
-        // assault requires silver level sword skills and bronze gun skills
-        // devestator requires bronze gun skills
+        if (squad.Members.Count == 0)
+        {
+            return "This squad has no members.";
+        }
 
-        // maxLevel -> Scout:0; Devestator:1; Assault:2; Tactical:3; Sergeant:4
-        string nameMarkup = $"[url={id}]{name}[/url]"; 
-        int maxLevel = 0;
+        return string.Join(
+            "\n\n",
+            squad.Members
+                .OfType<PlayerSoldier>()
+                .Where(soldier => !soldier.Template.IsSquadLeader)
+                .Select(soldier => GetScoutDescription(
+                    soldier.Id,
+                    soldier.Name,
+                    GetLatestEvaluation(soldier))));
+    }
+
+    private static SoldierEvaluation GetLatestEvaluation(PlayerSoldier soldier)
+    {
+        return soldier.SoldierEvaluationHistory.LastOrDefault();
+    }
+
+    private static int GetReadinessLevel(SoldierEvaluation evaluation)
+    {
+        if (evaluation == null)
+        {
+            return 0;
+        }
         if (evaluation.RangedRating > 105 && evaluation.MeleeRating < 90)
         {
-            maxLevel = 1;
+            return 1;
         }
-        else if (evaluation.RangedRating > 105 && evaluation.MeleeRating > 90)
+        if (evaluation.RangedRating > 105 && evaluation.MeleeRating > 90)
         {
             if (evaluation.RangedRating > 110 && evaluation.MeleeRating > 95)
             {
-                if (evaluation.LeadershipRating > 55)
-                {
-                    maxLevel = 4;
-                }
-                else
-                {
-                    maxLevel = 3;
-                }
+                return evaluation.LeadershipRating > 55 ? 4 : 3;
             }
-            else
-            {
-                maxLevel = 2;
-            }
+            return 2;
         }
-        if (maxLevel == 4)
+        return 0;
+    }
+
+    private static string GetScoutDescription(
+        int id,
+        string name,
+        SoldierEvaluation evaluation)
+    {
+        string nameMarkup = $"[url={id}]{name}[/url]";
+        return GetReadinessLevel(evaluation) switch
         {
-            return nameMarkup + " is ready for his Black Carapace and assignment to a Devastator Squad; I believe he will rise to be a Sergeant himself in short order.\n\n";
-        }
-        else if (maxLevel > 1)
-        {
-            return nameMarkup + " is ready for his Black Carapace and assignment to a Devastator Squad; I believe he will rise through the ranks quickly.\n\n";
-        }
-        else if (maxLevel == 1)
-        {
-            return nameMarkup + " is ready for his Black Carapace and assignment to a Devastator Squad.\n\n";
-        }
-        else
-        {
-            return nameMarkup + " is not ready to become a Battle Brother, and should acquire more seasoning before taking the Black Carapace.\n\n";
-        }
+            4 => nameMarkup + " is ready for his Black Carapace and assignment to a "
+                + "Devastator Squad; I believe he will rise to be a Sergeant himself "
+                + "in short order.",
+            2 or 3 => nameMarkup + " is ready for his Black Carapace and assignment "
+                + "to a Devastator Squad; I believe he will rise through the ranks quickly.",
+            1 => nameMarkup + " is ready for his Black Carapace and assignment to "
+                + "a Devastator Squad.",
+            _ => nameMarkup + " is not ready to become a Battle Brother, and should "
+                + "acquire more seasoning before taking the Black Carapace."
+        };
     }
 
     private void OnLinkClicked(object sender, Variant meta)
     {
-        int soldierId = meta.AsInt32();
-        SoldierLinkClicked.Invoke(this, soldierId);
+        SoldierLinkClicked?.Invoke(this, meta.AsInt32());
+    }
+
+    private static RecruitmentDoctrineDraft CreateDraft(RecruitmentProgram program)
+    {
+        RecruitmentAttributeFilters filters = program.AttributeFilters;
+        return new RecruitmentDoctrineDraft(
+            program.Policy,
+            filters.StrengthHalfSigmaSteps,
+            filters.ConstitutionHalfSigmaSteps,
+            filters.IntelligenceHalfSigmaSteps,
+            filters.DexterityHalfSigmaSteps,
+            filters.EgoHalfSigmaSteps,
+            program.MinimumGeneticCompatibility);
+    }
+
+    private static RecruitmentProgram CreatePreviewProgram(
+        RecruitmentProgram source,
+        RecruitmentDoctrineDraft doctrine)
+    {
+        RecruitmentProgram preview = new()
+        {
+            Id = source.Id,
+            HomeWorldPlanetId = source.HomeWorldPlanetId,
+            EstablishedDate = source.EstablishedDate,
+            LastProcessedDate = source.LastProcessedDate,
+            IsSetupComplete = source.IsSetupComplete,
+            Policy = doctrine.Policy,
+            WorldType = source.WorldType,
+            MinimumGeneticCompatibility = doctrine.MinimumGeneticCompatibility,
+            AttributeFilters = new RecruitmentAttributeFilters
+            {
+                StrengthHalfSigmaSteps = doctrine.StrengthHalfSigmaSteps,
+                ConstitutionHalfSigmaSteps = doctrine.ConstitutionHalfSigmaSteps,
+                IntelligenceHalfSigmaSteps = doctrine.IntelligenceHalfSigmaSteps,
+                DexterityHalfSigmaSteps = doctrine.DexterityHalfSigmaSteps,
+                EgoHalfSigmaSteps = doctrine.EgoHalfSigmaSteps
+            }
+        };
+        preview.StaffAssignments.AddRange(source.StaffAssignments);
+        preview.UnscreenedCohorts.AddRange(source.UnscreenedCohorts);
+        preview.QualifiedCandidates.AddRange(source.QualifiedCandidates);
+        preview.Aspirants.AddRange(source.Aspirants);
+        return preview;
+    }
+
+    internal static bool IsDoctrineValid(RecruitmentDoctrineDraft doctrine)
+    {
+        if (doctrine == null
+            || !Enum.IsDefined(doctrine.Policy)
+            || doctrine.MinimumGeneticCompatibility < 0
+            || doctrine.MinimumGeneticCompatibility > 1)
+        {
+            return false;
+        }
+
+        return new[]
+        {
+            doctrine.StrengthHalfSigmaSteps,
+            doctrine.ConstitutionHalfSigmaSteps,
+            doctrine.IntelligenceHalfSigmaSteps,
+            doctrine.DexterityHalfSigmaSteps,
+            doctrine.EgoHalfSigmaSteps
+        }.All(value =>
+            value >= RecruitmentRules.MinimumAttributeFilterHalfSteps
+            && value <= RecruitmentRules.MaximumAttributeFilterHalfSteps);
+    }
+
+    private static Planet GetHomeWorld(PlayerForce force, RecruitmentProgram program)
+    {
+        int planetId = force.HomeWorldPlanetId ?? program.HomeWorldPlanetId;
+        return GameDataSingleton.Instance.Sector.Planets.TryGetValue(
+            planetId, out Planet planet)
+                ? planet
+                : null;
+    }
+
+    internal static long GetChapterPopulation(Planet planet, int chapterFactionId)
+    {
+        if (planet == null)
+        {
+            return 0;
+        }
+
+        return planet.Regions
+            .Where(region => region != null)
+            .Sum(region =>
+                region.RegionFactionMap.TryGetValue(
+                    chapterFactionId, out RegionFaction presence)
+                    && presence.IsPublic
+                        ? presence.Population
+                        : 0);
+    }
+
+    private static float GetChapterReputation(Planet planet, int chapterFactionId)
+    {
+        if (planet != null
+            && planet.PlanetFactionMap.TryGetValue(
+                chapterFactionId, out PlanetFaction planetFaction))
+        {
+            return planetFaction.PlayerReputation;
+        }
+        return 0;
+    }
+
+    private static string FormatAge(Date birthDate)
+    {
+        if (birthDate == null || GameDataSingleton.Instance.Date == null)
+        {
+            return "Unknown";
+        }
+        double age = GameDataSingleton.Instance.Date.GetWeeksDifference(birthDate) / 52.0;
+        return $"{Math.Max(0, age):0.0} years";
+    }
+
+    private static string FormatPhase(RecruitmentPhase phase)
+    {
+        return phase == RecruitmentPhase.Phase0PreImplantation
+            ? "Phase 0 — Pre-implantation"
+            : phase == RecruitmentPhase.Phase13BlackCarapace
+                ? "Phase 13 — Black Carapace"
+                : $"Phase {(int)phase}";
+    }
+
+    private static string FormatProgramEvent(RecruitmentProgramEvent programEvent)
+    {
+        string count = programEvent.Count > 1 ? $" ×{programEvent.Count}" : string.Empty;
+        string detail = string.IsNullOrWhiteSpace(programEvent.Detail)
+            ? string.Empty
+            : $": {programEvent.Detail}";
+        return $"{programEvent.Date} — {programEvent.Type}{count}{detail}";
     }
 }

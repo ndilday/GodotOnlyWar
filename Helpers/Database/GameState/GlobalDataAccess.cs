@@ -8,9 +8,11 @@ namespace OnlyWar.Helpers.Database.GameState
     // The single-row GlobalData table holds chapter-wide scalars that aren't owned by any
     // other aggregate: the current date, the Requisition pool (PRD 4.23), the gene-seed
     // stockpile count and aggregate purity (PRD 4.8), and the optional Opening Scenario
-    // state (Design/OpeningScenario.md §7). Scenario is null for sandbox sectors.
+    // state (Design/OpeningScenario.md §7). Scenario is null for sandbox sectors. The
+    // nullable Home World id is set when the Promised World is secured.
     public sealed record GlobalState(Date Date, int Requisition, int GeneseedStockpile,
-                                     float GeneseedPurity, CampaignScenario Scenario);
+                                     float GeneseedPurity, CampaignScenario Scenario,
+                                     int? HomeWorldPlanetId);
 
     public class GlobalDataAccess
     {
@@ -68,24 +70,32 @@ namespace OnlyWar.Helpers.Database.GameState
                             authorityId, scenarioState, briefingAcknowledged);
                     }
 
+                    int? homeWorldPlanetId = reader[13] is DBNull ? null : reader.GetInt32(13);
                     state = new GlobalState(new Date(millenium, year, week), requisition,
-                                            geneseedStockpile, geneseedPurity, scenario);
+                                            geneseedStockpile, geneseedPurity, scenario,
+                                            homeWorldPlanetId);
                 }
             }
             return state;
         }
 
         public void SaveGlobalData(IDbTransaction transaction, Date currentDate, int requisition,
-                                   int geneseedStockpile, float geneseedPurity, CampaignScenario scenario)
+                                   int geneseedStockpile, float geneseedPurity,
+                                   CampaignScenario scenario, int? homeWorldPlanetId)
         {
             using (var command = transaction.Connection.CreateCommand())
             {
                 command.Transaction = transaction;
-                command.CommandText = @"INSERT INTO GlobalData VALUES
-                    (@millenium, @year, @week, @saveVersion, @requisition, @geneseedStockpile, @geneseedPurity,
-                     @scenarioType, @scenarioPromisedPlanetId, @scenarioState,
+                command.CommandText = @"INSERT INTO GlobalData
+                    (Millenium, Year, Week, SaveVersion, Requisition, GeneseedStockpile,
+                     GeneseedPurity, ScenarioType, ScenarioPromisedPlanetId, ScenarioState,
+                     ScenarioBriefingAcknowledged, ScenarioBriefingText,
+                     ScenarioOriginalAuthorityCharacterId, HomeWorldPlanetId)
+                    VALUES
+                    (@millenium, @year, @week, @saveVersion, @requisition, @geneseedStockpile,
+                     @geneseedPurity, @scenarioType, @scenarioPromisedPlanetId, @scenarioState,
                      @scenarioBriefingAcknowledged, @scenarioBriefingText,
-                     @scenarioOriginalAuthorityCharacterId);";
+                     @scenarioOriginalAuthorityCharacterId, @homeWorldPlanetId);";
                 command.AddParam("@millenium", currentDate.Millenium);
                 command.AddParam("@year", currentDate.Year);
                 command.AddParam("@week", currentDate.Week);
@@ -101,6 +111,7 @@ namespace OnlyWar.Helpers.Database.GameState
                 command.AddParam("@scenarioBriefingText", scenario?.BriefingText);
                 command.AddParam("@scenarioOriginalAuthorityCharacterId",
                     scenario?.OriginalAuthorityCharacterId ?? 0);
+                command.AddParam("@homeWorldPlanetId", homeWorldPlanetId);
                 command.ExecuteNonQuery();
             }
         }

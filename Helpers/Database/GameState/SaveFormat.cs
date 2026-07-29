@@ -2,6 +2,6 @@ namespace OnlyWar.Helpers.Database.GameState
 {
     internal static class SaveFormat
     {
-        internal const int CurrentVersion = 2;
+        internal const int CurrentVersion = 3;
     }
 }

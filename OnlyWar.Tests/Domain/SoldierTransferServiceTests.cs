@@ -478,6 +478,101 @@ public class SoldierTransferServiceTests
         Assert.Equal(master, soldier.Template);
     }
 
+    [Fact]
+    public void ApplyTransfer_BlocksCompatibilityBearingScoutRoleChange()
+    {
+        SoldierTemplate scout = CreateTemplate(60, "Scout Marine", 1, false);
+        SoldierTemplate devastator = CreateTemplate(61, "Devastator Marine", 2, false);
+        SquadTemplate scoutTemplate = CreateSquadTemplate(
+            "Scout Squad", SquadTypes.Scout, (scout, 0, 4));
+        SquadTemplate devastatorTemplate = CreateSquadTemplate(
+            "Devastator Squad", SquadTypes.Heavy, (devastator, 0, 4));
+        Unit chapter = CreateUnit("Chapter");
+        Squad source = AddSquad(chapter, "Scout Squad", scoutTemplate);
+        Squad target = AddSquad(chapter, "Devastator Squad", devastatorTemplate);
+        PlayerSoldier neophyte = AddPlayerSoldier(source, scout, "Neophyte Marius");
+        neophyte.GeneticCompatibility = 0.92f;
+        SoldierTransferOption option = new(
+            target.Id,
+            devastator,
+            "Devastator Marine, Devastator Squad, Chapter");
+
+        bool transferred = _service.ApplyTransfer(
+            neophyte,
+            option,
+            chapter.GetAllSquads().ToDictionary(squad => squad.Id),
+            _date);
+
+        Assert.False(transferred);
+        Assert.Same(source, neophyte.AssignedSquad);
+        Assert.Equal(scout, neophyte.Template);
+    }
+
+    [Fact]
+    public void RequiresBlackCarapace_FoundingScoutCanPromoteImmediately()
+    {
+        SoldierTemplate scout = CreateTemplate(60, "Scout Marine", 1, false);
+        SoldierTemplate devastator = CreateTemplate(61, "Devastator Marine", 2, false);
+        PlayerSoldier foundingScout = new(
+            TestModelFactory.CreateSoldier(scout, "Scout Marius"),
+            "Scout Marius");
+        SoldierTransferOption option = new(
+            42,
+            devastator,
+            "Devastator Marine, Devastator Squad, Chapter");
+
+        Assert.Null(foundingScout.GeneticCompatibility);
+        Assert.False(SoldierTransferService.RequiresBlackCarapace(
+            foundingScout, option));
+    }
+
+    [Fact]
+    public void RequiresBlackCarapace_DoesNotBlockLaterBattleBrotherPromotion()
+    {
+        SoldierTemplate devastator = CreateTemplate(61, "Devastator Marine", 2, false);
+        SoldierTemplate sergeant = CreateTemplate(62, "Sergeant", 3, true);
+        SquadTemplate devastatorTemplate = CreateSquadTemplate(
+            "Devastator Squad", SquadTypes.Heavy, (devastator, 0, 4), (sergeant, 0, 1));
+        Unit chapter = CreateUnit("Chapter");
+        Squad squad = AddSquad(chapter, "Devastator Squad", devastatorTemplate);
+        PlayerSoldier battleBrother = AddPlayerSoldier(
+            squad, devastator, "Brother Marius");
+        battleBrother.GeneticCompatibility = 0.92f;
+        SoldierTransferOption option = new(
+            squad.Id,
+            sergeant,
+            "Sergeant, Devastator Squad, Chapter");
+
+        Assert.False(SoldierTransferService.RequiresBlackCarapace(
+            battleBrother, option));
+    }
+
+    [Fact]
+    public void GetTransferOptions_AdministrativeHqOffersStaffLeaderSlotsUnderItsCaptain()
+    {
+        SoldierTemplate captain = CreateTemplate(50, "Captain", 6, true);
+        SoldierTemplate scoutSergeant = CreateTemplate(51, "Scout Sergeant", 5, true);
+        SquadTemplate administrativeTemplate = CreateSquadTemplate(
+            "Scout HQ Squad",
+            (captain, 1, 1),
+            (scoutSergeant, 0, 50));
+        SquadTemplate sourceTemplate = CreateSquadTemplate(
+            "Scout Squad",
+            (scoutSergeant, 1, 1));
+        Unit chapter = CreateUnit("Chapter");
+        Squad source = AddSquad(chapter, "Source Squad", sourceTemplate);
+        PlayerSoldier sergeant = AddPlayerSoldier(source, scoutSergeant, "Sergeant Marius");
+        Squad headquarters = AddSquad(chapter, "10th Company HQ", administrativeTemplate);
+        headquarters.AddSquadMember(TestModelFactory.CreateSoldier(captain, "Captain Aurelius"));
+        headquarters.IsAdministrative = true;
+
+        List<SoldierTransferOption> options = _service.GetTransferOptions(chapter, sergeant);
+
+        Assert.Contains(options, option =>
+            option.SquadId == headquarters.Id
+            && option.SoldierTemplate == scoutSergeant);
+    }
+
     private static PlayerSoldier AddPlayerSoldier(Squad squad, SoldierTemplate template, string name)
     {
         PlayerSoldier soldier = new(TestModelFactory.CreateSoldier(template, name), name);

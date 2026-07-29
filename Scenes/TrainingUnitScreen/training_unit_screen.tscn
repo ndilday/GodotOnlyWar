@@ -32,6 +32,29 @@ anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
 
+[node name="HeaderPanel" type="Panel" parent="TrainingUnitScreenView"]
+layout_mode = 1
+anchors_preset = 10
+anchor_right = 1.0
+offset_left = 16.0
+offset_top = 12.0
+offset_right = -68.0
+offset_bottom = 64.0
+grow_horizontal = 2
+
+[node name="Title" type="Label" parent="TrainingUnitScreenView/HeaderPanel"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+text = "10TH COMPANY — MASTER OF RECRUITMENT"
+horizontal_alignment = 1
+vertical_alignment = 1
+theme_override_colors/font_color = Color(0.96, 0.84, 0.52, 1)
+theme_override_font_sizes/font_size = 23
+
 [node name="CloseButton" type="Button" parent="TrainingUnitScreenView"]
 custom_minimum_size = Vector2(40, 40)
 layout_mode = 1
@@ -45,123 +68,53 @@ offset_bottom = 52.0
 grow_horizontal = 0
 text = "X"
 
-[node name="SquadList" type="Panel" parent="TrainingUnitScreenView"]
+[node name="SetupBanner" type="Label" parent="TrainingUnitScreenView"]
+visible = false
 layout_mode = 1
-anchors_preset = -1
-anchor_right = 0.5
+anchors_preset = 10
+anchor_right = 1.0
+offset_left = 16.0
+offset_top = 70.0
+offset_right = -16.0
+offset_bottom = 100.0
+grow_horizontal = 2
+text = "MANDATORY FOUNDING DOCTRINE"
+horizontal_alignment = 1
+vertical_alignment = 1
+theme_override_colors/font_color = Color(0.96, 0.45, 0.34, 1)
+
+[node name="Navigation" type="HBoxContainer" parent="TrainingUnitScreenView"]
+layout_mode = 1
+anchors_preset = 10
+anchor_right = 1.0
+offset_left = 16.0
+offset_top = 108.0
+offset_right = -16.0
+offset_bottom = 154.0
+grow_horizontal = 2
+alignment = 1
+theme_override_constants/separation = 8
+
+[node name="ContentPanel" type="Panel" parent="TrainingUnitScreenView"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
 anchor_bottom = 1.0
 offset_left = 16.0
-offset_top = 76.0
-offset_right = -6.0
-offset_bottom = -16.0
-
-[node name="Header" type="Panel" parent="TrainingUnitScreenView/SquadList"]
-custom_minimum_size = Vector2(0, 52)
-layout_mode = 1
-anchors_preset = 10
-anchor_right = 1.0
-offset_left = 12.0
-offset_top = 12.0
-offset_right = -12.0
-offset_bottom = 64.0
-grow_horizontal = 2
-
-[node name="Label" type="Label" parent="TrainingUnitScreenView/SquadList/Header"]
-layout_mode = 1
-anchors_preset = 15
-anchor_right = 1.0
-anchor_bottom = 1.0
-grow_horizontal = 2
-grow_vertical = 2
-text = "10th Company"
-horizontal_alignment = 1
-vertical_alignment = 1
-theme_override_colors/font_color = Color(0.96, 0.84, 0.52, 1)
-theme_override_font_sizes/font_size = 22
-
-[node name="ScrollContainer" type="ScrollContainer" parent="TrainingUnitScreenView/SquadList"]
-layout_mode = 1
-anchors_preset = 15
-anchor_right = 1.0
-anchor_bottom = 1.0
-offset_left = 12.0
-offset_top = 76.0
-offset_right = -12.0
-offset_bottom = -12.0
-grow_horizontal = 2
-grow_vertical = 2
-
-[node name="VBoxContainer" type="VBoxContainer" parent="TrainingUnitScreenView/SquadList/ScrollContainer"]
-layout_mode = 2
-size_flags_horizontal = 3
-theme_override_constants/separation = 7
-
-[node name="SquadReportPanel" type="Panel" parent="TrainingUnitScreenView"]
-layout_mode = 1
-anchors_preset = -1
-anchor_left = 0.5
-anchor_right = 1.0
-anchor_bottom = 1.0
-offset_left = 6.0
-offset_top = 76.0
+offset_top = 164.0
 offset_right = -16.0
 offset_bottom = -16.0
-
-[node name="Header" type="Panel" parent="TrainingUnitScreenView/SquadReportPanel"]
-custom_minimum_size = Vector2(0, 52)
-layout_mode = 1
-anchors_preset = 10
-anchor_right = 1.0
-offset_left = 12.0
-offset_top = 12.0
-offset_right = -12.0
-offset_bottom = 64.0
 grow_horizontal = 2
+grow_vertical = 2
 
-[node name="Label" type="Label" parent="TrainingUnitScreenView/SquadReportPanel/Header"]
+[node name="PageHost" type="Control" parent="TrainingUnitScreenView/ContentPanel"]
 layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
 anchor_bottom = 1.0
+offset_left = 10.0
+offset_top = 10.0
+offset_right = -10.0
+offset_bottom = -10.0
 grow_horizontal = 2
 grow_vertical = 2
-text = "10th Company Readiness Report"
-horizontal_alignment = 1
-vertical_alignment = 1
-theme_override_colors/font_color = Color(0.96, 0.84, 0.52, 1)
-theme_override_font_sizes/font_size = 22
-
-[node name="FocusHBox" type="HBoxContainer" parent="TrainingUnitScreenView/SquadReportPanel"]
-layout_mode = 1
-anchors_preset = -1
-anchor_right = 1.0
-offset_left = 12.0
-offset_top = 76.0
-offset_right = -12.0
-offset_bottom = 112.0
-
-[node name="FocusLabel" type="Label" parent="TrainingUnitScreenView/SquadReportPanel/FocusHBox"]
-layout_mode = 2
-custom_minimum_size = Vector2(110, 0)
-text = "Training Focus"
-vertical_alignment = 1
-theme_override_colors/font_color = Color(0.66, 0.6, 0.49, 1)
-
-[node name="FocusOption" type="OptionButton" parent="TrainingUnitScreenView/SquadReportPanel/FocusHBox"]
-layout_mode = 2
-size_flags_horizontal = 3
-
-[node name="RichTextLabel" type="RichTextLabel" parent="TrainingUnitScreenView/SquadReportPanel"]
-custom_minimum_size = Vector2(200, 100)
-layout_mode = 1
-anchors_preset = -1
-anchor_right = 1.0
-anchor_bottom = 1.0
-offset_left = 12.0
-offset_top = 124.0
-offset_right = -12.0
-offset_bottom = -12.0
-grow_horizontal = 2
-grow_vertical = 2
-bbcode_enabled = true
-text = "Select a squad to review its training readiness."

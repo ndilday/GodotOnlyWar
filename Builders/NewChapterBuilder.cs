@@ -137,7 +137,7 @@ namespace OnlyWar.Builders
                                                   Unit oob, ChapterGenerationTemplates templates)
         {
             // Rank every non-psyker for every founding role up front (score → derive
-            // demand → consume; Design/FoundingRoleAssignment.md). Each list is consumed
+            // demand → consume; Design/Reference/FoundingRoleAssignment.md). Each list is consumed
             // best-first; a soldier taken for one role is skipped by every other list.
             RoleSuitabilityService suitability = new(unassignedSoldierMap.Values.ToList());
             Dictionary<FoundingRole, List<PlayerSoldier>> roleLists =
@@ -470,7 +470,14 @@ namespace OnlyWar.Builders
                 {
                     continue;
                 }
-                for (int i = 0; i < element.MaximumNumber; i++)
+                // The Scout HQ's broader template capacity is the future recruitment
+                // staff roster, not a mandate to strip every Apothecary and Chaplain
+                // from the founding Chapter. Seed one of each support discipline just
+                // as before; the player fills the extra seats after winning a Home World.
+                int foundingMaximum = hq.SquadTemplate == templates.ScoutCompanyHeadquarters
+                    ? Math.Min(1, (int)element.MaximumNumber)
+                    : element.MaximumNumber;
+                for (int i = 0; i < foundingMaximum; i++)
                 {
                     if (!AssignSoldier(unassignedSoldierMap, roleLists[role.Value], hq,
                         element.SoldierTemplate, year))

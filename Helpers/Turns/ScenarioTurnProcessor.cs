@@ -2,6 +2,8 @@ using OnlyWar.Builders;
 using OnlyWar.Helpers.Simulation;
 using OnlyWar.Models;
 using OnlyWar.Models.Planets;
+using OnlyWar.Models.Recruitment;
+using OnlyWar.Helpers.Recruitment;
 using System;
 using System.Linq;
 
@@ -12,12 +14,11 @@ namespace OnlyWar.Helpers.Turns
     /// </summary>
     internal sealed class ScenarioTurnProcessor
     {
-        // Resolution reads only the promised world's own board, so nothing is kept from the
-        // session; the session-shaped constructor is retained so this processor is built like
-        // every other one in the turn loop.
+        private readonly GameSession _session;
+
         internal ScenarioTurnProcessor(GameSession session)
         {
-            ArgumentNullException.ThrowIfNull(session);
+            _session = session ?? throw new ArgumentNullException(nameof(session));
         }
 
         internal bool TryResolve(Sector sector, out string notification)
@@ -63,6 +64,9 @@ namespace OnlyWar.Helpers.Turns
             {
                 scenario.State = ObjectiveState.Won;
                 SectorBuilder.ReplaceChapterPlanetFaction(promised, player);
+                sector.PlayerForce.HomeWorldPlanetId = promised.Id;
+                sector.PlayerForce.RecruitmentProgram = CreateFoundingRecruitmentProgram(promised);
+                SetTenthCompanyHeadquartersAdministrative(sector, promised);
                 Character lord = sector.GetSectorLord();
                 if (lord != null)
                 {
@@ -79,6 +83,89 @@ namespace OnlyWar.Helpers.Turns
             }
 
             return false;
+        }
+
+        private RecruitmentProgram CreateFoundingRecruitmentProgram(Planet homeWorld)
+        {
+            Date established = new(
+                _session.CurrentDate.Millenium,
+                _session.CurrentDate.Year,
+                _session.CurrentDate.Week);
+            RecruitmentProgram program = new()
+            {
+                Id = 1,
+                HomeWorldPlanetId = homeWorld.Id,
+                EstablishedDate = established,
+                IsSetupComplete = false,
+                WorldType = GetRecruitmentWorldType(homeWorld)
+            };
+
+            // The liberation bootstrap represents the surviving male children who are already
+            // ages ten through twelve. It is an aggregate pool, not hundreds of thousands of
+            // individual records; children become individuals only after passing all screens.
+            long chapterPopulation =
+                homeWorld.Regions.Sum(region =>
+                    region.RegionFactionMap.TryGetValue(
+                        _session.Sector.PlayerForce.Faction.Id,
+                        out RegionFaction chapterRegion)
+                            && chapterRegion.IsPublic
+                            ? chapterRegion.Population
+                            : 0);
+            program.UnscreenedCohorts.Add(new RecruitmentCohort
+            {
+                Id = 1,
+                CreatedDate = established,
+                RemainingPopulation =
+                    RecruitmentRules.CalculateFoundingCohortPopulation(chapterPopulation),
+                MinimumAgeAtCreation = RecruitmentRules.FoundingCohortMinimumAge,
+                MaximumAgeAtCreation = RecruitmentRules.FoundingCohortMaximumAge,
+                IsFoundingCohort = true
+            });
+            program.ProgramEvents.Add(new RecruitmentProgramEvent
+            {
+                Date = established,
+                Type = RecruitmentEventType.ProgramEstablished,
+                Count = 1,
+                Detail = $"The Chapter established its first recruitment program on {homeWorld.Name}."
+            });
+            return program;
+        }
+
+        private void SetTenthCompanyHeadquartersAdministrative(Sector sector, Planet homeWorld)
+        {
+            var scoutCompany = sector.PlayerForce.Army.OrderOfBattle.ChildUnits
+                .FirstOrDefault(unit =>
+                    unit.UnitTemplate == _session.Rules.ChapterTemplates.ScoutCompany);
+            if (scoutCompany?.HQSquad != null)
+            {
+                var headquarters = scoutCompany.HQSquad;
+                var previousOrder = headquarters.CurrentOrders;
+                headquarters.IsAdministrative = true;
+                if (previousOrder?.AssignedSquads.Count == 0)
+                {
+                    sector.RemoveOrder(previousOrder);
+                }
+                Region capital = homeWorld.Regions.FirstOrDefault(
+                    region => region.Id == homeWorld.CapitalRegionId)
+                    ?? homeWorld.Regions.First();
+                headquarters.CurrentRegion = capital;
+                if (capital.RegionFactionMap.TryGetValue(
+                    sector.PlayerForce.Faction.Id, out RegionFaction chapterPresence)
+                    && !chapterPresence.LandedSquads.Contains(headquarters))
+                {
+                    chapterPresence.LandedSquads.Add(headquarters);
+                }
+            }
+        }
+
+        private static RecruitmentWorldType GetRecruitmentWorldType(Planet planet)
+        {
+            return planet?.Template?.Name switch
+            {
+                "Feral" => RecruitmentWorldType.Feral,
+                "Death" => RecruitmentWorldType.Death,
+                _ => RecruitmentWorldType.Standard
+            };
         }
 
         // Whether any faction matching the predicate openly holds ground somewhere on the world.

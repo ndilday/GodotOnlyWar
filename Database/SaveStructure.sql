@@ -14,9 +14,9 @@ CREATE TABLE Fleet (Id INTEGER PRIMARY KEY UNIQUE NOT NULL, FactionId INTEGER NO
 
 -- Table: GlobalData
 -- Scenario* columns carry the optional Opening Scenario state (Design/OpeningScenario.md §7).
--- ScenarioType 0 (None) means no scenario; legacy saves that predate these columns load with
--- Scenario == null via a column-count guard in GlobalDataAccess.
-CREATE TABLE GlobalData (Millenium INTEGER NOT NULL, Year INTEGER NOT NULL, Week INTEGER NOT NULL, SaveVersion INTEGER NOT NULL, Requisition INTEGER NOT NULL DEFAULT 0, GeneseedStockpile INTEGER NOT NULL DEFAULT 0, GeneseedPurity REAL NOT NULL DEFAULT 1.0, ScenarioType INTEGER NOT NULL DEFAULT 0, ScenarioPromisedPlanetId INTEGER NOT NULL DEFAULT 0, ScenarioState INTEGER NOT NULL DEFAULT 0, ScenarioBriefingAcknowledged BOOLEAN NOT NULL DEFAULT 0, ScenarioBriefingText TEXT, ScenarioOriginalAuthorityCharacterId INTEGER NOT NULL DEFAULT 0);
+-- ScenarioType 0 (None) means no scenario. HomeWorldPlanetId remains null until the
+-- Promised World is won. Format v3 is an intentional clean break from older saves.
+CREATE TABLE GlobalData (Millenium INTEGER NOT NULL, Year INTEGER NOT NULL, Week INTEGER NOT NULL, SaveVersion INTEGER NOT NULL, Requisition INTEGER NOT NULL DEFAULT 0, GeneseedStockpile INTEGER NOT NULL DEFAULT 0, GeneseedPurity REAL NOT NULL DEFAULT 1.0, ScenarioType INTEGER NOT NULL DEFAULT 0, ScenarioPromisedPlanetId INTEGER NOT NULL DEFAULT 0, ScenarioState INTEGER NOT NULL DEFAULT 0, ScenarioBriefingAcknowledged BOOLEAN NOT NULL DEFAULT 0, ScenarioBriefingText TEXT, ScenarioOriginalAuthorityCharacterId INTEGER NOT NULL DEFAULT 0, HomeWorldPlanetId INTEGER REFERENCES Planet (Id));
 
 -- Table: HitLocation
 CREATE TABLE HitLocation (SoldierId INTEGER NOT NULL REFERENCES Soldier (Id), HitLocationTemplateId INTEGER NOT NULL, IsCybernetic BOOLEAN NOT NULL, Armor REAL NOT NULL, WoundTotal INTEGER NOT NULL, WeeksOfHealing INTEGER);
@@ -25,6 +25,40 @@ CREATE TABLE HitLocation (SoldierId INTEGER NOT NULL REFERENCES Soldier (Id), Hi
 -- A medical procedure in progress in the Apothecarium (PRD 4.8 / 5.3). HitLocationTemplateId
 -- is a rules-data id (no save-DB table), matching HitLocation's column of the same name.
 CREATE TABLE MedicalProcedure (SoldierId INTEGER NOT NULL REFERENCES Soldier (Id), HitLocationTemplateId INTEGER NOT NULL, ProcedureType INTEGER NOT NULL, WeeksRemaining INTEGER NOT NULL, RequisitionCost INTEGER NOT NULL);
+
+-- Table: RecruitmentProgram
+-- Recruitment is limited to the Chapter Home World in v1. Dates are stored as total
+-- campaign weeks, matching Request/Pledge persistence, so the data layer stays independent
+-- of the evolving recruitment domain model.
+CREATE TABLE RecruitmentProgram (Id INTEGER PRIMARY KEY UNIQUE NOT NULL, HomeWorldPlanetId INTEGER NOT NULL REFERENCES Planet (Id), IsConfigured BOOLEAN NOT NULL, Policy INTEGER NOT NULL, WorldType INTEGER NOT NULL, StrengthThreshold INTEGER NOT NULL, ConstitutionThreshold INTEGER NOT NULL, IntelligenceThreshold INTEGER NOT NULL, DexterityThreshold INTEGER NOT NULL, EgoThreshold INTEGER NOT NULL, GeneticCompatibilityThreshold REAL NOT NULL, EstablishedDate INTEGER NOT NULL, LastProcessedDate INTEGER);
+
+-- Table: RecruitmentUnscreenedCohort
+-- Aggregate cohorts avoid materializing planetary populations. RemainingPopulation is REAL
+-- because expected-value screening and the founding-pool decay both preserve fractions.
+CREATE TABLE RecruitmentUnscreenedCohort (Id INTEGER PRIMARY KEY UNIQUE NOT NULL, ProgramId INTEGER NOT NULL REFERENCES RecruitmentProgram (Id), CreatedDate INTEGER NOT NULL, RemainingPopulation REAL NOT NULL, MinimumAgeAtCreation REAL NOT NULL, MaximumAgeAtCreation REAL NOT NULL, IsFoundingPool BOOLEAN NOT NULL);
+
+-- Table: RecruitmentCandidate
+-- Qualified candidates are individual records; threshold changes never rewrite these rows.
+CREATE TABLE RecruitmentCandidate (Id INTEGER PRIMARY KEY UNIQUE NOT NULL, ProgramId INTEGER NOT NULL REFERENCES RecruitmentProgram (Id), SourcePlanetId INTEGER NOT NULL REFERENCES Planet (Id), BirthDate INTEGER NOT NULL, Strength REAL NOT NULL, Constitution REAL NOT NULL, Intelligence REAL NOT NULL, Dexterity REAL NOT NULL, Ego REAL NOT NULL, GeneticCompatibility REAL NOT NULL, QualificationDate INTEGER NOT NULL, Designation STRING NOT NULL);
+
+-- Table: RecruitmentAspirant
+-- Aspirant ids share the soldier id sequence so a promoted neophyte can retain identity.
+CREATE TABLE RecruitmentAspirant (Id INTEGER PRIMARY KEY UNIQUE NOT NULL, ProgramId INTEGER NOT NULL REFERENCES RecruitmentProgram (Id), SourcePlanetId INTEGER NOT NULL REFERENCES Planet (Id), BirthDate INTEGER NOT NULL, Strength REAL NOT NULL, Constitution REAL NOT NULL, Intelligence REAL NOT NULL, Dexterity REAL NOT NULL, Ego REAL NOT NULL, GeneticCompatibility REAL NOT NULL, AdmissionDate INTEGER NOT NULL, CurrentPhase INTEGER NOT NULL, PhaseStartedDate INTEGER NOT NULL, WeeksInCurrentPhase INTEGER NOT NULL, TrainingProgress REAL NOT NULL, Designation STRING NOT NULL);
+
+-- Table: RecruitmentAspirantSkill
+CREATE TABLE RecruitmentAspirantSkill (AspirantId INTEGER NOT NULL REFERENCES RecruitmentAspirant (Id), BaseSkillId INTEGER NOT NULL, PointsInvested REAL NOT NULL, PRIMARY KEY (AspirantId, BaseSkillId));
+
+-- Table: RecruitmentAspirantEvent
+-- Aspirant histories remain private to recruitment and do not enter PlayerFactionEvent.
+CREATE TABLE RecruitmentAspirantEvent (AspirantId INTEGER NOT NULL REFERENCES RecruitmentAspirant (Id), EventDate INTEGER NOT NULL, EventType INTEGER NOT NULL, Detail STRING NOT NULL);
+
+-- Table: RecruitmentProcedure
+-- Phase 12 aspirant-to-neophyte promotion is immediate and has no procedure row.
+CREATE TABLE RecruitmentProcedure (Id INTEGER PRIMARY KEY UNIQUE NOT NULL, ProgramId INTEGER NOT NULL REFERENCES RecruitmentProgram (Id), AspirantId INTEGER NOT NULL, GeneticCompatibility REAL NOT NULL, ProcedureType INTEGER NOT NULL, Phase INTEGER NOT NULL, Status INTEGER NOT NULL, AssignedApothecarySoldierId INTEGER NOT NULL, WeeksRemaining INTEGER NOT NULL, ReservedSquadId INTEGER REFERENCES Squad (Id));
+
+-- Table: RecruitmentProgramLog
+-- Dead aspirants are deleted; their aggregate outcome survives only in this bounded program log.
+CREATE TABLE RecruitmentProgramLog (ProgramId INTEGER NOT NULL REFERENCES RecruitmentProgram (Id), EventDate INTEGER NOT NULL, EventType INTEGER NOT NULL, EventCount INTEGER NOT NULL, Entry STRING NOT NULL);
 
 -- Table: Planet
 CREATE TABLE Planet (Id INTEGER PRIMARY KEY UNIQUE NOT NULL, PlanetTemplateId INTEGER NOT NULL, Name STRING NOT NULL UNIQUE, x INTEGER NOT NULL, y INTEGER NOT NULL, Importance INTEGER NOT NULL, TaxLevel INTEGER NOT NULL, CapitalRegionId INTEGER);
@@ -54,7 +88,7 @@ CREATE TABLE PlayerFactionSubEvent (PlayerFactionEventId INTEGER REFERENCES Play
 CREATE TABLE PlayerFactionEvent (Id INTEGER PRIMARY KEY UNIQUE NOT NULL, Millenium INTEGER NOT NULL, Year INTEGER NOT NULL, Week INTEGER NOT NULL, Title TEXT NOT NULL);
 
 -- Table: PlayerSoldier
-CREATE TABLE PlayerSoldier (SoldierId INTEGER PRIMARY KEY REFERENCES Soldier (Id) UNIQUE NOT NULL, ImplantMillenium INTEGER NOT NULL, ImplantYear INTEGER NOT NULL, ImplantWeek INTEGER NOT NULL);
+CREATE TABLE PlayerSoldier (SoldierId INTEGER PRIMARY KEY REFERENCES Soldier (Id) UNIQUE NOT NULL, ImplantMillenium INTEGER NOT NULL, ImplantYear INTEGER NOT NULL, ImplantWeek INTEGER NOT NULL, GeneticCompatibility REAL, RecruitmentBirthMillenium INTEGER, RecruitmentBirthYear INTEGER, RecruitmentBirthWeek INTEGER);
 
 -- Table: SoldierEvaluation
 CREATE TABLE SoldierEvaluation (SoldierId INTEGER NOT NULL REFERENCES Soldier (Id), Millenium INTEGER NOT NULL, Year INTEGER NOT NULL, Week INTEGER NOT NULL);
@@ -95,7 +129,7 @@ CREATE TABLE Soldier (Id INTEGER PRIMARY KEY NOT NULL UNIQUE, SoldierTemplateId 
 CREATE TABLE SoldierSkill (SoldierId INTEGER NOT NULL REFERENCES Soldier (Id), BaseSkillId INTEGER NOT NULL, PointsInvested REAL NOT NULL);
 
 -- Table: Squad
-CREATE TABLE Squad (Id INTEGER PRIMARY KEY UNIQUE NOT NULL, SquadTemplateId INTEGER NOT NULL, ParentUnitId INTEGER NOT NULL REFERENCES Unit (Id), Name STRING NOT NULL, LoadedShipId INTEGER REFERENCES Ship (Id), LandedRegionId INTEGER REFERENCES Region(Id), TrainingFocus INTEGER NOT NULL DEFAULT 0);
+CREATE TABLE Squad (Id INTEGER PRIMARY KEY UNIQUE NOT NULL, SquadTemplateId INTEGER NOT NULL, ParentUnitId INTEGER NOT NULL REFERENCES Unit (Id), Name STRING NOT NULL, LoadedShipId INTEGER REFERENCES Ship (Id), LandedRegionId INTEGER REFERENCES Region(Id), TrainingFocus INTEGER NOT NULL DEFAULT 0, IsAdministrative BOOLEAN NOT NULL DEFAULT 0);
 
 -- Table: SquadWeaponSet
 CREATE TABLE SquadWeaponSet (SquadId INTEGER NOT NULL REFERENCES Squad (Id), WeaponSetId INTEGER NOT NULL);

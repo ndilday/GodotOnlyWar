@@ -171,10 +171,16 @@ public class SaveLoadRoundTripTests
         landedSquad.CurrentRegion = landedRegion;
         playerRegionFaction.LandedSquads.Add(landedSquad);
 
+        Squad administrativeSquad = armyRoot.GetAllSquads()
+            .First(s => s.Id != orderedSquad.Id && s.Id != landedSquad.Id);
+        administrativeSquad.IsAdministrative = true;
+
         PlayerSoldier eventSoldier = armyRoot.GetAllSquads()
             .SelectMany(s => s.Members)
             .OfType<PlayerSoldier>()
             .First();
+        eventSoldier.GeneticCompatibility = 0.93f;
+        eventSoldier.RecruitmentBirthDate = new Date(39, 486, 12);
         SoldierEvent battleEvent = new(_date, SoldierEventType.BattleParticipation,
             "Skirmish in the Northern Waste, Test World. Felled 4 Tyranids.",
             factionId: 7, magnitude: 4, locationName: "Northern Waste, Test World");
@@ -327,11 +333,24 @@ public class SaveLoadRoundTripTests
             Assert.Null(loadedLandedSquad.BoardedLocation);
             Assert.Contains(loadedLandedSquad, loadedPlayerRegionFaction.LandedSquads);
 
+            Squad loadedAdministrativeSquad = loaded.Units
+                .SelectMany(u => u.GetAllSquads())
+                .Single(s => s.Id == administrativeSquad.Id);
+            Assert.True(loadedAdministrativeSquad.IsAdministrative);
+            Assert.False(loadedAdministrativeSquad.IsOperational);
+            Assert.Null(loadedAdministrativeSquad.BoardedLocation);
+            Assert.Null(loadedAdministrativeSquad.CurrentRegion);
+            Assert.Null(loadedAdministrativeSquad.CurrentOrders);
+
             PlayerSoldier loadedEventSoldier = loaded.Units
                 .SelectMany(u => u.GetAllSquads())
                 .SelectMany(s => s.Members)
                 .OfType<PlayerSoldier>()
                 .Single(ps => ps.Id == eventSoldier.Id);
+            Assert.Equal(0.93f, loadedEventSoldier.GeneticCompatibility.Value, 3);
+            Assert.Equal(
+                eventSoldier.RecruitmentBirthDate,
+                loadedEventSoldier.RecruitmentBirthDate);
             SoldierEvent loadedEvent = loadedEventSoldier.SoldierEvents
                 .Single(e => e.Type == SoldierEventType.BattleParticipation);
             Assert.Equal(battleEvent.Detail, loadedEvent.Detail);

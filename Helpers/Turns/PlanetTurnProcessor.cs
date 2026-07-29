@@ -49,6 +49,7 @@ namespace OnlyWar.Helpers.Turns
         private readonly TurnIntelLedger _intelLedger;
         private readonly GovernorTurnProcessor _governorTurnProcessor;
         private readonly CivilUnrestTurnProcessor _civilUnrestTurnProcessor;
+        private readonly Dictionary<(int PlanetId, int FactionId), long> _organicPopulationGrowth = [];
         private readonly ICollection<FortificationTransferReport> _fortificationTransfers;
 
         internal PlanetTurnProcessor(
@@ -69,6 +70,22 @@ namespace OnlyWar.Helpers.Turns
         internal void ClearTurnIntelGains()
         {
             _intelLedger.Clear();
+        }
+
+        // Recruitment must use demographic growth rather than the world's raw before/after
+        // population delta (which also contains battle deaths, migration, conversion, and
+        // consumption). The turn controller clears this ledger once per campaign week and the
+        // recruitment processor reads the Home World's player-faction entry after planet updates.
+        internal void ClearOrganicPopulationGrowth()
+        {
+            _organicPopulationGrowth.Clear();
+        }
+
+        internal long GetOrganicPopulationGrowth(int planetId, int factionId)
+        {
+            return _organicPopulationGrowth.TryGetValue((planetId, factionId), out long growth)
+                ? growth
+                : 0;
         }
 
         internal void RecordIntelGain(PlanetFaction planetFaction, Region region, float gain)
@@ -213,6 +230,10 @@ namespace OnlyWar.Helpers.Turns
                 regionFaction.Population = 0;
             }
             long grown = regionFaction.Population - populationBeforeGrowth;
+            (int PlanetId, int FactionId) growthKey =
+                (regionFaction.Region.Planet.Id, regionFaction.PlanetFaction.Faction.Id);
+            _organicPopulationGrowth[growthKey] =
+                GetOrganicPopulationGrowth(growthKey.PlanetId, growthKey.FactionId) + grown;
             RecordScenarioNaturalPopulationChange(regionFaction, grown);
             if (isOverrunRemnant && grown > 0)
             {

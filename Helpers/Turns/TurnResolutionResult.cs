@@ -25,6 +25,7 @@ namespace OnlyWar.Helpers.Turns
         // inside the planetary sim without producing a MissionContext, so like construction they
         // have to be carried out of the turn separately or the report cannot mention them.
         internal List<GovernorRequestReport> GovernorRequestReports { get; } = new();
+        internal RecruitmentTurnReport RecruitmentReport { get; set; }
         internal string ScenarioNotification { get; set; }
 
         internal void Clear()
@@ -35,6 +36,7 @@ namespace OnlyWar.Helpers.Turns
             ConstructionReports.Clear();
             FortificationTransfers.Clear();
             GovernorRequestReports.Clear();
+            RecruitmentReport = null;
             ScenarioNotification = null;
         }
     }

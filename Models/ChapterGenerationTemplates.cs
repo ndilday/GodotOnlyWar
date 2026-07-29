@@ -63,6 +63,7 @@ namespace OnlyWar.Models
         public SquadTemplate AssaultSquad { get; }
         public SquadTemplate DevastatorSquad { get; }
         public SquadTemplate ScoutSquad { get; }
+        public SquadTemplate ScoutCompanyHeadquarters { get; }
 
         // Chapter-level specialist squad templates (used to locate the generated
         // chapter HQ squads by template identity rather than display name).
@@ -113,6 +114,7 @@ namespace OnlyWar.Models
             AssaultSquad = ResolveSquad(faction, "Assault Squad");
             DevastatorSquad = ResolveSquad(faction, "Devastator Squad");
             ScoutSquad = ResolveSquad(faction, "Scout Squad");
+            ScoutCompanyHeadquarters = ResolveSquad(faction, "Scout HQ Squad");
 
             Librarius = ResolveSquad(faction, "Librarius");
             Armory = ResolveSquad(faction, "Armory");

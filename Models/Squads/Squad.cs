@@ -15,9 +15,49 @@ namespace OnlyWar.Models.Squads
     {
         private static int _nextId = 0;
         private readonly List<ISoldier> _members;
+        private bool _isAdministrative;
         public int Id { get; }
         public string Name { get; set; }
         public SquadTemplate SquadTemplate { get; }
+        public bool IsAdministrative
+        {
+            get => _isAdministrative;
+            set
+            {
+                if (_isAdministrative == value)
+                {
+                    return;
+                }
+
+                _isAdministrative = value;
+                if (!value)
+                {
+                    return;
+                }
+
+                // Administrative duty is mutually exclusive with an operational
+                // posting. The 10th Company HQ may be aboard ship, landed, or under
+                // orders when the Home World is won, so activating it must detach all
+                // three pieces of operational state in one place.
+                if (CurrentOrders != null)
+                {
+                    CurrentOrders.AssignedSquads.Remove(this);
+                    CurrentOrders = null;
+                }
+                BoardedLocation?.RemoveSquad(this);
+                BoardedLocation = null;
+                if (CurrentRegion != null
+                    && Faction != null
+                    && CurrentRegion.RegionFactionMap.TryGetValue(
+                        Faction.Id, out RegionFaction regionFaction))
+                {
+                    regionFaction.LandedSquads.Remove(this);
+                }
+                CurrentRegion = null;
+            }
+        }
+        public bool IsOperational =>
+            !_isAdministrative && SquadTemplate?.IsOperational == true;
         public ISoldier SquadLeader { get => Members.FirstOrDefault(m => m.Template.IsSquadLeader); }
         public IReadOnlyCollection<ISoldier> Members { get => _members; }
         public Faction Faction
@@ -43,6 +83,7 @@ namespace OnlyWar.Models.Squads
             Name = name;
             ParentUnit = parentUnit;
             SquadTemplate = template;
+            _isAdministrative = template?.IsOperational == false;
             _members = [];
             //AssignedVehicles = new List<int>();
             Loadout = [];
@@ -58,6 +99,7 @@ namespace OnlyWar.Models.Squads
             Name = name;
             ParentUnit = parentUnit;
             SquadTemplate = template;
+            _isAdministrative = template?.IsOperational == false;
             _members = [];
             //AssignedVehicles = new List<int>();
             Loadout = [];
@@ -66,6 +108,7 @@ namespace OnlyWar.Models.Squads
         public object Clone()
         {
             Squad clone = new Squad(Id, Name, ParentUnit, SquadTemplate);
+            clone.IsAdministrative = IsAdministrative;
             foreach (ISoldier soldier in Members)
             {
                 clone.AddSquadMember((ISoldier)soldier.Clone());

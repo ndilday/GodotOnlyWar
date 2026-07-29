@@ -134,7 +134,10 @@ public partial class RegionScreenView : CommandWorkspaceView
         _missionsFlagRow.Visible = factionBadges?.Count > 0;
     }
 
-    public void SetMissions(IReadOnlyList<AvailableMission> missions, AvailableMission selected)
+    public void SetMissions(
+        IReadOnlyList<AvailableMission> missions,
+        AvailableMission selected,
+        IReadOnlySet<string> assignedMissionKeys)
     {
         foreach (Button button in _missionButtons)
         {
@@ -146,13 +149,18 @@ public partial class RegionScreenView : CommandWorkspaceView
 
         foreach (AvailableMission mission in missions)
         {
+            bool isAssigned = assignedMissionKeys?.Contains(mission.IdentityKey) == true;
+            string missionText = mission.Kind == MissionAvailabilityKind.Special
+                ? $"{mission.Label} (Special)"
+                : mission.Label;
+
             Button button = new()
             {
-                Text = mission.Kind == MissionAvailabilityKind.Special ? $"{mission.Label} (Special)" : mission.Label,
+                Text = missionText,
                 TooltipText = GetMissionDescription(mission),
                 ToggleMode = true,
                 ButtonGroup = _missionButtonGroup,
-                ButtonPressed = selected != null && selected.Kind == mission.Kind && selected.Label == mission.Label,
+                ButtonPressed = mission.RepresentsSameOption(selected),
                 MouseDefaultCursorShape = CursorShape.PointingHand,
                 CustomMinimumSize = new Vector2(0, 46),
                 SizeFlagsHorizontal = SizeFlags.ExpandFill,
@@ -162,13 +170,19 @@ public partial class RegionScreenView : CommandWorkspaceView
             IconAtlas.Apply(button, GetMissionIconKey(mission.Kind), 0);
             AvailableMission capturedMission = mission;
             button.Pressed += () => MissionSelected?.Invoke(this, capturedMission);
-            Color accent = mission.Kind == MissionAvailabilityKind.Special ? OnlyWarStyle.Gold : OnlyWarStyle.PlayerAccent;
-            OnlyWarStyle.ApplyAccentButtonRow(button, button.ButtonPressed, accent);
+            Color accent = isAssigned
+                ? OnlyWarStyle.MedicalStable
+                : mission.Kind == MissionAvailabilityKind.Special
+                    ? OnlyWarStyle.Gold
+                    : OnlyWarStyle.PlayerAccent;
+            OnlyWarStyle.ApplyAccentButtonRow(
+                button, button.ButtonPressed || isAssigned, accent);
             // Re-apply the accent styling whenever the toggle state changes so a button the
             // ButtonGroup silently deselects (e.g. selecting a mission in the other column)
-            // doesn't keep its highlighted "normal" stylebox.
+            // doesn't keep its selected stylebox. Assigned missions retain their green treatment.
             Button capturedButton = button;
-            button.Toggled += pressed => OnlyWarStyle.ApplyAccentButtonRow(capturedButton, pressed, accent);
+            button.Toggled += pressed => OnlyWarStyle.ApplyAccentButtonRow(
+                capturedButton, pressed || isAssigned, accent);
             _missionButtons.Add(button);
             _missionsListStack.AddChild(button);
         }
