@@ -1,4 +1,5 @@
 using OnlyWar.Helpers.Battles.Actions;
+using OnlyWar.Helpers.UI;
 using OnlyWar.Models.Battles;
 using OnlyWar.Models.Equippables;
 using OnlyWar.Models.Squads;
@@ -592,7 +593,13 @@ namespace OnlyWar.Helpers.Battles
                 return "infantry";
             }
 
-            SquadTypes type = squad.Squad?.SquadTemplate?.SquadType ?? SquadTypes.None;
+            SquadTemplate template = squad.Squad?.SquadTemplate;
+            if (squad.IsPlayerSquad)
+            {
+                return IconAtlas.GetSquadIconKey(template);
+            }
+
+            SquadTypes type = template?.SquadType ?? SquadTypes.None;
             if ((type & SquadTypes.HQ) != 0) return "hq";
             if ((type & SquadTypes.Scout) != 0) return "scout";
             if ((type & SquadTypes.Elite) != 0) return "elite";

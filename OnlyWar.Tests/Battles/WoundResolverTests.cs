@@ -116,11 +116,29 @@ public class WoundResolverTests
             woundTotal: (uint)WoundLevel.Critical,
             weeksOfHealing: 0);
         uint before = location.Wounds.WoundTotal;
-        Enqueue(resolver, location, 20f);
+        WoundResolution wound = Enqueue(resolver, location, 20f);
 
         resolver.Resolve();
 
         Assert.Equal(before, location.Wounds.WoundTotal);
+        Assert.Equal("The hit further mangles the Test Location\n", wound.Description);
+    }
+
+    [Fact]
+    public void Resolve_DescribesEarlierQueuedHitWhenLaterHitSeversLocation()
+    {
+        WoundResolver resolver = new();
+        HitLocation location = new(Template(severWound: (uint)WoundLevel.Critical));
+        BattleSoldier sufferer = CreateSufferer(location);
+        WoundResolution earlierHit = Enqueue(resolver, location, 10f, sufferer);
+        WoundResolution laterHit = Enqueue(resolver, location, 10f, sufferer);
+
+        resolver.Resolve();
+
+        Assert.Equal("The hit further mangles the Test Location\n", earlierHit.Description);
+        Assert.Equal(
+            "Wounded Marine suffers Critical wound to Test Location\n",
+            laterHit.Description);
     }
 
     [Fact]

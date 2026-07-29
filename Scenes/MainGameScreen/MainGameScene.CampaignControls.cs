@@ -13,6 +13,8 @@ using System.Linq;
 
 public partial class MainGameScene
 {
+    private const int GlobalOverlayZIndex = 100;
+
     private enum PendingNavigationKind
     {
         None,
@@ -126,6 +128,10 @@ public partial class MainGameScene
             ?? throw new InvalidOperationException($"Could not load required UI scene {scenePath}.");
         T control = scene.Instantiate<T>();
         _mainUILayer.AddChild(control);
+        // Gameplay surfaces can contain children with an explicit positive Z index (the
+        // planet tactical hexes use 3). Keep global menus above the entire gameplay stack
+        // while preserving sibling order between the menu and its child dialogs.
+        control.ZIndex = GlobalOverlayZIndex;
         control.Visible = false;
         return control;
     }

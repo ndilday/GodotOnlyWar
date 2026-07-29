@@ -111,6 +111,10 @@ namespace OnlyWar.Helpers.Battles.Resolutions
                     }
                 }
             }
+            else
+            {
+                wound.Description = $"The hit further mangles the {wound.HitLocation.Template.Name}\n";
+            }
         }
     }
 

@@ -300,6 +300,33 @@ public class BattleReplaySummaryBuilderTests
         Assert.Equal("heavy", opposingFormation.IconKey);
     }
 
+    [Theory]
+    [InlineData(SquadTypes.None, "tactical")]
+    [InlineData(SquadTypes.Fast, "assault")]
+    [InlineData(SquadTypes.Heavy, "devastator")]
+    public void Build_UsesSharedSquadTypeIconForPlayerFormation(SquadTypes squadType, string expectedIconKey)
+    {
+        BattleSquad playerSquad = CreateBattleSquad(
+            true,
+            "Alpha",
+            squadType,
+            "Sergeant Alpha",
+            "Brother Alpha");
+        BattleHistory history = CreateHistory(
+            playerSquad,
+            CreateBattleSquad(false, "Cult Mob", "Cultist One"));
+
+        BattleReplayDisplay display = new BattleReplaySummaryBuilder().Build(history, 0, playerSquad.Id);
+
+        BattleForceHierarchyNode playerFormation = Assert.Single(
+            display.ForceHierarchy,
+            node => node.IsPlayerForce)
+            .Children
+            .SelectMany(node => node.Children)
+            .Single(node => node.FormationId == playerSquad.Id);
+        Assert.Equal(expectedIconKey, playerFormation.IconKey);
+    }
+
     [Fact]
     public void Build_ReportsActiveWeaponSetsIncludingImplicitDefaultMembers()
     {
