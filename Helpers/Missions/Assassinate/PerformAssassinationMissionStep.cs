@@ -15,7 +15,7 @@ namespace OnlyWar.Helpers.Missions.Assassinate
     {
         public string Description => "Assassination Mission";
 
-        public void ExecuteMissionStep(MissionExecutionContext execution, float marginOfSuccess, IMissionStep returnStep)
+        public MissionStepResult ExecuteMissionStep(MissionExecutionContext execution, float marginOfSuccess, IMissionStep resumeStep)
         {
             MissionContext context = execution.State;
             BaseSkill tactics = execution.Rules.Tactics;
@@ -41,7 +41,10 @@ namespace OnlyWar.Helpers.Missions.Assassinate
             float difficulty = (float)((
                     RegionDefenses.GetShared(enemyFaction, DefenseType.Entrenchment)
                     + enemyFaction.GetOwnRegionIntel()) * 0.5)
-                + MissionStealthDifficulty.Magnitude(enemyFaction.GetDeployedStrength());
+                + MissionStealthDifficulty.Magnitude(enemyFaction.GetDeployedStrength())
+                // Aggression's EFFECT axis: taking the shot is what boldness buys. A force unwilling to
+                // expose itself cannot get close enough for a clean kill.
+                + MissionAggressionModifiers.EffectDifficulty(context.Order.LevelOfAggression);
             LeaderMissionTest missionTest = new LeaderMissionTest(tactics, difficulty);
             float margin = missionTest.RunMissionCheck(context.MissionSquads, execution.Random);
             
@@ -71,20 +74,15 @@ namespace OnlyWar.Helpers.Missions.Assassinate
             // to let DetectedMissionStep replace OpposingSquads with an interceptor patrol, meaning
             // the located target never entered battle and bodyguard/interceptor kills could be
             // mistaken for the objective.
-            new MeetingEngagementMissionStep().ExecuteMissionStep(
-                execution,
+            // The withdrawal runs whatever the engagement's outcome, so it is a mandatory follow-up
+            // rather than the engagement's resume target - MeetingEngagementMissionStep declines to
+            // resume when the force is spent, which would strand a force that withdrew under fire but
+            // could still walk home. WithdrawIfAbleMissionStep carries the two conditions this step
+            // used to apply inline (still able to continue, and standing on ground it does not hold).
+            return MissionStepResult.Continue(
+                new MeetingEngagementMissionStep(),
                 margin,
-                returnStep: null);
-
-            if (!context.MissionSquads.Any(s => s.ShouldContinueMission()))
-            {
-                return;
-            }
-
-            if (context.Order.Mission.RegionFaction.Region != context.MissionSquads.First().Squad.CurrentRegion)
-            {
-                new ExfiltrateMissionStep().ExecuteMissionStep(execution, 0.0f, this);
-            }
+                then: new WithdrawIfAbleMissionStep());
         }
     }
 }

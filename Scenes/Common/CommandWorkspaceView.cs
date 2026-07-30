@@ -21,6 +21,8 @@ public partial class CommandWorkspaceView : DialogView
     private Label _contextSubtitleLabel;
     private VBoxContainer _contextStack;
     private VBoxContainer _commandStack;
+    private bool _multiSelectionNotificationPending;
+    private string _pendingMultiSelectionKey = "";
 
     public event EventHandler<string> SelectionTreeItemSelected;
     public event EventHandler<string> SelectionTreeItemActivated;
@@ -458,11 +460,23 @@ public partial class CommandWorkspaceView : DialogView
         SelectionTreeItemSelected?.Invoke(this, item.GetMetadata(0).AsString());
     }
 
-    // Fires on every add/remove in multi-select mode. The key is only informational — callers
-    // recompute the whole selection from GetSelectedKeys() — so it's enough to signal "changed".
+    // Godot emits the deselection half of a multi-select change before it clears the TreeItem's
+    // selected flag. Callers read the complete selection through GetSelectedKeys(), so defer and
+    // coalesce the notification until the Tree has finished the whole click transaction.
     private void OnSelectionTreeMultiSelected(TreeItem item, long column, bool selected)
     {
-        string key = item != null ? item.GetMetadata(0).AsString() : "";
+        _pendingMultiSelectionKey = item != null ? item.GetMetadata(0).AsString() : "";
+        if (_multiSelectionNotificationPending) return;
+
+        _multiSelectionNotificationPending = true;
+        CallDeferred(MethodName.EmitSettledMultiSelectionChanged);
+    }
+
+    private void EmitSettledMultiSelectionChanged()
+    {
+        _multiSelectionNotificationPending = false;
+        string key = _pendingMultiSelectionKey;
+        _pendingMultiSelectionKey = "";
         SelectionTreeItemSelected?.Invoke(this, key);
     }
 

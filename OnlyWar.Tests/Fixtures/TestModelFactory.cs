@@ -228,6 +228,14 @@ internal static class TestModelFactory
         [new SquadTemplateElement(SergeantTemplate, 0, 1), new SquadTemplateElement(MarineTemplate, 0, 4)],
         SquadTypes.None);
 
+    // Test soldiers used to leave Id at its default 0, because nothing in the fixtures cared. That stops
+    // being harmless the moment two fixture-built squads meet on a battle grid: BattleGridManager keys
+    // placement by soldier id, so the second squad throws "Soldier 0 is already placed". Production never
+    // had this problem - SoldierFactory assigns from a static positive counter when no
+    // IEntityIdAllocator is supplied, seeded on load by GameStateDataAccess - so this only ever bit
+    // fixture-built forces. Interlocked because xUnit runs test classes in parallel.
+    private static int _nextTestSoldierId;
+
     public static Soldier CreateSoldier(
         SoldierTemplate template = null,
         string name = "Test Marine",
@@ -238,6 +246,7 @@ internal static class TestModelFactory
     {
         Soldier soldier = new(HumanBodyTemplate.Instance)
         {
+            Id = System.Threading.Interlocked.Increment(ref _nextTestSoldierId),
             Name = name,
             Template = template ?? MarineTemplate,
             Dexterity = dexterity,

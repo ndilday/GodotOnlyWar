@@ -46,6 +46,8 @@ namespace OnlyWar.Builders
                     return new DemonstrateForceMissionStep();
                 case MissionType.Extermination:
                     return new PositionAmbushMissionStep();
+                case MissionType.Patrol:
+                    return new PatrolSweepMissionStep();
                 case MissionType.Recon:
                     return new ReconStealthMissionStep();
                 case MissionType.Sabotage:

@@ -328,7 +328,7 @@ public class ScenarioTurnTests
         playerRegionFaction.LandedSquads.Add(squad);
 
         ConstructionMission mission = new(DefenseType.Entrenchment, 0, playerRegionFaction);
-        Order constructionOrder = new(new List<Squad> { squad }, Disposition.DugIn,
+        Order constructionOrder = new(new List<Squad> { squad }, 
                                       isQuiet: false, isActivelyEngaging: false,
                                       Aggression.Cautious, mission);
         sector.AddNewOrder(constructionOrder);

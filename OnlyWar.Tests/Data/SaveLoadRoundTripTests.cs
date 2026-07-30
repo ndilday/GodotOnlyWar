@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -147,7 +147,7 @@ public class SaveLoadRoundTripTests
             .First(r => r.RegionFactionMap.Count > 0);
         RegionFaction orderTarget = orderRegion.RegionFactionMap.Values.First();
         Mission orderMission = new(MissionType.Recon, orderTarget, 0);
-        Order order = new([orderedSquad], Disposition.Mobile, true, false, Aggression.Normal, orderMission);
+        Order order = new([orderedSquad], true, false, Aggression.Normal, orderMission);
         orderedSquad.CurrentOrders = order;
         sector.AddNewOrder(order);
 
@@ -448,7 +448,7 @@ public class SaveLoadRoundTripTests
             .First(r => r.RegionFactionMap.Count > 0);
         RegionFaction orderTarget = orderRegion.RegionFactionMap.Values.First();
         Mission orderMission = new(MissionType.Recon, orderTarget, 0);
-        Order order = new([orderedSquad], Disposition.Mobile, true, false, Aggression.Normal, orderMission);
+        Order order = new([orderedSquad], true, false, Aggression.Normal, orderMission);
         orderedSquad.CurrentOrders = order;
         sector.AddNewOrder(order);
 

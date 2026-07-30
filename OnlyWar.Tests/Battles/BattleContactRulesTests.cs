@@ -46,6 +46,59 @@ public class BattleContactRulesTests
     }
 
     [Fact]
+    public void TrivialPursuerSpeedEdge_StillOpensMobilityBreak()
+    {
+        // Within the tolerance the pursuer would need hundreds of turns to make up a single hex.
+        var withinTolerance = Input() with { FastestPursuerSpeed = 7.1f };
+        var beyondTolerance = Input() with { FastestPursuerSpeed = 7.2f };
+
+        Assert.Equal(ContactBreakResult.OrganizedForceDisengages,
+            BattleContactRules.Evaluate(withinTolerance).Decision);
+        Assert.Equal(ContactBreakResult.RemainInContact,
+            BattleContactRules.Evaluate(beyondTolerance).Decision);
+    }
+
+    [Fact]
+    public void SilentPursuitThatCannotClose_DisengagesInsideMaximumWeaponRange()
+    {
+        // Separation sits inside the pursuer's nominal attack reach, so the mobility break never
+        // fires — but the pursuer has landed nothing and cannot close, which is a chase in name
+        // only.
+        var stalled = Input() with
+        {
+            MinimumCurrentSeparation = 9,
+            FastestPursuerSpeed = 7,
+            PursuersAttackedRecently = false
+        };
+
+        BattleContactRules.Result result = BattleContactRules.Evaluate(stalled);
+
+        Assert.Equal(ContactBreakResult.OrganizedForceDisengages, result.Decision);
+        Assert.Equal("stalled_pursuit", result.Reason);
+    }
+
+    [Fact]
+    public void StalledPursuitBreak_RequiresSilence_NoSpeedEdge_AndMeleeSeparation()
+    {
+        var stalled = Input() with
+        {
+            MinimumCurrentSeparation = 9,
+            FastestPursuerSpeed = 7,
+            PursuersAttackedRecently = false
+        };
+
+        // Still shooting: the running firefight is a real engagement.
+        Assert.Equal(ContactBreakResult.RemainInContact,
+            BattleContactRules.Evaluate(stalled with { PursuersAttackedRecently = true }).Decision);
+        // Faster pursuer: it will close and the silence is temporary.
+        Assert.Equal(ContactBreakResult.RemainInContact,
+            BattleContactRules.Evaluate(stalled with { FastestPursuerSpeed = 9 }).Decision);
+        // Within a run-and-charge of the quarry: out of ammo is not out of contact.
+        Assert.Equal(ContactBreakResult.RemainInContact,
+            BattleContactRules.Evaluate(stalled with { MinimumCurrentSeparation = 8 }).Decision);
+    }
+
+    [Fact]
     public void PursuerStopping_DisengagesOrganizedForce()
     {
         var input = Input() with { AllPursuersBreakOff = true };
@@ -59,7 +112,8 @@ public class BattleContactRulesTests
         string trace = BattleContactRules.Evaluate(Input()).Trace.Render();
 
         Assert.Equal("CONTACT_EVAL turn=7 side=second active_pursuers=2 separation=15 attack_reach=10 " +
-                     "pursuer_speed=9 withdrawal_speed=7 rear_guard_active=false masked_progress=0 " +
-                     "masked_required=7 decision=RemainInContact reason=pursuit_can_maintain_contact", trace);
+                     "pursuer_speed=9 withdrawal_speed=7 pursuers_attacked=true rear_guard_active=false " +
+                     "masked_progress=0 masked_required=7 decision=RemainInContact " +
+                     "reason=pursuit_can_maintain_contact", trace);
     }
 }

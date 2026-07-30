@@ -58,6 +58,15 @@ namespace OnlyWar.Helpers.Battles
         public bool IsInMelee { get; set; }
         public ushort ReloadingPhase { get; set; }
         public Stance Stance { get; set; }
+
+        /// <summary>
+        /// This soldier is sprinting this turn (the Run tier). A running soldier cannot bring a
+        /// weapon up to parry and is not fighting defensively at all, so in melee his defence
+        /// falls back to raw foot speed — see
+        /// <see cref="Actions.MeleeAttackAction.GetRunningDefenderMeleeSkill"/>. The planners set
+        /// it alongside <see cref="CurrentSpeed"/>, and a soldier who stops to fight clears it.
+        /// </summary>
+        public bool IsRunning { get; set; }
         public float CurrentSpeed { get; set; }
         public float LeftoverMovement { get; set; }
 
@@ -177,6 +186,7 @@ namespace OnlyWar.Helpers.Battles
             Aim = null;
             IsInMelee = false;
             Stance = Stance.Standing;
+            IsRunning = false;
             CurrentSpeed = 0;
             LeftoverMovement = 0;
             EnemiesTakenDown = 0;
@@ -206,6 +216,7 @@ namespace OnlyWar.Helpers.Battles
             IsInMelee = soldier.IsInMelee;
             ReloadingPhase = soldier.ReloadingPhase;
             Stance = soldier.Stance;
+            IsRunning = soldier.IsRunning;
             CurrentSpeed = soldier.CurrentSpeed;
             LeftoverMovement = soldier.LeftoverMovement;
             TurnsRunning = soldier.TurnsRunning;
@@ -233,6 +244,29 @@ namespace OnlyWar.Helpers.Battles
             TargetId = soldier.TargetId;
         }
         
+        /// <summary>
+        /// Strips everything this soldier is carrying, so a squad's loadout can be redistributed.
+        /// </summary>
+        /// <remarks>
+        /// <see cref="AddWeapons"/> APPENDS - it does an AddRange and then re-grips. Re-running squad
+        /// allocation without clearing first would leave a soldier carrying two bolters after the second
+        /// battle of a mission and three after the third. This is the paired clear.
+        ///
+        /// Aim and ReloadingPhase go too: both reference or describe a specific weapon, and after a
+        /// redistribution the soldier may not be holding it any more.
+        /// </remarks>
+        internal void ClearWeapons()
+        {
+            RangedWeapons.Clear();
+            MeleeWeapons.Clear();
+            _equippedRangedWeapons.Clear();
+            _equippedMeleeWeapons.Clear();
+            _rangedWeaponHandGroups.Clear();
+            _meleeWeaponHandGroups.Clear();
+            Aim = null;
+            ReloadingPhase = 0;
+        }
+
         public void AddWeapons(IReadOnlyCollection<RangedWeapon> rangedWeapons, IReadOnlyCollection<MeleeWeapon> meleeWeapons)
         {
             if (rangedWeapons?.Count > 0)

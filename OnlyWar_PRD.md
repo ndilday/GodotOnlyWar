@@ -1327,6 +1327,22 @@ The remaining dependents of the cross-faction substrate, which now ships in 0.8 
   generating transient tactical armies. This is the concrete strategic attrition model called
   for by the Tyranid/PDF opening-scenario work; named player forces remain tactical. Spec:
   `Design/Reference/LargeScaleNpcCombat.md`.
+- **Next-level NPC mission planning — shaping and special operations.** `FactionStrategyController`
+  generates only Ambush, Advance, LightningRaid, Recon, Patrol, and construction orders. Every
+  mechanic a Diversion, Sabotage, or Assassination needs is already built and already symmetric
+  between sides (`Design/Active/DailyMissionResolution.md` §§4–6); what is missing is purely the
+  planning side that would *issue* those orders, plus the target-selection heuristics to pick where
+  they are worth running. Two consequences make this more than a completeness item. First, the daily
+  resolution model's most interesting property — that a diverted patrol fails to detect an attack, so
+  a feint prises a screen away from the ground it was covering — currently only cuts in the player's
+  favour, because nothing on the AI side ever feints. Second, the AI presently treats
+  `Aggression` as a constant per order type rather than a decision; shaping missions are where
+  choosing it deliberately (bold where the ground looks dormant, quiet where it is being searched,
+  read off `MissionStealthDifficulty.CalculateWatchScore`) starts to matter. Subsumes the
+  "Enemy-generated diversions" backlog entry in §5.7, whose NPC-vs-player analysis — the feint
+  against a player must become a one-turn-lagged intelligence deception, since the player commits
+  orders before `ProcessTurn` — remains the governing design note for that half and should be read
+  before implementation.
 
 ### 5.7 Post-0.8 Backlog
 
@@ -1334,7 +1350,7 @@ Documented for planning purposes; not scheduled:
 
 **Content:** Dreadnoughts, Chaplains, Psykers, Chaos Troops, Necrons, Tau, Vehicles, Flying Units, Drop Pods, Fortifications, Relics, Poison Weapons, Geneseed Mutation, Power Armor Variants, The Inquisition. *(Orks are now scheduled — see §5.5. **Vehicles depend on the 0.8 Techmarine pipeline (§5.5)** — armor cannot be fielded until the chapter has Techmarines to maintain and wake its machine spirits, so that pipeline must land first. When Vehicles arrive, add krak grenades alongside them — thrown single-target anti-armor attacks, not blast templates; deferred from the §4.14 grenade work because they matter little without armored targets.)*
 
-**Enemy-generated diversions.** Give `FactionStrategyController` the ability to run its own diversion feints, rather than only being the target of the player's. Deferred from 0.7: it adds little to the 0.7 experience, and player/NPC order-structure symmetry — while desirable — is not blocking. Two distinct problems hide here, and they should be scoped separately:
+**Enemy-generated diversions.** *(Now scheduled as part of "Next-level NPC mission planning" — see §5.6. The scoping analysis below is retained because it is the governing design note for the NPC-vs-player half, which is the genuinely hard part.)* Give `FactionStrategyController` the ability to run its own diversion feints, rather than only being the target of the player's. Deferred from 0.7: it adds little to the 0.7 experience, and player/NPC order-structure symmetry — while desirable — is not blocking. Two distinct problems hide here, and they should be scoped separately:
 
 - *NPC-vs-NPC feints* fit the existing turn loop with no changes: both the feinter and the fooled defender resolve within the same turn (shaping phase → faction planning), so this is purely a generation-heuristic addition to `FactionStrategyController`.
 - *NPC-vs-player feints do not fit the current flow.* The diversion mechanic only fools a decision-maker who plans *after* the shaping phase; the player commits orders *before* `ProcessTurn` runs, and nothing consumes `PerceivedThreatBonus` on a player region (the player allocates garrisons by hand). A feint against the player therefore cannot reuse the AI's same-turn planning bonus — it must become a **one-turn-lagged intelligence deception**: the feint inflates the *displayed* enemy-strength estimate in the player's intel layer, persists past `ClearDiversionEffects` (unlike the transient AI bonus), and is acted on by the player the following turn, with the real attack landing then. This also implies an AI planning horizon that pairs a feint with a follow-up assault across turns — beyond the current per-region greedy `GenerateFactionOrders`. Resolve these (effect channel, persistence, what the player sees and when the deception resolves, AI feint+follow-through planning) before implementation.

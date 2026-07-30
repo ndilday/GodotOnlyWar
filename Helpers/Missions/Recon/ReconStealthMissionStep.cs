@@ -12,9 +12,11 @@ namespace OnlyWar.Helpers.Missions.Recon
     {
         public string Description { get { return "Recon Stealth"; } }
 
+        public bool ConsumesDay => true;
+
         public ReconStealthMissionStep(){}
 
-        public void ExecuteMissionStep(MissionExecutionContext execution, float marginOfSuccess, IMissionStep returnStep)
+        public MissionStepResult ExecuteMissionStep(MissionExecutionContext execution, float marginOfSuccess, IMissionStep resumeStep)
         {
             MissionContext context = execution.State;
             // The mission runs for at most a week, and a force that infiltrated owes a day to get back
@@ -28,11 +30,9 @@ namespace OnlyWar.Helpers.Missions.Recon
                 GameLog.Trace(() =>
                     $"Recon stealth {DescribeFaction(context)} -> {DescribeTarget(context)}: "
                     + $"operating days spent at day {context.DaysElapsed}; breaking contact");
-                if (context.MustExfiltrate)
-                {
-                    new ExfiltrateMissionStep().ExecuteMissionStep(execution, 0.0f, null);
-                }
-                return;
+                return context.MustExfiltrate
+                    ? MissionStepResult.Continue(new ExfiltrateMissionStep())
+                    : MissionStepResult.Complete;
             }
 
             // negative mod for size of enemy force
@@ -82,14 +82,9 @@ namespace OnlyWar.Helpers.Missions.Recon
                 + $"+aggression={aggressionMod:F2} [{context.Order.LevelOfAggression}]), "
                 + $"bestStealthSkill={bestStealth:F2}, margin={margin:F2} -> "
                 + $"{(slippedIn ? "SLIPPED IN" : $"DETECTED by {DescribeSpotter(context.Spotter)}")}");
-            if (slippedIn)
-            {
-                new PerformReconMissionStep().ExecuteMissionStep(execution, margin, this);
-            }
-            else
-            {
-                new DetectedMissionStep().ExecuteMissionStep(execution, margin, this);
-            }
+            return slippedIn
+                ? MissionStepResult.Continue(new PerformReconMissionStep(), margin, this)
+                : MissionStepResult.Continue(new DetectedMissionStep(), margin, this);
         }
 
         private static string DescribeFaction(MissionContext context) =>

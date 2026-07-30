@@ -137,6 +137,20 @@ namespace OnlyWar.Helpers.Missions
             long staticStrength = Math.Max(0L, rf.GetDeployedStrength() - patrolStrength);
             float ambient = Math.Min(AmbientSearchCap, AmbientWeight * Magnitude(staticStrength));
 
+            // Attention drawn elsewhere TODAY by a shaping mission - a diversion demonstrating on the
+            // border. Drawn from the patrol term first and only then from the ambient term, because
+            // responding to a demonstration is the mobile screen's job: dug-in troops stand to in
+            // place, and moving them takes a great deal more than bending the screen does. That
+            // priority is what prices the feint-then-strike combination correctly, and it needs no
+            // player or AI decision - just one number and an order of draw.
+            //
+            // Surveillance is never divertible: sensors, informants, and standing awareness of your own
+            // ground do not turn their heads to watch a demonstration.
+            float drawn = Math.Max(0f, rf.CommittedAttention);
+            float patrolDrawn = Math.Min(patrol, drawn);
+            patrol -= patrolDrawn;
+            ambient = Math.Max(0f, ambient - (drawn - patrolDrawn));
+
             return new WatchTerms(surveillance, patrol, ambient);
         }
 

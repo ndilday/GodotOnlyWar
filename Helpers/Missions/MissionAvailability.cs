@@ -91,6 +91,20 @@ namespace OnlyWar.Helpers.Missions
     // or the dialog. Reproduces the original branching EXACTLY - see the moved comments below.
     public static class MissionAvailability
     {
+        public static string GetConstructionLabel(DefenseType constructionType) =>
+            constructionType switch
+            {
+                DefenseType.Entrenchment => "Build Fortifications",
+                DefenseType.ListeningPost => "Build Listening Post",
+                DefenseType.AntiAir => "Build Anti-Air",
+                _ => MissionType.Construction.ToString()
+            };
+
+        public static string GetOrderLabel(Mission mission) =>
+            mission is ConstructionMission construction
+                ? GetConstructionLabel(construction.ConstructionType)
+                : mission?.MissionType.ToString() ?? string.Empty;
+
         public static IReadOnlyList<AvailableMission> GetAvailableMissions(Region originRegion, Region targetRegion)
         {
             List<AvailableMission> missionOptions = new List<AvailableMission>();
@@ -105,9 +119,15 @@ namespace OnlyWar.Helpers.Missions
                 missionOptions.Add(new AvailableMission("Defend", MissionAvailabilityKind.Defend));
                 missionOptions.Add(new AvailableMission("Patrol", MissionAvailabilityKind.Patrol));
                 // Fortification: the squad spends the turn building defenses in its own region.
-                missionOptions.Add(new AvailableMission("Build Fortifications", MissionAvailabilityKind.FortifyEntrenchment));
-                missionOptions.Add(new AvailableMission("Build Listening Post", MissionAvailabilityKind.BuildListeningPost));
-                missionOptions.Add(new AvailableMission("Build Anti-Air", MissionAvailabilityKind.BuildAntiAir));
+                missionOptions.Add(new AvailableMission(
+                    GetConstructionLabel(DefenseType.Entrenchment),
+                    MissionAvailabilityKind.FortifyEntrenchment));
+                missionOptions.Add(new AvailableMission(
+                    GetConstructionLabel(DefenseType.ListeningPost),
+                    MissionAvailabilityKind.BuildListeningPost));
+                missionOptions.Add(new AvailableMission(
+                    GetConstructionLabel(DefenseType.AntiAir),
+                    MissionAvailabilityKind.BuildAntiAir));
             }
             else if (targetRegion.RegionFactionMap.Values.Any(rf => !rf.PlanetFaction.Faction.IsDefaultFaction && !rf.PlanetFaction.Faction.IsPlayerFaction))
             {

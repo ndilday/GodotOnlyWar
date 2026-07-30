@@ -1,4 +1,4 @@
-using OnlyWar.Helpers.Simulation;
+﻿using OnlyWar.Helpers.Simulation;
 using OnlyWar.Helpers.Turns;
 using OnlyWar.Models;
 using OnlyWar.Models.Orders;
@@ -119,7 +119,6 @@ public sealed class SessionSimulationContextPrimitiveTests
     private static Order CreateOrder(int id) => new(
         id,
         new List<Squad>(),
-        Disposition.DugIn,
         isQuiet: false,
         isActivelyEngaging: false,
         Aggression.Avoid,

@@ -38,9 +38,37 @@ public class FactionStrategyController
     // when sizing its garrison. Below it, a blind defender under-garrisons — until an attack (which
     // grants it intel of the attacker's staging regions) or a deliberate recon opens its eyes.
     internal const float GarrisonFullSightIntel = 2.0f;
+    // Below this much own-intel about a region, a faction is scouting ground it does not know and its
+    // recon goes in carefully (ChooseReconAggression). Set at half of GarrisonFullSightIntel so the
+    // three aggression bands land on the same scale the garrison-sizing threshold already uses,
+    // rather than introducing a second, unrelated intel scale.
+    internal const float UnfamiliarGroundIntel = 1.0f;
+    // Share of a region's deployable strength that is never available for anything else, however quiet
+    // the region looks. This is what stops CalculateRequiredDefensiveBattleValue's purely reactive
+    // threat term from leaving interior or blind regions with literally no defence. It also costs every
+    // faction a fifth of its offensive tempo, which is the intended trade: holding ground has a price.
+    internal const double MinimumDefensiveReserveFraction = 0.20;
     // Fraction of a region's leftover spare troops committed as a standing patrol screen (the rest
     // stays available). Pools are 1:1 with battle value now, so this is a direct share, not a ×N.
     internal const double PatrolForceFraction = 0.1;
+    // Share of spare troops kept on ordinary policing when there is no declared enemy on the world at
+    // all. A faction with a garrison is checking papers and walking beats whether or not it knows it
+    // has an enemy, and that alone should make covert ground non-free to cross.
+    //
+    // This closes the hole where a Chapter operating before it reveals itself met literally no
+    // opposition anywhere on a planet (Design/Active/DailyMissionResolution.md §8 Q4): the patrol
+    // fraction returned a hard zero without a public enemy, and interception now requires a screen at
+    // parity, so every intrusion went uncontested. Deliberately far below the 0.10 threatened-border
+    // tier - this is policing, not screening - and it needs no new state and no signal the faction has
+    // not earned, which is what made it the piece to build first.
+    //
+    // PlanPatrolMissionsOnPlanet still refuses to post a screen below faction.MinimumForceRequest, so a
+    // thin region posts nothing regardless; the floor only buys a patrol where there are troops to spare.
+    internal const double PolicingPatrolFraction = 0.05;
+    // Combined defense levels (entrenchment + listening post + anti-air) at which a region is worth
+    // screening on its own account, with no enemy visible next door. One whole level anywhere means the
+    // region has works a saboteur would come for; below that there is nothing on it to wreck.
+    internal const double WorthScreeningWorksLevel = 1.0;
     internal const double RaidForceRatioThreshold = 0.25;
     private const double RaidCommitFraction = 0.35;
     private const long MinimumRaidBattleValue = 100;
@@ -65,22 +93,29 @@ public class FactionStrategyController
         public long EstimatedDefenderBattleValue { get; set; }
     }
 
-    private class RegionForceState
+    internal class RegionForceState
     {
         public RegionFaction RegionFaction { get; }
-        public long RequiredGarrison { get; }
+        // The reserve this region holds back to defend itself, in battle value. Named for battle value
+        // rather than "garrison" because it is faction-agnostic - see
+        // CalculateRequiredDefensiveBattleValue.
+        public long RequiredDefensiveBattleValue { get; }
         public long SpareTroops { get; set; }
-        // How far this region's organized troops fall short of its required garrison (0 when the
-        // minimum is met). Tracked alongside SpareTroops so garrison reinforcement can whittle the
-        // deficit down as neighbours relocate troops in, rather than recomputing it each transfer.
-        public long GarrisonShortfall { get; set; }
+        // How far this region's organized troops fall short of the reserve it wants (0 when the
+        // minimum is met). Tracked alongside SpareTroops so reinforcement can whittle the deficit down
+        // as neighbours relocate troops in, rather than recomputing it each transfer.
+        public long DefensiveShortfall { get; set; }
 
-        public RegionForceState(RegionFaction factionInfo, long requiredGarrison, long spareTroops, long garrisonShortfall)
+        public RegionForceState(
+            RegionFaction factionInfo,
+            long requiredDefensiveBattleValue,
+            long spareTroops,
+            long defensiveShortfall)
         {
             RegionFaction = factionInfo;
-            RequiredGarrison = requiredGarrison;
+            RequiredDefensiveBattleValue = requiredDefensiveBattleValue;
             SpareTroops = spareTroops;
-            GarrisonShortfall = garrisonShortfall;
+            DefensiveShortfall = defensiveShortfall;
         }
     }
 
@@ -128,11 +163,12 @@ public class FactionStrategyController
         var regionalForceStates = new List<RegionForceState>();
         foreach (var regionFaction in factionRegionsOnPlanet)
         {
-            long requiredGarrison = CalculateRequiredGarrison(regionFaction);
+            long requiredDefensiveBattleValue = CalculateRequiredDefensiveBattleValue(regionFaction);
             long organizedTroops = regionFaction.GetDeployedStrength();
-            long spareTroops = Math.Max(0, organizedTroops - requiredGarrison);
-            long garrisonShortfall = Math.Max(0, requiredGarrison - organizedTroops);
-            regionalForceStates.Add(new RegionForceState(regionFaction, requiredGarrison, spareTroops, garrisonShortfall));
+            long spareTroops = Math.Max(0, organizedTroops - requiredDefensiveBattleValue);
+            long defensiveShortfall = Math.Max(0, requiredDefensiveBattleValue - organizedTroops);
+            regionalForceStates.Add(new RegionForceState(
+                regionFaction, requiredDefensiveBattleValue, spareTroops, defensiveShortfall));
         }
 
         long organizedTotal = factionRegionsOnPlanet
@@ -140,12 +176,12 @@ public class FactionStrategyController
         GameLog.Debug(() =>
             $"AI plan {faction.Name}/{planet.Name}: posture={(defensiveOnly ? "defensive" : "offensive")}, "
             + $"regions={factionRegionsOnPlanet.Count}, organized={organizedTotal}, "
-            + $"requiredGarrison={regionalForceStates.Sum(s => s.RequiredGarrison)}, spare={regionalForceStates.Sum(s => s.SpareTroops)}");
+            + $"requiredDefensiveBv={regionalForceStates.Sum(s => s.RequiredDefensiveBattleValue)}, spare={regionalForceStates.Sum(s => s.SpareTroops)}");
         GameLog.Trace(() =>
             $"AI plan {faction.Name}/{planet.Name}: force states "
             + string.Join("; ", regionalForceStates.Select(s =>
                 $"{s.RegionFaction.Region.Name}:pop={s.RegionFaction.Population},mil={s.RegionFaction.MilitaryStrength},"
-                + $"org={s.RegionFaction.Organization},required={s.RequiredGarrison},spare={s.SpareTroops}")));
+                + $"org={s.RegionFaction.Organization},required={s.RequiredDefensiveBattleValue},spare={s.SpareTroops}")));
 
         if (defensiveOnly)
         {
@@ -206,7 +242,7 @@ public class FactionStrategyController
     // Defensive reconnaissance: a purely-defensive faction (the PDF under assault) never assaults,
     // but it does scout the enemy regions massing on its borders — the recon-only slice of the same
     // targeting machinery. The intel it gains sharpens its garrison sizing against those neighbours
-    // (CalculateRequiredGarrison) and denies attackers the from-within surprise edge.
+    // (CalculateRequiredDefensiveBattleValue) and denies attackers the from-within surprise edge.
     private void PlanDefensiveReconOnPlanet(Faction faction, Planet planet, List<RegionForceState> states, List<Order> allOrders)
     {
         List<PotentialOffensive> potentialTargets = IdentifyPotentialOffensivesOnPlanet(faction, planet, states);
@@ -407,18 +443,44 @@ public class FactionStrategyController
         }
 
         Mission mission = new Mission(MissionType.Recon, target.TargetFaction, 0);
-        // Normal, not Cautious. Aggression now trades exposure for effect
-        // (MissionAggressionModifiers): a Cautious recon is harder to spot but learns less, and the
-        // intel it gathers is what sharpens this faction's own garrison sizing against its
-        // neighbours (GarrisonFullSightIntel). Defaulting to Cautious would have the AI quietly
-        // handicap the one thing it runs recon for.
-        Order order = new Order(scouts, Disposition.Mobile, true, false, Aggression.Normal, mission);
+        Aggression reconAggression = ChooseReconAggression(faction, target.TargetRegion);
+        Order order = new Order(scouts, true, false, reconAggression, mission);
         allOrders.Add(order);
         GameLog.Debug(() =>
             $"AI recon {faction.Name}: target={DescribeOffensive(target)}, staging={stagingRegion.Name}, "
             + $"requestedBV={request.TargetBattleValue}, generatedSquads={scouts.Count}, "
             + $"generatedSoldiers={scouts.Sum(s => s.Members.Count)}, generatedBV={SquadBattleValue(scouts)}");
         return true;
+    }
+
+    /// <summary>
+    /// How boldly this faction scouts a region, chosen from how well it already knows the ground.
+    /// </summary>
+    /// <remarks>
+    /// Aggression trades exposure for effect (MissionAggressionModifiers): a Cautious sweep is harder
+    /// to spot but learns less, a bold one presses close, learns more, and gets seen. Defaulting it
+    /// to a constant meant the AI never made that trade - and defaulting it to Cautious, as this did
+    /// originally, had it quietly handicap the one thing it runs recon for, since the intel gathered
+    /// is what sharpens its own garrison sizing (GarrisonFullSightIntel).
+    ///
+    /// The signal is <see cref="RegionExtensions.GetFactionRegionIntel"/> - what this faction has
+    /// already learned about that region - and NOT the region's true watch score. That distinction is
+    /// the same one Q4 turns on (Design/Active/DailyMissionResolution.md §8): reading
+    /// MissionStealthDifficulty here would hand the planner exact knowledge of an enemy's sensors and
+    /// patrol dispositions, which it has no way to hold. Own intel is unambiguously earned, and it is
+    /// also the exact term the stealth model already credits the intruder with (its IntelMod), so the
+    /// AI is reasoning about an advantage it genuinely has rather than about the answer sheet.
+    ///
+    /// The resulting progression is the intended one: the first look at unfamiliar ground is careful
+    /// and gains a little, and once the faction knows the region its scouts press in close. That also
+    /// climbs to GarrisonFullSightIntel faster than a flat Cautious ever would.
+    /// </remarks>
+    internal static Aggression ChooseReconAggression(Faction faction, Region target)
+    {
+        float known = target.GetFactionRegionIntel(faction);
+        if (known < UnfamiliarGroundIntel) return Aggression.Cautious;
+        if (known < GarrisonFullSightIntel) return Aggression.Normal;
+        return Aggression.Attritional;
     }
 
     private bool LaunchAssault(Faction faction, PotentialOffensive chosenOffensive, List<RegionForceState> regionalForceStates, List<Order> allOrders)
@@ -503,7 +565,7 @@ public class FactionStrategyController
                 aggression,
                 faction.InvadesOnVictory,
                 missionType);
-            allOrders.Add(new Order(new List<Squad>(), Disposition.Mobile, false, true, aggression, strategicMission));
+            allOrders.Add(new Order(new List<Squad>(), false, true, aggression, strategicMission));
             return true;
         }
 
@@ -541,7 +603,7 @@ public class FactionStrategyController
         }
 
         Mission newMission = new Mission(missionType, chosenOffensive.TargetFaction, 0);
-        Order newOrder = new Order(generatedSquads, Disposition.Mobile, missionType == MissionType.LightningRaid, true, aggression, newMission);
+        Order newOrder = new Order(generatedSquads, missionType == MissionType.LightningRaid, true, aggression, newMission);
         allOrders.Add(newOrder);
         GameLog.Debug(() =>
             $"AI {missionType} {faction.Name}: tactical order created target={DescribeOffensive(chosenOffensive)}, "
@@ -806,7 +868,7 @@ public class FactionStrategyController
                 }
             }
 
-            allOrders.Add(new Order(new List<Squad>(), Disposition.DugIn, true, false, Aggression.Avoid, mission));
+            allOrders.Add(new Order(new List<Squad>(), true, false, Aggression.Avoid, mission));
             best.State.SpareTroops = Math.Max(0, best.State.SpareTroops - spend);
             projected[best.State] = (org, det, ent, aa);
 
@@ -936,7 +998,7 @@ public class FactionStrategyController
                 (double)state.SpareTroops / costPerLevel);
             long spend = (long)Math.Ceiling(amount * costPerLevel);
 
-            allOrders.Add(new Order(new List<Squad>(), Disposition.DugIn, true, false, Aggression.Avoid,
+            allOrders.Add(new Order(new List<Squad>(), true, false, Aggression.Avoid,
                 new ConstructionMission(DefenseType.ListeningPost, amount, state.RegionFaction)));
             state.SpareTroops = Math.Max(0, state.SpareTroops - spend);
             GameLog.Trace(() =>
@@ -969,27 +1031,27 @@ public class FactionStrategyController
             // Adjacent friendly regions still short of their garrison minimum, neediest first.
             List<RegionForceState> needy = source.RegionFaction.Region.GetAdjacentRegions()
                 .Select(region => states.FirstOrDefault(s => s.RegionFaction.Region == region))
-                .Where(state => state != null && state.GarrisonShortfall > 0)
-                .OrderByDescending(state => state.GarrisonShortfall)
+                .Where(state => state != null && state.DefensiveShortfall > 0)
+                .OrderByDescending(state => state.DefensiveShortfall)
                 .ToList();
 
             foreach (RegionForceState destination in needy)
             {
                 if (source.SpareTroops <= 0) break;
 
-                long transfer = Math.Min(source.SpareTroops, destination.GarrisonShortfall);
+                long transfer = Math.Min(source.SpareTroops, destination.DefensiveShortfall);
                 if (transfer <= 0) continue;
 
                 source.RegionFaction.RemoveMilitaryStrength(transfer);
                 destination.RegionFaction.AddMilitaryStrength(transfer);
                 source.SpareTroops -= transfer;
-                destination.GarrisonShortfall -= transfer;
+                destination.DefensiveShortfall -= transfer;
 
                 GameLog.Debug(() =>
                     $"AI garrison reinforce {faction.Name}/{planet.Name}: "
                     + $"{source.RegionFaction.Region.Name}->{destination.RegionFaction.Region.Name}, "
                     + $"transfer={transfer}, sourceSpare={source.SpareTroops}, "
-                    + $"destShortfall={destination.GarrisonShortfall}");
+                    + $"destShortfall={destination.DefensiveShortfall}");
             }
         }
     }
@@ -1004,7 +1066,7 @@ public class FactionStrategyController
             RegionForceState destination = ChooseFrontReinforcementDestination(faction, source, states);
             if (destination == null || destination == source) continue;
 
-            long reserve = Math.Max(source.RequiredGarrison, (long)(source.SpareTroops * 0.30));
+            long reserve = Math.Max(source.RequiredDefensiveBattleValue, (long)(source.SpareTroops * 0.30));
             long transfer = Math.Max(0, source.SpareTroops - reserve);
             if (transfer <= 0) continue;
 
@@ -1095,7 +1157,7 @@ public class FactionStrategyController
             // the squads but launches no mission of its own (TurnController skips Patrol orders).
             // These squads are transient AI forces, cleared at the start of the next planning pass.
             Mission mission = new Mission(MissionType.Patrol, state.RegionFaction, 0);
-            Order order = new Order(patrolSquads, Disposition.DugIn, true, false, Aggression.Cautious, mission);
+            Order order = new Order(patrolSquads, true, false, Aggression.Cautious, mission);
             foreach (Squad squad in patrolSquads)
             {
                 squad.CurrentRegion = state.RegionFaction.Region;
@@ -1111,19 +1173,63 @@ public class FactionStrategyController
         }
     }
 
-    private double CalculatePatrolFraction(Faction faction, Planet planet, RegionForceState state)
+    /// <summary>
+    /// Share of a region's spare troops posted as a standing patrol screen.
+    /// </summary>
+    /// <remarks>
+    /// The two low-own-intel tiers this used to carry are gone. They existed because patrolling raised a
+    /// region's own situational awareness, and it no longer does - patrol grants no intelligence at all
+    /// (Design/Active/DailyMissionResolution.md §5), so the AI was spending troops on a reward it could
+    /// not collect. That motivation now lives where it can actually be paid: the listening-post benefit in
+    /// BestDevelopmentOption already scales with the gap below GarrisonFullSightIntel, and recon covers the
+    /// rest.
+    ///
+    /// What patrol is now FOR is counter-infiltration and interception, which is why the last tier exists:
+    /// a region with no visible enemy next door can still be worth screening if it is the sort of place
+    /// somebody would infiltrate.
+    /// </remarks>
+    internal double CalculatePatrolFraction(Faction faction, Planet planet, RegionForceState state)
     {
-        if (!HasPublicEnemyOnPlanet(faction, planet)) return 0.0;
+        // No declared enemy anywhere on the world: ordinary policing only. Not zero - see
+        // PolicingPatrolFraction. The threat-based tiers below all read visible enemies, so they would
+        // return zero here anyway; the works-based tier is allowed to apply, because a region worth
+        // infiltrating is worth watching whether or not anyone has declared themselves yet.
+        if (!HasPublicEnemyOnPlanet(faction, planet))
+        {
+            return IsWorthScreening(state.RegionFaction)
+                ? PatrolForceFraction
+                : PolicingPatrolFraction;
+        }
 
         bool localEnemy = HasLocalEnemyMilitary(faction, state.RegionFaction.Region);
         bool adjacentEnemy = VisibleAdjacentEnemyMilitary(faction, state.RegionFaction.Region) > 0;
-        float ownIntel = state.RegionFaction.GetOwnRegionIntel();
 
         if (localEnemy) return 0.20;
-        if (adjacentEnemy && ownIntel < GarrisonFullSightIntel) return 0.15;
         if (adjacentEnemy) return 0.10;
-        if (ownIntel < ReconIntelThreshold) return 0.05;
+        if (IsWorthScreening(state.RegionFaction)) return PatrolForceFraction;
         return 0.0;
+    }
+
+    /// <summary>
+    /// Whether a region has anything on it worth an intruder's trouble, and so is worth screening even
+    /// with no enemy massing next door.
+    /// </summary>
+    /// <remarks>
+    /// Reads the faction's own works, which is information it plainly has about itself - deliberately NOT
+    /// Region.SpecialMissions, which is the set of opportunities the PLAYER can see and would be an
+    /// unearned signal. Works are also scale-free: defense levels are small integers, where a population
+    /// threshold would need calibrating against whatever regional populations turn out to be.
+    ///
+    /// Sabotage opportunities are generated from a region's defenses and assassinations from its
+    /// population (PlanetTurnProcessor), so a population term belongs here too eventually; it is left out
+    /// until there is a principled threshold to use rather than a guessed one.
+    /// </remarks>
+    private static bool IsWorthScreening(RegionFaction regionFaction)
+    {
+        double works = regionFaction.Entrenchment
+            + regionFaction.ListeningPost
+            + regionFaction.AntiAir;
+        return works >= WorthScreeningWorksLevel;
     }
 
     // Removes the transient patrol squads this faction landed on a previous turn before it plans
@@ -1206,7 +1312,21 @@ public class FactionStrategyController
         });
     }
 
-    private long CalculateRequiredGarrison(RegionFaction defender)
+    /// <summary>
+    /// The battle value a region's controller holds back to defend it — the reserve, as an amount
+    /// rather than a set of squads. This is the single definition of "how strong is this region's
+    /// defence", read both by the planner (to work out what is spare) and by
+    /// PrepareAssaultMissionStep (to materialise the defence when the region is actually attacked).
+    /// </summary>
+    /// <remarks>
+    /// Named for battle value, not "garrison", deliberately: <see cref="RegionFaction.Garrison"/> is an
+    /// Imperial-specific field that <see cref="Helpers.Simulation.FactionRevealService"/> zeroes when a
+    /// cult or revolt reveals, whereas this is faction-agnostic and denominated in the same units as
+    /// <see cref="RegionFactionExtensions.GetDeployedStrength"/>. The old name is what led the tactical
+    /// assault path to materialise defenders from raw Garrison, so every revealed non-Imperial region
+    /// fielded no defence at all.
+    /// </remarks>
+    internal static long CalculateRequiredDefensiveBattleValue(RegionFaction defender)
     {
         Faction defenderFaction = defender.PlanetFaction.Faction;
         Region region = defender.Region;
@@ -1237,14 +1357,20 @@ public class FactionStrategyController
             if (adjacentThreat > highestThreat) highestThreat = adjacentThreat;
         }
 
-        // A diversion feinting against this region inflates the threat its defender believes it
-        // faces, causing it to reserve more force than the real enemy force would warrant.
-        if (defender.PerceivedThreatBonus > 0)
-        {
-            highestThreat += (long)defender.PerceivedThreatBonus;
-        }
+        // A diversion used to inflate the threat a defender believed it faced here, via
+        // RegionFaction.PerceivedThreatBonus. That garrison-inflation channel was dropped along with
+        // the pre-planning shaping phase: it required the feint to have already resolved before the
+        // enemy planned, which is only possible if diversions run outside the day scheduler. A feint's
+        // effect is now tactical and same-day (RegionFaction.CommittedAttention).
 
-        return highestThreat;
+        // Floor: nobody leaves ground completely unheld. The threat term above is purely reactive - it
+        // is the highest adjacent enemy battle value scaled by how well this defender SEES that
+        // neighbour - so it returns zero for an interior region with no armed neighbours, and also for
+        // a defender that is simply blind to what is massing next door. Without a floor those regions
+        // materialise no defence whatsoever when attacked, and a player learns to walk into quiet
+        // interior hexes unopposed.
+        long floor = (long)(defender.GetDeployedStrength() * MinimumDefensiveReserveFraction);
+        return Math.Max(highestThreat, floor);
     }
 
     // Pick the best objective by reward-to-risk among the targets the attacker believes it can
@@ -1260,16 +1386,18 @@ public class FactionStrategyController
     }
 
     // Winnable when the attacker's force exceeds its *estimated* defender strength by the required
-    // ratio. A successful diversion baits the commander into accepting worse odds, shaving the
-    // edge it insists on down toward parity.
+    // ratio.
+    //
+    // A diversion used to bait the commander into accepting worse odds here, shaving this threshold
+    // toward parity via RegionFaction.ProvocationLevel. That bait now lives in the diversion itself as
+    // Roll B (DemonstrateForceMissionStep): a feint that draws attention risks drawing a real
+    // counterattack the same day, resolved from the feinting player's own dice. That is strictly better
+    // than nudging a planning threshold - the response lands mid-week instead of a turn later, and the
+    // enemy AI makes no decision at all, which is what keeps "plans weekly, resolves daily" intact.
     internal static bool IsWinnable(PotentialOffensive offensive)
     {
-        double ratioThreshold = OffensiveForceRatioThreshold;
-        if (offensive.TargetFaction.ProvocationLevel > 0)
-        {
-            ratioThreshold = Math.Max(1.0, OffensiveForceRatioThreshold - offensive.TargetFaction.ProvocationLevel * 0.1);
-        }
-        return offensive.AvailableAttackingForce > offensive.EstimatedDefenderBattleValue * ratioThreshold;
+        return offensive.AvailableAttackingForce
+            > offensive.EstimatedDefenderBattleValue * OffensiveForceRatioThreshold;
     }
 
     internal static double RewardRiskScore(PotentialOffensive offensive)
@@ -1278,15 +1406,29 @@ public class FactionStrategyController
         // objective is disproportionately costly to take.
         double risk = offensive.EstimatedDefenderBattleValue
                       * (1.0 + RegionDefenses.GetShared(offensive.TargetFaction, DefenseType.Entrenchment) * EntrenchmentRiskFactor);
-        double score = offensive.Reward / Math.Max(risk, 1.0);
-        // Provocation from a diversion makes the feinting region a more tempting target.
-        return score * (1.0 + offensive.TargetFaction.ProvocationLevel * 0.1);
+        // Provocation from a diversion used to multiply this score, making a feinting region a more
+        // tempting target. See IsWinnable for why that channel was replaced by the diversion's own
+        // same-day response roll.
+        return offensive.Reward / Math.Max(risk, 1.0);
     }
 
     // Battle-value strength of a defending region faction: its strategic military pool
     // (Population for population-is-military hordes, Garrison for civilian-base factions) plus
     // landed squads weighted by their soldiers' battle value. A landed marine squad is worth far
     // more than its headcount, so counting bodies here would badly understate an elite garrison.
+    /// <remarks>
+    /// Raw MilitaryStrength, deliberately, and NOT GetDeployedStrength - do not "unify" this with
+    /// StrategicCombatResolver.CalculateDefenderBattleValue, which shares its name and its shape but
+    /// answers a different question.
+    ///
+    /// This one is what an ATTACKER ESTIMATES about a defender when deciding whether to attack, and an
+    /// attacker does not know how organised its target is or how much of that strength the defender will
+    /// actually commit. Pricing the estimate off Organization would hand the planner knowledge it has no
+    /// way to hold. The resolver's version is what actually FIGHTS once the assault lands, and that is
+    /// correctly limited to what can be fielded.
+    ///
+    /// Estimation versus resolution. The two are supposed to disagree.
+    /// </remarks>
     internal static long CalculateDefenderBattleValue(RegionFaction defender)
     {
         return defender.MilitaryStrength

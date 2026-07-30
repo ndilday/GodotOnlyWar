@@ -5,10 +5,8 @@ using OnlyWar.Models.Soldiers;
 using OnlyWar.Models.Units;
 using OnlyWar.Helpers.Battles;
 using OnlyWar.Models;
-using System;
 using System.Collections.Generic;
 using System.Linq;
-using OnlyWar.Helpers.StrategicCombat;
 
 namespace OnlyWar.Helpers.Missions.Ambush
 {
@@ -16,9 +14,11 @@ namespace OnlyWar.Helpers.Missions.Ambush
     {
         public string Description { get { return "Ambush Stealth"; } }
 
+        public bool ConsumesDay => true;
+
         public PositionAmbushMissionStep() { }
 
-        public void ExecuteMissionStep(MissionExecutionContext execution, float marginOfSuccess, IMissionStep returnStep)
+        public MissionStepResult ExecuteMissionStep(MissionExecutionContext execution, float marginOfSuccess, IMissionStep resumeStep)
         {
             MissionContext context = execution.State;
             // negative mod for size of enemy force
@@ -36,11 +36,21 @@ namespace OnlyWar.Helpers.Missions.Ambush
             // -infinity, which used to guarantee the ambushers got into position however badly they
             // rolled. Patrolled ground is now the thing that spoils an ambush setup, not raw mass.
             float difficulty = MissionStealthDifficulty
-                .Calculate(enemyFaction.Region, headcount, attacker).Total;
+                .Calculate(enemyFaction.Region, headcount, attacker).Total
+                // Aggression's EXPOSURE axis: a cautious ambush takes its time and is harder to spot.
+                //
+                // There is deliberately no separate effect-axis CHECK here, for the same reason
+                // Assault has none (Design/Active/DailyMissionResolution.md §6): an ambush's
+                // objective IS the engagement, so aggression's existing casualty threshold is
+                // already its effect axis - press the ambush and you destroy more of the enemy, break
+                // off early and you destroy less. This margin additionally decides the range the
+                // ambush is sprung at (see PerformAmbushMissionStep / MissionOpeningRange), so a
+                // patient setup also buys the fight on the ambusher's own terms.
+                + MissionAggressionModifiers.ExposureDifficulty(context.Order.LevelOfAggression);
             SquadMissionTest missionTest = new SquadMissionTest(stealth, difficulty);
 
             context.OpposingSquads = PopulateOpposingForce(
-                context.Order.Mission.MissionSize,
+                context.Order.Mission,
                 enemyFaction,
                 execution.Random,
                 execution.EntityIds);
@@ -48,34 +58,28 @@ namespace OnlyWar.Helpers.Missions.Ambush
             context.DaysElapsed++;
             float margin = missionTest.RunMissionCheck(context.MissionSquads, execution.Random);
 
-            if (margin > 0.0f)
-            {
-                new PerformAmbushMissionStep().ExecuteMissionStep(execution, margin, null);
-            }
-            else
-            {
-                new MeetingEngagementMissionStep().ExecuteMissionStep(execution, margin, null);
-            }
+            return margin > 0.0f
+                ? MissionStepResult.Continue(new PerformAmbushMissionStep(), margin)
+                : MissionStepResult.Continue(new MeetingEngagementMissionStep(), margin);
         }
 
         private static List<BattleSquad> PopulateOpposingForce(
-            int missionSize,
+            Mission mission,
             RegionFaction enemyFaction,
             IRNG random,
             IEntityIdAllocator entityIds)
         {
             List<BattleSquad> opposingForces = new List<BattleSquad>();
-            // determine size of force to generate
-            double log = random.GetLinearDouble() + missionSize;
-            int forceSize = (int)Math.Pow(10, log);
+            long targetBattleValue =
+                AmbushMissionSizing.ResolveTargetBattleValue(mission, random);
 
             // generate opposing force
             var request = new ForceGenerationRequest
             {
                 Faction = enemyFaction.PlanetFaction.Faction,
-                // Mission size is still expressed in rough headcount bands; convert it using the
-                // compressed PDF baseline so it remains in the same strategic unit scale.
-                TargetBattleValue = forceSize * StrategicCombatRules.PdfTrooperBattleValue,
+                // Intelligence-discovered ambushes persist this concrete budget when the opportunity
+                // is created. Legacy and non-special ambush orders retain the old execution-time roll.
+                TargetBattleValue = targetBattleValue,
                 Profile = ForceCompositionProfile.AmbushForce
             };
             return ForceGenerator.GenerateForce(request, random, entityIds)

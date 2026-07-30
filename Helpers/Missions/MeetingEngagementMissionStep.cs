@@ -15,7 +15,7 @@ namespace OnlyWar.Helpers.Missions
     {
         public string Description { get { return "Meeting Engagement"; } }
 
-        public void ExecuteMissionStep(MissionExecutionContext execution, float marginOfSuccess, IMissionStep returnStep)
+        public MissionStepResult ExecuteMissionStep(MissionExecutionContext execution, float marginOfSuccess, IMissionStep resumeStep)
         {
             MissionContext context = execution.State;
             List<BattleSquad> missionSquads = context.MissionSquads
@@ -28,23 +28,23 @@ namespace OnlyWar.Helpers.Missions
             {
                 context.NoViableTarget = true;
                 context.AddLog($"Day {context.DaysElapsed}: No combat-capable forces remain for engagement.");
-                return;
+                return MissionStepResult.Complete;
+            }
+
+            // Redistribute the squad's loadout before the fight: a weapon whose carrier fell in an
+            // earlier engagement this mission is picked up by the best remaining shooter rather than
+            // left on the ground for the rest of the week.
+            foreach (BattleSquad squad in missionSquads)
+            {
+                squad.ReallocateEquipment();
             }
 
             // set up meeting engagement between the mission force (attacker) and the defenders.
-            // The attacker's prep-check margin, as a CDF, slides the opening range between the two
-            // sides' preferred engagement ranges: a decisive attacker closes toward its own
-            // preference, a repelled one is held out at the defender's preference. Interpolating
-            // between the two preferences (rather than from their midpoint) means neither side is
-            // ever dragged past the other's preferred range.
-            float rangeModifier = GaussianCalculator.ApproximateNormalCDF(marginOfSuccess);
-            BattleSoldier defenderSoldier = opposingSquads.First()
-                .GetRandomSquadMember(execution.Random);
-            BattleSoldier attackerSoldier = missionSquads.First()
-                .GetRandomSquadMember(execution.Random);
-            double attackerRange = missionSquads.Average(s => s.GetPreferredOpeningRange(defenderSoldier.Soldier.Size, defenderSoldier.Armor.Template.ArmorProvided, defenderSoldier.Soldier.Constitution, defenderSoldier.Soldier.Template.Species.RangedEvasion));
-            double defenderRange = opposingSquads.Average(s => s.GetPreferredOpeningRange(attackerSoldier.Soldier.Size, attackerSoldier.Armor.Template.ArmorProvided, attackerSoldier.Soldier.Constitution, attackerSoldier.Soldier.Template.Species.RangedEvasion));
-            ushort range = (ushort)(defenderRange + (attackerRange - defenderRange) * rangeModifier);
+            // The attacker's prep-check margin slides the opening range between the two sides'
+            // preferred engagement ranges: a decisive attacker fights at its own preference, a
+            // repelled one is held out at the defender's. See MissionOpeningRange.
+            ushort range = MissionOpeningRange.Interpolate(
+                missionSquads, opposingSquads, marginOfSuccess, execution.Random);
             // set up meeting engagement battle
             BattleGridManager bgm = new BattleGridManager();
             AnnihilationPlacer placer = new AnnihilationPlacer(bgm, range);
@@ -53,8 +53,13 @@ namespace OnlyWar.Helpers.Missions
             // of advancing across the gap — see Design/EvasionBurrowAndAmbush.md
             BurrowPlacer.PlaceBurrowers(bgm, missionSquads.Concat(opposingSquads));
             int oppForSize = opposingSquads.Sum(s => s.AbleSoldiers.Count);
-            string log = $"Day {context.DaysElapsed}: Force accepted engagement with {oppForSize} {opposingSquads.First().Squad.Faction.Name}\n";
+            // See AmbushedMissionStep: Faction is guarded rather than assumed everywhere else it is read.
+            string opposingFaction = opposingSquads.First().Squad?.Faction?.Name ?? "an unidentified force";
+            string log = $"Day {context.DaysElapsed}: Force accepted engagement with {oppForSize} {opposingFaction}\n";
             context.AddLog(log);
+            // Measured before and after so a multi-day assault faces a garrison depleted by the fighting
+            // it has already done, rather than a fresh full-strength one every morning.
+            long opposingBattleValueBefore = AbleBattleValue(opposingSquads);
             // run the battle
             BattleTurnResolver resolver = new BattleTurnResolver(
                 bgm,
@@ -72,6 +77,8 @@ namespace OnlyWar.Helpers.Missions
             }
             context.RecordBattleOutcome(resolver.BattleHistory);
             context.AddBattleReport(resolver.BattleHistory);
+            context.RecordDefenderLosses(
+                opposingBattleValueBefore - AbleBattleValue(opposingSquads));
             // A force left combat-ineffective by the engagement ends its mission here rather than
             // recursing into steps that assume a manned squad (placement/checks index into
             // AbleSoldiers and would throw). Mirrors InfiltrateMissionStep.ShouldContinue's
@@ -80,18 +87,26 @@ namespace OnlyWar.Helpers.Missions
             {
                 context.ForceWithdrewUnderFire = true;
                 context.AddLog($"Day {context.DaysElapsed}: Force combat-ineffective; mission ended.");
-                return;
+                return MissionStepResult.Complete;
             }
             if (context.ForceWithdrewUnderFire)
             {
                 context.AddLog($"Day {context.DaysElapsed}: Force withdrew from the engagement under fire.");
-                return;
+                return MissionStepResult.Complete;
             }
-            if(returnStep == null)
+            // Both early exits above return Complete deliberately: the resume target is NOT taken
+            // when the force is spent. A caller that must run something after the engagement whatever
+            // its outcome uses MissionStepResult.Then instead (see WithdrawIfAbleMissionStep).
+            if (resumeStep == null)
             {
-                return;
+                return MissionStepResult.Complete;
             }
-            returnStep.ExecuteMissionStep(execution, marginOfSuccess, returnStep);
+            return MissionStepResult.Continue(resumeStep, marginOfSuccess, resumeStep);
         }
+
+        private static long AbleBattleValue(IEnumerable<BattleSquad> squads) =>
+            squads
+                .SelectMany(squad => squad.AbleSoldiers)
+                .Sum(soldier => (long)soldier.Soldier.Template.BattleValue);
     }
 }

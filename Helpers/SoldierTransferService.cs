@@ -294,16 +294,75 @@ namespace OnlyWar.Helpers
 
         private static void UpdateSquadLocations(Squad oldSquad, Squad newSquad)
         {
+            if (oldSquad == newSquad)
+            {
+                return;
+            }
+
             if (newSquad.Members.Count == 1)
             {
-                newSquad.CurrentRegion = oldSquad.CurrentRegion;
-                newSquad.BoardedLocation = oldSquad.BoardedLocation;
+                // Location and orders have both a squad-side pointer and an owning roster.
+                // An empty squad may still retain stale registration from an earlier posting,
+                // so detach it before inheriting the source squad's active deployment.
+                DetachDeployment(newSquad);
+                if (newSquad.IsOperational)
+                {
+                    newSquad.CurrentRegion = oldSquad.CurrentRegion;
+                    newSquad.BoardedLocation = oldSquad.BoardedLocation;
+                    newSquad.BoardedLocation?.LoadSquad(newSquad);
+
+                    RegionFaction regionFaction = FindRegionFaction(oldSquad);
+                    if (regionFaction != null && !regionFaction.LandedSquads.Contains(newSquad))
+                    {
+                        regionFaction.LandedSquads.Add(newSquad);
+                    }
+
+                    newSquad.CurrentOrders = oldSquad.CurrentOrders;
+                    if (newSquad.CurrentOrders != null
+                        && !newSquad.CurrentOrders.AssignedSquads.Contains(newSquad))
+                    {
+                        newSquad.CurrentOrders.AssignedSquads.Add(newSquad);
+                    }
+                }
             }
             if (oldSquad.Members.Count == 0)
             {
-                oldSquad.CurrentRegion = null;
-                oldSquad.BoardedLocation = null;
+                DetachDeployment(oldSquad);
             }
+        }
+
+        private static void DetachDeployment(Squad squad)
+        {
+            if (squad.CurrentOrders != null)
+            {
+                squad.CurrentOrders.AssignedSquads.Remove(squad);
+                squad.CurrentOrders = null;
+            }
+
+            squad.BoardedLocation?.RemoveSquad(squad);
+            squad.BoardedLocation = null;
+
+            RegionFaction regionFaction = FindRegionFaction(squad);
+            regionFaction?.LandedSquads.Remove(squad);
+            squad.CurrentRegion = null;
+        }
+
+        private static RegionFaction FindRegionFaction(Squad squad)
+        {
+            if (squad?.CurrentRegion == null)
+            {
+                return null;
+            }
+
+            if (squad.Faction != null
+                && squad.CurrentRegion.RegionFactionMap.TryGetValue(
+                    squad.Faction.Id, out RegionFaction factionPresence))
+            {
+                return factionPresence;
+            }
+
+            return squad.CurrentRegion.RegionFactionMap.Values
+                .FirstOrDefault(regionFaction => regionFaction.LandedSquads.Contains(squad));
         }
 
         private List<SoldierTransferOption> GetOpeningsInUnit(

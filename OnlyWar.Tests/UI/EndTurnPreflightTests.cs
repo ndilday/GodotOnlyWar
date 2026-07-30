@@ -1,4 +1,4 @@
-using OnlyWar.Helpers.Settings;
+﻿using OnlyWar.Helpers.Settings;
 using OnlyWar.Helpers.Turns;
 using OnlyWar.Models;
 using OnlyWar.Models.Fleets;
@@ -41,7 +41,6 @@ public class EndTurnPreflightTests
         Squad ordered = AddSquad(campaign, "Squad Vigilant", campaign.Region);
         _ = new Order(
             [ordered],
-            Disposition.DugIn,
             false,
             false,
             Aggression.Cautious,
@@ -246,7 +245,6 @@ public class EndTurnPreflightTests
         campaign.Region.SpecialMissions.Add(mission);
         _ = new Order(
             [squad],
-            Disposition.DugIn,
             true,
             true,
             Aggression.Normal,

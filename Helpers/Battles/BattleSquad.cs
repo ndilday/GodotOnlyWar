@@ -323,6 +323,37 @@ namespace OnlyWar.Helpers.Battles
             return (int)AbleSoldiers.Average(s => BattleModifiersUtil.CalculateOpeningDistance(s, targetSize, targetArmor, targetCon, targetRangedEvasion));
         }
 
+        /// <summary>
+        /// Redistributes the squad's whole loadout across whoever is still able to fight. Called at the
+        /// start of every battle, not once per mission.
+        /// </summary>
+        /// <remarks>
+        /// Allocation used to happen exactly once, in the constructor, and a BattleSquad lives for the
+        /// whole mission (see _missionStartingAbleSoldierCount). That was invisible while a mission
+        /// contained at most one battle; now that assaults fight repeatedly and raids can be intercepted
+        /// on several days, it meant a squad whose heavy gunner died on day 1 carried on all week with
+        /// the weapon lying in a ditch.
+        ///
+        /// Reallocation is FULL rather than orphans-only: the existing method already picks the best
+        /// carrier for each weapon set by that weapon's related skill, so re-running it hands the heavy
+        /// weapon to the best remaining shooter for free. The accepted cost is that kit can also move
+        /// between soldiers who are both still alive - a brother carrying a bolter on day 1 may be handed
+        /// the plasma gun on day 3 with no in-fiction reason the player can see. Squad.Loadout lives on
+        /// the persistent Squad, so this is squad property being remapped onto bodies rather than
+        /// personal kit changing hands, and a fallen carrier's weapon is therefore always recovered.
+        ///
+        /// No statistics invalidation is needed: EnsureStatistics derives only armor, size, evasion,
+        /// constitution and move speed, none of which depend on weapons.
+        /// </remarks>
+        internal void ReallocateEquipment()
+        {
+            foreach (BattleSoldier soldier in Soldiers)
+            {
+                soldier.ClearWeapons();
+            }
+            AllocateEquipment();
+        }
+
         private void AllocateEquipment()
         {
             List<BattleSoldier> tempSquad = new List<BattleSoldier>(AbleSoldiers);

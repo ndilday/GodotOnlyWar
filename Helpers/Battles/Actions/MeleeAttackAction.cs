@@ -42,6 +42,17 @@ namespace OnlyWar.Helpers.Battles.Actions
         public const float MeleeRollStandardDeviation = 6.0f;
 
         public const float MovementAttackPenalty = 2.0f;
+
+        /// <summary>
+        /// Converts a fleeing soldier's foot speed into the melee-defence term that replaces his
+        /// weapon skill. A soldier at a dead run has no guard up: he is not parrying, not
+        /// fighting defensively, and cannot answer the swing — all that keeps a blade off him is
+        /// how fast he is moving. Species move speeds run 6–12 against melee skills of roughly
+        /// 12–25, so at 1.0 this is worth most of a sigma on the opposed roll: being caught
+        /// running is genuinely dangerous without being an automatic kill, and a fast species
+        /// still slips away better than a slow one. Phase 7 calibration target.
+        /// </summary>
+        public const float RunningDefenderSpeedScale = 1.0f;
         private static readonly float OpposedRollSigma =
             (float)(MeleeRollStandardDeviation * Math.Sqrt(2.0));
 
@@ -321,7 +332,9 @@ namespace OnlyWar.Helpers.Battles.Actions
             IReadOnlyCollection<MeleeWeapon> projectedMeleeWeapons,
             bool forfeitsWeaponParry = false)
         {
-            if (forfeitsWeaponParry)
+            // A running soldier is not parrying with anything — the weapon in his hands is
+            // ballast while he sprints. Same zero as a charge, arrived at for a different reason.
+            if (forfeitsWeaponParry || defender?.IsRunning == true)
             {
                 return 0;
             }
@@ -338,8 +351,26 @@ namespace OnlyWar.Helpers.Battles.Actions
             return parryModifier;
         }
 
+        /// <summary>
+        /// The melee-defence value of a soldier who is running rather than fighting: his foot
+        /// speed, and nothing else. Deliberately not his melee skill — he is not using it — and
+        /// species <see cref="Models.Soldiers.Species.MeleeEvasion"/> is still added by the
+        /// contested roll on top, since innate agility does not depend on having a guard up.
+        /// </summary>
+        public static float GetRunningDefenderMeleeSkill(BattleSoldier defender) =>
+            (defender?.GetMoveSpeed() ?? 0) * RunningDefenderSpeedScale;
+
         public static float GetDefenderMeleeSkill(BattleSoldier defender, BaseSkill fallbackSkill)
         {
+            // Running replaces the whole skill term; the weapons in hand contribute nothing to a
+            // defence the soldier is not mounting. Checked here rather than at the call sites so
+            // every consumer — the live roll, the planner's projections, and the charge/parry
+            // valuations — prices a fleeing target the same way.
+            if (defender?.IsRunning == true)
+            {
+                return GetRunningDefenderMeleeSkill(defender);
+            }
+
             float best = float.MinValue;
             foreach (MeleeWeapon weapon in defender.EquippedMeleeWeapons)
             {

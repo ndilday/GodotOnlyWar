@@ -1,4 +1,4 @@
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using System.Linq;
 using OnlyWar.Helpers;
 using OnlyWar.Helpers.StrategicCombat;
@@ -275,7 +275,7 @@ public class StrategicCombatResolverTests
             [new StrategicCombatContribution(staging, committed)],
             Aggression.Normal,
             invadesOnVictory: true);
-        Order order = new(new List<Squad>(), Disposition.Mobile, false, true, Aggression.Normal, mission);
+        Order order = new(new List<Squad>(), false, true, Aggression.Normal, mission);
         TurnController controller = new();
 
         controller.ProcessStrategicCombatMissions([order]);

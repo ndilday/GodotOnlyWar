@@ -12,9 +12,11 @@ namespace OnlyWar.Helpers.Missions.Recon
     {
         public string Description { get { return "Infiltrate"; } }
 
+        public bool ConsumesDay => true;
+
         public InfiltrateMissionStep(){ }
 
-        public void ExecuteMissionStep(MissionExecutionContext execution, float marginOfSuccess, IMissionStep returnStep)
+        public MissionStepResult ExecuteMissionStep(MissionExecutionContext execution, float marginOfSuccess, IMissionStep resumeStep)
         {
             MissionContext context = execution.State;
             // negative mod for size of enemy force
@@ -33,7 +35,7 @@ namespace OnlyWar.Helpers.Missions.Recon
             SquadMissionTest missionTest = new SquadMissionTest(stealth, difficulty);
             if (!ShouldContinue(context))
             {
-                return;
+                return MissionStepResult.Complete;
             }
             context.DaysElapsed++;
             // modifiers should include: size of enemy forces, size of player force, terrain, some notion of enemy focus (hunting, defending, hiding), whether enemy is hidden or public
@@ -57,13 +59,10 @@ namespace OnlyWar.Helpers.Missions.Recon
                 context.AddLog(
                     $"Day {context.DaysElapsed}: Force succeeded in infiltrating "
                     + $"{context.Order.Mission.RegionFaction.Region.Name} undetected.");
-                MissionStepOrchestrator.GetMainInitialStep(execution)
-                    .ExecuteMissionStep(execution, margin, returnStep);
+                return MissionStepResult.Continue(
+                    MissionStepOrchestrator.GetMainInitialStep(execution), margin, resumeStep);
             }
-            else
-            {
-                new DetectedMissionStep().ExecuteMissionStep(execution, margin, this);
-            }
+            return MissionStepResult.Continue(new DetectedMissionStep(), margin, this);
         }
 
         public bool ShouldContinue(MissionContext context)

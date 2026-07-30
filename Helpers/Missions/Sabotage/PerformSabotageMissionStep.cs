@@ -13,7 +13,7 @@ namespace OnlyWar.Helpers.Missions.Sabotage
     {
         public string Description => "Sabotage Mission";
 
-        public void ExecuteMissionStep(MissionExecutionContext execution, float marginOfSuccess, IMissionStep returnStep)
+        public MissionStepResult ExecuteMissionStep(MissionExecutionContext execution, float marginOfSuccess, IMissionStep resumeStep)
         {
             MissionContext context = execution.State;
             BaseSkill tactics = execution.Rules.Tactics;
@@ -34,6 +34,9 @@ namespace OnlyWar.Helpers.Missions.Sabotage
             float difficulty = (float)(
                 RegionDefenses.GetShared(enemyFaction, DefenseType.Entrenchment) * 0.5);
             difficulty += MissionStealthDifficulty.Magnitude(enemyFaction.GetDeployedStrength());
+            // Aggression's EFFECT axis: how thoroughly the charges get placed. A force keeping its
+            // distance plants less.
+            difficulty += MissionAggressionModifiers.EffectDifficulty(context.Order.LevelOfAggression);
             LeaderMissionTest missionTest = new LeaderMissionTest(tactics, difficulty);
 
             Order order = context.MissionSquads.First().Squad.CurrentOrders;
@@ -47,20 +50,17 @@ namespace OnlyWar.Helpers.Missions.Sabotage
 
             if (context.OperatingDaysSpent)
             {
-                // time to go home
-                if (context.MustExfiltrate)
-                {
-                    new ExfiltrateMissionStep().ExecuteMissionStep(execution, 0.0f, this);
-                }
-                // otherwise we don't have to go anywhere, so just exit.
-                return;
+                // time to go home; otherwise we don't have to go anywhere, so just exit.
+                return context.MustExfiltrate
+                    ? MissionStepResult.Continue(new ExfiltrateMissionStep(), 0.0f, this)
+                    : MissionStepResult.Complete;
             }
 
             // Continue the SABOTAGE loop. This used to chain to ReconStealthMissionStep, whose success
             // branch runs PerformReconMissionStep - so after its first successful day a sabotage
             // mission silently turned into a recon mission: it stopped planting explosives and started
             // accruing recon Impact instead.
-            new SabotageStealthMissionStep().ExecuteMissionStep(execution, marginOfSuccess, this);
+            return MissionStepResult.Continue(new SabotageStealthMissionStep(), marginOfSuccess, this);
         }
     }
 }

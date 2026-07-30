@@ -1,4 +1,4 @@
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using System.Drawing;
 using OnlyWar.Helpers.Battles;
 using OnlyWar.Helpers.Missions;
@@ -172,7 +172,7 @@ public class MissionOutcomeClassifierTests
     private static MissionContext CreateContext(MissionType missionType)
     {
         Mission mission = new(missionType, CreateRegionFaction(), 0);
-        Order order = new(new List<Squad>(), Disposition.Raiding, true, false,
+        Order order = new(new List<Squad>(), true, false,
             Aggression.Cautious, mission);
         return new MissionContext(order, new List<BattleSquad>(), new List<BattleSquad>());
     }

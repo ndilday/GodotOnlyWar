@@ -1,4 +1,4 @@
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using System.Drawing;
 using System.Linq;
 using OnlyWar.Helpers;
@@ -9,6 +9,7 @@ using OnlyWar.Helpers.Missions.Assassinate;
 using OnlyWar.Helpers.Missions.Diversion;
 using OnlyWar.Helpers.Battles;
 using OnlyWar.Helpers.Simulation;
+using OnlyWar.Helpers.StrategicCombat;
 using OnlyWar.Helpers.Turns;
 using OnlyWar.Models;
 using OnlyWar.Models.Fleets;
@@ -46,9 +47,9 @@ public class MissionTargetStrengthTests
     {
         MissionContext context = CreateContext(
             MissionType.Ambush, hordePopulation: 100_000_000, trained: false,
-            defenderIntel: 6f, defenderPatrollers: 250);
+            defenderIntel: 6f, defenderPatrollers: 30);
 
-        new PositionAmbushMissionStep().ExecuteMissionStep(CreateExecution(context), 0f, null);
+        new MissionStepDriver(CreateExecution(context), new PositionAmbushMissionStep()).RunToCompletion();
 
         Assert.Contains(context.Log, line => line.Contains("for engagement"));
         Assert.DoesNotContain(context.Log, line => line.Contains("for ambush"));
@@ -60,7 +61,7 @@ public class MissionTargetStrengthTests
         MissionContext context = CreateContext(
             MissionType.Ambush, hordePopulation: 100, trained: true);
 
-        new PositionAmbushMissionStep().ExecuteMissionStep(CreateExecution(context), 0f, null);
+        new MissionStepDriver(CreateExecution(context), new PositionAmbushMissionStep()).RunToCompletion();
 
         Assert.Contains(context.Log, line => line.Contains("for ambush"));
     }
@@ -75,9 +76,9 @@ public class MissionTargetStrengthTests
     {
         MissionContext context = CreateContext(
             MissionType.Assassination, hordePopulation: 100_000_000, trained: false,
-            defenderIntel: 6f, defenderPatrollers: 250);
+            defenderIntel: 6f, defenderPatrollers: 30);
 
-        new AssassinateStealthMissionStep().ExecuteMissionStep(CreateExecution(context), 0f, null);
+        new MissionStepDriver(CreateExecution(context), new AssassinateStealthMissionStep()).RunToCompletion();
 
         Assert.Contains(context.Log, line => line.Contains("detected and intercepted"));
         Assert.DoesNotContain(context.Log, line => line.Contains("located the assassination target"));
@@ -90,7 +91,7 @@ public class MissionTargetStrengthTests
         MissionContext context = CreateContext(
             MissionType.Assassination, hordePopulation: 100, trained: true);
 
-        new AssassinateStealthMissionStep().ExecuteMissionStep(CreateExecution(context), 0f, null);
+        new MissionStepDriver(CreateExecution(context), new AssassinateStealthMissionStep()).RunToCompletion();
 
         Assert.Contains(context.Log, line => line.Contains("located the assassination target"));
     }
@@ -127,8 +128,8 @@ public class MissionTargetStrengthTests
         MissionContext small = CreateContext(MissionType.Diversion, 100, trained: true);
         MissionContext large = CreateContext(MissionType.Diversion, 1_000_000, trained: true);
 
-        new DemonstrateForceMissionStep().ExecuteMissionStep(CreateExecution(small), 0f, null);
-        new DemonstrateForceMissionStep().ExecuteMissionStep(CreateExecution(large), 0f, null);
+        new MissionStepDriver(CreateExecution(small), new DemonstrateForceMissionStep()).RunToCompletion();
+        new MissionStepDriver(CreateExecution(large), new DemonstrateForceMissionStep()).RunToCompletion();
 
         float expectedGap = MissionContext.MissionDurationDays
             * (MissionStealthDifficulty.Magnitude(1_000_000)
@@ -156,6 +157,13 @@ public class MissionTargetStrengthTests
         Assert.Equal(MissionType.Ambush, ambush.MissionType);
         Assert.Equal(0, horde.Garrison);
         Assert.Equal(1, ambush.MissionSize);
+        Assert.Equal(
+            10 * StrategicCombatRules.PdfTrooperBattleValue,
+            ambush.TargetBattleValue);
+        Assert.Equal(
+            1,
+            AmbushMissionSizing.RecommendedMinimumSquads(
+                ambush.TargetBattleValue.Value));
     }
 
     // The magnitude still has to cap the size: a rolled size of 4 stands against a hive fleet but is
@@ -174,6 +182,16 @@ public class MissionTargetStrengthTests
         Mission ambush = Assert.Single(generated);
         Assert.Equal(MissionType.Ambush, ambush.MissionType);
         Assert.Equal(expectedSize, ambush.MissionSize);
+        long expectedTargetBattleValue =
+            (long)System.Math.Pow(10, expectedSize)
+            * StrategicCombatRules.PdfTrooperBattleValue;
+        Assert.Equal(expectedTargetBattleValue, ambush.TargetBattleValue);
+        Assert.Equal(
+            (expectedTargetBattleValue
+             + AmbushMissionSizing.ReferenceSquadBattleValue - 1)
+            / AmbushMissionSizing.ReferenceSquadBattleValue,
+            AmbushMissionSizing.RecommendedMinimumSquads(
+                ambush.TargetBattleValue.Value));
     }
 
     // GenerateAssassinationMission has the same shape over Population. A horde's Population is
@@ -255,6 +273,11 @@ public class MissionTargetStrengthTests
         long hordePopulation,
         bool trained,
         float defenderIntel = 0f,
+        // A HEADCOUNT, not a battle value (contrast MissionStealthDifficultyTests, whose equivalent dial
+        // is denominated in battle value). Keep it small: since DetectedMissionStep began intercepting
+        // with the squads a region actually has, these patrollers are the force that fights, and they are
+        // built as one squad. At 250 that was a 250-man squad taking ~14 seconds to grind down a lone
+        // infiltrator. Thirty is ample to make the region count as searched.
         int defenderPatrollers = 0)
     {
         Planet planet = new(1, "Test Planet", new Coordinate(0, 0), 1, null, 0, 0);
@@ -280,7 +303,6 @@ public class MissionTargetStrengthTests
             patrol.CurrentRegion = region;
             _ = new Order(
                 [patrol],
-                Disposition.Mobile,
                 isQuiet: false,
                 isActivelyEngaging: false,
                 levelOfAggression: Aggression.Normal,
@@ -295,7 +317,6 @@ public class MissionTargetStrengthTests
         squad.CurrentRegion = region;
         Order order = new(
             [squad],
-            Disposition.Raiding,
             isQuiet: true,
             isActivelyEngaging: false,
             levelOfAggression: Aggression.Normal,

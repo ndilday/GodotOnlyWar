@@ -1,4 +1,4 @@
-using OnlyWar.Helpers.Missions;
+﻿using OnlyWar.Helpers.Missions;
 using OnlyWar.Models;
 using OnlyWar.Models.Missions;
 using OnlyWar.Models.Orders;
@@ -86,9 +86,29 @@ namespace OnlyWar.Helpers.Orders
             // The Order constructor sets squad.CurrentOrders = this for every squad passed in,
             // so assigning CurrentOrders separately afterwards is unnecessary.
             Order newOrder = new Order(
-                distinctSquads, Disposition.Mobile, true, false, aggression, builtMission);
+                distinctSquads, true, false, aggression, builtMission);
             sector.AddNewOrder(newOrder);
             return newOrder;
+        }
+
+        public static bool UnassignSquads(IReadOnlyList<Squad> squads)
+        {
+            if (squads == null || squads.Count == 0)
+            {
+                return false;
+            }
+
+            Sector sector = GameDataSingleton.Instance.Sector;
+            bool changed = false;
+            foreach (Squad squad in squads
+                .Where(squad => squad?.CurrentOrders != null)
+                .GroupBy(squad => squad.Id)
+                .Select(group => group.First()))
+            {
+                DetachFromCurrentOrder(squad, sector);
+                changed = true;
+            }
+            return changed;
         }
 
         private static bool IsPlayerOrder(Order order)

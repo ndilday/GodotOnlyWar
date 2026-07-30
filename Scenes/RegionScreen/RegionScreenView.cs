@@ -1,7 +1,9 @@
 using Godot;
 using OnlyWar.Helpers.Missions;
+using OnlyWar.Helpers.Missions.Ambush;
 using OnlyWar.Helpers.Orders;
 using OnlyWar.Helpers.UI;
+using OnlyWar.Models.Missions;
 using OnlyWar.Models.Orders;
 using OnlyWar.Models.Planets;
 using System;
@@ -220,11 +222,10 @@ public partial class RegionScreenView : CommandWorkspaceView
 
         foreach (InboundOrderInfo row in rows)
         {
-            string squads = row.SquadCount == 1 ? "1 squad" : $"{row.SquadCount} squads";
             Button rowButton = new()
             {
-                Text = $"{row.MissionLabel} · {squads} · from {row.OriginLabel}",
-                TooltipText = "Open orders",
+                Text = row.SummaryLabel,
+                TooltipText = row.HoverText,
                 MouseDefaultCursorShape = CursorShape.PointingHand,
                 SizeFlagsHorizontal = SizeFlags.ExpandFill,
                 Alignment = HorizontalAlignment.Left,
@@ -611,9 +612,22 @@ public partial class RegionScreenView : CommandWorkspaceView
             MissionAvailabilityKind.Attack => "Enter the target region, engaging any enemy forces there.",
             MissionAvailabilityKind.Diversion => "Feint from the origin region to pin the garrison in place.",
             MissionAvailabilityKind.Move => "Move into the target region.",
-            MissionAvailabilityKind.Special => "Special mission opportunity identified in this region.",
+            MissionAvailabilityKind.Special => GetSpecialMissionDescription(mission.SpecialMission),
             _ => ""
         };
+    }
+
+    private static string GetSpecialMissionDescription(Mission mission)
+    {
+        const string opportunity = "Special mission opportunity identified in this region.";
+        string recommendedMinimum =
+            AmbushMissionSizing.FormatRecommendedMinimumForce(mission);
+        return recommendedMinimum == null
+            ? opportunity
+            : $"{opportunity}\n"
+              + $"{recommendedMinimum}\n"
+              + "Full-strength Tactical Marine equivalents at battle-value parity,\n"
+              + "relying on the benefits of the ambush.";
     }
 
     private static void ClearContainerChildren(Container container)

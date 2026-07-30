@@ -248,7 +248,7 @@ public partial class BattleReviewView : DialogView
     {
         string indent = new(' ', depth * 3);
         string disclosure = node.Children.Count == 0 ? "   " : isCollapsed ? "[+] " : "[-] ";
-        return $"{indent}{disclosure}{node.Title}  {node.CurrentStrength}/{node.StartingStrength}  Losses {Math.Max(0, node.Losses)}";
+        return $"{indent}{disclosure}{node.Title}  {node.CurrentStrength}/{node.StartingStrength}";
     }
 
     private static string BuildForceRowTooltip(BattleForceHierarchyNode node, bool isCollapsed)

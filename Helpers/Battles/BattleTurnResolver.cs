@@ -836,9 +836,11 @@ namespace OnlyWar.Helpers.Battles
             EvaluatePursuitResponse(withdrawingSide, events);
         }
 
-        // Decides the enemy's pursuit posture toward a side that has just started withdrawing
-        // or routing. BreakOff completes the withdrawal immediately; otherwise the enemy's
-        // intent becomes Pursuing. Shared by voluntary withdrawal and the morale rout path.
+        // Decides the enemy's pursuit posture toward a side that is withdrawing or routing.
+        // BreakOff completes the withdrawal immediately; otherwise the enemy's intent becomes
+        // Pursuing. Shared by voluntary withdrawal, the morale rout path, and the per-round
+        // refresh in ResolveContactBreak, so it emits its event only when the posture actually
+        // changes rather than once per round.
         private void EvaluatePursuitResponse(BattleSide withdrawingSide, List<BattleEvent> events)
         {
             BattleSide pursuingSide = Opposite(withdrawingSide);
@@ -858,6 +860,14 @@ namespace OnlyWar.Helpers.Battles
                 squad => squad.WithdrawalRole != WithdrawalRole.Routing
                     && squad.AbleSoldiers.Any(
                         soldier => soldier.EquippedRangedWeapons.Count > 0));
+            // Whether the pursuit can put someone in melee THIS turn, independent of whether it
+            // can close over time. A pursuer already in contact, or one Run-and-charge away, has
+            // a catch available right now even at matched speeds, so the "cannot close" override
+            // must not talk it out of taking it.
+            bool pursuerCanReachMeleeThisTurn =
+                GetActiveSquads(pursuingSide).Any(squad => squad.IsInMelee)
+                || separation <= pursuitMetrics.FastestPursuitSquadSpeed
+                    + BattleContactRules.MeleeContactAllowance;
             BattlePursuitPlanner.Result result = BattlePursuitPlanner.Evaluate(new(
                 _currentState.TurnNumber,
                 pursuingSide == BattleSide.Attacker,
@@ -868,7 +878,11 @@ namespace OnlyWar.Helpers.Battles
                 withdrawalMetrics.SlowestMainBodySquadSpeed,
                 pressTurns,
                 ProjectedFollowShotTurns(pursuingSide, separation),
-                withdrawerReturnsFire));
+                withdrawerReturnsFire,
+                pursuerCanReachMeleeThisTurn));
+            PursuitPosture? previous = _pursuitPostures.TryGetValue(
+                pursuingSide,
+                out PursuitPosture stored) ? stored : null;
             _pursuitPostures[pursuingSide] = result.Posture;
             if (result.Posture == PursuitPosture.BreakOff)
             {
@@ -884,13 +898,16 @@ namespace OnlyWar.Helpers.Battles
             }
 
             pursuing.Intent = BattleSideIntent.Pursuing;
+            if (previous == result.Posture) return;
             events.Add(new BattleEvent(
                 BattleEventType.PursuitStarted,
                 _currentState.TurnNumber,
                 pursuingSide,
                 null,
                 GetActiveSquads(withdrawingSide).Select(squad => squad.Id),
-                $"{SideName(pursuingSide)} began a {result.Posture} pursuit."));
+                previous.HasValue
+                    ? $"{SideName(pursuingSide)} switched to a {result.Posture} pursuit."
+                    : $"{SideName(pursuingSide)} began a {result.Posture} pursuit."));
         }
 
         private void ResolveContactBreaks(List<BattleEvent> events)
@@ -916,6 +933,18 @@ namespace OnlyWar.Helpers.Battles
             }
 
             BattleSide pursuerSide = Opposite(withdrawingSide);
+            // Posture is not fixed at declaration (§7: the pursuer re-evaluates every round).
+            // Casualties and wounds move both sides' speeds, and the gap the withdrawal opens
+            // changes whether pressing or shooting is the better use of the turn — a pursuer
+            // that started faster than its quarry and is now not, in particular, needs to stop
+            // chasing and start shooting rather than trail it to the turn cap.
+            if (GetSideState(pursuerSide).Intent == BattleSideIntent.Pursuing)
+            {
+                EvaluatePursuitResponse(withdrawingSide, events);
+                // BreakOff completed the withdrawal and recorded the outcome.
+                if (BattleHistory.Outcome != null) return;
+            }
+
             List<BattleSquad> pursuers = GetActiveSquads(pursuerSide).ToList();
             PursuitPosture posture = _pursuitPostures.GetValueOrDefault(
                 pursuerSide,
@@ -936,7 +965,8 @@ namespace OnlyWar.Helpers.Battles
                 withdrawalMetrics.SlowestMainBodySquadSpeed,
                 state.RearGuardSquadId.HasValue,
                 0,
-                withdrawalMetrics.SlowestMainBodySquadSpeed));
+                withdrawalMetrics.SlowestMainBodySquadSpeed,
+                PursuersAttackedRecently: pursuerMetrics.HasViableDamagingActionRecently));
             if (forceResult.Decision == ContactBreakResult.OrganizedForceDisengages)
             {
                 CompleteWithdrawal(withdrawingSide, events);
@@ -965,7 +995,8 @@ namespace OnlyWar.Helpers.Battles
                         squad.GetSquadMove(),
                         true,
                         Math.Max(0, current - start),
-                        squad.GetSquadMove()));
+                        squad.GetSquadMove(),
+                        PursuersAttackedRecently: pursuerMetrics.HasViableDamagingActionRecently));
                     if (masked.Decision == ContactBreakResult.SquadDisengages)
                     {
                         DisengageSquad(withdrawingSide, squad, events, "departed behind the rear guard");

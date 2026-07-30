@@ -13,28 +13,29 @@ namespace OnlyWar.Helpers.Missions.Recon
 {
     public class DetectedMissionStep : IMissionStep
     {
+        // Interception strength required, as a multiple of the intruding force's battle value: parity at
+        // best, rising with how badly the intruder was seen. A marginal detection (about -0.5 sigma)
+        // wants roughly 1.25x the intruder; a thoroughly blown one (-3) wants 2.5x.
+        private const double InterceptionBaseMultiple = 1.0;
+        private const double InterceptionMultiplePerSigma = 0.5;
+
         public string Description { get { return "Detected"; } }
 
         public DetectedMissionStep(){}
 
-        public void ExecuteMissionStep(MissionExecutionContext execution, float marginOfSuccess, IMissionStep returnStep)
+        private static long AbleBattleValue(IEnumerable<BattleSquad> squads) =>
+            squads
+                .SelectMany(squad => squad.AbleSoldiers)
+                .Sum(soldier => (long)soldier.Soldier.Template.BattleValue);
+
+        private static long AbleBattleValue(Squad squad) =>
+            squad.Members
+                .Where(member => member.CanFight)
+                .Sum(member => (long)member.Template.BattleValue);
+
+        public MissionStepResult ExecuteMissionStep(MissionExecutionContext execution, float marginOfSuccess, IMissionStep resumeStep)
         {
             MissionContext context = execution.State;
-            // Build the intercepting OpFor. Its size grows the worse the scout's stealth margin was
-            // (a badly-blown infiltration is met by more defenders). marginOfSuccess is <= 0 here —
-            // this is the detected branch — so subtracting its truncated value ADDS squads. The cast
-            // MUST be to a signed type: the old (ushort) cast turned a negative margin (e.g. -1.7)
-            // into ~65535 and underflowed the count to a garbage negative, so GenerateScoutPatrol's
-            // `for (i = tier; i > 0; i--)` produced zero interceptors and no engagement ever happened.
-            int numberOfOpposingSquads = context.MissionSquads.Count - (short)marginOfSuccess;
-            // any fractional value of margin of Success is treated as the probability of an additional squad being added.
-            float fraction = Math.Abs(marginOfSuccess - (short)marginOfSuccess);
-            if (execution.Random.GetLinearDouble() < fraction)
-            {
-                numberOfOpposingSquads++;
-            }
-            // A detected intrusion always draws at least one responding squad.
-            numberOfOpposingSquads = Math.Max(1, numberOfOpposingSquads);
 
             // The spotter (resolved by the detection step via Region.SelectSpotter) is the faction that
             // actually caught the scout, and it may not be the mission's anchor RegionFaction when the
@@ -42,45 +43,67 @@ namespace OnlyWar.Helpers.Missions.Recon
             // not resolve a spotter (special missions carry a concrete target of their own).
             RegionFaction spotter = context.Spotter ?? context.Order.Mission.RegionFaction;
             context.Spotter = spotter;
-            context.AddLog(
-                $"Day {context.DaysElapsed}: Force was detected and intercepted in {spotter.Region.Name}.");
 
-            // shouldn't all be the same squad type
-            // a flexible, but verbose method would be to define a table in the game rules that maps some concept of "situation" and faction ID to "lottery balls".
-            // Then, here we would total the number of qualifying units lottery balls, and roll an int against that to generate a reasonable mix of units.
-            // for now, get all squads of the OpFor faction and select one for each opFor squad needed
-            var request = new ForceGenerationRequest
-            {
-                Faction = spotter.PlanetFaction.Faction,
-                Profile = ForceCompositionProfile.ScoutPatrol,
-                Tier = numberOfOpposingSquads
-            };
-            context.OpposingSquads = ForceGenerator.GenerateForce(
-                    request,
-                    execution.Random,
-                    execution.EntityIds)
-                .Select(s => new BattleSquad(false, s))
+            // How much force it would take to deal with this intrusion: a multiple of the intruding
+            // force, growing with how badly the intruder blew its stealth check (marginOfSuccess is <= 0
+            // in this branch). Sized in battle value rather than squad count, because a squad is not a
+            // unit of strength - the old rule generated one conjured squad per intruding squad plus one
+            // per sigma of failure, which meant a region's actual screen had no bearing at all on what
+            // showed up.
+            long intruderBattleValue = AbleBattleValue(context.MissionSquads);
+            double requiredMultiple = InterceptionBaseMultiple
+                + Math.Abs(marginOfSuccess) * InterceptionMultiplePerSigma;
+            long requiredBattleValue = (long)Math.Round(intruderBattleValue * requiredMultiple);
+
+            // Only forces actually out looking can intercept: squads on a Patrol or Recon order in the
+            // spotter's region. Nothing is conjured. A region with sensors but nobody sweeping knows
+            // perfectly well that there are enemies out there and is too busy to do anything about it.
+            List<Squad> screen = spotter.LandedSquads
+                .Where(squad => squad.CurrentOrders?.Mission.MissionType == MissionType.Patrol
+                    || squad.CurrentOrders?.Mission.MissionType == MissionType.Recon)
+                .Where(squad => squad.Members.Any(member => member.CanFight))
+                // Largest first, so the screen commits the fewest squads that will do the job and the
+                // rest carry on screening.
+                .OrderByDescending(AbleBattleValue)
                 .ToList();
+            long screenBattleValue = screen.Sum(AbleBattleValue);
 
-            // No force may actually materialize to intercept the scout: the region can detect the
-            // intrusion (a listening post over a bare garrison) yet have no squads to scramble, or
-            // the OpFor size can round to zero, or the faction may have no ScoutPatrol composition.
-            // With no OpFor there is nothing to engage, and every downstream battle step assumes a
-            // non-empty OpposingSquads (First()/Average() over it) and would throw. Treat the recon
-            // as uncontested and continue the mission rather than fighting a phantom force.
-            if (context.OpposingSquads.Count == 0)
+            // Below parity with the intruder the screen declines to engage rather than feeding itself in
+            // piecemeal. The intrusion is still DETECTED - that already happened - it simply goes
+            // uncontested.
+            if (screenBattleValue < intruderBattleValue)
             {
                 context.AddLog(
-                    $"Day {context.DaysElapsed}: Detected in {spotter.Region.Name}, "
-                    + "but no enemy force intercepts; the force presses on.");
+                    $"Day {context.DaysElapsed}: Force was spotted in {spotter.Region.Name}, but no "
+                    + "force strong enough to engage it is in position; the mission presses on.");
                 GameLog.Trace(() =>
                     $"Detected {DescribeRegion(context)} day {context.DaysElapsed}: "
-                    + $"intercept force requested (tier={numberOfOpposingSquads}) but none materialized "
-                    + $"({spotter.PlanetFaction.Faction.Name} fielded no ScoutPatrol); "
-                    + "recon uncontested, presses on");
-                returnStep?.ExecuteMissionStep(execution, marginOfSuccess, returnStep);
-                return;
+                    + $"screenBV={screenBattleValue} < intruderBV={intruderBattleValue}; "
+                    + "screen declines to engage, recon uncontested");
+                return resumeStep == null
+                    ? MissionStepResult.Complete
+                    : MissionStepResult.Continue(resumeStep, marginOfSuccess, resumeStep);
             }
+
+            // Commit squads until the requirement is met. Reaching parity but falling short of the ideal
+            // still engages - with less than it wanted, which is the cost of a thin screen.
+            List<BattleSquad> interceptors = new();
+            long committedBattleValue = 0;
+            foreach (Squad squad in screen)
+            {
+                if (committedBattleValue >= requiredBattleValue) break;
+                interceptors.Add(new BattleSquad(squad.Faction?.IsPlayerFaction == true, squad));
+                committedBattleValue += AbleBattleValue(squad);
+            }
+            context.OpposingSquads = interceptors;
+
+            context.AddLog(
+                $"Day {context.DaysElapsed}: Force was detected and intercepted in {spotter.Region.Name}.");
+            GameLog.Debug(() =>
+                $"Interception {DescribeRegion(context)} day {context.DaysElapsed}: "
+                + $"intruderBV={intruderBattleValue}, margin={marginOfSuccess:F2}, "
+                + $"requiredBV={requiredBattleValue} (x{requiredMultiple:F2}), screenBV={screenBattleValue} "
+                + $"-> committed {interceptors.Count} squad(s), {committedBattleValue} BV");
 
             // The scout's leader now tries to slip past the responders (a Tactics contest); the more
             // defenders were scrambled, the harder that is. Difficulty reads the ACTUAL generated
@@ -96,14 +119,9 @@ namespace OnlyWar.Helpers.Missions.Recon
                 + $"intercepted by {context.OpposingSquads.Sum(s => s.AbleSoldiers.Count)} "
                 + $"{context.OpposingSquads.First().Squad.Faction.Name} ({context.OpposingSquads.Count} squads), "
                 + $"tacticsMargin={margin:F2} -> {(margin > 0 ? "outmaneuvered them (cross-detection)" : "AMBUSHED")}");
-            if (margin > 0.0f)
-            {
-                new CrossDetectionMissionStep().ExecuteMissionStep(execution, margin, returnStep);
-            }
-            else
-            {
-                new AmbushedMissionStep().ExecuteMissionStep(execution, margin, returnStep);
-            }
+            return margin > 0.0f
+                ? MissionStepResult.Continue(new CrossDetectionMissionStep(), margin, resumeStep)
+                : MissionStepResult.Continue(new AmbushedMissionStep(), margin, resumeStep);
         }
 
         private static string DescribeRegion(MissionContext context)

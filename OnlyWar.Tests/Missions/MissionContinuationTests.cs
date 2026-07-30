@@ -1,4 +1,4 @@
-using OnlyWar.Helpers.Battles;
+﻿using OnlyWar.Helpers.Battles;
 using OnlyWar.Models.Missions;
 using OnlyWar.Models.Orders;
 using OnlyWar.Models.Squads;
@@ -36,7 +36,6 @@ public class MissionContinuationTests
         }
         _ = new Order(
             [squad],
-            Disposition.Raiding,
             isQuiet: true,
             isActivelyEngaging: false,
             levelOfAggression: aggression,

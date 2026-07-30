@@ -1,4 +1,4 @@
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using System.Linq;
 using OnlyWar.Models.Missions;
 using OnlyWar.Models.Orders;
@@ -132,7 +132,7 @@ public class TrainingUnitScreenControllerTests
             TrainingFocus = TrainingFocuses.Melee
         };
         Mission mission = new(MissionType.Patrol, null, 1);
-        _ = new Order([squad], Disposition.Mobile, false, true, Aggression.Normal, mission);
+        _ = new Order([squad], false, true, Aggression.Normal, mission);
 
         Assert.Equal("Alpha Scouts (On Mission)", TrainingUnitScreenController.GetSquadListLabel(squad));
     }

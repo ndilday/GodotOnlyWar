@@ -254,7 +254,8 @@ public class FleetMovementTests
         {
         }
 
-        public void TrainScouts(IEnumerable<Squad> scoutSquads, Dictionary<int, TrainingFocuses> squadFocusMap, float points = 0.2f)
+        public void TrainScouts(IEnumerable<Squad> scoutSquads, Dictionary<int, TrainingFocuses> squadFocusMap,
+            float points = 0.2f, IReadOnlyDictionary<int, float> pointsBySquad = null)
         {
         }
     }

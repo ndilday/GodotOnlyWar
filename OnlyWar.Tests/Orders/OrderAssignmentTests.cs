@@ -174,4 +174,37 @@ public class OrderAssignmentTests
         Assert.Null(order);
         Assert.Null(squad.CurrentOrders);
     }
+
+    [Fact]
+    public void UnassignSquads_OneOfTwoSquads_UpdatesInboundOrderCount()
+    {
+        SectorSimulationFixture fixture = SectorSimulationFixture.Create();
+        RegionFaction enemy = fixture.AddControllingFaction(5, "Orks", 5000);
+        Region targetRegion = fixture.Planet.Regions[5];
+        Region originRegion = fixture.Planet.Regions[0];
+        Squad remaining = TestModelFactory.CreateSquad(
+            "Remaining Squad", TestModelFactory.CreateSoldier());
+        Squad unassigned = TestModelFactory.CreateSquad(
+            "Unassigned Squad", TestModelFactory.CreateSoldier());
+        remaining.CurrentRegion = originRegion;
+        unassigned.CurrentRegion = originRegion;
+
+        Order order = OrderAssignment.AssignSquadsToMission(
+            [remaining, unassigned],
+            targetRegion,
+            new AvailableMission("Attack", MissionAvailabilityKind.Attack),
+            enemy.PlanetFaction.Faction.Id,
+            Aggression.Normal);
+
+        bool changed = OrderAssignment.UnassignSquads([unassigned]);
+        InboundOrderInfo inbound = Assert.Single(InboundOrders.ForRegion(targetRegion));
+
+        Assert.True(changed);
+        Assert.Null(unassigned.CurrentOrders);
+        Assert.Same(order, remaining.CurrentOrders);
+        Assert.Single(order.AssignedSquads);
+        Assert.Same(remaining, order.AssignedSquads[0]);
+        Assert.Equal(1, inbound.SquadCount);
+        Assert.Contains("1 squad", inbound.SummaryLabel);
+    }
 }

@@ -13,7 +13,11 @@ namespace OnlyWar.Helpers
         public void UpdateRatings(Date date, PlayerSoldier soldier);
         public void EvaluateSoldier(PlayerSoldier soldier, Date trainingFinishedYear);
         public void ApplySoldierWorkExperience(ISoldier soldier, Squad squad, float points);
-        public void TrainScouts(IEnumerable<Squad> scoutSquads, Dictionary<int, TrainingFocuses> squadFocusMap, float points = 0.2f);
+        public void TrainScouts(
+            IEnumerable<Squad> scoutSquads,
+            Dictionary<int, TrainingFocuses> squadFocusMap,
+            float points = 0.2f,
+            IReadOnlyDictionary<int, float> pointsBySquad = null);
     }
 
     public class SoldierTrainingCalculator : ISoldierTrainingService
@@ -113,13 +117,34 @@ namespace OnlyWar.Helpers
             ApplyTrainingProfile(soldier, soldier.Template.WorkExperienceTrainingProfile, points);
         }
 
-        public void TrainScouts(IEnumerable<Squad> scoutSquads, Dictionary<int, TrainingFocuses> squadFocusMap, float points = 0.2f)
+        public void TrainScouts(
+            IEnumerable<Squad> scoutSquads,
+            Dictionary<int, TrainingFocuses> squadFocusMap,
+            float points = 0.2f,
+            IReadOnlyDictionary<int, float> pointsBySquad = null)
         {
             foreach (Squad squad in scoutSquads)
             {
                 if (squad.Members.Count == 0) continue;
-                // scout squads on active duty don't have time to train, they'll get battle experience
-                if (squad.CurrentOrders == null || squad.CurrentOrders.Mission.MissionType == MissionType.Training)
+                // A squad named in pointsBySquad has already had its eligibility and its share of the
+                // week decided by the caller - a mission that finished early leaves drill time behind,
+                // and scouts are the squads most often out on one. Squads absent from the map keep the
+                // original rule: on active duty they have no time to train and take their growth from the
+                // field instead.
+                bool hasExplicitShare = pointsBySquad != null
+                    && pointsBySquad.TryGetValue(squad.Id, out float explicitPoints);
+                float squadPoints = points;
+                if (hasExplicitShare)
+                {
+                    pointsBySquad.TryGetValue(squad.Id, out squadPoints);
+                    if (squadPoints <= 0f) continue;
+                }
+                else if (squad.CurrentOrders != null
+                    && squad.CurrentOrders.Mission.MissionType != MissionType.Training)
+                {
+                    continue;
+                }
+
                 {
                     TrainingFocuses focuses = squadFocusMap[squad.Id];
                     int numberOfAreas = 0;
@@ -132,7 +157,7 @@ namespace OnlyWar.Helpers
                         numberOfAreas = 4;
                         focuses = TrainingFocuses.Melee | TrainingFocuses.Physical | TrainingFocuses.Ranged | TrainingFocuses.Vehicles;
                     }
-                    float baseLearning = points;
+                    float baseLearning = squadPoints;
                     ISoldier instructor = squad.SquadLeader;
                     if (instructor == null)
                     {
@@ -143,7 +168,7 @@ namespace OnlyWar.Helpers
                     }
                     else
                     {
-                        instructor.AddSkillPoints(_skillsByName["Teaching"], points * InstructorTeachingXpShare);
+                        instructor.AddSkillPoints(_skillsByName["Teaching"], squadPoints * InstructorTeachingXpShare);
                         if (instructor.GetTotalSkillValue(_skillsByName["Teaching"]) < GoodTeacherSkillThreshold)
                         {
                             // with a sub-par teacher, learning is halfway between teaching and practicing

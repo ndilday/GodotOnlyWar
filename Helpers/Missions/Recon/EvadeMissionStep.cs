@@ -12,7 +12,7 @@ namespace OnlyWar.Helpers.Missions.Recon
 
         public EvadeMissionStep(){}
 
-        public void ExecuteMissionStep(MissionExecutionContext execution, float marginOfSuccess, IMissionStep returnStep)
+        public MissionStepResult ExecuteMissionStep(MissionExecutionContext execution, float marginOfSuccess, IMissionStep resumeStep)
         {
             MissionContext context = execution.State;
             context.AddLog($"Day {context.DaysElapsed}: Force attempting to escape enemy force");
@@ -28,15 +28,14 @@ namespace OnlyWar.Helpers.Missions.Recon
             {
                 context.ForceBrokeContact = true;
                 context.AddLog($"Day {context.DaysElapsed}: Force successfully escaped enemy force");
-                returnStep.ExecuteMissionStep(execution, margin, returnStep);
+                // A null resume target ends the mission here rather than throwing, which is what the
+                // old unconditional returnStep.ExecuteMissionStep would have done.
+                return MissionStepResult.Continue(resumeStep, margin, resumeStep);
             }
-            else
-            {
-                // attempt failed
-                context.AddLog($"Day {context.DaysElapsed}: Escape failed");
-                new MeetingEngagementMissionStep().ExecuteMissionStep(execution, margin, returnStep);
-            }
-
+            // attempt failed
+            context.AddLog($"Day {context.DaysElapsed}: Escape failed");
+            return MissionStepResult.Continue(
+                new MeetingEngagementMissionStep(), margin, resumeStep);
         }
     }
 }

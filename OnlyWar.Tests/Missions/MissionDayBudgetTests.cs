@@ -1,4 +1,4 @@
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using System.Drawing;
 using System.Linq;
 using OnlyWar.Helpers.Battles;
@@ -61,7 +61,7 @@ public class MissionDayBudgetTests
     {
         MissionContext context = CreateSabotageContext(squadIsInTargetRegion: true);
 
-        new SabotageStealthMissionStep().ExecuteMissionStep(CreateExecution(context), 0f, null);
+        new MissionStepDriver(CreateExecution(context), new SabotageStealthMissionStep()).RunToCompletion();
 
         Assert.Equal(MissionContext.MissionDurationDays, context.DaysElapsed);
         Assert.Equal(MissionContext.MissionDurationDays, context.Log.Count);
@@ -76,7 +76,7 @@ public class MissionDayBudgetTests
     {
         MissionContext context = CreateSabotageContext(squadIsInTargetRegion: false);
 
-        new SabotageStealthMissionStep().ExecuteMissionStep(CreateExecution(context), 0f, null);
+        new MissionStepDriver(CreateExecution(context), new SabotageStealthMissionStep()).RunToCompletion();
 
         Assert.Equal(MissionContext.MissionDurationDays, context.DaysElapsed);
         Assert.Equal(MissionContext.MissionDurationDays - 1, context.Log.Count(line => line.Contains("plants explosives")));
@@ -100,7 +100,7 @@ public class MissionDayBudgetTests
         MissionContext context = CreateSabotageContext(squadIsInTargetRegion);
         context.DaysElapsed = (ushort)daysElapsed;
 
-        new SabotageStealthMissionStep().ExecuteMissionStep(CreateExecution(context), 0f, null);
+        new MissionStepDriver(CreateExecution(context), new SabotageStealthMissionStep()).RunToCompletion();
 
         Assert.DoesNotContain(context.Log, line => line.Contains("plants explosives"));
         // A force in its own region simply stops; one that has to exfiltrate spends its remaining
@@ -142,7 +142,6 @@ public class MissionDayBudgetTests
         squad.CurrentRegion = squadIsInTargetRegion ? targetRegion : stagingRegion;
         Order order = new(
             [squad],
-            Disposition.Raiding,
             isQuiet: true,
             isActivelyEngaging: false,
             levelOfAggression: Aggression.Normal,
@@ -174,7 +173,6 @@ public class MissionDayBudgetTests
         squad.CurrentRegion = squadIsInTargetRegion ? targetRegion : stagingRegion;
         Order order = new(
             [squad],
-            Disposition.Raiding,
             isQuiet: true,
             isActivelyEngaging: false,
             levelOfAggression: Aggression.Normal,

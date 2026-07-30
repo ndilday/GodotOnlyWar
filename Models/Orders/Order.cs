@@ -5,30 +5,36 @@ using System.Collections.Generic;
 
 namespace OnlyWar.Models.Orders
 {
-    // A squad order has three main descriptors:
-    // 1) whether the squad is dug in, mobile, or raiding (moving and then returning);
-    // 2) Whether the squad is actively engaging, or focused on observing; and
-    // 3) Whether the squad is attempting to stay hidden or not
+    // A squad order has two main descriptors:
+    // 1) Whether the squad is actively engaging, or focused on observing; and
+    // 2) Whether the squad is attempting to stay hidden or not
     // Level of Aggression impacts how favorite the circumstances must be for the squad to choose to engage
+    //
+    // A third descriptor - Disposition (DugIn / Mobile / Raiding) - was removed 2026-07-30. It was
+    // supplied at every construction site and persisted to the save file, but no decision anywhere in
+    // the game ever read it. Design/Active/DailyMissionResolution.md §1 opened on exactly this
+    // ("Disposition.DugIn is stored and never read"), and the defender advantage the enum was meant to
+    // express was ultimately delivered by the region's Entrenchment plus a contested preparation roll
+    // (§5) - which routed around the enum rather than wiring it up. What a force is doing with the
+    // ground is now carried by MissionType and MissionReturnPolicy (Hold / Return / Static), which is
+    // the same distinction expressed where something actually consumes it.
 
     public class Order
     {
         public int Id { get; }
         public List<Squad> AssignedSquads { get; }
-        public Disposition Disposition { get; }
         public bool IsQuiet { get; }
         public bool IsActivelyEngaging { get; }
         public Aggression LevelOfAggression { get; }
         public Mission Mission { get; }
 
-        public Order(List<Squad> orderedSquads, Disposition disposition, bool isQuiet, bool isActivelyEngaging, Aggression levelOfAggression, Mission mission) 
-            : this(IdGenerator.GetNextOrderId(), orderedSquads, disposition, isQuiet, isActivelyEngaging, levelOfAggression, mission) {}
+        public Order(List<Squad> orderedSquads, bool isQuiet, bool isActivelyEngaging, Aggression levelOfAggression, Mission mission)
+            : this(IdGenerator.GetNextOrderId(), orderedSquads, isQuiet, isActivelyEngaging, levelOfAggression, mission) {}
 
-        public Order(int id, List<Squad> orderedSquads, Disposition disposition, bool isQuiet, bool isActivelyEngaging, Aggression levelOfAggression, Mission mission)
+        public Order(int id, List<Squad> orderedSquads, bool isQuiet, bool isActivelyEngaging, Aggression levelOfAggression, Mission mission)
         {
             Id = id;
             AssignedSquads = orderedSquads;
-            Disposition = disposition;
             IsQuiet = isQuiet;
             IsActivelyEngaging = isActivelyEngaging;
             LevelOfAggression = levelOfAggression;
@@ -45,13 +51,6 @@ namespace OnlyWar.Models.Orders
                 }
             }
         }
-    }
-
-    public enum Disposition
-    {
-        DugIn = 0,
-        Mobile = 1,
-        Raiding = 2
     }
 
     public enum Aggression

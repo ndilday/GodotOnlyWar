@@ -1,4 +1,4 @@
-using OnlyWar.Models;
+﻿using OnlyWar.Models;
 using OnlyWar.Models.Missions;
 using OnlyWar.Models.Orders;
 using OnlyWar.Models.Planets;
@@ -140,7 +140,7 @@ public class ShowOfForceRequestTests
         if (missionType.HasValue)
         {
             Mission mission = new(missionType.Value, playerRegionFaction, 1);
-            _ = new Order([squad], Disposition.Mobile, true, false, Aggression.Normal, mission);
+            _ = new Order([squad], true, false, Aggression.Normal, mission);
         }
         return squad;
     }

@@ -56,7 +56,16 @@ namespace OnlyWar.Helpers.Turns
                         break;
                 }
 
-                long defenderCasualties = FallenBattleValue(context.OpposingSquads);
+                // Cumulative across every engagement in the mission, not just the last one.
+                // context.OpposingSquads is REPLACED each time a step raises a fresh opposing force, so
+                // once a mission can contain several battles (a multi-day assault, a recon intercepted on
+                // more than one day) reading it here would report only the final engagement's dead and
+                // silently discard every earlier day's attrition from the campaign. The battle steps
+                // accumulate measured losses into the context as they happen; fall back to the old read
+                // for any path that populated OpposingSquads without a battle step recording them.
+                long defenderCasualties = context.DefenderBattleValueDestroyed > 0
+                    ? context.DefenderBattleValueDestroyed
+                    : FallenBattleValue(context.OpposingSquads);
                 double entrenchment = RegionDefenses.GetShared(regionFaction, DefenseType.Entrenchment);
                 if (entrenchment > 0)
                 {

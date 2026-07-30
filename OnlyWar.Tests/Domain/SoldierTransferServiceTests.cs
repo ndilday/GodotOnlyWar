@@ -1,6 +1,7 @@
 using OnlyWar.Helpers;
 using OnlyWar.Models;
 using OnlyWar.Models.Fleets;
+using OnlyWar.Models.Orders;
 using OnlyWar.Models.Planets;
 using OnlyWar.Models.Soldiers;
 using OnlyWar.Models.Soldiers.Ratings;
@@ -390,6 +391,7 @@ public class SoldierTransferServiceTests
         PlayerSoldier soldier = AddPlayerSoldier(source, TestModelFactory.MarineTemplate, "Brother Marius");
         Ship ship = new(1, "Test Ship", new ShipTemplate(1, "Test Ship Class", 20, 0, 0));
         source.BoardedLocation = ship;
+        ship.LoadSquad(source);
         Squad target = AddSquad(chapter, "Empty Target Squad", template);
         Dictionary<int, Squad> squadMap = chapter.GetAllSquads().ToDictionary(squad => squad.Id);
         SoldierTransferOption option = new(target.Id, TestModelFactory.MarineTemplate, "Test Marine, Empty Target Squad, Chapter");
@@ -398,6 +400,61 @@ public class SoldierTransferServiceTests
 
         Assert.Null(source.BoardedLocation);
         Assert.Equal(ship, target.BoardedLocation);
+        Assert.DoesNotContain(source, ship.LoadedSquads);
+        Assert.Contains(target, ship.LoadedSquads);
+    }
+
+    [Fact]
+    public void ApplyTransfer_MovesLandedRosterAndOrderFromEmptiedSourceToDestination()
+    {
+        SquadTemplate template = CreateSquadTemplate(
+            "Line Squad",
+            (TestModelFactory.MarineTemplate, 0, 4));
+        Unit chapter = CreateUnit("Chapter");
+        Squad source = AddSquad(chapter, "Source Squad", template);
+        PlayerSoldier first = AddPlayerSoldier(
+            source, TestModelFactory.MarineTemplate, "Brother Marius");
+        PlayerSoldier last = AddPlayerSoldier(
+            source, TestModelFactory.MarineTemplate, "Brother Lucian");
+        Squad target = AddSquad(chapter, "Empty Target Squad", template);
+
+        Planet planet = new(1, "Macragge", new Coordinate(1, 2), 1, null, 1, 0);
+        Region region = new(
+            1, planet, 0, "Fortress Region", new RegionCoordinate(0, 0), 0f);
+        planet.Regions[0] = region;
+        RegionFaction presence = new(new PlanetFaction(null), region);
+        region.RegionFactionMap[1] = presence;
+        source.CurrentRegion = region;
+        presence.LandedSquads.Add(source);
+
+        Order order = new(
+            [source], false, true, Aggression.Normal, mission: null);
+        Dictionary<int, Squad> squadMap = chapter.GetAllSquads()
+            .ToDictionary(squad => squad.Id);
+        SoldierTransferOption option = new(
+            target.Id,
+            TestModelFactory.MarineTemplate,
+            "Test Marine, Empty Target Squad, Chapter");
+
+        _service.ApplyTransfer(first, option, squadMap, _date);
+
+        Assert.Contains(source, presence.LandedSquads);
+        Assert.Contains(target, presence.LandedSquads);
+        Assert.Contains(source, order.AssignedSquads);
+        Assert.Contains(target, order.AssignedSquads);
+        Assert.Equal(region, target.CurrentRegion);
+        Assert.Equal(order, target.CurrentOrders);
+
+        _service.ApplyTransfer(last, option, squadMap, _date);
+
+        Assert.DoesNotContain(source, presence.LandedSquads);
+        Assert.Contains(target, presence.LandedSquads);
+        Assert.DoesNotContain(source, order.AssignedSquads);
+        Assert.Contains(target, order.AssignedSquads);
+        Assert.Null(source.CurrentRegion);
+        Assert.Null(source.CurrentOrders);
+        Assert.Equal(region, target.CurrentRegion);
+        Assert.Equal(order, target.CurrentOrders);
     }
 
     [Fact]

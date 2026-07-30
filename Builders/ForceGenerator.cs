@@ -427,14 +427,21 @@ namespace OnlyWar.Builders
             var scoutTemplates = AvailableSquadTemplates(request)
                                         .Where(st => (st.SquadType & SquadTypes.Scout) != 0).ToList();
 
-            // NOTE: a faction with no Scout-typed squad templates (currently the Genestealer Cults
-            // and Orks — the Imperial PDF Infantry Squad was flagged Scout by migrate-scout-skills)
-            // fields no interception here, so recon against them runs uncontested. Making the
-            // garrison scramble its *line* squads
-            // instead produced multi-squad (20-50 soldier) interceptors that overwhelmed the scout,
-            // exposed a placement crash in AmbushPlacer for large forces, and slowed the sim sharply.
-            // The right fix is a data pass giving those factions small scout/patrol squad templates
-            // (and Tactics skill), not a line-squad fallback here.
+            // NOTE: a faction with no Scout-typed squad templates fields no ScoutPatrol force at all.
+            // Verified against the rules DB 2026-07-29: the only such faction is the Orks, which have a
+            // single template (Ork Warboss, HQ) because the faction is not implemented yet. The
+            // Genestealer Cults are no longer affected - Acolyte Hybrids, Brood Brother Squad and
+            // Neophyte Hybrid Squad are all Scout-flagged - and the Imperial PDF Infantry Squad was
+            // flagged Scout by migrate-scout-skills.
+            //
+            // The consequence is narrower than it used to be. This profile no longer feeds interception:
+            // DetectedMissionStep intercepts with the squads a region actually has out looking and
+            // conjures nothing. What an empty result means now is that a faction cannot field a standing
+            // patrol screen (FactionStrategyController.PlanPatrolMissionsOnPlanet), so it neither sweeps
+            // its own ground nor intercepts anyone. The fix remains a data pass giving such factions
+            // small scout/patrol squad templates (and Tactics skill), not a line-squad fallback here:
+            // scrambling *line* squads produced multi-squad (20-50 soldier) interceptors that overwhelmed
+            // the scout, exposed a placement crash in AmbushPlacer for large forces, and slowed the sim.
             if (!scoutTemplates.Any()) return opposingForces;
 
             for(int i = request.Tier; i > 0; i--)

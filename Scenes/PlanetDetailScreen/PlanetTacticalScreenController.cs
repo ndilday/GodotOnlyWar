@@ -533,7 +533,7 @@ public partial class PlanetTacticalScreenController : DialogController
 		List<InboundOrderInfo> inbound = InboundOrders.ForRegion(region);
 		List<ValueTuple<string, string>> inboundRows = inbound
 			.Select(info => Row(
-				$"{info.MissionLabel} · from {info.OriginLabel}",
+				$"{info.MissionAndAggressionLabel} · from {info.OriginLabel}",
 				info.SquadCount == 1 ? "1 squad" : $"{info.SquadCount} squads"))
 			.ToList();
 		cards.Add(new DossierCardData(

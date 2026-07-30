@@ -104,16 +104,21 @@ namespace OnlyWar.Models.Planets
         // post-0.7 Ork/revolt tuning will reuse the same lever (Design/OpeningScenario.md §2.2).
         public float GrowthMultiplier { get; set; } = 1.0f;
 
-        // Transient, within-turn diversion state. Set by a diversion mission's pre-planning
-        // resolution and consumed by FactionStrategyController when it generates orders that
-        // same turn, then cleared. Never persists across a turn, so it is not saved/loaded.
+        // Transient, within-DAY state: search effort this faction has committed to looking at
+        // something other than the ground it is supposed to be watching, in the difficulty-point
+        // units MissionStealthDifficulty works in. Written by shaping steps (a diversion's feint)
+        // during a day's Shaping pass, read by every stealth check during the same day's Acting pass,
+        // and reset by MissionDayScheduler before the next day begins. Never persists across a day,
+        // let alone a turn, so it is not saved/loaded.
         //
-        // PerceivedThreatBonus: extra apparent enemy threat (in troop-equivalents) that a feint
-        // projects onto this region, inflating the garrison its controller feels it must hold.
-        public float PerceivedThreatBonus { get; set; }
-        // ProvocationLevel: how strongly enemies are baited into attacking the force standing in
-        // this region (i.e. the feinting force's own region), drawing a counterattack.
-        public float ProvocationLevel { get; set; }
+        // This replaces the old PerceivedThreatBonus/ProvocationLevel pair, which were transient
+        // across a whole TURN: written by a pre-planning diversion pass and consumed by
+        // FactionStrategyController in a later phase, with a manual clear in between. That made a
+        // feint a purely strategic effect - it inflated the garrison the enemy planned to hold and did
+        // nothing whatsoever to the search effort an infiltrator actually faced, so feinting against a
+        // region and infiltrating it in the same week made the infiltration HARDER. The effect now
+        // lands where a feint should land: on who is looking where, today.
+        public float CommittedAttention { get; set; }
 
         public RegionFaction(PlanetFaction planetFaction, Region region)
         {

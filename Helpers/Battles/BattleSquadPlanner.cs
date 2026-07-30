@@ -40,12 +40,13 @@ namespace OnlyWar.Helpers.Battles
         // Design/Active/UnifiedRangedTargetingAndScatterScoring.md.
         private const float BlastDeliveryRollMean = 10.5f;
         private const float BlastDeliveryRollStdDev = 3.0f;
-        // The execution-time damage roll (BlastAttackAction.HandleHit): DamageMultiplier is
-        // scaled by (mean + z * stdDev) per victim. The planner's wound estimate integrates
-        // over this roll so armored figures carry their real armor-penetrating tail instead
-        // of being scored invulnerable at the mean.
-        private const float BlastDamageRollMean = 3.5f;
-        private const float BlastDamageRollStdDev = 1.75f;
+        // The execution-time damage roll, shared by every attack resolver in the engine
+        // (ShootAction, AreaAttackAction, MeleeAttackAction, BlastAttackAction): the weapon's
+        // damage coefficient is scaled by (mean + z * stdDev). The planner's wound estimates
+        // integrate over this roll so armored figures carry their real armor-penetrating tail
+        // instead of being scored invulnerable at the mean.
+        private const float DamageRollMean = 3.5f;
+        private const float DamageRollStdDev = 1.75f;
         // Deterministic quadrature nodes over the delivery roll's standard normal, and the
         // number of angular samples a scattered node spreads across. Fixed at compile time,
         // so blast scoring stays reproducible without drawing from the battle RNG.
@@ -621,6 +622,18 @@ namespace OnlyWar.Helpers.Battles
             ValueTuple<int, int> movementLine = new(direction.Item1 * 10_000, direction.Item2 * 10_000);
             foreach (BattleSoldier soldier in squad.AbleSoldiers.OrderBy(s => s.Soldier.Id))
             {
+                // A bound soldier caught in melee decides for himself whether to break contact.
+                // Running is not free: he turns his back, so he defends with foot speed alone
+                // (BattleSoldier.IsRunning). Withdrawal is an ordered movement, not a rout, so
+                // unlike PrepareRoutingActions he is allowed the choice rather than pinned.
+                if (_grid.IsAdjacentToEnemy(soldier.Soldier.Id)
+                    && DecideMeleeDisengagement(soldier).Choice
+                        == MeleeDisengagementChoice.StandAndFight)
+                {
+                    AddMeleeActionsToBag(soldier);
+                    continue;
+                }
+
                 AddMoveAction(
                     soldier,
                     GetMovementBudget(soldier, SquadMovementTier.Run),
@@ -628,6 +641,92 @@ namespace OnlyWar.Helpers.Battles
                     SquadMovementTier.Run);
                 AddPermittedRunUtilityActionToBag(soldier);
             }
+        }
+
+        /// <summary>
+        /// Scores the melee a withdrawing soldier has been caught in, against the most dangerous
+        /// enemy currently in contact. Both sides' chances are measured with the same
+        /// <see cref="MeleeAttackAction.EstimateHitProbability"/> the live roll uses, so the
+        /// decision cannot drift from the resolution it is predicting.
+        /// </summary>
+        private MeleeDisengagementPolicy.Result DecideMeleeDisengagement(BattleSoldier soldier)
+        {
+            List<BattleSoldier> adjacentEnemies = _grid.GetAdjacentEnemies(soldier.Soldier.Id)
+                .Select(enemyId => _soldierMap[enemyId])
+                .Where(enemy => enemy.CanFight)
+                .OrderBy(enemy => enemy.Soldier.Id)
+                .ToList();
+            if (adjacentEnemies.Count == 0)
+            {
+                return MeleeDisengagementPolicy.Evaluate(new(
+                    0, 0, 0, 0, soldier.BattleSquad.MoraleState));
+            }
+
+            MeleeWeapon myWeapon = GetProjectedMeleeLoadout(soldier).FirstOrDefault()
+                ?? MeleeAttackAction.GetUnarmedWeapon(soldier);
+            float mySkill = myWeapon == null
+                ? 0
+                : soldier.Soldier.GetTotalSkillValue(myWeapon.Template.RelatedSkill);
+            float myEvasion = soldier.Soldier.Template.Species.MeleeEvasion;
+            // Standing restores the guard the squad's declared Run took away, so both defensive
+            // terms are read as they would be if he stopped — not from his current flagged state.
+            float myParryIfStanding = MeleeAttackAction.GetDefenderDefenseModifier(
+                soldier,
+                soldier.EquippedMeleeWeapons,
+                forfeitsWeaponParry: false);
+            float mySkillIfRunning = MeleeAttackAction.GetRunningDefenderMeleeSkill(soldier);
+
+            float worstStanding = 0;
+            float worstRunning = 0;
+            float bestOffense = 0;
+            foreach (BattleSoldier enemy in adjacentEnemies)
+            {
+                MeleeWeapon enemyWeapon = enemy.GetPrimaryMeleeWeapon(
+                    MeleeAttackAction.GetUnarmedWeapon(enemy));
+                if (enemyWeapon == null) continue;
+                float enemySkill = enemy.Soldier.GetTotalSkillValue(
+                    enemyWeapon.Template.RelatedSkill);
+                float standing = MeleeAttackAction.EstimateHitProbability(
+                    enemySkill,
+                    enemyWeapon.Template.Accuracy,
+                    didMove: false,
+                    mySkill,
+                    myEvasion,
+                    myParryIfStanding);
+                float running = MeleeAttackAction.EstimateHitProbability(
+                    enemySkill,
+                    enemyWeapon.Template.Accuracy,
+                    didMove: false,
+                    mySkillIfRunning,
+                    myEvasion,
+                    defenderDefenseModifier: 0);
+                if (standing > worstStanding)
+                {
+                    worstStanding = standing;
+                    worstRunning = running;
+                }
+
+                if (myWeapon != null)
+                {
+                    float offense = MeleeAttackAction.EstimateHitProbability(
+                        mySkill,
+                        myWeapon.Template.Accuracy,
+                        didMove: false,
+                        MeleeAttackAction.GetDefenderMeleeSkill(
+                            enemy,
+                            myWeapon.Template.RelatedSkill),
+                        enemy.Soldier.Template.Species.MeleeEvasion,
+                        MeleeAttackAction.GetDefenderDefenseModifier(enemy));
+                    if (offense > bestOffense) bestOffense = offense;
+                }
+            }
+
+            return MeleeDisengagementPolicy.Evaluate(new(
+                bestOffense,
+                worstStanding,
+                worstRunning,
+                adjacentEnemies.Count,
+                soldier.BattleSquad.MoraleState));
         }
 
         /// <summary>Plans a rear guard holding in place, or continuing an existing melee.</summary>
@@ -710,6 +809,9 @@ namespace OnlyWar.Helpers.Battles
                     squad.MovementTier = SquadMovementTier.Stationary;
                     ApplyDeclaredMovementState(squad);
                     return;
+                case PursuitPosture.Standoff:
+                    PrepareStandoffActions(squad);
+                    return;
                 case PursuitPosture.Follow:
                     PrepareFollowingActions(squad, withdrawingTargets);
                     return;
@@ -719,6 +821,23 @@ namespace OnlyWar.Helpers.Battles
                 default:
                     throw new ArgumentOutOfRangeException(nameof(posture), posture, null);
             }
+        }
+
+        /// <summary>
+        /// Plans a standoff: the quarry cannot be caught, so the squad stops chasing and shoots.
+        /// Moving fire pays <see cref="FullBulkMultiplier"/> with the aim bonus zeroed, while a
+        /// jog is only half a run and so cannot hold the gap against a withdrawal anyway. Holding
+        /// still trades turns-in-range for unpenalised, fully aimed shots, which is the better
+        /// bargain once the chase itself is unwinnable. No charging: a squad that could reach
+        /// melee would still be Pressing.
+        /// </summary>
+        private void PrepareStandoffActions(BattleSquad squad)
+        {
+            squad.MovementTier = SquadMovementTier.Stationary;
+            ApplyDeclaredMovementState(squad);
+            PrepareStandingSoldiers(
+                squad.AbleSoldiers.OrderBy(s => s.Soldier.Id).ToList(),
+                allowCharge: false);
         }
 
         private void PrepareFollowingActions(
@@ -790,14 +909,38 @@ namespace OnlyWar.Helpers.Battles
             ApplyDeclaredMovementState(squad);
             foreach (BattleSoldier soldier in squad.AbleSoldiers.OrderBy(s => s.Soldier.Id))
             {
+                // Pressing exists to convert contact into damage. A pursuer who has caught the
+                // withdrawal fights it; one who can reach it this turn charges in. Without these
+                // two branches Press only ever closed the distance and then ran on the spot
+                // beside the enemy forever, so the posture could not hurt anyone and the fast
+                // element of a mixed-speed force could not pin a quarry for the slow element.
+                if (_grid.IsAdjacentToEnemy(soldier.Soldier.Id))
+                {
+                    AddMeleeActionsToBag(soldier);
+                    continue;
+                }
+
                 BattleSoldier target = FindNearestTarget(soldier, withdrawingTargets);
                 if (target == null) continue;
+                float budget = GetMovementBudget(soldier, SquadMovementTier.Run);
+                if (_grid.GetDistanceBetweenSoldiers(soldier.Soldier.Id, target.Soldier.Id)
+                    <= budget + 1)
+                {
+                    // Within a charge. AddChargeActionsToBag owns the adjacency search, the
+                    // reservation handling, and the fallbacks for a crowded target, and the
+                    // InMelee tier it moves at is the same speed as a Run. It picks the grid's
+                    // nearest enemy rather than the squad-level target, which at this range is
+                    // the same formation or one at least as close.
+                    AddChargeActionsToBag(soldier);
+                    continue;
+                }
+
                 ValueTuple<int, int> line = new(
                     target.TopLeft.Value.Item1 - soldier.TopLeft.Value.Item1,
                     target.TopLeft.Value.Item2 - soldier.TopLeft.Value.Item2);
                 AddMoveAction(
                     soldier,
-                    GetMovementBudget(soldier, SquadMovementTier.Run),
+                    budget,
                     line,
                     SquadMovementTier.Run);
                 AddPermittedRunUtilityActionToBag(soldier);
@@ -837,6 +980,10 @@ namespace OnlyWar.Helpers.Battles
         {
             foreach (BattleSoldier soldier in squad.AbleSoldiers)
             {
+                // Only the Run tier strips a soldier's melee guard (see BattleSoldier.IsRunning).
+                // A soldier who subsequently stops to fight clears the flag in
+                // AddMeleeActionsToBag, so the declaration here is a default, not a verdict.
+                soldier.IsRunning = squad.MovementTier == SquadMovementTier.Run;
                 switch (squad.MovementTier)
                 {
                     case SquadMovementTier.Stationary:
@@ -1521,6 +1668,9 @@ namespace OnlyWar.Helpers.Battles
         {
             soldier.TargetId = null;
             soldier.CurrentSpeed = 0;
+            // He has stopped and turned to fight, so he defends with skill and parry again even
+            // if his squad declared a Run this turn.
+            soldier.IsRunning = false;
             List<BattleSoldier> adjacentEnemies = _grid.GetAdjacentEnemies(soldier.Soldier.Id)
                 .Select(enemyId => _soldierMap[enemyId])
                 .Where(enemy => enemy.CanFight)
@@ -2769,7 +2919,7 @@ namespace OnlyWar.Helpers.Battles
                             victimId);
                         float armor = victim.Armor?.Template.ArmorProvided ?? 0;
                         float woundRatio = Math.Clamp(
-                            CalculateExpectedDamage(
+                            CalculateExpectedRangedWoundRatio(
                                 weapon,
                                 victimRange,
                                 armor,
@@ -3012,56 +3162,60 @@ namespace OnlyWar.Helpers.Battles
         }
 
         /// <summary>
-        /// Mirror of <see cref="BlastAttackAction"/>'s damage math at the planning
-        /// expectation used by CalculateExpectedDamage: the quadratic falloff scales the
-        /// damage roll before armor subtraction, and everyone caught is auto-hit.
+        /// Expected wound ratio (fraction of the victim's Constitution removed) for a single
+        /// hit, integrated over the execution-time damage roll rather than evaluated at its
+        /// mean. Every planner damage estimate routes through here so blast and conventional
+        /// fire are scored with the same estimator and remain comparable.
         /// </summary>
-        private static float CalculateExpectedBlastDamage(
-            RangedWeapon weapon,
-            float distanceFromImpact,
-            float armor,
-            float con)
-        {
-            float falloff = 1f - (distanceFromImpact / weapon.Template.AreaRadius);
-            float damage = weapon.Template.DamageMultiplier * 4.25f * falloff * falloff;
-            float effectiveArmor = armor * weapon.Template.ArmorMultiplier;
-            float penetratingDamage = Math.Max(0, damage - effectiveArmor);
-            return con <= 0
-                ? 1
-                : (penetratingDamage * weapon.Template.WoundMultiplier) / con;
-        }
-
-        // Expected wound ratio for a blast hit, integrated over the execution-time damage roll
-        // (roll ~ N(BlastDamageRollMean, BlastDamageRollStdDev), damage = DamageMultiplier * roll
-        // * falloff^2). Unlike the mean-only CalculateExpectedBlastDamage, this credits the
-        // armor-penetrating tail: an armored figure the mean never scratches still carries the
-        // fraction of rolls that punch through. falloffSquared is the quadratic distance falloff
-        // already squared.
-        private static float CalculateExpectedBlastWoundRatio(
-            RangedWeapon weapon,
-            float falloffSquared,
-            float armor,
+        /// <remarks>
+        /// Evaluating at the mean scores an armored figure whose armor beats the average roll
+        /// as strictly invulnerable (ratio exactly 0), discarding the armor-penetrating tail
+        /// that actually drops it. That used to apply to conventional fire only -- the blast
+        /// path already integrated -- so against armored targets a rifle shot was scored at 0
+        /// while a grenade scored positive, a systematic bias toward blast weapons that no
+        /// flat selection margin could offset.
+        /// <paramref name="damageCoefficient"/> is the per-roll-unit damage scale: effective
+        /// strength at range for a conventional shot, DamageMultiplier * falloff^2 for a blast.
+        /// </remarks>
+        private static float CalculateExpectedWoundRatio(
+            float damageCoefficient,
+            float effectiveArmor,
+            float woundMultiplier,
             float con)
         {
             if (con <= 0)
             {
                 return 1f;
             }
-            float coefficient = weapon.Template.DamageMultiplier * falloffSquared;
-            if (coefficient <= 0)
+            if (damageCoefficient <= 0)
             {
                 return 0f;
             }
-            float effectiveArmor = armor * weapon.Template.ArmorMultiplier;
             // penetrating = coefficient * max(0, roll - armor/coefficient); take its expectation
             // over the normal roll via the closed form E[max(0, X - t)] for X ~ N(mu, sigma).
-            float threshold = effectiveArmor / coefficient;
-            float z = (BlastDamageRollMean - threshold) / BlastDamageRollStdDev;
+            float threshold = effectiveArmor / damageCoefficient;
+            float z = (DamageRollMean - threshold) / DamageRollStdDev;
             float expectedExcessRoll =
-                ((BlastDamageRollMean - threshold) * GaussianCalculator.ApproximateNormalCDF(z))
-                + (BlastDamageRollStdDev * NormalPdf(z));
-            float expectedPenetrating = coefficient * Math.Max(0f, expectedExcessRoll);
-            return (expectedPenetrating * weapon.Template.WoundMultiplier) / con;
+                ((DamageRollMean - threshold) * GaussianCalculator.ApproximateNormalCDF(z))
+                + (DamageRollStdDev * NormalPdf(z));
+            float expectedPenetrating = damageCoefficient * Math.Max(0f, expectedExcessRoll);
+            return (expectedPenetrating * woundMultiplier) / con;
+        }
+
+        // Mirror of BlastAttackAction.HandleHit: the quadratic distance falloff (already
+        // squared by the caller) scales the damage roll before armor subtraction, and
+        // everyone caught inside the radius is auto-hit.
+        private static float CalculateExpectedBlastWoundRatio(
+            RangedWeapon weapon,
+            float falloffSquared,
+            float armor,
+            float con)
+        {
+            return CalculateExpectedWoundRatio(
+                weapon.Template.DamageMultiplier * falloffSquared,
+                armor * weapon.Template.ArmorMultiplier,
+                weapon.Template.WoundMultiplier,
+                con);
         }
 
         private static float NormalPdf(float z)
@@ -3518,7 +3672,7 @@ namespace OnlyWar.Helpers.Battles
                         scrumParticipants);
                     float armor = participant.Armor?.Template.ArmorProvided ?? 0;
                     float woundRatio = Math.Clamp(
-                        CalculateExpectedDamage(
+                        CalculateExpectedRangedWoundRatio(
                             weapon,
                             range,
                             armor,
@@ -3701,7 +3855,7 @@ namespace OnlyWar.Helpers.Battles
                 Math.Min((int)weapon.Template.RateOfFire, (int)weapon.LoadedAmmo));
             float armor = target.Armor?.Template.ArmorProvided ?? 0;
             float con = target.Soldier.Constitution;
-            float expectedDamage = CalculateExpectedDamage(weapon, range, armor, con);
+            float expectedWoundRatio = CalculateExpectedRangedWoundRatio(weapon, range, armor, con);
             bool firingIntoMelee = _grid.IsTargetEngagedWithShootersAllies(
                 soldier.Soldier.Id,
                 target.Soldier.Id);
@@ -3717,7 +3871,7 @@ namespace OnlyWar.Helpers.Battles
             {
                 estimate = EstimateHitAndDamage(
                     hitContext,
-                    expectedDamage,
+                    expectedWoundRatio,
                     shotsToFire);
                 int revisedShots = CalculateShotsToFire(
                     weapon,
@@ -3738,7 +3892,7 @@ namespace OnlyWar.Helpers.Battles
             // the one ShootAction will resolve, even if a future rule introduces oscillation.
             estimate = EstimateHitAndDamage(
                 hitContext,
-                expectedDamage,
+                expectedWoundRatio,
                 shotsToFire);
             return new ValueTuple<float, float, int>(estimate.Item1, estimate.Item2, shotsToFire);
         }
@@ -4028,14 +4182,19 @@ namespace OnlyWar.Helpers.Battles
             }
         }
 
-        private float CalculateExpectedDamage(RangedWeapon weapon, float range, float armor, float con)
+        // Mirror of ShootAction.HandleHit / AreaAttackAction: effective strength at range
+        // scales the damage roll before armor subtraction.
+        private static float CalculateExpectedRangedWoundRatio(
+            RangedWeapon weapon,
+            float range,
+            float armor,
+            float con)
         {
-            float effectiveStrength = BattleModifiersUtil.CalculateDamageAtRange(weapon, range);
-            float effectiveArmor = armor * weapon.Template.ArmorMultiplier;
-            float penetratingDamage = Math.Max(0, (effectiveStrength * 4.25f) - effectiveArmor);
-            return con <= 0
-                ? 1
-                : (penetratingDamage * weapon.Template.WoundMultiplier) / con;
+            return CalculateExpectedWoundRatio(
+                BattleModifiersUtil.CalculateDamageAtRange(weapon, range),
+                armor * weapon.Template.ArmorMultiplier,
+                weapon.Template.WoundMultiplier,
+                con);
         }
     }
 }

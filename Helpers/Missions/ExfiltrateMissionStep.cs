@@ -12,9 +12,11 @@ namespace OnlyWar.Helpers.Missions
 
         public string Description { get { return "Infiltrate"; } }
 
+        public bool ConsumesDay => true;
+
         public ExfiltrateMissionStep(){}
 
-        public void ExecuteMissionStep(MissionExecutionContext execution, float marginOfSuccess, IMissionStep returnStep)
+        public MissionStepResult ExecuteMissionStep(MissionExecutionContext execution, float marginOfSuccess, IMissionStep resumeStep)
         {
             MissionContext context = execution.State;
             // negative mod for size of enemy force
@@ -34,7 +36,7 @@ namespace OnlyWar.Helpers.Missions
             {
                 context.ForceLostContact = true;
                 context.AddLog($"Day {context.DaysElapsed}: Contact lost with mission force, assumed dead.");
-                return;
+                return MissionStepResult.Complete;
             }
             // Bound the detect->exfil->detect loop: a force that cannot slip back out within the week
             // plus a short grace has gone to ground behind enemy lines; end the mission rather than
@@ -47,7 +49,7 @@ namespace OnlyWar.Helpers.Missions
                     $"Exfiltrate {context.Order.Mission.RegionFaction.Region.Planet.Name}/"
                     + $"{context.Order.Mission.RegionFaction.Region.Name} day {context.DaysElapsed}: "
                     + "grace expired; mission ends (force gone to ground)");
-                return;
+                return MissionStepResult.Complete;
             }
             context.DaysElapsed++;
             context.AddLog($"Day {context.DaysElapsed}: Force attempting to exfiltrate from {context.Order.Mission.RegionFaction.Region.Name}");
@@ -59,12 +61,9 @@ namespace OnlyWar.Helpers.Missions
                     $"Exfiltrate {context.Order.Mission.RegionFaction.Region.Planet.Name}/"
                     + $"{context.Order.Mission.RegionFaction.Region.Name} day {context.DaysElapsed}: "
                     + $"margin={margin:F2} -> returned to base");
-                return;
+                return MissionStepResult.Complete;
             }
-            else
-            {
-                new DetectedMissionStep().ExecuteMissionStep(execution, margin, this);
-            }
+            return MissionStepResult.Continue(new DetectedMissionStep(), margin, this);
         }
     }
 }

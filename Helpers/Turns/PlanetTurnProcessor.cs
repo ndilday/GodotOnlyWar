@@ -2,6 +2,7 @@ using OnlyWar.Builders;
 using OnlyWar.Helpers.Extensions;
 using OnlyWar.Helpers.Fortifications;
 using OnlyWar.Helpers.Missions;
+using OnlyWar.Helpers.Missions.Ambush;
 using OnlyWar.Helpers.Simulation;
 using OnlyWar.Models;
 using OnlyWar.Models.Missions;
@@ -996,7 +997,13 @@ namespace OnlyWar.Helpers.Turns
             int maxSize = (int)MissionStealthDifficulty.TroopMagnitude(
                 enemyRegionFaction.GetDeployedStrength());
             int size = ClampMissionSize((int)_session.Random.NextRandomZValue() + 1, maxSize);
-            Mission ambush = new Mission(MissionType.Ambush, enemyRegionFaction, size);
+            long targetBattleValue =
+                AmbushMissionSizing.RollTargetBattleValue(size, _session.Random);
+            Mission ambush = new Mission(
+                MissionType.Ambush,
+                enemyRegionFaction,
+                size,
+                targetBattleValue);
             enemyRegionFaction.Region.SpecialMissions.Add(ambush);
             _specialMissions.Add(ambush);
         }

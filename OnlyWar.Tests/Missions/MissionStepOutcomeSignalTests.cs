@@ -1,4 +1,4 @@
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using System.Drawing;
 using OnlyWar.Helpers.Battles;
 using OnlyWar.Helpers;
@@ -170,7 +170,7 @@ public class MissionStepOutcomeSignalTests
         MissionContext context = CreateContext(MissionType.Advance);
 
         // Empty mission and opposing squad lists hit the guard before any battle setup.
-        new MeetingEngagementMissionStep().ExecuteMissionStep(CreateExecution(context), 0f, null);
+        new MissionStepDriver(CreateExecution(context), new MeetingEngagementMissionStep()).RunToCompletion();
 
         Assert.True(context.NoViableTarget);
     }
@@ -180,7 +180,7 @@ public class MissionStepOutcomeSignalTests
     {
         MissionContext context = CreateContext(MissionType.Ambush);
 
-        new AmbushedMissionStep().ExecuteMissionStep(CreateExecution(context), 0f, null);
+        new MissionStepDriver(CreateExecution(context), new AmbushedMissionStep()).RunToCompletion();
 
         Assert.True(context.NoViableTarget);
     }
@@ -190,7 +190,7 @@ public class MissionStepOutcomeSignalTests
     {
         MissionContext context = CreateContext(MissionType.Ambush);
 
-        new PerformAmbushMissionStep().ExecuteMissionStep(CreateExecution(context), 0f, null);
+        new MissionStepDriver(CreateExecution(context), new PerformAmbushMissionStep()).RunToCompletion();
 
         Assert.True(context.NoViableTarget);
     }
@@ -198,7 +198,7 @@ public class MissionStepOutcomeSignalTests
     private static MissionContext CreateContext(MissionType missionType)
     {
         Mission mission = new(missionType, CreateRegionFaction(), 0);
-        Order order = new(new List<Squad>(), Disposition.Raiding, true, false,
+        Order order = new(new List<Squad>(), true, false,
             Aggression.Cautious, mission);
         return new MissionContext(order, new List<BattleSquad>(), new List<BattleSquad>());
     }
@@ -211,7 +211,7 @@ public class MissionStepOutcomeSignalTests
         Squad squad = TestModelFactory.CreateSquad(
             $"{aggression} Squad", TestModelFactory.CreateSoldier(name: $"{aggression} Soldier"));
         Mission mission = new(MissionType.Advance, CreateRegionFaction(), 0);
-        _ = new Order([squad], Disposition.Mobile, false, true, aggression, mission);
+        _ = new Order([squad], false, true, aggression, mission);
         return new BattleSquad(false, squad);
     }
 

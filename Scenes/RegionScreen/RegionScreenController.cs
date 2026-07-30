@@ -201,6 +201,9 @@ public partial class RegionScreenController : DialogController
 
     private void OnAssignPressed(object sender, EventArgs e)
     {
+        // Treat the Tree as authoritative at commit time. This also protects assignment from any
+        // delayed UI notification leaving the cached selection a frame behind the visible rows.
+        RecomputeSelectedSquads();
         if (_selectedSquads.Count == 0 || _selectedMission == null || _targetRegion == null) return;
 
         int targetFactionId = ResolveTargetFactionId();
@@ -507,19 +510,11 @@ public partial class RegionScreenController : DialogController
 
     private void UnassignSelectedSquads()
     {
-        List<Squad> squadsWithOrders = _selectedSquads.Where(squad => squad.CurrentOrders != null).ToList();
-        if (squadsWithOrders.Count == 0) return;
-
-        foreach (Squad squad in squadsWithOrders)
-        {
-            Order order = squad.CurrentOrders;
-            order.AssignedSquads.Remove(squad);
-            squad.CurrentOrders = null;
-            if (order.AssignedSquads.Count == 0)
-            {
-                GameDataSingleton.Instance.Sector.RemoveOrder(order);
-            }
-        }
+        // Multi-select notifications are deferred until Godot has settled the complete selection
+        // transaction. Read the Tree again at commit time so a quick Unassign click cannot operate
+        // on the previous selection and leave the inbound-order count stale.
+        RecomputeSelectedSquads();
+        if (!OrderAssignment.UnassignSquads(_selectedSquads)) return;
 
         CampaignChanged?.Invoke(this, EventArgs.Empty);
         RefreshWorkspace();

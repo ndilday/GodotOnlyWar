@@ -11,9 +11,11 @@ namespace OnlyWar.Helpers.Missions.Sabotage
     {
         public string Description { get { return "Sabotage Stealth"; } }
 
+        public bool ConsumesDay => true;
+
         public SabotageStealthMissionStep() { }
 
-        public void ExecuteMissionStep(MissionExecutionContext execution, float marginOfSuccess, IMissionStep returnStep)
+        public MissionStepResult ExecuteMissionStep(MissionExecutionContext execution, float marginOfSuccess, IMissionStep resumeStep)
         {
             MissionContext context = execution.State;
             // The mission runs for at most a week, and a force that infiltrated owes a day to get back
@@ -29,11 +31,9 @@ namespace OnlyWar.Helpers.Missions.Sabotage
                 GameLog.Trace(() =>
                     $"Sabotage stealth {DescribeFaction(context)} -> {DescribeTarget(context)}: "
                     + $"operating days spent at day {context.DaysElapsed}; breaking contact");
-                if (context.MustExfiltrate)
-                {
-                    new ExfiltrateMissionStep().ExecuteMissionStep(execution, 0.0f, null);
-                }
-                return;
+                return context.MustExfiltrate
+                    ? MissionStepResult.Continue(new ExfiltrateMissionStep())
+                    : MissionStepResult.Complete;
             }
 
             // negative mod for size of enemy force
@@ -50,19 +50,17 @@ namespace OnlyWar.Helpers.Missions.Sabotage
             // (surveillance and patrols, plus a capped allowance for sheer density) rather than
             // against a raw Garrison that is permanently zero for a horde.
             float difficulty = MissionStealthDifficulty
-                .Calculate(region, headcount, saboteur).Total;
+                .Calculate(region, headcount, saboteur).Total
+                // Aggression's EXPOSURE axis; the charges themselves are the effect axis, in
+                // PerformSabotageMissionStep.
+                + MissionAggressionModifiers.ExposureDifficulty(context.Order.LevelOfAggression);
             SquadMissionTest missionTest = new SquadMissionTest(stealth, difficulty);
 
             context.DaysElapsed++;
             float margin = missionTest.RunMissionCheck(context.MissionSquads, execution.Random);
-            if (margin > 0.0f)
-            {
-                new PerformSabotageMissionStep().ExecuteMissionStep(execution, margin, this);
-            }
-            else
-            {
-                new DetectedMissionStep().ExecuteMissionStep(execution, margin, this);
-            }
+            return margin > 0.0f
+                ? MissionStepResult.Continue(new PerformSabotageMissionStep(), margin, this)
+                : MissionStepResult.Continue(new DetectedMissionStep(), margin, this);
         }
 
         private static string DescribeFaction(MissionContext context) =>

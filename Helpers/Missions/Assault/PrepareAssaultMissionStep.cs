@@ -16,10 +16,11 @@ namespace OnlyWar.Helpers.Missions.Assault
 {
     public class PrepareAssaultMissionStep : IMissionStep
     {
-        // Tactical assaults must stay table-sized. Larger garrisons belong in the strategic
-        // resolver; if a tactical order reaches this step after the defender mobilized, cap the
-        // generated garrison to the same limits used when deciding tactical-vs-strategic combat.
-        private const long MaxTacticalGarrisonBattleValue = StrategicCombatRules.MassCombatBattleValueFloor - 1;
+        // Tactical assaults must stay table-sized. Larger defences belong in the strategic resolver; if a
+        // tactical order reaches this step after the defender mobilized, cap the generated force to the
+        // same limits used when deciding tactical-vs-strategic combat. This is what keeps a hive's
+        // enormous reserve from producing an untenable tactical battle.
+        private const long MaxTacticalDefenderBattleValue = StrategicCombatRules.MassCombatBattleValueFloor - 1;
 
         // Base difficulty of the defenders' preparation check. Mirrors the attacker's own 10.0f so
         // neither side is structurally favoured: an evenly-matched pair of commanders produces a net
@@ -32,11 +33,55 @@ namespace OnlyWar.Helpers.Missions.Assault
         // defence as a point of regional intel is to spotting an intruder.
         private const float EntrenchmentPreparationBonus = 0.5f;
 
+        // Baseline difficulty of a patrol being astride the approach an attack actually used. Set so that
+        // a mid-sized attacker (magnitude ~3, i.e. around a thousand battle value) is roughly even money
+        // for an undiverted patrol at Normal aggression, a full advance is near-certain to be seen, and a
+        // small raid slipping through is a real possibility.
+        private const float PatrolDetectionBaseDifficulty = 13.0f;
+
+        // How much each point of attention drawn elsewhere costs the patrol's chance of being in position.
+        // Deliberately steep: this is the payoff for a successful feint, and the design intent is that
+        // pulling a screen aside meaningfully changes what happens when the real blow lands.
+        private const float PatrolDetectionAttentionPenalty = 2.0f;
+
         public string Description { get { return "Prepare Assault"; } }
 
-        public void ExecuteMissionStep(MissionExecutionContext execution, float marginOfSuccess, IMissionStep returnStep)
+        // An assault now spends days. Before this it consumed none at all: prep check, gather the
+        // defenders, one battle, done - the entire operation resolved on day 0, which meant there was
+        // no window during which anything could interfere with it and the day model bought the biggest
+        // mission in the game precisely nothing.
+        public bool ConsumesDay => true;
+
+        public MissionStepResult ExecuteMissionStep(MissionExecutionContext execution, float marginOfSuccess, IMissionStep resumeStep)
         {
             MissionContext context = execution.State;
+
+            // An advance holds what it takes (MissionReturnPolicy.Hold), so it gets the full week of
+            // attempts rather than surrendering the last day to a trip home.
+            if (context.OperatingDaysSpent)
+            {
+                context.AddLog(
+                    $"Day {context.DaysElapsed}: The assault has spent its week without taking "
+                    + $"{context.Order.Mission.RegionFaction.Region.Name}.");
+                return MissionStepResult.Complete;
+            }
+
+            // The across-days half of the aggression threshold. MeetingEngagementMissionStep already
+            // declines to resume when a single battle leaves the force spent; this catches the force
+            // that survived each individual fight but has been ground down over several of them.
+            if (context.MissionLossesExceedAggressionThreshold)
+            {
+                context.AddLog(
+                    $"Day {context.DaysElapsed}: Assault broken off - losses beyond "
+                    + $"{context.Order.LevelOfAggression} tolerance.");
+                GameLog.Debug(() =>
+                    $"Assault broken off {MissionTurnProcessor.DescribeRegionFaction(context.Order.Mission.RegionFaction)}: "
+                    + $"aggression={context.Order.LevelOfAggression}, day={context.DaysElapsed}, "
+                    + $"bv={context.CurrentMissionBattleValue}/{context.StartingMissionBattleValue}");
+                return MissionStepResult.Complete;
+            }
+
+            context.DaysElapsed++;
             // The attacker's preparation check remains the same
             BaseSkill tactics = execution.Rules.Tactics;
             LeaderMissionTest missionTest = new LeaderMissionTest(tactics, 10.0f);
@@ -54,7 +99,11 @@ namespace OnlyWar.Helpers.Missions.Assault
                 margin,
                 execution.Random,
                 execution.EntityIds,
-                tactics);
+                tactics,
+                context.DefenderBattleValueDestroyed,
+                // How much force is arriving, which is what decides whether a patrol could plausibly
+                // have missed it.
+                context.CurrentMissionBattleValue);
 
             if (context.OpposingSquads.Count == 0)
             {
@@ -63,10 +112,17 @@ namespace OnlyWar.Helpers.Missions.Assault
                 context.AddLog($"Day {context.DaysElapsed}: {attacker}'s assault on {defender} forces in {region} is unopposed.");
                 context.Impact += 5; // Give a significant positive impact for taking territory freely.
                 // a more robust system would properly transfer ownership here
-                return;
+                return MissionStepResult.Complete;
             }
 
-            new MeetingEngagementMissionStep().ExecuteMissionStep(execution, margin, null);
+            // Resume this step after the engagement, so an assault that is still willing and able comes
+            // back tomorrow for another attempt. MeetingEngagementMissionStep only resumes when the
+            // force survived and did not withdraw under fire, so a decisive defeat ends the assault
+            // here; the guards at the top of this method end it when the week or the force's tolerance
+            // runs out. An Aggressive order has no tolerance and so genuinely fights until the region
+            // falls or the force is destroyed, which is what the setting should mean.
+            return MissionStepResult.Continue(
+                new MeetingEngagementMissionStep(), margin, new PrepareAssaultMissionStep());
         }
 
         internal List<BattleSquad> AssembleDefendingForce(
@@ -74,7 +130,9 @@ namespace OnlyWar.Helpers.Missions.Assault
             float attackerMarginOfSuccess,
             IRNG random,
             IEntityIdAllocator entityIds = null,
-            BaseSkill defenderTactics = null)
+            BaseSkill defenderTactics = null,
+            long defenderBattleValueAlreadyDestroyed = 0,
+            long attackerBattleValue = 0)
         {
             var defendingForce = new List<BattleSquad>();
 
@@ -96,6 +154,14 @@ namespace OnlyWar.Helpers.Missions.Assault
             List<BattleSquad> landedDefenders = defendingSquads
                 .Select(s => new BattleSquad(s.Faction?.IsPlayerFaction == true, s))
                 .ToList();
+
+            // 1a. A patrol fights only if it saw this coming. Everything else here - a Defense order, an
+            // exposed diversion force, a show of force - is standing on the ground by intent and is
+            // caught up in the fighting regardless.
+            landedDefenders = landedDefenders
+                .Where(bs => bs.Squad?.CurrentOrders?.Mission.MissionType != MissionType.Patrol
+                    || PatrolDetectedAttack(bs, attackerBattleValue, defenderTactics, random))
+                .ToList();
             defendingForce.AddRange(landedDefenders);
 
             // 1b. A Defense order means the ground was PREPARED, and prepared ground contests the
@@ -107,22 +173,66 @@ namespace OnlyWar.Helpers.Missions.Assault
                 defenderTactics,
                 random);
 
-            // 2. Generate squads for each allied faction's abstract garrison.
-            foreach (RegionFaction alliedDefender in alliedDefenders.Where(rf => rf.Garrison > 0))
+            // 2. Materialise each allied defender's RESERVE - the battle value its controller held back
+            // to defend this ground (FactionStrategyController.CalculateRequiredDefensiveBattleValue).
+            //
+            // This used to read raw RegionFaction.Garrison, which was wrong for almost every defender in
+            // the game. Garrison is Imperial-specific: MilitaryStrength resolves to Population for a
+            // PopulationIsMilitary horde, and FactionRevealService ZEROES Garrison when a cult or revolt
+            // reveals. So the old `Where(rf => rf.Garrison > 0)` filter never fired for a revealed cult,
+            // revolt or Tyranid region, and an assault on one faced no abstract defence whatsoever -
+            // frequently landing in the unopposed branch below and taking the ground for free. The
+            // strategic resolver and LightningRaidMissionStep already priced defenders off
+            // MilitaryStrength, so this brings the assault path in line with its own siblings rather
+            // than inventing a new defence.
+            //
+            // The reserve and the region's landed patrol squads (added above) are disjoint by
+            // construction: patrol screens are drawn from SPARE troops, i.e. what is left after the
+            // reserve, so `reserve + patrolBattleValue <= GetDeployedStrength()` always holds and the two
+            // contributions cannot over-commit the pool. That is why nothing needs debiting at
+            // generation time.
+            //
+            // The reserve is drawn down by whatever this mission has already destroyed. Without that, a
+            // multi-day assault would raise a fresh full-strength defence every morning - the region's
+            // strength is not reduced until MissionAftermathProcessor runs at the end of the turn - so
+            // the attacker could never actually win, only run out of days or of its own casualty
+            // tolerance while re-fighting an identical battle. Spreading the deduction across allied
+            // defenders in proportion to their share keeps a multi-faction defence consistent with the
+            // single-faction case.
+            Dictionary<RegionFaction, long> reserves = alliedDefenders.ToDictionary(
+                rf => rf,
+                FactionStrategyController.CalculateRequiredDefensiveBattleValue);
+            long totalReserve = reserves.Values.Sum();
+            long remainingToDeduct = Math.Max(0L, defenderBattleValueAlreadyDestroyed);
+            foreach (RegionFaction alliedDefender in alliedDefenders)
             {
-                // Attacker's success in preparation reduces the effectiveness of the garrison
+                long reserve = reserves[alliedDefender];
+                if (reserve <= 0) continue;
+
+                long share = totalReserve <= 0
+                    ? 0
+                    : (long)((double)remainingToDeduct * reserve / totalReserve);
+                long survivingReserve = Math.Max(0L, reserve - share);
+                if (survivingReserve <= 0) continue;
+
+                // Attacker's success in preparation reduces the effectiveness of the defence's
                 // mobilization - net of whatever the defenders' own preparation clawed back.
                 float cdf = GaussianCalculator.ApproximateNormalCDF(effectiveAttackerMargin);
                 float multiplier = (float)Math.Pow(2, 1 - (2 * cdf));
-                long effectiveGarrison = (long)(alliedDefender.Garrison * multiplier);
-                // Garrison already lives in strategic battle-value points; the old x10 conversion
+                long effectiveReserve = (long)(survivingReserve * multiplier);
+                // The reserve already lives in strategic battle-value points; the old x10 conversion
                 // massively over-mobilised defenders after SoldierTemplate.BattleValue was
                 // recalculated onto real per-template values.
-                long targetBattleValue = effectiveGarrison <= 0
+                long targetBattleValue = effectiveReserve <= 0
                     ? 0
                     : Math.Min(
-                        Math.Max(effectiveGarrison, alliedDefender.PlanetFaction.Faction.MinimumForceRequest),
-                        MaxTacticalGarrisonBattleValue);
+                        Math.Min(
+                            Math.Max(effectiveReserve, alliedDefender.PlanetFaction.Faction.MinimumForceRequest),
+                            MaxTacticalDefenderBattleValue),
+                        // Never mobilise more than actually survives: MinimumForceRequest would otherwise
+                        // resurrect a defence ground down below one squad's worth, so the last fragment
+                        // of it could never be finished off.
+                        survivingReserve);
 
                 var request = new ForceGenerationRequest
                 {
@@ -136,6 +246,66 @@ namespace OnlyWar.Helpers.Missions.Assault
             }
 
             return defendingForce;
+        }
+
+        /// <summary>
+        /// Whether a patrol was looking the right way when this attack arrived, and therefore whether it
+        /// joins the defence at all.
+        /// </summary>
+        /// <remarks>
+        /// This is the distinction between Patrol and Defense that the whole redesign turns on. A Defense
+        /// order holds prepared ground and always fights. A patrol is dispersed and sweeping, so whether
+        /// it is in position is a question with an answer, and the answer is what the player buys when
+        /// they screen a region — or takes away when they feint at one.
+        ///
+        /// Two terms make it work. A larger formation crossing into the region is harder to miss, so
+        /// difficulty falls with the attacker's magnitude: a full advance is near-impossible to overlook,
+        /// a lightning raid is a genuine gamble. And attention a diversion drew elsewhere pushes it back
+        /// up — a diverted patrol has not failed to detect, it detected the wrong thing, which is
+        /// precisely what the feint was for. That makes the mechanic cut both ways the moment the AI
+        /// learns to feint.
+        /// </remarks>
+        internal static bool PatrolDetectedAttack(
+            BattleSquad patrol,
+            long attackerBattleValue,
+            BaseSkill defenderTactics,
+            IRNG random)
+        {
+            // Callers without the rules' Tactics skill (older test call sites, and any path assembling a
+            // defence outside a mission execution) keep the previous unconditional behaviour rather than
+            // silently dropping the patrol from the defence.
+            if (defenderTactics == null || random == null) return true;
+
+            RegionFaction patrolled = ResolvePatrolledFaction(patrol);
+            float committed = patrolled?.CommittedAttention ?? 0f;
+            float difficulty = PatrolDetectionBaseDifficulty
+                - MissionStealthDifficulty.Magnitude(attackerBattleValue)
+                + committed * PatrolDetectionAttentionPenalty
+                // A bold patrol ranges wider and is likelier to be astride the approach: aggression's
+                // EFFECT axis, matching PatrolSweepMissionStep.
+                + MissionAggressionModifiers.EffectDifficulty(
+                    patrol.Squad.CurrentOrders.LevelOfAggression);
+
+            float margin = new LeaderMissionTest(defenderTactics, difficulty)
+                .RunMissionCheck(new List<BattleSquad> { patrol }, random);
+            bool detected = margin > 0f;
+            GameLog.Debug(() =>
+                $"Patrol detection {patrol.Squad?.Name}: difficulty={difficulty:F2} "
+                + $"(attackerBV={attackerBattleValue}, committedAttention={committed:F2}), "
+                + $"margin={margin:F2} -> {(detected ? "IN POSITION" : "looking the wrong way")}");
+            return detected;
+        }
+
+        // The patrol's own presence in the region it patrols, which is where its committed attention
+        // lives. Falls back to null rather than guessing when the squad has no resolvable presence.
+        private static RegionFaction ResolvePatrolledFaction(BattleSquad patrol)
+        {
+            RegionFaction anchored = patrol.Squad?.CurrentOrders?.Mission?.RegionFaction;
+            if (anchored != null) return anchored;
+            Region region = patrol.Squad?.CurrentRegion;
+            int? factionId = patrol.Squad?.Faction?.Id;
+            if (region == null || factionId == null) return null;
+            return region.RegionFactionMap.TryGetValue(factionId.Value, out RegionFaction rf) ? rf : null;
         }
 
         /// <summary>

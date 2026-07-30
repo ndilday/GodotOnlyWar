@@ -6,8 +6,10 @@ namespace OnlyWar.Tests.Battles;
 
 public class BattlePursuitPlannerTests
 {
+    // A pursuer with a genuine speed edge (10 vs 8), so the aggression policy is what these
+    // cases exercise and not the cannot-close override.
     private static BattlePursuitPlanner.Input Input(Aggression aggression = Aggression.Normal) =>
-        new(4, true, aggression, 6, 8, 8, 8, 2, 1, WithdrawerReturnsFire: true);
+        new(4, true, aggression, 6, 8, 10, 8, 2, 1, WithdrawerReturnsFire: true);
 
     [Fact]
     public void OutnumberingFasterForce_StillAnswersToItsAggressionPolicy()
@@ -71,17 +73,85 @@ public class BattlePursuitPlannerTests
     }
 
     [Fact]
-    public void UnresistingPreyOverride_RequiresSpeedAdvantageAndAWorkingGun()
+    public void UnresistingPreyOverride_RequiresAWorkingGun()
     {
-        // Not faster: Press stands (following would let the quarry open the gap).
-        var slower = new BattlePursuitPlanner.Input(
-            4, true, Aggression.Aggressive, 12, 8, 8, 8, 2, 1, WithdrawerReturnsFire: false);
-        Assert.Equal(PursuitPosture.Press, BattlePursuitPlanner.Evaluate(slower).Posture);
-
-        // No projected positive follow shot (no ranged weapons): Press stands.
+        // No projected positive follow shot (no ranged weapons): Press stands. A melee-only
+        // pursuer has nothing better to do than keep contact; the contact rules end the chase
+        // once it demonstrably lands nothing.
         var meleeOnly = new BattlePursuitPlanner.Input(
             4, true, Aggression.Aggressive, 12, 8, 10, 8, 2, null, WithdrawerReturnsFire: false);
         Assert.Equal(PursuitPosture.Press, BattlePursuitPlanner.Evaluate(meleeOnly).Posture);
+    }
+
+    // Equal speed, quarry already in range (a positive shot is available this turn, not in two),
+    // and out of melee reach: the chase is unwinnable and only the guns are left.
+    private static BattlePursuitPlanner.Input StalledChase(Aggression aggression) =>
+        new(4, true, aggression, 12, 8, 8, 8, 1, 0, WithdrawerReturnsFire: true,
+            PursuerCanReachMeleeThisTurn: false);
+
+    [Theory]
+    [InlineData(Aggression.Cautious)]
+    [InlineData(Aggression.Normal)]
+    [InlineData(Aggression.Attritional)]
+    [InlineData(Aggression.Aggressive)]
+    public void PursuerWithNoSpeedEdge_StandsAndFiresInsteadOfChasing(Aggression aggression)
+    {
+        // Neither chasing posture pays here. Press never shoots; Follow jogs at half a run, so
+        // it cannot hold the gap either, and buys its extra turns in range with full-Bulk,
+        // unaimed shots. Standing still is the higher-damage option for all four policies.
+        BattlePursuitPlanner.Result result = BattlePursuitPlanner.Evaluate(StalledChase(aggression));
+
+        Assert.Equal(PursuitPosture.Standoff, result.Posture);
+        Assert.Equal("cannot_close_stands_and_fires", result.Reason);
+    }
+
+    [Fact]
+    public void PursuerThatCanNeitherCloseNorShoot_BreaksOff()
+    {
+        // Out of range with no way to regain it (the projected shot is two turns of jogging
+        // away, which an equal-speed quarry simply outruns): there is nothing left to gain from
+        // contact, so the engagement ends rather than grinding to the turn cap.
+        var outOfRange = StalledChase(Aggression.Aggressive) with
+        {
+            ProjectedFollowPositiveShotTurns = 2
+        };
+        Assert.Equal(PursuitPosture.BreakOff, BattlePursuitPlanner.Evaluate(outOfRange).Posture);
+        Assert.Equal("cannot_close_or_shoot", BattlePursuitPlanner.Evaluate(outOfRange).Reason);
+
+        // Same for a melee-only pursuer that will never lay a hand on them.
+        var noGun = StalledChase(Aggression.Aggressive) with
+        {
+            ProjectedFollowPositiveShotTurns = null
+        };
+        Assert.Equal(PursuitPosture.BreakOff, BattlePursuitPlanner.Evaluate(noGun).Posture);
+    }
+
+    [Fact]
+    public void CannotCloseOverride_YieldsToAMeleeCatchAvailableThisTurn()
+    {
+        // Matched speeds do not matter when the pursuer is already on top of the quarry — it can
+        // catch someone this turn, so its policy stands.
+        var inContact = StalledChase(Aggression.Aggressive) with
+        {
+            PursuerCanReachMeleeThisTurn = true
+        };
+
+        Assert.Equal(PursuitPosture.Press, BattlePursuitPlanner.Evaluate(inContact).Posture);
+    }
+
+    [Fact]
+    public void CannotCloseOverride_TreatsATrivialSpeedEdgeAsNoEdgeAtAll()
+    {
+        // Inside the shared tolerance the pursuer would need hundreds of turns to make up a
+        // single hex; outside it, the chase is real and the aggression policy stands.
+        var withinTolerance = StalledChase(Aggression.Aggressive) with
+        {
+            FastestPursuitSpeed = 8.1f
+        };
+        Assert.Equal(PursuitPosture.Standoff, BattlePursuitPlanner.Evaluate(withinTolerance).Posture);
+
+        var beyondTolerance = withinTolerance with { FastestPursuitSpeed = 8.2f };
+        Assert.Equal(PursuitPosture.Press, BattlePursuitPlanner.Evaluate(beyondTolerance).Posture);
     }
 
     [Fact]
@@ -90,8 +160,8 @@ public class BattlePursuitPlannerTests
         string trace = BattlePursuitPlanner.Evaluate(Input(Aggression.Cautious)).Trace.Render();
 
         Assert.Equal("PURSUIT_EVAL turn=4 side=first pursuer_soldiers=6 withdrawing_soldiers=8 " +
-                     "fastest_pursuit_speed=8 slowest_withdrawal_speed=8 aggression=Cautious " +
-                     "withdrawer_returns_fire=true " +
+                     "fastest_pursuit_speed=10 slowest_withdrawal_speed=8 aggression=Cautious " +
+                     "withdrawer_returns_fire=true melee_reach_this_turn=false " +
                      "press_intercept_turns=2 follow_shot_turns=1 decision=Follow reason=cautious_follows", trace);
     }
 }

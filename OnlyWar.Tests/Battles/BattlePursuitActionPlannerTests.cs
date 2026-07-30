@@ -62,6 +62,31 @@ public class BattlePursuitActionPlannerTests
     }
 
     [Fact]
+    public void Standoff_HoldsPositionAndBringsTheGunsToBearWithoutMoving()
+    {
+        // The chase is unwinnable, so the squad plants itself and works the target with
+        // stationary fire — no Bulk penalty, and the aim bonus is allowed to accumulate —
+        // rather than jogging after a quarry it cannot catch.
+        BattleSquad pursuer = CreateSquad("Pursuer", 72_041);
+        BattleSquad withdrawing = CreateSquad("Withdrawer", 72_042);
+        Fixture fixture = CreateFixture(
+            (pursuer, true, 0, 0),
+            (withdrawing, false, 10, 0));
+
+        fixture.Planner.PreparePursuitActions(
+            pursuer,
+            PursuitPosture.Standoff,
+            [withdrawing]);
+
+        Assert.Equal(SquadMovementTier.Stationary, pursuer.MovementTier);
+        Assert.Empty(fixture.MoveActions);
+        Assert.Empty(fixture.MeleeActions);
+        // Aiming and firing both land in the shoot segment; which one the planner picks this
+        // turn is its own business, but it must be engaging the withdrawer either way.
+        Assert.NotEmpty(fixture.ShootActions);
+    }
+
+    [Fact]
     public void Press_RunsTowardNearestWithdrawerWithoutShooting()
     {
         BattleSquad pursuer = CreateSquad("Pursuer", 72_011);
@@ -81,6 +106,52 @@ public class BattlePursuitActionPlannerTests
         Assert.Empty(fixture.ShootActions);
         MoveAction move = Assert.IsType<MoveAction>(Assert.Single(fixture.MoveActions));
         Assert.Matches(@"to \([1-9]\d*, -?\d+\)", move.Description());
+    }
+
+    [Fact]
+    public void Press_AttacksTheWithdrawerItHasCaughtInsteadOfRunningOnTheSpot()
+    {
+        // Press exists to convert contact into damage. Adjacent to the quarry it swings; without
+        // this the posture closed the distance and then jogged in place beside the enemy forever,
+        // so a fast element could never pin anyone for the slow element to catch up to.
+        BattleSquad pursuer = CreateSquad("Pursuer", 72_051);
+        BattleSquad withdrawing = CreateSquad("Withdrawer", 72_052);
+        Fixture fixture = CreateFixture(
+            (pursuer, true, 0, 0),
+            (withdrawing, false, 1, 0));
+
+        fixture.Planner.PreparePursuitActions(
+            pursuer,
+            PursuitPosture.Press,
+            [withdrawing]);
+
+        // Which attack it makes is the engaged-soldier decision's business — a rifleman standing
+        // on his quarry may well shoot point blank rather than club him. What matters is that
+        // reaching the enemy produces an attack at all instead of another stride.
+        Assert.NotEmpty(fixture.MeleeActions.Concat(fixture.ShootActions));
+        Assert.Empty(fixture.MoveActions);
+    }
+
+    [Fact]
+    public void Press_ChargesIntoContactWhenTheWithdrawerIsWithinOneMove()
+    {
+        // Just out of contact but inside a Run: the pursuer closes and gets stuck in the same
+        // turn rather than stopping politely one pace short.
+        BattleSquad pursuer = CreateSquad("Pursuer", 72_061);
+        BattleSquad withdrawing = CreateSquad("Withdrawer", 72_062);
+        Fixture fixture = CreateFixture(
+            (pursuer, true, 0, 0),
+            (withdrawing, false, 4, 0));
+
+        fixture.Planner.PreparePursuitActions(
+            pursuer,
+            PursuitPosture.Press,
+            [withdrawing]);
+
+        // It closes and gets stuck in on the same turn: a move plus an attack, not a bare stride
+        // that stops one pace short and repeats forever.
+        Assert.NotEmpty(fixture.MoveActions);
+        Assert.NotEmpty(fixture.MeleeActions.Concat(fixture.ShootActions));
     }
 
     [Fact]

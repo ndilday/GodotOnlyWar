@@ -89,10 +89,12 @@ namespace OnlyWar.Helpers
                 ScenarioMetricsCollector.GetScenarioMetricsPlanet(sector),
                 defaultFaction);
 
-            // --- 0. Shaping Phase ---
-            // Diversion missions resolve before strategic planning so the feint they project is
-            // already in place when factions decide where to garrison and attack this turn. This
-            // is what lets a diversion pull enemy attention away from the player's other forces.
+            // There is no longer a pre-planning shaping phase. Diversions used to resolve here, before
+            // NPC planning, so their projected threat could inflate the garrison the enemy chose to
+            // hold. That effect is gone deliberately: a feint begun on Monday cannot retroactively
+            // change planning the enemy did on Sunday. Diversions now resolve inside the day scheduler
+            // with every other mission, where they shape who is looking where each day
+            // (Design/Active/DailyMissionResolution.md §4).
             SimulationContext context = new(
                 _session,
                 _lastResult,
@@ -100,17 +102,10 @@ namespace OnlyWar.Helpers
                 sector.Orders.Values);
             List<Order> playerOrdersThisTurn = context.PlayerOrders;
             List<Order> allOrdersThisTurn = context.AllOrders;
-            _missionTurnProcessor.ProcessDiversionMissions(
-                allOrdersThisTurn.Where(o => o.Mission.MissionType == MissionType.Diversion && o.AssignedSquads.Any()),
-                MissionContexts);
 
             // --- 1. Strategic Planning Phase ---
             // Let each NPC faction generate its orders
             _orderPlanner.AppendNpcOrders(allOrdersThisTurn, sector);
-
-            // The diversion effect is consumed entirely by the planning above; clear it so it
-            // never lingers past the turn that produced it.
-            MissionTurnProcessor.ClearDiversionEffects(sector.Planets.Values);
 
             // --- 2. Mission Execution Phase ---
             var strategicCombatOrders = allOrdersThisTurn.Where(o => o.Mission is StrategicCombatMission);
@@ -127,7 +122,9 @@ namespace OnlyWar.Helpers
             // --- 3. Planetary Simulation & Resolution Phase ---
             _missionAftermathProcessor.ApplyMissionResults(MissionContexts);
             _chapterUpkeepProcessor.ProcessMedical(sector);
-            _chapterUpkeepProcessor.TrainNonDeployedPlayerForces(sector);
+            // Days a mission did not need become training credit, so the upkeep pass needs to know how
+            // long each squad was actually committed for.
+            _chapterUpkeepProcessor.TrainNonDeployedPlayerForces(sector, BuildMissionDaysBySquad());
             _fleetTurnProcessor.AdvanceFleetMovement(sector);
             _planetTurnProcessor.UpdatePlanets(sector.Planets.Values);
             _lastResult.RecruitmentReport = _recruitmentTurnProcessor.Process();
@@ -157,6 +154,26 @@ namespace OnlyWar.Helpers
         {
             EnsureSessionSector(sector);
             _planetForwardSimulator.Simulate(sector, planet, turns);
+        }
+
+        // Longest mission each squad ran this turn. A squad can appear in more than one mission context
+        // when an order fans out into independent elements (recon), so the maximum is the honest read of
+        // how much of its week was spoken for.
+        private Dictionary<int, int> BuildMissionDaysBySquad()
+        {
+            Dictionary<int, int> daysBySquad = new();
+            foreach (MissionContext context in MissionContexts)
+            {
+                foreach (Battles.BattleSquad battleSquad in context.MissionSquads)
+                {
+                    int squadId = battleSquad.Squad?.Id ?? battleSquad.Id;
+                    int days = context.DaysElapsed;
+                    daysBySquad[squadId] = daysBySquad.TryGetValue(squadId, out int existing)
+                        ? System.Math.Max(existing, days)
+                        : days;
+                }
+            }
+            return daysBySquad;
         }
 
         private void EnsureSessionSector(Sector sector)

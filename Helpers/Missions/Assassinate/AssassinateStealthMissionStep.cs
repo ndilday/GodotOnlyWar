@@ -11,9 +11,11 @@ namespace OnlyWar.Helpers.Missions.Assassinate
     {
         public string Description { get { return "Assassinate Stealth"; } }
 
+        public bool ConsumesDay => true;
+
         public AssassinateStealthMissionStep() { }
 
-        public void ExecuteMissionStep(MissionExecutionContext execution, float marginOfSuccess, IMissionStep returnStep)
+        public MissionStepResult ExecuteMissionStep(MissionExecutionContext execution, float marginOfSuccess, IMissionStep resumeStep)
         {
             MissionContext context = execution.State;
             // This step is the assassination loop's re-entry point - DetectedMissionStep is handed
@@ -25,11 +27,9 @@ namespace OnlyWar.Helpers.Missions.Assassinate
             // stealth check could never fail; guarding the log makes it reachable.
             if (context.OperatingDaysSpent)
             {
-                if (context.MustExfiltrate)
-                {
-                    new ExfiltrateMissionStep().ExecuteMissionStep(execution, 0.0f, null);
-                }
-                return;
+                return context.MustExfiltrate
+                    ? MissionStepResult.Continue(new ExfiltrateMissionStep())
+                    : MissionStepResult.Complete;
             }
 
             // negative mod for size of enemy force
@@ -46,19 +46,18 @@ namespace OnlyWar.Helpers.Missions.Assassinate
             // region held by a zero-Garrison horde can no longer produce Log(0) = -infinity, which
             // used to hand every assassin an infinite margin and a free approach.
             float difficulty = MissionStealthDifficulty
-                .Calculate(region, headcount, assassin).Total;
+                .Calculate(region, headcount, assassin).Total
+                // Aggression's EXPOSURE axis: a cautious approach keeps its distance and is harder to
+                // spot. The other half of the trade is the shot itself in
+                // PerformAssassinationMissionStep, which moves the opposite way.
+                + MissionAggressionModifiers.ExposureDifficulty(context.Order.LevelOfAggression);
             SquadMissionTest missionTest = new SquadMissionTest(stealth, difficulty);
 
             context.DaysElapsed++;
             float margin = missionTest.RunMissionCheck(context.MissionSquads, execution.Random);
-            if (margin > 0.0f)
-            {
-                new PerformAssassinationMissionStep().ExecuteMissionStep(execution, margin, this);
-            }
-            else
-            {
-                new DetectedMissionStep().ExecuteMissionStep(execution, margin, this);
-            }
+            return margin > 0.0f
+                ? MissionStepResult.Continue(new PerformAssassinationMissionStep(), margin, this)
+                : MissionStepResult.Continue(new DetectedMissionStep(), margin, this);
         }
     }
 }

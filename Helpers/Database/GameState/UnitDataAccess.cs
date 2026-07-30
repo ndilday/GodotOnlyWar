@@ -121,15 +121,13 @@ namespace OnlyWar.Helpers.Database.GameState
                 {
                     int orderId = reader.GetInt32(0);
                     int missionId = reader.GetInt32(1);
-                    int disposition = reader.GetInt32(2);
-                    bool isQuiet = reader.GetBoolean(3);
-                    bool isActivelyEngaging = reader.GetBoolean(4);
-                    int aggression = reader.GetInt32(5);
-                    Disposition disp = (Disposition)disposition;
+                    bool isQuiet = reader.GetBoolean(2);
+                    bool isActivelyEngaging = reader.GetBoolean(3);
+                    int aggression = reader.GetInt32(4);
                     Aggression agg = (Aggression)aggression;
                     // The Order constructor reattaches the order to each of its squads via
                     // Squad.CurrentOrders, so the loaded order is restored onto its squads here.
-                    Order order = new Order(orderId, orderSquadMap[orderId], disp, isQuiet, isActivelyEngaging, agg, missionMap[missionId]);
+                    Order order = new Order(orderId, orderSquadMap[orderId], isQuiet, isActivelyEngaging, agg, missionMap[missionId]);
                     if(orderId > maxOrderId)
                     {
                         maxOrderId = orderId;
@@ -292,15 +290,14 @@ namespace OnlyWar.Helpers.Database.GameState
 
         public void SaveOrder(IDbTransaction transaction, Order order)
         {
-            // CREATE TABLE Assignment (Id INTEGER PRIMARY KEY UNIQUE NOT NULL, MissionId INTEGER NOT NULL REFERENCES Mission (Id), Disposition INTEGER NOT NULL, IsQuiet BOOLEAN NOT NULL, IsActivelyEngaging BOOLEAN NOT NULL, Aggression INTEGER NOT NULL);
+            // CREATE TABLE Assignment (Id INTEGER PRIMARY KEY UNIQUE NOT NULL, MissionId INTEGER NOT NULL REFERENCES Mission (Id), IsQuiet BOOLEAN NOT NULL, IsActivelyEngaging BOOLEAN NOT NULL, Aggression INTEGER NOT NULL);
             using (var command = transaction.Connection.CreateCommand())
             {
                 command.Transaction = transaction;
                 command.CommandText = @"INSERT INTO Assignment VALUES
-                    (@id, @missionId, @disposition, @isQuiet, @isActivelyEngaging, @aggression);";
+                    (@id, @missionId, @isQuiet, @isActivelyEngaging, @aggression);";
                 command.AddParam("@id", order.Id);
                 command.AddParam("@missionId", order.Mission.Id);
-                command.AddParam("@disposition", (int)order.Disposition);
                 command.AddParam("@isQuiet", order.IsQuiet ? 1 : 0);
                 command.AddParam("@isActivelyEngaging", order.IsActivelyEngaging ? 1 : 0);
                 command.AddParam("@aggression", (int)order.LevelOfAggression);

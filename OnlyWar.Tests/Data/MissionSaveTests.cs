@@ -1,8 +1,10 @@
 using System.Collections.Generic;
 using System.Drawing;
+using System.Linq;
 using Microsoft.Data.Sqlite;
 using OnlyWar.Helpers.Database.GameState;
 using OnlyWar.Helpers.Extensions;
+using OnlyWar.Helpers.Missions.Ambush;
 using OnlyWar.Models;
 using OnlyWar.Models.Fleets;
 using OnlyWar.Models.Missions;
@@ -79,6 +81,62 @@ public class MissionSaveTests
         Assert.Equal(System.DBNull.Value, command.ExecuteScalar());
     }
 
+    [Fact]
+    public void SavePlanet_AmbushMission_RoundTripsTargetBattleValue()
+    {
+        Faction faction = CreateFaction();
+        Planet planet = CreatePlanet(faction);
+        RegionFaction targetFaction = planet.Regions[0].RegionFactionMap[faction.Id];
+        Mission original = new(
+            7,
+            MissionType.Ambush,
+            targetFaction,
+            missionSize: 2,
+            targetBattleValue: 270);
+        planet.Regions[0].SpecialMissions.Add(original);
+
+        using SqliteConnection connection = CreateSaveDatabase();
+        SavePlanet(connection, planet);
+        planet.Regions[0].SpecialMissions.Clear();
+
+        Dictionary<int, Region> regions = planet.Regions.ToDictionary(
+            region => region.Id,
+            region => region);
+        Mission loaded = new PlanetDataAccess()
+            .PopulateRegionMissions(connection, regions)[original.Id];
+
+        Assert.Equal(270, loaded.TargetBattleValue);
+        Assert.Contains(loaded, planet.Regions[0].SpecialMissions);
+    }
+
+    [Fact]
+    public void LoadLegacyAmbushMission_DerivesStableTargetBattleValue()
+    {
+        Faction faction = CreateFaction();
+        Planet planet = CreatePlanet(faction);
+        RegionFaction targetFaction = planet.Regions[0].RegionFactionMap[faction.Id];
+        Mission original = new(
+            7,
+            MissionType.Ambush,
+            targetFaction,
+            missionSize: 2);
+        planet.Regions[0].SpecialMissions.Add(original);
+
+        using SqliteConnection connection = CreateSaveDatabase();
+        SavePlanet(connection, planet);
+        planet.Regions[0].SpecialMissions.Clear();
+
+        Dictionary<int, Region> regions = planet.Regions.ToDictionary(
+            region => region.Id,
+            region => region);
+        Mission loaded = new PlanetDataAccess()
+            .PopulateRegionMissions(connection, regions)[original.Id];
+
+        Assert.Equal(
+            AmbushMissionSizing.EstimateLegacyTargetBattleValue(2),
+            loaded.TargetBattleValue);
+    }
+
     private static void SavePlanet(SqliteConnection connection, Planet planet)
     {
         using SqliteTransaction transaction = connection.BeginTransaction();
@@ -120,7 +178,8 @@ public class MissionSaveTests
             CREATE TABLE PlanetFactionRegionIntel (PlanetId INTEGER NOT NULL, FactionId INTEGER NOT NULL, RegionId INTEGER NOT NULL,
                 IntelLevel REAL NOT NULL);
             CREATE TABLE Mission (Id INTEGER PRIMARY KEY UNIQUE NOT NULL, MissionType INTEGER NOT NULL, RegionId INTEGER NOT NULL,
-                FactionId INTEGER NOT NULL, MissionSize INTEGER NOT NULL, DefenseTypeId INTEGER, IsRegionMission BOOLEAN NOT NULL);";
+                FactionId INTEGER NOT NULL, MissionSize INTEGER NOT NULL, DefenseTypeId INTEGER, IsRegionMission BOOLEAN NOT NULL,
+                TargetBattleValue BIGINT);";
         command.ExecuteNonQuery();
         return connection;
     }

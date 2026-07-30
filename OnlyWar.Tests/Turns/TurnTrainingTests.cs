@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Drawing;
 using System.IO;
@@ -268,7 +268,7 @@ public class TurnTrainingTests
         public void AssignDefensiveMission(Squad squad)
         {
             Mission mission = new(MissionType.DefenseInDepth, RegionFaction, 0);
-            Order order = new([squad], Disposition.DugIn, true, false, Aggression.Avoid, mission);
+            Order order = new([squad], true, false, Aggression.Avoid, mission);
             squad.CurrentOrders = order;
             Sector.AddNewOrder(order);
         }
@@ -276,7 +276,7 @@ public class TurnTrainingTests
         public void AssignFortifyMission(Squad squad, DefenseType defenseType)
         {
             ConstructionMission mission = new(defenseType, 0, RegionFaction);
-            Order order = new([squad], Disposition.DugIn, true, false, Aggression.Avoid, mission);
+            Order order = new([squad], true, false, Aggression.Avoid, mission);
             squad.CurrentOrders = order;
             Sector.AddNewOrder(order);
         }
@@ -399,6 +399,7 @@ public class TurnTrainingTests
         public List<ISoldier> WorkExperienceSoldiers { get; } = [];
         public List<Squad> ScoutTrainingSquads { get; } = [];
         public Dictionary<int, TrainingFocuses> ScoutFocusMap { get; private set; } = [];
+        public IReadOnlyDictionary<int, float> ScoutPointsBySquad { get; private set; }
 
         public void UpdateRatings(Date date, PlayerSoldier soldier)
         {
@@ -414,13 +415,30 @@ public class TurnTrainingTests
             soldier.AddSkillPoints(TestSkills.Ranged, points);
         }
 
-        public void TrainScouts(IEnumerable<Squad> scoutSquads, Dictionary<int, TrainingFocuses> squadFocusMap, float points = 0.2f)
+        public void TrainScouts(IEnumerable<Squad> scoutSquads, Dictionary<int, TrainingFocuses> squadFocusMap,
+            float points = 0.2f, IReadOnlyDictionary<int, float> pointsBySquad = null)
         {
             ScoutFocusMap = squadFocusMap;
+            ScoutPointsBySquad = pointsBySquad;
             ScoutTrainingSquads.AddRange(scoutSquads);
-            foreach (ISoldier soldier in scoutSquads.Where(s => s.CurrentOrders == null).SelectMany(s => s.Members))
+            foreach (Squad squad in scoutSquads)
             {
-                soldier.AddSkillPoints(TestSkills.Stealth, points);
+                // Mirrors the real service: a squad the caller has costed explicitly uses that share,
+                // otherwise only an idle squad drills.
+                float squadPoints = points;
+                if (pointsBySquad != null && pointsBySquad.TryGetValue(squad.Id, out float explicitPoints))
+                {
+                    squadPoints = explicitPoints;
+                }
+                else if (squad.CurrentOrders != null)
+                {
+                    continue;
+                }
+                if (squadPoints <= 0f) continue;
+                foreach (ISoldier soldier in squad.Members)
+                {
+                    soldier.AddSkillPoints(TestSkills.Stealth, squadPoints);
+                }
             }
         }
     }

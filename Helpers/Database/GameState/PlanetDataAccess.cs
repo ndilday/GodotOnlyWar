@@ -1,5 +1,6 @@
 ﻿using OnlyWar.Builders;
 using OnlyWar.Helpers.Extensions;
+using OnlyWar.Helpers.Missions.Ambush;
 using OnlyWar.Models;
 using OnlyWar.Models.Missions;
 using OnlyWar.Models.Planets;
@@ -110,6 +111,8 @@ namespace OnlyWar.Helpers.Database.GameState
             {
                 command.CommandText = "SELECT * FROM Mission";
                 var reader = command.ExecuteReader();
+                int targetBattleValueOrdinal =
+                    GetOrdinalOrDefault(reader, "TargetBattleValue");
                 int maxId = 0;
 
                 while (reader.Read())
@@ -125,6 +128,18 @@ namespace OnlyWar.Helpers.Database.GameState
                         defenseType = (DefenseType)reader.GetInt32(5);
                     }
                     bool isRegionMission = reader.GetBoolean(6);
+                    long? targetBattleValue =
+                        targetBattleValueOrdinal >= 0
+                        && reader[targetBattleValueOrdinal].GetType() != typeof(DBNull)
+                            ? Convert.ToInt64(reader[targetBattleValueOrdinal])
+                            : null;
+                    if (missionType == MissionType.Ambush
+                        && isRegionMission
+                        && targetBattleValue == null)
+                    {
+                        targetBattleValue =
+                            AmbushMissionSizing.EstimateLegacyTargetBattleValue(missionSize);
+                    }
 
                     Region region = regionMap[regionId];
                     RegionFaction regionFaction = region.RegionFactionMap[factionId];
@@ -134,7 +149,12 @@ namespace OnlyWar.Helpers.Database.GameState
                     // sabotage mission.
                     if (defenseType == null)
                     {
-                        mission = new Mission(id, missionType, regionFaction, missionSize);
+                        mission = new Mission(
+                            id,
+                            missionType,
+                            regionFaction,
+                            missionSize,
+                            targetBattleValue);
                     }
                     else if (missionType == MissionType.Construction)
                     {
@@ -595,8 +615,8 @@ namespace OnlyWar.Helpers.Database.GameState
             {
                 command.Transaction = transaction;
                 command.CommandText = @"INSERT INTO Mission
-                    (Id, MissionType, RegionId, FactionId, MissionSize, DefenseTypeId, IsRegionMission) VALUES
-                    (@id, @missionType, @regionId, @factionId, @missionSize, @defenseType, @isRegionMission);";
+                    (Id, MissionType, RegionId, FactionId, MissionSize, DefenseTypeId, IsRegionMission, TargetBattleValue) VALUES
+                    (@id, @missionType, @regionId, @factionId, @missionSize, @defenseType, @isRegionMission, @targetBattleValue);";
                 command.AddParam("@id", mission.Id);
                 command.AddParam("@missionType", (int)mission.MissionType);
                 command.AddParam("@regionId", mission.RegionFaction.Region.Id);
@@ -604,6 +624,11 @@ namespace OnlyWar.Helpers.Database.GameState
                 command.AddParam("@missionSize", mission.MissionSize);
                 command.AddParam("@defenseType", defenseType);
                 command.AddParam("@isRegionMission", isRegionMission ? 1 : 0);
+                command.AddParam(
+                    "@targetBattleValue",
+                    mission.TargetBattleValue.HasValue
+                        ? mission.TargetBattleValue.Value
+                        : null);
                 command.ExecuteNonQuery();
             }
         }

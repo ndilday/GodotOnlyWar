@@ -19,16 +19,37 @@ namespace OnlyWar.Models.Missions
         public MissionType MissionType { get; private set; }
         public RegionFaction RegionFaction { get; private set; }
         public int MissionSize { get; private set; }
+        // Ambush opportunities roll their concrete opposing-force budget when intelligence
+        // discovers them, so the player can make an informed commitment and execution can use
+        // the same force strength. Other mission types leave this null.
+        public long? TargetBattleValue { get; private set; }
 
-        public Mission(int id, MissionType missionType, RegionFaction regionFaction, int missionSize)
+        public Mission(
+            int id,
+            MissionType missionType,
+            RegionFaction regionFaction,
+            int missionSize,
+            long? targetBattleValue = null)
         {
             Id = id;
             MissionType = missionType;
             RegionFaction = regionFaction;
             MissionSize = missionSize;
+            TargetBattleValue = targetBattleValue;
         }
 
-        public Mission(MissionType missionType, RegionFaction regionFaction, int missionSize) : this(IdGenerator.GetNextMissionId(), missionType, regionFaction, missionSize) { }
+        public Mission(
+            MissionType missionType,
+            RegionFaction regionFaction,
+            int missionSize,
+            long? targetBattleValue = null)
+            : this(
+                IdGenerator.GetNextMissionId(),
+                missionType,
+                regionFaction,
+                missionSize,
+                targetBattleValue)
+        { }
     }
 
     public class SabotageMission : Mission

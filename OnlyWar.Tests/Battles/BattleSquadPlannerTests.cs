@@ -585,6 +585,16 @@ public class BattleSquadPlannerTests
         BattleSoldier shooter = shooterSquad.Soldiers[0];
         ((Soldier)shooter.Soldier).Dexterity = 17;
 
+        // This is a crossover scenario: it asserts the point-blank shoot-vs-melee decision
+        // flips between one and three adjacent attackers. The planner compares
+        // (bestRangedScore - forfeitedParryRisk) against the melee score, and parry risk
+        // scales with attacker count, so the test only discriminates while the ranged score
+        // sits in the band between the one-attacker and three-attacker crossings. That band
+        // is narrow -- under one point of baseDamage -- because the ranged side is scored as
+        // a linear wound ratio while melee is scored as a take-out probability.
+        // baseDamage 3.63 reproduces the expected ranged score this scenario was originally
+        // balanced around (3 x the old 4.25 damage-roll constant) now that the planner
+        // integrates the real N(3.5, 1.75) roll, keeping the scenario's balance unchanged.
         RangedWeapon pointBlankWeapon = new(new RangedWeaponTemplate(
             99_100,
             "Compact Rifle",
@@ -594,7 +604,7 @@ public class BattleSquadPlannerTests
             armorMultiplier: 1,
             penetrationMultiplier: 1,
             requiredStrength: 0,
-            baseDamage: 3,
+            baseDamage: 3.63f,
             maxDistance: 50,
             rof: 1,
             ammo: 5,

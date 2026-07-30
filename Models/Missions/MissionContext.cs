@@ -1,4 +1,5 @@
 using OnlyWar.Helpers.Battles;
+using OnlyWar.Helpers.Missions;
 using OnlyWar.Models.Battles;
 using OnlyWar.Models.Orders;
 using OnlyWar.Models.Planets;
@@ -64,10 +65,16 @@ namespace OnlyWar.Models.Missions
         public const int MissionDurationDays = 7;
         public const int ExfiltrationGraceDays = 3;
 
-        // True when the force is operating inside a region it does not already hold, so ending the
-        // mission means slipping back out. A force working ground it already stands on just stops.
+        // True when the force both intends to come home and is operating on ground it does not hold.
+        //
+        // The return policy is what makes this correct rather than accidentally correct: a Hold mission
+        // (an advance) keeps the ground it takes and must never try to withdraw from it, and a Static
+        // mission (a diversion, a patrol) never left its own region in the first place. The geometric
+        // comparison alone was only safe while PrepareAssaultMissionStep had no exfiltration step to
+        // reach; under one shared mission shape it would have marched a victorious assault back home.
         public bool MustExfiltrate =>
-            Order.Mission.RegionFaction.Region != MissionSquads.First().Squad.CurrentRegion;
+            MissionReturnPolicies.GetPolicy(Order.Mission.MissionType) == MissionReturnPolicy.Return
+            && Order.Mission.RegionFaction.Region != MissionSquads.First().Squad.CurrentRegion;
 
         // True once the force has spent its operating days and should break off. A force that has to
         // exfiltrate stops a day early so the trip home still lands inside the week; one with no trip
@@ -83,6 +90,55 @@ namespace OnlyWar.Models.Missions
         public Order Order { get; }
         public List<BattleSquad> MissionSquads { get; }
         public IReadOnlyList<PlayerSoldier> StartingPlayerParticipants { get; }
+
+        // Battle value of the force when the MISSION began, which is a different baseline from the one
+        // BattleForceEvaluator uses inside a battle.
+        //
+        // The same aggression percentage governs both scales, against two baselines: in-battle
+        // disengagement measures against the opening value of THAT battle, and the decision to seek a
+        // further battle measures against this one. The distinction is load-bearing rather than
+        // pedantic - BattleSquad.StartingBattleValue resets every engagement, so day 2's fight opens
+        // reading 100% remaining no matter what day 1 cost, and without a mission-scope baseline the
+        // across-days rule simply would not fire.
+        public long StartingMissionBattleValue { get; }
+
+        public long CurrentMissionBattleValue => SumBattleValue(MissionSquads);
+
+        // Defender battle value this mission has destroyed, accumulated across every engagement within
+        // it. A multi-day assault needs this: RegionFaction.Garrison is not reduced until
+        // MissionAftermathProcessor runs at the END of the turn, so without it every day's
+        // AssembleDefendingForce call raises a fresh full-strength garrison and the assault re-fights an
+        // identical battle it can never win - it can only run out of days or of tolerance.
+        public long DefenderBattleValueDestroyed { get; private set; }
+
+        public void RecordDefenderLosses(long battleValueDestroyed)
+        {
+            if (battleValueDestroyed > 0)
+            {
+                DefenderBattleValueDestroyed += battleValueDestroyed;
+            }
+        }
+
+        // True once losses across the whole mission cross the order's aggression tolerance. This is what
+        // stops an assault from seeking another engagement: a squad losing one member per battle never
+        // trips the in-battle rule but declines the fifth fight, while a squad mauled in its first battle
+        // is finished for the week. Aggression.Aggressive has no threshold and so never stops.
+        //
+        // Battle VALUE, not body count: losing a sergeant or a heavy weapon crosses the line faster than
+        // losing a line trooper, which reads correctly since those losses really do break a squad's
+        // effectiveness disproportionately.
+        public bool MissionLossesExceedAggressionThreshold
+        {
+            get
+            {
+                if (StartingMissionBattleValue <= 0) return false;
+                double? threshold = BattleForceEvaluator.GetEligibilityThreshold(
+                    Order?.LevelOfAggression ?? Aggression.Normal);
+                if (threshold == null) return false;
+                double remaining = (double)CurrentMissionBattleValue / StartingMissionBattleValue;
+                return remaining < threshold.Value;
+            }
+        }
         public ushort DaysElapsed { get; set; }
         public List<BattleSquad> OpposingSquads { get; set; }
         public List<string> Log { get; private set; }
@@ -141,6 +197,7 @@ namespace OnlyWar.Models.Missions
                 .Distinct()
                 .ToList();
             OpposingSquads = opposingForces;
+            StartingMissionBattleValue = SumBattleValue(playerSquads);
             DaysElapsed = 0;
             MissionsToAdd = new List<Mission>();
             MissionsToRemove = new List<Mission>();
@@ -150,6 +207,12 @@ namespace OnlyWar.Models.Missions
             EnemiesKilled = 0;
             EnemyKillCredits = 0;
         }
+
+        private static long SumBattleValue(IEnumerable<BattleSquad> squads) =>
+            squads?
+                .SelectMany(squad => squad.AbleSoldiers)
+                .Sum(battleSoldier => (long)battleSoldier.Soldier.Template.BattleValue)
+            ?? 0L;
 
         public void AddLog(string text)
         {

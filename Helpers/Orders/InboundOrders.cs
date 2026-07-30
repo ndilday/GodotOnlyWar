@@ -1,5 +1,6 @@
 using OnlyWar.Models;
 using OnlyWar.Helpers.Missions;
+using OnlyWar.Helpers.Missions.Ambush;
 using OnlyWar.Models.Orders;
 using OnlyWar.Models.Planets;
 using OnlyWar.Models.Squads;
@@ -15,10 +16,30 @@ namespace OnlyWar.Helpers.Orders
     {
         public Order Order { get; }
         public string MissionLabel { get; }
+        public string MissionAndAggressionLabel => $"{MissionLabel} ({Order.LevelOfAggression})";
         // Where the order's squads are tasked FROM (the region they currently sit in), so recon or
         // an advance already converging on this hex from a different region is visible.
         public string OriginLabel { get; }
         public int SquadCount { get; }
+        public string SummaryLabel
+        {
+            get
+            {
+                string squads = SquadCount == 1 ? "1 squad" : $"{SquadCount} squads";
+                return $"{MissionAndAggressionLabel} · {squads} · from {OriginLabel}";
+            }
+        }
+        public string HoverText
+        {
+            get
+            {
+                string recommendedMinimum =
+                    AmbushMissionSizing.FormatRecommendedMinimumForce(Order.Mission);
+                return recommendedMinimum == null
+                    ? SummaryLabel
+                    : $"{SummaryLabel}\n{recommendedMinimum}";
+            }
+        }
 
         public InboundOrderInfo(Order order, string missionLabel, string originLabel, int squadCount)
         {
@@ -45,7 +66,7 @@ namespace OnlyWar.Helpers.Orders
                     order,
                     target.SpecialMissions.Any(mission => mission?.Id == order.Mission.Id)
                         ? SpecialMissionPresentation.Format(order.Mission, target)
-                        : order.Mission.MissionType.ToString(),
+                        : MissionAvailability.GetOrderLabel(order.Mission),
                     BuildOriginLabel(order, target),
                     order.AssignedSquads.Count))
                 .ToList();

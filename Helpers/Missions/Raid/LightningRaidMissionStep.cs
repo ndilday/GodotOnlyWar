@@ -17,7 +17,9 @@ namespace OnlyWar.Helpers.Missions.Raid
     {
         public string Description => "Lightning Raid";
 
-        public void ExecuteMissionStep(MissionExecutionContext execution, float marginOfSuccess, IMissionStep returnStep)
+        public bool ConsumesDay => true;
+
+        public MissionStepResult ExecuteMissionStep(MissionExecutionContext execution, float marginOfSuccess, IMissionStep resumeStep)
         {
             MissionContext context = execution.State;
             RegionFaction enemyFaction = context.Order.Mission.RegionFaction;
@@ -26,8 +28,7 @@ namespace OnlyWar.Helpers.Missions.Raid
             {
                 context.NoViableTarget = true;
                 context.AddLog($"Day {context.DaysElapsed}: No military target found in {enemyFaction.Region.Name}.");
-                ExfiltrateIfNeeded(execution);
-                return;
+                return MissionStepResult.Continue(new WithdrawIfAbleMissionStep());
             }
 
             BaseSkill tactics = execution.Rules.Tactics;
@@ -63,8 +64,7 @@ namespace OnlyWar.Helpers.Missions.Raid
             {
                 context.NoViableTarget = true;
                 context.AddLog($"Day {context.DaysElapsed}: The raiders find no isolated force to engage.");
-                ExfiltrateIfNeeded(execution);
-                return;
+                return MissionStepResult.Continue(new WithdrawIfAbleMissionStep());
             }
 
             context.OpposingSquads = opposingSquads;
@@ -75,17 +75,16 @@ namespace OnlyWar.Helpers.Missions.Raid
                 + $"tacticsDifficulty={difficulty:F2}, margin={margin:F2}, targetBV={targetBattleValue}, "
                 + $"generatedOpposingBV={AbleBattleValue(opposingSquads)}");
 
-            new MeetingEngagementMissionStep().ExecuteMissionStep(execution, margin, null);
-            ExfiltrateIfNeeded(execution);
-        }
-
-        private static void ExfiltrateIfNeeded(MissionExecutionContext execution)
-        {
-            MissionContext context = execution.State;
-            if (!context.MissionSquads.Any(squad => squad.ShouldContinueMission())) return;
-            if (context.Order.Mission.RegionFaction.Region == context.MissionSquads.First().Squad.CurrentRegion) return;
-
-            new ExfiltrateMissionStep().ExecuteMissionStep(execution, 0.0f, null);
+            // A raid withdraws whatever the engagement's outcome, so the withdrawal is a mandatory
+            // follow-up rather than the engagement's resume target - MeetingEngagementMissionStep
+            // declines to resume when the force is spent, which would strand a raid that withdrew
+            // under fire but was still able to walk home. WithdrawIfAbleMissionStep is the former
+            // ExfiltrateIfNeeded helper, now shared with PerformAssassinationMissionStep, which
+            // applied byte-identical logic.
+            return MissionStepResult.Continue(
+                new MeetingEngagementMissionStep(),
+                margin,
+                then: new WithdrawIfAbleMissionStep());
         }
 
         private static long AbleBattleValue(IEnumerable<BattleSquad> squads)

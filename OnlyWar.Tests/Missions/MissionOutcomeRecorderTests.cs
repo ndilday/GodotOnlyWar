@@ -1,4 +1,4 @@
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using System.Drawing;
 using System.Linq;
 using OnlyWar.Helpers.Battles;
@@ -29,7 +29,7 @@ public class MissionOutcomeRecorderTests
         PlayerSoldier soldierA = CreatePlayerSoldier("Brother Atreus");
         PlayerSoldier soldierB = CreatePlayerSoldier("Brother Bellus");
         Squad squad = CreateSquad("Scout Squad", soldierA, soldierB);
-        squad.CurrentOrders = new Order([squad], Disposition.Raiding, true, false,
+        squad.CurrentOrders = new Order([squad], true, false,
             Aggression.Cautious, new Mission(MissionType.Recon, targetFaction, 0));
         BattleSquad battleSquad = new(true, squad);
 
@@ -58,7 +58,7 @@ public class MissionOutcomeRecorderTests
 
         PlayerSoldier soldier = CreatePlayerSoldier("Brother Castus");
         Squad squad = CreateSquad("Scout Squad", soldier);
-        squad.CurrentOrders = new Order([squad], Disposition.Raiding, true, false,
+        squad.CurrentOrders = new Order([squad], true, false,
             Aggression.Cautious, new Mission(MissionType.Recon, targetFaction, 0));
         BattleSquad battleSquad = new(true, squad);
 
@@ -109,7 +109,7 @@ public class MissionOutcomeRecorderTests
 
         PlayerSoldier soldier = CreatePlayerSoldier("Brother Vindicare");
         Squad squad = CreateSquad("Kill Team", soldier);
-        squad.CurrentOrders = new Order([squad], Disposition.Raiding, true, false,
+        squad.CurrentOrders = new Order([squad], true, false,
             Aggression.Cautious, new Mission(MissionType.Assassination, targetFaction, 0));
         BattleSquad battleSquad = new(true, squad);
 
@@ -135,7 +135,7 @@ public class MissionOutcomeRecorderTests
 
         PlayerSoldier soldier = CreatePlayerSoldier("Brother Eversor");
         Squad squad = CreateSquad("Kill Team", soldier);
-        squad.CurrentOrders = new Order([squad], Disposition.Raiding, true, false,
+        squad.CurrentOrders = new Order([squad], true, false,
             Aggression.Cautious, new Mission(MissionType.Assassination, targetFaction, 0));
         BattleSquad battleSquad = new(true, squad);
 
@@ -161,7 +161,7 @@ public class MissionOutcomeRecorderTests
         Soldier npcSoldier = TestModelFactory.CreateSoldier(TestModelFactory.MarineTemplate, "Trooper");
         npcSoldier.Id = _nextId++;
         Squad squad = CreateSquad("Guard Squad", npcSoldier);
-        squad.CurrentOrders = new Order([squad], Disposition.Raiding, true, false,
+        squad.CurrentOrders = new Order([squad], true, false,
             Aggression.Cautious, new Mission(MissionType.Recon, targetFaction, 0));
         BattleSquad battleSquad = new(false, squad);
 
@@ -184,7 +184,7 @@ public class MissionOutcomeRecorderTests
         PlayerSoldier survivor = CreatePlayerSoldier("Brother Survivor");
         PlayerSoldier fallen = CreatePlayerSoldier("Brother Fallen");
         Squad squad = CreateSquad("Raid Squad", survivor, fallen);
-        squad.CurrentOrders = new Order([squad], Disposition.Raiding, true, false,
+        squad.CurrentOrders = new Order([squad], true, false,
             Aggression.Aggressive, new Mission(MissionType.LightningRaid, targetFaction, 0));
         BattleSquad battleSquad = new(true, squad);
         MissionContext context = new(squad.CurrentOrders, [battleSquad], [])
@@ -223,7 +223,7 @@ public class MissionOutcomeRecorderTests
         Region region = CreateRegion("Ironveldt", "Kroll");
         RegionFaction targetFaction = new(new PlanetFaction(enemy), region);
         Squad squad = CreateSquad("Scout Squad", soldier);
-        squad.CurrentOrders = new Order([squad], Disposition.Raiding, true, false,
+        squad.CurrentOrders = new Order([squad], true, false,
             Aggression.Cautious, new Mission(MissionType.Recon, targetFaction, 0));
 
         return new MissionContext(squad.CurrentOrders, [new BattleSquad(true, squad)], [])

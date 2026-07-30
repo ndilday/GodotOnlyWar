@@ -13,7 +13,7 @@ namespace OnlyWar.Helpers.Missions
     {
         public string Description { get { return "Ambushed"; } }
 
-        public void ExecuteMissionStep(MissionExecutionContext execution, float marginOfSuccess, IMissionStep returnStep)
+        public MissionStepResult ExecuteMissionStep(MissionExecutionContext execution, float marginOfSuccess, IMissionStep resumeStep)
         {
             MissionContext context = execution.State;
             List<BattleSquad> missionSquads = context.MissionSquads
@@ -26,7 +26,14 @@ namespace OnlyWar.Helpers.Missions
             {
                 context.NoViableTarget = true;
                 context.AddLog($"Day {context.DaysElapsed}: No combat-capable forces remain for ambush.");
-                return;
+                return MissionStepResult.Complete;
+            }
+
+            // See MeetingEngagementMissionStep: the loadout is redistributed at the start of every
+            // battle, so a fallen carrier's weapon is picked up rather than lost for the mission.
+            foreach (BattleSquad squad in missionSquads)
+            {
+                squad.ReallocateEquipment();
             }
 
             // every point of margin of success modifies the starting range by 20 yards
@@ -38,8 +45,13 @@ namespace OnlyWar.Helpers.Missions
             // burrowing ambushers erupt straight into melee — see Design/EvasionBurrowAndAmbush.md
             BurrowPlacer.PlaceBurrowers(bgm, missionSquads.Concat(opposingSquads));
             int oppForSize = opposingSquads.Sum(s => s.AbleSoldiers.Count);
-            string log = $"Day {context.DaysElapsed}: Force was ambushed by {oppForSize} {opposingSquads.First().Squad.Faction.Name}\n";
+            // Squad.Faction resolves through SquadTemplate.Faction, which is guarded rather than assumed
+            // everywhere else it is read (Squad.CurrentRegion, BattleSquad.IsPlayerAligned). Guarding it
+            // here too keeps a log string from being able to take down a whole turn.
+            string opposingFaction = opposingSquads.First().Squad?.Faction?.Name ?? "an unidentified force";
+            string log = $"Day {context.DaysElapsed}: Force was ambushed by {oppForSize} {opposingFaction}\n";
             context.AddLog(log);
+            long opposingBattleValueBefore = AbleBattleValue(opposingSquads);
             // run the battle
             BattleTurnResolver resolver = new BattleTurnResolver(
                 bgm,
@@ -57,6 +69,8 @@ namespace OnlyWar.Helpers.Missions
             }
             context.RecordBattleOutcome(resolver.BattleHistory);
             context.AddBattleReport(resolver.BattleHistory);
+            context.RecordDefenderLosses(
+                opposingBattleValueBefore - AbleBattleValue(opposingSquads));
             // A force left combat-ineffective by the ambush ends its mission here rather than
             // recursing into steps that assume a manned squad (placement/checks index into
             // AbleSoldiers and would throw). Mirrors InfiltrateMissionStep.ShouldContinue's
@@ -65,18 +79,23 @@ namespace OnlyWar.Helpers.Missions
             {
                 context.ForceWithdrewUnderFire = true;
                 context.AddLog($"Day {context.DaysElapsed}: Force combat-ineffective; mission ended.");
-                return;
+                return MissionStepResult.Complete;
             }
             if (context.ForceWithdrewUnderFire)
             {
                 context.AddLog($"Day {context.DaysElapsed}: Force withdrew from the ambush under fire.");
-                return;
+                return MissionStepResult.Complete;
             }
-            if(returnStep == null)
+            if (resumeStep == null)
             {
-                return;
+                return MissionStepResult.Complete;
             }
-            returnStep.ExecuteMissionStep(execution, 0, this);
+            return MissionStepResult.Continue(resumeStep, 0, this);
         }
+
+        private static long AbleBattleValue(IEnumerable<BattleSquad> squads) =>
+            squads
+                .SelectMany(squad => squad.AbleSoldiers)
+                .Sum(soldier => (long)soldier.Soldier.Template.BattleValue);
     }
 }

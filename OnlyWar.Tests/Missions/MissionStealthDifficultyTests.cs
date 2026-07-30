@@ -460,11 +460,16 @@ public class MissionStealthDifficultyTests
     [Fact]
     public void SabotageStealth_UntrainedForceAgainstASearchedRegion_IsDetected()
     {
+        // 60 battle value is 30 patrollers, which is plenty to make the region count as searched. It used
+        // to be 250 (125 men): harmless while interception conjured its own force, but since
+        // DetectedMissionStep began intercepting with the squads a region actually has, this fixture's
+        // patrol IS the intercepting force, and a 125-man squad spent ~14 seconds grinding down one
+        // saboteur.
         MissionContext context = CreateSabotageContext(
             hordePopulation: 100_000_000, trained: false, defenderIntel: 6f,
-            defenderPatrolBattleValue: 250);
+            defenderPatrolBattleValue: 60);
 
-        new SabotageStealthMissionStep().ExecuteMissionStep(CreateExecution(context), 0f, null);
+        new MissionStepDriver(CreateExecution(context), new SabotageStealthMissionStep()).RunToCompletion();
 
         Assert.Contains(context.Log, line => line.Contains("detected and intercepted"));
         Assert.DoesNotContain(context.Log, line => line.Contains("plants explosives"));
@@ -478,7 +483,7 @@ public class MissionStealthDifficultyTests
     {
         MissionContext context = CreateSabotageContext(hordePopulation: 1_000_000, trained: true);
 
-        new SabotageStealthMissionStep().ExecuteMissionStep(CreateExecution(context), 0f, null);
+        new MissionStepDriver(CreateExecution(context), new SabotageStealthMissionStep()).RunToCompletion();
 
         Assert.Equal(MissionContext.MissionDurationDays, context.Log.Count(l => l.Contains("plants explosives")));
         Assert.True(float.IsFinite(context.Impact));
@@ -498,8 +503,8 @@ public class MissionStealthDifficultyTests
         MissionContext small = CreateSabotageContext(hordePopulation: 100, trained: true);
         MissionContext large = CreateSabotageContext(hordePopulation: 1_000_000, trained: true);
 
-        new SabotageStealthMissionStep().ExecuteMissionStep(CreateExecution(small), 0f, null);
-        new SabotageStealthMissionStep().ExecuteMissionStep(CreateExecution(large), 0f, null);
+        new MissionStepDriver(CreateExecution(small), new SabotageStealthMissionStep()).RunToCompletion();
+        new MissionStepDriver(CreateExecution(large), new SabotageStealthMissionStep()).RunToCompletion();
 
         float expectedGap = MissionContext.MissionDurationDays
             * (MissionStealthDifficulty.Magnitude(1_000_000)
@@ -562,7 +567,6 @@ public class MissionStealthDifficultyTests
         squad.CurrentRegion = region;
         Order order = new(
             [squad],
-            Disposition.Raiding,
             isQuiet: true,
             isActivelyEngaging: false,
             levelOfAggression: Aggression.Normal,
@@ -595,6 +599,97 @@ public class MissionStealthDifficultyTests
     // sized to a requested BATTLE VALUE rather than a headcount. GetPatrolStrength returns battle
     // value so that it can be subtracted from GetDeployedStrength, which is also battle value; a
     // fixture written in bodies would be testing a different quantity than the model consumes.
+    // --- committed attention (a diversion pulling the screen aside) ---
+    //
+    // These replace the two FactionStrategyController tests that covered PerceivedThreatBonus and
+    // ProvocationLevel. Under those, a feint was a purely strategic effect that inflated the garrison
+    // the enemy planned to hold and did nothing at all to the search effort an infiltrator faced. The
+    // effect now lands here instead, on who is looking where today.
+
+    // Attention comes out of the patrol term first: responding to a demonstration is the mobile
+    // screen's job, so a light feint bends the screen and leaves the dug-in troops where they are.
+    [Fact]
+    public void CommittedAttention_DrawsFromThePatrolTermFirst()
+    {
+        Region region = CreateRegion();
+        RegionFaction defender = AddHordeFaction(region, CreateFaction(20, "Swarm"), 10_000, intel: 0f);
+        SendOnMission(defender, MissionType.Patrol, 1_000);
+
+        WatchTerms undisturbed = MissionStealthDifficulty.CalculateWatchTerms(defender);
+        defender.CommittedAttention = undisturbed.Patrol / 2f;
+        WatchTerms drawn = MissionStealthDifficulty.CalculateWatchTerms(defender);
+
+        Assert.True(undisturbed.Patrol > 0f, "fixture must have patrol effort to draw away");
+        Assert.Equal(undisturbed.Patrol / 2f, drawn.Patrol, precision: 4);
+        Assert.Equal(undisturbed.Ambient, drawn.Ambient, precision: 4);
+        Assert.True(drawn.Total < undisturbed.Total);
+    }
+
+    // Only once the screen is fully committed does the draw begin to reach the troops merely present.
+    // This is what makes prising defenders loose require real commitment rather than one lucky roll.
+    [Fact]
+    public void CommittedAttention_SpillsIntoAmbientOnceThePatrolTermIsExhausted()
+    {
+        Region region = CreateRegion();
+        RegionFaction defender = AddHordeFaction(region, CreateFaction(20, "Swarm"), 10_000, intel: 0f);
+        SendOnMission(defender, MissionType.Patrol, 1_000);
+
+        WatchTerms undisturbed = MissionStealthDifficulty.CalculateWatchTerms(defender);
+        float spill = 0.25f;
+        defender.CommittedAttention = undisturbed.Patrol + spill;
+        WatchTerms drawn = MissionStealthDifficulty.CalculateWatchTerms(defender);
+
+        Assert.Equal(0f, drawn.Patrol, precision: 4);
+        Assert.Equal(undisturbed.Ambient - spill, drawn.Ambient, precision: 4);
+    }
+
+    // Sensors, informants, and standing awareness of your own ground do not turn their heads to watch
+    // a demonstration, however convincing it is.
+    [Fact]
+    public void CommittedAttention_NeverReducesSurveillance()
+    {
+        Region region = CreateRegion();
+        RegionFaction defender = AddHordeFaction(region, CreateFaction(20, "Swarm"), 10_000, intel: 4f);
+        SendOnMission(defender, MissionType.Patrol, 1_000);
+
+        WatchTerms undisturbed = MissionStealthDifficulty.CalculateWatchTerms(defender);
+        defender.CommittedAttention = 100f;
+        WatchTerms drawn = MissionStealthDifficulty.CalculateWatchTerms(defender);
+
+        Assert.True(undisturbed.Surveillance > 0f);
+        Assert.Equal(undisturbed.Surveillance, drawn.Surveillance, precision: 4);
+    }
+
+    // An unbounded draw must not push terms negative and start handing out free successes - the same
+    // failure class the log10(1 + x) shape exists to close off.
+    [Fact]
+    public void CommittedAttention_CannotDriveTermsBelowZero()
+    {
+        Region region = CreateRegion();
+        RegionFaction defender = AddHordeFaction(region, CreateFaction(20, "Swarm"), 10_000, intel: 3f);
+        SendOnMission(defender, MissionType.Patrol, 1_000);
+        defender.CommittedAttention = 1_000f;
+
+        WatchTerms drawn = MissionStealthDifficulty.CalculateWatchTerms(defender);
+
+        Assert.Equal(0f, drawn.Patrol, precision: 4);
+        Assert.Equal(0f, drawn.Ambient, precision: 4);
+        Assert.Equal(drawn.Surveillance, drawn.Total, precision: 4);
+    }
+
+    // A feint against ground nobody is watching accomplishes nothing, so there is nothing to draw.
+    [Fact]
+    public void CommittedAttention_OnUnwatchedGround_ChangesNothing()
+    {
+        Region region = CreateRegion();
+        RegionFaction defender = AddHordeFaction(region, CreateFaction(20, "Swarm"), 0, intel: 0f);
+        defender.CommittedAttention = 5f;
+
+        WatchTerms drawn = MissionStealthDifficulty.CalculateWatchTerms(defender);
+
+        Assert.Equal(0f, drawn.Total, precision: 4);
+    }
+
     private static Squad SendOnMission(RegionFaction rf, MissionType missionType, int battleValue)
     {
         Assert.True(
@@ -607,7 +702,6 @@ public class MissionStealthDifficultyTests
         // unused here.
         _ = new Order(
             [squad],
-            Disposition.Mobile,
             isQuiet: false,
             isActivelyEngaging: false,
             levelOfAggression: Aggression.Normal,

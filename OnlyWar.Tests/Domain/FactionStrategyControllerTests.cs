@@ -108,21 +108,11 @@ public class FactionStrategyControllerTests
         Assert.False(rebels.HasEmergenceAdvantage);
     }
 
-    [Fact]
-    public void GenerateFactionOrders_PerceivedThreatBonusPinsReserveAndSuppressesActivity()
-    {
-        Faction enemy = CreateNonPlayerFaction();
-        // Org 100, pop 1000 => 1000 organized troops. A diversion's perceived-threat bonus that
-        // exceeds the organized force should make the region feel it must reserve everything,
-        // leaving nothing spare and producing no orders.
-        Sector sector = BuildSectorWithSingleRegionFaction(enemy, population: 1000, organization: 100, isPublic: true);
-        RegionFaction regionFaction = sector.Planets.Values.First().Regions[0].RegionFactionMap[enemy.Id];
-        regionFaction.PerceivedThreatBonus = 2000;
-
-        List<Order> orders = new FactionStrategyController().GenerateFactionOrders(enemy, sector);
-
-        Assert.Empty(orders);
-    }
+    // Removed with the mechanic: GenerateFactionOrders_PerceivedThreatBonusPinsReserveAndSuppressesActivity
+    // covered RegionFaction.PerceivedThreatBonus, the diversion's garrison-inflation channel. That was
+    // dropped deliberately along with the pre-planning shaping phase - a feint begun on Monday cannot
+    // retroactively change planning the enemy did on Sunday. A diversion's effect is now same-day and
+    // tactical; see MissionStealthDifficultyTests' committed-attention coverage.
 
     [Fact]
     public void GenerateFactionOrders_DefensivePlanningDoesNotInstantlyRaiseGarrison()
@@ -368,7 +358,7 @@ public class FactionStrategyControllerTests
         Squad squad = TestModelFactory.CreateSquad("Raiders",
             TestModelFactory.CreateSoldier(TestModelFactory.MarineTemplate));
         squad.CurrentRegion = target.Region;
-        Order order = new([squad], Disposition.Mobile, true, true, Aggression.Cautious,
+        Order order = new([squad], true, true, Aggression.Cautious,
             new Mission(MissionType.LightningRaid, target, 0));
         MissionContext context = new(order, [], []);
         MissionExecutionContext execution = TestExecutionContextFactory.CreateMission(
@@ -578,18 +568,11 @@ public class FactionStrategyControllerTests
         Assert.Null(FactionStrategyController.ChooseBestOffensive([unwinnable]));
     }
 
-    [Fact]
-    public void IsWinnable_ProvocationLowersTheRequiredForceRatio()
-    {
-        Faction attacker = CreateNonPlayerFaction();
-        // 1200 vs 1000: short of the 1.5x edge normally required, but enough at parity.
-        var calm = Offensive(CreateTargetRegionFaction(attacker), attackForce: 1200, estimatedDefenderBv: 1000, reward: 100);
-        RegionFaction baited = CreateTargetRegionFaction(attacker, provocation: 5);
-        var provoked = Offensive(baited, attackForce: 1200, estimatedDefenderBv: 1000, reward: 100);
-
-        Assert.False(FactionStrategyController.IsWinnable(calm));
-        Assert.True(FactionStrategyController.IsWinnable(provoked));
-    }
+    // Removed with the mechanic: IsWinnable_ProvocationLowersTheRequiredForceRatio covered
+    // RegionFaction.ProvocationLevel, which baited a counterattack by shaving this threshold during
+    // NPC planning. The bait now lives in the diversion itself as Roll B
+    // (DemonstrateForceMissionStep), which draws a real counterattack the same day from the feinting
+    // player's own dice rather than nudging a planning threshold a turn later.
 
     [Fact]
     public void RewardRiskScore_PenalisesEntrenchedDefenders()
@@ -687,7 +670,7 @@ public class FactionStrategyControllerTests
     {
         Squad squad = TestModelFactory.CreateSquad("Screen",
             TestModelFactory.CreateSoldier(TestModelFactory.MarineTemplate));
-        Order order = new([squad], Disposition.DugIn, true, false, Aggression.Cautious,
+        Order order = new([squad], true, false, Aggression.Cautious,
             new Mission(missionType, rf, 0));
         squad.CurrentOrders = order;
         return squad;
@@ -724,7 +707,13 @@ public class FactionStrategyControllerTests
     {
         // A border region whose spare force cannot cover a whole listening-post level (level 0
         // costs 2 build points = 200 troops) builds the fraction it can afford instead of
-        // staying blind: 150 spare troops buy 0.75 of a level.
+        // staying blind.
+        //
+        // 150 garrison at full organization is 150 deployable. The region can see nothing next door
+        // (no intel is set on the enemy region, so CalculateRequiredDefensiveBattleValue's threat term
+        // contributes nothing), so its reserve falls to the MinimumDefensiveReserveFraction floor of
+        // 20% = 30. That leaves 120 spare, which buys 1.2 build points = 0.6 of a level. Before the
+        // floor existed the region reserved nothing at all and spent all 150 on 0.75 of a level.
         Faction pdf = CreateDefaultFaction();
         Faction enemy = CreateNonPlayerFaction();
 
@@ -741,7 +730,36 @@ public class FactionStrategyControllerTests
         Order order = Assert.Single(orders);
         ConstructionMission mission = Assert.IsType<ConstructionMission>(order.Mission);
         Assert.Equal(DefenseType.ListeningPost, mission.ConstructionType);
-        Assert.Equal(0.75, mission.BuildAmount, precision: 6);
+        Assert.Equal(0.6, mission.BuildAmount, precision: 6);
+    }
+
+    // The pool-reading fix. RegionFaction.Garrison is Imperial-specific - FactionRevealService zeroes it
+    // when a cult or revolt reveals, and a PopulationIsMilitary horde never had one - so a defence sized
+    // off raw Garrison came out at zero for every revealed non-Imperial faction. Sizing it off
+    // GetDeployedStrength (which resolves through MilitaryStrength) is what makes a hive defend itself.
+    [Fact]
+    public void RequiredDefensiveBattleValue_HordeWithNoGarrison_IsStillNonZero()
+    {
+        RegionFaction horde = CreateTargetRegionFaction(CreateNonPlayerFaction(), population: 10_000);
+
+        Assert.Equal(0, horde.Garrison);
+        Assert.True(horde.GetDeployedStrength() > 0, "a horde's strength lives in Population");
+        Assert.True(
+            FactionStrategyController.CalculateRequiredDefensiveBattleValue(horde) > 0,
+            "a region with fielded troops must hold some of them back to defend itself");
+    }
+
+    // With nothing visible next door the threat term contributes nothing, so the reserve is exactly the
+    // floor. This is what stops an interior or blind region from materialising no defence at all.
+    [Fact]
+    public void RequiredDefensiveBattleValue_WithNoVisibleThreat_FallsBackToTheFloor()
+    {
+        RegionFaction quiet = CreateTargetRegionFaction(CreateNonPlayerFaction(), population: 10_000);
+
+        long expected = (long)(quiet.GetDeployedStrength()
+            * FactionStrategyController.MinimumDefensiveReserveFraction);
+
+        Assert.Equal(expected, FactionStrategyController.CalculateRequiredDefensiveBattleValue(quiet));
     }
 
     private static void AddRegionFaction(Planet planet, Region region, Faction faction,
@@ -776,7 +794,7 @@ public class FactionStrategyControllerTests
     }
 
     private static RegionFaction CreateTargetRegionFaction(Faction faction, long population = 0, long garrison = 0,
-        int entrenchment = 0, float provocation = 0, long carryingCapacity = 0)
+        int entrenchment = 0, long carryingCapacity = 0)
     {
         Planet planet = CreatePlanet();
         Region region = planet.Regions[0];
@@ -788,7 +806,6 @@ public class FactionStrategyControllerTests
             Population = population,
             Garrison = garrison,
             Entrenchment = entrenchment,
-            ProvocationLevel = provocation,
             IsPublic = true
         };
         region.RegionFactionMap[faction.Id] = regionFaction;

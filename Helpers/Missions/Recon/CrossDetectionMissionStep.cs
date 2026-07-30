@@ -12,7 +12,7 @@ namespace OnlyWar.Helpers.Missions.Recon
         {
         }
 
-        public void ExecuteMissionStep(MissionExecutionContext execution, float marginOfSuccess, IMissionStep returnStep)
+        public MissionStepResult ExecuteMissionStep(MissionExecutionContext execution, float marginOfSuccess, IMissionStep resumeStep)
         {
             MissionContext context = execution.State;
             // decide whether to fight or flee
@@ -29,19 +29,12 @@ namespace OnlyWar.Helpers.Missions.Recon
             }
             if(attackerSize >= opForSize || context.Order.LevelOfAggression == Aggression.Aggressive)
             {
-                new MeetingEngagementMissionStep().ExecuteMissionStep(
-                    execution,
-                    marginOfSuccess,
-                    returnStep);
+                return MissionStepResult.Continue(
+                    new MeetingEngagementMissionStep(), marginOfSuccess, resumeStep);
             }
-            else
-            {
-                // attempt to flee
-                new ExfiltrateMissionStep().ExecuteMissionStep(
-                    execution,
-                    marginOfSuccess,
-                    returnStep);
-            }
+            // attempt to flee
+            return MissionStepResult.Continue(
+                new ExfiltrateMissionStep(), marginOfSuccess, resumeStep);
         }
     }
 }

@@ -25,7 +25,6 @@ namespace OnlyWar.Helpers.Turns
     internal sealed class MissionTurnProcessor
     {
         private const float EngineeringBuildDivisor = 100f;
-        private const float DiversionThreatScale = 4.0f;
 
         private readonly GameSession _session;
         private readonly MissionRules _missionRules;
@@ -83,19 +82,34 @@ namespace OnlyWar.Helpers.Turns
             }
         }
 
+        // One mission queued for the day scheduler, plus what its completion needs afterwards. The
+        // post-mission work (outcome recording, field-XP diffing) used to run inline right after the
+        // mission finished; with every mission advancing a day at a time, none of them are finished
+        // until the scheduler returns, so the pieces have to be held until then.
+        private sealed class ScheduledMission
+        {
+            internal Order Order { get; init; }
+            internal MissionContext Context { get; init; }
+            internal MissionStepDriver Driver { get; init; }
+            internal bool IsPlayerOrder { get; init; }
+            internal SoldierProgressLog.ProgressSnapshot XpBefore { get; init; }
+        }
+
         internal void ProcessCombatMissions(
             IEnumerable<Order> combatOrders,
             ICollection<MissionContext> missionContexts,
             ICollection<ConstructionProgressReport> constructionReports = null)
         {
+            List<ScheduledMission> scheduled = new();
+
             foreach (Order order in combatOrders)
             {
+                // A Defense order still runs no steps of its own: it is a posture, resolved when
+                // something attacks (PrepareAssaultMissionStep.ContestPreparation).
                 if (order.Mission.MissionType == MissionType.DefenseInDepth) continue;
-                // Diversions already resolved in the pre-planning shaping phase; their squads
-                // remain on the map only to defend if the feint draws a counterattack this turn.
-                if (order.Mission.MissionType == MissionType.Diversion) continue;
-                // A patrol is a standing defensive screen, not an active mission.
-                if (order.Mission.MissionType == MissionType.Patrol) continue;
+                // Patrol, by contrast, IS an active mission now - a week of sweeping its own ground, with
+                // a daily check that earns field experience (PatrolSweepMissionStep). It used to sit here
+                // beside Defense as a bare `continue`, which is why it granted no experience at all.
                 // Likewise a show of force: the squads hold position to be seen. They are pulled
                 // into battle only if the region is attacked, via GetRegionalDefensiveSquads.
                 if (order.Mission.MissionType == MissionType.ShowOfForce) continue;
@@ -127,31 +141,50 @@ namespace OnlyWar.Helpers.Turns
                 foreach (List<BattleSquad> elementSquads in missionElements)
                 {
                     MissionContext context = new(order, elementSquads, new List<BattleSquad>());
-                    var xpBefore = isPlayerOrder
-                        ? MissionFieldExperienceLog.Snapshot(context.StartingPlayerParticipants)
-                        : null;
                     var execution = new MissionExecutionContext(
                         context,
                         _missionRules,
                         _session.Random,
                         _battleExecution,
                         new TacticalEntityIdAllocator());
-                    MissionStepOrchestrator.GetStartingStep(execution)
-                        .ExecuteMissionStep(execution, 0, null);
-                    missionContexts.Add(context);
-                    if (isPlayerOrder)
+                    scheduled.Add(new ScheduledMission
                     {
-                        MissionOutcomeRecorder.RecordMissionOutcome(context, _session.CurrentDate);
-                        MissionFieldExperienceLog.LogGains(context, xpBefore);
-                    }
-                    GameLog.Debug(() =>
-                        $"Combat mission result {order.AssignedSquads.First().Faction.Name} "
-                        + $"{order.Mission.MissionType} -> {DescribeRegionFaction(order.Mission.RegionFaction)}: "
-                        + $"elementSquads={elementSquads.Count}, impact={context.Impact:F2}, "
-                        + $"enemiesKilled={context.EnemiesKilled}, days={context.DaysElapsed}, "
-                        + $"killCredits={context.EnemyKillCredits}, "
-                        + $"logEntries={context.Log.Count}");
+                        Order = order,
+                        Context = context,
+                        Driver = new MissionStepDriver(
+                            execution, MissionStepOrchestrator.GetStartingStep(execution)),
+                        IsPlayerOrder = isPlayerOrder,
+                        XpBefore = isPlayerOrder
+                            ? MissionFieldExperienceLog.Snapshot(context.StartingPlayerParticipants)
+                            : null
+                    });
                 }
+            }
+
+            // Every mission now advances a day at a time, together, rather than each running to
+            // completion in turn. Missions operating in the same region therefore see each other's
+            // effects as they land - which is what makes a diversion able to shelter an infiltrator.
+            MissionDayScheduler.Run(
+                scheduled.Select(mission => mission.Driver).ToList(),
+                onDayStart: _ => ResetCommittedAttention());
+
+            foreach (ScheduledMission mission in scheduled)
+            {
+                MissionContext context = mission.Context;
+                Order order = mission.Order;
+                missionContexts.Add(context);
+                if (mission.IsPlayerOrder)
+                {
+                    MissionOutcomeRecorder.RecordMissionOutcome(context, _session.CurrentDate);
+                    MissionFieldExperienceLog.LogGains(context, mission.XpBefore);
+                }
+                GameLog.Debug(() =>
+                    $"Combat mission result {order.AssignedSquads.First().Faction.Name} "
+                    + $"{order.Mission.MissionType} -> {DescribeRegionFaction(order.Mission.RegionFaction)}: "
+                    + $"elementSquads={context.MissionSquads.Count}, impact={context.Impact:F2}, "
+                    + $"enemiesKilled={context.EnemiesKilled}, days={context.DaysElapsed}, "
+                    + $"killCredits={context.EnemyKillCredits}, "
+                    + $"logEntries={context.Log.Count}");
             }
         }
 
@@ -168,53 +201,19 @@ namespace OnlyWar.Helpers.Turns
             return new List<List<BattleSquad>> { involvedBattleSquads };
         }
 
-        // Diversions resolve in the pre-planning shaping phase so the projected threat already
-        // exists when NPC factions choose their orders for the turn.
-        internal void ProcessDiversionMissions(
-            IEnumerable<Order> diversionOrders,
-            ICollection<MissionContext> missionContexts)
+        // Committed attention is per-DAY state, so it is wiped before each day resolves: a feint that
+        // pulled the screen aside yesterday shelters nobody today. Sweeping the whole sector is
+        // cheap (no allocation, a few hundred region-factions) and avoids having to track which
+        // regions a shaping step touched.
+        private void ResetCommittedAttention()
         {
-            foreach (Order order in diversionOrders)
-            {
-                bool isPlayerOrder = order.AssignedSquads.First().Faction.IsPlayerFaction;
-                List<BattleSquad> involvedBattleSquads = order.AssignedSquads
-                    .Where(s => s.Members.Any(m => m.CanFight))
-                    .Select(s => new BattleSquad(isPlayerOrder, s))
-                    .ToList();
-                if (involvedBattleSquads.Count == 0) continue;
-
-                MissionContext context = new(order, involvedBattleSquads, new List<BattleSquad>());
-                var xpBefore = isPlayerOrder
-                    ? MissionFieldExperienceLog.Snapshot(context.StartingPlayerParticipants)
-                    : null;
-                var execution = new MissionExecutionContext(
-                    context,
-                    _missionRules,
-                    _session.Random,
-                    _battleExecution,
-                    new TacticalEntityIdAllocator());
-                MissionStepOrchestrator.GetStartingStep(execution)
-                    .ExecuteMissionStep(execution, 0, null);
-                missionContexts.Add(context);
-                if (isPlayerOrder)
-                {
-                    MissionOutcomeRecorder.RecordMissionOutcome(context, _session.CurrentDate);
-                    MissionFieldExperienceLog.LogGains(context, xpBefore);
-                }
-                ApplyDiversionEffect(order, context);
-            }
-        }
-
-        internal static void ClearDiversionEffects(IEnumerable<Planet> planets)
-        {
-            foreach (Planet planet in planets)
+            foreach (Planet planet in _session.Sector.Planets.Values)
             {
                 foreach (Region region in planet.Regions)
                 {
                     foreach (RegionFaction regionFaction in region.RegionFactionMap.Values)
                     {
-                        regionFaction.PerceivedThreatBonus = 0;
-                        regionFaction.ProvocationLevel = 0;
+                        regionFaction.CommittedAttention = 0f;
                     }
                 }
             }
@@ -236,38 +235,6 @@ namespace OnlyWar.Helpers.Turns
             {
                 GameLog.Debug(() =>
                     $"Construction resolved: orders={orders.Count}, {SummarizeConstructionOrders(orders)}");
-            }
-        }
-
-        private static void ApplyDiversionEffect(Order order, MissionContext context)
-        {
-            Mission mission = order.Mission;
-            RegionFaction targetFaction = mission.RegionFaction;
-            long actualManpower = order.AssignedSquads.Sum(s => s.Members.Count);
-            if (actualManpower <= 0) return;
-
-            float clampedImpact = mission.MissionSize > 0
-                ? Math.Min(context.Impact, mission.MissionSize)
-                : context.Impact;
-            if (clampedImpact <= 0) return;
-
-            float multiplier = (float)Math.Pow(1 + clampedImpact / DiversionThreatScale, 2);
-            float apparentThreat = actualManpower * multiplier;
-            // The real force is already counted through its landed squads, so only the phantom
-            // remainder contributes to the feint.
-            targetFaction.PerceivedThreatBonus += apparentThreat - actualManpower;
-
-            if (order.LevelOfAggression >= Aggression.Normal)
-            {
-                Squad feintSquad = order.AssignedSquads.First();
-                Region feintRegion = feintSquad.CurrentRegion;
-                if (feintRegion != null
-                    && feintRegion.RegionFactionMap.TryGetValue(
-                        feintSquad.Faction.Id,
-                        out RegionFaction feintFaction))
-                {
-                    feintFaction.ProvocationLevel += clampedImpact;
-                }
             }
         }
 

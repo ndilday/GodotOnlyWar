@@ -19,7 +19,7 @@ namespace OnlyWar.Helpers.Missions.Recon
             
         }
 
-        public void ExecuteMissionStep(MissionExecutionContext execution, float marginOfSuccess, IMissionStep returnStep)
+        public MissionStepResult ExecuteMissionStep(MissionExecutionContext execution, float marginOfSuccess, IMissionStep resumeStep)
         {
             MissionContext context = execution.State;
             BaseSkill tactics = execution.Rules.Tactics;
@@ -41,16 +41,13 @@ namespace OnlyWar.Helpers.Missions.Recon
 
             if (context.OperatingDaysSpent)
             {
-                // time to go home
-                if (context.MustExfiltrate)
-                {
-                    new ExfiltrateMissionStep().ExecuteMissionStep(execution, 0.0f, this);
-                }
-                // otherwise we don't have to go anywhere, so just exit.
-                return;
+                // time to go home; otherwise we don't have to go anywhere, so just exit.
+                return context.MustExfiltrate
+                    ? MissionStepResult.Continue(new ExfiltrateMissionStep(), 0.0f, this)
+                    : MissionStepResult.Complete;
             }
 
-            new ReconStealthMissionStep().ExecuteMissionStep(execution, marginOfSuccess, this);
+            return MissionStepResult.Continue(new ReconStealthMissionStep(), marginOfSuccess, this);
         }
     }
 }

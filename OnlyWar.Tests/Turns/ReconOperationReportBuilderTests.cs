@@ -1,4 +1,4 @@
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using OnlyWar.Helpers;
 using OnlyWar.Helpers.Battles;
 using OnlyWar.Models.Missions;
@@ -83,7 +83,6 @@ public class ReconOperationReportBuilderTests
         Mission mission = new(MissionType.Recon, regionFaction: null, missionSize: 0);
         Order order = new(
             [squad.Squad],
-            Disposition.Raiding,
             isQuiet: true,
             isActivelyEngaging: false,
             levelOfAggression: Aggression.Cautious,

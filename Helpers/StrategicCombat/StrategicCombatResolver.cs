@@ -91,7 +91,7 @@ namespace OnlyWar.Helpers.StrategicCombat
 
             // Reactive awareness: a defender that survives the assault learns which regions the enemy
             // staged from, so a previously-blind neighbour can be garrisoned next turn even without a
-            // deliberate recon (FactionStrategyController.CalculateRequiredGarrison).
+            // deliberate recon (FactionStrategyController.CalculateRequiredDefensiveBattleValue).
             if (!controlChanged && mission.Contributions != null)
             {
                 foreach (StrategicCombatContribution contribution in mission.Contributions)
@@ -138,7 +138,15 @@ namespace OnlyWar.Helpers.StrategicCombat
                 .SelectMany(squad => squad.Members)
                 .Sum(soldier => (long)soldier.Template.BattleValue);
 
-            return defender.MilitaryStrength + landedNpcBattleValue;
+            // GetDeployedStrength, not raw MilitaryStrength: Organization is the share of a faction's
+            // strength that can actually be fielded, and every other consumer of "how strong is this
+            // defender" now works in those units - the planner's spare-troops arithmetic
+            // (FactionStrategyController.GeneratePlanetOrders), the defensive reserve
+            // (CalculateRequiredDefensiveBattleValue), and the tactical defence that materialises it
+            // (PrepareAssaultMissionStep.AssembleDefendingForce). Reading the raw pool here meant a
+            // disorganised region was priced as fully mobilised for strategic combat while being priced
+            // correctly everywhere else.
+            return defender.GetDeployedStrength() + landedNpcBattleValue;
         }
 
         internal static long CalculateDefenderBattleValueAgainst(RegionFaction target, Faction attacker)
