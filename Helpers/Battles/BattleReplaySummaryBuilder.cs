@@ -261,7 +261,8 @@ namespace OnlyWar.Helpers.Battles
                     string.IsNullOrWhiteSpace(battleEvent.Description)
                         ? BuildEventType(battleEvent.Type)
                         : battleEvent.Description,
-                    BuildSeverity(battleEvent.Type)));
+                    BuildSeverity(battleEvent.Type),
+                    formationId: battleEvent.PrimarySquadId));
             }
 
             foreach (IAction action in turn.Actions)
@@ -278,7 +279,8 @@ namespace OnlyWar.Helpers.Battles
                     BuildEventType(action),
                     string.IsNullOrWhiteSpace(text) ? action.GetType().Name : text,
                     BuildSeverity(text, woundCount),
-                    BuildCategories(action, woundCount)));
+                    BuildCategories(action, woundCount),
+                    actor == null ? null : actor.SquadId));
             }
 
             if (entries.Count == 0)

@@ -121,6 +121,7 @@ public class BattleReplaySummaryBuilderTests
         BattleEventEntry eventEntry = Assert.Single(display.CurrentTurnEvents);
         Assert.Equal("Sergeant Alpha", eventEntry.ActorName);
         Assert.Equal("Alpha", eventEntry.FormationName);
+        Assert.Equal(playerSquad.Id, eventEntry.FormationId);
         Assert.Equal("Action", eventEntry.EventType);
         Assert.Contains("opened fire", eventEntry.Text);
         Assert.Equal(2, display.Timeline.Count);
@@ -175,6 +176,29 @@ public class BattleReplaySummaryBuilderTests
     }
 
     [Fact]
+    public void EventEntry_SelectedFilterNarrowsCategoryMatchesToCurrentFormation()
+    {
+        BattleEventEntry alphaMelee = new(
+            1,
+            "01:01",
+            "Attacker",
+            "Alpha",
+            "Melee",
+            "A damaging strike.",
+            BattleEventSeverity.Warning,
+            BattleEventCategory.Melee | BattleEventCategory.Damaging,
+            formationId: 10);
+
+        Assert.True(alphaMelee.MatchesFilters(BattleEventCategory.None, false, 20));
+        Assert.True(alphaMelee.MatchesFilters(BattleEventCategory.None, true, 10));
+        Assert.False(alphaMelee.MatchesFilters(BattleEventCategory.None, true, 20));
+        Assert.True(alphaMelee.MatchesFilters(BattleEventCategory.Melee, true, 10));
+        Assert.False(alphaMelee.MatchesFilters(BattleEventCategory.Melee, true, 20));
+        Assert.False(alphaMelee.MatchesFilters(BattleEventCategory.Ranged, true, 10));
+        Assert.False(alphaMelee.MatchesFilters(BattleEventCategory.Melee, true, null));
+    }
+
+    [Fact]
     public void Build_ActionByCasualtyRetainsActorAndFormationIdentity()
     {
         BattleSquad playerSquad = CreateBattleSquad(true, "Alpha", "Sergeant Alpha");
@@ -223,8 +247,10 @@ public class BattleReplaySummaryBuilderTests
         Assert.Equal(2, display.CurrentTurnEvents.Count);
         Assert.Equal("Withdrawal", display.CurrentTurnEvents[0].EventType);
         Assert.Equal("Cult Mob", display.CurrentTurnEvents[0].FormationName);
+        Assert.Equal(opposingSquad.Id, display.CurrentTurnEvents[0].FormationId);
         Assert.Equal("01:01", display.CurrentTurnEvents[0].Timestamp);
         Assert.Equal("Action", display.CurrentTurnEvents[1].EventType);
+        Assert.Equal(playerSquad.Id, display.CurrentTurnEvents[1].FormationId);
         Assert.Equal("01:02", display.CurrentTurnEvents[1].Timestamp);
         Assert.Equal("1 battle event, 1 action, 0 wounds", display.Timeline[1].Summary);
     }

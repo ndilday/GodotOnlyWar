@@ -172,6 +172,7 @@ namespace OnlyWar.Models.Battles
         public string Text { get; }
         public BattleEventSeverity Severity { get; }
         public BattleEventCategory Categories { get; }
+        public int? FormationId { get; }
 
         public BattleEventEntry(
             int turnNumber,
@@ -181,7 +182,8 @@ namespace OnlyWar.Models.Battles
             string eventType,
             string text,
             BattleEventSeverity severity,
-            BattleEventCategory categories = BattleEventCategory.None)
+            BattleEventCategory categories = BattleEventCategory.None,
+            int? formationId = null)
         {
             TurnNumber = turnNumber;
             Timestamp = timestamp;
@@ -191,10 +193,19 @@ namespace OnlyWar.Models.Battles
             Text = text;
             Severity = severity;
             Categories = categories;
+            FormationId = formationId;
         }
 
         public bool MatchesAny(BattleEventCategory categories) =>
             categories == BattleEventCategory.None || (Categories & categories) != 0;
+
+        public bool MatchesFilters(
+            BattleEventCategory categories,
+            bool selectedOnly,
+            int? selectedFormationId) =>
+            MatchesAny(categories)
+            && (!selectedOnly
+                || (selectedFormationId.HasValue && FormationId == selectedFormationId));
     }
 
     public sealed class BattleTimelineEntry

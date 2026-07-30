@@ -26,8 +26,11 @@ public partial class BattleReviewView : DialogView
     private Button _meleeFilterButton;
     private Button _rangedFilterButton;
     private Button _damagingFilterButton;
+    private Button _selectedFilterButton;
     private IReadOnlyList<BattleEventEntry> _currentEvents = Array.Empty<BattleEventEntry>();
     private BattleEventCategory _activeEventFilters;
+    private int? _selectedFormationId;
+    private bool _selectedFilterActive;
     private Button _previousRoundButton;
     private Button _stepBackButton;
     private Button _playPauseButton;
@@ -64,6 +67,7 @@ public partial class BattleReviewView : DialogView
         _meleeFilterButton = GetNode<Button>("Layout/RightPanel/EventPanel/EventMargin/EventStack/EventFilterRow/MeleeFilterButton");
         _rangedFilterButton = GetNode<Button>("Layout/RightPanel/EventPanel/EventMargin/EventStack/EventFilterRow/RangedFilterButton");
         _damagingFilterButton = GetNode<Button>("Layout/RightPanel/EventPanel/EventMargin/EventStack/EventFilterRow/DamagingFilterButton");
+        _selectedFilterButton = GetNode<Button>("Layout/RightPanel/EventPanel/EventMargin/EventStack/EventFilterRow/SelectedFilterButton");
         _previousRoundButton = GetNode<Button>("Layout/CenterPanel/HeaderPanel/HeaderMargin/HeaderStack/PlaybackRow/PreviousRoundButton");
         _stepBackButton = GetNode<Button>("Layout/CenterPanel/HeaderPanel/HeaderMargin/HeaderStack/PlaybackRow/StepBackButton");
         _playPauseButton = GetNode<Button>("Layout/CenterPanel/HeaderPanel/HeaderMargin/HeaderStack/PlaybackRow/PlayPauseButton");
@@ -85,6 +89,7 @@ public partial class BattleReviewView : DialogView
         ConfigureEventFilter(_meleeFilterButton, BattleEventCategory.Melee);
         ConfigureEventFilter(_rangedFilterButton, BattleEventCategory.Ranged);
         ConfigureEventFilter(_damagingFilterButton, BattleEventCategory.Damaging);
+        ConfigureSelectedFilter();
     }
 
     private void HandleReplayInput(InputEvent inputEvent)
@@ -167,6 +172,7 @@ public partial class BattleReviewView : DialogView
         _roundLabel.Text = $"ROUND {display.CurrentTurnNumber} / {display.LastTurnNumber}";
         SetForceHierarchy(display.ForceHierarchy);
         SetSelectedFormation(display.SelectedFormation);
+        _selectedFormationId = display.SelectedFormationId;
         SetEvents(display.CurrentTurnEvents);
     }
 
@@ -337,11 +343,25 @@ public partial class BattleReviewView : DialogView
         OnlyWarStyle.ApplyAccentButtonRow(button, false, OnlyWarStyle.Gold);
     }
 
+    private void ConfigureSelectedFilter()
+    {
+        _selectedFilterButton.Toggled += pressed =>
+        {
+            _selectedFilterActive = pressed;
+            OnlyWarStyle.ApplyAccentButtonRow(_selectedFilterButton, pressed, OnlyWarStyle.Gold);
+            RefreshEvents();
+        };
+        OnlyWarStyle.ApplyAccentButtonRow(_selectedFilterButton, false, OnlyWarStyle.Gold);
+    }
+
     private void RefreshEvents()
     {
         ClearContainer(_eventListVBox);
         IReadOnlyList<BattleEventEntry> visibleEvents = _currentEvents
-            .Where(entry => entry.MatchesAny(_activeEventFilters))
+            .Where(entry => entry.MatchesFilters(
+                _activeEventFilters,
+                _selectedFilterActive,
+                _selectedFormationId))
             .ToArray();
         foreach (BattleEventEntry entry in visibleEvents)
         {

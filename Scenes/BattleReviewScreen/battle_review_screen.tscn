@@ -290,6 +290,14 @@ toggle_mode = true
 text = "DAMAGING"
 tooltip_text = "Show events that inflicted one or more wounds"
 
+[node name="SelectedFilterButton" type="Button" parent="DialogView/Layout/RightPanel/EventPanel/EventMargin/EventStack/EventFilterRow"]
+custom_minimum_size = Vector2(0, 28)
+layout_mode = 2
+size_flags_horizontal = 3
+toggle_mode = true
+text = "SELECTED"
+tooltip_text = "Show only events involving the currently selected formation"
+
 [node name="EventScroll" type="ScrollContainer" parent="DialogView/Layout/RightPanel/EventPanel/EventMargin/EventStack"]
 layout_mode = 2
 size_flags_vertical = 3
