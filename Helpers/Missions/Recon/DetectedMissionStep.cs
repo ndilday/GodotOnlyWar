@@ -44,6 +44,30 @@ namespace OnlyWar.Helpers.Missions.Recon
             RegionFaction spotter = context.Spotter ?? context.Order.Mission.RegionFaction;
             context.Spotter = spotter;
 
+            int intruderCount = context.MissionSquads.Sum(
+                squad => squad.AbleSoldiers.Count);
+            if (intruderCount == 0)
+            {
+                bool lostWhileExfiltrating = resumeStep is ExfiltrateMissionStep;
+                if (lostWhileExfiltrating)
+                {
+                    context.ForceLostContact = true;
+                }
+                else
+                {
+                    context.ObjectiveAborted = true;
+                }
+                context.OpposingSquads = [];
+                context.AddLog(
+                    $"Day {context.DaysElapsed}: Force was detected in {spotter.Region.Name}, "
+                    + "but no combat-capable mission force remained; the mission ended.");
+                GameLog.Trace(() =>
+                    $"Detected {DescribeRegion(context)} day {context.DaysElapsed}: "
+                    + "intruders=0; mission force combat-ineffective, "
+                    + (lostWhileExfiltrating ? "lost during exfiltration" : "objective aborted"));
+                return MissionStepResult.Complete;
+            }
+
             // How much force it would take to deal with this intrusion: a multiple of the intruding
             // force, growing with how badly the intruder blew its stealth check (marginOfSuccess is <= 0
             // in this branch). Sized in battle value rather than squad count, because a squad is not a
@@ -71,7 +95,7 @@ namespace OnlyWar.Helpers.Missions.Recon
             // Below parity with the intruder the screen declines to engage rather than feeding itself in
             // piecemeal. The intrusion is still DETECTED - that already happened - it simply goes
             // uncontested.
-            if (screenBattleValue < intruderBattleValue)
+            if (screen.Count == 0 || screenBattleValue < intruderBattleValue)
             {
                 context.AddLog(
                     $"Day {context.DaysElapsed}: Force was spotted in {spotter.Region.Name}, but no "
@@ -91,7 +115,10 @@ namespace OnlyWar.Helpers.Missions.Recon
             long committedBattleValue = 0;
             foreach (Squad squad in screen)
             {
-                if (committedBattleValue >= requiredBattleValue) break;
+                // A modded or legacy combatant may carry zero BattleValue. Still commit one real
+                // squad rather than letting a zero requirement produce an empty "interception".
+                if (interceptors.Count > 0
+                    && committedBattleValue >= requiredBattleValue) break;
                 interceptors.Add(new BattleSquad(squad.Faction?.IsPlayerFaction == true, squad));
                 committedBattleValue += AbleBattleValue(squad);
             }
@@ -114,10 +141,12 @@ namespace OnlyWar.Helpers.Missions.Recon
             float difficulty = 10.0f + (float)Math.Log(opForSize, 10);
             LeaderMissionTest missionTest = new LeaderMissionTest(tactics, difficulty);
             float margin = missionTest.RunMissionCheck(context.MissionSquads, execution.Random);
+            string interceptorFaction =
+                spotter.PlanetFaction?.Faction?.Name ?? "an unidentified force";
             GameLog.Trace(() =>
                 $"Detected {DescribeRegion(context)} day {context.DaysElapsed}: "
                 + $"intercepted by {context.OpposingSquads.Sum(s => s.AbleSoldiers.Count)} "
-                + $"{context.OpposingSquads.First().Squad.Faction.Name} ({context.OpposingSquads.Count} squads), "
+                + $"{interceptorFaction} ({context.OpposingSquads.Count} squads), "
                 + $"tacticsMargin={margin:F2} -> {(margin > 0 ? "outmaneuvered them (cross-detection)" : "AMBUSHED")}");
             return margin > 0.0f
                 ? MissionStepResult.Continue(new CrossDetectionMissionStep(), margin, resumeStep)

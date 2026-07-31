@@ -95,6 +95,27 @@ public class InterceptionSizingTests
         Assert.Contains(context.Log, line => line.Contains("detected and intercepted"));
     }
 
+    [Fact]
+    public void Interception_CombatIneffectiveIntruder_EndsWithoutBuildingEmptyInterception()
+    {
+        MissionContext context = CreateDetectionScenario(screenSquads: 0);
+        BattleSquad intruder = Assert.Single(context.MissionSquads);
+        foreach (BattleSoldier soldier in intruder.Soldiers.ToList())
+        {
+            intruder.RemoveSoldier(soldier);
+        }
+
+        MissionStepResult result = new DetectedMissionStep().ExecuteMissionStep(
+            CreateExecution(context), -1.0f, resumeStep: null);
+
+        Assert.Null(result.Next);
+        Assert.True(context.ObjectiveAborted);
+        Assert.Empty(context.OpposingSquads);
+        Assert.Contains(
+            context.Log,
+            line => line.Contains("no combat-capable mission force remained"));
+    }
+
     // --- fixtures ---
 
     private static int CommittedBattleValue(MissionContext context) =>
