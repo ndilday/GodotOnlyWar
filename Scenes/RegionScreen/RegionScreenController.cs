@@ -14,7 +14,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 
-public partial class RegionScreenController : MainScreenController
+public partial class RegionScreenController : DialogController
 {
     private static readonly (string Key, string Label)[] RosterFilters =
     [
@@ -39,7 +39,7 @@ public partial class RegionScreenController : MainScreenController
     public override void _Ready()
     {
         base._Ready();
-        _view = GetNode<RegionScreenView>("DialogView");
+        _view = GetNode<RegionScreenView>("DialogView/RegionScreenView");
 
         _view.SelectionTreeItemSelected += OnSelectionTreeItemSelected;
         _view.SelectionTreeItemActivated += OnSelectionTreeItemActivated;
@@ -401,27 +401,11 @@ public partial class RegionScreenController : MainScreenController
                 "Hostile Faction",
                 enemyFaction.PlanetFaction.Faction.Name,
                 rows,
-                OnlyWarStyle.OpposingAccent,
-                GetMagnitudeBarFraction(enemyFaction.GetForceMagnitudeDescription())));
+                OnlyWarStyle.OpposingAccent));
         }
 
         _view.SetDossier(target.Name, cards);
         _view.SetInboundOrders(InboundOrders.ForRegion(target));
-    }
-
-    private static float? GetMagnitudeBarFraction(string magnitudeWord)
-    {
-        return magnitudeWord switch
-        {
-            "None" => 0f,
-            "Handful" => 0.15f,
-            "Dozens" => 0.3f,
-            "Hundreds" => 0.5f,
-            "Thousands" => 0.7f,
-            "Millions" => 0.85f,
-            "Billions" => 1f,
-            _ => null
-        };
     }
 
     private IReadOnlyList<CommandTreeNode> BuildRoster()

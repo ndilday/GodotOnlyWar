@@ -247,7 +247,7 @@ public partial class MainGameScene : Control
 	}
 
 	// The bottom menu stays clickable while a map-overlay surface (planet, region,
-	// squad, soldier screen) is open. Push the visible surface before opening a
+	// or squad detail) is open. Push the visible surface before opening a
 	// bottom-menu screen so closing it returns there, instead of restoring the
 	// sector map underneath the still-visible surface.
 	private void PushVisibleOverlaySurface()
@@ -319,23 +319,26 @@ public partial class MainGameScene : Control
 			}
 			else if (control == _planetTacticalScreen)
 			{
-				if (_selectedPlanetId.HasValue && GameDataSingleton.Instance.Sector.Planets.TryGetValue(_selectedPlanetId.Value, out Planet planet))
-				{
-					_topMenu.SetScreenText(planet.Name);
-				}
 				_planetTacticalScreen.RefreshFromExternalChange();
+				_topMenu.SetScreenText("Sector Map");
 				_bottomMenu.SetActiveDestination(BottomMenu.Destination.None);
+				SetMapWorkspaceVisibility(true);
 			}
 			else if (control == _regionScreen)
 			{
 				_regionScreen.RefreshFromExternalChange();
+				_topMenu.SetScreenText("Sector Map");
 				_bottomMenu.SetActiveDestination(BottomMenu.Destination.None);
+				SetMapWorkspaceVisibility(true);
 			}
 			else if (control == _squadScreen)
 			{
 				_bottomMenu.SetActiveDestination(BottomMenu.Destination.None);
 			}
-			SetMapWorkspaceVisibility(false);
+			if (control != _planetTacticalScreen && control != _regionScreen)
+			{
+				SetMapWorkspaceVisibility(false);
+			}
 		}
 		else
 		{
@@ -601,18 +604,15 @@ public partial class MainGameScene : Control
 			PackedScene planetScene = GD.Load<PackedScene>("res://Scenes/PlanetDetailScreen/planet_tactical_screen.tscn");
 			_planetTacticalScreen = (PlanetTacticalScreenController)planetScene.Instantiate();
 
-			_planetTacticalScreen.CloseRequested += OnCloseScreen;
+			_planetTacticalScreen.CloseButtonPressed += OnDialogClosed;
 			_planetTacticalScreen.OrbitalSquadDoubleClicked += OnOrbitalSquadDoubleClicked;
 			_planetTacticalScreen.RegionDoubleClicked += OnRegionDoubleClicked;
 			_planetTacticalScreen.CampaignChanged += OnCampaignChanged;
-			AddPrimaryScreen(_planetTacticalScreen);
+			_modalLayer.AddChild(_planetTacticalScreen);
 		}
-		PlaceMainContentOverlay(_planetTacticalScreen);
 		_planetTacticalScreen.PopulatePlanetData(planet);
 		_planetTacticalScreen.Visible = true;
-		_bottomMenu.SetActiveDestination(BottomMenu.Destination.None);
-		_topMenu.SetScreenText(planet.Name);
-		SetMapWorkspaceVisibility(false);
+		_planetTacticalScreen.MoveToFront();
 		GD.Print($"Planet {planet.Id} Clicked");
 	}
 
@@ -887,17 +887,15 @@ public partial class MainGameScene : Control
 		{
 			PackedScene regionScene = GD.Load<PackedScene>("res://Scenes/RegionScreen/region_screen.tscn");
 			_regionScreen = (RegionScreenController)regionScene.Instantiate();
-			_regionScreen.CloseRequested += OnCloseScreen;
+			_regionScreen.CloseButtonPressed += OnCloseScreen;
 			_regionScreen.SquadDoubleClicked += OnSquadDoubleClicked;
 			_regionScreen.AdjacentRegionChangeRequested += OnAdjacentRegionChangeRequested;
 			_regionScreen.CampaignChanged += OnCampaignChanged;
-			AddPrimaryScreen(_regionScreen);
+			_modalLayer.AddChild(_regionScreen);
 		}
-		PlaceMainContentOverlay(_regionScreen);
 		_regionScreen.DisplayRegion(region);
 		_regionScreen.Visible = true;
-		_bottomMenu.SetActiveDestination(BottomMenu.Destination.None);
-		_topMenu.SetScreenText(region.Name);
+		_regionScreen.MoveToFront();
 		Control control = (Control)sender;
 		_previousScreenStack.Push(control);
 		control.Visible = false;
@@ -906,7 +904,6 @@ public partial class MainGameScene : Control
 	private void OnAdjacentRegionChangeRequested(object sender, Region region)
 	{
 		_regionScreen?.DisplayRegion(region);
-		_topMenu.SetScreenText(region.Name);
 	}
 
 	private void OnSquadDoubleClicked(object sender, Squad squad)

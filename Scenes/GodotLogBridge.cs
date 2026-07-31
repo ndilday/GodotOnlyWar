@@ -37,7 +37,7 @@ public partial class GodotLogBridge : Node
                 GD.PushWarning(message);
             }
         };
-        GameLog.MinimumLevel = GameLogLevel.Trace;
+        GameLog.MinimumLevel = GameLogLevel.Debug;
 
         GD.Print($"OnlyWar log sink: {_logSink.LogPath}");
     }

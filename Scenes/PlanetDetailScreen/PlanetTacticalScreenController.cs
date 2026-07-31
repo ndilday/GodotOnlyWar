@@ -16,7 +16,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 
-public partial class PlanetTacticalScreenController : MainScreenController
+public partial class PlanetTacticalScreenController : DialogController
 {
 	private const string ActionOpenRegion = "open_region";
 	private const string ActionOpenSquad = "open_squad";
@@ -65,7 +65,7 @@ public partial class PlanetTacticalScreenController : MainScreenController
 	{
 		base._Ready();
 		_buttonGroup = new ButtonGroup();
-		_view = GetNode<PlanetTacticalScreenView>("PlanetTacticalScreenView");
+		_view = GetNode<PlanetTacticalScreenView>("DialogView/PlanetTacticalScreenView");
 		_view.SelectionTreeItemSelected += OnSelectionTreeItemSelected;
 		_view.SelectionTreeItemActivated += OnSelectionTreeItemActivated;
 		_view.CommandPressed += OnCommandPressed;
@@ -86,7 +86,7 @@ public partial class PlanetTacticalScreenController : MainScreenController
 		_tacticalRegions = new TacticalRegionController[16];
 		for (int i = 1; i <= 16; i++)
 		{
-			_tacticalRegions[i - 1] = GetNode<TacticalRegionController>($"PlanetTacticalScreenView/TacticalRegionPanel/TacticalRegionController{i}");
+			_tacticalRegions[i - 1] = GetNode<TacticalRegionController>($"DialogView/PlanetTacticalScreenView/TacticalRegionPanel/TacticalRegionController{i}");
 			_tacticalRegions[i - 1].AddToButtonGroup(_buttonGroup);
 			_tacticalRegions[i - 1].TacticalRegionPressed += OnTacticalRegionPressed;
 			_tacticalRegions[i - 1].TacticalRegionDoubleClicked += OnTacticalRegionDoubleClicked;
