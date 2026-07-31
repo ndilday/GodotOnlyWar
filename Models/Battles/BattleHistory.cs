@@ -16,6 +16,9 @@ namespace OnlyWar.Models.Battles
         public int FirstSideEnemyDeaths { get; set; }
         // Stable soldier identities confirmed killed during this battle, independent of which
         // aftermath policy is active. Mission objectives can track a specific casualty directly.
+        // Includes the losing side's abandoned wounded, added in one pass once the battle ends and
+        // the field has an owner (BattleTurnResolver.FinishOffAbandonedWounded) -- so this set is
+        // only final after the battle completes.
         public HashSet<int> KilledSoldierIds { get; }
         // Stable identities of soldiers who received at least one resolved wound during this
         // battle. This supports compact casualty reporting without retaining or rendering the

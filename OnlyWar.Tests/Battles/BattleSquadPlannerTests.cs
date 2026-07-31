@@ -126,7 +126,8 @@ public class BattleSquadPlannerTests
     private static RangedWeapon EquipTemplateWeapon(
         BattleSoldier soldier,
         float areaRadius = 5,
-        float maximumRange = 30)
+        float maximumRange = 30,
+        float baseDamage = 5)
     {
         RangedWeapon weapon = new(new RangedWeaponTemplate(
             99_200,
@@ -137,7 +138,7 @@ public class BattleSquadPlannerTests
             armorMultiplier: 1,
             penetrationMultiplier: 1,
             requiredStrength: 0,
-            baseDamage: 5,
+            baseDamage: baseDamage,
             maxDistance: maximumRange,
             rof: 1,
             ammo: 50,
@@ -179,6 +180,183 @@ public class BattleSquadPlannerTests
         soldier.RangedWeapons.Add(rifle);
         soldier.ReadyWeapon(rifle);
         return rifle;
+    }
+
+    [Theory]
+    [InlineData(7.5f, 1600f)]
+    [InlineData(10.5f, 1000f)]
+    public void EstimateKillDistance_MultiHitWeaponRetainsStandoffRange(
+        float damageMultiplier,
+        float maximumRange)
+    {
+        RangedWeapon weapon = new(new RangedWeaponTemplate(
+            99_280,
+            "Degrading Test Weapon",
+            EquipLocation.TwoHand,
+            TestSkills.Ranged,
+            accuracy: 9,
+            armorMultiplier: 0.5f,
+            penetrationMultiplier: damageMultiplier == 7.5f ? 2 : 1,
+            requiredStrength: 0,
+            baseDamage: damageMultiplier,
+            maxDistance: maximumRange,
+            rof: 1,
+            ammo: 10,
+            recoil: 0,
+            bulk: 4,
+            doesDamageDegradeWithRange: true,
+            reloadTime: 1));
+
+        float distance = BattleModifiersUtil.EstimateKillDistance(
+            weapon, targetArmor: 0, targetCon: 100);
+
+        Assert.True(distance > 0, $"expected a useful standoff range, got {distance}");
+    }
+
+    [Fact]
+    public void EstimateKillDistance_OneShotCaseKeepsExistingQuantileRange()
+    {
+        RangedWeapon sniper = new(new RangedWeaponTemplate(
+            99_281,
+            "Sniper Rifle",
+            EquipLocation.TwoHand,
+            TestSkills.Ranged,
+            accuracy: 9,
+            armorMultiplier: 0.5f,
+            penetrationMultiplier: 2,
+            requiredStrength: 0,
+            baseDamage: 7.5f,
+            maxDistance: 1600,
+            rof: 1,
+            ammo: 10,
+            recoil: 0,
+            bulk: 4,
+            doesDamageDegradeWithRange: true,
+            reloadTime: 1));
+
+        float distance = BattleModifiersUtil.EstimateKillDistance(
+            sniper, targetArmor: 10, targetCon: 12);
+
+        Assert.InRange(distance, 1040f, 1060f);
+    }
+
+    [Fact]
+    public void EstimateKillDistance_WeaponThatCannotPenetrateReturnsMinusOne()
+    {
+        RangedWeapon popgun = new(new RangedWeaponTemplate(
+            99_282,
+            "Popgun",
+            EquipLocation.TwoHand,
+            TestSkills.Ranged,
+            accuracy: 9,
+            armorMultiplier: 1,
+            penetrationMultiplier: 1,
+            requiredStrength: 0,
+            baseDamage: 2,
+            maxDistance: 300,
+            rof: 1,
+            ammo: 10,
+            recoil: 0,
+            bulk: 1,
+            doesDamageDegradeWithRange: true,
+            reloadTime: 1));
+
+        Assert.Equal(
+            -1f,
+            BattleModifiersUtil.EstimateKillDistance(
+                popgun, targetArmor: 20, targetCon: 10));
+    }
+
+    [Fact]
+    public void PrepareActions_UsesBestShootableTargetForStandoffAgainstToughScreen()
+    {
+        BattleSquad shooters = CreateSquad("Sniper", 91_010);
+        BattleSquad toughScreen = CreateSquad("Tough Screen", 91_011);
+        BattleSquad softMass = CreateSquad(
+            "Soft Mass",
+            91_012,
+            battleValue: 1_000);
+        BattleSoldier shooter = shooters.Soldiers[0];
+        ((Soldier)shooter.Soldier).Dexterity = 20;
+        RangedWeapon sniper = new(new RangedWeaponTemplate(
+            99_283,
+            "Sniper Rifle",
+            EquipLocation.TwoHand,
+            TestSkills.Ranged,
+            accuracy: 9,
+            armorMultiplier: 0.5f,
+            penetrationMultiplier: 2,
+            requiredStrength: 0,
+            baseDamage: 7.5f,
+            maxDistance: 1600,
+            rof: 1,
+            ammo: 10,
+            recoil: 0,
+            bulk: 8,
+            doesDamageDegradeWithRange: true,
+            reloadTime: 1));
+        shooter.RangedWeapons.Clear();
+        shooter.ClearReadiedRangedWeapons();
+        shooter.RangedWeapons.Add(sniper);
+        shooter.ReadyWeapon(sniper);
+
+        BattleSoldier screen = toughScreen.Soldiers[0];
+        ((Soldier)screen.Soldier).Constitution = 100;
+        screen.Armor = new Armor(new ArmorTemplate(99_284, "Heavy Screen", 60, 0));
+        BattleSoldier softTarget = softMass.Soldiers[0];
+        softTarget.Armor = new Armor(new ArmorTemplate(99_285, "No Armor", 0, 0));
+        shooter.Aim = new ValueTuple<int, RangedWeapon, int>(
+            softTarget.Soldier.Id, sniper, 0);
+
+        BattleGridManager grid = new();
+        Place(grid, shooter, true, 0, 0);
+        Place(grid, screen, false, 300, 0);
+        Place(grid, softTarget, false, 301, 0);
+        List<IAction> shootActions = [];
+        BattleSquadPlanner planner = CreatePlanner(
+            grid, shootActions, [], [], shooters, toughScreen, softMass);
+
+        planner.PrepareActions(shooters);
+
+        Assert.Equal(SquadMovementTier.Stationary, shooters.MovementTier);
+        IAction rangedAction = Assert.Single(shootActions);
+        Assert.True(rangedAction is AimAction or ShootAction);
+        if (rangedAction is ShootAction shot)
+        {
+            Assert.Equal(softTarget.Soldier.Id, shot.TargetId);
+        }
+        Assert.Equal(
+            softTarget.Soldier.Id,
+            planner.SelectBestRangedTarget(shooter, useBulk: false).Target.Soldier.Id);
+    }
+
+    [Fact]
+    public void TakeOutProbability_ReadsAccumulatedLocationWounds()
+    {
+        BattleSquad targets = CreateSquad("Wounded Target", 91_020);
+        BattleSoldier target = targets.Soldiers[0];
+        HitLocation location = target.Soldier.Body.HitLocations
+            .First(candidate => candidate.Template.IsMotive || candidate.Template.IsVital);
+        float fresh = BattleSquadPlanner.CalculateTakeOutProbabilityOnHit(
+            target, damageCoefficient: 2f, effectiveArmor: 0f, weaponWoundMultiplier: 1f);
+
+        uint setupWounds = location.Template.CrippleWound switch
+        {
+            (uint)WoundLevel.Moderate => 5u * (uint)WoundLevel.Minor,
+            (uint)WoundLevel.Major => 5u * (uint)WoundLevel.Moderate,
+            (uint)WoundLevel.Critical => 5u * (uint)WoundLevel.Major,
+            (uint)WoundLevel.Massive => 5u * (uint)WoundLevel.Critical,
+            _ => 0u
+        };
+        Assert.True(setupWounds > 0);
+        location.Wounds = new Wounds(setupWounds, 0);
+
+        float wounded = BattleSquadPlanner.CalculateTakeOutProbabilityOnHit(
+            target, damageCoefficient: 2f, effectiveArmor: 0f, weaponWoundMultiplier: 1f);
+
+        Assert.True(
+            wounded > fresh,
+            $"expected accumulated wounds to increase take-out chance ({fresh} -> {wounded})");
     }
 
     [Fact]
@@ -585,16 +763,10 @@ public class BattleSquadPlannerTests
         BattleSoldier shooter = shooterSquad.Soldiers[0];
         ((Soldier)shooter.Soldier).Dexterity = 17;
 
-        // This is a crossover scenario: it asserts the point-blank shoot-vs-melee decision
-        // flips between one and three adjacent attackers. The planner compares
-        // (bestRangedScore - forfeitedParryRisk) against the melee score, and parry risk
-        // scales with attacker count, so the test only discriminates while the ranged score
-        // sits in the band between the one-attacker and three-attacker crossings. That band
-        // is narrow -- under one point of baseDamage -- because the ranged side is scored as
-        // a linear wound ratio while melee is scored as a take-out probability.
-        // baseDamage 3.63 reproduces the expected ranged score this scenario was originally
-        // balanced around (3 x the old 4.25 damage-roll constant) now that the planner
-        // integrates the real N(3.5, 1.75) roll, keeping the scenario's balance unchanged.
+        // This is a crossover scenario: one adjacent attacker leaves enough net value to fire,
+        // while the accumulated parry risk from three makes readying melee the better action.
+        // Both sides are now quoted in take-out probability, so the margin is produced by the
+        // actual threshold curve rather than a linear-damage/probability mismatch.
         RangedWeapon pointBlankWeapon = new(new RangedWeaponTemplate(
             99_100,
             "Compact Rifle",
@@ -604,7 +776,7 @@ public class BattleSquadPlannerTests
             armorMultiplier: 1,
             penetrationMultiplier: 1,
             requiredStrength: 0,
-            baseDamage: 3.63f,
+            baseDamage: 2.5f,
             maxDistance: 50,
             rof: 1,
             ammo: 5,
@@ -1065,7 +1237,7 @@ public class BattleSquadPlannerTests
         BattleSquad shooters = CreateSquad("Engaged Flamer Bearer", 670, battleValue: 2);
         BattleSquad enemies = CreateSquad("Adjacent Enemy", 680, battleValue: 10);
         BattleSoldier shooter = shooters.Soldiers[0];
-        EquipTemplateWeapon(shooter);
+        EquipTemplateWeapon(shooter, baseDamage: 20);
         BattleGridManager grid = new();
         Place(grid, shooter, true, 0, 0);
         Place(grid, enemies.Soldiers[0], false, 1, 0);

@@ -262,9 +262,11 @@ layout_mode = 2
 text = "EVENT CHRONICLE"
 horizontal_alignment = 1
 
-[node name="EventFilterRow" type="HBoxContainer" parent="DialogView/Layout/RightPanel/EventPanel/EventMargin/EventStack"]
+[node name="EventFilterRow" type="GridContainer" parent="DialogView/Layout/RightPanel/EventPanel/EventMargin/EventStack"]
 layout_mode = 2
-theme_override_constants/separation = 5
+theme_override_constants/h_separation = 5
+theme_override_constants/v_separation = 5
+columns = 2
 
 [node name="MeleeFilterButton" type="Button" parent="DialogView/Layout/RightPanel/EventPanel/EventMargin/EventStack/EventFilterRow"]
 custom_minimum_size = Vector2(0, 28)

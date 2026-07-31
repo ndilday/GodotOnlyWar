@@ -1,11 +1,14 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Text.RegularExpressions;
 
 using OnlyWar.Helpers;
 using OnlyWar.Helpers.Battles;
 using OnlyWar.Helpers.Battles.Actions;
+using OnlyWar.Models.Battles;
 using OnlyWar.Models.Equippables;
+using OnlyWar.Models.Orders;
 using OnlyWar.Models.Soldiers;
 using OnlyWar.Tests.Fixtures;
 
@@ -174,14 +177,198 @@ public class BattlePursuitActionPlannerTests
         Assert.Empty(fixture.MeleeActions);
     }
 
-    private static BattleSquad CreateSquad(string name, int soldierId)
+    [Fact]
+    public void FireSupportSquad_ChoosesStandoff_WhileAssaultSquadChoosesPress()
+    {
+        // The posture a pursuer should take is a property of what it is carrying, not of the force
+        // it belongs to. A sniper squad already inside its effective range is at its best standing
+        // still; a pistol-and-chainsword squad is worth nothing until it arrives. Both are chasing
+        // the same quarry at the same distance here, so only the loadout differs.
+        BattleSquad snipers = CreateSquad("Scouts", 72_071, Loadout.FireSupport);
+        BattleSquad assault = CreateSquad("Assault", 72_072, Loadout.Assault);
+        BattleSquad withdrawing = CreateSquad("Withdrawer", 72_073, Loadout.Rifle);
+        Fixture fixture = CreateFixture(
+            (snipers, true, 0, 0),
+            (assault, true, 0, 20),
+            (withdrawing, false, 60, 0));
+
+        // Quarry runs at its full squad move, which outpaces either pursuer's jog.
+        float quarrySpeed = withdrawing.GetSquadMove();
+
+        Assert.Equal(
+            PursuitPosture.Standoff,
+            fixture.Planner.SelectPursuitPosture(snipers, quarrySpeed));
+        Assert.Equal(
+            PursuitPosture.Press,
+            fixture.Planner.SelectPursuitPosture(assault, quarrySpeed));
+    }
+
+    [Fact]
+    public void Pursuers_MoveOnTheCoveringSquadRatherThanTheNearerFleeingOne()
+    {
+        // Bound squads Run, and a running squad cannot shoot — so every round the withdrawal fires
+        // comes from the covering squad. A pursuit that closes on the nearest body instead spends
+        // itself on the one enemy that cannot shoot back. The bound squad is nearer (10 along x)
+        // than the cover squad (30 along y), so heading up-field is only explicable by role.
+        BattleSquad pursuer = CreateSquad("Pursuer", 72_081, Loadout.Rifle);
+        BattleSquad bound = CreateSquad("Bound", 72_082, Loadout.Rifle);
+        BattleSquad cover = CreateSquad("Cover", 72_083, Loadout.Rifle);
+        bound.WithdrawalRole = WithdrawalRole.Bound;
+        cover.WithdrawalRole = WithdrawalRole.Cover;
+        Fixture fixture = CreateFixture(
+            (pursuer, true, 0, 0),
+            (bound, false, 10, 0),
+            (cover, false, 0, 30));
+
+        fixture.Planner.PreparePursuitActions(
+            pursuer,
+            PursuitPosture.Press,
+            [bound, cover]);
+
+        MoveAction move = Assert.IsType<MoveAction>(Assert.Single(fixture.MoveActions));
+        // Assert the bearing, not the exact square: destination selection sidesteps to avoid
+        // reserved ground, so the pursuer may drift a pace off the true line to the cover squad.
+        Match destination = Regex.Match(move.Description(), @"to \((-?\d+), (-?\d+)\)");
+        Assert.True(destination.Success, move.Description());
+        int x = int.Parse(destination.Groups[1].Value);
+        int y = int.Parse(destination.Groups[2].Value);
+        Assert.True(y > x, $"expected movement toward the covering squad (+y), got ({x}, {y})");
+    }
+
+    [Fact]
+    public void Pursuers_ShootTheCoveringSquadRatherThanTheNearerFleeingOne()
+    {
+        // The bound squad is nearer and therefore the easier shot on raw expected damage — but it
+        // is running, so it cannot shoot back. The covering squad is the only source of enemy fire
+        // in an organized withdrawal, and it is what should be getting shot at.
+        BattleSquad pursuer = CreateSquad("Pursuer", 72_091, Loadout.Rifle);
+        BattleSquad bound = CreateSquad("Bound", 72_092, Loadout.Rifle);
+        BattleSquad cover = CreateSquad("Cover", 72_093, Loadout.Rifle);
+        bound.WithdrawalRole = WithdrawalRole.Bound;
+        cover.WithdrawalRole = WithdrawalRole.Cover;
+        Fixture fixture = CreateFixture(
+            (pursuer, true, 0, 0),
+            (bound, false, 10, 0),
+            (cover, false, 14, 0));
+
+        fixture.Planner.PreparePursuitActions(
+            pursuer,
+            PursuitPosture.Standoff,
+            [bound, cover]);
+
+        ShootAction shot = Assert.IsType<ShootAction>(Assert.Single(fixture.ShootActions));
+        Assert.Equal(cover.Soldiers[0].Soldier.Id, shot.TargetId);
+    }
+
+    [Fact]
+    public void DistantStandoffSquad_FinishesItsAimAndFires_RatherThanAimingForever()
+    {
+        // Regression for "the scouts sit, aim, and never fire". A Standoff fire-support squad is
+        // stationary and far away by design, so its aim has to survive from turn to turn — an aim
+        // discarded and restarted never reaches the bonus that triggers the shot.
+        //
+        // The target is deliberately Bound. Releasing a fleeing target inside
+        // ShouldInterruptStickyTarget also released it inside IsExistingAimStillViable, which
+        // shares that predicate, so the aim was thrown away every turn however good the shot was.
+        // Handing the squad an already-matured aim makes the failure a single deterministic step:
+        // honour it and fire, or discard it and start aiming over.
+        BattleSquad snipers = CreateSquad("Scouts", 72_111, Loadout.FireSupport);
+        BattleSquad withdrawing = CreateSquad("Withdrawer", 72_112, Loadout.Rifle);
+        withdrawing.WithdrawalRole = WithdrawalRole.Bound;
+        Fixture fixture = CreateFixture(
+            (snipers, true, 0, 0),
+            (withdrawing, false, 300, 0));
+        BattleSoldier sniper = snipers.Soldiers[0];
+        sniper.Aim = new ValueTuple<int, RangedWeapon, int>(
+            withdrawing.Soldiers[0].Soldier.Id,
+            sniper.EquippedRangedWeapons[0],
+            3);
+
+        fixture.Planner.PreparePursuitActions(snipers, PursuitPosture.Standoff, [withdrawing]);
+
+        ShootAction shot = Assert.IsType<ShootAction>(Assert.Single(fixture.ShootActions));
+        Assert.Equal(withdrawing.Soldiers[0].Soldier.Id, shot.TargetId);
+        Assert.NotNull(sniper.Aim);
+    }
+
+    [Fact]
+    public void FleeingTargetBias_IsInertWhenNobodyIsWithdrawing()
+    {
+        // Same geometry, no withdrawal roles set: the ordinary expected-damage scorer is untouched
+        // and still takes the nearer, easier target. This is what keeps the bias out of every
+        // battle that is not a pursuit.
+        BattleSquad pursuer = CreateSquad("Pursuer", 72_101, Loadout.Rifle);
+        BattleSquad nearer = CreateSquad("Nearer", 72_102, Loadout.Rifle);
+        BattleSquad farther = CreateSquad("Farther", 72_103, Loadout.Rifle);
+        Fixture fixture = CreateFixture(
+            (pursuer, true, 0, 0),
+            (nearer, false, 10, 0),
+            (farther, false, 14, 0));
+
+        fixture.Planner.PreparePursuitActions(
+            pursuer,
+            PursuitPosture.Standoff,
+            [nearer, farther]);
+
+        ShootAction shot = Assert.IsType<ShootAction>(Assert.Single(fixture.ShootActions));
+        Assert.Equal(nearer.Soldiers[0].Soldier.Id, shot.TargetId);
+    }
+
+    private enum Loadout { Rifle, FireSupport, Assault }
+
+    private static BattleSquad CreateSquad(
+        string name,
+        int soldierId,
+        Loadout loadout = Loadout.Rifle)
     {
         Soldier soldier = TestModelFactory.CreateSoldier(
             name: name,
             dexterity: 18,
-            skills: [new Skill(TestSkills.Ranged, 12)]);
+            skills: [new Skill(TestSkills.Ranged, 12), new Skill(TestSkills.Melee, 12)]);
         soldier.Id = soldierId;
-        return new BattleSquad(false, TestModelFactory.CreateSquad(name, soldier));
+        BattleSquad squad = new(false, TestModelFactory.CreateSquad(name, soldier));
+        if (loadout != Loadout.Rifle)
+        {
+            Equip(squad.Soldiers[0], loadout, soldierId);
+        }
+
+        return squad;
+    }
+
+    // Two deliberately extreme loadouts so the posture test turns on the weapons rather than on
+    // where a tuning constant happens to sit this week.
+    private static void Equip(BattleSoldier soldier, Loadout loadout, int seed)
+    {
+        soldier.RangedWeapons.Clear();
+        soldier.ClearReadiedRangedWeapons();
+        soldier.MeleeWeapons.Clear();
+        soldier.ClearReadiedMeleeWeapons();
+
+        if (loadout == Loadout.FireSupport)
+        {
+            RangedWeapon sniper = new(new RangedWeaponTemplate(
+                seed, "Test Sniper Rifle", EquipLocation.TwoHand, TestSkills.Ranged,
+                accuracy: 10, armorMultiplier: 1, penetrationMultiplier: 1, requiredStrength: 0,
+                baseDamage: 12, maxDistance: 800, rof: 1, ammo: 10, recoil: 0, bulk: 1,
+                doesDamageDegradeWithRange: false, reloadTime: 1, 0, 0, 0));
+            soldier.RangedWeapons.Add(sniper);
+            soldier.ReadyWeapon(sniper);
+            return;
+        }
+
+        RangedWeapon pistol = new(new RangedWeaponTemplate(
+            seed, "Test Pistol", EquipLocation.OneHand, TestSkills.Ranged,
+            accuracy: 0, armorMultiplier: 1, penetrationMultiplier: 1, requiredStrength: 0,
+            baseDamage: 1, maxDistance: 6, rof: 1, ammo: 6, recoil: 0, bulk: 1,
+            doesDamageDegradeWithRange: true, reloadTime: 1, 0, 0, 0));
+        MeleeWeapon chainsword = new(new MeleeWeaponTemplate(
+            seed + 1, "Test Chainsword", EquipLocation.OneHand, TestSkills.Melee,
+            accuracy: 3, armorMultiplier: 1, penetrationMultiplier: 1, requiredStrength: 0,
+            strengthMultiplier: 4, parryMod: 2, attackSpeedMultiplier: 2));
+        soldier.RangedWeapons.Add(pistol);
+        soldier.ReadyWeapon(pistol);
+        soldier.MeleeWeapons.Add(chainsword);
+        soldier.ReadyWeapon(chainsword);
     }
 
     private static Fixture CreateFixture(

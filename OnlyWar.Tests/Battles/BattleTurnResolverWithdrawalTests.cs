@@ -9,6 +9,7 @@ using OnlyWar.Helpers.Battles;
 using OnlyWar.Helpers.Battles.Aftermath;
 using OnlyWar.Models;
 using OnlyWar.Models.Battles;
+using OnlyWar.Models.Equippables;
 using OnlyWar.Models.Orders;
 using OnlyWar.Models.Soldiers;
 using OnlyWar.Models.Squads;
@@ -139,6 +140,154 @@ public class BattleTurnResolverWithdrawalTests
             battleEvent => battleEvent.Type == BattleEventType.SquadDisengaged);
         Assert.Equal(burrowers.Id, disengagement.PrimarySquadId);
         Assert.Contains("burrowing capability", disengagement.Description);
+    }
+
+    [Fact]
+    public void ProcessNextTurn_LongBarrelledPursuerBreaksOffWhenItCannotUsefullyShoot()
+    {
+        // Regression for the Xibarrus Nu ambush (2026-07-30). The pursuit gates used to ask "can we
+        // shoot from here?" and answer with the longest weapon's MAXIMUM range. One Heavy Bolter at
+        // 1600 yards made a force look able to shoot from anywhere, so an Aggressive pursuer that
+        // could neither close nor land anything kept the engagement alive for hundreds of turns.
+        // The weapon here reaches 2000 yards on paper and is useless at any of them, so the gates
+        // must now report no worthwhile shot and let the withdrawal succeed.
+        SoldierTemplate zeroValueHuman = new(
+            73_030,
+            TestModelFactory.HumanSpecies,
+            "Zero Value Human",
+            1,
+            1,
+            false,
+            0,
+            Array.Empty<ValueTuple<BaseSkill, float>>(),
+            battleValue: 0);
+        BattleSquad withdrawing = CreateSquad("Withdrawing", 73_031, zeroValueHuman);
+        BattleSquad pursuer = CreateSquad(
+            "Pursuer",
+            73_032,
+            TestModelFactory.MarineTemplate,
+            isPlayerSquad: true);
+        EquipLongRangedPeashooter(pursuer.Soldiers[0]);
+        BattleGridManager grid = new();
+        Place(grid, withdrawing.Soldiers[0], true, 0, 0);
+        Place(grid, pursuer.Soldiers[0], false, 400, 0);
+        BattleTurnResolver resolver = CreateResolver(
+            grid,
+            [withdrawing],
+            [pursuer],
+            Aggression.Normal,
+            Aggression.Aggressive);
+
+        resolver.ProcessNextTurn();
+
+        BattleOutcome outcome = Assert.IsType<BattleOutcome>(resolver.BattleHistory.Outcome);
+        Assert.Equal(BattleEndReason.Withdrawal, outcome.EndReason);
+        Assert.Contains(withdrawing.Id, outcome.DisengagedSquadIds);
+        Assert.Contains(
+            resolver.BattleHistory.Turns.Last().Events,
+            battleEvent => battleEvent.Type == BattleEventType.PursuitEnded);
+    }
+
+    [Fact]
+    public void ProcessNextTurn_PursuerWithRealReachKeepsTheEngagementAlive()
+    {
+        // The paired case that proves the test above turns on the weapon rather than the distance.
+        // Identical geometry and aggression; only the gun differs. This one can genuinely hit and
+        // hurt at 400 yards, so there IS a worthwhile shot and the pursuit continues.
+        SoldierTemplate zeroValueHuman = new(
+            73_050,
+            TestModelFactory.HumanSpecies,
+            "Zero Value Human",
+            1,
+            1,
+            false,
+            0,
+            Array.Empty<ValueTuple<BaseSkill, float>>(),
+            battleValue: 0);
+        BattleSquad withdrawing = CreateSquad("Withdrawing", 73_051, zeroValueHuman);
+        BattleSquad pursuer = CreateSquad(
+            "Pursuer",
+            73_052,
+            TestModelFactory.MarineTemplate,
+            isPlayerSquad: true);
+        EquipAccurateLongGun(pursuer.Soldiers[0]);
+        BattleGridManager grid = new();
+        Place(grid, withdrawing.Soldiers[0], true, 0, 0);
+        Place(grid, pursuer.Soldiers[0], false, 400, 0);
+        BattleTurnResolver resolver = CreateResolver(
+            grid,
+            [withdrawing],
+            [pursuer],
+            Aggression.Normal,
+            Aggression.Aggressive);
+
+        resolver.ProcessNextTurn();
+
+        Assert.Null(resolver.BattleHistory.Outcome);
+    }
+
+    // Enormous nominal reach, no ability to hit or hurt anything at it: accuracy and damage are
+    // floored and the round degrades with range, so both halves of CalculateOptimalDistance
+    // (can I hit here, can I wound here) collapse to nothing.
+    private static void EquipLongRangedPeashooter(BattleSoldier soldier)
+    {
+        RangedWeapon peashooter = new(new RangedWeaponTemplate(
+            73_040,
+            "Test Long Barrel",
+            EquipLocation.TwoHand,
+            TestSkills.Ranged,
+            accuracy: -20,
+            armorMultiplier: 1,
+            penetrationMultiplier: 1,
+            requiredStrength: 0,
+            baseDamage: 1,
+            maxDistance: 2000,
+            rof: 1,
+            ammo: 10,
+            recoil: 0,
+            bulk: 1,
+            doesDamageDegradeWithRange: true,
+            reloadTime: 1,
+            0,
+            0,
+            0));
+        soldier.RangedWeapons.Clear();
+        soldier.ClearReadiedRangedWeapons();
+        soldier.RangedWeapons.Add(peashooter);
+        soldier.ReadyWeapon(peashooter);
+    }
+
+    // Lascannon-shaped: hits hard and does not lose damage over distance, so its killing reach is
+    // its full range. Accuracy is pushed well past anything in the rules database on purpose —
+    // GetRangeForModifier is exponential (2*e^(-m/2.4663)), so reaching out to 400 yards takes a
+    // to-hit total near 24, and the point here is an unambiguous contrast with the peashooter
+    // rather than a realistic gun.
+    private static void EquipAccurateLongGun(BattleSoldier soldier)
+    {
+        RangedWeapon longGun = new(new RangedWeaponTemplate(
+            73_060,
+            "Test Long Gun",
+            EquipLocation.TwoHand,
+            TestSkills.Ranged,
+            accuracy: 25,
+            armorMultiplier: 1,
+            penetrationMultiplier: 1,
+            requiredStrength: 0,
+            baseDamage: 40,
+            maxDistance: 2000,
+            rof: 1,
+            ammo: 10,
+            recoil: 0,
+            bulk: 1,
+            doesDamageDegradeWithRange: false,
+            reloadTime: 1,
+            0,
+            0,
+            0));
+        soldier.RangedWeapons.Clear();
+        soldier.ClearReadiedRangedWeapons();
+        soldier.RangedWeapons.Add(longGun);
+        soldier.ReadyWeapon(longGun);
     }
 
     private static BattleTurnResolver CreateResolver(

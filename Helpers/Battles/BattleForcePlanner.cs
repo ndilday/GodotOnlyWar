@@ -108,15 +108,32 @@ namespace OnlyWar.Helpers.Battles
             }
         }
 
+        /// <summary>
+        /// Prosecutes a pursuit. The force-level <paramref name="posture"/> decides only whether
+        /// this side pursues at all — BreakOff is a force decision because it ends the engagement.
+        /// How each squad pursues is the squad's own call, because the right answer depends on what
+        /// that squad is carrying: Scouts with sniper rifles want to stand and shoot, Assault squads
+        /// with pistols and chainswords want to reach contact, and Tacticals fall either side
+        /// depending on where the quarry is. See
+        /// <see cref="BattleSquadPlanner.SelectPursuitPosture"/>.
+        /// </summary>
         public void PreparePursuit(
             IReadOnlyCollection<BattleSquad> pursuingSquads,
             IReadOnlyCollection<BattleSquad> withdrawingSquads,
             PursuitPosture posture)
         {
             List<BattleSquad> targets = ActiveSquads(withdrawingSquads);
+            // The speed the withdrawal actually moves at — its slowest squad sets the pace of the
+            // body being chased, and is what each pursuer's jog has to keep up with.
+            float quarryRunSpeed = targets.Count == 0
+                ? 0
+                : targets.Min(squad => squad.GetSquadMove());
             foreach (BattleSquad squad in ActiveSquads(pursuingSquads))
             {
-                _squadPlanner.PreparePursuitActions(squad, posture, targets);
+                PursuitPosture squadPosture = posture == PursuitPosture.BreakOff
+                    ? PursuitPosture.BreakOff
+                    : _squadPlanner.SelectPursuitPosture(squad, quarryRunSpeed);
+                _squadPlanner.PreparePursuitActions(squad, squadPosture, targets);
             }
         }
 

@@ -171,8 +171,19 @@ namespace OnlyWar.Helpers.Battles
 
             // if there's no chance of doing a wound, maybe we should run?
             if (weapon.Template.DamageMultiplier * 6 < effectiveArmor) return -1;
-            //if we can't kill in one shot at point blank range, we still need to get as close as possible to have the best chance of taking the target down
-            if ((weapon.Template.DamageMultiplier * 6 - effectiveArmor) * weapon.Template.WoundMultiplier < targetCon) return 0;
+            // A weapon that cannot take the target out in one hit still has a useful standoff
+            // range. In that case use the same one-third armor-penetration quantile as the
+            // planner's fallback range rather than conflating "needs multiple hits" with
+            // "cannot wound at range".
+            if ((weapon.Template.DamageMultiplier * 6 - effectiveArmor)
+                * weapon.Template.WoundMultiplier < targetCon)
+            {
+                float penetrationDistanceRatio =
+                    1 - (effectiveArmor / (4.25f * weapon.Template.DamageMultiplier));
+                return penetrationDistanceRatio < 0
+                    ? 0
+                    : weapon.Template.MaximumRange * penetrationDistanceRatio;
+            }
             // find the range with a 1/3 chance of a killshot
             float distanceRatio = 1 - (((targetCon / weapon.Template.WoundMultiplier) + effectiveArmor) / (4.25f * weapon.Template.DamageMultiplier));
             if (distanceRatio < 0) return 0;

@@ -54,11 +54,9 @@ public class GrenadePlannerTests
         BattleSquad enemies = CreateSquad("Cluster", (730, 2), (731, 2), (732, 2), (733, 2));
         foreach (BattleSoldier enemy in enemies.Soldiers)
         {
-            // Durable, but not so tanky that a single frag barely dents each: the point is that
-            // catching a whole cluster clearly out-values a lone rifle shot. (At constitution 40 a
-            // frag's per-victim damage is marginal enough that a confident rifle shot is a defensible
-            // choice, so that no longer makes an unambiguous "throw at the cluster" fixture.)
-            MakeToughSharpshooter(enemy, constitution: 20);
+            // Frag-vulnerable infantry make catching the whole cluster clearly out-value a lone
+            // rifle shot under take-out-probability scoring.
+            MakeToughSharpshooter(enemy, constitution: 10);
         }
 
         BattleGridManager grid = new();
@@ -87,7 +85,7 @@ public class GrenadePlannerTests
         // expected blast loss (danger-close, self included) sinks the score below
         // zero; the expendable one accepts the risk. Distance 2 keeps the thrower
         // well inside the blast circle.
-        BattleSquad valuableShooters = CreateSquad("Valuable Grenadier", 740, battleValue: 10);
+        BattleSquad valuableShooters = CreateSquad("Valuable Grenadier", 740, battleValue: 20);
         ArmWithRifleAndBeltGrenade(valuableShooters.Soldiers[0]);
         BattleSquad firstEnemies = CreateSquad("Close Enemy", 750);
         BattleGridManager firstGrid = new();

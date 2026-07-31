@@ -23,6 +23,11 @@ namespace OnlyWar.Helpers.Battles.Aftermath
         // log agreeing with who really died, and holds it to one entry however many mortal wounds
         // landed before the wound queue drained.
         private readonly Dictionary<int, WeaponTemplate> _mortalWoundWeapons = new();
+        // (inflicter, sufferer) pairs already credited to a player soldier's career this battle.
+        // Hit locations resolve independently, so one WoundResolver pass can raise the fall hook
+        // (a motive or hand location lost) and the death hook (a vital location crippled) for the
+        // same enemy off two different wounds -- but an enemy can only be taken down once.
+        private readonly HashSet<(int InflicterId, int SuffererId)> _creditedTakedowns = new();
         // Dev-facing skill/attribute growth log: snapshot before the fight, diffed once it ends.
         private readonly SoldierProgressLog.ProgressSnapshot _progressBefore;
 
@@ -308,6 +313,8 @@ namespace OnlyWar.Helpers.Battles.Aftermath
             return battleEvents;
         }
 
+        // Returns true when the wound is a player soldier's hit on an enemy -- whether or not it
+        // produced a fresh career credit, so the per-hit aggregate above stays per-hit.
         private bool CreditPlayerSoldierForKill(BattleSoldier inflicter, BattleSoldier sufferer, WeaponTemplate weapon)
         {
             if (inflicter?.Soldier is not PlayerSoldier playerSoldier
@@ -315,6 +322,12 @@ namespace OnlyWar.Helpers.Battles.Aftermath
                 || !_context.AreOpposingSides(inflicter, sufferer))
             {
                 return false;
+            }
+
+            // One takedown, one credit: the fall and death hooks can both fire for this enemy.
+            if (!_creditedTakedowns.Add((playerSoldier.Id, sufferer.Soldier.Id)))
+            {
+                return true;
             }
 
             inflicter.EnemiesTakenDown++;

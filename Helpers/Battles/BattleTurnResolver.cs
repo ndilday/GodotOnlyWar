@@ -22,6 +22,11 @@ namespace OnlyWar.Helpers.Battles
         private readonly IBattleAftermathPolicy _aftermathPolicy;
         private readonly WoundResolver _woundResolver;
         private readonly Dictionary<int, BattleSoldier> _casualtyMap;
+        // Battle-scoped record of everyone who went down without dying -- a severed leg, a mangled
+        // weapon hand. _casualtyMap is cleared every turn, but these soldiers stay where they fell
+        // for the rest of the fight, so their fate can only be settled once the field has an owner.
+        // See FinishOffAbandonedWounded.
+        private readonly Dictionary<int, BattleSoldier> _incapacitatedSoldiers = [];
         public BattleHistory BattleHistory { get; private set; }
         private BattleState _currentState;
         private readonly Dictionary<BattleSide, PursuitPosture> _pursuitPostures = [];
@@ -186,6 +191,7 @@ namespace OnlyWar.Helpers.Battles
         private void WoundResolver_OnSoldierFall(WoundResolution wound, WoundLevel woundLevel)
         {
             _casualtyMap[wound.Suffererer.Soldier.Id] = wound.Suffererer;
+            _incapacitatedSoldiers[wound.Suffererer.Soldier.Id] = wound.Suffererer;
             _aftermathPolicy.OnSoldierDowned(wound, woundLevel);
         }
 
@@ -273,6 +279,7 @@ namespace OnlyWar.Helpers.Battles
 
         private void ProcessEndOfBattle(bool hitTurnCap)
         {
+            FinishOffAbandonedWounded();
             _stopwatch.Stop();
             GameLog.Debug(() =>
                 $"Battle end in {_region?.Name}: {_currentState.TurnNumber} turns, "
@@ -295,6 +302,48 @@ namespace OnlyWar.Helpers.Battles
             _aftermathPolicy.OnBattleCompleted(_currentState);
             OnBattleComplete?.Invoke(this, BattleHistory);
         }
+
+        // A side that quits the field abandons everyone it could not carry off with it. Soldiers
+        // who were taken out of the fight without a mortal wound -- shot through the leg, weapon
+        // hand ruined -- are lying where they fell, at the mercy of whoever is still standing on
+        // that ground when the shooting stops, and they get none. Counting them as dead is what
+        // makes the debrief body count agree with the number of enemies the force actually took
+        // out of the fight; without it a battle that removed all 19 cultists reported 15 dead.
+        //
+        // Only the losing side's wounded are finished off, and only when a side actually held the
+        // field: a mutual disengagement or a turn-cap break-off leaves both sides free to recover
+        // their own. Player soldiers are exempt in either direction -- a fallen battle-brother's
+        // fate belongs to PlayerChapterBattleAftermathPolicy (severed vital -> dead, plus geneseed
+        // recovery and the death event), and this must not kill him behind that policy's back.
+        private void FinishOffAbandonedWounded()
+        {
+            if (BattleHistory.Outcome?.SideHoldingField is not BattleSide holder) return;
+            BattleSide abandoningSide = Opposite(holder);
+
+            foreach (BattleSoldier soldier in _incapacitatedSoldiers.Values)
+            {
+                if (soldier.Soldier is PlayerSoldier) continue;
+                if (GetSoldierSide(soldier) != abandoningSide) continue;
+                if (!BattleHistory.KilledSoldierIds.Add(soldier.Soldier.Id)) continue;
+
+                if (abandoningSide == BattleSide.Opposing)
+                {
+                    // The first side is the mission force, so these are its kills. The credit
+                    // total tracks the body count here: the finishing blow belongs to the side as
+                    // a whole rather than to any one soldier, and the soldier who put the enemy
+                    // down was already credited individually when he fell.
+                    BattleHistory.FirstSideEnemiesKilled++;
+                    BattleHistory.FirstSideEnemyDeaths++;
+                }
+            }
+        }
+
+        // First side == attacker squads (see the constructor's BattleAftermathContext), so the
+        // aftermath context's side membership answers this without a second squad-id index.
+        private BattleSide? GetSoldierSide(BattleSoldier soldier) =>
+            _aftermathContext.IsFirstSide(soldier) ? BattleSide.Attacker
+            : _aftermathContext.IsSecondSide(soldier) ? BattleSide.Opposing
+            : null;
 
         private void Plan(List<IAction> shootSegmentActions,
                           List<IAction> moveSegmentActions,
@@ -348,6 +397,10 @@ namespace OnlyWar.Helpers.Battles
                 _execution.Random,
                 _execution.MaxPlanningDegreeOfParallelism,
                 planningContext);
+            // Labels the planner's ENGAGE_EVAL records so they correlate with the MORALE_EVAL and
+            // WITHDRAW_EVAL lines for the same turn and side. Diagnostic only.
+            squadPlanner.TraceTurnNumber = _currentState.TurnNumber;
+            squadPlanner.TraceSideLabel = side == BattleSide.Attacker ? "first" : "second";
             BattleForcePlanner forcePlanner = new(squadPlanner);
 
             // Routing squads flee through their own planner path regardless of side intent
@@ -877,7 +930,7 @@ namespace OnlyWar.Helpers.Battles
                 pursuitMetrics.FastestPursuitSquadSpeed,
                 withdrawalMetrics.SlowestMainBodySquadSpeed,
                 pressTurns,
-                ProjectedFollowShotTurns(pursuingSide, separation),
+                ProjectedFollowShotTurns(pursuingSide, withdrawingSide, separation),
                 withdrawerReturnsFire,
                 pursuerCanReachMeleeThisTurn));
             PursuitPosture? previous = _pursuitPostures.TryGetValue(
@@ -952,7 +1005,7 @@ namespace OnlyWar.Helpers.Battles
             BattleForceMetrics pursuerMetrics = BuildMetrics(pursuerSide);
             BattleForceMetrics withdrawalMetrics = BuildMetrics(withdrawingSide);
             float separation = MinimumSeparation(pursuerSide, withdrawingSide);
-            float attackReach = MaximumOneTurnAttackReach(pursuerSide);
+            float attackReach = MaximumOneTurnAttackReach(pursuerSide, withdrawingSide);
             BattleContactRules.Result forceResult = BattleContactRules.Evaluate(new(
                 _currentState.TurnNumber,
                 withdrawingSide == BattleSide.Attacker,
@@ -1038,7 +1091,7 @@ namespace OnlyWar.Helpers.Battles
             BattleForceMetrics friendlyMetrics = BuildMetrics(withdrawingSide);
             BattleForceMetrics enemyMetrics = BuildMetrics(pursuerSide);
             float fastestPursuer = enemyMetrics.FastestPursuitSquadSpeed;
-            float attackReach = MaximumOneTurnAttackReach(pursuerSide);
+            float attackReach = MaximumOneTurnAttackReach(pursuerSide, withdrawingSide);
             // §8.2 command collapse: force disadvantage feeds the closed-form rout estimate used
             // to price a severed dependent's collapse (see EstimateRoutsIfUncovered).
             float forceDisadvantage = BattleMoraleEvaluator.ComputeForceDisadvantage(
@@ -1331,30 +1384,73 @@ namespace OnlyWar.Helpers.Battles
             })).DefaultIfEmpty(float.MaxValue).Min();
         }
 
-        private float MaximumOneTurnAttackReach(BattleSide side)
+        /// <summary>
+        /// The average defensive profile of a side, used to ask how far the other side can
+        /// usefully shoot at it. Soldier-weighted across squads so a big weak formation does not
+        /// count for the same as a single elite one.
+        /// </summary>
+        private (float Size, float Armor, float Constitution, float Evasion) ForceTargetProfile(
+            BattleSide side)
         {
+            List<BattleSoldier> soldiers = GetActiveSquads(side)
+                .SelectMany(squad => squad.AbleSoldiers)
+                .ToList();
+            if (soldiers.Count == 0) return (0, 0, 0, 0);
+            return (
+                (float)soldiers.Average(soldier => soldier.Soldier.Size),
+                (float)soldiers.Average(soldier => soldier.Armor?.Template.ArmorProvided ?? 0),
+                (float)soldiers.Average(soldier => soldier.Soldier.Constitution),
+                (float)soldiers.Average(soldier => soldier.Soldier.Template.Species.RangedEvasion));
+        }
+
+        /// <summary>
+        /// How far <paramref name="side"/> can actually hurt <paramref name="targetSide"/>: the
+        /// best of its soldiers' optimal engagement distances, which is the lesser of "can I hit at
+        /// this range" and "can I wound it at this range".
+        ///
+        /// Deliberately NOT the longest weapon's maximum range. One Heavy Bolter or Sniper Rifle in
+        /// a force sets that to 1600 yards, which made every force look able to shoot from
+        /// anywhere: CONTACT_EVAL logged attack_reach=1600 every turn so §8's mobility break could
+        /// never fire, and ProjectedFollowShotTurns reported a shot was available at ranges where
+        /// nothing was worth firing. Between them they let the Xibarrus Nu ambush run 257 turns
+        /// with the pursuers landing nothing on 167 of them. Reusing CalculateOptimalDistance also
+        /// keeps these force-level gates agreeing with the per-soldier engagement model that
+        /// decides what the squads actually do.
+        /// </summary>
+        private float WorthwhileRangedReach(BattleSide side, BattleSide targetSide)
+        {
+            (float size, float armor, float constitution, float evasion) =
+                ForceTargetProfile(targetSide);
+            if (size <= 0) return 0;
             return GetActiveSquads(side).SelectMany(squad => squad.AbleSoldiers)
-                .Select(soldier => Math.Max(
-                    soldier.GetMoveSpeed() + 1,
-                    soldier.EquippedRangedWeapons
-                        .Select(weapon => (float)weapon.Template.MaximumRange)
-                        .DefaultIfEmpty(0)
-                        .Max()))
+                .Select(soldier => BattleModifiersUtil.CalculateOptimalDistance(
+                    soldier, size, armor, constitution, evasion))
                 .DefaultIfEmpty(0)
                 .Max();
         }
 
-        private float? ProjectedFollowShotTurns(BattleSide side, float separation)
+        private float MaximumOneTurnAttackReach(BattleSide side, BattleSide targetSide)
         {
-            float maximumRange = GetActiveSquads(side).SelectMany(squad => squad.AbleSoldiers)
-                .SelectMany(soldier => soldier.EquippedRangedWeapons)
-                .Select(weapon => (float)weapon.Template.MaximumRange)
+            float meleeReach = GetActiveSquads(side).SelectMany(squad => squad.AbleSoldiers)
+                .Select(soldier => soldier.GetMoveSpeed() + 1)
                 .DefaultIfEmpty(0)
                 .Max();
-            if (maximumRange <= 0) return null;
-            if (separation <= maximumRange) return 0;
-            float jogSpeed = BuildMetrics(side).FastestPursuitSquadSpeed * 0.66f;
-            return jogSpeed <= 0 ? null : (separation - maximumRange) / jogSpeed;
+            return Math.Max(meleeReach, WorthwhileRangedReach(side, targetSide));
+        }
+
+        private float? ProjectedFollowShotTurns(
+            BattleSide side,
+            BattleSide targetSide,
+            float separation)
+        {
+            float reach = WorthwhileRangedReach(side, targetSide);
+            // No range at which this force can both hit and hurt that one: there is no follow shot
+            // to wait for, however long its guns nominally are.
+            if (reach <= 0) return null;
+            if (separation <= reach) return 0;
+            float jogSpeed = BuildMetrics(side).FastestPursuitSquadSpeed
+                * BattleSquadPlanner.JogSpeedMultiplier;
+            return jogSpeed <= 0 ? null : (separation - reach) / jogSpeed;
         }
 
         private string SideName(BattleSide side) =>

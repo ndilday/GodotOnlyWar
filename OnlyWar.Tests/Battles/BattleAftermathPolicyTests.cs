@@ -63,6 +63,35 @@ public class BattleAftermathPolicyTests
     }
 
     [Fact]
+    public void PlayerBattleCreditsOneTakedownWhenAnEnemyBothFallsAndDies()
+    {
+        Faction playerFaction = CreateFaction(25, "Chapter", isPlayer: true);
+        Faction enemyFaction = CreateFaction(26, "Tyranids", isPlayer: false);
+        PlayerSoldier player = CreatePlayerSoldier("Brother Thorough");
+        BattleSquad attackers = CreateBattleSquad(playerFaction, "Strike Squad", player);
+        BattleSquad defenders = CreateBattleSquad(enemyFaction, "Brood", CreateSoldier("Gaunt"));
+        BattleHistory history = new();
+        BattleAftermathContext context = new(
+            [attackers], [defenders], null, history, CreateDependencies());
+        IBattleAftermathPolicy policy = BattleAftermathPolicyFactory.Create(context);
+        BattleSoldier killer = attackers.Soldiers[0];
+        BattleSoldier victim = defenders.Soldiers[0];
+        RangedWeaponTemplate rangedWeapon = killer.EquippedRangedWeapons[0].Template;
+
+        // Hit locations resolve independently, so a single wound-resolution pass can take this
+        // gaunt's leg off (the fall hook) and cripple his chest (the death hook). He is still one
+        // enemy, and must be credited to his killer once.
+        policy.OnSoldierDowned(CreateRangedWound(killer, victim), WoundLevel.Critical);
+        policy.OnSoldierKilled(CreateMeleeWound(killer, victim), WoundLevel.Mortal);
+
+        Assert.Equal((ushort)1, killer.EnemiesTakenDown);
+        Assert.Equal((ushort)1, player.RangedWeaponCasualtyCountMap[rangedWeapon.Id]);
+        Assert.Empty(player.MeleeWeaponCasualtyCountMap);
+        // The aggregate is deliberately per-hit and is not deduplicated.
+        Assert.Equal(1, history.EnemiesKilled);
+    }
+
+    [Fact]
     public void PlayerBattleDoesNotCreditFriendlyFireAsAnEnemyKill()
     {
         Faction playerFaction = CreateFaction(30, "Chapter", isPlayer: true);
