@@ -12,7 +12,7 @@ using Xunit;
 namespace OnlyWar.Tests.Battles;
 
 /// <summary>
-/// Phase 6 of Design/Active/MoraleAndRout.md (§4.3): command auras, the weak-coefficient
+/// Phase 6 of OnlyWar_TDD.md §6.6 (§4.3): command auras, the weak-coefficient
 /// generalisation of synapse. Covers the CommandAuraEvaluator geometry (living HQ support,
 /// non-stacking, the stateless every-HQ-destroyed loss reading), the signed w6 stress term,
 /// the never-a-skip rule, and the withdrawal forecast's second aura-loss consumer through

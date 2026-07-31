@@ -6,7 +6,7 @@ using Xunit;
 namespace OnlyWar.Tests.Battles;
 
 /// <summary>
-/// The RNG-free closed-form morale estimators (Design/Active/MoraleAndRout.md §8.2) that let the
+/// The RNG-free closed-form morale estimators (OnlyWar_TDD.md §6.6) that let the
 /// withdrawal forecast price command collapse deterministically: per-soldier fail probability
 /// Phi((stress - resolve)/sigma), meaned to a fail fraction and aggregated through the same
 /// thresholds the live roll uses. No battle RNG is consumed, so no shared-state collection is

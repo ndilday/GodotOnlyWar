@@ -22,7 +22,7 @@ using Xunit;
 namespace OnlyWar.Tests.Battles;
 
 /// <summary>
-/// Phase 3 resolver wiring for Design/Active/MoraleAndRout.md: the morale check runs at
+/// Phase 3 resolver wiring for OnlyWar_TDD.md §6.6: the morale check runs at
 /// resolver stage 6, a rout sets the existing WithdrawalRole.Routing seam, emits
 /// SquadRouted, stays sticky, and flows into BattleSideIntent.Rout / BattleEndReason.Rout
 /// through the existing withdrawal machinery. Consumes the seeded static RNG.

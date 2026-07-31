@@ -50,7 +50,7 @@ namespace OnlyWar.Builders
 
             // The scenario stamp resolves the sitting Sector Lord, so the sector and its derived
             // governance designation must exist first. The fleet starts empty here; the scenario
-            // parks it in orbit via Sector.AddNewFleet (Design/OpeningScenario.md §1, §3).
+            // parks it in orbit via Sector.AddNewFleet (Design/Reference/OpeningScenario.md).
             Sector sector = new Sector(playerForce, characterList, planetList, forceList);
             GenerateWarpNetwork(sector, data);
             // Register the in-progress sector so the opening-scenario stamp can run its planet-scoped
@@ -77,7 +77,7 @@ namespace OnlyWar.Builders
         }
 
         /// <summary>
-        /// Recomputes the governance designation (Design/OpeningScenario.md §2.3). For each
+        /// Recomputes the governance designation (Design/Reference/OpeningScenario.md). For each
         /// subsector, the highest-Importance Imperial-controlled world becomes the governance
         /// seat (tagged SubsectorCapital); the top seat sector-wide is promoted to SectorCapital.
         /// Like the warp network, this is derived from persisted planet data rather than stored,
@@ -134,7 +134,7 @@ namespace OnlyWar.Builders
             // faction openly holds a planet at game start, so the newly founded Chapter isn't
             // dropped into a sector already speckled with Tyranid/cult holdings. The only overt
             // incursion is the Tyranid invasion the opening scenario stamps onto the promised
-            // world (Design/OpeningScenario.md §3). Hidden Genestealer-cult infiltration is still
+            // world (Design/Reference/OpeningScenario.md). Hidden Genestealer-cult infiltration is still
             // seeded on a minority of worlds — it's covert, not "in control," and gives the sector
             // latent threats to surface later.
             // TODO: reintroduce overt faction-owned worlds via game-start config + hot spots.
@@ -145,7 +145,7 @@ namespace OnlyWar.Builders
             return PlanetBuilder.Instance.GenerateNewPlanet(data.PlanetTemplateMap, position, data.DefaultFaction, infiltratingFaction);
         }
 
-        // Reward path (Design/OpeningScenario.md §6.2): install the player as the planet-wide
+        // Reward path (Design/Reference/OpeningScenario.md): install the player as the planet-wide
         // controlling faction, inheriting the displaced Imperial population/garrison region by
         // region. Invoked by TurnController when the opening scenario is won.
         //

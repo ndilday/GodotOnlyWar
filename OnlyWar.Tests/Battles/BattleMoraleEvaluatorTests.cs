@@ -12,7 +12,7 @@ using Xunit;
 namespace OnlyWar.Tests.Battles;
 
 /// <summary>
-/// Phase 3 of Design/Active/MoraleAndRout.md: the morale check itself (§5), its outcomes
+/// Phase 3 of OnlyWar_TDD.md §6.6: the morale check itself (§5), its outcomes
 /// (§6), the synapse skip (§4.2), and the turn-start-snapshot propagation rule (§5.1).
 /// These are pure evaluator tests with an injected deterministic RNG — no static RNG state
 /// is touched, so no shared-state collection is needed. Resolver wiring is covered by

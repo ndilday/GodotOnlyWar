@@ -164,11 +164,15 @@ namespace OnlyWar.Helpers.Turns
                     r => r.RegionFactionMap.TryGetValue(planetFaction.Faction.Id, out RegionFaction rf)
                         ? rf.Population
                         : 0);
-                if (planetFactionPopulation <= 0)
+                bool hasRegionalPresence = planet.Regions.Any(region =>
+                    region.RegionFactionMap.ContainsKey(planetFaction.Faction.Id));
+                bool hasIntel = planetFaction.RegionIntel.Count > 0
+                    || _intelLedger.HasPendingEntries(planetFaction, planet);
+                if (!hasRegionalPresence && !hasIntel)
                 {
                     planet.PlanetFactionMap.Remove(planetFaction.Faction.Id);
                 }
-                else if (planetFaction.Leader != null)
+                else if (planetFactionPopulation > 0 && planetFaction.Leader != null)
                 {
                     _governorTurnProcessor.ProcessGovernor(planet, planetFaction);
                 }
@@ -853,7 +857,7 @@ namespace OnlyWar.Helpers.Turns
                         regionFaction.PlanetFaction.AddRegionIntel(region, sensorGain);
                     }
 
-                    // Patrol deliberately grants NO intelligence (Design/Active/DailyMissionResolution.md
+                    // Patrol deliberately grants NO intelligence (OnlyWar_TDD.md §6.4
                     // §5). It used to add a flat 1.0 + log10(headcount) here, which made it a strictly
                     // better intel source than Recon: this path routes through RecordIntelGain, which
                     // bypasses the diminishing-returns curve TurnIntelLedger applies to recon evidence,

@@ -9,7 +9,7 @@ namespace OnlyWar.Helpers.Battles.Placers
     /// formations at engagement range, this pulls every burrow-capable squad up
     /// against an enemy squad so it erupts directly into melee on turn one,
     /// rather than charging in from the open. See
-    /// Design/EvasionBurrowAndAmbush.md.
+    /// OnlyWar_TDD.md §6.6.
     ///
     /// Implemented as a relocation pass over squads already on the grid. Each
     /// burrow squad picks the nearest enemy squad as a whole and emerges around

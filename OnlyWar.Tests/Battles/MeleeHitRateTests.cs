@@ -6,7 +6,7 @@ namespace OnlyWar.Tests.Battles;
 
 /// <summary>
 /// Statistical guard rails for the contested melee roll (see
-/// Design/EvasionBurrowAndAmbush.md). These assert that the per-swing hit rate
+/// OnlyWar_TDD.md §6.6). These assert that the per-swing hit rate
 /// for representative matchups lands in a sane band — battles should neither
 /// stalemate (nobody connects) nor end in a single exchange. The bands are wide
 /// on purpose; they exist to catch a formula regression, not to pin an exact

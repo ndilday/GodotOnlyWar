@@ -2,7 +2,7 @@ namespace OnlyWar.Models
 {
     // Which framed opening a campaign was started with. None covers a future
     // plain-sandbox mode; when Sector.Scenario is null the game behaves as it did
-    // before the Opening Scenario work (Design/OpeningScenario.md §2.1).
+    // before the Opening Scenario work (Design/Reference/OpeningScenario.md).
     public enum ScenarioType { None = 0, PromisedWorld = 1 }
 
     // Live state of the scenario objective. Resolved by the (later-session) ProcessScenario
@@ -10,7 +10,7 @@ namespace OnlyWar.Models
     public enum ObjectiveState { Pending = 0, Won = 1, Lapsed = 2 }
 
     // Persistent objective state carried through the campaign and across save/load
-    // (Design/OpeningScenario.md §2.1). Attached to Sector as a nullable property and
+    // (Design/Reference/OpeningScenario.md). Attached to Sector as a nullable property and
     // persisted on the extended GlobalData row (§7). BriefingText is composed once at
     // generation and stored so the popup, Chapter screen, and any recap read the same
     // authored text. The mechanically-relevant authority is always the *current* Sector

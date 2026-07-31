@@ -13,7 +13,7 @@ namespace OnlyWar.Helpers.Missions
     /// pass at day granularity - a hardcoded interaction between two named mission types. Declaring
     /// it here means a loud assault approach, or a sabotage that wrecks a listening post before that
     /// day's infiltrators roll, interact for free and nothing in the scheduler knows what a diversion
-    /// is. See Design/Active/DailyMissionResolution.md §2.3.
+    /// is. See OnlyWar_TDD.md §6.4
     /// </remarks>
     public enum MissionStepPhase
     {

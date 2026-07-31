@@ -624,10 +624,11 @@ public class FactionStrategyControllerTests
     public void ResolveReconResult_PlayerReconFeedsPlayerVisibleRegionIntel()
     {
         Faction player = CreatePlayerFaction();
-        RegionFaction target = CreateTargetRegionFaction(player);
+        RegionFaction target = CreateTargetRegionFaction(CreateNonPlayerFaction());
 
         TurnController.ResolveReconResult(player, target, 2f);
 
+        Assert.True(target.Region.Planet.PlanetFactionMap.ContainsKey(player.Id));
         Assert.Equal(2f, target.Region.GetPlayerVisibleIntel());
     }
 

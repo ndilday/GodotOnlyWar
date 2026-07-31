@@ -33,11 +33,11 @@ namespace OnlyWar.Models.Soldiers
         // Defensive "harder to hit" levers. Melee evasion is subtracted from the
         // attacker's total in the contested melee roll; ranged evasion is a flat
         // subtraction in shooting (and the AI's range-seeking). See
-        // Design/EvasionBurrowAndAmbush.md.
+        // OnlyWar_TDD.md §6.6.
         public float MeleeEvasion { get; }
         public float RangedEvasion { get; }
         // Synapse aura radius in the same distance units as weapon MaximumRange and grid
-        // position deltas (Design/Active/MoraleAndRout.md §4.1). Zero for every species
+        // position deltas (OnlyWar_TDD.md §6.6). Zero for every species
         // that does not carry SpeciesAbilities.Synapse.
         public float SynapseRadius { get; }
         public SpeciesAbilities Abilities { get; }

@@ -84,7 +84,7 @@ namespace OnlyWar.Helpers.Missions.Ambush
                 BattleGridManager bgm = new BattleGridManager();
                 AmbushPlacer placer = new AmbushPlacer(bgm, range);
                 var squadPostionMap = placer.PlaceSquads(opposingSquads, missionSquads);
-                // burrowing squads erupt straight into melee — see Design/EvasionBurrowAndAmbush.md
+                // burrowing squads erupt straight into melee — see OnlyWar_TDD.md §6.6
                 BurrowPlacer.PlaceBurrowers(bgm, missionSquads.Concat(opposingSquads));
                 int oppForSize = opposingSquads.Sum(s => s.AbleSoldiers.Count);
                 // See AmbushedMissionStep: Faction is guarded rather than assumed everywhere else.

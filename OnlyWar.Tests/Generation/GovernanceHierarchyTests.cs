@@ -12,7 +12,7 @@ using Xunit;
 
 namespace OnlyWar.Tests.Generation;
 
-// Coverage for the governance hierarchy (Design/OpeningScenario.md §2.3 / step 1a):
+// Coverage for the governance hierarchy (Design/Reference/OpeningScenario.md):
 // the derived Sector Lord / subsector-governor designation folded into
 // SectorBuilder.GenerateWarpNetwork. The designation is recomputed (not persisted),
 // so the round-trip test proves it re-derives identically from saved planet data.

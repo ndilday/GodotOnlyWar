@@ -8,7 +8,7 @@ using System.Collections.Generic;
 public sealed record SquadMemberRow(
     int SoldierId, string Label, string RecoveryStatus, bool IsInjured, bool IsOutOfAction);
 
-public partial class SquadScreenView : DialogView
+public partial class SquadScreenView : MainScreenView
 {
     private VBoxContainer _squadDetailsVBox;
     private VBoxContainer _squadLoadoutVBox;

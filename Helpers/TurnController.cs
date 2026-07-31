@@ -94,7 +94,7 @@ namespace OnlyWar.Helpers
             // hold. That effect is gone deliberately: a feint begun on Monday cannot retroactively
             // change planning the enemy did on Sunday. Diversions now resolve inside the day scheduler
             // with every other mission, where they shape who is looking where each day
-            // (Design/Active/DailyMissionResolution.md §4).
+            // (OnlyWar_TDD.md §6.4).
             SimulationContext context = new(
                 _session,
                 _lastResult,
@@ -145,7 +145,7 @@ namespace OnlyWar.Helpers
         // Runs a planet-scoped slice of the weekly turn for a single world, for the given number of
         // weeks. Used by the opening-scenario stamp to let the promised world evolve during
         // generation before the player arrives — the revealed cult grinds the PDF down, then the
-        // stranded Tyranid swarm feeds and spreads (Design/OpeningScenario.md §4.24, "Opening
+        // stranded Tyranid swarm feeds and spreads (Design/Reference/OpeningScenario.md, "Opening
         // Scenario Application"). It deliberately omits everything that is not local to this planet
         // or that belongs to the player's own upkeep: no player training or medical, no fleet
         // movement, no other planets, and no scenario resolution (the scenario is not yet assigned

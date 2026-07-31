@@ -10,7 +10,7 @@ using Xunit;
 namespace OnlyWar.Tests.Battles;
 
 /// <summary>
-/// Burrow-arrival placement (see Design/EvasionBurrowAndAmbush.md): a burrow-capable
+/// Burrow-arrival placement (see OnlyWar_TDD.md §6.6): a burrow-capable
 /// squad placed at range picks the nearest enemy squad and erupts around that squad's
 /// footprint — adjacent cells first, spilling into outer rings when the perimeter
 /// fills — while a non-burrowing squad is left where it was.

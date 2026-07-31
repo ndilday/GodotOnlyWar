@@ -42,7 +42,7 @@ namespace OnlyWar.Helpers.Database.GameState
         public Dictionary<Date, List<EventHistory>> History { get; set; }
         // Squad-less fallen brothers, retained for their dossiers (PRD 4.12).
         public List<PlayerSoldier> FallenBrothers { get; set; }
-        // The Opening Scenario state (Design/OpeningScenario.md §7), or null for sandbox
+        // The Opening Scenario state (Design/Reference/OpeningScenario.md), or null for sandbox
         // saves; reattached to Sector.Scenario by the load path.
         public CampaignScenario Scenario { get; set; }
     }

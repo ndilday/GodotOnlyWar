@@ -9,7 +9,7 @@ using Xunit;
 namespace OnlyWar.Tests.Battles;
 
 /// <summary>
-/// Phase 1 of Design/Active/MoraleAndRout.md: SpeciesAbilities.Synapse, derived
+/// Phase 1 of OnlyWar_TDD.md §6.6: SpeciesAbilities.Synapse, derived
 /// BattleSquad.SquadProvidesSynapse, and the per-turn SynapseCoverageEvaluator predicate.
 /// No morale check exists yet (Phase 3) — these tests assert coverage only.
 /// </summary>

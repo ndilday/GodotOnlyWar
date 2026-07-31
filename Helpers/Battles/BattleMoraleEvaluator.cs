@@ -7,7 +7,7 @@ using OnlyWar.Models.Battles;
 namespace OnlyWar.Helpers.Battles
 {
     /// <summary>
-    /// The per-turn morale check (Design/Active/MoraleAndRout.md §5-6). Stateless and
+    /// The per-turn morale check (OnlyWar_TDD.md §6.6). Stateless and
     /// recomputed every turn from current state — no accumulator (§5.2). The scalar spatial
     /// inputs (propagation, local outnumbering, synapse coverage) are gathered by the caller
     /// (the resolver, which owns the grid and the turn-start snapshots); this class owns the

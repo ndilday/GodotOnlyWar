@@ -11,7 +11,7 @@ using Xunit;
 namespace OnlyWar.Tests.Battles;
 
 /// <summary>
-/// Ambush placement (see Design/EvasionBurrowAndAmbush.md) lays the ambushed force out as a
+/// Ambush placement (see OnlyWar_TDD.md §6.6) lays the ambushed force out as a
 /// column and sets the ambushers in an L: a long leg parallel to the column plus one short
 /// leg capping an end, with the far corner left open so no element fires across the kill zone
 /// into another. These tests pin that shape down and guard against the large-squad

@@ -70,7 +70,7 @@ public sealed class RecruitmentScreenSnapshot
     public IReadOnlyList<string> RecentEvents { get; init; } = [];
 }
 
-public partial class TrainingUnitScreenController : Control
+public partial class TrainingUnitScreenController : MainScreenController
 {
     private readonly RecruitmentStaffService _staffService = new();
     private readonly RecruitmentForecastService _forecastService = new();
@@ -78,7 +78,6 @@ public partial class TrainingUnitScreenController : Control
     private Squad _selectedSquad;
     private RecruitmentDoctrineDraft _draft;
 
-    public event EventHandler CloseButtonPressed;
     public event EventHandler<int> SoldierLinkClicked;
     public event EventHandler CampaignChanged;
     public event EventHandler ManageAdministrativeStaffRequested;
@@ -87,8 +86,8 @@ public partial class TrainingUnitScreenController : Control
 
     public override void _Ready()
     {
+        base._Ready();
         _view = GetNode<TrainingUnitScreenView>("TrainingUnitScreenView");
-        _view.CloseButtonPressed += OnCloseButtonPressed;
         _view.LinkClicked += OnLinkClicked;
         _view.SquadButtonPressed += OnSquadButtonPressed;
         _view.TrainingFocusSelected += OnTrainingFocusSelected;
@@ -207,7 +206,7 @@ public partial class TrainingUnitScreenController : Control
         }
     }
 
-    private void OnCloseButtonPressed(object sender, EventArgs e)
+    public override void RequestClose()
     {
         RecruitmentProgram program =
             GameDataSingleton.Instance.Sector?.PlayerForce?.RecruitmentProgram;
@@ -217,7 +216,7 @@ public partial class TrainingUnitScreenController : Control
                 "The Master of Recruitment must establish the program before continuing.");
             return;
         }
-        CloseButtonPressed?.Invoke(this, e);
+        base.RequestClose();
     }
 
     private void OnDoctrineChanged(object sender, RecruitmentDoctrineDraft doctrine)

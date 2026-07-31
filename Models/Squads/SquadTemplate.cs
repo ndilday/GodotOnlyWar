@@ -64,7 +64,7 @@ namespace OnlyWar.Models.Squads
         public int BattleValue => IsOperational
             ? Elements?.Sum(e => e.SoldierTemplate.BattleValue * e.MaximumNumber) ?? 0
             : 0;
-        // Derived, not stored (Design/Active/MoraleAndRout.md §4.1): true iff any element's
+        // Derived, not stored (OnlyWar_TDD.md §6.6): true iff any element's
         // species carries SpeciesAbilities.Synapse. Adding a new synapse creature to the DB
         // works automatically.
         public bool ProvidesSynapse => Elements?.Any(

@@ -3,7 +3,7 @@ using System;
 
 namespace OnlyWar.Helpers.Missions
 {
-    // Aggression trades EXPOSURE for EFFECT (Design/Active/DailyMissionResolution.md §6).
+    // Aggression trades EXPOSURE for EFFECT (OnlyWar_TDD.md §6.4).
     //
     // Before this, Aggression did exactly one thing: it set the casualty fraction at which a force
     // withdrew from an engagement (BattleForceEvaluator.GetEligibilityThreshold). That remains

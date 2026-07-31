@@ -1,4 +1,4 @@
-// Controller for the Promised World opening briefing dialog (Design/OpeningScenario.md §5).
+// Controller for the Promised World opening briefing dialog (Design/Reference/OpeningScenario.md).
 // Mirrors EndOfTurnDialogController: the base DialogController forwards the view's acknowledge
 // (CloseButton) press as CloseButtonPressed; MainGameScene shows this once on a new game and sets
 // CampaignScenario.BriefingAcknowledged on dismiss.

@@ -13,7 +13,7 @@ public enum CompanyType
     Scout
 }
 
-public partial class ChapterView : Control
+public partial class ChapterView : MainScreenView
 {
     private const int ChapterIconSize = 48;
 
@@ -29,7 +29,6 @@ public partial class ChapterView : Control
     private GridContainer _detailCardGrid;
     private Button _detailActionButton;
     private MenuButton _transferButton;
-    private Button _closeButton;
 
     public event EventHandler<ChapterBrowserItemEvent> BrowserItemSelected;
     public event EventHandler<ChapterBrowserItemEvent> BrowserItemDrillRequested;
@@ -37,10 +36,10 @@ public partial class ChapterView : Control
     public event EventHandler DetailPrimaryActionPressed;
     public event EventHandler<int> TransferTargetSelected;
     public event EventHandler FilterButtonPressed;
-    public event EventHandler CloseButtonPressed;
 
     public override void _Ready()
     {
+        base._Ready();
         _breadcrumbBar = GetNode<HBoxContainer>("Content/BreadcrumbBar");
         _leftTitleLabel = GetNode<Label>("Content/MainLayout/LeftMenu/Panel/MarginContainer/MenuStack/Header/TitleLabel");
         _filterButton = GetNode<Button>("Content/MainLayout/LeftMenu/Panel/MarginContainer/MenuStack/Header/FilterButton");
@@ -53,16 +52,12 @@ public partial class ChapterView : Control
         _detailCardGrid = GetNode<GridContainer>("Content/MainLayout/DetailPanel/Panel/MarginContainer/DetailStack/DetailScroll/DetailCardLayout/DetailCardGrid");
         _detailActionButton = GetNode<Button>("Content/MainLayout/DetailPanel/Panel/MarginContainer/DetailStack/DetailActionButton");
         _transferButton = GetNode<MenuButton>("Content/MainLayout/DetailPanel/Panel/MarginContainer/DetailStack/Hero/TransferButton");
-        _closeButton = GetNode<Button>("Content/CloseButton");
 
         ConfigureHeaderLabel(_leftTitleLabel);
         _filterButton.MouseDefaultCursorShape = CursorShape.PointingHand;
         _filterButton.Pressed += () => FilterButtonPressed?.Invoke(this, EventArgs.Empty);
         _detailIcon.CustomMinimumSize = new Vector2(ChapterIconSize, ChapterIconSize);
         _detailIcon.ExpandMode = TextureRect.ExpandModeEnum.IgnoreSize;
-        IconAtlas.Apply(_closeButton, "close", 40);
-        _closeButton.Text = "";
-        _closeButton.Pressed += () => CloseButtonPressed?.Invoke(this, EventArgs.Empty);
         _detailActionButton.Pressed += () => DetailPrimaryActionPressed?.Invoke(this, EventArgs.Empty);
         _transferButton.GetPopup().IndexPressed += index => TransferTargetSelected?.Invoke(this, (int)index);
     }

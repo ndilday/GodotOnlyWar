@@ -549,7 +549,7 @@ namespace OnlyWar.Helpers.Database.GameRules
                     ushort width = (ushort)reader.GetInt16(15);
                     ushort depth = (ushort)reader.GetInt16(16);
                     // Columns appended by the migrate-evasion pass (see
-                    // Design/EvasionBurrowAndAmbush.md). Read positionally at the
+                    // OnlyWar_TDD.md §6.6). Read positionally at the
                     // end of the row, after Width/Depth.
                     float meleeEvasion = (float)reader.GetDouble(17);
                     float rangedEvasion = (float)reader.GetDouble(18);
@@ -560,7 +560,7 @@ namespace OnlyWar.Helpers.Database.GameRules
                             $"Species {id} ('{name}') does not define a default unarmed weapon template.");
                     }
                     int defaultUnarmedWeaponTemplateId = reader.GetInt32(20);
-                    // Column appended by the synapse-data pass (Design/Active/MoraleAndRout.md
+                    // Column appended by the synapse-data pass (OnlyWar_TDD.md §6.6
                     // §4.1), after DefaultUnarmedWeaponTemplateId. Older schemas without it
                     // default to no synapse radius.
                     float synapseRadius = reader.FieldCount > 21 && reader[21].GetType() != typeof(DBNull)

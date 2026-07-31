@@ -21,7 +21,7 @@ namespace OnlyWar.Helpers.Narrative
     }
 
     // Minimal token-substitution composer for the "Promised World" opening briefing
-    // (Design/OpeningScenario.md §4). This is an explicit placeholder for the eventual §4.19
+    // (Design/Reference/OpeningScenario.md). This is an explicit placeholder for the eventual §4.19
     // narrative system: it fills one of a small set of hand-authored templates, chosen
     // deterministically from the tokens, so a run has flavor variety without authoring a full
     // narrator. Output is BBCode (rendered by the briefing dialog's RichTextLabel).
@@ -53,7 +53,7 @@ namespace OnlyWar.Helpers.Narrative
         };
 
         // The honorific borne by the promising authority, derived from the governance rank of the
-        // world they are seated on (Design/OpeningScenario.md §2.3 / §4). A hand-authored
+        // world they are seated on (Design/Reference/OpeningScenario.md). A hand-authored
         // Character.Title can supersede this later.
         public static string GetAuthorityTitle(GovernanceTier tier)
         {

@@ -6,7 +6,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 
-public partial class ApothecariumScreenView : DialogView
+public partial class ApothecariumScreenView : MainScreenView
 {
     private Button _vaultButton;
     private Tree _unitTree;
@@ -27,7 +27,6 @@ public partial class ApothecariumScreenView : DialogView
     private Control _vaultPanel;
     private Control _rollupPanel;
     private Control _soldierPanel;
-    private Button _closeButton;
 
     public event EventHandler VaultButtonPressed;
     public event EventHandler<ApothecariumSelection> TreeSelectionChanged;
@@ -149,16 +148,13 @@ public partial class ApothecariumScreenView : DialogView
 
     private void BuildLayout()
     {
-        _closeButton = GetNode<Button>("CloseButton");
-        IconAtlas.ApplyIconButton(_closeButton, "close", 40, 28);
-
         HBoxContainer root = new()
         {
             Name = "ApothecariumContent",
             AnchorRight = 1,
             AnchorBottom = 1,
             OffsetLeft = 16,
-            OffsetTop = 76,
+            OffsetTop = 16,
             OffsetRight = -16,
             OffsetBottom = -16
         };

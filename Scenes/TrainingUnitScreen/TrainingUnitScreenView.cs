@@ -8,7 +8,7 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
 
-public partial class TrainingUnitScreenView : Control
+public partial class TrainingUnitScreenView : MainScreenView
 {
     private enum RecruitmentPage
     {
@@ -18,7 +18,6 @@ public partial class TrainingUnitScreenView : Control
         Scouts
     }
 
-    private Button _closeButton;
     private Label _setupBanner;
     private readonly Dictionary<RecruitmentPage, Button> _navigationButtons = [];
     private readonly Dictionary<RecruitmentPage, Control> _pages = [];
@@ -55,7 +54,6 @@ public partial class TrainingUnitScreenView : Control
     private IReadOnlyList<ScoutSquadRow> _scoutRows = [];
     private int? _selectedSquadId;
 
-    public event EventHandler CloseButtonPressed;
     public event EventHandler<int> SquadButtonPressed;
     public event EventHandler<TrainingFocuses> TrainingFocusSelected;
     public event EventHandler<Variant> LinkClicked;
@@ -67,23 +65,11 @@ public partial class TrainingUnitScreenView : Control
 
     public override void _Ready()
     {
+        base._Ready();
         Theme = GD.Load<Theme>("res://Scenes/OnlyWarTheme.tres");
         OnlyWarStyle.ApplyContentPanel(GetNode<Panel>("ContentPanel"));
         OnlyWarStyle.ApplyInsetPanel(GetNode<Panel>("HeaderPanel"));
 
-        _closeButton = GetNode<Button>("CloseButton");
-        IconAtlas.ApplyIconButton(_closeButton, "close", 40, 28);
-        _closeButton.TooltipText = "Close";
-        _closeButton.Pressed += () =>
-        {
-            if (_setupMode)
-            {
-                ShowSetupValidation(
-                    "Recruitment setup must be completed before returning to the campaign.");
-                return;
-            }
-            CloseButtonPressed?.Invoke(this, EventArgs.Empty);
-        };
         _setupBanner = GetNode<Label>("SetupBanner");
         BuildNavigation();
         BuildPages();
@@ -122,10 +108,6 @@ public partial class TrainingUnitScreenView : Control
     public void SetSetupMode(bool required)
     {
         _setupMode = required;
-        if (_closeButton != null)
-        {
-            _closeButton.Visible = !required;
-        }
         if (_setupBanner != null)
         {
             _setupBanner.Visible = required;

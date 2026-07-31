@@ -76,6 +76,18 @@ namespace OnlyWar.Helpers.Turns
             regionEvidence.Add(evidence);
         }
 
+        internal bool HasPendingEntries(PlanetFaction planetFaction, Planet planet)
+        {
+            if (planetFaction == null || planet == null) return false;
+
+            return (_gains.TryGetValue(planetFaction, out Dictionary<Region, float> gains)
+                    && gains.Keys.Any(region => ReferenceEquals(region.Planet, planet)))
+                || (_reconEvidence.TryGetValue(
+                        planetFaction,
+                        out Dictionary<Region, ReconEvidence> evidence)
+                    && evidence.Keys.Any(region => ReferenceEquals(region.Planet, planet)));
+        }
+
         internal void Apply(Planet planet)
         {
             if (_gains.Count == 0 && _reconEvidence.Count == 0) return;

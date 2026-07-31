@@ -5,7 +5,7 @@ using Xunit;
 namespace OnlyWar.Tests.Battles;
 
 /// <summary>
-/// WithdrawalForecast, reworked for Design/Active/MoraleAndRout.md Phases 4-5:
+/// WithdrawalForecast, reworked for OnlyWar_TDD.md §6.6:
 /// the §7 rear-guard "will not break while holding" predicate, the §8.1 BV-primary metric,
 /// and the §8.2 one-level command-collapse projection. No RNG is consumed anywhere here —
 /// ProjectOpenGround, Evaluate, and the closed-form rout verdict are all deterministic — so

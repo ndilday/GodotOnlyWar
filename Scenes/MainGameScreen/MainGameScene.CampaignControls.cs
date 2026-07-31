@@ -127,7 +127,7 @@ public partial class MainGameScene
 		PackedScene scene = GD.Load<PackedScene>(scenePath)
 			?? throw new InvalidOperationException($"Could not load required UI scene {scenePath}.");
 		T control = scene.Instantiate<T>();
-		_mainUILayer.AddChild(control);
+		_modalLayer.AddChild(control);
 		// Gameplay surfaces can contain children with an explicit positive Z index (the
 		// planet tactical hexes use 3). Keep global menus above the entire gameplay stack
 		// while preserving sibling order between the menu and its child dialogs.
@@ -211,15 +211,17 @@ public partial class MainGameScene
 			}
 		}
 
-		if (_trainingUnitScreen?.Visible == true)
+		if (_primaryContentHost != null)
 		{
-			OnCloseScreen(_trainingUnitScreen, EventArgs.Empty);
-			return true;
-		}
-		if (_chapterScreen?.Visible == true)
-		{
-			OnCloseScreen(_chapterScreen, EventArgs.Empty);
-			return true;
+			for (int index = _primaryContentHost.GetChildCount() - 1; index >= 0; index--)
+			{
+				if (_primaryContentHost.GetChild(index) is MainScreenController screen
+					&& screen.IsVisibleInTree())
+				{
+					screen.RequestClose();
+					return true;
+				}
+			}
 		}
 
 		return false;

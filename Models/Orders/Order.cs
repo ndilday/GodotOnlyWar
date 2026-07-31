@@ -12,7 +12,7 @@ namespace OnlyWar.Models.Orders
     //
     // A third descriptor - Disposition (DugIn / Mobile / Raiding) - was removed 2026-07-30. It was
     // supplied at every construction site and persisted to the save file, but no decision anywhere in
-    // the game ever read it. Design/Active/DailyMissionResolution.md §1 opened on exactly this
+    // the game ever read it. OnlyWar_TDD.md §6.4 opened on exactly this
     // ("Disposition.DugIn is stored and never read"), and the defender advantage the enum was meant to
     // express was ultimately delivered by the region's Entrenchment plus a contested preparation roll
     // (§5) - which routed around the enum rather than wiring it up. What a force is doing with the

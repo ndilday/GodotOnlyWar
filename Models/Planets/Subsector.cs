@@ -17,7 +17,7 @@ namespace OnlyWar.Models.Planets
 
         // The subsector's seat of government: the highest-Importance Imperial-controlled world.
         // Derived (recomputed at build/load) by SectorBuilder.GenerateWarpNetwork, not persisted.
-        // Null if the subsector has no Imperial world. See Design/OpeningScenario.md §2.3.
+        // Null if the subsector has no Imperial world. See Design/Reference/OpeningScenario.md
         public Planet GovernanceSeat { get; set; }
 
         public Subsector(string name, ushort id, List<Planet> planets, List<Vector2I> cells)

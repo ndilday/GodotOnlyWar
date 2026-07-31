@@ -159,14 +159,24 @@ namespace OnlyWar.Helpers.Turns
             Action<PlanetFaction, Region, float> recordIntelGain = null)
         {
             if (target == null) return;
-            PlanetFaction reconningPlanetFaction =
-                reconningFaction != null
-                && target.Region.Planet.PlanetFactionMap.TryGetValue(
+            PlanetFaction reconningPlanetFaction = null;
+            if (reconningFaction != null)
+            {
+                Planet planet = target.Region.Planet;
+                if (!planet.PlanetFactionMap.TryGetValue(
                     reconningFaction.Id,
-                    out PlanetFaction pf)
-                    ? pf
-                    : null;
-            float observerBefore = reconningPlanetFaction?.GetRegionIntel(target.Region) ?? 0f;
+                    out reconningPlanetFaction))
+                {
+                    // RegionIntel belongs to the observer, even when that faction does not occupy
+                    // ground on the target planet. Recon from orbit therefore still needs a sparse
+                    // PlanetFaction record in which to retain the resulting belief.
+                    reconningPlanetFaction = new PlanetFaction(reconningFaction)
+                    {
+                        IsPublic = reconningFaction.IsPlayerFaction
+                    };
+                    planet.PlanetFactionMap[reconningFaction.Id] = reconningPlanetFaction;
+                }
+            }
             if (reconningPlanetFaction != null)
             {
                 if (recordIntelGain != null)
@@ -178,11 +188,10 @@ namespace OnlyWar.Helpers.Turns
                     reconningPlanetFaction.AddRegionIntel(target.Region, impact);
                 }
             }
-            float observerAfter = reconningPlanetFaction?.GetRegionIntel(target.Region) ?? observerBefore;
             GameLog.Debug(() =>
                 $"Recon result {reconningFaction?.Name ?? "Unknown"} -> "
                 + $"{MissionTurnProcessor.DescribeRegionFaction(target)}: "
-                + $"impact={impact:F2}, regionIntel={observerBefore:F2}->{observerAfter:F2}");
+                + $"impact={impact:F2}");
         }
 
         private static long FallenBattleValue(IEnumerable<BattleSquad> squads)

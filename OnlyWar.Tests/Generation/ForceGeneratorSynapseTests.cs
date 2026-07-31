@@ -14,7 +14,7 @@ using Xunit;
 namespace OnlyWar.Tests.Generation;
 
 /// <summary>
-/// Phase 2 of Design/Active/MoraleAndRout.md §9: GenerateGenericForce purchases
+/// Phase 2 of OnlyWar_TDD.md §6.6: GenerateGenericForce purchases
 /// synapse-providing squads on a BV ratio of coverage-needing squads, with a
 /// minimum-force floor. Uses seeded RNG per the shared-RNG test convention (see
 /// OnlyWar.Tests.TestCollections.SharedState).

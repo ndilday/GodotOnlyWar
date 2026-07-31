@@ -43,7 +43,7 @@ namespace OnlyWar.Helpers.Battles
         // Blast planning integrates enemy AND friendly value over the delivery scatter
         // distribution (not just the on-target impact), so a throw that only frags the
         // squad when it misses is no longer scored as free. See EvaluateBlastThrow and
-        // Design/Active/UnifiedRangedTargetingAndScatterScoring.md.
+        // OnlyWar_TDD.md §6.6.
         private const float BlastDeliveryRollMean = 10.5f;
         private const float BlastDeliveryRollStdDev = 3.0f;
         // The execution-time damage roll, shared by every attack resolver in the engine
@@ -87,7 +87,7 @@ namespace OnlyWar.Helpers.Battles
         // Aim bonus a pre-sprung ambusher opens with. Matches the planner's own "aim can no
         // longer be improved" ceiling (the >= 3 checks in the standing/forced-shot paths), so a
         // seeded ambusher is indistinguishable from a soldier who spent three turns lining up the
-        // shot. See SeedAmbushAim and Design/Active/EvasionBurrowAndAmbush.md.
+        // shot. See SeedAmbushAim and OnlyWar_TDD.md §6.6.
         private const int FullAimBonusTurns = 3;
 
         private readonly BattleGridManager _grid;
@@ -371,7 +371,7 @@ namespace OnlyWar.Helpers.Battles
         // placers' HQ rear offset so a rear-deployed HQ starts the battle already satisfied.
         private const float HqLineBuffer = 10f;
 
-        // Ambush opener (Design/Active/EvasionBurrowAndAmbush.md): an ambushing squad springs the
+        // Ambush opener (OnlyWar_TDD.md §6.6): an ambushing squad springs the
         // trap with weapons already trained on the kill zone. Called once, before the first turn is
         // planned, for each squad on the ambushing side. Every soldier holding a loaded conventional
         // ranged weapon is pre-seeded to the full aim bonus against the target the planner itself
@@ -554,8 +554,8 @@ namespace OnlyWar.Helpers.Battles
                     chargeVotes = 0;
                 }
 
-                // A Shaken squad will not advance toward the enemy (Design/Active/
-                // MoraleAndRout.md §6): advance/charge impulses collapse into holding ground.
+                // A Shaken squad will not advance toward the enemy (OnlyWar_TDD.md §6.6):
+                // advance/charge impulses collapse into holding ground.
                 // The state is recomputed every turn, so this is not sticky.
                 if (shakenClamped)
                 {
@@ -920,7 +920,7 @@ namespace OnlyWar.Helpers.Battles
         }
 
         /// <summary>
-        /// Plans a routing squad (Design/Active/WithdrawalAndPursuit.md §10): Run directly away
+        /// Plans a routing squad (OnlyWar_TDD.md §6.6): Run directly away
         /// from the nearest enemy; no shooting or voluntary utility action; an engaged routing
         /// soldier cannot simply leave melee and remains subject to normal enemy attacks.
         /// </summary>
@@ -1368,7 +1368,7 @@ namespace OnlyWar.Helpers.Battles
         // standoff range abandons his gun and runs in. 0 charges on any strict improvement; raise
         // it to reserve melee rushes for clearly winning trades. Retained after the scoring
         // conversion as the absolute separation floor in the point-blank crossover tests. See
-        // Design/Active/EngagementValueModel.md.
+        // OnlyWar_TDD.md §6.6.
         private const float EngagementChargeMargin = 0.25f;
         // How many of the engaged squad's nearest members a would-be charger projects strikes
         // against when estimating a melee's value. A charger reaches only the front of a squad;
@@ -3894,7 +3894,7 @@ namespace OnlyWar.Helpers.Battles
         // every miss node lands the template somewhere and pays its friendly cost. Enemy value is
         // discounted per victim by squad imminence (matching the conventional ranged path); friendly
         // and self value is never discounted. Replaces the former perfect-impact-times-confidence
-        // estimate. See Design/Active/UnifiedRangedTargetingAndScatterScoring.md.
+        // estimate. See OnlyWar_TDD.md §6.6.
         private BlastThrowOutcome EvaluateBlastThrow(
             BattleSoldier soldier,
             BattleSoldier target,

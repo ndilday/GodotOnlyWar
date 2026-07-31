@@ -40,7 +40,7 @@ namespace OnlyWar.Helpers.Missions.Ambush
                 // Aggression's EXPOSURE axis: a cautious ambush takes its time and is harder to spot.
                 //
                 // There is deliberately no separate effect-axis CHECK here, for the same reason
-                // Assault has none (Design/Active/DailyMissionResolution.md §6): an ambush's
+                // Assault has none (OnlyWar_TDD.md §6.4): an ambush's
                 // objective IS the engagement, so aggression's existing casualty threshold is
                 // already its effect axis - press the ambush and you destroy more of the enemy, break
                 // off early and you destroy less. This margin additionally decides the range the

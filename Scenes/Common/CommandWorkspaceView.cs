@@ -3,7 +3,7 @@ using OnlyWar.Helpers.UI;
 using System;
 using System.Collections.Generic;
 
-public partial class CommandWorkspaceView : DialogView
+public partial class CommandWorkspaceView : MainScreenView
 {
     private readonly Dictionary<MapLayer, Button> _layerButtons = [];
     private readonly Dictionary<string, Button> _filterButtons = [];

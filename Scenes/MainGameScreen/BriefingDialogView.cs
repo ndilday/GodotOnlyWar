@@ -1,6 +1,6 @@
 using Godot;
 
-// View for the Promised World opening briefing (Design/OpeningScenario.md §5). Follows the
+// View for the Promised World opening briefing (Design/Reference/OpeningScenario.md). Follows the
 // DialogView/EndOfTurnDialogView pattern: the base wires the single acknowledge button (the
 // inherited "CloseButton", relabelled "For the Emperor" in the scene) to CloseButtonPressed;
 // this view just renders the composed, BBCode briefing text into a RichTextLabel.

@@ -61,7 +61,7 @@ namespace OnlyWar.Helpers
             playerForce.Pledges.AddRange(gameState.Pledges ?? []);
             Sector sector = new Sector(playerForce, gameState.Characters, gameState.Planets, gameState.Fleets);
             // Reattach the Opening Scenario state (null for sandbox saves), which rides on the
-            // GlobalData row rather than being derived (Design/OpeningScenario.md §7).
+            // GlobalData row rather than being derived (Design/Reference/OpeningScenario.md).
             sector.Scenario = gameState.Scenario;
 
             // The data-access layer restores each Order onto its squads (Squad.CurrentOrders) but

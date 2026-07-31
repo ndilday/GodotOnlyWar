@@ -113,7 +113,7 @@ namespace OnlyWar.Models.Battles
         public SquadMovementTier MovementTier { get; }
         public BattleSquadStatus Status { get; }
         public WithdrawalRole WithdrawalRole { get; }
-        // Morale outcome at snapshot time (Design/Active/MoraleAndRout.md §6). Routing is
+        // Morale outcome at snapshot time (OnlyWar_TDD.md §6.6). Routing is
         // also mirrored in WithdrawalRole; Shaken/Steady only exist here.
         public MoraleState MoraleState { get; }
         public Squad Squad { get; }

@@ -1,7 +1,7 @@
 namespace OnlyWar.Helpers.Battles
 {
     /// <summary>
-    /// Morale and synapse tunables (Design/Active/MoraleAndRout.md). Every morale-related
+    /// Morale and synapse tunables (OnlyWar_TDD.md §6.6). Every morale-related
     /// constant lives here, in code — never in the rules database (§3.5). Calibration
     /// (§10 Phase 7) means editing these values, not editing Ego or any other DB row.
     ///

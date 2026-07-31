@@ -36,6 +36,9 @@ public partial class MainGameScene : Control
 	private RegionScreenController _regionScreen;
 	private Stack<Control> _previousScreenStack;
 	private CanvasLayer _mainUILayer;
+	private Control _primaryContentHost;
+	private Control _modalLayer;
+	private MainScreenController _activePrimaryScreen;
 	private ActivityOverlay _activityOverlay;
 	private TurnController _turnController;
 	private EndOfTurnDialogController _endOfTurnDialog;
@@ -84,6 +87,8 @@ public partial class MainGameScene : Control
 		_sectorMap.FleetClicked += OnFleetClicked;
 		_sectorMap.FleetRightClicked += OnFleetRightClicked;
 		_mainUILayer = GetNode<CanvasLayer>("UILayer");
+		_primaryContentHost = GetNode<Control>("UILayer/PrimaryContentHost");
+		_modalLayer = GetNode<Control>("UILayer/ModalLayer");
 		_activityOverlay = GetNode<ActivityOverlay>("UILayer/ActivityOverlay");
 		_turnController = new TurnController();
 		_previousScreenStack = new Stack<Control>();
@@ -98,7 +103,7 @@ public partial class MainGameScene : Control
 		_sectorMap.SetSelectedPlanet(initialPlanet?.Id);
 		_systemInspector.DisplayPlanet(initialPlanet);
 
-		// One-shot opening briefing (Design/OpeningScenario.md §5): show on first entry after a
+		// One-shot opening briefing (Design/Reference/OpeningScenario.md): show on first entry after a
 		// new game and never again. BriefingAcknowledged is persisted, so a freshly stamped
 		// scenario shows it once; a reloaded, acknowledged game does not.
 		CampaignScenario scenario = GameDataSingleton.Instance.Sector.Scenario;
@@ -115,7 +120,7 @@ public partial class MainGameScene : Control
 			PackedScene briefingScene = GD.Load<PackedScene>("res://Scenes/MainGameScreen/briefing_dialog.tscn");
 			_briefingDialog = (BriefingDialogController)briefingScene.Instantiate();
 			_briefingDialog.CloseButtonPressed += OnBriefingDialogClosed;
-			_mainUILayer.AddChild(_briefingDialog);
+			_modalLayer.AddChild(_briefingDialog);
 		}
 		_pendingBriefingScenario = scenario;
 		_briefingDialog.SetBriefing(scenario.BriefingText);
@@ -158,18 +163,58 @@ public partial class MainGameScene : Control
 		}*/
 	}
 
-	private void SetMainScreenVisibility(bool isVisible, bool keepTopMenuVisible = false, bool keepBottomMenuVisible = false)
+	private void SetMapWorkspaceVisibility(bool isVisible)
 	{
 		_sectorMap.Visible = isVisible;
 		_sectorMap.SetProcessInput(isVisible);
-		_topMenu.Visible = isVisible || keepTopMenuVisible;
+		_topMenu.Visible = true;
 		_leftMapTools.Visible = isVisible;
 		_systemInspector.Visible = isVisible;
-		_bottomMenu.Visible = isVisible || keepBottomMenuVisible;
-		if (_topMenu.Visible)
+		_bottomMenu.Visible = true;
+		RefreshTopMenuStatus();
+	}
+
+	private void ShowPrimaryScreen(
+		MainScreenController screen,
+		string title,
+		BottomMenu.Destination destination)
+	{
+		if (_activePrimaryScreen != null && _activePrimaryScreen != screen)
 		{
-			RefreshTopMenuStatus();
+			_activePrimaryScreen.Visible = false;
 		}
+
+		_activePrimaryScreen = screen;
+		screen.Visible = true;
+		_topMenu.SetScreenText(title);
+		_bottomMenu.SetActiveDestination(destination);
+		SetMapWorkspaceVisibility(false);
+	}
+
+	private bool ToggleOffActivePrimaryScreen(
+		MainScreenController screen,
+		BottomMenu.Destination destination)
+	{
+		if (_activePrimaryScreen != screen || !screen.Visible)
+		{
+			return false;
+		}
+
+		screen.RequestClose();
+		// A screen may veto navigation (the mandatory recruitment setup does this). Restore
+		// the pressed state that Godot toggled before dispatching the button event.
+		if (screen.Visible)
+		{
+			_bottomMenu.SetActiveDestination(destination);
+		}
+		return true;
+	}
+
+	private void AddPrimaryScreen(MainScreenController screen)
+	{
+		_primaryContentHost.AddChild(screen);
+		screen.SetAnchorsAndOffsetsPreset(Control.LayoutPreset.FullRect);
+		screen.Visible = false;
 	}
 
 	private void RefreshTopMenuStatus()
@@ -221,10 +266,15 @@ public partial class MainGameScene : Control
 	{
 		PushVisibleOverlaySurface();
 		EnsureChapterScreen();
+		if (ToggleOffActivePrimaryScreen(_chapterScreen, BottomMenu.Destination.Chapter))
+		{
+			return;
+		}
 		_chapterScreen.PopulateCompanyList();
-		_chapterScreen.Visible = true;
-		_topMenu.SetScreenText("Chapter Overview");
-		SetMainScreenVisibility(false, keepTopMenuVisible: true);
+		ShowPrimaryScreen(
+			_chapterScreen,
+			"Chapter Overview",
+			BottomMenu.Destination.Chapter);
 	}
 
 	private void EnsureChapterScreen()
@@ -236,27 +286,36 @@ public partial class MainGameScene : Control
 
 		PackedScene chapterScene = GD.Load<PackedScene>("res://Scenes/ChapterScreen/chapter_screen.tscn");
 		_chapterScreen = (ChapterController)chapterScene.Instantiate();
-		_chapterScreen.CloseButtonPressed += OnCloseScreen;
+		_chapterScreen.CloseRequested += OnCloseScreen;
 		_chapterScreen.CampaignChanged += OnCampaignChanged;
-		_mainUILayer.AddChild(_chapterScreen);
+		AddPrimaryScreen(_chapterScreen);
 	}
 
 	private void OnCloseScreen(object sender, EventArgs e)
 	{
+		Control closingScreen = (Control)sender;
+		closingScreen.Visible = false;
+		if (closingScreen == _activePrimaryScreen)
+		{
+			_activePrimaryScreen = null;
+		}
+
 		if(_previousScreenStack.Count > 0)
 		{
 			Control control = _previousScreenStack.Pop();
 			control.Visible = true;
 			if (control == _chapterScreen)
 			{
+				_activePrimaryScreen = _chapterScreen;
 				_topMenu.SetScreenText("Chapter Overview");
-				_topMenu.Visible = true;
+				_bottomMenu.SetActiveDestination(BottomMenu.Destination.Chapter);
 			}
 			else if (control == _trainingUnitScreen)
 			{
+				_activePrimaryScreen = _trainingUnitScreen;
 				_trainingUnitScreen.RefreshFromExternalChange();
-				_topMenu.Visible = false;
-				_bottomMenu.Visible = false;
+				_topMenu.SetScreenText("10th Company");
+				_bottomMenu.SetActiveDestination(BottomMenu.Destination.TrainingUnit);
 			}
 			else if (control == _planetTacticalScreen)
 			{
@@ -265,23 +324,34 @@ public partial class MainGameScene : Control
 					_topMenu.SetScreenText(planet.Name);
 				}
 				_planetTacticalScreen.RefreshFromExternalChange();
-				_topMenu.Visible = true;
-				_bottomMenu.Visible = true;
+				_bottomMenu.SetActiveDestination(BottomMenu.Destination.None);
 			}
 			else if (control == _regionScreen)
 			{
 				_regionScreen.RefreshFromExternalChange();
-				_topMenu.Visible = true;
-				_bottomMenu.Visible = true;
+				_bottomMenu.SetActiveDestination(BottomMenu.Destination.None);
 			}
+			else if (control == _squadScreen)
+			{
+				_bottomMenu.SetActiveDestination(BottomMenu.Destination.None);
+			}
+			SetMapWorkspaceVisibility(false);
 		}
 		else
 		{
 			_topMenu.SetScreenText("Sector Map");
-			SetMainScreenVisibility(true);
+			_bottomMenu.SetActiveDestination(BottomMenu.Destination.None);
+			SetMapWorkspaceVisibility(true);
 		}
 		RefreshTopMenuStatus();
-		((Control)(sender)).Visible = false;
+	}
+
+	private static void OnDialogClosed(object sender, EventArgs e)
+	{
+		if (sender is Control dialog)
+		{
+			dialog.Visible = false;
+		}
 	}
 
 	private void OnApothecariumButtonPressed(object sender, EventArgs e)
@@ -292,39 +362,55 @@ public partial class MainGameScene : Control
 		{
 			PackedScene apothecariumScene = GD.Load<PackedScene>("res://Scenes/ApothecariumScreen/apothecarium_screen.tscn");
 			_apothecariumScreen = (ApothecariumScreenController)apothecariumScene.Instantiate();
-			_apothecariumScreen.CloseButtonPressed += OnCloseScreen;
+			_apothecariumScreen.CloseRequested += OnCloseScreen;
 			_apothecariumScreen.CampaignChanged += OnCampaignChanged;
-			_mainUILayer.AddChild(_apothecariumScreen);
+			AddPrimaryScreen(_apothecariumScreen);
+		}
+		if (ToggleOffActivePrimaryScreen(
+			_apothecariumScreen,
+			BottomMenu.Destination.Apothecarium))
+		{
+			return;
 		}
 		_apothecariumScreen.RefreshFromExternalChange();
-		_apothecariumScreen.Visible = true;
-		SetMainScreenVisibility(false);
+		ShowPrimaryScreen(
+			_apothecariumScreen,
+			"Apothecarion",
+			BottomMenu.Destination.Apothecarium);
 	}
 
 	private void OnTrainingUnitButtonPressed(object sender, EventArgs e)
 	{
 		PushVisibleOverlaySurface();
-		OpenTrainingUnitScreen();
+		OpenTrainingUnitScreen(toggleIfActive: true);
 	}
 
-	private void OpenTrainingUnitScreen(bool mandatorySetup = false)
+	private void OpenTrainingUnitScreen(bool mandatorySetup = false, bool toggleIfActive = false)
 	{
 		if (_trainingUnitScreen == null)
 		{
 			PackedScene trainingUnitScene = GD.Load<PackedScene>("res://Scenes/TrainingUnitScreen/training_unit_screen.tscn");
 			_trainingUnitScreen = (TrainingUnitScreenController)trainingUnitScene.Instantiate();
-			_trainingUnitScreen.CloseButtonPressed += OnCloseScreen;
+			_trainingUnitScreen.CloseRequested += OnCloseScreen;
 			_trainingUnitScreen.SoldierLinkClicked += OnSoldierSelectedForDisplay;
 			_trainingUnitScreen.CampaignChanged += OnCampaignChanged;
 			_trainingUnitScreen.NeophytePlacementRequested += OnNeophytePlacementRequested;
 			_trainingUnitScreen.Phase13PromotionRequested += OnPhase13PromotionRequested;
 			_trainingUnitScreen.ManageAdministrativeStaffRequested +=
 				OnManageRecruitmentStaffRequested;
-			_mainUILayer.AddChild(_trainingUnitScreen);
+			AddPrimaryScreen(_trainingUnitScreen);
+		}
+		if (toggleIfActive && ToggleOffActivePrimaryScreen(
+			_trainingUnitScreen,
+			BottomMenu.Destination.TrainingUnit))
+		{
+			return;
 		}
 		_trainingUnitScreen.RefreshFromExternalChange();
-		_trainingUnitScreen.Visible = true;
-		SetMainScreenVisibility(false);
+		ShowPrimaryScreen(
+			_trainingUnitScreen,
+			"10th Company",
+			BottomMenu.Destination.TrainingUnit);
 		if (mandatorySetup)
 		{
 			_trainingUnitScreen.OpenMandatorySetup();
@@ -335,9 +421,10 @@ public partial class MainGameScene : Control
 	{
 		EnsureChapterScreen();
 		_chapterScreen.PopulateCompanyList();
-		_chapterScreen.Visible = true;
-		_topMenu.SetScreenText("Chapter Overview");
-		SetMainScreenVisibility(false, keepTopMenuVisible: true);
+		ShowPrimaryScreen(
+			_chapterScreen,
+			"Chapter Overview",
+			BottomMenu.Destination.Chapter);
 		Control recruitmentScreen = (Control)sender;
 		_previousScreenStack.Push(recruitmentScreen);
 		recruitmentScreen.Visible = false;
@@ -386,7 +473,7 @@ public partial class MainGameScene : Control
 		{
 			_recruitmentPlacementMenu = new PopupMenu();
 			_recruitmentPlacementMenu.IdPressed += OnRecruitmentTargetSelected;
-			_mainUILayer.AddChild(_recruitmentPlacementMenu);
+			_modalLayer.AddChild(_recruitmentPlacementMenu);
 		}
 		_recruitmentPlacementMenu.Clear();
 		foreach (Squad squad in targets)
@@ -431,13 +518,19 @@ public partial class MainGameScene : Control
 		{
 			PackedScene fleetScene = GD.Load<PackedScene>("res://Scenes/FleetScreen/fleet_screen.tscn");
 			_fleetScreen = (FleetScreenController)fleetScene.Instantiate();
-			_fleetScreen.CloseButtonPressed += OnCloseScreen;
+			_fleetScreen.CloseRequested += OnCloseScreen;
 			_fleetScreen.CampaignChanged += OnCampaignChanged;
-			_mainUILayer.AddChild(_fleetScreen);
+			AddPrimaryScreen(_fleetScreen);
+		}
+		if (ToggleOffActivePrimaryScreen(_fleetScreen, BottomMenu.Destination.Fleet))
+		{
+			return;
 		}
 		_fleetScreen.PopulateFleetData();
-		_fleetScreen.Visible = true;
-		SetMainScreenVisibility(false);
+		ShowPrimaryScreen(
+			_fleetScreen,
+			"Classis",
+			BottomMenu.Destination.Fleet);
 	}
 
 	private void OnDiplomacyButtonPressed(object sender, EventArgs e)
@@ -447,12 +540,20 @@ public partial class MainGameScene : Control
 		{
 			PackedScene diplomacyScene = GD.Load<PackedScene>("res://Scenes/DiplomacyScreen/diplomacy_screen.tscn");
 			_diplomacyScreen = (DiplomacyScreenController)diplomacyScene.Instantiate();
-			_diplomacyScreen.CloseButtonPressed += OnCloseScreen;
-			_mainUILayer.AddChild(_diplomacyScreen);
+			_diplomacyScreen.CloseRequested += OnCloseScreen;
+			AddPrimaryScreen(_diplomacyScreen);
+		}
+		if (ToggleOffActivePrimaryScreen(
+			_diplomacyScreen,
+			BottomMenu.Destination.Diplomacy))
+		{
+			return;
 		}
 		_diplomacyScreen.PopulateRequestData();
-		_diplomacyScreen.Visible = true;
-		SetMainScreenVisibility(false);
+		ShowPrimaryScreen(
+			_diplomacyScreen,
+			"Diplomacy",
+			BottomMenu.Destination.Diplomacy);
 	}
 
 	private void OnPlanetClicked(object sender, int planetId)
@@ -500,17 +601,18 @@ public partial class MainGameScene : Control
 			PackedScene planetScene = GD.Load<PackedScene>("res://Scenes/PlanetDetailScreen/planet_tactical_screen.tscn");
 			_planetTacticalScreen = (PlanetTacticalScreenController)planetScene.Instantiate();
 
-			_planetTacticalScreen.CloseButtonPressed += OnCloseScreen;
+			_planetTacticalScreen.CloseRequested += OnCloseScreen;
 			_planetTacticalScreen.OrbitalSquadDoubleClicked += OnOrbitalSquadDoubleClicked;
 			_planetTacticalScreen.RegionDoubleClicked += OnRegionDoubleClicked;
 			_planetTacticalScreen.CampaignChanged += OnCampaignChanged;
-			_mainUILayer.AddChild(_planetTacticalScreen);
+			AddPrimaryScreen(_planetTacticalScreen);
 		}
 		PlaceMainContentOverlay(_planetTacticalScreen);
 		_planetTacticalScreen.PopulatePlanetData(planet);
 		_planetTacticalScreen.Visible = true;
+		_bottomMenu.SetActiveDestination(BottomMenu.Destination.None);
 		_topMenu.SetScreenText(planet.Name);
-		SetMainScreenVisibility(false, keepTopMenuVisible: true, keepBottomMenuVisible: true);
+		SetMapWorkspaceVisibility(false);
 		GD.Print($"Planet {planet.Id} Clicked");
 	}
 
@@ -521,13 +623,11 @@ public partial class MainGameScene : Control
 		overlay.AnchorRight = 1f;
 		overlay.AnchorBottom = 1f;
 		overlay.OffsetLeft = 0f;
-		overlay.OffsetTop = 64f;
+		overlay.OffsetTop = 0f;
 		overlay.OffsetRight = 0f;
-		overlay.OffsetBottom = -72f;
+		overlay.OffsetBottom = 0f;
 		overlay.ClipContents = true;
-		_mainUILayer.MoveChild(overlay, 0);
-		_mainUILayer.MoveChild(_bottomMenu, _mainUILayer.GetChildCount() - 1);
-		_mainUILayer.MoveChild(_topMenu, _mainUILayer.GetChildCount() - 1);
+		_primaryContentHost.MoveChild(overlay, _primaryContentHost.GetChildCount() - 1);
 	}
 
 	private const int FleetMenuPlotCourse = 0;
@@ -572,7 +672,7 @@ public partial class MainGameScene : Control
 			_fleetContextMenu.AddItem("Divide Task Force", FleetMenuDivide);
 			_fleetContextMenu.AddItem("Merge Task Force", FleetMenuMerge);
 			_fleetContextMenu.IdPressed += OnFleetContextMenuIdPressed;
-			_mainUILayer.AddChild(_fleetContextMenu);
+			_modalLayer.AddChild(_fleetContextMenu);
 		}
 
 		bool canDivide = taskForce.Ships.Count > 1;
@@ -654,7 +754,7 @@ public partial class MainGameScene : Control
 			_fleetMoveDialog = (FleetMoveDialogController)fleetMoveScene.Instantiate();
 			_fleetMoveDialog.CloseButtonPressed += (s, e) => _fleetMoveDialog.Visible = false;
 			_fleetMoveDialog.CoursePlotted += OnFleetActionCompleted;
-			_mainUILayer.AddChild(_fleetMoveDialog);
+			_modalLayer.AddChild(_fleetMoveDialog);
 		}
 		_fleetMoveDialog.SetTaskForce(taskForce);
 		_fleetMoveDialog.Visible = true;
@@ -668,7 +768,7 @@ public partial class MainGameScene : Control
 			_fleetDivideDialog = (FleetDivideDialogController)fleetDivideScene.Instantiate();
 			_fleetDivideDialog.CloseButtonPressed += (s, e) => _fleetDivideDialog.Visible = false;
 			_fleetDivideDialog.FleetDivided += OnFleetActionCompleted;
-			_mainUILayer.AddChild(_fleetDivideDialog);
+			_modalLayer.AddChild(_fleetDivideDialog);
 		}
 		_fleetDivideDialog.SetTaskForce(taskForce);
 		_fleetDivideDialog.Visible = true;
@@ -682,7 +782,7 @@ public partial class MainGameScene : Control
 			_fleetMergeDialog = (FleetMergeDialogController)fleetMergeScene.Instantiate();
 			_fleetMergeDialog.CloseButtonPressed += (s, e) => _fleetMergeDialog.Visible = false;
 			_fleetMergeDialog.FleetsMerged += OnFleetActionCompleted;
-			_mainUILayer.AddChild(_fleetMergeDialog);
+			_modalLayer.AddChild(_fleetMergeDialog);
 		}
 		_fleetMergeDialog.SetTaskForce(taskForce);
 		_fleetMergeDialog.Visible = true;
@@ -713,8 +813,8 @@ public partial class MainGameScene : Control
 		{
 			PackedScene endOfTurnScene = GD.Load<PackedScene>("res://Scenes/EndOfTurnDialog.tscn");
 			_endOfTurnDialog = (EndOfTurnDialogController)endOfTurnScene.Instantiate();
-			_endOfTurnDialog.CloseButtonPressed += OnCloseScreen;
-			_mainUILayer.AddChild(_endOfTurnDialog);
+			_endOfTurnDialog.CloseButtonPressed += OnDialogClosed;
+			_modalLayer.AddChild(_endOfTurnDialog);
 		}
 
 		// handle ship movement
@@ -731,7 +831,7 @@ public partial class MainGameScene : Control
 		_endOfTurnDialog.Visible = true;
 
 		// Surface the opening-scenario resolution (win/lapse) if it fired this turn
-		// (Design/OpeningScenario.md §6.2).
+		// (Design/Reference/OpeningScenario.md).
 		if (!string.IsNullOrEmpty(turnResult.ScenarioNotification))
 		{
 			ShowScenarioNotification(turnResult.ScenarioNotification);
@@ -748,7 +848,7 @@ public partial class MainGameScene : Control
 			PackedScene briefingScene = GD.Load<PackedScene>("res://Scenes/MainGameScreen/briefing_dialog.tscn");
 			_scenarioNotificationDialog = (BriefingDialogController)briefingScene.Instantiate();
 			_scenarioNotificationDialog.CloseButtonPressed += OnScenarioNotificationClosed;
-			_mainUILayer.AddChild(_scenarioNotificationDialog);
+			_modalLayer.AddChild(_scenarioNotificationDialog);
 		}
 		_scenarioNotificationDialog.SetBriefing(text);
 		_scenarioNotificationDialog.Visible = true;
@@ -772,9 +872,10 @@ public partial class MainGameScene : Control
 	{
 		EnsureChapterScreen();
 		_chapterScreen.DisplaySoldier(soldierId);
-		_chapterScreen.Visible = true;
-		_topMenu.SetScreenText("Chapter Overview");
-		SetMainScreenVisibility(false, keepTopMenuVisible: true);
+		ShowPrimaryScreen(
+			_chapterScreen,
+			"Chapter Overview",
+			BottomMenu.Destination.Chapter);
 		Control control = (Control)sender;
 		_previousScreenStack.Push(control);
 		control.Visible = false;
@@ -786,15 +887,16 @@ public partial class MainGameScene : Control
 		{
 			PackedScene regionScene = GD.Load<PackedScene>("res://Scenes/RegionScreen/region_screen.tscn");
 			_regionScreen = (RegionScreenController)regionScene.Instantiate();
-			_regionScreen.CloseButtonPressed += OnCloseScreen;
+			_regionScreen.CloseRequested += OnCloseScreen;
 			_regionScreen.SquadDoubleClicked += OnSquadDoubleClicked;
 			_regionScreen.AdjacentRegionChangeRequested += OnAdjacentRegionChangeRequested;
 			_regionScreen.CampaignChanged += OnCampaignChanged;
-			_mainUILayer.AddChild(_regionScreen);
+			AddPrimaryScreen(_regionScreen);
 		}
 		PlaceMainContentOverlay(_regionScreen);
 		_regionScreen.DisplayRegion(region);
 		_regionScreen.Visible = true;
+		_bottomMenu.SetActiveDestination(BottomMenu.Destination.None);
 		_topMenu.SetScreenText(region.Name);
 		Control control = (Control)sender;
 		_previousScreenStack.Push(control);
@@ -813,13 +915,14 @@ public partial class MainGameScene : Control
 		{
 			PackedScene squadScene = GD.Load<PackedScene>("res://Scenes/SquadScreen/squad_screen.tscn");
 			_squadScreen = (SquadScreenController)squadScene.Instantiate();
-			_mainUILayer.AddChild(_squadScreen);
-			_squadScreen.CloseButtonPressed += OnCloseScreen;
+			AddPrimaryScreen(_squadScreen);
+			_squadScreen.CloseRequested += OnCloseScreen;
 			_squadScreen.CampaignChanged += OnCampaignChanged;
 		}
 		PlaceMainContentOverlay(_squadScreen);
 		_squadScreen.SetSquad(squad);
 		_squadScreen.Visible = true;
+		_bottomMenu.SetActiveDestination(BottomMenu.Destination.None);
 		Control control = (Control)sender;
 		_previousScreenStack.Push(control);
 		control.Visible = false;
@@ -831,13 +934,14 @@ public partial class MainGameScene : Control
 		{
 			PackedScene squadScene = GD.Load<PackedScene>("res://Scenes/SquadScreen/squad_screen.tscn");
 			_squadScreen = (SquadScreenController)squadScene.Instantiate();
-			_mainUILayer.AddChild(_squadScreen);
-			_squadScreen.CloseButtonPressed += OnCloseScreen;
+			AddPrimaryScreen(_squadScreen);
+			_squadScreen.CloseRequested += OnCloseScreen;
 			_squadScreen.CampaignChanged += OnCampaignChanged;
 		}
 		PlaceMainContentOverlay(_squadScreen);
 		_squadScreen.SetSquad(squad);
 		_squadScreen.Visible = true;
+		_bottomMenu.SetActiveDestination(BottomMenu.Destination.None);
 		Control control = (Control)sender;
 		_previousScreenStack.Push(control);
 		control.Visible = false;

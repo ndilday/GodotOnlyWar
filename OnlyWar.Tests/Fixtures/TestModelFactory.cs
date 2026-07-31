@@ -86,7 +86,7 @@ internal static class TestModelFactory
         Array.Empty<ValueTuple<BaseSkill, float>>(),
         battleValue: 2);
 
-    // A synapse-providing species (Design/Active/MoraleAndRout.md §4) — used to exercise
+    // A synapse-providing species (OnlyWar_TDD.md §6.6) — used to exercise
     // squad-to-squad synapse coverage. Radius is well inside the small integer distances
     // BattleGridManager tests place soldiers at, so "in range" / "out of range" cases stay
     // legible.

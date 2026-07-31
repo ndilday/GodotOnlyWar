@@ -30,7 +30,7 @@ namespace OnlyWar.Models
         public PlayerForce PlayerForce { get; }
 
         // The framed opening scenario stamped onto this sector at generation
-        // (Design/OpeningScenario.md §2.1). Null for plain-sandbox sectors,
+        // (Design/Reference/OpeningScenario.md). Null for plain-sandbox sectors,
         // in which case the game behaves as it did before the Opening Scenario work.
         public CampaignScenario Scenario { get; set; }
         
@@ -83,7 +83,7 @@ namespace OnlyWar.Models
         }
 
         // Governance resolvers over the derived designation set by
-        // SectorBuilder.GenerateWarpNetwork (Design/OpeningScenario.md §2.3).
+        // SectorBuilder.GenerateWarpNetwork (Design/Reference/OpeningScenario.md).
 
         // The single SectorCapital-tier world, or null if no Imperial world qualifies.
         public Planet GetSectorCapital()

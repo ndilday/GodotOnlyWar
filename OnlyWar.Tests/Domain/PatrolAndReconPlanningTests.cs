@@ -16,7 +16,7 @@ using Xunit;
 namespace OnlyWar.Tests.Domain;
 
 // Two AI planning decisions that were previously constants, both from
-// Design/Active/DailyMissionResolution.md §8: how much of a region's spare force screens it (Q4) and
+// OnlyWar_TDD.md §6.4: how much of a region's spare force screens it (Q4) and
 // how boldly the faction scouts (Q5).
 public class PatrolAndReconPlanningTests
 {

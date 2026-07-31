@@ -13,7 +13,7 @@ using Xunit;
 
 namespace OnlyWar.Tests.Generation;
 
-// Coverage for the "Promised World" generation override (Design/OpeningScenario.md section 3,
+// Coverage for the "Promised World" generation override (Design/Reference/OpeningScenario.md section 3,
 // step 2): ScenarioBuilder.StampPromisedWorld, invoked from SectorBuilder.GenerateSector in place
 // of the old FoundTakebackPlanet prototype. The stamp invariants and full per-seed determinism are
 // the load-bearing guarantees for the opening.

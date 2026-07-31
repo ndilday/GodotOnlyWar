@@ -9,7 +9,6 @@ layout_mode = 3
 anchors_preset = 15
 anchor_right = 1.0
 anchor_bottom = 1.0
-offset_top = 64.0
 grow_horizontal = 2
 grow_vertical = 2
 theme = ExtResource("3_theme")
@@ -50,23 +49,10 @@ custom_minimum_size = Vector2(0, 38)
 layout_mode = 1
 anchors_preset = 10
 anchor_right = 1.0
-offset_right = -52.0
+offset_right = 0.0
 offset_bottom = 38.0
 grow_horizontal = 2
 theme_override_constants/separation = 7
-
-[node name="CloseButton" type="Button" parent="ChapterView/Content"]
-custom_minimum_size = Vector2(40, 40)
-layout_mode = 1
-anchors_preset = -1
-anchor_left = 1.0
-anchor_right = 1.0
-offset_left = -40.0
-offset_top = -4.0
-offset_right = 0.0
-offset_bottom = 36.0
-grow_horizontal = 0
-text = "X"
 
 [node name="MainLayout" type="HBoxContainer" parent="ChapterView/Content"]
 layout_mode = 1

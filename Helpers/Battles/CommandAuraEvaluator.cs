@@ -7,7 +7,7 @@ using OnlyWar.Models.Soldiers;
 namespace OnlyWar.Helpers.Battles
 {
     /// <summary>
-    /// Per-turn command-aura modifier (Design/Active/MoraleAndRout.md §4.3, Phase 6): the
+    /// Per-turn command-aura modifier (OnlyWar_TDD.md §6.6): the
     /// weak-coefficient generalisation of synapse. An HQ squad (SquadTypes.HQ — the RIGHT
     /// set for command, unlike synapse; §3.2) projects a shorter, weaker aura that supplies
     /// a negative stress term to nearby friendly squads, and whose loss supplies a positive

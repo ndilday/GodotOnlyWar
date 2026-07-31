@@ -22,6 +22,18 @@ script = ExtResource("1_g3hiw")
 
 [node name="UILayer" type="CanvasLayer" parent="."]
 
+[node name="PrimaryContentHost" type="Control" parent="UILayer"]
+layout_mode = 3
+anchors_preset = -1
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_top = 64.0
+offset_bottom = -72.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+clip_contents = true
+
 [node name="TopMenu" parent="UILayer" instance=ExtResource("3_7t35a")]
 grow_vertical = 2
 
@@ -30,5 +42,14 @@ grow_vertical = 2
 [node name="SystemInspector" parent="UILayer" instance=ExtResource("6_f4umo")]
 
 [node name="BottomMenu" parent="UILayer" instance=ExtResource("4_1ccxp")]
+
+[node name="ModalLayer" type="Control" parent="UILayer"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
 
 [node name="ActivityOverlay" parent="UILayer" instance=ExtResource("7_activity")]

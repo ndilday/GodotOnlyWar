@@ -12,7 +12,7 @@ using System.Collections.Immutable;
 using System.ComponentModel;
 using System.Linq;
 
-public partial class SquadScreenController : DialogController
+public partial class SquadScreenController : MainScreenController
 {
     private Squad _squad;
     private SquadScreenView _view;

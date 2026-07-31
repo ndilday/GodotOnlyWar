@@ -5,7 +5,7 @@ using System.Linq;
 namespace OnlyWar.Helpers.Battles
 {
     /// <summary>
-    /// Per-turn synapse coverage predicate (Design/Active/MoraleAndRout.md §4.2). Stateless
+    /// Per-turn synapse coverage predicate (OnlyWar_TDD.md §6.6). Stateless
     /// and recomputed every call, matching how <see cref="BattleForceEvaluator"/> and
     /// <see cref="BattleContactRules"/> recompute their inputs each round rather than
     /// caching a flag on the squad.

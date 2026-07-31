@@ -137,6 +137,28 @@ public class SectorEntityLogicTests
     }
 
     [Fact]
+    public void ProcessTurn_RetainsZeroPopulationFactionThatHasRegionalPresenceAndIntel()
+    {
+        RNG.Reset(1);
+        SectorSimulationFixture fixture = SectorSimulationFixture.Create();
+        Region region = fixture.Planet.Regions[3];
+        Faction playerFaction = fixture.Sector.PlayerForce.Faction;
+        PlanetFaction playerPlanetFaction = new(playerFaction) { IsPublic = true };
+        fixture.Planet.PlanetFactionMap[playerFaction.Id] = playerPlanetFaction;
+        region.RegionFactionMap[playerFaction.Id] = new RegionFaction(playerPlanetFaction, region)
+        {
+            IsPublic = true,
+            Organization = 100
+        };
+        playerPlanetFaction.SetRegionIntel(region, 2f);
+
+        fixture.ProcessTurn();
+
+        Assert.Same(playerPlanetFaction, fixture.Planet.PlanetFactionMap[playerFaction.Id]);
+        Assert.Equal(1.5f, region.GetPlayerVisibleIntel(), precision: 4);
+    }
+
+    [Fact]
     // Listening posts are structures, so allied installations combine on the same logarithmic
     // curve as every other kind of works (RegionDefenses/FortificationMath) and each ally reads
     // the resulting shared coverage. They deliberately do NOT go through TurnIntelLedger's

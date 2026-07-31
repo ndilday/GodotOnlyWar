@@ -8,7 +8,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 
-public partial class ApothecariumScreenController : DialogController
+public partial class ApothecariumScreenController : MainScreenController
 {
     private readonly ApothecariumMedicalRecordBuilder _recordBuilder = new();
     private readonly MedicalProcedureService _procedureService = new();

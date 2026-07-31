@@ -8,7 +8,7 @@ using OnlyWar.Helpers.Extensions;
 namespace OnlyWar.Models.Planets
 {
     // Rank of the Imperial governor seated on a planet. Derived (recomputed at build/load),
-    // not persisted — see Design/OpeningScenario.md §2.3.
+    // not persisted — see Design/Reference/OpeningScenario.md
     public enum GovernanceTier { Planetary = 0, SubsectorCapital = 1, SectorCapital = 2 }
 
     public class Planet

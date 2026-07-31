@@ -535,23 +535,6 @@ public partial class RegionScreenView : CommandWorkspaceView
         caption.AddThemeColorOverride("font_color", OnlyWarStyle.MutedText);
         captionRow.AddChild(caption);
 
-        // The dialog's stock close button floats at the screen's top-right, where this
-        // panel overlaps it and swallows most of its clicks (GUI picking follows tree
-        // order, not z-index). Adopt it into the caption row instead so it sits fully
-        // inside the frame and stays clickable.
-        Button closeButton = GetNode<Button>("CloseButton");
-        closeButton.GetParent().RemoveChild(closeButton);
-        closeButton.SetAnchorsPreset(LayoutPreset.TopLeft);
-        closeButton.OffsetLeft = 0;
-        closeButton.OffsetTop = 0;
-        closeButton.OffsetRight = 0;
-        closeButton.OffsetBottom = 0;
-        closeButton.CustomMinimumSize = new Vector2(28, 28);
-        closeButton.SizeFlagsHorizontal = SizeFlags.ShrinkEnd;
-        closeButton.SizeFlagsVertical = SizeFlags.ShrinkCenter;
-        OnlyWarStyle.ApplyAccentButtonRow(closeButton, true, OnlyWarStyle.Gold);
-        captionRow.AddChild(closeButton);
-
         _dossierTitleLabel = new Label { ClipText = true, TextOverrunBehavior = TextServer.OverrunBehavior.TrimEllipsis };
         _dossierTitleLabel.AddThemeFontSizeOverride("font_size", 22);
         _dossierTitleLabel.AddThemeFontOverride("font", GetThemeFont("display"));

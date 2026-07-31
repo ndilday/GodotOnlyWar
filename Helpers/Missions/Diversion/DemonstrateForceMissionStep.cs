@@ -17,7 +17,7 @@ namespace OnlyWar.Helpers.Missions.Diversion
     /// order to pull the attention of whoever is watching that ground away from it.
     /// </summary>
     /// <remarks>
-    /// Two checks per day (Design/Active/DailyMissionResolution.md §4).
+    /// Two checks per day (OnlyWar_TDD.md §6.4).
     ///
     /// <para><b>Roll A - draw.</b> How much of the target's search effort the demonstration commits to
     /// watching it, written into <see cref="RegionFaction.CommittedAttention"/> and read by every

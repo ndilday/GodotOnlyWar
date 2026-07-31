@@ -101,7 +101,7 @@ namespace OnlyWar.Models.Planets
         // Multiplier (default 1.0) applied to this faction's organic population growth in the
         // turn loop. A general primitive, not scenario-specific: the Opening Scenario sets it
         // < 1.0 on stamped Tyranid regions to throttle them below the default curve, and the
-        // post-0.7 Ork/revolt tuning will reuse the same lever (Design/OpeningScenario.md §2.2).
+        // post-0.7 Ork/revolt tuning will reuse the same lever (Design/Reference/OpeningScenario.md).
         public float GrowthMultiplier { get; set; } = 1.0f;
 
         // Transient, within-DAY state: search effort this faction has committed to looking at

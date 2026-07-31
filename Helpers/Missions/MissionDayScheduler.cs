@@ -10,7 +10,7 @@ namespace OnlyWar.Helpers.Missions
     /// start to finish before the next one begins.
     /// </summary>
     /// <remarks>
-    /// This is the point of the whole exercise (Design/Active/DailyMissionResolution.md). Previously a
+    /// This is the point of the whole exercise (OnlyWar_TDD.md §6.4). Previously a
     /// mission's entire week resolved inside a single call, so no two missions were ever part-way
     /// through the same day and every cross-mission interaction had to be expressed as phase ordering
     /// around whole missions. With the days owned here, missions in the same region observe each

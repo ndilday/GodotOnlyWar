@@ -8,7 +8,7 @@ namespace OnlyWar.Helpers.Database.GameState
     // The single-row GlobalData table holds chapter-wide scalars that aren't owned by any
     // other aggregate: the current date, the Requisition pool (PRD 4.23), the gene-seed
     // stockpile count and aggregate purity (PRD 4.8), and the optional Opening Scenario
-    // state (Design/OpeningScenario.md §7). Scenario is null for sandbox sectors. The
+    // state (Design/Reference/OpeningScenario.md). Scenario is null for sandbox sectors. The
     // nullable Home World id is set when the Promised World is secured.
     public sealed record GlobalState(Date Date, int Requisition, int GeneseedStockpile,
                                      float GeneseedPurity, CampaignScenario Scenario,

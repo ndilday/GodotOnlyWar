@@ -7,7 +7,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 
-public partial class FleetScreenController : DialogController
+public partial class FleetScreenController : MainScreenController
 {
     private FleetScreenView _view;
 

@@ -1,6 +1,6 @@
 [gd_scene load_steps=6 format=3 uid="uid://bl61mb634d0tv"]
 
-[ext_resource type="PackedScene" uid="uid://cadpqoqxtyo0p" path="res://Scenes/Dialog.tscn" id="1_xuda3"]
+[ext_resource type="PackedScene" path="res://Scenes/MainScreen.tscn" id="1_xuda3"]
 [ext_resource type="Script" uid="uid://dcgjmojk3r18j" path="res://Scenes/RegionScreen/RegionScreenController.cs" id="2_7t0l2"]
 [ext_resource type="Script" uid="uid://co6g6t73yxpl3" path="res://Scenes/RegionScreen/RegionScreenView.cs" id="3_pa3jd"]
 [ext_resource type="Texture2D" uid="uid://c7s8q1a0l08y0" path="res://Assets/marines_shooting_jungle.jpg" id="4_pwx37"]

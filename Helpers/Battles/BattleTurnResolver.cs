@@ -33,7 +33,7 @@ namespace OnlyWar.Helpers.Battles
         private readonly Dictionary<BattleSide, Queue<int>> _battleValueHistory = [];
         private readonly Dictionary<BattleSide, Queue<bool>> _damageActionHistory = [];
         private readonly Dictionary<int, float> _rearGuardStartingSeparation = [];
-        // Morale (Design/Active/MoraleAndRout.md §5). Starting able strength per squad drives the
+        // Morale (OnlyWar_TDD.md §6.6). Starting able strength per squad drives the
         // cumulative-casualty term; the turn-start able counts drive the this-turn casualty term;
         // the turn-start routing snapshot drives the propagation term (§5.1 — read prior-turn
         // results, never routs rolled this turn); the leader set flags squads that began with a
@@ -247,7 +247,7 @@ namespace OnlyWar.Helpers.Battles
             if (_currentState.ActiveAttackerSquads.Count > 0
                 && _currentState.ActiveOpposingSquads.Count > 0)
             {
-                // Stage 6 (Design/Active/WithdrawalAndPursuit.md §11): a rout preempts the plan,
+                // Stage 6 (OnlyWar_TDD.md §6.6): a rout preempts the plan,
                 // so the morale check runs BEFORE the continuation/rear-guard decision.
                 EvaluateMorale(events);
                 if (BattleHistory.Outcome == null
@@ -404,7 +404,7 @@ namespace OnlyWar.Helpers.Battles
             BattleForcePlanner forcePlanner = new(squadPlanner);
 
             // Routing squads flee through their own planner path regardless of side intent
-            // (Design/Active/WithdrawalAndPursuit.md §10) and are removed from the cover
+            // (OnlyWar_TDD.md §6.6) and are removed from the cover
             // rotation and rear-guard candidate set — hence excluded from the force planner.
             List<BattleSquad> friendly = [];
             foreach (BattleSquad squad in allFriendly.OrderBy(squad => squad.Id))
@@ -548,7 +548,7 @@ namespace OnlyWar.Helpers.Battles
             }
         }
 
-        // Design/Active/MoraleAndRout.md §5-6. Both sides are evaluated from the same post-round
+        // OnlyWar_TDD.md §6.6 Both sides are evaluated from the same post-round
         // physical state; propagation (§5.1) reads the turn-start routing snapshot, so iteration
         // order does not change results and a rout this turn only pressures neighbours next turn.
         private void EvaluateMorale(List<BattleEvent> events)
@@ -1078,7 +1078,7 @@ namespace OnlyWar.Helpers.Battles
             }
 
             // Routing squads are removed from the rear-guard candidate set
-            // (Design/Active/WithdrawalAndPursuit.md §10).
+            // (OnlyWar_TDD.md §6.6).
             List<BattleSquad> squads = GetActiveSquads(withdrawingSide)
                 .Where(squad => squad.WithdrawalRole != WithdrawalRole.Routing)
                 .OrderBy(squad => squad.Id)

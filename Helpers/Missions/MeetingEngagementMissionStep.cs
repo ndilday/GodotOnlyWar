@@ -50,7 +50,7 @@ namespace OnlyWar.Helpers.Missions
             AnnihilationPlacer placer = new AnnihilationPlacer(bgm, range);
             var squadPostionMap = placer.PlaceSquads(missionSquads, opposingSquads);
             // burrow-capable squads (e.g. Raveners) erupt directly into melee instead
-            // of advancing across the gap — see Design/EvasionBurrowAndAmbush.md
+            // of advancing across the gap — see OnlyWar_TDD.md §6.6
             BurrowPlacer.PlaceBurrowers(bgm, missionSquads.Concat(opposingSquads));
             int oppForSize = opposingSquads.Sum(s => s.AbleSoldiers.Count);
             // See AmbushedMissionStep: Faction is guarded rather than assumed everywhere else it is read.

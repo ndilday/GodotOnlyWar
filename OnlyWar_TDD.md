@@ -25,6 +25,7 @@
    - 5.5 [Fleet](#55-fleet)
    - 5.6 [Missions & Orders](#56-missions--orders)
    - 5.7 [Characters & Requests](#57-characters--requests)
+   - 5.8 [Campaign Scenario](#58-campaign-scenario)
 6. [System Implementations](#6-system-implementations)
    - 6.1 [Turn Controller](#61-turn-controller)
    - 6.2 [Faction Strategy](#62-faction-strategy)
@@ -490,11 +491,31 @@ IRequest (interface)
   ├─ Requester : Character
   ├─ TargetPlanet : Planet
   ├─ DateRequestMade : Date
-  └─ DateRequestFulfilled : Date     (null if unfulfilled)
+  ├─ Deadline / DateRequestResolved : Date
+  ├─ FulfillmentKind : ForceCommitment | ThreatSuppressed
+  ├─ Status : Open | InProgress | Fulfilled | Failed
+  ├─ Commitment : ForceCommitmentPackage
+  ├─ ProgressBattleValueTime : long
+  └─ Snapshotted offer, severity, and hazard
 
 PresenceRequest : IRequest
-  (currently the only concrete implementation)
+  (the first governor-request vertical slice)
+
+Pledge
+  ├─ SourcePlanetId / GrantingAuthorityId : int
+  ├─ Payload : Requisition amount
+  ├─ ScheduleKind : OneOff | Standing
+  ├─ NextDeliveryDate / CadenceWeeks
+  └─ Status : Active | Suspended | Completed | Defaulted
 ```
+
+Requests snapshot their readable force package, deadline, hidden Battle-Value-Time valuation, and offered Requisition when generated. Confirmed threats use outcome fulfillment; false alarms use capped weekly force commitment. Fulfillment creates an institutional `Pledge` rather than crediting Requisition immediately. `PledgeDeliveryProcessor` handles delayed one-off grants, standing cadence, source-world suspension/default, and succession independently of the individual governor. Requests and pledges persist their evaluated values and lifecycle state exactly.
+
+### 5.8 Campaign Scenario
+
+`Sector.Scenario` is an optional persisted `CampaignScenario`; `null` retains sandbox behavior. The current `PromisedWorld` scenario stores its promised planet, objective state (`Pending`, `Won`, or `Lapsed`), one-shot briefing acknowledgement, composed briefing text, and original authority id. Mechanical authority is resolved from the current governance hierarchy rather than pinned to the original character.
+
+Governance designations are derived, not persisted. `SectorBuilder.AssignGovernance` deterministically selects the highest-importance Imperial world as sector capital and one Imperial governance seat per subsector; the governor characters themselves already round-trip. `ScenarioBuilder` stamps the opening objective and starting opposition after normal sector generation, while `ScenarioTurnProcessor` evaluates success or lapse only after the week's missions and planetary simulation settle.
 
 ---
 
@@ -541,6 +562,10 @@ Non-deployed non-Scout marines receive weekly work-experience training through `
 
 **Player construction (squad-driven fortification).** The player can order a squad in its own region to build a defense (Entrenchment / Detection / Anti-Air), creating a `ConstructionMission` targeting the player's `RegionFaction`. Unlike the NPC squad-less construction (resolved at a flat `MissionSize` in `ProcessConstructionOrders`), a construction order that carries a squad is routed in `ProcessCombatMissions` to `ResolveSquadConstruction`: every able soldier contributes its `Engineering (Fortification)` skill value, the sum is divided by `EngineeringBuildDivisor` (100) and floored (minimum 1), and the result is applied via the shared `ApplyConstruction`. The order persists, so the squad accumulates defenses over successive turns. `Engineering (Fortification)` is an Intelligence-based Tech skill trained by all combat marines at low weight.
 
+**Multi-faction regions.** Orders target an explicit `RegionFaction`; the assignment UI requires a choice when several hostile factions are present and locks it when only one exists. Detection is aggregated across every detecting enemy in the region, with the actual spotter/interceptor selected by intel and deployed-strength weighting. Intelligence opportunities are budgeted proportionally by faction strength rather than dictionary order. The detailed selection and presentation decisions remain in `Design/Reference/MultiFactionRegions.md`.
+
+**Strategic NPC combat.** NPC-only assaults cross from tactical to `StrategicCombatResolver` when either side exceeds `MaxTacticalActors` (120), generated forces would exceed `MaxGeneratedSquads` (24), or committed strength exceeds `MassCombatBattleValueFloor` (1,500 BV). Named/player squads always remain tactical. Strategic resolution works directly in conserved BV pools: effective strength combines committed BV, aggression, faction quality, organization/readiness, entrenchment, and intel-derived surprise; a Gaussian combat ratio determines bounded casualties and whether the attacker clears the 1.10 capture threshold. Invaders establish a foothold on victory, raiders return survivors, and no transient tactical squads are generated. Formulas and tuning questions remain in `Design/Reference/LargeScaleNpcCombat.md`.
+
 ### 6.3 Sector Entity Logic
 
 `PlanetTurnProcessor` runs after mission aftermath and Chapter/fleet upkeep. It handles:
@@ -552,7 +577,7 @@ Non-deployed non-Scout marines receive weekly work-experience training through `
 - `Logistic` and baseline (`None`) growth are scaled by a logistic crowding factor: `newPop = factionPop × growthRate × (1 − regionPop / carryingCapacity)`, where `regionPop` is the region's combined population across all factions. The factor is near-maximal when the region is sparse, zero at capacity, and gently negative above capacity (so an overfull region drifts back toward capacity). A carrying capacity of 0 is treated as uncapped (legacy behavior).
 - `growthRate` is the maximum (uncrowded) rate: `LogisticGrowthRate = 0.0006`, `BaselineGrowthRate = 0.0004`. These are tuned so a world at a typical fill (~50–75% of capacity) still roughly doubles per century, matching the canon "population doubles every ~100 Terran years" — not just ultra-underpopulated worlds.
 - `Conversion` growth: one default-faction member is converted per week. At population > 100, additional 0.2%/week organic growth. The garrison-to-population ratio determines whether a garrison member is also converted. (Conversion is not subject to the carrying-capacity factor.)
-- `Unrest` is reversible civilian allegiance rather than organic growth. Internal per-region Contentment drifts toward a tax/governor/security/crowding target; the Insurrectionist population closes toward the resulting target share, recruits PDF at a reduced weight, arms a separate civilian cadre pool, concentrates toward public revolts, and uses 2:1 reveal / 0.5:1 concealment hysteresis. Hidden embedded PDF remains in the nominal player-facing PDF roster but is excluded from loyal strength. See `Design/Active/RevoltCivilStability.md`.
+- `Unrest` is reversible civilian allegiance rather than organic growth. Internal per-region Contentment drifts 3% of the gap toward a tax/governor/security/crowding target; the Insurrectionist population closes toward a maximum 30% target share, recruits PDF at 0.7 weight, arms a separate civilian cadre pool, and concentrates one adjacency step at 5% per week. A revolt becomes public at 2:1 rebel-to-loyal strength and hides again below 0.5:1. Hidden embedded PDF remains in the nominal player-facing PDF roster but is excluded from loyal strength. Capital control and contextual human/xenos truces use this same public-state model.
 
 **Going Public:**
 - If a hidden faction's population exceeds the configured threshold, `IsPublic` is set to `true`, making it visible and triggering conflict resolution in subsequent turns.
@@ -571,6 +596,7 @@ Non-deployed non-Scout marines receive weekly work-experience training through `
 - `RequestGenerationRate` (`SupplyRule`) throttles the whole petition economy. Both gates are linear in the governor's traits, so it scales only how often worlds petition, not which ones do. Sector-wide arrivals per week ≈ `governorCount × 0.125 × RequestGenerationRate`; at the shipped 0.006 that is ~0.6/week for the ~800-governor production sector, holding ~13 petitions open at a time.
 - The deadline comes from `SupplySeverityDeadline`, keyed by the `RequestSeverity` that `ClassifyRequest` derives from the local threat ratio: Concerned 39 weeks, Serious 26, Desperate 13, Existential 13. It is deliberately a property of the petitioning world, not of where the Chapter's forces are — the Chapter may be spread across several task forces, so there is no single position to measure against, and keying off the nearest asset would tighten every deadline as the player expanded. Reachability instead falls out of geography: a round trip costs 4 weeks of system transit before any warp travel (`TaskForce.SystemTransitWeeksPerEnd`), so a short fuse is implicitly a proximity requirement and only urgent petitions near a standing force can be answered.
 - Severity is classified before the commitment package is built, so `ForceCommitmentPackage.CompletionDeadlineWeeks` carries the real fuse length and `RequestValueCalculator`'s throughput premium prices urgent petitions higher without any separate urgency term.
+- Request valuation is data-driven through `SupplyEconomyRules`. The player sees squads, qualifications, service weeks, deadlines, progress, and the fixed offer; Battle Value and Battle-Value-Time remain internal accounting units. `GovernorTurnProcessor` advances request state, creates pledges on fulfillment, and applies opinion/cooldown consequences. `PledgeDeliveryProcessor` runs at sector scope because deliveries affect the Chapter economy and may originate from many worlds.
 
 ### 6.4 Mission Step State Machine
 
@@ -580,9 +606,18 @@ All steps implement `IMissionStep`:
 public interface IMissionStep
 {
     string Description { get; }
-    void ExecuteMissionStep(MissionContext context, float marginOfSuccess, IMissionStep returnStep);
+    MissionStepPhase Phase { get; }
+    bool ConsumesDay { get; }
+    MissionStepResult ExecuteMissionStep(
+        MissionExecutionContext execution,
+        float marginOfSuccess,
+        IMissionStep resumeStep);
 }
 ```
+
+Steps return their successor through `MissionStepResult`; `MissionStepDriver` executes this trampoline instead of allowing steps to recursively run an entire mission. `MissionDayScheduler` interleaves all active missions for up to six days. On each day it runs every `Shaping` step before any `Acting` step, and only `ConsumesDay` steps advance mission time. This makes interactions declarative at the step level rather than hardcoded by mission type.
+
+`RegionFaction.CommittedAttention` is transient same-day state. Diversions draw a portion of the defender's remaining attention during the shaping phase; stealth, patrol, and interception steps consume the resulting exposure during acting, and the scheduler resets it at the next day boundary. `MissionReturnPolicy` determines whether a mission returns, holds captured ground, or remains static. Mission opening ranges interpolate between both sides' preferred ranges, so a successful ranged ambush opens farther away while a successful melee ambush opens close.
 
 Step chains by mission type:
 
@@ -685,6 +720,7 @@ Strength after armor reduction is compared against wound thresholds to determine
 **Ranged planning and friendly fire:**
 
 - `BattleSquadPlanner` scores candidate attacks in Battle Value rather than selecting a random member of the nearest squad. The common shape is `imminence × expected enemy BV removed − expected friendly BV lost`; imminence discounts enemies that cannot engage soon without double-counting their threat, since target BV already represents combat value.
+- Candidate acquisition is shared by conventional, cone, and blast paths. Enemies are ranked once and capped by `RangedCandidateEvaluationCount` (6), preventing the three weapon paths from independently choosing unrelated fields. Blast delivery is evaluated over deterministic normal quadrature and angle samples; both enemy benefit and friendly/self cost use the same scatter distribution. All planner damage estimates integrate the real `N(3.5, 1.75)` damage roll through `CalculateExpectedWoundRatio` rather than substituting its mean.
 - Shooting into a melee scrum applies `RangedFriendlyFireRules.FiringIntoMeleePenalty` in both planning and resolution. A miss inside the narrow near-miss band may strike another scrum participant, selected by footprint-size weight. `ShootAction` records the actual victim and whether the result was friendly fire so aftermath and replay do not credit or narrate the nominal target incorrectly.
 - An engaged soldier compares his planned melee sequence against a point-blank ranged action in the same BV currency. The ranged option pays the firing-into-melee and weapon-`Bulk` penalties plus the expected self-BV cost of giving up parry against adjacent attackers.
 - General line-of-fire tracing through friendly formations is not implemented; the scrum distribution is intentionally reusable when terrain and fire lanes are introduced.
@@ -701,6 +737,16 @@ Strength after armor reduction is compared against wound thresholds to determine
 - Remaining template/ranged work is tracked in `Design/Active/RangedCombatFollowUps.md`.
 
 **Squad placers:** `AmbushPlacer` and `AnnihilationPlacer` handle initial squad placement for their respective engagement types. Starting range is modified by `marginOfSuccess` from the preceding stealth check.
+
+`Species.MeleeEvasion` participates in the contested melee roll and `Species.RangedEvasion` is a flat penalty in shooting and planner distance estimates. `SpeciesAbilities.Burrow` moves eligible squads adjacent to the nearest enemy after ordinary placement, preserving valid footprints and letting ambushers erupt into melee; the same capability permits immediate tactical disengagement during withdrawal.
+
+**Engagement posture and range.** `BattleModifiersUtil.CalculateOptimalDistance` separates hit-limited weapons from weapons that genuinely cannot wound at range. `BattleSquadPlanner` compares expected ranged value, closing exposure, and melee value when deciding whether to stand, close, or charge. `BattleSquad.GetPreferredOpeningRange` averages soldier preferences and feeds meeting-engagement and ambush placement. The scoring currency remains expected BV removed; the active take-out-probability redesign is tracked in `Design/Active/EngagementPostureAndTakeOutScoring.md`.
+
+**Morale, withdrawal, and pursuit.** `BattleSideState` carries force intent (`Engaged`, fighting/rear-guard withdrawal, pursuit, rout, or disengaged), the withdrawal heading, covering/rear-guard assignments, and starting force metrics. Organized withdrawal alternates Cover and Bound roles; pursuers choose Break Off, Follow, or Press behavior from contact and expected value. `WithdrawalForecast` compares projected BV preservation, including masked departure and command-collapse risk, before assigning an autonomous rear guard. Running soldiers lose melee guard; Burrow can break contact immediately.
+
+After each combat round, `BattleMoraleEvaluator` computes local shock from current/cumulative casualties, leader loss, nearby routing allies, and local outnumbering, then multiplies it by force-wide disadvantage. Per-soldier resolve is a convex Ego function. Synapse coverage skips the check; command auras reduce shock without granting immunity. Squads aggregate to `Steady`, `Shaken`, or sticky `Routing`; routing preempts the normal plan and enters the same pursuit, outcome, aftermath, and replay pipeline as voluntary withdrawal. Morale and withdrawal tunables live in code (`MoraleConstants` and the withdrawal planners) and are calibration surfaces rather than rules-data facts.
+
+Battle completion produces a typed `BattleOutcome` with end reason, field holder, and disengaged/eliminated/routing/rear-guard squad ids. Typed `BattleEvent`s record withdrawal, cover, rear guard, pursuit, rout, and disengagement transitions for replay and narrative consumers.
 
 **Battle continuation (`BattleSquad.ShouldContinueMission`):**
 

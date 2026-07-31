@@ -12,7 +12,7 @@ using OnlyWar.Models.Squads;
 namespace OnlyWar.Builders
 {
     // Stamps the "Promised World" opening scenario on top of an already-generated, already-
-    // governed sector (Design/OpeningScenario.md §3). This is an override layer, not a fork of
+    // governed sector (Design/Reference/OpeningScenario.md). This is an override layer, not a fork of
     // the generator: it selects a mostly-Imperial world, confines a Tyranid incursion to a few
     // regions, parks the chapter fleet in orbit (the player must land), resolves the sitting
     // Sector Lord as the promising authority, and returns the persistent CampaignScenario.
@@ -31,7 +31,7 @@ namespace OnlyWar.Builders
             PlayerForce playerForce, List<Planet> planetList, List<Character> characterList)
         {
             // The opening plays out as a timed sequence during generation rather than being stamped
-            // as a static board (Design/OpeningScenario.md §4.24, "Opening Scenario Application"): the
+            // as a static board (Design/Reference/OpeningScenario.md): the
             // world the player inherits is emergent — sometimes a fresh Tyranid beachhead, sometimes a
             // month-eaten ruin — from the same simulation that runs during play. All draws come from
             // the already-seeded RNG stream, so seed + scenario still reproduces the same opening.
@@ -76,7 +76,7 @@ namespace OnlyWar.Builders
 
         // Weeks the stranded Tyranid swarm feeds after planetfall before the player arrives:
         // max(0, round(mean + z)), z ~ N(0,1), so the opening varies from a fresh beachhead to a
-        // deeply consumed world across seeds (Design/OpeningScenario.md §4.24). Drawn from the
+        // deeply consumed world across seeds (Design/Reference/OpeningScenario.md). Drawn from the
         // seeded RNG so it is deterministic per seed.
         private static int PostLandingTurns()
         {

@@ -155,7 +155,7 @@ namespace OnlyWar.Helpers.Battles
             baseTotal += BattleModifiersUtil.CalculateSizeModifier(targetSize);
             // elusive targets are flatly harder to hit, which pulls the optimal
             // engagement range closer — keeps the AI from over-estimating its reach
-            // against Raveners/Genestealers. See Design/EvasionBurrowAndAmbush.md.
+            // against Raveners/Genestealers. See OnlyWar_TDD.md §6.6.
             baseTotal -= targetRangedEvasion;
             // if the total doesn't get to 10.5, there will be no range where there's a good chance of hitting, so just keep getting closer
             if (baseTotal < 10.5) return 0;

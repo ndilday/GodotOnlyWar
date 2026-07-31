@@ -6,7 +6,7 @@ using Xunit;
 
 namespace OnlyWar.Tests.Narrative;
 
-// Coverage for the minimal Promised World briefing composer (Design/OpeningScenario.md §4, step 3).
+// Coverage for the minimal Promised World briefing composer (Design/Reference/OpeningScenario.md).
 // The load-bearing guarantees are: every token is substituted (no authored placeholder leaks into
 // the player-facing text), and the template choice is deterministic for a given token set.
 public class BriefingComposerTests

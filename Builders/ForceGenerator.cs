@@ -148,7 +148,7 @@ namespace OnlyWar.Builders
 
             if (!availableTemplates.Any()) return new List<Squad>();
 
-            // §9 synapse ratio (Design/Active/MoraleAndRout.md): only factions that field at
+            // §9 synapse ratio (OnlyWar_TDD.md §6.6): only factions that field at
             // least one synapse-providing squad template are affected. Every other faction's
             // generation is exactly the loop that existed before this pass.
             List<SquadTemplate> synapseTemplates = usableTemplates

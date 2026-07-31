@@ -10,7 +10,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 
-public partial class ChapterController : Control
+public partial class ChapterController : MainScreenController
 {
     private readonly ChapterBrowserNavigator _navigator = new();
     private readonly SoldierTransferService _transferService = new();
@@ -28,17 +28,16 @@ public partial class ChapterController : Control
 
     public ChapterView ChapterView { get; set; }
 
-    public event EventHandler CloseButtonPressed;
     public event EventHandler CampaignChanged;
 
     public override void _Ready()
     {
+        base._Ready();
         if (ChapterView == null)
         {
             ChapterView = GetNode<ChapterView>("ChapterView");
         }
 
-        ChapterView.CloseButtonPressed += OnCloseButtonPressed;
         ChapterView.BrowserItemSelected += OnBrowserItemSelected;
         ChapterView.BrowserItemDrillRequested += OnBrowserItemDrillRequested;
         ChapterView.BreadcrumbPressed += OnBreadcrumbPressed;
@@ -73,7 +72,6 @@ public partial class ChapterController : Control
             return;
         }
 
-        ChapterView.CloseButtonPressed -= OnCloseButtonPressed;
         ChapterView.BrowserItemSelected -= OnBrowserItemSelected;
         ChapterView.BrowserItemDrillRequested -= OnBrowserItemDrillRequested;
         ChapterView.BreadcrumbPressed -= OnBreadcrumbPressed;
@@ -103,11 +101,6 @@ public partial class ChapterController : Control
         _activeFilter = [];
         _navigator.OpenSoldier(FindCompanyId(squad), squad.Id, soldier.Id);
         RenderCurrentPath();
-    }
-
-    private void OnCloseButtonPressed(object sender, EventArgs e)
-    {
-        CloseButtonPressed?.Invoke(this, e);
     }
 
     private void OnBrowserItemSelected(object sender, ChapterBrowserItemEvent item)

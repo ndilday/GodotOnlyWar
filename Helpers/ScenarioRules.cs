@@ -1,6 +1,6 @@
 namespace OnlyWar.Helpers
 {
-    // Centralized tunables for the Opening Scenario ("Promised World" — Design/OpeningScenario.md
+    // Centralized tunables for the Opening Scenario ("Promised World" — Design/Reference/OpeningScenario.md
     // §8). These are the load-bearing balance numbers that decide whether the first objective is
     // tense-and-winnable; they live here (mirroring MedicalProcedureRules / GeneseedRules) so they
     // are tuned in one place rather than scattered as literals across the builder. The values below
@@ -45,7 +45,7 @@ namespace OnlyWar.Helpers
         // region resolves to single, Tyranid control.
         public const float ImperialRemnantFraction = 0.1f;
 
-        // Opening-scenario temporal sequencing (Design/OpeningScenario.md §4.24, "Opening Scenario
+        // Opening-scenario temporal sequencing (Design/Reference/OpeningScenario.md, "Opening Scenario
         // Application"). Rather than authoring a static board, the stamp plays the opening out as a
         // timed sequence during generation: the revealed Genestealer Cult fights the PDF for
         // PreLandingTurns weeks, the Tyranids then make planetfall, and the stranded swarm feeds for
@@ -75,7 +75,7 @@ namespace OnlyWar.Helpers
         // sometimes the player inherits a fresh beachhead, sometimes a month-eaten ruin.
         public const double PostLandingTurnsMean = 4.0;
 
-        // Sector Lord opinion swing when the scenario resolves (Design/OpeningScenario.md §6.2).
+        // Sector Lord opinion swing when the scenario resolves (Design/Reference/OpeningScenario.md).
         // Applied to the *current* seat-holder's OpinionOfPlayerForce: a promise honored raises it,
         // a promise lost lowers it. Magnitudes are starting points for playtesting.
         public const float SectorLordOpinionReward = 0.5f;

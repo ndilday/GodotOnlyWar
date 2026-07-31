@@ -45,7 +45,7 @@ namespace OnlyWar.Models.Battles
         Routing = 4
     }
 
-    // Squad-level morale outcome from the per-turn check (Design/Active/MoraleAndRout.md §6).
+    // Squad-level morale outcome from the per-turn check (OnlyWar_TDD.md §6.6).
     // Steady/Shaken are recomputed statelessly every turn and may flicker (non-sticky, §6);
     // Routing is sticky and is also reflected in WithdrawalRole.Routing so the withdrawal /
     // pursuit / aftermath machinery keyed on that role picks it up.

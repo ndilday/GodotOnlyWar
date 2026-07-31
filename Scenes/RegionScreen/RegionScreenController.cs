@@ -14,7 +14,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 
-public partial class RegionScreenController : DialogController
+public partial class RegionScreenController : MainScreenController
 {
     private static readonly (string Key, string Label)[] RosterFilters =
     [

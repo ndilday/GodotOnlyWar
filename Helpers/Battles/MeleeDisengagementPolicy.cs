@@ -12,7 +12,7 @@ public enum MeleeDisengagementChoice
 
 /// <summary>
 /// Decides whether a soldier in an organized withdrawal, caught in melee, turns and fights or
-/// keeps running (Design/Active/WithdrawalAndPursuit.md §6.2). Withdrawal is not a rout: a bound
+/// keeps running (OnlyWar_TDD.md §6.6). Withdrawal is not a rout: a bound
 /// squad is under orders and still has the discipline to make this call, where a routing soldier
 /// has none and simply fights when he cannot flee.
 ///

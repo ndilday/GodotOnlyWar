@@ -24,7 +24,7 @@ namespace OnlyWar.Tests.Missions;
 // and fulfils it from the region's Patrol/Recon squads largest-first, stopping as soon as the
 // requirement is met. The per-sigma term is the half of that formula that says "the worse you were
 // seen, the more of the screen turns up," and it was unexercised by the suite
-// (Design/Active/DailyMissionResolution.md §10, Phase 6): every other interception case has a screen
+// (OnlyWar_TDD.md §6.4): every other interception case has a screen
 // of exactly ONE squad, which commits identically at every margin, so the multiple could have been
 // any number at all and nothing would have noticed.
 //

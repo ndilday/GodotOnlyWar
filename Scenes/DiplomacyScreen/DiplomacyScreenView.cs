@@ -1,7 +1,7 @@
 using Godot;
 using System.Collections.Generic;
 
-public partial class DiplomacyScreenView : DialogView
+public partial class DiplomacyScreenView : MainScreenView
 {
     private Tree _requestTree;
 

@@ -56,7 +56,7 @@ public class FactionStrategyController
     // has an enemy, and that alone should make covert ground non-free to cross.
     //
     // This closes the hole where a Chapter operating before it reveals itself met literally no
-    // opposition anywhere on a planet (Design/Active/DailyMissionResolution.md §8 Q4): the patrol
+    // opposition anywhere on a planet (OnlyWar_TDD.md §6.4): the patrol
     // fraction returned a hard zero without a public enemy, and interception now requires a screen at
     // parity, so every intrusion went uncontested. Deliberately far below the 0.10 threatened-border
     // tier - this is policing, not screening - and it needs no new state and no signal the faction has
@@ -125,7 +125,7 @@ public class FactionStrategyController
     // stronger Imperial Guard (§6.4); a bare PDF holds the line and buys time.
     //
     // When onlyPlanet is supplied the faction plans for that single world only (the opening-scenario
-    // stamp's planet-scoped simulation — Design/OpeningScenario.md §4.24); otherwise it plans across
+    // stamp's planet-scoped simulation — Design/Reference/OpeningScenario.md); otherwise it plans across
     // every world in the sector as it does each turn.
     public List<Order> GenerateFactionOrders(Faction faction, Sector sector, Planet onlyPlanet = null, bool defensiveOnly = false)
     {
@@ -465,7 +465,7 @@ public class FactionStrategyController
     ///
     /// The signal is <see cref="RegionExtensions.GetFactionRegionIntel"/> - what this faction has
     /// already learned about that region - and NOT the region's true watch score. That distinction is
-    /// the same one Q4 turns on (Design/Active/DailyMissionResolution.md §8): reading
+    /// the same one Q4 turns on (OnlyWar_TDD.md §6.4): reading
     /// MissionStealthDifficulty here would hand the planner exact knowledge of an enemy's sensors and
     /// patrol dispositions, which it has no way to hold. Own intel is unambiguously earned, and it is
     /// also the exact term the stealth model already credits the intruder with (its IntelMod), so the
@@ -1179,7 +1179,7 @@ public class FactionStrategyController
     /// <remarks>
     /// The two low-own-intel tiers this used to carry are gone. They existed because patrolling raised a
     /// region's own situational awareness, and it no longer does - patrol grants no intelligence at all
-    /// (Design/Active/DailyMissionResolution.md §5), so the AI was spending troops on a reward it could
+    /// (OnlyWar_TDD.md §6.4), so the AI was spending troops on a reward it could
     /// not collect. That motivation now lives where it can actually be paid: the listening-post benefit in
     /// BestDevelopmentOption already scales with the gap below GarrisonFullSightIntel, and recon covers the
     /// rest.

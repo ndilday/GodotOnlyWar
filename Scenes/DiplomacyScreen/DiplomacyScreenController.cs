@@ -8,7 +8,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 
-public partial class DiplomacyScreenController : DialogController
+public partial class DiplomacyScreenController : MainScreenController
 {
     private DiplomacyScreenView _view;
 

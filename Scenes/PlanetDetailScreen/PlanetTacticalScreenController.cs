@@ -16,7 +16,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 
-public partial class PlanetTacticalScreenController : DialogController
+public partial class PlanetTacticalScreenController : MainScreenController
 {
 	private const string ActionOpenRegion = "open_region";
 	private const string ActionOpenSquad = "open_squad";

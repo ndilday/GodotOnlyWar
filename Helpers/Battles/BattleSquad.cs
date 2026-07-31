@@ -42,7 +42,7 @@ namespace OnlyWar.Helpers.Battles
         public SquadMovementTier MovementTier { get; set; }
         public BattleSquadStatus Status { get; set; }
         public WithdrawalRole WithdrawalRole { get; set; }
-        // Latest morale outcome (Design/Active/MoraleAndRout.md §6). Set each turn by the
+        // Latest morale outcome (OnlyWar_TDD.md §6.6). Set each turn by the
         // resolver's morale stage. Steady/Shaken are non-sticky; Routing is mirrored onto
         // WithdrawalRole.Routing. Read by the planner to degrade a Shaken squad's actions.
         public MoraleState MoraleState { get; set; }
@@ -82,7 +82,7 @@ namespace OnlyWar.Helpers.Battles
 
         // A squad burrows only if every able member can — burrowing is a whole-unit
         // tunnelling maneuver, not something a mixed squad does piecemeal. Drives
-        // eruption-into-melee placement (see Design/EvasionBurrowAndAmbush.md).
+        // eruption-into-melee placement (see OnlyWar_TDD.md §6.6).
         public bool CanBurrow
         {
             get
@@ -94,7 +94,7 @@ namespace OnlyWar.Helpers.Battles
         }
 
         // A squad "provides synapse" iff any of its soldier templates' species carries the
-        // ability (Design/Active/MoraleAndRout.md §4.1). This reads the full roster, not
+        // ability (OnlyWar_TDD.md §6.6). This reads the full roster, not
         // AbleSoldiers — it describes squad composition, not current combat capability.
         // Squads are species-homogeneous (§3.1), so in practice this is all-or-nothing, but
         // it is written to tolerate a future mixed template without change.
@@ -106,7 +106,7 @@ namespace OnlyWar.Helpers.Battles
             }
         }
 
-        // An HQ squad projects the §4.3 command aura (Design/Active/MoraleAndRout.md; Phase
+        // An HQ squad projects the §4.3 command aura (OnlyWar_TDD.md §6.6; Phase
         // 6). Unlike synapse, SquadTypes.HQ IS the right set for command (§3.2) — a Tyranid
         // Warrior squad provides synapse but no command aura, while every faction's HQ
         // (Captain, Warboss, Hive Tyrant) provides command. Radius and strength are

@@ -170,9 +170,9 @@ namespace OnlyWar.Helpers.Battles.Actions
             totalModifier += BattleModifiersUtil.CalculateSizeModifier(target.Soldier.Size);
             totalModifier += BattleModifiersUtil.CalculateRangeModifier(Range, target.CurrentSpeed);
             // elusive targets (serpentine Raveners, weaving Genestealers, camo-caped
-            // Scouts) are flatly harder to hit — see Design/EvasionBurrowAndAmbush.md
+            // Scouts) are flatly harder to hit — see OnlyWar_TDD.md §6.6
             totalModifier -= target.Soldier.Template.Species.RangedEvasion;
-            // a Shaken squad's fire is degraded (Design/Active/MoraleAndRout.md §6)
+            // a Shaken squad's fire is degraded (OnlyWar_TDD.md §6.6)
             if (shooter.BattleSquad?.MoraleState == MoraleState.Shaken)
             {
                 totalModifier -= MoraleConstants.ShakenRangedAccuracyPenalty;

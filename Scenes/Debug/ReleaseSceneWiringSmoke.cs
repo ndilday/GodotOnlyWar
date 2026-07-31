@@ -76,8 +76,10 @@ public partial class ReleaseSceneWiringSmoke : Node
 
         RequireNode<Node>(mainGame, "SectorMap");
         RequireNode<CanvasLayer>(mainGame, "UILayer");
+        Control primaryContentHost = RequireNode<Control>(mainGame, "UILayer/PrimaryContentHost");
         RequireNode<TopMenu>(mainGame, "UILayer/TopMenu");
         RequireNode<BottomMenu>(mainGame, "UILayer/BottomMenu");
+        RequireNode<Control>(mainGame, "UILayer/ModalLayer");
         RequireNode<SystemInspector>(mainGame, "UILayer/SystemInspector");
         RequireNode<ActivityOverlay>(mainGame, "UILayer/ActivityOverlay");
 
@@ -193,6 +195,51 @@ public partial class ReleaseSceneWiringSmoke : Node
             Require(!systemMenu.Visible, "Resume did not close System Menu.");
         }
 
+        // Primary destinations share the bounded workspace and leave both navigation bars
+        // available. Switching destinations directly must replace, rather than stack, screens.
+        Button chapterButton = RequireNode<Button>(mainGame,
+            "UILayer/BottomMenu/Panel/MarginContainer/HBoxContainer/ChapterButton");
+        Button fleetButton = RequireNode<Button>(mainGame,
+            "UILayer/BottomMenu/Panel/MarginContainer/HBoxContainer/FleetButton");
+        Press(chapterButton);
+        await NextFrame();
+        ChapterController chapterScreen = FindDescendant<ChapterController>(primaryContentHost);
+        Require(chapterScreen?.Visible == true,
+            "Chapter did not open in the primary content host.");
+        Require(mainGame.GetNode<TopMenu>("UILayer/TopMenu").Visible,
+            "Top Menu was hidden by a primary destination.");
+        Require(mainGame.GetNode<BottomMenu>("UILayer/BottomMenu").Visible,
+            "Bottom Menu was hidden by a primary destination.");
+
+        Press(fleetButton);
+        await NextFrame();
+        FleetScreenController fleetScreen = FindDescendant<FleetScreenController>(primaryContentHost);
+        Require(fleetScreen?.Visible == true,
+            "Classis did not open in the primary content host.");
+        if (fleetScreen != null)
+        {
+            Require(fleetScreen.GetNodeOrNull<Button>("FleetScreenView/CloseButton") == null,
+                "Primary screens should not contain a dialog-style close button.");
+        }
+        Require(chapterScreen?.Visible == false,
+            "Direct primary navigation left the previous destination visible.");
+
+        Press(fleetButton);
+        await NextFrame();
+        Require(fleetScreen?.Visible == false,
+            "Pressing the active bottom-menu destination did not return to the map.");
+        Require(!fleetButton.ButtonPressed,
+            "Bottom-menu destination remained pressed after toggling back to the map.");
+
+        Press(fleetButton);
+        await NextFrame();
+        Require(fleetScreen?.Visible == true && fleetButton.ButtonPressed,
+            "Classis did not reopen after being toggled off.");
+        SendKey(mainGame, Key.X);
+        await NextFrame();
+        Require(fleetScreen?.Visible == false,
+            "X did not return from the active primary destination.");
+
         Button endTurnButton = RequireNode<Button>(mainGame,
             "UILayer/BottomMenu/Panel/MarginContainer/HBoxContainer/EndTurnButton");
         EndTurnPreflightReport expectedPreflight = EndTurnPreflight.Evaluate(
@@ -208,6 +255,11 @@ public partial class ReleaseSceneWiringSmoke : Node
                 "End Turn has no effective subscriber or skipped attention: preflight did not open.");
             if (preflight != null)
             {
+                Button preflightCloseButton = RequireNode<Button>(preflight,
+                    "DialogView/CloseButton");
+                Require(preflightCloseButton?.Icon != null
+                        && string.IsNullOrEmpty(preflightCloseButton.Text),
+                    "Modal close control did not receive the standard close sprite.");
                 RequireNode<Button>(preflight,
                     "DialogView/PreflightPanel/ContentMargin/Layout/ActionRow/ProceedButton");
                 SendKey(mainGame, Key.X);
