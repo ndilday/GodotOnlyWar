@@ -72,6 +72,7 @@ public static class DossierCard
             {
                 Text = row.Item1,
                 SizeFlagsHorizontal = Control.SizeFlags.ExpandFill,
+                SizeFlagsStretchRatio = 0.55f,
                 ClipText = true,
                 TextOverrunBehavior = TextServer.OverrunBehavior.TrimEllipsis,
                 TooltipText = row.Item1
@@ -82,11 +83,14 @@ public static class DossierCard
             {
                 Text = row.Item2,
                 HorizontalAlignment = HorizontalAlignment.Right,
+                SizeFlagsHorizontal = Control.SizeFlags.ExpandFill,
+                SizeFlagsStretchRatio = 0.45f,
                 ClipText = true,
                 TextOverrunBehavior = TextServer.OverrunBehavior.TrimEllipsis,
                 TooltipText = row.Item2
             };
             value.AddThemeFontSizeOverride("font_size", 12);
+            value.AddThemeColorOverride("font_color", OnlyWarStyle.BodyText);
             rowBox.AddChild(label);
             rowBox.AddChild(value);
             cardStack.AddChild(rowBox);

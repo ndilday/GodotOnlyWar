@@ -197,6 +197,58 @@ public class FleetScreenControllerTests
     }
 
     [Fact]
+    public void CanTransferUnitToShip_RequiresCapacityForAllSquadsTogether()
+    {
+        Unit secondCompany = CreateUnit(2, "Second Company");
+        Ship sourceShip = CreateShip(1, "Source", 20);
+        Ship destinationShip = CreateShip(2, "Destination", 6);
+        _ = new TaskForce(1, CreateFaction(), null, CreatePlanet(1), null, [sourceShip, destinationShip]);
+        Squad firstSquad = CreateSquad(11, "Boreas Squad", secondCompany, memberCount: 4);
+        Squad secondSquad = CreateSquad(12, "Ardent Squad", secondCompany, memberCount: 4);
+        sourceShip.LoadSquad(firstSquad);
+        firstSquad.BoardedLocation = sourceShip;
+        sourceShip.LoadSquad(secondSquad);
+        secondSquad.BoardedLocation = sourceShip;
+
+        bool canTransfer = FleetScreenController.CanTransferUnitToShip(secondCompany, sourceShip, destinationShip);
+
+        Assert.False(canTransfer);
+        Assert.Contains(firstSquad, sourceShip.LoadedSquads);
+        Assert.Contains(secondSquad, sourceShip.LoadedSquads);
+    }
+
+    [Fact]
+    public void TransferUnitToShip_MovesEverySquadOfUnitFromSourceOnly()
+    {
+        Unit secondCompany = CreateUnit(2, "Second Company");
+        Unit thirdCompany = CreateUnit(3, "Third Company");
+        Ship sourceShip = CreateShip(1, "Source", 20);
+        Ship destinationShip = CreateShip(2, "Destination", 20);
+        _ = new TaskForce(1, CreateFaction(), null, CreatePlanet(1), null, [sourceShip, destinationShip]);
+        Squad firstSquad = CreateSquad(11, "Boreas Squad", secondCompany, memberCount: 3);
+        Squad secondSquad = CreateSquad(12, "Ardent Squad", secondCompany, memberCount: 4);
+        Squad otherUnitSquad = CreateSquad(21, "Aquila Squad", thirdCompany, memberCount: 2);
+        sourceShip.LoadSquad(firstSquad);
+        firstSquad.BoardedLocation = sourceShip;
+        sourceShip.LoadSquad(secondSquad);
+        secondSquad.BoardedLocation = sourceShip;
+        sourceShip.LoadSquad(otherUnitSquad);
+        otherUnitSquad.BoardedLocation = sourceShip;
+
+        FleetScreenController.TransferUnitToShip(secondCompany, sourceShip, destinationShip);
+
+        Assert.DoesNotContain(firstSquad, sourceShip.LoadedSquads);
+        Assert.DoesNotContain(secondSquad, sourceShip.LoadedSquads);
+        Assert.Contains(otherUnitSquad, sourceShip.LoadedSquads);
+        Assert.Contains(firstSquad, destinationShip.LoadedSquads);
+        Assert.Contains(secondSquad, destinationShip.LoadedSquads);
+        Assert.Equal(destinationShip, firstSquad.BoardedLocation);
+        Assert.Equal(destinationShip, secondSquad.BoardedLocation);
+        Assert.Equal(2, sourceShip.LoadedSoldierCount);
+        Assert.Equal(7, destinationShip.LoadedSoldierCount);
+    }
+
+    [Fact]
     public void LoadedSoldierCount_TracksMembersAddedAfterSquadEmbarks()
     {
         Unit secondCompany = CreateUnit(2, "Second Company");

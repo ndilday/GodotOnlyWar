@@ -58,6 +58,17 @@ public class PlanetTacticalScreenControllerTests
         Assert.Equal(["Alpha Squad | 1/1 | Unassigned", "Beta Squad | 1/1 | Unassigned"], unitNodes[0].Children.Select(node => node.Text));
     }
 
+    [Fact]
+    public void BuildShipCards_ShowsCapacityAsRowsWithoutDuplicativeProgressBar()
+    {
+        Ship ship = CreateShip();
+
+        DossierCardData card = Assert.Single(PlanetTacticalScreenController.BuildShipCards(ship));
+
+        Assert.Contains(card.Rows, row => row.Item1 == "Loaded" && row.Item2 == "0/100");
+        Assert.Null(card.BarFraction);
+    }
+
     [Theory]
     [InlineData(true, 1, "Bastion", "Land Squad in Bastion")]
     [InlineData(false, 1, "Bastion", "Land 1 Squad in Bastion")]

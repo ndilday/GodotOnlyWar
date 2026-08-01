@@ -4,11 +4,14 @@ using System;
 public partial class FleetTransferTree : Tree
 {
     private const string SquadPrefix = "Squad:";
+    private const string UnitPrefix = "Unit:";
     private const string ShipPrefix = "Ship:";
 
     public Func<int, int, bool> CanTransferSquadToShip { get; set; }
     public Action<int, int> TransferSquadToShip { get; set; }
-    private bool _isDraggingSquad;
+    public Func<int, int, int, bool> CanTransferUnitToShip { get; set; }
+    public Action<int, int, int> TransferUnitToShip { get; set; }
+    private bool _isDraggingTransfer;
 
     public override void _Ready()
     {
@@ -17,9 +20,9 @@ public partial class FleetTransferTree : Tree
 
     public override void _Notification(int what)
     {
-        if (what == NotificationDragEnd && _isDraggingSquad)
+        if (what == NotificationDragEnd && _isDraggingTransfer)
         {
-            _isDraggingSquad = false;
+            _isDraggingTransfer = false;
             ResetCursorShape();
             CallDeferred(MethodName.ResetCursorShape);
         }
@@ -28,7 +31,17 @@ public partial class FleetTransferTree : Tree
     public override Variant _GetDragData(Vector2 atPosition)
     {
         TreeItem item = GetItemAtPosition(atPosition);
-        if (!TryReadId(item, SquadPrefix, out int squadId))
+        string dragData;
+        if (TryReadId(item, SquadPrefix, out int squadId))
+        {
+            dragData = $"{SquadPrefix}{squadId}";
+        }
+        else if (TryReadId(item, UnitPrefix, out int unitId)
+            && TryReadId(item.GetParent(), ShipPrefix, out int sourceShipId))
+        {
+            dragData = $"{UnitPrefix}{unitId}:{sourceShipId}";
+        }
+        else
         {
             return default;
         }
@@ -39,16 +52,21 @@ public partial class FleetTransferTree : Tree
             Modulate = new Color(1f, 1f, 1f, 0.9f)
         };
         SetDragPreview(preview);
-        _isDraggingSquad = true;
+        _isDraggingTransfer = true;
         MouseDefaultCursorShape = CursorShape.Drag;
-        return Variant.From($"{SquadPrefix}{squadId}");
+        return Variant.From(dragData);
     }
 
     public override bool _CanDropData(Vector2 atPosition, Variant data)
     {
-        bool canDrop = TryReadDraggedSquadId(data, out int squadId)
-            && TryReadId(GetItemAtPosition(atPosition), ShipPrefix, out int shipId)
-            && CanTransferSquadToShip?.Invoke(squadId, shipId) == true;
+        bool canDrop = false;
+        if (TryReadId(GetItemAtPosition(atPosition), ShipPrefix, out int shipId))
+        {
+            canDrop = TryReadDraggedSquadId(data, out int squadId)
+                ? CanTransferSquadToShip?.Invoke(squadId, shipId) == true
+                : TryReadDraggedUnit(data, out int unitId, out int sourceShipId)
+                    && CanTransferUnitToShip?.Invoke(unitId, sourceShipId, shipId) == true;
+        }
 
         MouseDefaultCursorShape = canDrop ? CursorShape.CanDrop : CursorShape.Forbidden;
         return canDrop;
@@ -56,11 +74,18 @@ public partial class FleetTransferTree : Tree
 
     public override void _DropData(Vector2 atPosition, Variant data)
     {
-        if (TryReadDraggedSquadId(data, out int squadId)
-            && TryReadId(GetItemAtPosition(atPosition), ShipPrefix, out int shipId)
-            && CanTransferSquadToShip?.Invoke(squadId, shipId) == true)
+        if (TryReadId(GetItemAtPosition(atPosition), ShipPrefix, out int shipId))
         {
-            TransferSquadToShip?.Invoke(squadId, shipId);
+            if (TryReadDraggedSquadId(data, out int squadId)
+                && CanTransferSquadToShip?.Invoke(squadId, shipId) == true)
+            {
+                TransferSquadToShip?.Invoke(squadId, shipId);
+            }
+            else if (TryReadDraggedUnit(data, out int unitId, out int sourceShipId)
+                && CanTransferUnitToShip?.Invoke(unitId, sourceShipId, shipId) == true)
+            {
+                TransferUnitToShip?.Invoke(unitId, sourceShipId, shipId);
+            }
         }
 
         ResetCursorShape();
@@ -74,6 +99,23 @@ public partial class FleetTransferTree : Tree
     private static bool TryReadDraggedSquadId(Variant data, out int squadId)
     {
         return TryReadId(data.AsString(), SquadPrefix, out squadId);
+    }
+
+    private static bool TryReadDraggedUnit(Variant data, out int unitId, out int sourceShipId)
+    {
+        unitId = 0;
+        sourceShipId = 0;
+        string metadata = data.AsString();
+        if (string.IsNullOrEmpty(metadata)
+            || !metadata.StartsWith(UnitPrefix, StringComparison.Ordinal))
+        {
+            return false;
+        }
+
+        string[] ids = metadata[UnitPrefix.Length..].Split(':');
+        return ids.Length == 2
+            && int.TryParse(ids[0], out unitId)
+            && int.TryParse(ids[1], out sourceShipId);
     }
 
     private static bool TryReadId(TreeItem item, string prefix, out int id)

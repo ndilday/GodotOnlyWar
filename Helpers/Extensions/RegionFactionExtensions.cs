@@ -34,16 +34,16 @@ namespace OnlyWar.Helpers.Extensions
         {
             if (region == null) return 0f;
 
-            PlanetFaction playerFaction = region.Planet.PlanetFactionMap.Values
-                .FirstOrDefault(pf => pf.Faction.IsPlayerFaction);
-            if (playerFaction != null)
-            {
-                return playerFaction.GetRegionIntel(region);
-            }
-
-            PlanetFaction defaultFaction = region.Planet.PlanetFactionMap.Values
-                .FirstOrDefault(pf => pf.Faction.IsDefaultFaction);
-            return defaultFaction?.GetRegionIntel(region) ?? 0f;
+            // The Chapter and the PDF share player-visible intelligence. A Chapter
+            // PlanetFaction is created lazily when Marines first establish a presence on a
+            // planet, so it may have no historical RegionIntel entries even though the PDF
+            // already knows the region. Do not let that empty, newly-created map mask the
+            // allied intelligence that was visible before the Chapter presence existed.
+            return region.Planet.PlanetFactionMap.Values
+                .Where(pf => pf.Faction.IsPlayerFaction || pf.Faction.IsDefaultFaction)
+                .Select(pf => pf.GetRegionIntel(region))
+                .DefaultIfEmpty(0f)
+                .Max();
         }
 
         public static string GetPopulationDescription(this RegionFaction regionFaction)

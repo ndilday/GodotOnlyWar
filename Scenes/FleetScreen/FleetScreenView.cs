@@ -5,6 +5,7 @@ using System.Collections.Generic;
 public partial class FleetScreenView : MainScreenView
 {
     public event EventHandler<ValueTuple<int, int>> SquadDroppedOnShip;
+    public event EventHandler<ValueTuple<int, int, int>> UnitDroppedOnShip;
 
     private FleetTransferTree _fleetTree;
 
@@ -14,9 +15,14 @@ public partial class FleetScreenView : MainScreenView
         _fleetTree = GetNode<FleetTransferTree>("FleetPanel/Tree");
         _fleetTree.CanTransferSquadToShip = (squadId, shipId) => CanTransferSquadToShip?.Invoke(squadId, shipId) == true;
         _fleetTree.TransferSquadToShip = (squadId, shipId) => SquadDroppedOnShip?.Invoke(this, new ValueTuple<int, int>(squadId, shipId));
+        _fleetTree.CanTransferUnitToShip = (unitId, sourceShipId, destinationShipId) =>
+            CanTransferUnitToShip?.Invoke(unitId, sourceShipId, destinationShipId) == true;
+        _fleetTree.TransferUnitToShip = (unitId, sourceShipId, destinationShipId) =>
+            UnitDroppedOnShip?.Invoke(this, new ValueTuple<int, int, int>(unitId, sourceShipId, destinationShipId));
     }
 
     public Func<int, int, bool> CanTransferSquadToShip { get; set; }
+    public Func<int, int, int, bool> CanTransferUnitToShip { get; set; }
 
     public void PopulateFleetTree(IReadOnlyList<TreeNode> entries)
     {

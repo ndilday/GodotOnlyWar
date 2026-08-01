@@ -49,6 +49,10 @@ public partial class PlanetTacticalScreenController : DialogController
 	// Map selection is the landing destination. Surface selection is the embark source;
 	// keeping them separate makes map clicks irrelevant to Embark eligibility.
 	private Region _selectedRegion;
+	// Map focus controls the dossier subject independently from force selection. A ship or
+	// squad may stay selected as the source of a Land command while the clicked region's
+	// information is shown in the right-hand panel.
+	private bool _regionContextFocused = true;
 	private Ship _selectedShip;
 	private Unit _selectedLoadedUnit;
 	private Squad _selectedLoadedSquad;
@@ -105,6 +109,7 @@ public partial class PlanetTacticalScreenController : DialogController
 	{
 		_selectedPlanet = planet;
 		_selectedRegion = planet?.Regions.FirstOrDefault();
+		_regionContextFocused = true;
 		ClearForceSelections();
 
 		if (planet != null)
@@ -132,7 +137,12 @@ public partial class PlanetTacticalScreenController : DialogController
 	private void OnTacticalRegionPressed(object sender, Region region)
 	{
 		_selectedRegion = region;
-		RefreshWorkspace();
+		_regionContextFocused = true;
+		// Rebuilding the roster here restores its selected ship/squad row, and Godot emits
+		// ItemSelected while doing so. That immediately steals context focus back from the
+		// clicked map region. A map click changes only the destination and dossier context;
+		// the roster itself has not changed and must not be rebuilt.
+		RefreshContextAndCommands();
 	}
 
 	private void OnTacticalRegionDoubleClicked(object sender, Region region)
@@ -341,6 +351,7 @@ public partial class PlanetTacticalScreenController : DialogController
 
 	private string GetContextTitle()
 	{
+		if (_regionContextFocused && _selectedRegion != null) return _selectedRegion.Name;
 		if (_selectedLoadedSquad != null) return _selectedLoadedSquad.Name;
 		if (_selectedLandedSquad != null) return _selectedLandedSquad.Name;
 		if (_selectedShip != null) return _selectedShip.Name;
@@ -350,6 +361,7 @@ public partial class PlanetTacticalScreenController : DialogController
 
 	private string GetContextSubtitle()
 	{
+		if (_regionContextFocused && _selectedRegion != null) return "Region summary; select a squad for order detail";
 		if (_selectedLoadedSquad != null) return $"Aboard {_selectedLoadedSquad.BoardedLocation?.Name ?? "unknown ship"}";
 		if (_selectedLandedSquad != null) return $"Deployed in {_selectedLandedSquad.CurrentRegion?.Name ?? _selectedRegion?.Name ?? "unknown region"}";
 		if (_selectedShip != null) return "Orbiting transport and combat capacity";
@@ -360,6 +372,7 @@ public partial class PlanetTacticalScreenController : DialogController
 	private IReadOnlyList<DossierCardData> BuildContextCards()
 	{
 		if (_selectedPlanet == null) return Array.Empty<DossierCardData>();
+		if (_regionContextFocused && _selectedRegion != null) return BuildRegionCards(_selectedRegion);
 		if (_selectedLoadedSquad != null) return BuildSquadCards(_selectedLoadedSquad);
 		if (_selectedLandedSquad != null) return BuildSquadCards(_selectedLandedSquad);
 		if (_selectedShip != null) return BuildShipCards(_selectedShip);
@@ -565,7 +578,7 @@ public partial class PlanetTacticalScreenController : DialogController
 		return [new DossierCardData("Squad", squad.Name, rows, OnlyWarStyle.PlayerAccent, strengthBar)];
 	}
 
-	private static IReadOnlyList<DossierCardData> BuildShipCards(Ship ship)
+	internal static IReadOnlyList<DossierCardData> BuildShipCards(Ship ship)
 	{
 		List<ValueTuple<string, string>> rows =
 		[
@@ -573,10 +586,7 @@ public partial class PlanetTacticalScreenController : DialogController
 			Row("Available Capacity", ship.AvailableCapacity.ToString()),
 			Row("Loaded Squads", ship.LoadedSquads.Count.ToString())
 		];
-		float? loadBar = ship.Template.SoldierCapacity > 0
-			? (float)ship.LoadedSoldierCount / ship.Template.SoldierCapacity
-			: null;
-		return [new DossierCardData("Transport", ship.Name, rows, OnlyWarStyle.PlayerAccent, loadBar)];
+		return [new DossierCardData("Transport", ship.Name, rows, OnlyWarStyle.PlayerAccent)];
 	}
 
 	private IReadOnlyList<CommandAction> BuildCommands()
@@ -604,28 +614,36 @@ public partial class PlanetTacticalScreenController : DialogController
 	{
 		if (!IsSurfaceRosterSelectionKey(key)) ClearSurfaceForceSelection();
 		if (!IsOrbitalRosterSelectionKey(key)) ClearOrbitalSelection();
-		if (string.IsNullOrWhiteSpace(key) || key.StartsWith("group:") || key.StartsWith("presence:")) return;
+		if (string.IsNullOrWhiteSpace(key) || key.StartsWith("group:") || key.StartsWith("presence:"))
+		{
+			_regionContextFocused = true;
+			return;
+		}
 
 		string[] parts = key.Split(':');
 		switch (parts[0])
 		{
 			case "region":
 				_selectedRegion = _selectedPlanet.Regions.FirstOrDefault(region => region.Id == int.Parse(parts[1]));
+				_regionContextFocused = true;
 				_selectedSurfaceRegion = _selectedRegion;
 				_selectedLandedUnit = null;
 				_selectedLandedSquad = null;
 				break;
 			case "ship":
+				_regionContextFocused = false;
 				_selectedShip = FindShip(int.Parse(parts[1]));
 				_selectedLoadedUnit = null;
 				_selectedLoadedSquad = null;
 				break;
 			case "loaded-unit":
+				_regionContextFocused = false;
 				_selectedShip = FindShip(int.Parse(parts[1]));
 				_selectedLoadedUnit = GameDataSingleton.Instance.Sector.PlayerForce.Army.OrderOfBattle.ChildUnits.FirstOrDefault(unit => unit.Id == int.Parse(parts[2]));
 				_selectedLoadedSquad = null;
 				break;
 			case "loaded-squad":
+				_regionContextFocused = false;
 				_selectedShip = FindShip(int.Parse(parts[1]));
 				_selectedLoadedSquad = FindSquadById(_selectedShip?.LoadedSquads, int.Parse(parts[2]));
 				_selectedLoadedUnit = _selectedLoadedSquad?.ParentUnit;
@@ -633,12 +651,14 @@ public partial class PlanetTacticalScreenController : DialogController
 				break;
 			case "surface-unit":
 				_selectedRegion = _selectedPlanet.Regions.FirstOrDefault(region => region.Id == int.Parse(parts[1]));
+				_regionContextFocused = true;
 				_selectedSurfaceRegion = _selectedRegion;
 				_selectedLandedUnit = GameDataSingleton.Instance.Sector.PlayerForce.Army.OrderOfBattle.ChildUnits.FirstOrDefault(unit => unit.Id == int.Parse(parts[2]));
 				_selectedLandedSquad = null;
 				break;
 			case "surface-squad":
 				_selectedRegion = _selectedPlanet.Regions.FirstOrDefault(region => region.Id == int.Parse(parts[1]));
+				_regionContextFocused = false;
 				_selectedSurfaceRegion = _selectedRegion;
 				_selectedLandedSquad = FindSquadById(
 					GetPlayerRegionFaction(_selectedSurfaceRegion)?.LandedSquads,

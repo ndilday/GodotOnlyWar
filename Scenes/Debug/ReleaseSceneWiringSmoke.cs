@@ -1,6 +1,7 @@
 using Godot;
 using OnlyWar.Helpers.Settings;
 using OnlyWar.Helpers.Turns;
+using OnlyWar.Helpers.UI;
 using OnlyWar.Helpers.UI.SystemMenu;
 using System;
 using System.Collections.Generic;
@@ -53,6 +54,7 @@ public partial class ReleaseSceneWiringSmoke : Node
 
     private async Task RunSmoke()
     {
+        await ValidateDossierCardLayout();
         await ValidateOverlayScenesLoad();
 
         PackedScene bootstrapScene = LoadScene(
@@ -272,6 +274,31 @@ public partial class ReleaseSceneWiringSmoke : Node
         bootstrap.Free();
         await NextFrame();
         await ValidateTitleControls();
+    }
+
+    private async Task ValidateDossierCardLayout()
+    {
+        Control host = new() { Size = new Vector2(400, 160) };
+        AddChild(host);
+
+        Control card = DossierCard.Create(new DossierCardData(
+            "Region",
+            null,
+            [new ValueTuple<string, string>("Intel Rating", "1.5")],
+            OnlyWarStyle.Gold));
+        host.AddChild(card);
+        card.SetAnchorsAndOffsetsPreset(Control.LayoutPreset.FullRect);
+        await NextFrame();
+        await NextFrame();
+
+        VBoxContainer stack = card.GetChildOrNull<VBoxContainer>(0);
+        HBoxContainer row = stack?.GetChildOrNull<HBoxContainer>(1);
+        Label rowLabel = row?.GetChildOrNull<Label>(0);
+        Label rowValue = row?.GetChildOrNull<Label>(1);
+        Require(rowLabel?.Size.X > 0, "Dossier row label collapsed to zero width.");
+        Require(rowValue?.Size.X > 0, "Dossier row value collapsed to zero width.");
+
+        host.QueueFree();
     }
 
     private async Task ValidateTitleControls()

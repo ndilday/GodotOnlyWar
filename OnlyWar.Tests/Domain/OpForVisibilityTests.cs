@@ -1,4 +1,5 @@
 using OnlyWar.Helpers.Extensions;
+using OnlyWar.Models;
 using OnlyWar.Models.Planets;
 using OnlyWar.Tests.Fixtures;
 using Xunit;
@@ -50,6 +51,22 @@ public class OpForVisibilityTests
         fixture.DefaultPlanetFaction.SetRegionIntel(fixture.Planet.Regions[1], 6f);
 
         Assert.Equal("12345", enemy.GetPopulationDescription());
+    }
+
+    [Fact]
+    public void GetPlayerVisibleIntel_EmptyPlayerPresence_DoesNotMaskPdfIntel()
+    {
+        SectorSimulationFixture fixture = SectorSimulationFixture.CreateDetached();
+        Region region = fixture.Planet.Regions[0];
+        fixture.DefaultPlanetFaction.SetRegionIntel(region, 2.6576f);
+
+        Faction player = fixture.Sector.PlayerForce.Faction;
+        fixture.Planet.PlanetFactionMap[player.Id] = new PlanetFaction(player)
+        {
+            IsPublic = true
+        };
+
+        Assert.Equal(2.6576f, region.GetPlayerVisibleIntel(), precision: 4);
     }
 
     [Fact]

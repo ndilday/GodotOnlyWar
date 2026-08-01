@@ -18,7 +18,9 @@ public partial class FleetScreenController : MainScreenController
         base._Ready();
         _view = GetNode<FleetScreenView>("FleetScreenView");
         _view.CanTransferSquadToShip = CanTransferSquadToShip;
+        _view.CanTransferUnitToShip = CanTransferUnitToShip;
         _view.SquadDroppedOnShip += OnSquadDroppedOnShip;
+        _view.UnitDroppedOnShip += OnUnitDroppedOnShip;
         PopulateFleetData();
     }
 
@@ -114,9 +116,50 @@ public partial class FleetScreenController : MainScreenController
         squad.CurrentRegion = null;
     }
 
+    internal static bool CanTransferUnitToShip(Unit unit, Ship sourceShip, Ship destinationShip)
+    {
+        if (unit == null || sourceShip == null || destinationShip == null
+            || sourceShip == destinationShip
+            || !ShipsShareTransferLocation(sourceShip, destinationShip))
+        {
+            return false;
+        }
+
+        List<Squad> squads = sourceShip.LoadedSquads
+            .Where(squad => squad.ParentUnit == unit)
+            .ToList();
+        return squads.Count > 0
+            && squads.All(squad => CanTransferSquadToShip(squad, destinationShip))
+            && destinationShip.AvailableCapacity >= squads.Sum(squad => squad.Members.Count);
+    }
+
+    internal static void TransferUnitToShip(Unit unit, Ship sourceShip, Ship destinationShip)
+    {
+        if (!CanTransferUnitToShip(unit, sourceShip, destinationShip))
+        {
+            return;
+        }
+
+        foreach (Squad squad in sourceShip.LoadedSquads
+            .Where(squad => squad.ParentUnit == unit)
+            .ToList())
+        {
+            TransferSquadToShip(squad, destinationShip);
+        }
+    }
+
     private bool CanTransferSquadToShip(int squadId, int shipId)
     {
         return CanTransferSquadToShip(FindSquad(squadId), FindShip(shipId));
+    }
+
+    private bool CanTransferUnitToShip(int unitId, int sourceShipId, int destinationShipId)
+    {
+        Ship sourceShip = FindShip(sourceShipId);
+        return CanTransferUnitToShip(
+            FindUnitOnShip(unitId, sourceShip),
+            sourceShip,
+            FindShip(destinationShipId));
     }
 
     private void OnSquadDroppedOnShip(object sender, ValueTuple<int, int> args)
@@ -126,6 +169,18 @@ public partial class FleetScreenController : MainScreenController
         if (!CanTransferSquadToShip(squad, destination)) return;
 
         TransferSquadToShip(squad, destination);
+        CampaignChanged?.Invoke(this, EventArgs.Empty);
+        PopulateFleetData();
+    }
+
+    private void OnUnitDroppedOnShip(object sender, ValueTuple<int, int, int> args)
+    {
+        Ship sourceShip = FindShip(args.Item2);
+        Ship destinationShip = FindShip(args.Item3);
+        Unit unit = FindUnitOnShip(args.Item1, sourceShip);
+        if (!CanTransferUnitToShip(unit, sourceShip, destinationShip)) return;
+
+        TransferUnitToShip(unit, sourceShip, destinationShip);
         CampaignChanged?.Invoke(this, EventArgs.Empty);
         PopulateFleetData();
     }
@@ -143,6 +198,13 @@ public partial class FleetScreenController : MainScreenController
             .SelectMany(fleet => fleet.Ships)
             .SelectMany(ship => ship.LoadedSquads)
             .FirstOrDefault(squad => squad.Id == squadId);
+    }
+
+    private static Unit FindUnitOnShip(int unitId, Ship ship)
+    {
+        return ship?.LoadedSquads
+            .Select(squad => squad.ParentUnit)
+            .FirstOrDefault(unit => unit?.Id == unitId);
     }
 
     private static bool ShipsShareTransferLocation(Ship sourceShip, Ship destinationShip)
