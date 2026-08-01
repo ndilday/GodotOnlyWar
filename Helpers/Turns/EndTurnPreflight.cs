@@ -361,7 +361,7 @@ namespace OnlyWar.Helpers.Turns
                 : $"{region.Name}, {region.Planet?.Name ?? "unknown planet"}";
 
             // A Show of Force is a standing petition, not an intelligence find: it is exempt from
-            // both the weekly expiry roll and the zero-intel wipe (PlanetTurnProcessor.
+            // both the weekly expiry roll and the low-intel wipe (PlanetTurnProcessor.
             // UpdateIntelligence), so the generic risk text below would be a plain falsehood.
             // What it does risk is the request's own deadline, and the governor's regard erodes
             // every week it goes unanswered.
@@ -376,11 +376,11 @@ namespace OnlyWar.Helpers.Turns
                     + "falls every week it goes unanswered.");
             }
 
-            bool noVisibleIntel = region?.GetPlayerVisibleIntel() <= 0f;
-            string risk = noVisibleIntel
-                ? "Regional intelligence is already zero, so this opportunity will be cleared when the turn advances."
+            bool insufficientVisibleIntel = region?.GetPlayerVisibleIntel() < 1f;
+            string risk = insufficientVisibleIntel
+                ? "Regional intelligence is below 1, so this opportunity will be cleared when the turn advances."
                 : "This opportunity has an independent 25% chance to disappear when the turn advances; "
-                  + "it is also lost if regional intelligence falls to zero.";
+                  + "it is also lost if regional intelligence falls below 1.";
 
             return new EndTurnAttentionItem(
                 EndTurnWarningCategory.SpecialMissionOpportunities,

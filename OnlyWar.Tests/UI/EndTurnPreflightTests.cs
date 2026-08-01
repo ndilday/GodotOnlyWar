@@ -217,9 +217,10 @@ public class EndTurnPreflightTests
     }
 
     [Fact]
-    public void Evaluate_SpecialMissionWithZeroIntelExplainsItWillBeCleared()
+    public void Evaluate_SpecialMissionWithIntelBelowOneExplainsItWillBeCleared()
     {
         TestCampaign campaign = CreateCampaign();
+        campaign.PlayerPlanetFaction.SetRegionIntel(campaign.Region, 0.5f);
         Mission mission = CreateMission(campaign, MissionType.Assassination);
         campaign.Region.SpecialMissions.Add(mission);
 
@@ -232,7 +233,7 @@ public class EndTurnPreflightTests
             });
 
         EndTurnAttentionItem item = Assert.Single(report.Items);
-        Assert.Contains("intelligence is already zero", item.Detail, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("intelligence is below 1", item.Detail, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("cleared when the turn advances", item.Detail, StringComparison.OrdinalIgnoreCase);
     }
 

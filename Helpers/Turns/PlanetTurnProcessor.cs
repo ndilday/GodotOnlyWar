@@ -893,7 +893,7 @@ namespace OnlyWar.Helpers.Turns
                 // withdraw it, and it does not go stale, so it survives both the intel wipe and
                 // the weekly expiry roll that clear ordinary opportunities. Only
                 // GovernorTurnProcessor retires it, when the request resolves.
-                if (visibleIntel <= 0)
+                if (visibleIntel < 1f)
                 {
                     region.SpecialMissions.RemoveAll(
                         mission => mission.MissionType != MissionType.ShowOfForce);

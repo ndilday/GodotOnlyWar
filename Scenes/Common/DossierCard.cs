@@ -34,18 +34,32 @@ public static class DossierCard
         PanelContainer cardPanel = new() { SizeFlagsHorizontal = Control.SizeFlags.ExpandFill };
         OnlyWarStyle.ApplyTintedListRow(cardPanel, false, card.AccentColor);
 
-        VBoxContainer cardStack = new();
+        VBoxContainer cardStack = new()
+        {
+            SizeFlagsHorizontal = Control.SizeFlags.ExpandFill
+        };
         cardStack.AddThemeConstantOverride("separation", 4);
         cardPanel.AddChild(cardStack);
 
-        Label titleLabel = new() { Text = card.Title.ToUpperInvariant() };
+        Label titleLabel = new()
+        {
+            Text = card.Title.ToUpperInvariant(),
+            ClipText = true,
+            TextOverrunBehavior = TextServer.OverrunBehavior.TrimEllipsis
+        };
         titleLabel.AddThemeFontSizeOverride("font_size", 12);
         titleLabel.AddThemeColorOverride("font_color", OnlyWarStyle.MutedText);
         cardStack.AddChild(titleLabel);
 
         if (!string.IsNullOrEmpty(card.Subtitle))
         {
-            Label subtitleLabel = new() { Text = card.Subtitle };
+            Label subtitleLabel = new()
+            {
+                Text = card.Subtitle,
+                ClipText = true,
+                TextOverrunBehavior = TextServer.OverrunBehavior.TrimEllipsis,
+                TooltipText = card.Subtitle
+            };
             subtitleLabel.AddThemeFontSizeOverride("font_size", 16);
             subtitleLabel.AddThemeColorOverride("font_color", card.AccentColor);
             cardStack.AddChild(subtitleLabel);
@@ -54,10 +68,24 @@ public static class DossierCard
         foreach (ValueTuple<string, string> row in card.Rows)
         {
             HBoxContainer rowBox = new() { SizeFlagsHorizontal = Control.SizeFlags.ExpandFill };
-            Label label = new() { Text = row.Item1, SizeFlagsHorizontal = Control.SizeFlags.ExpandFill };
+            Label label = new()
+            {
+                Text = row.Item1,
+                SizeFlagsHorizontal = Control.SizeFlags.ExpandFill,
+                ClipText = true,
+                TextOverrunBehavior = TextServer.OverrunBehavior.TrimEllipsis,
+                TooltipText = row.Item1
+            };
             label.AddThemeFontSizeOverride("font_size", 12);
             label.AddThemeColorOverride("font_color", OnlyWarStyle.MutedText);
-            Label value = new() { Text = row.Item2, HorizontalAlignment = HorizontalAlignment.Right };
+            Label value = new()
+            {
+                Text = row.Item2,
+                HorizontalAlignment = HorizontalAlignment.Right,
+                ClipText = true,
+                TextOverrunBehavior = TextServer.OverrunBehavior.TrimEllipsis,
+                TooltipText = row.Item2
+            };
             value.AddThemeFontSizeOverride("font_size", 12);
             rowBox.AddChild(label);
             rowBox.AddChild(value);
