@@ -5,6 +5,7 @@ using OnlyWar.Models.Orders;
 using OnlyWar.Models.Planets;
 using OnlyWar.Models.Soldiers;
 using OnlyWar.Models.Squads;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 
@@ -111,11 +112,23 @@ namespace OnlyWar.Models.Missions
         // identical battle it can never win - it can only run out of days or of tolerance.
         public long DefenderBattleValueDestroyed { get; private set; }
 
+        // Disorganized troops overrun after an assault has destroyed the fielded defence. Kept
+        // separate because ordinary engagement losses debit organized BV in aftermath.
+        public long DisorganizedDefenderBattleValueDestroyed { get; private set; }
+
         public void RecordDefenderLosses(long battleValueDestroyed)
         {
             if (battleValueDestroyed > 0)
             {
                 DefenderBattleValueDestroyed += battleValueDestroyed;
+            }
+        }
+
+        public void RecordDisorganizedDefenderLosses(long battleValueDestroyed)
+        {
+            if (battleValueDestroyed > 0)
+            {
+                DisorganizedDefenderBattleValueDestroyed += battleValueDestroyed;
             }
         }
 
@@ -175,6 +188,10 @@ namespace OnlyWar.Models.Missions
         public bool ForceLostContact { get; set; }
         // An embedded engagement left the force combat-ineffective and ended the mission under fire.
         public bool ForceWithdrewUnderFire { get; set; }
+        // Set when this force ceased to be a viable participant in a reciprocal assault. NPC
+        // survivor accounting uses it to return a failed counterattack to its staging region
+        // instead of treating every surviving invader as though it secured the target.
+        public bool ReciprocalAssaultDefeated { get; set; }
         // The force could not reach its objective before acting (failed to infiltrate / too many casualties).
         public bool ObjectiveAborted { get; set; }
         // The operation found nothing worthwhile to engage (a raid/ambush that turned up no target).
@@ -259,6 +276,24 @@ namespace OnlyWar.Models.Missions
             {
                 ForceWithdrewUnderFire = true;
             }
+        }
+
+        /// <summary>
+        /// Records this context's side of a shared reciprocal-assault battle. A tactical withdrawal
+        /// is deliberately not terminal here: mission-level cumulative losses decide whether the
+        /// force can reform and contest the ground again tomorrow.
+        /// </summary>
+        public void RecordReciprocalAssaultOutcome(
+            BattleHistory battleHistory,
+            BattleSide missionSide,
+            int enemyDeaths)
+        {
+            EnemiesKilled += Math.Max(0, enemyDeaths);
+            // The resolver only tracks per-hit kill credit for its first side. Unique enemy deaths
+            // are the stable symmetric quantity available to both linked mission reports.
+            EnemyKillCredits += missionSide == BattleSide.Attacker
+                ? Math.Max(0, battleHistory?.FirstSideEnemiesKilled ?? 0)
+                : Math.Max(0, enemyDeaths);
         }
 
         public BattleSideProfile CreateMissionBattleProfile(BattleRole role) =>

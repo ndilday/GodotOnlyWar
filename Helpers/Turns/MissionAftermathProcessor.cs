@@ -36,8 +36,19 @@ namespace OnlyWar.Helpers.Turns
                 switch (context.Order.Mission.MissionType)
                 {
                     case MissionType.Assassination:
-                        int orgLost = (int)(context.Impact * 100 / regionFaction.Population);
-                        regionFaction.Organization -= Math.Min(orgLost, regionFaction.Organization);
+                        int orgLost = regionFaction.Population <= 0
+                            ? 0
+                            : (int)(context.Impact * 100 / regionFaction.Population);
+                        int targetOrganization = Math.Max(
+                            0,
+                            regionFaction.Organization - orgLost);
+                        long targetOrganizedBattleValue = (long)(
+                            regionFaction.MilitaryStrength * (targetOrganization / 100.0));
+                        regionFaction.DisorganizeMilitaryStrength(
+                            Math.Max(
+                                0L,
+                                regionFaction.OrganizedMilitaryStrength
+                                - targetOrganizedBattleValue));
                         break;
                     case MissionType.Recon:
                         ResolveReconResult(
@@ -73,7 +84,16 @@ namespace OnlyWar.Helpers.Turns
                     defenderCasualties = (long)(defenderCasualties * casualtyMultiplier);
                 }
                 long defenderStrengthBefore = regionFaction.MilitaryStrength;
-                regionFaction.RemoveMilitaryStrength(defenderCasualties);
+                if (context.Order.Mission.MissionType == MissionType.Ambush)
+                {
+                    RemoveProportionalAmbushLosses(regionFaction, defenderCasualties);
+                }
+                else
+                {
+                    regionFaction.RemoveOrganizedMilitaryStrength(defenderCasualties);
+                }
+                regionFaction.RemoveDisorganizedMilitaryStrength(
+                    context.DisorganizedDefenderBattleValueDestroyed);
                 long defenderStrengthAfter = regionFaction.MilitaryStrength;
                 Faction attackingFaction = context.Order.AssignedSquads.FirstOrDefault()?.Faction;
                 _recordScenarioPdfLost?.Invoke(
@@ -88,6 +108,23 @@ namespace OnlyWar.Helpers.Turns
 
                 ResolveOffensiveSurvivors(context);
             }
+        }
+
+        internal static void RemoveProportionalAmbushLosses(
+            RegionFaction regionFaction,
+            long casualties)
+        {
+            long total = regionFaction.MilitaryStrength;
+            if (casualties <= 0 || total <= 0) return;
+            long actual = Math.Min(casualties, total);
+            long organized = regionFaction.OrganizedMilitaryStrength;
+            long organizedLoss = (long)Math.Round(actual * (organized / (double)total));
+            organizedLoss = Math.Min(organized, organizedLoss);
+            long disorganizedLoss = actual - organizedLoss;
+            long removedDisorganized =
+                regionFaction.RemoveDisorganizedMilitaryStrength(disorganizedLoss);
+            regionFaction.RemoveOrganizedMilitaryStrength(
+                actual - removedDisorganized);
         }
 
         internal static void RemoveConsumedSpecialMissions(IEnumerable<Order> playerOrdersThisTurn)
@@ -225,7 +262,9 @@ namespace OnlyWar.Helpers.Turns
             if (survivors <= 0) return;
 
             Faction attacker = first.Squad.Faction;
-            if (context.Order.Mission.MissionType == MissionType.Advance && attacker.InvadesOnVictory)
+            if (context.Order.Mission.MissionType == MissionType.Advance
+                && attacker.InvadesOnVictory
+                && !context.ReciprocalAssaultDefeated)
             {
                 EstablishInvaderPresence(
                     attacker,

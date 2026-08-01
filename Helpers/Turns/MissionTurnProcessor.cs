@@ -3,6 +3,7 @@ using OnlyWar.Helpers.Battles;
 using OnlyWar.Helpers.Battles.Aftermath;
 using OnlyWar.Helpers.Fortifications;
 using OnlyWar.Helpers.Missions;
+using OnlyWar.Helpers.Missions.Assault;
 using OnlyWar.Helpers.Simulation;
 using OnlyWar.Helpers.StrategicCombat;
 using OnlyWar.Models;
@@ -166,7 +167,9 @@ namespace OnlyWar.Helpers.Turns
             // effects as they land - which is what makes a diversion able to shelter an infiltrator.
             MissionDayScheduler.Run(
                 scheduled.Select(mission => mission.Driver).ToList(),
-                onDayStart: _ => ResetCommittedAttention());
+                onDayStart: _ => ResetCommittedAttention(),
+                onActingDayStart: (missions, day) =>
+                    ResolveReciprocalAssaults(missions, day));
 
             foreach (ScheduledMission mission in scheduled)
             {
@@ -186,6 +189,65 @@ namespace OnlyWar.Helpers.Turns
                     + $"killCredits={context.EnemyKillCredits}, "
                     + $"logEntries={context.Log.Count}");
             }
+        }
+
+        internal static void ResolveReciprocalAssaults(
+            IReadOnlyList<MissionStepDriver> missions,
+            int day,
+            Action<MissionStepDriver, MissionStepDriver> resolvePair = null)
+        {
+            List<MissionStepDriver> ready = missions
+                .Where(driver => !driver.IsComplete
+                    && driver.NextStep is PrepareAssaultMissionStep
+                    && driver.State.Order?.Mission?.MissionType == MissionType.Advance
+                    && !driver.State.OperatingDaysSpent
+                    && !driver.State.MissionLossesExceedAggressionThreshold
+                    && driver.State.MissionSquads.Any(
+                        squad => squad.AbleSoldiers.Count > 0)
+                    && driver.State.DaysElapsed < day)
+                .ToList();
+            HashSet<MissionStepDriver> paired = [];
+
+            foreach (MissionStepDriver candidateFirst in ready)
+            {
+                if (paired.Contains(candidateFirst)) continue;
+                MissionStepDriver first = candidateFirst;
+                MissionStepDriver second = ready.FirstOrDefault(candidate =>
+                    !ReferenceEquals(candidate, first)
+                    && !paired.Contains(candidate)
+                    && AreReciprocalAssaults(first.State, candidate.State));
+                if (second == null) continue;
+
+                // Put the player on the resolver's first side whenever exactly one participant is
+                // player-controlled. Existing battle history attributes career kill credit to that
+                // side, so preserving the orientation keeps reports and experience correct.
+                if (second.State.MissionSquads.Any(squad => squad.IsPlayerSquad)
+                    && !first.State.MissionSquads.Any(squad => squad.IsPlayerSquad))
+                {
+                    (first, second) = (second, first);
+                }
+
+                (resolvePair ?? ReciprocalAssaultResolver.ResolveDay)(first, second);
+                paired.Add(first);
+                paired.Add(second);
+            }
+        }
+
+        internal static bool AreReciprocalAssaults(MissionContext first, MissionContext second)
+        {
+            RegionFaction firstTarget = first?.Order?.Mission?.RegionFaction;
+            RegionFaction secondTarget = second?.Order?.Mission?.RegionFaction;
+            Faction firstAttacker = first?.MissionSquads.FirstOrDefault()?.Squad?.Faction;
+            Faction secondAttacker = second?.MissionSquads.FirstOrDefault()?.Squad?.Faction;
+            if (firstTarget == null || secondTarget == null
+                || firstAttacker == null || secondAttacker == null)
+            {
+                return false;
+            }
+
+            return ReferenceEquals(firstTarget.Region, secondTarget.Region)
+                && firstTarget.PlanetFaction.Faction.Id == secondAttacker.Id
+                && secondTarget.PlanetFaction.Faction.Id == firstAttacker.Id;
         }
 
         internal static IReadOnlyList<List<BattleSquad>> BuildMissionElements(
@@ -295,16 +357,19 @@ namespace OnlyWar.Helpers.Turns
         /// <summary>
         /// Applies a level delta directly. Used by the NPC development planner, whose build amounts
         /// are already priced against the band they are buying into (FactionStrategyController), so
-        /// they arrive as levels rather than points.
+        /// structural improvements arrive as levels. Reorganization interprets the same amount as
+        /// effort and converts it to a fixed quantity of military BV.
         /// </summary>
         internal static void ApplyConstruction(ConstructionMission mission, double amount)
         {
             double before = GetConstructionLevel(mission);
             if (mission.ConstructionType == DefenseType.Organization)
             {
-                mission.RegionFaction.Organization = Math.Min(
-                    100,
-                    mission.RegionFaction.Organization + (int)Math.Round(amount));
+                long requested = amount <= 0
+                    ? 0
+                    : Math.Max(1L, (long)Math.Round(
+                        amount * StrategicCombatRules.ReorganizationBattleValuePerEffort));
+                mission.RegionFaction.ReorganizeMilitaryStrength(requested);
             }
             else
             {

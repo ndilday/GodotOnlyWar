@@ -34,17 +34,31 @@ namespace OnlyWar.Helpers.Missions
         public string Label { get; }
         public MissionAvailabilityKind Kind { get; }
         public Mission SpecialMission { get; }
+        // Attack options are faction-specific. Keeping the target on the descriptor means the
+        // button the player selects is the complete order intent rather than half of it, with a
+        // separate dropdown supplying the strategically important half later.
+        public RegionFaction TargetFaction { get; }
 
-        public AvailableMission(string label, MissionAvailabilityKind kind, Mission specialMission = null)
+        public AvailableMission(
+            string label,
+            MissionAvailabilityKind kind,
+            Mission specialMission = null,
+            RegionFaction targetFaction = null)
         {
             Label = label;
             Kind = kind;
             SpecialMission = specialMission;
+            TargetFaction = targetFaction;
         }
 
         public bool RepresentsSameOption(AvailableMission other)
         {
             if (other == null || Kind != other.Kind) return false;
+            if (Kind == MissionAvailabilityKind.Attack)
+            {
+                return TargetFaction?.PlanetFaction?.Faction?.Id
+                    == other.TargetFaction?.PlanetFaction?.Faction?.Id;
+            }
             if (Kind != MissionAvailabilityKind.Special) return true;
 
             return SpecialMission != null
@@ -52,9 +66,13 @@ namespace OnlyWar.Helpers.Missions
                 && SpecialMission.Id == other.SpecialMission.Id;
         }
 
-        public string IdentityKey => Kind == MissionAvailabilityKind.Special
-            ? $"Special:{SpecialMission?.Id}"
-            : Kind.ToString();
+        public string IdentityKey => Kind switch
+        {
+            MissionAvailabilityKind.Special => $"Special:{SpecialMission?.Id}",
+            MissionAvailabilityKind.Attack =>
+                $"Attack:{TargetFaction?.PlanetFaction?.Faction?.Id}",
+            _ => Kind.ToString()
+        };
 
         public bool RepresentsOrder(Order order)
         {
@@ -75,8 +93,14 @@ namespace OnlyWar.Helpers.Missions
                 MissionAvailabilityKind.BuildAntiAir =>
                     orderMission is ConstructionMission construction
                     && construction.ConstructionType == DefenseType.AntiAir,
-                MissionAvailabilityKind.Attack or MissionAvailabilityKind.Move =>
-                    orderMission.MissionType == MissionType.Advance,
+                MissionAvailabilityKind.Attack =>
+                    orderMission.MissionType == MissionType.Advance
+                    && TargetFaction != null
+                    && orderMission.RegionFaction?.PlanetFaction?.Faction?.Id
+                        == TargetFaction.PlanetFaction.Faction.Id,
+                MissionAvailabilityKind.Move =>
+                    orderMission.MissionType == MissionType.Advance
+                    && orderMission.RegionFaction?.PlanetFaction?.Faction?.IsPlayerFaction == true,
                 MissionAvailabilityKind.Diversion =>
                     orderMission.MissionType == MissionType.Diversion,
                 MissionAvailabilityKind.Special =>
@@ -100,14 +124,31 @@ namespace OnlyWar.Helpers.Missions
                 _ => MissionType.Construction.ToString()
             };
 
-        public static string GetOrderLabel(Mission mission) =>
-            mission is ConstructionMission construction
-                ? GetConstructionLabel(construction.ConstructionType)
-                : mission?.MissionType.ToString() ?? string.Empty;
+        public static string GetOrderLabel(Mission mission)
+        {
+            if (mission is ConstructionMission construction)
+            {
+                return GetConstructionLabel(construction.ConstructionType);
+            }
+            if (mission?.MissionType == MissionType.Advance)
+            {
+                Faction target = mission.RegionFaction?.PlanetFaction?.Faction;
+                return target?.IsPlayerFaction == true
+                    ? "Move"
+                    : target == null ? "Attack" : $"Attack ({target.Name})";
+            }
+            return mission?.MissionType.ToString() ?? string.Empty;
+        }
 
         public static IReadOnlyList<AvailableMission> GetAvailableMissions(Region originRegion, Region targetRegion)
         {
             List<AvailableMission> missionOptions = new List<AvailableMission>();
+            List<RegionFaction> publicEnemies = targetRegion.RegionFactionMap.Values
+                .Where(rf => rf.IsPublic
+                    && !FactionDispositionService.IsImperial(rf.PlanetFaction.Faction))
+                .OrderBy(rf => rf.PlanetFaction.Faction.Name)
+                .ThenBy(rf => rf.PlanetFaction.Faction.Id)
+                .ToList();
             // NOTE: id -9 (not -1) for Recon in the original OptionButton-based scheme. Godot's
             // OptionButton.AddItem treats id == -1 as "auto-assign to the item's index", so a
             // literal -1 would be silently replaced with the item index (0), breaking Recon
@@ -128,10 +169,11 @@ namespace OnlyWar.Helpers.Missions
                 missionOptions.Add(new AvailableMission(
                     GetConstructionLabel(DefenseType.AntiAir),
                     MissionAvailabilityKind.BuildAntiAir));
+                AddAttackOptions(missionOptions, publicEnemies);
             }
-            else if (targetRegion.RegionFactionMap.Values.Any(rf => !rf.PlanetFaction.Faction.IsDefaultFaction && !rf.PlanetFaction.Faction.IsPlayerFaction))
+            else if (publicEnemies.Count > 0)
             {
-                missionOptions.Add(new AvailableMission("Attack", MissionAvailabilityKind.Attack));
+                AddAttackOptions(missionOptions, publicEnemies);
                 missionOptions.Add(new AvailableMission("Diversion", MissionAvailabilityKind.Diversion));
             }
             else
@@ -157,6 +199,19 @@ namespace OnlyWar.Helpers.Missions
                     mission));
             }
             return missionOptions;
+        }
+
+        private static void AddAttackOptions(
+            ICollection<AvailableMission> missionOptions,
+            IEnumerable<RegionFaction> publicEnemies)
+        {
+            foreach (RegionFaction enemy in publicEnemies)
+            {
+                missionOptions.Add(new AvailableMission(
+                    $"Attack ({enemy.PlanetFaction.Faction.Name})",
+                    MissionAvailabilityKind.Attack,
+                    targetFaction: enemy));
+            }
         }
     }
 }

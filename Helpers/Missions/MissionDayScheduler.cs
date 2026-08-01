@@ -36,7 +36,10 @@ namespace OnlyWar.Helpers.Missions
         /// attention a feint drew yesterday does not shelter an infiltrator today. Passed in rather than
         /// reached for directly because the scheduler has no business knowing about planets.
         /// </param>
-        public static void Run(IReadOnlyList<MissionStepDriver> missions, Action<int> onDayStart = null)
+        public static void Run(
+            IReadOnlyList<MissionStepDriver> missions,
+            Action<int> onDayStart = null,
+            Action<IReadOnlyList<MissionStepDriver>, int> onActingDayStart = null)
         {
             if (missions == null || missions.Count == 0) return;
 
@@ -44,6 +47,10 @@ namespace OnlyWar.Helpers.Missions
             {
                 onDayStart?.Invoke(day);
                 AdvancePhase(missions, day, MissionStepPhase.Shaping);
+                // Cross-mission acting interactions belong after every shaping effect but before
+                // any ordinary acting step. Reciprocal assaults use this seam to replace two
+                // independent attacks with one shared meeting engagement.
+                onActingDayStart?.Invoke(missions, day);
                 AdvancePhase(missions, day, MissionStepPhase.Acting);
                 if (missions.All(mission => mission.IsComplete)) break;
             }

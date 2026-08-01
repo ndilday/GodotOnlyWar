@@ -592,7 +592,9 @@ public partial class RegionScreenView : CommandWorkspaceView
             MissionAvailabilityKind.FortifyEntrenchment => "Spend the turn building entrenchment defenses in this region.",
             MissionAvailabilityKind.BuildListeningPost => "Spend the turn building a listening post in this region.",
             MissionAvailabilityKind.BuildAntiAir => "Spend the turn building anti-air defenses in this region.",
-            MissionAvailabilityKind.Attack => "Enter the target region, engaging any enemy forces there.",
+            MissionAvailabilityKind.Attack => mission.TargetFaction == null
+                ? "Assault the selected hostile force in this region."
+                : $"Assault {mission.TargetFaction.PlanetFaction.Faction.Name} forces in this region.",
             MissionAvailabilityKind.Diversion => "Feint from the origin region to pin the garrison in place.",
             MissionAvailabilityKind.Move => "Move into the target region.",
             MissionAvailabilityKind.Special => GetSpecialMissionDescription(mission.SpecialMission),

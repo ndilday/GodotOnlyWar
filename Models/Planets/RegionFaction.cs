@@ -15,6 +15,8 @@ namespace OnlyWar.Models.Planets
         private long _population;
         private long _garrison;
         private long _armedCivilians;
+        private long? _organizedMilitaryStrength;
+        private int _legacyOrganization = 100;
         private float _contentment = 70f;
 
         // Total headcount for this faction in the region. The garrison is a subset of it (the portion
@@ -25,12 +27,14 @@ namespace OnlyWar.Models.Planets
             get => _population;
             set
             {
+                long militaryBefore = MilitaryStrength;
                 _population = value < 0 ? 0 : value;
                 if (_garrison > _population) _garrison = _population;
                 // Embedded garrison and armed civilian cadres are disjoint subsets of Population.
                 // Preserve embedded personnel first when a population loss forces the pools down.
                 long remaining = _population - _garrison;
                 if (_armedCivilians > remaining) _armedCivilians = remaining;
+                TrackMilitaryStrengthChange(militaryBefore);
             }
         }
 
@@ -44,8 +48,10 @@ namespace OnlyWar.Models.Planets
             get => _garrison;
             set
             {
+                long militaryBefore = MilitaryStrength;
                 long maximum = _population - _armedCivilians;
                 _garrison = value < 0 ? 0 : (value > maximum ? maximum : value);
+                TrackMilitaryStrengthChange(militaryBefore);
             }
         }
 
@@ -58,8 +64,10 @@ namespace OnlyWar.Models.Planets
             get => _armedCivilians;
             set
             {
+                long militaryBefore = MilitaryStrength;
                 long maximum = _population - _garrison;
                 _armedCivilians = value < 0 ? 0 : (value > maximum ? maximum : value);
+                TrackMilitaryStrengthChange(militaryBefore);
             }
         }
 
@@ -80,6 +88,22 @@ namespace OnlyWar.Models.Planets
             PlanetFaction.Faction.GrowthType == GrowthType.Unrest
                 ? Garrison + ArmedCivilians
                 : PlanetFaction.Faction.PopulationIsMilitary ? Population : Garrison;
+
+        // Military strength is partitioned into forces that can currently deploy and forces that
+        // still exist but have lost the command, supply, or formation needed to fight coherently.
+        // The nullable backing field lets ordinary object initializers establish Population and
+        // Garrison before the legacy Organization percentage is converted into a concrete BV pool.
+        public long OrganizedMilitaryStrength
+        {
+            get
+            {
+                EnsureOrganizedMilitaryStrength();
+                return _organizedMilitaryStrength.Value;
+            }
+        }
+
+        public long DisorganizedMilitaryStrength =>
+            Math.Max(0L, MilitaryStrength - OrganizedMilitaryStrength);
         public bool IsPublic { get; set; }
         // The first offensive after a hidden presence reveals is planned as an Ambush. Persisting
         // the marker prevents a save between revelation and planning from losing that advantage.
@@ -95,8 +119,26 @@ namespace OnlyWar.Models.Planets
         public double ListeningPost { get; set; }
         // AntiAir provides bonuses against air atacks and air assaults
         public double AntiAir { get; set; }
-        // Organization determins how much of the enemy force can be effectively deployed
-        public int Organization { get; set; }
+        // Compatibility/display percentage. The persisted source of truth is organized BV; setting
+        // this property remains useful for scenario builders and legacy saves, where it partitions
+        // the current military pool once. Runtime reorganization should use ReorganizeMilitaryStrength.
+        public int Organization
+        {
+            get
+            {
+                if (!_organizedMilitaryStrength.HasValue) return _legacyOrganization;
+                long total = MilitaryStrength;
+                if (total <= 0) return _legacyOrganization;
+                return Math.Clamp((int)Math.Round(
+                    OrganizedMilitaryStrength * 100.0 / total), 0, 100);
+            }
+            set
+            {
+                _legacyOrganization = Math.Clamp(value, 0, 100);
+                _organizedMilitaryStrength = (long)(
+                    MilitaryStrength * (_legacyOrganization / 100.0));
+            }
+        }
 
         // Multiplier (default 1.0) applied to this faction's organic population growth in the
         // turn loop. A general primitive, not scenario-specific: the Opening Scenario sets it
@@ -126,12 +168,11 @@ namespace OnlyWar.Models.Planets
             PlanetFaction = planetFaction;
             Region = region;
             IsPublic = planetFaction.IsPublic;
-            // Organization is a 0-100 percentage: it is the share of this faction's population that
-            // can be fielded as effective troops. A newly generated region faction defaults to fully
-            // organized (100%); factions build/lose it from there. (This was previously 1, written
-            // under the mistaken belief that 1 meant "100%"; at the true scale that left every
-            // generated faction fielding only 1% of its population — see the org=100 test fixtures.)
-            Organization = 100;
+            // New presences default to fully organized. The nullable state defers materializing the
+            // concrete pool until Population/Garrison has been initialized; legacy saves can then
+            // partition it once through the old percentage column.
+            _legacyOrganization = 100;
+            _organizedMilitaryStrength = null;
         }
 
         // Adds/removes fighting strength (in battle-value points) from the pool that represents
@@ -141,6 +182,7 @@ namespace OnlyWar.Models.Planets
         public void AddMilitaryStrength(long battleValue)
         {
             if (battleValue <= 0) return;
+            EnsureOrganizedMilitaryStrength();
             if (PlanetFaction.Faction.GrowthType == GrowthType.Unrest)
             {
                 Population += battleValue;
@@ -148,12 +190,14 @@ namespace OnlyWar.Models.Planets
             }
             else if (PlanetFaction.Faction.PopulationIsMilitary) Population += battleValue;
             else Garrison += battleValue;
+
+            // The military-pool property setters add newly raised strength to the organized pool.
         }
 
         // Indexed access to the three buildable defense stats, so construction, sabotage, decay and
         // the revolt/insurgency splits stop each carrying their own copy of the same three-way
-        // switch. Organization is deliberately absent: it is an integer percentage with its own
-        // clamp, not a structure on the ground, and nothing that reads a DefenseType level wants it.
+        // switch. Reorganization is deliberately absent: it transfers military BV rather than
+        // creating a structure level, and nothing reading a DefenseType level wants that pool.
         public double GetDefense(DefenseType defenseType) => defenseType switch
         {
             DefenseType.Entrenchment => Entrenchment,
@@ -194,6 +238,98 @@ namespace OnlyWar.Models.Planets
         }
 
         public void RemoveMilitaryStrength(long battleValue)
+        {
+            if (battleValue <= 0) return;
+            EnsureOrganizedMilitaryStrength();
+            long lost = Math.Min(MilitaryStrength, battleValue);
+            long organizedAfter = Math.Max(0L, OrganizedMilitaryStrength - lost);
+            RemoveRawMilitaryStrength(lost);
+            _organizedMilitaryStrength = Math.Min(MilitaryStrength, organizedAfter);
+        }
+
+        // Normal military casualties come from the force that actually deployed. They reduce both
+        // total strength and organized strength, leaving the disorganized reserve untouched.
+        public long RemoveOrganizedMilitaryStrength(long battleValue)
+        {
+            if (battleValue <= 0) return 0;
+            EnsureOrganizedMilitaryStrength();
+            long lost = Math.Min(OrganizedMilitaryStrength, battleValue);
+            if (lost <= 0) return 0;
+            long organizedAfter = OrganizedMilitaryStrength - lost;
+            RemoveRawMilitaryStrength(lost);
+            _organizedMilitaryStrength = Math.Min(MilitaryStrength, organizedAfter);
+            return lost;
+        }
+
+        // Used when an undefended assault overruns troops that still exist but cannot form a defence.
+        public long RemoveDisorganizedMilitaryStrength(long battleValue)
+        {
+            if (battleValue <= 0) return 0;
+            EnsureOrganizedMilitaryStrength();
+            long lost = Math.Min(DisorganizedMilitaryStrength, battleValue);
+            if (lost <= 0) return 0;
+            long organizedBefore = OrganizedMilitaryStrength;
+            RemoveRawMilitaryStrength(lost);
+            _organizedMilitaryStrength = Math.Min(MilitaryStrength, organizedBefore);
+            return lost;
+        }
+
+        public long ReorganizeMilitaryStrength(long battleValue)
+        {
+            if (battleValue <= 0) return 0;
+            EnsureOrganizedMilitaryStrength();
+            long moved = Math.Min(DisorganizedMilitaryStrength, battleValue);
+            _organizedMilitaryStrength += moved;
+            return moved;
+        }
+
+        public long DisorganizeMilitaryStrength(long battleValue)
+        {
+            if (battleValue <= 0) return 0;
+            EnsureOrganizedMilitaryStrength();
+            long moved = Math.Min(OrganizedMilitaryStrength, battleValue);
+            _organizedMilitaryStrength -= moved;
+            return moved;
+        }
+
+        // Save loading sets the concrete pool after loading the legacy percentage. Kept public so
+        // the data layer does not need reflection or a persistence-only constructor.
+        public void SetOrganizedMilitaryStrength(long battleValue)
+        {
+            _organizedMilitaryStrength = Math.Clamp(battleValue, 0L, MilitaryStrength);
+            _legacyOrganization = Organization;
+        }
+
+        private void EnsureOrganizedMilitaryStrength()
+        {
+            if (_organizedMilitaryStrength.HasValue)
+            {
+                if (_organizedMilitaryStrength.Value > MilitaryStrength)
+                    _organizedMilitaryStrength = MilitaryStrength;
+                return;
+            }
+
+            _organizedMilitaryStrength = (long)(
+                MilitaryStrength * (_legacyOrganization / 100.0));
+        }
+
+        private void TrackMilitaryStrengthChange(long before)
+        {
+            if (!_organizedMilitaryStrength.HasValue) return;
+            long after = MilitaryStrength;
+            if (after > before)
+            {
+                _organizedMilitaryStrength = Math.Min(
+                    after,
+                    _organizedMilitaryStrength.Value + (after - before));
+            }
+            else if (_organizedMilitaryStrength.Value > after)
+            {
+                _organizedMilitaryStrength = after;
+            }
+        }
+
+        private void RemoveRawMilitaryStrength(long battleValue)
         {
             if (battleValue <= 0) return;
             if (PlanetFaction.Faction.GrowthType == GrowthType.Unrest)

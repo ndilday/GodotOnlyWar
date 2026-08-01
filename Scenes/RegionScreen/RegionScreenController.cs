@@ -141,7 +141,8 @@ public partial class RegionScreenController : DialogController
     private void OnMissionSelected(object sender, AvailableMission mission)
     {
         _selectedMission = mission;
-        _selectedTargetFactionId = -1;
+        _selectedTargetFactionId = mission?.TargetFaction?
+            .PlanetFaction?.Faction?.Id ?? -1;
         RefreshTargetFactionSelector();
         RefreshCommitBar();
     }
@@ -293,7 +294,7 @@ public partial class RegionScreenController : DialogController
     private void RefreshTargetFactionSelector()
     {
         bool relevant = _selectedMission != null
-            && (_selectedMission.Kind == MissionAvailabilityKind.Attack || _selectedMission.Kind == MissionAvailabilityKind.Diversion)
+            && _selectedMission.Kind == MissionAvailabilityKind.Diversion
             && _targetRegion != null;
 
         List<RegionFaction> enemies = relevant ? GetPublicEnemyRegionFactions(_targetRegion) : [];
@@ -318,7 +319,11 @@ public partial class RegionScreenController : DialogController
     private int ResolveTargetFactionId()
     {
         if (_selectedMission == null) return -1;
-        if (_selectedMission.Kind != MissionAvailabilityKind.Attack && _selectedMission.Kind != MissionAvailabilityKind.Diversion) return -1;
+        if (_selectedMission.Kind == MissionAvailabilityKind.Attack)
+        {
+            return _selectedMission.TargetFaction?.PlanetFaction?.Faction?.Id ?? -1;
+        }
+        if (_selectedMission.Kind != MissionAvailabilityKind.Diversion) return -1;
         return _selectedTargetFactionId;
     }
 

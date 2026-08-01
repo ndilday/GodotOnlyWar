@@ -2,6 +2,7 @@ using System.Linq;
 using OnlyWar.Helpers.Missions;
 using OnlyWar.Models;
 using OnlyWar.Models.Missions;
+using OnlyWar.Models.Orders;
 using OnlyWar.Models.Planets;
 using OnlyWar.Tests.Fixtures;
 using Xunit;
@@ -10,6 +11,56 @@ namespace OnlyWar.Tests.UI;
 
 public class MissionAvailabilityTests
 {
+    [Fact]
+    public void CurrentRegion_PublicEnemiesProduceOneFactionSpecificAttackEach()
+    {
+        SectorSimulationFixture fixture = SectorSimulationFixture.CreateDetached();
+        RegionFaction cult = fixture.AddPublicCult(
+            region: 0, population: 2_000, organization: 100);
+        RegionFaction tyranids = fixture.AddConsumptionFaction(
+            region: 0, population: 3_000, organization: 100);
+        fixture.AddHiddenFaction(
+            region: 0, GrowthType.Conversion, population: 1_000);
+        Region region = fixture.Planet.Regions[0];
+
+        AvailableMission[] attacks = MissionAvailability
+            .GetAvailableMissions(region, region)
+            .Where(mission => mission.Kind == MissionAvailabilityKind.Attack)
+            .ToArray();
+
+        Assert.Equal(2, attacks.Length);
+        Assert.Contains(attacks, mission =>
+            mission.Label == "Attack (Genestealer Cult)"
+            && ReferenceEquals(mission.TargetFaction, cult));
+        Assert.Contains(attacks, mission =>
+            mission.Label == "Attack (Tyranids)"
+            && ReferenceEquals(mission.TargetFaction, tyranids));
+        Assert.Equal(2, attacks.Select(mission => mission.IdentityKey).Distinct().Count());
+    }
+
+    [Fact]
+    public void FactionSpecificAttackRepresentsOnlyOrdersAgainstItsTarget()
+    {
+        SectorSimulationFixture fixture = SectorSimulationFixture.CreateDetached();
+        RegionFaction cult = fixture.AddPublicCult(
+            region: 0, population: 2_000, organization: 100);
+        RegionFaction tyranids = fixture.AddConsumptionFaction(
+            region: 0, population: 3_000, organization: 100);
+        Region region = fixture.Planet.Regions[0];
+        AvailableMission cultAttack = MissionAvailability
+            .GetAvailableMissions(region, region)
+            .Single(mission => mission.TargetFaction == cult);
+        Order cultOrder = new([], true, true, Aggression.Normal,
+            new Mission(MissionType.Advance, cult, 0));
+        Order tyranidOrder = new([], true, true, Aggression.Normal,
+            new Mission(MissionType.Advance, tyranids, 0));
+
+        Assert.True(cultAttack.RepresentsOrder(cultOrder));
+        Assert.False(cultAttack.RepresentsOrder(tyranidOrder));
+        Assert.Equal("Attack (Genestealer Cult)",
+            MissionAvailability.GetOrderLabel(cultOrder.Mission));
+    }
+
     [Theory]
     [InlineData(DefenseType.Entrenchment, "Build Fortifications")]
     [InlineData(DefenseType.ListeningPost, "Build Listening Post")]

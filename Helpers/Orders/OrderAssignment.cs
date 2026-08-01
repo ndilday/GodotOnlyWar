@@ -25,10 +25,9 @@ namespace OnlyWar.Helpers.Orders
         // Otherwise builds and registers one new Order after detaching the squads from prior tasking.
         // Returns null (and creates nothing) if the mission descriptor can't be resolved.
         //
-        // targetFactionId: for Attack/Diversion on a multi-enemy region this selects which enemy
-        // faction to target; pass a negative value ("not specified") to auto-resolve the way the
-        // original single-squad dialog did (fall back to the player's own RegionFaction for
-        // Attack/Move, or fail for Diversion since it requires an explicit enemy target).
+        // targetFactionId remains the selector input for Diversion and for legacy callers that
+        // construct a generic Attack descriptor. New Attack buttons carry their RegionFaction
+        // directly on AvailableMission. A negative value means no separate selection was supplied.
         public static Order AssignSquadsToMission(
             IReadOnlyList<Squad> squads,
             Region targetRegion,
@@ -136,13 +135,16 @@ namespace OnlyWar.Helpers.Orders
                     && existingMission.Id == availableMission.SpecialMission.Id;
             }
 
+            int effectiveTargetFactionId = availableMission.TargetFaction?
+                .PlanetFaction?.Faction?.Id ?? targetFactionId;
+
             return availableMission.Kind switch
             {
                 MissionAvailabilityKind.Recon =>
                     existingMission.MissionType == MissionType.Recon,
                 MissionAvailabilityKind.Attack =>
                     existingMission.MissionType == MissionType.Advance
-                    && existingMission.RegionFaction.PlanetFaction.Faction.Id == targetFactionId,
+                    && existingMission.RegionFaction.PlanetFaction.Faction.Id == effectiveTargetFactionId,
                 MissionAvailabilityKind.Move =>
                     existingMission.MissionType == MissionType.Advance
                     && existingMission.RegionFaction.PlanetFaction.Faction.IsPlayerFaction,
@@ -221,15 +223,27 @@ namespace OnlyWar.Helpers.Orders
                         return new Mission(MissionType.Recon, enemyRegionFaction, 0);
                     }
                 case MissionAvailabilityKind.Attack:
-                case MissionAvailabilityKind.Move:
                     {
-                        // Player-selected target faction from the dialog's dropdown, when one was
-                        // targetable (region has public enemies) - falls back to the player's own
-                        // RegionFaction for the "Move" case where no enemy target was offered.
-                        RegionFaction enemyRegionFaction = GetSelectedTargetRegionFaction(selectedRegion, targetFactionId)
-                            ?? GetOrCreatePlayerRegionFaction(selectedRegion);
+                        int effectiveTargetFactionId = mission.TargetFaction?
+                            .PlanetFaction?.Faction?.Id ?? targetFactionId;
+                        RegionFaction enemyRegionFaction = GetSelectedTargetRegionFaction(
+                            selectedRegion, effectiveTargetFactionId);
+                        // An attack whose selected faction vanished is invalid. In particular, never
+                        // turn it into a Move by silently targeting the player's own presence.
+                        if (enemyRegionFaction == null
+                            || !enemyRegionFaction.IsPublic
+                            || FactionDispositionService.IsImperial(
+                                enemyRegionFaction.PlanetFaction.Faction))
+                        {
+                            return null;
+                        }
                         return new Mission(MissionType.Advance, enemyRegionFaction, 0);
                     }
+                case MissionAvailabilityKind.Move:
+                    return new Mission(
+                        MissionType.Advance,
+                        GetOrCreatePlayerRegionFaction(selectedRegion),
+                        0);
                 case MissionAvailabilityKind.Defend:
                     return new Mission(MissionType.DefenseInDepth, GetOrCreatePlayerRegionFaction(selectedRegion), 0);
                 case MissionAvailabilityKind.Patrol:

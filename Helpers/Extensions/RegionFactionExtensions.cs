@@ -103,15 +103,15 @@ namespace OnlyWar.Helpers.Extensions
             }
         }
 
-        // Troops this faction actually has fielded and active in the region — the fielded
+        // Troops this faction actually has fielded and active in the region — the organized
         // portion of its fighting strength. MilitaryStrength resolves the horde-vs-civilian
-        // split (Population for PopulationIsMilitary factions, Garrison otherwise); Organization
-        // (0-100%) trims it to the share that can be deployed. This is the "patrolling + defending"
+        // split (Population for PopulationIsMilitary factions, Garrison otherwise). This is the
+        // "patrolling + defending"
         // total: MissionStealthDifficulty splits it against GetPatrolStrength to separate the troops
         // out searching from the ones merely present, and the special-mission budget and the
         // target-guard checks (PerformSabotage/PerformAssassination) read the whole of it.
         public static long GetDeployedStrength(this RegionFaction rf) =>
-            (long)(rf.MilitaryStrength * rf.Organization / 100.0f);
+            rf.OrganizedMilitaryStrength;
 
         // The share of this faction's fielded troops that is actually out LOOKING for something, as
         // opposed to merely being present. Only Patrol and Recon count: those are the two orders whose

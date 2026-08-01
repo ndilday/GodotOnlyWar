@@ -24,6 +24,33 @@ namespace OnlyWar.Tests.Data;
 public class MissionSaveTests
 {
     [Fact]
+    public void SavePlanet_OrganizedMilitaryStrength_RoundTripsConcretePool()
+    {
+        Faction faction = CreateFaction();
+        Planet planet = CreatePlanet(faction);
+        RegionFaction original = planet.Regions[0].RegionFactionMap[faction.Id];
+        original.Garrison = 1_000;
+        original.Organization = 40;
+        original.DisorganizeMilitaryStrength(100);
+
+        using SqliteConnection connection = CreateSaveDatabase();
+        SavePlanet(connection, planet);
+        foreach (Region region in planet.Regions)
+        {
+            region.RegionFactionMap.Clear();
+        }
+
+        PlanetDataAccess.PopulateRegionFactions(
+            connection,
+            new Dictionary<int, Faction> { [faction.Id] = faction },
+            planet.Regions.ToDictionary(region => region.Id));
+
+        RegionFaction loaded = planet.Regions[0].RegionFactionMap[faction.Id];
+        Assert.Equal(300, loaded.OrganizedMilitaryStrength);
+        Assert.Equal(700, loaded.DisorganizedMilitaryStrength);
+    }
+
+    [Fact]
     public void SavePlanet_RegionWithOneSpecialMission_PersistsExactlyOneMissionRow()
     {
         Faction faction = CreateFaction();
@@ -174,7 +201,7 @@ public class MissionSaveTests
                 Population BIGINT NOT NULL, Garrison INTEGER NOT NULL, Organization INTEGER NOT NULL, Entrenchment INTEGER NOT NULL,
                 ListeningPost INTEGER NOT NULL, AntiAir INTEGER NOT NULL, GrowthMultiplier REAL NOT NULL DEFAULT 1.0,
                 Contentment REAL NOT NULL DEFAULT 70.0, ArmedCivilians INTEGER NOT NULL DEFAULT 0,
-                HasEmergenceAdvantage BOOLEAN NOT NULL DEFAULT 0);
+                HasEmergenceAdvantage BOOLEAN NOT NULL DEFAULT 0, OrganizedMilitaryStrength BIGINT);
             CREATE TABLE PlanetFactionRegionIntel (PlanetId INTEGER NOT NULL, FactionId INTEGER NOT NULL, RegionId INTEGER NOT NULL,
                 IntelLevel REAL NOT NULL);
             CREATE TABLE Mission (Id INTEGER PRIMARY KEY UNIQUE NOT NULL, MissionType INTEGER NOT NULL, RegionId INTEGER NOT NULL,

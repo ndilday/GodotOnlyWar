@@ -28,6 +28,14 @@ namespace OnlyWar.Helpers.StrategicCombat
         // own MinimumForceRequest can still floor this up to a full squad when its data requires it.
         public const long NpcReconBattleValueCap = 200;
 
+        // One point of reorganization effort reforms this much disorganized military BV. Anchored
+        // to a ten-trooper PDF squad so the rate is expressed in the same currency as force pools.
+        public const long ReorganizationBattleValuePerEffort = 10 * PdfTrooperBattleValue;
+
+        // Each undefended day of an assault destroys this multiple of the surviving assaulting
+        // force's BV from the defender's disorganized pool.
+        public const double UndefendedAssaultDestructionMultiplier = 1.0;
+
         public const double CombatSigma = 0.12;
         public const double BaseIntensity = 0.08;
         public const double CaptureThreshold = 1.10;
@@ -60,9 +68,6 @@ namespace OnlyWar.Helpers.StrategicCombat
             if (faction.GrowthType == GrowthType.Conversion) return 0.85;
             return 1.0;
         }
-
-        public static double DefenderReadiness(int organization) =>
-            0.35 + 0.65 * Math.Clamp(organization, 0, 100) / 100.0;
 
         public static double EntrenchmentMultiplier(double entrenchment) =>
             Math.Min(3.0, 1.0 + Math.Max(0.0, entrenchment) * 0.10);

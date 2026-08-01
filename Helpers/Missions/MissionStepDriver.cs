@@ -53,6 +53,18 @@ namespace OnlyWar.Helpers.Missions
         /// <summary>The mission this driver is walking, so the scheduler can read its day counter.</summary>
         public MissionContext State => _execution.State;
 
+        internal MissionExecutionContext Execution => _execution;
+
+        // A cross-mission interaction may terminate one participant while leaving the other
+        // driver's ordinary chain intact. Keeping that mutation here avoids manufacturing a fake
+        // terminal step merely to communicate the result back to the scheduler.
+        internal void Complete()
+        {
+            _next = null;
+            _resume = null;
+            _followUps.Clear();
+        }
+
         public void RunToCompletion()
         {
             while (_next != null)

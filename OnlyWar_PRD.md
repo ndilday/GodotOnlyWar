@@ -439,7 +439,7 @@ Advanced recruitment cultures, specialized facilities, detailed mutation and gen
 
 **Order Assignment**
 - The player can assign a squad to one of the following mission types: Recon, Advance (assault), Ambush, Assassination, Sabotage, Extermination, Defense, Patrol, Construction, or Diversion.
-- The player sets the target (a region and its occupying faction) and the aggression level (Avoid, Cautious, Normal, Attritional, or Aggressive).
+- The player sets the target and aggression level (Avoid, Cautious, Normal, Attritional, or Aggressive). Every public hostile presence is offered as its own `Attack (Faction)` option, including enemies sharing the squads' current region; hidden factions cannot be selected directly.
 - Multiple squads can be assigned to the same mission, combining their force for resolution.
 
 **Mission Execution**
@@ -456,7 +456,7 @@ Advanced recruitment cultures, specialized facilities, detailed mutation and gen
 
 **Mission Types — Specific Behaviors**
 - **Recon:** Each assigned squad conducts its own surveillance sweep over multiple days, with independent stealth, interception, combat, and skill checks; placing several squads on one order is a reporting convenience and produces the same strategic evidence as separate orders. Higher skill margins produce positive intelligence evidence, while critically poor margins produce false or corrupted evidence that can lower regional intelligence but never below zero. All recon evidence gathered by an intel-sharing group in a region that week receives smooth diminishing returns before being applied; positive and negative evidence are diminished separately so contradictory reports yield little net confidence. Intelligence decays over subsequent turns.
-- **Advance:** Squad assaults an enemy-held position. A battle is resolved. Successful advance reduces enemy garrison and may convert or destroy enemy regional holdings.
+- **Advance:** Squad assaults a selected hostile faction, either locally or in an adjacent region. If that faction has a reciprocal assault force ready in the same region, the two committed forces fight one shared meeting engagement first; neither benefits from entrenchment. A tactical withdrawal does not end this contest while the force remains combat-capable and inside its cumulative aggression tolerance. Once one assault force becomes nonviable, the survivor may begin attacking the remaining prepared defenders on the following day, at which point those defenders use entrenchment normally. Successful advance reduces enemy garrison and may convert or destroy enemy regional holdings.
 - **Ambush:** Squad positions and waits for enemy movement before engaging. Success depends on positioning skill and the enemy patrol activity level.
 - **Assassination:** Squad locates and eliminates a specific enemy leader target. Target tier determines the strength of the bodyguard force encountered.
 - **Sabotage:** Squad degrades enemy defensive infrastructure (listening posts, entrenchment, or anti-air). Degree of degradation scales with skill margin and the size of the existing defenses.
@@ -643,7 +643,7 @@ Blast templates extend the cone-template machinery with a second delivery mode: 
 
 **Construction**
 - Remaining spare troops (after offensive commitments) are converted to build points.
-- Factions spend build points to improve regional infrastructure: Organization (enables more organized military force), Listening Post (feeds defensive regional intel and increases enemy stealth difficulty), Entrenchment (increases defensive strength), and Anti-Air (resists aerial assaults).
+- Factions spend build points on regional reorganization or infrastructure. Reorganization transfers a fixed amount of surviving military BV from the disorganized pool into the organized pool; Listening Posts feed defensive regional intel, Entrenchment increases defensive strength, and Anti-Air resists aerial assaults.
 - Each upgrade tier costs exponentially more than the previous.
 
 **Patrol**
@@ -1043,7 +1043,7 @@ This is a behavioral specification. It depends on §4.21 (behavior flags, growth
   - **Winnable by construction.** Combined with the stranded-fleet premise (below), the swarm cannot grow without limit; the campaign is a race to break it before it has drawn down enough of the world to become unstoppable. Longer pre-arrival delays therefore mean both a larger swarm *and* a more blighted world to inherit.
 
 **Tyranid Troop AI**
-- The mobile combat force is the existing `organizedTroops = Population × Organization / 100` (`FactionStrategyController`). The *unorganized* remainder is the abstraction for the swarm's **feeding pools and gestating brood** — immobile, non-combat, and the engine of Consumption growth. Modeling those pools as discrete, strikable structures (a "destroy the birthing pits" objective) is deferred (§6.11); until then `Organization` carries the troop-vs-structure split.
+- The mobile combat force is the region's concrete `OrganizedMilitaryStrength` pool. The disorganized remainder still exists and can be caught in an ambush; after an assault destroys the organized defence, continuing undefended assault days destroy disorganized BV at a tunable multiple of surviving attacker BV. Reorganization explicitly transfers BV back into the organized pool rather than applying a percentage multiplier.
 - Each turn the AI allocates `organizedTroops` by priority:
   1. **Fight** — commit force to any in-region military threat (a PDF garrison, or a Cult fighting the swarm); the swarm is drawn to resistance first.
   2. **Expand** — send a share of the remainder to neighbors, biased toward the richest / most-resistant region. The share scales with local **depletion** (`depletion = 1 − ½·(civiliansLeft/civiliansAtStart + capacity/maxCapacity)`): a rich region keeps its forces home to gorge, a stripped one pushes them onward.
@@ -1073,7 +1073,7 @@ This is a behavioral specification. It depends on §4.21 (behavior flags, growth
 - First cut is **defensive only**: the PDF fortifies (Entrenchment), builds `ListeningPost` sensor infrastructure, and holds — it runs the development/construction slice of `FactionStrategyController` but launches no offensives. It is deliberately **less effective than the Imperial Guard** forces specified later (§6.4): the PDF holds the line and buys time; it does not maneuver or counterattack.
 
 **Strategic Combat Model**
-- PDF ↔ Tyranid ↔ Cult fighting resolves as a lightweight **strategic attrition** step — committed force × effectiveness against defender garrison, modified by the existing `Entrenchment` / `ListeningPost`-fed regional intel / `AntiAir` / `Organization` ratings. This is distinct from the tactical Battle engine (§4.14), which is reserved for Astartes engagements; running tactical resolution for every AI skirmish across a multi-turn headless pre-simulation would be far too costly.
+- PDF ↔ Tyranid ↔ Cult fighting resolves as a lightweight **strategic attrition** step — committed organized force × effectiveness against the defender's organized BV, modified by `Entrenchment`, `ListeningPost`-fed regional intel, and `AntiAir`. This is distinct from the tactical Battle engine (§4.14), which is reserved for Astartes engagements; running tactical resolution for every AI skirmish across a multi-turn headless pre-simulation would be far too costly.
 
 **Opening Scenario Application (the Promised World)**
 - The opening scenario sequences the two enemies in time so the Tyranid beachhead stays authored while the Cult war is emergent (extends `ScenarioBuilder.StampPromisedWorld` and the OpeningScenario design doc):

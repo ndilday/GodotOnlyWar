@@ -237,7 +237,7 @@ namespace OnlyWar.Helpers.Database.GameState
                     bool isPublic = reader.GetBoolean(2);
                     long population = reader.GetInt64(3);
                     long garrison = reader.GetInt64(4);
-                    int organization = Math.Max(1, reader.GetInt32(5));
+                    int organization = Math.Clamp(reader.GetInt32(5), 0, 100);
                     double entrenchment = reader.GetDouble(6);
                     double listeningPost = reader.GetDouble(7);
                     double antiAir = reader.GetDouble(8);
@@ -245,6 +245,8 @@ namespace OnlyWar.Helpers.Database.GameState
                     int contentmentOrdinal = GetOrdinalOrDefault(reader, "Contentment");
                     int armedCiviliansOrdinal = GetOrdinalOrDefault(reader, "ArmedCivilians");
                     int emergenceOrdinal = GetOrdinalOrDefault(reader, "HasEmergenceAdvantage");
+                    int organizedStrengthOrdinal =
+                        GetOrdinalOrDefault(reader, "OrganizedMilitaryStrength");
                     float contentment = contentmentOrdinal >= 0
                         ? Convert.ToSingle(reader[contentmentOrdinal])
                         : 70f;
@@ -280,6 +282,11 @@ namespace OnlyWar.Helpers.Database.GameState
                             AntiAir = antiAir,
                             GrowthMultiplier = growthMultiplier
                         };
+                    if (organizedStrengthOrdinal >= 0 && !reader.IsDBNull(organizedStrengthOrdinal))
+                    {
+                        regionFaction.SetOrganizedMilitaryStrength(
+                            reader.GetInt64(organizedStrengthOrdinal));
+                    }
                     region.RegionFactionMap[regionFaction.PlanetFaction.Faction.Id] = regionFaction;
                 }
             }
@@ -529,8 +536,8 @@ namespace OnlyWar.Helpers.Database.GameState
                     {
                         command.Transaction = transaction;
                         command.CommandText = @"INSERT INTO RegionFaction
-                            (RegionId, FactionId, IsPublic, Population, Garrison, Organization, Entrenchment, ListeningPost, AntiAir, GrowthMultiplier, Contentment, ArmedCivilians, HasEmergenceAdvantage) VALUES
-                            (@regionId, @factionId, @isPublic, @population, @garrison, @organization, @entrenchment, @listeningPost, @antiAir, @growthMultiplier, @contentment, @armedCivilians, @hasEmergenceAdvantage);";
+                            (RegionId, FactionId, IsPublic, Population, Garrison, Organization, Entrenchment, ListeningPost, AntiAir, GrowthMultiplier, Contentment, ArmedCivilians, HasEmergenceAdvantage, OrganizedMilitaryStrength) VALUES
+                            (@regionId, @factionId, @isPublic, @population, @garrison, @organization, @entrenchment, @listeningPost, @antiAir, @growthMultiplier, @contentment, @armedCivilians, @hasEmergenceAdvantage, @organizedMilitaryStrength);";
                         command.AddParam("@regionId", region.Id);
                         command.AddParam("@factionId", regionFaction.PlanetFaction.Faction.Id);
                         command.AddParam("@isPublic", regionFaction.IsPublic ? 1 : 0);
@@ -544,6 +551,7 @@ namespace OnlyWar.Helpers.Database.GameState
                         command.AddParam("@contentment", regionFaction.Contentment);
                         command.AddParam("@armedCivilians", regionFaction.ArmedCivilians);
                         command.AddParam("@hasEmergenceAdvantage", regionFaction.HasEmergenceAdvantage ? 1 : 0);
+                        command.AddParam("@organizedMilitaryStrength", regionFaction.OrganizedMilitaryStrength);
                         command.ExecuteNonQuery();
                     }
                 }

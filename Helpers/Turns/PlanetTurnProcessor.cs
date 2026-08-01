@@ -999,7 +999,7 @@ namespace OnlyWar.Helpers.Turns
             // ambush was created with a wildly negative size that PositionAmbushMissionStep then
             // raised 10 to - producing a target battle value of 0, an ambush with no ambushers.
             int maxSize = (int)MissionStealthDifficulty.TroopMagnitude(
-                enemyRegionFaction.GetDeployedStrength());
+                enemyRegionFaction.MilitaryStrength);
             int size = ClampMissionSize((int)_session.Random.NextRandomZValue() + 1, maxSize);
             long targetBattleValue =
                 AmbushMissionSizing.RollTargetBattleValue(size, _session.Random);

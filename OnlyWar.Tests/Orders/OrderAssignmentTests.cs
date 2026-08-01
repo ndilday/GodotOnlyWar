@@ -42,6 +42,47 @@ public class OrderAssignmentTests
     }
 
     [Fact]
+    public void AssignSquadsToMission_FactionSpecificAttackUsesButtonTarget()
+    {
+        SectorSimulationFixture fixture = SectorSimulationFixture.Create();
+        RegionFaction enemy = fixture.AddControllingFaction(5, "Orks", 5000);
+        Squad squad = TestModelFactory.CreateSquad(
+            "Test Squad", TestModelFactory.CreateSoldier());
+        AvailableMission attack = new(
+            "Attack (Orks)",
+            MissionAvailabilityKind.Attack,
+            targetFaction: enemy);
+
+        Order order = OrderAssignment.AssignSquadsToMission(
+            [squad], enemy.Region, attack, targetFactionId: -1,
+            aggression: Aggression.Normal);
+
+        Assert.NotNull(order);
+        Assert.Same(enemy, order.Mission.RegionFaction);
+    }
+
+    [Fact]
+    public void AssignSquadsToMission_VanishedAttackTargetDoesNotBecomeMove()
+    {
+        SectorSimulationFixture fixture = SectorSimulationFixture.Create();
+        RegionFaction enemy = fixture.AddControllingFaction(5, "Orks", 5000);
+        Squad squad = TestModelFactory.CreateSquad(
+            "Test Squad", TestModelFactory.CreateSoldier());
+        AvailableMission attack = new(
+            "Attack (Orks)",
+            MissionAvailabilityKind.Attack,
+            targetFaction: enemy);
+        enemy.Region.RegionFactionMap.Remove(enemy.PlanetFaction.Faction.Id);
+
+        Order order = OrderAssignment.AssignSquadsToMission(
+            [squad], enemy.Region, attack, targetFactionId: -1,
+            aggression: Aggression.Normal);
+
+        Assert.Null(order);
+        Assert.Null(squad.CurrentOrders);
+    }
+
+    [Fact]
     public void AssignSquadsToMission_TwoSquads_ShareASingleOrder()
     {
         SectorSimulationFixture fixture = SectorSimulationFixture.Create();

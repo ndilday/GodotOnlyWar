@@ -63,7 +63,8 @@ namespace OnlyWar.Helpers.StrategicCombat
             defenderLossRate = Math.Clamp(defenderLossRate, 0.01, 0.75);
 
             long attackerLosses = ClampLoss((long)Math.Round(committed * attackerLossRate), committed, defenderEffective);
-            long mutableDefenderStrength = defenders.Sum(defender => defender.MilitaryStrength);
+            long mutableDefenderStrength = defenders.Sum(
+                defender => defender.OrganizedMilitaryStrength);
             long defenderLosses = ClampLoss((long)Math.Round(defenderBattleValue * defenderLossRate),
                 mutableDefenderStrength, attackerEffective);
 
@@ -138,13 +139,13 @@ namespace OnlyWar.Helpers.StrategicCombat
                 .SelectMany(squad => squad.Members)
                 .Sum(soldier => (long)soldier.Template.BattleValue);
 
-            // GetDeployedStrength, not raw MilitaryStrength: Organization is the share of a faction's
-            // strength that can actually be fielded, and every other consumer of "how strong is this
-            // defender" now works in those units - the planner's spare-troops arithmetic
+            // GetDeployedStrength, not raw MilitaryStrength: organized BV is the concrete share of a
+            // faction's strength that can actually be fielded, and every other consumer of "how strong
+            // is this defender" now works in those units - the planner's spare-troops arithmetic
             // (FactionStrategyController.GeneratePlanetOrders), the defensive reserve
             // (CalculateRequiredDefensiveBattleValue), and the tactical defence that materialises it
             // (PrepareAssaultMissionStep.AssembleDefendingForce). Reading the raw pool here meant a
-            // disorganised region was priced as fully mobilised for strategic combat while being priced
+            // disorganized region was priced as fully mobilized for strategic combat while being priced
             // correctly everywhere else.
             return defender.GetDeployedStrength() + landedNpcBattleValue;
         }
@@ -193,21 +194,20 @@ namespace OnlyWar.Helpers.StrategicCombat
             if (losses <= 0 || totalMilitaryStrength <= 0) return;
 
             long applied = 0;
-            foreach (RegionFaction defender in defenders.OrderByDescending(item => item.MilitaryStrength))
+            foreach (RegionFaction defender in defenders.OrderByDescending(item => item.OrganizedMilitaryStrength))
             {
-                long share = (long)Math.Floor(losses * (defender.MilitaryStrength / (double)totalMilitaryStrength));
-                share = Math.Min(share, defender.MilitaryStrength);
-                defender.RemoveMilitaryStrength(share);
+                long share = (long)Math.Floor(losses * (defender.OrganizedMilitaryStrength / (double)totalMilitaryStrength));
+                share = Math.Min(share, defender.OrganizedMilitaryStrength);
+                defender.RemoveOrganizedMilitaryStrength(share);
                 applied += share;
             }
 
             long residue = losses - applied;
-            foreach (RegionFaction defender in defenders.OrderByDescending(item => item.MilitaryStrength))
+            foreach (RegionFaction defender in defenders.OrderByDescending(item => item.OrganizedMilitaryStrength))
             {
                 if (residue <= 0) break;
-                long extra = Math.Min(residue, defender.MilitaryStrength);
-                defender.RemoveMilitaryStrength(extra);
-                residue -= extra;
+                long removed = defender.RemoveOrganizedMilitaryStrength(residue);
+                residue -= removed;
             }
         }
 
@@ -223,7 +223,6 @@ namespace OnlyWar.Helpers.StrategicCombat
         {
             if (defender == null || defenderBattleValue <= 0) return 0;
             return defenderBattleValue
-                * StrategicCombatRules.DefenderReadiness(defender.Organization)
                 * StrategicCombatRules.FactionQuality(defender.PlanetFaction.Faction)
                 // The defender fights from the whole position its side holds here, not just the
                 // stretch of trench its own faction dug (RegionDefenses).

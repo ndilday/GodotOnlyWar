@@ -107,12 +107,25 @@ namespace OnlyWar.Helpers.Missions.Assault
 
             if (context.OpposingSquads.Count == 0)
             {
-                // No defenders, the assault is an uncontested success.
-                // This could be a separate mission step in the future (e.g., "Secure Unopposed Region").
-                context.AddLog($"Day {context.DaysElapsed}: {attacker}'s assault on {defender} forces in {region} is unopposed.");
-                context.Impact += 5; // Give a significant positive impact for taking territory freely.
-                // a more robust system would properly transfer ownership here
-                return MissionStepResult.Complete;
+                RegionFaction target = context.Order.Mission.RegionFaction;
+                long remainingDisorganized = Math.Max(
+                    0L,
+                    target.DisorganizedMilitaryStrength
+                    - context.DisorganizedDefenderBattleValueDestroyed);
+                long destructionCapacity = SaturatingScale(
+                    context.CurrentMissionBattleValue,
+                    StrategicCombatRules.UndefendedAssaultDestructionMultiplier);
+                long destroyed = Math.Min(remainingDisorganized, destructionCapacity);
+                context.RecordDisorganizedDefenderLosses(destroyed);
+                context.AddLog(
+                    $"Day {context.DaysElapsed}: {attacker}'s assault on {defender} forces in "
+                    + $"{region} is unopposed; {destroyed:N0} disorganized BV destroyed.");
+                context.Impact += 5;
+
+                long stillRemaining = remainingDisorganized - destroyed;
+                return stillRemaining > 0 && !context.OperatingDaysSpent
+                    ? MissionStepResult.Continue(new PrepareAssaultMissionStep())
+                    : MissionStepResult.Complete;
             }
 
             // Resume this step after the engagement, so an assault that is still willing and able comes
@@ -123,6 +136,13 @@ namespace OnlyWar.Helpers.Missions.Assault
             // falls or the force is destroyed, which is what the setting should mean.
             return MissionStepResult.Continue(
                 new MeetingEngagementMissionStep(), margin, new PrepareAssaultMissionStep());
+        }
+
+        private static long SaturatingScale(long battleValue, double multiplier)
+        {
+            if (battleValue <= 0 || multiplier <= 0) return 0;
+            double scaled = battleValue * multiplier;
+            return scaled >= long.MaxValue ? long.MaxValue : Math.Max(1L, (long)scaled);
         }
 
         internal List<BattleSquad> AssembleDefendingForce(

@@ -4,7 +4,9 @@ using System.Linq;
 using OnlyWar.Helpers.Battles;
 using OnlyWar.Helpers;
 using OnlyWar.Helpers.Missions.Assault;
+using OnlyWar.Helpers.Missions;
 using OnlyWar.Helpers.StrategicCombat;
+using OnlyWar.Helpers.Turns;
 using OnlyWar.Models;
 using OnlyWar.Models.Missions;
 using OnlyWar.Models.Orders;
@@ -17,6 +19,43 @@ namespace OnlyWar.Tests.Missions;
 
 public class PrepareAssaultMissionStepTests
 {
+    [Fact]
+    public void UnopposedAssault_DestroysOneAttackerMultipleOfDisorganizedBvPerDay()
+    {
+        Faction attacker = CreateFaction(1, "Attackers", isPlayer: true);
+        Faction defender = CreateFaction(2, "Defenders", isDefault: true);
+        Planet planet = new(1, "Terra", new Coordinate(0, 0), 1, null, 0, 0);
+        Region region = new(1, planet, 0, "Terra Lambda", new RegionCoordinate(0, 0), 0);
+        planet.Regions[0] = region;
+        RegionFaction target = AddPresence(region, defender);
+        target.Population = 10_000;
+        target.Garrison = 1_000;
+        target.Organization = 0;
+
+        Squad squad = TestModelFactory.CreateSquad(
+            "Assault force", TestModelFactory.CreateSoldier());
+        squad.CurrentRegion = region;
+        Order order = new([squad], false, true, Aggression.Aggressive,
+            new Mission(MissionType.Advance, target, 0));
+        MissionContext context = new(order, [new BattleSquad(true, squad)], []);
+
+        new MissionStepDriver(
+            TestExecutionContextFactory.CreateMission(context, new FixedRNG()),
+            new PrepareAssaultMissionStep()).RunToCompletion();
+
+        long expected = context.StartingMissionBattleValue
+            * MissionContext.MissionDurationDays;
+        Assert.Equal(MissionContext.MissionDurationDays, context.DaysElapsed);
+        Assert.Equal(expected, context.DisorganizedDefenderBattleValueDestroyed);
+        Assert.Equal(
+            MissionContext.MissionDurationDays,
+            context.Log.Count(line => line.Contains("unopposed")));
+
+        new MissionAftermathProcessor(null, null).ApplyMissionResults([context]);
+        Assert.Equal(1_000 - expected, target.MilitaryStrength);
+        Assert.Equal(0, target.OrganizedMilitaryStrength);
+    }
+
     [Fact]
     public void RegionalDefenders_IncludeAlliedFactionButExcludeEnemy()
     {

@@ -214,7 +214,7 @@ PlanetFaction        (PlanetId, FactionId, IsPublic, Population, PlanetaryContro
 Region               (Id, PlanetId, RegionNumber, RegionName, RegionType,
                       IsUnderAssault, IntelligenceLevel, CarryingCapacity)
 RegionFaction        (RegionId, FactionId, IsPublic, Population, Garrison,
-                      Organization, Entrenchment, Detection, AntiAir)
+                      Organization, OrganizedMilitaryStrength, Entrenchment, Detection, AntiAir)
 Mission              (Id, MissionType, RegionId, FactionId, MissionSize, DefenseTypeId,
                       IsRegionMission)                     -- 1 = region special mission, 0 = order-attached
 
@@ -284,7 +284,9 @@ RegionFaction
   ├─ PlanetFaction : PlanetFaction         (back-reference for faction identity)
   ├─ Population : long
   ├─ Garrison : int
-  ├─ Organization : int
+  ├─ OrganizedMilitaryStrength : long
+  ├─ DisorganizedMilitaryStrength : long (derived)
+  ├─ Organization : int (derived compatibility/display percentage)
   ├─ Detection : int
   ├─ Entrenchment : int
   ├─ AntiAir : int
@@ -555,16 +557,18 @@ Non-deployed non-Scout marines receive weekly work-experience training through `
 
 `FactionStrategyController.GenerateFactionOrders(Faction, Sector)` runs per non-player, non-default faction per turn. For each planet where the faction has a public presence:
 
-1. **Force assessment:** Compute `RequiredGarrison` per region, `OrganizedTroops = Population × Organization / 100`, `SpareTroops = max(0, OrganizedTroops − RequiredGarrison)`.
+1. **Force assessment:** Compute `RequiredGarrison` per region from the concrete `OrganizedMilitaryStrength` pool, then `SpareTroops = max(0, OrganizedMilitaryStrength − RequiredGarrison)`.
 2. **Offensive planning:** If combined `SpareTroops` in regions adjacent to an enemy exceeds that enemy's strength × 1.5, generate an `Advance` order. `ForceGenerator` is called with `TargetBattleValue` set to 50–75% of `SpareTroops × 10` (randomized). Committed troops are deducted from contributing region garrisons.
-3. **Construction:** Convert remaining `SpareTroops / 100` to build points. Spend greedily on the cheapest upgrade among Organization, Entrenchment, Detection, Anti-Air (costs scale as `2^currentLevel`).
+3. **Construction:** Convert remaining `SpareTroops / 100` to build points. Reorganization transfers `ReorganizationBattleValuePerEffort` BV from the disorganized pool to the organized pool per effort point; other construction improves Entrenchment, Detection, or Anti-Air (costs scale as `2^currentLevel`).
 4. **Patrol:** Any remaining `SpareTroops × 10` become a `ScoutPatrol` order.
 
 **Player construction (squad-driven fortification).** The player can order a squad in its own region to build a defense (Entrenchment / Detection / Anti-Air), creating a `ConstructionMission` targeting the player's `RegionFaction`. Unlike the NPC squad-less construction (resolved at a flat `MissionSize` in `ProcessConstructionOrders`), a construction order that carries a squad is routed in `ProcessCombatMissions` to `ResolveSquadConstruction`: every able soldier contributes its `Engineering (Fortification)` skill value, the sum is divided by `EngineeringBuildDivisor` (100) and floored (minimum 1), and the result is applied via the shared `ApplyConstruction`. The order persists, so the squad accumulates defenses over successive turns. `Engineering (Fortification)` is an Intelligence-based Tech skill trained by all combat marines at low weight.
 
 **Multi-faction regions.** Orders target an explicit `RegionFaction`; the assignment UI requires a choice when several hostile factions are present and locks it when only one exists. Detection is aggregated across every detecting enemy in the region, with the actual spotter/interceptor selected by intel and deployed-strength weighting. Intelligence opportunities are budgeted proportionally by faction strength rather than dictionary order. The detailed selection and presentation decisions remain in `Design/Reference/MultiFactionRegions.md`.
 
-**Strategic NPC combat.** NPC-only assaults cross from tactical to `StrategicCombatResolver` when either side exceeds `MaxTacticalActors` (120), generated forces would exceed `MaxGeneratedSquads` (24), or committed strength exceeds `MassCombatBattleValueFloor` (1,500 BV). Named/player squads always remain tactical. Strategic resolution works directly in conserved BV pools: effective strength combines committed BV, aggression, faction quality, organization/readiness, entrenchment, and intel-derived surprise; a Gaussian combat ratio determines bounded casualties and whether the attacker clears the 1.10 capture threshold. Invaders establish a foothold on victory, raiders return survivors, and no transient tactical squads are generated. Formulas and tuning questions remain in `Design/Reference/LargeScaleNpcCombat.md`.
+**Strategic NPC combat.** NPC-only assaults cross from tactical to `StrategicCombatResolver` when either side exceeds `MaxTacticalActors` (120), generated forces would exceed `MaxGeneratedSquads` (24), or committed strength exceeds `MassCombatBattleValueFloor` (1,500 BV). Named/player squads always remain tactical. Strategic resolution works directly in conserved BV pools: only organized BV deploys and takes ordinary battle casualties; effective strength combines committed BV, aggression, faction quality, entrenchment, and intel-derived surprise. A Gaussian combat ratio determines bounded casualties and whether the attacker clears the 1.10 capture threshold. Invaders establish a foothold on victory, raiders return survivors, and no transient tactical squads are generated. Formulas and tuning questions remain in `Design/Reference/LargeScaleNpcCombat.md`.
+
+**Organized and disorganized military strength.** `RegionFaction.MilitaryStrength` is partitioned into persisted `OrganizedMilitaryStrength` and derived `DisorganizedMilitaryStrength`. Newly raised troops, transferred formations, and returning survivors enter organized. Ordinary engagements remove organized BV and total BV together; disruptive effects may transfer BV into the disorganized pool without killing it. Reorganization is a fixed-BV transfer back, not a percentage increase. Ambush opportunities size against total military strength and distribute casualties proportionally across both pools. After an Advance has eliminated the organized defence, each remaining operating day destroys up to `attacker BV × UndefendedAssaultDestructionMultiplier` disorganized BV (initial multiplier 1.0).
 
 ### 6.3 Sector Entity Logic
 
@@ -625,7 +629,7 @@ Step chains by mission type:
 |---|---|
 | Any (cross-region) | `InfiltrateMissionStep` → main initial step |
 | Recon | `ReconStealthMissionStep` → `PerformReconMissionStep` (loops 6 days) → `ExfiltrateMissionStep` |
-| Advance | `PrepareAssaultMissionStep` → battle |
+| Advance | reciprocal assault check → `PrepareAssaultMissionStep` → battle |
 | Ambush / Extermination | `PositionAmbushMissionStep` → `AmbushBattleStep` |
 | Assassination | `AssassinateStealthMissionStep` → `AssassinateBattleStep` |
 | Sabotage | `SabotageStealthMissionStep` → `PerformSabotageMissionStep` (loops 6 days) → `ExfiltrateMissionStep` |
@@ -633,6 +637,8 @@ Step chains by mission type:
 Mission force topology defaults to `UnifiedForce`. Recon explicitly uses `IndependentSquads`: every assigned squad receives its own `MissionContext`, stealth checks, interception state, battles, field experience, and soldier outcome record. The shared `Order` is only an organizational/reporting container. The end-of-turn view groups those element contexts back into one order-level recon entry while retaining squad/day attribution and each battle replay. Raids, assassinations, sabotage, advances, and other mass-force missions continue to resolve all assigned squads in one unified context.
 
 Mission continuation thresholds measure casualties relative to the combat-capable members present when each `BattleSquad` mission element is created, not the squad template's maximum roster. An under-strength squad therefore begins at 100% mission strength; subsequent losses are compared with that starting force according to the order's aggression setting.
+
+At the start of each day's acting phase, `MissionTurnProcessor` pairs exact reciprocal Advance orders once both forces have reached `PrepareAssaultMissionStep` in the same target region. `ReciprocalAssaultResolver` substitutes one shared field battle for their two independent assaults, gives both sides the Attacker battle role, and never reads regional entrenchment. A withdrawal is only that day's result: a force with combatants remaining and cumulative losses still inside its aggression threshold reforms and contests again on the next day. A nonviable driver's chain ends; the survivor retains `PrepareAssaultMissionStep`, so the scheduler cannot run its attack on static defenders until the next day. An inbound counter-assault therefore spends its approach day while a local assault may hit defenders, then interrupts that assault once it arrives. Casualties in the shared battle belong to the already-committed formations and are not deducted again from either static regional military pool.
 
 Detection during any stealth phase routes to `DetectedMissionStep`, which dispatches to `AmbushedMissionStep` or `MeetingEngagementMissionStep` depending on context.
 

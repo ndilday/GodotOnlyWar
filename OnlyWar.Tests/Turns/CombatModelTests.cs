@@ -1,4 +1,8 @@
 using OnlyWar.Helpers;
+using OnlyWar.Helpers.Extensions;
+using OnlyWar.Helpers.StrategicCombat;
+using OnlyWar.Helpers.Turns;
+using OnlyWar.Models.Missions;
 using OnlyWar.Models;
 using OnlyWar.Models.Planets;
 using OnlyWar.Tests.Fixtures;
@@ -78,6 +82,88 @@ public class CombatModelTests
         horde.RemoveMilitaryStrength(5_000);
 
         Assert.Equal(0, horde.Population);
+    }
+
+    [Fact]
+    public void OrganizedAndDisorganizedStrength_AreConcretePoolsAcrossCasualties()
+    {
+        SectorSimulationFixture fixture = SectorSimulationFixture.CreateDetached();
+        RegionFaction horde = fixture.AddConsumptionFaction(
+            0, population: 10_000, organization: 40);
+
+        Assert.Equal(4_000, horde.OrganizedMilitaryStrength);
+        Assert.Equal(6_000, horde.DisorganizedMilitaryStrength);
+
+        horde.RemoveOrganizedMilitaryStrength(1_000);
+
+        Assert.Equal(9_000, horde.MilitaryStrength);
+        Assert.Equal(3_000, horde.GetDeployedStrength());
+        Assert.Equal(6_000, horde.DisorganizedMilitaryStrength);
+        Assert.Equal(33, horde.Organization);
+    }
+
+    [Fact]
+    public void RaisedTroopsEnterOrganizedPool_AndReorganizationMovesExistingStrength()
+    {
+        SectorSimulationFixture fixture = SectorSimulationFixture.CreateDetached();
+        RegionFaction horde = fixture.AddConsumptionFaction(
+            0, population: 1_000, organization: 0);
+
+        horde.AddMilitaryStrength(100);
+        long moved = horde.ReorganizeMilitaryStrength(
+            StrategicCombatRules.ReorganizationBattleValuePerEffort);
+
+        Assert.Equal(1_100, horde.MilitaryStrength);
+        Assert.Equal(150, horde.OrganizedMilitaryStrength);
+        Assert.Equal(950, horde.DisorganizedMilitaryStrength);
+        Assert.Equal(StrategicCombatRules.ReorganizationBattleValuePerEffort, moved);
+    }
+
+    [Fact]
+    public void UndefendedLossesRemoveOnlyDisorganizedStrength()
+    {
+        SectorSimulationFixture fixture = SectorSimulationFixture.CreateDetached();
+        RegionFaction horde = fixture.AddConsumptionFaction(
+            0, population: 1_000, organization: 25);
+
+        long destroyed = horde.RemoveDisorganizedMilitaryStrength(300);
+
+        Assert.Equal(300, destroyed);
+        Assert.Equal(700, horde.MilitaryStrength);
+        Assert.Equal(250, horde.OrganizedMilitaryStrength);
+        Assert.Equal(450, horde.DisorganizedMilitaryStrength);
+    }
+
+    [Fact]
+    public void ReorganizationConstruction_ConvertsAFixedBattleValuePerEffort()
+    {
+        SectorSimulationFixture fixture = SectorSimulationFixture.CreateDetached();
+        RegionFaction horde = fixture.AddConsumptionFaction(
+            0, population: 10_000, organization: 0);
+        ConstructionMission mission = new(DefenseType.Organization, 1, horde);
+
+        MissionTurnProcessor.ApplyConstruction(mission, amount: 2);
+
+        Assert.Equal(
+            2 * StrategicCombatRules.ReorganizationBattleValuePerEffort,
+            horde.OrganizedMilitaryStrength);
+        Assert.Equal(
+            10_000 - 2 * StrategicCombatRules.ReorganizationBattleValuePerEffort,
+            horde.DisorganizedMilitaryStrength);
+    }
+
+    [Fact]
+    public void AmbushCasualtiesSampleOrganizedAndDisorganizedPoolsProportionally()
+    {
+        SectorSimulationFixture fixture = SectorSimulationFixture.CreateDetached();
+        RegionFaction horde = fixture.AddConsumptionFaction(
+            0, population: 1_000, organization: 40);
+
+        MissionAftermathProcessor.RemoveProportionalAmbushLosses(horde, 100);
+
+        Assert.Equal(900, horde.MilitaryStrength);
+        Assert.Equal(360, horde.OrganizedMilitaryStrength);
+        Assert.Equal(540, horde.DisorganizedMilitaryStrength);
     }
 
     [Fact]
