@@ -25,6 +25,7 @@ public class MoveActionTests
 
         action.Execute(state: null);
 
+        Assert.True(action.Succeeded);
         Assert.Equal(new ValueTuple<int, int>(1, 1), soldier.TopLeft);
         Assert.Equal(2.25f - MathF.Sqrt(2), soldier.LeftoverMovement, precision: 4);
     }
@@ -45,6 +46,7 @@ public class MoveActionTests
 
         action.Execute(state: null);
 
+        Assert.False(action.Succeeded);
         Assert.Equal(new ValueTuple<int, int>(0, 0), soldier.TopLeft);
         Assert.Equal(2.75f, soldier.LeftoverMovement);
         Assert.Equal(new ValueTuple<int, int>(0, 0), grid.GetSoldierPosition(soldier.Soldier.Id)[0]);

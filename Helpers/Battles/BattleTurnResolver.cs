@@ -487,7 +487,12 @@ namespace OnlyWar.Helpers.Battles
             {
                 IAction action = moveActions[actionIndex];
                 action.Execute(_currentState);
-                executedActions.Add(action);
+                // Planning uses a frozen layout, so an earlier move can occupy this action's
+                // destination before execution. Bank its budget, but don't report it as movement.
+                if (action is not MoveAction moveAction || moveAction.Succeeded)
+                {
+                    executedActions.Add(action);
+                }
             }
         }
 

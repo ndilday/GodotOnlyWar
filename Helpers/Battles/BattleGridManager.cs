@@ -131,6 +131,36 @@ namespace OnlyWar.Helpers.Battles
             return true;
         }
 
+        public bool IsMoveDestinationAvailable(
+            BattleSoldier soldier,
+            ValueTuple<int, int> newTopLeft,
+            ushort newOrientation)
+        {
+            foreach (ValueTuple<int, int> location in
+                GetSoldierFootprint(soldier, newTopLeft, newOrientation))
+            {
+                int? occupier = _grid.GetCellObject(location);
+                if (_grid.IsCellReserved(location)
+                    || (occupier != null && occupier != soldier.Soldier.Id))
+                {
+                    return false;
+                }
+            }
+            return true;
+        }
+
+        public void ReserveMoveDestination(
+            BattleSoldier soldier,
+            ValueTuple<int, int> newTopLeft,
+            ushort newOrientation)
+        {
+            foreach (ValueTuple<int, int> location in
+                GetSoldierFootprint(soldier, newTopLeft, newOrientation))
+            {
+                _grid.ReserveCell(location);
+            }
+        }
+
         private void MoveSoldierToCells(int soldierId, IList<ValueTuple<int, int>> newLocation)
         {
             int slot = GetSlot(soldierId);

@@ -4569,11 +4569,16 @@ namespace OnlyWar.Helpers.Battles
         {
             ValueTuple<int, int> desiredMove = CalculateMovementAlongLine(line, moveSpeed);
             ValueTuple<int, int> newLocation = new ValueTuple<int, int>(soldier.TopLeft.Value.Item1 + desiredMove.Item1, soldier.TopLeft.Value.Item2 + desiredMove.Item2);
-            newLocation = FindBestLocation(soldier.TopLeft.Value, newLocation, moveSpeed);
             SquadMovementTier movementTier = tier ?? soldier.BattleSquad.MovementTier;
-            soldier.CurrentSpeed = GetTierSpeed(soldier, movementTier);
-            _grid.ReserveSpace(newLocation);
             ushort orientation = CalculateOrientationFromVector(line, soldier, movementTier);
+            newLocation = FindBestLocation(
+                soldier,
+                soldier.TopLeft.Value,
+                newLocation,
+                moveSpeed,
+                orientation);
+            soldier.CurrentSpeed = GetTierSpeed(soldier, movementTier);
+            _grid.ReserveMoveDestination(soldier, newLocation, orientation);
             _moveActions.Add(new MoveAction(
                 soldier,
                 _grid,
@@ -4728,7 +4733,12 @@ namespace OnlyWar.Helpers.Battles
                 % BattleOrientation.HeadingCount);
         }
 
-        private ValueTuple<int, int> FindBestLocation(ValueTuple<int, int> startingPoint, ValueTuple<int, int> targetPoint, float speed)
+        private ValueTuple<int, int> FindBestLocation(
+            BattleSoldier soldier,
+            ValueTuple<int, int> startingPoint,
+            ValueTuple<int, int> targetPoint,
+            float speed,
+            ushort orientation)
         {
             float speedSq = speed * speed;
             int xMove = targetPoint.Item1 - startingPoint.Item1;
@@ -4747,7 +4757,7 @@ namespace OnlyWar.Helpers.Battles
                     while (newY * newY <= speedSq - xMoveSq)
                     {
                         ValueTuple<int, int> newTarget = new ValueTuple<int, int>(startingPoint.Item1 + xMove, startingPoint.Item2 + newY);
-                        if (_grid.IsSpaceAvailable(newTarget))
+                        if (_grid.IsMoveDestinationAvailable(soldier, newTarget, orientation))
                         {
                             return newTarget;
                         }
@@ -4771,7 +4781,7 @@ namespace OnlyWar.Helpers.Battles
                     while (newX * newX <= speedSq - yMoveSq)
                     {
                         ValueTuple<int, int> newTarget = new ValueTuple<int, int>(startingPoint.Item1 + newX, startingPoint.Item2 + yMove);
-                        if (_grid.IsSpaceAvailable(newTarget))
+                        if (_grid.IsMoveDestinationAvailable(soldier, newTarget, orientation))
                         {
                             return newTarget;
                         }

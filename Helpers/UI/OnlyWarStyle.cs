@@ -89,6 +89,27 @@ namespace OnlyWar.Helpers.UI
             button.AddThemeStyleboxOverride("pressed", CreateAccentButtonStyle(true, accent, true));
         }
 
+        public static void ApplyDialogCloseButton(Button button)
+        {
+            button.FocusMode = Control.FocusModeEnum.None;
+            button.MouseDefaultCursorShape = Control.CursorShape.PointingHand;
+            button.AddThemeStyleboxOverride("normal", CreateCloseButtonStyle(
+                new Color(0.015f, 0.018f, 0.019f, 0.94f),
+                WithAlpha(Gold, 0.58f)));
+            button.AddThemeStyleboxOverride("hover", CreateCloseButtonStyle(
+                new Color(0.20f, 0.045f, 0.035f, 0.98f),
+                WithAlpha(Critical, 0.94f)));
+            button.AddThemeStyleboxOverride("pressed", CreateCloseButtonStyle(
+                new Color(0.29f, 0.055f, 0.04f, 1.0f),
+                Critical));
+            button.AddThemeStyleboxOverride("disabled", CreateCloseButtonStyle(
+                new Color(0.015f, 0.018f, 0.019f, 0.45f),
+                WithAlpha(MutedText, 0.25f)));
+            button.AddThemeColorOverride("icon_normal_color", BodyText);
+            button.AddThemeColorOverride("icon_hover_color", new Color(1.0f, 0.82f, 0.72f));
+            button.AddThemeColorOverride("icon_pressed_color", new Color(1.0f, 0.92f, 0.82f));
+        }
+
         public static void ApplyListRow(Button button, bool selected, bool enabled = true)
         {
             StyleBoxFlat normal = GetListRowStyle(selected);
@@ -125,6 +146,27 @@ namespace OnlyWar.Helpers.UI
             style.ContentMarginRight = 8;
             style.ContentMarginBottom = 5;
             return style;
+        }
+
+        private static StyleBoxFlat CreateCloseButtonStyle(Color background, Color border)
+        {
+            return new StyleBoxFlat
+            {
+                BgColor = background,
+                BorderColor = border,
+                BorderWidthLeft = 1,
+                BorderWidthTop = 1,
+                BorderWidthRight = 1,
+                BorderWidthBottom = 1,
+                CornerRadiusTopLeft = 2,
+                CornerRadiusTopRight = 2,
+                CornerRadiusBottomLeft = 2,
+                CornerRadiusBottomRight = 2,
+                ContentMarginLeft = 4,
+                ContentMarginTop = 4,
+                ContentMarginRight = 4,
+                ContentMarginBottom = 4
+            };
         }
 
         private static StyleBoxFlat GetStylebox(string styleName, string themeType)

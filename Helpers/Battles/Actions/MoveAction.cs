@@ -14,6 +14,7 @@ namespace OnlyWar.Helpers.Battles.Actions
         public int ActorId => _soldier.Soldier.Id;
         internal ValueTuple<int, int> Origin => _currentTopLeft;
         internal ValueTuple<int, int> Destination => _newTopLeft;
+        internal bool Succeeded { get; private set; }
 
         public MoveAction(BattleSoldier soldier, BattleGridManager grid, ValueTuple<int, int> currentTopLeft, ValueTuple<int, int> newTopLeft, ushort orientation)
             : this(
@@ -44,9 +45,12 @@ namespace OnlyWar.Helpers.Battles.Actions
 
         public void Execute(BattleState state)
         {
+            Succeeded = false;
             //_resultList.Add(new MoveResolution(_soldier, _grid, _newTopLeft, _orientation));
             if (_grid.TryMoveSoldier(_soldier, _newTopLeft, _newOrientation))
             {
+                Succeeded = _newTopLeft != _currentTopLeft
+                    || _newOrientation != _soldier.Orientation;
                 _soldier.TopLeft = _newTopLeft;
                 _soldier.Orientation = _newOrientation;
                 _soldier.TurnsRunning++;

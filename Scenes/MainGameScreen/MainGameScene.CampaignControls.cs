@@ -200,15 +200,12 @@ public partial class MainGameScene
 			.GetNodesInGroup(DialogController.DialogInputBlockerGroup)
 			.Where(node => node is CanvasItem item && item.IsVisibleInTree())
 			.ToList();
-
-		for (int index = blockers.Count - 1; index >= 0; index--)
+		DialogController topDialog = DialogController.FindTopmostVisibleDialog(
+			blockers.OfType<DialogController>());
+		if (topDialog != null)
 		{
-			switch (blockers[index])
-			{
-				case DialogController dialog:
-					dialog.RequestClose();
-					return true;
-			}
+			topDialog.RequestClose();
+			return true;
 		}
 
 		if (_primaryContentHost != null)

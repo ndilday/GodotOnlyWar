@@ -822,6 +822,37 @@ public class BattleGridManagerTests
         Assert.Equal(10 - expectedDepth, soldier.BottomRight.Value.Item2);
     }
 
+    [Fact]
+    public void MoveDestinationAvailability_UsesAndReservesTheWholeRotatedFootprint()
+    {
+        BattleGridManager grid = new();
+        Soldier largeModel = TestModelFactory.CreateSoldier(template: CreateNonSquareTemplate());
+        largeModel.Id = 1001;
+        BattleSoldier large = new(largeModel, squad: null)
+        {
+            TopLeft = new ValueTuple<int, int>(0, 0),
+            Orientation = 0
+        };
+        grid.PlaceSoldier(large, side: true, large.PositionList.ToList());
+
+        Soldier blockerModel = TestModelFactory.CreateSoldier();
+        blockerModel.Id = 1002;
+        BattleSoldier blocker = new(blockerModel, squad: null)
+        {
+            // Placement's Y boundary is one row above the occupied 1x1 grid cell.
+            TopLeft = new ValueTuple<int, int>(5, 5),
+            Orientation = 0
+        };
+        grid.PlaceSoldier(blocker, side: true, blocker.PositionList.ToList());
+
+        Assert.False(grid.IsMoveDestinationAvailable(large, (4, 4), newOrientation: 2));
+        Assert.True(grid.IsMoveDestinationAvailable(large, (3, 4), newOrientation: 2));
+
+        grid.ReserveMoveDestination(large, (3, 4), newOrientation: 2);
+
+        Assert.False(grid.IsSpaceAvailable((4, 4)));
+    }
+
     private static SoldierTemplate CreateNonSquareTemplate()
     {
         static NormalizedValueTemplate Value(float value) => new()
