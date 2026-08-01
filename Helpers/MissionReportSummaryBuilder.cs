@@ -132,15 +132,26 @@ namespace OnlyWar.Helpers
                 {
                     return $"{subject} killed {classification.EnemiesKilled} enemy troops in {location} before being forced to withdraw with heavy losses.";
                 }
-                bool withdrew = classification.Disposition == MissionForceDisposition.BrokeContact;
-                return withdrew
-                    ? $"{subject} killed {classification.EnemiesKilled} enemy troops in {location} and withdrew."
+                if (classification.RemainedInTargetRegion)
+                {
+                    return $"{subject} killed {classification.EnemiesKilled} enemy troops in {location} and remained deployed there.";
+                }
+                bool returned = classification.ReturnedToBase
+                    || classification.Disposition == MissionForceDisposition.BrokeContact;
+                return returned
+                    ? $"{subject} killed {classification.EnemiesKilled} enemy troops in {location} and returned to base."
                     : $"{subject} killed {classification.EnemiesKilled} enemy troops in {location}.";
             }
 
             if (classification.NoViableTarget)
             {
-                return $"{subject} found no viable target in {location}.";
+                if (classification.RemainedInTargetRegion)
+                {
+                    return $"{subject} found no viable target in {location} and remained deployed there.";
+                }
+                return classification.ReturnedToBase
+                    ? $"{subject} found no viable target in {location} and returned to base."
+                    : $"{subject} found no viable target in {location}.";
             }
             return $"{subject} conducted a {classification.MissionType} in {location} without confirmed enemy casualties.";
         }

@@ -14,6 +14,7 @@ using OnlyWar.Models.Soldiers.Ratings;
 using OnlyWar.Models.Squads;
 using OnlyWar.Models.Units;
 using OnlyWar.Models.Supply;
+using OnlyWar.Models.Equippables;
 using OnlyWar.Tests.Fixtures;
 using Xunit;
 
@@ -175,6 +176,17 @@ public class SaveLoadRoundTripTests
             .First(s => s.Id != orderedSquad.Id && s.Id != landedSquad.Id);
         administrativeSquad.IsAdministrative = true;
 
+        Squad doctrineSquad = armyRoot.GetAllSquads()
+            .First(squad => squad.SquadTemplate.WeaponOptions?.Any() == true);
+        WeaponSet doctrineWeaponSet = doctrineSquad.SquadTemplate.WeaponOptions
+            .First().Options.First();
+        sector.PlayerForce.Army.LoadoutDoctrine.SetLoadout(
+            doctrineSquad.SquadTemplate.Id, [doctrineWeaponSet]);
+        landedRegion.Planet.LoadoutDoctrine.SetLoadout(
+            doctrineSquad.SquadTemplate.Id, [doctrineWeaponSet, doctrineWeaponSet]);
+        orderedSquad.UsesLoadoutDoctrine = false;
+        orderedSquad.Loadout = [doctrineWeaponSet];
+
         PlayerSoldier eventSoldier = armyRoot.GetAllSquads()
             .SelectMany(s => s.Members)
             .OfType<PlayerSoldier>()
@@ -212,6 +224,9 @@ public class SaveLoadRoundTripTests
             Assert.Equal(0.83f, loaded.GeneseedPurity, 3);
             Assert.Equal(sector.Planets.Count, loaded.Planets.Count);
             Assert.Equal(sector.Characters.Count(), loaded.Characters.Count);
+            Assert.True(loaded.ChapterLoadoutDoctrine.TryGetLoadout(
+                doctrineSquad.SquadTemplate.Id, out IReadOnlyList<WeaponSet> loadedChapterLoadout));
+            Assert.Equal(doctrineWeaponSet.Id, Assert.Single(loadedChapterLoadout).Id);
             Character loadedAuthority = loaded.Characters.Single(character => character.Id == pledgeAuthority.Id);
             Assert.Equal(0.37f, loadedAuthority.Competence, 3);
             Assert.Equal(0.82f, loadedAuthority.Severity, 3);
@@ -224,6 +239,10 @@ public class SaveLoadRoundTripTests
             Assert.Equal(27.5f, loadedCivilState.Contentment, 3);
             Assert.Equal(1_234, loadedCivilState.ArmedCivilians);
             Assert.True(loadedCivilState.HasEmergenceAdvantage);
+            Planet loadedDoctrinePlanet = loaded.Planets.Single(planet => planet.Id == landedRegion.Planet.Id);
+            Assert.True(loadedDoctrinePlanet.LoadoutDoctrine.TryGetLoadout(
+                doctrineSquad.SquadTemplate.Id, out IReadOnlyList<WeaponSet> loadedPlanetLoadout));
+            Assert.Equal(2, loadedPlanetLoadout.Count);
             Assert.Equal(sector.PlayerForce.Requests.Count, loaded.Requests.Count);
             IRequest loadedRequest = loaded.Requests.Single(request => request.Id == requestId);
             Assert.Equal(RequestStatus.InProgress, loadedRequest.Status);
@@ -317,6 +336,8 @@ public class SaveLoadRoundTripTests
                 .SelectMany(u => u.GetAllSquads())
                 .Single(s => s.Id == orderedSquad.Id);
             Assert.NotNull(loadedSquad.CurrentOrders);
+            Assert.False(loadedSquad.UsesLoadoutDoctrine);
+            Assert.Equal(doctrineWeaponSet.Id, Assert.Single(loadedSquad.Loadout).Id);
             Assert.Equal(MissionType.Recon, loadedSquad.CurrentOrders.Mission.MissionType);
             Assert.DoesNotContain(
                 loaded.Planets.SelectMany(p => p.Regions).SelectMany(r => r.SpecialMissions),

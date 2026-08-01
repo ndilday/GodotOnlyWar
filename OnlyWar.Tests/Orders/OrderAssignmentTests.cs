@@ -110,7 +110,7 @@ public class OrderAssignmentTests
     }
 
     [Fact]
-    public void AssignSquadsToMission_ExistingPatrol_ReusesOrderAndMission()
+    public void AssignSquadsToMission_ExistingPatrol_ReusesOrderAndUpdatesAggression()
     {
         SectorSimulationFixture fixture = SectorSimulationFixture.Create();
         Region targetRegion = fixture.Planet.Regions[0];
@@ -132,10 +132,34 @@ public class OrderAssignmentTests
 
         Assert.Same(original, reused);
         Assert.Same(originalMission, reused.Mission);
-        Assert.Equal(Aggression.Cautious, reused.LevelOfAggression);
+        Assert.Equal(Aggression.Aggressive, reused.LevelOfAggression);
         Assert.Equal(2, reused.AssignedSquads.Count);
         Assert.Same(reused, first.CurrentOrders);
         Assert.Same(reused, reinforcement.CurrentOrders);
+        Assert.Single(fixture.Sector.Orders);
+    }
+
+    [Fact]
+    public void AssignSquadsToMission_SameSquadAndMission_UpdatesAggression()
+    {
+        SectorSimulationFixture fixture = SectorSimulationFixture.Create();
+        Region targetRegion = fixture.Planet.Regions[0];
+        fixture.Planet.PlanetFactionMap[fixture.Sector.PlayerForce.Faction.Id] =
+            new PlanetFaction(fixture.Sector.PlayerForce.Faction) { IsPublic = true };
+        AvailableMission patrol = new("Patrol", MissionAvailabilityKind.Patrol);
+        Squad squad = TestModelFactory.CreateSquad(
+            "Existing Patrol", TestModelFactory.CreateSoldier());
+        squad.CurrentRegion = targetRegion;
+
+        Order original = OrderAssignment.AssignSquadsToMission(
+            [squad], targetRegion, patrol, -1, Aggression.Cautious);
+        Order updated = OrderAssignment.AssignSquadsToMission(
+            [squad], targetRegion, patrol, -1, Aggression.Attritional);
+
+        Assert.Same(original, updated);
+        Assert.Equal(Aggression.Attritional, updated.LevelOfAggression);
+        Assert.Same(updated, squad.CurrentOrders);
+        Assert.Single(updated.AssignedSquads);
         Assert.Single(fixture.Sector.Orders);
     }
 

@@ -1,10 +1,12 @@
 using Godot;
 using OnlyWar.Helpers.UI;
 using System.Collections.Generic;
+using System;
 
 public partial class PlanetTacticalScreenView : CommandWorkspaceView
 {
     private Control _tacticalRegionPanel;
+    public event EventHandler TheaterLoadoutsPressed;
 
     public override void _Ready()
     {
@@ -16,6 +18,15 @@ public partial class PlanetTacticalScreenView : CommandWorkspaceView
         // Planet roster rows do not use the shared tree's badge column, so collapse it and let
         // ship, company, and squad labels use the full width of the roster panel.
         BuildWorkspaceShell(0.705f, 0.91f, 0.755f, selectionBadgeColumnWidth: 0);
+        HBoxContainer headerRow = GetNode<Panel>("HeaderBar").GetChild<HBoxContainer>(0);
+        Button loadoutsButton = new()
+        {
+            Text = "Theater Loadouts",
+            CustomMinimumSize = new Vector2(156, 34)
+        };
+        IconAtlas.Apply(loadoutsButton, "armamentarium", 156);
+        loadoutsButton.Pressed += () => TheaterLoadoutsPressed?.Invoke(this, EventArgs.Empty);
+        headerRow.AddChild(loadoutsButton);
         CallDeferred(nameof(LayoutRegionHexGrid));
     }
 

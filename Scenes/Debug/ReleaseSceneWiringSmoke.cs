@@ -79,11 +79,23 @@ public partial class ReleaseSceneWiringSmoke : Node
         RequireNode<Node>(mainGame, "SectorMap");
         RequireNode<CanvasLayer>(mainGame, "UILayer");
         Control primaryContentHost = RequireNode<Control>(mainGame, "UILayer/PrimaryContentHost");
-        RequireNode<TopMenu>(mainGame, "UILayer/TopMenu");
-        RequireNode<BottomMenu>(mainGame, "UILayer/BottomMenu");
-        RequireNode<Control>(mainGame, "UILayer/ModalLayer");
-        RequireNode<SystemInspector>(mainGame, "UILayer/SystemInspector");
-        RequireNode<ActivityOverlay>(mainGame, "UILayer/ActivityOverlay");
+        TopMenu topMenu = RequireNode<TopMenu>(mainGame, "UILayer/TopMenu");
+        BottomMenu bottomMenu = RequireNode<BottomMenu>(mainGame, "UILayer/BottomMenu");
+        Control modalLayer = RequireNode<Control>(mainGame, "UILayer/ModalLayer");
+        Control leftMapTools = RequireNode<Control>(mainGame, "UILayer/LeftMapTools");
+        SystemInspector systemInspector = RequireNode<SystemInspector>(mainGame, "UILayer/SystemInspector");
+        ActivityOverlay activityOverlay = RequireNode<ActivityOverlay>(mainGame, "UILayer/ActivityOverlay");
+
+        Require(leftMapTools.ZIndex < primaryContentHost.ZIndex &&
+                systemInspector.ZIndex < primaryContentHost.ZIndex,
+            "Map workspace chrome must render behind primary screens.");
+        Require(primaryContentHost.ZIndex < topMenu.ZIndex &&
+                primaryContentHost.ZIndex < bottomMenu.ZIndex,
+            "Persistent navigation must render above primary screens.");
+        Require(topMenu.ZIndex < modalLayer.ZIndex && bottomMenu.ZIndex < modalLayer.ZIndex,
+            "Dialogs must render above persistent navigation.");
+        Require(modalLayer.ZIndex < activityOverlay.ZIndex,
+            "The activity overlay must render above dialogs.");
 
         CloseOpeningBriefingIfPresent(mainGame);
         await NextFrame();

@@ -2,7 +2,7 @@
 
 [ext_resource type="Script" uid="uid://b5v4kp3bcmotx" path="res://Scenes/TrainingUnitScreen/TrainingUnitScreenController.cs" id="1_bgnhv"]
 [ext_resource type="Script" uid="uid://b6pyq4sxwfroa" path="res://Scenes/TrainingUnitScreen/TrainingUnitScreenView.cs" id="2_kwxid"]
-[ext_resource type="Theme" uid="uid://ylp8bk1nhedq" path="res://Scenes/OnlyWarTheme.tres" id="3_theme"]
+[ext_resource type="Theme" path="res://Scenes/OnlyWarTheme.tres" id="3_theme"]
 
 [node name="TrainingUnitScreenController" type="Control"]
 layout_mode = 3

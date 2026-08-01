@@ -60,6 +60,7 @@ public partial class PlanetTacticalScreenController : DialogController
 	private Unit _selectedLandedUnit;
 	private Squad _selectedLandedSquad;
 	private PopupMenu _embarkShipMenu;
+	private LoadoutDoctrineDialog _loadoutDoctrineDialog;
 
 	public event EventHandler<Region> RegionDoubleClicked;
 	public event EventHandler<Squad> OrbitalSquadDoubleClicked;
@@ -75,6 +76,7 @@ public partial class PlanetTacticalScreenController : DialogController
 		_view.CommandPressed += OnCommandPressed;
 		_view.MapLayerToggled += OnMapLayerToggled;
 		_view.RosterFilterSelected += OnRosterFilterSelected;
+		_view.TheaterLoadoutsPressed += OnTheaterLoadoutsPressed;
 		_view.SetMapLayerOptions(MapLayerOptions);
 		_view.SetActiveMapLayers(_activeLayers);
 		_view.SetRosterFilters(RosterFilters);
@@ -87,6 +89,14 @@ public partial class PlanetTacticalScreenController : DialogController
 		_embarkShipMenu.IdPressed += OnEmbarkShipSelected;
 		AddChild(_embarkShipMenu);
 
+		_loadoutDoctrineDialog = new LoadoutDoctrineDialog();
+		_loadoutDoctrineDialog.DoctrineChanged += (_, _) =>
+		{
+			CampaignChanged?.Invoke(this, EventArgs.Empty);
+			RefreshWorkspace();
+		};
+		AddChild(_loadoutDoctrineDialog);
+
 		_tacticalRegions = new TacticalRegionController[16];
 		for (int i = 1; i <= 16; i++)
 		{
@@ -94,6 +104,15 @@ public partial class PlanetTacticalScreenController : DialogController
 			_tacticalRegions[i - 1].AddToButtonGroup(_buttonGroup);
 			_tacticalRegions[i - 1].TacticalRegionPressed += OnTacticalRegionPressed;
 			_tacticalRegions[i - 1].TacticalRegionDoubleClicked += OnTacticalRegionDoubleClicked;
+		}
+	}
+
+	private void OnTheaterLoadoutsPressed(object sender, EventArgs e)
+	{
+		PlayerForce force = GameDataSingleton.Instance?.Sector?.PlayerForce;
+		if (force != null && _selectedPlanet != null)
+		{
+			_loadoutDoctrineDialog.OpenPlanet(force, _selectedPlanet);
 		}
 	}
 
@@ -403,6 +422,19 @@ public partial class PlanetTacticalScreenController : DialogController
 		worldRows.Add(Row("Orbiting Task Forces", planet.OrbitingTaskForceList.Count.ToString()));
 		cards.Add(new DossierCardData("World", planet.Name, worldRows, OnlyWarStyle.Gold));
 
+		int overrideCount = planet.LoadoutDoctrine.Loadouts.Count;
+		int doctrineFollowers = GetPlanetSquads(planet).Count(squad => squad.UsesLoadoutDoctrine);
+		int customSquads = GetPlanetSquads(planet).Count(squad => !squad.UsesLoadoutDoctrine);
+		cards.Add(new DossierCardData(
+			"Theater Doctrine",
+			overrideCount == 0 ? "Inherits Chapter" : $"{overrideCount} override{(overrideCount == 1 ? "" : "s")}",
+			[
+				Row("Following Doctrine", doctrineFollowers.ToString()),
+				Row("Custom Squads", customSquads.ToString()),
+				Row("Edit", "Theater Loadouts in header")
+			],
+			OnlyWarStyle.PlayerAccent));
+
 		if (imperialOrPlayer)
 		{
 			Character governor = planet.PlanetFactionMap[controllingFaction.Id].Leader;
@@ -428,6 +460,20 @@ public partial class PlanetTacticalScreenController : DialogController
 		}
 
 		return cards;
+	}
+
+	private static List<Squad> GetPlanetSquads(Planet planet)
+	{
+		return planet.Regions
+			.Where(region => region != null)
+			.SelectMany(region => region.RegionFactionMap.Values)
+			.SelectMany(regionFaction => regionFaction.LandedSquads)
+			.Concat(planet.OrbitingTaskForceList.SelectMany(fleet => fleet.Ships)
+				.SelectMany(ship => ship.LoadedSquads))
+			.Where(squad => squad.Faction?.IsPlayerFaction == true)
+			.GroupBy(squad => squad.Id)
+			.Select(group => group.First())
+			.ToList();
 	}
 
 	private static DossierCardData BuildGovernorRequestCard(Planet planet, IRequest request)
@@ -567,6 +613,8 @@ public partial class PlanetTacticalScreenController : DialogController
 			Row("Location", squad.BoardedLocation != null ? $"Aboard {squad.BoardedLocation.Name}" : squad.CurrentRegion?.Name ?? "Unknown"),
 			Row("Orders", squad.CurrentOrders?.Mission.MissionType.ToString() ?? "Unassigned")
 		];
+		rows.Add(Row("Loadout", LoadoutDoctrineService.DescribeSource(
+			LoadoutDoctrineService.Resolve(squad))));
 		if (squad.CurrentOrders != null)
 		{
 			rows.Add(Row("Target Region", squad.CurrentOrders.Mission.RegionFaction.Region.Name));

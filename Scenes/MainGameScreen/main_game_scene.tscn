@@ -23,6 +23,7 @@ script = ExtResource("1_g3hiw")
 [node name="UILayer" type="CanvasLayer" parent="."]
 
 [node name="PrimaryContentHost" type="Control" parent="UILayer"]
+z_index = 10
 layout_mode = 3
 anchors_preset = -1
 anchor_right = 1.0
@@ -35,6 +36,7 @@ mouse_filter = 2
 clip_contents = true
 
 [node name="TopMenu" parent="UILayer" instance=ExtResource("3_7t35a")]
+z_index = 20
 grow_vertical = 2
 
 [node name="LeftMapTools" parent="UILayer" instance=ExtResource("5_cgkku")]
@@ -42,8 +44,10 @@ grow_vertical = 2
 [node name="SystemInspector" parent="UILayer" instance=ExtResource("6_f4umo")]
 
 [node name="BottomMenu" parent="UILayer" instance=ExtResource("4_1ccxp")]
+z_index = 20
 
 [node name="ModalLayer" type="Control" parent="UILayer"]
+z_index = 30
 layout_mode = 3
 anchors_preset = 15
 anchor_right = 1.0
@@ -53,3 +57,4 @@ grow_vertical = 2
 mouse_filter = 2
 
 [node name="ActivityOverlay" parent="UILayer" instance=ExtResource("7_activity")]
+z_index = 200

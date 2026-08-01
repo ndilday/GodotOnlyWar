@@ -11,6 +11,7 @@ public static class SquadExtensions
         // 1. Create a new Squad with the same template and basic properties
         Squad newSquad = new Squad(originalSquad.Id, originalSquad.Name, null, originalSquad.SquadTemplate);
         newSquad.IsAdministrative = originalSquad.IsAdministrative;
+        newSquad.UsesLoadoutDoctrine = originalSquad.UsesLoadoutDoctrine;
 
         // 2. Deep copy the Loadout (WeaponSets)
         newSquad.Loadout = new List<WeaponSet>();

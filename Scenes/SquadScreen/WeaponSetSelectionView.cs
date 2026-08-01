@@ -2,6 +2,7 @@ using Godot;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using OnlyWar.Helpers.UI;
 
 public partial class WeaponSetSelectionView : PanelContainer
 {
@@ -20,6 +21,9 @@ public partial class WeaponSetSelectionView : PanelContainer
         _weaponSetVBox = GetNode<VBoxContainer>("VBoxContainer");
         _header = GetNode<RichTextLabel>("VBoxContainer/RichTextLabel");
         _weaponSetRows = new List<WeaponSetRowView>();
+        OnlyWarStyle.ApplyInsetPanel(this);
+        _header.AddThemeColorOverride("default_color", OnlyWarStyle.MutedText);
+        _header.AddThemeFontSizeOverride("normal_font_size", 12);
     }
 
     public void Initialize(List<ValueTuple<string, int>> weaponSets, string name, int minimumCount, int maximumCount)
@@ -56,7 +60,7 @@ public partial class WeaponSetSelectionView : PanelContainer
         return weaponSetCounts;
     }
 
-    public void DisableInrease(bool disable)
+    public void DisableIncrease(bool disable)
     {
         int total = _weaponSetRows.Sum(row => row.Count);
         foreach (WeaponSetRowView row in _weaponSetRows)
@@ -85,7 +89,7 @@ public partial class WeaponSetSelectionView : PanelContainer
         {
             total += child.Count;
         }
-        _header.Text = $"Minimum: {_minimumCount}, Maximum: {_maximumCount}, Current Total: {total}";
+        _header.Text = $"{OptionName.ToUpperInvariant()}   {total}/{_maximumCount}";
     }
 
     private void OnCountChanged(object sender, int newCount)

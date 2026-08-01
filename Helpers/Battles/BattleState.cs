@@ -55,14 +55,15 @@ namespace OnlyWar.Models.Battles
 			BattleSideProfile opposingProfile, BattleSideState attackerSide, BattleSideState opposingSide)
 		{
 			TurnNumber = turnNumber;
+			bool isNewEngagement = attackerSide == null && opposingSide == null;
 
 			// deep copy the squads, which will also deep copy the soldiers in the squads
 			_allAttackerBattleSquads = attackerSquads.ToDictionary(
 				kvp => kvp.Key,
-				kvp => (BattleSquad)kvp.Value.Clone());
+				kvp => CloneSquad(kvp.Value, isNewEngagement));
 			_allOpposingBattleSquads = opposingSquads.ToDictionary(
 				kvp => kvp.Key,
-				kvp => (BattleSquad)kvp.Value.Clone());
+				kvp => CloneSquad(kvp.Value, isNewEngagement));
 			_attackerBattleSquads = _allAttackerBattleSquads
 				.Where(kvp => kvp.Value.Status == BattleSquadStatus.Active)
 				.ToDictionary(kvp => kvp.Key, kvp => kvp.Value);
@@ -86,6 +87,28 @@ namespace OnlyWar.Models.Battles
 					_soldiers[soldier.Soldier.Id] = soldier;
 				}
 			}
+		}
+
+		private static BattleSquad CloneSquad(BattleSquad source, bool removePriorCasualties)
+		{
+			BattleSquad clone = (BattleSquad)source.Clone();
+			if (!removePriorCasualties)
+			{
+				return clone;
+			}
+
+			// A BattleSquad survives for the whole mission, so its full wrapper roster still
+			// contains soldiers removed from an earlier engagement. Their underlying injury state
+			// is shared and correctly says they cannot fight, but retaining those wrappers in a new
+			// BattleState makes them reappear in the next day's formation and starting-strength
+			// snapshot. A new engagement begins with survivors only. Turn-to-turn copies do not run
+			// this pruning because they must retain the battle's own disengaged and casualty history.
+			foreach (BattleSoldier casualty in clone.Soldiers.Where(soldier => !soldier.CanFight).ToList())
+			{
+				clone.RemoveSoldier(casualty);
+			}
+
+			return clone;
 		}
 
 		private static BattleSideState CreateSideState(BattleSideProfile profile, IEnumerable<BattleSquad> squads)

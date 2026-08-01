@@ -72,6 +72,9 @@ namespace OnlyWar.Models.Squads
         public Unit ParentUnit { get; set; }
         // if Loadout count < Member count, assume the rest are using the default loadout in the template
         public List<WeaponSet> Loadout { get; set; }
+        // Player squads follow the chapter/planet doctrine hierarchy unless the player explicitly
+        // customizes them. NPC squads ignore doctrine and continue using their generated loadout.
+        public bool UsesLoadoutDoctrine { get; set; }
         public Region CurrentRegion { get; set; }
         public Ship BoardedLocation { get; set; }
         public Order CurrentOrders { get; set; }
@@ -83,6 +86,7 @@ namespace OnlyWar.Models.Squads
             Name = name;
             ParentUnit = parentUnit;
             SquadTemplate = template;
+            UsesLoadoutDoctrine = template?.Faction?.IsPlayerFaction == true;
             _isAdministrative = template?.IsOperational == false;
             _members = [];
             //AssignedVehicles = new List<int>();
@@ -99,6 +103,7 @@ namespace OnlyWar.Models.Squads
             Name = name;
             ParentUnit = parentUnit;
             SquadTemplate = template;
+            UsesLoadoutDoctrine = template?.Faction?.IsPlayerFaction == true;
             _isAdministrative = template?.IsOperational == false;
             _members = [];
             //AssignedVehicles = new List<int>();
@@ -115,6 +120,7 @@ namespace OnlyWar.Models.Squads
             }
             // loadout doesn't need a deep copy
             clone.Loadout = Loadout;
+            clone.UsesLoadoutDoctrine = UsesLoadoutDoctrine;
             return clone;
         }
 

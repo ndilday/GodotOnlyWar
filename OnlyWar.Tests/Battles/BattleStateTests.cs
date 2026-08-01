@@ -3,6 +3,7 @@ using System.Linq;
 using OnlyWar.Helpers.Battles;
 using OnlyWar.Models.Battles;
 using OnlyWar.Models.Orders;
+using OnlyWar.Models.Soldiers;
 using OnlyWar.Tests.Fixtures;
 using Xunit;
 
@@ -158,6 +159,40 @@ public class BattleStateTests
             state.AttackerSide.StartingBattleValue);
         Assert.Equal(Aggression.Aggressive, state.OpposingSide.Aggression);
         Assert.Equal(BattleRole.Ambushed, state.OpposingSide.BattleRole);
+    }
+
+    [Fact]
+    public void NewEngagement_ExcludesSoldiersKilledOrIncapacitatedBeforeBattle()
+    {
+        var survivor = TestModelFactory.CreateSoldier(name: "Survivor");
+        var killed = TestModelFactory.CreateSoldier(name: "Killed");
+        killed.Body.HitLocations
+            .First(location => location.Template.IsVital)
+            .Wounds.AddWound(WoundLevel.Unsurvivable);
+        var incapacitated = TestModelFactory.CreateSoldier(name: "Incapacitated");
+        incapacitated.Body.HitLocations
+            .First(location => location.Template.IsMotive)
+            .Wounds.AddWound(WoundLevel.Unsurvivable);
+        BattleSquad missionSquad = new(false, TestModelFactory.CreateSquad(
+            "Multi-day Assault",
+            survivor,
+            killed,
+            incapacitated));
+
+        BattleState state = new(
+            new Dictionary<int, BattleSquad> { [missionSquad.Id] = missionSquad },
+            new Dictionary<int, BattleSquad>());
+
+        BattleSquad deployedSquad = state.AttackerSquads[missionSquad.Id];
+        Assert.Single(deployedSquad.Soldiers);
+        Assert.Same(survivor, deployedSquad.Soldiers[0].Soldier);
+        Assert.DoesNotContain(killed.Id, state.Soldiers.Keys);
+        Assert.DoesNotContain(incapacitated.Id, state.Soldiers.Keys);
+        Assert.Equal(1, state.AttackerSide.StartingSoldierCount);
+        Assert.Equal(survivor.Template.BattleValue, state.AttackerSide.StartingBattleValue);
+
+        // The mission-level wrapper remains intact for aftermath and persistent roster handling.
+        Assert.Equal(3, missionSquad.Soldiers.Count);
     }
 
     private static BattleState CreateState(BattleSquad missionSide, BattleSquad opposingSide)

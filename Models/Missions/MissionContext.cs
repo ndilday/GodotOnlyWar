@@ -184,6 +184,12 @@ namespace OnlyWar.Models.Missions
 
         // The strike force slipped back out after being detected (evaded the interceptors / exfiltrated).
         public bool ForceBrokeContact { get; set; }
+        // The force completed the dedicated exfiltration step and reached its staging area. Kept
+        // separate from ForceBrokeContact because an undetected return is not an evasion.
+        public bool ForceReturnedToBase { get; set; }
+        // Exfiltration grace expired while combat-capable troops remained. They begin the next turn
+        // openly deployed in the mission region, using the same regional posture as an assault force.
+        public bool ForceRemainedInTargetRegion { get; set; }
         // The force could not break contact and was lost behind enemy lines (assumed dead / gone to ground).
         public bool ForceLostContact { get; set; }
         // An embedded engagement left the force combat-ineffective and ended the mission under fire.

@@ -17,6 +17,8 @@ public class MissionReportSummaryBuilderTests
     private static MissionOutcomeClassification Classification(
         MissionType missionType,
         bool wasDetected = false,
+        bool returnedToBase = false,
+        bool remainedInTargetRegion = false,
         MissionForceDisposition disposition = MissionForceDisposition.Nominal,
         bool noViableTarget = false,
         bool targetLocated = false,
@@ -27,6 +29,8 @@ public class MissionReportSummaryBuilderTests
         {
             MissionType = missionType,
             WasDetected = wasDetected,
+            ReturnedToBase = returnedToBase,
+            RemainedInTargetRegion = remainedInTargetRegion,
             Disposition = disposition,
             NoViableTarget = noViableTarget,
             TargetLocated = targetLocated,
@@ -78,6 +82,40 @@ public class MissionReportSummaryBuilderTests
             "Iron Valley, Cadia");
 
         Assert.Contains("killed 7 enemy troops", summary);
+    }
+
+    [Fact]
+    public void BuildSummary_AmbushThatExfiltrated_ReportsReturnToBase()
+    {
+        string summary = MissionReportSummaryBuilder.BuildSummary(
+            Classification(MissionType.Ambush, returnedToBase: true, enemiesKilled: 7),
+            "Iron Valley, Cadia");
+
+        Assert.Contains("returned to base", summary);
+    }
+
+    [Fact]
+    public void BuildSummary_NoTargetAmbushThatExfiltrated_ReportsReturnToBase()
+    {
+        string summary = MissionReportSummaryBuilder.BuildSummary(
+            Classification(MissionType.Ambush, returnedToBase: true, noViableTarget: true),
+            "Iron Valley, Cadia");
+
+        Assert.Contains("no viable target", summary);
+        Assert.Contains("returned to base", summary);
+    }
+
+    [Fact]
+    public void BuildSummary_AmbushUnableToExfiltrate_ReportsContinuedDeployment()
+    {
+        string summary = MissionReportSummaryBuilder.BuildSummary(
+            Classification(
+                MissionType.Ambush,
+                remainedInTargetRegion: true,
+                enemiesKilled: 7),
+            "Iron Valley, Cadia");
+
+        Assert.Contains("remained deployed there", summary);
     }
 
     [Fact]

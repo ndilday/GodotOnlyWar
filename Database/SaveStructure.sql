@@ -15,7 +15,8 @@ CREATE TABLE Fleet (Id INTEGER PRIMARY KEY UNIQUE NOT NULL, FactionId INTEGER NO
 -- Table: GlobalData
 -- Scenario* columns carry the optional Opening Scenario state (Design/OpeningScenario.md §7).
 -- ScenarioType 0 (None) means no scenario. HomeWorldPlanetId remains null until the
--- Promised World is won. Format v3 is an intentional clean break from older saves.
+-- Promised World is won. Format v4 is an intentional clean break from older saves and adds
+-- chapter/planet loadout doctrine persistence.
 CREATE TABLE GlobalData (Millenium INTEGER NOT NULL, Year INTEGER NOT NULL, Week INTEGER NOT NULL, SaveVersion INTEGER NOT NULL, Requisition INTEGER NOT NULL DEFAULT 0, GeneseedStockpile INTEGER NOT NULL DEFAULT 0, GeneseedPurity REAL NOT NULL DEFAULT 1.0, ScenarioType INTEGER NOT NULL DEFAULT 0, ScenarioPromisedPlanetId INTEGER NOT NULL DEFAULT 0, ScenarioState INTEGER NOT NULL DEFAULT 0, ScenarioBriefingAcknowledged BOOLEAN NOT NULL DEFAULT 0, ScenarioBriefingText TEXT, ScenarioOriginalAuthorityCharacterId INTEGER NOT NULL DEFAULT 0, HomeWorldPlanetId INTEGER REFERENCES Planet (Id));
 
 -- Table: HitLocation
@@ -129,10 +130,20 @@ CREATE TABLE Soldier (Id INTEGER PRIMARY KEY NOT NULL UNIQUE, SoldierTemplateId 
 CREATE TABLE SoldierSkill (SoldierId INTEGER NOT NULL REFERENCES Soldier (Id), BaseSkillId INTEGER NOT NULL, PointsInvested REAL NOT NULL);
 
 -- Table: Squad
-CREATE TABLE Squad (Id INTEGER PRIMARY KEY UNIQUE NOT NULL, SquadTemplateId INTEGER NOT NULL, ParentUnitId INTEGER NOT NULL REFERENCES Unit (Id), Name STRING NOT NULL, LoadedShipId INTEGER REFERENCES Ship (Id), LandedRegionId INTEGER REFERENCES Region(Id), TrainingFocus INTEGER NOT NULL DEFAULT 0, IsAdministrative BOOLEAN NOT NULL DEFAULT 0);
+-- Doctrine-following is the default. Only an explicitly customized squad uses its persisted
+-- SquadWeaponSet rows directly.
+CREATE TABLE Squad (Id INTEGER PRIMARY KEY UNIQUE NOT NULL, SquadTemplateId INTEGER NOT NULL, ParentUnitId INTEGER NOT NULL REFERENCES Unit (Id), Name STRING NOT NULL, LoadedShipId INTEGER REFERENCES Ship (Id), LandedRegionId INTEGER REFERENCES Region(Id), TrainingFocus INTEGER NOT NULL DEFAULT 0, IsAdministrative BOOLEAN NOT NULL DEFAULT 0, UsesLoadoutDoctrine BOOLEAN NOT NULL DEFAULT 1);
 
 -- Table: SquadWeaponSet
 CREATE TABLE SquadWeaponSet (SquadId INTEGER NOT NULL REFERENCES Squad (Id), WeaponSetId INTEGER NOT NULL);
+
+-- Chapter defaults are sparse: no row means the squad template's built-in standard loadout.
+CREATE TABLE ChapterLoadout (SquadTemplateId INTEGER PRIMARY KEY NOT NULL);
+CREATE TABLE ChapterLoadoutWeaponSet (SquadTemplateId INTEGER NOT NULL REFERENCES ChapterLoadout (SquadTemplateId), WeaponSetId INTEGER NOT NULL);
+
+-- Planetary theater overrides are likewise sparse and inherit from ChapterLoadout when absent.
+CREATE TABLE PlanetLoadout (PlanetId INTEGER NOT NULL REFERENCES Planet (Id), SquadTemplateId INTEGER NOT NULL, PRIMARY KEY (PlanetId, SquadTemplateId));
+CREATE TABLE PlanetLoadoutWeaponSet (PlanetId INTEGER NOT NULL, SquadTemplateId INTEGER NOT NULL, WeaponSetId INTEGER NOT NULL, FOREIGN KEY (PlanetId, SquadTemplateId) REFERENCES PlanetLoadout (PlanetId, SquadTemplateId));
 
 -- Table: Unit
 CREATE TABLE Unit (Id INTEGER PRIMARY KEY UNIQUE NOT NULL, FactionId INTEGER NOT NULL, UnitTemplateId INTEGER NOT NULL, ParentUnitId INTEGER REFERENCES Unit (Id), Name STRING NOT NULL);

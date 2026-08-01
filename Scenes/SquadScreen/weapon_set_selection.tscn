@@ -3,20 +3,17 @@
 [ext_resource type="Script" uid="uid://0528wshowry7" path="res://Scenes/SquadScreen/WeaponSetSelectionView.cs" id="1_ii0tk"]
 
 [node name="WeaponSetSelectionView" type="PanelContainer"]
-anchors_preset = 15
-anchor_right = 1.0
-anchor_bottom = 1.0
-grow_horizontal = 2
-grow_vertical = 2
+custom_minimum_size = Vector2(0, 72)
+size_flags_horizontal = 3
 script = ExtResource("1_ii0tk")
 
 [node name="VBoxContainer" type="VBoxContainer" parent="."]
 layout_mode = 2
-theme_override_constants/separation = 10
+theme_override_constants/separation = 6
 
 [node name="RichTextLabel" type="RichTextLabel" parent="VBoxContainer"]
 clip_contents = false
-custom_minimum_size = Vector2(0, 25)
+custom_minimum_size = Vector2(0, 22)
 layout_mode = 2
 text = "Max 1"
 fit_content = true

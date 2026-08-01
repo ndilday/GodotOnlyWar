@@ -18,6 +18,8 @@ public partial class ChapterView : MainScreenView
     private const int ChapterIconSize = 48;
 
     private HBoxContainer _breadcrumbBar;
+    private HBoxContainer _breadcrumbItems;
+    private Button _loadoutsButton;
     private Label _leftTitleLabel;
     private Button _filterButton;
     private VBoxContainer _leftMenuVBox;
@@ -36,11 +38,14 @@ public partial class ChapterView : MainScreenView
     public event EventHandler DetailPrimaryActionPressed;
     public event EventHandler<int> TransferTargetSelected;
     public event EventHandler FilterButtonPressed;
+    public event EventHandler ChapterLoadoutsPressed;
 
     public override void _Ready()
     {
         base._Ready();
         _breadcrumbBar = GetNode<HBoxContainer>("Content/BreadcrumbBar");
+        _breadcrumbItems = GetNode<HBoxContainer>("Content/BreadcrumbBar/BreadcrumbItems");
+        _loadoutsButton = GetNode<Button>("Content/BreadcrumbBar/ChapterActions/LoadoutsButton");
         _leftTitleLabel = GetNode<Label>("Content/MainLayout/LeftMenu/Panel/MarginContainer/MenuStack/Header/TitleLabel");
         _filterButton = GetNode<Button>("Content/MainLayout/LeftMenu/Panel/MarginContainer/MenuStack/Header/FilterButton");
         _leftMenuVBox = GetNode<VBoxContainer>("Content/MainLayout/LeftMenu/Panel/MarginContainer/MenuStack/ScrollContainer/LeftMenuVBox");
@@ -56,6 +61,8 @@ public partial class ChapterView : MainScreenView
         ConfigureHeaderLabel(_leftTitleLabel);
         _filterButton.MouseDefaultCursorShape = CursorShape.PointingHand;
         _filterButton.Pressed += () => FilterButtonPressed?.Invoke(this, EventArgs.Empty);
+        IconAtlas.Apply(_loadoutsButton, "armamentarium", 150);
+        _loadoutsButton.Pressed += () => ChapterLoadoutsPressed?.Invoke(this, EventArgs.Empty);
         _detailIcon.CustomMinimumSize = new Vector2(ChapterIconSize, ChapterIconSize);
         _detailIcon.ExpandMode = TextureRect.ExpandModeEnum.IgnoreSize;
         _detailActionButton.Pressed += () => DetailPrimaryActionPressed?.Invoke(this, EventArgs.Empty);
@@ -64,7 +71,7 @@ public partial class ChapterView : MainScreenView
 
     public void SetBreadcrumbs(IReadOnlyList<ChapterBreadcrumbItem> breadcrumbs)
     {
-        ClearContainer(_breadcrumbBar);
+        ClearContainer(_breadcrumbItems);
 
         foreach (ChapterBreadcrumbItem breadcrumb in breadcrumbs)
         {
@@ -76,7 +83,7 @@ public partial class ChapterView : MainScreenView
             };
             IconAtlas.Apply(button, breadcrumb.IconKey);
             button.Pressed += () => BreadcrumbPressed?.Invoke(this, breadcrumb.Level);
-            _breadcrumbBar.AddChild(button);
+            _breadcrumbItems.AddChild(button);
         }
     }
 

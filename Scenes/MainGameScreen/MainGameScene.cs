@@ -919,6 +919,7 @@ public partial class MainGameScene : Control
 		PlaceMainContentOverlay(_squadScreen);
 		_squadScreen.SetSquad(squad);
 		_squadScreen.Visible = true;
+		SetMapWorkspaceVisibility(false);
 		_bottomMenu.SetActiveDestination(BottomMenu.Destination.None);
 		Control control = (Control)sender;
 		_previousScreenStack.Push(control);
@@ -938,6 +939,7 @@ public partial class MainGameScene : Control
 		PlaceMainContentOverlay(_squadScreen);
 		_squadScreen.SetSquad(squad);
 		_squadScreen.Visible = true;
+		SetMapWorkspaceVisibility(false);
 		_bottomMenu.SetActiveDestination(BottomMenu.Destination.None);
 		Control control = (Control)sender;
 		_previousScreenStack.Push(control);

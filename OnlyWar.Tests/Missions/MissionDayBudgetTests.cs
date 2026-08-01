@@ -3,6 +3,7 @@ using System.Drawing;
 using System.Linq;
 using OnlyWar.Helpers.Battles;
 using OnlyWar.Helpers.Missions;
+using OnlyWar.Helpers.Missions.Ambush;
 using OnlyWar.Helpers.Missions.Sabotage;
 using OnlyWar.Models;
 using OnlyWar.Models.Fleets;
@@ -84,6 +85,55 @@ public class MissionDayBudgetTests
         Assert.DoesNotContain(context.Log, line => line.Contains("reconnaissance"));
     }
 
+    [Fact]
+    public void SuccessfulExfiltration_IsLabeledAndRecordedAsReturnToBase()
+    {
+        MissionContext context = CreateSabotageContext(squadIsInTargetRegion: false);
+        ExfiltrateMissionStep step = new();
+
+        new MissionStepDriver(CreateExecution(context), step).RunToCompletion();
+
+        Assert.Equal("Exfiltrate", step.Description);
+        Assert.True(context.ForceReturnedToBase);
+        Assert.True(MissionOutcomeClassifier.Classify(context).ReturnedToBase);
+        Assert.Contains(context.Log, line => line.Contains("returned to base"));
+    }
+
+    [Fact]
+    public void ExfiltrationGraceExpired_DeploysForceInTargetRegionForNextTurn()
+    {
+        MissionContext context = CreateSabotageContext(squadIsInTargetRegion: false);
+        Region target = context.Order.Mission.RegionFaction.Region;
+        context.DaysElapsed = MissionContext.MissionDurationDays
+            + MissionContext.ExfiltrationGraceDays;
+
+        new MissionStepDriver(CreateExecution(context), new ExfiltrateMissionStep()).RunToCompletion();
+
+        Assert.False(context.ForceLostContact);
+        Assert.True(context.ForceRemainedInTargetRegion);
+        Assert.All(context.MissionSquads, squad => Assert.Same(target, squad.Squad.CurrentRegion));
+        RegionFaction deployedPresence = target.RegionFactionMap[
+            context.MissionSquads[0].Squad.Faction.Id];
+        Assert.True(deployedPresence.IsPublic);
+        Assert.All(context.MissionSquads,
+            squad => Assert.Contains(squad.Squad, deployedPresence.LandedSquads));
+        Assert.Contains(context.Log, line => line.Contains("remains deployed"));
+    }
+
+    [Fact]
+    public void AmbushWithNoViableTarget_StillExfiltrates()
+    {
+        MissionContext context = CreateSabotageContext(
+            squadIsInTargetRegion: false,
+            missionType: MissionType.Ambush);
+
+        new MissionStepDriver(CreateExecution(context), new PerformAmbushMissionStep()).RunToCompletion();
+
+        Assert.True(context.NoViableTarget);
+        Assert.True(context.ForceReturnedToBase);
+        Assert.Contains(context.Log, line => line.Contains("returned to base"));
+    }
+
     // SabotageStealthMissionStep is the sabotage loop's re-entry point - DetectedMissionStep is handed
     // it as the returnStep, so a force that was intercepted and survived comes back here rather than
     // through PerformSabotageMissionStep. It previously had no day check of its own, so that path had
@@ -120,7 +170,9 @@ public class MissionDayBudgetTests
     // Squad skills are set well above the checks' difficulty and FixedRNG rolls a z of 0, so every
     // stealth/tactics check in the loop succeeds - the mission runs its full day budget without
     // diverting into DetectedMissionStep, which is what these tests are measuring.
-    private static MissionContext CreateSabotageContext(bool squadIsInTargetRegion)
+    private static MissionContext CreateSabotageContext(
+        bool squadIsInTargetRegion,
+        MissionType missionType = MissionType.Sabotage)
     {
         Planet planet = new(1, "Test Planet", new Coordinate(0, 0), 1, null, 0, 0);
         Region targetRegion = CreateRegion(1, "Target Region", planet);
@@ -135,17 +187,38 @@ public class MissionDayBudgetTests
         };
         targetRegion.RegionFactionMap[defender.Id] = targetFaction;
 
-        Squad squad = TestModelFactory.CreateSquad(
+        Faction attacker = CreateFaction(10, "Attackers");
+        SquadTemplate squadTemplate = new(
+            10,
             "Saboteur Squad",
-            CreateSaboteur(TestModelFactory.SergeantTemplate, "Saboteur Sergeant"),
-            CreateSaboteur(TestModelFactory.MarineTemplate, "Saboteur"));
-        squad.CurrentRegion = squadIsInTargetRegion ? targetRegion : stagingRegion;
+            TestModelFactory.DefaultWeapons,
+            [],
+            TestModelFactory.TestArmor,
+            [
+                new SquadTemplateElement(TestModelFactory.SergeantTemplate, 0, 1),
+                new SquadTemplateElement(TestModelFactory.MarineTemplate, 0, 4)
+            ],
+            SquadTypes.None)
+        {
+            Faction = attacker
+        };
+        Squad squad = new("Saboteur Squad", null, squadTemplate);
+        squad.AddSquadMember(CreateSaboteur(
+            TestModelFactory.SergeantTemplate, "Saboteur Sergeant"));
+        squad.AddSquadMember(CreateSaboteur(TestModelFactory.MarineTemplate, "Saboteur"));
+        Region startingRegion = squadIsInTargetRegion ? targetRegion : stagingRegion;
+        squad.CurrentRegion = startingRegion;
+        PlanetFaction attackerPlanetPresence = new(attacker);
+        planet.PlanetFactionMap[attacker.Id] = attackerPlanetPresence;
+        RegionFaction attackerStartingPresence = new(attackerPlanetPresence, startingRegion);
+        startingRegion.RegionFactionMap[attacker.Id] = attackerStartingPresence;
+        attackerStartingPresence.LandedSquads.Add(squad);
         Order order = new(
             [squad],
             isQuiet: true,
             isActivelyEngaging: false,
             levelOfAggression: Aggression.Normal,
-            mission: new Mission(MissionType.Sabotage, targetFaction, missionSize: 0));
+            mission: new Mission(missionType, targetFaction, missionSize: 0));
 
         return new MissionContext(order, [new BattleSquad(true, squad)], []);
     }

@@ -2,7 +2,7 @@
 
 [ext_resource type="Script" path="res://Scenes/ChapterScreen/ChapterView.cs" id="1_view"]
 [ext_resource type="Script" path="res://Scenes/ChapterScreen/ChapterController.cs" id="2_controller"]
-[ext_resource type="Theme" uid="uid://ylp8bk1nhedq" path="res://Scenes/OnlyWarTheme.tres" id="3_theme"]
+[ext_resource type="Theme" path="res://Scenes/OnlyWarTheme.tres" id="3_theme"]
 
 [node name="ChapterController" type="Control"]
 layout_mode = 3
@@ -53,6 +53,20 @@ offset_right = 0.0
 offset_bottom = 38.0
 grow_horizontal = 2
 theme_override_constants/separation = 7
+
+[node name="BreadcrumbItems" type="HBoxContainer" parent="ChapterView/Content/BreadcrumbBar"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/separation = 7
+
+[node name="ChapterActions" type="HBoxContainer" parent="ChapterView/Content/BreadcrumbBar"]
+layout_mode = 2
+theme_override_constants/separation = 7
+
+[node name="LoadoutsButton" type="Button" parent="ChapterView/Content/BreadcrumbBar/ChapterActions"]
+custom_minimum_size = Vector2(150, 36)
+layout_mode = 2
+text = "Chapter Loadouts"
 
 [node name="MainLayout" type="HBoxContainer" parent="ChapterView/Content"]
 layout_mode = 1

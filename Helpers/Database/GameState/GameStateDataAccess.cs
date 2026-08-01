@@ -45,6 +45,7 @@ namespace OnlyWar.Helpers.Database.GameState
         // The Opening Scenario state (Design/Reference/OpeningScenario.md), or null for sandbox
         // saves; reattached to Sector.Scenario by the load path.
         public CampaignScenario Scenario { get; set; }
+        public LoadoutDoctrine ChapterLoadoutDoctrine { get; set; }
     }
 
     public class GameStateDataAccess
@@ -60,6 +61,7 @@ namespace OnlyWar.Helpers.Database.GameState
         private readonly MedicalProcedureDataAccess _medicalProcedureDataAccess;
         private readonly PledgeDataAccess _pledgeDataAccess;
         private readonly RecruitmentDataAccess _recruitmentDataAccess;
+        private readonly LoadoutDoctrineDataAccess _loadoutDoctrineDataAccess;
         private static GameStateDataAccess _instance;
         public static GameStateDataAccess Instance
         {
@@ -86,6 +88,7 @@ namespace OnlyWar.Helpers.Database.GameState
             _medicalProcedureDataAccess = new MedicalProcedureDataAccess();
             _pledgeDataAccess = new PledgeDataAccess();
             _recruitmentDataAccess = new RecruitmentDataAccess();
+            _loadoutDoctrineDataAccess = new LoadoutDoctrineDataAccess();
         }
 
         public GameStateDataBlob GetData(string filePath,
@@ -113,6 +116,9 @@ namespace OnlyWar.Helpers.Database.GameState
             //var regionData = _planetDataAccess.Get
             var planets = _planetDataAccess.GetPlanets(dbCon, factionMap, characterMap,
                                                        planetTemplateMap);
+            var planetMap = planets.ToDictionary(planet => planet.Id);
+            _loadoutDoctrineDataAccess.PopulatePlanetDoctrines(dbCon, planetMap, weaponSets);
+            var chapterLoadoutDoctrine = _loadoutDoctrineDataAccess.GetChapterDoctrine(dbCon, weaponSets);
             var regions = _planetDataAccess.GetRegions(dbCon, factionMap, planets);
             PlanetDataAccess.PopulateRegionFactions(dbCon, factionMap, regions);
             var missionMap = _planetDataAccess.PopulateRegionMissions(dbCon, regions);
@@ -160,7 +166,8 @@ namespace OnlyWar.Helpers.Database.GameState
                 MedicalProcedures = medicalProcedures,
                 History = history,
                 FallenBrothers = fallenBrothers,
-                Scenario = global?.Scenario
+                Scenario = global?.Scenario,
+                ChapterLoadoutDoctrine = chapterLoadoutDoctrine
             };
         }
 
@@ -180,6 +187,7 @@ namespace OnlyWar.Helpers.Database.GameState
                              IEnumerable<PlayerSoldier> playerSoldiers,
                              IEnumerable<PlayerSoldier> fallenBrothers,
                              IReadOnlyDictionary<Date, List<EventHistory>> history,
+                             LoadoutDoctrine chapterLoadoutDoctrine,
                              string schemaFilePath = null,
                              int? homeWorldPlanetId = null,
                              RecruitmentSaveData recruitment = null)
@@ -207,7 +215,7 @@ namespace OnlyWar.Helpers.Database.GameState
                 WriteSaveData(tempPath, currentDate, requisition, geneseedStockpile,
                               geneseedPurity, scenario, medicalProcedures, characters, requests,
                               pledges, planets, fleets, playerSoldiers, fallenBrothers, history, squads,
-                              ships, units, homeWorldPlanetId, recruitment);
+                              ships, units, chapterLoadoutDoctrine, homeWorldPlanetId, recruitment);
                 // Release the pooled SQLite handles so the temp file can be moved over the
                 // target on Windows (an open handle would block the move).
                 SqliteConnection.ClearAllPools();
@@ -249,6 +257,7 @@ namespace OnlyWar.Helpers.Database.GameState
                                    IEnumerable<Squad> squads,
                                    IEnumerable<Ship> ships,
                                    IEnumerable<Unit> units,
+                                   LoadoutDoctrine chapterLoadoutDoctrine,
                                    int? homeWorldPlanetId,
                                    RecruitmentSaveData recruitment)
         {
@@ -267,7 +276,10 @@ namespace OnlyWar.Helpers.Database.GameState
                     foreach (Planet planet in planets)
                     {
                         _planetDataAccess.SavePlanet(transaction, planet);
+                        _loadoutDoctrineDataAccess.SavePlanetDoctrine(transaction, planet);
                     }
+
+                    _loadoutDoctrineDataAccess.SaveChapterDoctrine(transaction, chapterLoadoutDoctrine);
 
                     foreach(IRequest request in requests)
                     {

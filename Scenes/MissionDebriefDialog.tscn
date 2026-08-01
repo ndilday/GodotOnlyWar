@@ -3,7 +3,7 @@
 [ext_resource type="PackedScene" uid="uid://cadpqoqxtyo0p" path="res://Scenes/Dialog.tscn" id="1_dialog"]
 [ext_resource type="Script" path="res://Scenes/MissionDebriefDialogController.cs" id="2_controller"]
 [ext_resource type="Script" path="res://Scenes/MissionDebriefDialogView.cs" id="3_view"]
-[ext_resource type="Theme" uid="uid://ylp8bk1nhedq" path="res://Scenes/OnlyWarTheme.tres" id="4_theme"]
+[ext_resource type="Theme" path="res://Scenes/OnlyWarTheme.tres" id="4_theme"]
 
 [node name="DialogController" instance=ExtResource("1_dialog")]
 theme = ExtResource("4_theme")

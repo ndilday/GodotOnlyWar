@@ -1,5 +1,6 @@
 using Godot;
 using System;
+using OnlyWar.Helpers.UI;
 
 public partial class WeaponSetRowView : HBoxContainer
 {
@@ -40,6 +41,8 @@ public partial class WeaponSetRowView : HBoxContainer
 		_weaponSetNameLabel = GetNode<RichTextLabel>("WeaponSetNameLabel");
 		_weaponCount = GetNode<SpinBox>("WeaponCount");
         _weaponCount.ValueChanged += (double d) => CountChanged?.Invoke(this, (int)d);
+        _weaponSetNameLabel.AddThemeColorOverride("default_color", OnlyWarStyle.BodyText);
+        _weaponSetNameLabel.AddThemeFontSizeOverride("normal_font_size", 14);
     }
 
 	public void SetCount(int count)

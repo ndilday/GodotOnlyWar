@@ -48,6 +48,7 @@ namespace OnlyWar.Models
         public Unit OrderOfBattle { get; }
         public Dictionary<int, PlayerSoldier> PlayerSoldierMap { get; }
         public Dictionary<int, Squad> SquadMap { get; private set; }
+        public LoadoutDoctrine LoadoutDoctrine { get; } = new();
         // The chapter's abstract supply/favor currency (PRD 4.23): earned from request
         // fulfillment, spent on medical procedures and (later) other materiel sinks.
         public int Requisition { get; set; }

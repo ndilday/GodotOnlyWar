@@ -363,7 +363,9 @@ namespace OnlyWar.Helpers.Battles
             // construction never throws on an empty AbleSoldiers (was: tempSquad[0] below).
             if (tempSquad.Count == 0) return;
             // order the weapon sets by the strength of the primary weapon
-            List<WeaponSet> wsList = Squad.Loadout.OrderByDescending(ws => ws.PrimaryRangedWeapon?.DamageMultiplier ?? ws.PrimaryMeleeWeapon.StrengthMultiplier).ToList();
+            List<WeaponSet> wsList = LoadoutDoctrineService.GetEffectiveLoadout(Squad)
+                .OrderByDescending(ws => ws.PrimaryRangedWeapon?.DamageMultiplier ?? ws.PrimaryMeleeWeapon.StrengthMultiplier)
+                .ToList();
             // need to allocate weapons from squad weapon sets
             if (tempSquad[0].Soldier.Template.IsSquadLeader)
             {

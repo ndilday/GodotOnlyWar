@@ -87,6 +87,7 @@ internal sealed class GameStateRoundTripFixture
             sector.PlayerForce.Army.PlayerSoldierMap.Values,
             sector.PlayerForce.Army.FallenBrothers.Values,
             sector.PlayerForce.BattleHistory,
+            sector.PlayerForce.Army.LoadoutDoctrine,
             schemaPath,
             sector.PlayerForce.HomeWorldPlanetId,
             RecruitmentSaveMapper.ToSaveData(sector.PlayerForce.RecruitmentProgram));

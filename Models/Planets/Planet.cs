@@ -4,6 +4,7 @@ using System.Linq;
 
 using OnlyWar.Models.Fleets;
 using OnlyWar.Helpers.Extensions;
+using OnlyWar.Models.Squads;
 
 namespace OnlyWar.Models.Planets
 {
@@ -29,6 +30,7 @@ namespace OnlyWar.Models.Planets
 
         public List<TaskForce> OrbitingTaskForceList;
         public readonly Dictionary<int, PlanetFaction> PlanetFactionMap;
+        public LoadoutDoctrine LoadoutDoctrine { get; } = new();
 
         // Governance designation, recomputed by SectorBuilder.GenerateWarpNetwork.
         public GovernanceTier GovernanceTier { get; set; } = GovernanceTier.Planetary;

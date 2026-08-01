@@ -1,6 +1,6 @@
 [gd_scene load_steps=3 format=3 uid="uid://dbyl28kccv75p"]
 
-[ext_resource type="Theme" uid="uid://ylp8bk1nhedq" path="res://Scenes/OnlyWarTheme.tres" id="1_theme"]
+[ext_resource type="Theme" path="res://Scenes/OnlyWarTheme.tres" id="1_theme"]
 [ext_resource type="Script" path="res://Scenes/MainGameScreen/SystemInspector.cs" id="2_script"]
 
 [node name="SystemInspector" type="Control"]

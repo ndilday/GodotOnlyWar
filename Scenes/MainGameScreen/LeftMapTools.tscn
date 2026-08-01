@@ -1,6 +1,6 @@
 [gd_scene load_steps=3 format=3 uid="uid://b0g3xsci3r5mb"]
 
-[ext_resource type="Theme" uid="uid://ylp8bk1nhedq" path="res://Scenes/OnlyWarTheme.tres" id="1_theme"]
+[ext_resource type="Theme" path="res://Scenes/OnlyWarTheme.tres" id="1_theme"]
 [ext_resource type="Script" path="res://Scenes/MainGameScreen/LeftMapTools.cs" id="2_script"]
 
 [node name="LeftMapTools" type="Control"]

@@ -1,258 +1,139 @@
 using Godot;
 using OnlyWar.Helpers.UI;
+using OnlyWar.Models.Equippables;
+using OnlyWar.Models.Squads;
 using System;
 using System.Collections.Generic;
 
-// A single squad-roster row: the member's id, rank/name label, a recovery-status clause, and
-// flags driving how injured members are visually distinguished (PRD 4.6).
-public sealed record SquadMemberRow(
-    int SoldierId, string Label, string RecoveryStatus, bool IsInjured, bool IsOutOfAction);
-
 public partial class SquadScreenView : MainScreenView
 {
-    private VBoxContainer _squadDetailsVBox;
-    private VBoxContainer _squadLoadoutVBox;
-    private VBoxContainer _squadMemberVBox;
-    private RichTextLabel _defaultName;
-    private RichTextLabel _defaultCount;
-    private Button _copyLoadoutButton;
-    private Button _pasteLoadoutButton;
-    private List<WeaponSetSelectionView> _weaponSets;
+    private Label _title;
+    private Label _subtitle;
+    private Label _source;
+    private Button _returnToDoctrine;
+    private LoadoutEditorView _editor;
 
-    public event EventHandler<ValueTuple<string, int>> WeaponSetSelectionWeaponSetCountChanged;
-    public event EventHandler CopyLoadout;
-    public event EventHandler PasteLoadout;
+    public event EventHandler LoadoutChanged;
+    public event EventHandler ReturnToDoctrinePressed;
+    public event EventHandler ClosePressed;
+
+    public IReadOnlyList<WeaponSet> WorkingLoadout => _editor.WorkingLoadout;
 
     public override void _Ready()
     {
         base._Ready();
-        _squadDetailsVBox = GetNode<VBoxContainer>("DataPanel/VBoxContainer");
-        _squadLoadoutVBox = GetNode<VBoxContainer>("LoadoutPanel/ScrollContainer/VBoxContainer");
-        _squadMemberVBox = GetNode<VBoxContainer>("SquadMemberPanel/ScrollContainer/VBoxContainer");
-        _defaultName = GetNode<RichTextLabel>("LoadoutPanel/ScrollContainer/VBoxContainer/DefaultHBox/Name");
-        _defaultCount = GetNode<RichTextLabel>("LoadoutPanel/ScrollContainer/VBoxContainer/DefaultHBox/Count");
-        _copyLoadoutButton = GetNode<Button>("DataPanel/ButtonVBox/CopyLoadoutButton");
-        _copyLoadoutButton.Pressed += () => CopyLoadout(this, EventArgs.Empty);
-        _pasteLoadoutButton = GetNode<Button>("DataPanel/ButtonVBox/PasteLoadoutButton");
-        _pasteLoadoutButton.Pressed += () => PasteLoadout(this, EventArgs.Empty);
-        _weaponSets = new List<WeaponSetSelectionView>();
-        ApplyThemeStyling();
-    }
-
-    public void ClearSquadData()
-    {
-        var existingLines = _squadDetailsVBox.GetChildren();
-        if (existingLines != null)
+        foreach (Node child in GetChildren())
         {
-            foreach (var line in existingLines)
-            {
-                _squadDetailsVBox.RemoveChild(line);
-                line.QueueFree();
-            }
-        }
-    }
-
-    public void ClearSquadLoadout()
-    {
-        if (_weaponSets.Count > 0)
-        {
-            foreach (var weaponSetSelectionView in _weaponSets)
-            {
-                _squadLoadoutVBox.RemoveChild(weaponSetSelectionView);
-                weaponSetSelectionView.WeaponSetCountChanged -= OnWeaponSetCountChanged;
-                weaponSetSelectionView.QueueFree();
-            }
-            _weaponSets.Clear();
-        }
-    }
-
-    public void PopulateSquadData(IReadOnlyList<ValueTuple<string, string>> stringPairs)
-    {
-        ClearSquadData();
-        foreach (ValueTuple<string, string> line in stringPairs)
-        {
-            AddLine(_squadDetailsVBox, line.Item1, line.Item2);
-        }
-    }
-
-    public void PopulateSquadLoadout(List<ValueTuple<List<ValueTuple<string, int>>, string, int, int>> weaponSets, ValueTuple<string, int> defaultWeaponSet)
-    {
-        ClearSquadLoadout();
-        PackedScene weaponSetSelectionScene = GD.Load<PackedScene>("res://Scenes/SquadScreen/weapon_set_selection.tscn");
-        // add default Weapon set at top, set min and max for it to its current value
-        List<string> defaultWeaponSetList = new List<string> { defaultWeaponSet.Item1 };
-        _defaultName.Text = defaultWeaponSet.Item1;
-        _defaultCount.Text = defaultWeaponSet.Item2.ToString();
-        foreach (var weaponSet in weaponSets)
-        {
-
-            WeaponSetSelectionView view = (WeaponSetSelectionView)weaponSetSelectionScene.Instantiate();
-            _squadLoadoutVBox.AddChild(view);
-            _weaponSets.Add(view);
-            view.Initialize(weaponSet.Item1, weaponSet.Item2, weaponSet.Item3, weaponSet.Item4);
-            view.WeaponSetCountChanged += OnWeaponSetCountChanged;
-        }
-
-    }
-
-    // Injured members are visually distinguished and carry their expected recovery time
-    // (PRD 4.6): out-of-action brothers in crimson, lighter wounds in amber, healthy in the
-    // default parchment.
-    private static readonly Color OutOfActionColor = new Color("d05a5a");
-    private static readonly Color InjuredColor = new Color("d9a441");
-
-    public void PopulateSquadMembers(IReadOnlyList<SquadMemberRow> members)
-    {
-        ClearSquadMembers();
-        if (members == null || members.Count == 0)
-        {
-            _squadMemberVBox.AddChild(CreateMemberRow("No members assigned.", OnlyWarStyle.MutedText));
-        }
-        else
-        {
-            foreach (var member in members)
-            {
-                string text = member.IsInjured
-                    ? $"{member.Label} - {member.RecoveryStatus}"
-                    : member.Label;
-                Color textColor = OnlyWarStyle.BodyText;
-                if (member.IsOutOfAction)
-                {
-                    textColor = OutOfActionColor;
-                }
-                else if (member.IsInjured)
-                {
-                    textColor = InjuredColor;
-                }
-                _squadMemberVBox.AddChild(CreateMemberRow(text, textColor));
-            }
-        }
-    }
-
-    private void ClearSquadMembers()
-    {
-        var children = _squadMemberVBox.GetChildren();
-        foreach (var child in children)
-        {
-            _squadMemberVBox.RemoveChild(child);
+            RemoveChild(child);
             child.QueueFree();
         }
-    }
 
-    public void SetDefaultWeaponSetCount(int count)
-    {
-        _defaultCount.Text = count.ToString();
-    }
-
-    public void DisableCountIncreases(bool disable)
-    {
-        foreach(var weaponSet in _weaponSets)
+        ColorRect scrim = new()
         {
-            weaponSet.DisableInrease(disable);
-        }
-    }
-
-    public void DisablePasteLoadout(bool disable)
-    {
-        _pasteLoadoutButton.Disabled = disable;
-    }
-
-    private void OnWeaponSetCountChanged(object sender, ValueTuple<string, int> args)
-    {
-        WeaponSetSelectionWeaponSetCountChanged?.Invoke(sender, args);
-    }
-
-    private void ApplyThemeStyling()
-    {
-        ApplyContentPanel("DataPanel");
-        ApplyContentPanel("SquadMemberPanel");
-        ApplyContentPanel("LoadoutPanel");
-        ApplyInsetPanel("DataPanel/Header");
-        ApplyInsetPanel("SquadMemberPanel/Header");
-        ApplyInsetPanel("LoadoutPanel/Panel");
-
-        _squadDetailsVBox.AddThemeConstantOverride("separation", 6);
-        _squadLoadoutVBox.AddThemeConstantOverride("separation", 6);
-        _squadMemberVBox.AddThemeConstantOverride("separation", 6);
-    }
-
-    private void ApplyContentPanel(string path)
-    {
-        Panel panel = GetNodeOrNull<Panel>(path);
-        if (panel != null)
-        {
-            OnlyWarStyle.ApplyContentPanel(panel);
-        }
-    }
-
-    private void ApplyInsetPanel(string path)
-    {
-        Panel panel = GetNodeOrNull<Panel>(path);
-        if (panel != null)
-        {
-            OnlyWarStyle.ApplyInsetPanel(panel);
-        }
-    }
-
-    private void AddLine(VBoxContainer container, string label, string value)
-    {
-        PanelContainer linePanel = new()
-        {
-            CustomMinimumSize = new Vector2(0, 36),
-            SizeFlagsHorizontal = SizeFlags.ExpandFill
+            Color = new Color(0, 0, 0, 0.62f),
+            MouseFilter = MouseFilterEnum.Stop,
+            AnchorRight = 1,
+            AnchorBottom = 1
         };
-        OnlyWarStyle.ApplyInsetPanel(linePanel);
+        AddChild(scrim);
 
-        HBoxContainer row = new()
+        PanelContainer dialog = new()
         {
-            SizeFlagsHorizontal = SizeFlags.ExpandFill
+            AnchorLeft = 0.29f,
+            AnchorTop = 0.10f,
+            AnchorRight = 0.71f,
+            AnchorBottom = 0.90f,
+            OffsetLeft = 0,
+            OffsetTop = 0,
+            OffsetRight = 0,
+            OffsetBottom = 0
         };
-        row.AddThemeConstantOverride("separation", 8);
-        linePanel.AddChild(row);
+        OnlyWarStyle.ApplyContentPanel(dialog);
+        AddChild(dialog);
 
-        Label lineLabel = new()
+        MarginContainer margin = new();
+        margin.AddThemeConstantOverride("margin_left", 18);
+        margin.AddThemeConstantOverride("margin_top", 16);
+        margin.AddThemeConstantOverride("margin_right", 18);
+        margin.AddThemeConstantOverride("margin_bottom", 16);
+        dialog.AddChild(margin);
+
+        VBoxContainer stack = new();
+        stack.AddThemeConstantOverride("separation", 10);
+        margin.AddChild(stack);
+
+        HBoxContainer header = new();
+        header.AddThemeConstantOverride("separation", 12);
+        stack.AddChild(header);
+
+        VBoxContainer titleStack = new() { SizeFlagsHorizontal = SizeFlags.ExpandFill };
+        _title = new Label();
+        _title.AddThemeFontOverride("font", GetThemeFont("display"));
+        _title.AddThemeFontSizeOverride("font_size", 22);
+        _subtitle = new Label { AutowrapMode = TextServer.AutowrapMode.WordSmart };
+        _subtitle.AddThemeColorOverride("font_color", OnlyWarStyle.MutedText);
+        titleStack.AddChild(_title);
+        titleStack.AddChild(_subtitle);
+        header.AddChild(titleStack);
+
+        Button close = new() { CustomMinimumSize = new Vector2(40, 36), Text = "X" };
+        IconAtlas.ApplyIconButton(close, "close", 40, 28);
+        close.TooltipText = "Close";
+        close.Pressed += () => ClosePressed?.Invoke(this, EventArgs.Empty);
+        header.AddChild(close);
+
+        PanelContainer sourcePanel = new() { CustomMinimumSize = new Vector2(0, 38) };
+        OnlyWarStyle.ApplyInsetPanel(sourcePanel);
+        _source = new Label { VerticalAlignment = VerticalAlignment.Center };
+        _source.AddThemeColorOverride("font_color", OnlyWarStyle.PlayerAccent);
+        sourcePanel.AddChild(_source);
+        stack.AddChild(sourcePanel);
+
+        ScrollContainer scroll = new()
         {
-            Text = label,
-            ClipText = true,
-            TextOverrunBehavior = TextServer.OverrunBehavior.TrimEllipsis,
-            SizeFlagsHorizontal = SizeFlags.ExpandFill,
-            CustomMinimumSize = new Vector2(140, 0)
+            HorizontalScrollMode = ScrollContainer.ScrollMode.Disabled,
+            SizeFlagsVertical = SizeFlags.ExpandFill
         };
-        lineLabel.AddThemeColorOverride("font_color", OnlyWarStyle.MutedText);
-        row.AddChild(lineLabel);
+        _editor = new LoadoutEditorView { SizeFlagsHorizontal = SizeFlags.ExpandFill };
+        _editor.LoadoutChanged += (_, _) => LoadoutChanged?.Invoke(this, EventArgs.Empty);
+        scroll.AddChild(_editor);
+        stack.AddChild(scroll);
 
-        Label lineValue = new()
+        HBoxContainer footer = new() { Alignment = BoxContainer.AlignmentMode.End };
+        footer.AddThemeConstantOverride("separation", 8);
+        _returnToDoctrine = new Button
         {
-            Text = value,
-            HorizontalAlignment = HorizontalAlignment.Right,
-            ClipText = true,
-            TextOverrunBehavior = TextServer.OverrunBehavior.TrimEllipsis,
-            SizeFlagsHorizontal = SizeFlags.ExpandFill,
-            CustomMinimumSize = new Vector2(140, 0)
+            Text = "Return to Doctrine",
+            CustomMinimumSize = new Vector2(170, 38)
         };
-        row.AddChild(lineValue);
-
-        container.AddChild(linePanel);
+        IconAtlas.Apply(_returnToDoctrine, "chapter", 170);
+        _returnToDoctrine.Pressed += () => ReturnToDoctrinePressed?.Invoke(this, EventArgs.Empty);
+        Button done = new() { Text = "Done", CustomMinimumSize = new Vector2(110, 38) };
+        done.Pressed += () => ClosePressed?.Invoke(this, EventArgs.Empty);
+        footer.AddChild(_returnToDoctrine);
+        footer.AddChild(done);
+        stack.AddChild(footer);
     }
 
-    private static Control CreateMemberRow(string text, Color textColor)
+    public void Display(
+        string title,
+        string subtitle,
+        string source,
+        SquadTemplate template,
+        IEnumerable<WeaponSet> loadout,
+        int capacity,
+        bool isCustom)
     {
-        PanelContainer rowPanel = new()
-        {
-            CustomMinimumSize = new Vector2(0, 34),
-            SizeFlagsHorizontal = SizeFlags.ExpandFill
-        };
-        OnlyWarStyle.ApplyInsetPanel(rowPanel);
+        _title.Text = title;
+        _subtitle.Text = subtitle;
+        _source.Text = source;
+        _returnToDoctrine.Visible = isCustom;
+        _editor.SetLoadout(template, loadout, capacity);
+    }
 
-        Label label = new()
-        {
-            Text = text,
-            ClipText = true,
-            TextOverrunBehavior = TextServer.OverrunBehavior.TrimEllipsis,
-            SizeFlagsHorizontal = SizeFlags.ExpandFill
-        };
-        label.AddThemeColorOverride("font_color", textColor);
-        rowPanel.AddChild(label);
-        return rowPanel;
+    public void SetDoctrineState(string source, bool isCustom)
+    {
+        _source.Text = source;
+        _returnToDoctrine.Visible = isCustom;
     }
 }

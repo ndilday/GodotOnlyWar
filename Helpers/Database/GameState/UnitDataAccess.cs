@@ -44,6 +44,7 @@ namespace OnlyWar.Helpers.Database.GameState
                     // Set this before restoring ship/region state. Administrative squads
                     // are non-operational and their setter intentionally clears deployments.
                     squad.IsAdministrative = reader.GetBoolean(7);
+                    squad.UsesLoadoutDoctrine = reader.GetBoolean(8);
                     squadByIdMap[id] = squad;
 
 
@@ -252,9 +253,9 @@ namespace OnlyWar.Helpers.Database.GameState
                 command.Transaction = transaction;
                 command.CommandText = @"INSERT INTO Squad
                     (Id, SquadTemplateId, ParentUnitId, Name, LoadedShipId, LandedRegionId,
-                     TrainingFocus, IsAdministrative) VALUES
+                     TrainingFocus, IsAdministrative, UsesLoadoutDoctrine) VALUES
                     (@id, @templateId, @parentUnitId, @name, @ship, @region, @trainingFocus,
-                     @isAdministrative);";
+                     @isAdministrative, @usesLoadoutDoctrine);";
                 command.AddParam("@id", squad.Id);
                 command.AddParam("@templateId", squad.SquadTemplate.Id);
                 command.AddParam("@parentUnitId", squad.ParentUnit.Id);
@@ -263,10 +264,11 @@ namespace OnlyWar.Helpers.Database.GameState
                 command.AddParam("@region", region);
                 command.AddParam("@trainingFocus", (int)squad.TrainingFocus);
                 command.AddParam("@isAdministrative", squad.IsAdministrative ? 1 : 0);
+                command.AddParam("@usesLoadoutDoctrine", squad.UsesLoadoutDoctrine ? 1 : 0);
                 command.ExecuteNonQuery();
             }
 
-            if(squad.Loadout != null && squad.Loadout.Count > 0)
+            if(!squad.UsesLoadoutDoctrine && squad.Loadout != null && squad.Loadout.Count > 0)
             {
                 SaveSquadLoadout(transaction, squad);
             }

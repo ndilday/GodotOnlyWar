@@ -211,13 +211,16 @@ namespace OnlyWar.Helpers.Battles
         private static IReadOnlyList<BattleWeaponSetSummary> BuildActiveWeaponSets(BattleSquadSnapshot squad, int startingStrength)
         {
             WeaponSet defaultWeaponSet = squad?.Squad?.SquadTemplate?.DefaultWeapons;
-            if (defaultWeaponSet == null && squad?.Squad?.Loadout == null)
+            IReadOnlyList<WeaponSet> effectiveLoadout = squad?.Squad == null
+                ? []
+                : LoadoutDoctrineService.GetEffectiveLoadout(squad.Squad);
+            if (defaultWeaponSet == null && effectiveLoadout.Count == 0)
             {
                 return [];
             }
 
             Dictionary<string, int> customSetCounts = new(StringComparer.OrdinalIgnoreCase);
-            foreach (WeaponSet weaponSet in squad.Squad.Loadout ?? [])
+            foreach (WeaponSet weaponSet in effectiveLoadout)
             {
                 if (weaponSet == null || (defaultWeaponSet != null && weaponSet.Id == defaultWeaponSet.Id))
                 {

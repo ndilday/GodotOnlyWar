@@ -34,8 +34,10 @@ namespace OnlyWar.Helpers.Missions.Ambush
             if (missionSquads.Count == 0 || opposingSquads.Count == 0)
             {
                 context.NoViableTarget = true;
-                context.AddLog($"Day {context.DaysElapsed}: No combat-capable forces remain for ambush.");
-                return MissionStepResult.Complete;
+                context.AddLog($"Day {context.DaysElapsed}: No viable target remained for ambush.");
+                return missionSquads.Count > 0 && context.MustExfiltrate
+                    ? MissionStepResult.Continue(new ExfiltrateMissionStep())
+                    : MissionStepResult.Complete;
             }
 
             // negative mod for size of enemy force

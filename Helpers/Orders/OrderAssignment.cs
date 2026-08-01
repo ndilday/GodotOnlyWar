@@ -67,6 +67,7 @@ namespace OnlyWar.Helpers.Orders
                         duplicateOrder.AssignedSquads.ToList(), existingOrder, sector);
                     sector.RemoveOrder(duplicateOrder);
                 }
+                existingOrder.SetAggression(aggression);
                 MoveSquadsToOrder(distinctSquads, existingOrder, sector);
                 return existingOrder;
             }

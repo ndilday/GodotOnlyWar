@@ -3,7 +3,7 @@
 [ext_resource type="PackedScene" uid="uid://cadpqoqxtyo0p" path="res://Scenes/Dialog.tscn" id="1_base"]
 [ext_resource type="Script" uid="uid://cbrf1ctrl9a2xz" path="res://Scenes/MainGameScreen/BriefingDialogController.cs" id="2_ctrl"]
 [ext_resource type="Script" uid="uid://cbrf2view8b3yw" path="res://Scenes/MainGameScreen/BriefingDialogView.cs" id="3_view"]
-[ext_resource type="Theme" uid="uid://ylp8bk1nhedq" path="res://Scenes/OnlyWarTheme.tres" id="4_theme"]
+[ext_resource type="Theme" path="res://Scenes/OnlyWarTheme.tres" id="4_theme"]
 
 [node name="DialogController" instance=ExtResource("1_base")]
 theme = ExtResource("4_theme")

@@ -30,6 +30,8 @@ namespace OnlyWar.Helpers.Missions
     {
         public MissionType MissionType { get; init; }
         public bool WasDetected { get; init; }
+        public bool ReturnedToBase { get; init; }
+        public bool RemainedInTargetRegion { get; init; }
         public MissionForceDisposition Disposition { get; init; }
         public bool NoViableTarget { get; init; }
         public bool TargetLocated { get; init; }
@@ -52,6 +54,8 @@ namespace OnlyWar.Helpers.Missions
                 MissionType = missionType,
                 // Spotter is set the moment a detection resolves; its presence is the detection signal.
                 WasDetected = context.Spotter != null,
+                ReturnedToBase = context.ForceReturnedToBase,
+                RemainedInTargetRegion = context.ForceRemainedInTargetRegion,
                 Disposition = ResolveDisposition(context),
                 NoViableTarget = context.NoViableTarget,
                 TargetLocated = context.TargetLocated,

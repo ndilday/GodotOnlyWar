@@ -25,7 +25,7 @@ namespace OnlyWar.Models.Orders
         public List<Squad> AssignedSquads { get; }
         public bool IsQuiet { get; }
         public bool IsActivelyEngaging { get; }
-        public Aggression LevelOfAggression { get; }
+        public Aggression LevelOfAggression { get; private set; }
         public Mission Mission { get; }
 
         public Order(List<Squad> orderedSquads, bool isQuiet, bool isActivelyEngaging, Aggression levelOfAggression, Mission mission)
@@ -50,6 +50,11 @@ namespace OnlyWar.Models.Orders
                     squad.CurrentOrders = this;
                 }
             }
+        }
+
+        public void SetAggression(Aggression aggression)
+        {
+            LevelOfAggression = aggression;
         }
     }
 

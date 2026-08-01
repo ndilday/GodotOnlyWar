@@ -25,6 +25,7 @@ public partial class ChapterController : MainScreenController
     private ConfirmationDialog _transferConfirmationDialog;
     private AcceptDialog _transferBlockedDialog;
     private ChapterFilterDialog _filterDialog;
+    private LoadoutDoctrineDialog _loadoutDoctrineDialog;
 
     public ChapterView ChapterView { get; set; }
 
@@ -43,6 +44,7 @@ public partial class ChapterController : MainScreenController
         ChapterView.BreadcrumbPressed += OnBreadcrumbPressed;
         ChapterView.TransferTargetSelected += OnTransferTargetSelected;
         ChapterView.FilterButtonPressed += OnFilterButtonPressed;
+        ChapterView.ChapterLoadoutsPressed += OnChapterLoadoutsPressed;
 
         _transferConfirmationDialog = new ConfirmationDialog
         {
@@ -62,6 +64,10 @@ public partial class ChapterController : MainScreenController
         _filterDialog.FilterCleared += OnFilterCleared;
         AddChild(_filterDialog);
 
+        _loadoutDoctrineDialog = new LoadoutDoctrineDialog();
+        _loadoutDoctrineDialog.DoctrineChanged += (_, _) => CampaignChanged?.Invoke(this, EventArgs.Empty);
+        AddChild(_loadoutDoctrineDialog);
+
         RenderCurrentPath();
     }
 
@@ -77,6 +83,7 @@ public partial class ChapterController : MainScreenController
         ChapterView.BreadcrumbPressed -= OnBreadcrumbPressed;
         ChapterView.TransferTargetSelected -= OnTransferTargetSelected;
         ChapterView.FilterButtonPressed -= OnFilterButtonPressed;
+        ChapterView.ChapterLoadoutsPressed -= OnChapterLoadoutsPressed;
         if (_transferConfirmationDialog != null)
         {
             _transferConfirmationDialog.Confirmed -= OnTransferConfirmed;
@@ -318,6 +325,15 @@ public partial class ChapterController : MainScreenController
         if (_transferConfirmationDialog != null)
         {
             _transferConfirmationDialog.Title = "Confirm Transfer";
+        }
+    }
+
+    private void OnChapterLoadoutsPressed(object sender, EventArgs e)
+    {
+        PlayerForce force = GameDataSingleton.Instance?.Sector?.PlayerForce;
+        if (force != null)
+        {
+            _loadoutDoctrineDialog.OpenChapter(force);
         }
     }
 
