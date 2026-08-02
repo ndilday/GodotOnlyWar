@@ -757,6 +757,26 @@ public class BattleSquadPlannerTests
         Assert.IsType<MoveAction>(Assert.Single(moveActions));
     }
 
+    [Fact]
+    public void PrepareActions_AdjacentMeleeCombatantDiscardsCarriedMovement()
+    {
+        BattleSquad attackers = CreateSquad("Engaged Attacker", 90_023);
+        BattleSquad enemies = CreateSquad("Adjacent Target", 90_024);
+        BattleSoldier attacker = attackers.Soldiers[0];
+        attacker.LeftoverMovement = 40.5f;
+        BattleGridManager grid = new();
+        Place(grid, attacker, true, 0, 0);
+        Place(grid, enemies.Soldiers[0], false, 1, 0);
+        attackers.IsInMelee = true;
+        BattleSquadPlanner planner = CreatePlanner(grid, attackers, enemies);
+
+        planner.PrepareActions(attackers);
+
+        Assert.Equal(SquadMovementTier.InMelee, attackers.MovementTier);
+        Assert.Equal(0, attacker.CurrentSpeed);
+        Assert.Equal(0, attacker.LeftoverMovement);
+    }
+
     private static EngagedDecisionScenario CreateEngagedDecisionScenario(int attackerCount)
     {
         BattleSquad shooterSquad = CreateSquad("Engaged Shooter", 500, battleValue: 10);

@@ -83,19 +83,20 @@ namespace OnlyWar.Helpers.Battles
         {
             List<BattleSquadSnapshot> initialSquads = GetAllSquads(initialState).ToList();
             List<BattleSquadSnapshot> currentSquads = GetAllSquads(currentState).ToList();
-            List<BattleForceHierarchyNode> roots =
-            [
-                BuildForceRoot("Player Force", "Imperial formations", "controlled", true, initialSquads.Where(s => s.IsPlayerAligned), currentSquads.Where(s => s.IsPlayerAligned), selectedFormationId),
-                BuildForceRoot("Opposing Force", "Hostile formations", "hostile", false, initialSquads.Where(s => !s.IsPlayerAligned), currentSquads.Where(s => !s.IsPlayerAligned), selectedFormationId)
-            ];
-
-            return roots.Where(root => root.StartingStrength > 0 || root.CurrentStrength > 0).ToList();
+            return BuildUnitRoots(
+                    true,
+                    initialSquads.Where(s => s.IsPlayerAligned),
+                    currentSquads.Where(s => s.IsPlayerAligned),
+                    selectedFormationId)
+                .Concat(BuildUnitRoots(
+                    false,
+                    initialSquads.Where(s => !s.IsPlayerAligned),
+                    currentSquads.Where(s => !s.IsPlayerAligned),
+                    selectedFormationId))
+                .ToList();
         }
 
-        private static BattleForceHierarchyNode BuildForceRoot(
-            string title,
-            string subtitle,
-            string iconKey,
+        private static IReadOnlyList<BattleForceHierarchyNode> BuildUnitRoots(
             bool isPlayerForce,
             IEnumerable<BattleSquadSnapshot> initialSquads,
             IEnumerable<BattleSquadSnapshot> currentSquads,
@@ -145,16 +146,7 @@ namespace OnlyWar.Helpers.Battles
                     squadNodes));
             }
 
-            return new BattleForceHierarchyNode(
-                null,
-                title,
-                subtitle,
-                iconKey,
-                isPlayerForce,
-                children.Any(child => child.IsSelected),
-                children.Sum(child => child.StartingStrength),
-                children.Sum(child => child.CurrentStrength),
-                children);
+            return children;
         }
 
         private static BattleForceHierarchyNode BuildSquadNode(BattleSquadSnapshot initialSquad, BattleSquadSnapshot currentSquad, int? selectedFormationId)

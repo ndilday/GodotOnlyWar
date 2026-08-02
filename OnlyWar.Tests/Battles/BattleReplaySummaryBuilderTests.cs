@@ -46,10 +46,13 @@ public class BattleReplaySummaryBuilderTests
         BattleReplayDisplay display = new BattleReplaySummaryBuilder().Build(history, 0);
 
         Assert.Equal(playerDefender.Id, display.SelectedFormationId);
-        BattleForceHierarchyNode playerRoot = Assert.Single(display.ForceHierarchy, node => node.IsPlayerForce);
-        Assert.Contains(playerRoot.Children.SelectMany(node => node.Children), node => node.FormationId == playerDefender.Id);
-        BattleForceHierarchyNode opposingRoot = Assert.Single(display.ForceHierarchy, node => !node.IsPlayerForce);
-        Assert.Contains(opposingRoot.Children.SelectMany(node => node.Children), node => node.FormationId == npcAttacker.Id);
+        Assert.DoesNotContain(display.ForceHierarchy, node => node.Title is "Player Force" or "Opposing Force");
+        Assert.Contains(
+            display.ForceHierarchy.Where(node => node.IsPlayerForce).SelectMany(node => node.Children),
+            node => node.FormationId == playerDefender.Id);
+        Assert.Contains(
+            display.ForceHierarchy.Where(node => !node.IsPlayerForce).SelectMany(node => node.Children),
+            node => node.FormationId == npcAttacker.Id);
     }
 
     [Fact]
@@ -73,10 +76,14 @@ public class BattleReplaySummaryBuilderTests
 
         BattleReplayDisplay display = new BattleReplaySummaryBuilder().Build(history, 0, pdfDefender.Id);
 
-        BattleForceHierarchyNode playerRoot = Assert.Single(display.ForceHierarchy, node => node.IsPlayerForce);
-        BattleForceHierarchyNode opposingRoot = Assert.Single(display.ForceHierarchy, node => !node.IsPlayerForce);
-        Assert.Contains(playerRoot.Children.SelectMany(node => node.Children), node => node.FormationId == pdfDefender.Id);
-        Assert.DoesNotContain(opposingRoot.Children.SelectMany(node => node.Children), node => node.FormationId == pdfDefender.Id);
+        IEnumerable<BattleForceHierarchyNode> playerFormations = display.ForceHierarchy
+            .Where(node => node.IsPlayerForce)
+            .SelectMany(node => node.Children);
+        IEnumerable<BattleForceHierarchyNode> opposingFormations = display.ForceHierarchy
+            .Where(node => !node.IsPlayerForce)
+            .SelectMany(node => node.Children);
+        Assert.Contains(playerFormations, node => node.FormationId == pdfDefender.Id);
+        Assert.DoesNotContain(opposingFormations, node => node.FormationId == pdfDefender.Id);
         Assert.True(display.SelectedFormation.IsPlayerForce);
     }
 
@@ -321,7 +328,6 @@ public class BattleReplaySummaryBuilderTests
             display.ForceHierarchy,
             node => !node.IsPlayerForce)
             .Children
-            .SelectMany(node => node.Children)
             .Single(node => node.FormationId == opposingSquad.Id);
         Assert.Equal("heavy", opposingFormation.IconKey);
     }
@@ -348,7 +354,6 @@ public class BattleReplaySummaryBuilderTests
             display.ForceHierarchy,
             node => node.IsPlayerForce)
             .Children
-            .SelectMany(node => node.Children)
             .Single(node => node.FormationId == playerSquad.Id);
         Assert.Equal(expectedIconKey, playerFormation.IconKey);
     }

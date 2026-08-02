@@ -252,8 +252,8 @@ public partial class BattleReviewView : DialogView
 
     private static string BuildForceRowText(BattleForceHierarchyNode node, int depth, bool isCollapsed)
     {
-        string indent = new(' ', depth * 3);
-        string disclosure = node.Children.Count == 0 ? "   " : isCollapsed ? "[+] " : "[-] ";
+        string indent = new(' ', depth);
+        string disclosure = node.Children.Count == 0 ? " " : isCollapsed ? "[+] " : "[-] ";
         return $"{indent}{disclosure}{node.Title}  {node.CurrentStrength}/{node.StartingStrength}";
     }
 

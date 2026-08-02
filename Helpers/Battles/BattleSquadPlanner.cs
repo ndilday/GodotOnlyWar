@@ -1271,9 +1271,15 @@ namespace OnlyWar.Helpers.Battles
                         soldier.Aim = null;
                         break;
                     case SquadMovementTier.InMelee:
-                        soldier.CurrentSpeed = _grid.IsAdjacentToEnemy(soldier.Soldier.Id)
-                            ? 0
-                            : soldier.GetMoveSpeed();
+                        bool isAdjacentToEnemy = _grid.IsAdjacentToEnemy(soldier.Soldier.Id);
+                        soldier.CurrentSpeed = isAdjacentToEnemy ? 0 : soldier.GetMoveSpeed();
+                        if (isAdjacentToEnemy)
+                        {
+                            // Carry-over represents an interrupted continuous move. Once a
+                            // soldier settles into direct melee, that move has ended; retaining
+                            // its bank here can produce an oversized charge after contact breaks.
+                            soldier.LeftoverMovement = 0;
+                        }
                         soldier.Aim = null;
                         break;
                 }

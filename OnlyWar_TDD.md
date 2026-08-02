@@ -623,6 +623,13 @@ Steps return their successor through `MissionStepResult`; `MissionStepDriver` ex
 
 `RegionFaction.CommittedAttention` is transient same-day state. Diversions draw a portion of the defender's remaining attention during the shaping phase; stealth, patrol, and interception steps consume the resulting exposure during acting, and the scheduler resets it at the next day boundary. `MissionReturnPolicy` determines whether a mission returns, holds captured ground, or remains static. Mission opening ranges interpolate between both sides' preferred ranges, so a successful ranged ambush opens farther away while a successful melee ambush opens close.
 
+**Diversion effect channels.** `DemonstrateForceMissionStep` runs a daily Tactics check whose difficulty rises with the target's defender-held regional intel and *deployed strength* — deliberately reading total force present rather than the search-effort `WatchScore` the stealth checks use, because a feint has to be seen by a garrison that is actually there. Accumulated Impact feeds two independent transient channels:
+
+- `PerceivedThreatBonus` on the target `RegionFaction`, set to a superlinear `apparentThreat = manpower × (1 + impact/scale)²`, inflating the garrison the controller feels it must hold.
+- `ProvocationLevel` on the feinting force at Normal aggression or higher, which lowers the AI's force-ratio threshold for attacking (toward parity) and biases target selection — baiting a counterattack. Because the feint force stands in the open, it is pulled into the resulting fight as a defender.
+
+Both are set during the shaping phase, consumed by faction planning in the same turn, and cleared by `ClearDiversionEffects` before the turn ends. **Neither is ever persisted** — they must not appear in the save schema. This same-turn lifecycle is why an AI-generated feint *against the player* cannot reuse this mechanism: the player commits orders before `ProcessTurn` runs, so it would have to become a one-turn-lagged intelligence deception instead (see PRD §5.7).
+
 Step chains by mission type:
 
 | Mission Type | Step Chain |
@@ -643,6 +650,8 @@ At the start of each day's acting phase, `MissionTurnProcessor` pairs exact reci
 Detection during any stealth phase routes to `DetectedMissionStep`, which dispatches to `AmbushedMissionStep` or `MeetingEngagementMissionStep` depending on context.
 
 **Shared stealth/infiltration/exfiltration difficulty formula** (`MissionStealthDifficulty`):
+
+Stealth difficulty scales with how hard enemies are *looking*, not with how many of them *live* in the region. The model replaced a `log10(deployed strength)` term built on `Garrison`, which had become an Imperium-only concept among public factions: for a `PopulationIsMilitary` horde `GetDeployedStrength()` resolves to Population, so the old term meant "how many creatures live here" and, at `MissionCheck`'s 0.2σ per difficulty point, spanned 1.6σ while every other lever combined spanned ~0.6σ. Mass was not *a* factor in the check — mass *was* the check.
 
 Detection is a property of the **region**, not of the mission's chosen target, so both terms sum over `Region.GetDetectingEnemyFactions()` — the same set `Region.SelectSpotter` draws the interceptor from, so difficulty and interceptor always agree on "the enemies present".
 
@@ -738,9 +747,15 @@ Strength after armor reduction is compared against wound thresholds to determine
 - `ConeTemplate` projects the weapon's full-range cone along the shooter-to-target direction. A combatant is caught when any occupied footprint cell lies inside it. `AreaAttackAction` auto-hits every caught friend or foe except the shooter, applies normal armor/hit-location/wound resolution per victim, and consumes `FuelPerBurst`. The planner scores the entire firing line and never aims a cone weapon.
 - `BlastTemplate` resolves an aim cell, then converts a failed normal-curve skill check into margin-proportional scatter in a pre-resolved random direction. A combatant is caught when any footprint cell lies inside `AreaRadius`; the thrower is not excluded. `BlastAttackAction` scales damage quadratically from full at the impact center to zero at the rim before armor.
 - Thrown blast range is `Strength × MaximumRange`; launched blasts use `MaximumRange` directly. `WeaponSet.GrenadeWeapon` is a third ranged slot, and grenades use the ordinary loaded-ammo/reload action economy rather than a separate inventory count.
-- The planner evaluates nominal template victims as expected enemy BV removed minus expected friendly/self BV lost. A grenade must also beat the soldier's best conventional action, with enemy value discounted by delivery confidence and engagement imminence. `WalkBackPreservesShooting` prevents movement geometry from needlessly suppressing a bulky primary weapon and making a grenade appear artificially preferable.
+- The planner evaluates nominal template victims as expected enemy BV removed minus expected friendly/self BV lost. A grenade must also beat the soldier's best conventional action, with enemy value discounted by delivery confidence and engagement imminence. Two tie-breaks keep grenades from displacing ordinary fire: **ties go to the gun**, and a **melee-engaged soldier never throws**. Empty grenades restock through the normal reload branches on idle turns rather than a separate resupply path. `WalkBackPreservesShooting` prevents movement geometry from needlessly suppressing a bulky primary weapon and making a grenade appear artificially preferable.
 - `BattleValueCalculator` values cones and blasts through density-scaled expected victims, fuel/ammo duty cycle, template reach, blast falloff, and the same reference-threat panel used for conventional weapons. A grenade is valued as a sidearm (`max(primary, grenade)`), matching the planner's mutually exclusive throw-or-shoot choice.
 - Remaining template/ranged work is tracked in `Design/Active/RangedCombatFollowUps.md`.
+
+**Melee resolution.** Attacks per melee action are `AttackSpeed/10 × weapon.AttackSpeedMultiplier`, with the fractional remainder resolved probabilistically in `MeleeMath`. `AttackSpeedMultiplier` replaced the old `ExtraAttacks` column; all shipped values are currently `1.0`, leaving per-weapon speed differentiation as an unused data lever. Dual wielding two one-handed melee weapons grants one off-hand strike using the off-hand weapon's own profile; its defensive value comes entirely from weapon `ParryModifier`s summed across equipped weapons (the unarmed fist is `−1`), with no flat dual-wield bonus — an early flat `+1` was removed because it stacked a free defensive bonus on top of the evasion that already models Tyranid natural weapons. `BattleSquadPlanner.BuildStrikePlan` distributes strikes across adjacent enemies, committing to one target until cumulative take-out confidence reaches 75% before moving on.
+
+The contested melee roll is calibrated to tabletop's intuition band rather than to raw skill differences: `MeleeDefenderAdvantage = 0` (equal skill trades at ~50%, tabletop's "hit on 4s") and a per-side roll σ of `6`, making each skill point worth ~5.6% near parity and compressing large gaps toward tabletop's clamped 33–67% ladder — a Genestealer runs ~72% out / ~28% back against a marine. `StrengthMultiplier` values are doubled against dialed-down heavy-tier `WoundMultiplier`s; the deliberate balance stance is that base marines are two-wound soldiers.
+
+**Battle Value derivation.** `BattleValueCalculator` is an engine-faithful valuation, not a stat-line heuristic: it replays the real to-hit/damage math (recoil decay, aim-vs-fire arbitrage, single-target overkill caps, ammo duty cycle, melee closing and engagement limits) against a four-profile reference threat panel — swarm chaff, light infantry, elite infantry, monster — to derive expected kills per turn and survival turns, then computes `BV = 5 · √(offense × durability) · command`. `SoldierTemplate.BattleValue` rows are generated from it (PDF Trooper 5 as the anchor; Tactical Marine 10, Genestealer 14, Hive Tyrant 95) and the `StrategicCombatRules` BV anchors track those values. An offline `Compute-BattleValue.ps1` harness reproduces the calculator to 6-decimal parity for bulk regeneration. **Player-soldier BV intentionally remains the template guideline rather than a live skill-tracking value** — enemy forces size their responses by estimating the player force, not by reading concrete data on every marine.
 
 **Squad placers:** `AmbushPlacer` and `AnnihilationPlacer` handle initial squad placement for their respective engagement types. Starting range is modified by `marginOfSuccess` from the preceding stealth check.
 
@@ -763,6 +778,17 @@ Battle completion produces a typed `BattleOutcome` with end reason, field holder
 | Normal | 50% |
 | Attritional | 25% |
 | Aggressive | Always (until 0 able soldiers) |
+
+### 6.6.1 Medical & Gene-Seed
+
+`MedicalTurnProcessor` runs as the `ProcessMedical` step of `TurnController.ProcessTurn` and has two halves.
+
+- **Natural healing.** Applies `Wounds.ApplyWeekOfHealing()` to every wounded player-soldier hit location regardless of deployment, *except* locations that require a replacement procedure — severed, or a crippled functional/vital location. `HitLocation.IsReplacementEligible` is the single source of truth for that exclusion and is shared with the Apothecarium view and the Squad Screen, so the three surfaces cannot disagree.
+- **Procedure resolution.** `ResolveProcedures` decrements weeks-remaining and, on completion, clears the location's wounds and removes the procedure. Cybernetic completion sets `HitLocation.IsCybernetic`; vat-grown leaves it clear. Because wounds are not cleared until completion, a marine under a procedure stays out-of-action automatically rather than needing a separate flag.
+
+`MedicalProcedure` (soldier id, hit-location template id, `MedicalProcedureType { Cybernetic, VatGrown }`, weeks remaining, Requisition cost paid up front) lives on `Army` beside the Requisition pool and roster, and persists to a `MedicalProcedure` table keyed to `Soldier`. `MedicalProcedureService.TryAssign` validates eligibility, surgery site, co-located staff, and affordability, then deducts cost and creates the procedure; `EvaluateRequisites` returns the per-requisite breakdown the UI renders green/red. Durations and costs live in `MedicalProcedureRules`, never in UI literals. The gates are a co-located Apothecary **and** Techmarine (same ship or same region, checked only at procedure start) plus a valid surgery site — aboard a ship, or an Imperial/player-controlled Hive/Forge/Civilised region. No fortress-monastery is modeled, so a player-held region serves as the de-facto base.
+
+Gene-seed recovery resolves once per confirmed-dead brother in `BattleTurnResolver.RemoveSoldiersKilledInBattle` (`ResolveGeneseedRecovery`), folding any recovered gland's purity into the chapter aggregate and writing a structured `SoldierEventType.GeneseedRecovery` event onto the preserved fallen-brother dossier; the battle log reads that recorded outcome rather than recomputing it. `PlayerForce` carries a count-weighted aggregate `GeneseedPurity` float alongside `GeneseedStockpile` — seeded pristine at founding, each recovered gland contributing a purity rolled around a baseline with small downward drift (`GeneseedRules`). Both persist on the extended `GlobalData` row. Stockpile drawdown happens in the recruitment pipeline (one unit consumed on Phase 0 → Phase 1; PRD §4.9).
 
 ### 6.7 Force Generation
 
