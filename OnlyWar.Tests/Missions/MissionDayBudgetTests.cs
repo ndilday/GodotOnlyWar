@@ -53,34 +53,33 @@ public class MissionDayBudgetTests
         Assert.Equal(expected, context.OperatingDaysSpent);
     }
 
-    // A sabotage force in the region it already holds works the full week and never stops planting
-    // explosives. PerformSabotageMissionStep used to continue the mission via ReconStealthMissionStep,
-    // whose success branch runs PerformReconMissionStep - so from day 2 on the mission quietly became
-    // a recon: the log read "performs reconnaissance" and Impact accrued as recon intel instead.
+    // A successful sabotage is a single completed objective. The six unused days are left available
+    // for training rather than being spent repeatedly damaging the same target.
     [Fact]
-    public void SabotageForceInItsOwnRegion_PlantsExplosivesEveryDayOfTheWeek()
+    public void SuccessfulSabotageInOwnRegion_StopsAfterOneStrike()
     {
         MissionContext context = CreateSabotageContext(squadIsInTargetRegion: true);
 
         new MissionStepDriver(CreateExecution(context), new SabotageStealthMissionStep()).RunToCompletion();
 
-        Assert.Equal(MissionContext.MissionDurationDays, context.DaysElapsed);
-        Assert.Equal(MissionContext.MissionDurationDays, context.Log.Count);
-        Assert.All(context.Log, line => Assert.Contains("plants explosives", line));
+        Assert.Equal(1, context.DaysElapsed);
+        Assert.Single(context.Log, line => line.Contains("plants explosives"));
+        Assert.True(context.Impact > 0);
         Assert.DoesNotContain(context.Log, line => line.Contains("reconnaissance"));
     }
 
-    // An infiltrated sabotage force gives up its last day to the trip home, so it plants explosives
-    // on days 1-6 and is back at base on day 7 - the whole mission inside the strategic turn.
+    // An infiltrated sabotage force strikes once and then immediately spends the next day returning
+    // to base. The remaining five days are therefore available for training.
     [Fact]
-    public void InfiltratedSabotageForce_ExfiltratesInsideTheWeek()
+    public void SuccessfulInfiltratedSabotage_StrikesOnceThenExfiltrates()
     {
         MissionContext context = CreateSabotageContext(squadIsInTargetRegion: false);
 
         new MissionStepDriver(CreateExecution(context), new SabotageStealthMissionStep()).RunToCompletion();
 
-        Assert.Equal(MissionContext.MissionDurationDays, context.DaysElapsed);
-        Assert.Equal(MissionContext.MissionDurationDays - 1, context.Log.Count(line => line.Contains("plants explosives")));
+        Assert.Equal(2, context.DaysElapsed);
+        Assert.Single(context.Log, line => line.Contains("plants explosives"));
+        Assert.True(context.Impact > 0);
         Assert.Contains(context.Log, line => line.Contains("returned to base"));
         Assert.DoesNotContain(context.Log, line => line.Contains("reconnaissance"));
     }

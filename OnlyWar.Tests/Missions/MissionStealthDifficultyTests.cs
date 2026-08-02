@@ -485,7 +485,7 @@ public class MissionStealthDifficultyTests
 
         new MissionStepDriver(CreateExecution(context), new SabotageStealthMissionStep()).RunToCompletion();
 
-        Assert.Equal(MissionContext.MissionDurationDays, context.Log.Count(l => l.Contains("plants explosives")));
+        Assert.Single(context.Log, l => l.Contains("plants explosives"));
         Assert.True(float.IsFinite(context.Impact));
         Assert.True(context.Impact > 0f);
     }
@@ -493,8 +493,8 @@ public class MissionStealthDifficultyTests
     // ...and the horde's numbers have to actually matter to the Tactics check that demolishes its
     // works. That check is target-anchored and deliberately stays off the search model (the guard
     // around an installation is the guard whether it is sweeping the hills or not), so the gap between
-    // a 100-strong and a 1,000,000-strong defender is still the four orders of magnitude between them,
-    // spread over the mission's days. FixedRNG rolls z = 0, so each day's margin is exactly
+    // a 100-strong and a 1,000,000-strong defender is still the four orders of magnitude between them.
+    // FixedRNG rolls z = 0, so the successful strike's margin is exactly
     // (skill - difficulty) / 5. Under the old raw-Garrison read both were 0 and the two runs were
     // identical.
     [Fact]
@@ -506,9 +506,8 @@ public class MissionStealthDifficultyTests
         new MissionStepDriver(CreateExecution(small), new SabotageStealthMissionStep()).RunToCompletion();
         new MissionStepDriver(CreateExecution(large), new SabotageStealthMissionStep()).RunToCompletion();
 
-        float expectedGap = MissionContext.MissionDurationDays
-            * (MissionStealthDifficulty.Magnitude(1_000_000)
-               - MissionStealthDifficulty.Magnitude(100)) / 5f;
+        float expectedGap = (MissionStealthDifficulty.Magnitude(1_000_000)
+            - MissionStealthDifficulty.Magnitude(100)) / 5f;
         Assert.True(small.Impact > large.Impact);
         Assert.Equal(expectedGap, small.Impact - large.Impact, 3);
     }

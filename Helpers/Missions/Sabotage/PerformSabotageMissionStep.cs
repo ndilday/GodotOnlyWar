@@ -2,7 +2,6 @@ using OnlyWar.Helpers.Extensions;
 using OnlyWar.Helpers.Fortifications;
 using OnlyWar.Models;
 using OnlyWar.Models.Missions;
-using OnlyWar.Models.Orders;
 using OnlyWar.Models.Planets;
 using OnlyWar.Models.Soldiers;
 using System.Linq;
@@ -39,13 +38,18 @@ namespace OnlyWar.Helpers.Missions.Sabotage
             difficulty += MissionAggressionModifiers.EffectDifficulty(context.Order.LevelOfAggression);
             LeaderMissionTest missionTest = new LeaderMissionTest(tactics, difficulty);
 
-            Order order = context.MissionSquads.First().Squad.CurrentOrders;
-
             context.AddLog($"Day {context.DaysElapsed}: Force plants explosives in {context.Order.Mission.RegionFaction.Region.Name}");
             float margin = missionTest.RunMissionCheck(context.MissionSquads, execution.Random);
             if(margin > 0)
             {
                 context.Impact += margin;
+
+                // The objective is complete after the first successful strike. Days left after the
+                // force returns (or immediately, when it is already operating from friendly ground)
+                // are converted to training credit by ChapterUpkeepProcessor from DaysElapsed.
+                return context.MustExfiltrate
+                    ? MissionStepResult.Continue(new ExfiltrateMissionStep(), 0.0f, this)
+                    : MissionStepResult.Complete;
             }
 
             if (context.OperatingDaysSpent)
@@ -56,10 +60,8 @@ namespace OnlyWar.Helpers.Missions.Sabotage
                     : MissionStepResult.Complete;
             }
 
-            // Continue the SABOTAGE loop. This used to chain to ReconStealthMissionStep, whose success
-            // branch runs PerformReconMissionStep - so after its first successful day a sabotage
-            // mission silently turned into a recon mission: it stopped planting explosives and started
-            // accruing recon Impact instead.
+            // A failed attempt can try again while operating time remains. A success above ends the
+            // objective immediately, so the squad cannot repeatedly damage the same target.
             return MissionStepResult.Continue(new SabotageStealthMissionStep(), marginOfSuccess, this);
         }
     }
