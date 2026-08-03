@@ -2584,6 +2584,12 @@ namespace OnlyWar.Helpers.Battles
                 adjacentEnemies,
                 plannedMeleeWeapons,
                 didMove: false);
+
+            if (TryAddGunAndBladeActions(soldier, projectedStrikePlans))
+            {
+                return;
+            }
+
             float meleeScore = EstimateProjectedMeleeBattleValue(
                 soldier,
                 projectedStrikePlans,
@@ -2653,6 +2659,70 @@ namespace OnlyWar.Helpers.Battles
                     random: _random,
                     meleeWeaponTemplates: _meleeWeaponTemplates));
             }
+        }
+
+        // A soldier gripping both a one-handed gun and a one-handed melee weapon does not choose
+        // between them: the strike costs him nothing, so he always makes it, and the sidearm shot
+        // at his strike target joins it whenever its own net value is positive. The evaluation's
+        // stray-shot term prices in the scrum he is standing in -- himself and his brothers
+        // included -- so a non-positive score means the trigger pull is expected to cost his side
+        // more than it removes from the enemy.
+        private bool TryAddGunAndBladeActions(
+            BattleSoldier soldier,
+            List<PlannedMeleeStrike> strikePlans)
+        {
+            if (strikePlans.Count == 0
+                || !soldier.EquippedMeleeWeapons.Any(
+                    weapon => weapon.Template.Location == EquipLocation.OneHand))
+            {
+                return false;
+            }
+            RangedWeapon sidearm = OrderRangedByTemplateId(soldier.EquippedRangedWeapons)
+                .FirstOrDefault(weapon => weapon.Template.Location == EquipLocation.OneHand
+                    && !weapon.Template.IsTemplateWeapon
+                    && !weapon.Template.IsBlastWeapon
+                    && weapon.LoadedAmmo > 0);
+            if (sidearm == null)
+            {
+                return false;
+            }
+
+            _meleeActions.Add(new MeleeAttackAction(
+                soldier,
+                strikePlans,
+                didMove: false,
+                log: _log,
+                random: _random,
+                meleeWeaponTemplates: _meleeWeaponTemplates));
+
+            BattleSoldier strikeTarget = _soldierMap[strikePlans[0].TargetId];
+            float range = _grid.GetDistanceBetweenSoldiers(
+                soldier.Soldier.Id,
+                strikeTarget.Soldier.Id);
+            if (range > sidearm.Template.MaximumRange)
+            {
+                return true;
+            }
+            RangedTargetEvaluation sidearmShot = EvaluateRangedTarget(
+                soldier,
+                strikeTarget,
+                sidearm,
+                range,
+                additionalToHitModifier: -sidearm.Template.Bulk);
+            if (sidearmShot.Score > 0)
+            {
+                soldier.TargetId = strikeTarget.Soldier.Id;
+                _shootActions.Add(new ShootAction(
+                    soldier.Soldier.Id,
+                    strikeTarget.Soldier.Id,
+                    sidearm.Template.Id,
+                    range,
+                    sidearmShot.ShotsToFire,
+                    useBulk: true,
+                    grid: _grid,
+                    random: _random));
+            }
+            return true;
         }
 
         private IReadOnlyList<MeleeWeapon> GetProjectedMeleeLoadout(BattleSoldier soldier)

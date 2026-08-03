@@ -1143,6 +1143,141 @@ public class BattleSquadPlannerTests
         Assert.Empty(threeAttackers.MeleeActions);
     }
 
+    private static EngagedDecisionScenario CreateGunAndBladeScenario(byte? attackerArmor = null)
+    {
+        BattleSquad shooterSquad = CreateSquad("Gun And Blade", 520, battleValue: 10);
+        BattleSoldier shooter = shooterSquad.Soldiers[0];
+        ((Soldier)shooter.Soldier).Dexterity = 17;
+
+        RangedWeapon sidearm = new(new RangedWeaponTemplate(
+            99_110,
+            "Service Pistol",
+            EquipLocation.OneHand,
+            TestSkills.Ranged,
+            accuracy: 0,
+            armorMultiplier: 1,
+            penetrationMultiplier: 1,
+            requiredStrength: 0,
+            baseDamage: 2.5f,
+            maxDistance: 50,
+            rof: 1,
+            ammo: 5,
+            recoil: 0,
+            bulk: 0,
+            doesDamageDegradeWithRange: false,
+            reloadTime: 1));
+        MeleeWeapon blade = new(new MeleeWeaponTemplate(
+            99_111,
+            "Combat Blade",
+            EquipLocation.OneHand,
+            TestSkills.Melee,
+            accuracy: 0,
+            armorMultiplier: 1,
+            penetrationMultiplier: 1,
+            requiredStrength: 0,
+            strengthMultiplier: 0.2f,
+            parryMod: 4,
+            attackSpeedMultiplier: 1));
+        shooter.RangedWeapons.Clear();
+        shooter.ClearReadiedRangedWeapons();
+        shooter.RangedWeapons.Add(sidearm);
+        shooter.ReadyWeapon(sidearm);
+        shooter.MeleeWeapons.Clear();
+        shooter.ClearReadiedMeleeWeapons();
+        shooter.MeleeWeapons.Add(blade);
+        shooter.ReadyWeapon(blade);
+
+        BattleSquad attackerSquad = CreateSquad("Blade Attacker", 530, battleValue: 10);
+        BattleSoldier attacker = attackerSquad.Soldiers[0];
+        MeleeWeapon attackerWeapon = new(new MeleeWeaponTemplate(
+            99_112,
+            "Light Claws",
+            EquipLocation.OneHand,
+            TestSkills.Melee,
+            accuracy: 0,
+            armorMultiplier: 1,
+            penetrationMultiplier: 1,
+            requiredStrength: 0,
+            strengthMultiplier: 0.2142857f,
+            parryMod: 0,
+            attackSpeedMultiplier: 1));
+        attacker.RangedWeapons.Clear();
+        attacker.ClearReadiedRangedWeapons();
+        attacker.MeleeWeapons.Clear();
+        attacker.ClearReadiedMeleeWeapons();
+        attacker.MeleeWeapons.Add(attackerWeapon);
+        attacker.ReadyWeapon(attackerWeapon);
+        if (attackerArmor.HasValue)
+        {
+            attacker.Armor = new Armor(new ArmorTemplate(
+                99_113, "Impenetrable Plate", attackerArmor.Value, 0));
+        }
+
+        BattleGridManager grid = new();
+        Place(grid, shooter, true, 0, 0);
+        Place(grid, attacker, false, 1, 0);
+
+        Dictionary<int, BattleSoldier> soldierMap = new()
+        {
+            [shooter.Soldier.Id] = shooter,
+            [attacker.Soldier.Id] = attacker
+        };
+        List<IAction> shootActions = [];
+        List<IAction> meleeActions = [];
+        BattleSquadPlanner planner = new(
+            grid,
+            soldierMap,
+            shootActions,
+            new List<IAction>(),
+            meleeActions,
+            null,
+            CreateMeleeTemplateMap(soldierMap.Values),
+            new SeededRNG(12345));
+        shooterSquad.IsInMelee = true;
+        shooter.IsInMelee = true;
+
+        return new EngagedDecisionScenario
+        {
+            ShooterSquad = shooterSquad,
+            Shooter = shooter,
+            Attackers = [attacker],
+            ProjectedMeleeWeapon = blade,
+            Planner = planner,
+            ShootActions = shootActions,
+            MeleeActions = meleeActions
+        };
+    }
+
+    [Fact]
+    public void EngagedGunAndBladeSoldier_StrikesAndShootsTheSameTarget()
+    {
+        EngagedDecisionScenario scenario = CreateGunAndBladeScenario();
+
+        scenario.Planner.PrepareActions(scenario.ShooterSquad);
+
+        MeleeAttackAction strike = Assert.IsType<MeleeAttackAction>(
+            Assert.Single(scenario.MeleeActions));
+        ShootAction shot = Assert.IsType<ShootAction>(Assert.Single(scenario.ShootActions));
+        int attackerId = scenario.Attackers[0].Soldier.Id;
+        Assert.Equal(attackerId, strike.StrikePlans[0].TargetId);
+        Assert.Equal(attackerId, shot.TargetId);
+        Assert.True(shot.UseBulk);
+    }
+
+    [Fact]
+    public void EngagedGunAndBladeSoldier_HoldsFireWhenShotValueIsNegative()
+    {
+        // The pistol cannot penetrate the attacker's plate, so the shot removes nothing from
+        // the enemy while a stray can still wound the shooter himself: net value is negative
+        // and only the blade should be used.
+        EngagedDecisionScenario scenario = CreateGunAndBladeScenario(attackerArmor: byte.MaxValue);
+
+        scenario.Planner.PrepareActions(scenario.ShooterSquad);
+
+        Assert.IsType<MeleeAttackAction>(Assert.Single(scenario.MeleeActions));
+        Assert.Empty(scenario.ShootActions);
+    }
+
     [Fact]
     public void TemplateWeaponBearer_EmitsAreaAttackWithoutAimingOrShooting()
     {
