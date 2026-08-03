@@ -35,13 +35,14 @@ namespace OnlyWar.Helpers
             "Power Armor", "Teaching"
         ];
 
-        // Instruction-quality tiers for scout drills. A capable sergeant runs training at
-        // full rate; a sub-par one splits the difference between teaching and letting the
-        // scouts practice; a squad that has lost its sergeant has no instructor at all and
-        // falls back to self-directed drill until a replacement is assigned.
+        // Instruction-quality tiers for scout drills. A capable sergeant is worth a bonus over
+        // the baseline; a sub-par one still runs drills at the ordinary rate; a squad that has
+        // lost its sergeant has no instructor at all and falls back to self-directed drill,
+        // which costs it a quarter of the week's value until a replacement is assigned.
         private const float GoodTeacherSkillThreshold = 12.0f;
-        private const float SubParInstructorLearningRate = 0.75f;
-        private const float NoInstructorLearningRate = 0.5f;
+        private const float GoodInstructorLearningRate = 1.1f;
+        private const float SubParInstructorLearningRate = 1.0f;
+        private const float NoInstructorLearningRate = 0.75f;
         private const float InstructorTeachingXpShare = 0.25f;
 
         public SoldierTrainingCalculator(IEnumerable<BaseSkill> baseSkills,
@@ -163,17 +164,16 @@ namespace OnlyWar.Helpers
                     {
                         // The sergeant is dead or transferred out and no replacement has been
                         // assigned. The scouts still drill, but with nobody running the training
-                        // they only get the practice half of it.
+                        // they lose part of its value.
                         baseLearning *= NoInstructorLearningRate;
                     }
                     else
                     {
                         instructor.AddSkillPoints(_skillsByName["Teaching"], squadPoints * InstructorTeachingXpShare);
-                        if (instructor.GetTotalSkillValue(_skillsByName["Teaching"]) < GoodTeacherSkillThreshold)
-                        {
-                            // with a sub-par teacher, learning is halfway between teaching and practicing
-                            baseLearning *= SubParInstructorLearningRate;
-                        }
+                        baseLearning *=
+                            instructor.GetTotalSkillValue(_skillsByName["Teaching"]) < GoodTeacherSkillThreshold
+                                ? SubParInstructorLearningRate
+                                : GoodInstructorLearningRate;
                     }
                     foreach (ISoldier soldier in squad.Members)
                     {

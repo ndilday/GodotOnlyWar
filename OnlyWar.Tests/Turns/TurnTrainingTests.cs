@@ -93,6 +93,26 @@ public class TurnTrainingTests
         Assert.True(GetSkillPoints(scout, TestSkills.Stealth) > 0);
     }
 
+    // Regression: the Scout Company HQ carries SquadTypes.Scout alongside SquadTypes.HQ, so the
+    // upkeep processor swept it into TrainScouts even though the training screen hides it and the
+    // player can never set its TrainingFocus. It drilled every week against an unset focus. It is a
+    // command element and belongs on the garrison work-experience path like every other HQ squad.
+    [Fact]
+    public void ProcessTurn_TrainsScoutCompanyHqAsGarrisonRatherThanScouts()
+    {
+        TurnTrainingFixture fixture = TurnTrainingFixture.Create();
+        Squad squad = fixture.CreatePlayerScoutSquad(
+            "Scout HQ Squad", fixture.ScoutHqSquadTemplate, out ISoldier scout);
+        fixture.LandSquad(squad);
+
+        fixture.ProcessTurn();
+
+        Assert.DoesNotContain(squad, fixture.TrainingService.ScoutTrainingSquads);
+        Assert.Contains(scout, fixture.TrainingService.WorkExperienceSoldiers);
+        Assert.Equal(0, GetSkillPoints(scout, TestSkills.Stealth));
+        Assert.True(GetSkillPoints(scout, TestSkills.Ranged) > 0);
+    }
+
     [Fact]
     public void ProcessTurn_DoesNotTrainScoutSquadsAssignedToMissions()
     {
@@ -155,6 +175,7 @@ public class TurnTrainingTests
         public RegionFaction RegionFaction { get; }
         public SquadTemplate SquadTemplate { get; }
         public SquadTemplate ScoutSquadTemplate { get; }
+        public SquadTemplate ScoutHqSquadTemplate { get; }
         public SoldierTemplate SoldierTemplate { get; }
         public TestTrainingService TrainingService { get; }
 
@@ -166,9 +187,11 @@ public class TurnTrainingTests
             RegionFaction regionFaction,
             SquadTemplate squadTemplate,
             SquadTemplate scoutSquadTemplate,
+            SquadTemplate scoutHqSquadTemplate,
             SoldierTemplate soldierTemplate,
             TestTrainingService trainingService)
         {
+            ScoutHqSquadTemplate = scoutHqSquadTemplate;
             Sector = sector;
             Ship = ship;
             TaskForce = taskForce;
@@ -188,7 +211,9 @@ public class TurnTrainingTests
             SoldierTemplate soldierTemplate = CreateTrainingSoldierTemplate();
             SquadTemplate squadTemplate = CreateSquadTemplate(playerFaction);
             SquadTemplate scoutSquadTemplate = CreateScoutSquadTemplate(playerFaction);
-            UnitTemplate unitTemplate = new(1, "Training Test Unit", true, [squadTemplate, scoutSquadTemplate], []);
+            SquadTemplate scoutHqSquadTemplate = CreateScoutHqSquadTemplate(playerFaction);
+            UnitTemplate unitTemplate = new(
+                1, "Training Test Unit", true, [squadTemplate, scoutSquadTemplate, scoutHqSquadTemplate], []);
             unitTemplate.Faction = playerFaction;
             Unit orderOfBattle = new(1, "Training Test Force", unitTemplate, []);
             Fleet fleet = new("Training Test Fleet", null, null);
@@ -225,6 +250,7 @@ public class TurnTrainingTests
                 regionFaction,
                 squadTemplate,
                 scoutSquadTemplate,
+                scoutHqSquadTemplate,
                 soldierTemplate,
                 new TestTrainingService());
         }
@@ -244,11 +270,16 @@ public class TurnTrainingTests
 
         public Squad CreatePlayerScoutSquad(string name, out ISoldier scout)
         {
+            return CreatePlayerScoutSquad(name, ScoutSquadTemplate, out scout);
+        }
+
+        public Squad CreatePlayerScoutSquad(string name, SquadTemplate template, out ISoldier scout)
+        {
             Soldier leaderBaseSoldier = TestModelFactory.CreateSoldier(TestModelFactory.SergeantTemplate);
             PlayerSoldier leader = new(leaderBaseSoldier, name + " Sergeant");
             Soldier scoutBaseSoldier = TestModelFactory.CreateSoldier(SoldierTemplate);
             PlayerSoldier playerScout = new(scoutBaseSoldier, name + " Scout");
-            Squad squad = new(name, Sector.PlayerForce.Army.OrderOfBattle, ScoutSquadTemplate);
+            Squad squad = new(name, Sector.PlayerForce.Army.OrderOfBattle, template);
             squad.AddSquadMember(leader);
             squad.AddSquadMember(playerScout);
             Sector.PlayerForce.Army.OrderOfBattle.AddSquad(squad);
@@ -330,6 +361,22 @@ public class TurnTrainingTests
                 TestModelFactory.TestArmor,
                 [new SquadTemplateElement(TestModelFactory.MarineTemplate, 0, 10)],
                 SquadTypes.None);
+            squadTemplate.Faction = playerFaction;
+            return squadTemplate;
+        }
+
+        // The Scout Company HQ: SquadTypes.Scout AND SquadTypes.HQ, matching the real
+        // "Scout HQ Squad" template. It is a command element, not a training squad.
+        private static SquadTemplate CreateScoutHqSquadTemplate(Faction playerFaction)
+        {
+            SquadTemplate squadTemplate = new(
+                3,
+                "Turn Training Scout HQ Squad",
+                TestModelFactory.DefaultWeapons,
+                [],
+                TestModelFactory.TestArmor,
+                [new SquadTemplateElement(TestModelFactory.SergeantTemplate, 1, 1), new SquadTemplateElement(TestModelFactory.MarineTemplate, 1, 5)],
+                SquadTypes.Scout | SquadTypes.HQ);
             squadTemplate.Faction = playerFaction;
             return squadTemplate;
         }

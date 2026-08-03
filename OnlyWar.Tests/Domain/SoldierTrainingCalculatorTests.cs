@@ -95,23 +95,23 @@ public class SoldierTrainingCalculatorTests
     }
 
     [Fact]
-    public void TrainScouts_CapableSergeantDrillsAtFullRate()
+    public void TrainScouts_CapableSergeantDrillsAtBonusRate()
     {
-        Assert.Equal(8f, TrainScoutsAndGetMeleePoints(sergeantTeachingPoints: 4, points: 8), precision: 4);
+        Assert.Equal(8.8f, TrainScoutsAndGetMeleePoints(sergeantTeachingPoints: 4, points: 8), precision: 4);
     }
 
     [Fact]
-    public void TrainScouts_SubParSergeantDrillsAtThreeQuarterRate()
+    public void TrainScouts_SubParSergeantDrillsAtBaselineRate()
     {
-        Assert.Equal(6f, TrainScoutsAndGetMeleePoints(sergeantTeachingPoints: 0, points: 8), precision: 4);
+        Assert.Equal(8f, TrainScoutsAndGetMeleePoints(sergeantTeachingPoints: 0, points: 8), precision: 4);
     }
 
     // Regression: a scout squad whose sergeant was killed in battle used to throw an NRE here,
     // which killed the whole turn and left the campaign unable to advance.
     [Fact]
-    public void TrainScouts_SquadWithNoSergeantDrillsAtHalfRateRatherThanThrowing()
+    public void TrainScouts_SquadWithNoSergeantDrillsAtReducedRateRatherThanThrowing()
     {
-        Assert.Equal(4f, TrainScoutsAndGetMeleePoints(sergeantTeachingPoints: null, points: 8), precision: 4);
+        Assert.Equal(6f, TrainScoutsAndGetMeleePoints(sergeantTeachingPoints: null, points: 8), precision: 4);
     }
 
     // Melee is the only focus, so the points the scout banks equal the squad's learning rate

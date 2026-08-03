@@ -326,8 +326,8 @@ namespace OnlyWar.Helpers.Turns
             // Scout squads take a mechanical penalty every week they go unled, so call that
             // out specifically; for line squads the cost is felt on mission checks and in battle.
             string consequence = ChapterUpkeepProcessor.IsScoutSquad(squad)
-                ? "With no instructor, the squad trains at half rate and its scouts fall further "
-                  + "behind every week until a new sergeant is assigned."
+                ? "With no instructor, the squad trains at three-quarter rate and its scouts fall "
+                  + "further behind every week until a new sergeant is assigned."
                 : "Leadership-based mission checks fall back to an ordinary battle-brother, and "
                   + "the squad fights without a leader's command presence.";
 

@@ -159,9 +159,18 @@ namespace OnlyWar.Helpers.Turns
             return squad.BoardedLocation?.Fleet?.TravelPhase != FleetTravelPhase.InWarp;
         }
 
+        // The Scout HQ (SquadTypes.HQ | SquadTypes.Scout) carries the Scout flag but is a command
+        // element, not a training squad: TrainingUnitScreenController.IsTrainingSquad excludes it, so
+        // the player can neither see it on the training screen nor set its TrainingFocus. Matching that
+        // exclusion here keeps the two from disagreeing - previously the Scout HQ was silently drilled
+        // as scouts every week against an unset focus (which TrainScouts expands to all four areas),
+        // and its scout sergeants developed against focus profiles the player never chose. Excluded
+        // here, it falls into the garrison work-experience path with every other HQ squad.
         internal static bool IsScoutSquad(Squad squad)
         {
-            return (squad.SquadTemplate.SquadType & SquadTypes.Scout) == SquadTypes.Scout;
+            SquadTypes type = squad.SquadTemplate.SquadType;
+            return (type & SquadTypes.Scout) == SquadTypes.Scout
+                && (type & SquadTypes.HQ) == 0;
         }
 
         private ISoldierTrainingService CreateTrainingService()

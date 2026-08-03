@@ -111,7 +111,7 @@ public class EndTurnPreflightTests
         Assert.Contains("Odovocar Squad", item.Title);
         Assert.Contains("7 brothers", item.Detail);
         Assert.Contains("Test Sergeant", item.Detail);
-        Assert.Contains("half rate", item.Detail, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("three-quarter rate", item.Detail, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
@@ -125,7 +125,7 @@ public class EndTurnPreflightTests
         EndTurnAttentionItem item = Assert.Single(report.Items);
         Assert.Contains("1 brother ", item.Detail);
         Assert.Contains("mission checks", item.Detail, StringComparison.OrdinalIgnoreCase);
-        Assert.DoesNotContain("half rate", item.Detail, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("three-quarter rate", item.Detail, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
