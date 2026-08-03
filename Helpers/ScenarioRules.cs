@@ -26,18 +26,29 @@ namespace OnlyWar.Helpers
         public const int MinTyranidRegions = 2;
         public const int MaxTyranidRegions = 3;
 
-        // Starting strength per stamped Tyranid region, expressed as a fraction of the promised
-        // world's *average Imperial region* (garrison and population), measured before the stamp
-        // (§8). This is the load-bearing balance number.
+        // Total starting Tyranid strength on the promised world, as a multiple of the planet's
+        // WHOLE Imperial garrison measured before the stamp (§8), split evenly across the stamped
+        // regions. This is the load-bearing balance number.
         //
         // It is relative rather than absolute because the promised world is drawn from a wide
         // population band ([5M, 500M]); a fixed headcount that is a tense garrison on a 5M world is
         // a rounding error against a 500M world's multi-million-strong PDF (an early playtest of the
         // old absolute 2,000-garrison constant found the Tyranids ~1000x too weak to register on
         // the larger worlds — trivial to clear and unable to press outward). Scaling to the world's
-        // own PDF keeps the fight in the same ballpark across the whole band. < 1 so a single
-        // stamped region is weaker than a full Imperial region, keeping the objective winnable.
-        public const float TyranidStrengthFraction = 0.33f;
+        // own PDF keeps the fight in the same ballpark across the whole band.
+        //
+        // The basis is GARRISON, not civilian population. It was population until 2026-08-02, which
+        // silently made this ~33x larger than intended: a Tyranid faction is PopulationIsMilitary,
+        // so its Population *is* its MilitaryStrength, and pricing that off Imperial civilians
+        // compared the swarm's army against a headcount roughly 33x the PDF it actually faces. The
+        // stamped swarm came out ~11x stronger than a full Imperial region rather than weaker, and
+        // being the base of an exponential (Consumption growth compounds weekly) that error was
+        // most of how a seed reached 87M swarm population against a 36K-BV PDF.
+        // Tuned against seed 1 on 2026-08-02. Note this knob is weaker than it looks: the swarm
+        // feeds unopposed for PostLandingTurns weeks before the player arrives, which multiplied
+        // the stamp by ~6.8x on that seed, so halving the seed buys well under a week of grace.
+        // The consumption yield curve and the post-landing window are the stronger levers.
+        public const float TyranidGarrisonStrengthMultiple = 1.0f;
 
         // Fraction of a stamped region's original Imperial civilian population left behind as a
         // displaced remnant, so the region reads as "overrun" rather than empty. The remnant's

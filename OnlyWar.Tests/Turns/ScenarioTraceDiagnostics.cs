@@ -115,12 +115,26 @@ public class ScenarioTraceDiagnostics
         csv.AppendLine("seed,turn,state,postLandingWeeks,tyrRegions,tyrPop,tyrGarrison,tyrMilStr,"
             + "cultRegions,cultPop,impPop,impGarrison,blightPct,planetPop,battles,strategicBattles");
 
-        foreach (int seed in Seeds)
+        // SCENARIO_TRACE_SEEDS narrows the sweep, e.g. SCENARIO_TRACE_SEEDS=1 for a single-seed
+        // run while iterating on battle behaviour. Unset means the full seed list.
+        foreach (int seed in SelectedSeeds())
         {
             RunOneSeed(seed, csv);
         }
 
         File.WriteAllText(Path.Combine(OutDir, "summary.csv"), csv.ToString());
+    }
+
+    private static IEnumerable<int> SelectedSeeds()
+    {
+        string requested = Environment.GetEnvironmentVariable("SCENARIO_TRACE_SEEDS");
+        if (string.IsNullOrWhiteSpace(requested)) return Seeds;
+        return requested
+            .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Select(entry => int.TryParse(entry, out int seed) ? seed : (int?)null)
+            .Where(seed => seed.HasValue)
+            .Select(seed => seed.Value)
+            .ToList();
     }
 
     private void RunOneSeed(int seed, StringBuilder csv)

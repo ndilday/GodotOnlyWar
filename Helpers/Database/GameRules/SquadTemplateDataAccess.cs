@@ -650,6 +650,9 @@ namespace OnlyWar.Helpers.Database.GameRules
                     int battleValue = reader.FieldCount > 9 && reader[9].GetType() != typeof(DBNull)
                         ? reader.GetInt32(9)
                         : 0;
+                    float? meleeFraction = reader.FieldCount > 10 && reader[10].GetType() != typeof(DBNull)
+                        ? Convert.ToSingle(reader[10])
+                        : null;
                     List<ValueTuple<BaseSkill, float>> trainingList = null;
                     if (soldierTemplateTrainingMap.ContainsKey(id))
                     {
@@ -662,9 +665,9 @@ namespace OnlyWar.Helpers.Database.GameRules
                             : [];
                     SoldierTemplate soldierTemplate =
                         new SoldierTemplate(id, species, name, (byte)rank, (byte)subrank,
-                                            isSquadLeader, (byte)specialistType, trainingList,
-                                            workExperienceTrainingProfile, battleValue,
-                                            promotionRequirements);
+                                             isSquadLeader, (byte)specialistType, trainingList,
+                                             workExperienceTrainingProfile, battleValue,
+                                             promotionRequirements, meleeFraction);
 
                     if (!soldierTemplatesByFactionId.ContainsKey(factionId))
                     {

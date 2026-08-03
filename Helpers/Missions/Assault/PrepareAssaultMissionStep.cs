@@ -1,5 +1,6 @@
 using OnlyWar.Builders;
 using OnlyWar.Helpers.Battles;
+using OnlyWar.Helpers.Extensions;
 using OnlyWar.Helpers.Fortifications;
 using OnlyWar.Helpers.Turns;
 using OnlyWar.Models;
@@ -206,11 +207,23 @@ namespace OnlyWar.Helpers.Missions.Assault
             // MilitaryStrength, so this brings the assault path in line with its own siblings rather
             // than inventing a new defence.
             //
-            // The reserve and the region's landed patrol squads (added above) are disjoint by
-            // construction: patrol screens are drawn from SPARE troops, i.e. what is left after the
-            // reserve, so `reserve + patrolBattleValue <= GetDeployedStrength()` always holds and the two
-            // contributions cannot over-commit the pool. That is why nothing needs debiting at
-            // generation time.
+            // The reserve read here is the ASSIGNMENT the region's controller made during planning
+            // (RegionFaction.AssignedDefensiveBattleValue), not the requirement it computed. This step
+            // used to call CalculateRequiredDefensiveBattleValue itself, which returns an unbounded
+            // want derived from adjacent enemy strength and says nothing about whether the troops to
+            // meet it exist. Materialising soldiers to fill that want meant a region holding ~200 BV of
+            // organized strength fielded a 1499 BV defence - roughly three times its entire army,
+            // generated out of nothing, and bounded only by MaxTacticalDefenderBattleValue and the
+            // actor cap rather than by anything the defender actually had.
+            //
+            // The reserve and the region's landed patrol squads (added above) are intended to be
+            // disjoint: patrol screens are drawn from SPARE troops, i.e. what is left after the
+            // reserve. Note that this is an intent, not an enforced invariant - patrols and recon debit
+            // only the planner's transient SpareTroops and never OrganizedMilitaryStrength, so a
+            // screening squad is counted both in the pool the reserve is clamped against and in
+            // LandedSquads. Clamping the reserve to organized strength bounds the overlap to at most
+            // the screen's own battle value instead of leaving it unbounded, but it does not eliminate
+            // it. Nothing is debited at generation time.
             //
             // The reserve is drawn down by whatever this mission has already destroyed. Without that, a
             // multi-day assault would raise a fresh full-strength defence every morning - the region's
@@ -221,7 +234,7 @@ namespace OnlyWar.Helpers.Missions.Assault
             // single-faction case.
             Dictionary<RegionFaction, long> reserves = alliedDefenders.ToDictionary(
                 rf => rf,
-                FactionStrategyController.CalculateRequiredDefensiveBattleValue);
+                ResolveDefensiveReserve);
             long totalReserve = reserves.Values.Sum();
             long remainingToDeduct = Math.Max(0L, defenderBattleValueAlreadyDestroyed);
             foreach (RegionFaction alliedDefender in alliedDefenders)
@@ -266,6 +279,33 @@ namespace OnlyWar.Helpers.Missions.Assault
             }
 
             return defendingForce;
+        }
+
+        /// <summary>
+        /// The battle value a defender actually holds this ground with: the assignment its controller
+        /// committed during planning, falling back to deriving that same clamp when no planning pass
+        /// has ever run for this region.
+        /// </summary>
+        /// <remarks>
+        /// The fallback is not cosmetic. A region faction has no assignment when it was created after
+        /// the last planning pass, when its faction plans only on turns it is threatened, or when the
+        /// save predates the field. Treating "never planned" as an assignment of zero would field no
+        /// abstract defence at all and hand the attacker the ground for free - the same class of bug
+        /// that reading raw Garrison used to cause for revealed cults and hordes. So an unplanned
+        /// region derives the clamp here instead: the requirement it would have computed, bounded by
+        /// the organized troops it actually has. That is the same expression the planner writes, which
+        /// is why an unplanned region and a freshly planned one defend identically.
+        /// </remarks>
+        private static long ResolveDefensiveReserve(RegionFaction defender)
+        {
+            if (defender.AssignedDefensiveBattleValue.HasValue)
+            {
+                return Math.Max(0L, defender.AssignedDefensiveBattleValue.Value);
+            }
+
+            return Math.Min(
+                defender.GetDeployedStrength(),
+                FactionStrategyController.CalculateRequiredDefensiveBattleValue(defender));
         }
 
         /// <summary>

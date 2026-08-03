@@ -104,6 +104,27 @@ namespace OnlyWar.Models.Planets
 
         public long DisorganizedMilitaryStrength =>
             Math.Max(0L, MilitaryStrength - OrganizedMilitaryStrength);
+
+        // The battle value this faction's controller actually COMMITTED to holding this region in its
+        // last planning pass — the assignment, as opposed to the demand.
+        // FactionStrategyController.CalculateRequiredDefensiveBattleValue answers "how much defence
+        // does this ground want, given what is massing next door", and is deliberately unbounded: it
+        // is a want, and the planner needs the raw want to compute a shortfall it can reinforce
+        // against. What it is NOT is a promise that the troops exist. The planner clamps it to
+        // GetDeployedStrength() and that clamped figure is the real garrison, but it used to live only
+        // in a transient RegionForceState that was discarded when planning returned. The tactical
+        // assault path then re-derived the defence days later from the raw WANT
+        // (PrepareAssaultMissionStep.AssembleDefendingForce) and generated soldiers to fill it, so a
+        // region holding ~200 BV of organized strength fielded a 1499 BV defence conjured out of
+        // nothing, and a whole planet's "required" defence outran its actual army by ~25x. Persisting
+        // the assignment is what makes the defence that materialises be the defence that was assigned.
+        //
+        // Null means "never planned" (a fresh region, or a save written before this field existed).
+        // That is deliberately distinguishable from a planned assignment of zero: readers fall back to
+        // deriving the clamp themselves rather than treating an unplanned region as undefended, which
+        // would hand an attacker free ground.
+        public long? AssignedDefensiveBattleValue { get; set; }
+
         public bool IsPublic { get; set; }
         // The first offensive after a hidden presence reveals is planned as an Ambush. Persisting
         // the marker prevents a save between revelation and planning from losing that advantage.

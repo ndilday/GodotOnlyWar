@@ -293,13 +293,29 @@ public class FactionStrategyControllerTests
     public void GenerateFactionOrders_LargeUnknownTargetReconUsesCappedTacticalForce()
     {
         RNG.Reset(1234);
+        // Deliberately a private copy of TestModelFactory's squad template rather than the shared
+        // static itself. Faction's constructor re-owns every SquadTemplate handed to it
+        // (`template.Faction = this`), so passing the shared instance permanently rebinds it to
+        // this non-player Swarm for the remainder of the test process. Every squad
+        // TestModelFactory.CreateSquad builds afterwards then reports IsPlayerFaction == false,
+        // which silently defeats OrderAssignment.IsPlayerOrder and stops it reusing a player's
+        // existing order — failing whichever tests happened to be scheduled after this one.
+        SquadTemplate swarmSquad = new(
+            TestModelFactory.SquadTemplate.Id,
+            TestModelFactory.SquadTemplate.Name,
+            TestModelFactory.DefaultWeapons,
+            [],
+            TestModelFactory.TestArmor,
+            [new SquadTemplateElement(TestModelFactory.SergeantTemplate, 0, 1),
+             new SquadTemplateElement(TestModelFactory.MarineTemplate, 0, 4)],
+            SquadTypes.None);
         Faction attacker = BuildFaction(
             20,
             "Swarm",
             isPlayer: false,
             isDefault: false,
             GrowthType.Consumption,
-            new Dictionary<int, SquadTemplate> { [TestModelFactory.SquadTemplate.Id] = TestModelFactory.SquadTemplate });
+            new Dictionary<int, SquadTemplate> { [swarmSquad.Id] = swarmSquad });
         Faction defender = CreateDefaultFaction();
         Planet planet = CreatePlanet();
         Region staging = planet.Regions[0];

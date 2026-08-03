@@ -100,6 +100,12 @@ public class FactionStrategyController
         // rather than "garrison" because it is faction-agnostic - see
         // CalculateRequiredDefensiveBattleValue.
         public long RequiredDefensiveBattleValue { get; }
+        // What this region can actually field against that requirement: the reserve clamped to the
+        // organized troops that exist. RequiredDefensiveBattleValue is a want and may exceed the whole
+        // army; this is the commitment, and it is the figure mirrored onto
+        // RegionFaction.AssignedDefensiveBattleValue so the tactical assault path materialises the
+        // defence that was assigned instead of re-deriving the unbounded want.
+        public long AssignedDefensiveBattleValue { get; }
         public long SpareTroops { get; set; }
         // How far this region's organized troops fall short of the reserve it wants (0 when the
         // minimum is met). Tracked alongside SpareTroops so reinforcement can whittle the deficit down
@@ -109,11 +115,13 @@ public class FactionStrategyController
         public RegionForceState(
             RegionFaction factionInfo,
             long requiredDefensiveBattleValue,
+            long assignedDefensiveBattleValue,
             long spareTroops,
             long defensiveShortfall)
         {
             RegionFaction = factionInfo;
             RequiredDefensiveBattleValue = requiredDefensiveBattleValue;
+            AssignedDefensiveBattleValue = assignedDefensiveBattleValue;
             SpareTroops = spareTroops;
             DefensiveShortfall = defensiveShortfall;
         }
@@ -167,8 +175,17 @@ public class FactionStrategyController
             long organizedTroops = regionFaction.GetDeployedStrength();
             long spareTroops = Math.Max(0, organizedTroops - requiredDefensiveBattleValue);
             long defensiveShortfall = Math.Max(0, requiredDefensiveBattleValue - organizedTroops);
+            // The requirement is a want and is deliberately unbounded (it is derived from the enemy
+            // strength next door, not from this region's own army), so what the region actually
+            // commits is the want clamped to the troops that exist. Persisting it on the region
+            // faction is the point of the clamp: the tactical assault path materialises the defence
+            // days after this planning pass, and reading the raw want there let a region field several
+            // times its entire organized strength in soldiers generated from nothing.
+            long assignedDefensiveBattleValue = Math.Min(organizedTroops, requiredDefensiveBattleValue);
+            regionFaction.AssignedDefensiveBattleValue = assignedDefensiveBattleValue;
             regionalForceStates.Add(new RegionForceState(
-                regionFaction, requiredDefensiveBattleValue, spareTroops, defensiveShortfall));
+                regionFaction, requiredDefensiveBattleValue, assignedDefensiveBattleValue,
+                spareTroops, defensiveShortfall));
         }
 
         long organizedTotal = factionRegionsOnPlanet

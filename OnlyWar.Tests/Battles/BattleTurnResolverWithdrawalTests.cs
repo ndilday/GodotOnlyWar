@@ -226,6 +226,63 @@ public class BattleTurnResolverWithdrawalTests
         Assert.Null(resolver.BattleHistory.Outcome);
     }
 
+    [Fact]
+    public void ProcessNextTurn_UnpursuedBoundBeyondRelativeRetargetHorizonDisengages()
+    {
+        SoldierTemplate zeroValueHuman = new(
+            73_070,
+            TestModelFactory.HumanSpecies,
+            "Zero Value Runner",
+            1,
+            1,
+            false,
+            0,
+            Array.Empty<ValueTuple<BaseSkill, float>>(),
+            battleValue: 0);
+        BattleSquad firstRunner = CreateSquad("First Runner", 73_071, zeroValueHuman);
+        BattleSquad secondRunner = CreateSquad("Second Runner", 73_072, zeroValueHuman);
+        BattleSquad pursuer = CreateSquad(
+            "Single Pursuer",
+            73_073,
+            TestModelFactory.MarineTemplate,
+            isPlayerSquad: true);
+        foreach (BattleSquad runner in new[] { firstRunner, secondRunner })
+        {
+            ((Soldier)runner.Soldiers[0].Soldier).MoveSpeed = 6;
+        }
+        ((Soldier)pursuer.Soldiers[0].Soldier).MoveSpeed = 8;
+        pursuer.Soldiers[0].RangedWeapons.Clear();
+        pursuer.Soldiers[0].ClearReadiedRangedWeapons();
+
+        BattleGridManager grid = new();
+        Place(grid, firstRunner.Soldiers[0], true, 0, 0);
+        Place(grid, secondRunner.Soldiers[0], true, 0, 20);
+        Place(grid, pursuer.Soldiers[0], false, 40, 10);
+        BattleTurnResolver resolver = CreateResolver(
+            grid,
+            [firstRunner, secondRunner],
+            [pursuer],
+            Aggression.Normal,
+            Aggression.Aggressive);
+
+        // The valueless side elects to withdraw on turn one. On turn two the single pursuer can
+        // select only one squad as its quarry; the other is well beyond the two-turn retarget
+        // horizon at a relative closing speed of two.
+        resolver.ProcessNextTurn();
+        Assert.Null(resolver.BattleHistory.Outcome);
+        resolver.ProcessNextTurn();
+
+        IReadOnlyList<BattleEvent> events = resolver.BattleHistory.Turns.Last().Events;
+        BattleEvent escaped = Assert.Single(events, battleEvent =>
+            battleEvent.Type == BattleEventType.SquadDisengaged
+            && battleEvent.Description.Contains("timely enemy interception"));
+        Assert.True(escaped.PrimarySquadId == firstRunner.Id
+            || escaped.PrimarySquadId == secondRunner.Id);
+        Assert.Single(resolver.BattleHistory.Turns.Last().State.AttackerSquads.Values,
+            squad => squad.Status == BattleSquadStatus.Active);
+        Assert.Null(resolver.BattleHistory.Outcome);
+    }
+
     // Enormous nominal reach, no ability to hit or hurt anything at it: accuracy and damage are
     // floored and the round degrades with range, so both halves of CalculateOptimalDistance
     // (can I hit here, can I wound here) collapse to nothing.

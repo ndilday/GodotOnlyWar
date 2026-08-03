@@ -144,7 +144,8 @@ public class PatrolAndReconPlanningTests
     }
 
     private static FactionStrategyController.RegionForceState State(RegionFaction rf) =>
-        new(rf, requiredDefensiveBattleValue: 0, spareTroops: 10_000, defensiveShortfall: 0);
+        new(rf, requiredDefensiveBattleValue: 0, assignedDefensiveBattleValue: 0,
+            spareTroops: 10_000, defensiveShortfall: 0);
 
     private static RegionFaction AddRegionFaction(
         Planet planet, Region region, Faction faction, long population)

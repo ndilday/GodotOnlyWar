@@ -57,6 +57,24 @@ public class BattleValueCalculatorTests
         Assert.True(elite.BattleValue > baseline.BattleValue);
     }
 
+    [Fact]
+    public void MeleeFraction_PreservesCanonicalModeSplitBeforeCombinedValue()
+    {
+        BattleValueCalculator.Result melee = BattleValueCalculator.Calculate(
+            BaselineInput(TestModelFactory.DefaultWeapons.PrimaryMeleeWeapon));
+        RangedWeaponTemplate rifle = new(
+            98, "Mode Split Rifle", EquipLocation.TwoHand, TestSkills.Ranged,
+            accuracy: 8, armorMultiplier: 1, penetrationMultiplier: 2,
+            requiredStrength: 0, baseDamage: 12, maxDistance: 1_000, rof: 4,
+            ammo: 40, recoil: 1, bulk: 2, doesDamageDegradeWithRange: false,
+            reloadTime: 2);
+        BattleValueCalculator.Result ranged = BattleValueCalculator.Calculate(
+            BaselineInput(rangedWeapon: rifle));
+
+        Assert.InRange(melee.MeleeFraction, 0.99f, 1f);
+        Assert.InRange(ranged.MeleeFraction, 0f, 0.01f);
+    }
+
     private static RangedWeaponTemplate TestGrenadeLauncher { get; } = new(
         99, "Test Grenade Launcher", EquipLocation.TwoHand, TestSkills.Ranged,
         accuracy: 0, armorMultiplier: 1, penetrationMultiplier: 2,

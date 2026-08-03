@@ -19,20 +19,15 @@ namespace OnlyWar.Tests.Battles;
 public class BattlePursuitActionPlannerTests
 {
     [Fact]
-    public void Follow_JogsTowardNearestWithdrawerAndFiresOnlyWithinJogArc()
+    public void JogToward_MovesTowardQuarryAndMaterializesItsPlannedShot()
     {
         BattleSquad pursuer = CreateSquad("Pursuer", 72_001);
         BattleSquad withdrawing = CreateSquad("Withdrawer", 72_002);
-        BattleSquad closerNonTarget = CreateSquad("Non-target", 72_003);
         Fixture fixture = CreateFixture(
             (pursuer, true, 0, 0),
-            (withdrawing, false, 10, 0),
-            (closerNonTarget, false, -3, 0));
+            (withdrawing, false, 10, 0));
 
-        fixture.Planner.PreparePursuitActions(
-            pursuer,
-            PursuitPosture.Follow,
-            [withdrawing]);
+        PlanPursuit(fixture, pursuer, [withdrawing], EngagementOptionKind.JogToward);
 
         Assert.Equal(SquadMovementTier.Jog, pursuer.MovementTier);
         MoveAction move = Assert.IsType<MoveAction>(Assert.Single(fixture.MoveActions));
@@ -42,7 +37,7 @@ public class BattlePursuitActionPlannerTests
     }
 
     [Fact]
-    public void Follow_RunsToRegainRange_WhenNoWorthwhileShotExists()
+    public void PursuitChoosesRunToward_WhenJogHasNoWorthwhileShot()
     {
         // The withdrawer is far beyond the test rifle's 100-yd maximum range: a jog-and-fire
         // follow would just fall further behind, so the squad sprints to regain effective
@@ -53,11 +48,9 @@ public class BattlePursuitActionPlannerTests
             (pursuer, true, 0, 0),
             (withdrawing, false, 400, 0));
 
-        fixture.Planner.PreparePursuitActions(
-            pursuer,
-            PursuitPosture.Follow,
-            [withdrawing]);
+        SquadEngagementDecision decision = PlanPursuit(fixture, pursuer, [withdrawing]);
 
+        Assert.Equal(EngagementOptionKind.RunToward, decision.Chosen.Kind);
         Assert.Equal(SquadMovementTier.Run, pursuer.MovementTier);
         Assert.Empty(fixture.ShootActions);
         MoveAction move = Assert.IsType<MoveAction>(Assert.Single(fixture.MoveActions));
@@ -65,7 +58,7 @@ public class BattlePursuitActionPlannerTests
     }
 
     [Fact]
-    public void Standoff_HoldsPositionAndBringsTheGunsToBearWithoutMoving()
+    public void Hold_BringsTheGunsToBearWithoutMoving()
     {
         // The chase is unwinnable, so the squad plants itself and works the target with
         // stationary fire — no Bulk penalty, and the aim bonus is allowed to accumulate —
@@ -76,10 +69,7 @@ public class BattlePursuitActionPlannerTests
             (pursuer, true, 0, 0),
             (withdrawing, false, 10, 0));
 
-        fixture.Planner.PreparePursuitActions(
-            pursuer,
-            PursuitPosture.Standoff,
-            [withdrawing]);
+        PlanPursuit(fixture, pursuer, [withdrawing], EngagementOptionKind.Hold);
 
         Assert.Equal(SquadMovementTier.Stationary, pursuer.MovementTier);
         Assert.Empty(fixture.MoveActions);
@@ -90,7 +80,7 @@ public class BattlePursuitActionPlannerTests
     }
 
     [Fact]
-    public void Press_RunsTowardNearestWithdrawerWithoutShooting()
+    public void RunToward_MovesTowardPrimaryWithdrawerWithoutShooting()
     {
         BattleSquad pursuer = CreateSquad("Pursuer", 72_011);
         BattleSquad farther = CreateSquad("Far", 72_012);
@@ -100,10 +90,8 @@ public class BattlePursuitActionPlannerTests
             (farther, false, 20, 0),
             (nearerRearGuard, false, 8, 0));
 
-        fixture.Planner.PreparePursuitActions(
-            pursuer,
-            PursuitPosture.Press,
-            [farther, nearerRearGuard]);
+        PlanPursuit(fixture, pursuer, [farther, nearerRearGuard],
+            EngagementOptionKind.RunToward);
 
         Assert.Equal(SquadMovementTier.Run, pursuer.MovementTier);
         Assert.Empty(fixture.ShootActions);
@@ -112,7 +100,7 @@ public class BattlePursuitActionPlannerTests
     }
 
     [Fact]
-    public void Press_AttacksTheWithdrawerItHasCaughtInsteadOfRunningOnTheSpot()
+    public void CloseToContact_AttacksTheWithdrawerItHasCaught()
     {
         // Press exists to convert contact into damage. Adjacent to the quarry it swings; without
         // this the posture closed the distance and then jogged in place beside the enemy forever,
@@ -123,20 +111,21 @@ public class BattlePursuitActionPlannerTests
             (pursuer, true, 0, 0),
             (withdrawing, false, 1, 0));
 
-        fixture.Planner.PreparePursuitActions(
-            pursuer,
-            PursuitPosture.Press,
-            [withdrawing]);
+        PlanPursuit(fixture, pursuer, [withdrawing], EngagementOptionKind.CloseToContact);
 
         // Which attack it makes is the engaged-soldier decision's business — a rifleman standing
         // on his quarry may well shoot point blank rather than club him. What matters is that
         // reaching the enemy produces an attack at all instead of another stride.
+        SquadChargeIntentAction charge = Assert.IsType<SquadChargeIntentAction>(
+            Assert.Single(fixture.MoveActions));
+        charge.Execute(null);
+
         Assert.NotEmpty(fixture.MeleeActions.Concat(fixture.ShootActions));
-        Assert.Empty(fixture.MoveActions);
+        Assert.Empty(charge.ResolvedMovementActions);
     }
 
     [Fact]
-    public void Press_ChargesIntoContactWhenTheWithdrawerIsWithinOneMove()
+    public void CloseToContact_ChargesWhenTheWithdrawerIsWithinOneMove()
     {
         // Just out of contact but inside a Run: the pursuer closes and gets stuck in the same
         // turn rather than stopping politely one pace short.
@@ -146,15 +135,58 @@ public class BattlePursuitActionPlannerTests
             (pursuer, true, 0, 0),
             (withdrawing, false, 4, 0));
 
-        fixture.Planner.PreparePursuitActions(
-            pursuer,
-            PursuitPosture.Press,
-            [withdrawing]);
+        PlanPursuit(fixture, pursuer, [withdrawing], EngagementOptionKind.CloseToContact);
 
         // It closes and gets stuck in on the same turn: a move plus an attack, not a bare stride
         // that stops one pace short and repeats forever.
-        Assert.NotEmpty(fixture.MoveActions);
+        SquadChargeIntentAction charge = Assert.IsType<SquadChargeIntentAction>(
+            Assert.Single(fixture.MoveActions));
+        charge.Execute(null);
+
+        Assert.NotEmpty(charge.ResolvedMovementActions);
         Assert.NotEmpty(fixture.MeleeActions.Concat(fixture.ShootActions));
+    }
+
+    [Fact]
+    public void MovingQuarryInsideChargeRange_IsPursuedAfterItsMoveWithoutTeleporting()
+    {
+        // Movement resolves simultaneously. Charging the quarry's current square would use only
+        // enough movement to stop beside that stale position; the Routing squad then runs away and
+        // the same false charge repeats forever. A faster pursuer runs through the old position
+        // until it begins a turn in real contact.
+        BattleSquad pursuer = CreateSquad("Pursuer", 72_063, Loadout.Assault);
+        BattleSquad withdrawing = CreateSquad("Withdrawer", 72_064);
+        ((Soldier)pursuer.Soldiers[0].Soldier).MoveSpeed = 8;
+        ((Soldier)withdrawing.Soldiers[0].Soldier).MoveSpeed = 4;
+        Fixture fixture = CreateFixture(
+            (pursuer, true, 0, 0),
+            (withdrawing, false, 6, 0));
+
+        SquadEngagementDecision decision = PlanPursuit(
+            fixture,
+            pursuer,
+            [withdrawing],
+            targetRoles: new Dictionary<int, EngagementSquadRole>
+            {
+                [withdrawing.Id] = EngagementSquadRole.Routing
+            });
+
+        Assert.Equal(EngagementOptionKind.CloseToContact, decision.Chosen.Kind);
+        SquadChargeIntentAction charge = Assert.IsType<SquadChargeIntentAction>(
+            Assert.Single(fixture.MoveActions));
+
+        fixture.Grid.MoveSoldier(withdrawing.Soldiers[0], (10, 0), 0);
+        withdrawing.Soldiers[0].TopLeft = (10, 0);
+        charge.Execute(null);
+
+        MoveAction pursuitMove = Assert.IsType<MoveAction>(
+            Assert.Single(charge.ResolvedMovementActions));
+        float remaining = fixture.Grid.GetDistanceBetweenSoldiers(
+            pursuer.Soldiers[0].Soldier.Id,
+            withdrawing.Soldiers[0].Soldier.Id);
+        Assert.InRange(remaining, 1.0001f, 5.9999f);
+        Assert.True(GridDistance((0, 0), pursuitMove.Destination) <= 8.0001f);
+        Assert.Empty(fixture.MeleeActions);
     }
 
     [Fact]
@@ -166,11 +198,13 @@ public class BattlePursuitActionPlannerTests
             (pursuer, true, 0, 0),
             (withdrawing, false, 8, 0));
 
-        fixture.Planner.PreparePursuitActions(
+        SquadEngagementDecision decision = PlanPursuit(
+            fixture,
             pursuer,
-            PursuitPosture.BreakOff,
-            [withdrawing]);
+            [withdrawing],
+            role: EngagementSquadRole.BreakOff);
 
+        Assert.Equal(EngagementOptionKind.Hold, decision.Chosen.Kind);
         Assert.Equal(SquadMovementTier.Stationary, pursuer.MovementTier);
         Assert.Empty(fixture.MoveActions);
         Assert.Empty(fixture.ShootActions);
@@ -178,7 +212,7 @@ public class BattlePursuitActionPlannerTests
     }
 
     [Fact]
-    public void FireSupportSquad_ChoosesStandoff_WhileAssaultSquadChoosesPress()
+    public void FireSupportChoosesHold_WhileAssaultChoosesFastAdvance()
     {
         // The posture a pursuer should take is a property of what it is carrying, not of the force
         // it belongs to. A sniper squad already inside its effective range is at its best standing
@@ -192,47 +226,56 @@ public class BattlePursuitActionPlannerTests
             (assault, true, 0, 20),
             (withdrawing, false, 60, 0));
 
-        // Quarry runs at its full squad move, which outpaces either pursuer's jog.
-        float quarrySpeed = withdrawing.GetSquadMove();
+        IReadOnlyCollection<BattleSquad> friendly = [snipers, assault];
+        SquadEngagementDecision sniperDecision = PlanPursuit(
+            fixture, snipers, [withdrawing], friendlySquads: friendly,
+            materialize: false);
+        SquadEngagementDecision assaultDecision = PlanPursuit(
+            fixture, assault, [withdrawing], friendlySquads: friendly,
+            materialize: false);
 
-        Assert.Equal(
-            PursuitPosture.Standoff,
-            fixture.Planner.SelectPursuitPosture(snipers, quarrySpeed));
-        Assert.Equal(
-            PursuitPosture.Press,
-            fixture.Planner.SelectPursuitPosture(assault, quarrySpeed));
+        Assert.Equal(EngagementOptionKind.Hold, sniperDecision.Chosen.Kind);
+        Assert.True(assaultDecision.Chosen.Kind is
+            EngagementOptionKind.RunToward or EngagementOptionKind.CloseToContact);
     }
 
     [Fact]
-    public void Pursuers_MoveOnTheCoveringSquadRatherThanTheNearerFleeingOne()
+    public void RunToward_UsesCurrentRoleConstraintToPreferCoverOverNearerBoundSquad()
     {
-        // Bound squads Run, and a running squad cannot shoot — so every round the withdrawal fires
-        // comes from the covering squad. A pursuit that closes on the nearest body instead spends
-        // itself on the one enemy that cannot shoot back. The bound squad is nearer (10 along x)
-        // than the cover squad (30 along y), so heading up-field is only explicable by role.
+        // Bound squads cannot shoot while the Cover squad can. The pursuit frame therefore selects
+        // the Cover squad as its primary even though the Bound squad is nearer (10 along x versus
+        // 30 along y), and the unified RunToward candidate follows that primary.
         BattleSquad pursuer = CreateSquad("Pursuer", 72_081, Loadout.Rifle);
         BattleSquad bound = CreateSquad("Bound", 72_082, Loadout.Rifle);
         BattleSquad cover = CreateSquad("Cover", 72_083, Loadout.Rifle);
-        bound.WithdrawalRole = WithdrawalRole.Bound;
-        cover.WithdrawalRole = WithdrawalRole.Cover;
+        // Deliberately stale live roles disagree with this turn's paired constraints.
+        bound.WithdrawalRole = WithdrawalRole.Cover;
+        cover.WithdrawalRole = WithdrawalRole.Bound;
         Fixture fixture = CreateFixture(
             (pursuer, true, 0, 0),
             (bound, false, 10, 0),
             (cover, false, 0, 30));
 
-        fixture.Planner.PreparePursuitActions(
+        SquadEngagementDecision decision = PlanPursuit(
+            fixture,
             pursuer,
-            PursuitPosture.Press,
-            [bound, cover]);
+            [bound, cover],
+            EngagementOptionKind.RunToward,
+            targetRoles: new Dictionary<int, EngagementSquadRole>
+            {
+                [bound.Id] = EngagementSquadRole.Bound,
+                [cover.Id] = EngagementSquadRole.Cover
+            });
 
+        Assert.Equal(cover.Id, decision.Frame.PrimaryCounterpartSquadId);
         MoveAction move = Assert.IsType<MoveAction>(Assert.Single(fixture.MoveActions));
         // Assert the bearing, not the exact square: destination selection sidesteps to avoid
-        // reserved ground, so the pursuer may drift a pace off the true line to the cover squad.
+        // reserved ground, so the pursuer may drift a pace off the true line to the primary.
         Match destination = Regex.Match(move.Description(), @"to \((-?\d+), (-?\d+)\)");
         Assert.True(destination.Success, move.Description());
         int x = int.Parse(destination.Groups[1].Value);
         int y = int.Parse(destination.Groups[2].Value);
-        Assert.True(y > x, $"expected movement toward the covering squad (+y), got ({x}, {y})");
+        Assert.True(y > x, $"expected movement toward the covering primary (+y), got ({x}, {y})");
     }
 
     [Fact]
@@ -251,17 +294,14 @@ public class BattlePursuitActionPlannerTests
             (bound, false, 10, 0),
             (cover, false, 14, 0));
 
-        fixture.Planner.PreparePursuitActions(
-            pursuer,
-            PursuitPosture.Standoff,
-            [bound, cover]);
+        PlanPursuit(fixture, pursuer, [bound, cover], EngagementOptionKind.Hold);
 
         ShootAction shot = Assert.IsType<ShootAction>(Assert.Single(fixture.ShootActions));
         Assert.Equal(cover.Soldiers[0].Soldier.Id, shot.TargetId);
     }
 
     [Fact]
-    public void DistantStandoffSquad_FinishesItsAimAndFires_RatherThanAimingForever()
+    public void DistantHoldingSquad_FinishesItsAimAndFires_RatherThanAimingForever()
     {
         // Regression for "the scouts sit, aim, and never fire". A Standoff fire-support squad is
         // stationary and far away by design, so its aim has to survive from turn to turn — an aim
@@ -284,7 +324,7 @@ public class BattlePursuitActionPlannerTests
             sniper.EquippedRangedWeapons[0],
             3);
 
-        fixture.Planner.PreparePursuitActions(snipers, PursuitPosture.Standoff, [withdrawing]);
+        PlanPursuit(fixture, snipers, [withdrawing], EngagementOptionKind.Hold);
 
         ShootAction shot = Assert.IsType<ShootAction>(Assert.Single(fixture.ShootActions));
         Assert.Equal(withdrawing.Soldiers[0].Soldier.Id, shot.TargetId);
@@ -305,13 +345,68 @@ public class BattlePursuitActionPlannerTests
             (nearer, false, 10, 0),
             (farther, false, 14, 0));
 
-        fixture.Planner.PreparePursuitActions(
-            pursuer,
-            PursuitPosture.Standoff,
-            [nearer, farther]);
+        PlanPursuit(fixture, pursuer, [nearer, farther], EngagementOptionKind.Hold);
 
         ShootAction shot = Assert.IsType<ShootAction>(Assert.Single(fixture.ShootActions));
         Assert.Equal(nearer.Soldiers[0].Soldier.Id, shot.TargetId);
+    }
+
+    private static SquadEngagementDecision PlanPursuit(
+        Fixture fixture,
+        BattleSquad pursuer,
+        IReadOnlyCollection<BattleSquad> withdrawing,
+        EngagementOptionKind? selectedKind = null,
+        EngagementSquadRole role = EngagementSquadRole.Pursuit,
+        IReadOnlyCollection<BattleSquad> friendlySquads = null,
+        bool materialize = true,
+        IReadOnlyDictionary<int, EngagementSquadRole> targetRoles = null)
+    {
+        IReadOnlyCollection<BattleSquad> friendly = friendlySquads ?? [pursuer];
+        float quarryRunSpeed = withdrawing.Count == 0
+            ? 0
+            : withdrawing.Min(squad => squad.GetSquadMove());
+        Dictionary<int, EngagementRoleConstraint> constraints = new()
+        {
+            [pursuer.Id] = new EngagementRoleConstraint(
+                role,
+                QuarryRunSpeed: quarryRunSpeed,
+                RoleTargets: withdrawing)
+        };
+        foreach (BattleSquad target in withdrawing)
+        {
+            EngagementSquadRole targetRole = targetRoles?.GetValueOrDefault(target.Id)
+                ?? (target.WithdrawalRole switch
+                {
+                    WithdrawalRole.Cover => EngagementSquadRole.Cover,
+                    WithdrawalRole.RearGuard => EngagementSquadRole.RearGuard,
+                    WithdrawalRole.Bound => EngagementSquadRole.Bound,
+                    WithdrawalRole.Routing => EngagementSquadRole.Routing,
+                    _ => EngagementSquadRole.Normal
+                });
+            constraints[target.Id] = new EngagementRoleConstraint(targetRole);
+        }
+        BattleEngagementFrameBuilder.PairedFrame paired =
+            BattleEngagementFrameBuilder.Build(friendly, withdrawing, constraints);
+        SquadEngagementDecision scored = fixture.Planner.ChooseEngagementOption(
+            pursuer,
+            paired.Frames[pursuer.Id],
+            paired.Profiles,
+            paired.Frames,
+            friendly,
+            withdrawing,
+            withdrawing);
+        SquadEngagementDecision selected = selectedKind.HasValue
+            ? scored with
+            {
+                Chosen = scored.Candidates.Single(candidate => candidate.Kind == selectedKind.Value)
+            }
+            : scored;
+        if (materialize)
+        {
+            fixture.Planner.DeclareEngagementDecision(selected);
+            fixture.Planner.BuildEngagementActions(selected);
+        }
+        return selected;
     }
 
     private enum Loadout { Rifle, FireSupport, Assault }
@@ -397,7 +492,7 @@ public class BattlePursuitActionPlannerTests
             null,
             CreateMeleeTemplateMap(soldiers.Values),
             new SeededRNG(72_000));
-        return new Fixture(planner, shootActions, moveActions, meleeActions);
+        return new Fixture(grid, planner, shootActions, moveActions, meleeActions);
     }
 
     private static IReadOnlyDictionary<int, MeleeWeaponTemplate> CreateMeleeTemplateMap(
@@ -412,7 +507,15 @@ public class BattlePursuitActionPlannerTests
             .ToDictionary(group => group.Key, group => group.First());
     }
 
+    private static float GridDistance((int X, int Y) first, (int X, int Y) second)
+    {
+        int dx = first.X - second.X;
+        int dy = first.Y - second.Y;
+        return (float)System.Math.Sqrt(dx * dx + dy * dy);
+    }
+
     private sealed record Fixture(
+        BattleGridManager Grid,
         BattleSquadPlanner Planner,
         List<IAction> ShootActions,
         List<IAction> MoveActions,

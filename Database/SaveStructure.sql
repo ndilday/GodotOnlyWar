@@ -72,7 +72,11 @@ CREATE TABLE Region (Id INTEGER PRIMARY KEY UNIQUE NOT NULL, PlanetId INTEGER NO
 -- column-count guard in PlanetDataAccess.PopulateRegionFactions (Design/OpeningScenario.md §2.2, §7).
 -- ListeningPost is a sensor structure (formerly "Detection"); it now feeds PlanetFactionRegionIntel
 -- rather than providing an awareness bonus directly. Column is positional in the loader.
-CREATE TABLE RegionFaction (RegionId INTEGER REFERENCES Region (Id) NOT NULL, FactionId INTEGER NOT NULL, IsPublic BOOLEAN NOT NULL, Population BIGINT NOT NULL, Garrison INTEGER NOT NULL, Organization INTEGER NOT NULL, Entrenchment REAL NOT NULL, ListeningPost REAL NOT NULL, AntiAir REAL NOT NULL, GrowthMultiplier REAL NOT NULL DEFAULT 1.0, Contentment REAL NOT NULL DEFAULT 70.0, ArmedCivilians INTEGER NOT NULL DEFAULT 0, HasEmergenceAdvantage BOOLEAN NOT NULL DEFAULT 0, OrganizedMilitaryStrength BIGINT);
+-- AssignedDefensiveBattleValue is nullable on purpose: NULL means the region has never been through a
+-- planning pass (including every row in a save written before the column existed), which the loader
+-- keeps distinct from an assignment of zero so the assault path derives the clamp instead of fielding
+-- no defence. Read by name via GetOrdinalOrDefault, so older saves load unchanged.
+CREATE TABLE RegionFaction (RegionId INTEGER REFERENCES Region (Id) NOT NULL, FactionId INTEGER NOT NULL, IsPublic BOOLEAN NOT NULL, Population BIGINT NOT NULL, Garrison INTEGER NOT NULL, Organization INTEGER NOT NULL, Entrenchment REAL NOT NULL, ListeningPost REAL NOT NULL, AntiAir REAL NOT NULL, GrowthMultiplier REAL NOT NULL DEFAULT 1.0, Contentment REAL NOT NULL DEFAULT 70.0, ArmedCivilians INTEGER NOT NULL DEFAULT 0, HasEmergenceAdvantage BOOLEAN NOT NULL DEFAULT 0, OrganizedMilitaryStrength BIGINT, AssignedDefensiveBattleValue BIGINT);
 
 -- Table: PlanetFaction
 CREATE TABLE PlanetFaction (PlanetId INTEGER REFERENCES Planet (Id) NOT NULL, FactionId INTEGER NOT NULL, IsPublic BOOLEAN NOT NULL, PlanetaryControl INTEGER NOT NULL, PlayerReputation REAL NOT NULL, LeaderId INTEGER REFERENCES Character (Id));

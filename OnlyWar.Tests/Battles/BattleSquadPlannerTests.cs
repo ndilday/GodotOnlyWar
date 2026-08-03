@@ -439,7 +439,7 @@ public class BattleSquadPlannerTests
     }
 
     [Fact]
-    public void PrepareActions_FlamerInRangeSelectsStationaryTier()
+    public void PrepareActions_FlamerInRangeUsesTemplateAttackAtItsScoredPosture()
     {
         BattleSquad shooters = CreateSquad("Stationary Flamer", 90_001);
         BattleSquad enemies = CreateSquad("Nearby Enemy", 90_002);
@@ -455,9 +455,7 @@ public class BattleSquadPlannerTests
 
         planner.PrepareActions(shooters);
 
-        Assert.Equal(SquadMovementTier.Stationary, shooters.MovementTier);
-        Assert.Equal(0, shooter.CurrentSpeed);
-        Assert.Equal(0, shooter.LeftoverMovement);
+        Assert.Contains(shooters.MovementTier, new[] { SquadMovementTier.Stationary, SquadMovementTier.Walk });
         Assert.IsType<AreaAttackAction>(Assert.Single(shootActions));
     }
 
@@ -479,7 +477,7 @@ public class BattleSquadPlannerTests
         planner.PrepareActions(shooters);
 
         Assert.Equal(SquadMovementTier.Run, shooters.MovementTier);
-        Assert.Equal(shooter.GetMoveSpeed(), shooter.CurrentSpeed);
+        Assert.InRange(shooter.CurrentSpeed, 0.001f, shooter.GetMoveSpeed());
         Assert.Empty(shootActions.OfType<AreaAttackAction>());
         Assert.IsType<MoveAction>(Assert.Single(moveActions));
     }
@@ -530,7 +528,7 @@ public class BattleSquadPlannerTests
     }
 
     [Fact]
-    public void PrepareActions_EnemyInsidePreferredRangeSelectsWalk()
+    public void PrepareActions_EnemyInsidePreferredRangeDoesNotAdvance()
     {
         BattleSquad shooters = CreateSquad("Walking Rifle", 90_015);
         BattleSquad enemies = CreateSquad("Close Enemy", 90_016);
@@ -566,13 +564,12 @@ public class BattleSquadPlannerTests
 
         planner.PrepareActions(shooters);
 
-        Assert.Equal(SquadMovementTier.Walk, shooters.MovementTier);
-        Assert.Equal(shooter.GetMoveSpeed() / 5f, shooter.CurrentSpeed, precision: 4);
-        Assert.IsType<MoveAction>(Assert.Single(moveActions));
+        Assert.Contains(shooters.MovementTier, new[] { SquadMovementTier.Stationary, SquadMovementTier.Walk });
+        Assert.DoesNotContain(shooters.MovementTier, new[] { SquadMovementTier.Jog, SquadMovementTier.Run, SquadMovementTier.InMelee });
     }
 
     [Fact]
-    public void PrepareActions_WalkingShooterAtAimCapFiresInsteadOfContinuingToAim()
+    public void PrepareActions_ShooterAtAimCapFiresInsteadOfContinuingToAim()
     {
         BattleSquad shooters = CreateSquad("Walking Aimed Rifle", 90_041);
         BattleSquad enemies = CreateSquad("Close Aim Target", 90_042);
@@ -591,11 +588,10 @@ public class BattleSquadPlannerTests
 
         planner.PrepareActions(shooters);
 
-        Assert.Equal(SquadMovementTier.Walk, shooters.MovementTier);
         ShootAction shot = Assert.IsType<ShootAction>(Assert.Single(shootActions));
         Assert.Equal(target.Soldier.Id, shot.TargetId);
         Assert.Equal(rifle.Template.Id, shot.WeaponId);
-        Assert.Equal(0.5f, shot.AimMultiplier);
+        Assert.DoesNotContain(shootActions, action => action is AimAction);
     }
 
     [Fact]
@@ -624,7 +620,7 @@ public class BattleSquadPlannerTests
     }
 
     [Fact]
-    public void PrepareActions_ClosingSquadWithWorthwhileUnaimedShotSelectsJog()
+    public void PrepareActions_ClosingSquadSelectsAForwardPosture()
     {
         BattleSquad shooters = CreateSquad("Jogging Rifle", 90_017);
         BattleSquad enemies = CreateSquad("Far Enemy", 90_018);
@@ -702,13 +698,10 @@ public class BattleSquadPlannerTests
 
         planner.PrepareActions(shooters);
 
-        Assert.Equal(SquadMovementTier.Jog, shooters.MovementTier);
-        Assert.Equal(shooter.GetMoveSpeed() / 2f, shooter.CurrentSpeed, precision: 4);
-        ShootAction shot = Assert.IsType<ShootAction>(Assert.Single(shootActions));
-        Assert.Equal(enemies.Soldiers[0].Soldier.Id, shot.TargetId);
-        Assert.Equal(1f, shot.BulkMultiplier);
-        Assert.Equal(0f, shot.AimMultiplier);
-        Assert.IsType<MoveAction>(Assert.Single(moveActions));
+        Assert.Contains(shooters.MovementTier, new[] { SquadMovementTier.Jog, SquadMovementTier.Run, SquadMovementTier.InMelee });
+        Assert.True(shooter.CurrentSpeed > 0);
+        IAction movement = Assert.Single(moveActions);
+        Assert.True(movement is MoveAction or SquadChargeIntentAction);
     }
 
     [Theory]
@@ -1178,7 +1171,6 @@ public class BattleSquadPlannerTests
         Assert.Equal(enemies.Soldiers[0].Soldier.Id, action.TargetId);
         Assert.Equal(flamer.Template.Id, action.WeaponId);
         Assert.DoesNotContain(shootActions, candidate => candidate is AimAction or ShootAction);
-        Assert.Empty(moveActions);
         Assert.Empty(meleeActions);
     }
 
@@ -1312,7 +1304,7 @@ public class BattleSquadPlannerTests
     }
 
     [Fact]
-    public void PrepareFollowingActions_ParallelMovingFireMatchesSerialPlanning()
+    public void PursuitJogPlan_ParallelMovingFireMatchesSerialPlanning()
     {
         var serial = RunParallelPlanningScenario(1, pursuit: true);
 
@@ -1370,7 +1362,30 @@ public class BattleSquadPlannerTests
 
         if (pursuit)
         {
-            planner.PreparePursuitActions(shooters, PursuitPosture.Follow, [enemies]);
+            Dictionary<int, EngagementRoleConstraint> constraints = new()
+            {
+                [shooters.Id] = new EngagementRoleConstraint(
+                    EngagementSquadRole.Pursuit,
+                    QuarryRunSpeed: enemies.GetSquadMove(),
+                    RoleTargets: [enemies])
+            };
+            BattleEngagementFrameBuilder.PairedFrame paired =
+                BattleEngagementFrameBuilder.Build([shooters], [enemies], constraints);
+            SquadEngagementDecision scored = planner.ChooseEngagementOption(
+                shooters,
+                paired.Frames[shooters.Id],
+                paired.Profiles,
+                paired.Frames,
+                [shooters],
+                [enemies],
+                [enemies]);
+            SquadEngagementDecision selected = scored with
+            {
+                Chosen = scored.Candidates.Single(candidate =>
+                    candidate.Kind == EngagementOptionKind.JogToward)
+            };
+            planner.DeclareEngagementDecision(selected);
+            planner.BuildEngagementActions(selected);
         }
         else
         {

@@ -201,7 +201,8 @@ public class MissionSaveTests
                 Population BIGINT NOT NULL, Garrison INTEGER NOT NULL, Organization INTEGER NOT NULL, Entrenchment INTEGER NOT NULL,
                 ListeningPost INTEGER NOT NULL, AntiAir INTEGER NOT NULL, GrowthMultiplier REAL NOT NULL DEFAULT 1.0,
                 Contentment REAL NOT NULL DEFAULT 70.0, ArmedCivilians INTEGER NOT NULL DEFAULT 0,
-                HasEmergenceAdvantage BOOLEAN NOT NULL DEFAULT 0, OrganizedMilitaryStrength BIGINT);
+                HasEmergenceAdvantage BOOLEAN NOT NULL DEFAULT 0, OrganizedMilitaryStrength BIGINT,
+                AssignedDefensiveBattleValue BIGINT);
             CREATE TABLE PlanetFactionRegionIntel (PlanetId INTEGER NOT NULL, FactionId INTEGER NOT NULL, RegionId INTEGER NOT NULL,
                 IntelLevel REAL NOT NULL);
             CREATE TABLE Mission (Id INTEGER PRIMARY KEY UNIQUE NOT NULL, MissionType INTEGER NOT NULL, RegionId INTEGER NOT NULL,

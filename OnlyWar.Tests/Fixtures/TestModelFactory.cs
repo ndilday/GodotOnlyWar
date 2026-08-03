@@ -219,6 +219,14 @@ internal static class TestModelFactory
         primaryMelee: DefaultWeapons.PrimaryMeleeWeapon,
         grenadeWeapon: FragGrenadeTemplate);
 
+    // NEVER hand this instance to a Faction constructor. Faction re-owns every SquadTemplate in
+    // the dictionary it is given (`template.Faction = this`, Models/Faction.cs), and this object is
+    // a process-wide static shared by every fixture-built squad. Binding it to a non-player faction
+    // therefore makes Squad.Faction.IsPlayerFaction false for every subsequently built test squad,
+    // for the rest of the run — which defeats OrderAssignment.IsPlayerOrder and breaks order reuse
+    // in whatever tests xUnit happens to schedule afterwards. It presents as an intermittent,
+    // ordering-dependent failure a long way from the test that caused it.
+    // Build a private copy instead (see FactionStrategyControllerTests for the pattern).
     public static SquadTemplate SquadTemplate { get; } = new(
         1,
         "Test Squad",

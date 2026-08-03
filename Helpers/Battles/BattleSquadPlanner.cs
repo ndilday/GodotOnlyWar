@@ -28,18 +28,11 @@ namespace OnlyWar.Helpers.Battles
         internal const float JogSpeedMultiplier = 0.5f;
         private const float WalkBulkMultiplier = 0.5f;
         private const float FullBulkMultiplier = 1f;
+        // Length the squad rout heading is normalized to. Long enough that no rout is ever capped
+        // by the line itself (CalculateMovementAlongLine treats a line shorter than the move budget
+        // as a destination), short enough that its squared length stays well inside int range.
+        private const int RoutLineLength = 1_000;
         private const float WalkAimMultiplier = 0.5f;
-        // TUNABLE: a step-back (kite) applies WalkBulkMultiplier x Bulk to every shot that
-        // turn. For a light weapon that cost is negligible and repositioning to the sweet
-        // spot is worthwhile; for a heavy, high-Bulk weapon it guts the soldier's firepower,
-        // so backpedaling to "optimal" range is self-defeating -- he removes more value
-        // planting his feet and firing (Bulk 0). A soldier only votes to walk back when the
-        // walking shot preserves at least this fraction of his stationary shot's value;
-        // otherwise he votes to hold. Calibrated so standard infantry rifles (Bulk 4:
-        // Boltgun, Lasgun) keep kiting while genuine heavy weapons (Bulk 6-8: Heavy Bolter,
-        // Lascannon, Autocannon, Missile Launcher) plant and fire. 1.0 forbids any bulk
-        // loss; 0 restores the old bulk-blind kiting.
-        private const float WalkBulkShootingRetention = 0.4f;
         // Blast planning integrates enemy AND friendly value over the delivery scatter
         // distribution (not just the on-target impact), so a throw that only frags the
         // squad when it misses is no longer scored as free. See EvaluateBlastThrow and
@@ -185,10 +178,12 @@ namespace OnlyWar.Helpers.Battles
                 RangedWeapon weapon,
                 float range,
                 float moveAndAimModifier,
-                bool firingIntoMelee)
+                bool firingIntoMelee,
+                float? targetSpeed = null)
             {
                 _weaponSkill = soldier.Soldier.GetTotalSkillValue(weapon.Template.RelatedSkill);
-                _rangeModifier = BattleModifiersUtil.CalculateRangeModifier(range, target.CurrentSpeed);
+                _rangeModifier = BattleModifiersUtil.CalculateRangeModifier(
+                    range, targetSpeed ?? target.CurrentSpeed);
                 _sizeModifier = BattleModifiersUtil.CalculateSizeModifier(target.Soldier.Size);
                 _moveAndAimModifier = moveAndAimModifier;
                 _meleeModifier = firingIntoMelee
@@ -409,13 +404,6 @@ namespace OnlyWar.Helpers.Battles
 
         public void PrepareActions(BattleSquad squad, IReadOnlyCollection<BattleSquad> friendlySquads = null)
         {
-            // If no living enemy remains on the grid, this squad has nothing to plan against: every
-            // targeting helper below resolves the "nearest enemy" to -1 and then indexes
-            // _soldierMap[-1], which throws. Enemy presence is global to a side, so one probe settles
-            // it — if the opposing side still has anyone on the grid, every per-soldier lookup will
-            // find them. The battle is effectively decided; hold and let the resolver's end-of-turn
-            // check close it out. (Latent since forever; surfaced once fully-organized NPC factions
-            // began actually joining tactical battles at scale.)
             BattleSoldier probe = squad.AbleSoldiers.FirstOrDefault();
             if (probe == null) return;
             _grid.GetNearestEnemy(probe.Soldier.Id, out int anyEnemyId);
@@ -441,311 +429,1397 @@ namespace OnlyWar.Helpers.Battles
             }
             else
             {
-                // An HQ squad with line troops still standing keeps itself behind them
-                // ("stay behind the troop wall") and only joins a melee once the troops are
-                // stuck in. Everything below is skipped if the HQ decides to hold or fall
-                // back; otherwise it plans like any other squad, minus the charge impulse.
-                bool suppressCharge = false;
-                if (squad.Squad?.SquadTemplate?.SquadType.HasFlag(Models.Squads.SquadTypes.HQ) == true
-                    && friendlySquads != null)
-                {
-                    List<BattleSquad> wall = friendlySquads
-                        .Where(s => s.Id != squad.Id
-                            && s.Status == BattleSquadStatus.Active
-                            && s.AbleSoldiers.Count > 0
-                            && s.Squad?.SquadTemplate?.SquadType.HasFlag(Models.Squads.SquadTypes.HQ) != true)
-                        .ToList();
-                    if (wall.Count > 0)
-                    {
-                        bool wallEngaged = wall.Any(s => s.IsInMelee);
-                        suppressCharge = !wallEngaged;
-                        if (!wallEngaged)
-                        {
-                            float wallDistance = wall.Min(NearestEnemyDistance);
-                            float ownDistance = NearestEnemyDistance(squad);
-                            if (ownDistance < wallDistance + HqLineBuffer)
-                            {
-                                // At or ahead of the wall: back off at a walk, weapons up.
-                                squad.MovementTier = SquadMovementTier.Walk;
-                                ApplyDeclaredMovementState(squad);
-                                foreach (BattleSoldier soldier in squad.AbleSoldiers)
-                                {
-                                    AddRetreatingActionsToBag(soldier, SquadMovementTier.Walk);
-                                }
-                                LogEngagementEval(
-                                    squad, null, 0, 0, 0, 0, 0, false, suppressCharge,
-                                    "hq_ahead_of_wall");
-                                return;
-                            }
-                            float jogReach = squad.GetSquadMove() * JogSpeedMultiplier;
-                            if (ownDistance < wallDistance + HqLineBuffer + jogReach)
-                            {
-                                // Comfortably tucked behind the line: hold and shoot rather
-                                // than jitter across the buffer boundary every turn.
-                                squad.MovementTier = SquadMovementTier.Stationary;
-                                ApplyDeclaredMovementState(squad);
-                                PrepareStandingSoldiers(
-                                    squad.AbleSoldiers,
-                                    allowCharge: false);
-                                LogEngagementEval(
-                                    squad, null, 0, 0, 0, 0, 0, false, suppressCharge,
-                                    "hq_behind_wall");
-                                return;
-                            }
-                        }
-                    }
-                }
-
-                // need some concept of squad disposition... stance, whether they're actively aiming
-                // determine closest enemy
-                // determine our optimal range
-                // determine closest enemy optimal range
-                // if the enemy wants to advance, we want to stay put, and vice versa
-                // if we both want to get closer or both want to stay put, it's more interesting
-
-                // retreatng is moving full tilt away from the enemy
-                // TODO: this won't be a valid option when surrounded
-                int retreatVotes = 0;
-                // falling back is moving at 1/3 speed away from the enemy,
-                // leaving the possibility of shooting
-                //int fallbackVotes = 0;
-                // advancing is sprinting toward the enemy
-                int advanceVotes = 0;
-                // walking is a small withdrawal/reposition while retaining effective fire
-                int walkVotes = 0;
-                // standing is not moving
-                int standVotes = 0;
-                // charging is moving into hand-to-hand contact with the enemy
-                int chargeVotes = 0;
-                List<EngagementAssessment> assessments =
-                    BattleLog.IsEnabled ? new List<EngagementAssessment>() : null;
-                foreach (BattleSoldier soldier in squad.AbleSoldiers)
-                {
-                    EngagementAssessment assessment = AssessSoldierEngagement(soldier);
-                    assessments?.Add(assessment);
-                    switch (assessment.Intent)
-                    {
-                        case EngagementIntent.Retreat:
-                            retreatVotes++;
-                            break;
-                        case EngagementIntent.Walk:
-                            walkVotes++;
-                            break;
-                        case EngagementIntent.Advance:
-                            advanceVotes++;
-                            break;
-                        case EngagementIntent.Charge:
-                            // A charge is a full-speed advance that also wants melee contact;
-                            // the tier selection below turns a charge-heavy advance into InMelee.
-                            advanceVotes++;
-                            chargeVotes++;
-                            break;
-                        default:
-                            standVotes++;
-                            break;
-                    }
-                }
-                bool shakenClamped = squad.MoraleState == MoraleState.Shaken && advanceVotes > 0;
-
-                // "If I want to melee, let the troops get stuck in first": an HQ behind an
-                // unengaged wall folds its charge impulse into a plain advance.
-                if (suppressCharge)
-                {
-                    chargeVotes = 0;
-                }
-
-                // A Shaken squad will not advance toward the enemy (OnlyWar_TDD.md §6.6):
-                // advance/charge impulses collapse into holding ground.
-                // The state is recomputed every turn, so this is not sticky.
-                if (shakenClamped)
-                {
-                    standVotes += advanceVotes;
-                    advanceVotes = 0;
-                    chargeVotes = 0;
-                }
-
-                if (advanceVotes > standVotes
-                    && advanceVotes > retreatVotes
-                    && advanceVotes > walkVotes)
-                {
-                    if (chargeVotes > 0 && chargeVotes * 2 >= advanceVotes)
-                    {
-                        squad.MovementTier = SquadMovementTier.InMelee;
-                        ApplyDeclaredMovementState(squad);
-                        foreach (BattleSoldier soldier in squad.AbleSoldiers)
-                        {
-                            AddChargeActionsToBag(soldier);
-                        }
-                    }
-                    else
-                    {
-                        squad.MovementTier = ShouldJogAndShoot(squad)
-                            ? SquadMovementTier.Jog
-                            : SquadMovementTier.Run;
-                        ApplyDeclaredMovementState(squad);
-                        PrepareAdvanceSoldiers(squad.AbleSoldiers, squad.MovementTier);
-                    }
-                }
-                else if (retreatVotes > standVotes
-                    && retreatVotes > advanceVotes
-                    && retreatVotes > walkVotes)
-                {
-                    squad.MovementTier = SquadMovementTier.Run;
-                    ApplyDeclaredMovementState(squad);
-                    PrepareRetreatingSoldiers(squad.AbleSoldiers, squad.MovementTier);
-                }
-                else if (walkVotes > standVotes
-                    && walkVotes >= advanceVotes
-                    && walkVotes >= retreatVotes)
-                {
-                    squad.MovementTier = SquadMovementTier.Walk;
-                    ApplyDeclaredMovementState(squad);
-                    PrepareRetreatingSoldiers(squad.AbleSoldiers, squad.MovementTier);
-                }
-                else
-                {
-                    squad.MovementTier = SquadMovementTier.Stationary;
-                    ApplyDeclaredMovementState(squad);
-                    PrepareStandingSoldiers(squad.AbleSoldiers, allowCharge: true);
-                }
-
-                LogEngagementEval(
+                List<BattleSquad> all = _soldierMap.Values
+                    .Select(soldier => soldier.BattleSquad)
+                    .Where(candidate => candidate != null)
+                    .DistinctBy(candidate => candidate.Id)
+                    .ToList();
+                bool side = _grid.GetSoldierSide(probe.Soldier.Id);
+                List<BattleSquad> friendly = (friendlySquads ?? all
+                        .Where(candidate => candidate.AbleSoldiers.Any(member =>
+                            IsPlaced(member) && _grid.GetSoldierSide(member.Soldier.Id) == side)))
+                    .OrderBy(candidate => candidate.Id)
+                    .ToList();
+                List<BattleSquad> enemy = all
+                    .Where(candidate => candidate.AbleSoldiers.Any(member =>
+                        IsPlaced(member) && _grid.GetSoldierSide(member.Soldier.Id) != side))
+                    .OrderBy(candidate => candidate.Id)
+                    .ToList();
+                BattleEngagementFrameBuilder.PairedFrame paired =
+                    BattleEngagementFrameBuilder.Build(friendly, enemy);
+                SquadEngagementDecision decision = ChooseEngagementOption(
                     squad,
-                    assessments,
-                    advanceVotes,
-                    chargeVotes,
-                    standVotes,
-                    walkVotes,
-                    retreatVotes,
-                    shakenClamped,
-                    suppressCharge,
-                    "vote");
+                    paired.Frames[squad.Id],
+                    paired.Profiles,
+                    friendly,
+                    enemy);
+                DeclareEngagementDecision(decision);
+                BuildEngagementActions(decision);
             }
+        }
+
+        internal const int EngagementLookaheadHorizon = 2;
+        private const float EngagementFutureDiscount = 0.65f;
+        private const float EngagementIndifferenceFraction = 0.02f;
+
+        /// <summary>
+        /// Layer 2: scores whole-squad semantic movement options without mutating movement state,
+        /// aim, reservations or action collections. Current-turn fire may use the exact memoized
+        /// per-soldier target evaluators; rollout steps below are capability-group aggregates only.
+        /// </summary>
+        internal SquadEngagementDecision ChooseEngagementOption(
+            BattleSquad squad,
+            SquadEngagementFrame frame,
+            IReadOnlyDictionary<int, BattleSquadCapabilityProfile> profiles,
+            IReadOnlyDictionary<int, SquadEngagementFrame> allFrames,
+            IReadOnlyCollection<BattleSquad> friendlySquads,
+            IReadOnlyCollection<BattleSquad> enemySquads,
+            IReadOnlyCollection<BattleSquad> roleTargets = null)
+        {
+            ArgumentNullException.ThrowIfNull(squad);
+            ArgumentNullException.ThrowIfNull(frame);
+            BattleSquadCapabilityProfile profile = profiles[squad.Id];
+            List<BattleSquad> enemies = (roleTargets ?? enemySquads ?? [])
+                .Where(candidate => candidate != null
+                    && candidate.Status == BattleSquadStatus.Active
+                    && candidate.AbleSoldiers.Count > 0)
+                .OrderBy(candidate => candidate.Id)
+                .ToList();
+            BattleSquad primary = ResolvePrimary(frame, enemies, enemySquads);
+            List<EngagementOptionKind> legal = GetLegalOptionKinds(
+                squad, frame, primary, profile, allFrames);
+            List<EngagementOptionEvaluation> evaluations = legal
+                .Select(kind => EvaluateEngagementOption(
+                    squad, kind, frame, profile, profiles, allFrames, primary, enemies))
+                .OrderByDescending(candidate => candidate.Score)
+                .ThenBy(candidate => candidate.Kind)
+                .ToList();
+            float bestScore = evaluations.Select(candidate => candidate.Score)
+                .DefaultIfEmpty(0)
+                .Max();
+            float indifference = Math.Max(
+                0.1f, profile.TotalAbleBattleValue * EngagementIndifferenceFraction);
+            EngagementOptionEvaluation chosen = evaluations
+                .Where(candidate => bestScore - candidate.Score <= indifference)
+                .OrderByDescending(candidate => candidate.Kind == squad.LastEngagementOptionKind)
+                .ThenByDescending(candidate => candidate.Score)
+                .ThenBy(candidate => candidate.Kind)
+                .FirstOrDefault()
+                ?? new EngagementOptionEvaluation(
+                    EngagementOptionKind.Hold,
+                    SquadMovementTier.Stationary,
+                    null, 0, 0, 0, 0, 0, 0, [], 0, 0, 0, 0);
+            return new SquadEngagementDecision(
+                squad,
+                frame,
+                chosen,
+                evaluations,
+                roleTargets);
+        }
+
+        internal SquadEngagementDecision ChooseEngagementOption(
+            BattleSquad squad,
+            SquadEngagementFrame frame,
+            IReadOnlyDictionary<int, BattleSquadCapabilityProfile> profiles,
+            IReadOnlyCollection<BattleSquad> friendlySquads,
+            IReadOnlyCollection<BattleSquad> enemySquads,
+            IReadOnlyCollection<BattleSquad> roleTargets = null)
+        {
+            BattleEngagementFrameBuilder.PairedFrame paired =
+                BattleEngagementFrameBuilder.Build(friendlySquads, enemySquads);
+            return ChooseEngagementOption(
+                squad,
+                frame,
+                profiles,
+                paired.Frames,
+                friendlySquads,
+                enemySquads,
+                roleTargets);
+        }
+
+        private static List<EngagementOptionKind> GetLegalOptionKinds(
+            BattleSquad squad,
+            SquadEngagementFrame frame,
+            BattleSquad primary,
+            BattleSquadCapabilityProfile profile,
+            IReadOnlyDictionary<int, SquadEngagementFrame> allFrames)
+        {
+            if (frame.Role is EngagementSquadRole.Bound
+                or EngagementSquadRole.BreakOff)
+            {
+                return frame.Role == EngagementSquadRole.Bound
+                    ? [EngagementOptionKind.RunToward]
+                    : [EngagementOptionKind.Hold];
+            }
+            if (frame.Role == EngagementSquadRole.Routing)
+            {
+                return [EngagementOptionKind.RunToward];
+            }
+            if (squad.IsInMelee || frame.Role == EngagementSquadRole.RearGuard && squad.IsInMelee)
+            {
+                return [EngagementOptionKind.CloseToContact];
+            }
+            if (frame.Role is EngagementSquadRole.Cover or EngagementSquadRole.RearGuard)
+            {
+                return [EngagementOptionKind.Hold, EngagementOptionKind.StepBack];
+            }
+            if (frame.Role == EngagementSquadRole.Pursuit)
+            {
+                if (primary == null) return [EngagementOptionKind.Hold];
+                float distance = BattleEngagementFrameBuilder.MinimumDistance(squad, primary);
+                EngagementOptionKind fast = distance <= profile.MoveSpeed
+                        + BattleContactRules.MeleeContactAllowance
+                    ? EngagementOptionKind.CloseToContact
+                    : EngagementOptionKind.RunToward;
+                return [EngagementOptionKind.Hold, EngagementOptionKind.JogToward, fast];
+            }
+
+            List<EngagementOptionKind> result =
+            [
+                EngagementOptionKind.Hold,
+                EngagementOptionKind.StepBack,
+                EngagementOptionKind.StepForward,
+                EngagementOptionKind.JogToward,
+                EngagementOptionKind.CloseToContact
+            ];
+            if (frame.InterposePoint.HasValue)
+            {
+                result.Add(EngagementOptionKind.MoveToInterpose);
+            }
+            return result;
+        }
+
+        private EngagementOptionEvaluation EvaluateEngagementOption(
+            BattleSquad squad,
+            EngagementOptionKind kind,
+            SquadEngagementFrame frame,
+            BattleSquadCapabilityProfile profile,
+            IReadOnlyDictionary<int, BattleSquadCapabilityProfile> profiles,
+            IReadOnlyDictionary<int, SquadEngagementFrame> allFrames,
+            BattleSquad primary,
+            IReadOnlyCollection<BattleSquad> enemies)
+        {
+            SquadMovementTier tier = GetOptionTier(kind, squad, primary, frame);
+            ValueTuple<float, float>? intended = GetIntendedDestination(
+                squad, kind, frame, primary, allFrames);
+            (float feasibleSpeed, ValueTuple<float, float> projectedCentroid) =
+                ProjectFeasibleSquadEndpoint(squad, kind, tier, intended, primary, frame);
+            ValueTuple<int, int>? direction = GetOptionDirection(squad, kind, frame, primary, intended);
+            (float enemyRemoval, float friendlyFire, float readiness,
+                IReadOnlyList<PlannedSoldierAction> rootActions) =
+                EvaluateImmediateActionValue(squad, tier, direction);
+            float incoming = EvaluateIncomingNow(
+                squad, feasibleSpeed, profiles, allFrames, enemies);
+            (float meleeNow, float commitment) = EvaluateContactTerms(
+                squad, kind, primary, profile);
+            List<float> future = EvaluateFutureExchange(
+                squad,
+                projectedCentroid,
+                kind,
+                profile,
+                profiles,
+                allFrames,
+                enemies);
+            float roleTerm = EvaluateScreenRoleTerm(
+                squad, kind, frame, profile, profiles, projectedCentroid, enemies);
+            roleTerm += EvaluatePursuitContactProgress(
+                squad,
+                kind,
+                frame,
+                profile,
+                primary,
+                feasibleSpeed,
+                primary != null
+                    ? allFrames.GetValueOrDefault(primary.Id)?.Role
+                    : null);
+            if (squad.MoraleState == MoraleState.Shaken
+                && kind is EngagementOptionKind.StepForward
+                    or EngagementOptionKind.JogToward
+                    or EngagementOptionKind.CloseToContact
+                    or EngagementOptionKind.MoveToInterpose
+                    or EngagementOptionKind.RunToward)
+            {
+                commitment += profile.TotalAbleBattleValue * 0.35f;
+            }
+            if (frame.Role == EngagementSquadRole.Pursuit
+                && kind == EngagementOptionKind.JogToward
+                && feasibleSpeed + 0.0001f < frame.QuarryRunSpeed)
+            {
+                commitment += profile.TotalAbleBattleValue
+                    * (1f - feasibleSpeed / Math.Max(0.1f, frame.QuarryRunSpeed));
+            }
+            if (SuppressHqAdvance(squad, kind))
+            {
+                commitment += profile.TotalAbleBattleValue;
+            }
+            // Stability is a tie policy in ChooseEngagementOption, not utility.  Keep the trace
+            // column for compatibility while preventing an old posture from buying real BV.
+            float hysteresis = 0;
+            float discountedFuture = 0;
+            for (int index = 0; index < future.Count; index++)
+            {
+                discountedFuture += (float)Math.Pow(EngagementFutureDiscount, index + 1)
+                    * future[index];
+            }
+            float score = enemyRemoval - friendlyFire + readiness - incoming + meleeNow
+                + discountedFuture + roleTerm - commitment + hysteresis;
+            return new EngagementOptionEvaluation(
+                kind, tier, intended, feasibleSpeed,
+                enemyRemoval, friendlyFire, readiness, incoming, meleeNow,
+                future, roleTerm, commitment, hysteresis, score, rootActions);
+        }
+
+        private static SquadMovementTier GetOptionTier(
+            EngagementOptionKind kind,
+            BattleSquad squad,
+            BattleSquad primary,
+            SquadEngagementFrame frame)
+        {
+            return kind switch
+            {
+                EngagementOptionKind.Hold => SquadMovementTier.Stationary,
+                EngagementOptionKind.StepBack or EngagementOptionKind.StepForward =>
+                    SquadMovementTier.Walk,
+                EngagementOptionKind.JogToward => SquadMovementTier.Jog,
+                EngagementOptionKind.MoveToInterpose => InterposeTier(squad, frame),
+                EngagementOptionKind.CloseToContact => primary != null
+                    && BattleEngagementFrameBuilder.MinimumDistance(squad, primary)
+                        <= squad.GetSquadMove() + 1
+                            ? SquadMovementTier.InMelee
+                            : SquadMovementTier.Run,
+                EngagementOptionKind.RunToward => SquadMovementTier.Run,
+                _ => SquadMovementTier.Stationary
+            };
+        }
+
+        private static SquadMovementTier InterposeTier(BattleSquad squad, SquadEngagementFrame frame)
+        {
+            if (!frame.InterposePoint.HasValue) return SquadMovementTier.Stationary;
+            (float x, float y) = BattleEngagementFrameBuilder.Centroid(squad);
+            float dx = frame.InterposePoint.Value.Item1 - x;
+            float dy = frame.InterposePoint.Value.Item2 - y;
+            float distance = (float)Math.Sqrt(dx * dx + dy * dy);
+            float move = squad.GetSquadMove();
+            if (distance <= move * WalkSpeedMultiplier) return SquadMovementTier.Walk;
+            if (distance <= move * JogSpeedMultiplier) return SquadMovementTier.Jog;
+            return SquadMovementTier.Run;
+        }
+
+        private static ValueTuple<float, float>? GetIntendedDestination(
+            BattleSquad squad,
+            EngagementOptionKind kind,
+            SquadEngagementFrame frame,
+            BattleSquad primary,
+            IReadOnlyDictionary<int, SquadEngagementFrame> allFrames)
+        {
+            if (kind == EngagementOptionKind.MoveToInterpose) return frame.InterposePoint;
+            if (primary == null) return null;
+            ValueTuple<float, float> target = BattleEngagementFrameBuilder.Centroid(primary);
+            if (frame.Role != EngagementSquadRole.Pursuit
+                || allFrames.GetValueOrDefault(primary.Id)?.Role is not
+                    (EngagementSquadRole.Bound or EngagementSquadRole.Routing))
+            {
+                return target;
+            }
+
+            // Movement is simultaneous. Lead a moving quarry instead of stopping at its current
+            // centroid; otherwise a faster Run repeatedly arrives where the withdrawal used to be
+            // and never spends its speed advantage. Bound movement has an exact force heading.
+            // Routing movement runs the whole squad along the line from its closest threat through
+            // its own centroid, so when this pursuer is that threat the line from here through the
+            // quarry is exactly the rout heading, and a good approximation when it is not.
+            SquadEngagementFrame quarryFrame = allFrames[primary.Id];
+            float leadX;
+            float leadY;
+            if (quarryFrame.Role == EngagementSquadRole.Bound
+                && quarryFrame.FixedHeading.HasValue)
+            {
+                (int x, int y) = BattleForcePlanner.GetHeadingVector(
+                    quarryFrame.FixedHeading.Value);
+                leadX = x;
+                leadY = y;
+            }
+            else
+            {
+                (float x, float y) = BattleEngagementFrameBuilder.Centroid(squad);
+                leadX = target.Item1 - x;
+                leadY = target.Item2 - y;
+            }
+            float length = (float)Math.Sqrt(leadX * leadX + leadY * leadY);
+            if (length <= 0.0001f) return target;
+            float leadDistance = Math.Max(0, frame.QuarryRunSpeed);
+            return (
+                target.Item1 + leadX / length * leadDistance,
+                target.Item2 + leadY / length * leadDistance);
+        }
+
+        private ValueTuple<int, int>? GetOptionDirection(
+            BattleSquad squad,
+            EngagementOptionKind kind,
+            SquadEngagementFrame frame,
+            BattleSquad primary,
+            ValueTuple<float, float>? intended)
+        {
+            if (kind == EngagementOptionKind.Hold) return null;
+            if (kind == EngagementOptionKind.StepBack && frame.FixedHeading.HasValue)
+            {
+                return BattleForcePlanner.GetHeadingVector(frame.FixedHeading.Value);
+            }
+            (float x, float y) = BattleEngagementFrameBuilder.Centroid(squad);
+            float targetX = intended?.Item1 ?? x;
+            float targetY = intended?.Item2 ?? y;
+            int dx = Math.Sign(targetX - x);
+            int dy = Math.Sign(targetY - y);
+            if (kind == EngagementOptionKind.StepBack)
+            {
+                dx = -dx;
+                dy = -dy;
+            }
+            return new ValueTuple<int, int>(dx, dy);
+        }
+
+        private (float FeasibleSpeed, ValueTuple<float, float> Centroid)
+            ProjectFeasibleSquadEndpoint(
+                BattleSquad squad,
+                EngagementOptionKind kind,
+                SquadMovementTier tier,
+                ValueTuple<float, float>? intended,
+                BattleSquad primary,
+                SquadEngagementFrame frame)
+        {
+            if (tier == SquadMovementTier.Stationary)
+            {
+                (float x, float y) = BattleEngagementFrameBuilder.Centroid(squad);
+                return (0, (x, y));
+            }
+            BattleGridManager overlay = (BattleGridManager)_grid.Clone();
+            float distanceTotal = 0;
+            float xTotal = 0;
+            float yTotal = 0;
+            int count = 0;
+            foreach (BattleSoldier soldier in squad.AbleSoldiers
+                .Where(IsPlaced)
+                .OrderBy(member => member.Soldier.Id))
+            {
+                ValueTuple<int, int> line = MovementLineFor(
+                    soldier, kind, frame, primary, intended);
+                float budget = GetMovementBudget(soldier, tier);
+                ValueTuple<int, int> desired = CalculateMovementAlongLine(line, budget);
+                ValueTuple<int, int> target = (
+                    soldier.TopLeft.Value.Item1 + desired.Item1,
+                    soldier.TopLeft.Value.Item2 + desired.Item2);
+                ushort orientation = CalculateOrientationFromVector(line, soldier, tier);
+                ValueTuple<int, int> endpoint = FindBestLocation(
+                    soldier, soldier.TopLeft.Value, target, budget, orientation, overlay);
+                overlay.ReserveMoveDestination(soldier, endpoint, orientation);
+                int dx = endpoint.Item1 - soldier.TopLeft.Value.Item1;
+                int dy = endpoint.Item2 - soldier.TopLeft.Value.Item2;
+                distanceTotal += (float)Math.Sqrt(dx * dx + dy * dy);
+                xTotal += endpoint.Item1;
+                yTotal += endpoint.Item2;
+                count++;
+            }
+            if (count == 0) return (0, (0, 0));
+            return (distanceTotal / count, (xTotal / count, yTotal / count));
+        }
+
+        private ValueTuple<int, int> MovementLineFor(
+            BattleSoldier soldier,
+            EngagementOptionKind kind,
+            SquadEngagementFrame frame,
+            BattleSquad primary,
+            ValueTuple<float, float>? intended)
+        {
+            if (kind == EngagementOptionKind.StepBack && frame.FixedHeading.HasValue)
+            {
+                ValueTuple<int, int> heading = BattleForcePlanner.GetHeadingVector(
+                    frame.FixedHeading.Value);
+                return (heading.Item1 * 10_000, heading.Item2 * 10_000);
+            }
+            float targetX = intended?.Item1
+                ?? primary?.AbleSoldiers.FirstOrDefault(IsPlaced)?.TopLeft?.Item1
+                ?? soldier.TopLeft.Value.Item1;
+            float targetY = intended?.Item2
+                ?? primary?.AbleSoldiers.FirstOrDefault(IsPlaced)?.TopLeft?.Item2
+                ?? soldier.TopLeft.Value.Item2;
+            int dx = (int)Math.Round(targetX - soldier.TopLeft.Value.Item1);
+            int dy = (int)Math.Round(targetY - soldier.TopLeft.Value.Item2);
+            if (kind == EngagementOptionKind.StepBack)
+            {
+                dx = -dx;
+                dy = -dy;
+            }
+            if (dx == 0 && dy == 0) dy = 1;
+            return (dx, dy);
+        }
+
+        private (float EnemyRemoval, float FriendlyFire, float Readiness,
+            IReadOnlyList<PlannedSoldierAction> RootActions)
+            EvaluateImmediateActionValue(
+                BattleSquad squad,
+                SquadMovementTier tier,
+                ValueTuple<int, int>? direction)
+        {
+            float bulk = tier switch
+            {
+                SquadMovementTier.Walk => WalkBulkMultiplier,
+                SquadMovementTier.Jog => FullBulkMultiplier,
+                _ => 0
+            };
+            float removal = 0;
+            float friendly = 0;
+            float readiness = 0;
+            Dictionary<int, float> awardedByTarget = [];
+            List<PlannedSoldierAction> rootActions = [];
+            foreach (BattleSoldier soldier in squad.AbleSoldiers.OrderBy(member => member.Soldier.Id))
+            {
+                if (!IsPlaced(soldier)) continue;
+                PlannedSoldierAction action = PlanSoldierRootAction(
+                    soldier, tier, bulk, direction);
+                rootActions.Add(action);
+                float awardedRemoval = action.ExpectedEnemyBattleValueRemoved;
+                if (action.TargetId.HasValue && awardedRemoval > 0)
+                {
+                    int targetId = action.TargetId.Value;
+                    float cap = _soldierMap.TryGetValue(targetId, out BattleSoldier target)
+                        ? GetBattleValue(target)
+                        : awardedRemoval;
+                    float prior = awardedByTarget.GetValueOrDefault(targetId);
+                    float award = Math.Min(
+                        awardedRemoval,
+                        Math.Max(0, cap - prior));
+                    awardedByTarget[targetId] = prior + award;
+                    removal += award;
+                }
+                friendly += action.ExpectedFriendlyBattleValueLost;
+                readiness += action.ReadinessValue;
+            }
+            float enemyCap = _soldierMap.Values
+                .Where(target => target.CanFight
+                    && IsPlaced(target)
+                    && target.BattleSquad != squad
+                    && _grid.GetSoldierSide(target.Soldier.Id)
+                        != _grid.GetSoldierSide(squad.AbleSoldiers[0].Soldier.Id))
+                .Sum(GetBattleValue);
+            return (Math.Min(removal, enemyCap), friendly, readiness, rootActions);
         }
 
         /// <summary>
-        /// Emits one ENGAGE_EVAL record per squad per planning pass: the squad's movement vote, the
-        /// tier it produced, and a per-loadout breakdown of which branch of
-        /// <see cref="AssessSoldierEngagement"/> each soldier took and with what optimal distance.
-        /// This is the counterpart to MORALE_EVAL/WITHDRAW_EVAL — without it a squad's decision to
-        /// close or hold leaves no trace at all, and the only way to explain a surprise advance is
-        /// to re-derive the range arithmetic by hand.
-        ///
-        /// Grouped by (weapon, intent, reason) rather than written per soldier: a 255-turn battle
-        /// with 32 squads would otherwise add ~80k lines to an already large trace, and the group
-        /// key is exactly the distinction that explains a split vote. Squads are planned
-        /// sequentially by the resolver, so ordering here is deterministic.
+        /// Selects the concrete root-turn action for one soldier under a candidate posture.  This
+        /// method is deliberately pure: candidate workers call it against the frozen state, and
+        /// the winning descriptors are later materialized without running target/action selection
+        /// again.  In particular, Aim is never compared when the posture makes Aim illegal.
         /// </summary>
-        private void LogEngagementEval(
-            BattleSquad squad,
-            IReadOnlyList<EngagementAssessment> assessments,
-            int advanceVotes,
-            int chargeVotes,
-            int standVotes,
-            int walkVotes,
-            int retreatVotes,
-            bool shakenClamped,
-            bool suppressCharge,
-            string path)
+        private PlannedSoldierAction PlanSoldierRootAction(
+            BattleSoldier soldier,
+            SquadMovementTier tier,
+            float bulkMultiplier,
+            ValueTuple<int, int>? movementDirection)
         {
-            if (!BattleLog.IsEnabled) return;
-
-            float nearestDistance = -1f;
-            int nearestEnemyId = -1;
-            int nearestEnemySquadId = 0;
-            BattleSoldier probe = squad.AbleSoldiers.FirstOrDefault();
-            if (probe != null)
+            if (tier is SquadMovementTier.Run or SquadMovementTier.InMelee)
             {
-                nearestDistance = _grid.GetNearestEnemy(probe.Soldier.Id, out nearestEnemyId);
-                if (nearestEnemyId != -1
-                    && _soldierMap.TryGetValue(nearestEnemyId, out BattleSoldier nearestEnemy))
-                {
-                    nearestEnemySquadId = nearestEnemy.BattleSquad.Id;
-                }
+                return PlanRunUtilityAction(soldier);
+            }
+            if (soldier.RangedWeapons.Count == 0)
+            {
+                return new PlannedSoldierAction(soldier.Soldier.Id, PlannedSoldierActionKind.None);
+            }
+            if (soldier.EquippedRangedWeapons.Count == 0)
+            {
+                RangedWeapon ready = soldier.RangedWeapons
+                    .Where(weapon => (int)weapon.Template.Location <= soldier.FunctioningHands)
+                    .OrderByDescending(weapon => weapon.Template.MaximumRange)
+                    .ThenBy(weapon => weapon.Template.Id)
+                    .FirstOrDefault();
+                return ready == null
+                    ? new PlannedSoldierAction(soldier.Soldier.Id, PlannedSoldierActionKind.None)
+                    : new PlannedSoldierAction(
+                        soldier.Soldier.Id,
+                        PlannedSoldierActionKind.Ready,
+                        WeaponTemplateId: ready.Template.Id,
+                        ReadinessValue: GetBattleValue(soldier) * 0.025f);
+            }
+            RangedWeapon equipped = soldier.EquippedRangedWeapons[0];
+            if (soldier.ReloadingPhase > 0 || equipped.LoadedAmmo == 0)
+            {
+                return new PlannedSoldierAction(
+                    soldier.Soldier.Id,
+                    PlannedSoldierActionKind.Reload,
+                    WeaponTemplateId: equipped.Template.Id,
+                    ReadinessValue: GetBattleValue(soldier) * 0.025f);
             }
 
-            BattleDecisionTrace trace = new("ENGAGE_EVAL", new List<KeyValuePair<string, string>>
+            if (tier == SquadMovementTier.Stationary
+                && soldier.Aim is ValueTuple<int, RangedWeapon, int> stickyAim
+                && _soldierMap.TryGetValue(stickyAim.Item1, out BattleSoldier stickyTarget)
+                && IsExistingAimStillViable(soldier))
             {
-                BattleDecisionTrace.Field("turn", TraceTurnNumber),
-                BattleDecisionTrace.Field("side", TraceSideLabel ?? "none"),
-                BattleDecisionTrace.Field("squad", squad.Id),
-                BattleDecisionTrace.Field("faction", squad.Squad?.Faction?.Name ?? "none"),
-                BattleDecisionTrace.Field("path", path),
-                BattleDecisionTrace.Field("able", squad.AbleSoldiers.Count),
-                BattleDecisionTrace.Field("nearest_enemy", nearestEnemyId),
-                BattleDecisionTrace.Field("nearest_enemy_squad", nearestEnemySquadId),
-                BattleDecisionTrace.Field("nearest_distance", nearestDistance),
-                BattleDecisionTrace.Field("morale", squad.MoraleState),
-                BattleDecisionTrace.Field("shaken_clamped_advance", shakenClamped),
-                BattleDecisionTrace.Field("suppress_charge", suppressCharge),
-                BattleDecisionTrace.Field("advance_votes", advanceVotes),
-                BattleDecisionTrace.Field("charge_votes", chargeVotes),
-                BattleDecisionTrace.Field("stand_votes", standVotes),
-                BattleDecisionTrace.Field("walk_votes", walkVotes),
-                BattleDecisionTrace.Field("retreat_votes", retreatVotes),
-                BattleDecisionTrace.Field("tier", squad.MovementTier),
-                BattleDecisionTrace.Field("detail", RenderEngagementDetail(assessments))
-            });
-            BattleLog.Write(trace.Render());
+                float stickyRange = _grid.GetDistanceBetweenSoldiers(
+                    soldier.Soldier.Id, stickyTarget.Soldier.Id);
+                RangedTargetEvaluation stickyShot = EvaluateRangedTarget(
+                    soldier,
+                    stickyTarget,
+                    stickyAim.Item2,
+                    stickyRange,
+                    stickyAim.Item2.Template.Accuracy + stickyAim.Item3 + 1);
+                bool shoot = stickyAim.Item3 >= 3
+                    || stickyTarget.GetMoveSpeed() > stickyRange
+                    || stickyShot.TakeOutProbabilityOnHit * stickyShot.HitProbability >= 0.33f;
+                return shoot
+                    ? PlanConventionalShot(soldier, stickyShot, 0, 1)
+                    : new PlannedSoldierAction(
+                        soldier.Soldier.Id,
+                        PlannedSoldierActionKind.Aim,
+                        stickyTarget.Soldier.Id,
+                        stickyAim.Item2.Template.Id,
+                        stickyRange,
+                        ReadinessValue: GetBattleValue(soldier) * 0.05f);
+            }
+
+            float aimMultiplier = tier switch
+            {
+                SquadMovementTier.Stationary => 1f,
+                SquadMovementTier.Walk => WalkAimMultiplier,
+                _ => 0f
+            };
+            IReadOnlyList<BattleSoldier> candidates = BuildRankedRangedCandidates(
+                soldier, movementDirection);
+            TemplateFiringLineEvaluation template = SelectBestTemplateFiringLine(
+                soldier, candidates, movementDirection);
+            RangedTargetEvaluation targetEvaluation = EvaluateStickyTarget(
+                    soldier, bulkMultiplier, movementDirection)
+                ?? SelectBestRangedTarget(
+                    soldier,
+                    bulkMultiplier,
+                    includeExistingAim: tier == SquadMovementTier.Stationary,
+                    movementDirection: movementDirection);
+            TemplateFiringLineEvaluation blast = SelectBestBlastThrow(
+                soldier, movementDirection, bulkMultiplier, candidates);
+            float bestConventional = Math.Max(
+                template?.Score ?? float.MinValue,
+                targetEvaluation?.Score ?? float.MinValue);
+            if (blast != null
+                && blast.Score > bestConventional + BlastOverConventionalScoreMargin)
+            {
+                return new PlannedSoldierAction(
+                    soldier.Soldier.Id,
+                    PlannedSoldierActionKind.BlastAttack,
+                    blast.Target.Soldier.Id,
+                    blast.Weapon.Template.Id,
+                    blast.Range,
+                    BulkMultiplier: bulkMultiplier,
+                    ExpectedEnemyBattleValueRemoved: blast.ExpectedEnemyBattleValueRemoved,
+                    ExpectedFriendlyBattleValueLost: blast.ExpectedFriendlyBattleValueLost);
+            }
+            if (template != null
+                && template.Score >= (targetEvaluation?.Score ?? float.MinValue))
+            {
+                return new PlannedSoldierAction(
+                    soldier.Soldier.Id,
+                    PlannedSoldierActionKind.AreaAttack,
+                    template.Target.Soldier.Id,
+                    template.Weapon.Template.Id,
+                    template.Range,
+                    BulkMultiplier: bulkMultiplier,
+                    ExpectedEnemyBattleValueRemoved: template.ExpectedEnemyBattleValueRemoved,
+                    ExpectedFriendlyBattleValueLost: template.ExpectedFriendlyBattleValueLost);
+            }
+            if (targetEvaluation == null)
+            {
+                RangedWeapon emptyBlast = soldier.EquippedRangedWeapons
+                    .Concat(soldier.RangedWeapons)
+                    .FirstOrDefault(weapon => weapon.Template.IsBlastWeapon
+                        && weapon.LoadedAmmo == 0);
+                return soldier.ReloadingPhase == 0 && emptyBlast != null
+                    ? new PlannedSoldierAction(
+                        soldier.Soldier.Id,
+                        PlannedSoldierActionKind.Reload,
+                        WeaponTemplateId: emptyBlast.Template.Id,
+                        ReadinessValue: GetBattleValue(soldier) * 0.02f)
+                    : new PlannedSoldierAction(soldier.Soldier.Id, PlannedSoldierActionKind.None);
+            }
+
+            BattleSoldier target = targetEvaluation.Target;
+            float range = _grid.GetDistanceBetweenSoldiers(
+                soldier.Soldier.Id, target.Soldier.Id);
+            if (soldier.Aim is ValueTuple<int, RangedWeapon, int> existingAim
+                && existingAim.Item3 >= 3
+                && existingAim.Item1 == target.Soldier.Id
+                && existingAim.Item2.LoadedAmmo > 0
+                && soldier.EquippedRangedWeapons.Contains(existingAim.Item2)
+                && range <= existingAim.Item2.Template.MaximumRange)
+            {
+                float modifier = -(existingAim.Item2.Template.Bulk * bulkMultiplier)
+                    + ((existingAim.Item2.Template.Accuracy + existingAim.Item3 + 1)
+                        * aimMultiplier);
+                return PlanConventionalShot(
+                    soldier,
+                    EvaluateRangedTarget(
+                        soldier, target, existingAim.Item2, range, modifier),
+                    bulkMultiplier,
+                    aimMultiplier);
+            }
+
+            RangedTargetEvaluation shootNow = GetBestWeaponForSituation(
+                soldier,
+                target,
+                range,
+                bulkMultiplier,
+                useAccuracy: false,
+                aimMultiplier: aimMultiplier);
+            // A moving candidate cannot aim.  Excluding that illegal alternative, rather than
+            // comparing against it and later doing nothing, is the key plan/execution invariant.
+            RangedTargetEvaluation aimNow = aimMultiplier > 0
+                ? GetBestWeaponForSituation(
+                    soldier,
+                    target,
+                    range,
+                    bulkMultiplier,
+                    useAccuracy: true,
+                    aimMultiplier: aimMultiplier)
+                : null;
+            if (shootNow != null
+                && (aimNow == null || shootNow.HitProbability * 2 > aimNow.HitProbability))
+            {
+                return PlanConventionalShot(
+                    soldier, shootNow, bulkMultiplier, aimMultiplier);
+            }
+            if (aimMultiplier > 0)
+            {
+                RangedWeapon aimWeapon = aimNow?.Weapon
+                    ?? soldier.EquippedRangedWeapons
+                        .Where(weapon => !weapon.Template.IsTemplateWeapon)
+                        .OrderByDescending(weapon => weapon.Template.MaximumRange)
+                        .ThenBy(weapon => weapon.Template.Id)
+                        .FirstOrDefault();
+                if (aimWeapon != null)
+                {
+                    return new PlannedSoldierAction(
+                        soldier.Soldier.Id,
+                        PlannedSoldierActionKind.Aim,
+                        target.Soldier.Id,
+                        aimWeapon.Template.Id,
+                        range,
+                        ReadinessValue: GetBattleValue(soldier) * 0.05f);
+                }
+            }
+            return new PlannedSoldierAction(soldier.Soldier.Id, PlannedSoldierActionKind.None);
         }
 
-        private static string RenderEngagementDetail(
-            IReadOnlyList<EngagementAssessment> assessments)
+        private PlannedSoldierAction PlanRunUtilityAction(BattleSoldier soldier)
         {
-            if (assessments == null || assessments.Count == 0) return "none";
-
-            // First-appearance ordering over AbleSoldiers keeps the field stable across runs of the
-            // same seed, so traces stay diffable.
-            List<(string Weapon, EngagementIntent Intent, EngagementReason Reason)> order = [];
-            Dictionary<
-                (string, EngagementIntent, EngagementReason),
-                (int Count, float Preferred, float TargetPreferred, float Distance)> groups = new();
-            foreach (EngagementAssessment assessment in assessments)
+            if (soldier.RangedWeapons.Count == 0)
             {
-                var key = (assessment.WeaponName, assessment.Intent, assessment.Reason);
-                if (groups.TryGetValue(key, out var existing))
+                return new PlannedSoldierAction(soldier.Soldier.Id, PlannedSoldierActionKind.None);
+            }
+            if (soldier.EquippedRangedWeapons.Count == 0)
+            {
+                RangedWeapon ready = soldier.RangedWeapons
+                    .Where(weapon => (int)weapon.Template.Location <= soldier.FunctioningHands)
+                    .OrderByDescending(weapon => weapon.Template.MaximumRange)
+                    .ThenBy(weapon => weapon.Template.Id)
+                    .FirstOrDefault();
+                return ready == null
+                    ? new PlannedSoldierAction(soldier.Soldier.Id, PlannedSoldierActionKind.None)
+                    : new PlannedSoldierAction(
+                        soldier.Soldier.Id,
+                        PlannedSoldierActionKind.Ready,
+                        WeaponTemplateId: ready.Template.Id,
+                        ReadinessValue: GetBattleValue(soldier) * 0.025f);
+            }
+            RangedWeapon weapon = soldier.ReloadingPhase > 0
+                || soldier.EquippedRangedWeapons[0].LoadedAmmo == 0
+                    ? soldier.EquippedRangedWeapons[0]
+                    : soldier.RangedWeapons.FirstOrDefault(candidate =>
+                        candidate.Template.IsBlastWeapon && candidate.LoadedAmmo == 0);
+            return weapon == null
+                ? new PlannedSoldierAction(soldier.Soldier.Id, PlannedSoldierActionKind.None)
+                : new PlannedSoldierAction(
+                    soldier.Soldier.Id,
+                    PlannedSoldierActionKind.Reload,
+                    WeaponTemplateId: weapon.Template.Id,
+                    ReadinessValue: GetBattleValue(soldier) * 0.025f);
+        }
+
+        private static PlannedSoldierAction PlanConventionalShot(
+            BattleSoldier soldier,
+            RangedTargetEvaluation shot,
+            float bulkMultiplier,
+            float aimMultiplier) => new(
+                soldier.Soldier.Id,
+                PlannedSoldierActionKind.Shoot,
+                shot.Target.Soldier.Id,
+                shot.Weapon.Template.Id,
+                shot.Range,
+                shot.ShotsToFire,
+                bulkMultiplier,
+                aimMultiplier,
+                shot.ExpectedEnemyBattleValueRemoved,
+                shot.ExpectedFriendlyBattleValueLost);
+
+        private float EvaluateIncomingNow(
+            BattleSquad squad,
+            float feasibleSpeed,
+            IReadOnlyDictionary<int, BattleSquadCapabilityProfile> profiles,
+            IReadOnlyDictionary<int, SquadEngagementFrame> frames,
+            IReadOnlyCollection<BattleSquad> enemies)
+        {
+            float incoming = 0;
+            foreach (BattleSquad enemy in enemies.OrderBy(candidate => candidate.Id))
+            {
+                if (!profiles.ContainsKey(enemy.Id)
+                    || !frames.TryGetValue(enemy.Id, out SquadEngagementFrame enemyFrame))
                 {
-                    groups[key] = (
-                        existing.Count + 1,
-                        existing.Preferred,
-                        existing.TargetPreferred,
-                        Math.Min(existing.Distance, assessment.Distance));
+                    continue;
                 }
-                else
+                float allocation = enemyFrame.PairWeights.GetValueOrDefault(squad.Id);
+                float attackerBulk = enemyFrame.BaselinePosture switch
                 {
-                    order.Add(key);
-                    groups[key] = (
-                        1,
-                        assessment.PreferredDistance,
-                        assessment.TargetPreferredDistance,
-                        assessment.Distance);
+                    EngagementOptionKind.StepBack or EngagementOptionKind.StepForward =>
+                        WalkBulkMultiplier,
+                    EngagementOptionKind.JogToward => FullBulkMultiplier,
+                    EngagementOptionKind.CloseToContact or EngagementOptionKind.RunToward =>
+                        float.PositiveInfinity,
+                    _ => 0f
+                };
+                if (!float.IsPositiveInfinity(attackerBulk))
+                {
+                    incoming += allocation * EstimateIncomingResponse(
+                        enemy, squad, feasibleSpeed, attackerBulk);
                 }
             }
+            return incoming;
+        }
 
-            StringBuilder detail = new();
-            foreach (var key in order)
+        private float EstimateIncomingResponse(
+            BattleSquad attackerSquad,
+            BattleSquad targetSquad,
+            float targetSpeed,
+            float attackerBulk)
+        {
+            var cacheKey = (
+                attackerSquad.Id,
+                targetSquad.Id,
+                BitConverter.SingleToInt32Bits(targetSpeed),
+                BitConverter.SingleToInt32Bits(attackerBulk));
+            if (_context.IncomingResponses.TryGetValue(cacheKey, out float cached))
             {
-                var group = groups[key];
-                if (detail.Length > 0) detail.Append(',');
-                detail.Append(key.Item1)
-                    .Append('/')
-                    .Append(key.Item2.ToString().ToLowerInvariant())
-                    .Append('/')
-                    .Append(RenderEngagementReason(key.Item3))
-                    .Append("/n=")
-                    .Append(group.Count)
-                    .Append("/dist=")
-                    .Append(group.Distance.ToString("0.###", CultureInfo.InvariantCulture))
-                    .Append("/pref=")
-                    .Append(group.Preferred.ToString("0.###", CultureInfo.InvariantCulture));
-                if (group.TargetPreferred >= 0f)
+                return cached;
+            }
+
+            float response = 0;
+            foreach (BattleSoldier shooter in attackerSquad.AbleSoldiers
+                .Where(IsPlaced)
+                .OrderBy(member => member.Soldier.Id))
+            {
+                RangedTargetEvaluation best = null;
+                foreach (BattleSoldier target in targetSquad.AbleSoldiers
+                    .Where(IsPlaced)
+                    .OrderBy(candidate => _grid.GetDistanceBetweenSoldiers(
+                        shooter.Soldier.Id, candidate.Soldier.Id))
+                    .ThenBy(candidate => candidate.Soldier.Id)
+                    .Take(3))
                 {
-                    detail.Append("/tgt_pref=")
-                        .Append(group.TargetPreferred.ToString(
-                            "0.###", CultureInfo.InvariantCulture));
+                    float range = _grid.GetDistanceBetweenSoldiers(
+                        shooter.Soldier.Id, target.Soldier.Id);
+                    foreach (RangedWeapon weapon in shooter.EquippedRangedWeapons
+                        .Where(candidate => candidate.LoadedAmmo > 0
+                            && !candidate.Template.IsTemplateWeapon
+                            && range <= candidate.Template.MaximumRange)
+                        .OrderBy(candidate => candidate.Template.Id))
+                    {
+                        RangedTargetEvaluation evaluation = EvaluateRangedTarget(
+                            shooter,
+                            target,
+                            weapon,
+                            range,
+                            -weapon.Template.Bulk * attackerBulk,
+                            targetSpeed);
+                        if (best == null || evaluation.Score > best.Score)
+                        {
+                            best = evaluation;
+                        }
+                    }
+                }
+                if (best != null && best.Score > 0)
+                {
+                    response += best.ExpectedEnemyBattleValueRemoved;
                 }
             }
-            return detail.ToString();
+            response = Math.Min(
+                response,
+                targetSquad.AbleSoldiers.Where(IsPlaced).Sum(GetBattleValue));
+            _context.IncomingResponses[cacheKey] = response;
+            return response;
+        }
+
+        private (float MeleeNow, float Commitment) EvaluateContactTerms(
+            BattleSquad squad,
+            EngagementOptionKind kind,
+            BattleSquad primary,
+            BattleSquadCapabilityProfile profile)
+        {
+            if (kind != EngagementOptionKind.CloseToContact || primary == null)
+            {
+                return (0, 0);
+            }
+            float distance = BattleEngagementFrameBuilder.MinimumDistance(squad, primary);
+            float melee = 0;
+            float closing = 0;
+            int reaches = 0;
+            foreach (BattleSoldier soldier in squad.AbleSoldiers.OrderBy(member => member.Soldier.Id))
+            {
+                ChargeAssessment estimate = EstimateChargeNet(soldier, primary, distance);
+                closing += estimate.ClosingCost;
+                if (estimate.ReachesContactThisTurn)
+                {
+                    melee += estimate.MeleeBattleValue;
+                    reaches++;
+                }
+            }
+            float seatFraction = Math.Min(1f,
+                profile.ContactCapacity / (float)Math.Max(1, squad.AbleSoldiers.Count));
+            melee *= Math.Min(seatFraction, reaches / (float)Math.Max(1, squad.AbleSoldiers.Count));
+            float lockCost = reaches > 0
+                ? Math.Max(0, profile.UsableRangedBattleValue - profile.UsableMeleeBattleValue)
+                    * 0.12f
+                : 0;
+            return (Math.Min(melee, primary.AbleSoldiers.Sum(GetBattleValue)), closing + lockCost);
+        }
+
+        private List<float> EvaluateFutureExchange(
+            BattleSquad squad,
+            ValueTuple<float, float> projectedCentroid,
+            EngagementOptionKind kind,
+            BattleSquadCapabilityProfile profile,
+            IReadOnlyDictionary<int, BattleSquadCapabilityProfile> profiles,
+            IReadOnlyDictionary<int, SquadEngagementFrame> frames,
+            IReadOnlyCollection<BattleSquad> enemies)
+        {
+            Dictionary<int, float> ranges = enemies.ToDictionary(
+                enemy => enemy.Id,
+                enemy => Distance(projectedCentroid, BattleEngagementFrameBuilder.Centroid(enemy)));
+            float continuation = EvaluateBestContinuation(
+                squad,
+                profile,
+                profiles,
+                frames,
+                enemies,
+                ranges,
+                EngagementLookaheadHorizon);
+            return [continuation];
+        }
+
+        private static float EvaluateBestContinuation(
+            BattleSquad squad,
+            BattleSquadCapabilityProfile profile,
+            IReadOnlyDictionary<int, BattleSquadCapabilityProfile> profiles,
+            IReadOnlyDictionary<int, SquadEngagementFrame> frames,
+            IReadOnlyCollection<BattleSquad> enemies,
+            IReadOnlyDictionary<int, float> ranges,
+            int depth)
+        {
+            if (depth <= 0)
+            {
+                float terminal = 0;
+                foreach (BattleSquad enemy in enemies.OrderBy(candidate => candidate.Id))
+                {
+                    float range = Math.Max(0, ranges[enemy.Id]);
+                    float desired = profile.IsContactSeeking
+                        ? 1f
+                        : Math.Max(1f, profile.PreferredBandUpper);
+                    float turnsToAct = Math.Max(0, range - desired)
+                        / Math.Max(0.1f, profile.MoveSpeed);
+                    float attainable = Math.Max(
+                        profile.UsableRangedBattleValue,
+                        profile.UsableMeleeBattleValue);
+                    terminal += frames[squad.Id].PairWeights.GetValueOrDefault(enemy.Id)
+                        * attainable * 0.25f / (1f + turnsToAct);
+                    // Terminal value represents attainable action opportunity, not generic distance:
+                    // a squad with no usable offense receives no reward merely for closing.
+                }
+                return terminal;
+            }
+            float best = float.MinValue;
+            // A future state chooses again.  This is the bounded policy comparison the previous
+            // fixed baseline rollout lacked: root Hold may continue with Run, root Run may continue
+            // with Hold/fire, and Jog is valued only at its aggregate moving-fire retention.
+            foreach (EngagementOptionKind policy in new[]
+            {
+                EngagementOptionKind.Hold,
+                EngagementOptionKind.JogToward,
+                EngagementOptionKind.RunToward
+            })
+            {
+                float exchange = 0;
+                Dictionary<int, float> nextRanges = [];
+                foreach (BattleSquad enemy in enemies.OrderBy(candidate => candidate.Id))
+                {
+                    BattleSquadCapabilityProfile opposing = profiles[enemy.Id];
+                    float range = Math.Max(0, ranges[enemy.Id]);
+                    float outgoingAllocation = frames[squad.Id].PairWeights.GetValueOrDefault(enemy.Id);
+                    float incomingAllocation = frames[enemy.Id].PairWeights.GetValueOrDefault(squad.Id);
+                    float outgoingRetention = policy switch
+                    {
+                        EngagementOptionKind.Hold => 1f,
+                        EngagementOptionKind.JogToward => 0.65f,
+                        _ => 0f
+                    };
+                    exchange += outgoingAllocation
+                        * AggregateRemovalRate(profile, opposing, range)
+                        * outgoingRetention
+                        - incomingAllocation * AggregateRemovalRate(opposing, profile, range);
+                    float ourMotion = PolicyRangeDelta(profile, range, policy);
+                    float theirMotion = frames[squad.Id].Role == EngagementSquadRole.Pursuit
+                        ? Math.Max(0, frames[squad.Id].QuarryRunSpeed)
+                        : BaselineRangeDelta(opposing, range);
+                    nextRanges[enemy.Id] = Math.Max(0, range + ourMotion + theirMotion);
+                }
+                float value = exchange + EngagementFutureDiscount * EvaluateBestContinuation(
+                    squad, profile, profiles, frames, enemies, nextRanges, depth - 1);
+                if (value > best) best = value;
+            }
+            return best == float.MinValue ? 0 : best;
+        }
+
+        private static float PolicyRangeDelta(
+            BattleSquadCapabilityProfile profile,
+            float range,
+            EngagementOptionKind policy)
+        {
+            if (policy == EngagementOptionKind.Hold) return 0;
+            float speed = profile.MoveSpeed * (policy == EngagementOptionKind.JogToward
+                ? JogSpeedMultiplier
+                : 1f);
+            float desired = profile.IsContactSeeking ? 1f : profile.PreferredBandUpper;
+            return range > desired ? -Math.Min(speed, range - desired) : 0;
+        }
+
+        private static float BaselineRangeDelta(
+            BattleSquadCapabilityProfile profile,
+            float range)
+        {
+            if (profile.IsContactSeeking) return range > 1
+                ? -Math.Min(profile.MoveSpeed, range - 1)
+                : 0;
+            if (range > profile.PreferredBandUpper + 1)
+            {
+                return -Math.Min(profile.MoveSpeed * JogSpeedMultiplier,
+                    range - profile.PreferredBandUpper);
+            }
+            if (range < profile.PreferredBandLower - 1)
+            {
+                return Math.Min(profile.MoveSpeed * WalkSpeedMultiplier,
+                    profile.PreferredBandLower - range);
+            }
+            return 0;
+        }
+
+        private static float AggregateRemovalRate(
+            BattleSquadCapabilityProfile attacker,
+            BattleSquadCapabilityProfile defender,
+            float range)
+        {
+            float rangedReach = attacker.PreferredBandUpper;
+            float rangedRangeFactor = rangedReach <= 0 || range > rangedReach
+                ? 0
+                : Math.Clamp(1f - (range / Math.Max(1, rangedReach)) * 0.35f, 0.1f, 1f);
+            float ranged = attacker.UsableRangedBattleValue * 0.10f
+                * rangedRangeFactor;
+            float melee = range <= 1.5f
+                ? attacker.UsableMeleeBattleValue * 0.13f
+                : 0;
+            return Math.Min(defender.TotalAbleBattleValue, Math.Max(ranged, melee));
+        }
+
+        private static float EvaluateScreenRoleTerm(
+            BattleSquad squad,
+            EngagementOptionKind kind,
+            SquadEngagementFrame frame,
+            BattleSquadCapabilityProfile profile,
+            IReadOnlyDictionary<int, BattleSquadCapabilityProfile> profiles,
+            ValueTuple<float, float> endpoint,
+            IReadOnlyCollection<BattleSquad> enemies)
+        {
+            if (kind != EngagementOptionKind.MoveToInterpose
+                || !frame.ProtectedSquadId.HasValue
+                || !frame.ScreenThreatSquadId.HasValue)
+            {
+                return 0;
+            }
+            BattleSquad threat = enemies.FirstOrDefault(
+                candidate => candidate.Id == frame.ScreenThreatSquadId.Value);
+            if (threat == null) return 0;
+            BattleSquadCapabilityProfile threatProfile = profiles[threat.Id];
+            float interceptDistance = Distance(
+                endpoint, BattleEngagementFrameBuilder.Centroid(threat));
+            float interceptTurns = interceptDistance / Math.Max(0.1f, threatProfile.MoveSpeed);
+            float holding = Math.Min(1f,
+                (profile.UsableMeleeBattleValue + profile.TotalAbleBattleValue * 0.25f)
+                / Math.Max(1, threatProfile.UsableMeleeBattleValue));
+            float capacity = Math.Min(1f,
+                profile.ContactCapacity / (float)Math.Max(1, threatProfile.ContactCapacity));
+            float intercept = 1f / (1f + interceptTurns);
+            return Math.Min(
+                threatProfile.UsableMeleeBattleValue,
+                profiles[frame.ProtectedSquadId.Value].TotalAbleBattleValue)
+                * holding * capacity * intercept;
+        }
+
+        private static float EvaluatePursuitContactProgress(
+            BattleSquad squad,
+            EngagementOptionKind kind,
+            SquadEngagementFrame frame,
+            BattleSquadCapabilityProfile profile,
+            BattleSquad primary,
+            float feasibleSpeed,
+            EngagementSquadRole? quarryRole)
+        {
+            if (frame.Role != EngagementSquadRole.Pursuit
+                || primary == null
+                || kind == EngagementOptionKind.Hold)
+            {
+                return 0;
+            }
+            ValueTuple<float, float> target = BattleEngagementFrameBuilder.Centroid(primary);
+            float before = Distance(BattleEngagementFrameBuilder.Centroid(squad), target);
+            float desiredRange = profile.IsContactSeeking
+                ? 1f
+                : Math.Max(1f, profile.PreferredBandUpper);
+            if (before <= desiredRange) return 0;
+
+            // Closing is not valuable only to assault troops. A ranged squad that has lost its
+            // firing band must invest movement now to recover a later shot. The short exchange
+            // rollout cannot express that once the quarry is more than its two-turn horizon away,
+            // so price the fraction of one useful full-speed stride completed by this option.
+            // This keeps Hold competitive while it can actually fire, makes Run valuable after
+            // contact is lost, and still lets the existing quarry-speed penalty reject a Jog that
+            // would fall farther behind.
+            float quarrySpeed = quarryRole is EngagementSquadRole.Bound
+                or EngagementSquadRole.Routing
+                    ? Math.Max(0, frame.QuarryRunSpeed)
+                    : 0;
+            float usefulStride = Math.Min(
+                Math.Max(0, profile.MoveSpeed - quarrySpeed),
+                before - desiredRange);
+            float progress = Math.Min(
+                usefulStride,
+                Math.Max(0, feasibleSpeed - quarrySpeed));
+            float attainable = profile.IsContactSeeking
+                ? profile.UsableMeleeBattleValue
+                : profile.UsableRangedBattleValue;
+            return usefulStride <= 0
+                ? 0
+                : attainable * progress / Math.Max(0.1f, usefulStride);
+        }
+
+        private bool SuppressHqAdvance(BattleSquad squad, EngagementOptionKind kind)
+        {
+            if (kind is not (EngagementOptionKind.StepForward
+                or EngagementOptionKind.JogToward
+                or EngagementOptionKind.CloseToContact
+                or EngagementOptionKind.RunToward))
+            {
+                return false;
+            }
+            if (squad.Squad?.SquadTemplate?.SquadType.HasFlag(
+                    Models.Squads.SquadTypes.HQ) != true)
+            {
+                return false;
+            }
+            bool side = _grid.GetSoldierSide(squad.AbleSoldiers[0].Soldier.Id);
+            return _soldierMap.Values
+                .Select(soldier => soldier.BattleSquad)
+                .Where(candidate => candidate != null && candidate.Id != squad.Id)
+                .DistinctBy(candidate => candidate.Id)
+                .Any(candidate => candidate.Status == BattleSquadStatus.Active
+                    && candidate.Squad?.SquadTemplate?.SquadType.HasFlag(
+                        Models.Squads.SquadTypes.HQ) != true
+                    && candidate.AbleSoldiers.Any(member => IsPlaced(member)
+                        && _grid.GetSoldierSide(member.Soldier.Id) == side)
+                    && !candidate.IsInMelee);
+        }
+
+        private static BattleSquad ResolvePrimary(
+            SquadEngagementFrame frame,
+            IReadOnlyCollection<BattleSquad> preferredTargets,
+            IReadOnlyCollection<BattleSquad> allTargets)
+        {
+            IEnumerable<BattleSquad> targets = (preferredTargets ?? [])
+                .Concat(allTargets ?? [])
+                .Where(target => target != null)
+                .DistinctBy(target => target.Id);
+            if (frame.PrimaryCounterpartSquadId.HasValue)
+            {
+                BattleSquad primary = targets.FirstOrDefault(
+                    target => target.Id == frame.PrimaryCounterpartSquadId.Value);
+                if (primary != null) return primary;
+            }
+            return targets.OrderBy(target => target.Id).FirstOrDefault();
+        }
+
+        private static float Distance(
+            ValueTuple<float, float> first,
+            ValueTuple<float, float> second)
+        {
+            float dx = first.Item1 - second.Item1;
+            float dy = first.Item2 - second.Item2;
+            return (float)Math.Sqrt(dx * dx + dy * dy);
+        }
+
+        /// <summary>Layer 2.5 declaration. Called for every squad before Layer 3.</summary>
+        internal void DeclareEngagementDecision(SquadEngagementDecision decision)
+        {
+            BattleSquad squad = decision.Squad;
+            squad.MovementTier = decision.Chosen.Tier;
+            squad.WithdrawalRole = decision.Frame.Role switch
+            {
+                EngagementSquadRole.Cover => WithdrawalRole.Cover,
+                EngagementSquadRole.RearGuard => WithdrawalRole.RearGuard,
+                EngagementSquadRole.Bound => WithdrawalRole.Bound,
+                EngagementSquadRole.Routing => WithdrawalRole.Routing,
+                _ => WithdrawalRole.None
+            };
+            squad.LastEngagementOptionKind = decision.Chosen.Kind;
+            squad.LastScreenThreatSquadId = decision.Frame.ScreenThreatSquadId;
+            squad.LastProtectedSquadId = decision.Frame.ProtectedSquadId;
+            ApplyDeclaredMovementState(squad);
+
+            // A declaration receives only the speed its feasible projection actually covers. This
+            // prevents a blocked or zero-distance move from receiving free ranged evasion.
+            float tierReference = squad.GetSquadMove() * (decision.Chosen.Tier switch
+            {
+                SquadMovementTier.Walk => WalkSpeedMultiplier,
+                SquadMovementTier.Jog => JogSpeedMultiplier,
+                SquadMovementTier.Run or SquadMovementTier.InMelee => 1f,
+                _ => 0f
+            });
+            float fraction = tierReference <= 0
+                ? 0
+                : Math.Clamp(decision.Chosen.FeasibleSpeed / tierReference, 0, 1);
+            foreach (BattleSoldier soldier in squad.AbleSoldiers)
+            {
+                soldier.CurrentSpeed *= fraction;
+                if (soldier.CurrentSpeed <= 0) soldier.IsRunning = false;
+            }
+        }
+
+        /// <summary>Layer 3: constructs the existing per-soldier actions for a declared option.</summary>
+        internal void BuildEngagementActions(SquadEngagementDecision decision)
+        {
+            BattleSquad squad = decision.Squad;
+            EngagementOptionKind kind = decision.Chosen.Kind;
+            BattleSquad primary = ResolvePrimary(
+                decision.Frame,
+                decision.RoleTargets,
+                _soldierMap.Values.Select(soldier => soldier.BattleSquad).DistinctBy(s => s.Id).ToList());
+            // Logged before the role dispatch, because four of the seven roles — BreakOff,
+            // Routing, Bound and Pursuit — return without ever reaching an action builder. Those
+            // squads still score their (force-masked) option set, and for Pursuit that score IS
+            // the posture decision, so discarding the table left the roles that hang a battle as
+            // the only ones with no scored-option trace. Nothing between here and the former call
+            // sites touches another squad's LastEngagementOptionKind, so enemy_revealed is
+            // unchanged by the move.
+            LogEngagementOptions(decision);
+            if (decision.Frame.Role == EngagementSquadRole.BreakOff) return;
+            if (decision.Frame.Role == EngagementSquadRole.Routing)
+            {
+                PrepareRoutingActions(squad);
+                return;
+            }
+            if (decision.Frame.Role == EngagementSquadRole.Bound)
+            {
+                PrepareBoundActions(squad, decision.Frame.FixedHeading ?? 0);
+                return;
+            }
+            // CloseToContact is also the ordinary semantic "run until contact is possible" option
+            // for distant squads. Only convert it into a deferred charge when contact is actually
+            // reachable this turn; otherwise preserve the selected moving root action (reload,
+            // ready, and similar run-legal utility) while making a normal directed move.
+            if (squad.IsInMelee
+                || kind == EngagementOptionKind.CloseToContact
+                    && decision.Chosen.Tier == SquadMovementTier.InMelee)
+            {
+                if (primary == null) return;
+                foreach (BattleSoldier soldier in squad.AbleSoldiers
+                    .OrderBy(member => member.Soldier.Id))
+                {
+                    MeleeWeapon meleeWeaponToReady = GetFirstUsableMeleeWeapon(soldier);
+                    if (soldier.EquippedMeleeWeapons.Count == 0 && meleeWeaponToReady != null)
+                    {
+                        _shootActions.Add(new ReadyMeleeWeaponAction(soldier, meleeWeaponToReady));
+                    }
+                }
+                _moveActions.Add(new SquadChargeIntentAction(
+                    squad,
+                    primary,
+                    state => ResolveSquadChargeIntent(squad, primary, state)));
+                return;
+            }
+            if (kind == EngagementOptionKind.Hold)
+            {
+                ExecutePlannedRootActions(decision);
+            }
+            else
+            {
+                PrepareDirectedMovingActions(squad, decision, primary);
+            }
+        }
+
+        private void PrepareDirectedMovingActions(
+            BattleSquad squad,
+            SquadEngagementDecision decision,
+            BattleSquad primary)
+        {
+            Dictionary<int, PlannedSoldierAction> actions = (decision.Chosen.RootActions ?? [])
+                .ToDictionary(action => action.SoldierId);
+            foreach (BattleSoldier soldier in squad.AbleSoldiers.OrderBy(member => member.Soldier.Id))
+            {
+                ValueTuple<int, int> line = MovementLineFor(
+                    soldier,
+                    decision.Chosen.Kind,
+                    decision.Frame,
+                    primary,
+                    decision.Chosen.IntendedDestination);
+                ValueTuple<int, int> direction = AddMoveAction(
+                    soldier,
+                    GetMovementBudget(soldier, decision.Chosen.Tier),
+                    line,
+                    decision.Chosen.Tier);
+                if (actions.TryGetValue(soldier.Soldier.Id, out PlannedSoldierAction action))
+                {
+                    ExecutePlannedRootAction(action);
+                }
+            }
+        }
+
+        private void ExecutePlannedRootActions(SquadEngagementDecision decision)
+        {
+            foreach (PlannedSoldierAction action in (decision.Chosen.RootActions ?? [])
+                .OrderBy(candidate => candidate.SoldierId))
+            {
+                ExecutePlannedRootAction(action);
+            }
+        }
+
+        private void ExecutePlannedRootAction(PlannedSoldierAction plan)
+        {
+            if (!_soldierMap.TryGetValue(plan.SoldierId, out BattleSoldier soldier)) return;
+            BattleSoldier target = plan.TargetId.HasValue
+                && _soldierMap.TryGetValue(plan.TargetId.Value, out BattleSoldier foundTarget)
+                    ? foundTarget
+                    : null;
+            RangedWeapon weapon = plan.WeaponTemplateId.HasValue
+                ? soldier.EquippedRangedWeapons
+                    .Concat(soldier.RangedWeapons)
+                    .FirstOrDefault(candidate =>
+                        candidate.Template.Id == plan.WeaponTemplateId.Value)
+                : null;
+            switch (plan.Kind)
+            {
+                case PlannedSoldierActionKind.Shoot when target != null && weapon != null:
+                    soldier.TargetId = target.Soldier.Id;
+                    _shootActions.Add(new ShootAction(
+                        soldier.Soldier.Id,
+                        target.Soldier.Id,
+                        weapon.Template.Id,
+                        plan.Range,
+                        plan.ShotsToFire,
+                        plan.BulkMultiplier,
+                        plan.AimMultiplier,
+                        _grid,
+                        _random));
+                    break;
+                case PlannedSoldierActionKind.Aim when target != null && weapon != null:
+                    soldier.TargetId = target.Soldier.Id;
+                    _shootActions.Add(new AimAction(soldier, target, weapon, _log));
+                    break;
+                case PlannedSoldierActionKind.Reload when weapon != null:
+                    _shootActions.Add(new ReloadRangedWeaponAction(soldier, weapon));
+                    break;
+                case PlannedSoldierActionKind.Ready when weapon != null:
+                    _shootActions.Add(new ReadyRangedWeaponAction(soldier, weapon));
+                    break;
+                case PlannedSoldierActionKind.AreaAttack when target != null && weapon != null:
+                    soldier.TargetId = target.Soldier.Id;
+                    _shootActions.Add(new AreaAttackAction(
+                        soldier.Soldier.Id,
+                        target.Soldier.Id,
+                        weapon.Template.Id,
+                        _grid,
+                        _random));
+                    break;
+                case PlannedSoldierActionKind.BlastAttack when target != null && weapon != null:
+                    soldier.TargetId = target.Soldier.Id;
+                    _shootActions.Add(new BlastAttackAction(
+                        soldier.Soldier.Id,
+                        target.Soldier.Id,
+                        weapon.Template.Id,
+                        plan.Range,
+                        plan.BulkMultiplier,
+                        _grid,
+                        _random));
+                    break;
+            }
+        }
+
+        private void LogEngagementOptions(SquadEngagementDecision decision)
+        {
+            if (!BattleLog.IsEnabled) return;
+            float runnerUp = decision.Candidates
+                .Where(candidate => !ReferenceEquals(candidate, decision.Chosen))
+                .Select(candidate => candidate.Score)
+                .DefaultIfEmpty(decision.Chosen.Score)
+                .Max();
+            // Identical for every candidate row, and it walks the whole soldier map to build a
+            // squad lookup. Computed per row it made enabling the battle log cost
+            // options x squads x turns x soldiers, which priced the trace out of the long
+            // pursuit battles it exists to diagnose.
+            string revealedEnemyChoices = RenderRevealedEnemyChoices(decision.Frame);
+            foreach (EngagementOptionEvaluation candidate in decision.Candidates
+                .OrderBy(option => option.Kind))
+            {
+                BattleLog.Write(new BattleDecisionTrace("ENGAGE_EVAL", new List<KeyValuePair<string, string>>
+                {
+                    BattleDecisionTrace.Field("turn", TraceTurnNumber),
+                    BattleDecisionTrace.Field("side", TraceSideLabel ?? "none"),
+                    BattleDecisionTrace.Field("squad", decision.Squad.Id),
+                    BattleDecisionTrace.Field("role", decision.Frame.Role),
+                    BattleDecisionTrace.Field("kind", candidate.Kind),
+                    BattleDecisionTrace.Field("tier", candidate.Tier),
+                    BattleDecisionTrace.Field("intended", candidate.IntendedDestination?.ToString() ?? "none"),
+                    BattleDecisionTrace.Field("feasible_speed", candidate.FeasibleSpeed),
+                    BattleDecisionTrace.Field("outgoing", candidate.ImmediateEnemyRemoval),
+                    BattleDecisionTrace.Field("friendly_fire", candidate.ImmediateFriendlyFire),
+                    BattleDecisionTrace.Field("readiness", candidate.ReadinessValue),
+                    BattleDecisionTrace.Field("incoming", candidate.IncomingNow),
+                    BattleDecisionTrace.Field("melee", candidate.MeleeNow),
+                    BattleDecisionTrace.Field("future", string.Join(',', candidate.FutureExchange.Select(value => value.ToString("0.###", CultureInfo.InvariantCulture)))),
+                    BattleDecisionTrace.Field("role_term", candidate.RoleTerm),
+                    BattleDecisionTrace.Field("commitment", candidate.ContactCommitmentCost),
+                    BattleDecisionTrace.Field("hysteresis", candidate.Hysteresis),
+                    BattleDecisionTrace.Field("score", candidate.Score),
+                    BattleDecisionTrace.Field("chosen", candidate.Kind == decision.Chosen.Kind),
+                    BattleDecisionTrace.Field("margin", decision.Chosen.Score - runnerUp),
+                    BattleDecisionTrace.Field("enemy_baseline", decision.Frame.BaselinePosture),
+                    BattleDecisionTrace.Field("enemy_revealed", revealedEnemyChoices)
+                }).Render());
+            }
+        }
+
+        private string RenderRevealedEnemyChoices(SquadEngagementFrame frame)
+        {
+            Dictionary<int, BattleSquad> squads = _soldierMap.Values
+                .Select(soldier => soldier.BattleSquad)
+                .Where(squad => squad != null)
+                .DistinctBy(squad => squad.Id)
+                .ToDictionary(squad => squad.Id);
+            string revealed = string.Join(',', frame.PairWeights.Keys
+                .OrderBy(id => id)
+                .Select(id => squads.TryGetValue(id, out BattleSquad squad)
+                    ? $"{id}:{squad.LastEngagementOptionKind?.ToString() ?? "none"}"
+                    : $"{id}:missing"));
+            return string.IsNullOrEmpty(revealed) ? "none" : revealed;
         }
 
         private float NearestEnemyDistance(BattleSquad squad)
@@ -923,12 +1997,14 @@ namespace OnlyWar.Helpers.Battles
         /// Plans a routing squad (OnlyWar_TDD.md §6.6): Run directly away
         /// from the nearest enemy; no shooting or voluntary utility action; an engaged routing
         /// soldier cannot simply leave melee and remains subject to normal enemy attacks.
+        /// The heading is a squad property — see <see cref="CalculateSquadRoutLine"/>.
         /// </summary>
         public void PrepareRoutingActions(BattleSquad squad)
         {
             squad.WithdrawalRole = WithdrawalRole.Routing;
             squad.MovementTier = SquadMovementTier.Run;
             ApplyDeclaredMovementState(squad);
+            ValueTuple<int, int>? routLine = CalculateSquadRoutLine(squad);
             foreach (BattleSoldier soldier in squad.AbleSoldiers.OrderBy(s => s.Soldier.Id))
             {
                 if (_grid.IsAdjacentToEnemy(soldier.Soldier.Id))
@@ -938,311 +2014,50 @@ namespace OnlyWar.Helpers.Battles
                     continue;
                 }
 
-                float distance = _grid.GetNearestEnemy(soldier.Soldier.Id, out int closestEnemyId);
-                if (closestEnemyId == -1) continue;
-                ValueTuple<int, int> enemyPosition = _grid.GetSoldierPosition(closestEnemyId)[0];
-                ValueTuple<int, int> awayLine = new(
-                    soldier.TopLeft.Value.Item1 - enemyPosition.Item1,
-                    soldier.TopLeft.Value.Item2 - enemyPosition.Item2);
-                if (awayLine.Item1 == 0 && awayLine.Item2 == 0)
-                {
-                    awayLine = new ValueTuple<int, int>(0, 1);
-                }
+                // No enemy this squad can locate: nothing to run from, so nobody moves.
+                if (routLine == null) continue;
                 AddMoveAction(
                     soldier,
                     GetMovementBudget(soldier, SquadMovementTier.Run),
-                    awayLine,
+                    routLine.Value,
                     SquadMovementTier.Run);
                 // Deliberately no run-utility action: routing permits no voluntary actions.
             }
         }
 
         /// <summary>
-        /// Picks how one squad prosecutes a pursuit its force has already committed to. Posture is
-        /// a squad question, not a force question: a Scout squad with sniper rifles and heavy
-        /// bolters is at its best standing still and shooting, an Assault squad with pistols and
-        /// chainswords is worth nothing until it reaches contact, and a Tactical squad's answer
-        /// depends on where the quarry currently is. Answering it once for the whole force
-        /// guarantees two thirds of it does the wrong thing.
-        ///
-        /// The judgment already exists: <see cref="AssessSoldierEngagement"/> asks precisely "where
-        /// can this soldier deal with that enemy", loadout by loadout, and is already tuned. This
-        /// reads its votes rather than inventing a parallel rule, so a squad's pursuit behaviour
-        /// stays consistent with how it fights when nobody is withdrawing.
+        /// One flight heading for the whole squad: the line from the closest threat, through the
+        /// squad centroid, outward. Deriving it per soldier let members whose nearest enemy differed
+        /// break along diverging lines, and the squad centroid — the point pursuit, the engagement
+        /// frame and the escape rules all steer by — ended up in empty ground between the fragments.
+        /// Returns null when no member can find an enemy at all.
         /// </summary>
-        /// <param name="quarryRunSpeed">
-        /// The speed the withdrawal is actually moving at. A jog is half a run
-        /// (<see cref="JogSpeedMultiplier"/>), so Follow only holds the gap against a fleeing enemy
-        /// when the pursuer is more than twice its speed. Below that, jogging fire pays the full
-        /// Bulk penalty with the aim bonus zeroed AND loses ground — the worst of both — so the
-        /// squad commits to closing or to shooting instead.
-        /// </param>
-        public PursuitPosture SelectPursuitPosture(BattleSquad squad, float quarryRunSpeed)
+        private ValueTuple<int, int>? CalculateSquadRoutLine(BattleSquad squad)
         {
-            int standVotes = 0;
-            int advanceVotes = 0;
-            int chargeVotes = 0;
-            foreach (BattleSoldier soldier in squad.AbleSoldiers)
-            {
-                if (!IsPlaced(soldier)) continue;
-                EngagementAssessment assessment = AssessSoldierEngagement(soldier);
-                switch (assessment.Intent)
-                {
-                    case EngagementIntent.Charge:
-                        advanceVotes++;
-                        chargeVotes++;
-                        break;
-                    case EngagementIntent.Advance:
-                        advanceVotes++;
-                        break;
-                    default:
-                        // Stand, Walk and Retreat all mean "this soldier does not want to be
-                        // closing" — in a pursuit that is a vote to plant and shoot.
-                        standVotes++;
-                        break;
-                }
-            }
-
-            float jogSpeed = squad.GetSquadMove() * JogSpeedMultiplier;
-            bool jogHoldsTheGap = jogSpeed >= quarryRunSpeed;
-            PursuitPosture posture;
-            string reason;
-            bool wantsContact = chargeVotes * 2 >= advanceVotes && chargeVotes > 0;
-            if (advanceVotes > standVotes && wantsContact)
-            {
-                // Assault troops: worth nothing until they arrive, so they run and take the
-                // casualties on the way in. A jog would only delay contact.
-                (posture, reason) = (PursuitPosture.Press, "squad_wants_contact");
-            }
-            else if (advanceVotes > standVotes)
-            {
-                // Closing to its own firing range rather than to melee. Jogging in while shooting
-                // is strictly better than sprinting in silence — but only if the jog keeps up.
-                (posture, reason) = jogHoldsTheGap
-                    ? (PursuitPosture.Follow, "squad_closes_while_firing")
-                    : (PursuitPosture.Press, "squad_must_run_to_reach_range");
-            }
-            else if (jogHoldsTheGap && ShouldJogAndShoot(squad))
-            {
-                (posture, reason) = (PursuitPosture.Follow, "squad_shoots_while_keeping_pace");
-            }
-            else
-            {
-                // Fire support: already where it wants to be, or unable to keep pace anyway.
-                // Planting and shooting beats both chasing postures.
-                (posture, reason) = (PursuitPosture.Standoff, "squad_fights_from_where_it_stands");
-            }
-
-            BattleLog.Write(new BattleDecisionTrace("SQUAD_PURSUIT", new List<KeyValuePair<string, string>>
-            {
-                BattleDecisionTrace.Field("squad", squad.Id),
-                BattleDecisionTrace.Field("stand_votes", standVotes),
-                BattleDecisionTrace.Field("advance_votes", advanceVotes),
-                BattleDecisionTrace.Field("charge_votes", chargeVotes),
-                BattleDecisionTrace.Field("squad_move", squad.GetSquadMove()),
-                BattleDecisionTrace.Field("jog_speed", jogSpeed),
-                BattleDecisionTrace.Field("quarry_speed", quarryRunSpeed),
-                BattleDecisionTrace.Field("jog_holds_gap", jogHoldsTheGap),
-                BattleDecisionTrace.Field("decision", posture),
-                BattleDecisionTrace.Field("reason", reason)
-            }).Render());
-            return posture;
-        }
-
-        public void PreparePursuitActions(
-            BattleSquad squad,
-            PursuitPosture posture,
-            IReadOnlyCollection<BattleSquad> withdrawingTargets)
-        {
-            squad.WithdrawalRole = WithdrawalRole.None;
-            switch (posture)
-            {
-                case PursuitPosture.BreakOff:
-                    squad.MovementTier = SquadMovementTier.Stationary;
-                    ApplyDeclaredMovementState(squad);
-                    return;
-                case PursuitPosture.Standoff:
-                    PrepareStandoffActions(squad);
-                    return;
-                case PursuitPosture.Follow:
-                    PrepareFollowingActions(squad, withdrawingTargets);
-                    return;
-                case PursuitPosture.Press:
-                    PreparePressingActions(squad, withdrawingTargets);
-                    return;
-                default:
-                    throw new ArgumentOutOfRangeException(nameof(posture), posture, null);
-            }
-        }
-
-        /// <summary>
-        /// Plans a standoff: the quarry cannot be caught, so the squad stops chasing and shoots.
-        /// Moving fire pays <see cref="FullBulkMultiplier"/> with the aim bonus zeroed, while a
-        /// jog is only half a run and so cannot hold the gap against a withdrawal anyway. Holding
-        /// still trades turns-in-range for unpenalised, fully aimed shots, which is the better
-        /// bargain once the chase itself is unwinnable. No charging: a squad that could reach
-        /// melee would still be Pressing.
-        /// </summary>
-        private void PrepareStandoffActions(BattleSquad squad)
-        {
-            squad.MovementTier = SquadMovementTier.Stationary;
-            ApplyDeclaredMovementState(squad);
-            PrepareStandingSoldiers(
-                squad.AbleSoldiers.OrderBy(s => s.Soldier.Id).ToList(),
-                allowCharge: false);
-        }
-
-        private void PrepareFollowingActions(
-            BattleSquad squad,
-            IReadOnlyCollection<BattleSquad> withdrawingTargets)
-        {
-            // Following is a firing pursuit, and the jog only pays while the guns are
-            // actually worth firing. Out of effective range the squad runs to regain it —
-            // otherwise any quarry faster than a jog simply walks away from the pursuit —
-            // and drops back to jog-and-shoot once shots are worthwhile again.
-            if (!ShouldJogAndShoot(squad))
-            {
-                squad.MovementTier = SquadMovementTier.Run;
-                ApplyDeclaredMovementState(squad);
-                foreach (BattleSoldier soldier in squad.AbleSoldiers.OrderBy(s => s.Soldier.Id))
-                {
-                    BattleSoldier target = FindNearestTarget(soldier, withdrawingTargets);
-                    if (target == null) continue;
-                    ValueTuple<int, int> line = new(
-                        target.TopLeft.Value.Item1 - soldier.TopLeft.Value.Item1,
-                        target.TopLeft.Value.Item2 - soldier.TopLeft.Value.Item2);
-                    AddMoveAction(
-                        soldier,
-                        GetMovementBudget(soldier, SquadMovementTier.Run),
-                        line,
-                        SquadMovementTier.Run);
-                    AddPermittedRunUtilityActionToBag(soldier);
-                }
-                return;
-            }
-
-            squad.MovementTier = SquadMovementTier.Jog;
-            ApplyDeclaredMovementState(squad);
-            List<BattleSoldier> firingPursuers = [];
-            Dictionary<int, BattleSoldier> pursuitTargets = [];
+            float nearestDistance = float.MaxValue;
+            ValueTuple<int, int>? threat = null;
             foreach (BattleSoldier soldier in squad.AbleSoldiers.OrderBy(s => s.Soldier.Id))
             {
-                BattleSoldier target = FindNearestTarget(soldier, withdrawingTargets);
-                if (target == null) continue;
-                firingPursuers.Add(soldier);
-                pursuitTargets.Add(soldier.Soldier.Id, target);
+                if (!soldier.TopLeft.HasValue) continue;
+                float distance = _grid.GetNearestEnemy(soldier.Soldier.Id, out int closestEnemyId);
+                if (closestEnemyId == -1 || distance >= nearestDistance) continue;
+                nearestDistance = distance;
+                threat = _grid.GetSoldierPosition(closestEnemyId)[0];
             }
-            PrepareMovingRangedSoldiers(
-                firingPursuers,
-                (planner, soldier) =>
-                {
-                    BattleSoldier target = pursuitTargets[soldier.Soldier.Id];
-                    ValueTuple<int, int> line = new(
-                        target.TopLeft.Value.Item1 - soldier.TopLeft.Value.Item1,
-                        target.TopLeft.Value.Item2 - soldier.TopLeft.Value.Item2);
-                    return planner.AddMoveAction(
-                        soldier,
-                        GetMovementBudget(soldier, SquadMovementTier.Jog),
-                        line,
-                        SquadMovementTier.Jog);
-                },
-                (planner, soldier, direction) => planner.AddRangedActionToBag(
-                    soldier,
-                    FullBulkMultiplier,
-                    aimMultiplier: 0,
-                    movementDirection: direction));
-        }
+            if (threat == null) return null;
 
-        private void PreparePressingActions(
-            BattleSquad squad,
-            IReadOnlyCollection<BattleSquad> withdrawingTargets)
-        {
-            squad.MovementTier = SquadMovementTier.Run;
-            ApplyDeclaredMovementState(squad);
-            foreach (BattleSoldier soldier in squad.AbleSoldiers.OrderBy(s => s.Soldier.Id))
-            {
-                // Pressing exists to convert contact into damage. A pursuer who has caught the
-                // withdrawal fights it; one who can reach it this turn charges in. Without these
-                // two branches Press only ever closed the distance and then ran on the spot
-                // beside the enemy forever, so the posture could not hurt anyone and the fast
-                // element of a mixed-speed force could not pin a quarry for the slow element.
-                if (_grid.IsAdjacentToEnemy(soldier.Soldier.Id))
-                {
-                    AddMeleeActionsToBag(soldier);
-                    continue;
-                }
-
-                BattleSoldier target = FindNearestTarget(soldier, withdrawingTargets);
-                if (target == null) continue;
-                float budget = GetMovementBudget(soldier, SquadMovementTier.Run);
-                if (_grid.GetDistanceBetweenSoldiers(soldier.Soldier.Id, target.Soldier.Id)
-                    <= budget + 1)
-                {
-                    // Within a charge. AddChargeActionsToBag owns the adjacency search, the
-                    // reservation handling, and the fallbacks for a crowded target, and the
-                    // InMelee tier it moves at is the same speed as a Run. It picks the grid's
-                    // nearest enemy rather than the squad-level target, which at this range is
-                    // the same formation or one at least as close.
-                    AddChargeActionsToBag(soldier);
-                    continue;
-                }
-
-                ValueTuple<int, int> line = new(
-                    target.TopLeft.Value.Item1 - soldier.TopLeft.Value.Item1,
-                    target.TopLeft.Value.Item2 - soldier.TopLeft.Value.Item2);
-                AddMoveAction(
-                    soldier,
-                    budget,
-                    line,
-                    SquadMovementTier.Run);
-                AddPermittedRunUtilityActionToBag(soldier);
-            }
-        }
-
-        /// <summary>
-        /// Picks a pursuer's target from the withdrawing force, preferring the squads that can
-        /// actually fight back. Bound squads Run, and a running squad cannot shoot at all — so in
-        /// an organized withdrawal every round the withdrawal fires comes from the one Cover or
-        /// RearGuard squad standing still. Chasing the nearest body instead means sprinting after
-        /// squads that cannot hurt you while the one that can shoots you from a standstill with
-        /// full aim. Falls back to nearest when no covering squad is identifiable.
-        /// </summary>
-        private BattleSoldier FindNearestTarget(
-            BattleSoldier pursuer,
-            IReadOnlyCollection<BattleSquad> withdrawingTargets)
-        {
-            if (withdrawingTargets == null) return null;
-
-            List<BattleSquad> active = withdrawingTargets
-                .Where(squad => squad != null && squad.Status == BattleSquadStatus.Active)
-                .ToList();
-            // The role is carried over from the withdrawing side's own planning. When that side
-            // plans second its roles are a turn stale, which is still a good predictor: cover
-            // rotates only when the incumbent becomes the closest squad.
-            List<BattleSquad> shooters = active
-                .Where(squad => squad.WithdrawalRole
-                    is WithdrawalRole.Cover or WithdrawalRole.RearGuard)
-                .ToList();
-            HashSet<int> targetIds = (shooters.Count > 0 ? shooters : active)
-                .SelectMany(squad => squad.AbleSoldiers)
-                .Where(target => _soldierMap.ContainsKey(target.Soldier.Id))
-                .Select(target => target.Soldier.Id)
-                .ToHashSet();
-            int bestTargetId = -1;
-            float bestDistance = float.MaxValue;
-            foreach ((int enemyId, float distance) in
-                _grid.GetEnemyDistances(pursuer.Soldier.Id))
-            {
-                if (targetIds.Contains(enemyId)
-                    && (distance < bestDistance
-                        || (distance == bestDistance
-                            && (bestTargetId == -1 || enemyId < bestTargetId))))
-                {
-                    bestTargetId = enemyId;
-                    bestDistance = distance;
-                }
-            }
-            return bestTargetId == -1 ? null : _soldierMap[bestTargetId];
+            (float centroidX, float centroidY) = BattleEngagementFrameBuilder.Centroid(squad);
+            float dx = centroidX - threat.Value.Item1;
+            float dy = centroidY - threat.Value.Item2;
+            float length = (float)Math.Sqrt(dx * dx + dy * dy);
+            if (length <= 0.0001f) return new ValueTuple<int, int>(0, RoutLineLength);
+            // Normalized to a fixed length for two reasons: it keeps the direction's angular
+            // resolution high, and it stops CalculateMovementAlongLine from treating the short
+            // centroid-to-threat offset as a destination — a rout spends the whole Run budget, so
+            // men close to the enemy must not end the turn nearer than men who started further off.
+            return new ValueTuple<int, int>(
+                (int)Math.Round(dx / length * RoutLineLength),
+                (int)Math.Round(dy / length * RoutLineLength));
         }
 
         private void ApplyDeclaredMovementState(BattleSquad squad)
@@ -1286,96 +2101,6 @@ namespace OnlyWar.Helpers.Battles
             }
         }
 
-        // Per-soldier movement intent produced by AssessSoldierEngagement, tallied into the
-        // squad's advance/stand/walk/retreat/charge vote in PrepareActions.
-        private enum EngagementIntent { Retreat, Walk, Stand, Advance, Charge }
-
-        // Which branch of AssessSoldierEngagement produced an intent. Recorded purely so the
-        // ENGAGE_EVAL trace can say *why* a squad moved: the intent alone doesn't distinguish
-        // "the enemy is beyond three times my optimal range" from "the enemy out-ranges me", and
-        // those call for opposite fixes.
-        private enum EngagementReason
-        {
-            NoHands,
-            TemplateOutOfRange,
-            TemplateNoFiringLine,
-            TemplateInRange,
-            BeyondTripleOptimal,
-            InsideOptimalKite,
-            InsideOptimalHold,
-            OutrangedByTarget,
-            HoldingOptimal,
-            WeakCharge,
-            WeakAdvanceToContact,
-            WeakHoldAndFire,
-            WeakDesperateClose,
-            WeakDesperateHold,
-            WeakNoOption
-        }
-
-        private static string RenderEngagementReason(EngagementReason reason) => reason switch
-        {
-            EngagementReason.NoHands => "no_functioning_hands",
-            EngagementReason.TemplateOutOfRange => "template_out_of_range",
-            EngagementReason.TemplateNoFiringLine => "template_no_firing_line",
-            EngagementReason.TemplateInRange => "template_in_range",
-            EngagementReason.BeyondTripleOptimal => "beyond_triple_optimal",
-            EngagementReason.InsideOptimalKite => "inside_optimal_kite",
-            EngagementReason.InsideOptimalHold => "inside_optimal_bulk_hold",
-            EngagementReason.OutrangedByTarget => "outranged_by_target",
-            EngagementReason.HoldingOptimal => "holding_optimal",
-            EngagementReason.WeakCharge => "weak_charge_wins",
-            EngagementReason.WeakAdvanceToContact => "weak_charge_wins_out_of_reach",
-            EngagementReason.WeakHoldAndFire => "weak_hold_and_fire",
-            EngagementReason.WeakDesperateClose => "weak_desperate_close",
-            EngagementReason.WeakDesperateHold => "weak_desperate_hold",
-            EngagementReason.WeakNoOption => "weak_no_option_charge",
-            _ => reason.ToString()
-        };
-
-        /// <summary>
-        /// One soldier's movement vote plus the quantities that produced it. Everything here is
-        /// already computed by <see cref="AssessSoldierEngagement"/>; the struct only carries it out
-        /// so the squad trace can report it. Building it consumes no RNG and makes no extra
-        /// evaluation calls, so seeded battles are unaffected.
-        /// </summary>
-        private readonly struct EngagementAssessment
-        {
-            public EngagementIntent Intent { get; }
-            public EngagementReason Reason { get; }
-            public string WeaponName { get; }
-            public float Distance { get; }
-            // The soldier's own optimal standoff range. -1 = no functioning hands; 0 = no effective
-            // standoff range at all (the weak-ranged path).
-            public float PreferredDistance { get; }
-            // The nearest enemy's optimal standoff range against this soldier, or -1 where the
-            // branch taken never computed one.
-            public float TargetPreferredDistance { get; }
-
-            public EngagementAssessment(
-                EngagementIntent intent,
-                EngagementReason reason,
-                string weaponName,
-                float distance,
-                float preferredDistance,
-                float targetPreferredDistance = -1f)
-            {
-                Intent = intent;
-                Reason = reason;
-                WeaponName = weaponName;
-                Distance = distance;
-                PreferredDistance = preferredDistance;
-                TargetPreferredDistance = targetPreferredDistance;
-            }
-        }
-
-        // TUNABLE (engagement-value model): a charge must beat the best held ranged shot by at
-        // least this expected-battle-value margin before a soldier who cannot establish a good
-        // standoff range abandons his gun and runs in. 0 charges on any strict improvement; raise
-        // it to reserve melee rushes for clearly winning trades. Retained after the scoring
-        // conversion as the absolute separation floor in the point-blank crossover tests. See
-        // OnlyWar_TDD.md §6.6.
-        private const float EngagementChargeMargin = 0.25f;
         // How many of the engaged squad's nearest members a would-be charger projects strikes
         // against when estimating a melee's value. A charger reaches only the front of a squad;
         // this geometry/sample bound is independent of the score currency.
@@ -1388,285 +2113,6 @@ namespace OnlyWar.Helpers.Battles
         // the nearest-first distance scan stops there to stay bounded in large battles. This is a
         // spatial scan bound, so the score-currency conversion does not change it.
         private const float EngagementRearThreatCutoff = 30f;
-
-        /// <summary>
-        /// Decides how a single soldier wants to move relative to the nearest enemy, as a vote in
-        /// its squad's collective movement decision. The core question is where this soldier can
-        /// deal with that enemy: template (cone) weapons want to enter their auto-hit envelope;
-        /// conventional weapons with a real standoff range hold or reposition around it; and a
-        /// soldier with no effective standoff range (cannot reliably hit, or cannot wound at any
-        /// range) weighs charging into melee against simply holding and taking low-odds shots
-        /// (<see cref="ResolveWeakRangedEngagement"/>) rather than blindly closing the distance.
-        /// </summary>
-        private EngagementAssessment AssessSoldierEngagement(BattleSoldier soldier)
-        {
-            float distance = _grid.GetNearestEnemy(soldier.Soldier.Id, out int closestSoldierId);
-            BattleSoldier closestEnemy = _soldierMap[closestSoldierId];
-            BattleSquad closestSquad = closestEnemy.BattleSquad;
-            string weaponName = DescribeEngagementWeapon(soldier);
-
-            float templateMaximumRange = soldier.RangedWeapons
-                .Where(weapon => weapon.Template.IsConeWeapon)
-                .Select(weapon => weapon.Template.MaximumRange)
-                .DefaultIfEmpty(0)
-                .Max();
-            if (templateMaximumRange > 0)
-            {
-                // Template weapons auto-hit once they are in reach, so their movement decision is
-                // about entering the template rather than finding a to-hit sweet spot derived from
-                // accuracy, target size, or evasion.
-                if (distance > templateMaximumRange)
-                {
-                    return new EngagementAssessment(
-                        EngagementIntent.Advance,
-                        EngagementReason.TemplateOutOfRange,
-                        weaponName,
-                        distance,
-                        templateMaximumRange);
-                }
-                // Physically in range but no safe positive-value firing line: reposition rather
-                // than declare Stationary and then smuggle a full-speed closing move into it.
-                return SelectBestTemplateFiringLine(soldier) == null
-                    ? new EngagementAssessment(
-                        EngagementIntent.Advance,
-                        EngagementReason.TemplateNoFiringLine,
-                        weaponName,
-                        distance,
-                        templateMaximumRange)
-                    : new EngagementAssessment(
-                        EngagementIntent.Stand,
-                        EngagementReason.TemplateInRange,
-                        weaponName,
-                        distance,
-                        templateMaximumRange);
-            }
-
-            // Shooting quality and desired standoff are properties of the target we can best
-            // engage, while immediate spacing pressure is still a property of the nearest enemy.
-            // Ambush aim is included by SelectBestRangedTarget's sticky-target path, and the
-            // deterministic scan is memoized for the later action-selection pass.
-            RangedTargetEvaluation bestShot = EvaluateAimedPostureTarget(soldier)
-                ?? SelectBestRangedTarget(soldier, useBulk: false);
-            BattleSquad standoffTargetSquad = bestShot?.Target?.BattleSquad ?? closestSquad;
-            float targetSize = standoffTargetSquad.GetAverageSize();
-            float targetArmor = standoffTargetSquad.GetAverageArmor();
-            float targetCon = standoffTargetSquad.GetAverageConstitution();
-            float targetEvasion = standoffTargetSquad.GetAverageRangedEvasion();
-            float preferredHitDistance = BattleModifiersUtil.CalculateOptimalDistance(
-                soldier, targetSize, targetArmor, targetCon, targetEvasion);
-
-            if (preferredHitDistance == -1)
-            {
-                // No functioning hands — no weapon to fight with. Fall back.
-                return new EngagementAssessment(
-                    EngagementIntent.Retreat,
-                    EngagementReason.NoHands,
-                    weaponName,
-                    distance,
-                    preferredHitDistance);
-            }
-
-            if (preferredHitDistance == 0)
-            {
-                // No effective standoff range against this target — either we cannot reliably hit
-                // it (single-shot heavy weapon vs a small, evasive target) or cannot wound it at any
-                // range (light weapon vs heavy armor and constitution). Rather than blindly close
-                // the distance (which sent missile squads and autogun cultists sprinting at Space
-                // Marines), weigh a charge against holding and taking the low-odds shots.
-                return ResolveWeakRangedEngagement(
-                    soldier, closestEnemy, closestSquad, distance, targetArmor, weaponName);
-            }
-
-            if (distance > preferredHitDistance * 3)
-            {
-                return new EngagementAssessment(
-                    EngagementIntent.Advance,
-                    EngagementReason.BeyondTripleOptimal,
-                    weaponName,
-                    distance,
-                    preferredHitDistance);
-            }
-            if (distance < preferredHitDistance)
-            {
-                // The enemy is inside this soldier's sweet spot, so geometry wants a step back.
-                // Only take it if the walk's Bulk penalty doesn't gut his firepower.
-                return WalkBackPreservesShooting(soldier)
-                    ? new EngagementAssessment(
-                        EngagementIntent.Walk,
-                        EngagementReason.InsideOptimalKite,
-                        weaponName,
-                        distance,
-                        preferredHitDistance)
-                    : new EngagementAssessment(
-                        EngagementIntent.Stand,
-                        EngagementReason.InsideOptimalHold,
-                        weaponName,
-                        distance,
-                        preferredHitDistance);
-            }
-
-            // Within [preferredHitDistance, 3x]: advance only if we out-range the enemy's own
-            // preferred engagement distance. Uses the closest enemy as a deterministic representative
-            // (the prior random draw perturbed the seeded planning stream for no benefit).
-            float targetPreferredDistance = BattleModifiersUtil.CalculateOptimalDistance(
-                closestEnemy,
-                soldier.Soldier.Size,
-                soldier.Armor.Template.ArmorProvided,
-                soldier.Soldier.Constitution,
-                soldier.Soldier.Template.Species.RangedEvasion);
-            return preferredHitDistance < targetPreferredDistance
-                ? new EngagementAssessment(
-                    EngagementIntent.Advance,
-                    EngagementReason.OutrangedByTarget,
-                    weaponName,
-                    distance,
-                    preferredHitDistance,
-                    targetPreferredDistance)
-                : new EngagementAssessment(
-                    EngagementIntent.Stand,
-                    EngagementReason.HoldingOptimal,
-                    weaponName,
-                    distance,
-                    preferredHitDistance,
-                    targetPreferredDistance);
-        }
-
-        private RangedTargetEvaluation EvaluateAimedPostureTarget(BattleSoldier soldier)
-        {
-            if (soldier.Aim is not ValueTuple<int, RangedWeapon, int> aim
-                || !_soldierMap.TryGetValue(aim.Item1, out BattleSoldier target)
-                || !target.CanFight
-                || !IsPlaced(target)
-                || aim.Item2.LoadedAmmo <= 0
-                || !soldier.EquippedRangedWeapons.Contains(aim.Item2))
-            {
-                return null;
-            }
-
-            float range = _grid.GetDistanceBetweenSoldiers(
-                soldier.Soldier.Id, target.Soldier.Id);
-            if (range > aim.Item2.Template.MaximumRange)
-            {
-                return null;
-            }
-
-            RangedTargetEvaluation evaluation = EvaluateRangedTarget(
-                soldier,
-                target,
-                aim.Item2,
-                range,
-                aim.Item2.Template.Accuracy + aim.Item3 + 1);
-            return evaluation.Score > 0 ? evaluation : null;
-        }
-
-        // The weapon the engagement decision effectively hinges on: the longest-ranged one the
-        // soldier can actually bring to bear, matching CalculateOptimalDistance's own scan. Named
-        // in the trace so a mixed squad's split vote is attributable to a loadout rather than a
-        // soldier id nobody can look up.
-        private static string DescribeEngagementWeapon(BattleSoldier soldier)
-        {
-            RangedWeapon weapon = soldier.EquippedRangedWeapons
-                .Where(w => (int)w.Template.Location <= soldier.FunctioningHands)
-                .OrderByDescending(w => w.Template.MaximumRange)
-                .FirstOrDefault();
-            return weapon?.Template.Name.Replace(' ', '_') ?? "unarmed";
-        }
-
-        /// <summary>
-        /// Movement decision for a soldier with no effective standoff range against the nearest
-        /// enemy. Compares the net value of charging into melee (projected melee battle value minus
-        /// the cost of crossing the gap under fire) against the best shot he could take by holding
-        /// position. He charges only when melee clearly wins; otherwise, if any positive-value shot
-        /// exists, he plants and fires; and only when neither shooting nor charging is productive
-        /// does he fall back to the old "close to maximize a hit/penetration chance" behavior.
-        /// </summary>
-        private EngagementAssessment ResolveWeakRangedEngagement(
-            BattleSoldier soldier,
-            BattleSoldier closestEnemy,
-            BattleSquad closestSquad,
-            float distance,
-            float targetArmor,
-            string weaponName)
-        {
-            RangedTargetEvaluation heldShot = SelectBestRangedTarget(soldier, useBulk: false);
-            float rangedScore = heldShot?.Score ?? 0f;
-
-            ChargeAssessment charge = EstimateChargeNet(soldier, closestSquad, distance);
-            if (charge.MeleeBattleValue > 0
-                && charge.NetValue > rangedScore
-                && charge.NetValue > EngagementChargeMargin)
-            {
-                return charge.ReachesContactThisTurn
-                    ? new EngagementAssessment(
-                        EngagementIntent.Charge,
-                        EngagementReason.WeakCharge,
-                        weaponName,
-                        distance,
-                        0f)
-                    : new EngagementAssessment(
-                        EngagementIntent.Advance,
-                        EngagementReason.WeakAdvanceToContact,
-                        weaponName,
-                        distance,
-                        0f);
-            }
-
-            if (rangedScore > 0)
-            {
-                // A low-odds shot from safety still beats a losing charge: hold and fire.
-                return new EngagementAssessment(
-                    EngagementIntent.Stand,
-                    EngagementReason.WeakHoldAndFire,
-                    weaponName,
-                    distance,
-                    0f);
-            }
-
-            // Neither shooting nor charging looks productive here. Preserve the old desperate
-            // close: getting nearer at least maximizes a hit/penetration chance, and there is
-            // nothing to be gained by standing still.
-            if (soldier.EquippedRangedWeapons.Count >= 1)
-            {
-                float desperateHitDistance = Math.Min(
-                    EstimateArmorPenDistance(soldier.EquippedRangedWeapons[0], targetArmor),
-                    BattleModifiersUtil.EstimateHitDistance(
-                        soldier.Soldier,
-                        soldier.EquippedRangedWeapons[0],
-                        closestSquad.GetAverageSize(),
-                        soldier.FunctioningHands,
-                        closestSquad.GetAverageRangedEvasion()));
-                if (desperateHitDistance > 0)
-                {
-                    float targetPreferredDistance = BattleModifiersUtil.CalculateOptimalDistance(
-                        closestEnemy,
-                        soldier.Soldier.Size,
-                        soldier.Armor.Template.ArmorProvided,
-                        soldier.Soldier.Constitution,
-                        soldier.Soldier.Template.Species.RangedEvasion);
-                    return desperateHitDistance < targetPreferredDistance
-                        ? new EngagementAssessment(
-                            EngagementIntent.Advance,
-                            EngagementReason.WeakDesperateClose,
-                            weaponName,
-                            distance,
-                            desperateHitDistance,
-                            targetPreferredDistance)
-                        : new EngagementAssessment(
-                            EngagementIntent.Stand,
-                            EngagementReason.WeakDesperateHold,
-                            weaponName,
-                            distance,
-                            desperateHitDistance,
-                            targetPreferredDistance);
-                }
-            }
-            return new EngagementAssessment(
-                EngagementIntent.Charge,
-                EngagementReason.WeakNoOption,
-                weaponName,
-                distance,
-                0f);
-        }
 
         // Net outcome of a soldier charging the engaged enemy squad: the battle value his strikes
         // would remove on contact, and the friendly battle value expected to be lost crossing the
@@ -1810,55 +2256,6 @@ namespace OnlyWar.Helpers.Battles
                 plannedWeapons.Add(secondary);
             }
             return plannedWeapons;
-        }
-
-        /// <summary>
-        /// Whether stepping back is worth the Bulk penalty it imposes on this soldier's
-        /// shooting this turn. Both shots are scored against the current (unmoved) layout so
-        /// only the Bulk multiplier differs: a stationary shot (Bulk 0) versus a walking shot
-        /// (<see cref="WalkBulkMultiplier"/>). A light weapon keeps nearly all its value and
-        /// the kite is fine; a heavy, high-Bulk weapon loses too much and the soldier is
-        /// better off holding and firing. When there is no worthwhile stationary shot to
-        /// protect (no ranged weapon, or a non-positive score), the step-back is about
-        /// spacing rather than firepower, so it is left unchanged.
-        /// </summary>
-        private bool WalkBackPreservesShooting(BattleSoldier soldier)
-        {
-            RangedTargetEvaluation standing = SelectBestRangedTarget(soldier, 0f);
-            if (standing == null || standing.Score <= 0)
-            {
-                return true;
-            }
-
-            RangedTargetEvaluation walking = SelectBestRangedTarget(soldier, WalkBulkMultiplier);
-            float walkingScore = walking?.Score ?? 0f;
-            return walkingScore >= standing.Score * WalkBulkShootingRetention;
-        }
-
-        private bool ShouldJogAndShoot(BattleSquad squad)
-        {
-            int worthwhileShots = 0;
-            foreach (BattleSoldier soldier in squad.AbleSoldiers)
-            {
-                ValueTuple<int, int>? movementDirection = GetDirectionToNearestEnemy(soldier);
-                RangedTargetEvaluation conventionalShot = SelectBestRangedTarget(
-                    soldier,
-                    useBulk: true,
-                    movementDirection: movementDirection);
-                bool hasShot = SelectBestTemplateFiringLine(
-                        soldier,
-                        movementDirection: movementDirection) != null
-                    || HasBlastTargetInRange(soldier)
-                    || (conventionalShot?.Score > 0
-                        && conventionalShot.HitProbability > 0.1f);
-                if (hasShot)
-                {
-                    worthwhileShots++;
-                }
-            }
-
-            return worthwhileShots > 0
-                && worthwhileShots * 2 >= squad.AbleSoldiers.Count;
         }
 
         private bool ShouldChargeFromStanding(BattleSoldier soldier)
@@ -2533,6 +2930,155 @@ namespace OnlyWar.Helpers.Battles
                     }
                 }
             }
+        }
+
+        private IReadOnlyList<IAction> ResolveSquadChargeIntent(
+            BattleSquad chargingSquad,
+            BattleSquad targetSquad,
+            BattleState state)
+        {
+            List<IAction> resolvedMovement = [];
+            if (chargingSquad.Status != BattleSquadStatus.Active
+                || targetSquad.Status != BattleSquadStatus.Active)
+            {
+                return resolvedMovement;
+            }
+
+            // Resolve in stable soldier order against the live post-movement grid. Each successful
+            // placement immediately occupies its cells, so later members naturally select another
+            // defender or another open adjacency instead of dog-piling one reserved square.
+            List<BattleSoldier> initialTargets = targetSquad.AbleSoldiers
+                .Where(IsPlaced)
+                .ToList();
+            foreach (BattleSoldier charger in chargingSquad.AbleSoldiers
+                .Where(IsPlaced)
+                .Select(soldier => new
+                {
+                    Soldier = soldier,
+                    Distance = initialTargets
+                        .Select(target => _grid.GetDistanceBetweenSoldiers(
+                            soldier.Soldier.Id, target.Soldier.Id))
+                        .DefaultIfEmpty(float.MaxValue)
+                        .Min()
+                })
+                .OrderByDescending(candidate => candidate.Distance)
+                .ThenBy(candidate => candidate.Soldier.Soldier.Id)
+                .Select(candidate => candidate.Soldier))
+            {
+                List<BattleSoldier> targets = targetSquad.AbleSoldiers
+                    .Where(IsPlaced)
+                    .OrderBy(target => target.Soldier.Id)
+                    .ToList();
+                if (targets.Count == 0) break;
+
+                List<BattleSoldier> adjacent = targets
+                    .Where(target => _grid.GetDistanceBetweenSoldiers(
+                        charger.Soldier.Id, target.Soldier.Id)
+                        <= BattleContactRules.MeleeContactAllowance)
+                    .ToList();
+                if (adjacent.Count > 0)
+                {
+                    PrepareChargerForMelee(charger);
+                    MeleeAttackAction attack = CreateMeleeAttackAction(
+                        charger, adjacent, didMove: false);
+                    if (attack != null) _meleeActions.Add(attack);
+                    continue;
+                }
+
+                float budget = GetMovementBudget(charger, SquadMovementTier.InMelee);
+                var approaches = targets
+                    .Select(target =>
+                    {
+                        ValueTuple<int, int> position = _grid.GetSoldierPosition(
+                            target.Soldier.Id)[0];
+                        ValueTuple<int, int> adjacency = _grid.GetClosestOpenAdjacency(
+                            charger.TopLeft.Value, position);
+                        float distance = adjacency == charger.TopLeft.Value
+                            ? float.MaxValue
+                            : GridDistance(charger.TopLeft.Value, adjacency);
+                        return new { Target = target, Position = position, Adjacency = adjacency, Distance = distance };
+                    })
+                    .OrderBy(candidate => candidate.Distance)
+                    .ThenBy(candidate => candidate.Target.Soldier.Id)
+                    .ToList();
+                var reachable = approaches.FirstOrDefault(candidate =>
+                    candidate.Distance <= budget + 0.0001f);
+                BattleSoldier pursuedTarget = reachable?.Target
+                    ?? targets.OrderBy(target => _grid.GetDistanceBetweenSoldiers(
+                            charger.Soldier.Id, target.Soldier.Id))
+                        .ThenBy(target => target.Soldier.Id)
+                        .First();
+                ValueTuple<int, int> pursuedPosition = _grid.GetSoldierPosition(
+                    pursuedTarget.Soldier.Id)[0];
+                ValueTuple<int, int> line;
+                ValueTuple<int, int> destination;
+                if (reachable != null)
+                {
+                    destination = reachable.Adjacency;
+                    line = (
+                        destination.Item1 - charger.TopLeft.Value.Item1,
+                        destination.Item2 - charger.TopLeft.Value.Item2);
+                }
+                else
+                {
+                    line = (
+                        pursuedPosition.Item1 - charger.TopLeft.Value.Item1,
+                        pursuedPosition.Item2 - charger.TopLeft.Value.Item2);
+                    ValueTuple<int, int> desired = CalculateMovementAlongLine(line, budget);
+                    destination = (
+                        charger.TopLeft.Value.Item1 + desired.Item1,
+                        charger.TopLeft.Value.Item2 + desired.Item2);
+                }
+
+                ushort orientation = CalculateOrientationFromVector(
+                    line, charger, SquadMovementTier.InMelee);
+                destination = FindBestLocation(
+                    charger,
+                    charger.TopLeft.Value,
+                    destination,
+                    budget,
+                    orientation);
+                MoveAction move = new(
+                    charger,
+                    _grid,
+                    charger.TopLeft.Value,
+                    destination,
+                    orientation,
+                    budget);
+                charger.CurrentSpeed = GetTierSpeed(charger, SquadMovementTier.InMelee);
+                move.Execute(state);
+                if (move.Succeeded) resolvedMovement.Add(move);
+
+                if (move.Succeeded
+                    && pursuedTarget.CanFight
+                    && IsPlaced(pursuedTarget)
+                    && _grid.GetDistanceBetweenSoldiers(
+                        charger.Soldier.Id, pursuedTarget.Soldier.Id)
+                        <= BattleContactRules.MeleeContactAllowance)
+                {
+                    PrepareChargerForMelee(charger);
+                    MeleeAttackAction attack = CreateMeleeAttackAction(
+                        charger, [pursuedTarget], didMove: true, isCharge: true);
+                    if (attack != null) _meleeActions.Add(attack);
+                }
+            }
+            return resolvedMovement;
+        }
+
+        private static float GridDistance(
+            ValueTuple<int, int> first,
+            ValueTuple<int, int> second)
+        {
+            int dx = first.Item1 - second.Item1;
+            int dy = first.Item2 - second.Item2;
+            return (float)Math.Sqrt(dx * dx + dy * dy);
+        }
+
+        private static void PrepareChargerForMelee(BattleSoldier soldier)
+        {
+            soldier.CurrentSpeed = 0;
+            soldier.LeftoverMovement = 0;
+            soldier.IsRunning = false;
         }
 
         private void AddChargeActionsHelper(BattleSoldier soldier, int closestEnemyId, ValueTuple<int, int> currentPosition, float distance, BattleSquad oppSquad, ValueTuple<int, int> newPos)
@@ -4058,15 +4604,17 @@ namespace OnlyWar.Helpers.Battles
             BattleSoldier target,
             RangedWeapon weapon,
             float range,
-            float additionalToHitModifier)
+            float additionalToHitModifier,
+            float? targetSpeed = null)
         {
+            float evaluatedTargetSpeed = targetSpeed ?? target.CurrentSpeed;
             var cacheKey = (
                 soldier.Soldier.Id,
                 target.Soldier.Id,
                 weapon.Template.Id,
                 BitConverter.SingleToInt32Bits(range),
                 BitConverter.SingleToInt32Bits(additionalToHitModifier),
-                BitConverter.SingleToInt32Bits(target.CurrentSpeed),
+                BitConverter.SingleToInt32Bits(evaluatedTargetSpeed),
                 (int)weapon.LoadedAmmo);
             if (_context.RangedEvaluations.TryGetValue(cacheKey, out RangedTargetEvaluation cached))
             {
@@ -4078,7 +4626,8 @@ namespace OnlyWar.Helpers.Battles
                 target,
                 weapon,
                 range,
-                additionalToHitModifier);
+                additionalToHitModifier,
+                evaluatedTargetSpeed);
             float takeOutProbability = Math.Clamp(attackEstimate.Item2, 0, 1);
             float imminence = GetSquadImminence(soldier.BattleSquad, target.BattleSquad);
             float enemyBattleValueRemoved = imminence
@@ -4442,7 +4991,8 @@ namespace OnlyWar.Helpers.Battles
             BattleSoldier target,
             RangedWeapon weapon,
             float range,
-            float moveAndAimMod)
+            float moveAndAimMod,
+            float? targetSpeed = null)
         {
             int shotsToFire = Math.Max(
                 1,
@@ -4459,7 +5009,8 @@ namespace OnlyWar.Helpers.Battles
                 weapon,
                 range,
                 moveAndAimMod,
-                firingIntoMelee);
+                firingIntoMelee,
+                targetSpeed);
             ValueTuple<float, float> estimate = new(0,0);
             for (int iteration = 0; iteration < 4; iteration++)
             {
@@ -4583,7 +5134,6 @@ namespace OnlyWar.Helpers.Battles
                 newLocation,
                 moveSpeed,
                 orientation);
-            soldier.CurrentSpeed = GetTierSpeed(soldier, movementTier);
             _grid.ReserveMoveDestination(soldier, newLocation, orientation);
             _moveActions.Add(new MoveAction(
                 soldier,
@@ -4595,23 +5145,18 @@ namespace OnlyWar.Helpers.Battles
             ValueTuple<int, int> actualDirection = new(
                 newLocation.Item1 - soldier.TopLeft.Value.Item1,
                 newLocation.Item2 - soldier.TopLeft.Value.Item2);
+            soldier.CurrentSpeed = Math.Min(
+                GetTierSpeed(soldier, movementTier),
+                (float)Math.Sqrt(
+                    actualDirection.Item1 * actualDirection.Item1
+                    + actualDirection.Item2 * actualDirection.Item2));
+            if (soldier.CurrentSpeed <= 0)
+            {
+                soldier.IsRunning = false;
+            }
             return actualDirection.Item1 == 0 && actualDirection.Item2 == 0
                 ? line
                 : actualDirection;
-        }
-
-        private ValueTuple<int, int>? GetDirectionToNearestEnemy(BattleSoldier soldier)
-        {
-            _grid.GetNearestEnemy(soldier.Soldier.Id, out int closestEnemyId);
-            if (closestEnemyId == -1)
-            {
-                return null;
-            }
-
-            ValueTuple<int, int> enemyPosition = _grid.GetSoldierPosition(closestEnemyId)[0];
-            return new ValueTuple<int, int>(
-                enemyPosition.Item1 - soldier.TopLeft.Value.Item1,
-                enemyPosition.Item2 - soldier.TopLeft.Value.Item2);
         }
 
         private static bool HasRestrictedJogFiringArc(
@@ -4744,63 +5289,57 @@ namespace OnlyWar.Helpers.Battles
             ValueTuple<int, int> startingPoint,
             ValueTuple<int, int> targetPoint,
             float speed,
-            ushort orientation)
+            ushort orientation,
+            BattleGridManager grid = null)
         {
+            grid ??= _grid;
             float speedSq = speed * speed;
             int xMove = targetPoint.Item1 - startingPoint.Item1;
-            int xMoveSq = xMove * xMove;
             int yMove = targetPoint.Item2 - startingPoint.Item2;
-            int yMoveSq = yMove * yMove;
-            // try shifting around the shorter axis first
-            if (xMoveSq > yMoveSq)
-            {
+            // Shift around the shorter axis first: the major axis carries the intent of the move,
+            // so give ground on the minor one.
+            bool majorIsX = xMove * xMove > yMove * yMove;
+            int major = majorIsX ? xMove : yMove;
+            int minor = majorIsX ? yMove : xMove;
+            // Which side of the intended lateral offset gets probed first. Outward (away from the
+            // line of travel) matches the pre-existing bias.
+            int leadSide = minor < 0 ? -1 : 1;
 
-                while (xMoveSq > 0)
-                {
-                    int direction = yMove < 0 ? -1 : 1;
-                    int i = 2;
-                    int newY = yMove + ((i / 2) * direction * (i % 1 == 1 ? -1 : 1));
-                    while (newY * newY <= speedSq - xMoveSq)
-                    {
-                        ValueTuple<int, int> newTarget = new ValueTuple<int, int>(startingPoint.Item1 + xMove, startingPoint.Item2 + newY);
-                        if (_grid.IsMoveDestinationAvailable(soldier, newTarget, orientation))
-                        {
-                            return newTarget;
-                        }
-                        i++;
-                        newY = yMove + ((i / 2) * direction * (i % 1 == 1 ? -1 : 1));
-                    }
-                    // if we can't find a lateral move that works, start over with the main axis reduced by 1
-                    xMove -= xMove > 0 ? 1 : -1;
-                    xMoveSq = xMove * xMove;
-                }
-                //Debug.Log($"There is no place in the world for this move: {startingPoint.Item1}, {startingPoint.Item2}->{targetPoint.Item1},{targetPoint.Item2}, {speed}");
-                return startingPoint;
-            }
-            else
+            while (major * major > 0)
             {
-                while (yMoveSq > 0)
+                float lateralBudgetSq = speedSq - (major * major);
+                // Probe the intended offset first and then alternate outward from it — 0, +1, -1,
+                // +2, -2, … A side that has left the movement budget is skipped rather than ending
+                // the search, because when the intended offset is nonzero the two sides run out at
+                // different magnitudes and the nearer one still has usable squares.
+                for (int magnitude = 0; ; magnitude++)
                 {
-                    int direction = xMove < 0 ? -1 : 1;
-                    int i = 2;
-                    int newX = xMove + ((i / 2) * direction * (i % 1 == 1 ? -1 : 1));
-                    while (newX * newX <= speedSq - yMoveSq)
+                    bool anyWithinBudget = false;
+                    int sides = magnitude == 0 ? 1 : 2;
+                    for (int side = 0; side < sides; side++)
                     {
-                        ValueTuple<int, int> newTarget = new ValueTuple<int, int>(startingPoint.Item1 + newX, startingPoint.Item2 + yMove);
-                        if (_grid.IsMoveDestinationAvailable(soldier, newTarget, orientation))
+                        int lateral = minor
+                            + (magnitude * (side == 0 ? leadSide : -leadSide));
+                        if (lateral * lateral > lateralBudgetSq) continue;
+                        anyWithinBudget = true;
+                        ValueTuple<int, int> newTarget = majorIsX
+                            ? new ValueTuple<int, int>(
+                                startingPoint.Item1 + major,
+                                startingPoint.Item2 + lateral)
+                            : new ValueTuple<int, int>(
+                                startingPoint.Item1 + lateral,
+                                startingPoint.Item2 + major);
+                        if (grid.IsMoveDestinationAvailable(soldier, newTarget, orientation))
                         {
                             return newTarget;
                         }
-                        i++;
-                        newX = xMove + ((i / 2) * direction * (i % 1 == 1 ? -1 : 1));
                     }
-                    // if we can't find a lateral move that works, start over with the main axis reduced by 1
-                    yMove -= yMove > 0 ? 1 : -1;
-                    yMoveSq = yMove * yMove;
+                    if (!anyWithinBudget) break;
                 }
-                //Debug.Log($"There is no place in the world for this move: {startingPoint.Item1}, {startingPoint.Item2}->{targetPoint.Item1},{targetPoint.Item2}, {speed}");
-                return startingPoint;
+                // if we can't find a lateral move that works, start over with the main axis reduced by 1
+                major -= major > 0 ? 1 : -1;
             }
+            return startingPoint;
         }
 
         // Mirror of ShootAction.HandleHit / AreaAttackAction: effective strength at range

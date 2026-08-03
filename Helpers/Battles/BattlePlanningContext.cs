@@ -57,6 +57,14 @@ namespace OnlyWar.Helpers.Battles
         // SquadId -> its firing geometry for the turn (Phase 3 fire distribution). Squad-level and
         // identical for every member, so computed once per squad.
         internal ConcurrentDictionary<int, SquadEngagementGeometry> SquadGeometry { get; } = new();
+
+        // Exact, bounded current-turn response estimate for one enemy squad against one candidate
+        // target squad.  Candidate options differ primarily by declared target speed; geometry is
+        // frozen until shooting resolves.  This lets every option reuse live hit/range math without
+        // rescanning the battlefield.
+        internal ConcurrentDictionary<
+            (int AttackerSquadId, int TargetSquadId, int TargetSpeedBits, int AttackerBulkBits),
+            float> IncomingResponses { get; } = new();
     }
 
     /// <summary>

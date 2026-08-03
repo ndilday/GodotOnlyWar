@@ -10,6 +10,7 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
+using System.Threading.Tasks;
 
 namespace OnlyWar.Helpers.Battles
 {
@@ -30,6 +31,10 @@ namespace OnlyWar.Helpers.Battles
         public BattleHistory BattleHistory { get; private set; }
         private BattleState _currentState;
         private readonly Dictionary<BattleSide, PursuitPosture> _pursuitPostures = [];
+        // Frozen current-turn pursuit pairings. Individual withdrawal escape must distinguish a
+        // squad the enemy deliberately chose as its quarry from another member of the same force;
+        // force-wide min/max speeds cannot answer that question.
+        private readonly Dictionary<int, int> _pursuitTargetsBySquad = [];
         private readonly Dictionary<BattleSide, Queue<int>> _battleValueHistory = [];
         private readonly Dictionary<BattleSide, Queue<bool>> _damageActionHistory = [];
         private readonly Dictionary<int, float> _rearGuardStartingSeparation = [];
@@ -243,6 +248,7 @@ namespace OnlyWar.Helpers.Battles
                 _currentState.RemoveSoldier(casualtyId);
             }
             RecordRoundMetrics(executedActions);
+            ResolveUnpursuedWithdrawalEscapes(events);
             ResolveContactBreaks(events);
             if (_currentState.ActiveAttackerSquads.Count > 0
                 && _currentState.ActiveOpposingSquads.Count > 0)
@@ -355,8 +361,295 @@ namespace OnlyWar.Helpers.Battles
             // execution begins (below), so both sides' planners can safely reuse each other's
             // pure targeting computations. Rebuilt every turn, so nothing survives a layout change.
             BattlePlanningContext planningContext = new();
-            PlanSide(BattleSide.Attacker, shootSegmentActions, moveSegmentActions, meleeSegmentActions, log, planningContext);
-            PlanSide(BattleSide.Opposing, shootSegmentActions, moveSegmentActions, meleeSegmentActions, log, planningContext);
+            PlanSimultaneously(
+                shootSegmentActions,
+                moveSegmentActions,
+                meleeSegmentActions,
+                log,
+                planningContext);
+        }
+
+        private void PlanSimultaneously(
+            ICollection<IAction> shootActions,
+            ICollection<IAction> moveActions,
+            ICollection<IAction> meleeActions,
+            Action<string> log,
+            BattlePlanningContext planningContext)
+        {
+            List<BattleSquad> attacker = GetActiveSquads(BattleSide.Attacker)
+                .OrderBy(squad => squad.Id)
+                .ToList();
+            List<BattleSquad> opposing = GetActiveSquads(BattleSide.Opposing)
+                .OrderBy(squad => squad.Id)
+                .ToList();
+            Dictionary<BattleSide, BattleSquadPlanner> planners = new()
+            {
+                [BattleSide.Attacker] = CreateSquadPlanner(
+                    BattleSide.Attacker, shootActions, moveActions, meleeActions, log,
+                    planningContext),
+                [BattleSide.Opposing] = CreateSquadPlanner(
+                    BattleSide.Opposing, shootActions, moveActions, meleeActions, log,
+                    planningContext)
+            };
+
+            Dictionary<int, EngagementRoleConstraint> constraints = [];
+            BuildRoleConstraints(BattleSide.Attacker, attacker, opposing, constraints);
+            BuildRoleConstraints(BattleSide.Opposing, opposing, attacker, constraints);
+            BattleEngagementFrameBuilder.PairedFrame paired =
+                BattleEngagementFrameBuilder.Build(attacker, opposing, constraints);
+            LogScreenEvaluations(BattleSide.Attacker, attacker, opposing, paired);
+            LogScreenEvaluations(BattleSide.Opposing, opposing, attacker, paired);
+
+            List<(BattleSide Side, List<BattleSquad> Friendly, List<BattleSquad> Enemy,
+                BattleSquad Squad)> jobs = [];
+            foreach ((BattleSide side, List<BattleSquad> friendly, List<BattleSquad> enemy) in new[]
+            {
+                (BattleSide.Attacker, attacker, opposing),
+                (BattleSide.Opposing, opposing, attacker)
+            })
+            {
+                foreach (BattleSquad squad in friendly.OrderBy(candidate => candidate.Id))
+                {
+                    jobs.Add((side, friendly, enemy, squad));
+                }
+            }
+
+            // The complete squad decision is the bounded global planning job.  Every job reads the
+            // same frozen frame/grid and writes one indexed result; there is no nested soldier
+            // parallelism during this stage.  The declaration/action barriers below remain serial.
+            (BattleSide Side, SquadEngagementDecision Decision)[] decisionResults =
+                new (BattleSide, SquadEngagementDecision)[jobs.Count];
+            void ChooseAt(int index)
+            {
+                var job = jobs[index];
+                EngagementRoleConstraint constraint = constraints.GetValueOrDefault(job.Squad.Id)
+                    ?? new EngagementRoleConstraint(EngagementSquadRole.Normal);
+                SquadEngagementDecision decision = planners[job.Side].ChooseEngagementOption(
+                    job.Squad,
+                    paired.Frames[job.Squad.Id],
+                    paired.Profiles,
+                    paired.Frames,
+                    job.Friendly,
+                    job.Enemy,
+                    constraint.RoleTargets);
+                decisionResults[index] = (job.Side, decision);
+            }
+            if (_execution.MaxPlanningDegreeOfParallelism <= 1 || jobs.Count <= 1)
+            {
+                for (int index = 0; index < jobs.Count; index++) ChooseAt(index);
+            }
+            else
+            {
+                Parallel.For(
+                    0,
+                    jobs.Count,
+                    new ParallelOptions
+                    {
+                        MaxDegreeOfParallelism = _execution.MaxPlanningDegreeOfParallelism
+                    },
+                    ChooseAt);
+            }
+            List<(BattleSide Side, SquadEngagementDecision Decision)> decisions =
+                decisionResults.ToList();
+
+            _pursuitTargetsBySquad.Clear();
+            foreach ((_, SquadEngagementDecision decision) in decisions)
+            {
+                if (decision.Frame.Role == EngagementSquadRole.Pursuit
+                    && decision.Frame.PrimaryCounterpartSquadId is int targetSquadId)
+                {
+                    _pursuitTargetsBySquad[decision.Squad.Id] = targetSquadId;
+                }
+            }
+
+            // Layer 2.5: reveal every posture before any soldier's ranged action is constructed.
+            // Side and squad order are deterministic, but no choice can observe an earlier reveal.
+            foreach ((BattleSide side, SquadEngagementDecision decision) in decisions
+                .OrderBy(entry => entry.Side)
+                .ThenBy(entry => entry.Decision.Squad.Id))
+            {
+                planners[side].DeclareEngagementDecision(decision);
+            }
+            foreach ((BattleSide side, SquadEngagementDecision decision) in decisions
+                .OrderBy(entry => entry.Side)
+                .ThenBy(entry => entry.Decision.Squad.Id))
+            {
+                planners[side].BuildEngagementActions(decision);
+            }
+        }
+
+        private BattleSquadPlanner CreateSquadPlanner(
+            BattleSide side,
+            ICollection<IAction> shootActions,
+            ICollection<IAction> moveActions,
+            ICollection<IAction> meleeActions,
+            Action<string> log,
+            BattlePlanningContext planningContext)
+        {
+            BattleSquadPlanner planner = new(
+                _grid,
+                _currentState.Soldiers,
+                shootActions,
+                moveActions,
+                meleeActions,
+                log,
+                _execution.Rules.MeleeWeaponTemplates,
+                _execution.Random,
+                _execution.MaxPlanningDegreeOfParallelism,
+                planningContext)
+            {
+                TraceTurnNumber = _currentState.TurnNumber,
+                TraceSideLabel = side == BattleSide.Attacker ? "first" : "second"
+            };
+            return planner;
+        }
+
+        private void LogScreenEvaluations(
+            BattleSide side,
+            IReadOnlyCollection<BattleSquad> friendly,
+            IReadOnlyCollection<BattleSquad> enemy,
+            BattleEngagementFrameBuilder.PairedFrame paired)
+        {
+            if (!BattleLog.IsEnabled) return;
+            float forceBv = friendly.Sum(squad =>
+                paired.Profiles.GetValueOrDefault(squad.Id)?.TotalAbleBattleValue ?? 0);
+            float committed = friendly
+                .Where(squad => paired.Frames.GetValueOrDefault(squad.Id)?.ScreenThreatSquadId != null)
+                .Sum(squad => paired.Profiles[squad.Id].TotalAbleBattleValue);
+            foreach (BattleSquad screener in friendly.OrderBy(squad => squad.Id))
+            {
+                SquadEngagementFrame frame = paired.Frames[screener.Id];
+                BattleSquadCapabilityProfile profile = paired.Profiles[screener.Id];
+                foreach (BattleSquad threat in enemy
+                    .Where(squad => paired.Profiles[squad.Id].IsContactSeeking)
+                    .OrderBy(squad => squad.Id))
+                {
+                    bool selected = frame.ScreenThreatSquadId == threat.Id;
+                    int? protectedId = selected ? frame.ProtectedSquadId : null;
+                    float noScreenLoss = Math.Min(
+                        paired.Profiles[threat.Id].UsableMeleeBattleValue,
+                        protectedId.HasValue
+                            ? paired.Profiles[protectedId.Value].TotalAbleBattleValue
+                            : 0);
+                    float holding = selected
+                        ? Math.Min(1f,
+                            (profile.UsableMeleeBattleValue + profile.TotalAbleBattleValue * 0.25f)
+                            / Math.Max(1, paired.Profiles[threat.Id].UsableMeleeBattleValue))
+                        : 0;
+                    BattleLog.Write(new BattleDecisionTrace("SCREEN_EVAL", new List<KeyValuePair<string, string>>
+                    {
+                        BattleDecisionTrace.Field("turn", _currentState.TurnNumber),
+                        BattleDecisionTrace.Field("side", side),
+                        BattleDecisionTrace.Field("threat", threat.Id),
+                        BattleDecisionTrace.Field("screener", screener.Id),
+                        BattleDecisionTrace.Field("protected", protectedId?.ToString() ?? "none"),
+                        BattleDecisionTrace.Field("intercept_point", frame.InterposePoint?.ToString() ?? "none"),
+                        BattleDecisionTrace.Field("no_screen_loss", noScreenLoss),
+                        BattleDecisionTrace.Field("screened_loss", noScreenLoss * (1 - holding)),
+                        BattleDecisionTrace.Field("capacity_consumed", selected ? profile.ContactCapacity : 0),
+                        BattleDecisionTrace.Field("force_commitment", committed),
+                        BattleDecisionTrace.Field("force_cap", forceBv * 0.4f),
+                        BattleDecisionTrace.Field("incumbent", selected
+                            && screener.LastScreenThreatSquadId == threat.Id),
+                        BattleDecisionTrace.Field("selected", selected),
+                        BattleDecisionTrace.Field("rejection", selected ? "none" : "not_selected")
+                    }).Render());
+                }
+            }
+        }
+
+        private void BuildRoleConstraints(
+            BattleSide side,
+            IReadOnlyCollection<BattleSquad> friendlySquads,
+            IReadOnlyCollection<BattleSquad> enemySquads,
+            IDictionary<int, EngagementRoleConstraint> constraints)
+        {
+            BattleSideState sideState = GetSideState(side);
+            List<BattleSquad> active = friendlySquads
+                .Where(squad => squad.Status == BattleSquadStatus.Active
+                    && squad.AbleSoldiers.Count > 0)
+                .OrderBy(squad => squad.Id)
+                .ToList();
+            foreach (BattleSquad squad in active.Where(squad =>
+                squad.WithdrawalRole == WithdrawalRole.Routing
+                || squad.MoraleState == MoraleState.Routing))
+            {
+                constraints[squad.Id] = new EngagementRoleConstraint(
+                    EngagementSquadRole.Routing);
+            }
+            List<BattleSquad> disciplined = active
+                .Where(squad => !constraints.ContainsKey(squad.Id))
+                .ToList();
+            if (disciplined.Count == 0) return;
+
+            if (sideState.Intent == BattleSideIntent.FightingWithdrawal)
+            {
+                sideState.WithdrawalHeading ??= BattleForcePlanner.SelectWithdrawalHeading(
+                    disciplined, enemySquads);
+                if (disciplined.Count < 2)
+                {
+                    sideState.CoveringSquadId = null;
+                    foreach (BattleSquad squad in disciplined)
+                    {
+                        constraints[squad.Id] = new EngagementRoleConstraint(
+                            EngagementSquadRole.Bound,
+                            sideState.WithdrawalHeading);
+                    }
+                    return;
+                }
+                BattleForcePlanner.CoverAssignment cover = BattleForcePlanner.SelectCover(
+                    BattleForcePlanner.BuildCoverCandidates(disciplined, enemySquads),
+                    sideState.CoveringSquadId);
+                sideState.CoveringSquadId = cover.SquadId;
+                LogCoverAssignment(side, sideState, cover);
+                foreach (BattleSquad squad in disciplined)
+                {
+                    constraints[squad.Id] = new EngagementRoleConstraint(
+                        cover.SquadId == squad.Id
+                            ? EngagementSquadRole.Cover
+                            : EngagementSquadRole.Bound,
+                        sideState.WithdrawalHeading);
+                }
+                return;
+            }
+            if (sideState.Intent == BattleSideIntent.RearGuardWithdrawal)
+            {
+                sideState.WithdrawalHeading ??= BattleForcePlanner.SelectWithdrawalHeading(
+                    disciplined, enemySquads);
+                sideState.CoveringSquadId = null;
+                foreach (BattleSquad squad in disciplined)
+                {
+                    constraints[squad.Id] = new EngagementRoleConstraint(
+                        sideState.RearGuardSquadId == squad.Id
+                            ? EngagementSquadRole.RearGuard
+                            : EngagementSquadRole.Bound,
+                        sideState.WithdrawalHeading);
+                }
+                return;
+            }
+            if (sideState.Intent == BattleSideIntent.Pursuing)
+            {
+                PursuitPosture forcePosture = _pursuitPostures.GetValueOrDefault(
+                    side, PursuitPosture.BreakOff);
+                float quarryRunSpeed = enemySquads.Count == 0
+                    ? 0
+                    : enemySquads.Min(squad => squad.GetSquadMove());
+                foreach (BattleSquad squad in disciplined)
+                {
+                    constraints[squad.Id] = new EngagementRoleConstraint(
+                        forcePosture == PursuitPosture.BreakOff
+                            ? EngagementSquadRole.BreakOff
+                            : EngagementSquadRole.Pursuit,
+                        QuarryRunSpeed: quarryRunSpeed,
+                        RoleTargets: enemySquads);
+                }
+                return;
+            }
+            foreach (BattleSquad squad in disciplined)
+            {
+                constraints[squad.Id] = new EngagementRoleConstraint(
+                    EngagementSquadRole.Normal);
+            }
         }
 
         private void PrepareParallelPlanningState()
@@ -372,79 +665,6 @@ namespace OnlyWar.Helpers.Battles
                 .Concat(GetActiveSquads(BattleSide.Opposing)))
             {
                 squad.PrepareForParallelPlanning();
-            }
-        }
-
-        private void PlanSide(
-            BattleSide side,
-            ICollection<IAction> shootActions,
-            ICollection<IAction> moveActions,
-            ICollection<IAction> meleeActions,
-            Action<string> log,
-            BattlePlanningContext planningContext)
-        {
-            IReadOnlyCollection<BattleSquad> allFriendly = GetActiveSquads(side);
-            IReadOnlyCollection<BattleSquad> enemy = GetActiveSquads(Opposite(side));
-            BattleSideState sideState = GetSideState(side);
-            BattleSquadPlanner squadPlanner = new(
-                _grid,
-                _currentState.Soldiers,
-                shootActions,
-                moveActions,
-                meleeActions,
-                log,
-                _execution.Rules.MeleeWeaponTemplates,
-                _execution.Random,
-                _execution.MaxPlanningDegreeOfParallelism,
-                planningContext);
-            // Labels the planner's ENGAGE_EVAL records so they correlate with the MORALE_EVAL and
-            // WITHDRAW_EVAL lines for the same turn and side. Diagnostic only.
-            squadPlanner.TraceTurnNumber = _currentState.TurnNumber;
-            squadPlanner.TraceSideLabel = side == BattleSide.Attacker ? "first" : "second";
-            BattleForcePlanner forcePlanner = new(squadPlanner);
-
-            // Routing squads flee through their own planner path regardless of side intent
-            // (OnlyWar_TDD.md §6.6) and are removed from the cover
-            // rotation and rear-guard candidate set — hence excluded from the force planner.
-            List<BattleSquad> friendly = [];
-            foreach (BattleSquad squad in allFriendly.OrderBy(squad => squad.Id))
-            {
-                if (squad.WithdrawalRole == WithdrawalRole.Routing)
-                {
-                    squadPlanner.PrepareRoutingActions(squad);
-                }
-                else
-                {
-                    friendly.Add(squad);
-                }
-            }
-            if (friendly.Count == 0) return;
-
-            if (sideState.Intent == BattleSideIntent.FightingWithdrawal)
-            {
-                BattleForcePlanner.CoverAssignment cover = forcePlanner.PrepareFightingWithdrawal(
-                    sideState, friendly, enemy);
-                LogCoverAssignment(side, sideState, cover);
-                return;
-            }
-            if (sideState.Intent == BattleSideIntent.RearGuardWithdrawal)
-            {
-                forcePlanner.PrepareRearGuardWithdrawal(sideState, friendly, enemy);
-                return;
-            }
-            if (sideState.Intent == BattleSideIntent.Pursuing)
-            {
-                forcePlanner.PreparePursuit(
-                    friendly,
-                    enemy,
-                    _pursuitPostures.GetValueOrDefault(side, PursuitPosture.BreakOff));
-                return;
-            }
-
-            foreach (BattleSquad squad in friendly)
-            {
-                squad.WithdrawalRole = WithdrawalRole.None;
-                squadPlanner.PrepareActions(squad, friendly);
             }
         }
 
@@ -486,6 +706,7 @@ namespace OnlyWar.Helpers.Battles
             for (int actionIndex = moveActions.Count - 1; actionIndex >= 0; actionIndex--)
             {
                 IAction action = moveActions[actionIndex];
+                if (action is SquadChargeIntentAction) continue;
                 action.Execute(_currentState);
                 // Planning uses a frozen layout, so an earlier move can occupy this action's
                 // destination before execution. Bank its budget, but don't report it as movement.
@@ -493,6 +714,18 @@ namespace OnlyWar.Helpers.Battles
                 {
                     executedActions.Add(action);
                 }
+            }
+
+            // Charge destinations are deliberately absent from the frozen planning layout. Once
+            // every ordinary move has resolved, discard those now-stale reservations and let each
+            // charging squad coordinate against the target squad's actual positions.
+            _grid.ClearReservations();
+            foreach (SquadChargeIntentAction charge in moveActions
+                .OfType<SquadChargeIntentAction>()
+                .OrderBy(action => action.ActorId))
+            {
+                charge.Execute(_currentState);
+                executedActions.AddRange(charge.ResolvedMovementActions);
             }
         }
 
@@ -977,6 +1210,50 @@ namespace OnlyWar.Helpers.Battles
             }
         }
 
+        private void ResolveUnpursuedWithdrawalEscapes(List<BattleEvent> events)
+        {
+            ResolveUnpursuedWithdrawalEscapes(BattleSide.Attacker, events);
+            ResolveUnpursuedWithdrawalEscapes(BattleSide.Opposing, events);
+        }
+
+        private void ResolveUnpursuedWithdrawalEscapes(
+            BattleSide withdrawingSide,
+            List<BattleEvent> events)
+        {
+            if (!IsWithdrawalIntent(GetSideState(withdrawingSide).Intent)) return;
+
+            BattleSide pursuingSide = Opposite(withdrawingSide);
+            List<BattleSquad> pursuers = GetActiveSquads(pursuingSide).ToList();
+            HashSet<int> pursuedSquadIds = _pursuitTargetsBySquad
+                .Where(pair => pursuers.Any(squad => squad.Id == pair.Key))
+                .Select(pair => pair.Value)
+                .ToHashSet();
+            foreach (BattleSquad withdrawing in GetActiveSquads(withdrawingSide).ToList())
+            {
+                List<BattleEscapeRules.Threat> threats = pursuers.Select(pursuer =>
+                    new BattleEscapeRules.Threat(
+                        pursuer.Id,
+                        MinimumSquadSeparation(pursuer, withdrawing),
+                        MaximumUsefulAttackRange(pursuer, withdrawing),
+                        SafeSquadMove(pursuer),
+                        SafeSquadMove(withdrawing)))
+                    .ToList();
+                BattleEscapeRules.Result result = BattleEscapeRules.Evaluate(new(
+                    _currentState.TurnNumber,
+                    withdrawingSide == BattleSide.Attacker,
+                    withdrawing.Id,
+                    pursuedSquadIds.Contains(withdrawing.Id),
+                    threats));
+                if (!result.Escapes) continue;
+
+                DisengageSquad(
+                    withdrawingSide,
+                    withdrawing,
+                    events,
+                    "escaped beyond any timely enemy interception");
+            }
+        }
+
         private void ResolveContactBreak(BattleSide withdrawingSide, List<BattleEvent> events)
         {
             BattleSideState state = GetSideState(withdrawingSide);
@@ -1011,6 +1288,7 @@ namespace OnlyWar.Helpers.Battles
             BattleForceMetrics withdrawalMetrics = BuildMetrics(withdrawingSide);
             float separation = MinimumSeparation(pursuerSide, withdrawingSide);
             float attackReach = MaximumOneTurnAttackReach(pursuerSide, withdrawingSide);
+            float declaredPursuitSpeed = FastestDeclaredPursuitSpeed(pursuers);
             BattleContactRules.Result forceResult = BattleContactRules.Evaluate(new(
                 _currentState.TurnNumber,
                 withdrawingSide == BattleSide.Attacker,
@@ -1019,7 +1297,7 @@ namespace OnlyWar.Helpers.Battles
                 IsWithdrawalIntent(GetSideState(pursuerSide).Intent),
                 separation,
                 attackReach,
-                pursuerMetrics.FastestPursuitSquadSpeed,
+                declaredPursuitSpeed,
                 withdrawalMetrics.SlowestMainBodySquadSpeed,
                 state.RearGuardSquadId.HasValue,
                 0,
@@ -1049,7 +1327,7 @@ namespace OnlyWar.Helpers.Battles
                         false,
                         separation,
                         attackReach,
-                        pursuerMetrics.FastestPursuitSquadSpeed,
+                        declaredPursuitSpeed,
                         squad.GetSquadMove(),
                         true,
                         Math.Max(0, current - start),
@@ -1246,6 +1524,23 @@ namespace OnlyWar.Helpers.Battles
                 holder);
         }
 
+        private static float FastestDeclaredPursuitSpeed(
+            IReadOnlyCollection<BattleSquad> pursuers)
+        {
+            return pursuers
+                .Where(squad => squad.LastEngagementOptionKind is
+                    EngagementOptionKind.StepForward
+                    or EngagementOptionKind.JogToward
+                    or EngagementOptionKind.RunToward
+                    or EngagementOptionKind.CloseToContact)
+                .Select(squad => squad.AbleSoldiers
+                    .Select(soldier => soldier.CurrentSpeed)
+                    .DefaultIfEmpty(0)
+                    .Min())
+                .DefaultIfEmpty(0)
+                .Max();
+        }
+
         private void DisengageForce(BattleSide side, List<BattleEvent> events, string description)
         {
             foreach (BattleSquad squad in GetActiveSquads(side).ToList())
@@ -1400,12 +1695,36 @@ namespace OnlyWar.Helpers.Battles
             List<BattleSoldier> soldiers = GetActiveSquads(side)
                 .SelectMany(squad => squad.AbleSoldiers)
                 .ToList();
+            return TargetProfile(soldiers);
+        }
+
+        private static (float Size, float Armor, float Constitution, float Evasion) TargetProfile(
+            IReadOnlyCollection<BattleSoldier> soldiers)
+        {
             if (soldiers.Count == 0) return (0, 0, 0, 0);
             return (
                 (float)soldiers.Average(soldier => soldier.Soldier.Size),
                 (float)soldiers.Average(soldier => soldier.Armor?.Template.ArmorProvided ?? 0),
                 (float)soldiers.Average(soldier => soldier.Soldier.Constitution),
                 (float)soldiers.Average(soldier => soldier.Soldier.Template.Species.RangedEvasion));
+        }
+
+        private static float MaximumUsefulAttackRange(
+            BattleSquad pursuer,
+            BattleSquad target)
+        {
+            (float size, float armor, float constitution, float evasion) =
+                TargetProfile(target.AbleSoldiers);
+            if (size <= 0) return 0;
+            float ranged = pursuer.AbleSoldiers
+                .Select(soldier => BattleModifiersUtil.CalculateOptimalDistance(
+                    soldier, size, armor, constitution, evasion))
+                .DefaultIfEmpty(0)
+                .Max();
+            // A melee-only pursuer still has an attack envelope once relative movement brings it
+            // beside the quarry. The projected turns consume movement; this is the final contact
+            // allowance, not an extra turn of free movement.
+            return Math.Max(BattleContactRules.MeleeContactAllowance, ranged);
         }
 
         /// <summary>

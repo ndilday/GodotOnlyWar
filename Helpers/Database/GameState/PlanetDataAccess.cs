@@ -247,6 +247,8 @@ namespace OnlyWar.Helpers.Database.GameState
                     int emergenceOrdinal = GetOrdinalOrDefault(reader, "HasEmergenceAdvantage");
                     int organizedStrengthOrdinal =
                         GetOrdinalOrDefault(reader, "OrganizedMilitaryStrength");
+                    int assignedDefensiveOrdinal =
+                        GetOrdinalOrDefault(reader, "AssignedDefensiveBattleValue");
                     float contentment = contentmentOrdinal >= 0
                         ? Convert.ToSingle(reader[contentmentOrdinal])
                         : 70f;
@@ -286,6 +288,14 @@ namespace OnlyWar.Helpers.Database.GameState
                     {
                         regionFaction.SetOrganizedMilitaryStrength(
                             reader.GetInt64(organizedStrengthOrdinal));
+                    }
+                    // Left null for a save predating the column, or for a region whose controller has
+                    // never planned: the assault path then derives the clamp rather than treating the
+                    // region as having committed nothing to its own defence.
+                    if (assignedDefensiveOrdinal >= 0 && !reader.IsDBNull(assignedDefensiveOrdinal))
+                    {
+                        regionFaction.AssignedDefensiveBattleValue =
+                            reader.GetInt64(assignedDefensiveOrdinal);
                     }
                     region.RegionFactionMap[regionFaction.PlanetFaction.Faction.Id] = regionFaction;
                 }
@@ -536,8 +546,8 @@ namespace OnlyWar.Helpers.Database.GameState
                     {
                         command.Transaction = transaction;
                         command.CommandText = @"INSERT INTO RegionFaction
-                            (RegionId, FactionId, IsPublic, Population, Garrison, Organization, Entrenchment, ListeningPost, AntiAir, GrowthMultiplier, Contentment, ArmedCivilians, HasEmergenceAdvantage, OrganizedMilitaryStrength) VALUES
-                            (@regionId, @factionId, @isPublic, @population, @garrison, @organization, @entrenchment, @listeningPost, @antiAir, @growthMultiplier, @contentment, @armedCivilians, @hasEmergenceAdvantage, @organizedMilitaryStrength);";
+                            (RegionId, FactionId, IsPublic, Population, Garrison, Organization, Entrenchment, ListeningPost, AntiAir, GrowthMultiplier, Contentment, ArmedCivilians, HasEmergenceAdvantage, OrganizedMilitaryStrength, AssignedDefensiveBattleValue) VALUES
+                            (@regionId, @factionId, @isPublic, @population, @garrison, @organization, @entrenchment, @listeningPost, @antiAir, @growthMultiplier, @contentment, @armedCivilians, @hasEmergenceAdvantage, @organizedMilitaryStrength, @assignedDefensiveBattleValue);";
                         command.AddParam("@regionId", region.Id);
                         command.AddParam("@factionId", regionFaction.PlanetFaction.Faction.Id);
                         command.AddParam("@isPublic", regionFaction.IsPublic ? 1 : 0);
@@ -552,6 +562,11 @@ namespace OnlyWar.Helpers.Database.GameState
                         command.AddParam("@armedCivilians", regionFaction.ArmedCivilians);
                         command.AddParam("@hasEmergenceAdvantage", regionFaction.HasEmergenceAdvantage ? 1 : 0);
                         command.AddParam("@organizedMilitaryStrength", regionFaction.OrganizedMilitaryStrength);
+                        // Written as NULL when the region has never been planned for, so a reload can
+                        // still tell "no assignment yet" from "assigned nothing" (see
+                        // PrepareAssaultMissionStep.ResolveDefensiveReserve).
+                        command.AddParam("@assignedDefensiveBattleValue",
+                            regionFaction.AssignedDefensiveBattleValue);
                         command.ExecuteNonQuery();
                     }
                 }

@@ -113,6 +113,9 @@ namespace OnlyWar.Models.Battles
         public SquadMovementTier MovementTier { get; }
         public BattleSquadStatus Status { get; }
         public WithdrawalRole WithdrawalRole { get; }
+        public EngagementOptionKind? LastEngagementOptionKind { get; }
+        public int? LastScreenThreatSquadId { get; }
+        public int? LastProtectedSquadId { get; }
         // Morale outcome at snapshot time (OnlyWar_TDD.md §6.6). Routing is
         // also mirrored in WithdrawalRole; Shaken/Steady only exist here.
         public MoraleState MoraleState { get; }
@@ -129,6 +132,9 @@ namespace OnlyWar.Models.Battles
             MovementTier = squad.MovementTier;
             Status = squad.Status;
             WithdrawalRole = squad.WithdrawalRole;
+            LastEngagementOptionKind = squad.LastEngagementOptionKind;
+            LastScreenThreatSquadId = squad.LastScreenThreatSquadId;
+            LastProtectedSquadId = squad.LastProtectedSquadId;
             MoraleState = squad.MoraleState;
             Squad = squad.Squad;
             Soldiers = soldiers;

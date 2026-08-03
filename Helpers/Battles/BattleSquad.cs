@@ -46,6 +46,9 @@ namespace OnlyWar.Helpers.Battles
         // resolver's morale stage. Steady/Shaken are non-sticky; Routing is mirrored onto
         // WithdrawalRole.Routing. Read by the planner to degrade a Shaken squad's actions.
         public MoraleState MoraleState { get; set; }
+        public EngagementOptionKind? LastEngagementOptionKind { get; set; }
+        public int? LastScreenThreatSquadId { get; set; }
+        public int? LastProtectedSquadId { get; set; }
 
         public Squad Squad { get; }
 
@@ -170,6 +173,9 @@ namespace OnlyWar.Helpers.Battles
             Status = BattleSquadStatus.Active;
             WithdrawalRole = WithdrawalRole.None;
             MoraleState = MoraleState.Steady;
+            LastEngagementOptionKind = null;
+            LastScreenThreatSquadId = null;
+            LastProtectedSquadId = null;
             // order weapon sets by strength of primary weapon
             AllocateEquipment();
         }
@@ -186,6 +192,9 @@ namespace OnlyWar.Helpers.Battles
             Status = original.Status;
             WithdrawalRole = original.WithdrawalRole;
             MoraleState = original.MoraleState;
+            LastEngagementOptionKind = original.LastEngagementOptionKind;
+            LastScreenThreatSquadId = original.LastScreenThreatSquadId;
+            LastProtectedSquadId = original.LastProtectedSquadId;
             _missionStartingAbleSoldierCount = original._missionStartingAbleSoldierCount;
             // because of the circular reference, the clone function won't work,
             // so I made a custom BattleSoldier constructor that does basically the same thing

@@ -19,13 +19,20 @@ namespace OnlyWar.Models.Soldiers
         // accounting against the strategic pools. A squad's battle value is the sum of its members'
         // (PRD §4.24). Optional/defaulted for templates that predate populated point values.
         public int BattleValue { get; }
+        /// <summary>
+        /// Doctrinal share of canonical offensive output supplied by melee. Runtime battle roles
+        /// additionally weight this by the able roster, usable grips, ammunition and readiness.
+        /// </summary>
+        public float MeleeFraction { get; }
+        public bool HasAuthoredMeleeFraction { get; }
 
         public SoldierTemplate(int id, Species species, string name, byte rank, byte subrank,
                                bool isSquadLeader, byte specialistType,
                                IReadOnlyCollection<ValueTuple<BaseSkill, float>> mosTraining,
                                TrainingProfile workExperienceTrainingProfile = null,
                                int battleValue = 0,
-                               IReadOnlyList<SoldierTemplateRequirement> promotionRequirements = null)
+                               IReadOnlyList<SoldierTemplateRequirement> promotionRequirements = null,
+                               float? meleeFraction = null)
         {
             Id = id;
             Species = species;
@@ -37,6 +44,8 @@ namespace OnlyWar.Models.Soldiers
             MosTraining = mosTraining;
             WorkExperienceTrainingProfile = workExperienceTrainingProfile;
             BattleValue = battleValue;
+            HasAuthoredMeleeFraction = meleeFraction.HasValue;
+            MeleeFraction = Math.Clamp(meleeFraction ?? 0, 0, 1);
             PromotionRequirements = promotionRequirements ?? [];
         }
     }

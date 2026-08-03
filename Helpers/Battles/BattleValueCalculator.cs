@@ -116,15 +116,17 @@ public static class BattleValueCalculator
         public float NormalizedOffense { get; }
         public float NormalizedDurability { get; }
         public int BattleValue { get; }
+        public float MeleeFraction { get; }
 
         public Result(float offense, float durability, float normalizedOffense,
-                      float normalizedDurability, int battleValue)
+                      float normalizedDurability, int battleValue, float meleeFraction = 0)
         {
             Offense = offense;
             Durability = durability;
             NormalizedOffense = normalizedOffense;
             NormalizedDurability = normalizedDurability;
             BattleValue = battleValue;
+            MeleeFraction = Math.Clamp(meleeFraction, 0, 1);
         }
     }
 
@@ -223,10 +225,11 @@ public static class BattleValueCalculator
     {
         if (input == null)
         {
-            return new Result(0, 0, 0, 0, 0);
+            return new Result(0, 0, 0, 0, 0, 0);
         }
 
-        (float offense, float durability) = ScoreAgainstPanel(input);
+        (float offense, float durability, float rangedRate, float meleeRate) =
+            ScoreAgainstPanelWithModes(input);
         (float referenceOffense, float referenceDurability) = ReferenceScores.Value;
 
         float normalizedOffense = Math.Max(0.0001f, offense / referenceOffense);
@@ -235,21 +238,40 @@ public static class BattleValueCalculator
         float rawValue = AnchorBattleValue * commandMultiplier
             * (float)Math.Sqrt(normalizedOffense * normalizedDurability);
         int battleValue = Math.Max(1, (int)Math.Round(rawValue, MidpointRounding.AwayFromZero));
-        return new Result(offense, durability, normalizedOffense, normalizedDurability, battleValue);
+        float meleeFraction = meleeRate / Math.Max(0.0001f, meleeRate + rangedRate);
+        return new Result(
+            offense,
+            durability,
+            normalizedOffense,
+            normalizedDurability,
+            battleValue,
+            meleeFraction);
     }
 
     private static (float Offense, float Durability) ScoreAgainstPanel(Input input)
     {
+        (float offense, float durability, _, _) = ScoreAgainstPanelWithModes(input);
+        return (offense, durability);
+    }
+
+    private static (float Offense, float Durability, float RangedRate, float MeleeRate)
+        ScoreAgainstPanelWithModes(Input input)
+    {
         float offense = 0;
         float incomingKillRate = 0;
+        float rangedRate = 0;
+        float meleeRate = 0;
         foreach ((Input profile, float weight) in ThreatPanel)
         {
-            offense += weight * CalculateKillRate(input, profile);
+            (float canonicalRanged, float canonicalMelee) = CalculateModeKillRates(input, profile);
+            rangedRate += weight * canonicalRanged;
+            meleeRate += weight * canonicalMelee;
+            offense += weight * CombineModeKillRates(canonicalRanged, canonicalMelee);
             incomingKillRate += weight * CalculateKillRate(profile, input);
         }
 
         float durability = 1.0f / Math.Max(incomingKillRate, 1.0f / MaxSurvivalTurns);
-        return (Math.Max(0.0001f, offense), durability);
+        return (Math.Max(0.0001f, offense), durability, rangedRate, meleeRate);
     }
 
     private static float CalculateCommandMultiplier(Input input)
@@ -262,6 +284,14 @@ public static class BattleValueCalculator
     /// <summary>Expected kills per turn of <paramref name="attacker"/> against <paramref name="defender"/>.</summary>
     private static float CalculateKillRate(Input attacker, Input defender)
     {
+        (float rangedRate, float meleeRate) = CalculateModeKillRates(attacker, defender);
+        return CombineModeKillRates(rangedRate, meleeRate);
+    }
+
+    private static (float RangedRate, float MeleeRate) CalculateModeKillRates(
+        Input attacker,
+        Input defender)
+    {
         float primaryRangedRate = attacker.RangedWeapon != null
             ? CalculateRangedKillRate(attacker, attacker.RangedWeapon, defender)
             : 0;
@@ -273,9 +303,12 @@ public static class BattleValueCalculator
             : 0;
         float rangedRate = Math.Max(primaryRangedRate, grenadeRate);
         float meleeRate = CalculateMeleeKillRate(attacker, defender);
-        return Math.Max(rangedRate, meleeRate)
-            + SecondaryModeCredit * Math.Min(rangedRate, meleeRate);
+        return (rangedRate, meleeRate);
     }
+
+    private static float CombineModeKillRates(float rangedRate, float meleeRate) =>
+        Math.Max(rangedRate, meleeRate)
+        + SecondaryModeCredit * Math.Min(rangedRate, meleeRate);
 
     // ----- ranged model: mirrors ShootAction -----
 

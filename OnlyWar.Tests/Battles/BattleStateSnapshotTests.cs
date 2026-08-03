@@ -20,6 +20,9 @@ public class BattleStateSnapshotTests
         sourceSoldier.LeftoverMovement = 1.25f;
         sourceSoldier.TurnsRunning = 2;
         squad.MovementTier = SquadMovementTier.Walk;
+        squad.LastEngagementOptionKind = EngagementOptionKind.StepBack;
+        squad.LastScreenThreatSquadId = 41;
+        squad.LastProtectedSquadId = 42;
         BattleState liveState = new(
             new Dictionary<int, BattleSquad> { [squad.Id] = squad },
             new Dictionary<int, BattleSquad>());
@@ -32,6 +35,9 @@ public class BattleStateSnapshotTests
         liveSoldier.LeftoverMovement = 4.5f;
         liveSoldier.TurnsRunning = 9;
         liveState.GetSquad(squad.Id).MovementTier = SquadMovementTier.Run;
+        liveState.GetSquad(squad.Id).LastEngagementOptionKind = EngagementOptionKind.RunToward;
+        liveState.GetSquad(squad.Id).LastScreenThreatSquadId = null;
+        liveState.GetSquad(squad.Id).LastProtectedSquadId = null;
         liveState.GetSquad(squad.Id).Soldiers.Clear();
         liveState.AdvanceTurn();
 
@@ -41,6 +47,9 @@ public class BattleStateSnapshotTests
         Assert.Equal(1.25f, snapshot.LeftoverMovement);
         Assert.Equal(2, snapshot.TurnsRunning);
         Assert.Equal(SquadMovementTier.Walk, turn.State.AttackerSquads[squad.Id].MovementTier);
+        Assert.Equal(EngagementOptionKind.StepBack, turn.State.AttackerSquads[squad.Id].LastEngagementOptionKind);
+        Assert.Equal(41, turn.State.AttackerSquads[squad.Id].LastScreenThreatSquadId);
+        Assert.Equal(42, turn.State.AttackerSquads[squad.Id].LastProtectedSquadId);
         Assert.Single(turn.State.AttackerSquads[squad.Id].Soldiers);
     }
 
