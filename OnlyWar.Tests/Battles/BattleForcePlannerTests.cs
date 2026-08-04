@@ -7,7 +7,6 @@ using OnlyWar.Helpers.Battles;
 using OnlyWar.Helpers.Battles.Actions;
 using OnlyWar.Models.Battles;
 using OnlyWar.Models.Equippables;
-using OnlyWar.Models.Orders;
 using OnlyWar.Models.Soldiers;
 using OnlyWar.Tests.Fixtures;
 
@@ -80,64 +79,6 @@ public class BattleForcePlannerTests
     }
 
     [Fact]
-    public void PrepareFightingWithdrawal_FixesHeadingAndAssignsCoverAndBoundRoles()
-    {
-        BattleSquad near = CreateSquad("Near", 71_021);
-        BattleSquad far = CreateSquad("Far", 71_022);
-        BattleSquad enemy = CreateSquad("Enemy", 71_023);
-        PlannerFixture fixture = CreatePlannerFixture(
-            (near, true, 8, 0),
-            (far, true, 14, 0),
-            (enemy, false, 0, 0));
-        BattleSideState side = SideState();
-        BattleForcePlanner planner = new(fixture.SquadPlanner);
-
-        BattleForcePlanner.CoverAssignment result = planner.PrepareFightingWithdrawal(
-            side, [near, far], [enemy]);
-
-        Assert.Equal((ushort)2, side.WithdrawalHeading);
-        Assert.Equal(far.Id, result.SquadId);
-        Assert.Equal(WithdrawalRole.Cover, far.WithdrawalRole);
-        Assert.Equal(SquadMovementTier.Stationary, far.MovementTier);
-        Assert.Equal(WithdrawalRole.Bound, near.WithdrawalRole);
-        Assert.Equal(SquadMovementTier.Run, near.MovementTier);
-        Assert.Single(fixture.MoveActions);
-        Assert.DoesNotContain(fixture.ShootActions, action => action.ActorId == near.Soldiers[0].Soldier.Id);
-
-        side.WithdrawalHeading = 4;
-        planner.PrepareFightingWithdrawal(side, [near, far], [enemy]);
-        Assert.Equal((ushort)4, side.WithdrawalHeading);
-    }
-
-    [Fact]
-    public void PrepareFightingWithdrawal_SingleSquadRunsInsteadOfCovering()
-    {
-        // A lone squad has no main body to cover. Designating it as cover would make it stand
-        // and fire while nobody withdraws, even though the enemy has already begun pursuit off
-        // the withdrawal order. It falls back to the unsupported withdrawal: it Runs.
-        BattleSquad lone = CreateSquad("Lone", 71_061);
-        BattleSquad enemy = CreateSquad("Enemy", 71_062);
-        PlannerFixture fixture = CreatePlannerFixture(
-            (lone, true, 10, 0),
-            (enemy, false, 0, 0));
-        BattleSideState side = SideState();
-        BattleForcePlanner planner = new(fixture.SquadPlanner);
-
-        BattleForcePlanner.CoverAssignment result = planner.PrepareFightingWithdrawal(
-            side, [lone], [enemy]);
-
-        Assert.Null(result.SquadId);
-        Assert.Equal("single_squad_unsupported", result.Reason);
-        Assert.Null(side.CoveringSquadId);
-        Assert.Equal(WithdrawalRole.Bound, lone.WithdrawalRole);
-        Assert.Equal(SquadMovementTier.Run, lone.MovementTier);
-        Assert.Single(fixture.MoveActions);
-        Assert.DoesNotContain(
-            fixture.ShootActions,
-            action => action.ActorId == lone.Soldiers[0].Soldier.Id);
-    }
-
-    [Fact]
     public void PrepareBoundActions_RunsAlongHeadingWithoutAttacking()
     {
         BattleSquad bound = CreateSquad("Bound", 71_031);
@@ -156,43 +97,106 @@ public class BattleForcePlannerTests
     }
 
     [Fact]
-    public void PrepareCoverActions_HoldsPositionAndUsesStandingFirePlanner()
+    public void CoverAndBoundRoles_HoldTheCoverSquadWhileTheRestOfTheForceBounds()
     {
-        BattleSquad cover = CreateSquad("Cover", 71_041);
-        BattleSquad enemy = CreateSquad("Enemy", 71_042);
+        // The force no longer builds withdrawal actions itself: it picks the heading and the cover
+        // squad, hands each squad a role constraint, and every action comes out of the ordinary
+        // option-scoring path. This is the same geometry the old force-level builder was given.
+        BattleSquad near = CreateSquad("Near", 71_021);
+        BattleSquad far = CreateSquad("Far", 71_022);
+        BattleSquad enemy = CreateSquad("Enemy", 71_023);
         PlannerFixture fixture = CreatePlannerFixture(
-            (cover, true, 0, 0),
-            (enemy, false, 0, 8));
+            (near, true, 8, 0),
+            (far, true, 14, 0),
+            (enemy, false, 0, 0));
+        ushort heading = BattleForcePlanner.SelectWithdrawalHeading([near, far], [enemy]);
+        BattleForcePlanner.CoverAssignment cover = BattleForcePlanner.SelectCover(
+            BattleForcePlanner.BuildCoverCandidates([near, far], [enemy]),
+            incumbentSquadId: null);
+        Assert.Equal((ushort)2, heading);
+        Assert.Equal(far.Id, cover.SquadId);
 
-        fixture.SquadPlanner.PrepareCoverActions(cover);
+        Dictionary<int, EngagementRoleConstraint> constraints = new()
+        {
+            [far.Id] = new EngagementRoleConstraint(EngagementSquadRole.Cover, heading),
+            [near.Id] = new EngagementRoleConstraint(EngagementSquadRole.Bound, heading)
+        };
+        BattleEngagementFrameBuilder.PairedFrame paired =
+            BattleEngagementFrameBuilder.Build([near, far], [enemy], constraints);
 
-        Assert.Equal(WithdrawalRole.Cover, cover.WithdrawalRole);
-        Assert.Equal(SquadMovementTier.Stationary, cover.MovementTier);
+        SquadEngagementDecision coverDecision = Hold(fixture.SquadPlanner.ChooseEngagementOption(
+            far, paired.Frames[far.Id], paired.Profiles, paired.Frames, [near, far], [enemy]));
+        fixture.SquadPlanner.DeclareEngagementDecision(coverDecision);
+        fixture.SquadPlanner.BuildEngagementActions(coverDecision);
+
+        Assert.Equal(WithdrawalRole.Cover, far.WithdrawalRole);
+        Assert.Equal(SquadMovementTier.Stationary, far.MovementTier);
         Assert.Empty(fixture.MoveActions);
         Assert.NotEmpty(fixture.ShootActions);
+
+        SquadEngagementDecision boundDecision = fixture.SquadPlanner.ChooseEngagementOption(
+            near, paired.Frames[near.Id], paired.Profiles, paired.Frames, [near, far], [enemy]);
+        fixture.SquadPlanner.DeclareEngagementDecision(boundDecision);
+        fixture.SquadPlanner.BuildEngagementActions(boundDecision);
+
+        Assert.Equal(
+            [EngagementOptionKind.RunToward],
+            boundDecision.Candidates.Select(candidate => candidate.Kind).ToArray());
+        Assert.Equal((ushort)2, boundDecision.Frame.FixedHeading);
+        Assert.Equal(WithdrawalRole.Bound, near.WithdrawalRole);
+        Assert.Equal(SquadMovementTier.Run, near.MovementTier);
+        Assert.Single(fixture.MoveActions);
+        Assert.DoesNotContain(
+            fixture.ShootActions,
+            action => action.ActorId == near.Soldiers[0].Soldier.Id);
     }
 
     [Fact]
-    public void PrepareRearGuardActions_HoldsUnlessAlreadyInMelee()
+    public void RearGuardRole_HoldsAndFiresWithoutGivingUpGround()
     {
         BattleSquad rearGuard = CreateSquad("Rear Guard", 71_051);
         BattleSquad enemy = CreateSquad("Enemy", 71_052);
         PlannerFixture fixture = CreatePlannerFixture(
             (rearGuard, true, 0, 0),
             (enemy, false, 0, 8));
+        Dictionary<int, EngagementRoleConstraint> constraints = new()
+        {
+            [rearGuard.Id] = new EngagementRoleConstraint(
+                EngagementSquadRole.RearGuard, FixedHeading: 0)
+        };
+        BattleEngagementFrameBuilder.PairedFrame paired =
+            BattleEngagementFrameBuilder.Build([rearGuard], [enemy], constraints);
 
-        fixture.SquadPlanner.PrepareRearGuardActions(rearGuard);
+        SquadEngagementDecision scored = fixture.SquadPlanner.ChooseEngagementOption(
+            rearGuard,
+            paired.Frames[rearGuard.Id],
+            paired.Profiles,
+            paired.Frames,
+            [rearGuard],
+            [enemy]);
+        SquadEngagementDecision decision = Hold(scored);
+        fixture.SquadPlanner.DeclareEngagementDecision(decision);
+        fixture.SquadPlanner.BuildEngagementActions(decision);
 
+        // A rear guard may give ground a step at a time, but it never advances.
+        Assert.Equal(
+            [EngagementOptionKind.Hold, EngagementOptionKind.StepBack],
+            scored.Candidates.Select(candidate => candidate.Kind).Order().ToArray());
         Assert.Equal(WithdrawalRole.RearGuard, rearGuard.WithdrawalRole);
         Assert.Equal(SquadMovementTier.Stationary, rearGuard.MovementTier);
         Assert.Empty(fixture.MoveActions);
         Assert.NotEmpty(fixture.ShootActions);
     }
 
-    private static BattleSideState SideState() => new(
-        new BattleSideProfile(Aggression.Normal, BattleRole.Defender),
-        startingBattleValue: 10,
-        startingSoldierCount: 2);
+    /// <summary>
+    /// Re-selects the Hold candidate from an already-scored decision, so a test can assert how a
+    /// standing role's actions are constructed without depending on Hold out-scoring StepBack.
+    /// </summary>
+    private static SquadEngagementDecision Hold(SquadEngagementDecision decision) => decision with
+    {
+        Chosen = decision.Candidates.Single(candidate =>
+            candidate.Kind == EngagementOptionKind.Hold)
+    };
 
     private static BattleSquad CreateSquad(string name, int soldierId)
     {

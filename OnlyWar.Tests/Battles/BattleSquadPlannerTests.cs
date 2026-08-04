@@ -595,7 +595,7 @@ public class BattleSquadPlannerTests
     }
 
     [Fact]
-    public void PrepareCoverActions_AimPastCapStillForcesShot()
+    public void CoverRoleHold_AimPastCapStillForcesShot()
     {
         BattleSquad shooters = CreateSquad("Overshot Aim Rifle", 90_043);
         BattleSquad enemies = CreateSquad("Overshot Aim Target", 90_044);
@@ -611,8 +611,28 @@ public class BattleSquadPlannerTests
         List<IAction> shootActions = [];
         BattleSquadPlanner planner = CreatePlanner(
             grid, shootActions, [], [], shooters, enemies);
+        Dictionary<int, EngagementRoleConstraint> constraints = new()
+        {
+            [shooters.Id] = new EngagementRoleConstraint(
+                EngagementSquadRole.Cover, FixedHeading: 0)
+        };
+        BattleEngagementFrameBuilder.PairedFrame paired =
+            BattleEngagementFrameBuilder.Build([shooters], [enemies], constraints);
 
-        planner.PrepareCoverActions(shooters);
+        SquadEngagementDecision scored = planner.ChooseEngagementOption(
+            shooters,
+            paired.Frames[shooters.Id],
+            paired.Profiles,
+            paired.Frames,
+            [shooters],
+            [enemies]);
+        SquadEngagementDecision selected = scored with
+        {
+            Chosen = scored.Candidates.Single(candidate =>
+                candidate.Kind == EngagementOptionKind.Hold)
+        };
+        planner.DeclareEngagementDecision(selected);
+        planner.BuildEngagementActions(selected);
 
         ShootAction shot = Assert.IsType<ShootAction>(Assert.Single(shootActions));
         Assert.Equal(target.Soldier.Id, shot.TargetId);
@@ -1426,7 +1446,7 @@ public class BattleSquadPlannerTests
     }
 
     [Fact]
-    public void PrepareCoverActions_ParallelPlanningMatchesSerialPlanning()
+    public void CoverRoleHoldPlan_ParallelPlanningMatchesSerialPlanning()
     {
         var serial = RunParallelPlanningScenario(1);
 
@@ -1495,37 +1515,32 @@ public class BattleSquadPlannerTests
             new SeededRNG(12_345),
             maxDegreeOfParallelism);
 
-        if (pursuit)
+        EngagementRoleConstraint constraint = pursuit
+            ? new EngagementRoleConstraint(
+                EngagementSquadRole.Pursuit,
+                QuarryRunSpeed: enemies.GetSquadMove(),
+                RoleTargets: [enemies])
+            : new EngagementRoleConstraint(EngagementSquadRole.Cover, FixedHeading: 0);
+        BattleEngagementFrameBuilder.PairedFrame paired = BattleEngagementFrameBuilder.Build(
+            [shooters],
+            [enemies],
+            new Dictionary<int, EngagementRoleConstraint> { [shooters.Id] = constraint });
+        SquadEngagementDecision scored = planner.ChooseEngagementOption(
+            shooters,
+            paired.Frames[shooters.Id],
+            paired.Profiles,
+            paired.Frames,
+            [shooters],
+            [enemies],
+            constraint.RoleTargets);
+        SquadEngagementDecision selected = scored with
         {
-            Dictionary<int, EngagementRoleConstraint> constraints = new()
-            {
-                [shooters.Id] = new EngagementRoleConstraint(
-                    EngagementSquadRole.Pursuit,
-                    QuarryRunSpeed: enemies.GetSquadMove(),
-                    RoleTargets: [enemies])
-            };
-            BattleEngagementFrameBuilder.PairedFrame paired =
-                BattleEngagementFrameBuilder.Build([shooters], [enemies], constraints);
-            SquadEngagementDecision scored = planner.ChooseEngagementOption(
-                shooters,
-                paired.Frames[shooters.Id],
-                paired.Profiles,
-                paired.Frames,
-                [shooters],
-                [enemies],
-                [enemies]);
-            SquadEngagementDecision selected = scored with
-            {
-                Chosen = scored.Candidates.Single(candidate =>
-                    candidate.Kind == EngagementOptionKind.JogToward)
-            };
-            planner.DeclareEngagementDecision(selected);
-            planner.BuildEngagementActions(selected);
-        }
-        else
-        {
-            planner.PrepareCoverActions(shooters);
-        }
+            Chosen = scored.Candidates.Single(candidate => candidate.Kind == (pursuit
+                ? EngagementOptionKind.JogToward
+                : EngagementOptionKind.Hold))
+        };
+        planner.DeclareEngagementDecision(selected);
+        planner.BuildEngagementActions(selected);
 
         string[] actions = shootActions.Select(action => action switch
         {

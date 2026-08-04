@@ -7,14 +7,14 @@ using OnlyWar.Models.Battles;
 namespace OnlyWar.Helpers.Battles
 {
     /// <summary>
-    /// Coordinates complementary squad roles for withdrawal. Geometry and role selection are
-    /// deterministic; action construction is delegated to BattleSquadPlanner. Pursuit roles are
-    /// built directly by BattleTurnResolver's simultaneous planning pass.
+    /// Withdrawal geometry and cover-squad selection. Both are deterministic and stateless: the
+    /// resolver calls them while building the role constraints that mask each squad's engagement
+    /// options, and every action is then constructed by the ordinary
+    /// ChooseEngagementOption/BuildEngagementActions path in BattleSquadPlanner.
     /// </summary>
-    public sealed class BattleForcePlanner
+    public static class BattleForcePlanner
     {
         private const double DistanceTieTolerance = 0.0001;
-        private readonly BattleSquadPlanner _squadPlanner;
 
         public sealed record CoverCandidate(
             int SquadId,
@@ -26,88 +26,6 @@ namespace OnlyWar.Helpers.Battles
             bool Rotated,
             string Reason,
             IReadOnlyList<CoverCandidate> Candidates);
-
-        public BattleForcePlanner(BattleSquadPlanner squadPlanner)
-        {
-            _squadPlanner = squadPlanner
-                ?? throw new ArgumentNullException(nameof(squadPlanner));
-        }
-
-        public CoverAssignment PrepareFightingWithdrawal(
-            BattleSideState sideState,
-            IReadOnlyCollection<BattleSquad> friendlySquads,
-            IReadOnlyCollection<BattleSquad> enemySquads)
-        {
-            ArgumentNullException.ThrowIfNull(sideState);
-            List<BattleSquad> friendly = ActiveSquads(friendlySquads);
-            List<BattleSquad> enemies = ActiveSquads(enemySquads);
-
-            sideState.WithdrawalHeading ??= SelectWithdrawalHeading(friendly, enemies);
-
-            // A fighting withdrawal is a leapfrog: a cover squad only accomplishes something if
-            // there is a main body for it to cover. With a single squad, designating it as cover
-            // makes it stand and fire — nobody withdraws — while the enemy has already committed
-            // to pursuit off the withdrawal order. Fall back to the §6.2.5 unsupported withdrawal:
-            // the lone squad Runs along the fixed heading and the contact-break rules decide
-            // whether it escapes.
-            if (friendly.Count < 2)
-            {
-                sideState.CoveringSquadId = null;
-                foreach (BattleSquad squad in friendly)
-                {
-                    _squadPlanner.PrepareBoundActions(squad, sideState.WithdrawalHeading.Value);
-                }
-                return new CoverAssignment(
-                    null,
-                    false,
-                    "single_squad_unsupported",
-                    BuildCoverCandidates(friendly, enemies));
-            }
-
-            CoverAssignment assignment = SelectCover(
-                BuildCoverCandidates(friendly, enemies),
-                sideState.CoveringSquadId);
-            sideState.CoveringSquadId = assignment.SquadId;
-
-            foreach (BattleSquad squad in friendly)
-            {
-                if (assignment.SquadId == squad.Id)
-                {
-                    _squadPlanner.PrepareCoverActions(squad);
-                }
-                else
-                {
-                    _squadPlanner.PrepareBoundActions(squad, sideState.WithdrawalHeading.Value);
-                }
-            }
-
-            return assignment;
-        }
-
-        public void PrepareRearGuardWithdrawal(
-            BattleSideState sideState,
-            IReadOnlyCollection<BattleSquad> friendlySquads,
-            IReadOnlyCollection<BattleSquad> enemySquads)
-        {
-            ArgumentNullException.ThrowIfNull(sideState);
-            List<BattleSquad> friendly = ActiveSquads(friendlySquads);
-            sideState.WithdrawalHeading ??= SelectWithdrawalHeading(
-                friendly,
-                ActiveSquads(enemySquads));
-            sideState.CoveringSquadId = null;
-
-            foreach (BattleSquad squad in friendly)
-            {
-                if (sideState.RearGuardSquadId == squad.Id)
-                {
-                    _squadPlanner.PrepareRearGuardActions(squad);
-                }
-                else
-                {
-                    _squadPlanner.PrepareBoundActions(squad, sideState.WithdrawalHeading.Value);
-                }
-            }
-        }
 
         /// <summary>
         /// Selects and fixes the eight-way heading away from the enemy centroid. If centroids

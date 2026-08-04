@@ -1,8 +1,8 @@
 # OnlyWar — Product Requirements Document
 
-**Version:** Alpha 0.7 Released / Alpha 0.8 Roadmap
+**Version:** Alpha 0.7.2 Released / Alpha 0.8 Roadmap
 
-**Last Updated:** July 2026
+**Last Updated:** August 2026
 **Author:** Nathan Dilday  
 
 ---
@@ -1188,7 +1188,7 @@ The baseline the 0.7 line was built on. Every item below is specified in §4 and
 - Tyranid faction: Warriors, Carnifex, Ripper Swarms, Genestealer Cult troops, expanded species
 - Space Marine faction: Tactical, Assault, Devastator, Scout, Veteran squads and full weapon set
 
-### 5.2 Alpha 0.7 — Committed
+### 5.2 Alpha 0.7 — Released
 
 Shipped in full. This is a scope record, not a description of the work: each line says what was committed and where the behavior is now specified. Per-release change detail lives in the GitHub release notes; behavior lives in §4; implementation lives in the TDD.
 
@@ -1210,7 +1210,7 @@ Shipped in full. This is a scope record, not a description of the work: each lin
 - ✅ **Mission Field Experience & Records** — non-battle missions previously granted no development and left no trace. Now each mission step's check grants margin-scaled learn-by-doing XP on the skill it tested, paired with per-soldier mission history events and end-of-turn mission-result reporting. Mission steps set structured outcome signals that a shared classifier reads, so outcome classification no longer depends on matching log strings. §4.12, §4.13. *(Attributes stay static — open question §6.13.)*
 - ✅ **Template Weapons — Flamers** — flamers converted from stat-line guns into true cone templates: auto-hit on everything in the cone including friendlies, evasion and size bypassed, fuel-per-burst ammo, firing-line target selection, and template-aware Battle Value. §4.14 (*Template Weapons — Flamers*); TDD §6.6. *(Pulled forward from Battle Logic Phase 4 so the flamer was not built twice; on-fire and morale stayed in Phase 4, and grenades shipped separately in §5.3.)*
 
-### 5.3 Alpha 0.7.2 — Committed
+### 5.3 Alpha 0.7.2 — Released
 
 Alpha 0.7.2 is deliberately limited to protecting and operating the released campaign. It does not add a new faction or major simulation system.
 
@@ -1225,8 +1225,6 @@ Alpha 0.7.2 is deliberately limited to protecting and operating the released cam
 - ✅ **Battle Logic Phase 4A — Movement tiers and sprint/fire tradeoff** — five squad-level tactical tiers (Stationary, Walk, Jog, Run, In Melee) governing movement allowance, legal actions, aim retention, weapon `Bulk` penalties, defensive speed, charging, and banked fractional movement. §4.14 (*Movement Tiers*). *(Leg-wound/true-stance integration and Battle Value recalibration deliberately deferred — §5.4.)*
 
 ### 5.4 Alpha 0.7.3 — To-Do
-
-*Audited 2026-08-01 against the codebase and rules DB. **Recruitment v1 is done**, as is the drag-and-drop half of UX Improvement Phase 1 and the Morale/Rout half of Battle Logic Phase 4B. **Battle Visuals Phase 3 and Mission System Expansion have moved to the Post-0.8 Backlog (§5.7)** — they are the two largest remaining items, neither blocks anything else in 0.7.3, and both are better done after 0.8's legibility and narrative pass has settled what the screens need to show. **Squad row redesign has folded into §5.5 item (6)**, the 0.8 force-legibility redesign, since it was never elaborated beyond the phrase and is the same problem that redesign already has to solve. What remains in 0.7.3 is the Phase 4B remainder, the two "maybe" combat-realism items, zoom-adaptive planet labels, and Insurrectionist squad templates.*
 
 - ✅ **Recruitment v1 (pulled forward from 0.8)** — the continuous, capacity-limited recruitment program that closes the Chapter's one-way attrition loop, so the Promised World win pays out in more than flavor. The win designates a first-class Chapter Home World, grants the first recruitment right, and makes the founding program setup mandatory before the next turn can be ended. Full spec, including the three staff roles and their hard-gating capacities, in **§4.9**; the settled-v1 framing and the deferred v2 questions in **§6.3**.
   - **Remaining gap:** only the Chapter Home World is a recruiting source. §4.9's "per-world rights granted by a governor relationship or manpower pledge" is specified but not built; it depends on governor relations reaching the required depth and is the natural first increment of a Recruitment v1.1. It is not required to close the attrition loop, which v1 does.
