@@ -49,6 +49,9 @@ namespace OnlyWar.Models
         public Dictionary<int, PlayerSoldier> PlayerSoldierMap { get; }
         public Dictionary<int, Squad> SquadMap { get; private set; }
         public LoadoutDoctrine LoadoutDoctrine { get; } = new();
+        // Command staff and specialists are equipped by role and by individual rather than by
+        // squad type, so their kit lives outside the squad doctrine hierarchy.
+        public CharacterLoadoutDoctrine CharacterLoadoutDoctrine { get; } = new();
         // The chapter's abstract supply/favor currency (PRD 4.23): earned from request
         // fulfillment, spent on medical procedures and (later) other materiel sinks.
         public int Requisition { get; set; }

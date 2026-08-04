@@ -23,9 +23,25 @@ public partial class LoadoutDoctrineDialog : Control
     private Label _subtitle;
     private Label _selectionTitle;
     private Label _selectionSource;
-    private LoadoutEditorView _editor;
+    private ElementLoadoutEditorView _editor;
     private Button _saveButton;
     private Button _inheritButton;
+    private ElementLoadoutEditorView _characterEditor;
+    private ScrollContainer _characterScroll;
+    private HBoxContainer _modeRow;
+    private Button _squadModeButton;
+    private Button _characterModeButton;
+    private PanelContainer _listPanel;
+    private VBoxContainer _squadEditorStack;
+    private HBoxContainer _footer;
+    // Characters mode rows are keyed by SoldierTemplate.Id (CharacterLoadoutDoctrine's own key),
+    // but CharacterLoadoutService.SetRoleDefault needs the element itself — this recovers it
+    // when a row fires its key back on selection/reset.
+    private Dictionary<int, SquadTemplateElement> _characterRoleElements = new();
+    // Characters are equipped by role rather than by squad type, so they get their own mode
+    // instead of a row in the squad-template list. Chapter scope only: there is no theater tier
+    // for characters (see CharacterLoadoutDoctrine).
+    private bool _charactersMode;
 
     public event EventHandler DoctrineChanged;
 
@@ -81,11 +97,22 @@ public partial class LoadoutDoctrineDialog : Control
         header.AddChild(close);
         outer.AddChild(header);
 
+        _modeRow = new HBoxContainer();
+        _modeRow.AddThemeConstantOverride("separation", 8);
+        _squadModeButton = new Button { Text = "Squad Types", CustomMinimumSize = new Vector2(150, 34) };
+        _characterModeButton = new Button { Text = "Characters", CustomMinimumSize = new Vector2(150, 34) };
+        _squadModeButton.Pressed += () => SetMode(false);
+        _characterModeButton.Pressed += () => SetMode(true);
+        _modeRow.AddChild(_squadModeButton);
+        _modeRow.AddChild(_characterModeButton);
+        outer.AddChild(_modeRow);
+
         HBoxContainer content = new() { SizeFlagsVertical = SizeFlags.ExpandFill };
         content.AddThemeConstantOverride("separation", 12);
         outer.AddChild(content);
 
         PanelContainer listPanel = new() { CustomMinimumSize = new Vector2(285, 0) };
+        _listPanel = listPanel;
         OnlyWarStyle.ApplyInsetPanel(listPanel);
         ScrollContainer listScroll = new() { HorizontalScrollMode = ScrollContainer.ScrollMode.Disabled };
         _templateList = new VBoxContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill };
@@ -102,9 +129,13 @@ public partial class LoadoutDoctrineDialog : Control
         editorMargin.AddThemeConstantOverride("margin_right", 14);
         editorMargin.AddThemeConstantOverride("margin_bottom", 12);
         editorPanel.AddChild(editorMargin);
-        VBoxContainer editorStack = new();
+        // Both modes render into the same panel, so they share one container and swap visibility.
+        VBoxContainer editorRoot = new() { SizeFlagsVertical = SizeFlags.ExpandFill };
+        editorMargin.AddChild(editorRoot);
+        VBoxContainer editorStack = new() { SizeFlagsVertical = SizeFlags.ExpandFill };
         editorStack.AddThemeConstantOverride("separation", 8);
-        editorMargin.AddChild(editorStack);
+        editorRoot.AddChild(editorStack);
+        _squadEditorStack = editorStack;
         _selectionTitle = new Label();
         _selectionTitle.AddThemeFontOverride("font", GetThemeFont("display"));
         _selectionTitle.AddThemeFontSizeOverride("font_size", 20);
@@ -117,12 +148,31 @@ public partial class LoadoutDoctrineDialog : Control
             HorizontalScrollMode = ScrollContainer.ScrollMode.Disabled,
             SizeFlagsVertical = SizeFlags.ExpandFill
         };
-        _editor = new LoadoutEditorView { SizeFlagsHorizontal = SizeFlags.ExpandFill };
+        _editor = new ElementLoadoutEditorView { SizeFlagsHorizontal = SizeFlags.ExpandFill };
         editorScroll.AddChild(_editor);
         editorStack.AddChild(editorScroll);
+
+        ScrollContainer characterScroll = new()
+        {
+            HorizontalScrollMode = ScrollContainer.ScrollMode.Disabled,
+            SizeFlagsVertical = SizeFlags.ExpandFill,
+            SizeFlagsHorizontal = SizeFlags.ExpandFill,
+            Visible = false
+        };
+        _characterEditor = new ElementLoadoutEditorView
+        {
+            SizeFlagsHorizontal = SizeFlags.ExpandFill,
+            CharacterCaptionText = "CHAPTER STANDARD BY ROLE"
+        };
+        _characterEditor.CharacterSelectionChanged += OnCharacterRoleSelected;
+        _characterEditor.CharacterResetRequested += OnCharacterRoleReset;
+        characterScroll.AddChild(_characterEditor);
+        editorRoot.AddChild(characterScroll);
+        _characterScroll = characterScroll;
         content.AddChild(editorPanel);
 
         HBoxContainer footer = new() { Alignment = BoxContainer.AlignmentMode.End };
+        _footer = footer;
         footer.AddThemeConstantOverride("separation", 8);
         _inheritButton = new Button
         {
@@ -154,14 +204,102 @@ public partial class LoadoutDoctrineDialog : Control
         _force = force;
         _planet = planet;
         _doctrine = doctrine;
-        _title.Text = planet == null ? "Chapter Loadouts" : $"{planet.Name} Theater Loadouts";
-        _subtitle.Text = planet == null
-            ? "Set the chapter-wide baseline for each squad type. Squads with a theater override or custom loadout are unaffected."
-            : "Create only the overrides this theater needs. Unmodified squad types continue to inherit chapter doctrine.";
         _saveButton.Text = planet == null ? "Save Chapter Default" : "Save Theater Override";
         _inheritButton.Visible = planet != null;
-        PopulateTemplateList();
+        // Characters have no theater tier, so the mode switch only appears at chapter scope.
+        _modeRow.Visible = planet == null;
+        SetMode(_charactersMode && planet == null);
         Visible = true;
+    }
+
+    private void SetMode(bool charactersMode)
+    {
+        _charactersMode = charactersMode;
+        OnlyWarStyle.ApplyListRow(_squadModeButton, !charactersMode);
+        OnlyWarStyle.ApplyListRow(_characterModeButton, charactersMode);
+
+        _title.Text = _planet == null ? "Chapter Loadouts" : $"{_planet.Name} Theater Loadouts";
+        if (charactersMode)
+        {
+            _subtitle.Text = "Set the chapter-wide kit for each command and specialist role. "
+                + "Individuals equipped from their squad screen keep their personal loadout.";
+        }
+        else
+        {
+            _subtitle.Text = _planet == null
+                ? "Set the chapter-wide baseline for each squad type. Squads with a theater override or custom loadout are unaffected."
+                : "Create only the overrides this theater needs. Unmodified squad types continue to inherit chapter doctrine.";
+        }
+
+        _listPanel.Visible = !charactersMode;
+        _squadEditorStack.Visible = !charactersMode;
+        _characterScroll.Visible = charactersMode;
+        // Character picks apply on selection; only the squad editor stages an edit to be saved.
+        _footer.Visible = !charactersMode;
+
+        if (charactersMode)
+        {
+            PopulateCharacterRoles();
+        }
+        else
+        {
+            PopulateTemplateList();
+        }
+    }
+
+    // Every character role the chapter actually fields, gathered from the order of battle so a
+    // chapter without (say) a Judiciar never shows one. Administrative formations are excluded
+    // for the same reason the squad list excludes them: they never deploy as units, so a combat
+    // loadout for them is noise. Roles they share with a company HQ (Apothecary, Chaplain,
+    // Judiciar) still appear via that HQ; only roles unique to a Chapter office drop out. Grouped
+    // by SoldierTemplate.Id (not element) because that's what CharacterLoadoutDoctrine.RoleDefaults
+    // is keyed by — the same "Sergeant" role fielded by three squad types is one row, one
+    // default, not three.
+    private void PopulateCharacterRoles()
+    {
+        List<SquadTemplateElement> elements = _force?.Army?.OrderOfBattle?.GetAllSquads()
+            .Where(squad => squad.IsOperational)
+            .SelectMany(squad => squad.SquadTemplate.Elements)
+            .Where(element => element.TryGetQuota(CharacterLoadoutService.CommandWeaponGroup, out _))
+            .GroupBy(element => element.SoldierTemplate.Id)
+            .Select(group => group.First())
+            .OrderByDescending(element => element.SoldierTemplate.Rank)
+            .ThenBy(element => element.SoldierTemplate.Name, StringComparer.OrdinalIgnoreCase)
+            .ToList() ?? [];
+
+        _characterRoleElements = elements.ToDictionary(element => element.SoldierTemplate.Id);
+
+        CharacterLoadoutDoctrine doctrine = _force?.Army?.CharacterLoadoutDoctrine;
+        _characterEditor.SetData(elements.Select(element =>
+        {
+            EffectiveCharacterLoadout resolved = CharacterLoadoutService.ResolveRole(element, _force);
+            return new CharacterLoadoutRowData(
+                element.SoldierTemplate.Id,
+                element.SoldierTemplate.Name,
+                CharacterLoadoutService.DescribeSource(resolved),
+                element.GetMenu(CharacterLoadoutService.CommandWeaponGroup),
+                resolved?.WeaponSet,
+                doctrine?.RoleDefaults.ContainsKey(element.SoldierTemplate.Id) == true);
+        }).ToList(), [], []);
+    }
+
+    private void OnCharacterRoleSelected(object sender, (int Key, WeaponSet WeaponSet) change)
+    {
+        if (_characterRoleElements.TryGetValue(change.Key, out SquadTemplateElement element))
+        {
+            CharacterLoadoutService.SetRoleDefault(element, change.WeaponSet, _force);
+            DoctrineChanged?.Invoke(this, EventArgs.Empty);
+        }
+        PopulateCharacterRoles();
+    }
+
+    private void OnCharacterRoleReset(object sender, int soldierTemplateId)
+    {
+        if (_force?.Army?.CharacterLoadoutDoctrine.ClearRoleDefault(soldierTemplateId) == true)
+        {
+            DoctrineChanged?.Invoke(this, EventArgs.Empty);
+        }
+        PopulateCharacterRoles();
     }
 
     private void PopulateTemplateList()
@@ -173,8 +311,13 @@ public partial class LoadoutDoctrineDialog : Control
         }
 
         List<SquadTemplate> templates = _force?.Army?.OrderOfBattle?.GetAllSquads()
+            // A squad type belongs here if it has any pooled group to spend, which is every group
+            // other than Command Weapon — not every group with a maximum above 1. Tactical Squad's
+            // two groups are both (0,1) and it is still very much a squad type worth a doctrine.
             .Where(squad => squad.IsOperational
-                && squad.SquadTemplate.WeaponOptions?.Any() == true)
+                && squad.SquadTemplate.Elements.Any(
+                    element => element.Quotas.Any(
+                        quota => quota.OptionGroup != CharacterLoadoutService.CommandWeaponGroup)))
             .Select(squad => squad.SquadTemplate)
             .GroupBy(template => template.Id)
             .Select(group => group.First())
@@ -224,7 +367,6 @@ public partial class LoadoutDoctrineDialog : Control
                 _selectedTemplate.Id, out loadout);
         }
         loadout ??= [];
-        int maximumSize = _selectedTemplate.Elements.Sum(element => (int)element.MaximumNumber);
         _selectionTitle.Text = _selectedTemplate.Name;
         _selectionSource.Text = _planet == null
             ? (_doctrine.Loadouts.ContainsKey(_selectedTemplate.Id)
@@ -233,7 +375,12 @@ public partial class LoadoutDoctrineDialog : Control
             : (_planet.LoadoutDoctrine.Loadouts.ContainsKey(_selectedTemplate.Id)
                 ? "Planetary theater override"
                 : "Inherited from chapter doctrine");
-        _editor.SetLoadout(_selectedTemplate, loadout, maximumSize);
+        // No live roster at template scope, so capacity is each element's own MaximumNumber
+        // rather than an able-bodied count.
+        _editor.SetData(
+            [],
+            ElementLoadoutSections.Build(_selectedTemplate, element => element.MaximumNumber),
+            loadout);
         _inheritButton.Disabled = _planet == null
             || !_planet.LoadoutDoctrine.Loadouts.ContainsKey(_selectedTemplate.Id);
     }

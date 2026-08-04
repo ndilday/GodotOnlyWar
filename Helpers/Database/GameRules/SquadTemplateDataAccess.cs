@@ -34,28 +34,28 @@ namespace OnlyWar.Helpers.Database.GameRules
             var meleeWeapons = GetMeleeWeaponTemplates(connection, baseSkillMap);
             var species = GetSpeciesByFactionId(connection, attributes, hitLocationMap, meleeWeapons);
             var soldierTemplateRequirements = GetSoldierTemplateRequirements(connection);
-            var soldierTemplates = 
+            var rangedWeapons = GetRangedWeaponTemplates(connection, baseSkillMap);
+            // Weapon sets are built before soldier templates because every role's weapon menu
+            // (see SoldierTemplate.WeaponOptionsByGroup) references them.
+            var weaponSets = GetWeaponSetMap(connection, meleeWeapons, rangedWeapons);
+            var weaponOptionsByTemplateId = GetWeaponOptionsBySoldierTemplateId(connection, weaponSets);
+            var soldierTemplates =
                 GetSoldierTemplatesByFactionId(
                     connection,
                     soldierTemplateSkills,
                     species,
                     trainingProfiles,
-                    soldierTemplateRequirements);
+                    soldierTemplateRequirements,
+                    weaponOptionsByTemplateId);
             var armorTemplates = GetArmorTemplates(connection);
-            var rangedWeapons = GetRangedWeaponTemplates(connection, baseSkillMap);
-            var weaponSets = GetWeaponSetMap(connection, meleeWeapons, rangedWeapons);
-            var squadTemplateWeaponSetIds = 
-                GetSquadTemplateWeaponSetIdsBySquadTemplateWeaponOptionId(connection);
-            var squadWeaponOptions = 
-                GetSquadWeaponOptionsBySquadTemplateId(connection, 
-                                                       squadTemplateWeaponSetIds, 
-                                                       weaponSets);
+            var elementQuotas = GetElementQuotasByElementId(connection);
             var basicSoldierTemplateMap = soldierTemplates.Values
                                                           .SelectMany(st => st)
                                                           .ToDictionary(st => st.Id);
-            var squadElements = GetSquadTemplateElementsBySquadId(connection, basicSoldierTemplateMap);
+            var squadElements = GetSquadTemplateElementsBySquadId(
+                connection, basicSoldierTemplateMap, weaponSets, elementQuotas);
             var squadTemplates = GetSquadTemplatesById(connection, squadElements, weaponSets,
-                                                       squadWeaponOptions, armorTemplates, trainingProfiles);
+                                                       armorTemplates, trainingProfiles);
             return new SquadTemplateDataBlob
             {
                 ArmorTemplates = armorTemplates,
@@ -348,87 +348,74 @@ namespace OnlyWar.Helpers.Database.GameRules
             return weaponSetMap;
         }
 
-        private Dictionary<int, List<int>> GetSquadTemplateWeaponSetIdsBySquadTemplateWeaponOptionId(IDbConnection connection)
+        /// <summary>
+        /// Loads SquadTemplateElementQuota — how many bodies of an element may draw from one of
+        /// its SoldierTemplate's weapon-menu groups (see SquadTemplateElement.Quotas). Read in
+        /// table order with no ORDER BY, same as every other loader in this file, which matters
+        /// here: SquadFactory's random draw walks a group's menu in this order, and the rules DB
+        /// migration preserved the legacy SquadTemplateWeaponOption row order when it populated
+        /// this table, so reading naturally keeps that draw deterministic across the schema change.
+        /// </summary>
+        private Dictionary<int, List<SquadTemplateElementQuota>> GetElementQuotasByElementId(IDbConnection connection)
         {
-            Dictionary<int, List<int>> weaponOptionToWeaponSetMap = [];
-            using (var command = connection.CreateCommand())
+            Dictionary<int, List<SquadTemplateElementQuota>> quotaMap = [];
+            using var command = connection.CreateCommand();
+            command.CommandText =
+                "SELECT SquadTemplateElementId, OptionGroup, MinimumRequired, MaximumAllowed "
+                + "FROM SquadTemplateElementQuota";
+            var reader = command.ExecuteReader();
+            while (reader.Read())
             {
-                command.CommandText = "SELECT * FROM SquadTemplateWeaponOptionWeaponSet";
-                var reader = command.ExecuteReader();
-                while (reader.Read())
+                int elementId = reader.GetInt32(0);
+                string optionGroup = reader.GetString(1);
+                int min = reader.GetInt32(2);
+                int max = reader.GetInt32(3);
+
+                if (!quotaMap.TryGetValue(elementId, out List<SquadTemplateElementQuota> quotas))
                 {
-                    int weaponSetId = reader.GetInt32(1);
-                    int squadTemplateWeaponOption = reader.GetInt32(2);
-                    if (!weaponOptionToWeaponSetMap.ContainsKey(squadTemplateWeaponOption))
-                    {
-                        weaponOptionToWeaponSetMap[squadTemplateWeaponOption] = [];
-                    }
-                    weaponOptionToWeaponSetMap[squadTemplateWeaponOption].Add(weaponSetId);
+                    quotas = [];
+                    quotaMap[elementId] = quotas;
                 }
+                quotas.Add(new SquadTemplateElementQuota(optionGroup, min, max));
             }
-            return weaponOptionToWeaponSetMap;
+            return quotaMap;
         }
 
-        private Dictionary<int, List<SquadWeaponOption>> GetSquadWeaponOptionsBySquadTemplateId(
+        private Dictionary<int, List<SquadTemplateElement>> GetSquadTemplateElementsBySquadId(
             IDbConnection connection,
-            Dictionary<int, List<int>> weaponOptionWeaponSetMap,
-            Dictionary<int, WeaponSet> weaponSetMap)
-        {
-            Dictionary<int, List<SquadWeaponOption>> squadWeaponOptionMap =
-                [];
-            using (var command = connection.CreateCommand())
-            {
-                command.CommandText = "SELECT * FROM SquadTemplateWeaponOption";
-                var reader = command.ExecuteReader();
-                while (reader.Read())
-                {
-                    int id = reader.GetInt32(0);
-                    int squadTemplateId = reader.GetInt32(1);
-                    string name = reader[2].ToString();
-                    int min = reader.GetInt32(3);
-                    int max = reader.GetInt32(4);
-
-                    List<int> baseList = weaponOptionWeaponSetMap[id];
-                    List<WeaponSet> weaponSetList = [];
-                    foreach (int weaponSetId in baseList)
-                    {
-                        weaponSetList.Add(weaponSetMap[weaponSetId]);
-                    }
-
-                    SquadWeaponOption weaponOption = new SquadWeaponOption(name, min, max, weaponSetList);
-                    if (!squadWeaponOptionMap.ContainsKey(squadTemplateId))
-                    {
-                        squadWeaponOptionMap[squadTemplateId] = [];
-                    }
-                    squadWeaponOptionMap[squadTemplateId].Add(weaponOption);
-                }
-            }
-            return squadWeaponOptionMap;
-        }
-
-        private Dictionary<int, List<SquadTemplateElement>> GetSquadTemplateElementsBySquadId(IDbConnection connection,
-                                                                                              Dictionary<int, SoldierTemplate> soldierTemplateMap)
+            Dictionary<int, SoldierTemplate> soldierTemplateMap,
+            Dictionary<int, WeaponSet> weaponSetMap,
+            Dictionary<int, List<SquadTemplateElementQuota>> quotaMap)
         {
             Dictionary<int, List<SquadTemplateElement>> elementsMap =
                 [];
             using (var command = connection.CreateCommand())
             {
-                command.CommandText = "SELECT * FROM SquadTemplateElement";
+                command.CommandText =
+                    "SELECT Id, SquadTemplateId, SoldierTemplateId, MinimumRequired, MaximumAllowed, "
+                    + "DefaultWeaponSetId FROM SquadTemplateElement";
                 var reader = command.ExecuteReader();
                 while (reader.Read())
                 {
+                    int id = reader.GetInt32(0);
                     int squadTemplateId = reader.GetInt32(1);
                     int soldierTemplateId = reader.GetInt32(2);
                     int min = reader.GetInt32(3);
                     int max = reader.GetInt32(4);
+                    WeaponSet defaultWeapons = reader[5].GetType() != typeof(DBNull)
+                        ? weaponSetMap[reader.GetInt32(5)]
+                        : null;
 
                     SoldierTemplate template = soldierTemplateMap[soldierTemplateId];
+                    IReadOnlyList<SquadTemplateElementQuota> quotas =
+                        quotaMap.TryGetValue(id, out List<SquadTemplateElementQuota> list) ? list : [];
 
                     if (!elementsMap.ContainsKey(squadTemplateId))
                     {
                         elementsMap[squadTemplateId] = [];
                     }
-                    elementsMap[squadTemplateId].Add(new SquadTemplateElement(template, (byte)min, (byte)max));
+                    elementsMap[squadTemplateId].Add(
+                        new SquadTemplateElement(template, (byte)min, (byte)max, id, defaultWeapons, quotas));
                 }
             }
             return elementsMap;
@@ -438,7 +425,6 @@ namespace OnlyWar.Helpers.Database.GameRules
             IDbConnection connection,
             Dictionary<int, List<SquadTemplateElement>> elementMap,
             Dictionary<int, WeaponSet> weaponSetMap,
-            Dictionary<int, List<SquadWeaponOption>> squadWeaponOptionMap,
             Dictionary<int, ArmorTemplate> armorTemplateMap,
             Dictionary<int, TrainingProfile> trainingProfileMap)
         {
@@ -466,12 +452,15 @@ namespace OnlyWar.Helpers.Database.GameRules
                     }
 
                     ArmorTemplate defaultArmor = armorTemplateMap[defaultArmorId];
-                    List<SquadWeaponOption> options = squadWeaponOptionMap.ContainsKey(id) ?
-                        squadWeaponOptionMap[id] : null;
+                    // The squad-level weapon-option menu (SquadTemplateWeaponOption) is gone —
+                    // it split into SoldierTemplate.WeaponOptionsByGroup (the menu) and
+                    // SquadTemplateElement.Quotas (how many bodies may draw from it). SquadTemplate
+                    // still carries the field for callers that have not migrated (see
+                    // Builders/SquadFactory.cs), but there is nothing left to populate it with.
                     SquadTemplate squadTemplate = new SquadTemplate(id,
                                                                     name,
                                                                     weaponSetMap[defaultWeaponSetId],
-                                                                    options,
+                                                                    null,
                                                                     defaultArmor,
                                                                     elementMap[id],
                                                                     (SquadTypes)squadType);
@@ -617,12 +606,50 @@ namespace OnlyWar.Helpers.Database.GameRules
             return weaponTemplate;
         }
 
+        /// <summary>
+        /// Reads the per-role weapon-set menus (Models/Soldiers/SoldierTemplate.WeaponOptionsByGroup),
+        /// grouped by OptionGroup. The default no longer lives here — it moved to
+        /// SquadTemplateElement.DefaultWeaponSetId, since the same role can default differently
+        /// depending on which squad's element it fills.
+        /// </summary>
+        private static Dictionary<int, Dictionary<string, List<WeaponSet>>>
+            GetWeaponOptionsBySoldierTemplateId(
+                IDbConnection connection,
+                Dictionary<int, WeaponSet> weaponSetMap)
+        {
+            Dictionary<int, Dictionary<string, List<WeaponSet>>> optionMap = [];
+            using var command = connection.CreateCommand();
+            command.CommandText =
+                "SELECT SoldierTemplateId, OptionGroup, WeaponSetId FROM SoldierTemplateWeaponOption";
+            var reader = command.ExecuteReader();
+            while (reader.Read())
+            {
+                int soldierTemplateId = reader.GetInt32(0);
+                string optionGroup = reader.GetString(1);
+                WeaponSet weaponSet = weaponSetMap[reader.GetInt32(2)];
+
+                if (!optionMap.TryGetValue(soldierTemplateId, out Dictionary<string, List<WeaponSet>> groups))
+                {
+                    groups = [];
+                    optionMap[soldierTemplateId] = groups;
+                }
+                if (!groups.TryGetValue(optionGroup, out List<WeaponSet> options))
+                {
+                    options = [];
+                    groups[optionGroup] = options;
+                }
+                options.Add(weaponSet);
+            }
+            return optionMap;
+        }
+
         private Dictionary<int, List<SoldierTemplate>> GetSoldierTemplatesByFactionId(
             IDbConnection connection,
             Dictionary<int, List<ValueTuple<BaseSkill, float>>> soldierTemplateTrainingMap,
             Dictionary<int, List<Species>> speciesMap,
             Dictionary<int, TrainingProfile> trainingProfileMap,
-            Dictionary<int, List<SoldierTemplateRequirement>> requirementMap)
+            Dictionary<int, List<SoldierTemplateRequirement>> requirementMap,
+            Dictionary<int, Dictionary<string, List<WeaponSet>>> weaponOptionMap)
         {
             Dictionary<int, List<SoldierTemplate>> soldierTemplatesByFactionId = 
                 [];
@@ -663,11 +690,18 @@ namespace OnlyWar.Helpers.Database.GameRules
                         requirementMap.TryGetValue(id, out List<SoldierTemplateRequirement> requirements)
                             ? requirements
                             : [];
+                    IReadOnlyDictionary<string, IReadOnlyList<WeaponSet>> weaponOptionsByGroup = null;
+                    if (weaponOptionMap.TryGetValue(id, out Dictionary<string, List<WeaponSet>> groups))
+                    {
+                        weaponOptionsByGroup = groups.ToDictionary(
+                            kv => kv.Key, kv => (IReadOnlyList<WeaponSet>)kv.Value);
+                    }
                     SoldierTemplate soldierTemplate =
                         new SoldierTemplate(id, species, name, (byte)rank, (byte)subrank,
                                              isSquadLeader, (byte)specialistType, trainingList,
                                              workExperienceTrainingProfile, battleValue,
-                                             promotionRequirements, meleeFraction);
+                                             promotionRequirements, meleeFraction,
+                                             weaponOptionsByGroup);
 
                     if (!soldierTemplatesByFactionId.ContainsKey(factionId))
                     {

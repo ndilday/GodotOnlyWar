@@ -1,6 +1,7 @@
 using OnlyWar.Helpers;
 using OnlyWar.Models;
 using OnlyWar.Models.Soldiers;
+using OnlyWar.Models.Soldiers.Ratings;
 using OnlyWar.Models.Squads;
 using OnlyWar.Models.Units;
 using OnlyWar.Tests.Fixtures;
@@ -83,6 +84,33 @@ public class SoldierDossierServiceTests
         Assert.Contains($"{silverDate}: Silver Sword of the Emperor", awards);
         Assert.Contains($"{marksmanDate}: Marksman's Honour", awards);
         Assert.DoesNotContain($"{bronzeDate}: Bronze Sword of the Emperor", awards);
+    }
+
+    [Fact]
+    public void BuildCombatHonorNames_KeepsHighestGunAndSwordAndDropsOtherHonors()
+    {
+        Squad squad = CreateAssignedSquad("Tactical Squad");
+        PlayerSoldier soldier = AddPlayerSoldier(squad, "Brother Marius");
+        soldier.AddAward(new SoldierAward(new Date(41, 998, 5), "Bronze Sword of the Emperor", AwardTypes.Sword, 1));
+        soldier.AddAward(new SoldierAward(new Date(41, 999, 20), "Gold Sword of the Emperor", AwardTypes.Sword, 3));
+        soldier.AddAward(new SoldierAward(new Date(41, 999, 30), "Silver Bolter of the Emperor", AwardTypes.Gun, 2));
+        soldier.AddAward(new SoldierAward(new Date(41, 999, 40), "Gold Voice of the Emperor", AwardTypes.Voice, 3));
+
+        var honors = _service.BuildCombatHonorNames(soldier);
+
+        // Gun first, then Sword, each collapsed to its highest grade. Voice and Banner are honors
+        // about other things and have no bearing on a weapon choice.
+        Assert.Equal(["Silver Bolter of the Emperor", "Gold Sword of the Emperor"], honors);
+    }
+
+    [Fact]
+    public void BuildCombatHonorNames_ReturnsNothingForAnUndecoratedBrother()
+    {
+        Squad squad = CreateAssignedSquad("Tactical Squad");
+        PlayerSoldier soldier = AddPlayerSoldier(squad, "Brother Marius");
+        soldier.AddAward(new SoldierAward(new Date(41, 999, 40), "Gold Voice of the Emperor", AwardTypes.Voice, 3));
+
+        Assert.Empty(_service.BuildCombatHonorNames(soldier));
     }
 
     [Fact]

@@ -46,6 +46,7 @@ namespace OnlyWar.Helpers.Database.GameState
         // saves; reattached to Sector.Scenario by the load path.
         public CampaignScenario Scenario { get; set; }
         public LoadoutDoctrine ChapterLoadoutDoctrine { get; set; }
+        public CharacterLoadoutDoctrine CharacterLoadoutDoctrine { get; set; }
     }
 
     public class GameStateDataAccess
@@ -119,6 +120,7 @@ namespace OnlyWar.Helpers.Database.GameState
             var planetMap = planets.ToDictionary(planet => planet.Id);
             _loadoutDoctrineDataAccess.PopulatePlanetDoctrines(dbCon, planetMap, weaponSets);
             var chapterLoadoutDoctrine = _loadoutDoctrineDataAccess.GetChapterDoctrine(dbCon, weaponSets);
+            var characterLoadoutDoctrine = _loadoutDoctrineDataAccess.GetCharacterDoctrine(dbCon, weaponSets);
             var regions = _planetDataAccess.GetRegions(dbCon, factionMap, planets);
             PlanetDataAccess.PopulateRegionFactions(dbCon, factionMap, regions);
             var missionMap = _planetDataAccess.PopulateRegionMissions(dbCon, regions);
@@ -167,7 +169,8 @@ namespace OnlyWar.Helpers.Database.GameState
                 History = history,
                 FallenBrothers = fallenBrothers,
                 Scenario = global?.Scenario,
-                ChapterLoadoutDoctrine = chapterLoadoutDoctrine
+                ChapterLoadoutDoctrine = chapterLoadoutDoctrine,
+                CharacterLoadoutDoctrine = characterLoadoutDoctrine
             };
         }
 
@@ -188,6 +191,7 @@ namespace OnlyWar.Helpers.Database.GameState
                              IEnumerable<PlayerSoldier> fallenBrothers,
                              IReadOnlyDictionary<Date, List<EventHistory>> history,
                              LoadoutDoctrine chapterLoadoutDoctrine,
+                             CharacterLoadoutDoctrine characterLoadoutDoctrine,
                              string schemaFilePath = null,
                              int? homeWorldPlanetId = null,
                              RecruitmentSaveData recruitment = null)
@@ -215,7 +219,8 @@ namespace OnlyWar.Helpers.Database.GameState
                 WriteSaveData(tempPath, currentDate, requisition, geneseedStockpile,
                               geneseedPurity, scenario, medicalProcedures, characters, requests,
                               pledges, planets, fleets, playerSoldiers, fallenBrothers, history, squads,
-                              ships, units, chapterLoadoutDoctrine, homeWorldPlanetId, recruitment);
+                              ships, units, chapterLoadoutDoctrine, characterLoadoutDoctrine,
+                              homeWorldPlanetId, recruitment);
                 // Release the pooled SQLite handles so the temp file can be moved over the
                 // target on Windows (an open handle would block the move).
                 SqliteConnection.ClearAllPools();
@@ -258,6 +263,7 @@ namespace OnlyWar.Helpers.Database.GameState
                                    IEnumerable<Ship> ships,
                                    IEnumerable<Unit> units,
                                    LoadoutDoctrine chapterLoadoutDoctrine,
+                                   CharacterLoadoutDoctrine characterLoadoutDoctrine,
                                    int? homeWorldPlanetId,
                                    RecruitmentSaveData recruitment)
         {
@@ -326,6 +332,10 @@ namespace OnlyWar.Helpers.Database.GameState
                     {
                         _soldierDataAccess.SaveSoldier(transaction, fallenBrother);
                     }
+
+                    // After the soldier rows exist: personal loadouts carry a foreign key to
+                    // Soldier, and the insert drops entries for anyone no longer on the roster.
+                    _loadoutDoctrineDataAccess.SaveCharacterDoctrine(transaction, characterLoadoutDoctrine);
                     // missions already written as region special missions, so order missions
                     // that reuse one are not inserted twice (primary-key conflict)
                     HashSet<int> savedMissionIds = planets

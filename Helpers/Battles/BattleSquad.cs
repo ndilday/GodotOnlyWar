@@ -371,19 +371,19 @@ namespace OnlyWar.Helpers.Battles
             // TurnController.ProcessCombatMissions, which skips depleted squads — but guard here so
             // construction never throws on an empty AbleSoldiers (was: tempSquad[0] below).
             if (tempSquad.Count == 0) return;
+            // Characters carry kit assigned to the individual, so equip them before the pooled
+            // passes below and take them out of contention. The skill-greedy allocation that
+            // follows cannot express "this set belongs to this man" — it would happily hand the
+            // Captain's relic blade to an Apothecary with a better Sword score. A sergeant is a
+            // character like any other now — his element carries a Command Weapon quota — so
+            // there is no separate IsSquadLeader pass here any more.
+            AllocateCharacterEquipment(tempSquad);
+            if (tempSquad.Count == 0) return;
             // order the weapon sets by the strength of the primary weapon
             List<WeaponSet> wsList = LoadoutDoctrineService.GetEffectiveLoadout(Squad)
                 .OrderByDescending(ws => ws.PrimaryRangedWeapon?.DamageMultiplier ?? ws.PrimaryMeleeWeapon.StrengthMultiplier)
                 .ToList();
             // need to allocate weapons from squad weapon sets
-            if (tempSquad[0].Soldier.Template.IsSquadLeader)
-            {
-                // for now, sgt always gets default weapons
-                tempSquad[0].AddWeapons(Squad.SquadTemplate.DefaultWeapons.GetRangedWeapons(), Squad.SquadTemplate.DefaultWeapons.GetMeleeWeapons());
-                // TODO: personalize armor and weapons
-                tempSquad[0].Armor = new Armor(Squad.SquadTemplate.Armor);
-                tempSquad.RemoveAt(0);
-            }
             foreach (WeaponSet ws in wsList)
             {
                 if(tempSquad.Count() == 0)
@@ -410,10 +410,44 @@ namespace OnlyWar.Helpers.Battles
             {
                 foreach(BattleSoldier soldier in tempSquad)
                 {
-                    soldier.AddWeapons(Squad.SquadTemplate.DefaultWeapons.GetRangedWeapons(), Squad.SquadTemplate.DefaultWeapons.GetMeleeWeapons());
+                    WeaponSet defaultWeapons = ResolveElementDefaultWeapons(soldier.Soldier);
+                    soldier.AddWeapons(defaultWeapons.GetRangedWeapons(), defaultWeapons.GetMeleeWeapons());
                     // TODO: personalize armor and weapons
                     soldier.Armor = new Armor(Squad.SquadTemplate.Armor);
                 }
+            }
+        }
+
+        // The soldier's own slot default, falling back to the squad template's default
+        // (SquadTemplateElement.DefaultWeaponSetId falls back the same way at load time — see
+        // SquadTemplateDataAccess — so for every element without its own authored default this
+        // already resolves to the same WeaponSet the squad default would have given).
+        private WeaponSet ResolveElementDefaultWeapons(ISoldier soldier)
+        {
+            SquadTemplateElement element = Squad.SquadTemplate.Elements
+                .FirstOrDefault(e => e.SoldierTemplate == soldier.Template);
+            return element?.DefaultWeapons ?? Squad.SquadTemplate.DefaultWeapons;
+        }
+
+        /// <summary>
+        /// Equips every character in the list from its own resolved loadout and removes it from
+        /// the list, leaving only soldiers the pooled allocation should handle. A character whose
+        /// role resolves to no weapon set is left in place so he still gets the squad default
+        /// rather than deploying unarmed.
+        /// </summary>
+        private void AllocateCharacterEquipment(List<BattleSoldier> tempSquad)
+        {
+            for (int i = tempSquad.Count - 1; i >= 0; i--)
+            {
+                BattleSoldier battleSoldier = tempSquad[i];
+                WeaponSet weaponSet = CharacterLoadoutService.GetEffectiveWeaponSet(battleSoldier.Soldier);
+                if (weaponSet == null)
+                {
+                    continue;
+                }
+                battleSoldier.AddWeapons(weaponSet.GetRangedWeapons(), weaponSet.GetMeleeWeapons());
+                battleSoldier.Armor = new Armor(Squad.SquadTemplate.Armor);
+                tempSquad.RemoveAt(i);
             }
         }
 

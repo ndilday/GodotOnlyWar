@@ -35,6 +35,47 @@ public class RulesDatabaseValidationTests
     }
 
     [Fact]
+    public void CharacterTemplates_LoadWeaponOptionsFromShippedDatabase()
+    {
+        var rules = RulesDatabaseFixture.LoadRules();
+        var playerFaction = rules.Factions.Single(faction => faction.IsPlayerFaction);
+        var playerTemplates = playerFaction.SoldierTemplates;
+        // "Character" is no longer a SoldierTemplate flag (the same template can be a lone
+        // specialist in one squad and a bulk instructor slot in another — the Chaplain in HQ
+        // Squad vs. the 10th Company HQ); it is a SquadTemplateElement carrying a Command Weapon
+        // quota. Collect every element once so the assertions below can look one up per template.
+        List<SquadTemplateElement> allElements = playerFaction.SquadTemplates.Values
+            .SelectMany(squad => squad.Elements)
+            .ToList();
+
+        // Chaplains, the Master of Sanctity, Reclusiarchs and Judiciars all train Axe, which is
+        // the Crozius Arcanum's skill — a default nobody is untrained with.
+        foreach (int croziusRoleId in new[] { 9, 10, 16, 51 })
+        {
+            SoldierTemplate template = playerTemplates[croziusRoleId];
+            Assert.NotEmpty(template.GetWeaponOptions(CharacterLoadoutService.CommandWeaponGroup));
+            SquadTemplateElement element = allElements.First(e => e.SoldierTemplate == template);
+            Assert.Equal("Bolt Pistol + Crozius Arcanum", element.DefaultWeapons?.Name);
+        }
+
+        // Every option a character can be given has to be one of his own, or the loadout UI
+        // would offer a pick that resolution could never produce.
+        foreach (SquadTemplateElement element in allElements.Where(
+                     e => e.TryGetQuota(CharacterLoadoutService.CommandWeaponGroup, out _)))
+        {
+            if (element.DefaultWeapons == null) continue;
+            Assert.Contains(element.DefaultWeapons, element.GetMenu(CharacterLoadoutService.CommandWeaponGroup));
+        }
+
+        // Line troopers stay outside the character system and keep pooled squad allocation.
+        Assert.Empty(playerTemplates[18].GetWeaponOptions(CharacterLoadoutService.CommandWeaponGroup));
+        // Sergeants are the point of the element-loadout refactor: they now carry a real Command
+        // Weapon menu (so the player can customize them individually) even though the weapon they
+        // get absent any choice is unchanged (see element defaults, asserted elsewhere).
+        Assert.NotEmpty(playerTemplates[12].GetWeaponOptions(CharacterLoadoutService.CommandWeaponGroup));
+    }
+
+    [Fact]
     public void PlayerSpecialistTemplates_LoadDataDrivenPromotionRequirements()
     {
         var rules = RulesDatabaseFixture.LoadRules();

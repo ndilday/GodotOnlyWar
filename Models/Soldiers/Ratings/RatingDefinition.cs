@@ -19,6 +19,19 @@ namespace OnlyWar.Models.Soldiers.Ratings
         public const string Piety = "piety";
     }
 
+    /// <summary>
+    /// Stable <see cref="SoldierAward.Type"/> values, for the same reason as
+    /// <see cref="RatingKeys"/>: the award tiers are data-driven, but UI that singles out a
+    /// particular honor needs to name it without a magic string.
+    /// </summary>
+    public static class AwardTypes
+    {
+        public const string Gun = "Gun";
+        public const string Sword = "Sword";
+        public const string Voice = "Voice";
+        public const string Banner = "Banner";
+    }
+
     public enum RatingAggregation
     {
         Product = 0,

@@ -1,5 +1,6 @@
 using OnlyWar.Models;
 using OnlyWar.Models.Soldiers;
+using OnlyWar.Models.Soldiers.Ratings;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -157,15 +158,36 @@ namespace OnlyWar.Helpers
         // grades of the same honor shows just his current standing rather than every step.
         public IReadOnlyList<string> BuildAwardLines(PlayerSoldier soldier)
         {
-            return soldier.SoldierAwards
+            return HighestPerType(soldier)
+                .OrderBy(award => award.DateAwarded)
+                .Select(award => $"{award.DateAwarded}: {award.Name}")
+                .ToList();
+        }
+
+        /// <summary>
+        /// A brother's standing with gun and blade, highest grade of each, named as the Chapter
+        /// names them ("Gold Bolter of the Emperor"). This is how martial ability is surfaced
+        /// where a loadout decision needs context: the player is never shown raw skill values,
+        /// so an honor is the readable stand-in for one. Empty for a brother with neither.
+        /// </summary>
+        public IReadOnlyList<string> BuildCombatHonorNames(PlayerSoldier soldier)
+        {
+            return HighestPerType(soldier)
+                .Where(award => award.Type == AwardTypes.Gun || award.Type == AwardTypes.Sword)
+                // Gun before Sword, so a row's honors don't reorder as awards are earned.
+                .OrderBy(award => award.Type, StringComparer.Ordinal)
+                .Select(award => award.Name)
+                .ToList();
+        }
+
+        private static IEnumerable<SoldierAward> HighestPerType(PlayerSoldier soldier)
+        {
+            return (soldier?.SoldierAwards ?? [])
                 .GroupBy(award => award.Type)
                 .Select(group => group
                     .OrderByDescending(award => award.Level)
                     .ThenByDescending(award => award.DateAwarded)
-                    .First())
-                .OrderBy(award => award.DateAwarded)
-                .Select(award => $"{award.DateAwarded}: {award.Name}")
-                .ToList();
+                    .First());
         }
 
         public string BuildSergeantReport(PlayerSoldier soldier)

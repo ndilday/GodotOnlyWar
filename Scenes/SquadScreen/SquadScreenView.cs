@@ -1,7 +1,6 @@
 using Godot;
 using OnlyWar.Helpers.UI;
 using OnlyWar.Models.Equippables;
-using OnlyWar.Models.Squads;
 using System;
 using System.Collections.Generic;
 
@@ -11,11 +10,13 @@ public partial class SquadScreenView : MainScreenView
     private Label _subtitle;
     private Label _source;
     private Button _returnToDoctrine;
-    private LoadoutEditorView _editor;
+    private ElementLoadoutEditorView _editor;
 
     public event EventHandler LoadoutChanged;
     public event EventHandler ReturnToDoctrinePressed;
     public event EventHandler ClosePressed;
+    public event EventHandler<(int SoldierId, WeaponSet WeaponSet)> CharacterLoadoutSelected;
+    public event EventHandler<int> CharacterLoadoutReset;
 
     public IReadOnlyList<WeaponSet> WorkingLoadout => _editor.WorkingLoadout;
 
@@ -94,9 +95,20 @@ public partial class SquadScreenView : MainScreenView
             HorizontalScrollMode = ScrollContainer.ScrollMode.Disabled,
             SizeFlagsVertical = SizeFlags.ExpandFill
         };
-        _editor = new LoadoutEditorView { SizeFlagsHorizontal = SizeFlags.ExpandFill };
+        VBoxContainer editorStack = new() { SizeFlagsHorizontal = SizeFlags.ExpandFill };
+        editorStack.AddThemeConstantOverride("separation", 14);
+        scroll.AddChild(editorStack);
+
+        // Character rows render above the pooled count sections: in an HQ squad they are the
+        // whole roster, and in a mixed squad they are the part the player most likely came here
+        // to change.
+        _editor = new ElementLoadoutEditorView { SizeFlagsHorizontal = SizeFlags.ExpandFill };
         _editor.LoadoutChanged += (_, _) => LoadoutChanged?.Invoke(this, EventArgs.Empty);
-        scroll.AddChild(_editor);
+        _editor.CharacterSelectionChanged += (_, change) =>
+            CharacterLoadoutSelected?.Invoke(this, (change.Key, change.WeaponSet));
+        _editor.CharacterResetRequested += (_, soldierId) =>
+            CharacterLoadoutReset?.Invoke(this, soldierId);
+        editorStack.AddChild(_editor);
         stack.AddChild(scroll);
 
         HBoxContainer footer = new() { Alignment = BoxContainer.AlignmentMode.End };
@@ -119,16 +131,16 @@ public partial class SquadScreenView : MainScreenView
         string title,
         string subtitle,
         string source,
-        SquadTemplate template,
         IEnumerable<WeaponSet> loadout,
-        int capacity,
-        bool isCustom)
+        bool isCustom,
+        IReadOnlyList<CharacterLoadoutRowData> characterRows,
+        IReadOnlyList<ElementCountSectionData> countSections)
     {
         _title.Text = title;
         _subtitle.Text = subtitle;
         _source.Text = source;
         _returnToDoctrine.Visible = isCustom;
-        _editor.SetLoadout(template, loadout, capacity);
+        _editor.SetData(characterRows, countSections, loadout);
     }
 
     public void SetDoctrineState(string source, bool isCustom)

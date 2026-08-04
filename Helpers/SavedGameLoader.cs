@@ -38,6 +38,7 @@ namespace OnlyWar.Helpers
                 gameRulesData.PlayerFaction.Units.First().GetAllMembers().Select(m => (PlayerSoldier)m));
             army.Requisition = gameState.Requisition;
             army.LoadoutDoctrine.ReplaceWith(gameState.ChapterLoadoutDoctrine);
+            army.CharacterLoadoutDoctrine.ReplaceWith(gameState.CharacterLoadoutDoctrine);
             army.MedicalProcedures.AddRange(gameState.MedicalProcedures ?? new List<MedicalProcedure>());
             // Restore the fallen brothers, who belong to no unit and so are carried separately.
             foreach (PlayerSoldier fallen in gameState.FallenBrothers ?? new List<PlayerSoldier>())

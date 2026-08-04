@@ -15,8 +15,8 @@ CREATE TABLE Fleet (Id INTEGER PRIMARY KEY UNIQUE NOT NULL, FactionId INTEGER NO
 -- Table: GlobalData
 -- Scenario* columns carry the optional Opening Scenario state (Design/OpeningScenario.md §7).
 -- ScenarioType 0 (None) means no scenario. HomeWorldPlanetId remains null until the
--- Promised World is won. Format v4 is an intentional clean break from older saves and adds
--- chapter/planet loadout doctrine persistence.
+-- Promised World is won. Format v5 is an intentional clean break from older saves and adds
+-- chapter/planet loadout doctrine plus character (role and individual) loadout persistence.
 CREATE TABLE GlobalData (Millenium INTEGER NOT NULL, Year INTEGER NOT NULL, Week INTEGER NOT NULL, SaveVersion INTEGER NOT NULL, Requisition INTEGER NOT NULL DEFAULT 0, GeneseedStockpile INTEGER NOT NULL DEFAULT 0, GeneseedPurity REAL NOT NULL DEFAULT 1.0, ScenarioType INTEGER NOT NULL DEFAULT 0, ScenarioPromisedPlanetId INTEGER NOT NULL DEFAULT 0, ScenarioState INTEGER NOT NULL DEFAULT 0, ScenarioBriefingAcknowledged BOOLEAN NOT NULL DEFAULT 0, ScenarioBriefingText TEXT, ScenarioOriginalAuthorityCharacterId INTEGER NOT NULL DEFAULT 0, HomeWorldPlanetId INTEGER REFERENCES Planet (Id));
 
 -- Table: HitLocation
@@ -148,6 +148,14 @@ CREATE TABLE ChapterLoadoutWeaponSet (SquadTemplateId INTEGER NOT NULL REFERENCE
 -- Planetary theater overrides are likewise sparse and inherit from ChapterLoadout when absent.
 CREATE TABLE PlanetLoadout (PlanetId INTEGER NOT NULL REFERENCES Planet (Id), SquadTemplateId INTEGER NOT NULL, PRIMARY KEY (PlanetId, SquadTemplateId));
 CREATE TABLE PlanetLoadoutWeaponSet (PlanetId INTEGER NOT NULL, SquadTemplateId INTEGER NOT NULL, WeaponSetId INTEGER NOT NULL, FOREIGN KEY (PlanetId, SquadTemplateId) REFERENCES PlanetLoadout (PlanetId, SquadTemplateId));
+
+-- Characters (command staff and specialists) are equipped by role and by individual rather than
+-- by squad type, so they sit outside the squad doctrine hierarchy above. Both layers are sparse:
+-- no row means "inherit", ending at the role's authored default in the rules database. There is
+-- no planetary layer — a chapter fields few enough characters that the individual layer covers
+-- what the theater tier does for interchangeable line squads.
+CREATE TABLE ChapterCharacterLoadout (SoldierTemplateId INTEGER PRIMARY KEY NOT NULL, WeaponSetId INTEGER NOT NULL);
+CREATE TABLE SoldierLoadout (SoldierId INTEGER PRIMARY KEY NOT NULL REFERENCES Soldier (Id), WeaponSetId INTEGER NOT NULL);
 
 -- Table: Unit
 CREATE TABLE Unit (Id INTEGER PRIMARY KEY UNIQUE NOT NULL, FactionId INTEGER NOT NULL, UnitTemplateId INTEGER NOT NULL, ParentUnitId INTEGER REFERENCES Unit (Id), Name STRING NOT NULL);

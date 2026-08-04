@@ -176,16 +176,41 @@ public class SaveLoadRoundTripTests
             .First(s => s.Id != orderedSquad.Id && s.Id != landedSquad.Id);
         administrativeSquad.IsAdministrative = true;
 
-        Squad doctrineSquad = armyRoot.GetAllSquads()
-            .First(squad => squad.SquadTemplate.WeaponOptions?.Any() == true);
-        WeaponSet doctrineWeaponSet = doctrineSquad.SquadTemplate.WeaponOptions
-            .First().Options.First();
+        // The squad-level weapon-option menu (SquadTemplateWeaponOption) is gone: a pooled
+        // special-weapon menu now lives on the trooper element's SoldierTemplate, gated by a
+        // quota keyed by any group other than Command Weapon (that one belongs to the character
+        // system exercised below). Find a squad with one to exercise the same doctrine paths the
+        // old squad-level menu did.
+        (Squad Squad, SquadTemplateElement Element, string Group) doctrineSource = armyRoot.GetAllSquads()
+            .SelectMany(squad => squad.SquadTemplate.Elements
+                .SelectMany(element => element.Quotas
+                    .Where(quota => quota.OptionGroup != CharacterLoadoutService.CommandWeaponGroup)
+                    .Select(quota => (Squad: squad, Element: element, Group: quota.OptionGroup))))
+            .First();
+        Squad doctrineSquad = doctrineSource.Squad;
+        WeaponSet doctrineWeaponSet = doctrineSource.Element.GetMenu(doctrineSource.Group).First();
         sector.PlayerForce.Army.LoadoutDoctrine.SetLoadout(
             doctrineSquad.SquadTemplate.Id, [doctrineWeaponSet]);
         landedRegion.Planet.LoadoutDoctrine.SetLoadout(
             doctrineSquad.SquadTemplate.Id, [doctrineWeaponSet, doctrineWeaponSet]);
         orderedSquad.UsesLoadoutDoctrine = false;
         orderedSquad.Loadout = [doctrineWeaponSet];
+
+        // Characters persist on their own two layers: a chapter default for the role, and a
+        // personal override for the individual. "Character" is now a property of the soldier's
+        // element (a Command Weapon quota), not his template, so this has to go through
+        // CharacterLoadoutService rather than a template flag.
+        ISoldier characterSoldier = armyRoot.GetAllSquads()
+            .SelectMany(squad => squad.Members)
+            .First(CharacterLoadoutService.IsCharacter);
+        IReadOnlyList<WeaponSet> characterMenu =
+            characterSoldier.Template.GetWeaponOptions(CharacterLoadoutService.CommandWeaponGroup);
+        WeaponSet roleDefaultSet = characterMenu[0];
+        WeaponSet personalSet = characterMenu.Last();
+        sector.PlayerForce.Army.CharacterLoadoutDoctrine.SetRoleDefault(
+            characterSoldier.Template.Id, roleDefaultSet);
+        sector.PlayerForce.Army.CharacterLoadoutDoctrine.SetPersonalLoadout(
+            characterSoldier.Id, personalSet);
 
         PlayerSoldier eventSoldier = armyRoot.GetAllSquads()
             .SelectMany(s => s.Members)
@@ -227,6 +252,12 @@ public class SaveLoadRoundTripTests
             Assert.True(loaded.ChapterLoadoutDoctrine.TryGetLoadout(
                 doctrineSquad.SquadTemplate.Id, out IReadOnlyList<WeaponSet> loadedChapterLoadout));
             Assert.Equal(doctrineWeaponSet.Id, Assert.Single(loadedChapterLoadout).Id);
+            Assert.True(loaded.CharacterLoadoutDoctrine.TryGetRoleDefault(
+                characterSoldier.Template.Id, out WeaponSet loadedRoleDefault));
+            Assert.Equal(roleDefaultSet.Id, loadedRoleDefault.Id);
+            Assert.True(loaded.CharacterLoadoutDoctrine.TryGetPersonalLoadout(
+                characterSoldier.Id, out WeaponSet loadedPersonalSet));
+            Assert.Equal(personalSet.Id, loadedPersonalSet.Id);
             Character loadedAuthority = loaded.Characters.Single(character => character.Id == pledgeAuthority.Id);
             Assert.Equal(0.37f, loadedAuthority.Competence, 3);
             Assert.Equal(0.82f, loadedAuthority.Severity, 3);
