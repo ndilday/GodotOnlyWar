@@ -85,7 +85,15 @@ public class GrenadePlannerTests
         // expected blast loss (danger-close, self included) sinks the score below
         // zero; the expendable one accepts the risk. Distance 2 keeps the thrower
         // well inside the blast circle.
-        BattleSquad valuableShooters = CreateSquad("Valuable Grenadier", 740, battleValue: 20);
+        //
+        // Phase 3 (Design/Active/EngagementScoringOverhaul.md) recalibrated the threshold, not the
+        // property. Enemy removal used to be scaled by 1/(1 + turnsUntilTargetReachesUs) while the
+        // thrower's own expected loss was never scaled, so the refusal was partly an accounting
+        // asymmetry rather than a real danger-close judgement. With both sides of the trade now
+        // priced in the same undiscounted currency, a BV-20 thrower's 0.59 self-cost no longer
+        // exceeds the 0.71 it removes; the crossover sits higher. BV 40 restores a genuine
+        // "worth more than the throw buys" thrower.
+        BattleSquad valuableShooters = CreateSquad("Valuable Grenadier", 740, battleValue: 40);
         ArmWithRifleAndBeltGrenade(valuableShooters.Soldiers[0]);
         BattleSquad firstEnemies = CreateSquad("Close Enemy", 750);
         BattleGridManager firstGrid = new();

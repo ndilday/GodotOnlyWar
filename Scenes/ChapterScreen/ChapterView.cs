@@ -17,6 +17,9 @@ public partial class ChapterView : MainScreenView
 {
     private const int ChapterIconSize = 48;
 
+    // Pointer travel (in viewport pixels) still treated as a click rather than a drag.
+    private const float ClickDragTolerance = 6f;
+
     private HBoxContainer _breadcrumbBar;
     private HBoxContainer _breadcrumbItems;
     private Button _loadoutsButton;
@@ -45,7 +48,7 @@ public partial class ChapterView : MainScreenView
         base._Ready();
         _breadcrumbBar = GetNode<HBoxContainer>("Content/BreadcrumbBar");
         _breadcrumbItems = GetNode<HBoxContainer>("Content/BreadcrumbBar/BreadcrumbItems");
-        _loadoutsButton = GetNode<Button>("Content/BreadcrumbBar/ChapterActions/LoadoutsButton");
+        _loadoutsButton = GetNode<Button>("Content/MainLayout/DetailPanel/Panel/MarginContainer/DetailStack/Hero/LoadoutsButton");
         _leftTitleLabel = GetNode<Label>("Content/MainLayout/LeftMenu/Panel/MarginContainer/MenuStack/Header/TitleLabel");
         _filterButton = GetNode<Button>("Content/MainLayout/LeftMenu/Panel/MarginContainer/MenuStack/Header/FilterButton");
         _leftMenuVBox = GetNode<VBoxContainer>("Content/MainLayout/LeftMenu/Panel/MarginContainer/MenuStack/ScrollContainer/LeftMenuVBox");
@@ -196,20 +199,44 @@ public partial class ChapterView : MainScreenView
             MouseDefaultCursorShape = CursorShape.PointingHand
         };
         OnlyWarStyle.ApplyListRow(row, item.IsSelected);
+        // A press only arms the row; the selection fires on release, and only if the pointer
+        // stayed put. Otherwise drag-scrolling the menu would select whichever row the drag
+        // happened to start on.
+        bool pressArmed = false;
+        Vector2 pressPosition = Vector2.Zero;
         row.GuiInput += inputEvent =>
         {
-            if (inputEvent is InputEventMouseButton mouseButton &&
-                mouseButton.ButtonIndex == MouseButton.Left &&
-                mouseButton.Pressed)
+            if (inputEvent is not InputEventMouseButton mouseButton ||
+                mouseButton.ButtonIndex != MouseButton.Left)
+            {
+                return;
+            }
+
+            if (mouseButton.Pressed)
             {
                 if (mouseButton.DoubleClick && item.CanDrill)
                 {
+                    pressArmed = false;
                     BrowserItemDrillRequested?.Invoke(this, new ChapterBrowserItemEvent(item.Level, item.Id));
+                    return;
                 }
-                else
-                {
-                    BrowserItemSelected?.Invoke(this, new ChapterBrowserItemEvent(item.Level, item.Id));
-                }
+
+                pressArmed = true;
+                // Viewport space, not row-local: the row itself moves under the cursor while
+                // the scroll container is being dragged, which would hide the motion.
+                pressPosition = mouseButton.GlobalPosition;
+                return;
+            }
+
+            if (!pressArmed)
+            {
+                return;
+            }
+
+            pressArmed = false;
+            if (mouseButton.GlobalPosition.DistanceTo(pressPosition) <= ClickDragTolerance)
+            {
+                BrowserItemSelected?.Invoke(this, new ChapterBrowserItemEvent(item.Level, item.Id));
             }
         };
 

@@ -21,10 +21,12 @@ namespace OnlyWar.Helpers.Missions
     /// other's preference: the worst a mission force can do is fight at exactly the range its
     /// enemy wanted.
     ///
-    /// <see cref="BattleSquad.GetPreferredOpeningRange"/> is the right input rather than
-    /// GetPreferredEngagementRange, because it disambiguates a zero standoff range by cause — a
-    /// missile launcher that cannot reliably hit still wants to open far and plink, while a weapon
-    /// that cannot wound the target at any range gains nothing by standing off.
+    /// PHASE 7 (Design/Active/EngagementScoringOverhaul.md): each side's preference is now the
+    /// derived engagement band against the OTHER SIDE'S ACTUAL FORCE, not the un-opposed
+    /// saturation range of a curve fired at one randomly drawn representative. The interpolation
+    /// itself is unchanged; what changed is that both endpoints are now the range each side would
+    /// steer to anyway, so neither side opens a fight several hundred yards from where it intends
+    /// to fight it.
     /// </remarks>
     public static class MissionOpeningRange
     {
@@ -39,21 +41,19 @@ namespace OnlyWar.Helpers.Missions
             IRNG random)
         {
             float rangeModifier = GaussianCalculator.ApproximateNormalCDF(marginOfSuccess);
-            // Representative members stand in for each side's target profile. Drawn opposing-side
-            // first to preserve the RNG order this logic had when it lived inline in
-            // MeetingEngagementMissionStep, so that path's seeded baselines do not move.
-            BattleSoldier opposingSoldier = opposingSquads.First().GetRandomSquadMember(random);
-            BattleSoldier missionSoldier = missionSquads.First().GetRandomSquadMember(random);
-            double missionRange = missionSquads.Average(squad => squad.GetPreferredOpeningRange(
-                opposingSoldier.Soldier.Size,
-                opposingSoldier.Armor.Template.ArmorProvided,
-                opposingSoldier.Soldier.Constitution,
-                opposingSoldier.Soldier.Template.Species.RangedEvasion));
-            double opposingRange = opposingSquads.Average(squad => squad.GetPreferredOpeningRange(
-                missionSoldier.Soldier.Size,
-                missionSoldier.Armor.Template.ArmorProvided,
-                missionSoldier.Soldier.Constitution,
-                missionSoldier.Soldier.Template.Species.RangedEvasion));
+            // RNG-STREAM ANCHOR, and nothing else. Phase 6 drew one representative member per side
+            // to stand in for that side's target profile, opposing-side first, to preserve the RNG
+            // order this logic had when it lived inline in MeetingEngagementMissionStep. Phase 7
+            // derives each preference against the WHOLE opposing force, so the draws no longer feed
+            // anything -- but dropping them would shift every seeded mission battle's RNG stream,
+            // mixing a wholesale re-baseline into a change whose only intended effect is the range.
+            // Keeping them makes any divergence below attributable to the opening range itself.
+            _ = opposingSquads.First().GetRandomSquadMember(random);
+            _ = missionSquads.First().GetRandomSquadMember(random);
+            double missionRange = missionSquads.Average(
+                squad => squad.GetPreferredOpeningRange(opposingSquads));
+            double opposingRange = opposingSquads.Average(
+                squad => squad.GetPreferredOpeningRange(missionSquads));
             return (ushort)(opposingRange + (missionRange - opposingRange) * rangeModifier);
         }
     }

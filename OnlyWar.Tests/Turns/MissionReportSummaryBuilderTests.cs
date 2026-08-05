@@ -24,9 +24,15 @@ public class MissionReportSummaryBuilderTests
         bool targetLocated = false,
         bool targetEliminated = false,
         int enemiesKilled = 0,
-        float impact = 0f) =>
+        float impact = 0f,
+        DefenseType? sabotageTarget = null,
+        double sabotageDamage = 0.0,
+        double sabotageLevelBefore = 0.0) =>
         new()
         {
+            SabotageTarget = sabotageTarget,
+            SabotageDamage = sabotageDamage,
+            SabotageLevelBefore = sabotageLevelBefore,
             MissionType = missionType,
             WasDetected = wasDetected,
             ReturnedToBase = returnedToBase,
@@ -168,6 +174,96 @@ public class MissionReportSummaryBuilderTests
             "Forge Complex, Mars");
 
         Assert.Contains("without notable effect", summary);
+    }
+
+    // Damage that leaves the position in the band it started in is "weakened" - and never a raw
+    // level, which is fog-of-war the region screens would not give the player either.
+    [Fact]
+    public void BuildSummary_SabotageWithinOneBand_ReportsWeakened()
+    {
+        // 6.0 -> 5.2: both round into the Moderate band.
+        string summary = MissionReportSummaryBuilder.BuildSummary(
+            Classification(
+                MissionType.Sabotage,
+                impact: 2.5f,
+                sabotageTarget: DefenseType.AntiAir,
+                sabotageDamage: 0.8,
+                sabotageLevelBefore: 6.0),
+            "Forge Complex, Mars");
+
+        Assert.Contains("enemy anti-air batteries", summary);
+        Assert.Contains("weakening them", summary);
+        Assert.DoesNotContain("5.2", summary);
+        Assert.DoesNotContain("0.8", summary);
+    }
+
+    [Fact]
+    public void BuildSummary_SabotageDroppingABand_ReportsSubstantialDamageAndNewBand()
+    {
+        // 6.0 (Moderate) -> 3.5 (Mediocre).
+        string summary = MissionReportSummaryBuilder.BuildSummary(
+            Classification(
+                MissionType.Sabotage,
+                impact: 2.5f,
+                sabotageTarget: DefenseType.AntiAir,
+                sabotageDamage: 2.5,
+                sabotageLevelBefore: 6.0),
+            "Forge Complex, Mars");
+
+        Assert.Contains("substantial damage", summary);
+        Assert.Contains("Mediocre", summary);
+        Assert.DoesNotContain("3.5", summary);
+    }
+
+    // "the position now reads None" is not how a debrief speaks.
+    [Fact]
+    public void BuildSummary_SabotageFlatteningThePosition_ReportsDestruction()
+    {
+        string summary = MissionReportSummaryBuilder.BuildSummary(
+            Classification(
+                MissionType.Sabotage,
+                impact: 2.5f,
+                sabotageTarget: DefenseType.Entrenchment,
+                sabotageDamage: 1.2,
+                sabotageLevelBefore: 1.2),
+            "Forge Complex, Mars");
+
+        Assert.Contains("destroying them outright", summary);
+        Assert.DoesNotContain("None", summary);
+    }
+
+    // A failed attempt still knows what it was sent against, so the debrief names the objective
+    // rather than falling back to the generic "sabotage" wording.
+    [Fact]
+    public void BuildSummary_SabotageFailed_StillNamesTargetedWorks()
+    {
+        string summary = MissionReportSummaryBuilder.BuildSummary(
+            Classification(
+                MissionType.Sabotage,
+                impact: -1f,
+                sabotageTarget: DefenseType.ListeningPost),
+            "Forge Complex, Mars");
+
+        Assert.Contains("enemy listening posts", summary);
+        Assert.Contains("without notable effect", summary);
+    }
+
+    // Impact says the charges went off; the aftermath measurement says nothing was standing to
+    // take them. The report must not credit a level of damage it did not do.
+    [Fact]
+    public void BuildSummary_SabotageSucceededAgainstNothing_ReportsNoLevelsLost()
+    {
+        string summary = MissionReportSummaryBuilder.BuildSummary(
+            Classification(
+                MissionType.Sabotage,
+                impact: 2.5f,
+                sabotageTarget: DefenseType.Entrenchment,
+                sabotageDamage: 0.0),
+            "Forge Complex, Mars");
+
+        Assert.Contains("enemy entrenchments", summary);
+        Assert.Contains("little left to destroy", summary);
+        Assert.DoesNotContain("levels", summary);
     }
 
     [Fact]

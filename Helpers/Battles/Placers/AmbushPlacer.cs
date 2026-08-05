@@ -18,7 +18,6 @@ namespace OnlyWar.Helpers.Battles.Placers
         // Fraction of ambusher frontage assigned to the long (main) leg; the remainder
         // caps one end as the short leg.
         private const double LongLegFrontageShare = 0.6;
-        private const int MaxFormationStandoff = 200;
         // How far behind a firing leg an ambushing HQ squad deploys (away from the kill
         // zone). Modest: enough that the counter-fire finds the line first, small enough
         // to keep the HQ inside its command aura and weapon reach.
@@ -26,6 +25,8 @@ namespace OnlyWar.Helpers.Battles.Placers
 
         private readonly BattleGridManager _grid;
         private readonly ushort _engagementRange;
+        // Set from the ambushed force at placement time; see MinimumStandoff.
+        private int _minimumStandoff = 1;
 
         private readonly struct KillZone
         {
@@ -55,9 +56,34 @@ namespace OnlyWar.Helpers.Battles.Placers
                                                                     IReadOnlyList<BattleSquad> ambushingSquads)
         {
             Dictionary<BattleSquad, ValueTuple<int, int>> result = [];
+            _minimumStandoff = MinimumStandoff(ambushedSquads);
             KillZone killZone = PlaceAmbushedSquads(OrderColumnHqMid(ambushedSquads), 0, 0, result);
             PlaceAmbushingSquads(ambushingSquads, killZone, result);
             return result;
+        }
+
+        /// <summary>
+        /// No ambush is ever set inside one turn of the ambushed force's own movement, whatever
+        /// range the mission derived.
+        ///
+        /// <para>A standoff shorter than that hands the column a free charge on the turn the ambush
+        /// is sprung: the ambushers get one volley and then are fighting the melee they set the
+        /// ambush to avoid. Xibarrus Zeta (2026-08-04) is the case -- a derived standoff of 1 yard
+        /// put three marine squads in contact with a Broodlord and a Carnifex on turn 1 and cost 29
+        /// of 30 marines. The derivation that produced that 1 is fixed in
+        /// <c>BattleEngagementFrameBuilder.CalculatePreferredOpeningRange</c>; this is the floor that
+        /// keeps a future one from being catastrophic rather than merely wrong, and it is expressed
+        /// in the quantity that actually matters -- how far the enemy moves in a turn -- rather than
+        /// as another round number.</para>
+        /// </summary>
+        private static int MinimumStandoff(IReadOnlyList<BattleSquad> ambushedSquads)
+        {
+            float fastest = ambushedSquads?
+                .Where(squad => squad != null && squad.AbleSoldiers.Count > 0)
+                .Select(squad => squad.GetSquadMove())
+                .DefaultIfEmpty(0f)
+                .Max() ?? 0f;
+            return Math.Max(1, (int)Math.Ceiling(fastest));
         }
 
         private static bool IsHqSquad(BattleSquad squad) =>
@@ -270,7 +296,39 @@ namespace OnlyWar.Helpers.Battles.Placers
             }
         }
 
+        /// <summary>
+        /// How far the firing legs stand off from the kill zone: the engagement range the mission
+        /// chose, floored by <see cref="MinimumStandoff"/> so the ambushers never share cells with
+        /// the column and never spring the ambush inside a single enemy bound.
+        ///
+        /// <para>PHASE 7 (Design/Active/EngagementScoringOverhaul.md) REMOVED THE UPPER CLAMP. It
+        /// was <c>Math.Clamp((int)_engagementRange, 1, 200)</c>, added 2026-07-08 in commit 4d6182c
+        /// inside a change about PDF drafting and garrison rates, unmentioned in that commit's
+        /// message and accompanied only by a test asserting that coordinates do not wrap. It was an
+        /// overflow guard whose 200 was a round number, and it has acted as an unreviewed balance
+        /// constant ever since -- capping every ambush at 200 yards regardless of what either force
+        /// was carrying, which is exactly the authored quantity this overhaul exists to derive.</para>
+        ///
+        /// <para>THERE IS NO UPPER BOUND AT ALL NOW, because the wrap it was guarding has been
+        /// fixed at its source. Phase 7 initially kept a ceiling of <c>short.MaxValue / 2</c>: the
+        /// wrap was real and reproducible, but it lived in
+        /// <c>BattleSquadPlacer.PlaceSquadHorizontally/Vertically</c>, which narrowed every cell
+        /// coordinate through <c>(short)</c> before widening it straight back into the
+        /// <c>ValueTuple&lt;int, int&gt;</c> the grid actually stores. A 65,535-yard standoff landed
+        /// the west leg near x = -65,543, truncated it to a cell beside the origin, and threw on the
+        /// collision with the column it was standing off from. Those casts are gone;
+        /// <c>BattleGridManager</c> keys cells with a sparse
+        /// <c>Dictionary&lt;(int X, int Y), int&gt;</c> and has no bounded extent, so any
+        /// <see cref="ushort"/> standoff now places correctly.</para>
+        ///
+        /// <para>Fixing the placer rather than bounding its callers is what let this revert to the
+        /// pre-2026-07-08 form. <see cref="AnnihilationPlacer"/> shared the same exposure with no
+        /// guard of its own and is fixed by the same change.
+        /// <c>PlaceSquads_HugeEngagementRange_DoesNotWrapCoordinates</c> still pins the behaviour at
+        /// <see cref="ushort.MaxValue"/>, and now exercises the real placement path rather than a
+        /// ceiling that kept it away from the bug.</para>
+        /// </summary>
         private int FormationStandoff() =>
-            Math.Clamp((int)_engagementRange, 1, MaxFormationStandoff);
+            Math.Max((int)_engagementRange, _minimumStandoff);
     }
 }

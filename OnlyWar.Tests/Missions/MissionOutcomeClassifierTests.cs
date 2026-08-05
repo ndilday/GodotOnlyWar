@@ -169,6 +169,33 @@ public class MissionOutcomeClassifierTests
         Assert.Equal(MissionType.Patrol, MissionOutcomeClassifier.Classify(context).MissionType);
     }
 
+    // The sabotage debrief names the works and the level it brought down, so both have to survive
+    // the trip through the classification the report is rendered from.
+    [Fact]
+    public void Classify_Sabotage_CarriesTargetedWorksAndDamageDealt()
+    {
+        SabotageMission mission = new(DefenseType.AntiAir, 3, CreateRegionFaction());
+        Order order = new(new List<Squad>(), true, false, Aggression.Cautious, mission);
+        MissionContext context = new(order, new List<BattleSquad>(), new List<BattleSquad>())
+        {
+            Impact = 2.5f,
+            SabotageDamageDealt = 1.25,
+            SabotageDefenseLevelBefore = 4.0
+        };
+
+        MissionOutcomeClassification result = MissionOutcomeClassifier.Classify(context);
+
+        Assert.Equal(DefenseType.AntiAir, result.SabotageTarget);
+        Assert.Equal(1.25, result.SabotageDamage);
+        Assert.Equal(4.0, result.SabotageLevelBefore);
+    }
+
+    [Fact]
+    public void Classify_NonSabotageMission_HasNoTargetedWorks()
+    {
+        Assert.Null(MissionOutcomeClassifier.Classify(CreateContext(MissionType.Recon)).SabotageTarget);
+    }
+
     private static MissionContext CreateContext(MissionType missionType)
     {
         Mission mission = new(missionType, CreateRegionFaction(), 0);

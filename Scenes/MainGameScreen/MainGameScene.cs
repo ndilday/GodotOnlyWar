@@ -80,6 +80,7 @@ public partial class MainGameScene : Control
 		_bottomMenu.TrainingUnitButtonPressed += OnTrainingUnitButtonPressed;
 		_bottomMenu.FleetButtonPressed += OnFleetButtonPressed;
 		_bottomMenu.DiplomacyButtonPressed += OnDiplomacyButtonPressed;
+		_bottomMenu.ArchiveButtonPressed += OnArchiveButtonPressed;
 		_bottomMenu.EndTurnButtonPressed += OnEndTurnButtonPressed;
 		_sectorMap = GetNode<SectorMap>("SectorMap");
 		_sectorMap.PlanetClicked += OnPlanetClicked;
@@ -799,6 +800,17 @@ public partial class MainGameScene : Control
 	private void OnEndTurnButtonPressed(object sender, EventArgs e)
 	{
 		RequestEndTurn();
+	}
+
+	private void OnArchiveButtonPressed(object sender, EventArgs e)
+	{
+		if (_endOfTurnDialog == null)
+		{
+			return;
+		}
+
+		_endOfTurnDialog.Visible = true;
+		_endOfTurnDialog.MoveToFront();
 	}
 
 	private void ProcessTurnCore()

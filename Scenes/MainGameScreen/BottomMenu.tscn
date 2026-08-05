@@ -87,7 +87,6 @@ text = "Diplomacy"
 [node name="ArchiveButton" type="Button" parent="Panel/MarginContainer/HBoxContainer"]
 custom_minimum_size = Vector2(92, 0)
 layout_mode = 2
-disabled = true
 text = "Archive"
 
 [node name="EndTurnButton" type="Button" parent="Panel/MarginContainer/HBoxContainer"]

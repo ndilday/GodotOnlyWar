@@ -1,5 +1,4 @@
-﻿using System;
-using System.Linq;
+using System;
 using OnlyWar.Models.Equippables;
 using OnlyWar.Models.Soldiers;
 
@@ -7,15 +6,24 @@ namespace OnlyWar.Helpers.Battles
 {
     public static class BattleModifiersUtil
     {
+        /// <summary>
+        /// Scale of the logarithmic range curve: the to-hit penalty is
+        /// <c>RangeModifierCoefficient * ln(2 / (range + relativeTargetSpeed))</c>. Named so the
+        /// closed-form range rescaling in <see cref="SquadPairRemovalRate"/> -- which relies on
+        /// <c>modifier(r) - modifier(r0) = RangeModifierCoefficient * ln((r0+v0)/(r+v))</c> -- reads
+        /// the same constant this function does rather than repeating the literal.
+        /// </summary>
+        public const float RangeModifierCoefficient = 2.4663f;
+
         public static float GetRangeForModifier(float modifier)
         {
-            return (float)(2 * Math.Exp(-modifier / 2.4663f));
+            return (float)(2 * Math.Exp(-modifier / RangeModifierCoefficient));
         }
 
         public static float CalculateRangeModifier(float range, float relativeTargetSpeed)
         {
-            // 
-            return (float)(2.4663f * Math.Log(2 / (range + relativeTargetSpeed)));
+            //
+            return (float)(RangeModifierCoefficient * Math.Log(2 / (range + relativeTargetSpeed)));
         }
 
         public static float CalculateSizeModifier(float size)
@@ -47,9 +55,19 @@ namespace OnlyWar.Helpers.Battles
         public const float ThrownRangePenaltyAtMax = 12f;
 
         /// <summary>
+        /// Share of an attacker's usable melee battle value it removes per turn once it is in
+        /// contact. The last surviving piece of the pre-Phase-4 capability proxy. It lives here
+        /// rather than privately in <c>BattleSquadPlanner</c> because
+        /// <c>BattleEngagementFrameBuilder.CalculateEffectiveEngagementRange</c> prices the same
+        /// melee threat when it derives a standoff, and the two must agree about what a charge
+        /// arriving is worth.
+        /// </summary>
+        internal const float MeleeContactRemovalFraction = 0.13f;
+
+        /// <summary>
         /// The range portion of a blast delivery check. Launched blasts are aimed like
         /// firearms and use the standard logarithmic range curve; thrown blasts instead
-        /// take −<see cref="ThrownRangePenaltyAtMax"/> × (range / effective max range)²,
+        /// take -<see cref="ThrownRangePenaltyAtMax"/> x (range / effective max range)^2,
         /// so a stronger thrower is more accurate at the same distance, short lobs are
         /// nearly automatic, and max-range heaves scatter badly.
         /// </summary>
@@ -72,122 +90,56 @@ namespace OnlyWar.Helpers.Battles
 
         public static float CalculateDamageAtRange(RangedWeapon weapon, float range)
         {
-            return weapon.Template.DoesDamageDegradeWithRange ?
-                                weapon.Template.DamageMultiplier * (1 - (range / weapon.Template.MaximumRange)) :
-                                weapon.Template.DamageMultiplier;
+            return CalculateDamageAtRange(weapon.Template, range);
         }
 
+        /// <summary>
+        /// Damage coefficient at a range. NOTE (relied on by the Phase 4 removal-rate table, see
+        /// Design/Active/EngagementScoringOverhaul.md): when DoesDamageDegradeWithRange is false
+        /// this is a FLAT DamageMultiplier, so take-out probability is genuinely range-independent
+        /// for such a weapon and caching it once at a reference range is exact, not an
+        /// approximation. Only the degrading branch needs the per-hit-location rescaling path.
+        /// </summary>
+        public static float CalculateDamageAtRange(RangedWeaponTemplate template, float range)
+        {
+            return template.DoesDamageDegradeWithRange ?
+                                template.DamageMultiplier * (1 - (range / template.MaximumRange)) :
+                                template.DamageMultiplier;
+        }
+
+        /// <summary>
+        /// The outer edge of this soldier's useful engagement band against a representative
+        /// target: the largest range at which it is still doing
+        /// <see cref="RangedEffectivenessCurve.SaturationFraction"/> of its best work.
+        ///
+        /// <para>PHASE 6 (Design/Active/EngagementScoringOverhaul.md). Now a thin derivation of
+        /// <see cref="RangedEffectivenessCurve"/>, the one engagement-range model. It used to be
+        /// <c>max over weapons of min(EstimateHitDistance, EstimateKillDistance)</c>; those two
+        /// functions and <c>CalculateOpeningDistance</c> are gone. See the type comment on
+        /// <see cref="RangedEffectivenessCurve"/> for why a threshold construction had to go -- in
+        /// short, EstimateKillDistance returned the weapon's MaximumRange outright for a
+        /// non-degrading weapon, so the "optimal" distance was simply reach for most marine small
+        /// arms, and EstimateHitDistance returned a hard 0 whenever the to-hit total failed to
+        /// reach 10.5, which was the only reason CalculateOpeningDistance had to exist to
+        /// disambiguate that 0.</para>
+        ///
+        /// <para>Return values keep their old meanings, so no caller changed: -1 for a soldier with
+        /// no functioning hands, and 0 for "there is nothing to stand off for" -- no usable ranged
+        /// weapon, or a target this soldier cannot damage at any range.</para>
+        /// </summary>
         public static float CalculateOptimalDistance(BattleSoldier soldier, float targetSize, float targetArmor, float targetCon, float targetRangedEvasion = 0)
         {
-            int freeHands = soldier.FunctioningHands;
-            if (freeHands == 0)
+            if (soldier.FunctioningHands == 0)
             {
                 // with no hands free, there's not much combat left for this soldier
                 return -1;
             }
-            float range = 0;
-            var weapons = soldier.EquippedRangedWeapons.Where(w => (int)w.Template.Location <= freeHands).OrderByDescending(w => w.Template.MaximumRange);
-            foreach (RangedWeapon weapon in weapons)
-            {
-                float hitRange = EstimateHitDistance(soldier.Soldier, weapon, targetSize, freeHands, targetRangedEvasion);
-                float damRange = EstimateKillDistance(weapon, targetArmor, targetCon);
-                float minVal = Math.Min(hitRange, damRange);
-                if (minVal > range) range = minVal;
-            }
-            return range;
-        }
-
-        /// <summary>
-        /// Preferred distance for a soldier at the START of a meeting engagement. Unlike
-        /// <see cref="CalculateOptimalDistance"/>, a zero standoff range is disambiguated by *why*
-        /// it is zero. A weapon that can wound but cannot reliably hit at range (a single-shot heavy
-        /// weapon such as a missile launcher) still wants to open far and take its low-odds shots,
-        /// so it contributes its killing reach. A weapon that hits fine but cannot wound the target
-        /// at any range (a light weapon vs heavy armor) gains nothing by standing off and opens
-        /// close (0), where a rush or a lucky penetration is at least possible. Kept separate from
-        /// CalculateOptimalDistance because squad imminence depends on that function's meaning.
-        /// </summary>
-        public static float CalculateOpeningDistance(BattleSoldier soldier, float targetSize, float targetArmor, float targetCon, float targetRangedEvasion = 0)
-        {
-            int freeHands = soldier.FunctioningHands;
-            if (freeHands == 0)
-            {
-                return 0;
-            }
-            float best = 0;
-            var weapons = soldier.EquippedRangedWeapons.Where(w => (int)w.Template.Location <= freeHands);
-            foreach (RangedWeapon weapon in weapons)
-            {
-                float hitRange = EstimateHitDistance(soldier.Soldier, weapon, targetSize, freeHands, targetRangedEvasion);
-                float killRange = EstimateKillDistance(weapon, targetArmor, targetCon);
-                float optimal = Math.Min(hitRange, killRange);
-                if (optimal > best)
-                {
-                    best = optimal;
-                }
-                else if (optimal <= 0 && hitRange <= 0 && killRange > 0)
-                {
-                    // Hit-limited, not wound-limited: this weapon could kill at range but rarely
-                    // hits there. It still prefers to open far and plink rather than close in.
-                    if (killRange > best)
-                    {
-                        best = killRange;
-                    }
-                }
-            }
-            return best;
-        }
-
-        public static float EstimateHitDistance(ISoldier soldier, RangedWeapon weapon, float targetSize, int functioningHands, float targetRangedEvasion = 0)
-        {
-            if ((int)weapon.Template.Location > functioningHands)
-            {
-                return 0;
-            }
-
-            float baseTotal = soldier.GetTotalSkillValue(weapon.Template.RelatedSkill);
-
-            // we'd like to get to a range where at least 1 bullet will hit more often than not when we aim
-            // +1 for all-out attack, - ROF after the first shot
-            // z value of 0.43 is 
-            baseTotal = baseTotal + 1 + weapon.Template.Accuracy;
-            baseTotal += BattleModifiersUtil.CalculateRateOfFireModifier(weapon.Template.RateOfFire);
-            baseTotal += BattleModifiersUtil.CalculateSizeModifier(targetSize);
-            // elusive targets are flatly harder to hit, which pulls the optimal
-            // engagement range closer — keeps the AI from over-estimating its reach
-            // against Raveners/Genestealers. See OnlyWar_TDD.md §6.6.
-            baseTotal -= targetRangedEvasion;
-            // if the total doesn't get to 10.5, there will be no range where there's a good chance of hitting, so just keep getting closer
-            if (baseTotal < 10.5) return 0;
-
-            return BattleModifiersUtil.GetRangeForModifier(10.5f - baseTotal);
-        }
-
-        public static float EstimateKillDistance(RangedWeapon weapon, float targetArmor, float targetCon)
-        {
-            // if range doesn't matter for damage, we can just limit on hitting 
-            if (!weapon.Template.DoesDamageDegradeWithRange) return weapon.Template.MaximumRange;
-            float effectiveArmor = targetArmor * weapon.Template.ArmorMultiplier;
-
-            // if there's no chance of doing a wound, maybe we should run?
-            if (weapon.Template.DamageMultiplier * 6 < effectiveArmor) return -1;
-            // A weapon that cannot take the target out in one hit still has a useful standoff
-            // range. In that case use the same one-third armor-penetration quantile as the
-            // planner's fallback range rather than conflating "needs multiple hits" with
-            // "cannot wound at range".
-            if ((weapon.Template.DamageMultiplier * 6 - effectiveArmor)
-                * weapon.Template.WoundMultiplier < targetCon)
-            {
-                float penetrationDistanceRatio =
-                    1 - (effectiveArmor / (4.25f * weapon.Template.DamageMultiplier));
-                return penetrationDistanceRatio < 0
-                    ? 0
-                    : weapon.Template.MaximumRange * penetrationDistanceRatio;
-            }
-            // find the range with a 1/3 chance of a killshot
-            float distanceRatio = 1 - (((targetCon / weapon.Template.WoundMultiplier) + effectiveArmor) / (4.25f * weapon.Template.DamageMultiplier));
-            if (distanceRatio < 0) return 0;
-            return weapon.Template.MaximumRange * distanceRatio;
+            return RangedEffectivenessCurve
+                .Build(
+                    [soldier],
+                    new EngagementTargetProfile(
+                        targetSize, targetArmor, targetCon, targetRangedEvasion))
+                .SaturationRange(RangedEffectivenessCurve.SaturationFraction);
         }
     }
 }

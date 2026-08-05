@@ -96,7 +96,11 @@ namespace OnlyWar.Models.Squads
         public Squad(int id, string name, Unit parentUnit, SquadTemplate template)
         {
             Id = id;
-            if(id > _nextId)
+            // >= , not > : _nextId is the *next* id to hand out, so a loaded squad whose id
+            // equals it must still push it past itself. With > , loading a save whose highest
+            // squad id landed on _nextId left the counter unchanged and the next runtime-created
+            // squad reused that id.
+            if(id >= _nextId)
             {
                 Interlocked.Exchange(ref _nextId, id + 1);
             }

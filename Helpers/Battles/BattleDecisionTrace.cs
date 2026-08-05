@@ -67,7 +67,25 @@ namespace OnlyWar.Helpers.Battles
                 _ => value.ToString()
             };
 
-            return new KeyValuePair<string, string>(name, rendered);
+            // Render() separates fields with spaces, so a value containing whitespace would silently
+            // break splitting a record into key=value pairs. No existing caller passes free text, but
+            // soldier and squad NAMES do contain spaces, so enforce it here rather than trusting
+            // every future caller to remember.
+            return new KeyValuePair<string, string>(name, CollapseWhitespace(rendered));
+        }
+
+        private static string CollapseWhitespace(string value)
+        {
+            if (string.IsNullOrEmpty(value)) return value;
+            char[] characters = value.ToCharArray();
+            for (int index = 0; index < characters.Length; index++)
+            {
+                if (char.IsWhiteSpace(characters[index]))
+                {
+                    characters[index] = '_';
+                }
+            }
+            return new string(characters);
         }
     }
 }

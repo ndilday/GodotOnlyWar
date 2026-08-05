@@ -37,11 +37,13 @@ public class BattleAbandonedWoundedTests
     private const long TermagauntBroodBudget = 90L; // 15 gaunts — enough casualties that some
                                                     // go down maimed rather than dead.
     private const int PdfInfantrySquadTemplateId = 34;
-    // Engagement scoring and movement changes shift this seeded battle's winner (most recently the
-    // squad-level rout heading and the FindBestLocation sidestep fix). Keep the force size explicit
-    // and raise it when the PDF stops holding the field: this is an aftermath test, not a balance
-    // baseline, and it only needs a side that reliably ends up standing on the bodies.
-    private const int PdfPlatoonCount = 5;
+    // Engagement scoring and movement changes shift this seeded battle's winner (most recently
+    // Phase 3 of Design/Active/EngagementScoringOverhaul.md, which removed the arrival-time
+    // discount from ranged removal; before that, the squad-level rout heading and the
+    // FindBestLocation sidestep fix). Keep the force size explicit and raise it when the PDF stops
+    // holding the field: this is an aftermath test, not a balance baseline, and it only needs a
+    // side that reliably ends up standing on the bodies.
+    private const int PdfPlatoonCount = 6;
 
     [Fact]
     public void BattleEnd_SideHoldingFieldFinishesOffTheWoundedTheLoserLeftBehind()

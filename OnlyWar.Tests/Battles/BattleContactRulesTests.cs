@@ -58,6 +58,52 @@ public class BattleContactRulesTests
             BattleContactRules.Evaluate(beyondTolerance).Decision);
     }
 
+    [Theory]
+    // Standing quarry: the pursuer keeps its whole move, so reach is move + allowance.
+    [InlineData(6f, 0f, 7f, true)]
+    [InlineData(6f, 0f, 7.01f, false)]
+    // Genuinely faster pursuer: only the two-per-turn it actually gains counts.
+    [InlineData(8f, 6f, 3f, true)]
+    [InlineData(8f, 6f, 3.01f, false)]
+    // The Xibarrus Theta fixed point (2026-08-04). Separation settles at exactly the pursuer's
+    // move because that is how far it travels while the quarry travels the same, so measuring
+    // against the raw move reported "contact is one move away" on every one of ~997 turns. Net of
+    // the quarry's withdrawal the pursuer gains 0.001 a turn and can reach nothing.
+    [InlineData(6.001f, 6.001f, 6f, false)]
+    public void CanReachMeleeThisTurn_MeasuresNetClosingNotRawMove(
+        float pursuerSpeed,
+        float quarrySpeed,
+        float separation,
+        bool expected)
+    {
+        Assert.Equal(
+            expected,
+            BattleContactRules.CanReachMeleeThisTurn(separation, pursuerSpeed, quarrySpeed));
+    }
+
+    [Fact]
+    public void SilentSternChaseAtMatchedSpeed_Disengages()
+    {
+        // Regression for the Xibarrus Theta ambush (2026-08-04): two Marine squads ran after one
+        // Abominant at 6.001 vs 6.001 with the separation pinned at 6, landing nothing from turn 4
+        // to the resolver's 1000-turn cap. The stalled_pursuit break should have ended it — the
+        // pursuers had gone silent and could not close — but its "not standing on top of the
+        // quarry" guard compared separation to the pursuer's raw move, which at matched speed is
+        // exactly the separation. The guard is now net of the withdrawal, so the break fires.
+        var sternChase = Input() with
+        {
+            MinimumCurrentSeparation = 6,
+            FastestPursuerSpeed = 6.001f,
+            SlowestWithdrawalSpeed = 6.001f,
+            PursuersAttackedRecently = false
+        };
+
+        BattleContactRules.Result result = BattleContactRules.Evaluate(sternChase);
+
+        Assert.Equal(ContactBreakResult.OrganizedForceDisengages, result.Decision);
+        Assert.Equal("stalled_pursuit", result.Reason);
+    }
+
     [Fact]
     public void SilentPursuitThatCannotClose_DisengagesInsideMaximumWeaponRange()
     {
@@ -93,9 +139,14 @@ public class BattleContactRulesTests
         // Faster pursuer: it will close and the silence is temporary.
         Assert.Equal(ContactBreakResult.RemainInContact,
             BattleContactRules.Evaluate(stalled with { FastestPursuerSpeed = 9 }).Decision);
-        // Within a run-and-charge of the quarry: out of ammo is not out of contact.
+        // Within a run-and-charge of the quarry: out of ammo is not out of contact. "Within a
+        // charge" is net of the quarry's own withdrawal, so at the matched speeds this case holds
+        // fixed it means the contact allowance and nothing more — the pursuer gains no ground, and
+        // the eight yards this used to accept were eight yards it could never take back.
         Assert.Equal(ContactBreakResult.RemainInContact,
-            BattleContactRules.Evaluate(stalled with { MinimumCurrentSeparation = 8 }).Decision);
+            BattleContactRules.Evaluate(stalled with { MinimumCurrentSeparation = 1 }).Decision);
+        Assert.Equal(ContactBreakResult.OrganizedForceDisengages,
+            BattleContactRules.Evaluate(stalled with { MinimumCurrentSeparation = 1.01f }).Decision);
     }
 
     [Fact]

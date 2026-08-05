@@ -33,8 +33,16 @@ namespace OnlyWar.Helpers.Battles.Placers
                                                               bool formationSide, bool tacticalSide)
         {
             Coordinate squadBoxSize = geometry.Bounds;
-            ValueTuple<int, int> startingLocation = new ValueTuple<int, int>((short)(bottomLeft.Item1 + ((squadBoxSize.X - 1) / 2)),
-                                                                           (short)(bottomLeft.Item2 + squadBoxSize.Y - 1));
+            // Cell coordinates are int, all the way down: BattleGridManager keys its cells with a
+            // sparse Dictionary<(int X, int Y), int> and stores every position as ValueTuple<int, int>.
+            // These expressions used to be narrowed through (short) before being widened straight back
+            // into that int tuple, which did nothing except silently wrap any layout wider than 32,767
+            // -- a large standoff would land a leg at x = -65,543, truncate to a cell near the origin,
+            // and throw on the collision with the force it was meant to be standing off from. See
+            // Design/Active/EngagementScoringOverhaul.md; AmbushPlacer carried a ceiling to dodge this
+            // and no longer needs one.
+            ValueTuple<int, int> startingLocation = new ValueTuple<int, int>(bottomLeft.Item1 + ((squadBoxSize.X - 1) / 2),
+                                                                           bottomLeft.Item2 + squadBoxSize.Y - 1);
             int emptyRearRankSlots = geometry.RankCount * geometry.MembersPerRank
                 - squad.AbleSoldiers.Count;
             for (int i = 0; i < squad.AbleSoldiers.Count; i++)
@@ -55,7 +63,7 @@ namespace OnlyWar.Helpers.Battles.Placers
                 {
                     for (int d = 0; d < depth; d++)
                     {
-                        ValueTuple<int, int> location = new ValueTuple<int, int>((short)(startingLocation.Item1 + xMod + w), (short)(startingLocation.Item2 + yMod + d));
+                        ValueTuple<int, int> location = new ValueTuple<int, int>(startingLocation.Item1 + xMod + w, startingLocation.Item2 + yMod + d);
                         soldierLocations.Add(location);
                     }
                 }
@@ -74,8 +82,9 @@ namespace OnlyWar.Helpers.Battles.Placers
                                                             bool formationSide, bool tacticalSide)
         {
             Coordinate squadBoxSize = geometry.Bounds;
-            ValueTuple<int, int> startingLocation = new ValueTuple<int, int>((short)(bottomLeft.Item1 + squadBoxSize.Y - 1),
-                                                                   (short)(bottomLeft.Item2 + ((squadBoxSize.X - 1) / 2)));
+            // int throughout -- see PlaceSquadHorizontally for why there is no narrowing here.
+            ValueTuple<int, int> startingLocation = new ValueTuple<int, int>(bottomLeft.Item1 + squadBoxSize.Y - 1,
+                                                                   bottomLeft.Item2 + ((squadBoxSize.X - 1) / 2));
             int emptyRearRankSlots = geometry.RankCount * geometry.MembersPerRank
                 - squad.AbleSoldiers.Count;
             for (int i = 0; i < squad.AbleSoldiers.Count; i++)
@@ -96,7 +105,7 @@ namespace OnlyWar.Helpers.Battles.Placers
                 {
                     for (int d = 0; d < width; d++)
                     {
-                        ValueTuple<int, int> location = new ValueTuple<int, int>((short)(startingLocation.Item1 + xMod + w), (short)(startingLocation.Item2 + yMod + d));
+                        ValueTuple<int, int> location = new ValueTuple<int, int>(startingLocation.Item1 + xMod + w, startingLocation.Item2 + yMod + d);
                         soldierLocations.Add(location);
                     }
                 }

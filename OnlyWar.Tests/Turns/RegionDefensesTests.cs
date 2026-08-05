@@ -112,6 +112,44 @@ public class RegionDefensesTests
         Assert.Equal(marines.Entrenchment, pdf.Entrenchment, 6);
     }
 
+    // The returned figure is what the sabotage debrief tells the player it achieved, so it has to
+    // be the level actually knocked down rather than the level the charges were laid for.
+    [Fact]
+    public void Damage_ReportsTheLevelActuallyLost()
+    {
+        SectorSimulationFixture fixture = SectorSimulationFixture.CreateDetached();
+        RegionFaction pdf = fixture.DefaultRegionFaction(0);
+        pdf.AntiAir = 2.0;
+
+        double dealt = RegionDefenses.Damage(pdf, DefenseType.AntiAir, 0.5);
+
+        Assert.Equal(0.5, dealt, 4);
+        Assert.Equal(1.5, RegionDefenses.GetShared(pdf, DefenseType.AntiAir), 4);
+    }
+
+    [Fact]
+    public void Damage_AgainstThinnerWorks_ReportsOnlyWhatWasThere()
+    {
+        SectorSimulationFixture fixture = SectorSimulationFixture.CreateDetached();
+        RegionFaction pdf = fixture.DefaultRegionFaction(0);
+        pdf.AntiAir = 0.75;
+
+        double dealt = RegionDefenses.Damage(pdf, DefenseType.AntiAir, 3.0);
+
+        Assert.Equal(0.75, dealt, 4);
+        Assert.Equal(0.0, RegionDefenses.GetShared(pdf, DefenseType.AntiAir), 4);
+    }
+
+    [Fact]
+    public void Damage_AgainstNoWorks_ReportsNothing()
+    {
+        SectorSimulationFixture fixture = SectorSimulationFixture.CreateDetached();
+        RegionFaction pdf = fixture.DefaultRegionFaction(0);
+        pdf.AntiAir = 0.0;
+
+        Assert.Equal(0.0, RegionDefenses.Damage(pdf, DefenseType.AntiAir, 3.0));
+    }
+
     [Fact]
     public void TransferToAlly_LeavesTheSidesPositionUnchanged()
     {

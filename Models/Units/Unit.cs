@@ -43,7 +43,9 @@ namespace OnlyWar.Models.Units
         public Unit(int id, string name, UnitTemplate template, List<Squad> squads)
         {
             Id = id;
-            if(id > _nextId)
+            // >= , not > : see Squad's loading constructor — _nextId is the next id to hand
+            // out, so an id equal to it must still advance the counter or it gets reissued.
+            if(id >= _nextId)
             {
                 Interlocked.Exchange(ref _nextId, id + 1);
             }

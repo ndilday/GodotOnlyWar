@@ -315,21 +315,29 @@ namespace OnlyWar.Helpers.Battles
             return Squad.Name;
         }
 
-        public int GetPreferredEngagementRange(float targetSize, float targetArmor, float targetCon, float targetRangedEvasion = 0)
-        {
-            return (int)AbleSoldiers.Average(s => BattleModifiersUtil.CalculateOptimalDistance(s, targetSize, targetArmor, targetCon, targetRangedEvasion));
-        }
-
         /// <summary>
-        /// The range at which this squad prefers to open a meeting engagement. Differs from
-        /// <see cref="GetPreferredEngagementRange"/> only in how it treats members with no standoff
-        /// range: hit-limited standoff weapons (e.g. missile launchers) open far and plink rather
-        /// than being dragged toward a close start. See
-        /// <see cref="BattleModifiersUtil.CalculateOpeningDistance"/>.
+        /// The range at which this squad prefers to OPEN an engagement against
+        /// <paramref name="opposingSquads"/>.
+        ///
+        /// <para>PHASE 7 (Design/Active/EngagementScoringOverhaul.md). Kept as a named seam, but it
+        /// is now the SAME derived band the squad will steer toward once the fight starts, so
+        /// opening there costs zero turns of approach. Phase 6 had it ask
+        /// <c>BattleModifiersUtil.CalculateOptimalDistance</c> -- the effectiveness curve's
+        /// UN-OPPOSED "where am I still half as effective as at my best" -- which for bolter
+        /// marines runs out to weapon reach and opened engagements 800 yards outside the range
+        /// those same marines immediately walk to. See
+        /// <c>BattleEngagementFrameBuilder.CalculatePreferredOpeningRange</c> for why pricing the
+        /// approach collapses the two questions into one.</para>
+        ///
+        /// <para>Phase 6's scalar-target overloads (and <c>GetPreferredEngagementRange</c>, which
+        /// had no other caller) are gone with it: the derivation needs the whole opposing force,
+        /// not a representative draw, because the melee arrival term reads how much of that force
+        /// closes and how fast.</para>
         /// </summary>
-        public int GetPreferredOpeningRange(float targetSize, float targetArmor, float targetCon, float targetRangedEvasion = 0)
+        public int GetPreferredOpeningRange(IReadOnlyCollection<BattleSquad> opposingSquads)
         {
-            return (int)AbleSoldiers.Average(s => BattleModifiersUtil.CalculateOpeningDistance(s, targetSize, targetArmor, targetCon, targetRangedEvasion));
+            return (int)BattleEngagementFrameBuilder.CalculatePreferredOpeningRange(
+                this, opposingSquads);
         }
 
         /// <summary>

@@ -182,13 +182,22 @@ public class BattleSquadPlannerTests
         return rifle;
     }
 
+    // PHASE 6 replacement for EstimateKillDistance_MultiHitWeaponRetainsStandoffRange. The
+    // property is unchanged and still worth pinning -- a degrading weapon that cannot take its
+    // target out in ONE hit still has a useful standoff range, and must not be confused with a
+    // weapon that cannot wound it at all. What changed is that the old test asked
+    // EstimateKillDistance, a function that answered it with a hand-placed one-third
+    // armor-penetration quantile; the curve answers it from the removal it actually produces.
     [Theory]
     [InlineData(7.5f, 1600f)]
     [InlineData(10.5f, 1000f)]
-    public void EstimateKillDistance_MultiHitWeaponRetainsStandoffRange(
+    public void OptimalDistance_MultiHitDegradingWeaponRetainsStandoffRange(
         float damageMultiplier,
         float maximumRange)
     {
+        BattleSquad squad = CreateSquad("Multi Hit Gunner", 91_005);
+        BattleSoldier shooter = squad.Soldiers[0];
+        ((Soldier)shooter.Soldier).Dexterity = 20;
         RangedWeapon weapon = new(new RangedWeaponTemplate(
             99_280,
             "Degrading Test Weapon",
@@ -206,16 +215,31 @@ public class BattleSquadPlannerTests
             bulk: 4,
             doesDamageDegradeWithRange: true,
             reloadTime: 1));
+        shooter.RangedWeapons.Clear();
+        shooter.ClearReadiedRangedWeapons();
+        shooter.RangedWeapons.Add(weapon);
+        shooter.ReadyWeapon(weapon);
 
-        float distance = BattleModifiersUtil.EstimateKillDistance(
-            weapon, targetArmor: 0, targetCon: 100);
+        float distance = BattleModifiersUtil.CalculateOptimalDistance(
+            shooter, targetSize: 1f, targetArmor: 0f, targetCon: 100f);
 
         Assert.True(distance > 0, $"expected a useful standoff range, got {distance}");
     }
 
+    // PHASE 6 DELETED EstimateKillDistance_OneShotCaseKeepsExistingQuantileRange. It asserted the
+    // distance fell in 1040-1060 yards, a number produced entirely by EstimateKillDistance's
+    // hand-placed "1/3 chance of a killshot" quantile (the 4.25f divisor). That quantile was the
+    // approximation Phase 6 removed; there is no behaviour left underneath the assertion to
+    // re-express, only the constant it pinned. The property that survives -- a degrading weapon's
+    // standoff shrinks as the target gets tougher -- is covered by
+    // OptimalDistance_DegradingWeaponStandsCloserAgainstAToughterTarget below.
+
     [Fact]
-    public void EstimateKillDistance_OneShotCaseKeepsExistingQuantileRange()
+    public void OptimalDistance_DegradingWeaponStandsCloserAgainstAToughterTarget()
     {
+        BattleSquad squad = CreateSquad("Sniper", 91_006);
+        BattleSoldier shooter = squad.Soldiers[0];
+        ((Soldier)shooter.Soldier).Dexterity = 20;
         RangedWeapon sniper = new(new RangedWeaponTemplate(
             99_281,
             "Sniper Rifle",
@@ -233,16 +257,28 @@ public class BattleSquadPlannerTests
             bulk: 4,
             doesDamageDegradeWithRange: true,
             reloadTime: 1));
+        shooter.RangedWeapons.Clear();
+        shooter.ClearReadiedRangedWeapons();
+        shooter.RangedWeapons.Add(sniper);
+        shooter.ReadyWeapon(sniper);
 
-        float distance = BattleModifiersUtil.EstimateKillDistance(
-            sniper, targetArmor: 10, targetCon: 12);
+        float soft = BattleModifiersUtil.CalculateOptimalDistance(
+            shooter, targetSize: 1f, targetArmor: 10f, targetCon: 12f);
+        float tough = BattleModifiersUtil.CalculateOptimalDistance(
+            shooter, targetSize: 1f, targetArmor: 30f, targetCon: 40f);
 
-        Assert.InRange(distance, 1040f, 1060f);
+        Assert.True(soft > 0, $"expected a standoff against the soft target, got {soft}");
+        Assert.True(
+            tough < soft,
+            $"expected a degrading weapon to close against a tougher target ({soft} -> {tough})");
     }
 
     [Fact]
-    public void EstimateKillDistance_WeaponThatCannotPenetrateReturnsMinusOne()
+    public void OptimalDistance_WeaponThatCannotPenetrateHasNoStandoffRange()
     {
+        BattleSquad squad = CreateSquad("Popgunner", 91_007);
+        BattleSoldier shooter = squad.Soldiers[0];
+        ((Soldier)shooter.Soldier).Dexterity = 20;
         RangedWeapon popgun = new(new RangedWeaponTemplate(
             99_282,
             "Popgun",
@@ -260,11 +296,18 @@ public class BattleSquadPlannerTests
             bulk: 1,
             doesDamageDegradeWithRange: true,
             reloadTime: 1));
+        shooter.RangedWeapons.Clear();
+        shooter.ClearReadiedRangedWeapons();
+        shooter.RangedWeapons.Add(popgun);
+        shooter.ReadyWeapon(popgun);
 
+        // PHASE 6. The old EstimateKillDistance signalled this with a magic -1 that
+        // CalculateOptimalDistance then swallowed via min(). The invariant is the same and is now
+        // stated directly: a target that cannot be penetrated buys no standoff at all.
         Assert.Equal(
-            -1f,
-            BattleModifiersUtil.EstimateKillDistance(
-                popgun, targetArmor: 20, targetCon: 10));
+            0f,
+            BattleModifiersUtil.CalculateOptimalDistance(
+                shooter, targetSize: 1f, targetArmor: 20f, targetCon: 10f));
     }
 
     [Fact]
@@ -360,13 +403,18 @@ public class BattleSquadPlannerTests
     }
 
     [Fact]
-    public void CalculateOpeningDistance_HitLimitedHeavyWeaponOpensFarWhileOptimalIsZero()
+    public void OpeningDistance_HitLimitedHeavyWeaponStillOpensFar()
     {
-        // A single-shot heavy weapon (missile-launcher-like) can wound at any range but rarely
-        // hits a small target at range in ordinary hands, so CalculateOptimalDistance collapses
-        // to 0 ("no standoff range"). The opening-range variant recognizes this is hit-limited,
-        // not wound-limited, and keeps the squad opening far to take its low-odds shots rather
-        // than being dragged toward a close start where its bulk and single shot are wasted.
+        // PHASE 6 REPLACES CalculateOpeningDistance_HitLimitedHeavyWeaponOpensFarWhileOptimalIsZero.
+        // The scenario is unchanged: a single-shot heavy weapon (missile-launcher-like) can wound
+        // at any range but rarely hits a small target at range in ordinary hands. What changed is
+        // that the OLD assertion had two halves and one of them was an artifact. It asserted
+        // optimal == 0 exactly, which happened only because EstimateHitDistance returned a hard 0
+        // whenever the to-hit total failed to clear 10.5 -- and that cliff was the entire reason
+        // CalculateOpeningDistance had to exist, to disambiguate the 0 by cause. There is no cliff
+        // now: a 20%-at-400-yards hit chance scores 20%, so the standoff and the opening range are
+        // the same nonzero number and the surviving half of the property -- this weapon opens far
+        // rather than being dragged to a close start -- is asserted directly.
         BattleSquad squad = CreateSquad("Missile Gunner", 91_001);
         BattleSoldier shooter = squad.Soldiers[0];
         RangedWeapon launcher = new(new RangedWeaponTemplate(
@@ -391,15 +439,20 @@ public class BattleSquadPlannerTests
         shooter.RangedWeapons.Add(launcher);
         shooter.ReadyWeapon(launcher);
 
+        // PHASE 7 DROPPED THE GetPreferredOpeningRange HALF. Phase 6 had already reduced it to the
+        // same un-opposed saturation range CalculateOptimalDistance returns, so the second
+        // assertion restated the first; Phase 7 then re-pointed opening range at the derived band,
+        // which needs an opposing FORCE and is therefore no longer a property of this weapon alone.
+        // The surviving property -- a weapon that can wound at any range but rarely hits a small
+        // target still wants a standoff rather than being dragged to a close start -- is exactly
+        // what CalculateOptimalDistance answers, and it is asserted here.
         float optimal = BattleModifiersUtil.CalculateOptimalDistance(shooter, 1f, 15f, 30f);
-        float opening = BattleModifiersUtil.CalculateOpeningDistance(shooter, 1f, 15f, 30f);
 
-        Assert.Equal(0f, optimal);
-        Assert.True(opening > 0f, $"expected hit-limited weapon to open far, got {opening}");
+        Assert.True(optimal > 0f, $"expected hit-limited weapon to stand off, got {optimal}");
     }
 
     [Fact]
-    public void CalculateOpeningDistance_WoundLimitedWeaponStaysCloseLikeOptimal()
+    public void OpeningDistance_WoundLimitedWeaponStaysCloseLikeOptimal()
     {
         // A weapon that hits fine but cannot wound the target at any range gains nothing by
         // standing off, so both the optimal and opening distances are 0 (open/stay close, where
@@ -431,11 +484,12 @@ public class BattleSquadPlannerTests
         shooter.ReadyWeapon(popgun);
 
         // Armor 30 the 2-damage popgun can never overcome: DamageMultiplier*6 = 12 < 30.
+        // As above, the opening-range half is gone in Phase 7; the invariant it restated -- a
+        // weapon that cannot wound the target at any range buys no standoff -- is the assertion
+        // that remains.
         float optimal = BattleModifiersUtil.CalculateOptimalDistance(shooter, 1f, 30f, 30f);
-        float opening = BattleModifiersUtil.CalculateOpeningDistance(shooter, 1f, 30f, 30f);
 
         Assert.Equal(0f, optimal);
-        Assert.Equal(0f, opening);
     }
 
     [Fact]
@@ -640,6 +694,256 @@ public class BattleSquadPlannerTests
     }
 
     [Fact]
+    public void ChooseEngagementOption_WithdrawingMeleeOpponentProjectsOpeningNotCharging()
+    {
+        // Phase 1 (Design/Active/EngagementScoringOverhaul.md): BaselineRangeDelta previously
+        // projected any contact-seeking (melee-only) opponent as charging unconditionally. A Bound
+        // squad has been ordered to run away (see BattleEngagementFrameBuilder.BuildSide's
+        // quarryRunSpeed switch), so the lookahead must stop projecting it as closing to melee range.
+        // We prove this indirectly: with a charging melee opponent, the lookahead should eventually
+        // see it reach melee range and start charging incoming BV against us; with the SAME opponent
+        // marked Bound, it never does, so Hold's projected future exchange should be strictly better
+        // (less incoming loss).
+        BattleSquad shooters = CreateSquad("Ranged Holder", 90_101);
+        BattleSquad meleeEnemy = CreateSquad("Melee Enemy", 90_102);
+        EquipAimTestRifle(shooters.Soldiers[0], 99_260);
+        meleeEnemy.Soldiers[0].ClearReadiedRangedWeapons();
+        meleeEnemy.Soldiers[0].RangedWeapons.Clear();
+
+        BattleSquadCapabilityProfile enemyProfile =
+            BattleEngagementFrameBuilder.BuildProfile(meleeEnemy);
+        int range = (int)System.Math.Ceiling(enemyProfile.MoveSpeed) + 1;
+
+        BattleGridManager grid = new();
+        Place(grid, shooters.Soldiers[0], true, 0, 0);
+        Place(grid, meleeEnemy.Soldiers[0], false, range, 0);
+        BattleSquadPlanner planner = CreatePlanner(grid, shooters, meleeEnemy);
+
+        Dictionary<int, EngagementRoleConstraint> chargingConstraints = new()
+        {
+            [meleeEnemy.Id] = new EngagementRoleConstraint(EngagementSquadRole.Normal)
+        };
+        Dictionary<int, EngagementRoleConstraint> withdrawingConstraints = new()
+        {
+            [meleeEnemy.Id] = new EngagementRoleConstraint(EngagementSquadRole.Bound)
+        };
+
+        BattleEngagementFrameBuilder.PairedFrame chargingPaired =
+            BattleEngagementFrameBuilder.Build([shooters], [meleeEnemy], chargingConstraints);
+        BattleEngagementFrameBuilder.PairedFrame withdrawingPaired =
+            BattleEngagementFrameBuilder.Build([shooters], [meleeEnemy], withdrawingConstraints);
+
+        SquadEngagementDecision chargingDecision = planner.ChooseEngagementOption(
+            shooters,
+            chargingPaired.Frames[shooters.Id],
+            chargingPaired.Profiles,
+            chargingPaired.Frames,
+            [shooters],
+            [meleeEnemy]);
+        SquadEngagementDecision withdrawingDecision = planner.ChooseEngagementOption(
+            shooters,
+            withdrawingPaired.Frames[shooters.Id],
+            withdrawingPaired.Profiles,
+            withdrawingPaired.Frames,
+            [shooters],
+            [meleeEnemy]);
+
+        float chargingHoldFuture = chargingDecision.Candidates
+            .Single(candidate => candidate.Kind == EngagementOptionKind.Hold)
+            .FutureExchange[0];
+        float withdrawingHoldFuture = withdrawingDecision.Candidates
+            .Single(candidate => candidate.Kind == EngagementOptionKind.Hold)
+            .FutureExchange[0];
+
+        Assert.True(
+            withdrawingHoldFuture > chargingHoldFuture,
+            $"expected withdrawing enemy to project less incoming melee threat: "
+                + $"charging={chargingHoldFuture}, withdrawing={withdrawingHoldFuture}");
+    }
+
+    private static RangedWeapon EquipLongReachRifle(BattleSoldier soldier, int templateId)
+    {
+        RangedWeapon rifle = new(new RangedWeaponTemplate(
+            templateId,
+            "Long Reach Rifle",
+            EquipLocation.TwoHand,
+            TestSkills.Ranged,
+            accuracy: 6,
+            armorMultiplier: 1,
+            penetrationMultiplier: 1,
+            requiredStrength: 0,
+            baseDamage: 100,
+            maxDistance: 1_000,
+            rof: 3,
+            ammo: 30,
+            recoil: 0,
+            bulk: 4,
+            doesDamageDegradeWithRange: false,
+            reloadTime: 1));
+        soldier.RangedWeapons.Clear();
+        soldier.ClearReadiedRangedWeapons();
+        soldier.RangedWeapons.Add(rifle);
+        soldier.ReadyWeapon(rifle);
+        return rifle;
+    }
+
+    [Fact]
+    public void ChooseEngagementOption_LookaheadSeesOwnMovementInsideWeaponReach()
+    {
+        // Phase 2 (Design/Active/EngagementScoringOverhaul.md). Reference scenario: a squad with a
+        // non-degrading 1000-range rifle standing 200 yards from a melee-only enemy.
+        //
+        // Before: PolicyRangeDelta and the depth-0 terminal both used `desired =
+        // PreferredBandUpper`, i.e. the weapon's MAXIMUM range. At 200 < 1000, `range > desired` is
+        // false for every policy, so projected own motion was 0 and `turnsToAct` was 0 identically
+        // across all five options -- the lookahead could not see its own movement.
+        //
+        // After: both sites use EffectiveEngagementRange, which is well inside reach here, so
+        // closing policies project real motion and the terminal differentiates. (Phase 6 changed
+        // how that range is DERIVED -- it is now the argmax of removal(r) - incoming(r) rather than
+        // an accuracy/penetration limit -- but not that it is inside reach, which is all this test
+        // needs.)
+        //
+        // The "before" arm is reconstructed exactly by forcing EffectiveEngagementRange back onto
+        // PreferredBandUpper, so this test fails if either changed site regresses.
+        BattleSquad shooters = CreateSquad("Reference Bolters", 90_130);
+        BattleSquad meleeEnemy = CreateSquad("Melee Enemy", 90_131);
+        EquipLongReachRifle(shooters.Soldiers[0], 99_262);
+        meleeEnemy.Soldiers[0].ClearReadiedRangedWeapons();
+        meleeEnemy.Soldiers[0].RangedWeapons.Clear();
+
+        BattleGridManager grid = new();
+        Place(grid, shooters.Soldiers[0], true, 0, 0);
+        Place(grid, meleeEnemy.Soldiers[0], false, 200, 0);
+
+        BattleEngagementFrameBuilder.PairedFrame paired =
+            BattleEngagementFrameBuilder.Build([shooters], [meleeEnemy]);
+        BattleSquadCapabilityProfile shooterProfile = paired.Profiles[shooters.Id];
+
+        Assert.Equal(1_000f, shooterProfile.PreferredBandUpper, 3);
+        Assert.True(
+            shooterProfile.EffectiveEngagementRange > 0
+                && shooterProfile.EffectiveEngagementRange < 200,
+            $"expected an effective engagement range inside the 200-yard standoff, got "
+                + $"{shooterProfile.EffectiveEngagementRange} (reach "
+                + $"{shooterProfile.PreferredBandUpper})");
+
+        Dictionary<int, BattleSquadCapabilityProfile> conflatedProfiles = paired.Profiles
+            .ToDictionary(
+                entry => entry.Key,
+                entry => entry.Value with
+                {
+                    EffectiveEngagementRange = entry.Value.PreferredBandUpper
+                });
+
+        SquadEngagementDecision after = CreatePlanner(grid, shooters, meleeEnemy)
+            .ChooseEngagementOption(
+                shooters,
+                paired.Frames[shooters.Id],
+                paired.Profiles,
+                paired.Frames,
+                [shooters],
+                [meleeEnemy]);
+        SquadEngagementDecision before = CreatePlanner(grid, shooters, meleeEnemy)
+            .ChooseEngagementOption(
+                shooters,
+                paired.Frames[shooters.Id],
+                conflatedProfiles,
+                paired.Frames,
+                [shooters],
+                [meleeEnemy]);
+
+        static float Future(SquadEngagementDecision decision, EngagementOptionKind kind) =>
+            decision.Candidates.Single(candidate => candidate.Kind == kind).FutureExchange[0];
+
+        float beforeSpread = System.Math.Abs(
+            Future(before, EngagementOptionKind.CloseToContact)
+                - Future(before, EngagementOptionKind.Hold));
+        float afterSpread = System.Math.Abs(
+            Future(after, EngagementOptionKind.CloseToContact)
+                - Future(after, EngagementOptionKind.Hold));
+
+        // PHASE 5d REVISED THIS ARM. It used to assert that Hold's future SHRINKS under the honest
+        // range (0.38882 -> 0.23541), because the old terminal was
+        // `attainable * 0.25 / (1 + turnsToAct)` -- a penalty applied to Hold for standing far from
+        // a range Hold, by definition, never closes to. Phase 5d replaced that with a geometric
+        // continuation of the real per-turn exchange, evaluated at the range the squad WILL act
+        // from and discounted by the turns it takes to get there. Under that shape the honest range
+        // makes Hold's terminal LARGER here (1.28e-8 -> 2.12e-8): standing 200 yards off is worth
+        // almost nothing, and thirty-odd discounted turns of grinding at the effective range is
+        // worth almost nothing plus a little. The direction of this one number was a property of
+        // the old terminal's formula, not of Phase 2, so asserting it would now pin the shape
+        // Phase 5d deliberately removed.
+        //
+        // The Phase 2 property itself -- the lookahead can SEE its own movement -- is entirely
+        // carried by the two assertions below, which are unchanged and still discriminate: under
+        // the conflated range every policy projects zero own-motion, so closing and holding are
+        // indistinguishable.
+        Assert.NotEqual(
+            Future(before, EngagementOptionKind.Hold),
+            Future(after, EngagementOptionKind.Hold));
+        // PHASE 6 DROPPED A THIRD ARM. It asserted `Future(after, CloseToContact) >
+        // Future(after, Hold)` -- "closing is now worth strictly more than standing still" -- and
+        // it no longer holds, for a reason specific to this fixture rather than to the property
+        // under test.
+        //
+        // Under the derived band this shooter's EffectiveEngagementRange is 1, i.e. contact. That
+        // is the honest answer here: the Long Reach Rifle has accuracy 6 against a SIZE 1 target,
+        // so at the fixture's 200 yards its hit probability is about 0.0005, while the lone
+        // melee-only enemy threatens 0.234 BV/turn at contact. A rifleman who cannot hit at 200
+        // yards should close, and the model says so. But CloseToContact is scored with zero
+        // outgoing retention (you do not shoot while running) against melee incoming that switches
+        // on the moment you are inside 1.5, so the LOOKAHEAD still prices closing below holding --
+        // and both arms are now on the order of 1e-7, because the terminal is discounted across the
+        // ~50 turns it takes to cross 200 yards at this speed. Asserting the sign of a difference
+        // between two numbers that are both effectively zero pins fixture noise.
+        //
+        // The property this test is named for -- the lookahead can SEE its own movement -- is
+        // carried entirely by the two surviving assertions, and they still discriminate sharply:
+        // the spread widened from 2.15e-9 (conflated) to 1.22e-7 (derived), a factor of ~57.
+        Assert.True(
+            afterSpread > beforeSpread,
+            $"expected movement to be more visible to the lookahead: "
+                + $"before={beforeSpread}, after={afterSpread}");
+    }
+
+    [Fact]
+    public void CapabilityProfile_NonDegradingWeaponEffectiveRangeIsDerivedNotReach()
+    {
+        // PHASE 6 FLIPPED THIS TEST. It was
+        // CapabilityProfile_NonDegradingWeaponEffectiveRangeStillCollapsesOntoReach, a deliberate
+        // characterization of the defect: EstimateKillDistance short-circuited to the weapon's
+        // MaximumRange for a non-degrading weapon, so against a large, unarmored, non-evasive
+        // target accuracy was never the binding constraint and the "effective" range degenerated
+        // back to reach -- the Xibarrus Zeta bolter-vs-Carnifex case in
+        // Design/Active/EngagementScoringOverhaul.md. The same scenario now derives the band from
+        // removal(r) - incoming(r), and it lands strictly inside reach: closing improves the hit
+        // chance, but it also brings a melee-only enemy in sooner, and the derived standoff is
+        // where those two stop trading evenly.
+        BattleSquad crackShots = CreateSquad("Crack Shots", 90_150);
+        BattleSquad bigEnemy = CreateSquad("Big Enemy", 90_151, battleValue: 30, size: 8f);
+        EquipLongReachRifle(crackShots.Soldiers[0], 99_264);
+        ((Soldier)crackShots.Soldiers[0].Soldier).Dexterity = 20;
+        bigEnemy.Soldiers[0].ClearReadiedRangedWeapons();
+        bigEnemy.Soldiers[0].RangedWeapons.Clear();
+        BattleGridManager grid = new();
+        Place(grid, crackShots.Soldiers[0], true, 0, 0);
+        Place(grid, bigEnemy.Soldiers[0], false, 200, 0);
+
+        BattleEngagementFrameBuilder.PairedFrame paired =
+            BattleEngagementFrameBuilder.Build([crackShots], [bigEnemy]);
+        BattleSquadCapabilityProfile profile = paired.Profiles[crackShots.Id];
+
+        Assert.True(
+            profile.EffectiveEngagementRange > 0,
+            "a penetrable target at reach must still buy a standoff");
+        Assert.True(
+            profile.EffectiveEngagementRange < profile.PreferredBandUpper,
+            "expected the derived band to separate from reach: "
+                + $"{profile.EffectiveEngagementRange} vs reach {profile.PreferredBandUpper}");
+    }
+
+    [Fact]
     public void PrepareActions_ClosingSquadSelectsAForwardPosture()
     {
         BattleSquad shooters = CreateSquad("Jogging Rifle", 90_017);
@@ -809,7 +1113,16 @@ public class BattleSquadPlannerTests
             armorMultiplier: 1,
             penetrationMultiplier: 1,
             requiredStrength: 0,
-            baseDamage: 2.5f,
+            // PHASE 5 RETUNED THIS DIAL, 2.5 -> 4. This fixture exists to STRADDLE the shoot/parry
+            // crossover (1 attacker -> shoot, 3 -> ready melee), and the graded removal metric moved
+            // the whole curve: both the shot AND the forfeited parry are now credited for the
+            // wounding they do rather than only for disabling, and melee at point-blank hits far
+            // more often than a bulky rifle does, so parry risk grew faster than shot value. At 2.5
+            // damage the shooter drops the rifle even against a SINGLE attacker and the test stops
+            // discriminating at all. A rifle that can actually threaten its target restores the
+            // straddle at exactly the original 1-versus-3 counts, so the property under test is
+            // unchanged -- only the point on the damage axis where it lives.
+            baseDamage: 4f,
             maxDistance: 50,
             rof: 1,
             ammo: 5,
@@ -1038,11 +1351,19 @@ public class BattleSquadPlannerTests
             });
     }
 
-    [Fact]
-    public void SquadImminence_IsCachedPerAttackerAndTargetSquadForPlannerTurn()
+    [Theory]
+    [InlineData(WithdrawalRole.Bound)]
+    [InlineData(WithdrawalRole.Routing)]
+    public void RangedRemoval_AgainstWithdrawingTargetIsNotZeroed(WithdrawalRole withdrawalRole)
     {
-        BattleSquad shooters = CreateSquad("Shooter", 301);
-        BattleSquad meleeEnemy = CreateSquad("Melee Enemy", 310);
+        // Phase 3 (Design/Active/EngagementScoringOverhaul.md) replaces the Phase 1 test
+        // TargetArrivalDiscount_WithdrawingTargetNeverArrives. That test asserted the arrival
+        // discount collapsed to 0 for a retreating target -- correct for the quantity it measured,
+        // but the quantity itself multiplied RANGED removal, so it made a retreating enemy worth
+        // literally nothing to shoot. The discount is gone from ranged removal; a withdrawing
+        // target must score exactly what a standing one does.
+        BattleSquad shooters = CreateSquad("Shooter", 302);
+        BattleSquad meleeEnemy = CreateSquad("Withdrawing Melee Enemy", 311);
         meleeEnemy.Soldiers[0].ClearReadiedRangedWeapons();
         meleeEnemy.Soldiers[0].RangedWeapons.Clear();
 
@@ -1050,13 +1371,19 @@ public class BattleSquadPlannerTests
         Place(grid, shooters.Soldiers[0], true, 0, 0);
         Place(grid, meleeEnemy.Soldiers[0], false, 13, 0);
         BattleSquadPlanner planner = CreatePlanner(grid, shooters, meleeEnemy);
+        RangedWeapon weapon = shooters.Soldiers[0].EquippedRangedWeapons[0];
+        float engaged = planner.EvaluateRangedTarget(
+            shooters.Soldiers[0], meleeEnemy.Soldiers[0], weapon, 13f, 0f)
+            .ExpectedEnemyBattleValueRemoved;
 
-        float first = planner.GetSquadImminence(shooters, meleeEnemy);
-        float second = planner.GetSquadImminence(shooters, meleeEnemy);
+        meleeEnemy.WithdrawalRole = withdrawalRole;
+        BattleSquadPlanner withdrawingPlanner = CreatePlanner(grid, shooters, meleeEnemy);
+        float withdrawing = withdrawingPlanner.EvaluateRangedTarget(
+            shooters.Soldiers[0], meleeEnemy.Soldiers[0], weapon, 13f, 0f)
+            .ExpectedEnemyBattleValueRemoved;
 
-        Assert.InRange(first, 0.01f, 0.99f);
-        Assert.Equal(first, second);
-        Assert.Equal(1, planner.CachedSquadImminenceCount);
+        Assert.True(engaged > 0, $"expected positive removal, got {engaged:0.#####}");
+        Assert.Equal(engaged, withdrawing, 5);
     }
 
     [Fact]

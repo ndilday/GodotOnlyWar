@@ -38,7 +38,13 @@ namespace OnlyWar.Helpers.Missions.Sabotage
             difficulty += MissionAggressionModifiers.EffectDifficulty(context.Order.LevelOfAggression);
             LeaderMissionTest missionTest = new LeaderMissionTest(tactics, difficulty);
 
-            context.AddLog($"Day {context.DaysElapsed}: Force plants explosives in {context.Order.Mission.RegionFaction.Region.Name}");
+            // The objective's works are named here as well as in the report summary: the day-by-day
+            // log is what the player reads to follow the operation, and "plants explosives" alone
+            // never said which position was being wrecked.
+            string works = context.Order.Mission is SabotageMission sabotage
+                ? $" on enemy {DefenseTypeNames.Prose(sabotage.DefenseType)}"
+                : "";
+            context.AddLog($"Day {context.DaysElapsed}: Force plants explosives{works} in {context.Order.Mission.RegionFaction.Region.Name}");
             float margin = missionTest.RunMissionCheck(context.MissionSquads, execution.Random);
             if(margin > 0)
             {

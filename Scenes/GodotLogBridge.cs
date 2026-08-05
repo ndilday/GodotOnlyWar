@@ -22,6 +22,11 @@ public partial class GodotLogBridge : Node
         _logSink = DurableLogSink.Create();
 
         BattleLog.Sink = message => _logSink.Write("Battle", message);
+        // Each battle gets its own file. The engine only announces boundaries; the file layout is
+        // this host's choice. GameLog's own "Battle start/end in <region>" lines stay in the main
+        // trace, so it remains an index of which battle files exist and in what order.
+        BattleLog.BattleStarted = name => _logSink.BeginBattle(name);
+        BattleLog.BattleEnded = () => _logSink.EndBattle();
         // Leveled turn/battle trace. Set MinimumLevel lower (Info/Warn) to quiet it, or Off to
         // silence entirely; Trace surfaces per-battle sizes/timings, force generation, per-week costs.
         GameLog.Sink = (level, message) =>
@@ -45,6 +50,8 @@ public partial class GodotLogBridge : Node
     public override void _ExitTree()
     {
         BattleLog.Sink = null;
+        BattleLog.BattleStarted = null;
+        BattleLog.BattleEnded = null;
         GameLog.Sink = null;
         _logSink?.Dispose();
         _logSink = null;
@@ -61,6 +68,9 @@ public partial class GodotLogBridge : Node
         private StreamWriter _writer;
         private int _fileIndex;
         private int _pendingFlushLines;
+        // Non-null only while a battle is in progress. Battle-channel writes go here instead of the
+        // main trace; every other channel keeps going to the main trace throughout.
+        private StreamWriter _battleWriter;
 
         private DurableLogSink(string logDirectory, string sessionStamp)
         {
@@ -84,17 +94,21 @@ public partial class GodotLogBridge : Node
         {
             lock (_sync)
             {
-                if (_writer.BaseStream.Length >= MaxLogBytes)
+                bool toBattleFile = _battleWriter != null && channel == "Battle";
+                if (!toBattleFile && _writer.BaseStream.Length >= MaxLogBytes)
                 {
                     OpenNextFile();
                 }
 
+                // A battle file is never rotated: it is one battle, and splitting it would defeat
+                // the point of giving it its own name.
+                StreamWriter writer = toBattleFile ? _battleWriter : _writer;
                 string timestamp = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss.fff", CultureInfo.InvariantCulture);
-                _writer.Write(timestamp);
-                _writer.Write(" [");
-                _writer.Write(channel);
-                _writer.Write("] ");
-                _writer.WriteLine(message);
+                writer.Write(timestamp);
+                writer.Write(" [");
+                writer.Write(channel);
+                writer.Write("] ");
+                writer.WriteLine(message);
 
                 _pendingFlushLines++;
                 if (_pendingFlushLines >= FlushEveryLines)
@@ -104,14 +118,55 @@ public partial class GodotLogBridge : Node
             }
         }
 
+        /// <summary>
+        /// Routes Battle-channel writes to <c>{name}.txt</c> until <see cref="EndBattle"/>. A battle
+        /// that never announces its end (an exception unwinding past ProcessEndOfBattle) would
+        /// otherwise leak its stream into the next battle, so an unclosed one is closed here rather
+        /// than treated as an error.
+        /// </summary>
+        public void BeginBattle(string name)
+        {
+            lock (_sync)
+            {
+                CloseBattleWriterLocked();
+                string path = Path.Combine(_logDirectory, name + ".txt");
+                Stream stream = new System.IO.FileStream(
+                    path,
+                    FileMode.Create,
+                    System.IO.FileAccess.Write,
+                    FileShare.ReadWrite);
+                _battleWriter = new StreamWriter(stream, new UTF8Encoding(false), 65536)
+                {
+                    AutoFlush = false
+                };
+            }
+        }
+
+        public void EndBattle()
+        {
+            lock (_sync)
+            {
+                CloseBattleWriterLocked();
+            }
+        }
+
         public void Dispose()
         {
             lock (_sync)
             {
+                CloseBattleWriterLocked();
                 FlushLocked();
                 _writer?.Dispose();
                 _writer = null;
             }
+        }
+
+        private void CloseBattleWriterLocked()
+        {
+            if (_battleWriter == null) return;
+            _battleWriter.Flush();
+            _battleWriter.Dispose();
+            _battleWriter = null;
         }
 
         private void OpenNextFile()
@@ -139,6 +194,7 @@ public partial class GodotLogBridge : Node
         private void FlushLocked()
         {
             _writer?.Flush();
+            _battleWriter?.Flush();
             _pendingFlushLines = 0;
         }
     }

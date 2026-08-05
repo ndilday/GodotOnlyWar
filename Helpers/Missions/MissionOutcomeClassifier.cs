@@ -39,6 +39,13 @@ namespace OnlyWar.Helpers.Missions
         public int EnemiesKilled { get; init; }
         public int EnemyKillCredits { get; init; }
         public float Impact { get; init; }
+        // Sabotage only: which works were the objective, the level of them the raid actually brought
+        // down (measured in aftermath, so it is 0 on a failed attempt or against a position that was
+        // already gone), and what was standing before it did. The report renders the last two as a
+        // change in the same fuzzy band the region screens show, never as raw numbers.
+        public DefenseType? SabotageTarget { get; init; }
+        public double SabotageDamage { get; init; }
+        public double SabotageLevelBefore { get; init; }
     }
 
     public static class MissionOutcomeClassifier
@@ -62,7 +69,12 @@ namespace OnlyWar.Helpers.Missions
                 TargetEliminated = context.TargetEliminated,
                 EnemiesKilled = killed,
                 EnemyKillCredits = context.EnemyKillCredits,
-                Impact = context.Impact
+                Impact = context.Impact,
+                // The objective's works are known from the posted mission whether or not the raid
+                // got to them, so a failed attempt can still name what it went after.
+                SabotageTarget = (context.Order?.Mission as SabotageMission)?.DefenseType,
+                SabotageDamage = context.SabotageDamageDealt,
+                SabotageLevelBefore = context.SabotageDefenseLevelBefore
             };
         }
 

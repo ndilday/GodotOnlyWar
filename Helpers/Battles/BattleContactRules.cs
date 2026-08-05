@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 
 namespace OnlyWar.Helpers.Battles;
@@ -28,6 +29,26 @@ public static class BattleContactRules
     /// matching the Run-to-melee term in the resolver's one-turn attack reach.
     /// </summary>
     public const float MeleeContactAllowance = 1.0f;
+
+    /// <summary>
+    /// Whether a pursuer can put someone in melee THIS turn, measured against the gap it can
+    /// actually take out of the separation rather than the raw distance it can travel.
+    ///
+    /// The quarry moves in the same turn, so the distance that matters is the NET closing rate.
+    /// Comparing separation to the pursuer's move alone made a stern chase at matched speed read
+    /// as permanently one move from contact: separation settles at exactly the pursuer's move
+    /// (it gains only the sliver by which it is faster), so "I can reach melee this turn" stayed
+    /// true forever while contact never happened. Both escape hatches that end an unwinnable
+    /// chase — <see cref="BattlePursuitPlanner"/>'s cannot-close override and the stalled_pursuit
+    /// break below — are gated on this test, so the fixed point disabled both and the battle ran
+    /// to the resolver's turn cap. Observed 2026-08-04 (Xibarrus Theta): 6.001 vs 6.001,
+    /// separation pinned at 6, ~997 turns with nothing landed.
+    /// </summary>
+    public static bool CanReachMeleeThisTurn(
+        float separation,
+        float pursuerSpeed,
+        float quarrySpeed) =>
+        separation <= Math.Max(0, pursuerSpeed - quarrySpeed) + MeleeContactAllowance;
 
     /// <param name="PursuersAttackedRecently">
     /// The pursuing side produced a damaging action (fire or melee) within the evaluator's recent
@@ -78,8 +99,10 @@ public static class BattleContactRules
         // quarry does not hand it a free escape.
         else if (!input.PursuersAttackedRecently
                  && !PursuerCanClose(input)
-                 && input.MinimumCurrentSeparation
-                     > input.FastestPursuerSpeed + MeleeContactAllowance)
+                 && !CanReachMeleeThisTurn(
+                     input.MinimumCurrentSeparation,
+                     input.FastestPursuerSpeed,
+                     input.SlowestWithdrawalSpeed))
             (decision, reason) = (ContactBreakResult.OrganizedForceDisengages, "stalled_pursuit");
         else if (input.RearGuardActive && input.MaskedDepartureProgress >= required)
             (decision, reason) = (ContactBreakResult.SquadDisengages, "masked_departure");

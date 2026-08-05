@@ -1,5 +1,6 @@
 using OnlyWar.Models;
 using OnlyWar.Helpers.Extensions;
+using OnlyWar.Helpers.Fortifications;
 using OnlyWar.Models.Missions;
 using OnlyWar.Models.Planets;
 using System;
@@ -71,22 +72,10 @@ namespace OnlyWar.Helpers.Missions
 
             if (mission is SabotageMission sabotage)
             {
-                label += $" · {FormatDefenseType(sabotage.DefenseType)}";
+                label += $" · {DefenseTypeNames.Label(sabotage.DefenseType)}";
             }
 
             return label;
-        }
-
-        private static string FormatDefenseType(DefenseType defenseType)
-        {
-            return defenseType switch
-            {
-                DefenseType.Entrenchment => "Entrenchments",
-                DefenseType.ListeningPost => "Listening Post",
-                DefenseType.AntiAir => "Anti-Air",
-                DefenseType.Organization => "Organization",
-                _ => Humanize(defenseType.ToString())
-            };
         }
 
         private static string Humanize(string value)

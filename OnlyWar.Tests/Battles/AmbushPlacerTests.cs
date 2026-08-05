@@ -79,6 +79,41 @@ public class AmbushPlacerTests
         Assert.Equal(ambushed.Concat(ambushing).Sum(s => s.AbleSoldiers.Count), placed);
     }
 
+    /// <summary>
+    /// XIBARRUS ZETA REGRESSION (2026-08-04). A derived engagement range of ONE YARD set three
+    /// marine squads a single yard off a column containing a Broodlord and a Carnifex, which
+    /// reached them on turn 1; 29 of 30 marines died. The derivation is fixed in
+    /// <c>BattleEngagementFrameBuilder.CalculatePreferredOpeningRange</c>, but the placer must not
+    /// be able to produce that geometry again whatever range it is handed: an ambush sprung inside
+    /// one bound of the ambushed force's own movement buys a single volley and then becomes the
+    /// melee the ambush existed to avoid.
+    /// </summary>
+    [Theory]
+    [InlineData((ushort)0)]
+    [InlineData((ushort)1)]
+    [InlineData((ushort)3)]
+    public void PlaceSquads_RangeInsideOneEnemyBound_StillStandsOffAFullBound(ushort range)
+    {
+        BattleGridManager grid = new();
+        List<BattleSquad> ambushed = [CreateSquad("Column", 10, false)];
+        List<BattleSquad> ambushing = [CreateSquad("Ambusher", 10, true)];
+
+        AmbushPlacer placer = new(grid, range);
+        placer.PlaceSquads(ambushed, ambushing);
+
+        // One turn of the COLUMN's movement is the quantity that matters: it is how far they get
+        // on the turn the ambush is sprung.
+        int bound = (int)System.Math.Ceiling(ambushed[0].GetSquadMove());
+        Bounds kill = BoundsOf(grid, ambushed[0]);
+        Bounds leg = BoundsOf(grid, ambushing[0]);
+        int gap = kill.MinX - leg.MaxX;
+
+        Assert.True(
+            gap >= bound,
+            $"an engagement range of {range} left the ambushers {gap} from the column, inside its "
+                + $"{bound}-yard bound");
+    }
+
     [Fact]
     public void PlaceSquads_UsesTwoAdjacentSides_WithOpenCorner()
     {
@@ -148,5 +183,49 @@ public class AmbushPlacerTests
         Dictionary<BattleSquad, ValueTuple<int, int>> map = placer.PlaceSquads(ambushed, ambushing);
 
         Assert.Equal(ambushed.Count + ambushing.Count, map.Count);
+
+        // The assertion this test was named for but never made. It was written alongside a ceiling
+        // that kept placement away from the wrap, so counting the squads was all it could check.
+        // BattleSquadPlacer no longer narrows cell coordinates through (short), so the legs really
+        // do stand off 65,535 yards instead of truncating back to cells beside the kill zone -- the
+        // failure mode was a collision throw, but a standoff that silently landed at arm's length
+        // would pass a count-only check just as well.
+        Bounds kill = BoundsOf(grid, ambushed[0]);
+        foreach (BattleSquad ambusher in ambushing)
+        {
+            Bounds b = BoundsOf(grid, ambusher);
+            // System.Math, not the OnlyWar.Tests.Math namespace this file sits next to.
+            int gap = System.Math.Max(
+                System.Math.Max(kill.MinX - b.MaxX, b.MinX - kill.MaxX),
+                System.Math.Max(kill.MinY - b.MaxY, b.MinY - kill.MaxY));
+            Assert.True(
+                gap > 60_000,
+                $"{ambusher.Name} stood off only {gap} from the kill zone at a 65,535 engagement "
+                + "range - coordinates wrapped");
+        }
+    }
+
+    // AnnihilationPlacer shared BattleSquadPlacer's truncation and, unlike AmbushPlacer, never had a
+    // ceiling of its own to hide behind. Meeting engagements and reciprocal assaults route through
+    // it, and Phase 6 made their opening range derived rather than clamped, so the input range is no
+    // longer bounded by anything but weapon reach.
+    [Fact]
+    public void AnnihilationPlacer_HugeRange_DoesNotWrapCoordinates()
+    {
+        BattleGridManager grid = new();
+        List<BattleSquad> bottom = [CreateSquad("Bottom", 5, true)];
+        List<BattleSquad> top = [CreateSquad("Top", 5, false)];
+
+        AnnihilationPlacer placer = new(grid, ushort.MaxValue);
+        Dictionary<BattleSquad, ValueTuple<int, int>> map = placer.PlaceSquads(bottom, top);
+
+        Assert.Equal(bottom.Count + top.Count, map.Count);
+
+        Bounds bottomBounds = BoundsOf(grid, bottom[0]);
+        Bounds topBounds = BoundsOf(grid, top[0]);
+        Assert.True(
+            topBounds.MinY - bottomBounds.MaxY > 60_000,
+            $"the two lines opened only {topBounds.MinY - bottomBounds.MaxY} apart at a 65,535 "
+            + "range - coordinates wrapped");
     }
 }

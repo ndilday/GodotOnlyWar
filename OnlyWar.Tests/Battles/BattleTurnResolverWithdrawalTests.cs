@@ -283,6 +283,126 @@ public class BattleTurnResolverWithdrawalTests
         Assert.Null(resolver.BattleHistory.Outcome);
     }
 
+    [Fact]
+    public void ProcessNextTurn_MatchedSpeedSternChaseEndsInsteadOfGrindingToTheTurnCap()
+    {
+        // Regression for the Xibarrus Theta ambush (2026-08-04). Two Marine squads chased one
+        // Abominant at 6.001 vs 6.001 for ~997 turns and hit MaxBattleTurns. Both rules that
+        // should have ended it — the pursuit planner's cannot-close override and the contact
+        // rules' stalled_pursuit break — were gated on "can the pursuer reach melee this turn",
+        // which compared the separation to the pursuer's raw move. In a stern chase the
+        // separation settles at exactly that distance, so the gate read as a catch permanently
+        // one move away and neither rule ever fired.
+        //
+        // Melee-only so no gun can end the fight instead: there is genuinely nothing this pursuer
+        // can ever do, which is precisely when the engagement must be allowed to end.
+        SoldierTemplate zeroValueHuman = new(
+            73_090,
+            TestModelFactory.HumanSpecies,
+            "Zero Value Runner",
+            1,
+            1,
+            false,
+            0,
+            Array.Empty<ValueTuple<BaseSkill, float>>(),
+            battleValue: 0);
+        BattleSquad withdrawing = CreateSquad("Withdrawing", 73_091, zeroValueHuman);
+        BattleSquad pursuer = CreateSquad(
+            "Matched Pursuer",
+            73_092,
+            TestModelFactory.MarineTemplate,
+            isPlayerSquad: true);
+        // The Theta speeds exactly: a 0.001 edge, which is inside PursuitSpeedAdvantageTolerance
+        // and so is no edge at all — the pursuer needs a thousand turns to gain a single yard.
+        ((Soldier)withdrawing.Soldiers[0].Soldier).MoveSpeed = 6f;
+        ((Soldier)pursuer.Soldiers[0].Soldier).MoveSpeed = 6.001f;
+        // Worth nothing (so its side elects to run), unarmed (so it cannot win the fight it is
+        // running from), and durable enough that neither side can settle this by killing. The
+        // withdrawal is only declared at the END of turn one, so turn one is fought at engaged
+        // ranges — a fragile quarry simply dies there, which is correct behaviour and not the case
+        // under test. The chase this is about only begins on turn two, once the quarry is running.
+        ((Soldier)withdrawing.Soldiers[0].Soldier).Constitution = 5_000;
+        withdrawing.Soldiers[0].ClearWeapons();
+        // Melee-only, so no gun can end the engagement instead: there is genuinely nothing this
+        // pursuer can ever do to a quarry it cannot catch, which is exactly when the chase has to
+        // be allowed to end rather than run to the cap.
+        pursuer.Soldiers[0].RangedWeapons.Clear();
+        pursuer.Soldiers[0].ClearReadiedRangedWeapons();
+
+        BattleGridManager grid = new();
+        // Separation 7 sits just inside the old gate (7 <= move + MeleeContactAllowance = 7.001)
+        // and outside the corrected one (net closing 0.001 + allowance = 1.001) — the exact band
+        // in which the chase became unkillable.
+        Place(grid, withdrawing.Soldiers[0], true, 0, 0);
+        Place(grid, pursuer.Soldiers[0], false, 7, 0);
+        BattleTurnResolver resolver = CreateResolver(
+            grid,
+            [withdrawing],
+            [pursuer],
+            Aggression.Normal,
+            Aggression.Aggressive);
+
+        for (int turn = 0; turn < 50 && resolver.BattleHistory.Outcome == null; turn++)
+        {
+            resolver.ProcessNextTurn();
+        }
+
+        BattleOutcome outcome = Assert.IsType<BattleOutcome>(resolver.BattleHistory.Outcome);
+        Assert.Equal(BattleEndReason.Withdrawal, outcome.EndReason);
+        Assert.Contains(withdrawing.Id, outcome.DisengagedSquadIds);
+        // The point of the whole exercise: it ends in a handful of turns rather than grinding.
+        Assert.True(
+            resolver.BattleHistory.Turns.Count < 10,
+            $"an uncatchable quarry should be let go promptly; took "
+                + $"{resolver.BattleHistory.Turns.Count} turns");
+    }
+
+    [Fact]
+    public void ProcessNextTurn_MatchedSpeedPursuerWithAGunResolvesRatherThanChasing()
+    {
+        // The armed half of the Theta scenario, and the reason the fix is two-part. Ending the
+        // chase is not enough on its own: arrival value was measured against the quarry's current
+        // position, so running scored the full worth of closing six yards that the quarry
+        // immediately reopened, and beat standing and firing every turn. With the withdrawal
+        // netted out there is no arrival left to buy and the guns settle it quickly.
+        SoldierTemplate zeroValueHuman = new(
+            73_100,
+            TestModelFactory.HumanSpecies,
+            "Zero Value Runner",
+            1,
+            1,
+            false,
+            0,
+            Array.Empty<ValueTuple<BaseSkill, float>>(),
+            battleValue: 0);
+        BattleSquad withdrawing = CreateSquad("Withdrawing", 73_101, zeroValueHuman);
+        BattleSquad pursuer = CreateSquad(
+            "Armed Matched Pursuer",
+            73_102,
+            TestModelFactory.MarineTemplate,
+            isPlayerSquad: true);
+        ((Soldier)withdrawing.Soldiers[0].Soldier).MoveSpeed = 6;
+        ((Soldier)pursuer.Soldiers[0].Soldier).MoveSpeed = 6;
+
+        BattleGridManager grid = new();
+        Place(grid, withdrawing.Soldiers[0], true, 0, 0);
+        Place(grid, pursuer.Soldiers[0], false, 6, 0);
+        BattleTurnResolver resolver = CreateResolver(
+            grid,
+            [withdrawing],
+            [pursuer],
+            Aggression.Normal,
+            Aggression.Aggressive);
+
+        for (int turn = 0; turn < 50 && resolver.BattleHistory.Outcome == null; turn++)
+        {
+            resolver.ProcessNextTurn();
+        }
+
+        BattleOutcome outcome = Assert.IsType<BattleOutcome>(resolver.BattleHistory.Outcome);
+        Assert.NotEqual(BattleEndReason.TurnCap, outcome.EndReason);
+    }
+
     // Enormous nominal reach, no ability to hit or hurt anything at it: accuracy and damage are
     // floored and the round degrades with range, so both halves of CalculateOptimalDistance
     // (can I hit here, can I wound here) collapse to nothing.

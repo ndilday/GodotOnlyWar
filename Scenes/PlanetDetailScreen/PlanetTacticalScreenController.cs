@@ -54,11 +54,15 @@ public partial class PlanetTacticalScreenController : DialogController
 	// information is shown in the right-hand panel.
 	private bool _regionContextFocused = true;
 	private Ship _selectedShip;
-	private Unit _selectedLoadedUnit;
 	private Squad _selectedLoadedSquad;
 	private Region _selectedSurfaceRegion;
-	private Unit _selectedLandedUnit;
 	private Squad _selectedLandedSquad;
+	// The roster Tree is multi-select, so it - not the single-selection fields above - is
+	// authoritative for which squads Land and Embark act on. Those fields still drive the dossier
+	// context panel from the most recently clicked row.
+	private IReadOnlyList<string> _selectedRosterKeys = [];
+	private readonly List<Squad> _selectedLoadedSquads = [];
+	private readonly List<Squad> _selectedLandedSquads = [];
 	private PopupMenu _embarkShipMenu;
 	private LoadoutDoctrineDialog _loadoutDoctrineDialog;
 
@@ -81,6 +85,9 @@ public partial class PlanetTacticalScreenController : DialogController
 		_view.SetActiveMapLayers(_activeLayers);
 		_view.SetRosterFilters(RosterFilters);
 		_view.SetActiveRosterFilter(_rosterFilter);
+		// Ctrl/shift-click accumulates a landing or embarkation force across ships, units, and
+		// individual squads; a plain click still replaces the selection with a single row.
+		_view.SetSelectionMultiSelect(true);
 
 		_embarkShipMenu = new PopupMenu
 		{
@@ -174,12 +181,14 @@ public partial class PlanetTacticalScreenController : DialogController
 
 	private void OnSelectionTreeItemSelected(object sender, string key)
 	{
-		ApplySelectionKey(key);
+		RecomputeSelectedSquads();
+		ApplySelectionKey(ResolveContextKey(key));
 		RefreshContextAndCommands();
 	}
 
 	private void OnSelectionTreeItemActivated(object sender, string key)
 	{
+		RecomputeSelectedSquads();
 		ApplySelectionKey(key);
 		Squad squad = GetSelectedSquad();
 		if (squad != null)
@@ -230,8 +239,10 @@ public partial class PlanetTacticalScreenController : DialogController
 	{
 		RefreshRegionMap();
 		_view.SetHeader(_selectedPlanet.Name, GetGovernorBadgeText());
-		_view.SetSelectionTitle("ROSTER", "Select a region, ship, or squad. Land, load, or open its orders from the command bar.");
 		_view.PopulateSelectionTree(BuildRoster());
+		// PopulateSelectionTree restores the previous selection by key, so the squad sets have to be
+		// rebuilt against the freshly created rows before any command text is derived from them.
+		RecomputeSelectedSquads();
 		RefreshContextAndCommands();
 	}
 
@@ -256,8 +267,18 @@ public partial class PlanetTacticalScreenController : DialogController
 	private void RefreshContextAndCommands()
 	{
 		RefreshRegionMap();
+		RefreshSelectionSummary();
 		_view.SetContextCards(GetContextTitle(), GetContextSubtitle(), BuildContextCards());
 		_view.SetCommandRows(BuildCommandRows());
+	}
+
+	private void RefreshSelectionSummary()
+	{
+		int count = _selectedLoadedSquads.Count + _selectedLandedSquads.Count;
+		string hint = count == 0
+			? "Select a region, ship, or squad; ctrl-click to select several. Land, load, or open its orders from the command bar."
+			: $"{count} squad{(count == 1 ? "" : "s")} selected · ctrl-click to add or remove";
+		_view.SetSelectionTitle("ROSTER", hint);
 	}
 
 	private IReadOnlyList<CommandTreeNode> BuildRoster()
@@ -337,7 +358,12 @@ public partial class PlanetTacticalScreenController : DialogController
 				return new CommandTreeNode(
 					LoadedUnitKey(ship.Id, unitId),
 					$"{unitName} | {group.Sum(squad => squad.Members.Count)} aboard",
-					group.Select(squad => new CommandTreeNode(LoadedSquadKey(ship.Id, squad.Id), RosterFormat.SquadLabel(squad))).ToList());
+					group.Select(squad => new CommandTreeNode(
+						LoadedSquadKey(ship.Id, squad.Id),
+						RosterFormat.SquadLabel(squad),
+						null,
+						IconAtlas.GetSquadIconKey(squad.SquadTemplate),
+						null)).ToList());
 			})
 			.ToList();
 	}
@@ -363,7 +389,12 @@ public partial class PlanetTacticalScreenController : DialogController
 				return new CommandTreeNode(
 					SurfaceUnitKey(regionId, unitId),
 					$"{unitName} | {group.Sum(squad => squad.Members.Count)} on surface",
-					group.Select(squad => new CommandTreeNode(SurfaceSquadKey(regionId, squad.Id), RosterFormat.SquadLabel(squad))).ToList());
+					group.Select(squad => new CommandTreeNode(
+						SurfaceSquadKey(regionId, squad.Id),
+						RosterFormat.SquadLabel(squad),
+						null,
+						IconAtlas.GetSquadIconKey(squad.SquadTemplate),
+						null)).ToList());
 			})
 			.ToList();
 	}
@@ -675,33 +706,28 @@ public partial class PlanetTacticalScreenController : DialogController
 				_selectedRegion = _selectedPlanet.Regions.FirstOrDefault(region => region.Id == int.Parse(parts[1]));
 				_regionContextFocused = true;
 				_selectedSurfaceRegion = _selectedRegion;
-				_selectedLandedUnit = null;
 				_selectedLandedSquad = null;
 				break;
 			case "ship":
 				_regionContextFocused = false;
 				_selectedShip = FindShip(int.Parse(parts[1]));
-				_selectedLoadedUnit = null;
 				_selectedLoadedSquad = null;
 				break;
 			case "loaded-unit":
 				_regionContextFocused = false;
 				_selectedShip = FindShip(int.Parse(parts[1]));
-				_selectedLoadedUnit = GameDataSingleton.Instance.Sector.PlayerForce.Army.OrderOfBattle.ChildUnits.FirstOrDefault(unit => unit.Id == int.Parse(parts[2]));
 				_selectedLoadedSquad = null;
 				break;
 			case "loaded-squad":
 				_regionContextFocused = false;
 				_selectedShip = FindShip(int.Parse(parts[1]));
 				_selectedLoadedSquad = FindSquadById(_selectedShip?.LoadedSquads, int.Parse(parts[2]));
-				_selectedLoadedUnit = _selectedLoadedSquad?.ParentUnit;
 				if (_selectedLoadedSquad == null) _selectedShip = null;
 				break;
 			case "surface-unit":
 				_selectedRegion = _selectedPlanet.Regions.FirstOrDefault(region => region.Id == int.Parse(parts[1]));
 				_regionContextFocused = true;
 				_selectedSurfaceRegion = _selectedRegion;
-				_selectedLandedUnit = GameDataSingleton.Instance.Sector.PlayerForce.Army.OrderOfBattle.ChildUnits.FirstOrDefault(unit => unit.Id == int.Parse(parts[2]));
 				_selectedLandedSquad = null;
 				break;
 			case "surface-squad":
@@ -711,7 +737,6 @@ public partial class PlanetTacticalScreenController : DialogController
 				_selectedLandedSquad = FindSquadById(
 					GetPlayerRegionFaction(_selectedSurfaceRegion)?.LandedSquads,
 					int.Parse(parts[2]));
-				_selectedLandedUnit = _selectedLandedSquad?.ParentUnit;
 				if (_selectedLandedSquad == null) _selectedSurfaceRegion = null;
 				break;
 		}
@@ -738,11 +763,14 @@ public partial class PlanetTacticalScreenController : DialogController
 
 	private void LandSelectedForces()
 	{
+		// Multi-select notifications are deferred until Godot has settled the whole click
+		// transaction, so re-read the Tree at commit time rather than trusting the cached sets.
+		RecomputeSelectedSquads();
 		if (!CanLand()) return;
 		RegionFaction regionFaction = GetOrCreatePlayerRegionFaction(_selectedRegion);
 		bool changed = false;
 
-		foreach (Squad squad in GetSelectedLoadedSquads().ToList())
+		foreach (Squad squad in _selectedLoadedSquads.ToList())
 		{
 			Ship ship = squad.BoardedLocation;
 			ship?.RemoveSquad(squad);
@@ -762,8 +790,9 @@ public partial class PlanetTacticalScreenController : DialogController
 
 	private void ShowEmbarkShipMenu()
 	{
-		List<Squad> squads = GetSelectedLandedSquads().ToList();
-		if (squads.Count == 0 || _selectedSurfaceRegion == null) return;
+		RecomputeSelectedSquads();
+		List<Squad> squads = _selectedLandedSquads.ToList();
+		if (squads.Count == 0) return;
 
 		int capacityRequired = squads.Sum(squad => squad.Members.Count);
 		List<Ship> ships = GetPlayerOrbitingShips().ToList();
@@ -799,60 +828,76 @@ public partial class PlanetTacticalScreenController : DialogController
 
 	private void LoadSelectedForces(Ship destinationShip)
 	{
-		List<Squad> squads = GetSelectedLandedSquads().ToList();
+		List<Squad> squads = _selectedLandedSquads.ToList();
 		int capacityRequired = squads.Sum(squad => squad.Members.Count);
 		if (destinationShip == null || squads.Count == 0 || capacityRequired > destinationShip.AvailableCapacity) return;
 
-		RegionFaction regionFaction = GetPlayerRegionFaction(_selectedSurfaceRegion);
-		if (regionFaction == null) return;
 		bool changed = false;
 
-		foreach (Squad squad in squads)
+		// A multi-row selection can pull squads out of several regions at once, so embark region by
+		// region and give each vacated region its own cleanup pass.
+		foreach (IGrouping<Region, Squad> group in squads
+			.Where(squad => squad.CurrentRegion != null)
+			.GroupBy(squad => squad.CurrentRegion))
 		{
-			regionFaction.LandedSquads.Remove(squad);
-			destinationShip.LoadSquad(squad);
-			squad.CurrentRegion = null;
-			squad.BoardedLocation = destinationShip;
-			changed = true;
+			RegionFaction regionFaction = GetPlayerRegionFaction(group.Key);
+			if (regionFaction == null) continue;
+
+			foreach (Squad squad in group)
+			{
+				regionFaction.LandedSquads.Remove(squad);
+				destinationShip.LoadSquad(squad);
+				squad.CurrentRegion = null;
+				squad.BoardedLocation = destinationShip;
+				changed = true;
+			}
+
+			CleanupPlayerRegionFactionAfterLoad(group.Key, regionFaction);
 		}
 
 		if (changed) CampaignChanged?.Invoke(this, EventArgs.Empty);
-		CleanupPlayerRegionFactionAfterLoad(_selectedSurfaceRegion, regionFaction);
 		ClearForceSelections();
 		RefreshWorkspace();
 	}
 
 	private bool CanLand()
 	{
-		return _selectedShip != null
-			&& _selectedRegion != null
+		return _selectedRegion != null
 			&& _selectedRegion.Planet != null
 			&& GameDataSingleton.Instance?.Sector?.PlayerForce?.Faction != null
-			&& GetSelectedLoadedSquads().Any();
+			&& _selectedLoadedSquads.Count > 0;
 	}
 
 	private bool CanLoad()
 	{
-		if (_selectedSurfaceRegion == null) return false;
-		List<Squad> squads = GetSelectedLandedSquads().ToList();
-		int capacityRequired = squads.Sum(squad => squad.Members.Count);
-		return capacityRequired > 0 && GetPlayerOrbitingShips().Any();
+		return _selectedLandedSquads.Sum(squad => squad.Members.Count) > 0 && GetPlayerOrbitingShips().Any();
 	}
 
 	private string GetLandCommandText()
 	{
-		if (_selectedRegion == null || _selectedShip == null) return "Land Selected";
-		int squadCount = GetSelectedLoadedSquads().Count();
-		if (_selectedLoadedSquad != null) return BuildLandCommandText(true, squadCount, _selectedRegion.Name);
-		if (_selectedLoadedUnit != null || _selectedShip != null) return BuildLandCommandText(false, squadCount, _selectedRegion.Name);
-		return "Land Selected";
+		if (_selectedRegion == null || _selectedLoadedSquads.Count == 0) return "Land Selected";
+		return BuildLandCommandText(
+			IsSingleRowSelection("loaded-squad:"), _selectedLoadedSquads.Count, _selectedRegion.Name);
 	}
 
 	private string GetLoadCommandText()
 	{
-		if (_selectedSurfaceRegion == null) return "Embark Selected";
-		int squadCount = GetSelectedLandedSquads().Count();
-		return BuildEmbarkCommandText(_selectedLandedSquad != null, squadCount, _selectedSurfaceRegion.Name);
+		// A multi-row selection can span regions, so name the single origin when there is one and
+		// fall back to a count when the force is being pulled out of several at once.
+		List<Region> origins = GetSelectedLandedRegions();
+		if (origins.Count == 0) return "Embark Selected";
+		string originName = origins.Count == 1 ? origins[0].Name : $"{origins.Count} Regions";
+		return BuildEmbarkCommandText(
+			IsSingleRowSelection("surface-squad:"), _selectedLandedSquads.Count, originName);
+	}
+
+	private List<Region> GetSelectedLandedRegions()
+	{
+		return _selectedLandedSquads
+			.Select(squad => squad.CurrentRegion)
+			.Where(region => region != null)
+			.Distinct()
+			.ToList();
 	}
 
 	internal static string BuildLandCommandText(bool singleSquadSelected, int squadCount, string regionName)
@@ -867,37 +912,73 @@ public partial class PlanetTacticalScreenController : DialogController
 		return $"Embark {squadCount} Squad{(squadCount == 1 ? "" : "s")} From {regionName}";
 	}
 
-	private IEnumerable<Squad> GetSelectedLoadedSquads()
+	// Rebuilds the orbital and surface squad sets from every selected roster row. Called before any
+	// command text or commit, so the Tree stays the single source of truth for what a command acts
+	// on even when Godot's deferred multi-select notification lags a frame behind the visible rows.
+	private void RecomputeSelectedSquads()
 	{
-		if (_selectedLoadedSquad != null)
-			return _selectedLoadedSquad.IsOperational ? [_selectedLoadedSquad] : [];
-		if (_selectedShip == null) return [];
-		if (_selectedLoadedUnit != null)
+		_selectedRosterKeys = _view.GetSelectedKeys();
+		_selectedLoadedSquads.Clear();
+		_selectedLandedSquads.Clear();
+		if (_selectedPlanet == null) return;
+
+		foreach (string key in _selectedRosterKeys)
 		{
-			return _selectedShip.LoadedSquads.Where(
-				squad => squad.IsOperational && squad.ParentUnit == _selectedLoadedUnit);
+			if (string.IsNullOrWhiteSpace(key)) continue;
+			string[] parts = key.Split(':');
+			if (parts.Length < 2 || !int.TryParse(parts[1], out int locationId)) continue;
+
+			if (IsOrbitalRosterSelectionKey(key))
+			{
+				AddDistinct(_selectedLoadedSquads, ExpandRosterSelection(FindShip(locationId)?.LoadedSquads, key));
+			}
+			else if (IsSurfaceRosterSelectionKey(key))
+			{
+				Region region = _selectedPlanet.Regions.FirstOrDefault(candidate => candidate.Id == locationId);
+				AddDistinct(_selectedLandedSquads, ExpandRosterSelection(GetPlayerRegionFaction(region)?.LandedSquads, key));
+			}
 		}
-		return _selectedShip.LoadedSquads.Where(squad => squad.IsOperational);
 	}
 
-	private IEnumerable<Squad> GetSelectedLandedSquads()
+	// Expands one roster row into the squads it commands: a squad row is itself, a unit row is every
+	// operational squad of that unit in the location, and a ship or region row is the whole location.
+	// Ctrl-clicking a unit therefore adds or removes all of its squads at once.
+	internal static IEnumerable<Squad> ExpandRosterSelection(IEnumerable<Squad> locationSquads, string key)
 	{
-		if (_selectedSurfaceRegion == null) return [];
-		RegionFaction regionFaction = GetPlayerRegionFaction(_selectedSurfaceRegion);
-		if (regionFaction == null) return [];
-		if (_selectedLandedSquad != null)
+		if (locationSquads == null || string.IsNullOrWhiteSpace(key)) return [];
+		string[] parts = key.Split(':');
+		IEnumerable<Squad> operational = locationSquads.Where(squad => squad.IsOperational);
+		return parts[0] switch
 		{
-			return _selectedLandedSquad.IsOperational
-				&& _selectedLandedSquad.CurrentRegion == _selectedSurfaceRegion
-				? [_selectedLandedSquad]
-				: [];
-		}
-		if (_selectedLandedUnit != null)
+			"ship" or "region" => operational,
+			"loaded-unit" or "surface-unit" when parts.Length > 2 =>
+				operational.Where(squad => (squad.ParentUnit?.Id ?? 0) == int.Parse(parts[2])),
+			"loaded-squad" or "surface-squad" when parts.Length > 2 =>
+				operational.Where(squad => squad.Id == int.Parse(parts[2])),
+			_ => []
+		};
+	}
+
+	private static void AddDistinct(List<Squad> target, IEnumerable<Squad> squads)
+	{
+		foreach (Squad squad in squads)
 		{
-			return regionFaction.LandedSquads.Where(
-				squad => squad.IsOperational && squad.ParentUnit == _selectedLandedUnit);
+			if (!target.Contains(squad)) target.Add(squad);
 		}
-		return regionFaction.LandedSquads.Where(squad => squad.IsOperational);
+	}
+
+	// The multi-select notification names the row that was toggled, which on a ctrl-click
+	// deselection is a row that just left the selection. Fall back to a surviving row so the
+	// dossier follows what is still selected.
+	private string ResolveContextKey(string key)
+	{
+		if (!string.IsNullOrEmpty(key) && _selectedRosterKeys.Contains(key)) return key;
+		return _selectedRosterKeys.Count > 0 ? _selectedRosterKeys[^1] : "";
+	}
+
+	private bool IsSingleRowSelection(string keyPrefix)
+	{
+		return _selectedRosterKeys.Count == 1 && _selectedRosterKeys[0].StartsWith(keyPrefix);
 	}
 
 	private Squad GetSelectedSquad()
@@ -925,14 +1006,12 @@ public partial class PlanetTacticalScreenController : DialogController
 	private void ClearOrbitalSelection()
 	{
 		_selectedShip = null;
-		_selectedLoadedUnit = null;
 		_selectedLoadedSquad = null;
 	}
 
 	private void ClearSurfaceForceSelection()
 	{
 		_selectedSurfaceRegion = null;
-		_selectedLandedUnit = null;
 		_selectedLandedSquad = null;
 	}
 
@@ -940,6 +1019,13 @@ public partial class PlanetTacticalScreenController : DialogController
 	{
 		ClearOrbitalSelection();
 		ClearSurfaceForceSelection();
+		// Drop the Tree's own selection too: PopulateSelectionTree restores selections by key, so a
+		// ship or region row left selected here would silently re-arm the whole location after a
+		// commit that only moved part of it.
+		_view.ClearSelection();
+		_selectedRosterKeys = [];
+		_selectedLoadedSquads.Clear();
+		_selectedLandedSquads.Clear();
 	}
 
 	private void RefreshRegionMap()

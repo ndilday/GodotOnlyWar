@@ -10,6 +10,7 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 
 namespace OnlyWar.Helpers.Battles
@@ -61,6 +62,10 @@ namespace OnlyWar.Helpers.Battles
         // A battle's only natural end is one side's annihilation. Two forces that cannot resolve
         // would otherwise spin the caller's while loop forever, so this caps the fight.
         private const int MaxBattleTurns = 1000;
+
+        // Disambiguates battles that share a date and a region. Process-wide and never persisted:
+        // it exists to name a log stream, not to identify a battle across sessions.
+        private static int _nextBattleId;
 
         internal BattleTurnResolver(BattleGridManager grid,
                                     IList<BattleSquad> attackerBattleSquads,
@@ -123,6 +128,8 @@ namespace OnlyWar.Helpers.Battles
                 }
             }
 
+            BattleLog.BeginBattle(BuildBattleLogName());
+
             GameLog.Debug(() =>
                 $"Battle start in {_region?.Name}: {_aftermathContext.FirstSideStartingSoldierCount} "
                 + $"{_aftermathContext.FirstSideFaction.Name} vs "
@@ -130,6 +137,42 @@ namespace OnlyWar.Helpers.Battles
                 + $"{_aftermathContext.SecondSideFaction.Name}");
 
             SeedAmbushAim();
+        }
+
+        /// <summary>
+        /// Identifies this battle's log stream: <c>{gamedate}-{region}-{battleId}</c>. The id is a
+        /// process-wide counter rather than anything persisted, because date and region alone do not
+        /// separate two battles fought in the same region in the same week -- exactly the case a
+        /// contested region produces. Announced to <see cref="BattleLog"/>, which leaves it to the
+        /// host to decide whether that means a separate file.
+        /// </summary>
+        private string BuildBattleLogName()
+        {
+            int battleId = Interlocked.Increment(ref _nextBattleId);
+            string date = SanitizeForFileName(_execution.Aftermath?.Date?.ToString()) ?? "unknown-date";
+            string region = SanitizeForFileName(_region?.Name) ?? "unknown-region";
+            return $"{date}-{region}-{battleId}";
+        }
+
+        /// <summary>
+        /// Reduces a campaign name to something safe to use as a path component: invalid characters
+        /// and whitespace both collapse to '_', since the point of per-battle files is that they are
+        /// easy to glob and split on. Returns null for a name with nothing usable in it, so the
+        /// caller's fallback applies.
+        /// </summary>
+        private static string SanitizeForFileName(string value)
+        {
+            if (string.IsNullOrWhiteSpace(value)) return null;
+            char[] invalid = System.IO.Path.GetInvalidFileNameChars();
+            System.Text.StringBuilder sb = new(value.Length);
+            foreach (char character in value)
+            {
+                sb.Append(
+                    char.IsWhiteSpace(character) || Array.IndexOf(invalid, character) >= 0
+                        ? '_'
+                        : character);
+            }
+            return sb.ToString();
         }
 
         // An ambushing side opens fire from concealment with weapons already trained on the kill
@@ -278,9 +321,43 @@ namespace OnlyWar.Helpers.Battles
             else if (_currentState.TurnNumber >= MaxBattleTurns)
             {
                 Log(false, $"Battle unresolved after {MaxBattleTurns} turns; forcing disengagement");
+                LogTurnCapWarning();
                 BattleHistory.Outcome = BuildOutcome(BattleEndReason.TurnCap, null);
                 ProcessEndOfBattle(true);
             }
+        }
+
+        /// <summary>
+        /// Reaching <see cref="MaxBattleTurns"/> is always a bug, not an outcome: the cap exists to
+        /// stop a runaway loop, and every battle that hits it spent most of its turns doing nothing
+        /// resolvable. The per-battle log already records the forced disengagement, but that stream
+        /// is opt-in and megabytes long, so the fact never reaches anyone reading the game trace.
+        /// This raises it to a warning carrying the numbers that identify the usual cause — a stern
+        /// chase at matched speed, where the pursuer sits one move behind its quarry forever
+        /// (separation converges on the pursuer's move, so both "cannot close" escape hatches see a
+        /// catch as permanently imminent and never fire).
+        /// </summary>
+        private void LogTurnCapWarning()
+        {
+            GameLog.Warn(() =>
+            {
+                BattleSideState attacker = GetSideState(BattleSide.Attacker);
+                BattleSideState opposing = GetSideState(BattleSide.Opposing);
+                BattleForceMetrics attackerMetrics = BuildMetrics(BattleSide.Attacker);
+                BattleForceMetrics opposingMetrics = BuildMetrics(BattleSide.Opposing);
+                float separation = MinimumSeparation(BattleSide.Attacker, BattleSide.Opposing);
+                return $"Battle in {_region?.Name} hit the {MaxBattleTurns}-turn cap without "
+                    + "resolving; forcing disengagement. "
+                    + $"{_aftermathContext.FirstSideFaction?.Name} ({attacker.Intent}, "
+                    + $"{attackerMetrics.AbleSoldierCount} able, bv {attackerMetrics.CurrentBattleValue}, "
+                    + $"speed {attackerMetrics.FastestPursuitSquadSpeed:F2}-"
+                    + $"{attackerMetrics.SlowestMainBodySquadSpeed:F2}) vs "
+                    + $"{_aftermathContext.SecondSideFaction?.Name} ({opposing.Intent}, "
+                    + $"{opposingMetrics.AbleSoldierCount} able, bv {opposingMetrics.CurrentBattleValue}, "
+                    + $"speed {opposingMetrics.FastestPursuitSquadSpeed:F2}-"
+                    + $"{opposingMetrics.SlowestMainBodySquadSpeed:F2}); "
+                    + $"separation {separation:F1}";
+            });
         }
 
         private void ProcessEndOfBattle(bool hitTurnCap)
@@ -306,6 +383,10 @@ namespace OnlyWar.Helpers.Battles
                 _currentState.TurnNumber,
                 hitTurnCap));
             _aftermathPolicy.OnBattleCompleted(_currentState);
+            // Closes the per-battle log stream before control returns to the campaign turn, so
+            // whatever the caller does next is not filed under this battle. Anything the aftermath
+            // policy logs above still belongs to it.
+            BattleLog.EndBattle();
             OnBattleComplete?.Invoke(this, BattleHistory);
         }
 
@@ -1153,12 +1234,16 @@ namespace OnlyWar.Helpers.Battles
                         soldier => soldier.EquippedRangedWeapons.Count > 0));
             // Whether the pursuit can put someone in melee THIS turn, independent of whether it
             // can close over time. A pursuer already in contact, or one Run-and-charge away, has
-            // a catch available right now even at matched speeds, so the "cannot close" override
-            // must not talk it out of taking it.
+            // a catch available right now, so the "cannot close" override must not talk it out of
+            // taking it. The reach test is net of the quarry's own withdrawal — see
+            // BattleContactRules.CanReachMeleeThisTurn for why measuring it against the pursuer's
+            // raw move instead pinned this flag true for the whole of a stern chase.
             bool pursuerCanReachMeleeThisTurn =
                 GetActiveSquads(pursuingSide).Any(squad => squad.IsInMelee)
-                || separation <= pursuitMetrics.FastestPursuitSquadSpeed
-                    + BattleContactRules.MeleeContactAllowance;
+                || BattleContactRules.CanReachMeleeThisTurn(
+                    separation,
+                    pursuitMetrics.FastestPursuitSquadSpeed,
+                    withdrawalMetrics.SlowestMainBodySquadSpeed);
             BattlePursuitPlanner.Result result = BattlePursuitPlanner.Evaluate(new(
                 _currentState.TurnNumber,
                 pursuingSide == BattleSide.Attacker,

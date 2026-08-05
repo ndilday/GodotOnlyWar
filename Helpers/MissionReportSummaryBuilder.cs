@@ -1,3 +1,5 @@
+using OnlyWar.Helpers.Extensions;
+using OnlyWar.Helpers.Fortifications;
 using OnlyWar.Helpers.Missions;
 using OnlyWar.Models.Missions;
 
@@ -55,9 +57,7 @@ namespace OnlyWar.Helpers
                     return BuildAssassinationSummary(subject, location, classification);
 
                 case MissionType.Sabotage:
-                    return classification.Impact > 0
-                        ? $"{subject} sabotaged enemy operations in {location}."
-                        : $"{subject} attempted sabotage in {location} without notable effect.";
+                    return BuildSabotageSummary(subject, location, classification);
 
                 case MissionType.Diversion:
                     return classification.Impact > 0
@@ -120,6 +120,55 @@ namespace OnlyWar.Helpers
             }
             return $"{subject} conducted an assassination attempt in {location}.";
         }
+
+        // Names the works the charges went on and how badly they were hurt, so the debrief says more
+        // than that "operations" were sabotaged. The damage comes from aftermath rather than from
+        // Impact - the raid's effect is capped by the mission's size and then by whatever of the
+        // position was still standing - so a success that found nothing left to wreck reads as one.
+        //
+        // Reported against the same fuzzy bands the region screens show enemy defenses in, not as a
+        // raw level: a strike that leaves the position in the band it started in "weakened" it,
+        // while one that drops it a band did "substantial" damage and is worth naming the new band
+        // for. The player never sees an exact enemy figure here that the region screen would deny
+        // them, and the two readouts move together.
+        private static string BuildSabotageSummary(
+            string subject,
+            string location,
+            MissionOutcomeClassification classification)
+        {
+            string target = classification.SabotageTarget is DefenseType defenseType
+                ? $"enemy {DefenseTypeNames.Prose(defenseType)}"
+                : "enemy operations";
+
+            if (classification.Impact <= 0)
+            {
+                return $"{subject} attempted to sabotage {target} in {location} without notable effect.";
+            }
+            if (classification.SabotageDamage <= 0)
+            {
+                return $"{subject} sabotaged {target} in {location}, finding little left to destroy.";
+            }
+
+            double levelAfter = classification.SabotageLevelBefore - classification.SabotageDamage;
+            string bandBefore = RegionFactionExtensions.GetDefenseLevelDescription(
+                classification.SabotageLevelBefore);
+            string bandAfter = RegionFactionExtensions.GetDefenseLevelDescription(levelAfter);
+
+            if (bandAfter == bandBefore)
+            {
+                return $"{subject} sabotaged {target} in {location}, weakening them.";
+            }
+            if (bandAfter == NoDefensesBand)
+            {
+                return $"{subject} sabotaged {target} in {location}, destroying them outright.";
+            }
+            return $"{subject} sabotaged {target} in {location}, inflicting substantial damage - "
+                + $"the position now reads {bandAfter}.";
+        }
+
+        // What GetDefenseLevelDescription calls a position that has been flattened. Reported as
+        // destruction rather than as a band, since "now reads None" is not how a debrief speaks.
+        private const string NoDefensesBand = "None";
 
         private static string BuildCombatSummary(
             string subject,

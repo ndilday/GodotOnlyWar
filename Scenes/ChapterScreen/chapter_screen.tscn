@@ -59,15 +59,6 @@ layout_mode = 2
 size_flags_horizontal = 3
 theme_override_constants/separation = 7
 
-[node name="ChapterActions" type="HBoxContainer" parent="ChapterView/Content/BreadcrumbBar"]
-layout_mode = 2
-theme_override_constants/separation = 7
-
-[node name="LoadoutsButton" type="Button" parent="ChapterView/Content/BreadcrumbBar/ChapterActions"]
-custom_minimum_size = Vector2(150, 36)
-layout_mode = 2
-text = "Chapter Loadouts"
-
 [node name="MainLayout" type="HBoxContainer" parent="ChapterView/Content"]
 layout_mode = 1
 anchors_preset = 15
@@ -188,6 +179,12 @@ autowrap_mode = 2
 custom_minimum_size = Vector2(340, 0)
 layout_mode = 2
 columns = 3
+
+[node name="LoadoutsButton" type="Button" parent="ChapterView/Content/MainLayout/DetailPanel/Panel/MarginContainer/DetailStack/Hero"]
+custom_minimum_size = Vector2(150, 36)
+layout_mode = 2
+size_flags_vertical = 0
+text = "Chapter Loadouts"
 
 [node name="TransferButton" type="MenuButton" parent="ChapterView/Content/MainLayout/DetailPanel/Panel/MarginContainer/DetailStack/Hero"]
 custom_minimum_size = Vector2(0, 36)

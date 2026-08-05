@@ -74,21 +74,27 @@ namespace OnlyWar.Helpers.Fortifications
         /// most of it out of the player's stock - not out of whichever ally happened to be the
         /// mission's nominal target.
         /// </summary>
-        public static void Damage(RegionFaction target, DefenseType defenseType, double levelReduction)
+        /// <returns>
+        /// The level actually knocked off the shared position, which is what the mission report
+        /// tells the player it achieved. It is less than <paramref name="levelReduction"/> whenever
+        /// the works were already thinner than the charges laid on them - reporting the requested
+        /// figure would credit a raid for wrecking defenses that were never there.
+        /// </returns>
+        public static double Damage(RegionFaction target, DefenseType defenseType, double levelReduction)
         {
-            if (target == null || levelReduction <= 0.0) return;
+            if (target == null || levelReduction <= 0.0) return 0.0;
 
             List<RegionFaction> contributors = GetContributors(target)
                 .Where(rf => rf.GetDefense(defenseType) > 0.0)
                 .ToList();
-            if (contributors.Count == 0) return;
+            if (contributors.Count == 0) return 0.0;
 
             double sharedBefore = GetShared(target, defenseType);
+            double sharedAfter = Math.Max(0.0, sharedBefore - levelReduction);
             double pointsBefore = FortificationMath.LevelToPoints(sharedBefore);
-            double pointsAfter = FortificationMath.LevelToPoints(
-                Math.Max(0.0, sharedBefore - levelReduction));
+            double pointsAfter = FortificationMath.LevelToPoints(sharedAfter);
             double pointsLost = pointsBefore - pointsAfter;
-            if (pointsLost <= 0.0) return;
+            if (pointsLost <= 0.0) return 0.0;
 
             double survivingShare = pointsBefore <= 0.0 ? 0.0 : pointsAfter / pointsBefore;
             foreach (RegionFaction contributor in contributors)
@@ -98,6 +104,7 @@ namespace OnlyWar.Helpers.Fortifications
                     defenseType,
                     FortificationMath.PointsToLevel(ownPoints * survivingShare));
             }
+            return sharedBefore - sharedAfter;
         }
 
         /// <summary>

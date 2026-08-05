@@ -21,6 +21,7 @@ public partial class BottomMenu : Control
     public event EventHandler TrainingUnitButtonPressed;
     public event EventHandler FleetButtonPressed;
     public event EventHandler DiplomacyButtonPressed;
+    public event EventHandler ArchiveButtonPressed;
     public event EventHandler EndTurnButtonPressed;
 
     public override void _Ready()
@@ -53,6 +54,7 @@ public partial class BottomMenu : Control
         diplomacyButton.Pressed += () => DiplomacyButtonPressed?.Invoke(this, EventArgs.Empty);
         Button archiveButton = GetNode<Button>("Panel/MarginContainer/HBoxContainer/ArchiveButton");
         IconAtlas.Apply(archiveButton, "archive", 92);
+        archiveButton.Pressed += () => ArchiveButtonPressed?.Invoke(this, EventArgs.Empty);
         Button endTurnButton = GetNode<Button>("Panel/MarginContainer/HBoxContainer/EndTurnButton");
         IconAtlas.Apply(endTurnButton, "end_turn", 110);
         endTurnButton.Pressed += () => EndTurnButtonPressed?.Invoke(this, EventArgs.Empty);

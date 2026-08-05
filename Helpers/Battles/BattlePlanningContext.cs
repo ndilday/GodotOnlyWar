@@ -18,7 +18,7 @@ namespace OnlyWar.Helpers.Battles
     /// threads and squads therefore cannot change a seeded outcome. The context is discarded and
     /// rebuilt each turn, so cross-turn staleness is impossible.
     ///
-    /// All three maps are <see cref="ConcurrentDictionary{TKey, TValue}"/> because worker planners
+    /// Every map is a <see cref="ConcurrentDictionary{TKey, TValue}"/> because worker planners
     /// read and populate them concurrently during the parallel ranged phase. The factories are pure,
     /// so the benign double-compute a concurrent miss can trigger yields identical values.
     /// </summary>
@@ -26,12 +26,6 @@ namespace OnlyWar.Helpers.Battles
     // so the encapsulated RangedTargetEvaluation type need not be widened.
     public sealed class BattlePlanningContext
     {
-        // (AttackerSquadId, TargetSquadId) -> imminence. A squad-vs-squad quantity, identical for
-        // every soldier in the attacking squad, so this is the largest cross-soldier reuse: it was
-        // previously recomputed once per soldier in isolated per-worker caches.
-        internal ConcurrentDictionary<(int AttackerSquadId, int TargetSquadId), float>
-            SquadImminence { get; } = new();
-
         // Full ranged-shot evaluation, keyed by everything that varies. This cache lived per-worker,
         // where each soldier was evaluated once against distinct targets, so it never amortized
         // (~0.7% hit rate). Shared across the pass, one soldier's evaluations serve later phases.
@@ -65,6 +59,24 @@ namespace OnlyWar.Helpers.Battles
         internal ConcurrentDictionary<
             (int AttackerSquadId, int TargetSquadId, int TargetSpeedBits, int AttackerBulkBits),
             float> IncomingResponses { get; } = new();
+
+        // Phase 4 removal-rate table (Design/Active/EngagementScoringOverhaul.md): one
+        // SquadPairRemovalRate per (shooter squad, target squad) pair, holding the closed-form
+        // rescalable removal terms the lookahead will use to price its exchanges in the same
+        // currency as immediate fire. Stored shooter-squad-major -- ShooterSquadId -> TargetSquadId
+        // -> rate -- because the whole row is produced by one pass over the shooter squad's
+        // soldiers (each soldier's best target lands in exactly one column), so building a row
+        // lazily on the first cell request costs no more than building that cell alone. All cells
+        // for a shooter squad are therefore present or absent together; an ABSENT column means no
+        // soldier is aimed into that enemy squad, i.e. rate 0.
+        //
+        // PHASE 5 CONSUMES THIS. BattleSquadPlanner.EvaluateExchangeRate reads it for both halves
+        // of every lookahead ply and for the depth-0 terminal, replacing the AggregateRemovalRate
+        // capability proxy. Rows are therefore built for a squad's own table AND for its enemies'
+        // (the incoming half), all memoized here for the turn.
+        internal ConcurrentDictionary<
+            int,
+            IReadOnlyDictionary<int, SquadPairRemovalRate>> PairRemovalRates { get; } = new();
     }
 
     /// <summary>

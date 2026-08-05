@@ -113,6 +113,74 @@ public class PlanetTacticalScreenControllerTests
     }
 
     [Fact]
+    public void SquadRosterNodes_CarrySquadTypeIcons()
+    {
+        Unit company = CreateUnit(2, "Second Company");
+        Squad squad = CreateSquad(11, "Alpha Squad", company);
+        Ship ship = CreateShip();
+        ship.LoadSquad(squad);
+        string expectedIconKey = IconAtlas.GetSquadIconKey(squad.SquadTemplate);
+
+        IReadOnlyList<CommandTreeNode> loadedNodes = PlanetTacticalScreenController.CreateLoadedUnitNodes(ship, "all");
+
+        Assert.Equal(expectedIconKey, Assert.Single(loadedNodes[0].Children).IconKey);
+
+        RegionFaction regionFaction = new(new PlanetFaction(CreateFaction()), CreateRegion());
+        regionFaction.LandedSquads.Add(CreateSquad(12, "Beta Squad", company));
+
+        IReadOnlyList<CommandTreeNode> surfaceNodes =
+            PlanetTacticalScreenController.CreateSurfaceUnitNodes(5, regionFaction, "all");
+
+        Assert.Equal(expectedIconKey, Assert.Single(surfaceNodes[0].Children).IconKey);
+    }
+
+    [Fact]
+    public void ExpandRosterSelection_UnitRowCoversEverySquadUnderThatUnit()
+    {
+        Unit secondCompany = CreateUnit(2, "Second Company");
+        Unit firstCompany = CreateUnit(3, "First Company");
+        Squad alphaSquad = CreateSquad(11, "Alpha Squad", secondCompany);
+        Squad betaSquad = CreateSquad(12, "Beta Squad", secondCompany);
+        Squad firstCompanySquad = CreateSquad(21, "First Company Squad", firstCompany);
+        List<Squad> roster = [alphaSquad, betaSquad, firstCompanySquad];
+
+        Assert.Equal(
+            new[] { alphaSquad, betaSquad },
+            PlanetTacticalScreenController.ExpandRosterSelection(roster, "loaded-unit:7:2"));
+        Assert.Equal(
+            new[] { firstCompanySquad },
+            PlanetTacticalScreenController.ExpandRosterSelection(roster, "surface-unit:5:3"));
+    }
+
+    [Fact]
+    public void ExpandRosterSelection_LocationRowCoversWholeLocationAndSquadRowCoversOne()
+    {
+        Unit company = CreateUnit(2, "Second Company");
+        Squad alphaSquad = CreateSquad(11, "Alpha Squad", company);
+        Squad betaSquad = CreateSquad(12, "Beta Squad", company);
+        List<Squad> roster = [alphaSquad, betaSquad];
+
+        Assert.Equal(roster, PlanetTacticalScreenController.ExpandRosterSelection(roster, "ship:7"));
+        Assert.Equal(roster, PlanetTacticalScreenController.ExpandRosterSelection(roster, "region:5"));
+        Assert.Equal(
+            new[] { betaSquad },
+            PlanetTacticalScreenController.ExpandRosterSelection(roster, "loaded-squad:7:12"));
+        Assert.Equal(
+            new[] { alphaSquad },
+            PlanetTacticalScreenController.ExpandRosterSelection(roster, "surface-squad:5:11"));
+    }
+
+    [Fact]
+    public void ExpandRosterSelection_IgnoresGroupHeadersAndMissingLocations()
+    {
+        Squad squad = CreateSquad(11, "Alpha Squad", CreateUnit(2, "Second Company"));
+
+        Assert.Empty(PlanetTacticalScreenController.ExpandRosterSelection([squad], "group:orbit"));
+        Assert.Empty(PlanetTacticalScreenController.ExpandRosterSelection(null, "ship:7"));
+        Assert.Empty(PlanetTacticalScreenController.ExpandRosterSelection([squad], ""));
+    }
+
+    [Fact]
     public void FindSquadById_ResolvesFromDisplayedRosterWithoutGlobalSquadMap()
     {
         Unit unit = CreateUnit(1, "Company");

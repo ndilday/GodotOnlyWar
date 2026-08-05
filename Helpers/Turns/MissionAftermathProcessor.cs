@@ -63,7 +63,10 @@ namespace OnlyWar.Helpers.Turns
                         // Sabotage wrecks the position that is actually there, so the loss comes
                         // out of the side's pooled works rather than only the nominal target's
                         // share of them (RegionDefenses.Damage spreads it across contributors).
-                        RegionDefenses.Damage(regionFaction, sabotageMission.DefenseType, impact);
+                        context.SabotageDefenseLevelBefore = RegionDefenses.GetShared(
+                            regionFaction, sabotageMission.DefenseType);
+                        context.SabotageDamageDealt = RegionDefenses.Damage(
+                            regionFaction, sabotageMission.DefenseType, impact);
                         break;
                 }
 

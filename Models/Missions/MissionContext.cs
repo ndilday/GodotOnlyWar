@@ -204,6 +204,13 @@ namespace OnlyWar.Models.Missions
         public bool NoViableTarget { get; set; }
         // An assassination force reached and identified its target.
         public bool TargetLocated { get; set; }
+        // The level of enemy works a sabotage mission actually knocked down, and the level that was
+        // standing before it did, as measured by MissionAftermathProcessor when it applies the
+        // damage. Not derivable from Impact: the charges are capped by the mission's size and then
+        // by however much of the position was really there. The report renders the pair as a band
+        // change rather than a raw figure, so it needs the starting level as well as the loss.
+        public double SabotageDamageDealt { get; set; }
+        public double SabotageDefenseLevelBefore { get; set; }
         // The generated HQ soldier selected as the assassination objective, and whether that exact
         // soldier was confirmed killed. Bodyguard/interceptor casualties do not satisfy the objective.
         public int? AssassinationTargetSoldierId { get; set; }
