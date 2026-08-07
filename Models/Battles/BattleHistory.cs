@@ -20,6 +20,13 @@ namespace OnlyWar.Models.Battles
         // the field has an owner (BattleTurnResolver.FinishOffAbandonedWounded) -- so this set is
         // only final after the battle completes.
         public HashSet<int> KilledSoldierIds { get; }
+        // Stable identities of soldiers who were taken out of the fight ALIVE: down but not dead
+        // (Design/Active/CasualtyRealism.md §2.3). Populated as soldiers fall, then settled once
+        // the field has an owner -- the losing side's abandoned wounded are finished off
+        // (BattleTurnResolver.FinishOffAbandonedWounded) and a player brother left behind is
+        // presumed dead (PlayerChapterBattleAftermathPolicy). Disjoint from KilledSoldierIds by
+        // the time the battle completes, so a report can count the two independently.
+        public HashSet<int> IncapacitatedSoldierIds { get; }
         // Stable identities of soldiers who received at least one resolved wound during this
         // battle. This supports compact casualty reporting without retaining or rendering the
         // verbose per-action battle log.
@@ -36,6 +43,7 @@ namespace OnlyWar.Models.Battles
             FirstSideEnemiesKilled = 0;
             FirstSideEnemyDeaths = 0;
             KilledSoldierIds = new HashSet<int>();
+            IncapacitatedSoldierIds = new HashSet<int>();
             DamagedSoldierIds = new HashSet<int>();
             ClosingSummary = new List<string>();
         }

@@ -165,7 +165,10 @@ public class WoundResolverTests
         resolver.OnSoldierFall += (_, _) => fell = true;
         resolver.OnSoldierDeath += (_, _) => { };
         HitLocation location = new(Template(crippleWound: (uint)WoundLevel.Critical, isMotive: true));
-        Enqueue(resolver, location, 10f);
+        // The location must belong to the sufferer's own body. Since Phase 3 the motive branch
+        // asks the SOLDIER whether he is still combat effective rather than assuming that a
+        // crippled motive location means he is not, so a detached location proves nothing.
+        Enqueue(resolver, location, 10f, CreateSufferer(location));
 
         resolver.Resolve();
 
@@ -178,8 +181,9 @@ public class WoundResolverTests
         WoundResolver resolver = new();
         resolver.OnSoldierFall += (_, _) => { };
         HitLocation location = new(Template(crippleWound: (uint)WoundLevel.Critical, isMotive: true));
-        WoundResolution first = Enqueue(resolver, location, 10f);
-        WoundResolution second = Enqueue(resolver, location, 10f);
+        BattleSoldier sufferer = CreateSufferer(location);
+        WoundResolution first = Enqueue(resolver, location, 10f, sufferer);
+        WoundResolution second = Enqueue(resolver, location, 10f, sufferer);
 
         resolver.Resolve();
 

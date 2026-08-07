@@ -28,7 +28,8 @@ public enum EngagementSquadRole
     RearGuard = 3,
     Bound = 4,
     Routing = 5,
-    BreakOff = 6
+    BreakOff = 6,
+    Standoff = 7
 }
 
 /// <summary>
@@ -148,6 +149,10 @@ public sealed record EngagementOptionEvaluation(
     float ImmediateEnemyRemoval,
     float ImmediateFriendlyFire,
     float ReadinessValue,
+    // Present-value estimate of a full aimed shot that can be completed after the pursuit
+    // fire-window commitment. This is separate from current-turn outgoing fire: Hold may have
+    // no immediate shot while still being correct because it preserves the aim cycle.
+    float FireWindowValue,
     float IncomingNow,
     float MeleeNow,
     IReadOnlyList<float> FutureExchange,

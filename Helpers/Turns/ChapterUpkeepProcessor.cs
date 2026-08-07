@@ -1,3 +1,4 @@
+using OnlyWar.Helpers.Medical;
 using OnlyWar.Helpers.Simulation;
 using OnlyWar.Models;
 using OnlyWar.Models.Fleets;
@@ -40,7 +41,30 @@ namespace OnlyWar.Helpers.Turns
                 return;
             }
 
-            MedicalTurnProcessor.ApplyWeeklyHealing(army.OrderOfBattle?.GetAllMembers());
+            IEnumerable<ISoldier> members = army.OrderOfBattle?.GetAllMembers();
+            // Days outside a mission get their daily pass too. Weeks with no combat orders never
+            // enter MissionDayScheduler at all, and even an active week ends its day loop as soon
+            // as the last mission finishes, so this is the garrison half of the Astartes daily
+            // clear (Design/Active/CasualtyRealism.md §2.5). One call covers however many quiet
+            // days there were, because clearing an already-clear band does nothing.
+            //
+            // Subsumed by ApplyWeeklyHealing today, which clears Negligible and Minor outright for
+            // everyone. Kept explicit so the daily rule does not silently depend on that: it is
+            // stated where it belongs and survives any future change to the weekly cascade.
+            MedicalTurnProcessor.ApplyDailyHealing(members);
+            // GARRISON FIELD CARE (Design/Active/CasualtyRealism.md §2.6): the Apothecarium at rest,
+            // which is where most convalescence actually happens. An Apothecary NOT on a mission
+            // treats co-located brothers who are likewise not on a mission, on the same capacity and
+            // the same triage as his forward counterpart -- so an Apothecary sent out with an
+            // assault is visibly an Apothecary not clearing the backlog at home, and both effects
+            // land on the same screen.
+            //
+            // Run BEFORE the weekly cascade so the week's demotions are in place when it ticks.
+            FieldCareService.ApplyGarrisonFieldCare(
+                members?.OfType<PlayerSoldier>(),
+                FieldCareService.ResolveMedicalSkills(
+                    _session.Rules?.RatingDefinitions, _session.Rules?.BaseSkillMap));
+            MedicalTurnProcessor.ApplyWeeklyHealing(members);
             MedicalTurnProcessor.ResolveProcedures(army.MedicalProcedures, army.PlayerSoldierMap);
         }
 

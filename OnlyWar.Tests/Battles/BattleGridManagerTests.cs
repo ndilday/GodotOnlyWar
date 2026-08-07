@@ -372,7 +372,7 @@ public class BattleGridManagerTests
             leftLeg));
         resolver.Resolve();
 
-        Assert.False(initiallyNearest.CanFight);
+        Assert.False(initiallyNearest.IsCombatEffective);
         Assert.Equal(5f,
             grid.GetMinimumDistanceBetweenSquadAndSoldier(observers, target.Soldier.Id),
             precision: 4);

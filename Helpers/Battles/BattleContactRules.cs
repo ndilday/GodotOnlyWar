@@ -54,6 +54,11 @@ public static class BattleContactRules
     /// The pursuing side produced a damaging action (fire or melee) within the evaluator's recent
     /// window. False means the pursuit is silent — it is neither shooting nor reaching melee.
     /// </param>
+    /// <param name="PursuersHaveReasonableShot">
+    /// The pursuing side's current fire-control projection says that a worthwhile shot is available
+    /// now. This remains true while a stationary shooter is investing turns to mature an aimed shot,
+    /// even though no attack action has executed yet.
+    /// </param>
     public sealed record Input(
         int Turn,
         bool IsFirstSide,
@@ -68,7 +73,8 @@ public static class BattleContactRules
         float MaskedDepartureProgress,
         float WithdrawingSquadRunAllowance,
         bool HasImmediateDisengagementCapability = false,
-        bool PursuersAttackedRecently = true);
+        bool PursuersAttackedRecently = true,
+        bool PursuersHaveReasonableShot = false);
 
     public sealed record Result(ContactBreakResult Decision, string Reason, BattleDecisionTrace Trace);
 
@@ -94,10 +100,12 @@ public static class BattleContactRules
         // mobility break alone does not catch it, because that clause measures separation against
         // the pursuer's *maximum* weapon range. A long-ranged pursuer therefore stays nominally in
         // contact forever at a distance where no shot is ever worth taking. Once its guns have gone
-        // silent and it is no longer running anyone down, let the withdrawal succeed. Melee reach
-        // is still checked so a pursuer that is merely out of ammo but standing on top of the
-        // quarry does not hand it a free escape.
+        // silent, has no reasonable shot to prepare, and is no longer running anyone down, let the
+        // withdrawal succeed. A stationary shooter may spend several turns maturing an aim before
+        // a ShootAction executes. Melee reach is still checked so a pursuer that is merely out of
+        // ammo but standing on top of the quarry does not hand it a free escape.
         else if (!input.PursuersAttackedRecently
+                 && !input.PursuersHaveReasonableShot
                  && !PursuerCanClose(input)
                  && !CanReachMeleeThisTurn(
                      input.MinimumCurrentSeparation,
@@ -119,6 +127,7 @@ public static class BattleContactRules
             BattleDecisionTrace.Field("pursuer_speed", input.FastestPursuerSpeed),
             BattleDecisionTrace.Field("withdrawal_speed", input.SlowestWithdrawalSpeed),
             BattleDecisionTrace.Field("pursuers_attacked", input.PursuersAttackedRecently),
+            BattleDecisionTrace.Field("pursuers_reasonable_shot", input.PursuersHaveReasonableShot),
             BattleDecisionTrace.Field("rear_guard_active", input.RearGuardActive),
             BattleDecisionTrace.Field("masked_progress", input.MaskedDepartureProgress),
             BattleDecisionTrace.Field("masked_required", required),

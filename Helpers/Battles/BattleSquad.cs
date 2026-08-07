@@ -64,7 +64,7 @@ namespace OnlyWar.Helpers.Battles
                     || _ableSoldiersSourceCount != Soldiers.Count
                     || _cachedGlobalAbleSoldiersVersion != globalVersion)
                 {
-                    _ableSoldiers = Soldiers.Where(s => s.CanFight).ToList();
+                    _ableSoldiers = Soldiers.Where(s => s.IsCombatEffective).ToList();
                     _ableSoldiersSourceCount = Soldiers.Count;
                     _cachedGlobalAbleSoldiersVersion = globalVersion;
                     _ableSoldiersVersion++;

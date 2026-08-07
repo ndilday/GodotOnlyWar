@@ -1,3 +1,4 @@
+using OnlyWar.Helpers.Medical;
 using OnlyWar.Models;
 using OnlyWar.Models.Soldiers;
 using OnlyWar.Models.Squads;
@@ -104,7 +105,16 @@ namespace OnlyWar.Helpers
                 soldiers);
         }
 
-        public MedicalSoldierSummary BuildSoldierSummary(ISoldier soldier)
+        public MedicalSoldierSummary BuildSoldierSummary(ISoldier soldier) =>
+            BuildSoldierSummary(soldier, null);
+
+        /// <param name="force">
+        /// Supplies the chapter roster needed to work out who is covering this brother medically
+        /// (Design/Active/CasualtyRealism.md §2.6). Optional: with no force the field-care readout
+        /// is simply blank, which keeps the internal callers below -- which only want recovery
+        /// weeks -- from paying for a roster sweep per soldier.
+        /// </param>
+        public MedicalSoldierSummary BuildSoldierSummary(ISoldier soldier, PlayerForce force)
         {
             if (soldier == null)
             {
@@ -124,17 +134,43 @@ namespace OnlyWar.Helpers
                 GetSoldierIconKey(soldier),
                 $"{soldier.Template?.Name ?? "Battle-Brother"} {soldier.Name}",
                 $"{squad?.Name ?? "Unassigned"}, {squad?.ParentUnit?.Name ?? "No Company"} - {SquadLocationFormatter.Format(squad)}",
-                soldier.CanFight,
+                soldier.IsCombatEffective,
                 maxRecovery,
                 geneSeedStatus,
                 worstSeverity,
                 wounds,
-                BuildReplacementOptions(soldier.Body.HitLocations));
+                BuildReplacementOptions(soldier.Body.HitLocations),
+                BuildFieldCareStatus(soldier, force));
+        }
+
+        /// <summary>
+        /// Who is treating this brother, and how much of an Apothecary's day he has access to
+        /// (Design/Active/CasualtyRealism.md §2.6). Shown on the Apothecarium so the cost of sending
+        /// an Apothecary forward is visible where the backlog is: the brothers he left behind read
+        /// "no Apothecary on hand" the moment he is attached to an order.
+        /// </summary>
+        public static string BuildFieldCareStatus(ISoldier soldier, PlayerForce force)
+        {
+            if (soldier is not PlayerSoldier player || force?.Army?.OrderOfBattle == null)
+            {
+                return "";
+            }
+            IReadOnlyList<PlayerSoldier> covering = FieldCareService.GetCoveringApothecaries(
+                player, force.Army.OrderOfBattle.GetAllMembers().OfType<PlayerSoldier>());
+            if (covering.Count == 0)
+            {
+                return "Field care: no Apothecary on hand.";
+            }
+            float capacity = covering.Sum(FieldCareService.GetCapacity);
+            string who = covering.Count == 1
+                ? covering[0].Name
+                : $"{covering.Count} Apothecaries";
+            return $"Field care: {who} ({capacity:0.0} wound treatments/day).";
         }
 
         public static string GetSoldierIconKey(ISoldier soldier)
         {
-            if (soldier == null || !soldier.CanFight)
+            if (soldier == null || !soldier.IsCombatEffective)
             {
                 return "wounded";
             }
@@ -219,7 +255,7 @@ namespace OnlyWar.Helpers
                 ? "replacement"
                 : summary.MaxRecoveryWeeks > 0
                     ? $"{summary.MaxRecoveryWeeks} wk"
-                    : soldier.CanFight ? "ready" : "out";
+                    : soldier.IsCombatEffective ? "ready" : "out";
 
             return new ApothecariumTreeItem(
                 ApothecariumSelectionKind.Soldier,
@@ -244,7 +280,7 @@ namespace OnlyWar.Helpers
             int healthy = soldiers.Count(s => !IsWounded(s));
             int wounded = CountWounded(soldiers);
             int outOfAction = CountOutOfAction(soldiers);
-            int readyNext = soldiers.Count(s => IsWounded(s) && BuildSoldierSummary(s).MaxRecoveryWeeks <= 1 && s.CanFight);
+            int readyNext = soldiers.Count(s => IsWounded(s) && BuildSoldierSummary(s).MaxRecoveryWeeks <= 1 && s.IsCombatEffective);
             int maxRecovery = soldiers.Select(s => BuildSoldierSummary(s).MaxRecoveryWeeks).DefaultIfEmpty(0).Max();
 
             return new MedicalUnitSummary(
@@ -281,7 +317,7 @@ namespace OnlyWar.Helpers
                     soldier.Name,
                     $"{wound.LocationName}: {wound.Status}",
                     summary.ReplacementOptions.Count > 0 ? "replacement required" : wound.Recovery,
-                    summary.ReplacementOptions.Count > 0 ? "assign replacement" : soldier.CanFight ? "monitor" : "recover",
+                    summary.ReplacementOptions.Count > 0 ? "assign replacement" : soldier.IsCombatEffective ? "monitor" : "recover",
                     wound.Severity));
             }
 
@@ -464,7 +500,7 @@ namespace OnlyWar.Helpers
 
         private static int CountOutOfAction(IReadOnlyList<ISoldier> soldiers)
         {
-            return soldiers.Count(s => !s.CanFight);
+            return soldiers.Count(s => !s.IsCombatEffective);
         }
 
         private static bool IsWounded(ISoldier soldier)
@@ -474,7 +510,7 @@ namespace OnlyWar.Helpers
 
         private static bool IsMedicallyRelevant(ISoldier soldier)
         {
-            return IsWounded(soldier) || !soldier.CanFight || soldier.Body.HitLocations.Any(hl => hl.IsCybernetic);
+            return IsWounded(soldier) || !soldier.IsCombatEffective || soldier.Body.HitLocations.Any(hl => hl.IsCybernetic);
         }
 
         private static MedicalSeverity SeverityForSoldiers(IReadOnlyList<ISoldier> soldiers)

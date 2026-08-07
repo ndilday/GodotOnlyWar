@@ -166,7 +166,8 @@ public partial class ApothecariumScreenController : MainScreenController
             return;
         }
 
-        MedicalSoldierSummary summary = _recordBuilder.BuildSoldierSummary(soldier);
+        MedicalSoldierSummary summary = _recordBuilder.BuildSoldierSummary(
+            soldier, GameDataSingleton.Instance.Sector.PlayerForce);
         summary = EnrichWithRequisites(GameDataSingleton.Instance.Sector.PlayerForce, soldier, summary);
         _apothecariumView.ShowSoldier(summary);
     }

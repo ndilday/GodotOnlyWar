@@ -93,6 +93,34 @@ public class MissionDaySchedulerTests
         Assert.True(longMission.IsComplete);
     }
 
+    // The end-of-day hook (Design/Active/CasualtyRealism.md §2.5 daily healing) must fire exactly
+    // once per day however many drivers are in flight. One order fans out into several independent
+    // single-squad drivers under MissionForceMode.IndependentSquads, so a pass hung off a driver
+    // would run several times a day over overlapping men. It must also land AFTER the day's
+    // fighting - a brother scratched on day 2 has to start day 3 clean - and it must not skip the
+    // final day, which the early-exit check sits right after.
+    [Fact]
+    public void EndOfDayHook_FiresOncePerDayAfterEveryMissionHasActed()
+    {
+        List<string> trace = new();
+        MissionStepDriver first = CreateDriver(new DailyStub("A", trace, days: 3));
+        MissionStepDriver second = CreateDriver(new DailyStub("B", trace, days: 3));
+        MissionStepDriver third = CreateDriver(new DailyStub("C", trace, days: 3));
+
+        MissionDayScheduler.Run(
+            new[] { first, second, third },
+            onDayEnd: day => trace.Add($"endOfDay{day}"));
+
+        Assert.Equal(
+            new[]
+            {
+                "A:day1", "B:day1", "C:day1", "endOfDay1",
+                "A:day2", "B:day2", "C:day2", "endOfDay2",
+                "A:day3", "B:day3", "C:day3", "endOfDay3"
+            },
+            trace);
+    }
+
     private static MissionStepDriver CreateDriver(IMissionStep startingStep)
     {
         // Order is unused by the stubs, and MissionContext tolerates a null one (every read of it is

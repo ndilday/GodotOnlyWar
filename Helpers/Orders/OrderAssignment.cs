@@ -4,6 +4,7 @@ using OnlyWar.Models.Missions;
 using OnlyWar.Models.Orders;
 using OnlyWar.Models.Planets;
 using OnlyWar.Models.Recruitment;
+using OnlyWar.Models.Soldiers;
 using OnlyWar.Models.Squads;
 using OnlyWar.Helpers.Recruitment;
 using System.Collections.Generic;
@@ -33,9 +34,19 @@ namespace OnlyWar.Helpers.Orders
             Region targetRegion,
             AvailableMission mission,
             int targetFactionId,
-            Aggression aggression)
+            Aggression aggression,
+            IReadOnlyList<PlayerSoldier> attachedSoldiers = null)
         {
             if (squads == null || squads.Count == 0 || squads.Any(squad => squad?.IsOperational != true))
+            {
+                return null;
+            }
+            // A formation that may give up individuals never deploys as a unit
+            // (Design/Active/SpecialistAttachment.md §3.3). HQ squads and the four chapter
+            // offices are personnel pools: their people reach the field only by attachment.
+            // Note this is enforced here rather than by marking them Administrative -- their
+            // IsOperational must stay true, since surgery staffing and recruitment gate on it.
+            if (squads.Any(squad => squad.SquadTemplate?.PermitsIndividualDetachment == true))
             {
                 return null;
             }
@@ -48,6 +59,21 @@ namespace OnlyWar.Helpers.Orders
             if (distinctSquads.Any(squad => squad.Members.Any(member =>
                     RecruitmentPromotionService.IsSoldierInBlackCarapaceProcedure(
                         program, member.Id))))
+            {
+                return null;
+            }
+
+            // Individual specialists lent to this operation. Validated before any mutation:
+            // one bad specialist rejects the whole issue and creates nothing, matching the
+            // existing all-or-nothing contract of this method.
+            List<PlayerSoldier> distinctSpecialists = (attachedSoldiers ?? [])
+                .Where(soldier => soldier != null)
+                .GroupBy(soldier => soldier.Id)
+                .Select(group => group.First())
+                .ToList();
+            if (distinctSpecialists.Any(soldier =>
+                    RecruitmentPromotionService.IsSoldierInBlackCarapaceProcedure(
+                        program, soldier.Id)))
             {
                 return null;
             }
@@ -67,9 +93,25 @@ namespace OnlyWar.Helpers.Orders
                         duplicateOrder.AssignedSquads.ToList(), existingOrder, sector);
                     sector.RemoveOrder(duplicateOrder);
                 }
+                List<Squad> existingStaging = existingOrder.AssignedSquads
+                    .Concat(distinctSquads)
+                    .ToList();
+                if (!CanAttachAll(distinctSpecialists, existingOrder, existingStaging))
+                {
+                    return null;
+                }
                 existingOrder.SetAggression(aggression);
                 MoveSquadsToOrder(distinctSquads, existingOrder, sector);
+                foreach (PlayerSoldier specialist in distinctSpecialists)
+                {
+                    OrderAttachment.Attach(specialist, existingOrder);
+                }
                 return existingOrder;
+            }
+
+            if (!CanAttachAll(distinctSpecialists, null, distinctSquads))
+            {
+                return null;
             }
 
             Mission builtMission = BuildMission(targetRegion, mission, targetFactionId);
@@ -88,7 +130,24 @@ namespace OnlyWar.Helpers.Orders
             Order newOrder = new Order(
                 distinctSquads, true, false, aggression, builtMission);
             sector.AddNewOrder(newOrder);
+            foreach (PlayerSoldier specialist in distinctSpecialists)
+            {
+                OrderAttachment.Attach(specialist, newOrder);
+            }
             return newOrder;
+        }
+
+        // Every specialist must clear OrderAttachment.CanAttach against the force actually
+        // being committed; the staging list is passed explicitly because for a brand-new order
+        // the Order object does not exist yet. targetOrder is null in that case, which makes
+        // the "already attached elsewhere" guard reject anyone already committed.
+        private static bool CanAttachAll(
+            IReadOnlyList<PlayerSoldier> specialists,
+            Order targetOrder,
+            IReadOnlyList<Squad> stagingSquads)
+        {
+            return specialists.All(soldier => OrderAttachment.CanAttach(
+                soldier, targetOrder, stagingSquads, null, out _));
         }
 
         public static bool UnassignSquads(IReadOnlyList<Squad> squads)
@@ -106,6 +165,27 @@ namespace OnlyWar.Helpers.Orders
                 .Select(group => group.First()))
             {
                 DetachFromCurrentOrder(squad, sector);
+                changed = true;
+            }
+            return changed;
+        }
+
+        // Recalls individual specialists from whatever operation they are attached to. The
+        // order itself survives -- it still has its squads, and it is the squads that decide
+        // whether the operation exists at all.
+        public static bool UnassignSpecialists(IReadOnlyList<PlayerSoldier> soldiers)
+        {
+            if (soldiers == null || soldiers.Count == 0)
+            {
+                return false;
+            }
+            bool changed = false;
+            foreach (PlayerSoldier soldier in soldiers
+                .Where(soldier => soldier?.AttachedOrder != null)
+                .GroupBy(soldier => soldier.Id)
+                .Select(group => group.First()))
+            {
+                OrderAttachment.Detach(soldier);
                 changed = true;
             }
             return changed;
@@ -203,6 +283,9 @@ namespace OnlyWar.Helpers.Orders
             squad.CurrentOrders = null;
             if (oldOrder.AssignedSquads.Count == 0)
             {
+                // An order must always carry at least one squad, so losing the last one ends
+                // the operation -- and any specialists lent to it come home with it.
+                OrderAttachment.ReleaseAll(oldOrder);
                 sector.RemoveOrder(oldOrder);
             }
         }

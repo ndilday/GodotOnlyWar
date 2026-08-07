@@ -367,6 +367,20 @@ internal static class BattleEngagementFrameBuilder
     // matters in its own right: an opening range twice what the fight needs is a battle twice as
     // many turns long for the same outcome.
     private const float ApproachRangeParsimony = 0.01f;
+    // TUNABLE. Turns of enemy movement held back from the saturation floor below, so a force does
+    // not open the engagement at the very outer edge of its own useful band.
+    //
+    // The logic is that the attacker wants time to shoot at RETREATING enemies. Opening at the
+    // saturation range spends the whole band up front: it buys turns of fire while the enemy closes,
+    // but the moment that enemy turns and withdraws it is immediately outside the band and every
+    // remaining shot is wasted -- which is the Xibarrus Nu shape (2026-08-05), where the withdrawal
+    // triggered at 42.9% battle value and the pursuers had no useful range left to punish it with.
+    // Holding back ten bounds of the enemy's own speed reserves roughly ten turns of fire against a
+    // quarry running flat out, in the quantity that decides how fast that band is spent.
+    //
+    // It is a floor adjustment only. An enemy tough enough that `sufficient` exceeds the reduced
+    // floor still pushes the opening range back out, so this never overrides the sufficiency branch.
+    private const float RetreatFireTurns = 10f;
 
     /// <summary>
     /// The range at which a squad wants an engagement to OPEN against a specific opposing force,
@@ -438,23 +452,26 @@ internal static class BattleEngagementFrameBuilder
         float sufficient = RangedEffectivenessCurve.Argmax(
             curves.Band,
             range => CalculateApproachExchange(curves, range) - (parsimony * range));
-        // FLOOR: never open inside the range our own fire is still worth using.
+        // FLOOR: never open inside the range our own fire is still worth using, less the headroom
+        // below.
         //
         // `sufficient` is the shortest range whose EXPECTED removal destroys them before contact,
         // and expectation is a poor thing to stand on at knife range: against lightly armoured
         // monsters it lands at 12 yards, where the plan works on average and one cold streak puts a
         // Broodlord into the line at full strength. The saturation range is the authored answer to
-        // "how far out is this force still doing real work" (half its peak removal), it costs
-        // nothing to take when the enemy is the one closing, and it is the quantity Phase 6 used
-        // before Phase 7 replaced it for a reason that only holds when WE close.
+        // "how far out is this force still doing real work", it costs nothing to take when the
+        // enemy is the one closing, and it is the quantity Phase 6 used before Phase 7 replaced it
+        // for a reason that only holds when WE close.
         //
         // The two branches divide the space cleanly. Ordinary enemies are destroyed well inside the
         // useful band, so the floor decides and the opening range is stable. An enemy tough enough
         // that the useful band does not buy enough turns pushes `sufficient` outside it, and then
         // sufficiency decides -- which is exactly the high-constitution case moving the answer
         // outward with no toughness term in the formula.
-        float useful = curves.Outgoing.SaturationRange(
-            RangedEffectivenessCurve.SaturationFraction);
+        float useful = Math.Max(
+            0,
+            curves.Outgoing.SaturationRange(RangedEffectivenessCurve.SaturationFraction)
+                - (RetreatFireTurns * curves.ClosingSpeed));
         return Math.Clamp(Math.Max(sufficient, useful), 0, curves.Band);
     }
 
@@ -619,7 +636,8 @@ internal static class BattleEngagementFrameBuilder
             // actively protecting the withdrawal; otherwise use the normal highest-ProximityWeight
             // counterpart. Read the paired current-turn role constraints rather than mutable
             // BattleSquad role state so both sides use the same frozen declaration snapshot.
-            HashSet<int> coveringTargetIds = constraint.Role == EngagementSquadRole.Pursuit
+            HashSet<int> coveringTargetIds = (constraint.Role
+                    is EngagementSquadRole.Pursuit or EngagementSquadRole.Standoff)
                 ? enemy.Where(target => constraints?.GetValueOrDefault(target.Id)?.Role is
                         EngagementSquadRole.Cover or EngagementSquadRole.RearGuard)
                     .Select(target => target.Id)
@@ -644,7 +662,8 @@ internal static class BattleEngagementFrameBuilder
             // Pursuit scoring must use the speed of the quarry this squad actually selected. The
             // old force minimum could belong to an entirely different withdrawing squad, making a
             // jog look able to hold a gap that its real target was opening.
-            float quarryRunSpeed = constraint.Role == EngagementSquadRole.Pursuit
+            float quarryRunSpeed = (constraint.Role
+                    is EngagementSquadRole.Pursuit or EngagementSquadRole.Standoff)
                 && primary.HasValue
                     ? primaryRole switch
                     {

@@ -76,7 +76,7 @@ public partial class SquadScreenController : MainScreenController
     {
         if (_squad == null || _view == null) return;
         EffectiveLoadout effective = LoadoutDoctrineService.Resolve(_squad);
-        int ableBodied = _squad.Members.Count(member => member.CanFight);
+        int ableBodied = _squad.Members.Count(member => member.IsCombatEffective);
         string location = _squad.CurrentRegion?.Planet?.Name
             ?? _squad.BoardedLocation?.Fleet?.Planet?.Name
             ?? "No active theater";
@@ -92,7 +92,7 @@ public partial class SquadScreenController : MainScreenController
                 // Capacity is THIS element's own able-bodied bodies, not the squad's — a
                 // sergeant's individually-equipped slot must not eat into the trooper pool.
                 element => _squad.Members.Count(
-                    member => member.CanFight && member.Template == element.SoldierTemplate)));
+                    member => member.IsCombatEffective && member.Template == element.SoldierTemplate)));
     }
 
     // Characters carry kit chosen for the individual, so they get a row each rather than a share

@@ -1,4 +1,5 @@
 using OnlyWar.Models;
+using OnlyWar.Models.Fleets;
 using OnlyWar.Models.Planets;
 using OnlyWar.Models.Soldiers;
 using OnlyWar.Models.Squads;
@@ -30,9 +31,9 @@ namespace OnlyWar.Helpers
             return
             [
                 new ProcedureRequisite("Apothecary co-located",
-                    HasCoLocatedStaff(force, squad, ApothecaryTemplates)),
+                    HasCoLocatedStaff(force, soldier, ApothecaryTemplates)),
                 new ProcedureRequisite("Techmarine co-located",
-                    HasCoLocatedStaff(force, squad, TechmarineTemplates)),
+                    HasCoLocatedStaff(force, soldier, TechmarineTemplates)),
                 new ProcedureRequisite("Valid surgery site", IsValidSurgerySite(squad)),
                 new ProcedureRequisite(
                     $"Requisition {option.RequisitionCost} (have {balance})",
@@ -68,33 +69,60 @@ namespace OnlyWar.Helpers
                 p => p.SoldierId == soldierId && p.HitLocationTemplateId == hitLocationTemplateId) == true;
         }
 
-        private static bool HasCoLocatedStaff(PlayerForce force, Squad woundedSquad, HashSet<string> templateNames)
+        /// <summary>
+        /// Is this brother an Apothecary? Identified by template name, which is how the Chapter's
+        /// medical roles have always been recognised here. Exposed so field care
+        /// (<c>Helpers/Medical/FieldCareService</c>) shares this definition rather than growing a
+        /// second one that could drift.
+        /// </summary>
+        public static bool IsApothecary(ISoldier soldier) =>
+            soldier?.Template != null && ApothecaryTemplates.Contains(soldier.Template.Name);
+
+        private static bool HasCoLocatedStaff(PlayerForce force, ISoldier wounded, HashSet<string> templateNames)
         {
-            if (force?.Army?.OrderOfBattle == null || woundedSquad == null)
+            if (force?.Army?.OrderOfBattle == null || wounded?.AssignedSquad == null)
             {
                 return false;
             }
+            (Ship woundedShip, Region woundedRegion) = ResolveLocation(wounded);
             return force.Army.OrderOfBattle.GetAllMembers().Any(member =>
-                member.CanFight
+                // Fit for duty: the staff member must be neither downed nor immobilized.
+                member.IsCombatEffective
                 && member.AssignedSquad?.IsOperational == true
                 && member.Template != null
                 && templateNames.Contains(member.Template.Name)
-                && SameLocation(member.AssignedSquad, woundedSquad));
+                && SameLocation(ResolveLocation(member), (woundedShip, woundedRegion)));
         }
 
-        private static bool SameLocation(Squad a, Squad b)
+        /// <summary>
+        /// Where a soldier physically is, as a (ship, region) pair.
+        ///
+        /// Design/Active/SpecialistAttachment.md §8 trap 2: this used to read
+        /// <c>AssignedSquad</c> alone, but an Apothecary attached to an order is FORWARD while his
+        /// home squad may still sit aboard ship -- so surgery gating would have accepted him at a
+        /// site he had left. An attached specialist is therefore resolved through
+        /// <see cref="PlayerSoldier.EffectiveRegion"/> and is aboard nothing. Everyone else resolves
+        /// exactly as before, so this changes no existing behaviour.
+        /// </summary>
+        private static (Ship Ship, Region Region) ResolveLocation(ISoldier soldier)
         {
-            if (a == null || b == null)
+            if (soldier is PlayerSoldier player && player.AttachedOrder != null)
             {
-                return false;
+                return (null, player.EffectiveRegion);
             }
-            if (a.BoardedLocation != null && b.BoardedLocation != null)
+            Squad squad = soldier?.AssignedSquad;
+            return (squad?.BoardedLocation, squad?.CurrentRegion);
+        }
+
+        private static bool SameLocation((Ship Ship, Region Region) a, (Ship Ship, Region Region) b)
+        {
+            if (a.Ship != null && b.Ship != null)
             {
-                return a.BoardedLocation.Id == b.BoardedLocation.Id;
+                return a.Ship.Id == b.Ship.Id;
             }
-            if (a.CurrentRegion != null && b.CurrentRegion != null)
+            if (a.Region != null && b.Region != null)
             {
-                return a.CurrentRegion.Id == b.CurrentRegion.Id;
+                return a.Region.Id == b.Region.Id;
             }
             return false;
         }

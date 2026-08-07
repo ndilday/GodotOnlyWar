@@ -2,6 +2,7 @@ using OnlyWar.Builders;
 using OnlyWar.Helpers.Battles;
 using OnlyWar.Helpers.Battles.Aftermath;
 using OnlyWar.Helpers.Fortifications;
+using OnlyWar.Helpers.Medical;
 using OnlyWar.Helpers.Missions;
 using OnlyWar.Helpers.Missions.Assault;
 using OnlyWar.Helpers.Simulation;
@@ -126,7 +127,7 @@ namespace OnlyWar.Helpers.Turns
                 // Never construct a BattleSquad from a depleted squad. This also protects orders
                 // whose force was wiped out earlier in the same resolution pass.
                 List<BattleSquad> involvedBattleSquads = order.AssignedSquads
-                    .Where(s => s.Members.Any(m => m.CanFight))
+                    .Where(s => s.Members.Any(m => m.IsCombatEffective))
                     .Select(s => new BattleSquad(isPlayerOrder, s))
                     .ToList();
                 if (involvedBattleSquads.Count == 0) continue;
@@ -165,16 +166,53 @@ namespace OnlyWar.Helpers.Turns
             // Every mission now advances a day at a time, together, rather than each running to
             // completion in turn. Missions operating in the same region therefore see each other's
             // effects as they land - which is what makes a diversion able to shelter an infiltrator.
+
+            // ONE ENTRY PER DISTINCT ORDER (Design/Active/SpecialistAttachment.md §8 trap 1).
+            // BuildMissionElements fans a single order into several independent single-squad
+            // elements under MissionForceMode.IndependentSquads, each with its own driver and its
+            // own MissionContext -- so a field-care pass keyed on the ELEMENT would treat the same
+            // order's wounded once per element and make one Apothecary silently worth three. The
+            // dedup lives here, at the scheduler's altitude, exactly as Phase 1b's daily-healing
+            // pass does.
+            Dictionary<int, Order> distinctPlayerOrders = [];
+            Dictionary<int, FieldCareReport> fieldCareByOrder = [];
+            foreach (ScheduledMission mission in scheduled.Where(m => m.IsPlayerOrder))
+            {
+                if (mission.Order == null || distinctPlayerOrders.ContainsKey(mission.Order.Id))
+                {
+                    continue;
+                }
+                distinctPlayerOrders[mission.Order.Id] = mission.Order;
+                fieldCareByOrder[mission.Order.Id] = new FieldCareReport();
+            }
+            IReadOnlyList<BaseSkill> medicalSkills = FieldCareService.ResolveMedicalSkills(
+                _session.Rules?.RatingDefinitions, _session.Rules?.BaseSkillMap);
+
             MissionDayScheduler.Run(
                 scheduled.Select(mission => mission.Driver).ToList(),
                 onDayStart: _ => ResetCommittedAttention(),
                 onActingDayStart: (missions, day) =>
-                    ResolveReciprocalAssaults(missions, day));
+                    ResolveReciprocalAssaults(missions, day),
+                onDayEnd: _ =>
+                {
+                    ApplyDailyHealing();
+                    ApplyDailyFieldCare(distinctPlayerOrders, fieldCareByOrder, medicalSkills);
+                });
 
             foreach (ScheduledMission mission in scheduled)
             {
                 MissionContext context = mission.Context;
                 Order order = mission.Order;
+                // Every element of an order carries the same order-wide medical summary. The
+                // TREATMENT ran once (see the dedup above); this is only the report, and each
+                // element's debrief is its own screen, so showing it on each is right rather than
+                // double-counting.
+                if (order != null
+                    && fieldCareByOrder.TryGetValue(order.Id, out FieldCareReport fieldCare)
+                    && fieldCare.HasApothecary)
+                {
+                    context.FieldCare = fieldCare;
+                }
                 missionContexts.Add(context);
                 if (mission.IsPlayerOrder)
                 {
@@ -267,6 +305,44 @@ namespace OnlyWar.Helpers.Turns
         // pulled the screen aside yesterday shelters nobody today. Sweeping the whole sector is
         // cheap (no allocation, a few hundred region-factions) and avoids having to track which
         // regions a shaping step touched.
+        // End-of-day recovery for the whole Chapter, not just the squads on this order
+        // (Design/Active/CasualtyRealism.md §2.5). Swept over the full order of battle because the
+        // day boundary is a property of the campaign, not of any one mission - and because the
+        // pass is idempotent and cheap, sweeping is simpler and safer than reconciling which men
+        // belong to which of the day's drivers. Run exactly once per day from the scheduler's
+        // onDayEnd hook; see MissionDayScheduler.Run for why it cannot hang off a driver.
+        private void ApplyDailyHealing()
+        {
+            MedicalTurnProcessor.ApplyDailyHealing(
+                _session.Sector?.PlayerForce?.Army?.OrderOfBattle?.GetAllMembers());
+        }
+
+        /// <summary>
+        /// Apothecary field care for the day just ended (Design/Active/CasualtyRealism.md §2.6).
+        /// Runs after the day's fighting and after natural daily healing, so a brother hit today and
+        /// treated tonight enters TOMORROW's battle at reduced severity -- battle setup reads live
+        /// wound state per battle, which is what makes the daily seam worth having at all.
+        ///
+        /// Once per distinct order, never per mission element: see the dedup at the call site.
+        ///
+        /// An order whose own missions finished early keeps receiving care until the day loop ends,
+        /// which is deliberate: the force is still in the field until the turn resolves, and its
+        /// squads still hold CurrentOrders, so the garrison pass will not pick them up either. The
+        /// alternative -- stopping care the moment the last element completes -- would mean an
+        /// Apothecary idling beside wounded brothers because the shooting stopped.
+        /// </summary>
+        private static void ApplyDailyFieldCare(
+            IReadOnlyDictionary<int, Order> distinctPlayerOrders,
+            IReadOnlyDictionary<int, FieldCareReport> reports,
+            IReadOnlyList<BaseSkill> medicalSkills)
+        {
+            foreach (KeyValuePair<int, Order> entry in distinctPlayerOrders)
+            {
+                FieldCareService.ApplyDailyFieldCare(
+                    entry.Value, reports[entry.Key], medicalSkills);
+            }
+        }
+
         private void ResetCommittedAttention()
         {
             foreach (Planet planet in _session.Sector.Planets.Values)

@@ -70,7 +70,7 @@ namespace OnlyWar.Helpers.UI
     {
         public static string SquadLabel(Squad squad)
         {
-            string strength = $"{squad.Members.Count(member => member.CanFight)}/{squad.Members.Count}";
+            string strength = $"{squad.Members.Count(member => member.IsCombatEffective)}/{squad.Members.Count}";
             string order = squad.CurrentOrders != null ? squad.CurrentOrders.Mission.MissionType.ToString() : "Unassigned";
             return $"{squad.Name} | {strength} | {order}";
         }
@@ -80,7 +80,7 @@ namespace OnlyWar.Helpers.UI
             return filterKey switch
             {
                 "unassigned" => squad.CurrentOrders == null,
-                "injured" => squad.Members.Count(member => member.CanFight) < 5,
+                "injured" => squad.Members.Count(member => member.IsCombatEffective) < 5,
                 _ => true
             };
         }

@@ -25,11 +25,16 @@ public class MissionReportSummaryBuilderTests
         bool targetEliminated = false,
         int enemiesKilled = 0,
         float impact = 0f,
+        AmbushSpoilStage ambushSpoiled = AmbushSpoilStage.NotSpoiled,
         DefenseType? sabotageTarget = null,
         double sabotageDamage = 0.0,
-        double sabotageLevelBefore = 0.0) =>
+        double sabotageLevelBefore = 0.0,
+        int friendlyDeaths = 0,
+        int friendlyIncapacitated = 0) =>
         new()
         {
+            FriendlyDeaths = friendlyDeaths,
+            FriendlyIncapacitated = friendlyIncapacitated,
             SabotageTarget = sabotageTarget,
             SabotageDamage = sabotageDamage,
             SabotageLevelBefore = sabotageLevelBefore,
@@ -42,8 +47,86 @@ public class MissionReportSummaryBuilderTests
             TargetLocated = targetLocated,
             TargetEliminated = targetEliminated,
             EnemiesKilled = enemiesKilled,
-            Impact = impact
+            Impact = impact,
+            AmbushSpoiled = ambushSpoiled
         };
+
+    // Design/Active/CasualtyRealism.md §2.3: a brother carried off the field alive is a casualty,
+    // not a kill, and the debrief has to say which. Before Phase 1 both read as "dead".
+    [Fact]
+    public void BuildFriendlyCasualtyLine_NamesKilledAndIncapacitatedSeparately()
+    {
+        string line = MissionReportSummaryBuilder.BuildFriendlyCasualtyLine(
+            Classification(MissionType.Ambush, friendlyDeaths: 2, friendlyIncapacitated: 3));
+
+        Assert.Contains("2 brothers killed", line);
+        Assert.Contains("3 brought back incapacitated", line);
+    }
+
+    [Fact]
+    public void BuildFriendlyCasualtyLine_OmitsTheHalfThatDidNotHappen()
+    {
+        Assert.Equal(
+            " Chapter losses: 1 brought back incapacitated.",
+            MissionReportSummaryBuilder.BuildFriendlyCasualtyLine(
+                Classification(MissionType.Ambush, friendlyIncapacitated: 1)));
+        Assert.Equal(
+            " Chapter losses: 1 brother killed.",
+            MissionReportSummaryBuilder.BuildFriendlyCasualtyLine(
+                Classification(MissionType.Ambush, friendlyDeaths: 1)));
+    }
+
+    [Fact]
+    public void BuildFriendlyCasualtyLine_IsSilentWhenTheOperationCostNothing()
+    {
+        Assert.Equal(
+            "",
+            MissionReportSummaryBuilder.BuildFriendlyCasualtyLine(
+                Classification(MissionType.Recon)));
+        Assert.Equal("", MissionReportSummaryBuilder.BuildFriendlyCasualtyLine(null));
+    }
+
+    // Design/Active/SpecialistAttachment.md §8 trap 3: an attached Apothecary is in no BattleSquad,
+    // so he is in no battle report, earns no field XP through the battle path, and would otherwise
+    // leave the debrief with no evidence he was ever sent. This line is the evidence.
+    [Fact]
+    public void BuildFieldCareLine_NamesTheApothecaryAndWhatHeDid()
+    {
+        string line = MissionReportSummaryBuilder.BuildFieldCareLine(
+            new MissionOutcomeClassification
+            {
+                MissionType = MissionType.Advance,
+                FieldCareApothecaries = ["Apothecary Kadmon"],
+                FieldCareTreatments = 5,
+                FieldCareTreatedBrothers = 3
+            });
+
+        Assert.Contains("Apothecary Kadmon", line);
+        Assert.Contains("3 brothers", line);
+        Assert.Contains("5 wounds", line);
+    }
+
+    [Fact]
+    public void BuildFieldCareLine_StillNamesHimWhenNobodyNeededTreating()
+    {
+        string line = MissionReportSummaryBuilder.BuildFieldCareLine(
+            new MissionOutcomeClassification
+            {
+                MissionType = MissionType.Recon,
+                FieldCareApothecaries = ["Apothecary Kadmon"]
+            });
+
+        Assert.Contains("Apothecary Kadmon", line);
+        Assert.Contains("no field treatment", line);
+    }
+
+    [Fact]
+    public void BuildFieldCareLine_IsSilentOnAnOrdinaryOrder()
+    {
+        Assert.Equal("", MissionReportSummaryBuilder.BuildFieldCareLine(
+            Classification(MissionType.Advance)));
+        Assert.Equal("", MissionReportSummaryBuilder.BuildFieldCareLine(null));
+    }
 
     [Fact]
     public void BuildSummary_UndetectedRecon_ReportsUndetected()
@@ -109,6 +192,64 @@ public class MissionReportSummaryBuilderTests
 
         Assert.Contains("no viable target", summary);
         Assert.Contains("returned to base", summary);
+    }
+
+    // A detected ambush still ends in a battle, and the kill-count sentence alone read exactly like a
+    // successful one. These guard that the debrief names the detection and the fight that replaced it.
+    [Fact]
+    public void BuildSummary_AmbushSpottedInSetup_ReportsDetectionAndRegularEngagement()
+    {
+        string summary = MissionReportSummaryBuilder.BuildSummary(
+            Classification(
+                MissionType.Ambush,
+                returnedToBase: true,
+                enemiesKilled: 7,
+                ambushSpoiled: AmbushSpoilStage.DuringSetup),
+            "Iron Valley, Cadia");
+
+        Assert.Contains("spotted moving into ambush positions", summary);
+        Assert.Contains("regular engagement", summary);
+        Assert.Contains("killed 7 enemy troops", summary);
+        Assert.Contains("returned to base", summary);
+    }
+
+    [Fact]
+    public void BuildSummary_AmbushDiscoveredBeforeSpringing_ReportsDetectionAndRegularEngagement()
+    {
+        string summary = MissionReportSummaryBuilder.BuildSummary(
+            Classification(
+                MissionType.Ambush,
+                enemiesKilled: 3,
+                disposition: MissionForceDisposition.WithdrewUnderFire,
+                ambushSpoiled: AmbushSpoilStage.BeforeSpringing),
+            "Iron Valley, Cadia");
+
+        Assert.Contains("discovered before it could be sprung", summary);
+        Assert.Contains("regular engagement", summary);
+        Assert.Contains("killed 3 enemy troops", summary);
+        Assert.Contains("heavy losses", summary);
+    }
+
+    [Fact]
+    public void BuildSummary_SpoiledAmbushWithNoKills_StillReportsDetection()
+    {
+        string summary = MissionReportSummaryBuilder.BuildSummary(
+            Classification(MissionType.Ambush, ambushSpoiled: AmbushSpoilStage.BeforeSpringing),
+            "Iron Valley, Cadia");
+
+        Assert.Contains("discovered before it could be sprung", summary);
+        Assert.Contains("no enemy casualties were confirmed", summary);
+    }
+
+    [Fact]
+    public void BuildSummary_SprungAmbush_MakesNoMentionOfDetection()
+    {
+        string summary = MissionReportSummaryBuilder.BuildSummary(
+            Classification(MissionType.Ambush, returnedToBase: true, enemiesKilled: 7),
+            "Iron Valley, Cadia");
+
+        Assert.DoesNotContain("regular engagement", summary);
+        Assert.DoesNotContain("discovered", summary);
     }
 
     [Fact]

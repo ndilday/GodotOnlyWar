@@ -91,12 +91,17 @@ namespace OnlyWar.Helpers
         string IconKey,
         string Name,
         string Assignment,
-        bool CanFight,
+        // Fit for duty: able to fight *and* able to move (ISoldier.IsCombatEffective).
+        bool IsCombatEffective,
         int MaxRecoveryWeeks,
         string GeneSeedStatus,
         MedicalSeverity WorstSeverity,
         IReadOnlyList<WoundLocationSummary> Wounds,
-        IReadOnlyList<ReplacementOption> ReplacementOptions);
+        IReadOnlyList<ReplacementOption> ReplacementOptions,
+        // Apothecary field care covering this brother right now, as a one-line readout
+        // (Design/Active/CasualtyRealism.md §2.6). Appended last and defaulted so every existing
+        // construction site keeps compiling. Empty when the caller supplied no force context.
+        string FieldCareStatus = "");
 
     public sealed record WoundLocationSummary(
         int HitLocationId,

@@ -84,8 +84,8 @@ namespace OnlyWar.Helpers.Battles.Aftermath
                 $"Battle XP [{_context.Region.Name}, {_context.Region.Planet.Name}]",
                 _context.StartingPlayerSoldiers.Select(soldier => soldier.Soldier),
                 _progressBefore);
-            List<PlayerSoldier> dead = RemoveSoldiersKilledInBattle();
-            LogBattleToChapterHistory(dead);
+            PlayerCasualtyDisposition disposition = ResolvePlayerCasualtyDispositions();
+            LogBattleToChapterHistory(disposition);
         }
 
         private void RememberFinalPlayerSnapshots(BattleState finalState)
@@ -201,52 +201,129 @@ namespace OnlyWar.Helpers.Battles.Aftermath
             }
         }
 
-        private List<PlayerSoldier> RemoveSoldiersKilledInBattle()
+        /// <summary>
+        /// Did the Chapter own the ground when the shooting stopped? Only then are its wounded
+        /// carried off it. A battle nobody won (mutual disengagement, the turn cap) leaves both
+        /// sides free to recover their own -- the same rule
+        /// <c>BattleTurnResolver.FinishOffAbandonedWounded</c> applies to everyone else.
+        /// </summary>
+        private bool PlayerHeldTheField()
         {
+            if (_context.BattleHistory.Outcome?.SideHoldingField is not BattleSide holder)
+            {
+                return true;
+            }
+            BattleSoldier anyPlayerSoldier = _context.StartingPlayerSoldiers.FirstOrDefault();
+            BattleSide playerSide = _context.IsSecondSide(anyPlayerSoldier)
+                ? BattleSide.Opposing
+                : BattleSide.Attacker;
+            return holder == playerSide;
+        }
+
+        /// <summary>
+        /// Settles every battle-brother who started the fight into one of the three outcomes of
+        /// Design/Active/CasualtyRealism.md §2.3, and makes <see cref="BattleHistory"/> agree.
+        /// The wound resolver's death hook fires on a *crippled* vital and its fall hook on a lost
+        /// limb, neither of which is a verdict -- power-armor biostasis means a downed brother
+        /// cannot die of his wounds while he waits, so the only questions that decide his fate are
+        /// whether a vital location came off and whether his side held the ground he fell on.
+        /// </summary>
+        private PlayerCasualtyDisposition ResolvePlayerCasualtyDispositions()
+        {
+            bool recovered = PlayerHeldTheField();
             List<PlayerSoldier> dead = [];
+            List<PlayerSoldier> incapacitated = [];
+            HashSet<int> killedIds = _context.BattleHistory.KilledSoldierIds;
+            HashSet<int> incapacitatedIds = _context.BattleHistory.IncapacitatedSoldierIds;
+
             foreach (BattleSoldier soldier in _context.StartingPlayerSoldiers)
             {
-                foreach (HitLocation hl in soldier.Soldier.Body.HitLocations)
+                PlayerSoldier playerSoldier = (PlayerSoldier)soldier.Soldier;
+                CasualtyState state = CasualtyStateEvaluator.Classify(playerSoldier, recovered);
+                // This policy is authoritative for its own brothers: the in-battle hooks marked
+                // them provisionally, and both sets are corrected here in both directions.
+                killedIds.Remove(playerSoldier.Id);
+                incapacitatedIds.Remove(playerSoldier.Id);
+
+                switch (state)
                 {
-                    if (hl.Template.IsVital && hl.IsSevered)
-                    {
-                        PlayerSoldier playerSoldier = (PlayerSoldier)soldier.Soldier;
+                    case CasualtyState.Killed:
+                        bool bodyRecovered =
+                            CasualtyStateEvaluator.HasSeveredVitalLocation(playerSoldier);
+                        killedIds.Add(playerSoldier.Id);
                         dead.Add(playerSoldier);
-                        RecordDeath(playerSoldier, soldier);
-                        RecordGeneseedRecovery(playerSoldier);
+                        RecordDeath(playerSoldier, soldier, bodyRecovered);
+                        RecordGeneseedRecovery(playerSoldier, bodyRecovered);
                         _dependencies.PlayerSink.MoveToFallenBrothers(playerSoldier);
                         break;
-                    }
+                    case CasualtyState.Incapacitated:
+                        incapacitatedIds.Add(playerSoldier.Id);
+                        incapacitated.Add(playerSoldier);
+                        RecordIncapacitation(playerSoldier, soldier);
+                        break;
                 }
             }
-            return dead;
+
+            return new PlayerCasualtyDisposition(dead, incapacitated);
         }
 
         // Exactly one death entry per fallen brother, written where death is actually decided.
         // A brother whose vital wound was mortal but not severing lives on, and must not be
         // recorded as killed.
-        private void RecordDeath(PlayerSoldier soldier, BattleSoldier battleSoldier)
+        //
+        // <paramref name="bodyRecovered"/> separates the two ways to die: a severed vital, with the
+        // Chapter standing over him, and being left on ground the Chapter could not hold. The
+        // second is a presumption, and the record says so rather than inventing a killing blow.
+        private void RecordDeath(
+            PlayerSoldier soldier, BattleSoldier battleSoldier, bool bodyRecovered)
         {
             Faction opposingFaction = _context.GetOpposingFaction(battleSoldier);
             string enemy = opposingFaction?.Name ?? "enemy";
             // A vital location can be severed by a wound that never raised the death hook (the
             // location was already crippled), leaving no weapon to name.
             WeaponTemplate weapon = _mortalWoundWeapons.GetValueOrDefault(soldier.Id);
-            string detail = weapon == null
-                ? $"Killed in battle with the {enemy}"
-                : $"Killed in battle with the {enemy} by a {weapon.Name}";
+            string detail;
+            if (!bodyRecovered)
+            {
+                detail = $"Fell in battle with the {enemy} and was left on the field; "
+                    + "presumed dead, body not recovered";
+            }
+            else
+            {
+                detail = weapon == null
+                    ? $"Killed in battle with the {enemy}"
+                    : $"Killed in battle with the {enemy} by a {weapon.Name}";
+            }
 
             soldier.AddEvent(new SoldierEvent(
                 _dependencies.Date,
                 SoldierEventType.Death,
                 detail,
                 factionId: opposingFaction?.Id,
-                weaponTemplateId: weapon?.Id));
+                weaponTemplateId: bodyRecovered ? weapon?.Id : null));
         }
 
-        private void RecordGeneseedRecovery(PlayerSoldier soldier)
+        // A brother carried off the field alive but out of the fight. He keeps his place on the
+        // roster and enters the wound-recovery pipeline; this is the career-log record that he
+        // went down, which the plain BattleParticipation note cannot express on its own.
+        private void RecordIncapacitation(PlayerSoldier soldier, BattleSoldier battleSoldier)
         {
-            (GeneseedRecoveryResult result, float purity) = ResolveGeneseedRecovery(soldier);
+            Faction opposingFaction = _context.GetOpposingFaction(battleSoldier);
+            string enemy = opposingFaction?.Name ?? "enemy";
+            soldier.AddEvent(new SoldierEvent(
+                _dependencies.Date,
+                SoldierEventType.Incapacitated,
+                $"Incapacitated in battle with the {enemy} and recovered from the field.",
+                factionId: opposingFaction?.Id,
+                locationName: _context.Region == null
+                    ? null
+                    : $"{_context.Region.Name}, {_context.Region.Planet.Name}"));
+        }
+
+        private void RecordGeneseedRecovery(PlayerSoldier soldier, bool bodyRecovered)
+        {
+            (GeneseedRecoveryResult result, float purity) =
+                ResolveGeneseedRecovery(soldier, bodyRecovered);
             _geneseedResults[soldier.Id] = result;
             soldier.AddEvent(new SoldierEvent(
                 _dependencies.Date,
@@ -257,8 +334,14 @@ namespace OnlyWar.Helpers.Battles.Aftermath
                     : null));
         }
 
-        private (GeneseedRecoveryResult, float) ResolveGeneseedRecovery(PlayerSoldier soldier)
+        private (GeneseedRecoveryResult, float) ResolveGeneseedRecovery(
+            PlayerSoldier soldier, bool bodyRecovered)
         {
+            // No body, no progenoids. An Apothecary cannot cut what the enemy is standing on.
+            if (!bodyRecovered)
+            {
+                return (GeneseedRecoveryResult.Lost, 0f);
+            }
             if (soldier.Body.HitLocations.Any(hl => hl.Template.HoldsProgenoid && hl.IsSevered))
             {
                 return (GeneseedRecoveryResult.Destroyed, 0f);
@@ -278,6 +361,7 @@ namespace OnlyWar.Helpers.Battles.Aftermath
             {
                 GeneseedRecoveryResult.Recovered => $"Gene-seed recovered (purity {purity:P0}).",
                 GeneseedRecoveryResult.Destroyed => "Gene-seed destroyed with the body.",
+                GeneseedRecoveryResult.Lost => "Gene-seed lost with the body.",
                 _ => "Gene-seed immature and unrecoverable.",
             };
 
@@ -286,23 +370,24 @@ namespace OnlyWar.Helpers.Battles.Aftermath
             {
                 GeneseedRecoveryResult.Recovered => "Recovered",
                 GeneseedRecoveryResult.Destroyed => "Destroyed",
+                GeneseedRecoveryResult.Lost => "Lost",
                 _ => "Immature, Unrecoverable",
             };
 
-        private void LogBattleToChapterHistory(List<PlayerSoldier> killedInBattle)
+        private void LogBattleToChapterHistory(PlayerCasualtyDisposition disposition)
         {
-            List<string> subEvents = GetBattleLog(killedInBattle);
+            List<string> subEvents = GetBattleLog(disposition);
             string title = $"A skirmish in {_context.Region.Name}, {_context.Region.Planet.Name}";
             _dependencies.PlayerSink.AddToBattleHistory(_dependencies.Date, title, subEvents);
         }
 
-        private List<string> GetBattleLog(List<PlayerSoldier> killedInBattle)
+        private List<string> GetBattleLog(PlayerCasualtyDisposition disposition)
         {
             List<string> battleEvents = [];
             int marineCount = _context.StartingPlayerSoldiers.Count;
             int enemyCount = _context.StartingSoldiers.Count - marineCount;
             battleEvents.Add(marineCount.ToString() + " stood against " + enemyCount.ToString() + " enemies");
-            foreach (PlayerSoldier soldier in killedInBattle)
+            foreach (PlayerSoldier soldier in disposition.Killed)
             {
                 string geneseedStatus = _geneseedResults.TryGetValue(soldier.Id, out GeneseedRecoveryResult result)
                     ? GetGeneseedStatusLabel(result)
@@ -310,8 +395,18 @@ namespace OnlyWar.Helpers.Battles.Aftermath
                 battleEvents.Add(
                     $"{soldier.Template.Name} {soldier.Name} died in the service of the emperor. Geneseed: {geneseedStatus}.");
             }
+            foreach (PlayerSoldier soldier in disposition.Incapacitated)
+            {
+                battleEvents.Add(
+                    $"{soldier.Template.Name} {soldier.Name} was carried from the field alive but out of the fight.");
+            }
             return battleEvents;
         }
+
+        // Who lived, who did not, once the field had an owner.
+        private sealed record PlayerCasualtyDisposition(
+            IReadOnlyList<PlayerSoldier> Killed,
+            IReadOnlyList<PlayerSoldier> Incapacitated);
 
         // Returns true when the wound is a player soldier's hit on an enemy -- whether or not it
         // produced a fresh career credit, so the per-hit aggregate above stays per-hit.
@@ -347,7 +442,10 @@ namespace OnlyWar.Helpers.Battles.Aftermath
         {
             Recovered,
             Destroyed,
-            Immature
+            Immature,
+            // The brother was left on ground the Chapter did not hold, so there were no progenoids
+            // to cut. Distinct from Destroyed, which means the glands themselves were ruined.
+            Lost
         }
     }
 }

@@ -103,7 +103,7 @@ namespace OnlyWar.Models.Battles
 			// BattleState makes them reappear in the next day's formation and starting-strength
 			// snapshot. A new engagement begins with survivors only. Turn-to-turn copies do not run
 			// this pruning because they must retain the battle's own disengaged and casualty history.
-			foreach (BattleSoldier casualty in clone.Soldiers.Where(soldier => !soldier.CanFight).ToList())
+			foreach (BattleSoldier casualty in clone.Soldiers.Where(soldier => !soldier.IsCombatEffective).ToList())
 			{
 				clone.RemoveSoldier(casualty);
 			}

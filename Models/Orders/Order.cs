@@ -27,6 +27,16 @@ namespace OnlyWar.Models.Orders
         public bool IsActivelyEngaging { get; }
         public Aggression LevelOfAggression { get; private set; }
         public Mission Mission { get; }
+        // Individuals attached to this operation without their home squad
+        // (Design/Active/SpecialistAttachment.md). Purely organizational in Phase 2a: an
+        // attached specialist is WITH the force, not IN the engagement -- he gets no
+        // BattleSquad binding and cannot become a casualty.
+        //
+        // Initialized here rather than taken as a constructor parameter so that every
+        // existing construction site (player UI, NPC strategy, save load, tests) keeps
+        // producing a non-null list, and so that mutation only ever happens through
+        // OrderAttachment, which owns both halves of the pointer pair.
+        public List<Soldiers.PlayerSoldier> AttachedSoldiers { get; } = [];
 
         public Order(List<Squad> orderedSquads, bool isQuiet, bool isActivelyEngaging, Aggression levelOfAggression, Mission mission)
             : this(IdGenerator.GetNextOrderId(), orderedSquads, isQuiet, isActivelyEngaging, levelOfAggression, mission) {}

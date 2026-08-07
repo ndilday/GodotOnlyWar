@@ -85,6 +85,10 @@ namespace OnlyWar.Helpers.Battles
         // seeded ambusher is indistinguishable from a soldier who spent three turns lining up the
         // shot. See SeedAmbushAim and OnlyWar_TDD.md §6.6.
         private const int FullAimBonusTurns = 3;
+        // A fresh stationary aim starts at bonus 0, takes four Aim actions to reach the planner's
+        // full-aim threshold (3), and fires on the fifth turn. Pursuit uses this same cycle when
+        // deciding how far a squad must run before it can safely stop and complete a shot.
+        private const int PursuitFireWindowTurns = FullAimBonusTurns + 2;
         // ===================================================================================
         // TUNABLE -- lambda, the graded-damage credit weight (Phase 5,
         // Design/Active/EngagementScoringOverhaul.md).
@@ -497,7 +501,7 @@ namespace OnlyWar.Helpers.Battles
                 ?? new EngagementOptionEvaluation(
                     EngagementOptionKind.Hold,
                     SquadMovementTier.Stationary,
-                    null, 0, 0, 0, 0, 0, 0, [], 0, 0, 0, 0, 0);
+                    null, 0, 0, 0, 0, 0, 0, 0, [], 0, 0, 0, 0, 0);
             return new SquadEngagementDecision(
                 squad,
                 frame,
@@ -568,7 +572,7 @@ namespace OnlyWar.Helpers.Battles
                     || profile.PeakRangedRemovalFraction
                         < ContactSeekerRangedRelevanceFraction);
 
-        private static List<EngagementOptionKind> GetLegalOptionKinds(
+        private List<EngagementOptionKind> GetLegalOptionKinds(
             BattleSquad squad,
             SquadEngagementFrame frame,
             BattleSquad primary,
@@ -594,9 +598,24 @@ namespace OnlyWar.Helpers.Battles
             {
                 return [EngagementOptionKind.Hold, EngagementOptionKind.StepBack];
             }
+            if (frame.Role == EngagementSquadRole.Standoff)
+            {
+                // Standoff is the force-level answer to an unwinnable chase with a worthwhile
+                // current shot. It is a hard movement constraint: preserve aimed standing fire
+                // rather than allowing the pursuit scorer to invent a running chase.
+                return [EngagementOptionKind.Hold];
+            }
             if (frame.Role == EngagementSquadRole.Pursuit)
             {
                 if (primary == null) return [EngagementOptionKind.Hold];
+                // A stationary aim is a real cross-turn commitment. Once a pursuit squad has
+                // selected Hold and at least one soldier has a still-viable aim on the pursued
+                // squad, movement would clear that aim and restart the cycle. Keep the squad
+                // stationary until the soldier fires or the target/shot becomes invalid.
+                if (HasPursuitFireCommitment(squad, frame, primary))
+                {
+                    return [EngagementOptionKind.Hold];
+                }
                 float distance = BattleEngagementFrameBuilder.MinimumDistance(squad, primary);
                 EngagementOptionKind fast = distance <= profile.MoveSpeed
                         + BattleContactRules.MeleeContactAllowance
@@ -711,6 +730,15 @@ namespace OnlyWar.Helpers.Battles
                 primary != null
                     ? allFrames.GetValueOrDefault(primary.Id)?.Role
                     : null);
+            float fireWindowValue = EvaluatePursuitFireWindowValue(
+                squad,
+                kind,
+                frame,
+                profile,
+                primary,
+                primary != null
+                    ? allFrames.GetValueOrDefault(primary.Id)?.Role
+                    : null);
             if (squad.MoraleState == MoraleState.Shaken
                 && kind is EngagementOptionKind.StepForward
                     or EngagementOptionKind.JogToward
@@ -747,11 +775,12 @@ namespace OnlyWar.Helpers.Battles
             // capability proxy asserting a flat 10% of the ATTACKER'S OWN battle value per turn --
             // which put the two halves of this sum ~4 orders of magnitude apart (~10^-3 vs ~10^1)
             // and meant the immediate term could never change which option won. It can now.
-            float score = enemyRemoval - friendlyFire + readiness - incoming + meleeNow
-                + discountedFuture + arrivalTimeValue + roleTerm - commitment + hysteresis;
+            float score = enemyRemoval - friendlyFire + readiness + fireWindowValue
+                - incoming + meleeNow + discountedFuture + arrivalTimeValue + roleTerm
+                - commitment + hysteresis;
             return new EngagementOptionEvaluation(
                 kind, tier, intended, feasibleSpeed,
-                enemyRemoval, friendlyFire, readiness, incoming, meleeNow,
+                enemyRemoval, friendlyFire, readiness, fireWindowValue, incoming, meleeNow,
                 future, arrivalTimeValue, roleTerm, commitment, hysteresis, score, rootActions);
         }
 
@@ -981,7 +1010,7 @@ namespace OnlyWar.Helpers.Battles
                 readiness += action.ReadinessValue;
             }
             float enemyCap = _soldierMap.Values
-                .Where(target => target.CanFight
+                .Where(target => target.IsCombatEffective
                     && IsPlaced(target)
                     && target.BattleSquad != squad
                     && _grid.GetSoldierSide(target.Soldier.Id)
@@ -1586,7 +1615,8 @@ namespace OnlyWar.Helpers.Battles
                         range,
                         outgoingRetention,
                         targetSpeed: Math.Max(0, -ourMotion));
-                    float theirMotion = frames[squad.Id].Role == EngagementSquadRole.Pursuit
+                    float theirMotion = (frames[squad.Id].Role
+                        is EngagementSquadRole.Pursuit or EngagementSquadRole.Standoff)
                         ? Math.Max(0, frames[squad.Id].QuarryRunSpeed)
                         : BaselineRangeDelta(opposing, frames[enemy.Id].Role, range);
                     nextRanges[enemy.Id] = Math.Max(0, range + ourMotion + theirMotion);
@@ -1935,7 +1965,7 @@ namespace OnlyWar.Helpers.Battles
                 _grid.GetEnemyDistances(soldier.Soldier.Id))
             {
                 if (!_soldierMap.TryGetValue(enemyId, out BattleSoldier enemy)
-                    || !enemy.CanFight
+                    || !enemy.IsCombatEffective
                     || enemy.BattleSquad == null
                     || !IsPlaced(enemy))
                 {
@@ -2040,6 +2070,124 @@ namespace OnlyWar.Helpers.Battles
                     ? Math.Max(0, frame.QuarryRunSpeed)
                     : 0;
 
+        private bool HasPursuitFireCommitment(
+            BattleSquad squad,
+            SquadEngagementFrame frame,
+            BattleSquad primary)
+        {
+            if (frame.Role != EngagementSquadRole.Pursuit
+                || squad.LastEngagementOptionKind != EngagementOptionKind.Hold
+                || primary == null)
+            {
+                return false;
+            }
+
+            // Aim is the authoritative commitment state. It is copied in the normal battle
+            // snapshot and is cleared by ShootAction or by movement, so this remains true exactly
+            // while the squad has something invested in the current aimed shot. Re-checking the
+            // existing-aim viability gate releases the commitment if the target dies, leaves the
+            // weapon's range, or becomes a bad shot.
+            return squad.AbleSoldiers.Any(soldier =>
+                soldier.Aim is ValueTuple<int, RangedWeapon, int> aim
+                && _soldierMap.TryGetValue(aim.Item1, out BattleSoldier target)
+                && target.BattleSquad?.Id == primary.Id
+                && IsExistingAimStillViable(soldier));
+        }
+
+        /// <summary>
+        /// Values the aimed shot that a pursuit squad can complete after holding for the full
+        /// stationary fire cycle. The range projection is deliberately conservative: the quarry
+        /// is assumed to open by its full withdrawal speed for all five turns, while the actual
+        /// target evaluator supplies the hit, armor, wound-progress, burst, and friendly-fire
+        /// terms. The future shot is discounted by the same continuation discount as the rest of
+        /// engagement scoring, so this is a present-value nudge rather than free immediate fire.
+        /// </summary>
+        private float EvaluatePursuitFireWindowValue(
+            BattleSquad squad,
+            EngagementOptionKind kind,
+            SquadEngagementFrame frame,
+            BattleSquadCapabilityProfile profile,
+            BattleSquad primary,
+            EngagementSquadRole? quarryRole)
+        {
+            if (kind != EngagementOptionKind.Hold
+                || frame.Role != EngagementSquadRole.Pursuit
+                || profile.IsContactSeeking
+                || primary == null)
+            {
+                return 0;
+            }
+
+            float quarrySpeed = QuarryWithdrawalRate(frame, quarryRole);
+            float projectedOpening = quarrySpeed * PursuitFireWindowTurns;
+            Dictionary<int, float> awardedByTarget = [];
+            float projectedValue = 0;
+
+            foreach (BattleSoldier shooter in squad.AbleSoldiers.OrderBy(soldier => soldier.Soldier.Id))
+            {
+                if (!IsPlaced(shooter) || shooter.EquippedRangedWeapons.Count == 0)
+                {
+                    continue;
+                }
+
+                RangedTargetEvaluation best = null;
+                foreach (BattleSoldier target in primary.AbleSoldiers
+                    .Where(candidate => candidate.IsCombatEffective && IsPlaced(candidate))
+                    .OrderBy(candidate => candidate.Soldier.Id))
+                {
+                    float currentRange = _grid.GetDistanceBetweenSoldiers(
+                        shooter.Soldier.Id,
+                        target.Soldier.Id);
+                    float projectedRange = currentRange + projectedOpening;
+                    foreach (RangedWeapon weapon in shooter.EquippedRangedWeapons
+                        .Where(candidate => !candidate.Template.IsTemplateWeapon
+                            && candidate.LoadedAmmo > 0
+                            && projectedRange <= candidate.Template.MaximumRange)
+                        .OrderByDescending(candidate => candidate.Template.DamageMultiplier)
+                        .ThenBy(candidate => candidate.Template.Id))
+                    {
+                        RangedTargetEvaluation evaluation = EvaluateRangedTarget(
+                            shooter,
+                            target,
+                            weapon,
+                            projectedRange,
+                            weapon.Template.Accuracy + FullAimBonusTurns + 1,
+                            quarrySpeed);
+                        if (evaluation.HitProbability <= StickyMinimumHitProbability
+                            || evaluation.Score <= 0)
+                        {
+                            continue;
+                        }
+                        if (best == null
+                            || evaluation.Score > best.Score
+                            || (Math.Abs(evaluation.Score - best.Score) < 0.0001f
+                                && evaluation.Target.Soldier.Id < best.Target.Soldier.Id))
+                        {
+                            best = evaluation;
+                        }
+                    }
+                }
+
+                if (best == null)
+                {
+                    continue;
+                }
+
+                float alreadyAwarded = awardedByTarget.GetValueOrDefault(best.Target.Soldier.Id);
+                float remainingValue = Math.Max(0, GetBattleValue(best.Target) - alreadyAwarded);
+                float contribution = Math.Min(remainingValue, Math.Max(0, best.Score));
+                if (contribution <= 0)
+                {
+                    continue;
+                }
+                awardedByTarget[best.Target.Soldier.Id] = alreadyAwarded + contribution;
+                projectedValue += contribution;
+            }
+
+            return projectedValue
+                * (float)Math.Pow(EngagementFutureDiscount, PursuitFireWindowTurns);
+        }
+
         private static float EvaluatePursuitContactProgress(
             BattleSquad squad,
             EngagementOptionKind kind,
@@ -2067,6 +2215,36 @@ namespace OnlyWar.Helpers.Battles
             }
             ValueTuple<float, float> target = BattleEngagementFrameBuilder.Centroid(primary);
             float before = Distance(BattleEngagementFrameBuilder.Centroid(squad), target);
+            float quarrySpeed = QuarryWithdrawalRate(frame, quarryRole);
+            float attainable = profile.IsContactSeeking
+                ? profile.UsableMeleeBattleValue
+                : profile.UsableRangedBattleValue;
+
+            // A ranged pursuit does not have a binary "outside reach / inside reach" need. Its
+            // reason to keep running should taper through the authored preferred band: full at
+            // PreferredBandUpper, zero at PreferredBandLower. This removes the discontinuous
+            // score jump that made Hold and Run alternate when a fleeing quarry crossed one
+            // threshold by a few yards. The second factor prices only net closing speed, so a
+            // jog that the quarry outruns still receives no chase credit.
+            if (frame.Role == EngagementSquadRole.Pursuit
+                && !profile.IsContactSeeking
+                && profile.PreferredBandUpper > profile.PreferredBandLower)
+            {
+                float bandWidth = Math.Max(
+                    0.1f,
+                    profile.PreferredBandUpper - profile.PreferredBandLower);
+                float bandPressure = Math.Clamp(
+                    (before - profile.PreferredBandLower) / bandWidth,
+                    0,
+                    1);
+                float maximumNetClosing = Math.Max(0, profile.MoveSpeed - quarrySpeed);
+                float actualNetClosing = Math.Max(0, feasibleSpeed - quarrySpeed);
+                float closingFraction = maximumNetClosing <= 0
+                    ? 0
+                    : Math.Clamp(actualNetClosing / maximumNetClosing, 0, 1);
+                return attainable * bandPressure * closingFraction;
+            }
+
             // Deliberately still reach, not EffectiveEngagementRange (Phase 2 audit, RE-CHECKED IN
             // PHASE 6 and unchanged): this term prices recovering a LOST firing solution against a
             // quarry beyond the lookahead horizon, so the threshold that matters is "can I shoot at
@@ -2093,16 +2271,12 @@ namespace OnlyWar.Helpers.Battles
             // This keeps Hold competitive while it can actually fire, makes Run valuable after
             // contact is lost, and still lets the existing quarry-speed penalty reject a Jog that
             // would fall farther behind.
-            float quarrySpeed = QuarryWithdrawalRate(frame, quarryRole);
             float usefulStride = Math.Min(
                 Math.Max(0, profile.MoveSpeed - quarrySpeed),
                 before - desiredRange);
             float progress = Math.Min(
                 usefulStride,
                 Math.Max(0, feasibleSpeed - quarrySpeed));
-            float attainable = profile.IsContactSeeking
-                ? profile.UsableMeleeBattleValue
-                : profile.UsableRangedBattleValue;
             return usefulStride <= 0
                 ? 0
                 : attainable * progress / Math.Max(0.1f, usefulStride);
@@ -2447,6 +2621,7 @@ namespace OnlyWar.Helpers.Battles
                     BattleDecisionTrace.Field("outgoing", candidate.ImmediateEnemyRemoval),
                     BattleDecisionTrace.Field("friendly_fire", candidate.ImmediateFriendlyFire),
                     BattleDecisionTrace.Field("readiness", candidate.ReadinessValue),
+                    BattleDecisionTrace.Field("fire_window", candidate.FireWindowValue),
                     BattleDecisionTrace.Field("incoming", candidate.IncomingNow),
                     BattleDecisionTrace.Field("melee", candidate.MeleeNow),
                     BattleDecisionTrace.Field("future", string.Join(',', candidate.FutureExchange.Select(value => value.ToString("0.###", CultureInfo.InvariantCulture)))),
@@ -2533,7 +2708,7 @@ namespace OnlyWar.Helpers.Battles
         {
             List<BattleSoldier> adjacentEnemies = _grid.GetAdjacentEnemies(soldier.Soldier.Id)
                 .Select(enemyId => _soldierMap[enemyId])
-                .Where(enemy => enemy.CanFight)
+                .Where(enemy => enemy.IsCombatEffective)
                 .OrderBy(enemy => enemy.Soldier.Id)
                 .ToList();
             if (adjacentEnemies.Count == 0)
@@ -2826,7 +3001,7 @@ namespace OnlyWar.Helpers.Battles
                     break;
                 }
                 if (!_soldierMap.TryGetValue(enemyId, out BattleSoldier enemy)
-                    || !enemy.CanFight)
+                    || !enemy.IsCombatEffective)
                 {
                     continue;
                 }
@@ -2954,7 +3129,7 @@ namespace OnlyWar.Helpers.Battles
             soldier.IsRunning = false;
             List<BattleSoldier> adjacentEnemies = _grid.GetAdjacentEnemies(soldier.Soldier.Id)
                 .Select(enemyId => _soldierMap[enemyId])
-                .Where(enemy => enemy.CanFight)
+                .Where(enemy => enemy.IsCombatEffective)
                 .OrderBy(enemy => enemy.Soldier.Id)
                 .ToList();
             if (adjacentEnemies.Count == 0)
@@ -3509,7 +3684,7 @@ namespace OnlyWar.Helpers.Battles
                 if (move.Succeeded) resolvedMovement.Add(move);
 
                 if (move.Succeeded
-                    && pursuedTarget.CanFight
+                    && pursuedTarget.IsCombatEffective
                     && IsPlaced(pursuedTarget)
                     && _grid.GetDistanceBetweenSoldiers(
                         charger.Soldier.Id, pursuedTarget.Soldier.Id)
@@ -3594,7 +3769,7 @@ namespace OnlyWar.Helpers.Battles
             bool isCharge = false)
         {
             List<BattleSoldier> targets = candidateTargets
-                .Where(target => target != null && target.CanFight)
+                .Where(target => target != null && target.IsCombatEffective)
                 .GroupBy(target => target.Soldier.Id)
                 .Select(group => group.First())
                 .OrderBy(target => target.Soldier.Id)
@@ -3824,7 +3999,7 @@ namespace OnlyWar.Helpers.Battles
             {
                 foreach (BattleSoldier enemy in squad.AbleSoldiers)
                 {
-                    if (enemy == null || !enemy.CanFight || !IsPlaced(enemy))
+                    if (enemy == null || !enemy.IsCombatEffective || !IsPlaced(enemy))
                     {
                         continue;
                     }
@@ -3863,7 +4038,7 @@ namespace OnlyWar.Helpers.Battles
         {
             if (soldier.Aim is not ValueTuple<int, RangedWeapon, int> aim
                 || !_soldierMap.TryGetValue(aim.Item1, out BattleSoldier target)
-                || !target.CanFight
+                || !target.IsCombatEffective
                 || !IsPlaced(target)
                 || _grid.GetSoldierSide(aim.Item1) == _grid.GetSoldierSide(soldier.Soldier.Id))
             {
@@ -3914,7 +4089,7 @@ namespace OnlyWar.Helpers.Battles
         {
             if (soldier.TargetId is not int committedId
                 || !_soldierMap.TryGetValue(committedId, out BattleSoldier target)
-                || !target.CanFight
+                || !target.IsCombatEffective
                 || !IsPlaced(target)
                 || _grid.GetSoldierSide(committedId) == _grid.GetSoldierSide(soldier.Soldier.Id))
             {
@@ -4068,7 +4243,7 @@ namespace OnlyWar.Helpers.Battles
             int enemyCount = 0;
             foreach (BattleSoldier enemy in _soldierMap.Values)
             {
-                if (!enemy.CanFight
+                if (!enemy.IsCombatEffective
                     || enemy.TopLeft is not ValueTuple<int, int> enemyPosition
                     || !_grid.IsSoldierPlaced(enemy.Soldier.Id)
                     || _grid.GetSoldierSide(enemy.Soldier.Id) == shooterSide)
@@ -4270,7 +4445,7 @@ namespace OnlyWar.Helpers.Battles
             TemplateFiringLineEvaluation best = null;
             foreach (BattleSoldier target in targets
                 .Where(target => target != null
-                    && target.CanFight
+                    && target.IsCombatEffective
                     && IsPlaced(target)
                     && _grid.GetSoldierSide(target.Soldier.Id) != shooterSide)
                 .GroupBy(target => target.Soldier.Id)
@@ -4304,7 +4479,7 @@ namespace OnlyWar.Helpers.Battles
                         {
                             continue;
                         }
-                        if (!victim.CanFight)
+                        if (!victim.IsCombatEffective)
                         {
                             // Incapacitated figures are still physically engulfed by the action,
                             // but their battle value has already been removed from the fight.
@@ -4392,7 +4567,7 @@ namespace OnlyWar.Helpers.Battles
             TemplateFiringLineEvaluation best = null;
             foreach (BattleSoldier target in targets
                 .Where(target => target != null
-                    && target.CanFight
+                    && target.IsCombatEffective
                     && IsPlaced(target)
                     && _grid.GetSoldierSide(target.Soldier.Id) != shooterSide)
                 .GroupBy(target => target.Soldier.Id)
@@ -4846,7 +5021,7 @@ namespace OnlyWar.Helpers.Battles
             float? damageCoefficient,
             List<TakeOutLocationTerm> collector)
         {
-            if (target == null || !target.CanFight || weaponWoundMultiplier <= 0)
+            if (target == null || !target.IsCombatEffective || weaponWoundMultiplier <= 0)
             {
                 return (0f, 0f);
             }
@@ -5081,7 +5256,7 @@ namespace OnlyWar.Helpers.Battles
             List<int> nominalVictims = [];
             foreach (BattleSoldier candidate in _soldierMap.Values)
             {
-                if (!candidate.CanFight || !IsPlaced(candidate))
+                if (!candidate.IsCombatEffective || !IsPlaced(candidate))
                 {
                     continue;
                 }
@@ -5329,7 +5504,7 @@ namespace OnlyWar.Helpers.Battles
                     continue;
                 }
                 if (!_soldierMap.TryGetValue(enemyId, out BattleSoldier enemy)
-                    || !enemy.CanFight
+                    || !enemy.IsCombatEffective
                     || enemy.BattleSquad == null
                     || (restrictFiringArc && !IsWithinJogFiringArc(
                         shooter,

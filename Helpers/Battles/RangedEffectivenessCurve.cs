@@ -82,24 +82,32 @@ namespace OnlyWar.Helpers.Battles
     {
         /// <summary>
         /// Fraction of its own peak removal a force must still be achieving for a range to count as
-        /// inside its useful band: "still at least half as effective here as at its best".
+        /// inside its useful band: "still doing real work here, even if well off its best".
         ///
-        /// <para>0.5 rather than a tighter figure because of what the consumers of
-        /// <see cref="BattleModifiersUtil.CalculateOptimalDistance"/> actually ask.
-        /// <c>BattleTurnResolver.WorthwhileRangedReach</c> wants "how far can I actually hurt
-        /// them", and <c>BattleSquad.GetPreferredOpeningRange</c> wants "where should this
-        /// engagement open" -- both are questions about the OUTER edge of usefulness, not about
-        /// where the weapon is at its very best. A 0.9 band was tried first and pulled degrading
-        /// weapons in to near contact, because their damage falloff is linear and 90% of peak is a
-        /// narrow window; that understated reach for exactly the force-level gates that exist to
-        /// stop a force believing it can shoot from anywhere.</para>
+        /// <para>0.1 SINCE 2026-08-05, down from 0.5. The consumers of
+        /// <see cref="BattleModifiersUtil.CalculateOptimalDistance"/> all ask a CAPABILITY question
+        /// -- "can these guns still do something from here" -- and 0.5 answered a PREFERENCE
+        /// question instead. Xibarrus Nu (2026-08-05) is the case: on turn 11 the Genestealer force
+        /// broke off at 42.9% battle value, and the pursuit gate computed a worthwhile reach of
+        /// roughly 736 against a separation of 925, declared no shot available, and ended the battle
+        /// -- on the same turn the resolver logged those marines shooting the withdrawers at 925 for
+        /// 53 battle value over two rounds. The band was not wrong about 925 being off-peak; it was
+        /// being read as though off-peak meant harmless.</para>
+        ///
+        /// <para>A 0.9 band was tried first, long before that, and pulled degrading weapons in to
+        /// near contact, because their damage falloff is linear and 90% of peak is a narrow window.
+        /// The direction of travel has been the same both times: every consumer wants the OUTER edge
+        /// of usefulness, and each tightening of this fraction has understated it. The floor at
+        /// <see cref="NegligibleRemovalFraction"/> is what stops 0.1 from degenerating into
+        /// plinking -- a curve whose peak never clears that floor returns 0 here regardless of this
+        /// fraction, so "10% of peak" can never mean "10% of nothing".</para>
         ///
         /// <para>The old threshold model had no such knob because it had no curve to take a
         /// fraction of. It asked where the to-hit total crossed a fixed 10.5 -- a hit probability of
         /// exactly 0.5, taking no account of how much a hit is worth -- and, for damage, where a
         /// hand-placed one-third-quantile damage roll stopped penetrating.</para>
         /// </summary>
-        internal const float SaturationFraction = 0.5f;
+        internal const float SaturationFraction = 0.1f;
 
         /// <summary>
         /// SAMPLING BUDGET. 33 coarse samples spanning [1, reach] locate the peak (or the outermost

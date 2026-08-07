@@ -21,12 +21,17 @@ namespace OnlyWar.Helpers.Orders
         // an advance already converging on this hex from a different region is visible.
         public string OriginLabel { get; }
         public int SquadCount { get; }
+        // Individual specialists lent to this operation without their home squad
+        // (Design/Active/SpecialistAttachment.md). Read off the order so no caller has to
+        // remember to supply it.
+        public int AttachedCount => Order?.AttachedSoldiers?.Count ?? 0;
         public string SummaryLabel
         {
             get
             {
                 string squads = SquadCount == 1 ? "1 squad" : $"{SquadCount} squads";
-                return $"{MissionAndAggressionLabel} · {squads} · from {OriginLabel}";
+                string attached = AttachedCount > 0 ? $" · +{AttachedCount} attached" : "";
+                return $"{MissionAndAggressionLabel} · {squads}{attached} · from {OriginLabel}";
             }
         }
         public string HoverText

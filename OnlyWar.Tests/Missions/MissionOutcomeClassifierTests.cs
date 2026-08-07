@@ -105,6 +105,24 @@ public class MissionOutcomeClassifierTests
             MissionOutcomeClassifier.Classify(context).Disposition);
     }
 
+    [Theory]
+    [InlineData(AmbushSpoilStage.DuringSetup)]
+    [InlineData(AmbushSpoilStage.BeforeSpringing)]
+    public void Classify_AmbushSpoilStageFlows(AmbushSpoilStage stage)
+    {
+        MissionContext context = CreateContext(MissionType.Ambush);
+        context.AmbushSpoiled = stage;
+
+        Assert.Equal(stage, MissionOutcomeClassifier.Classify(context).AmbushSpoiled);
+    }
+
+    [Fact]
+    public void Classify_UnspoiledAmbush_ReportsNotSpoiled()
+    {
+        Assert.Equal(AmbushSpoilStage.NotSpoiled,
+            MissionOutcomeClassifier.Classify(CreateContext(MissionType.Ambush)).AmbushSpoiled);
+    }
+
     [Fact]
     public void Classify_NoViableTargetFlows()
     {

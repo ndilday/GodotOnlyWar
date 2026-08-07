@@ -30,7 +30,7 @@ namespace OnlyWar.Helpers.Missions.Recon
 
         private static long AbleBattleValue(Squad squad) =>
             squad.Members
-                .Where(member => member.CanFight)
+                .Where(member => member.IsCombatEffective)
                 .Sum(member => (long)member.Template.BattleValue);
 
         public MissionStepResult ExecuteMissionStep(MissionExecutionContext execution, float marginOfSuccess, IMissionStep resumeStep)
@@ -85,7 +85,7 @@ namespace OnlyWar.Helpers.Missions.Recon
             List<Squad> screen = spotter.LandedSquads
                 .Where(squad => squad.CurrentOrders?.Mission.MissionType == MissionType.Patrol
                     || squad.CurrentOrders?.Mission.MissionType == MissionType.Recon)
-                .Where(squad => squad.Members.Any(member => member.CanFight))
+                .Where(squad => squad.Members.Any(member => member.IsCombatEffective))
                 // Largest first, so the screen commits the fewest squads that will do the job and the
                 // rest carry on screening.
                 .OrderByDescending(AbleBattleValue)

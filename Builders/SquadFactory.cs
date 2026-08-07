@@ -132,9 +132,16 @@ namespace OnlyWar.Builders
             // Pooled special-weapon quotas: for every element's quota group other than Command
             // Weapon (the individually-equipped groups CharacterLoadoutService owns instead —
             // see that class), roll how many of the group's menu get drafted into the squad's
-            // pooled loadout, then roll which set fills each slot. Draw order and RNG call shape
-            // both match the pre-migration squad-level SquadTemplateWeaponOption walk exactly, so
-            // seeded generation is unaffected by the table split.
+            // pooled loadout, then roll which set fills each slot.
+            //
+            // A degenerate quota consumes no randomness. A fixed count (min == max) and a one-item
+            // menu are both foregone conclusions, and asking the RNG a question with one possible
+            // answer still advances the shared stream — so a crew-served slot like Brood Brother
+            // Weapon Squad's single autocannon would shift every later draw in a seeded walk while
+            // contributing no variation of its own. Skipping those calls costs nothing in outcome
+            // and keeps the stream position meaningful. Note this is a deliberate departure from
+            // the pre-migration squad-level SquadTemplateWeaponOption walk, which always drew:
+            // seeded generation diverges for any squad holding such a quota.
             foreach (SquadTemplateElement element in squadTemplate.Elements)
             {
                 foreach (SquadTemplateElementQuota quota in element.Quotas)
@@ -143,11 +150,14 @@ namespace OnlyWar.Builders
                     IReadOnlyList<WeaponSet> menu = element.GetMenu(quota.OptionGroup);
                     if (menu.Count == 0) continue;
 
-                    int taking = random.GetIntBelowMax(quota.MinimumRequired, quota.MaximumAllowed + 1);
+                    int taking = quota.MinimumRequired == quota.MaximumAllowed
+                        ? quota.MinimumRequired
+                        : random.GetIntBelowMax(quota.MinimumRequired, quota.MaximumAllowed + 1);
                     taking = System.Math.Min(taking, squad.Members.Count);
                     for (int i = 0; i < taking; i++)
                     {
-                        squad.Loadout.Add(menu[random.GetIntBelowMax(0, menu.Count)]);
+                        squad.Loadout.Add(
+                            menu.Count == 1 ? menu[0] : menu[random.GetIntBelowMax(0, menu.Count)]);
                     }
                 }
             }

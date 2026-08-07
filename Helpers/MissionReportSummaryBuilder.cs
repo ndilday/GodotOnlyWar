@@ -2,6 +2,7 @@ using OnlyWar.Helpers.Extensions;
 using OnlyWar.Helpers.Fortifications;
 using OnlyWar.Helpers.Missions;
 using OnlyWar.Models.Missions;
+using System.Collections.Generic;
 
 namespace OnlyWar.Helpers
 {
@@ -33,6 +34,64 @@ namespace OnlyWar.Helpers
                         : classification.NoViableTarget ? "MISSION INCONCLUSIVE" : "MISSION FAILED",
                 _ => "MISSION COMPLETE"
             };
+        }
+
+        /// <summary>
+        /// The Chapter's own losses, rendered as a trailing sentence appended to
+        /// <see cref="BuildSummary"/> by the caller. Kept separate from the summary so the
+        /// mission-outcome prose and the casualty ledger stay independently testable.
+        ///
+        /// Killed and incapacitated are named apart deliberately
+        /// (Design/Active/CasualtyRealism.md §2.3): an incapacitated brother came home. Reporting
+        /// him as a death is the specific misreading this phase exists to fix, and it is the
+        /// difference between a mission that gutted a squad and one that filled the Apothecarium.
+        /// Returns "" when the operation cost nothing, so the common case adds no text at all.
+        /// </summary>
+        public static string BuildFriendlyCasualtyLine(MissionOutcomeClassification classification)
+        {
+            if (classification == null) return "";
+            int killed = classification.FriendlyDeaths;
+            int down = classification.FriendlyIncapacitated;
+            if (killed <= 0 && down <= 0) return "";
+
+            string killedPart = killed == 1 ? "1 brother killed" : $"{killed} brothers killed";
+            string downPart = down == 1
+                ? "1 brought back incapacitated"
+                : $"{down} brought back incapacitated";
+
+            if (killed <= 0) return $" Chapter losses: {downPart}.";
+            if (down <= 0) return $" Chapter losses: {killedPart}.";
+            return $" Chapter losses: {killedPart}, {downPart}.";
+        }
+
+        /// <summary>
+        /// What the Apothecary attached to the operation did (Design/Active/CasualtyRealism.md
+        /// §2.6), appended after the casualty line by the caller.
+        ///
+        /// Its real job is to make an attached specialist VISIBLE. He is in no BattleSquad, so he
+        /// appears in no battle report, earns no field XP through the battle path, and takes no part
+        /// in the roster -- all correct under the no-battlefield-presence rule, and all of it reads
+        /// as a bug the first time a player sends an Apothecary out and finds no trace of him. This
+        /// is the trace. Returns "" when no Apothecary was attached, so ordinary orders are silent.
+        /// </summary>
+        public static string BuildFieldCareLine(MissionOutcomeClassification classification)
+        {
+            if (classification == null) return "";
+            IReadOnlyList<string> names = classification.FieldCareApothecaries;
+            if (names == null || names.Count == 0) return "";
+
+            string who = names.Count == 1
+                ? names[0]
+                : $"{names.Count} Apothecaries";
+            if (classification.FieldCareTreatments <= 0)
+            {
+                return $" {who} accompanied the force; no field treatment was needed.";
+            }
+
+            int brothers = classification.FieldCareTreatedBrothers;
+            string brotherPart = brothers == 1 ? "1 brother" : $"{brothers} brothers";
+            return $" {who} treated {brotherPart} in the field"
+                + $" ({classification.FieldCareTreatments} wounds eased).";
         }
 
         // The player's own missions are the only ones this builder renders (NPC missions go through
@@ -175,6 +234,12 @@ namespace OnlyWar.Helpers
             string location,
             MissionOutcomeClassification classification)
         {
+            if (classification.MissionType == MissionType.Ambush
+                && classification.AmbushSpoiled != AmbushSpoilStage.NotSpoiled)
+            {
+                return BuildSpoiledAmbushSummary(subject, location, classification);
+            }
+
             if (classification.EnemiesKilled > 0)
             {
                 if (classification.Disposition == MissionForceDisposition.WithdrewUnderFire)
@@ -203,6 +268,49 @@ namespace OnlyWar.Helpers
                     : $"{subject} found no viable target in {location}.";
             }
             return $"{subject} conducted a {classification.MissionType} in {location} without confirmed enemy casualties.";
+        }
+
+        // An ambush that was detected still ends in a battle, and the plain combat summary above
+        // reported that battle as though the ambush had gone to plan - the player had no way to tell
+        // a sprung ambush from one that was walked into on even terms. Both spoil stages lead to the
+        // same meeting engagement, so the difference is named in the opening clause and the outcome
+        // clause is the same shape the combat summary uses.
+        private static string BuildSpoiledAmbushSummary(
+            string subject,
+            string location,
+            MissionOutcomeClassification classification)
+        {
+            string opening = classification.AmbushSpoiled == AmbushSpoilStage.DuringSetup
+                ? $"{subject} were spotted moving into ambush positions in {location}"
+                : $"The ambush {subject} laid in {location} was discovered before it could be sprung";
+
+            return opening + ", and a regular engagement was fought instead"
+                + SpoiledAmbushOutcomeClause(classification);
+        }
+
+        private static string SpoiledAmbushOutcomeClause(MissionOutcomeClassification classification)
+        {
+            if (classification.EnemiesKilled > 0)
+            {
+                string killed = $"; they killed {classification.EnemiesKilled} enemy troops";
+                if (classification.Disposition == MissionForceDisposition.WithdrewUnderFire)
+                {
+                    return killed + " before being forced to withdraw with heavy losses.";
+                }
+                if (classification.RemainedInTargetRegion)
+                {
+                    return killed + " and remained deployed there.";
+                }
+                bool returned = classification.ReturnedToBase
+                    || classification.Disposition == MissionForceDisposition.BrokeContact;
+                return returned ? killed + " and returned to base." : killed + ".";
+            }
+
+            if (classification.Disposition == MissionForceDisposition.WithdrewUnderFire)
+            {
+                return "; they were forced to withdraw with heavy losses.";
+            }
+            return "; no enemy casualties were confirmed.";
         }
     }
 }

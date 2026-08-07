@@ -131,6 +131,13 @@ namespace OnlyWar.Helpers.Missions.Ambush
             // A spoiled ambush turns into a meeting engagement, and the exfiltration is reached as
             // that engagement's resume target - so a force left spent by it does not attempt to
             // withdraw. That was the existing behaviour and is preserved deliberately.
+            //
+            // The position was set; what failed is staying hidden until the enemy walked in. Logged
+            // distinctly from the setup-stage failure so the debrief distinguishes the two.
+            context.AmbushSpoiled = AmbushSpoilStage.BeforeSpringing;
+            context.AddLog(
+                $"Day {context.DaysElapsed}: Ambush was discovered before it could be sprung; "
+                + "the enemy engaged on even terms.");
             return MissionStepResult.Continue(
                 new MeetingEngagementMissionStep(), margin, new ExfiltrateMissionStep());
         }

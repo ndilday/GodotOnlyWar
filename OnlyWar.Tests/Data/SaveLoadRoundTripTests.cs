@@ -5,6 +5,7 @@ using System.Linq;
 using OnlyWar.Builders;
 using OnlyWar.Helpers;
 using OnlyWar.Helpers.Database.GameState;
+using OnlyWar.Helpers.Orders;
 using OnlyWar.Models;
 using OnlyWar.Models.Missions;
 using OnlyWar.Models.Orders;
@@ -176,6 +177,22 @@ public class SaveLoadRoundTripTests
             .First(s => s.Id != orderedSquad.Id && s.Id != landedSquad.Id);
         administrativeSquad.IsAdministrative = true;
 
+        // Order-level specialist attachment (Design/Active/SpecialistAttachment.md). The man
+        // stays on his home squad's roll -- his only persisted marker of being forward is the
+        // OrderSoldier row -- so the round trip has to restore BOTH halves of the pointer pair
+        // AND land on the same object the squad holds. See the reference-equality assertions
+        // below: PlayerSoldier's constructor swaps the wrapper into the squad in place of the
+        // base Soldier during load, so an id-only assertion would pass while the game held two
+        // divergent objects.
+        Squad detachableSquad = armyRoot.GetAllSquads().First(s =>
+            s.SquadTemplate.PermitsIndividualDetachment
+            && s.Members.Count > 0
+            && s.Id != administrativeSquad.Id);
+        PlayerSoldier attachedSpecialist = detachableSquad.Members.OfType<PlayerSoldier>().First();
+        OrderAttachment.Attach(attachedSpecialist, order);
+        int attachedSpecialistId = attachedSpecialist.Id;
+        int detachableSquadId = detachableSquad.Id;
+
         // The squad-level weapon-option menu (SquadTemplateWeaponOption) is gone: a pooled
         // special-weapon menu now lives on the trooper element's SoldierTemplate, gated by a
         // quota keyed by any group other than Command Weapon (that one belongs to the character
@@ -223,9 +240,33 @@ public class SaveLoadRoundTripTests
             factionId: 7, magnitude: 4, locationName: "Northern Waste, Test World");
         eventSoldier.AddEvent(battleEvent);
 
+        // Incapacitation (Design/Active/CasualtyRealism.md §2.3) adds NO new persisted column: the
+        // state is derived from the wounds the HitLocation table already carries, and an
+        // incapacitated brother keeps his squad, so he is never mistaken for a fallen brother
+        // (GameStateDataAccess treats a squad-less player soldier as dead). Both halves are pinned
+        // here - the derived state after a round trip, and the untouched brother still reading
+        // healthy, which is what "absent state = healthy" means when there is no migration.
+        PlayerSoldier incapacitated = sector.PlayerForce.Army.PlayerSoldierMap.Values
+            .First(s => s.AssignedSquad != null && s.Id != eventSoldier.Id);
+        int incapacitatedId = incapacitated.Id;
+        int incapacitatedSquadId = incapacitated.AssignedSquad.Id;
+        HitLocation crippledVital = incapacitated.Body.HitLocations
+            .First(location => location.Template.IsVital && !location.Template.HoldsProgenoid);
+        // Crippled, deliberately short of severed: down and alive, which is the whole point.
+        crippledVital.Wounds.AddWound(WoundLevel.Critical);
+        Assert.True(CasualtyStateEvaluator.IsIncapacitated(incapacitated));
+        Assert.False(CasualtyStateEvaluator.HasSeveredVitalLocation(incapacitated));
+        uint incapacitatedWoundTotal = crippledVital.Wounds.WoundTotal;
+        int crippledVitalTemplateId = crippledVital.Template.Id;
+        incapacitated.AddEvent(new SoldierEvent(_date, SoldierEventType.Incapacitated,
+            "Incapacitated in battle with the Tyranids and recovered from the field.",
+            factionId: 7));
+
         Army army = sector.PlayerForce.Army;
         PlayerSoldier doomed = army.PlayerSoldierMap.Values
-            .First(s => s.AssignedSquad != null && s.Id != eventSoldier.Id);
+            .First(s => s.AssignedSquad != null
+                && s.Id != eventSoldier.Id
+                && s.Id != incapacitatedId);
         int doomedId = doomed.Id;
         string doomedName = doomed.Name;
         doomed.AddEvent(new SoldierEvent(_date, SoldierEventType.Death,
@@ -374,6 +415,23 @@ public class SaveLoadRoundTripTests
                 loaded.Planets.SelectMany(p => p.Regions).SelectMany(r => r.SpecialMissions),
                 m => m.Id == orderMission.Id);
 
+            // 1. The attachment survived.
+            Order loadedOrder = loadedSquad.CurrentOrders;
+            PlayerSoldier loadedSpecialist = Assert.Single(loadedOrder.AttachedSoldiers);
+            Assert.Equal(attachedSpecialistId, loadedSpecialist.Id);
+            // 2. And it points at the SAME instance the home squad holds -- the assertion that
+            //    catches the PlayerSoldier-wrapper trap. He is still on his squad's roll, so he
+            //    must not have loaded as a fallen brother either.
+            Squad loadedHomeSquad = loaded.Units
+                .SelectMany(u => u.GetAllSquads())
+                .Single(s => s.Id == detachableSquadId);
+            ISoldier rosterInstance = loadedHomeSquad.Members
+                .Single(m => m.Id == attachedSpecialistId);
+            Assert.Same(rosterInstance, loadedSpecialist);
+            Assert.DoesNotContain(loaded.FallenBrothers, f => f.Id == attachedSpecialistId);
+            // 3. The soldier-side backpointer resolves to the same order object.
+            Assert.Same(loadedOrder, loadedSpecialist.AttachedOrder);
+
             Squad loadedLandedSquad = loaded.Units
                 .SelectMany(u => u.GetAllSquads())
                 .Single(s => s.Id == landedSquad.Id);
@@ -412,6 +470,30 @@ public class SaveLoadRoundTripTests
             Assert.Equal("Northern Waste, Test World", loadedEvent.LocationName);
             Assert.Equal(battleEvent.Render(), loadedEvent.Render());
             Assert.True(loadedEventSoldier.SoldierEvents.Count > 1);
+
+            PlayerSoldier loadedIncapacitated = loaded.Units
+                .SelectMany(u => u.GetAllSquads())
+                .SelectMany(s => s.Members)
+                .OfType<PlayerSoldier>()
+                .Single(ps => ps.Id == incapacitatedId);
+            Assert.Equal(incapacitatedSquadId, loadedIncapacitated.AssignedSquad.Id);
+            Assert.Equal(
+                incapacitatedWoundTotal,
+                loadedIncapacitated.Body.HitLocations
+                    .Single(location => location.Template.Id == crippledVitalTemplateId)
+                    .Wounds.WoundTotal);
+            Assert.True(CasualtyStateEvaluator.IsIncapacitated(loadedIncapacitated));
+            Assert.False(CasualtyStateEvaluator.HasSeveredVitalLocation(loadedIncapacitated));
+            Assert.Equal(
+                CasualtyState.Incapacitated,
+                CasualtyStateEvaluator.Classify(loadedIncapacitated, bodyRecovered: true));
+            Assert.Single(
+                loadedIncapacitated.SoldierEvents,
+                e => e.Type == SoldierEventType.Incapacitated);
+            // No stored flag means an untouched brother comes back healthy, with nothing to migrate.
+            Assert.Equal(
+                CasualtyState.Unharmed,
+                CasualtyStateEvaluator.Classify(loadedEventSoldier, bodyRecovered: true));
 
             PlayerSoldier loadedFallen = Assert.Single(loaded.FallenBrothers);
             Assert.Equal(doomedId, loadedFallen.Id);
@@ -504,6 +586,15 @@ public class SaveLoadRoundTripTests
         orderedSquad.CurrentOrders = order;
         sector.AddNewOrder(order);
 
+        // An attached specialist must ride through the full StartMenu load path too:
+        // SavedGameLoader re-registers the same Order instances, so the attachment restored by
+        // PopulateOrderAttachments has to still be on them after the sector rebuild.
+        Squad detachableSquad = armyRoot.GetAllSquads().First(s =>
+            s.SquadTemplate.PermitsIndividualDetachment && s.Members.Count > 0);
+        PlayerSoldier specialist = detachableSquad.Members.OfType<PlayerSoldier>().First();
+        OrderAttachment.Attach(specialist, order);
+        int specialistId = specialist.Id;
+
         string dbPath = GameStateRoundTripFixture.CreateTempDbPath("onlywar_load_orders");
         try
         {
@@ -521,6 +612,18 @@ public class SaveLoadRoundTripTests
             // The squad's restored order is registered with the Sector, not merely dangling off
             // the squad - this is the assertion that would have caught the empty-Orders bug.
             Assert.Contains(rebuiltSquad.CurrentOrders, rebuilt.Orders.Values);
+
+            PlayerSoldier rebuiltSpecialist =
+                Assert.Single(rebuiltSquad.CurrentOrders.AttachedSoldiers);
+            Assert.Equal(specialistId, rebuiltSpecialist.Id);
+            Assert.Same(rebuiltSquad.CurrentOrders, rebuiltSpecialist.AttachedOrder);
+            // Reference equality against the live roster: the rebuilt sector must hold one
+            // object for this man, not an order-side copy that diverges from his squad entry.
+            Assert.Same(
+                rebuilt.PlayerForce.Army.OrderOfBattle.GetAllSquads()
+                    .SelectMany(s => s.Members)
+                    .Single(m => m.Id == specialistId),
+                rebuiltSpecialist);
         }
         finally
         {

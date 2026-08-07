@@ -283,6 +283,77 @@ public class EndTurnPreflightTests
         Assert.Equal(EndTurnWarningCategory.ActionableTaskForces, item.Category);
     }
 
+    // Design/Active/SpecialistAttachment.md §7.3. Two ways a formation stops being "idle":
+    // it is a personnel pool that never takes orders of its own, or it has a member forward.
+    [Fact]
+    public void Evaluate_DoesNotFlagAFormationWhoseTemplatePermitsDetachmentAsIdle()
+    {
+        TestCampaign campaign = CreateCampaign();
+        SquadTemplate poolTemplate = new(
+            902,
+            "Apothecarion",
+            campaign.SquadTemplate.DefaultWeapons,
+            [],
+            campaign.SquadTemplate.Armor,
+            [.. campaign.SquadTemplate.Elements],
+            SquadTypes.PermitsIndividualDetachment)
+        {
+            Faction = campaign.PlayerFaction
+        };
+        Squad pool = new("Apothecarion", campaign.RootUnit, poolTemplate)
+        {
+            CurrentRegion = campaign.Region
+        };
+        pool.AddSquadMember(TestModelFactory.CreateSoldier(name: "Brother Apothecary"));
+        campaign.RootUnit.AddSquad(pool);
+        GetOrAddPlayerRegionFaction(campaign, campaign.Region).LandedSquads.Add(pool);
+
+        EndTurnPreflightReport report = EndTurnPreflight.Evaluate(
+            campaign.Sector,
+            new EndTurnWarningPreferences
+            {
+                WarnActionableTaskForces = false,
+                WarnSpecialMissionOpportunities = false,
+                WarnLeaderlessSquads = false
+            });
+
+        Assert.DoesNotContain(report.Items, item => item.EntityId == pool.Id);
+        // ...and it stays operational, which surgery staffing and recruitment depend on.
+        Assert.True(pool.IsOperational);
+    }
+
+    [Fact]
+    public void Evaluate_DoesNotFlagASquadWithAMemberAttachedToAnOperation()
+    {
+        TestCampaign campaign = CreateCampaign();
+        Squad ordered = AddSquad(campaign, "Squad Vigilant", campaign.Region);
+        Order order = new(
+            [ordered], false, false, Aggression.Normal,
+            CreateMission(campaign, MissionType.Patrol));
+
+        Squad lender = new("Armory", campaign.RootUnit, campaign.SquadTemplate)
+        {
+            CurrentRegion = campaign.Region
+        };
+        PlayerSoldier lent = new(
+            TestModelFactory.CreateSoldier(name: "Brother Techmarine"), "Brother Techmarine");
+        lender.AddSquadMember(lent);
+        campaign.RootUnit.AddSquad(lender);
+        GetOrAddPlayerRegionFaction(campaign, campaign.Region).LandedSquads.Add(lender);
+        OnlyWar.Helpers.Orders.OrderAttachment.Attach(lent, order);
+
+        EndTurnPreflightReport report = EndTurnPreflight.Evaluate(
+            campaign.Sector,
+            new EndTurnWarningPreferences
+            {
+                WarnActionableTaskForces = false,
+                WarnSpecialMissionOpportunities = false,
+                WarnLeaderlessSquads = false
+            });
+
+        Assert.DoesNotContain(report.Items, item => item.EntityId == lender.Id);
+    }
+
     [Fact]
     public void PreferencesRepository_RoundTripsGlobalWarningChoices()
     {

@@ -107,6 +107,12 @@ namespace OnlyWar.Models.Soldiers
 
         public Squad AssignedSquad { get; set; }
 
+        /// <summary>
+        /// Can this soldier still bring a weapon to bear? Hands and vital (consciousness)
+        /// locations only -- motive locations are deliberately excluded; see
+        /// <see cref="CanMove"/>. Callers that mean "is this soldier in the fight at all"
+        /// want <see cref="IsCombatEffective"/>, not this.
+        /// </summary>
         public bool CanFight
         {
             get
@@ -114,23 +120,41 @@ namespace OnlyWar.Models.Soldiers
                 foreach (HitLocation location in Body.HitLocations)
                 {
                     HitLocationTemplate template = location.Template;
-                    uint wounds = location.Wounds.WoundTotal;
-
-                    bool disabled =
-                        wounds >= template.CrippleWound ||
-                        wounds >= template.SeverWound;
-
-                    if (disabled)
-                    {
-                        if (template.IsMotive || template.IsVital)
-                        {
-                            return false;
-                        }
-                    }
+                    if (!template.IsVital) continue;
+                    if (IsDisabled(location)) return false;
                 }
 
                 return FunctioningHands > 0;
             }
+        }
+
+        /// <summary>
+        /// How much foot speed his motive wounds leave him -- the product of every motive
+        /// location's banded multiplier (<see cref="MotiveImpairment"/>).
+        /// </summary>
+        public float MotiveSpeedMultiplier => MotiveImpairment.CalculateSpeedMultiplier(Body);
+
+        /// <summary>
+        /// Can this soldier still walk? Motive locations only, and since Phase 3 of the
+        /// casualty-realism plan this is exactly "his speed has not reached zero" rather than
+        /// "no motive location is crippled". The difference is the whole point of the phase: a
+        /// marine with one Critical leg keeps fighting at 0.6 speed instead of dropping, and a
+        /// man with a shattered foot never drops at all.
+        /// </summary>
+        public bool CanMove => MotiveSpeedMultiplier > 0f;
+
+        /// <summary>
+        /// The old combined <c>CanFight</c>: able to both fight and move, i.e. still a
+        /// participant in a battle rather than a casualty. This is what deployment gating,
+        /// strength counts, and target selection mean.
+        /// </summary>
+        public bool IsCombatEffective => CanFight && CanMove;
+
+        private static bool IsDisabled(HitLocation location)
+        {
+            uint wounds = location.Wounds.WoundTotal;
+            return wounds >= location.Template.CrippleWound
+                || wounds >= location.Template.SeverWound;
         }
 
         public void AddSkillPoints(BaseSkill skill, float points)

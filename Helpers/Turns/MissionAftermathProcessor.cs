@@ -148,6 +148,11 @@ namespace OnlyWar.Helpers.Turns
                 if (ShouldPersistPlayerOrder(order)) continue;
 
                 sector.RemoveOrder(order);
+                // The primary release path for attached specialists: attachment lasts exactly
+                // as long as the order does, so an ordinary one-week mission returns its
+                // specialists here. A Construction / Show-of-Force order persists and keeps
+                // them, matching what it does with its squads.
+                Orders.OrderAttachment.ReleaseAll(order);
                 foreach (Squad squad in order.AssignedSquads)
                 {
                     if (ReferenceEquals(squad.CurrentOrders, order))
@@ -239,7 +244,7 @@ namespace OnlyWar.Helpers.Turns
             if (squads == null) return 0;
             return squads
                 .SelectMany(squad => squad.Soldiers)
-                .Where(soldier => !soldier.CanFight)
+                .Where(soldier => !soldier.IsCombatEffective)
                 .Sum(soldier => (long)soldier.Soldier.Template.BattleValue);
         }
 

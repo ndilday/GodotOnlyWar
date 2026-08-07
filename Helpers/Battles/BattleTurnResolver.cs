@@ -240,6 +240,10 @@ namespace OnlyWar.Helpers.Battles
         {
             _casualtyMap[wound.Suffererer.Soldier.Id] = wound.Suffererer;
             _incapacitatedSoldiers[wound.Suffererer.Soldier.Id] = wound.Suffererer;
+            // Down but not dead, and reportable as such. The set is provisional until the field
+            // has an owner: FinishOffAbandonedWounded removes the losing side's wounded, and the
+            // player policy settles battle-brothers at battle end.
+            BattleHistory.IncapacitatedSoldierIds.Add(wound.Suffererer.Soldier.Id);
             _aftermathPolicy.OnSoldierDowned(wound, woundLevel);
         }
 
@@ -382,6 +386,10 @@ namespace OnlyWar.Helpers.Battles
                 secondSideRemaining,
                 _currentState.TurnNumber,
                 hitTurnCap));
+            // A soldier can fall (a leg gone) and later be killed outright by another wound in the
+            // same battle. Death wins; the two sets must be disjoint before anything reports on
+            // them. The player policy below settles battle-brothers itself and keeps them disjoint.
+            BattleHistory.IncapacitatedSoldierIds.ExceptWith(BattleHistory.KilledSoldierIds);
             _aftermathPolicy.OnBattleCompleted(_currentState);
             // Closes the per-battle log stream before control returns to the campaign turn, so
             // whatever the caller does next is not filed under this battle. Anything the aftermath
@@ -412,6 +420,7 @@ namespace OnlyWar.Helpers.Battles
                 if (soldier.Soldier is PlayerSoldier) continue;
                 if (GetSoldierSide(soldier) != abandoningSide) continue;
                 if (!BattleHistory.KilledSoldierIds.Add(soldier.Soldier.Id)) continue;
+                BattleHistory.IncapacitatedSoldierIds.Remove(soldier.Soldier.Id);
 
                 if (abandoningSide == BattleSide.Opposing)
                 {
@@ -536,7 +545,8 @@ namespace OnlyWar.Helpers.Battles
             _pursuitTargetsBySquad.Clear();
             foreach ((_, SquadEngagementDecision decision) in decisions)
             {
-                if (decision.Frame.Role == EngagementSquadRole.Pursuit
+                if ((decision.Frame.Role is EngagementSquadRole.Pursuit
+                        or EngagementSquadRole.Standoff)
                     && decision.Frame.PrimaryCounterpartSquadId is int targetSquadId)
                 {
                     _pursuitTargetsBySquad[decision.Squad.Id] = targetSquadId;
@@ -718,9 +728,12 @@ namespace OnlyWar.Helpers.Battles
                 foreach (BattleSquad squad in disciplined)
                 {
                     constraints[squad.Id] = new EngagementRoleConstraint(
-                        forcePosture == PursuitPosture.BreakOff
-                            ? EngagementSquadRole.BreakOff
-                            : EngagementSquadRole.Pursuit,
+                        forcePosture switch
+                        {
+                            PursuitPosture.BreakOff => EngagementSquadRole.BreakOff,
+                            PursuitPosture.Standoff => EngagementSquadRole.Standoff,
+                            _ => EngagementSquadRole.Pursuit
+                        },
                         QuarryRunSpeed: quarryRunSpeed,
                         RoleTargets: enemySquads);
                 }
@@ -1244,6 +1257,11 @@ namespace OnlyWar.Helpers.Battles
                     separation,
                     pursuitMetrics.FastestPursuitSquadSpeed,
                     withdrawalMetrics.SlowestMainBodySquadSpeed);
+            float? projectedFollowShotTurns = ProjectedFollowShotTurns(
+                pursuingSide,
+                withdrawingSide,
+                separation,
+                withdrawalMetrics.SlowestMainBodySquadSpeed);
             BattlePursuitPlanner.Result result = BattlePursuitPlanner.Evaluate(new(
                 _currentState.TurnNumber,
                 pursuingSide == BattleSide.Attacker,
@@ -1253,7 +1271,7 @@ namespace OnlyWar.Helpers.Battles
                 pursuitMetrics.FastestPursuitSquadSpeed,
                 withdrawalMetrics.SlowestMainBodySquadSpeed,
                 pressTurns,
-                ProjectedFollowShotTurns(pursuingSide, withdrawingSide, separation),
+                projectedFollowShotTurns,
                 withdrawerReturnsFire,
                 pursuerCanReachMeleeThisTurn));
             PursuitPosture? previous = _pursuitPostures.TryGetValue(
@@ -1374,6 +1392,14 @@ namespace OnlyWar.Helpers.Battles
             float separation = MinimumSeparation(pursuerSide, withdrawingSide);
             float attackReach = MaximumOneTurnAttackReach(pursuerSide, withdrawingSide);
             float declaredPursuitSpeed = FastestDeclaredPursuitSpeed(pursuers);
+            // Keep contact alive while the same projection used by BattlePursuitPlanner says a
+            // worthwhile shot is available now. The squad planner may spend several stationary
+            // turns converting that opportunity into a fully aimed ShootAction.
+            bool pursuersHaveReasonableShot = ProjectedFollowShotTurns(
+                pursuerSide,
+                withdrawingSide,
+                separation,
+                withdrawalMetrics.SlowestMainBodySquadSpeed) == 0f;
             BattleContactRules.Result forceResult = BattleContactRules.Evaluate(new(
                 _currentState.TurnNumber,
                 withdrawingSide == BattleSide.Attacker,
@@ -1387,7 +1413,8 @@ namespace OnlyWar.Helpers.Battles
                 state.RearGuardSquadId.HasValue,
                 0,
                 withdrawalMetrics.SlowestMainBodySquadSpeed,
-                PursuersAttackedRecently: pursuerMetrics.HasViableDamagingActionRecently));
+                PursuersAttackedRecently: pursuerMetrics.HasViableDamagingActionRecently,
+                PursuersHaveReasonableShot: pursuersHaveReasonableShot));
             if (forceResult.Decision == ContactBreakResult.OrganizedForceDisengages)
             {
                 CompleteWithdrawal(withdrawingSide, events);
@@ -1417,7 +1444,8 @@ namespace OnlyWar.Helpers.Battles
                         true,
                         Math.Max(0, current - start),
                         squad.GetSquadMove(),
-                        PursuersAttackedRecently: pursuerMetrics.HasViableDamagingActionRecently));
+                        PursuersAttackedRecently: pursuerMetrics.HasViableDamagingActionRecently,
+                        PursuersHaveReasonableShot: pursuersHaveReasonableShot));
                     if (masked.Decision == ContactBreakResult.SquadDisengages)
                     {
                         DisengageSquad(withdrawingSide, squad, events, "departed behind the rear guard");
@@ -1847,10 +1875,25 @@ namespace OnlyWar.Helpers.Battles
             return Math.Max(meleeReach, WorthwhileRangedReach(side, targetSide));
         }
 
+        /// <summary>
+        /// Turns of FOLLOWING before this side has a shot worth taking at a quarry that is running
+        /// away, or null when following will never produce one.
+        ///
+        /// <para>The quarry's own speed is netted out, exactly as <c>pressTurns</c> nets it out of
+        /// the intercept projection. Following jogs at <see cref="BattleSquadPlanner.JogSpeedMultiplier"/>
+        /// of a run so the guns stay usable, so a quarry running flat out opens the range at half a
+        /// run against a follower and no number of turns closes it. Dividing by the raw jog speed
+        /// instead reported a finite arrival for a chase that never arrives, and
+        /// <c>BattlePursuitPlanner.SelectNormal</c> compares this number DIRECTLY against a press
+        /// projection that does net the quarry out -- so a stern chase read as "following shoots
+        /// first" on a comparison where one side had paid for the quarry's flight and the other had
+        /// not.</para>
+        /// </summary>
         private float? ProjectedFollowShotTurns(
             BattleSide side,
             BattleSide targetSide,
-            float separation)
+            float separation,
+            float quarrySpeed)
         {
             float reach = WorthwhileRangedReach(side, targetSide);
             // No range at which this force can both hit and hurt that one: there is no follow shot
@@ -1859,7 +1902,12 @@ namespace OnlyWar.Helpers.Battles
             if (separation <= reach) return 0;
             float jogSpeed = BuildMetrics(side).FastestPursuitSquadSpeed
                 * BattleSquadPlanner.JogSpeedMultiplier;
-            return jogSpeed <= 0 ? null : (separation - reach) / jogSpeed;
+            float closingRate = jogSpeed - Math.Max(0, quarrySpeed);
+            // A follower that cannot out-pace the withdrawal has no shot to wait for either: the
+            // range is opening, not closing. Null rather than infinity, which is the same answer
+            // this method already gives for "there is no follow shot to wait for" and which routes
+            // a Normal pursuer to Press -- running is the only posture that can still make contact.
+            return closingRate <= 0 ? null : (separation - reach) / closingRate;
         }
 
         private string SideName(BattleSide side) =>

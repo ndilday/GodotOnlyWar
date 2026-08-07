@@ -200,6 +200,14 @@ namespace OnlyWar.Helpers
             {
                 return false;
             }
+            // A brother attached to an operation is in the field with someone else's force;
+            // reposting him mid-operation is not a decision the Chapter screen may make. The
+            // UI hides the options, but this is the enforcement point
+            // (Design/Active/SpecialistAttachment.md §3.4).
+            if (soldier.AttachedOrder != null)
+            {
+                return false;
+            }
             if (soldier.AssignedSquad == null)
             {
                 throw new InvalidOperationException("Cannot transfer a soldier with no assigned squad.");

@@ -20,7 +20,15 @@ namespace OnlyWar.Models.Squads
         // Administrative formations hold personnel assigned to Chapter duties rather
         // than battlefield service. They remain ordinary squads for roster transfers
         // and persistence, but are never deployable, orderable, or trainable.
-        Administrative = 0x40
+        Administrative = 0x40,
+        // Formations whose function is to SUPPLY specialists to other formations: the four
+        // command HQ templates and the four chapter offices. The flag is two-sided
+        // (Design/Active/SpecialistAttachment.md §3.3): such a formation may give up an
+        // individual to an order via OrderAttachment, and in exchange it never deploys as a
+        // unit -- it is a personnel pool, not a manoeuvre element. Note this is NOT
+        // Administrative: IsOperational must stay true or surgery staffing and
+        // recruitment/implantation stop seeing these squads' members.
+        PermitsIndividualDetachment = 0x80
     }
 
     [Flags]
@@ -59,6 +67,11 @@ namespace OnlyWar.Models.Squads
         public WeaponSet DefaultWeapons { get; }
         public SquadTypes SquadType { get; }
         public bool IsOperational => (SquadType & SquadTypes.Administrative) == 0;
+        // See SquadTypes.PermitsIndividualDetachment. True iff this formation may lend
+        // individuals to an order -- and, as the other half of the same rule, may never be
+        // assigned to an order as a squad.
+        public bool PermitsIndividualDetachment =>
+            (SquadType & SquadTypes.PermitsIndividualDetachment) != 0;
         // A squad's point value is the sum of its members' battle values at full strength (PRD
         // §4.24). Previously a stored column; now derived so it can never drift from the roster.
         public int BattleValue => IsOperational

@@ -82,6 +82,30 @@ namespace OnlyWar.Models.Soldiers
             }
         }
 
+        public bool CanMove
+        {
+            get
+            {
+                return _soldier.CanMove;
+            }
+        }
+
+        public float MotiveSpeedMultiplier
+        {
+            get
+            {
+                return _soldier.MotiveSpeedMultiplier;
+            }
+        }
+
+        public bool IsCombatEffective
+        {
+            get
+            {
+                return _soldier.IsCombatEffective;
+            }
+        }
+
         public bool IsWounded
         {
             get
@@ -90,14 +114,43 @@ namespace OnlyWar.Models.Soldiers
             }
         }
 
-        public bool IsDeployable
-        {
-            get
-            {
-                return !_soldier.Body.HitLocations.Any(hl => hl.Template.IsMotive && hl.IsCrippled)
-                    && !_soldier.Body.HitLocations.Any(hl => hl.Template.IsVital && hl.IsCrippled);
-            }
-        }
+        /// <summary>
+        /// May the player send this brother out with a squad? Resolved in Phase 3 of
+        /// Design/Active/CasualtyRealism.md (§3.3 "Deployability"): a brother is deployable
+        /// exactly when he is still combat effective -- he can bring a weapon to bear AND his
+        /// motive wounds have not taken his speed to zero.
+        ///
+        /// This deliberately replaces the old inline motive-vs-vital split, which barred anyone
+        /// with a crippled motive location. Under graded impairment that rule would bar a marine
+        /// limping at 0.6 speed who can genuinely still fight, which is the exact outcome this
+        /// phase exists to stop producing. The vital half is unchanged in effect (a crippled
+        /// vital already clears <see cref="CanFight"/>), and the new form additionally bars a
+        /// brother with no functioning hand -- which the old check missed.
+        /// </summary>
+        public bool IsDeployable => IsCombatEffective;
+
+        /// <summary>
+        /// The operation this brother has been attached to as an individual, without his home
+        /// squad (Design/Active/SpecialistAttachment.md). Null for the overwhelming majority of
+        /// the roster. He remains in <see cref="AssignedSquad"/>'s Members throughout --
+        /// removing him would make him load back as a fallen brother.
+        ///
+        /// Deliberately NOT on ISoldier: attachment is a player-chapter concept, and ISoldier is
+        /// also implemented by plain Soldier and by test doubles.
+        ///
+        /// Set only through Helpers/Orders/OrderAttachment, which owns both halves of the
+        /// pointer pair (Order.AttachedSoldiers is the other).
+        /// </summary>
+        public Orders.Order AttachedOrder { get; set; }
+
+        /// <summary>
+        /// Where this brother physically is for campaign purposes: with the operation he is
+        /// attached to if he is attached, otherwise wherever his squad is. An attached
+        /// Apothecary's home squad may sit aboard ship while he is forward, so anything asking
+        /// "where is this man" must go through here rather than AssignedSquad.CurrentRegion.
+        /// </summary>
+        public Planets.Region EffectiveRegion =>
+            AttachedOrder?.Mission?.RegionFaction?.Region ?? AssignedSquad?.CurrentRegion;
 
         public void AddSkillPoints(BaseSkill skill, float points)
         {

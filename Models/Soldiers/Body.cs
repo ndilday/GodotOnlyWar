@@ -92,84 +92,187 @@ namespace OnlyWar.Models.Soldiers
         {
             WeeksOfHealing = 0;
             WoundTotal += (uint)wound;
-            if(NegligibleWounds > WOUND_MAX)
-            {
-                WoundTotal &= 0xfffffff0;
-                WoundTotal += (uint)WoundLevel.Minor;
-            }
-            if (MinorWounds > WOUND_MAX)
-            {
-                WoundTotal &= 0xffffff0f;
-                WoundTotal += (uint)WoundLevel.Moderate;
-            }
-            if (ModerateWounds > WOUND_MAX)
-            {
-                WoundTotal &= 0xfffff0ff;
-                WoundTotal += (uint)WoundLevel.Major;
-            }
-            if (MajorWounds > WOUND_MAX)
-            {
-                WoundTotal &= 0xffff0fff;
-                WoundTotal += (uint)WoundLevel.Critical;
-            }
-            if (CriticalWounds > WOUND_MAX)
-            {
-                WoundTotal &= 0xfff0ffff;
-                WoundTotal += (uint)WoundLevel.Massive;
-            }
-            if (MassiveWounds > WOUND_MAX)
-            {
-                WoundTotal &= 0xff0fffff;
-                WoundTotal += (uint)WoundLevel.Mortal;
-            }
-            if (MortalWounds > WOUND_MAX)
-            {
-                WoundTotal &= 0xf0ffffff;
-                WoundTotal += (uint)WoundLevel.Unsurvivable;
-            }
+            Normalize();
             Changed?.Invoke();
+        }
+
+        // Folds any band holding more than WOUND_MAX wounds up into the band above it, carrying the
+        // remainder. Every severity comparison in the game -- cripple, sever, CanFight, the
+        // Apothecarium's severity labels -- reads WoundTotal as a plain magnitude, and that is only
+        // valid while the representation is normalized: six Major wounds (0x6000) compare as *less*
+        // severe than the one Critical wound (0x10000) they are equivalent to.
+        //
+        // Both mutation paths must run this. AddWound always did; the healing step-down never did,
+        // and it deposits a whole band's worth of wounds onto a band that may already be occupied.
+        private void Normalize()
+        {
+            const int bandRatio = WOUND_MAX + 1;
+            for (int shift = 0; shift < 28; shift += 4)
+            {
+                uint count = (WoundTotal >> shift) & 0xf;
+                if (count <= WOUND_MAX)
+                {
+                    continue;
+                }
+                uint promoted = count / bandRatio;
+                uint remainder = count % bandRatio;
+                WoundTotal &= ~((uint)0xf << shift);
+                WoundTotal += remainder << shift;
+                WoundTotal += promoted << (shift + 4);
+            }
+        }
+
+        /// <summary>
+        /// Clears the Negligible band outright, leaving every other band and every band clock
+        /// untouched (Design/Active/CasualtyRealism.md §2.5). This is the Astartes daily pass:
+        /// grazes and bruises close overnight.
+        ///
+        /// The boundary is load-bearing rather than cosmetic. Five Negligible wounds promote to a
+        /// Minor one, so clearing them once a day means a *day's* worth of glancing hits no longer
+        /// compounds into a real wound -- while a single battle's worth still does, because a
+        /// battle resolves inside one day and this never runs during one. Bands below Moderate
+        /// carry no healing clock, so there is nothing to reset.
+        /// </summary>
+        public void ClearNegligibleWounds()
+        {
+            uint before = WoundTotal;
+            WoundTotal &= 0xfffffff0;
+            if (WoundTotal != before)
+            {
+                Changed?.Invoke();
+            }
+        }
+
+        /// <summary>
+        /// The worst band this location carries that an Apothecary could usefully treat, and how
+        /// many of that band's wounds a single treatment could actually step down
+        /// (Design/Active/CasualtyRealism.md §2.6). Pure -- nothing is mutated.
+        ///
+        /// Bands below Moderate are excluded because they carry no healing clock and are cleared
+        /// outright by the next natural pass anyway: spending an Apothecary's day on a graze buys
+        /// nothing. Count is capped by the room left in the band below, because a demotion that
+        /// overfilled it would be folded straight back up by <see cref="Normalize"/> -- undoing the
+        /// treatment. Returns <see cref="WoundLevel.None"/> with a zero count when there is nothing
+        /// worth treating.
+        /// </summary>
+        public (WoundLevel Band, int Count) FindTreatableBand()
+        {
+            for (int shift = 28; shift >= 8; shift -= 4)
+            {
+                uint count = (WoundTotal >> shift) & 0xf;
+                if (count == 0) continue;
+                uint room = WOUND_MAX - ((WoundTotal >> (shift - 4)) & 0xf);
+                uint movable = System.Math.Min(count, room);
+                return movable == 0
+                    ? ((WoundLevel)0, 0)
+                    : ((WoundLevel)((uint)1 << shift), (int)movable);
+            }
+            return ((WoundLevel)0, 0);
+        }
+
+        /// <summary>
+        /// An Apothecary's field treatment: a FORCED demotion of the worst treatable band, applied
+        /// the moment it happens (Design/Active/CasualtyRealism.md §2.6). Returns the band that was
+        /// treated, or <see cref="WoundLevel.None"/> if there was nothing to treat.
+        ///
+        /// Expressed in the healing model's own vocabulary rather than as a separate "treatment
+        /// credit" accumulator, which is the whole reason §2.4 calls the step-down structure a gift
+        /// for the medical system: the effect is immediately visible to
+        /// <see cref="RecoveryTimeLeft"/>, to the Apothecarium, and to the next day's battle.
+        ///
+        /// Clock handling mirrors <see cref="ApplyWeekOfHealing"/>'s demotions: the receiving band's
+        /// clock is reset because the wounds arriving there have served none of its dwell time, and
+        /// the vacated band's clock is reset only when the band actually emptied. Nothing else about
+        /// WeeksOfHealing is touched -- treatment must never cost a man the convalescence he has
+        /// already banked.
+        /// </summary>
+        public WoundLevel ApplyTreatmentDemotion()
+        {
+            (WoundLevel band, int count) = FindTreatableBand();
+            if (band == 0 || count <= 0)
+            {
+                return 0;
+            }
+
+            int shift = 0;
+            for (uint value = (uint)band; value > 1; value >>= 1) shift++;
+            int lowerShift = shift - 4;
+
+            uint remaining = (((WoundTotal >> shift) & 0xf) - (uint)count);
+            WoundTotal &= ~((uint)0xf << shift);
+            WoundTotal += remaining << shift;
+            WoundTotal += (uint)count << lowerShift;
+            if (remaining == 0)
+            {
+                WeeksOfHealing &= ~((uint)0xf << shift);
+            }
+            WeeksOfHealing &= ~((uint)0xf << lowerShift);
+            // Cannot fire given FindTreatableBand's room cap, but the invariant is cheap to hold and
+            // every severity comparison in the game depends on it.
+            Normalize();
+            Changed?.Invoke();
+            return band;
         }
 
         public void ApplyWeekOfHealing()
         {
-            WeeksOfHealing += 0x11111100;
+            // Every band that currently HOLDS wounds advances its own clock, independently and at
+            // the same time. Wounds are discrete injuries, not one severity counter: a broken nose,
+            // a swollen eye and a split lip all mend together, and the lip does not wait for the
+            // nose. An EMPTY band's clock must not advance, which is where the original
+            // `WeeksOfHealing += 0x11111100` went wrong -- it aged every band unconditionally, so a
+            // wound stepping down found the band below had already served its dwell time and fell
+            // straight through to Minor in a single pass, and over a long convalescence the unused
+            // low nibbles overflowed and carried into the bands above them.
+            AdvanceOccupiedBandClocks();
             // negligible and minor wounds heal automatically
             WoundTotal &= 0xffffff00;
+            // Each demotion clears the clock for BOTH the band being vacated and the band being
+            // entered. Clearing the receiving band is the load-bearing half: every band's nibble
+            // advances each week whether or not a wound sits in it, so without this reset a wound
+            // arriving at a lower band finds that band's dwell time already served and falls
+            // straight through -- cascading all the way to Minor in a single pass, and healing an
+            // Unsurvivable wound in 8 weeks instead of the advertised 28.
             if(UnsurvivableWounds > 0 && (WeeksOfHealing & 0xf0000000) > 0x60000000)
             {
                 byte newMortalWounds = UnsurvivableWounds;
-                WeeksOfHealing &= 0x0fffffff;
+                WeeksOfHealing &= 0x00ffffff;
                 WoundTotal &= 0x0fffffff;
                 WoundTotal += (uint)(newMortalWounds * 0x01000000);
             }
             if (MortalWounds > 0 && (WeeksOfHealing & 0x0f000000) > 0x05000000)
             {
                 byte newMassiveWounds = MortalWounds;
-                WeeksOfHealing &= 0xf0ffffff;
+                WeeksOfHealing &= 0xf00fffff;
                 WoundTotal &= 0xf0ffffff;
                 WoundTotal += (uint)(newMassiveWounds * 0x00100000);
             }
             if (MassiveWounds > 0 && (WeeksOfHealing & 0x00f00000) > 0x00400000)
             {
                 byte newCriticalWounds = MassiveWounds;
-                WeeksOfHealing &= 0xff0fffff;
+                WeeksOfHealing &= 0xff00ffff;
                 WoundTotal &= 0xff0fffff;
                 WoundTotal += (uint)(newCriticalWounds * 0x00010000);
             }
             if (CriticalWounds > 0 && (WeeksOfHealing & 0x000f0000) > 0x00030000)
             {
                 byte newMajorWounds = CriticalWounds;
-                WeeksOfHealing &= 0xfff0ffff;
+                WeeksOfHealing &= 0xfff00fff;
                 WoundTotal &= 0xfff0ffff;
                 WoundTotal += (uint)(newMajorWounds * 0x00001000);
             }
             if (MajorWounds > 0 && (WeeksOfHealing & 0x0000f000) > 0x00002000)
             {
                 byte newModerateWounds = MajorWounds;
-                WeeksOfHealing &= 0xffff0fff;
+                WeeksOfHealing &= 0xffff00ff;
                 WoundTotal &= 0xffff0fff;
                 WoundTotal += (uint)(newModerateWounds * 0x00000100);
             }
+            // A step-down can deposit its wounds onto a band that is already occupied -- three
+            // Critical wounds falling onto three existing Major wounds leaves six, one band over
+            // its maximum. Without this, that location reads as *less* severely wounded than it is
+            // and the next hit resolves against a malformed WoundTotal.
+            Normalize();
             if (ModerateWounds > 0 && (WeeksOfHealing & 0x00000f00) > 0x00000100)
             {
                 byte newMinorWounds = ModerateWounds;
@@ -178,6 +281,26 @@ namespace OnlyWar.Models.Soldiers
                 WoundTotal += (uint)(newMinorWounds * 0x00000010);
             }
             Changed?.Invoke();
+        }
+
+        // Adds one week to the clock of every band that currently holds at least one wound, and to
+        // no others. Bands below Moderate are cleared outright each pass and carry no clock.
+        private void AdvanceOccupiedBandClocks()
+        {
+            for (int shift = 8; shift <= 28; shift += 4)
+            {
+                if (((WoundTotal >> shift) & 0xf) == 0)
+                {
+                    continue;
+                }
+                // An occupied band always steps down well before its nibble could overflow, but
+                // clamp rather than let a carry corrupt the band above it.
+                if (((WeeksOfHealing >> shift) & 0xf) == 0xf)
+                {
+                    continue;
+                }
+                WeeksOfHealing += (uint)1 << shift;
+            }
         }
 
         public byte RecoveryTimeLeft()
@@ -537,8 +660,16 @@ namespace OnlyWar.Models.Soldiers
                     NaturalArmor = 0,
                     WoundMultiplier = 1,
                    HitProbabilityMap = new int[3] { 160, 80, 1 },
-                    CrippleWound = (uint)WoundLevel.Critical,
-                    SeverWound = (uint)WoundLevel.Massive,
+                    // Cripple raised Critical -> Massive by
+                    // Database/RulesMigration_LegCrippleThreshold.sql, and sever then raised
+                    // Massive -> Mortal by Database/RulesMigration_LegSeverThreshold.sql
+                    // (CasualtyRealism.md §2.1). The two must stay one band apart: with sever at
+                    // Massive every leg wound that felled a marine also took the leg off, deleting
+                    // "crippled but not severed" -- the state §2.3's Incapacitated outcome needs.
+                    // Keep in step with the DB or this fallback silently amputates legs the loaded
+                    // rules would only cripple.
+                    CrippleWound = (uint)WoundLevel.Massive,
+                    SeverWound = (uint)WoundLevel.Mortal,
                     IsMotive = true,
                     IsVital = false
                 },
@@ -550,8 +681,13 @@ namespace OnlyWar.Models.Soldiers
                     NaturalArmor = 0,
                     WoundMultiplier = 1,
                     HitProbabilityMap = new int[3] { 160, 80, 1 },
-                    CrippleWound = (uint)WoundLevel.Critical,
-                    SeverWound = (uint)WoundLevel.Massive,
+                    // Cripple raised Critical -> Massive by
+                    // Database/RulesMigration_LegCrippleThreshold.sql, sever raised Massive ->
+                    // Mortal by Database/RulesMigration_LegSeverThreshold.sql
+                    // (CasualtyRealism.md §2.1). The two must stay one band apart so that
+                    // "crippled but not severed" stays reachable for legs. Keep in step with the DB.
+                    CrippleWound = (uint)WoundLevel.Massive,
+                    SeverWound = (uint)WoundLevel.Mortal,
                     IsMotive = true,
                     IsVital = false
                 },
@@ -760,8 +896,13 @@ namespace OnlyWar.Models.Soldiers
                     NaturalArmor = 0,
                     WoundMultiplier = 1,
                     HitProbabilityMap = new int[3] { 160, 80, 1 },
-                    CrippleWound = (uint)WoundLevel.Critical,
-                    SeverWound = (uint)WoundLevel.Massive,
+                    // Cripple raised Critical -> Massive by
+                    // Database/RulesMigration_LegCrippleThreshold.sql, sever raised Massive ->
+                    // Mortal by Database/RulesMigration_LegSeverThreshold.sql
+                    // (CasualtyRealism.md §2.1). The two must stay one band apart so that
+                    // "crippled but not severed" stays reachable for legs. Keep in step with the DB.
+                    CrippleWound = (uint)WoundLevel.Massive,
+                    SeverWound = (uint)WoundLevel.Mortal,
                     IsMotive = true,
                     IsVital = false
                 },
@@ -773,8 +914,13 @@ namespace OnlyWar.Models.Soldiers
                     NaturalArmor = 0,
                     WoundMultiplier = 1,
                     HitProbabilityMap = new int[3] { 160, 80, 1 },
-                    CrippleWound = (uint)WoundLevel.Critical,
-                    SeverWound = (uint)WoundLevel.Massive,
+                    // Cripple raised Critical -> Massive by
+                    // Database/RulesMigration_LegCrippleThreshold.sql, sever raised Massive ->
+                    // Mortal by Database/RulesMigration_LegSeverThreshold.sql
+                    // (CasualtyRealism.md §2.1). The two must stay one band apart so that
+                    // "crippled but not severed" stays reachable for legs. Keep in step with the DB.
+                    CrippleWound = (uint)WoundLevel.Massive,
+                    SeverWound = (uint)WoundLevel.Mortal,
                     IsMotive = true,
                     IsVital = false
                 },

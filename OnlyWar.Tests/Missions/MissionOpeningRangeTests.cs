@@ -98,9 +98,17 @@ public class MissionOpeningRangeTests
     // no longer delegates; it integrates the approach. See its comment for why the two questions
     // differ, and GradedRemovalCalibrationTests for the regression that pins the melee-only case.
     //
-    // What this guard tests is unchanged and still not tautological, because it brackets the answer
-    // from BOTH sides: a shooting force facing a melee force wants real standoff, but well inside
-    // its own weapon reach -- neither contact nor the un-opposed saturation range.
+    // UPPER BOUND REBASELINED (2026-08-05), and it is a RELAXATION -- record it as one. It was a
+    // flat `< 500`, chosen when SaturationFraction was 0.5 and "still half as effective as at my
+    // best" sat a long way inside weapon reach. At 0.1 the useful band deliberately runs close to
+    // reach, so 500 now encodes the old fraction rather than the property, and the quantity that
+    // keeps opening range OFF weapon reach is no longer the fraction at all -- it is the
+    // retreat-fire headroom in CalculatePreferredOpeningRange, which holds ten bounds of the
+    // enemy's own speed back from the saturation floor.
+    //
+    // So the bound is stated in that quantity instead. It still brackets from BOTH sides and still
+    // fails the Phase 6 defect this guard exists for, which answered weapon reach exactly. Measured
+    // 2026-08-05: 694 against a 1000-yard reach.
     [Fact]
     public void PreferredOpeningRange_IsTheDerivedBandNotWeaponReach()
     {
@@ -108,14 +116,16 @@ public class MissionOpeningRangeTests
         BattleSquad brawlers = CreateMeleeSquad();
 
         int opening = shooters.GetPreferredOpeningRange([brawlers]);
+        int headroom = (int)(10 * brawlers.GetSquadMove());
 
         Assert.True(
             opening > 0,
             "a force that can hurt the enemy at range should still want some standoff, not contact");
         Assert.True(
-            opening < 500,
-            $"opening range came back {opening} against a {LongRifleReach}-yard reach - that is the "
-            + "un-opposed saturation range Phase 7 replaced, not the derived engagement band");
+            opening <= LongRifleReach - headroom,
+            $"opening range came back {opening} against a {LongRifleReach}-yard reach, leaving less "
+            + $"than the {headroom} yards of retreat-fire headroom the derivation reserves - that is "
+            + "weapon reach, not the derived engagement band");
     }
 
     // --- fixtures ---

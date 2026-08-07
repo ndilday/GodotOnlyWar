@@ -263,6 +263,38 @@ public class RulesDatabaseValidationTests
     }
 
     [Fact]
+    public void SquadTemplates_PermitIndividualDetachment_ForExactlyTheHqSquadsAndChapterOffices()
+    {
+        // Pins RulesMigration_SpecialistDetachment.sql. The flag is two-sided
+        // (Design/Active/SpecialistAttachment.md §3.3): these eight formations may lend
+        // individuals to an order and may never be ordered as squads. Line squads must not
+        // carry it, or a tactical squad would silently stop being deployable.
+        var rules = RulesDatabaseFixture.LoadRules();
+        Dictionary<int, SquadTemplate> allTemplates = rules.Factions
+            .Where(faction => faction.SquadTemplates != null)
+            .SelectMany(faction => faction.SquadTemplates.Values)
+            .ToDictionary(template => template.Id);
+
+        int[] expected = [5, 6, 7, 8, 9, 10, 11, 19];
+        int[] actual = allTemplates.Values
+            .Where(template => template.PermitsIndividualDetachment)
+            .Select(template => template.Id)
+            .OrderBy(id => id)
+            .ToArray();
+        Assert.Equal(expected, actual);
+
+        // Line squads: Veteran, Tactical, Assault, Devastator, Scout.
+        foreach (int lineTemplateId in new[] { 0, 1, 2, 3, 4 })
+        {
+            Assert.False(allTemplates[lineTemplateId].PermitsIndividualDetachment);
+        }
+
+        // The flag must not have been implemented as Administrative: IsOperational is
+        // load-bearing for surgery staffing and recruitment/implantation.
+        Assert.All(expected, id => Assert.True(allTemplates[id].IsOperational));
+    }
+
+    [Fact]
     public void ForceGenerator_MobilisesADefendingForceForADefaultFactionGarrison()
     {
         // This drives the end-to-end path a PDF garrison takes when assaulted:

@@ -273,8 +273,13 @@ namespace OnlyWar.Helpers.Turns
             return squad?.Faction?.IsPlayerFaction == true
                 && squad.IsOperational
                 && squad.CurrentOrders == null
+                // A personnel pool never takes orders of its own, so it is never "idle" in
+                // the sense this warning means (Design/Active/SpecialistAttachment.md §3.3);
+                // and a formation with a member forward is contributing already.
+                && squad.SquadTemplate?.PermitsIndividualDetachment != true
+                && !Orders.OrderAttachment.HasAttachedMembers(squad)
                 && canDeployFromCurrentLocation
-                && squad.Members.Any(member => member.CanFight);
+                && squad.Members.Any(member => member.IsCombatEffective);
         }
 
         // A squad only counts as leaderless if its template actually calls for a leader.
@@ -304,7 +309,7 @@ namespace OnlyWar.Helpers.Turns
             string unit = string.IsNullOrWhiteSpace(squad.ParentUnit?.Name)
                 ? string.Empty
                 : $" - {squad.ParentUnit.Name}";
-            int combatReady = squad.Members.Count(member => member.CanFight);
+            int combatReady = squad.Members.Count(member => member.IsCombatEffective);
             string location = SquadLocationFormatter.Format(squad);
             return new EndTurnAttentionItem(
                 EndTurnWarningCategory.IdleDeployableSquads,

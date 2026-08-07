@@ -640,7 +640,7 @@ public partial class PlanetTacticalScreenController : DialogController
 		List<ValueTuple<string, string>> rows =
 		[
 			Row("Unit", squad.ParentUnit?.Name ?? "Unknown"),
-			Row("Fighting Strength", $"{squad.Members.Count(member => member.CanFight)}/{squad.Members.Count}"),
+			Row("Fighting Strength", $"{squad.Members.Count(member => member.IsCombatEffective)}/{squad.Members.Count}"),
 			Row("Location", squad.BoardedLocation != null ? $"Aboard {squad.BoardedLocation.Name}" : squad.CurrentRegion?.Name ?? "Unknown"),
 			Row("Orders", squad.CurrentOrders?.Mission.MissionType.ToString() ?? "Unassigned")
 		];
@@ -652,7 +652,7 @@ public partial class PlanetTacticalScreenController : DialogController
 			rows.Add(Row("Aggression", squad.CurrentOrders.LevelOfAggression.ToString()));
 		}
 		float? strengthBar = squad.Members.Count > 0
-			? (float)squad.Members.Count(member => member.CanFight) / squad.Members.Count
+			? (float)squad.Members.Count(member => member.IsCombatEffective) / squad.Members.Count
 			: null;
 		return [new DossierCardData("Squad", squad.Name, rows, OnlyWarStyle.PlayerAccent, strengthBar)];
 	}

@@ -172,6 +172,12 @@ CREATE TABLE Assignment (Id INTEGER PRIMARY KEY UNIQUE NOT NULL, MissionId INTEG
 -- Table: SquadOrder
 CREATE TABLE OrderSquad (OrderId INTEGER NOT NULL REFERENCES Assignment (Id), SquadId INTEGER NOT NULL REFERENCES Squad (Id));
 
+-- Table: OrderSoldier
+-- Individuals attached to an operation without their home squad (Order.AttachedSoldiers,
+-- Design/Active/SpecialistAttachment.md). The soldier's Soldier.SquadId still points at his home
+-- squad; this table is the only record that he is currently detached to an operation.
+CREATE TABLE OrderSoldier (OrderId INTEGER NOT NULL REFERENCES Assignment (Id), SoldierId INTEGER NOT NULL REFERENCES Soldier (Id));
+
 
 COMMIT TRANSACTION;
 PRAGMA foreign_keys = on;

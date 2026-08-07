@@ -93,6 +93,18 @@ namespace OnlyWar.Helpers.Missions
                         : $"Raid conducted in {regionName}; withdrew without engaging a worthwhile target.";
 
                 case MissionType.Ambush:
+                    // A detected ambush is a materially different thing to have lived through than a
+                    // sprung one, so the career log says which it was rather than crediting every
+                    // engagement to a successful ambush.
+                    if (classification.AmbushSpoiled != AmbushSpoilStage.NotSpoiled)
+                    {
+                        string discovery = classification.AmbushSpoiled == AmbushSpoilStage.DuringSetup
+                            ? $"Ambush in {regionName} was spotted while being set"
+                            : $"Ambush in {regionName} was discovered before it could be sprung";
+                        return killed > 0
+                            ? $"{discovery}; fought the {enemyName} in a straight engagement, {killed} enemy casualties."
+                            : $"{discovery}; fought the {enemyName} in a straight engagement.";
+                    }
                     return killed > 0
                         ? $"Ambush laid against the {enemyName} in {regionName}; {killed} enemy casualties."
                         : $"Attempted an ambush in {regionName}, but no target presented itself.";

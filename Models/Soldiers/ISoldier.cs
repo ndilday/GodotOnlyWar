@@ -23,7 +23,17 @@ namespace OnlyWar.Models.Soldiers
         float MoveSpeed { get; }
         Body Body { get; }
         Squad AssignedSquad { get; set; }
+        /// <summary>Hands and vital locations only -- excludes motive capability.</summary>
         bool CanFight { get; }
+        /// <summary>Motive locations only: <see cref="MotiveSpeedMultiplier"/> is above zero.</summary>
+        bool CanMove { get; }
+        /// <summary>
+        /// How much of his foot speed his motive wounds leave him, 1.0 down to 0.0
+        /// (Design/Active/CasualtyRealism.md §2.1). Zero means he cannot walk at all.
+        /// </summary>
+        float MotiveSpeedMultiplier { get; }
+        /// <summary><see cref="CanFight"/> and <see cref="CanMove"/>: still in the fight.</summary>
+        bool IsCombatEffective { get; }
         IReadOnlyCollection<Skill> Skills { get; }
 
         IReadOnlyList<int> FunctioningHandGroupIds { get; }

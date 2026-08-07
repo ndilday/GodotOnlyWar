@@ -58,9 +58,19 @@ namespace OnlyWar.Helpers.Missions.Ambush
             context.DaysElapsed++;
             float margin = missionTest.RunMissionCheck(context.MissionSquads, execution.Random);
 
-            return margin > 0.0f
-                ? MissionStepResult.Continue(new PerformAmbushMissionStep(), margin)
-                : MissionStepResult.Continue(new MeetingEngagementMissionStep(), margin);
+            if (margin > 0.0f)
+            {
+                return MissionStepResult.Continue(new PerformAmbushMissionStep(), margin);
+            }
+
+            // The setup was seen. The force still fights - but as a meeting engagement against an
+            // alerted enemy, not as an ambush - so the debrief is told why the plan changed before
+            // MeetingEngagementMissionStep logs the fight itself.
+            context.AmbushSpoiled = AmbushSpoilStage.DuringSetup;
+            context.AddLog(
+                $"Day {context.DaysElapsed}: Force was spotted moving into ambush positions; "
+                + "the enemy was alerted and no ambush could be set.");
+            return MissionStepResult.Continue(new MeetingEngagementMissionStep(), margin);
         }
 
         private static List<BattleSquad> PopulateOpposingForce(

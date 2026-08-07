@@ -31,6 +31,9 @@ namespace OnlyWar.Helpers.Battles.Aftermath
                     "A player army is required to record a fallen battle participant.");
             }
 
+            // Only his own death ends an attachment; releasing it here keeps a dead man out
+            // of an order's AttachedSoldiers (and out of the OrderSoldier save table).
+            Orders.OrderAttachment.Detach(soldier);
             soldier.AssignedSquad?.RemoveSquadMember(soldier);
             soldier.AssignedSquad = null;
             playerForce.Army.PlayerSoldierMap.Remove(soldier.Id);

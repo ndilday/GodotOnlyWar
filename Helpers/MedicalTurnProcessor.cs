@@ -21,6 +21,49 @@ namespace OnlyWar.Helpers
             }
         }
 
+        /// <summary>
+        /// The end-of-campaign-day pass (Design/Active/CasualtyRealism.md §2.5): species with
+        /// <see cref="SpeciesAbilities.AcceleratedHealing"/> shed their Negligible wounds
+        /// overnight. Everyone else is untouched and stays entirely on the weekly cascade.
+        ///
+        /// Idempotent by construction -- clearing a band that is already clear does nothing -- so
+        /// running it more often than once a day is harmless. That is what lets it be hung off the
+        /// mission day loop and the weekly upkeep pass without either having to know about the
+        /// other.
+        /// </summary>
+        public static void ApplyDailyHealing(IEnumerable<ISoldier> soldiers)
+        {
+            if (soldiers == null)
+            {
+                return;
+            }
+            foreach (ISoldier soldier in soldiers)
+            {
+                ApplyDailyHealing(soldier);
+            }
+        }
+
+        public static void ApplyDailyHealing(ISoldier soldier)
+        {
+            if (soldier?.Body == null || !HasAcceleratedHealing(soldier))
+            {
+                return;
+            }
+            foreach (HitLocation location in soldier.Body.HitLocations)
+            {
+                // A severed location is gone; nothing about it knits closed on its own.
+                if (location.IsSevered)
+                {
+                    continue;
+                }
+                location.Wounds.ClearNegligibleWounds();
+            }
+        }
+
+        private static bool HasAcceleratedHealing(ISoldier soldier) =>
+            soldier.Template?.Species?.Abilities.HasFlag(SpeciesAbilities.AcceleratedHealing)
+            ?? false;
+
         public static void ApplyWeeklyHealing(Body body)
         {
             if (body == null)

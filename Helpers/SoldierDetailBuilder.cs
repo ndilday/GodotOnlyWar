@@ -26,7 +26,7 @@ public class SoldierDetailBuilder
             cards.Add(new ChapterBrowserDetailCard("training", "Sergeant Report", "Recommendation", dossier.SergeantReport));
             cards.Add(new ChapterBrowserDetailCard("threat", "Battle History", "Combat record", FormatPairs(dossier.CombatRecord)));
             cards.Add(new ChapterBrowserDetailCard("award", "Honors", "Awards", FormatLines(dossier.Awards, "No awards recorded."), Scrollable: true));
-            cards.Add(new ChapterBrowserDetailCard("medical", "Injury Report", playerSoldier.CanFight ? "Fit report" : "Recovery report", dossier.InjuryReport));
+            cards.Add(new ChapterBrowserDetailCard("medical", "Injury Report", playerSoldier.IsCombatEffective ? "Fit report" : "Recovery report", dossier.InjuryReport));
             cards.Add(new ChapterBrowserDetailCard("archive", "Service Record", "Full history", FormatLines(dossier.History, "No history recorded."), Scrollable: true, FullHeight: true));
         }
         else
@@ -43,7 +43,7 @@ public class SoldierDetailBuilder
         return new ChapterBrowserDetail(
             GetSoldierIconKey(soldier),
             title,
-            $"{(soldier.CanFight ? "Available for duty" : "Wounded or impaired")} - {SquadLocationFormatter.Format(soldier.AssignedSquad)}",
+            $"{(soldier.IsCombatEffective ? "Available for duty" : "Wounded or impaired")} - {SquadLocationFormatter.Format(soldier.AssignedSquad)}",
             [],
             cards,
             includeOpenFullRecordAction ? "Open Full Record" : null,
@@ -52,7 +52,7 @@ public class SoldierDetailBuilder
 
     public static string GetSoldierIconKey(ISoldier soldier)
     {
-        if (!soldier.CanFight)
+        if (!soldier.IsCombatEffective)
         {
             return "wounded";
         }

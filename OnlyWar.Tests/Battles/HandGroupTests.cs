@@ -112,8 +112,8 @@ public class HandGroupTests
     {
         Soldier soldier = TestModelFactory.CreateSoldier();
         BattleSoldier battleSoldier = new(soldier, null);
-        Assert.True(battleSoldier.CanFight);
-        Assert.False(battleSoldier.IsSlow);
+        Assert.True(battleSoldier.IsCombatEffective);
+        Assert.Equal(1f, battleSoldier.MotiveSpeedMultiplier);
 
         WoundResolver resolver = new();
         resolver.OnSoldierFall += (_, _) => { };
@@ -126,9 +126,15 @@ public class HandGroupTests
 
         resolver.Resolve();
 
-        Assert.False(battleSoldier.CanFight);
-        Assert.True(battleSoldier.IsSlow);
-        Assert.Equal(soldier.MoveSpeed * 0.75f, battleSoldier.GetMoveSpeed());
+        // A ruined leg no longer clears CanFight itself -- it clears CanMove, and the
+        // combined predicate is what removes him from the battle. float.MaxValue damage is an
+        // Unsurvivable wound, well past the leg's Massive cripple/sever threshold, so the
+        // multiplier goes to zero rather than merely grading down.
+        Assert.True(battleSoldier.CanFight);
+        Assert.False(battleSoldier.CanMove);
+        Assert.False(battleSoldier.IsCombatEffective);
+        Assert.Equal(0f, battleSoldier.MotiveSpeedMultiplier);
+        Assert.Equal(0f, battleSoldier.GetMoveSpeed());
     }
 
     [Fact]
@@ -137,7 +143,7 @@ public class HandGroupTests
         Soldier soldier = TestModelFactory.CreateSoldier();
         BattleSoldier retainedWrapper = new(soldier, null);
         BattleSoldier activeWrapper = new(retainedWrapper, null);
-        Assert.True(retainedWrapper.CanFight);
+        Assert.True(retainedWrapper.IsCombatEffective);
 
         WoundResolver resolver = new();
         resolver.OnSoldierFall += (_, _) => { };
@@ -150,9 +156,9 @@ public class HandGroupTests
 
         resolver.Resolve();
 
-        Assert.False(activeWrapper.CanFight);
-        Assert.False(retainedWrapper.CanFight);
-        Assert.True(retainedWrapper.IsSlow);
+        Assert.False(activeWrapper.IsCombatEffective);
+        Assert.False(retainedWrapper.IsCombatEffective);
+        Assert.Equal(0f, retainedWrapper.MotiveSpeedMultiplier);
     }
 
     [Fact]

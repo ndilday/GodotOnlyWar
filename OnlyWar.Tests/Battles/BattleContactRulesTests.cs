@@ -124,6 +124,22 @@ public class BattleContactRulesTests
     }
 
     [Fact]
+    public void ReasonableShotKeepsSilentPursuitInContactWhileAimMatures()
+    {
+        var aimingPursuit = Input() with
+        {
+            MinimumCurrentSeparation = 9,
+            FastestPursuerSpeed = 7,
+            PursuersAttackedRecently = false,
+            PursuersHaveReasonableShot = true
+        };
+
+        Assert.Equal(
+            ContactBreakResult.RemainInContact,
+            BattleContactRules.Evaluate(aimingPursuit).Decision);
+    }
+
+    [Fact]
     public void StalledPursuitBreak_RequiresSilence_NoSpeedEdge_AndMeleeSeparation()
     {
         var stalled = Input() with
@@ -163,7 +179,8 @@ public class BattleContactRulesTests
         string trace = BattleContactRules.Evaluate(Input()).Trace.Render();
 
         Assert.Equal("CONTACT_EVAL turn=7 side=second active_pursuers=2 separation=15 attack_reach=10 " +
-                     "pursuer_speed=9 withdrawal_speed=7 pursuers_attacked=true rear_guard_active=false " +
+                     "pursuer_speed=9 withdrawal_speed=7 pursuers_attacked=true " +
+                     "pursuers_reasonable_shot=false rear_guard_active=false " +
                      "masked_progress=0 masked_required=7 decision=RemainInContact " +
                      "reason=pursuit_can_maintain_contact", trace);
     }

@@ -9,6 +9,7 @@ using OnlyWar.Models;
 using OnlyWar.Models.Missions;
 using OnlyWar.Models.Orders;
 using OnlyWar.Models.Planets;
+using OnlyWar.Models.Soldiers;
 using OnlyWar.Models.Squads;
 using System;
 using System.Collections.Generic;
@@ -27,6 +28,14 @@ public partial class RegionScreenController : DialogController
     private Region _currentRegion;
     private Region _targetRegion;
     private readonly List<Squad> _selectedSquads = [];
+    // Individual specialists picked out of the ATTACHMENTS roster group
+    // (Design/Active/SpecialistAttachment.md §7.1). Kept beside _selectedSquads and
+    // recomputed from the Tree at commit time for the same reason.
+    private readonly List<PlayerSoldier> _selectedSpecialists = [];
+    // The order being edited, when the player arrived via an inbound-order row. Lets its own
+    // attached specialists stay selectable (so they can be released) while everyone else's
+    // commitments stay hidden.
+    private Order _editingOrder;
     private AvailableMission _selectedMission;
     private Aggression _aggression = Aggression.Normal;
     private int _selectedTargetFactionId = -1;
@@ -88,6 +97,8 @@ public partial class RegionScreenController : DialogController
         _currentRegion = region;
         _targetRegion = region;
         _selectedSquads.Clear();
+        _selectedSpecialists.Clear();
+        _editingOrder = null;
         _selectedMission = null;
         _selectedTargetFactionId = -1;
         _aggression = Aggression.Normal;
@@ -178,6 +189,7 @@ public partial class RegionScreenController : DialogController
         }
 
         _targetRegion = target;
+        _editingOrder = order;
         _aggression = order.LevelOfAggression;
         _selectedMission = FindMissionForOrder(order);
         _selectedTargetFactionId = _selectedMission != null
@@ -186,7 +198,10 @@ public partial class RegionScreenController : DialogController
             : -1;
         RefreshWorkspace();
 
-        _view.SetSelectedKeys(order.AssignedSquads.Select(squad => SquadKey(squad.Id)).ToList());
+        // Both halves of the order re-select: its squads and the individuals lent to it.
+        _view.SetSelectedKeys(order.AssignedSquads.Select(squad => SquadKey(squad.Id))
+            .Concat(order.AttachedSoldiers.Select(soldier => SpecialistKey(soldier.Id)))
+            .ToList());
         RecomputeSelectedSquads();
         UpdateSelectionSummary();
         RefreshCommitBar();
@@ -205,18 +220,25 @@ public partial class RegionScreenController : DialogController
         // Treat the Tree as authoritative at commit time. This also protects assignment from any
         // delayed UI notification leaving the cached selection a frame behind the visible rows.
         RecomputeSelectedSquads();
+        // An order must always carry at least one squad: a specialist attaches to an
+        // operation, he does not constitute one.
         if (_selectedSquads.Count == 0 || _selectedMission == null || _targetRegion == null) return;
 
         int targetFactionId = ResolveTargetFactionId();
         Order newOrder = OrderAssignment.AssignSquadsToMission(
-            _selectedSquads.ToList(), _targetRegion, _selectedMission, targetFactionId, _aggression);
+            _selectedSquads.ToList(), _targetRegion, _selectedMission, targetFactionId, _aggression,
+            _selectedSpecialists.ToList());
         if (newOrder == null)
         {
-            GD.PushWarning($"Could not assign squads to {_selectedMission.Label} vs {_targetRegion.Name}: mission target could not be resolved.");
+            string rejected = DescribeRejectedSpecialist();
+            GD.PushWarning(rejected
+                ?? $"Could not assign squads to {_selectedMission.Label} vs {_targetRegion.Name}: mission target could not be resolved.");
             return;
         }
 
         _selectedSquads.Clear();
+        _selectedSpecialists.Clear();
+        _editingOrder = null;
         _view.ClearSelection();
         CampaignChanged?.Invoke(this, EventArgs.Empty);
         RefreshWorkspace();
@@ -332,9 +354,18 @@ public partial class RegionScreenController : DialogController
         _view.SetAggression(_aggression);
         _view.SetAggressionEnabled(_selectedMission != null);
         int count = _selectedSquads.Count;
+        int specialists = _selectedSpecialists.Count;
+        // A specialist can never be the whole operation, so the button stays gated on squads.
         bool enabled = count > 0 && _selectedMission != null;
-        _view.SetAssignButton(count == 1 ? "Assign 1 Squad" : $"Assign {count} Squads", enabled);
-        _view.SetUnassignButton(_selectedSquads.Any(squad => squad.CurrentOrders != null));
+        string label = count == 1 ? "Assign 1 Squad" : $"Assign {count} Squads";
+        if (specialists > 0)
+        {
+            label += specialists == 1 ? " + 1 Specialist" : $" + {specialists} Specialists";
+        }
+        _view.SetAssignButton(label, enabled);
+        _view.SetUnassignButton(
+            _selectedSquads.Any(squad => squad.CurrentOrders != null)
+            || _selectedSpecialists.Any(soldier => soldier.AttachedOrder != null));
     }
 
     // Every dossier reads a side's pooled works rather than one faction's stock, so the same
@@ -417,7 +448,38 @@ public partial class RegionScreenController : DialogController
     {
         if (_currentRegion == null) return Array.Empty<CommandTreeNode>();
 
-        return BuildUnitNodes();
+        return BuildUnitNodes()
+            .Concat(BuildAttachmentNodes())
+            .ToList();
+    }
+
+    // The ATTACHMENTS group: individuals a personnel-pool formation landed here may lend to
+    // this operation. Empty (and therefore absent) unless such a formation is in this region.
+    private List<CommandTreeNode> BuildAttachmentNodes()
+    {
+        IReadOnlyList<SpecialistOption> candidates = SpecialistAvailability.EnumerateCandidates(
+            GetPlayerRegionFaction(), _currentRegion, _editingOrder);
+        if (candidates.Count == 0) return [];
+
+        List<CommandTreeNode> children = candidates
+            .Select(option => new CommandTreeNode(
+                SpecialistKey(option.Soldier.Id),
+                option.Label,
+                null,
+                IconAtlas.GetSquadIconKey(option.HomeSquad?.SquadTemplate),
+                option.StatusLabel))
+            .ToList();
+
+        return
+        [
+            new CommandTreeNode(
+                "attachments",
+                $"ATTACHMENTS · {children.Count} available",
+                children,
+                null,
+                null,
+                false)
+        ];
     }
 
     private List<CommandTreeNode> BuildUnitNodes()
@@ -426,8 +488,11 @@ public partial class RegionScreenController : DialogController
         List<CommandTreeNode> units = [];
         if (playerFaction != null)
         {
+            // IsDeployableFormation also drops the personnel pools (HQ squads and the four
+            // chapter offices), which no longer deploy as units at all - their people reach
+            // the field through the ATTACHMENTS group instead (§3.3).
             foreach (IGrouping<OnlyWar.Models.Units.Unit, Squad> group in playerFaction.LandedSquads
-                .Where(squad => squad.IsOperational && squad.Members.Count > 0)
+                .Where(SpecialistAvailability.IsDeployableFormation)
                 .GroupBy(squad => squad.ParentUnit))
             {
                 List<CommandTreeNode> squadNodes = group
@@ -458,36 +523,84 @@ public partial class RegionScreenController : DialogController
         return units;
     }
 
+    // Available strength, not headcount: a member lent to another operation is on the roll but
+    // not on hand (§4). Squad.Members is deliberately never modified by attachment.
     private static string SquadRosterLabel(Squad squad)
     {
-        string strength = $"{squad.Members.Count(member => member.CanFight)}/{squad.Members.Count}";
-        return $"{squad.Name} | {strength}";
+        int available = squad.Members.Count(member =>
+            member.IsCombatEffective
+            && (member as PlayerSoldier)?.AttachedOrder == null);
+        return $"{squad.Name} | {available}/{squad.Members.Count}";
     }
 
     private void UpdateSelectionSummary()
     {
         int count = _selectedSquads.Count;
-        int fighting = _selectedSquads.Sum(squad => squad.Members.Count(member => member.CanFight));
-        string summary = count == 0
-            ? "Select squads. Pick a target hex and mission, then assign."
-            : $"{count} squad{(count == 1 ? "" : "s")} selected · {fighting} fighting";
+        int fighting = _selectedSquads.Sum(squad => squad.Members.Count(member => member.IsCombatEffective));
+        int specialists = _selectedSpecialists.Count;
+        string summary;
+        if (count == 0 && specialists == 0)
+        {
+            summary = "Select squads. Pick a target hex and mission, then assign.";
+        }
+        else
+        {
+            summary = $"{count} squad{(count == 1 ? "" : "s")} selected · {fighting} fighting";
+            if (specialists > 0)
+            {
+                summary += $" · {specialists} specialist{(specialists == 1 ? "" : "s")} attached";
+            }
+        }
         _view.SetSelectionTitle("ROSTER", summary);
     }
 
     private void RecomputeSelectedSquads()
     {
         _selectedSquads.Clear();
+        _selectedSpecialists.Clear();
         RegionFaction playerFaction = GetPlayerRegionFaction();
         if (playerFaction == null) return;
 
-        HashSet<int> selectedIds = _view.GetSelectedKeys()
+        IReadOnlyList<string> keys = _view.GetSelectedKeys();
+        HashSet<int> selectedIds = keys
             .Where(key => key.StartsWith("squad:"))
+            .Select(key => int.Parse(key.Split(':')[1]))
+            .ToHashSet();
+        if (selectedIds.Count > 0)
+        {
+            _selectedSquads.AddRange(playerFaction.LandedSquads.Where(
+                squad => squad.IsOperational && selectedIds.Contains(squad.Id)));
+        }
+        RecomputeSelectedSpecialists(keys, playerFaction);
+    }
+
+    private void RecomputeSelectedSpecialists(
+        IReadOnlyList<string> keys, RegionFaction playerFaction)
+    {
+        HashSet<int> selectedIds = keys
+            .Where(key => key.StartsWith("soldier:"))
             .Select(key => int.Parse(key.Split(':')[1]))
             .ToHashSet();
         if (selectedIds.Count == 0) return;
 
-        _selectedSquads.AddRange(playerFaction.LandedSquads.Where(
-            squad => squad.IsOperational && selectedIds.Contains(squad.Id)));
+        _selectedSpecialists.AddRange(playerFaction.LandedSquads
+            .SelectMany(squad => squad.Members.OfType<PlayerSoldier>())
+            .Where(soldier => selectedIds.Contains(soldier.Id)));
+    }
+
+    // Names the specialist that caused a rejected assignment, so the warning is actionable
+    // rather than always blaming the mission target.
+    private string DescribeRejectedSpecialist()
+    {
+        foreach (PlayerSoldier soldier in _selectedSpecialists)
+        {
+            if (!OrderAttachment.CanAttach(
+                    soldier, _editingOrder, _selectedSquads, _currentRegion, out string reason))
+            {
+                return reason;
+            }
+        }
+        return null;
     }
 
     private Squad ResolveSquadFromKey(string key)
@@ -503,8 +616,14 @@ public partial class RegionScreenController : DialogController
         // transaction. Read the Tree again at commit time so a quick Unassign click cannot operate
         // on the previous selection and leave the inbound-order count stale.
         RecomputeSelectedSquads();
-        if (!OrderAssignment.UnassignSquads(_selectedSquads)) return;
+        bool changed = OrderAssignment.UnassignSquads(_selectedSquads);
+        // Order matters only in that releasing squads may already have released the
+        // specialists (an order losing its last squad ends); UnassignSpecialists is a no-op
+        // for anyone already home.
+        changed |= OrderAssignment.UnassignSpecialists(_selectedSpecialists);
+        if (!changed) return;
 
+        _editingOrder = null;
         CampaignChanged?.Invoke(this, EventArgs.Empty);
         RefreshWorkspace();
     }
@@ -542,6 +661,8 @@ public partial class RegionScreenController : DialogController
     }
 
     private static string SquadKey(int squadId) => $"squad:{squadId}";
+
+    private static string SpecialistKey(int soldierId) => $"soldier:{soldierId}";
 
     private string GetDirectionFromCurrentToNeighbour(Region currentRegion, Region neighbourRegion)
     {

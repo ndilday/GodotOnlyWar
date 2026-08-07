@@ -116,9 +116,14 @@ public partial class ApothecariumScreenView : MainScreenView
         ShowPanel(_soldierPanel);
         _soldierIcon.Texture = IconAtlas.GetIcon(summary.IconKey);
         _soldierTitle.Text = summary.Name;
-        _soldierSubtitle.Text = summary.Assignment;
+        // Field-care coverage rides on the assignment line rather than claiming a metric tile: it is
+        // context for the recovery numbers beside it, not a fifth headline figure
+        // (Design/Active/CasualtyRealism.md §2.6).
+        _soldierSubtitle.Text = string.IsNullOrEmpty(summary.FieldCareStatus)
+            ? summary.Assignment
+            : $"{summary.Assignment}\n{summary.FieldCareStatus}";
         PopulateMetrics(_soldierMetrics, [
-            ("Status", summary.CanFight ? "Ready" : "Out", summary.CanFight ? MedicalSeverity.Stable : MedicalSeverity.Critical),
+            ("Status", summary.IsCombatEffective ? "Ready" : "Out", summary.IsCombatEffective ? MedicalSeverity.Stable : MedicalSeverity.Critical),
             ("Recovery", summary.ReplacementOptions.Count > 0 ? "Replacement" : $"{summary.MaxRecoveryWeeks} wk", summary.ReplacementOptions.Count > 0 ? MedicalSeverity.Critical : MedicalSeverity.Watch),
             ("Gene-seed", summary.GeneSeedStatus, summary.GeneSeedStatus == "Safe" ? MedicalSeverity.Stable : MedicalSeverity.Critical),
             ("Wounds", summary.Wounds.Count(w => w.Severity > MedicalSeverity.None).ToString(), summary.WorstSeverity)

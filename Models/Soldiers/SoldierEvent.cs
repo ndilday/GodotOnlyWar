@@ -21,6 +21,10 @@ namespace OnlyWar.Models.Soldiers
         // Whether a fallen brother's gene-seed was recovered, destroyed, or immature
         // (PRD 4.8 / 4.12). Recorded at roster removal, distinct from the Death note.
         GeneseedRecovery = 9,
+        // Taken out of a battle alive -- motive capability gone, a weapon hand ruined, or a vital
+        // location crippled short of severed -- and recovered from the field
+        // (Design/Active/CasualtyRealism.md §2.3). Distinct from Death: he is still on the roster.
+        Incapacitated = 10,
 
         // Reserved for planned notable career events:
         FirstBlood = 100,

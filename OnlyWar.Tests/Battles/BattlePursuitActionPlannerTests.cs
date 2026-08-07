@@ -58,6 +58,32 @@ public class BattlePursuitActionPlannerTests
     }
 
     [Fact]
+    public void Pursuit_HoldCommitmentKeepsAimingStationaryUntilShotOrInvalidation()
+    {
+        BattleSquad pursuer = CreateSquad("Committed Pursuer", 72_035, Loadout.FireSupport);
+        BattleSquad withdrawing = CreateSquad("Committed Quarry", 72_036);
+        Fixture fixture = CreateFixture(
+            (pursuer, true, 0, 0),
+            (withdrawing, false, 50, 0));
+        BattleSoldier shooter = pursuer.Soldiers[0];
+        shooter.Aim = new ValueTuple<int, RangedWeapon, int>(
+            withdrawing.Soldiers[0].Soldier.Id,
+            shooter.EquippedRangedWeapons[0],
+            1);
+        pursuer.LastEngagementOptionKind = EngagementOptionKind.Hold;
+
+        SquadEngagementDecision decision = PlanPursuit(
+            fixture,
+            pursuer,
+            [withdrawing],
+            materialize: false);
+
+        Assert.Single(decision.Candidates);
+        Assert.Equal(EngagementOptionKind.Hold, decision.Chosen.Kind);
+        Assert.Equal(SquadMovementTier.Stationary, decision.Chosen.Tier);
+    }
+
+    [Fact]
     public void Hold_BringsTheGunsToBearWithoutMoving()
     {
         // The chase is unwinnable, so the squad plants itself and works the target with
@@ -76,6 +102,29 @@ public class BattlePursuitActionPlannerTests
         Assert.Empty(fixture.MeleeActions);
         // Aiming and firing both land in the shoot segment; which one the planner picks this
         // turn is its own business, but it must be engaging the withdrawer either way.
+        Assert.NotEmpty(fixture.ShootActions);
+    }
+
+    [Fact]
+    public void Standoff_HoldsAndFiresWithoutMovement()
+    {
+        BattleSquad pursuer = CreateSquad("Standoff Pursuer", 72_043);
+        BattleSquad withdrawing = CreateSquad("Standoff Quarry", 72_044);
+        Fixture fixture = CreateFixture(
+            (pursuer, true, 0, 0),
+            (withdrawing, false, 10, 0));
+
+        SquadEngagementDecision decision = PlanPursuit(
+            fixture,
+            pursuer,
+            [withdrawing],
+            role: EngagementSquadRole.Standoff);
+
+        Assert.Equal(EngagementOptionKind.Hold, decision.Chosen.Kind);
+        Assert.Single(decision.Candidates);
+        Assert.Equal(EngagementOptionKind.Hold, decision.Candidates[0].Kind);
+        Assert.Equal(SquadMovementTier.Stationary, pursuer.MovementTier);
+        Assert.Empty(fixture.MoveActions);
         Assert.NotEmpty(fixture.ShootActions);
     }
 

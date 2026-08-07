@@ -23,6 +23,8 @@ public partial class ChapterController : MainScreenController
     private int? _currentDetailSoldierId;
     private bool _pendingBlackCarapaceSurgery;
     private ConfirmationDialog _transferConfirmationDialog;
+    private ConfirmationDialog _recallConfirmationDialog;
+    private int? _pendingRecallSoldierId;
     private AcceptDialog _transferBlockedDialog;
     private ChapterFilterDialog _filterDialog;
     private LoadoutDoctrineDialog _loadoutDoctrineDialog;
@@ -52,6 +54,14 @@ public partial class ChapterController : MainScreenController
         };
         _transferConfirmationDialog.Confirmed += OnTransferConfirmed;
         AddChild(_transferConfirmationDialog);
+
+        ChapterView.DetailPrimaryActionPressed += OnDetailPrimaryActionPressed;
+        _recallConfirmationDialog = new ConfirmationDialog
+        {
+            Title = "Confirm Recall"
+        };
+        _recallConfirmationDialog.Confirmed += OnRecallConfirmed;
+        AddChild(_recallConfirmationDialog);
 
         _transferBlockedDialog = new AcceptDialog
         {
@@ -84,9 +94,14 @@ public partial class ChapterController : MainScreenController
         ChapterView.TransferTargetSelected -= OnTransferTargetSelected;
         ChapterView.FilterButtonPressed -= OnFilterButtonPressed;
         ChapterView.ChapterLoadoutsPressed -= OnChapterLoadoutsPressed;
+        ChapterView.DetailPrimaryActionPressed -= OnDetailPrimaryActionPressed;
         if (_transferConfirmationDialog != null)
         {
             _transferConfirmationDialog.Confirmed -= OnTransferConfirmed;
+        }
+        if (_recallConfirmationDialog != null)
+        {
+            _recallConfirmationDialog.Confirmed -= OnRecallConfirmed;
         }
         if (_filterDialog != null)
         {
@@ -490,7 +505,7 @@ public partial class ChapterController : MainScreenController
                 soldier.Id,
                 GetSoldierIconKey(soldier),
                 $"{soldier.Template.Name} {soldier.Name}",
-                soldier.CanFight ? "Available" : "Wounded or impaired",
+                soldier.IsCombatEffective ? "Available" : "Wounded or impaired",
                 true,
                 selectedSoldier?.Id == soldier.Id,
                 "i"))
@@ -521,7 +536,7 @@ public partial class ChapterController : MainScreenController
                 squadMember.Id,
                 GetSoldierIconKey(squadMember),
                 $"{squadMember.Template.Name} {squadMember.Name}",
-                squadMember.CanFight ? "Available" : "Wounded or impaired",
+                squadMember.IsCombatEffective ? "Available" : "Wounded or impaired",
                 true,
                 squadMember.Id == soldier.Id,
                 "i"))
@@ -534,7 +549,42 @@ public partial class ChapterController : MainScreenController
     private void SetSoldierDetail(ISoldier soldier)
     {
         _currentDetailSoldierId = soldier.Id;
-        ChapterView.SetDetail(_soldierDetailBuilder.Build(soldier, false, includeSquadInTitle: true));
+        ChapterBrowserDetail detail =
+            _soldierDetailBuilder.Build(soldier, false, includeSquadInTitle: true);
+
+        // A brother attached to an operation (Design/Active/SpecialistAttachment.md) is in the
+        // field with someone else's force. Surface that, offer the recall, and withhold the
+        // transfer options - SoldierTransferService.ApplyTransfer refuses him anyway (§3.4),
+        // so offering them would only produce a silent no-op.
+        PlayerSoldier attached = soldier as PlayerSoldier;
+        if (attached?.AttachedOrder != null)
+        {
+            string where = attached.AttachedOrder.Mission?.RegionFaction?.Region?.Name
+                ?? "an ongoing operation";
+            detail = detail with
+            {
+                Cards =
+                [
+                    new ChapterBrowserDetailCard(
+                        "target",
+                        "Attached to Operation",
+                        where,
+                        $"{soldier.Name} is detached from {attached.AssignedSquad?.Name} and "
+                        + $"serving with the force committed to {where}. He returns when the "
+                        + "operation ends, or on recall. Transfers are unavailable while he is "
+                        + "in the field."),
+                    .. detail.Cards
+                ],
+                PrimaryActionText = "Recall from operation",
+                PrimaryActionIconKey = "archive"
+            };
+            ChapterView.SetDetail(detail);
+            _transferOptions = [];
+            ChapterView.SetTransferOptions([]);
+            return;
+        }
+
+        ChapterView.SetDetail(detail);
         if (soldier is PlayerSoldier playerSoldier)
         {
             _transferOptions = _transferService.GetTransferOptions(
@@ -547,6 +597,36 @@ public partial class ChapterController : MainScreenController
             _transferOptions = [];
             ChapterView.SetTransferOptions([]);
         }
+    }
+
+    // "Recall from operation" on an attached brother's detail card. Routed through the same
+    // confirmation dialog transfers use, so the two destructive-ish actions read alike.
+    private void OnDetailPrimaryActionPressed(object sender, EventArgs e)
+    {
+        if (!_currentDetailSoldierId.HasValue
+            || GetSoldier(_currentDetailSoldierId.Value) is not PlayerSoldier soldier
+            || soldier.AttachedOrder == null)
+        {
+            return;
+        }
+        _pendingRecallSoldierId = soldier.Id;
+        _recallConfirmationDialog.DialogText =
+            $"Recall {soldier.Template.Name} {soldier.Name} from the operation in "
+            + $"{soldier.AttachedOrder.Mission?.RegionFaction?.Region?.Name ?? "the field"}? "
+            + $"He rejoins {soldier.AssignedSquad?.Name} immediately.";
+        _recallConfirmationDialog.PopupCentered();
+    }
+
+    private void OnRecallConfirmed()
+    {
+        if (!_pendingRecallSoldierId.HasValue) return;
+        int soldierId = _pendingRecallSoldierId.Value;
+        _pendingRecallSoldierId = null;
+        if (GetSoldier(soldierId) is not PlayerSoldier soldier) return;
+
+        OnlyWar.Helpers.Orders.OrderAttachment.Detach(soldier);
+        CampaignChanged?.Invoke(this, EventArgs.Empty);
+        RenderCurrentPath();
     }
 
     // Renders the active filter as a flat, drillable soldier list scoped to the current
@@ -569,7 +649,7 @@ public partial class ChapterController : MainScreenController
                 soldier.Id,
                 GetSoldierIconKey(soldier),
                 $"{soldier.Template.Name} {soldier.Name}",
-                soldier.CanFight ? "Available" : "Wounded or impaired",
+                soldier.IsCombatEffective ? "Available" : "Wounded or impaired",
                 true,
                 selected?.Id == soldier.Id,
                 "i"))
@@ -763,7 +843,7 @@ public partial class ChapterController : MainScreenController
     {
         int soldierCount = chapter.GetAllMembers().Count();
         int squadCount = chapter.GetAllSquads().Count();
-        int woundedCount = chapter.GetAllMembers().Count(soldier => !soldier.CanFight);
+        int woundedCount = chapter.GetAllMembers().Count(soldier => !soldier.IsCombatEffective);
 
         // Scouts are neophytes, not yet full battle brothers, so report them separately
         // from the battle-brother line. Their sergeants are full marines leading them.
@@ -819,7 +899,7 @@ public partial class ChapterController : MainScreenController
     private ChapterBrowserDetail BuildCompanyDetail(Unit company, Squad selectedSquad)
     {
         int soldierCount = company.GetAllMembers().Count();
-        int woundedCount = company.GetAllMembers().Count(soldier => !soldier.CanFight);
+        int woundedCount = company.GetAllMembers().Count(soldier => !soldier.IsCombatEffective);
 
         List<ChapterBrowserDetailCard> cards =
         [
@@ -851,11 +931,19 @@ public partial class ChapterController : MainScreenController
 
     private ChapterBrowserDetail BuildSquadDetail(Squad squad, ISoldier selectedSoldier)
     {
-        int woundedCount = squad.Members.Count(soldier => !soldier.CanFight);
+        int woundedCount = squad.Members.Count(soldier => !soldier.IsCombatEffective);
+        // Headcount stays whole (attachment never touches Squad.Members); this is the
+        // "available right now" counterpart the roster needs.
+        int attachedCount = squad.Members
+            .OfType<PlayerSoldier>()
+            .Count(soldier => soldier.AttachedOrder != null);
+        string attachedNote = attachedCount == 0
+            ? ""
+            : $" {attachedCount} attached to operations elsewhere.";
 
         List<ChapterBrowserDetailCard> cards =
         [
-            new ChapterBrowserDetailCard(GetSquadIconKey(squad), "Squad Composition", squad.SquadTemplate.Name, $"{squad.Members.Count} battle brothers assigned."),
+            new ChapterBrowserDetailCard(GetSquadIconKey(squad), "Squad Composition", squad.SquadTemplate.Name, $"{squad.Members.Count} battle brothers assigned.{attachedNote}"),
             new ChapterBrowserDetailCard("medical", "Casualties", "Current condition", $"{woundedCount} soldiers are wounded or impaired."),
             new ChapterBrowserDetailCard("archive", "Squad Record", "Chronicle", "Squad history, honors, and mission record can expand here.")
         ];
@@ -865,7 +953,7 @@ public partial class ChapterController : MainScreenController
             cards.Insert(0, new ChapterBrowserDetailCard(
                 GetSoldierIconKey(selectedSoldier),
                 $"Selected: {selectedSoldier.Template.Name} {selectedSoldier.Name}",
-                selectedSoldier.CanFight ? "Available" : "Wounded or impaired",
+                selectedSoldier.IsCombatEffective ? "Available" : "Wounded or impaired",
                 "Select a soldier for preview; use the detail button to open the existing soldier display flow."));
         }
 

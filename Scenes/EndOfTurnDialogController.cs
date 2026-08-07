@@ -379,7 +379,9 @@ public partial class EndOfTurnDialogController : DialogController
                 region?.Name,
                 region?.Planet?.Name);
             MissionOutcomeClassification classification = MissionOutcomeClassifier.Classify(context);
-            string summary = MissionReportSummaryBuilder.BuildSummary(classification, location);
+            string summary = MissionReportSummaryBuilder.BuildSummary(classification, location)
+                + MissionReportSummaryBuilder.BuildFriendlyCasualtyLine(classification)
+                + MissionReportSummaryBuilder.BuildFieldCareLine(classification);
             string outcomeStatus = MissionReportSummaryBuilder.BuildOutcomeStatus(classification);
             IReadOnlyList<MissionDebriefLine> lines = context.DebriefLines.Count > 0
                 ? context.DebriefLines

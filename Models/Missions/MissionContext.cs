@@ -35,9 +35,28 @@ namespace OnlyWar.Models.Missions
         }
     }
 
+    // Why an ambush never got to spring. Both failure points end in the same meeting engagement, and
+    // without this the debrief showed only "Force accepted engagement with ..." - indistinguishable
+    // from a mission that was never an ambush at all.
+    public enum AmbushSpoilStage
+    {
+        // Either not an ambush, or the ambush was sprung as intended.
+        NotSpoiled = 0,
+        // Spotted while moving into position: the ambush was never set (PositionAmbushMissionStep).
+        DuringSetup,
+        // Set successfully, then discovered before the enemy walked in (PerformAmbushMissionStep).
+        BeforeSpringing
+    }
+
+    // Ordered worst-first: the debrief roster sorts on this.
     public enum BattleCasualtyDisposition
     {
         Dead,
+        // Out of the fight but alive, and carried off the field
+        // (Design/Active/CasualtyRealism.md §2.3). Listed above ReplacementRequired because an
+        // incapacitated brother is usually also awaiting a replacement limb, and "he went down"
+        // is the more important fact.
+        Incapacitated,
         ReplacementRequired,
         Recovering
     }
@@ -54,7 +73,10 @@ namespace OnlyWar.Models.Missions
     public sealed record BattleDebriefReport(
         int PlayerDeaths,
         int OpposingDeaths,
-        IReadOnlyList<BattleCasualtyEntry> PlayerCasualties);
+        IReadOnlyList<BattleCasualtyEntry> PlayerCasualties,
+        // Brothers taken out of this engagement alive. Appended rather than inserted so existing
+        // three-argument construction keeps compiling and keeps meaning what it meant.
+        int PlayerIncapacitated = 0);
 
     public class MissionContext
     {
@@ -173,6 +195,29 @@ namespace OnlyWar.Models.Missions
         // land on the same enemy.
         public int EnemyKillCredits { get; set; }
 
+        // What this mission cost the Chapter, accumulated across every engagement in it
+        // (Design/Active/CasualtyRealism.md §2.3). Counted against the force that STARTED the
+        // mission, so a brother can appear in exactly one of the two totals and only once.
+        public int FriendlyDeaths { get; private set; }
+        public int FriendlyIncapacitated { get; private set; }
+
+        /// <summary>
+        /// What the Apothecary attached to this order did over the operation
+        /// (Design/Active/CasualtyRealism.md §2.6, Phase 2b). Null when the order had none.
+        ///
+        /// This exists because of SpecialistAttachment.md §8 trap 3: an attached specialist is in no
+        /// BattleSquad, so <see cref="StartingPlayerParticipants"/> excludes him, he earns no field
+        /// XP through the battle path, and he would appear in NO debrief at all. That is consistent
+        /// with having no battlefield presence, and it would still read as a bug the first time a
+        /// player sends an Apothecary out and sees no trace of him.
+        ///
+        /// Order-wide, not element-wide: one order can produce several MissionContexts, and all of
+        /// them carry the same report. The treatment itself ran exactly once.
+        /// </summary>
+        public Helpers.Medical.FieldCareReport FieldCare { get; set; }
+        private readonly HashSet<int> _friendlyDeadIds = [];
+        private readonly HashSet<int> _friendlyIncapacitatedIds = [];
+
         // --- Structured mission-outcome signals (PRD 5.3 "Mission Field Experience & Records") ---
         // Set by the individual mission steps at the point each event resolves, so downstream consumers
         // (MissionOutcomeClassifier -> the career-log recorder and the end-of-turn report) classify how
@@ -202,6 +247,11 @@ namespace OnlyWar.Models.Missions
         public bool ObjectiveAborted { get; set; }
         // The operation found nothing worthwhile to engage (a raid/ambush that turned up no target).
         public bool NoViableTarget { get; set; }
+        // Set by the ambush steps when a stealth check fails and the ambush degrades into a
+        // straight meeting engagement, so the debrief can say which of the two happened. Like the
+        // flags above it is only ever set forward: a setup that was spotted can never later be
+        // discovered in position, since it never reaches PerformAmbushMissionStep.
+        public AmbushSpoilStage AmbushSpoiled { get; set; }
         // An assassination force reached and identified its target.
         public bool TargetLocated { get; set; }
         // The level of enemy works a sabotage mission actually knocked down, and the level that was
@@ -256,7 +306,7 @@ namespace OnlyWar.Models.Missions
         public void AddBattleReport(BattleHistory battleHistory)
         {
             BattleDebriefReport report = BattleDebriefReportBuilder.Build(battleHistory);
-            string summary = $"Friendly dead: {report.PlayerDeaths}    Opposing dead: {report.OpposingDeaths}";
+            string summary = BattleDebriefReportBuilder.BuildSummaryLine(report);
             Log.Add(summary);
             DebriefLines.Add(new MissionDebriefLine(
                 summary,
@@ -285,10 +335,41 @@ namespace OnlyWar.Models.Missions
                 TargetEliminated = true;
             }
 
+            RecordFriendlyCasualties(battleHistory);
+
             if (MissionSideWithdrewOrRouted(battleHistory.Outcome))
             {
                 ForceWithdrewUnderFire = true;
             }
+        }
+
+        /// <summary>
+        /// Folds one engagement's Chapter casualties into the mission totals. Restricted to the
+        /// brothers this mission started with, so a shared battle (a reciprocal assault) never
+        /// bills one mission for the other's losses, and deduplicated by soldier id because a
+        /// brother who goes down on day 2 is still down on day 3 and must not be counted twice.
+        /// Incapacitation is a real state change from a prior day's tally only in one direction:
+        /// a man already counted as incapacitated who later dies moves to the dead total.
+        /// </summary>
+        private void RecordFriendlyCasualties(BattleHistory battleHistory)
+        {
+            if (battleHistory == null) return;
+            foreach (PlayerSoldier participant in StartingPlayerParticipants)
+            {
+                int id = participant.Id;
+                if (battleHistory.KilledSoldierIds.Contains(id))
+                {
+                    _friendlyIncapacitatedIds.Remove(id);
+                    _friendlyDeadIds.Add(id);
+                }
+                else if (battleHistory.IncapacitatedSoldierIds.Contains(id)
+                    && !_friendlyDeadIds.Contains(id))
+                {
+                    _friendlyIncapacitatedIds.Add(id);
+                }
+            }
+            FriendlyDeaths = _friendlyDeadIds.Count;
+            FriendlyIncapacitated = _friendlyIncapacitatedIds.Count;
         }
 
         /// <summary>
@@ -307,6 +388,7 @@ namespace OnlyWar.Models.Missions
             EnemyKillCredits += missionSide == BattleSide.Attacker
                 ? Math.Max(0, battleHistory?.FirstSideEnemiesKilled ?? 0)
                 : Math.Max(0, enemyDeaths);
+            RecordFriendlyCasualties(battleHistory);
         }
 
         public BattleSideProfile CreateMissionBattleProfile(BattleRole role) =>

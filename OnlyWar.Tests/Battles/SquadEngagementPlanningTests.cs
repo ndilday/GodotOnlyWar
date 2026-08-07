@@ -212,6 +212,131 @@ public class SquadEngagementPlanningTests
     }
 
     [Fact]
+    public void Pursuit_RunPressureTapersAcrossPreferredBand()
+    {
+        // Run pressure is a band, not a reach cliff: zero at PreferredBandLower, half-way in
+        // the middle, and full at PreferredBandUpper. The quarry is Bound so the test also
+        // exercises the net-closing-speed factor used by a real withdrawal pursuit.
+        float[] distances = [70, 85, 100];
+        List<float> runTerms = [];
+        foreach (int distance in distances)
+        {
+            BattleSquad pursuer = Squad("Band Pursuer", 81_250 + distance, 20, 0.05f);
+            BattleSquad quarry = Squad("Band Quarry", 82_250 + distance, 10, 0.9f);
+            EquipRifle(pursuer.Soldiers[0], 91_250 + distance, range: 100, damage: 20);
+            EquipMelee(quarry.Soldiers[0], 92_250 + distance);
+            ((Soldier)pursuer.Soldiers[0].Soldier).MoveSpeed = 8;
+            ((Soldier)quarry.Soldiers[0].Soldier).MoveSpeed = 4;
+            BattleGridManager grid = new();
+            Place(grid, pursuer, true, 0, 0);
+            Place(grid, quarry, false, distance, 0);
+            Dictionary<int, EngagementRoleConstraint> constraints = new()
+            {
+                [pursuer.Id] = new EngagementRoleConstraint(
+                    EngagementSquadRole.Pursuit,
+                    QuarryRunSpeed: quarry.GetSquadMove(),
+                    RoleTargets: [quarry]),
+                [quarry.Id] = new EngagementRoleConstraint(EngagementSquadRole.Bound)
+            };
+            BattleEngagementFrameBuilder.PairedFrame paired =
+                BattleEngagementFrameBuilder.Build([pursuer], [quarry], constraints);
+            SquadEngagementDecision decision = Planner(grid, pursuer, quarry)
+                .ChooseEngagementOption(
+                    pursuer,
+                    paired.Frames[pursuer.Id],
+                    paired.Profiles,
+                    paired.Frames,
+                    [pursuer],
+                    [quarry],
+                    [quarry]);
+
+            runTerms.Add(decision.Candidates.Single(candidate =>
+                candidate.Kind == EngagementOptionKind.RunToward).RoleTerm);
+        }
+
+        Assert.Equal(0, runTerms[0], 3);
+        Assert.InRange(runTerms[1], runTerms[0] + 0.1f, runTerms[2] - 0.1f);
+        Assert.True(runTerms[2] > runTerms[1]);
+    }
+
+    [Fact]
+    public void Pursuit_HoldCarriesProjectedFullAimFireValue()
+    {
+        BattleSquad pursuer = Squad("Projected Shooter", 81_260, 20, 0.05f);
+        BattleSquad quarry = Squad("Projected Quarry", 82_260, 10, 0.9f);
+        EquipRifle(pursuer.Soldiers[0], 91_260, range: 500, damage: 20);
+        EquipMelee(quarry.Soldiers[0], 92_260);
+        ((Soldier)pursuer.Soldiers[0].Soldier).Dexterity = 20;
+        ((Soldier)pursuer.Soldiers[0].Soldier).MoveSpeed = 8;
+        ((Soldier)quarry.Soldiers[0].Soldier).MoveSpeed = 4;
+        BattleGridManager grid = new();
+        Place(grid, pursuer, true, 0, 0);
+        Place(grid, quarry, false, 50, 0);
+        Dictionary<int, EngagementRoleConstraint> constraints = new()
+        {
+            [pursuer.Id] = new EngagementRoleConstraint(
+                EngagementSquadRole.Pursuit,
+                QuarryRunSpeed: quarry.GetSquadMove(),
+                RoleTargets: [quarry]),
+            [quarry.Id] = new EngagementRoleConstraint(EngagementSquadRole.Bound)
+        };
+        BattleEngagementFrameBuilder.PairedFrame paired =
+            BattleEngagementFrameBuilder.Build([pursuer], [quarry], constraints);
+        SquadEngagementDecision decision = Planner(grid, pursuer, quarry)
+            .ChooseEngagementOption(
+                pursuer,
+                paired.Frames[pursuer.Id],
+                paired.Profiles,
+                paired.Frames,
+                [pursuer],
+                [quarry],
+                [quarry]);
+
+        EngagementOptionEvaluation hold = decision.Candidates.Single(candidate =>
+            candidate.Kind == EngagementOptionKind.Hold);
+        Assert.True(
+            hold.FireWindowValue > 0,
+            $"expected a projected full-aim shot to have value, got {hold.FireWindowValue}");
+    }
+
+    [Fact]
+    public void Pursuit_HoldGetsNoFireWindowValueWhenQuarryRunsPastWeaponReach()
+    {
+        BattleSquad pursuer = Squad("Short Window Shooter", 81_270, 20, 0.05f);
+        BattleSquad quarry = Squad("Short Window Quarry", 82_270, 10, 0.9f);
+        EquipRifle(pursuer.Soldiers[0], 91_270, range: 100, damage: 20);
+        EquipMelee(quarry.Soldiers[0], 92_270);
+        ((Soldier)pursuer.Soldiers[0].Soldier).Dexterity = 20;
+        ((Soldier)quarry.Soldiers[0].Soldier).MoveSpeed = 4;
+        BattleGridManager grid = new();
+        Place(grid, pursuer, true, 0, 0);
+        Place(grid, quarry, false, 90, 0);
+        Dictionary<int, EngagementRoleConstraint> constraints = new()
+        {
+            [pursuer.Id] = new EngagementRoleConstraint(
+                EngagementSquadRole.Pursuit,
+                QuarryRunSpeed: quarry.GetSquadMove(),
+                RoleTargets: [quarry]),
+            [quarry.Id] = new EngagementRoleConstraint(EngagementSquadRole.Bound)
+        };
+        BattleEngagementFrameBuilder.PairedFrame paired =
+            BattleEngagementFrameBuilder.Build([pursuer], [quarry], constraints);
+        SquadEngagementDecision decision = Planner(grid, pursuer, quarry)
+            .ChooseEngagementOption(
+                pursuer,
+                paired.Frames[pursuer.Id],
+                paired.Profiles,
+                paired.Frames,
+                [pursuer],
+                [quarry],
+                [quarry]);
+
+        EngagementOptionEvaluation hold = decision.Candidates.Single(candidate =>
+            candidate.Kind == EngagementOptionKind.Hold);
+        Assert.Equal(0, hold.FireWindowValue);
+    }
+
+    [Fact]
     public void Pursuit_AtMatchedSpeedPricesNoArrivalAndStandsToShoot()
     {
         // Regression for the Xibarrus Theta ambush (2026-08-04). Arrival value measured `before`

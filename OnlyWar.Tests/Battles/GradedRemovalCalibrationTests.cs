@@ -154,14 +154,18 @@ public class GradedRemovalCalibrationTests
     /// OUTWARD -- with no constitution term anywhere in the derivation.
     ///
     /// <para>Only asserted where toughness is the BINDING constraint. Below that the saturation
-    /// floor decides and the answer is flat in constitution (measured 2026-08-05 against five
-    /// Carnifexes: 75 yards at 120, 67 at 224, then 94 / 242 / 687 / 996 at 400 / 800 / 1600 /
-    /// 3200). The dip from 75 to 67 is the floor moving, not the approach integral, and pinning
-    /// monotonicity there would be pinning noise.</para>
+    /// floor decides and the answer is flat in constitution, and pinning monotonicity there would be
+    /// pinning noise.</para>
+    ///
+    /// <para>THE BINDING REGION MOVED UP on 2026-08-05, when SaturationFraction went 0.5 -> 0.1.
+    /// A wider useful band is a higher floor, so sufficiency now has to clear a lot more before it
+    /// decides anything. Measured against five Carnifexes, before and after: 94 / 242 / 687 / 996 at
+    /// constitution 400 / 800 / 1600 / 3200, against 929 / 929 / 929 / 996 now. Only the top pair
+    /// still has toughness binding, so only the top pair is still asserted -- the 400/800 and
+    /// 800/1600 cases were dropped because the property genuinely does not hold there any more, NOT
+    /// because the numbers moved. If the floor is ever lowered again, restore them.</para>
     /// </summary>
     [Theory]
-    [InlineData(400f, 800f)]
-    [InlineData(800f, 1600f)]
     [InlineData(1600f, 3200f)]
     public void PreferredOpeningRange_RisesWithOpposingConstitution(float softer, float tougher)
     {

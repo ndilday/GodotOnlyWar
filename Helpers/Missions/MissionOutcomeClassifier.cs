@@ -1,4 +1,5 @@
 using OnlyWar.Models.Missions;
+using System.Collections.Generic;
 
 namespace OnlyWar.Helpers.Missions
 {
@@ -34,10 +35,23 @@ namespace OnlyWar.Helpers.Missions
         public bool RemainedInTargetRegion { get; init; }
         public MissionForceDisposition Disposition { get; init; }
         public bool NoViableTarget { get; init; }
+        // Ambush only: whether the attempt was detected before it could be sprung, and at which
+        // stage. NotSpoiled on every other mission type.
+        public AmbushSpoilStage AmbushSpoiled { get; init; }
         public bool TargetLocated { get; init; }
         public bool TargetEliminated { get; init; }
         public int EnemiesKilled { get; init; }
         public int EnemyKillCredits { get; init; }
+        // What the operation cost the Chapter. Incapacitated brothers are casualties, not kills
+        // (Design/Active/CasualtyRealism.md §2.3): they came home alive and go into the
+        // wound-recovery pipeline, so the debrief must not bury them.
+        public int FriendlyDeaths { get; init; }
+        public int FriendlyIncapacitated { get; init; }
+        // Apothecary field care under this order (Design/Active/CasualtyRealism.md §2.6).
+        // Zero/empty when no Apothecary was attached, which is the overwhelming majority of orders.
+        public IReadOnlyList<string> FieldCareApothecaries { get; init; } = [];
+        public int FieldCareTreatments { get; init; }
+        public int FieldCareTreatedBrothers { get; init; }
         public float Impact { get; init; }
         // Sabotage only: which works were the objective, the level of them the raid actually brought
         // down (measured in aftermath, so it is 0 on a failed attempt or against a position that was
@@ -65,10 +79,16 @@ namespace OnlyWar.Helpers.Missions
                 RemainedInTargetRegion = context.ForceRemainedInTargetRegion,
                 Disposition = ResolveDisposition(context),
                 NoViableTarget = context.NoViableTarget,
+                AmbushSpoiled = context.AmbushSpoiled,
                 TargetLocated = context.TargetLocated,
                 TargetEliminated = context.TargetEliminated,
                 EnemiesKilled = killed,
                 EnemyKillCredits = context.EnemyKillCredits,
+                FriendlyDeaths = context.FriendlyDeaths,
+                FriendlyIncapacitated = context.FriendlyIncapacitated,
+                FieldCareApothecaries = context.FieldCare?.ApothecaryNames ?? [],
+                FieldCareTreatments = context.FieldCare?.TreatmentCount ?? 0,
+                FieldCareTreatedBrothers = context.FieldCare?.TreatedSoldierCount ?? 0,
                 Impact = context.Impact,
                 // The objective's works are known from the posted mission whether or not the raid
                 // got to them, so a failed attempt can still name what it went after.

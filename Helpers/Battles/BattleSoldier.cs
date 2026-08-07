@@ -16,7 +16,8 @@ namespace OnlyWar.Helpers.Battles
         private IReadOnlyList<int> _functioningHandGroupIds = Array.Empty<int>();
         private HashSet<int> _functioningHandGroupIdSet = [];
         private bool _canFight;
-        private bool _isSlow;
+        private bool _canMove;
+        private float _motiveSpeedMultiplier = 1f;
         private Body _cachedInjuryBody;
         private int _cachedInjuryRevision = -1;
         private Body _weaponGripInjuryBody;
@@ -85,6 +86,7 @@ namespace OnlyWar.Helpers.Battles
 
         public ushort EnemiesTakenDown { get; set; }
 
+        /// <summary>Hands and vital locations only -- see <see cref="ISoldier.CanFight"/>.</summary>
         public bool CanFight
         {
             get
@@ -94,12 +96,41 @@ namespace OnlyWar.Helpers.Battles
             }
         }
 
-        public bool IsSlow
+        /// <summary>Motive locations only -- see <see cref="ISoldier.CanMove"/>.</summary>
+        public bool CanMove
         {
             get
             {
                 EnsureInjuryState();
-                return _isSlow;
+                return _canMove;
+            }
+        }
+
+        /// <summary>
+        /// Still a participant in the battle: able to fight and able to move. This is the
+        /// predicate the planners, targeting, and casualty removal use.
+        /// </summary>
+        public bool IsCombatEffective
+        {
+            get
+            {
+                EnsureInjuryState();
+                return _canFight && _canMove;
+            }
+        }
+
+        /// <summary>
+        /// What his motive wounds leave of his foot speed, 1.0 down to 0.0 -- see
+        /// <see cref="OnlyWar.Models.Soldiers.MotiveImpairment"/>. Replaces the old binary
+        /// <c>IsSlow</c> / flat x0.75, which fired at Major on any motive location and said
+        /// nothing about how bad the wound was.
+        /// </summary>
+        public float MotiveSpeedMultiplier
+        {
+            get
+            {
+                EnsureInjuryState();
+                return _motiveSpeedMultiplier;
             }
         }
 
@@ -337,16 +368,14 @@ namespace OnlyWar.Helpers.Battles
             }
         }
 
+        /// <summary>
+        /// Foot speed after motive wounds. Zero only when he cannot walk at all, and a soldier in
+        /// that state is not combat effective, so the planners have already dropped him from
+        /// <see cref="BattleSquad.AbleSoldiers"/> before this could return 0.
+        /// </summary>
         public float GetMoveSpeed()
         {
-            float baseMoveSpeed = Soldier.MoveSpeed;
-
-            // if leg/foot injuries, slow soldier down
-            if (IsSlow)
-            {
-                return baseMoveSpeed * 0.75f;
-            }
-            return baseMoveSpeed;
+            return Soldier.MoveSpeed * MotiveSpeedMultiplier;
         }
 
         internal void RefreshInjuryState()
@@ -356,17 +385,8 @@ namespace OnlyWar.Helpers.Battles
             _functioningHandGroupIds = Array.AsReadOnly(functioningHandGroupIds);
             _functioningHandGroupIdSet = functioningHandGroupIds.ToHashSet();
             _canFight = Soldier.CanFight;
-
-            _isSlow = false;
-            foreach (HitLocation location in body.HitLocations)
-            {
-                if (location.Template.IsMotive
-                    && location.Wounds.WoundTotal >= (uint)WoundLevel.Major)
-                {
-                    _isSlow = true;
-                    break;
-                }
-            }
+            _motiveSpeedMultiplier = MotiveImpairment.CalculateSpeedMultiplier(body);
+            _canMove = _motiveSpeedMultiplier > 0f;
 
             _cachedInjuryBody = body;
             _cachedInjuryRevision = body.InjuryRevision;

@@ -44,6 +44,12 @@ namespace OnlyWar.Models.Squads
                     CurrentOrders.AssignedSquads.Remove(this);
                     CurrentOrders = null;
                 }
+                // Members lent out to other operations come home too: an administrative
+                // formation has no one in the field (Design/Active/SpecialistAttachment.md).
+                foreach (PlayerSoldier member in _members.OfType<PlayerSoldier>().ToList())
+                {
+                    OnlyWar.Helpers.Orders.OrderAttachment.Detach(member);
+                }
                 BoardedLocation?.RemoveSquad(this);
                 BoardedLocation = null;
                 if (CurrentRegion != null

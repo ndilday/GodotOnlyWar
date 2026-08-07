@@ -89,21 +89,42 @@ namespace OnlyWar.Helpers.Battles.Resolutions
                 // see if wound.HitLocation is now severed
                 if (!wasFunctionallyDisabled && (wound.HitLocation.IsSevered || wound.HitLocation.IsCrippled))
                 {
-                    // if severed, see if it's an arm or leg
+                    // OnSoldierFall is the "out of the fight, alive" hook -- what
+                    // Design/Active/CasualtyRealism.md §2.3 names Incapacitated. The predicate for
+                    // it is IsCombatEffective, and that stays the right one now that the state has
+                    // a name: a soldier is out of the battle exactly when he can no longer both
+                    // fight and move, which is precisely what the battle layer removes him for.
+                    // The narrower CanFight would fire on a man who can still shoot from where he
+                    // stands, and there is no prone fire to let him (§2.2 cuts stance), so it
+                    // would report a fall the engine does not actually perform.
+                    //
+                    // Phase 3 broke the equivalence the motive branch used to rely on. A crippled
+                    // motive location is no longer the same thing as !CanMove: a crippled or
+                    // severed FOOT floors at a fraction of speed and never zero, and a leg is only
+                    // load-bearing enough to zero him at Massive. So the branch tests
+                    // IsCombatEffective explicitly, exactly as the hand branch below does.
+                    // RefreshInjuryState() above has already re-read the body, so this is current.
                     if (wound.HitLocation.Template.IsMotive)
                     {
-                        wound.Description += $"{wound.Suffererer.Soldier.Name} can no longer walk\n";
-                        OnSoldierFall.Invoke(wound, woundLevel);
+                        if (!wound.Suffererer.IsCombatEffective)
+                        {
+                            wound.Description += $"{wound.Suffererer.Soldier.Name} can no longer walk\n";
+                            OnSoldierFall.Invoke(wound, woundLevel);
+                        }
                     }
                     else if (wound.HitLocation.Template.HandGroupId.HasValue)
                     {
                         wound.Suffererer.DropWeaponsUsingHandGroup(
                             wound.HitLocation.Template.HandGroupId.Value);
-                        if (!wound.Suffererer.CanFight)
+                        if (!wound.Suffererer.IsCombatEffective)
                         {
                             OnSoldierFall.Invoke(wound, woundLevel);
                         }
                     }
+                    // A crippled vital is mortal for everyone the enemy leaves lying. For a player
+                    // soldier it is not a verdict: power-armor biostasis holds him, and
+                    // PlayerChapterBattleAftermathPolicy decides at battle end whether he died
+                    // (severed vital, or abandoned on ground the Chapter did not hold).
                     if (wound.HitLocation.Template.IsVital && wound.HitLocation.IsCrippled)
                     {
                         wound.Description += $"{wound.Suffererer.Soldier.Name} has died\n";

@@ -149,7 +149,7 @@ public partial class MissionDebriefDialogView : DialogView
         BattleDebriefReport report = line.BattleReport ?? BattleDebriefReportBuilder.Build(line.BattleHistory);
         Label summary = new()
         {
-            Text = $"{prefix}Friendly dead: {report.PlayerDeaths}    Opposing dead: {report.OpposingDeaths}",
+            Text = prefix + BattleDebriefReportBuilder.BuildSummaryLine(report),
             AutowrapMode = TextServer.AutowrapMode.WordSmart
         };
         summary.AddThemeColorOverride("font_color",
@@ -295,6 +295,8 @@ public partial class MissionDebriefDialogView : DialogView
         return casualty.Disposition switch
         {
             BattleCasualtyDisposition.Dead => "DEAD",
+            BattleCasualtyDisposition.Incapacitated =>
+                $"INCAPACITATED  •  {casualty.RecoveryWeeks} {(casualty.RecoveryWeeks == 1 ? "WEEK" : "WEEKS")} RECOVERY",
             BattleCasualtyDisposition.ReplacementRequired => "LIMB REPLACEMENT REQUIRED",
             _ => $"{casualty.RecoveryWeeks} {(casualty.RecoveryWeeks == 1 ? "WEEK" : "WEEKS")} RECOVERY"
         };

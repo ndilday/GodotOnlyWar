@@ -36,10 +36,23 @@ namespace OnlyWar.Helpers.Missions
         /// attention a feint drew yesterday does not shelter an infiltrator today. Passed in rather than
         /// reached for directly because the scheduler has no business knowing about planets.
         /// </param>
+        /// <param name="onDayEnd">
+        /// Called with the day number once every mission has resolved everything it does on that
+        /// day. This is where between-days recovery belongs - notably the Astartes daily healing
+        /// pass (Design/Active/CasualtyRealism.md §2.5), which must land after the day's fighting
+        /// so a brother scratched on day 2 starts day 3 clean.
+        ///
+        /// Deliberately a scheduler-level hook and NOT a per-driver one: one order can fan out
+        /// into several independent single-squad drivers (MissionForceMode.IndependentSquads), so
+        /// anything hung off a driver would run several times a day over overlapping men. Invoked
+        /// exactly once per day, before the early-exit check, so the last day of fighting still
+        /// gets its pass.
+        /// </param>
         public static void Run(
             IReadOnlyList<MissionStepDriver> missions,
             Action<int> onDayStart = null,
-            Action<IReadOnlyList<MissionStepDriver>, int> onActingDayStart = null)
+            Action<IReadOnlyList<MissionStepDriver>, int> onActingDayStart = null,
+            Action<int> onDayEnd = null)
         {
             if (missions == null || missions.Count == 0) return;
 
@@ -52,6 +65,7 @@ namespace OnlyWar.Helpers.Missions
                 // independent attacks with one shared meeting engagement.
                 onActingDayStart?.Invoke(missions, day);
                 AdvancePhase(missions, day, MissionStepPhase.Acting);
+                onDayEnd?.Invoke(day);
                 if (missions.All(mission => mission.IsComplete)) break;
             }
 
