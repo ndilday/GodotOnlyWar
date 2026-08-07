@@ -42,7 +42,7 @@ namespace OnlyWar.Helpers
         /// mission-outcome prose and the casualty ledger stay independently testable.
         ///
         /// Killed and incapacitated are named apart deliberately
-        /// (Design/Active/CasualtyRealism.md §2.3): an incapacitated brother came home. Reporting
+        /// (Design/Reference/CasualtyRealism.md §2.3): an incapacitated brother came home. Reporting
         /// him as a death is the specific misreading this phase exists to fix, and it is the
         /// difference between a mission that gutted a squad and one that filled the Apothecarium.
         /// Returns "" when the operation cost nothing, so the common case adds no text at all.
@@ -65,7 +65,7 @@ namespace OnlyWar.Helpers
         }
 
         /// <summary>
-        /// What the Apothecary attached to the operation did (Design/Active/CasualtyRealism.md
+        /// What the Apothecary attached to the operation did (Design/Reference/CasualtyRealism.md
         /// §2.6), appended after the casualty line by the caller.
         ///
         /// Its real job is to make an attached specialist VISIBLE. He is in no BattleSquad, so he

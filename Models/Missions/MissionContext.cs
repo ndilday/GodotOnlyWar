@@ -53,7 +53,7 @@ namespace OnlyWar.Models.Missions
     {
         Dead,
         // Out of the fight but alive, and carried off the field
-        // (Design/Active/CasualtyRealism.md §2.3). Listed above ReplacementRequired because an
+        // (Design/Reference/CasualtyRealism.md §2.3). Listed above ReplacementRequired because an
         // incapacitated brother is usually also awaiting a replacement limb, and "he went down"
         // is the more important fact.
         Incapacitated,
@@ -196,14 +196,14 @@ namespace OnlyWar.Models.Missions
         public int EnemyKillCredits { get; set; }
 
         // What this mission cost the Chapter, accumulated across every engagement in it
-        // (Design/Active/CasualtyRealism.md §2.3). Counted against the force that STARTED the
+        // (Design/Reference/CasualtyRealism.md §2.3). Counted against the force that STARTED the
         // mission, so a brother can appear in exactly one of the two totals and only once.
         public int FriendlyDeaths { get; private set; }
         public int FriendlyIncapacitated { get; private set; }
 
         /// <summary>
         /// What the Apothecary attached to this order did over the operation
-        /// (Design/Active/CasualtyRealism.md §2.6, Phase 2b). Null when the order had none.
+        /// (Design/Reference/CasualtyRealism.md §2.6, Phase 2b). Null when the order had none.
         ///
         /// This exists because of SpecialistAttachment.md §8 trap 3: an attached specialist is in no
         /// BattleSquad, so <see cref="StartingPlayerParticipants"/> excludes him, he earns no field

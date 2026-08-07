@@ -1,4 +1,4 @@
-﻿using OnlyWar.Builders;
+using OnlyWar.Builders;
 using OnlyWar.Models.Missions;
 using OnlyWar.Models.Squads;
 using System.Collections.Generic;
@@ -28,7 +28,7 @@ namespace OnlyWar.Models.Orders
         public Aggression LevelOfAggression { get; private set; }
         public Mission Mission { get; }
         // Individuals attached to this operation without their home squad
-        // (Design/Active/SpecialistAttachment.md). Purely organizational in Phase 2a: an
+        // (Design/Reference/SpecialistAttachment.md). Purely organizational in Phase 2a: an
         // attached specialist is WITH the force, not IN the engagement -- he gets no
         // BattleSquad binding and cannot become a casualty.
         //

@@ -14,7 +14,7 @@ using Xunit;
 namespace OnlyWar.Tests.Domain;
 
 /// <summary>
-/// Phase 2b of Design/Active/CasualtyRealism.md: Apothecary field care.
+/// Phase 2b of Design/Reference/CasualtyRealism.md: Apothecary field care.
 ///
 /// The triage tie-break draws from the shared session RNG like all other gameplay randomness, so
 /// this class needs [Collection(TestCollections.SharedState)] or it flakes under xUnit parallelism.
@@ -235,7 +235,7 @@ public class FieldCareServiceTests
 
     // ---- Reach, dedup and the daily seam -----------------------------------------------------
 
-    // Design/Active/SpecialistAttachment.md §8 trap 1: MissionTurnProcessor.BuildMissionElements
+    // Design/Reference/SpecialistAttachment.md §8 trap 1: MissionTurnProcessor.BuildMissionElements
     // fans ONE order into several independent single-squad elements under
     // MissionForceMode.IndependentSquads, each with its own MissionStepDriver. A pass hung off a
     // driver would run once per element and make an Apothecary silently worth 3x. The service is

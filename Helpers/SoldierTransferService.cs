@@ -203,7 +203,7 @@ namespace OnlyWar.Helpers
             // A brother attached to an operation is in the field with someone else's force;
             // reposting him mid-operation is not a decision the Chapter screen may make. The
             // UI hides the options, but this is the enforcement point
-            // (Design/Active/SpecialistAttachment.md §3.4).
+            // (Design/Reference/SpecialistAttachment.md §3.4).
             if (soldier.AttachedOrder != null)
             {
                 return false;

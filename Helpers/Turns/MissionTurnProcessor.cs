@@ -167,7 +167,7 @@ namespace OnlyWar.Helpers.Turns
             // completion in turn. Missions operating in the same region therefore see each other's
             // effects as they land - which is what makes a diversion able to shelter an infiltrator.
 
-            // ONE ENTRY PER DISTINCT ORDER (Design/Active/SpecialistAttachment.md §8 trap 1).
+            // ONE ENTRY PER DISTINCT ORDER (Design/Reference/SpecialistAttachment.md §8 trap 1).
             // BuildMissionElements fans a single order into several independent single-squad
             // elements under MissionForceMode.IndependentSquads, each with its own driver and its
             // own MissionContext -- so a field-care pass keyed on the ELEMENT would treat the same
@@ -306,7 +306,7 @@ namespace OnlyWar.Helpers.Turns
         // cheap (no allocation, a few hundred region-factions) and avoids having to track which
         // regions a shaping step touched.
         // End-of-day recovery for the whole Chapter, not just the squads on this order
-        // (Design/Active/CasualtyRealism.md §2.5). Swept over the full order of battle because the
+        // (Design/Reference/CasualtyRealism.md §2.5). Swept over the full order of battle because the
         // day boundary is a property of the campaign, not of any one mission - and because the
         // pass is idempotent and cheap, sweeping is simpler and safer than reconciling which men
         // belong to which of the day's drivers. Run exactly once per day from the scheduler's
@@ -318,7 +318,7 @@ namespace OnlyWar.Helpers.Turns
         }
 
         /// <summary>
-        /// Apothecary field care for the day just ended (Design/Active/CasualtyRealism.md §2.6).
+        /// Apothecary field care for the day just ended (Design/Reference/CasualtyRealism.md §2.6).
         /// Runs after the day's fighting and after natural daily healing, so a brother hit today and
         /// treated tonight enters TOMORROW's battle at reduced severity -- battle setup reads live
         /// wound state per battle, which is what makes the daily seam worth having at all.

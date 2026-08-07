@@ -1,4 +1,4 @@
-﻿using OnlyWar.Builders;
+using OnlyWar.Builders;
 using OnlyWar.Models.Equippables;
 using OnlyWar.Models.Fleets;
 using OnlyWar.Models.Missions;
@@ -342,7 +342,7 @@ namespace OnlyWar.Helpers.Database.GameState
         /// evicts the base Soldier from its squad and inserts the wrapper in its place. Anything
         /// resolving soldier references before the PlayerSoldier pass would capture objects that
         /// are no longer in any squad. So this runs after the player soldiers are loaded and
-        /// resolves against them (Design/Active/SpecialistAttachment.md §6.3).
+        /// resolves against them (Design/Reference/SpecialistAttachment.md §6.3).
         /// </summary>
         public void PopulateOrderAttachments(
             IDbConnection connection,

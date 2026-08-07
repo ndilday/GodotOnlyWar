@@ -274,7 +274,7 @@ namespace OnlyWar.Helpers.Turns
                 && squad.IsOperational
                 && squad.CurrentOrders == null
                 // A personnel pool never takes orders of its own, so it is never "idle" in
-                // the sense this warning means (Design/Active/SpecialistAttachment.md §3.3);
+                // the sense this warning means (Design/Reference/SpecialistAttachment.md §3.3);
                 // and a formation with a member forward is contributing already.
                 && squad.SquadTemplate?.PermitsIndividualDetachment != true
                 && !Orders.OrderAttachment.HasAttachedMembers(squad)

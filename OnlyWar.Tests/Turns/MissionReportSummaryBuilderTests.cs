@@ -51,7 +51,7 @@ public class MissionReportSummaryBuilderTests
             AmbushSpoiled = ambushSpoiled
         };
 
-    // Design/Active/CasualtyRealism.md §2.3: a brother carried off the field alive is a casualty,
+    // Design/Reference/CasualtyRealism.md §2.3: a brother carried off the field alive is a casualty,
     // not a kill, and the debrief has to say which. Before Phase 1 both read as "dead".
     [Fact]
     public void BuildFriendlyCasualtyLine_NamesKilledAndIncapacitatedSeparately()
@@ -86,7 +86,7 @@ public class MissionReportSummaryBuilderTests
         Assert.Equal("", MissionReportSummaryBuilder.BuildFriendlyCasualtyLine(null));
     }
 
-    // Design/Active/SpecialistAttachment.md §8 trap 3: an attached Apothecary is in no BattleSquad,
+    // Design/Reference/SpecialistAttachment.md §8 trap 3: an attached Apothecary is in no BattleSquad,
     // so he is in no battle report, earns no field XP through the battle path, and would otherwise
     // leave the debrief with no evidence he was ever sent. This line is the evidence.
     [Fact]

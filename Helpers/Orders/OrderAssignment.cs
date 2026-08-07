@@ -1,4 +1,4 @@
-﻿using OnlyWar.Helpers.Missions;
+using OnlyWar.Helpers.Missions;
 using OnlyWar.Models;
 using OnlyWar.Models.Missions;
 using OnlyWar.Models.Orders;
@@ -42,7 +42,7 @@ namespace OnlyWar.Helpers.Orders
                 return null;
             }
             // A formation that may give up individuals never deploys as a unit
-            // (Design/Active/SpecialistAttachment.md §3.3). HQ squads and the four chapter
+            // (Design/Reference/SpecialistAttachment.md §3.3). HQ squads and the four chapter
             // offices are personnel pools: their people reach the field only by attachment.
             // Note this is enforced here rather than by marking them Administrative -- their
             // IsOperational must stay true, since surgery staffing and recruitment gate on it.

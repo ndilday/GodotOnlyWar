@@ -22,7 +22,7 @@ namespace OnlyWar.Helpers.Orders
         public string OriginLabel { get; }
         public int SquadCount { get; }
         // Individual specialists lent to this operation without their home squad
-        // (Design/Active/SpecialistAttachment.md). Read off the order so no caller has to
+        // (Design/Reference/SpecialistAttachment.md). Read off the order so no caller has to
         // remember to supply it.
         public int AttachedCount => Order?.AttachedSoldiers?.Count ?? 0;
         public string SummaryLabel

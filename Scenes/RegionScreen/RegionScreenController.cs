@@ -29,7 +29,7 @@ public partial class RegionScreenController : DialogController
     private Region _targetRegion;
     private readonly List<Squad> _selectedSquads = [];
     // Individual specialists picked out of the ATTACHMENTS roster group
-    // (Design/Active/SpecialistAttachment.md §7.1). Kept beside _selectedSquads and
+    // (Design/Reference/SpecialistAttachment.md §7.1). Kept beside _selectedSquads and
     // recomputed from the Tree at commit time for the same reason.
     private readonly List<PlayerSoldier> _selectedSpecialists = [];
     // The order being edited, when the player arrived via an inbound-order row. Lets its own

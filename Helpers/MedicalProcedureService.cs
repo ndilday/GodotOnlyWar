@@ -97,7 +97,7 @@ namespace OnlyWar.Helpers
         /// <summary>
         /// Where a soldier physically is, as a (ship, region) pair.
         ///
-        /// Design/Active/SpecialistAttachment.md §8 trap 2: this used to read
+        /// Design/Reference/SpecialistAttachment.md §8 trap 2: this used to read
         /// <c>AssignedSquad</c> alone, but an Apothecary attached to an order is FORWARD while his
         /// home squad may still sit aboard ship -- so surgery gating would have accepted him at a
         /// site he had left. An attached specialist is therefore resolved through

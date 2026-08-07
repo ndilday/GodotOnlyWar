@@ -552,7 +552,7 @@ public partial class ChapterController : MainScreenController
         ChapterBrowserDetail detail =
             _soldierDetailBuilder.Build(soldier, false, includeSquadInTitle: true);
 
-        // A brother attached to an operation (Design/Active/SpecialistAttachment.md) is in the
+        // A brother attached to an operation (Design/Reference/SpecialistAttachment.md) is in the
         // field with someone else's force. Surface that, offer the recall, and withhold the
         // transfer options - SoldierTransferService.ApplyTransfer refuses him anyway (§3.4),
         // so offering them would only produce a silent no-op.

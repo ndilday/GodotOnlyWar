@@ -9,7 +9,7 @@ namespace OnlyWar.Helpers.Database.GameState
         // and it can only do so if this constant moves with the schema.
         //
         // 6: OrderSoldier table (order-level specialist attachment,
-        //    Design/Active/SpecialistAttachment.md). Added 2026-08-07 after a v5 save crashed with
+        //    Design/Reference/SpecialistAttachment.md). Added 2026-08-07 after a v5 save crashed with
         //    "no such table: OrderSoldier" instead of being reported as incompatible.
         internal const int CurrentVersion = 6;
     }

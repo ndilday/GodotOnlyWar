@@ -7,7 +7,7 @@ using Xunit;
 namespace OnlyWar.Tests.Domain;
 
 // Pins the graded motive impairment curve introduced by Phase 3 of
-// Design/Active/CasualtyRealism.md §2.1. The rules it exists to protect:
+// Design/Reference/CasualtyRealism.md §2.1. The rules it exists to protect:
 //
 //   * each wound band maps to a fixed multiplier (1.0 / 0.85 / 0.6 / 0)
 //   * the two legs COMPOUND MULTIPLICATIVELY -- two bad legs are worse than one

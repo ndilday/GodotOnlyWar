@@ -10,7 +10,7 @@ namespace OnlyWar.Helpers.Orders
     // The rules behind the Region Ops "ATTACHMENTS" roster group, extracted out of
     // RegionScreenController for the same reason OrderAssignment was: a Godot partial class
     // cannot be unit-tested, so the decisions live here and the controller only does tree
-    // wiring. See Design/Active/SpecialistAttachment.md §7.1.
+    // wiring. See Design/Reference/SpecialistAttachment.md §7.1.
     public sealed class SpecialistOption
     {
         public PlayerSoldier Soldier { get; }

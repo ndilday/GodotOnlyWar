@@ -20,7 +20,7 @@ namespace OnlyWar.Helpers.Medical
     /// <summary>
     /// What field care did for one order (or one garrison location) over the days it ran. Carried
     /// into the mission report so the player can see the Apothecary he sent forward doing something
-    /// -- see §7 trap 3 of Design/Active/SpecialistAttachment.md: he is in no BattleSquad, earns no
+    /// -- see §7 trap 3 of Design/Reference/SpecialistAttachment.md: he is in no BattleSquad, earns no
     /// field XP through the battle path, and would otherwise leave no trace whatsoever.
     /// </summary>
     public sealed class FieldCareReport
@@ -44,7 +44,7 @@ namespace OnlyWar.Helpers.Medical
     }
 
     /// <summary>
-    /// Apothecary field care (Design/Active/CasualtyRealism.md §2.6, Phase 2b).
+    /// Apothecary field care (Design/Reference/CasualtyRealism.md §2.6, Phase 2b).
     ///
     /// An Apothecary converts his Medical rating into a DAILY wound capacity and spends it on the
     /// wounded within his reach, as forced wound-band demotions that take effect the moment they

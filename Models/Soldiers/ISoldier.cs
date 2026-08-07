@@ -1,4 +1,4 @@
-﻿using OnlyWar.Models.Squads;
+using OnlyWar.Models.Squads;
 using System;
 using System.Collections.Generic;
 
@@ -29,7 +29,7 @@ namespace OnlyWar.Models.Soldiers
         bool CanMove { get; }
         /// <summary>
         /// How much of his foot speed his motive wounds leave him, 1.0 down to 0.0
-        /// (Design/Active/CasualtyRealism.md §2.1). Zero means he cannot walk at all.
+        /// (Design/Reference/CasualtyRealism.md §2.1). Zero means he cannot walk at all.
         /// </summary>
         float MotiveSpeedMultiplier { get; }
         /// <summary><see cref="CanFight"/> and <see cref="CanMove"/>: still in the fight.</summary>

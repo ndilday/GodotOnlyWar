@@ -1512,6 +1512,23 @@ namespace OnlyWar.Helpers.Battles
                 // range. Incoming exposure remains in EvaluateIncomingNow and the continuation
                 // exchange, so using the net rate here would count that risk twice and could make
                 // every necessary approach look worse simply because the enemy can shoot back.
+                //
+                // It is the MARGINAL rate, not the gross one. The gross rate at the destination
+                // prices arrival as though the squad were doing nothing where it stands, so a
+                // squad already delivering fire is paid the full post-arrival rate for abandoning
+                // it. Measured 2026-08-07: a flamer bearer standing 10 yards from its target --
+                // inside a 30-yard weapon, burning it for 0.775 battle value this turn -- scored
+                // arrival 0.971 for running to contact and taking 0.000, so CloseToContact beat
+                // Hold 1.705 to 1.310 and the cone was never fired.
+                //
+                // What closing actually buys is the IMPROVEMENT in the per-turn rate. A squad
+                // whose rate is already what it will be at the destination gains nothing by
+                // arriving sooner; a melee squad out of reach still scores 0 where it stands and
+                // closes exactly as it did before, as does any squad outside its weapon's reach.
+                // This is the same invariant the BaselinePosture guard above reaches for -- do not
+                // pull a squad toward a sharper range merely because that range exists -- which
+                // that guard cannot enforce for a contact-seeking profile, since a contact seeker
+                // is precisely the case whose baseline posture is always a closing one.
                 float exchangeRate = EvaluateOutgoingExchangeRate(
                     squad,
                     enemy,
@@ -1519,7 +1536,16 @@ namespace OnlyWar.Helpers.Battles
                     opposing,
                     frames,
                     desiredRange);
-                value += exchangeRate * ExpectedRemainingTurns * arrivalDiscountDelta;
+                float currentRate = EvaluateOutgoingExchangeRate(
+                    squad,
+                    enemy,
+                    profile,
+                    opposing,
+                    frames,
+                    before);
+                float rateGain = exchangeRate - currentRate;
+                if (rateGain <= 0) continue;
+                value += rateGain * ExpectedRemainingTurns * arrivalDiscountDelta;
             }
             return value;
         }
@@ -1914,6 +1940,27 @@ namespace OnlyWar.Helpers.Battles
                     // lookahead projects the squads into range, and then contributes the real
                     // hit x removal x BV at that projected range.
                     ?? EvaluateNearestOutOfReachTarget(soldier);
+                // A CONE BEARER IS A SHOOTER. Both target selectors above skip
+                // IsTemplateWeapon, so a soldier whose only weapon is a flamer used to
+                // contribute NO term and his squad's whole row read rate 0 at every range --
+                // the squad was modelled as unarmed. Everything downstream then followed from
+                // that: EvaluateArrivalTimeValue saw an outgoing rate of 0 where the squad
+                // stood and paid it to run to contact, so a flamer bearer burning a target for
+                // 0.775 battle value at 10 yards abandoned the burst to charge (both
+                // template-weapon planner tests, 2026-08-07).
+                //
+                // Take whichever branch the live planner would take -- PlanRangedAction gives
+                // the cone ties, so this does too -- and price the burst the way the cone
+                // actually resolves: one application per victim, no to-hit roll.
+                TemplateFiringLineEvaluation coneLine = HasReadyTemplateWeapon(soldier)
+                    ? SelectBestTemplateFiringLine(soldier)
+                    : null;
+                if (coneLine != null
+                    && coneLine.Score >= (evaluation?.Score ?? float.MinValue))
+                {
+                    AddConeRemovalTerms(soldier, coneLine, termsByTargetSquad);
+                    continue;
+                }
                 if (evaluation?.Target == null
                     || evaluation.Weapon == null
                     || evaluation.Target.BattleSquad == null)
@@ -1983,6 +2030,105 @@ namespace OnlyWar.Helpers.Battles
                 ? null
                 : EvaluateRangedTarget(soldier, nearest, weapon, nearestDistance, 0f);
         }
+
+        private static bool HasReadyTemplateWeapon(BattleSoldier soldier)
+        {
+            IReadOnlyList<RangedWeapon> equipped = soldier.EquippedRangedWeapons;
+            for (int index = 0; index < equipped.Count; index++)
+            {
+                if (equipped[index].Template.IsConeWeapon && equipped[index].LoadedAmmo > 0)
+                {
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        /// <summary>
+        /// One removal term per enemy the chosen firing line engulfs, filed under that victim's own
+        /// squad -- a cone crossing two squads genuinely removes value from both, and the table is
+        /// keyed by target squad.
+        ///
+        /// <para>Friendly victims are dropped rather than netted out. This table is the OUTGOING
+        /// half only; the blue-on-blue cost of a burst already lives in the immediate term's
+        /// <c>ExpectedFriendlyBattleValueLost</c>, and a negative entry in a cell that means "what I
+        /// remove from THAT squad" would be read as enemy removal by every consumer.</para>
+        /// </summary>
+        private void AddConeRemovalTerms(
+            BattleSoldier shooter,
+            TemplateFiringLineEvaluation line,
+            Dictionary<int, List<PairRemovalTerm>> termsByTargetSquad)
+        {
+            bool shooterSide = _grid.GetSoldierSide(shooter.Soldier.Id);
+            foreach (int victimId in line.VictimIds)
+            {
+                if (!_soldierMap.TryGetValue(victimId, out BattleSoldier victim)
+                    || !victim.IsCombatEffective
+                    || victim.BattleSquad == null
+                    || _grid.GetSoldierSide(victimId) == shooterSide)
+                {
+                    continue;
+                }
+                float victimRange = _grid.GetDistanceBetweenSoldiers(
+                    shooter.Soldier.Id, victimId);
+                int targetSquadId = victim.BattleSquad.Id;
+                if (!termsByTargetSquad.TryGetValue(
+                    targetSquadId, out List<PairRemovalTerm> terms))
+                {
+                    terms = [];
+                    termsByTargetSquad[targetSquadId] = terms;
+                }
+                terms.Add(BuildConeRemovalTerm(shooter, line.Weapon, victim, victimRange));
+            }
+        }
+
+        /// <summary>
+        /// A cone's per-victim term. Structurally a <see cref="PairRemovalTerm"/> like any other so
+        /// the whole rescaling path is shared, but with the to-hit half neutralised: a template
+        /// weapon engulfs its area rather than rolling against a target, so the reference to-hit
+        /// total is pinned above every threshold in the burst model and the shot count is one.
+        /// <see cref="PairRemovalTerm.MaximumEffectiveRange"/> still gates the term to 0 beyond the
+        /// weapon's reach, which is what keeps the closing gradient honest.
+        /// </summary>
+        private static PairRemovalTerm BuildConeRemovalTerm(
+            BattleSoldier shooter,
+            RangedWeapon weapon,
+            BattleSoldier victim,
+            float victimRange)
+        {
+            RangedWeaponTemplate template = weapon.Template;
+            float armor = victim.Armor?.Template.ArmorProvided ?? 0f;
+            IReadOnlyList<TakeOutLocationTerm> takeOutTerms =
+                template.DoesDamageDegradeWithRange
+                    ? BuildTakeOutLocationTerms(
+                        victim, armor * template.ArmorMultiplier, template.WoundMultiplier)
+                    : null;
+            (float takeOut, float progress) =
+                CalculateRangedHitRemoval(victim, weapon, victimRange, armor);
+            return new PairRemovalTerm(
+                shooter.Soldier.Id,
+                victim.Soldier.Id,
+                template,
+                ConeCertainHitTotal,
+                1,
+                victimRange,
+                // No to-hit roll means no speed penalty to capture, and a zero reference speed
+                // keeps the range rescaling in HitTotalAt on the same footing as the capture.
+                0f,
+                Math.Clamp(takeOut, 0f, 1f),
+                Math.Clamp(progress, 0f, 1f),
+                GetBattleValue(victim),
+                BattleModifiersUtil.GetEffectiveMaxRange(shooter.Soldier, template),
+                takeOutTerms);
+        }
+
+        /// <summary>
+        /// Stands in for "this weapon does not roll to hit". Far enough above
+        /// <see cref="HitRollMean"/> that the burst model's first-shot threshold is met with
+        /// certainty at any range and under any bulk multiplier, but finite, so the shared
+        /// rescaling arithmetic applies to it unchanged.
+        /// </summary>
+        private const float ConeCertainHitTotal = 1_000f;
 
         private static PairRemovalTerm BuildPairRemovalTerm(
             BattleSoldier shooter,

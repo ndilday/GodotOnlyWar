@@ -8,7 +8,7 @@ using Xunit;
 
 namespace OnlyWar.Tests.Battles;
 
-// The battle-layer half of Phase 3 (Design/Active/CasualtyRealism.md §2.1): WoundResolver's
+// The battle-layer half of Phase 3 (Design/Reference/CasualtyRealism.md §2.1): WoundResolver's
 // OnSoldierFall hook, and BattleSoldier's move speed.
 //
 // WoundResolver.HandleWound fires OnSoldierFall when a location crosses into crippled/severed.

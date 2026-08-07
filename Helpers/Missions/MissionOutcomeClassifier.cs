@@ -43,11 +43,11 @@ namespace OnlyWar.Helpers.Missions
         public int EnemiesKilled { get; init; }
         public int EnemyKillCredits { get; init; }
         // What the operation cost the Chapter. Incapacitated brothers are casualties, not kills
-        // (Design/Active/CasualtyRealism.md §2.3): they came home alive and go into the
+        // (Design/Reference/CasualtyRealism.md §2.3): they came home alive and go into the
         // wound-recovery pipeline, so the debrief must not bury them.
         public int FriendlyDeaths { get; init; }
         public int FriendlyIncapacitated { get; init; }
-        // Apothecary field care under this order (Design/Active/CasualtyRealism.md §2.6).
+        // Apothecary field care under this order (Design/Reference/CasualtyRealism.md §2.6).
         // Zero/empty when no Apothecary was attached, which is the overwhelming majority of orders.
         public IReadOnlyList<string> FieldCareApothecaries { get; init; } = [];
         public int FieldCareTreatments { get; init; }

@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 
@@ -23,7 +23,7 @@ namespace OnlyWar.Models.Squads
         Administrative = 0x40,
         // Formations whose function is to SUPPLY specialists to other formations: the four
         // command HQ templates and the four chapter offices. The flag is two-sided
-        // (Design/Active/SpecialistAttachment.md §3.3): such a formation may give up an
+        // (Design/Reference/SpecialistAttachment.md §3.3): such a formation may give up an
         // individual to an order via OrderAttachment, and in exchange it never deploys as a
         // unit -- it is a personnel pool, not a manoeuvre element. Note this is NOT
         // Administrative: IsOperational must stay true or surgery staffing and

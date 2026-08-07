@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -177,7 +177,7 @@ public class SaveLoadRoundTripTests
             .First(s => s.Id != orderedSquad.Id && s.Id != landedSquad.Id);
         administrativeSquad.IsAdministrative = true;
 
-        // Order-level specialist attachment (Design/Active/SpecialistAttachment.md). The man
+        // Order-level specialist attachment (Design/Reference/SpecialistAttachment.md). The man
         // stays on his home squad's roll -- his only persisted marker of being forward is the
         // OrderSoldier row -- so the round trip has to restore BOTH halves of the pointer pair
         // AND land on the same object the squad holds. See the reference-equality assertions
@@ -240,7 +240,7 @@ public class SaveLoadRoundTripTests
             factionId: 7, magnitude: 4, locationName: "Northern Waste, Test World");
         eventSoldier.AddEvent(battleEvent);
 
-        // Incapacitation (Design/Active/CasualtyRealism.md §2.3) adds NO new persisted column: the
+        // Incapacitation (Design/Reference/CasualtyRealism.md §2.3) adds NO new persisted column: the
         // state is derived from the wounds the HitLocation table already carries, and an
         // incapacitated brother keeps his squad, so he is never mistaken for a fallen brother
         // (GameStateDataAccess treats a squad-less player soldier as dead). Both halves are pinned

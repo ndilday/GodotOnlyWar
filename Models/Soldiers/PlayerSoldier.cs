@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using OnlyWar.Models.Squads;
@@ -116,7 +116,7 @@ namespace OnlyWar.Models.Soldiers
 
         /// <summary>
         /// May the player send this brother out with a squad? Resolved in Phase 3 of
-        /// Design/Active/CasualtyRealism.md (§3.3 "Deployability"): a brother is deployable
+        /// Design/Reference/CasualtyRealism.md (§3.3 "Deployability"): a brother is deployable
         /// exactly when he is still combat effective -- he can bring a weapon to bear AND his
         /// motive wounds have not taken his speed to zero.
         ///
@@ -131,7 +131,7 @@ namespace OnlyWar.Models.Soldiers
 
         /// <summary>
         /// The operation this brother has been attached to as an individual, without his home
-        /// squad (Design/Active/SpecialistAttachment.md). Null for the overwhelming majority of
+        /// squad (Design/Reference/SpecialistAttachment.md). Null for the overwhelming majority of
         /// the roster. He remains in <see cref="AssignedSquad"/>'s Members throughout --
         /// removing him would make him load back as a fallen brother.
         ///

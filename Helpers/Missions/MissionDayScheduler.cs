@@ -39,7 +39,7 @@ namespace OnlyWar.Helpers.Missions
         /// <param name="onDayEnd">
         /// Called with the day number once every mission has resolved everything it does on that
         /// day. This is where between-days recovery belongs - notably the Astartes daily healing
-        /// pass (Design/Active/CasualtyRealism.md §2.5), which must land after the day's fighting
+        /// pass (Design/Reference/CasualtyRealism.md §2.5), which must land after the day's fighting
         /// so a brother scratched on day 2 starts day 3 clean.
         ///
         /// Deliberately a scheduler-level hook and NOT a per-driver one: one order can fan out

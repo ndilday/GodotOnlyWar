@@ -72,10 +72,13 @@ namespace OnlyWar.Helpers
         // random infiltration roll can leave only a token cult, so on this one world the cult is
         // pulled up to this share of each region's combined (cult + Imperial) population and garrison,
         // carving the difference out of the Imperial owner. A cult now rises on its POPULATION vs the
-        // PDF's garrison (PRD §4.24), so even 10% of the world dwarfs the PDF and comfortably sustains
-        // the revolt — a larger share would represent a cult that should have revolted long ago, and
-        // pushes an absurd fraction of the planet into open cult hands. Playtest-pending.
-        public const float PromisedWorldCultStrengthFraction = 0.10f;
+        // PDF's garrison (PRD §4.24), so even a few percent of the world dwarfs the PDF and comfortably
+        // sustains the revolt — a larger share would represent a cult that should have revolted long
+        // ago, and pushes an absurd fraction of the planet into open cult hands. Cut from 0.10 to 0.05
+        // on 2026-08-07: at 10% the promised world handed off with the invaders outnumbering the
+        // Imperial populace (the seed-1 "invaded but not conquered" invariant failed), and the cult's
+        // share is pure transfer out of the Imperial column, so it moves that ratio twice over.
+        public const float PromisedWorldCultStrengthFraction = 0.05f;
 
         // The promised world's Cult has infiltrated the PDF and government before it rises, so it
         // starts with enough per-region belief to choose assaults from knowledge rather than spending

@@ -5,7 +5,7 @@ using Xunit;
 
 namespace OnlyWar.Tests.Domain;
 
-// Pins the CanFight / CanMove split introduced by Phase 0 of Design/Active/CasualtyRealism.md.
+// Pins the CanFight / CanMove split introduced by Phase 0 of Design/Reference/CasualtyRealism.md.
 //
 // Before the split, Soldier.CanFight answered one question -- "is this man out of the fight?" --
 // by folding hands, vitals and motive locations together. It is now three properties:

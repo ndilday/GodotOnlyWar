@@ -266,7 +266,7 @@ public class RulesDatabaseValidationTests
     public void SquadTemplates_PermitIndividualDetachment_ForExactlyTheHqSquadsAndChapterOffices()
     {
         // Pins RulesMigration_SpecialistDetachment.sql. The flag is two-sided
-        // (Design/Active/SpecialistAttachment.md §3.3): these eight formations may lend
+        // (Design/Reference/SpecialistAttachment.md §3.3): these eight formations may lend
         // individuals to an order and may never be ordered as squads. Line squads must not
         // carry it, or a tactical squad would silently stop being deployable.
         var rules = RulesDatabaseFixture.LoadRules();

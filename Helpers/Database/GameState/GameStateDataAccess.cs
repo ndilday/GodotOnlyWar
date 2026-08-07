@@ -1,4 +1,4 @@
-﻿using Microsoft.Data.Sqlite;
+using Microsoft.Data.Sqlite;
 using OnlyWar.Builders;
 using OnlyWar.Models;
 using OnlyWar.Models.Equippables;
@@ -146,7 +146,7 @@ namespace OnlyWar.Helpers.Database.GameState
             // Must run here, not inside GetSquadsByUnitId where the orders are built: the
             // PlayerSoldier constructor swaps the wrapper into the squad in place of the base
             // Soldier, so attachments have to be resolved against the wrappers that the call
-            // above just produced (Design/Active/SpecialistAttachment.md §6.3).
+            // above just produced (Design/Reference/SpecialistAttachment.md §6.3).
             _unitDataAccess.PopulateOrderAttachments(dbCon, squadMap, playerSoldiers);
             var global = _globalDataAccess.GetGlobalData(dbCon);
             var medicalProcedures = _medicalProcedureDataAccess.GetProcedures(dbCon);
@@ -351,7 +351,7 @@ namespace OnlyWar.Helpers.Database.GameState
                     // Under the >=1-assigned-squad invariant the squad walk alone is
                     // sufficient, but an order is now also reachable through an attached
                     // specialist. Concatenating that side makes the coverage explicit rather
-                    // than accidental (Design/Active/SpecialistAttachment.md §6.2).
+                    // than accidental (Design/Reference/SpecialistAttachment.md §6.2).
                     var orders = squads.Select(s => s.CurrentOrders)
                                        .Concat(playerSoldiers.Select(s => s.AttachedOrder))
                                        .Where(o => o != null && o.Mission != null)

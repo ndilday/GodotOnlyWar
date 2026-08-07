@@ -124,7 +124,7 @@ namespace OnlyWar.Models.Soldiers
 
         /// <summary>
         /// Clears the Negligible band outright, leaving every other band and every band clock
-        /// untouched (Design/Active/CasualtyRealism.md §2.5). This is the Astartes daily pass:
+        /// untouched (Design/Reference/CasualtyRealism.md §2.5). This is the Astartes daily pass:
         /// grazes and bruises close overnight.
         ///
         /// The boundary is load-bearing rather than cosmetic. Five Negligible wounds promote to a
@@ -146,7 +146,7 @@ namespace OnlyWar.Models.Soldiers
         /// <summary>
         /// The worst band this location carries that an Apothecary could usefully treat, and how
         /// many of that band's wounds a single treatment could actually step down
-        /// (Design/Active/CasualtyRealism.md §2.6). Pure -- nothing is mutated.
+        /// (Design/Reference/CasualtyRealism.md §2.6). Pure -- nothing is mutated.
         ///
         /// Bands below Moderate are excluded because they carry no healing clock and are cleared
         /// outright by the next natural pass anyway: spending an Apothecary's day on a graze buys
@@ -172,7 +172,7 @@ namespace OnlyWar.Models.Soldiers
 
         /// <summary>
         /// An Apothecary's field treatment: a FORCED demotion of the worst treatable band, applied
-        /// the moment it happens (Design/Active/CasualtyRealism.md §2.6). Returns the band that was
+        /// the moment it happens (Design/Reference/CasualtyRealism.md §2.6). Returns the band that was
         /// treated, or <see cref="WoundLevel.None"/> if there was nothing to treat.
         ///
         /// Expressed in the healing model's own vocabulary rather than as a separate "treatment

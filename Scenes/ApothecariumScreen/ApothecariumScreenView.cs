@@ -118,7 +118,7 @@ public partial class ApothecariumScreenView : MainScreenView
         _soldierTitle.Text = summary.Name;
         // Field-care coverage rides on the assignment line rather than claiming a metric tile: it is
         // context for the recovery numbers beside it, not a fifth headline figure
-        // (Design/Active/CasualtyRealism.md §2.6).
+        // (Design/Reference/CasualtyRealism.md §2.6).
         _soldierSubtitle.Text = string.IsNullOrEmpty(summary.FieldCareStatus)
             ? summary.Assignment
             : $"{summary.Assignment}\n{summary.FieldCareStatus}";

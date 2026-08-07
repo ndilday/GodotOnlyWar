@@ -10,7 +10,7 @@ using System.Linq;
 
 namespace OnlyWar.Helpers.Orders
 {
-    // Order-level attachment of individual specialists (Design/Active/SpecialistAttachment.md,
+    // Order-level attachment of individual specialists (Design/Reference/SpecialistAttachment.md,
     // Phase 2a). An attached specialist is WITH the force but not IN the engagement: he has no
     // BattleSquad binding, takes no battle-time effects, and cannot become a casualty. That is
     // deliberately deferred (Phase 2c).

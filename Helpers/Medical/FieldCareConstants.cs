@@ -3,7 +3,7 @@ using OnlyWar.Models.Soldiers;
 namespace OnlyWar.Helpers.Medical
 {
     /// <summary>
-    /// Tunables for Apothecary field care (Design/Active/CasualtyRealism.md §2.6, §3.2).
+    /// Tunables for Apothecary field care (Design/Reference/CasualtyRealism.md §2.6, §3.2).
     ///
     /// These live in CODE, never in the rules database, following the morale precedent
     /// (<c>MoraleConstants</c>) and the Phase 3 precedent (<c>CasualtyConstants</c>). None of it is

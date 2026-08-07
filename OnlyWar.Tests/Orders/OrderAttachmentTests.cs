@@ -12,8 +12,8 @@ using Xunit;
 
 namespace OnlyWar.Tests.Orders;
 
-// Phase 2a of Design/Active/CasualtyRealism.md, specified in
-// Design/Active/SpecialistAttachment.md: an individual specialist may be attached to an
+// Phase 2a of Design/Reference/CasualtyRealism.md, specified in
+// Design/Reference/SpecialistAttachment.md: an individual specialist may be attached to an
 // operation without his home squad.
 //
 // Two rules carry most of the weight here and are asserted repeatedly:

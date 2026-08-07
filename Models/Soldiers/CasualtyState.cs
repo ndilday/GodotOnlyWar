@@ -4,7 +4,7 @@ namespace OnlyWar.Models.Soldiers
 {
     /// <summary>
     /// What a battle did to a soldier, resolved once the fighting stops
-    /// (Design/Active/CasualtyRealism.md §2.3). Ordered from least to most severe so the
+    /// (Design/Reference/CasualtyRealism.md §2.3). Ordered from least to most severe so the
     /// worst outcome wins a comparison.
     /// </summary>
     public enum CasualtyState

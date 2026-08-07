@@ -110,7 +110,7 @@ namespace OnlyWar.Helpers
 
         /// <param name="force">
         /// Supplies the chapter roster needed to work out who is covering this brother medically
-        /// (Design/Active/CasualtyRealism.md §2.6). Optional: with no force the field-care readout
+        /// (Design/Reference/CasualtyRealism.md §2.6). Optional: with no force the field-care readout
         /// is simply blank, which keeps the internal callers below -- which only want recovery
         /// weeks -- from paying for a roster sweep per soldier.
         /// </param>
@@ -145,7 +145,7 @@ namespace OnlyWar.Helpers
 
         /// <summary>
         /// Who is treating this brother, and how much of an Apothecary's day he has access to
-        /// (Design/Active/CasualtyRealism.md §2.6). Shown on the Apothecarium so the cost of sending
+        /// (Design/Reference/CasualtyRealism.md §2.6). Shown on the Apothecarium so the cost of sending
         /// an Apothecary forward is visible where the backlog is: the brothers he left behind read
         /// "no Apothecary on hand" the moment he is attached to an order.
         /// </summary>

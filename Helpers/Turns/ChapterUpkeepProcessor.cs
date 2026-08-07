@@ -45,14 +45,14 @@ namespace OnlyWar.Helpers.Turns
             // Days outside a mission get their daily pass too. Weeks with no combat orders never
             // enter MissionDayScheduler at all, and even an active week ends its day loop as soon
             // as the last mission finishes, so this is the garrison half of the Astartes daily
-            // clear (Design/Active/CasualtyRealism.md §2.5). One call covers however many quiet
+            // clear (Design/Reference/CasualtyRealism.md §2.5). One call covers however many quiet
             // days there were, because clearing an already-clear band does nothing.
             //
             // Subsumed by ApplyWeeklyHealing today, which clears Negligible and Minor outright for
             // everyone. Kept explicit so the daily rule does not silently depend on that: it is
             // stated where it belongs and survives any future change to the weekly cascade.
             MedicalTurnProcessor.ApplyDailyHealing(members);
-            // GARRISON FIELD CARE (Design/Active/CasualtyRealism.md §2.6): the Apothecarium at rest,
+            // GARRISON FIELD CARE (Design/Reference/CasualtyRealism.md §2.6): the Apothecarium at rest,
             // which is where most convalescence actually happens. An Apothecary NOT on a mission
             // treats co-located brothers who are likewise not on a mission, on the same capacity and
             // the same triage as his forward counterpart -- so an Apothecary sent out with an

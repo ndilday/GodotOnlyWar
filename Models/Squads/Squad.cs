@@ -1,4 +1,4 @@
-﻿using OnlyWar.Models.Equippables;
+using OnlyWar.Models.Equippables;
 using OnlyWar.Models.Fleets;
 using OnlyWar.Models.Orders;
 using OnlyWar.Models.Planets;
@@ -45,7 +45,7 @@ namespace OnlyWar.Models.Squads
                     CurrentOrders = null;
                 }
                 // Members lent out to other operations come home too: an administrative
-                // formation has no one in the field (Design/Active/SpecialistAttachment.md).
+                // formation has no one in the field (Design/Reference/SpecialistAttachment.md).
                 foreach (PlayerSoldier member in _members.OfType<PlayerSoldier>().ToList())
                 {
                     OnlyWar.Helpers.Orders.OrderAttachment.Detach(member);

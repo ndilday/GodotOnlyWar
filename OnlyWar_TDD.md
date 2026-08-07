@@ -197,7 +197,9 @@ Written in full on each save (file is deleted and recreated from scratch using t
 
 **Current 0.7.1 behavior:** `SaveFormat.CurrentVersion` is written to `GlobalData.SaveVersion`; discovery marks a different version as incompatible, and the data access layer rejects it before reading sector tables. Missing saves are opened in neither create nor write mode, preventing a failed load from leaving behind an empty SQLite file. The visible chooser retains compatible, incompatible, and corrupt entries with an explicit reason instead of silently choosing the newest file.
 
-Named manual slots, the initial recovery point, three rolling post-turn autosaves, and the protected pre-turn recovery point all use the same atomic persistence path. `CampaignRecoverabilityTracker` records whether the current in-memory revision has a successfully written recovery point, while `SaveGameManager` owns slot naming, metadata, retention, overwrite protection, and restoration of the prior valid save on failure. The protected pre-turn write completes before `ProcessTurn` mutates state; failure blocks turn resolution. Ordered save-format migration is intentionally deferred until the first format-version change—Alpha 0.7.1 does not bump the format or introduce speculative migrators.
+Named manual slots, the initial recovery point, three rolling post-turn autosaves, and the protected pre-turn recovery point all use the same atomic persistence path. `CampaignRecoverabilityTracker` records whether the current in-memory revision has a successfully written recovery point, while `SaveGameManager` owns slot naming, metadata, retention, overwrite protection, and restoration of the prior valid save on failure. The protected pre-turn write completes before `ProcessTurn` mutates state; failure blocks turn resolution. Ordered save-format migration remains intentionally deferred; no migrators exist.
+
+**Format version 6 (2026-08-07).** The first bump. `OrderSoldier` (specialist attachment, §5.6) was added to the save schema, and a version-5 save read by the new build faulted deep in the loader with `SQLite Error 1: 'no such table: OrderSoldier'`. The guard for exactly this already existed — `GlobalDataAccess.EnsureCompatibleSaveVersion` runs at `GameStateDataAccess.GetData` *before* any sector table is read, and `SaveGameCatalog` marks mismatched files incompatible in the chooser — but it can only fire if `SaveFormat.CurrentVersion` moves with the schema. **The rule this establishes: any change to `SaveStructure.sql`'s shape bumps `SaveFormat.CurrentVersion`.** A save/load round-trip test cannot catch the omission, because the writer recreates the schema from scratch on every save and so always agrees with itself; only an *older file* read by a *newer build* exposes it. Old saves are rejected rather than migrated — acceptable during alpha, and the point at which that stops being acceptable is the point migrators get written.
 
 Connections use `Microsoft.Data.Sqlite` (the `SqliteConnectionStringBuilder` `DataSource`) with foreign key enforcement enabled (`ForeignKeys = true`). The schema is foreign-key-valid — every reference resolves to a table in the save file — and the save routines insert parent rows before the rows that reference them. `Faction` is intentionally *not* a foreign-key target: factions live only in the read-only rules database and are matched by id at load. See §8.5.1 for the provider-compatibility work that established this.
 
@@ -233,7 +235,7 @@ Assignment           (Id, MissionId, Disposition, IsQuiet,
 OrderSquad           (OrderId→Assignment, SquadId)       -- order-to-squad junction
 OrderSoldier         (OrderId→Assignment, SoldierId)     -- individual specialists attached to an
                                                          -- operation without their home squad
-                                                         -- (Design/Active/SpecialistAttachment.md).
+                                                         -- (Design/Reference/SpecialistAttachment.md).
                                                          -- Soldier.SquadId still points at the home
                                                          -- squad; this row is the only record that
                                                          -- he is currently detached forward.
@@ -370,7 +372,25 @@ WoundLevel enum (bitmask):
 
 `WeeksOfHealing` encodes healing progress across tiers using nibble offsets. The `Wounds.WeeksToHeal` property reads the appropriate nibble for the highest active tier to determine remaining weeks.
 
+**Healing cadence.** `Wounds.AdvanceOccupiedBandClocks` advances the clock of **every band that holds wounds, independently and concurrently; empty bands do not age.** Dwell times step down one band per interval — Unsurvivable 7 weeks, Mortal 6, Massive 5, Critical 4, Major 3, Moderate 2 — with Negligible and Minor cleared outright on any pass. The governing principle is that wounds are *discrete injuries, not one severity counter*: a location's Major wounds convalesce alongside its Critical ones, exactly as a split lip mends without waiting for a broken nose. Because each band's dwell is one week shorter than the band above, a band always empties one week before the band above steps into it, so a step-down can never overfill a band. `Wounds.Normalize()` is retained as an invariant guard on both mutation paths (it folds a band above `WOUND_MAX` upward), and `AddWound` genuinely needs it — a sixth Major wound *is* one Critical. Demotion preserves count: three Major wounds become three Moderate. `AddWound` resets `WeeksOfHealing` for **every** band, deliberately (PRD §6.14). Pinned by `WoundHealingCadenceTests`.
+
+**Astartes daily healing.** `Wounds.ClearNegligibleWounds()` (`WoundTotal &= 0xfffffff0`) runs once per campaign day for species carrying `SpeciesAbilities.AcceleratedHealing`, so a day's glancing hits no longer compound into a real wound while a single battle's worth still can — a battle resolves inside one day. Severed locations are skipped.
+
 `HitLocationTemplate` defines per-location properties: `NaturalArmor`, `WoundMultiplier`, `CrippleWound` threshold, `SeverWound` threshold, `IsMotive`, nullable `HandGroupId`, `IsVital`, and `HitProbabilityMap` (a 3-element int array for short/medium/long range bands). An arm and its hand share a hand group; disabling either disables that physical hand.
+
+#### Capability, Motive Impairment & Casualty State
+
+"Out of the fight" is three predicates on `ISoldier`, not one:
+
+- **`CanFight`** — hands and vitals. False if any *vital* location is crippled or severed, or no hand group functions.
+- **`CanMove`** — motive only. False when the motive speed multiplier reaches zero.
+- **`IsCombatEffective`** — `CanFight && CanMove`. This is the seam every consumer uses (planning, targeting, morale, deployment gating, the Apothecarium); nothing in production means "can shoot but need not walk".
+
+`MotiveImpairment` computes a **speed multiplier per motive location by wound band**, and immobility is simply the product reaching zero — there is no separate binary. Constants live in `CasualtyConstants`, not the rules DB. Below Major 1.0, Major 0.85, Critical 0.6, and zero at Massive/crippled/severed; locations compound **multiplicatively**, so two Critical legs give 0.36 and still fight. **Extremities floor at 0.40 and can never fell a soldier** — a location counts as an extremity when some other motive location on that body has a strictly higher cripple threshold, which makes legs principal and feet extremities on both authored bodies. `BattleSoldier.GetMoveSpeed()` multiplies `Soldier.MoveSpeed` by it, replacing the former binary `IsSlow` / flat ×0.75.
+
+Legs cripple at `Massive` and sever at `Mortal` — deliberately a band apart, so "crippled but not severed" stays reachable for the body's principal motive location, which is the state incapacitation is built on. Feet cripple at `Major`, sever at `Critical`. Thresholds live in the rules DB and are mirrored in the `Body.cs` hard-coded fallbacks; the two must not diverge.
+
+`CasualtyState { Unharmed, Impaired, Incapacitated, Killed }` with `CasualtyStateEvaluator` classifies the outcome from the body plus one external fact (whether the body was recovered). **Power-armor biostasis:** a downed player soldier cannot die of his wounds awaiting treatment, so there is no deterioration clock, no bleed-out pass, and medical care is only ever about *speed* of recovery. Nothing new is persisted — the condition derives from wounds already in the `HitLocation` table, and a recovered brother keeps his squad, so he never trips the null-squad-means-dead path at load.
 
 #### Skill Model
 
@@ -468,6 +488,7 @@ ConstructionMission : Mission
 
 Order
   ├─ Squads : List<Squad>
+  ├─ AttachedSoldiers : List<PlayerSoldier>   (individuals attached without their squad)
   ├─ Mission : Mission
   ├─ Disposition : Disposition       (Mobile, DugIn)
   ├─ IsPlayerControlled : bool
@@ -483,6 +504,18 @@ MissionContext  (runtime only, not persisted)
   ├─ Impact : float
   └─ EnemiesKilled : int
 ```
+
+#### Specialist Attachment
+
+Orders bind squads; an individual specialist reaches an operation by **attachment** instead. `Order.AttachedSoldiers` ⟷ `PlayerSoldier.AttachedOrder` is a pointer pair owned entirely by `OrderAttachment` (`Attach`/`Detach`/`ReleaseAll`/`CanAttach`), so nothing can half-attach. `SpecialistAvailability` holds the selection rules, extracted from the Godot controller so they are unit-testable.
+
+An attached soldier **stays in `Squad.Members`** — the save keys a soldier's squad, and a null squad at load means *dead*, so removing him would resurrect him as a fallen brother. Home-squad headcount therefore still counts him; only "ready right now" displays subtract him.
+
+`SquadTypes.PermitsIndividualDetachment` (0x80, rules DB) marks the eight formations that exist to supply specialists — the four HQ templates and the four chapter offices. The flag is **two-sided**: a formation that may give up individuals **never deploys as a unit**, enforced in `OrderAssignment.AssignSquadsToMission`. This is deliberately *not* implemented via the `Administrative` bit, because `Squad.IsOperational` must stay true — surgery staffing (`MedicalProcedureService`) and recruitment/implantation (`RecruitmentPromotionService`) both gate on it, and these are exactly the formations that supply that staff.
+
+Invariant: **an order always has ≥1 assigned squad.** A specialists-only order is rejected; several sites partition orders on `AssignedSquads.Any()`. Attachment lifetime is order lifetime — it is released when the player unassigns, when `MissionAftermathProcessor` cleans up a resolved order, when the last squad leaves, when the home squad turns administrative, or on the man's death. An attached specialist has **no battlefield presence**: he is in no `BattleSquad`, cannot become a casualty, and is added to the mission report explicitly rather than via battle participation.
+
+Persistence is the `OrderSoldier` table. Hydration must run **after** player soldiers load, not where orders are constructed, because `PlayerSoldier`'s constructor evicts the base `Soldier` from its squad and inserts the wrapper — so the round-trip test asserts *reference* equality, not matching ids.
 
 ### 5.7 Characters & Requests
 
@@ -823,10 +856,21 @@ Battle completion produces a typed `BattleOutcome` with end reason, field holder
 
 `MedicalTurnProcessor` runs as the `ProcessMedical` step of `TurnController.ProcessTurn` and has two halves.
 
-- **Natural healing.** Applies `Wounds.ApplyWeekOfHealing()` to every wounded player-soldier hit location regardless of deployment, *except* locations that require a replacement procedure — severed, or a crippled functional/vital location. `HitLocation.IsReplacementEligible` is the single source of truth for that exclusion and is shared with the Apothecarium view and the Squad Screen, so the three surfaces cannot disagree.
+- **Natural healing.** Applies `Wounds.ApplyWeekOfHealing()` to every wounded player-soldier hit location regardless of deployment, *except* locations that require a replacement procedure — severed, or a crippled functional/vital location. `HitLocation.IsReplacementEligible` is the single source of truth for that exclusion and is shared with the Apothecarium view and the Squad Screen, so the three surfaces cannot disagree. Cadence and the daily Astartes pass are specified in §5.3.
 - **Procedure resolution.** `ResolveProcedures` decrements weeks-remaining and, on completion, clears the location's wounds and removes the procedure. Cybernetic completion sets `HitLocation.IsCybernetic`; vat-grown leaves it clear. Because wounds are not cleared until completion, a marine under a procedure stays out-of-action automatically rather than needing a separate flag.
 
 `MedicalProcedure` (soldier id, hit-location template id, `MedicalProcedureType { Cybernetic, VatGrown }`, weeks remaining, Requisition cost paid up front) lives on `Army` beside the Requisition pool and roster, and persists to a `MedicalProcedure` table keyed to `Soldier`. `MedicalProcedureService.TryAssign` validates eligibility, surgery site, co-located staff, and affordability, then deducts cost and creates the procedure; `EvaluateRequisites` returns the per-requisite breakdown the UI renders green/red. Durations and costs live in `MedicalProcedureRules`, never in UI literals. The gates are a co-located Apothecary **and** Techmarine (same ship or same region, checked only at procedure start) plus a valid surgery site — aboard a ship, or an Imperial/player-controlled Hive/Forge/Civilised region. No fortress-monastery is modeled, so a player-held region serves as the de-facto base.
+
+**Apothecary field care.** `FieldCareService` converts an Apothecary's **Medical** rating into a daily wound capacity spent on the wounded he can reach. Treatment is a **forced wound-band demotion applied the day it happens**, not a credit settled at turn end — a brother hit in a day-2 assault and treated that evening enters the day-3 battle at reduced severity, which is the whole point, since battles read live wound state. All tunables live in `FieldCareConstants`, never the rules DB.
+
+- **Reach** is the order: every wounded soldier in its assigned squads plus its attached soldiers. This is what makes order-level attachment the right shape (§5.6).
+- **Capacity** is mildly superlinear in Medical rating and clamped, so a Master of the Apothecarion outworks an ordinary brother without replacing several of them.
+- **Cost is flat in band *index*, not band value.** Wound bands are powers of 16, so a proportional cost would make severe wounds untreatable; a sub-linear surcharge covers extra wounds within a band, since a demotion moves the whole band at once.
+- **Triage** is worst-first and deliberately not spread thin: severity by `Wounds.RecoveryTimeLeft()` — the *player-visible* number, so the order shown is the order run — then Rank desc, Subrank desc, then a random draw from the session RNG. Re-triaged after **every** treatment, so a demotion can hand the queue to someone else mid-day.
+- **Greedy, no per-soldier cap, use-it-or-lose-it.** Re-triage self-levels: once the worst case drops below the next man, the queue reorders on its own.
+- **Ceiling.** `IsReplacementEligible` is true from the *cripple* threshold up, so the worst wound field care can reach is the band below it. A brother who actually went down is a surgical case — surgery remains surgery.
+
+Two seams, deliberately deduped. The mission pass runs on `MissionDayScheduler`'s scheduler-level `onDayEnd`, iterating **distinct `Order`s** — never mission elements, because `BuildMissionElements` fans one order into several single-squad drivers for `IndependentSquads` and a per-driver pass would make an Apothecary silently worth 3×. Garrison care runs the identical routine in `ChapterUpkeepProcessor.ProcessMedical` before the weekly cascade. **Field beats garrison by construction, not by rule:** an Apothecary under an order fails the "not on a mission" test defining the garrison pool, so the pools are disjoint and no man spends a day twice. Co-location resolves through `PlayerSoldier.EffectiveRegion`, since an attached Apothecary's home squad may sit on the ship while he is forward — `MedicalProcedureService.HasCoLocatedStaff` routes through it for the same reason.
 
 Gene-seed recovery resolves once per confirmed-dead brother in `BattleTurnResolver.RemoveSoldiersKilledInBattle` (`ResolveGeneseedRecovery`), folding any recovered gland's purity into the chapter aggregate and writing a structured `SoldierEventType.GeneseedRecovery` event onto the preserved fallen-brother dossier; the battle log reads that recorded outcome rather than recomputing it. `PlayerForce` carries a count-weighted aggregate `GeneseedPurity` float alongside `GeneseedStockpile` — seeded pristine at founding, each recovered gland contributing a purity rolled around a baseline with small downward drift (`GeneseedRules`). Both persist on the extended `GlobalData` row. Stockpile drawdown happens in the recruitment pipeline (one unit consumed on Phase 0 → Phase 1; PRD §4.9).
 

@@ -10,7 +10,7 @@ using Xunit;
 namespace OnlyWar.Tests.Domain;
 
 /// <summary>
-/// Phase 1b of Design/Active/CasualtyRealism.md (§2.5): an Astartes sheds his Negligible wounds
+/// Phase 1b of Design/Reference/CasualtyRealism.md (§2.5): an Astartes sheds his Negligible wounds
 /// overnight, so a day's worth of grazes cannot compound into a real wound -- while a single
 /// battle's worth still does, because a battle resolves inside one day and the pass never runs
 /// during one.

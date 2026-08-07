@@ -23,7 +23,7 @@ namespace OnlyWar.Models.Soldiers
         GeneseedRecovery = 9,
         // Taken out of a battle alive -- motive capability gone, a weapon hand ruined, or a vital
         // location crippled short of severed -- and recovered from the field
-        // (Design/Active/CasualtyRealism.md §2.3). Distinct from Death: he is still on the roster.
+        // (Design/Reference/CasualtyRealism.md §2.3). Distinct from Death: he is still on the roster.
         Incapacitated = 10,
 
         // Reserved for planned notable career events:

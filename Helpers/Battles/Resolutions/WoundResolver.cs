@@ -1,4 +1,4 @@
-﻿using System.Collections.Generic;
+using System.Collections.Generic;
 
 using OnlyWar.Models.Soldiers;
 using OnlyWar.Models.Equippables;
@@ -90,7 +90,7 @@ namespace OnlyWar.Helpers.Battles.Resolutions
                 if (!wasFunctionallyDisabled && (wound.HitLocation.IsSevered || wound.HitLocation.IsCrippled))
                 {
                     // OnSoldierFall is the "out of the fight, alive" hook -- what
-                    // Design/Active/CasualtyRealism.md §2.3 names Incapacitated. The predicate for
+                    // Design/Reference/CasualtyRealism.md §2.3 names Incapacitated. The predicate for
                     // it is IsCombatEffective, and that stays the right one now that the state has
                     // a name: a soldier is out of the battle exactly when he can no longer both
                     // fight and move, which is precisely what the battle layer removes him for.

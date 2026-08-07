@@ -222,7 +222,7 @@ namespace OnlyWar.Helpers.Battles.Aftermath
 
         /// <summary>
         /// Settles every battle-brother who started the fight into one of the three outcomes of
-        /// Design/Active/CasualtyRealism.md §2.3, and makes <see cref="BattleHistory"/> agree.
+        /// Design/Reference/CasualtyRealism.md §2.3, and makes <see cref="BattleHistory"/> agree.
         /// The wound resolver's death hook fires on a *crippled* vital and its fall hook on a lost
         /// limb, neither of which is a verdict -- power-armor biostasis means a downed brother
         /// cannot die of his wounds while he waits, so the only questions that decide his fate are

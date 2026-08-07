@@ -29,7 +29,7 @@ namespace OnlyWar.Models.Soldiers
         /// <summary>
         /// The species heals fast enough that trivial injuries close overnight: a daily pass
         /// clears the Negligible wound band, so a day's worth of grazes cannot compound into a
-        /// real wound (Design/Active/CasualtyRealism.md §2.5). Minor and above stay on the
+        /// real wound (Design/Reference/CasualtyRealism.md §2.5). Minor and above stay on the
         /// ordinary weekly cascade. Astartes only today; it is a species property rather than a
         /// player-faction check so a future transhuman enemy gets it for the same reason.
         /// </summary>

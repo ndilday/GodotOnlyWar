@@ -65,7 +65,7 @@ public class MedicalTurnProcessorTests
         // Left Foot (motive) crippled but not severed: needs a replacement, so it is frozen.
         //
         // Was the Left Leg on one Critical wound until Phase 3 of
-        // Design/Active/CasualtyRealism.md raised the leg cripple threshold to Massive, which
+        // Design/Reference/CasualtyRealism.md raised the leg cripple threshold to Massive, which
         // collided with the leg's sever threshold and briefly deleted "crippled but not severed"
         // as a state a leg could hold. RulesMigration_LegSeverThreshold.sql restored it by moving
         // leg sever up to Mortal (§2.1, "Why sever moved too"), and the leg case is pinned
@@ -84,7 +84,7 @@ public class MedicalTurnProcessorTests
         Assert.Equal(before, foot.Wounds.WoundTotal);
     }
 
-    // Design/Active/CasualtyRealism.md §2.1, "Why sever moved too" (2026-08-06). Phase 3 raised leg
+    // Design/Reference/CasualtyRealism.md §2.1, "Why sever moved too" (2026-08-06). Phase 3 raised leg
     // CRIPPLE to Massive while leg SEVER was already Massive, collapsing the two thresholds onto one
     // band -- so every leg wound that felled a marine also took the leg off, and "crippled but not
     // severed" ceased to exist for the body's principal motive location. That state is exactly what

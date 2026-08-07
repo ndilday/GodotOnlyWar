@@ -22,7 +22,7 @@ namespace OnlyWar.Helpers
         }
 
         /// <summary>
-        /// The end-of-campaign-day pass (Design/Active/CasualtyRealism.md §2.5): species with
+        /// The end-of-campaign-day pass (Design/Reference/CasualtyRealism.md §2.5): species with
         /// <see cref="SpeciesAbilities.AcceleratedHealing"/> shed their Negligible wounds
         /// overnight. Everyone else is untouched and stays entirely on the weekly cascade.
         ///

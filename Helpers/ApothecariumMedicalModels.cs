@@ -99,7 +99,7 @@ namespace OnlyWar.Helpers
         IReadOnlyList<WoundLocationSummary> Wounds,
         IReadOnlyList<ReplacementOption> ReplacementOptions,
         // Apothecary field care covering this brother right now, as a one-line readout
-        // (Design/Active/CasualtyRealism.md §2.6). Appended last and defaulted so every existing
+        // (Design/Reference/CasualtyRealism.md §2.6). Appended last and defaulted so every existing
         // construction site keeps compiling. Empty when the caller supplied no force context.
         string FieldCareStatus = "");
 

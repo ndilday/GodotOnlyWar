@@ -93,7 +93,7 @@ public class MissionDaySchedulerTests
         Assert.True(longMission.IsComplete);
     }
 
-    // The end-of-day hook (Design/Active/CasualtyRealism.md §2.5 daily healing) must fire exactly
+    // The end-of-day hook (Design/Reference/CasualtyRealism.md §2.5 daily healing) must fire exactly
     // once per day however many drivers are in flight. One order fans out into several independent
     // single-squad drivers under MissionForceMode.IndependentSquads, so a pass hung off a driver
     // would run several times a day over overlapping men. It must also land AFTER the day's

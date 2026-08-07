@@ -3,7 +3,7 @@ using System.Collections.Generic;
 namespace OnlyWar.Models.Soldiers
 {
     /// <summary>
-    /// Tunables for graded casualty effects (Design/Active/CasualtyRealism.md §2.1, §3.3).
+    /// Tunables for graded casualty effects (Design/Reference/CasualtyRealism.md §2.1, §3.3).
     /// These live in code, never in the rules database, following the morale precedent
     /// (<c>MoraleConstants</c>): only the leg cripple threshold is genuinely *location* data and
     /// therefore genuinely belongs in <c>HitLocationTemplate</c>. The shape of the impairment
@@ -50,7 +50,7 @@ namespace OnlyWar.Models.Soldiers
 
     /// <summary>
     /// Turns a body's motive wounds into a single speed multiplier
-    /// (Design/Active/CasualtyRealism.md §2.1, Phase 3). Replaces the old binary question
+    /// (Design/Reference/CasualtyRealism.md §2.1, Phase 3). Replaces the old binary question
     /// "is any motive location crippled?" -- which answered total immobility and so let one
     /// Critical leg wound end a marine's battle -- with a graded product.
     ///

@@ -1,4 +1,4 @@
-﻿using System.Collections.Generic;
+using System.Collections.Generic;
 
 namespace OnlyWar.Models.Battles
 {
@@ -21,7 +21,7 @@ namespace OnlyWar.Models.Battles
         // only final after the battle completes.
         public HashSet<int> KilledSoldierIds { get; }
         // Stable identities of soldiers who were taken out of the fight ALIVE: down but not dead
-        // (Design/Active/CasualtyRealism.md §2.3). Populated as soldiers fall, then settled once
+        // (Design/Reference/CasualtyRealism.md §2.3). Populated as soldiers fall, then settled once
         // the field has an owner -- the losing side's abandoned wounded are finished off
         // (BattleTurnResolver.FinishOffAbandonedWounded) and a player brother left behind is
         // presumed dead (PlayerChapterBattleAftermathPolicy). Disjoint from KilledSoldierIds by

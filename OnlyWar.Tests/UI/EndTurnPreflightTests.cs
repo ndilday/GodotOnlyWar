@@ -1,4 +1,4 @@
-﻿using OnlyWar.Helpers.Settings;
+using OnlyWar.Helpers.Settings;
 using OnlyWar.Helpers.Turns;
 using OnlyWar.Models;
 using OnlyWar.Models.Fleets;
@@ -283,7 +283,7 @@ public class EndTurnPreflightTests
         Assert.Equal(EndTurnWarningCategory.ActionableTaskForces, item.Category);
     }
 
-    // Design/Active/SpecialistAttachment.md §7.3. Two ways a formation stops being "idle":
+    // Design/Reference/SpecialistAttachment.md §7.3. Two ways a formation stops being "idle":
     // it is a personnel pool that never takes orders of its own, or it has a member forward.
     [Fact]
     public void Evaluate_DoesNotFlagAFormationWhoseTemplatePermitsDetachmentAsIdle()

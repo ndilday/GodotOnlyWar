@@ -15,7 +15,7 @@ using Xunit;
 namespace OnlyWar.Tests.Battles;
 
 /// <summary>
-/// Phase 1 of Design/Active/CasualtyRealism.md: incapacitation as a named, persisted outcome.
+/// Phase 1 of Design/Reference/CasualtyRealism.md: incapacitation as a named, persisted outcome.
 ///
 /// Three things are pinned here. That the disposition of a downed battle-brother keys on
 /// <c>BattleOutcome.SideHoldingField</c> and nothing else; that power-armor biostasis means no
