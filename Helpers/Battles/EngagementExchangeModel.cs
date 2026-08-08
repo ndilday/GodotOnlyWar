@@ -26,13 +26,13 @@ namespace OnlyWar.Helpers.Battles
     {
         // Plies of policy rollout. Each ply re-chooses, so this is a depth, not a fixed script.
         internal const int EngagementLookaheadHorizon = 2;
-        private const float EngagementFutureDiscount = 0.65f;
+        internal const float EngagementFutureDiscount = 0.65f;
         // How many turns of battle a squad expects to still be fighting. Scales the lookahead
         // terminal so a short rollout does not make a battle that opens at 400 yards read as though
         // it ends before a charge could pay off.
         private const float ExpectedRemainingTurns = 20f;
-        private const float WalkBulkMultiplier = 0.5f;
-        private const float FullBulkMultiplier = 1f;
+        private const float WalkBulkMultiplier = SoldierMovementPlanner.WalkBulkMultiplier;
+        private const float FullBulkMultiplier = SoldierMovementPlanner.FullBulkMultiplier;
 
         private readonly SquadPlanningServices _services;
         private readonly RangedTargetSelector _ranged;

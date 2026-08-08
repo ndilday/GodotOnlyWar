@@ -24,6 +24,11 @@ namespace OnlyWar.Helpers.Battles
         // predicting a jog a third faster than the one it got. Do not re-declare these elsewhere.
         internal const float WalkSpeedMultiplier = 0.2f;
         internal const float JogSpeedMultiplier = 0.5f;
+        // How much of a weapon's Bulk penalty a soldier eats at each movement tier. Canonical home:
+        // the engagement scorer, the posture-bulk mapping and the ranged selector all read these,
+        // and they must not drift apart.
+        internal const float WalkBulkMultiplier = 0.5f;
+        internal const float FullBulkMultiplier = 1f;
 
         private readonly SquadPlanningServices _services;
         private readonly ActionSink _actions;

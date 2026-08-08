@@ -14,8 +14,8 @@ namespace OnlyWar.Helpers.Battles
         // Aliases onto the canonical tier speeds; see SoldierMovementPlanner.
         private const float WalkSpeedMultiplier = SoldierMovementPlanner.WalkSpeedMultiplier;
         private const float JogSpeedMultiplier = SoldierMovementPlanner.JogSpeedMultiplier;
-        private const float WalkBulkMultiplier = 0.5f;
-        private const float FullBulkMultiplier = 1f;
+        private const float WalkBulkMultiplier = SoldierMovementPlanner.WalkBulkMultiplier;
+        private const float FullBulkMultiplier = SoldierMovementPlanner.FullBulkMultiplier;
         // Length the squad rout heading is normalized to. Long enough that no rout is ever capped
         // by the line itself (CalculateMovementAlongLine treats a line shorter than the move budget
         // as a destination), short enough that its squared length stays well inside int range.
@@ -27,12 +27,13 @@ namespace OnlyWar.Helpers.Battles
         // or an un-engaged enemy is about to reach melee. "Worthwhile" reuses the planner's existing
         // floor: positive expected value and better than a one-in-ten chance to hit. Raising this
         // makes soldiers abandon marginal targets (and rescan) sooner.
-        private const float StickyMinimumHitProbability = 0.1f;
+        private const float StickyMinimumHitProbability =
+            RangedTargetSelector.StickyMinimumHitProbability;
         // Aim bonus a pre-sprung ambusher opens with. Matches the planner's own "aim can no
         // longer be improved" ceiling (the >= 3 checks in the standing/forced-shot paths), so a
         // seeded ambusher is indistinguishable from a soldier who spent three turns lining up the
         // shot. See SeedAmbushAim and OnlyWar_TDD.md §6.6.
-        private const int FullAimBonusTurns = 3;
+        private const int FullAimBonusTurns = RangedTargetSelector.FullAimBonusTurns;
         // A fresh stationary aim starts at bonus 0, takes four Aim actions to reach the planner's
         // full-aim threshold (3), and fires on the fifth turn. Pursuit uses this same cycle when
         // deciding how far a squad must run before it can safely stop and complete a shot.
@@ -273,12 +274,13 @@ namespace OnlyWar.Helpers.Battles
             }
         }
 
-        internal const int EngagementLookaheadHorizon = 2;
-        private const float EngagementFutureDiscount = 0.65f;
-        // The ply discount limits how much a short rollout can steer the current turn. The
-        // terminal represents the remaining battle, so it needs an explicit battle-length scale
-        // instead of reusing the ply discount as a geometric tail.
-        private const float ExpectedRemainingTurns = 20f;
+        // Both owned by EngagementExchangeModel, which is where the rollout they govern lives.
+        // Aliased rather than redeclared so the two cannot drift; BattleEscapeRules reads the
+        // horizon through this name.
+        internal const int EngagementLookaheadHorizon =
+            EngagementExchangeModel.EngagementLookaheadHorizon;
+        private const float EngagementFutureDiscount =
+            EngagementExchangeModel.EngagementFutureDiscount;
         private const float EngagementIndifferenceFraction = 0.02f;
 
         /// <summary>
@@ -1149,7 +1151,7 @@ namespace OnlyWar.Helpers.Battles
             // threat's speed, no ceiling and no preferred-range subtraction (distinct from the melee
             // charge-arrival discount above -- see Design/Reference/EngagementScoringOverhaul.md
             // Phase 0).
-            float interceptDistance = Distance(
+            float interceptDistance = EngagementExchangeModel.Distance(
                 endpoint, BattleEngagementFrameBuilder.Centroid(threat));
             float turnsUntilThreatReachesInterceptPoint =
                 interceptDistance / Math.Max(0.1f, threatProfile.MoveSpeed);
@@ -1164,23 +1166,6 @@ namespace OnlyWar.Helpers.Battles
                 profiles[frame.ProtectedSquadId.Value].TotalAbleBattleValue)
                 * holding * capacity * interceptDiscount;
         }
-
-        /// <summary>
-        /// The rate at which the quarry is opening the range while this squad closes it, or 0 when
-        /// nothing is running away. Any term that prices "how much nearer does this option get me"
-        /// has to net this out, or it pays for gross closing the quarry immediately undoes.
-        /// </summary>
-        /// <remarks>
-        /// QuarryRunSpeed is only populated for a Pursuit frame; on an ordinary approach the primary
-        /// is not fleeing, so there is no withdrawal rate to subtract.
-        /// </remarks>
-        private static float QuarryWithdrawalRate(
-            SquadEngagementFrame frame,
-            EngagementSquadRole? quarryRole) =>
-            frame.Role == EngagementSquadRole.Pursuit
-                && quarryRole is EngagementSquadRole.Bound or EngagementSquadRole.Routing
-                    ? Math.Max(0, frame.QuarryRunSpeed)
-                    : 0;
 
         private bool HasPursuitFireCommitment(
             BattleSquad squad,
@@ -1230,7 +1215,7 @@ namespace OnlyWar.Helpers.Battles
                 return 0;
             }
 
-            float quarrySpeed = QuarryWithdrawalRate(frame, quarryRole);
+            float quarrySpeed = EngagementExchangeModel.QuarryWithdrawalRate(frame, quarryRole);
             float projectedOpening = quarrySpeed * PursuitFireWindowTurns;
             Dictionary<int, float> awardedByTarget = [];
             float projectedValue = 0;
@@ -1326,8 +1311,9 @@ namespace OnlyWar.Helpers.Battles
                 return 0;
             }
             ValueTuple<float, float> target = BattleEngagementFrameBuilder.Centroid(primary);
-            float before = Distance(BattleEngagementFrameBuilder.Centroid(squad), target);
-            float quarrySpeed = QuarryWithdrawalRate(frame, quarryRole);
+            float before = EngagementExchangeModel.Distance(
+                BattleEngagementFrameBuilder.Centroid(squad), target);
+            float quarrySpeed = EngagementExchangeModel.QuarryWithdrawalRate(frame, quarryRole);
             float attainable = profile.IsContactSeeking
                 ? profile.UsableMeleeBattleValue
                 : profile.UsableRangedBattleValue;
@@ -1437,15 +1423,6 @@ namespace OnlyWar.Helpers.Battles
                 if (primary != null) return primary;
             }
             return targets.OrderBy(target => target.Id).FirstOrDefault();
-        }
-
-        private static float Distance(
-            ValueTuple<float, float> first,
-            ValueTuple<float, float> second)
-        {
-            float dx = first.Item1 - second.Item1;
-            float dy = first.Item2 - second.Item2;
-            return (float)Math.Sqrt(dx * dx + dy * dy);
         }
 
         /// <summary>Layer 2.5 declaration. Called for every squad before Layer 3.</summary>
@@ -1794,7 +1771,7 @@ namespace OnlyWar.Helpers.Battles
                 // (BattleSoldier.IsRunning). Withdrawal is an ordered movement, not a rout, so
                 // unlike PrepareRoutingActions he is allowed the choice rather than pinned.
                 if (_grid.IsAdjacentToEnemy(soldier.Soldier.Id)
-                    && DecideMeleeDisengagement(soldier).Choice
+                    && _melee.DecideMeleeDisengagement(soldier).Choice
                         == MeleeDisengagementChoice.StandAndFight)
                 {
                     AddMeleeActionsToBag(soldier);
@@ -1816,86 +1793,6 @@ namespace OnlyWar.Helpers.Battles
         /// <see cref="MeleeAttackAction.EstimateHitProbability"/> the live roll uses, so the
         /// decision cannot drift from the resolution it is predicting.
         /// </summary>
-        private MeleeDisengagementPolicy.Result DecideMeleeDisengagement(BattleSoldier soldier)
-        {
-            List<BattleSoldier> adjacentEnemies = _grid.GetAdjacentEnemies(soldier.Soldier.Id)
-                .Select(enemyId => _soldierMap[enemyId])
-                .Where(enemy => enemy.IsCombatEffective)
-                .OrderBy(enemy => enemy.Soldier.Id)
-                .ToList();
-            if (adjacentEnemies.Count == 0)
-            {
-                return MeleeDisengagementPolicy.Evaluate(new(
-                    0, 0, 0, 0, soldier.BattleSquad.MoraleState));
-            }
-
-            MeleeWeapon myWeapon = GetProjectedMeleeLoadout(soldier).FirstOrDefault()
-                ?? MeleeAttackAction.GetUnarmedWeapon(soldier);
-            float mySkill = myWeapon == null
-                ? 0
-                : soldier.Soldier.GetTotalSkillValue(myWeapon.Template.RelatedSkill);
-            float myEvasion = soldier.Soldier.Template.Species.MeleeEvasion;
-            // Standing restores the guard the squad's declared Run took away, so both defensive
-            // terms are read as they would be if he stopped — not from his current flagged state.
-            float myParryIfStanding = MeleeAttackAction.GetDefenderDefenseModifier(
-                soldier,
-                soldier.EquippedMeleeWeapons,
-                forfeitsWeaponParry: false);
-            float mySkillIfRunning = MeleeAttackAction.GetRunningDefenderMeleeSkill(soldier);
-
-            float worstStanding = 0;
-            float worstRunning = 0;
-            float bestOffense = 0;
-            foreach (BattleSoldier enemy in adjacentEnemies)
-            {
-                MeleeWeapon enemyWeapon = enemy.GetPrimaryMeleeWeapon(
-                    MeleeAttackAction.GetUnarmedWeapon(enemy));
-                if (enemyWeapon == null) continue;
-                float enemySkill = enemy.Soldier.GetTotalSkillValue(
-                    enemyWeapon.Template.RelatedSkill);
-                float standing = MeleeAttackAction.EstimateHitProbability(
-                    enemySkill,
-                    enemyWeapon.Template.Accuracy,
-                    didMove: false,
-                    mySkill,
-                    myEvasion,
-                    myParryIfStanding);
-                float running = MeleeAttackAction.EstimateHitProbability(
-                    enemySkill,
-                    enemyWeapon.Template.Accuracy,
-                    didMove: false,
-                    mySkillIfRunning,
-                    myEvasion,
-                    defenderDefenseModifier: 0);
-                if (standing > worstStanding)
-                {
-                    worstStanding = standing;
-                    worstRunning = running;
-                }
-
-                if (myWeapon != null)
-                {
-                    float offense = MeleeAttackAction.EstimateHitProbability(
-                        mySkill,
-                        myWeapon.Template.Accuracy,
-                        didMove: false,
-                        MeleeAttackAction.GetDefenderMeleeSkill(
-                            enemy,
-                            myWeapon.Template.RelatedSkill),
-                        enemy.Soldier.Template.Species.MeleeEvasion,
-                        MeleeAttackAction.GetDefenderDefenseModifier(enemy));
-                    if (offense > bestOffense) bestOffense = offense;
-                }
-            }
-
-            return MeleeDisengagementPolicy.Evaluate(new(
-                bestOffense,
-                worstStanding,
-                worstRunning,
-                adjacentEnemies.Count,
-                soldier.BattleSquad.MoraleState));
-        }
-
         /// <summary>
         /// Plans a routing squad (OnlyWar_TDD.md §6.6): Run directly away
         /// from the nearest enemy; no shooting or voluntary utility action; an engaged routing
@@ -2069,22 +1966,12 @@ namespace OnlyWar.Helpers.Battles
         private IReadOnlyList<MeleeWeapon> GetProjectedMeleeLoadout(BattleSoldier soldier) =>
             _melee.GetProjectedMeleeLoadout(soldier);
 
-        private static MeleeWeapon GetSecondaryMeleeWeapon(IReadOnlyList<MeleeWeapon> loadout) =>
-            MeleeStrikeEstimator.GetSecondaryMeleeWeapon(loadout);
-
         private static MeleeWeapon GetFirstUsableMeleeWeapon(BattleSoldier soldier) =>
             MeleeStrikeEstimator.GetFirstUsableMeleeWeapon(soldier);
 
-        // TEST SEAM, like the ranged forwarders above: BattleSquadPlannerTests drives parry risk
-        // through a constructed planner.
-        internal float EstimateProjectedMeleeBattleValue(
-            BattleSoldier attacker,
-            IReadOnlyList<PlannedMeleeStrike> strikePlans,
-            IReadOnlyList<MeleeWeapon> plannedWeapons,
-            bool didMove = false) =>
-            _melee.EstimateProjectedMeleeBattleValue(
-                attacker, strikePlans, plannedWeapons, didMove);
-
+        // TEST SEAM, like the ranged forwarders above: BattleSquadPlannerTests drives forfeited
+        // parry risk through a constructed planner. It is the only melee scorer the tests reach
+        // for; everything else on MeleeStrikeEstimator is called through _melee directly.
         internal float EstimateForfeitedParryRisk(
             BattleSoldier defender,
             IReadOnlyList<BattleSoldier> adjacentAttackers,
@@ -2100,21 +1987,6 @@ namespace OnlyWar.Helpers.Battles
             BattleSquad targetSquad,
             BattleState state) =>
             _meleeBuilder.ResolveSquadChargeIntent(chargingSquad, targetSquad, state);
-
-
-        private List<PlannedMeleeStrike> BuildStrikePlan(
-            BattleSoldier attacker,
-            IReadOnlyList<BattleSoldier> targets,
-            IReadOnlyList<MeleeWeapon> plannedWeapons,
-            bool didMove) =>
-            _melee.BuildStrikePlan(attacker, targets, plannedWeapons, didMove);
-
-        private float EstimateTakeOutProbability(
-            BattleSoldier attacker,
-            BattleSoldier target,
-            MeleeWeapon weapon,
-            bool didMove) =>
-            _melee.EstimateTakeOutProbability(attacker, target, weapon, didMove);
 
         // TEST SEAM. The planner's own paths call _ranged directly; these three remain because the
         // battle test fixtures drive ranged scoring through a constructed planner. Delete them when

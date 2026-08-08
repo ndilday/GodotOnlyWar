@@ -269,6 +269,99 @@ namespace OnlyWar.Helpers.Battles
                 (1 - entry.Value) * GetBattleValue(_soldierMap[entry.Key]));
         }
 
+        /// <summary>
+        /// Whether a soldier caught in melee should break contact or stand and fight, for a squad
+        /// under an ordered withdrawal (not a rout -- a routing soldier is pinned rather than given
+        /// the choice).
+        ///
+        /// <para>Running is not free: he turns his back, so his guard is forfeited and he defends
+        /// with foot speed alone. This weighs the worst incoming hit probability standing (parry
+        /// intact) against the same standing running, alongside his own best offense, and hands the
+        /// three numbers plus the squad's morale state to
+        /// <see cref="MeleeDisengagementPolicy"/>. Both defensive terms are read as they would be
+        /// if he STOPPED, not from his currently-flagged running state -- standing is what restores
+        /// the guard his squad's declared Run took away.</para>
+        /// </summary>
+        internal MeleeDisengagementPolicy.Result DecideMeleeDisengagement(BattleSoldier soldier)
+        {
+            List<BattleSoldier> adjacentEnemies = _grid.GetAdjacentEnemies(soldier.Soldier.Id)
+                .Select(enemyId => _soldierMap[enemyId])
+                .Where(enemy => enemy.IsCombatEffective)
+                .OrderBy(enemy => enemy.Soldier.Id)
+                .ToList();
+            if (adjacentEnemies.Count == 0)
+            {
+                return MeleeDisengagementPolicy.Evaluate(new(
+                    0, 0, 0, 0, soldier.BattleSquad.MoraleState));
+            }
+
+            MeleeWeapon myWeapon = GetProjectedMeleeLoadout(soldier).FirstOrDefault()
+                ?? MeleeAttackAction.GetUnarmedWeapon(soldier);
+            float mySkill = myWeapon == null
+                ? 0
+                : soldier.Soldier.GetTotalSkillValue(myWeapon.Template.RelatedSkill);
+            float myEvasion = soldier.Soldier.Template.Species.MeleeEvasion;
+            // Standing restores the guard the squad's declared Run took away, so both defensive
+            // terms are read as they would be if he stopped — not from his current flagged state.
+            float myParryIfStanding = MeleeAttackAction.GetDefenderDefenseModifier(
+                soldier,
+                soldier.EquippedMeleeWeapons,
+                forfeitsWeaponParry: false);
+            float mySkillIfRunning = MeleeAttackAction.GetRunningDefenderMeleeSkill(soldier);
+
+            float worstStanding = 0;
+            float worstRunning = 0;
+            float bestOffense = 0;
+            foreach (BattleSoldier enemy in adjacentEnemies)
+            {
+                MeleeWeapon enemyWeapon = enemy.GetPrimaryMeleeWeapon(
+                    MeleeAttackAction.GetUnarmedWeapon(enemy));
+                if (enemyWeapon == null) continue;
+                float enemySkill = enemy.Soldier.GetTotalSkillValue(
+                    enemyWeapon.Template.RelatedSkill);
+                float standing = MeleeAttackAction.EstimateHitProbability(
+                    enemySkill,
+                    enemyWeapon.Template.Accuracy,
+                    didMove: false,
+                    mySkill,
+                    myEvasion,
+                    myParryIfStanding);
+                float running = MeleeAttackAction.EstimateHitProbability(
+                    enemySkill,
+                    enemyWeapon.Template.Accuracy,
+                    didMove: false,
+                    mySkillIfRunning,
+                    myEvasion,
+                    defenderDefenseModifier: 0);
+                if (standing > worstStanding)
+                {
+                    worstStanding = standing;
+                    worstRunning = running;
+                }
+
+                if (myWeapon != null)
+                {
+                    float offense = MeleeAttackAction.EstimateHitProbability(
+                        mySkill,
+                        myWeapon.Template.Accuracy,
+                        didMove: false,
+                        MeleeAttackAction.GetDefenderMeleeSkill(
+                            enemy,
+                            myWeapon.Template.RelatedSkill),
+                        enemy.Soldier.Template.Species.MeleeEvasion,
+                        MeleeAttackAction.GetDefenderDefenseModifier(enemy));
+                    if (offense > bestOffense) bestOffense = offense;
+                }
+            }
+
+            return MeleeDisengagementPolicy.Evaluate(new(
+                bestOffense,
+                worstStanding,
+                worstRunning,
+                adjacentEnemies.Count,
+                soldier.BattleSquad.MoraleState));
+        }
+
         internal float EstimateForfeitedParryRisk(
             BattleSoldier defender,
             IReadOnlyList<BattleSoldier> adjacentAttackers,

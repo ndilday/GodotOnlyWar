@@ -21,7 +21,7 @@ namespace OnlyWar.Helpers.Battles
         // Shot count targets the same take-out confidence melee strike planning uses.
         private const float TargetTakeOutConfidenceThreshold = MeleeMath.TakeOutConfidenceTarget;
         private const int RangedTargetSquadCandidateCount = 3;
-        private const float FullBulkMultiplier = 1f;
+        private const float FullBulkMultiplier = SoldierMovementPlanner.FullBulkMultiplier;
         // Shared ranged-candidate cap: rifle, cone, and blast all score against the same top
         // handful of acquired targets (committed target first, then nearest) instead of each
         // rescanning the field independently.
@@ -32,7 +32,7 @@ namespace OnlyWar.Helpers.Battles
         // or an un-engaged enemy is about to reach melee. "Worthwhile" reuses the planner's existing
         // floor: positive expected value and better than a one-in-ten chance to hit. Raising this
         // makes soldiers abandon marginal targets (and rescan) sooner.
-        private const float StickyMinimumHitProbability = 0.1f;
+        internal const float StickyMinimumHitProbability = 0.1f;
         // TUNABLE (Phase 3 fire distribution): base strength of the firing-lane preference that
         // spreads a squad's fire across the enemy frontage instead of piling every rifle onto the
         // single highest-value target. Each candidate target is penalized by this coefficient times
@@ -909,20 +909,6 @@ namespace OnlyWar.Helpers.Battles
                 * expectedFriendlyLossOnStray;
         }
 
-        internal float EstimateArmorPenDistance(RangedWeapon weapon, float targetArmor)
-        {
-            // if range doesn't matter for damage, we can just limit on hitting
-            if (!weapon.Template.DoesDamageDegradeWithRange) return weapon.Template.MaximumRange;
-            float effectiveArmor = targetArmor * weapon.Template.ArmorMultiplier;
-
-            // if there's no chance of doing a wound, maybe we should run?
-            if (weapon.Template.DamageMultiplier * 6 < effectiveArmor) return -1;
-            // find the range with a 1/3 chance of armor pen
-            float distanceRatio = 1 - ( effectiveArmor / (4.25f * weapon.Template.DamageMultiplier));
-            if (distanceRatio < 0) return 0;
-            return weapon.Template.MaximumRange * distanceRatio;
-        }
-
         internal RangedTargetEvaluation GetBestWeaponForSituation(
             BattleSoldier soldier,
             BattleSoldier target,
@@ -1168,25 +1154,10 @@ namespace OnlyWar.Helpers.Battles
             return dotProduct >= 0;
         }
 
-        // Mirror of ShootAction.HandleHit / AreaAttackAction: effective strength at range
-        // scales the damage roll before armor subtraction.
-        internal static float CalculateRangedTakeOutProbability(
-            BattleSoldier target,
-            RangedWeapon weapon,
-            float range,
-            float armor)
-        {
-            return RemovalMath.CalculateTakeOutProbabilityOnHit(
-                target,
-                BattleModifiersUtil.CalculateDamageAtRange(weapon, range),
-                armor * weapon.Template.ArmorMultiplier,
-                weapon.Template.WoundMultiplier);
-        }
-
-        // Phase 5: the graded sibling of CalculateRangedTakeOutProbability. Every site that turns a
-        // landed hit into expected BATTLE VALUE removed reads this; CalculateShotsToFire and the
-        // Phase 4 table's ReferenceTakeOut keep reading the raw take-out probability, because a
-        // shot count is a question about kills, not about accumulated wounds.
+        // Phase 5: the graded fraction. Every site that turns a landed hit into expected BATTLE
+        // VALUE removed reads this; CalculateShotsToFire and the Phase 4 table's ReferenceTakeOut
+        // go straight to RemovalMath for the raw take-out probability instead, because a shot count
+        // is a question about kills, not about accumulated wounds.
         internal static float CalculateRangedRemovalFraction(
             BattleSoldier target,
             RangedWeapon weapon,
