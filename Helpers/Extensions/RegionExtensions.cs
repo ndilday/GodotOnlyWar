@@ -14,7 +14,7 @@ namespace OnlyWar.Helpers.Extensions
         // incursion sitting on a still-hidden cult), so detection must aggregate across all of them.
         // Both the aggregated stealth difficulty (ReconStealthMissionStep) and the spotter roll
         // (SelectSpotter) read this same set so the difficulty and the interceptor always agree on
-        // "the enemies present" (Design/MultiFactionRegions.md WI-3).
+        // "the enemies present" (OnlyWar_TDD.md §6.2, "Multi-faction regions").
         public static List<RegionFaction> GetDetectingEnemyFactions(this Region region)
         {
             return region.RegionFactionMap.Values
@@ -23,7 +23,7 @@ namespace OnlyWar.Helpers.Extensions
                 .ToList();
         }
 
-        // Chooses which enemy faction detects an intruder (Design/MultiFactionRegions.md WI-3). The
+        // Chooses which enemy faction detects an intruder (OnlyWar_TDD.md §6.2). The
         // spotter is drawn in proportion to each faction's WatchScore — the exact per-faction number
         // that MissionStealthDifficulty summed to decide the crossing was hard in the first place.
         //

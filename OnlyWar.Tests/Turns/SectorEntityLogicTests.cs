@@ -394,7 +394,7 @@ public class SectorEntityLogicTests
         Assert.Equal(52, pledge.CadenceWeeks);
     }
 
-    // Design/MultiFactionRegions.md WI-4: the special-mission opportunity budget is split across a
+    // OnlyWar_TDD.md §6.2 ("Multi-faction regions"): the special-mission opportunity budget is split across a
     // region's public enemy factions proportional to deployed strength, instead of being handed
     // entirely to whichever faction is iterated first.
     [Fact]

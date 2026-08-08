@@ -6,7 +6,7 @@ namespace OnlyWar.Models.Soldiers.Ratings
     /// Stable string keys for the ratings the game logic references directly. The set
     /// of ratings is otherwise open-ended (data-driven); these constants exist so code
     /// that cares about a specific rating (chapter generation, UI) avoids magic strings.
-    /// See Design/DataDrivenRatings.md.
+    /// See OnlyWar_TDD.md §4.1.1; the shipped definitions live in Database/OnlyWar.s3db.
     /// </summary>
     public static class RatingKeys
     {

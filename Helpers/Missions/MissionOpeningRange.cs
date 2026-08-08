@@ -21,7 +21,7 @@ namespace OnlyWar.Helpers.Missions
     /// other's preference: the worst a mission force can do is fight at exactly the range its
     /// enemy wanted.
     ///
-    /// PHASE 7 (Design/Active/EngagementScoringOverhaul.md): each side's preference is now the
+    /// PHASE 7 (Design/Reference/EngagementScoringOverhaul.md): each side's preference is now the
     /// derived engagement band against the OTHER SIDE'S ACTUAL FORCE, not the un-opposed
     /// saturation range of a curve fired at one randomly drawn representative. The interpolation
     /// itself is unchanged; what changed is that both endpoints are now the range each side would

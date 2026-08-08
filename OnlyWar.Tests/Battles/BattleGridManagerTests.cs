@@ -735,7 +735,6 @@ public class BattleGridManagerTests
         ValueTuple<int, int> adjacency = grid.GetClosestOpenAdjacency(new ValueTuple<int, int>(5, 0), target);
 
         Assert.NotEqual(new ValueTuple<int, int>(5, 4), adjacency);
-        Assert.NotNull(adjacency);
     }
 
     [Fact]

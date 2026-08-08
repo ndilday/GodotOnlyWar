@@ -199,7 +199,6 @@ public class SquadEngagementPlanningTests
             paired.Frames[pursuer.Id],
             paired.Profiles,
             paired.Frames,
-            [pursuer],
             [quarry],
             [quarry]);
 
@@ -246,7 +245,6 @@ public class SquadEngagementPlanningTests
                     paired.Frames[pursuer.Id],
                     paired.Profiles,
                     paired.Frames,
-                    [pursuer],
                     [quarry],
                     [quarry]);
 
@@ -288,7 +286,6 @@ public class SquadEngagementPlanningTests
                 paired.Frames[pursuer.Id],
                 paired.Profiles,
                 paired.Frames,
-                [pursuer],
                 [quarry],
                 [quarry]);
 
@@ -327,7 +324,6 @@ public class SquadEngagementPlanningTests
                 paired.Frames[pursuer.Id],
                 paired.Profiles,
                 paired.Frames,
-                [pursuer],
                 [quarry],
                 [quarry]);
 
@@ -379,7 +375,6 @@ public class SquadEngagementPlanningTests
             paired.Frames[pursuer.Id],
             paired.Profiles,
             paired.Frames,
-            [pursuer],
             [quarry],
             [quarry]);
 
@@ -426,7 +421,6 @@ public class SquadEngagementPlanningTests
             paired.Frames[pursuer.Id],
             paired.Profiles,
             paired.Frames,
-            [pursuer],
             [quarry],
             [quarry]);
 
@@ -460,7 +454,6 @@ public class SquadEngagementPlanningTests
             paired.Frames[melee.Id],
             paired.Profiles,
             paired.Frames,
-            [melee],
             [shooters],
             [shooters]);
 

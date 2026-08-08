@@ -441,7 +441,6 @@ public class BattlePursuitActionPlannerTests
             paired.Frames[pursuer.Id],
             paired.Profiles,
             paired.Frames,
-            friendly,
             withdrawing,
             withdrawing);
         SquadEngagementDecision selected = selectedKind.HasValue

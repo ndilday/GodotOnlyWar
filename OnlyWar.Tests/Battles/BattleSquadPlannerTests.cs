@@ -1863,7 +1863,6 @@ public class BattleSquadPlannerTests
             paired.Frames[shooters.Id],
             paired.Profiles,
             paired.Frames,
-            [shooters],
             [enemies],
             constraint.RoleTargets);
         SquadEngagementDecision selected = scored with

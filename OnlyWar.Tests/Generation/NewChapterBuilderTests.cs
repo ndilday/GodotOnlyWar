@@ -159,8 +159,7 @@ public class NewChapterBuilderTests
         Assert.All(
             scoutHeadquarters.Members.Where(member =>
                 member.Template.Name is "Apothecary" or "Chaplain" or "Judiciar"),
-            member => Assert.Single(
-                scoutHeadquarters.Members.Where(other => other.Template == member.Template)));
+            member => Assert.Single(scoutHeadquarters.Members, other => other.Template == member.Template));
 
         // At most one Master of Sanctity and one Reclusiarch, and both live in the Reclusium.
         var mastersOfSanctity = oob.GetAllMembers().OfType<PlayerSoldier>()

@@ -95,7 +95,7 @@ namespace OnlyWar.Helpers.Battles
 
         /// <summary>
         /// Damage coefficient at a range. NOTE (relied on by the Phase 4 removal-rate table, see
-        /// Design/Active/EngagementScoringOverhaul.md): when DoesDamageDegradeWithRange is false
+        /// Design/Reference/EngagementScoringOverhaul.md): when DoesDamageDegradeWithRange is false
         /// this is a FLAT DamageMultiplier, so take-out probability is genuinely range-independent
         /// for such a weapon and caching it once at a reference range is exact, not an
         /// approximation. Only the degrading branch needs the per-hit-location rescaling path.
@@ -112,7 +112,7 @@ namespace OnlyWar.Helpers.Battles
         /// target: the largest range at which it is still doing
         /// <see cref="RangedEffectivenessCurve.SaturationFraction"/> of its best work.
         ///
-        /// <para>PHASE 6 (Design/Active/EngagementScoringOverhaul.md). Now a thin derivation of
+        /// <para>PHASE 6 (Design/Reference/EngagementScoringOverhaul.md). Now a thin derivation of
         /// <see cref="RangedEffectivenessCurve"/>, the one engagement-range model. It used to be
         /// <c>max over weapons of min(EstimateHitDistance, EstimateKillDistance)</c>; those two
         /// functions and <c>CalculateOpeningDistance</c> are gone. See the type comment on

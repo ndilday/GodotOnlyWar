@@ -518,7 +518,6 @@ namespace OnlyWar.Helpers.Battles
                     paired.Frames[job.Squad.Id],
                     paired.Profiles,
                     paired.Frames,
-                    job.Friendly,
                     job.Enemy,
                     constraint.RoleTargets);
                 decisionResults[index] = (job.Side, decision);
@@ -1918,8 +1917,8 @@ namespace OnlyWar.Helpers.Battles
             BattleSideState state,
             BattleForcePlanner.CoverAssignment assignment)
         {
-            BattleDecisionTrace trace = new("COVER_ASSIGN", new List<KeyValuePair<string, string>>
-            {
+            BattleDecisionTrace trace = new("COVER_ASSIGN",
+            [
                 BattleDecisionTrace.Field("turn", _currentState.TurnNumber),
                 BattleDecisionTrace.Field("side", side == BattleSide.Attacker ? "first" : "second"),
                 BattleDecisionTrace.Field("heading", state.WithdrawalHeading),
@@ -1929,7 +1928,7 @@ namespace OnlyWar.Helpers.Battles
                 BattleDecisionTrace.Field("candidates", string.Join(",", assignment.Candidates
                     .OrderBy(candidate => candidate.SquadId)
                     .Select(candidate => $"{candidate.SquadId}:{candidate.NearestEnemyDistance:0.###}:{candidate.RangedCoverEligible}")))
-            });
+            ]);
             BattleLog.Write(trace.Render());
             if (assignment.SquadId.HasValue
                 && (assignment.Rotated || assignment.Reason == "farthest_eligible"))
@@ -1972,7 +1971,7 @@ namespace OnlyWar.Helpers.Battles
             squad.IsInMelee = atLeastOneSoldierInMelee;
         }
 
-        private void Log(bool isMessageVerbose, string text)
+        private static void Log(bool isMessageVerbose, string text)
         {
             BattleLog.Write(text);
         }

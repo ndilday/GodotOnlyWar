@@ -126,7 +126,7 @@ namespace OnlyWar.Models
         // Fail fast at load if a data-driven rating definition is malformed: every
         // required rating key must be present, each definition must have at least one
         // component, every skill-total component must reference a real base skill, and
-        // every award tier must reference an existing rating (Design/DataDrivenRatings.md).
+        // every award tier must reference an existing rating (OnlyWar_TDD.md §4.1.1).
         private void ValidateRatingDefinitions()
         {
             string[] requiredKeys =

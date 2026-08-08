@@ -28,7 +28,7 @@ namespace OnlyWar.Helpers
 
         // Base skills this calculator still references by name directly (work-experience
         // and scout training). Rating-formula skills are now validated through the
-        // data-driven rating definitions instead (see Design/DataDrivenRatings.md).
+        // data-driven rating definitions instead (see OnlyWar_TDD.md §4.1.1).
         // Exposed so the rules-DB load step can fail fast if any is missing (TDD §8.3).
         public static readonly string[] RequiredSkillNames =
         [

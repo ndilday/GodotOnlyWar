@@ -83,7 +83,7 @@ public class MissionOpeningRangeTests
         }
     }
 
-    // PHASE 7 REGRESSION GUARD (Design/Active/EngagementScoringOverhaul.md).
+    // PHASE 7 REGRESSION GUARD (Design/Reference/EngagementScoringOverhaul.md).
     //
     // Phase 6 left opening range as the UN-OPPOSED saturation range - "where am I still half as
     // effective as at my best" - which for a force whose weapon outranges the fight runs all the way
@@ -132,7 +132,7 @@ public class MissionOpeningRangeTests
 
     private const int LongRifleReach = 1_000;
 
-    // PHASE 7 FIXTURE RETUNE (Design/Active/EngagementScoringOverhaul.md), same precedent as the
+    // PHASE 7 FIXTURE RETUNE (Design/Reference/EngagementScoringOverhaul.md), same precedent as the
     // Phase 6 retune it replaces and for the same underlying reason: the fixture's shooters have to
     // be able to shoot for "a force that wants to shoot" to mean anything.
     //

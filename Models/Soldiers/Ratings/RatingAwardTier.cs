@@ -13,7 +13,7 @@ namespace OnlyWar.Models.Soldiers.Ratings
     /// highest <see cref="Level"/> whose <see cref="Threshold"/> is exceeded is applied.
     /// <see cref="NameTemplate"/> may contain the placeholder <c>{bestSkillInCategory}</c>,
     /// replaced with the soldier's best skill name in the rating's category.
-    /// See Design/DataDrivenRatings.md §3.
+    /// See OnlyWar_TDD.md §4.1.1; the shipped tiers live in Database/OnlyWar.s3db.
     /// </summary>
     public sealed class RatingAwardTier
     {

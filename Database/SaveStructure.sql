@@ -13,7 +13,7 @@ CREATE TABLE Character (Id INTEGER PRIMARY KEY UNIQUE NOT NULL, Name STRING NOT 
 CREATE TABLE Fleet (Id INTEGER PRIMARY KEY UNIQUE NOT NULL, FactionId INTEGER NOT NULL, x REAL NOT NULL, y REAL NOT NULL, DestinationPlanetId INTEGER REFERENCES Planet (Id), TravelWeeksRemaining INTEGER NOT NULL DEFAULT 0, OriginPlanetId INTEGER REFERENCES Planet (Id), TravelPhase INTEGER NOT NULL DEFAULT 0, CurrentPhaseWeeksRemaining INTEGER NOT NULL DEFAULT 0, WarpSubjectiveWeeks REAL NOT NULL DEFAULT 0, WarpObjectiveWeeks REAL NOT NULL DEFAULT 0, WarpSubjectiveTrainingApplied BOOLEAN NOT NULL DEFAULT 1);
 
 -- Table: GlobalData
--- Scenario* columns carry the optional Opening Scenario state (Design/OpeningScenario.md §7).
+-- Scenario* columns carry the optional Opening Scenario state (Design/Reference/OpeningScenario.md §7).
 -- ScenarioType 0 (None) means no scenario. HomeWorldPlanetId remains null until the
 -- Promised World is won. Format v5 is an intentional clean break from older saves and adds
 -- chapter/planet loadout doctrine plus character (role and individual) loadout persistence.
@@ -69,7 +69,7 @@ CREATE TABLE Region (Id INTEGER PRIMARY KEY UNIQUE NOT NULL, PlanetId INTEGER NO
 
 -- Table: RegionFaction
 -- GrowthMultiplier (default 1.0) throttles organic growth; legacy rows default to 1.0 via a
--- column-count guard in PlanetDataAccess.PopulateRegionFactions (Design/OpeningScenario.md §2.2, §7).
+-- column-count guard in PlanetDataAccess.PopulateRegionFactions (Design/Reference/OpeningScenario.md §2.2, §7).
 -- ListeningPost is a sensor structure (formerly "Detection"); it now feeds PlanetFactionRegionIntel
 -- rather than providing an awareness bonus directly. Column is positional in the loader.
 -- AssignedDefensiveBattleValue is nullable on purpose: NULL means the region has never been through a

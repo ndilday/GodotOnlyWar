@@ -83,7 +83,7 @@ namespace OnlyWar.Helpers.Missions
         // at once (a public Tyranid incursion sitting on a still-hidden cult), so every term sums over
         // GetDetectingEnemyFactions() - the same set Region.SelectSpotter draws the interceptor from,
         // so difficulty and interceptor always agree on "the enemies present"
-        // (Design/MultiFactionRegions.md WI-3).
+        // (OnlyWar_TDD.md §6.2, "Multi-faction regions").
         public static StealthDifficultyTerms Calculate(
             Region region, int intruderHeadcount, Faction intruder)
         {

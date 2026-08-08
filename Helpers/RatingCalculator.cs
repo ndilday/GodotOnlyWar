@@ -11,7 +11,7 @@ namespace OnlyWar.Helpers
     /// <summary>
     /// Computes soldier ratings and applies rating-driven awards from data-driven
     /// <see cref="RatingDefinition"/>s and <see cref="RatingAwardTier"/>s, rather than
-    /// hardcoded formulas. See Design/DataDrivenRatings.md.
+    /// hardcoded formulas. See OnlyWar_TDD.md §4.1.1.
     /// </summary>
     public sealed class RatingCalculator
     {

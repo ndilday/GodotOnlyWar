@@ -261,7 +261,7 @@ namespace OnlyWar.Helpers.Battles.Actions
                                             float defenderDefenseModifier,
                                             IRNG random)
         {
-            if (random == null) throw new ArgumentNullException(nameof(random));
+            ArgumentNullException.ThrowIfNull(random);
             float attackTotal = attackSkill + weaponAccuracy + (didMove ? -MovementAttackPenalty : 0)
                                 + (MeleeRollStandardDeviation * (float)random.NextRandomZValue());
             float defendTotal = defenderSkill + defenderEvasion + MeleeDefenderAdvantage
@@ -459,10 +459,10 @@ namespace OnlyWar.Helpers.Battles.Actions
             Dictionary<ValueTuple<int, int>, int> damagingHitCountByTargetAndWeapon = [];
             foreach (WoundResolution wound in WoundResolutions)
             {
-                ValueTuple<int, int> key = new ValueTuple<int, int>(wound.Suffererer.Soldier.Id, wound.Weapon.Id);
-                if (damagingHitCountByTargetAndWeapon.ContainsKey(key))
+                ValueTuple<int, int> key = new(wound.Suffererer.Soldier.Id, wound.Weapon.Id);
+                if (damagingHitCountByTargetAndWeapon.TryGetValue(key, out int value))
                 {
-                    damagingHitCountByTargetAndWeapon[key]++;
+                    damagingHitCountByTargetAndWeapon[key] = ++value;
                 }
                 else
                 {
@@ -474,7 +474,7 @@ namespace OnlyWar.Helpers.Battles.Actions
             string desc = "";
             foreach (PlannedMeleeStrike strikePlan in StrikePlans)
             {
-                ValueTuple<int, int> key = new ValueTuple<int, int>(strikePlan.TargetId, strikePlan.WeaponTemplateId);
+                ValueTuple<int, int> key = new(strikePlan.TargetId, strikePlan.WeaponTemplateId);
                 if (!describedKeys.Add(key))
                 {
                     continue;
