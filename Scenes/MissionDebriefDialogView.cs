@@ -182,15 +182,18 @@ public partial class MissionDebriefDialogView : DialogView
         };
         controls.AddChild(casualtyButton);
 
-        Button reviewButton = new()
-        {
-            Text = "VIEW BATTLE",
-            CustomMinimumSize = new Vector2(170, 34),
-            TooltipText = "Open the battle replay for this engagement"
-        };
         BattleHistory battleHistory = line.BattleHistory;
-        reviewButton.Pressed += () => BattleReviewRequested?.Invoke(this, battleHistory);
-        controls.AddChild(reviewButton);
+        if (battleHistory != null)
+        {
+            Button reviewButton = new()
+            {
+                Text = "VIEW BATTLE",
+                CustomMinimumSize = new Vector2(170, 34),
+                TooltipText = "Open the battle replay for this engagement"
+            };
+            reviewButton.Pressed += () => BattleReviewRequested?.Invoke(this, battleHistory);
+            controls.AddChild(reviewButton);
+        }
         stack.AddChild(controls);
     }
 

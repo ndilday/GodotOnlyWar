@@ -42,7 +42,8 @@ namespace OnlyWar.Helpers.Storage
                 force.Army.LoadoutDoctrine,
                 force.Army.CharacterLoadoutDoctrine,
                 homeWorldPlanetId: force.HomeWorldPlanetId,
-                recruitment: RecruitmentSaveMapper.ToSaveData(force.RecruitmentProgram));
+                recruitment: RecruitmentSaveMapper.ToSaveData(force.RecruitmentProgram),
+                lastTurnReportSnapshot: force.LastTurnReportSnapshot);
         }
     }
 }

@@ -393,7 +393,7 @@ namespace OnlyWar.Helpers.Database.GameRules
             {
                 command.CommandText =
                     "SELECT Id, SquadTemplateId, SoldierTemplateId, MinimumRequired, MaximumAllowed, "
-                    + "DefaultWeaponSetId FROM SquadTemplateElement";
+                    + "DefaultWeaponSetId, RollsStrength FROM SquadTemplateElement";
                 var reader = command.ExecuteReader();
                 while (reader.Read())
                 {
@@ -405,6 +405,8 @@ namespace OnlyWar.Helpers.Database.GameRules
                     WeaponSet defaultWeapons = reader[5].GetType() != typeof(DBNull)
                         ? weaponSetMap[reader.GetInt32(5)]
                         : null;
+                    bool rollsStrength = reader[6].GetType() != typeof(DBNull)
+                        && reader.GetInt32(6) != 0;
 
                     SoldierTemplate template = soldierTemplateMap[soldierTemplateId];
                     IReadOnlyList<SquadTemplateElementQuota> quotas =
@@ -415,7 +417,8 @@ namespace OnlyWar.Helpers.Database.GameRules
                         elementsMap[squadTemplateId] = [];
                     }
                     elementsMap[squadTemplateId].Add(
-                        new SquadTemplateElement(template, (byte)min, (byte)max, id, defaultWeapons, quotas));
+                        new SquadTemplateElement(
+                            template, (byte)min, (byte)max, id, defaultWeapons, quotas, rollsStrength));
                 }
             }
             return elementsMap;

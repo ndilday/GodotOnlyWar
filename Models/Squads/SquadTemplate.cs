@@ -72,10 +72,15 @@ namespace OnlyWar.Models.Squads
         // assigned to an order as a squad.
         public bool PermitsIndividualDetachment =>
             (SquadType & SquadTypes.PermitsIndividualDetachment) != 0;
-        // A squad's point value is the sum of its members' battle values at full strength (PRD
-        // §4.24). Previously a stored column; now derived so it can never drift from the roster.
+        // A squad's point value is the sum of its members' battle values (PRD §4.24). Previously a
+        // stored column; now derived so it can never drift from the roster. Elements with a rolled
+        // strength are priced at their average, since that is what generation actually fields over
+        // many squads; for a fixed element the average IS the maximum, so every template authored
+        // before variable strength existed prices exactly as it always did.
         public int BattleValue => IsOperational
-            ? Elements?.Sum(e => e.SoldierTemplate.BattleValue * e.MaximumNumber) ?? 0
+            ? (int)Math.Round(
+                Elements?.Sum(e => e.SoldierTemplate.BattleValue * e.ExpectedNumber) ?? 0f,
+                MidpointRounding.AwayFromZero)
             : 0;
         // Derived, not stored (OnlyWar_TDD.md §6.6): true iff any element's
         // species carries SpeciesAbilities.Synapse. Adding a new synapse creature to the DB

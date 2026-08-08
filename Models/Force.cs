@@ -6,6 +6,7 @@ using OnlyWar.Models.Squads;
 using OnlyWar.Models.Units;
 using OnlyWar.Models.Supply;
 using OnlyWar.Models.Recruitment;
+using OnlyWar.Models.Reports;
 
 namespace OnlyWar.Models
 {
@@ -131,6 +132,11 @@ namespace OnlyWar.Models
     public class PlayerForce : SectorForce
     {
         public ushort GeneseedStockpile { get; set; }
+
+        // The most recently resolved turn report. This is deliberately a bounded presentation
+        // snapshot rather than the live mission/result graph, so it can safely travel through the
+        // save path and remain available after a campaign reload.
+        public LastTurnReportSnapshot LastTurnReportSnapshot { get; set; }
 
         // The planet granted to the Chapter by the opening scenario. Recruitment v1
         // deliberately has exactly one source world; later recruitment-right support can

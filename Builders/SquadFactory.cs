@@ -20,8 +20,17 @@ namespace OnlyWar.Builders
             IEntityIdAllocator entityIds,
             string name = "")
         {
+            // An element that opts into rolled strength musters somewhere in [Min, Max], so an
+            // irregular formation turns out at a different size every time. Everything else builds
+            // at Max exactly as it always has — including the many elements whose Min is merely an
+            // understrength floor (see SquadTemplateElement.RollsStrength) — and consumes no
+            // randomness, so the shared RNG stream is untouched for every existing template.
             Dictionary<SquadTemplateElement, int> counts = squadTemplate.Elements
-                .ToDictionary(element => element, element => (int)element.MaximumNumber);
+                .ToDictionary(
+                    element => element,
+                    element => element.RollsStrength
+                        ? random.GetIntBelowMax(element.MinimumNumber, element.MaximumNumber + 1)
+                        : (int)element.MaximumNumber);
             return GenerateSquad(squadTemplate, counts, random, entityIds, name);
         }
 

@@ -2,7 +2,7 @@
 
 **Version:** Alpha 0.7
 
-**Last Updated:** July 2026
+**Last Updated:** August 8, 2026
 
 **Author:** Nathan Dilday
 
@@ -40,6 +40,7 @@
    - 7.1 [View / Controller Pattern](#71-view--controller-pattern)
    - 7.2 [Screen Inventory](#72-screen-inventory)
    - 7.3 [Navigation Model](#73-navigation-model)
+   - 7.4 [Last-Turn Report Archive](#74-last-turn-report-archive)
 8. [Identified Technical Risks & Debt](#8-identified-technical-risks--debt)
 9. [Testing Strategy](#9-testing-strategy)
 
@@ -201,7 +202,11 @@ Written in full on each save (file is deleted and recreated from scratch using t
 
 Named manual slots, the initial recovery point, three rolling post-turn autosaves, and the protected pre-turn recovery point all use the same atomic persistence path. `CampaignRecoverabilityTracker` records whether the current in-memory revision has a successfully written recovery point, while `SaveGameManager` owns slot naming, metadata, retention, overwrite protection, and restoration of the prior valid save on failure. The protected pre-turn write completes before `ProcessTurn` mutates state; failure blocks turn resolution. Ordered save-format migration remains intentionally deferred; no migrators exist.
 
-**Format version 6 (2026-08-07).** The first bump. `OrderSoldier` (specialist attachment, §5.6) was added to the save schema, and a version-5 save read by the new build faulted deep in the loader with `SQLite Error 1: 'no such table: OrderSoldier'`. The guard for exactly this already existed — `GlobalDataAccess.EnsureCompatibleSaveVersion` runs at `GameStateDataAccess.GetData` *before* any sector table is read, and `SaveGameCatalog` marks mismatched files incompatible in the chooser — but it can only fire if `SaveFormat.CurrentVersion` moves with the schema. **The rule this establishes: any change to `SaveStructure.sql`'s shape bumps `SaveFormat.CurrentVersion`.** A save/load round-trip test cannot catch the omission, because the writer recreates the schema from scratch on every save and so always agrees with itself; only an *older file* read by a *newer build* exposes it. Old saves are rejected rather than migrated — acceptable during alpha, and the point at which that stops being acceptable is the point migrators get written.
+**Format version 7 (2026-08-08).** The `LastTurnReport` table stores one optional bounded JSON snapshot of the latest resolved turn report. The row is written in the same atomic transaction as the campaign and is hydrated onto `PlayerForce`; a missing table or row is treated as a null report so a supported campaign-start/pre-turn save can still load and show an intentional empty Archive state. The payload contains display strings, debrief lines, and compact casualty data only — never `MissionContext`, `BattleHistory`, or live campaign entities. Earlier saves remain incompatible by policy; no migrator is provided.
+
+The format-7 change follows the same rule established by format 6: any change to `SaveStructure.sql`'s shape bumps `SaveFormat.CurrentVersion`. A save/load round-trip test cannot catch a missed bump because the writer recreates the schema from scratch; only an older file read by a newer build exposes it.
+
+`CurrentCampaignSaveWriter` passes `PlayerForce.LastTurnReportSnapshot` explicitly to `GameStateDataAccess.SaveData`. A null snapshot is written as a valid current-version save with no `LastTurnReport` row; it is not an error and represents a campaign whose first turn has not resolved yet. Full battle replay is deliberately not part of this payload. The chapter event chronicle is also separate: it cannot reconstruct all strategic, construction, governor, recruitment, and mission-report cards.
 
 Connections use `Microsoft.Data.Sqlite` (the `SqliteConnectionStringBuilder` `DataSource`) with foreign key enforcement enabled (`ForeignKeys = true`). The schema is foreign-key-valid — every reference resolves to a table in the save file — and the save routines insert parent rows before the rows that reference them. `Faction` is intentionally *not* a foreign-key target: factions live only in the read-only rules database and are matched by id at load. See §8.5.1 for the provider-compatibility work that established this.
 
@@ -211,6 +216,7 @@ Key tables and their relationships:
 
 ```
 GlobalData           (Millenium, Year, Week, SaveVersion)
+LastTurnReport       (Id = 1, ResolvedDate, PayloadJson)
 
 Planet               (Id, PlanetTemplateId, Name, x, y, Importance, TaxLevel)
 PlanetFaction        (PlanetId, FactionId, IsPublic, Population, PlanetaryControl,
@@ -434,14 +440,35 @@ SquadTemplate
   ├─ Elements : List<SquadTemplateElement>
   ├─ WeaponOptions : List<SquadWeaponOption>
   ├─ SquadType : SquadTypes         (flags: HQ, Scout, Elite, etc.)
-  ├─ BattleValue : int
+  ├─ BattleValue : int              (derived: sum of members' BV at ExpectedNumber)
   └─ BodyguardSquadTemplate : SquadTemplate   (for Assassination missions)
 
 SquadTemplateElement
   ├─ SoldierTemplate : SoldierTemplate
   ├─ MinimumNumber : int
-  └─ MaximumNumber : int
+  ├─ MaximumNumber : int
+  ├─ RollsStrength : bool           (opt-in; see below)
+  └─ ExpectedNumber : float         (RollsStrength ? midpoint : MaximumNumber)
 ```
+
+**Element strength: establishment vs. rolled.** `SquadFactory` builds an element at `MaximumNumber`,
+and `MinimumNumber` is an understrength floor consulted only by `GenerateSquadWithinBudget` when a
+squad is scaled down to fit a leftover budget. Most ranged elements in the rules data mean exactly
+that — a Tactical Squad's 4–9 marines and a chapter office's 0–50 specialists are establishments
+squads are filled *to*.
+
+`RollsStrength` (a rules-DB column, default 0) opts a single element out of that: it musters at a
+strength drawn uniformly from `[Min, Max]` every time, which is how an irregular formation turns out
+however many turn out. Consequences, all confined to rolling elements:
+
+- The template is priced at `ExpectedNumber`, since that is what generation fields on average.
+- `ForceGenerator` charges its budget for the squad that actually mustered, not the template's
+  advertised price, so an understrength mob is not billed for bodies it never fielded.
+- The roll consumes randomness, so a force containing such a squad walks the shared RNG stream
+  differently. Non-rolling elements draw nothing, exactly as before.
+
+As of 0.7.3 the only rolling element in the database is the Insurrectionist Mob's 4–29 insurgents
+(`Database/RulesMigration_InsurrectionistUnits.sql`).
 
 `PlayerForce` contains:
 - `Army : Unit` — the top-level chapter unit (order of battle root)
@@ -971,12 +998,118 @@ See Section 3.1. All events flow View → Controller → Model → Controller �
 | `apothecary_screen` | *(controller)* | *(view)* | Wound and geneseed management |
 | `recruiter_screen` | *(controller)* | *(view)* | Training pipeline |
 | `BattleReviewScreen` | `BattleReviewController` | `BattleReviewView` | Post-battle replay |
-| `EndOfTurnDialog` | `EndOfTurnDialogController` | *(view)* | Turn summary |
+| `EndOfTurnDialog` | `EndOfTurnDialogController` | *(view)* | Current turn summary and last-turn Archive report |
 | `order_dialog` | `OrderDialogController` | — | Inline order assignment sub-dialog |
 
 ### 7.3 Navigation Model
 
 `MainGameScreenController` maintains a `Stack<Control>` (`_previousScreenStack`). Opening a sub-screen pushes the current screen onto the stack and hides it. Closing via `CloseButton` pops and restores the previous screen. The galaxy view is the root; all other screens are overlays managed through this stack.
+
+### 7.4 Last-Turn Report Archive
+
+The end-of-turn report is both the immediate post-resolution dialog and the campaign's single-report
+Archive surface. It is not a historical browser; the chapter event chronicle remains the separate
+long-term history surface. The feature exists because `EndOfTurnDialogController` is normally created
+only after a turn resolves, so an unloaded campaign must be able to reconstruct the dialog from a
+bounded snapshot rather than from the transient `TurnResolutionResult` or a live mission graph.
+
+#### Snapshot contract
+
+The pure models under `Models/Reports` are independent of Godot and campaign entities:
+
+```text
+LastTurnReportSnapshot
+  ResolvedDate                 -- Date.GetTotalWeeks(), or 0 when no date was supplied
+  Entries[]
+
+LastTurnReportEntrySnapshot
+  Title
+  Subtitle
+  Summary
+  OutcomeStatus
+  IsEnemyActivity
+  Debrief (optional)
+
+LastTurnDebriefSnapshot
+  Title
+  Subtitle
+  OutcomeStatus
+  OutcomeSummary
+  Lines[]
+
+LastTurnDebriefLineSnapshot
+  Text
+  Day (optional)
+  SquadName (optional)
+  BattleSummary (optional)
+
+BattleSummarySnapshot
+  PlayerDeaths
+  OpposingDeaths
+  PlayerIncapacitated
+  Casualties[]
+
+BattleCasualtySnapshot
+  SoldierId, Name, Rank, Squad, Company, Disposition, RecoveryWeeks
+```
+
+Casualty rows contain display data only. They must not retain a `PlayerSoldier`, `BattleHistory`,
+`MissionContext`, `RegionFaction`, or any other live campaign reference. `BattleHistory` is retained
+by the current-session presentation path only; it is never serialized by this feature.
+
+#### Build and runtime flow
+
+`TurnController.ProcessTurn` resolves the week and returns one `TurnResolutionResult`. After the
+result has returned, `LastTurnReportSnapshotBuilder.Build` runs the existing report-entry builders
+once and returns both the persisted `LastTurnReportSnapshot` and the live
+`EndOfTurnReportEntry` presentation list. This keeps immediate post-turn wording and reloaded Archive
+wording on one construction path.
+
+On a successful resolution, `MainGameScene` gives the build to `EndOfTurnDialogController` and then
+stores the snapshot on `Sector.PlayerForce.LastTurnReportSnapshot`. The assignment occurs only after
+report construction succeeds. The post-turn autosave and later manual saves therefore serialize the
+new report, while the protected pre-turn save—written before `ProcessTurn` mutates state—preserves the
+previous report. If resolution, report construction, or save fails, the prior in-memory/database
+snapshot remains available.
+
+When a save is loaded, `GameStateDataAccess` reads the optional `LastTurnReport` row,
+`SavedGameLoader` attaches it to the reconstructed `PlayerForce`, and `MainGameScene` lazily creates
+the end-of-turn dialog when Archive is pressed. A loaded snapshot is converted back into presentation
+entries without replay history. Its debrief can show narrative lines and compact casualty details,
+but it does not expose `VIEW BATTLE`. A null snapshot produces the explicit empty state
+“No previous turn report is available for this save.” rather than silently doing nothing.
+
+#### Persistence and compatibility
+
+The save schema contains one bounded row:
+
+```text
+LastTurnReport
+  Id              INTEGER PRIMARY KEY CHECK (Id = 1)
+  ResolvedDate    INTEGER NOT NULL
+  PayloadJson     TEXT NOT NULL
+```
+
+`LastTurnReportDataAccess` owns `System.Text.Json` serialization. It treats a missing table or missing
+row as null, which is needed for a supported-version campaign-start or protected turn-1 save with no
+resolved report. This null tolerance is not backward compatibility: the exact-version guard rejects
+earlier saves after the format-7 schema bump. The row is written in the same transaction as all other
+campaign data; no sidecar file is used, so slot copying, autosave retention, rollback, and diagnostics
+remain on one persistence path.
+
+#### Acceptance and verification
+
+The shipped behavior is covered by the report-builder, data-access, and save/load tests. The required
+invariants are:
+
+- Archive after loading a post-turn save shows the same cards and wording as the immediate report.
+- A campaign-start save opens Archive with an intentional empty state.
+- Saving before a new turn preserves the previous resolved report.
+- A successful new turn replaces the previous report only after report construction succeeds.
+- Reloaded debriefs retain narrative and compact casualty information but no replay button.
+- Save failures and turn-resolution failures do not erase the last known snapshot.
+- A current-version save with an absent report row loads with no snapshot; earlier save versions remain
+  incompatible under the existing save policy.
 
 ---
 
@@ -1184,7 +1317,7 @@ All of the targets below are now implemented; they are retained as a record of t
 
 Initial coverage now exists for wounds, skill math, Gaussian math, mission checks, force generation, subsector generation, battle-soldier cloning, rules database validation, training profile application, turn training flow, and save/load (round-trip and the mission-save regression). The next recommended targets are:
 
-1. **Save/load round-trip tests** — *(Implemented — `SaveLoadRoundTripTests`.)* Generates a real new-game sector via `SectorBuilder.GenerateSector`, saves it through `GameStateDataAccess.SaveData` to a temporary SQLite file, reads it back through `GetData`, and asserts high-level state survives (date, planet/character/request/ship/squad/soldier counts, total population). This also serves as the new-game smoke test (target #9 below) and is the regression guard for schema drift: any schema change not propagated to both `SaveData` and `GetData` fails here. Surfacing and fixing the provider-compatibility cluster in §8.5.1 was driven entirely by getting this test to pass.
+1. **Save/load round-trip tests** — *(Implemented — `SaveLoadRoundTripTests`.)* Generates a real new-game sector via `SectorBuilder.GenerateSector`, saves it through `GameStateDataAccess.SaveData` to a temporary SQLite file, reads it back through `GetData`, and asserts high-level state survives (date, planet/character/request/ship/squad/soldier counts, total population, and the bounded latest-turn report). This also serves as the new-game smoke test (target #9 below) and is the regression guard for schema drift: any schema change not propagated to both `SaveData` and `GetData` fails here. Surfacing and fixing the provider-compatibility cluster in §8.5.1 was driven entirely by getting this test to pass.
 2. **Mission save duplication regression** — *(Implemented — `MissionSaveTests`.)* Drives `PlanetDataAccess.SavePlanet` against a freshly created save schema and asserts the `Mission` table holds exactly one row for a region with one special mission, plus field round-trip and null-`DefenseType` cases. Covers §8.1.
 3. **Rules DB schema validation** — *(Implemented — `RulesDatabaseValidationTests`.)* In addition to the existing `TrainingProfile` coverage, the suite now constructs `GameRulesData` against the shipped database (exercising the fail-fast load-time validation for the data-driven rating/training tables and the validated registries) and directly asserts rating-table referential integrity (every award tier references a defined rating; every `SkillTotal` rating component resolves to a real base skill). Mission-definition tables remain future work (§4.1.1) and will get the same treatment when introduced.
 4. **`FactionStrategyController`** — *(Implemented — `FactionStrategyControllerTests`.)* The controller already takes `(faction, sector)` and reads no `GameDataSingleton` state, so no refactor was needed; tests build `Planet`/`Region`/`RegionFaction` graphs and cover the empty-result cases (faction absent, hidden regions, no spare troops) and the development-construction path (spare troops spent on `ConstructionMission` orders).
@@ -1194,6 +1327,7 @@ Initial coverage now exists for wounds, skill math, Gaussian math, mission check
 8. **Seeded multi-turn smoke test** — *(Implemented — `MultiTurnSmokeTests`.)* Builds a compact single-planet sector (`SectorSimulationFixture`) with a conversion cult, a public rival controller, a governor, and a high-intelligence region, then runs twelve `ProcessTurn` cycles under a fixed seed and asserts high-level invariants survive: planet stays populated with no negative region populations, the default faction persists, the cult steadily recruits, intelligence decays toward zero, and the governor's aid request persists.
 9. **New game smoke test** — Generate a new campaign from rules data and assert chapter, fleet, sector, subsector, planet, faction, and squad invariants without requiring the Godot UI.
 10. **Godot scene-wiring smoke tests** — *(Implemented for 0.7.1 — `Scenes/Debug/release_scene_wiring_smoke.tscn`.)* Headlessly instantiate the main command scene and release-control overlays, verify required nodes resolve, and exercise top-level actions far enough to prove their event has a subscriber and opens the intended surface. These tests are intentionally shallow: their purpose is to catch visible-but-inert controls and broken scene paths, not duplicate controller/domain tests through Godot.
+11. **Last-turn report Archive** — *(Implemented — `LastTurnReportSnapshotBuilderTests`, `LastTurnReportDataAccessTests`, and `SaveLoadRoundTripTests`.)* Builder tests cover mission, strategic, construction, fortification, governor, recruitment, empty-report, casualty, and replay-redaction cases. Data-access tests cover missing table, missing row, and JSON round trip. Save/load coverage verifies persistence and loader attachment to `PlayerForce`; the headless main-scene smoke verifies the UI wiring compiles and instantiates.
 
 ### 9.3 Regression Risk Areas
 

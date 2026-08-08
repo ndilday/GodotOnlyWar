@@ -11,6 +11,7 @@ namespace OnlyWar.Helpers.Database.GameState
         // 6: OrderSoldier table (order-level specialist attachment,
         //    Design/Reference/SpecialistAttachment.md). Added 2026-08-07 after a v5 save crashed with
         //    "no such table: OrderSoldier" instead of being reported as incompatible.
-        internal const int CurrentVersion = 6;
+        // 7: LastTurnReport table (bounded JSON snapshot of the latest resolved turn report).
+        internal const int CurrentVersion = 7;
     }
 }

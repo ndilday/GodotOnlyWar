@@ -16,6 +16,7 @@ using OnlyWar.Models.Squads;
 using OnlyWar.Models.Units;
 using OnlyWar.Models.Supply;
 using OnlyWar.Models.Equippables;
+using OnlyWar.Models.Reports;
 using OnlyWar.Tests.Fixtures;
 using Xunit;
 
@@ -59,6 +60,15 @@ public class SaveLoadRoundTripTests
         sector.PlayerForce.Army.Requisition = 777;
         sector.PlayerForce.GeneseedStockpile = 13;
         sector.PlayerForce.GeneseedPurity = 0.83f;
+        LastTurnReportSnapshot expectedReport = new(
+            _date.GetTotalWeeks(),
+            [new LastTurnReportEntrySnapshot(
+                "Mission",
+                "A mission",
+                "Mission outcome",
+                "COMPLETE",
+                false)]);
+        sector.PlayerForce.LastTurnReportSnapshot = expectedReport;
 
         Character pledgeAuthority = sector.Characters.First(character => character.Id >= 0);
         Planet pledgeSource = sector.Planets.Values.First(planet => planet.Id >= 0);
@@ -288,6 +298,8 @@ public class SaveLoadRoundTripTests
             Assert.Equal(777, loaded.Requisition);
             Assert.Equal(13, loaded.GeneseedStockpile);
             Assert.Equal(0.83f, loaded.GeneseedPurity, 3);
+            Assert.Equal(expectedReport.ResolvedDate, loaded.LastTurnReportSnapshot.ResolvedDate);
+            Assert.Equal("Mission", Assert.Single(loaded.LastTurnReportSnapshot.Entries).Title);
             Assert.Equal(sector.Planets.Count, loaded.Planets.Count);
             Assert.Equal(sector.Characters.Count(), loaded.Characters.Count);
             Assert.True(loaded.ChapterLoadoutDoctrine.TryGetLoadout(
@@ -535,6 +547,14 @@ public class SaveLoadRoundTripTests
         Sector sector = SectorBuilder.GenerateSector(1, _data, _date, "Load Reconstruct Chapter");
         GameDataSingleton.Instance.LoadGameDataFromBlob(_data, _date, sector);
         _roundTrip.RegisterPlayerArmy(sector);
+        sector.PlayerForce.LastTurnReportSnapshot = new LastTurnReportSnapshot(
+            _date.GetTotalWeeks(),
+            [new LastTurnReportEntrySnapshot(
+                "Previous turn",
+                "Archive",
+                "Recovered",
+                "COMPLETE",
+                false)]);
         Unit armyRoot = sector.PlayerForce.Army.OrderOfBattle;
         int expectedSoldierCount = armyRoot.GetAllMembers().Count();
 
@@ -556,6 +576,9 @@ public class SaveLoadRoundTripTests
             Assert.NotEmpty(freshRules.PlayerFaction.Units);
             Assert.Equal(expectedSoldierCount,
                 rebuilt.PlayerForce.Army.OrderOfBattle.GetAllMembers().Count());
+            Assert.Equal(
+                "Previous turn",
+                Assert.Single(rebuilt.PlayerForce.LastTurnReportSnapshot.Entries).Title);
         }
         finally
         {

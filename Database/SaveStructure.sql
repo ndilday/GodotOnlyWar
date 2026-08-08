@@ -19,6 +19,10 @@ CREATE TABLE Fleet (Id INTEGER PRIMARY KEY UNIQUE NOT NULL, FactionId INTEGER NO
 -- chapter/planet loadout doctrine plus character (role and individual) loadout persistence.
 CREATE TABLE GlobalData (Millenium INTEGER NOT NULL, Year INTEGER NOT NULL, Week INTEGER NOT NULL, SaveVersion INTEGER NOT NULL, Requisition INTEGER NOT NULL DEFAULT 0, GeneseedStockpile INTEGER NOT NULL DEFAULT 0, GeneseedPurity REAL NOT NULL DEFAULT 1.0, ScenarioType INTEGER NOT NULL DEFAULT 0, ScenarioPromisedPlanetId INTEGER NOT NULL DEFAULT 0, ScenarioState INTEGER NOT NULL DEFAULT 0, ScenarioBriefingAcknowledged BOOLEAN NOT NULL DEFAULT 0, ScenarioBriefingText TEXT, ScenarioOriginalAuthorityCharacterId INTEGER NOT NULL DEFAULT 0, HomeWorldPlanetId INTEGER REFERENCES Planet (Id));
 
+-- The latest resolved turn report is intentionally one bounded JSON payload. A missing row is
+-- valid for a campaign that has not resolved a turn yet.
+CREATE TABLE LastTurnReport (Id INTEGER PRIMARY KEY CHECK (Id = 1), ResolvedDate INTEGER NOT NULL, PayloadJson TEXT NOT NULL);
+
 -- Table: HitLocation
 CREATE TABLE HitLocation (SoldierId INTEGER NOT NULL REFERENCES Soldier (Id), HitLocationTemplateId INTEGER NOT NULL, IsCybernetic BOOLEAN NOT NULL, Armor REAL NOT NULL, WoundTotal INTEGER NOT NULL, WeeksOfHealing INTEGER);
 

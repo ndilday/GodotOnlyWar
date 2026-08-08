@@ -16,26 +16,43 @@ namespace OnlyWar.Helpers
             return (float)(zValue - roll);
         }
 
+        /// <summary>
+        /// 1/sqrt(2*pi), written out rather than as <c>Math.Sqrt(2 * Math.PI)</c>. Roslyn folds the
+        /// multiply, but it does not evaluate library calls at compile time, and RyuJIT expands
+        /// Math.Sqrt to a bare sqrtsd without noticing its operand is constant -- so the inline form
+        /// cost a real square root on every call at every optimization level. Battle planning makes
+        /// ~1.5e9 of these per seed.
+        /// </summary>
+        internal const float InvSqrt2Pi = 0.3989422804014327f;
+
         public static float ApproximateNormalCDF(float zScore)
         {
             // Abramowitz and Stegun approximation constants
-            const double a1 = 0.319381530;
-            const double a2 = -0.356563782;
-            const double a3 = 1.781477937;
-            const double a4 = -1.821255978;
-            const double a5 = 1.330274429;
-            const double k = 0.2316419;
+            const float a1 = 0.319381530f;
+            const float a2 = -0.356563782f;
+            const float a3 = 1.781477937f;
+            const float a4 = -1.821255978f;
+            const float a5 = 1.330274429f;
+            const float k = 0.2316419f;
 
-            double x = Math.Abs(zScore);
-            double t = 1.0 / (1.0 + k * x);
+            // Math.Abs is a call; the ternary is a sign-bit clear the JIT emits inline.
+            float x = zScore < 0f ? -zScore : zScore;
+            float t = 1f / (1f + (k * x));
 
-            double poly = t * (a1 + t * (a2 + t * (a3 + t * (a4 + t * a5))));
-            double prob = 1.0 - 1.0 / Math.Sqrt(2 * Math.PI) * Math.Exp(-x * x / 2.0) * poly;
+            float poly = t * (a1 + (t * (a2 + (t * (a3 + (t * (a4 + (t * a5))))))));
+            // The UPPER tail Q(x) = 1 - Phi(x), which is what A&S actually approximates. Forming it
+            // directly and branching -- rather than building Phi and taking 1 - Phi for negative z
+            // -- is what makes the single-precision body safe. The old double body could round trip
+            // through `1 - (1 - Q)` and recover Q, because double carries ~2.2e-16 of headroom
+            // under 1.0; float carries ~6e-8, so `1 - Q` collapses to exactly 1f once |z| passes
+            // about 5.3 and the tail would come back a hard zero. ExpectedBurstRemovalFraction
+            // breaks its recoil loop on `reachesK <= 0f` and its comment is explicit that a ~1e-7
+            // rate must stay distinguishable from "cannot shoot at all", so that zero would have
+            // been a behaviour change rather than a rounding difference. Neither branch here
+            // cancels, and the negative tail is strictly more accurate than what it replaces.
+            float upperTail = InvSqrt2Pi * MathF.Exp(-x * x / 2f) * poly;
 
-            if (zScore < 0)
-                prob = 1.0 - prob;
-
-            return (float)prob;
+            return zScore < 0f ? upperTail : 1f - upperTail;
         }
 
         /// <summary>

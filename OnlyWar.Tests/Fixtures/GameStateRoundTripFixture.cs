@@ -91,7 +91,8 @@ internal sealed class GameStateRoundTripFixture
             sector.PlayerForce.Army.CharacterLoadoutDoctrine,
             schemaPath,
             sector.PlayerForce.HomeWorldPlanetId,
-            RecruitmentSaveMapper.ToSaveData(sector.PlayerForce.RecruitmentProgram));
+            RecruitmentSaveMapper.ToSaveData(sector.PlayerForce.RecruitmentProgram),
+            sector.PlayerForce.LastTurnReportSnapshot);
     }
 
     public GameStateDataBlob Load(string dbPath)

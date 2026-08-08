@@ -15,6 +15,7 @@ using System.Linq;
 using OnlyWar.Models.Orders;
 using OnlyWar.Helpers.Storage;
 using OnlyWar.Models.Supply;
+using OnlyWar.Models.Reports;
 
 namespace OnlyWar.Helpers.Database.GameState
 {
@@ -47,6 +48,7 @@ namespace OnlyWar.Helpers.Database.GameState
         public CampaignScenario Scenario { get; set; }
         public LoadoutDoctrine ChapterLoadoutDoctrine { get; set; }
         public CharacterLoadoutDoctrine CharacterLoadoutDoctrine { get; set; }
+        public LastTurnReportSnapshot LastTurnReportSnapshot { get; set; }
     }
 
     public class GameStateDataAccess
@@ -63,6 +65,7 @@ namespace OnlyWar.Helpers.Database.GameState
         private readonly PledgeDataAccess _pledgeDataAccess;
         private readonly RecruitmentDataAccess _recruitmentDataAccess;
         private readonly LoadoutDoctrineDataAccess _loadoutDoctrineDataAccess;
+        private readonly LastTurnReportDataAccess _lastTurnReportDataAccess;
         private static GameStateDataAccess _instance;
         public static GameStateDataAccess Instance
         {
@@ -90,6 +93,7 @@ namespace OnlyWar.Helpers.Database.GameState
             _pledgeDataAccess = new PledgeDataAccess();
             _recruitmentDataAccess = new RecruitmentDataAccess();
             _loadoutDoctrineDataAccess = new LoadoutDoctrineDataAccess();
+            _lastTurnReportDataAccess = new LastTurnReportDataAccess();
         }
 
         public GameStateDataBlob GetData(string filePath,
@@ -151,6 +155,7 @@ namespace OnlyWar.Helpers.Database.GameState
             var global = _globalDataAccess.GetGlobalData(dbCon);
             var medicalProcedures = _medicalProcedureDataAccess.GetProcedures(dbCon);
             var history = _playerFactionEventDataAccess.GetHistory(dbCon);
+            var lastTurnReportSnapshot = _lastTurnReportDataAccess.GetSnapshot(dbCon);
             // Decorated soldiers with no squad are fallen brothers; the living are reached
             // through the loaded units, so only the fallen need to ride along in the blob.
             var fallenBrothers = playerSoldiers.Values
@@ -175,7 +180,8 @@ namespace OnlyWar.Helpers.Database.GameState
                 FallenBrothers = fallenBrothers,
                 Scenario = global?.Scenario,
                 ChapterLoadoutDoctrine = chapterLoadoutDoctrine,
-                CharacterLoadoutDoctrine = characterLoadoutDoctrine
+                CharacterLoadoutDoctrine = characterLoadoutDoctrine,
+                LastTurnReportSnapshot = lastTurnReportSnapshot
             };
         }
 
@@ -199,7 +205,8 @@ namespace OnlyWar.Helpers.Database.GameState
                              CharacterLoadoutDoctrine characterLoadoutDoctrine,
                              string schemaFilePath = null,
                              int? homeWorldPlanetId = null,
-                             RecruitmentSaveData recruitment = null)
+                             RecruitmentSaveData recruitment = null,
+                             LastTurnReportSnapshot lastTurnReportSnapshot = null)
         {
 
             // Write the whole save to a sibling temp file first and only swap it over the
@@ -225,7 +232,7 @@ namespace OnlyWar.Helpers.Database.GameState
                               geneseedPurity, scenario, medicalProcedures, characters, requests,
                               pledges, planets, fleets, playerSoldiers, fallenBrothers, history, squads,
                               ships, units, chapterLoadoutDoctrine, characterLoadoutDoctrine,
-                              homeWorldPlanetId, recruitment);
+                              homeWorldPlanetId, recruitment, lastTurnReportSnapshot);
                 // Release the pooled SQLite handles so the temp file can be moved over the
                 // target on Windows (an open handle would block the move).
                 SqliteConnection.ClearAllPools();
@@ -270,7 +277,8 @@ namespace OnlyWar.Helpers.Database.GameState
                                    LoadoutDoctrine chapterLoadoutDoctrine,
                                    CharacterLoadoutDoctrine characterLoadoutDoctrine,
                                    int? homeWorldPlanetId,
-                                   RecruitmentSaveData recruitment)
+                                   RecruitmentSaveData recruitment,
+                                   LastTurnReportSnapshot lastTurnReportSnapshot)
         {
             string connection = BuildConnectionString(filePath, SqliteOpenMode.ReadWriteCreate);
             using IDbConnection dbCon = new SqliteConnection(connection);
@@ -381,6 +389,7 @@ namespace OnlyWar.Helpers.Database.GameState
                                                      geneseedStockpile, geneseedPurity, scenario,
                                                      homeWorldPlanetId);
                     _playerFactionEventDataAccess.SaveData(transaction, history);
+                    _lastTurnReportDataAccess.SaveSnapshot(transaction, lastTurnReportSnapshot);
                 }
                 catch (Exception)
                 {

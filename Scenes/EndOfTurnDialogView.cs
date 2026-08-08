@@ -25,10 +25,25 @@ public partial class EndOfTurnDialogView : DialogView
 
     public void SetReport(IReadOnlyList<EndOfTurnReportEntry> entries)
     {
+        SetReport(entries, null, null);
+    }
+
+    public void SetReport(
+        IReadOnlyList<EndOfTurnReportEntry> entries,
+        string resolvedDateLabel,
+        string emptyHint)
+    {
         ClearEntries();
         int reportCount = entries?.Count ?? 0;
-        _titleLabel.Text = "TURN REPORT";
+        _titleLabel.Text = string.IsNullOrWhiteSpace(resolvedDateLabel)
+            ? "TURN REPORT"
+            : $"TURN REPORT  -  {resolvedDateLabel}";
         _summaryLabel.Text = $"{reportCount} report{(reportCount == 1 ? "" : "s")} received by chapter command.";
+        if (!string.IsNullOrWhiteSpace(emptyHint))
+        {
+            _summaryLabel.Text = emptyHint;
+        }
+        _emptyHintLabel.Text = emptyHint ?? "No reports reached command this turn.";
         _emptyHintLabel.Visible = reportCount == 0;
 
         if (entries == null)

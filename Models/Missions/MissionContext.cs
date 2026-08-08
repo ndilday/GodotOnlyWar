@@ -18,7 +18,9 @@ namespace OnlyWar.Models.Missions
         public BattleDebriefReport BattleReport { get; }
         public ushort? Day { get; }
         public string SquadName { get; }
-        public bool HasBattle => BattleHistory != null;
+        // A reloaded report retains the compact BattleReport but not the full replay graph. Both
+        // forms should render as battle content; only the history-backed form can open a replay.
+        public bool HasBattle => BattleHistory != null || BattleReport != null;
 
         public MissionDebriefLine(
             string text,

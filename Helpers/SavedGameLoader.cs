@@ -59,6 +59,7 @@ namespace OnlyWar.Helpers
             playerForce.HomeWorldPlanetId = gameState.HomeWorldPlanetId;
             playerForce.RecruitmentProgram =
                 RecruitmentSaveMapper.FromSaveData(gameState.Recruitment);
+            playerForce.LastTurnReportSnapshot = gameState.LastTurnReportSnapshot;
             playerForce.Requests.AddRange(gameState.Requests ?? []);
             playerForce.Pledges.AddRange(gameState.Pledges ?? []);
             Sector sector = new Sector(playerForce, gameState.Characters, gameState.Planets, gameState.Fleets);

@@ -213,27 +213,46 @@ internal static class BattleEngagementFrameBuilder
         float band = curves.Band;
         float meleeThreat = curves.MeleeThreat;
         float speed = curves.ClosingSpeed;
-        float chosen = Math.Clamp(
-            RangedEffectivenessCurve.Argmax(
-                band,
-                range => curves.Outgoing.RemovalAt(range)
-                    - curves.Incoming.RemovalAt(range)
-                    - (meleeThreat
-                        / (1f + (Math.Max(0f, range - ContactGap) / speed)))),
-            0,
-            band);
-        // Sampled at the curve's PEAK, not at `chosen`. `chosen` is the argmax of
+        // The PEAK of the outgoing curve, not its value at `chosen`. `chosen` is the argmax of
         // removal - incoming, which degenerates to maximum range whenever the outgoing curve is
         // flat -- exactly the useless-gun case -- so reading removal there reports 0 for a good
         // rifle and a bad pistol alike. The peak asks the question the option mask actually needs
         // answered: at its very best, anywhere it could stand, is this squad's shooting worth
         // anything against this enemy?
         //
+        // Harvested from the net-score sweep rather than from a second Argmax over the outgoing
+        // curve alone. That second sweep re-evaluated a curve this one has already sampled at every
+        // coarse point, and the two sweeps together were about a third of all curve evaluations in
+        // the battle planner. The two sample sets differ ONLY in the 17-point refinement window,
+        // which the net sweep places around the argmax of removal - incoming and a dedicated sweep
+        // would place around the argmax of removal: so this can report a marginally lower peak when
+        // those two argmaxes fall in different coarse intervals. It cannot matter at the resolution
+        // the value is read at -- a curve is flat by definition at its own peak, so refinement moves
+        // it by O(step^2 * curvature), and the only consumer (BattleSquadPlanner's option mask)
+        // compares it against NegligibleRemovalFraction, a threshold three orders of magnitude
+        // coarser than that.
+        float outgoingPeak = 0f;
+        float chosen = Math.Clamp(
+            RangedEffectivenessCurve.Argmax(
+                band,
+                range =>
+                {
+                    float outgoing = curves.Outgoing.RemovalAt(range);
+                    if (outgoing > outgoingPeak)
+                    {
+                        outgoingPeak = outgoing;
+                    }
+                    return outgoing
+                        - curves.Incoming.RemovalAt(range)
+                        - (meleeThreat
+                            / (1f + (Math.Max(0f, range - ContactGap) / speed)));
+                }),
+            0,
+            band);
         // RemovalAt is a squad total in battle value; divide out both the shooter count and the
         // representative opponent's worth to land on "share of one enemy, per shooter, per turn"
         // -- the scale NegligibleRemovalFraction is quoted on.
-        float peak = RangedEffectivenessCurve.Argmax(band, curves.Outgoing.RemovalAt);
-        peakRemovalFraction = curves.Outgoing.RemovalAt(peak)
+        peakRemovalFraction = outgoingPeak
             / (Math.Max(1, curves.OurSoldierCount) * Math.Max(1f, curves.Target.BattleValue));
         return chosen;
     }

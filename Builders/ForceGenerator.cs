@@ -251,15 +251,24 @@ namespace OnlyWar.Builders
                     usedTemplateIds.Add(chosenTemplate.Id);
                 }
 
-                generatedSquads.Add(SquadFactory.GenerateSquad(
+                Squad generatedSquad = SquadFactory.GenerateSquad(
                     chosenTemplate,
                     random,
-                    entityIds));
-                remainingValue -= chosenTemplate.BattleValue;
+                    entityIds);
+                generatedSquads.Add(generatedSquad);
+                // Charge the budget for the squad that actually mustered, not the template's
+                // advertised price. A template with a rolled strength prices at its average, so an
+                // understrength mob would otherwise be billed for bodies it never fielded (and an
+                // overstrength one would come free). Affordability above still gates on the average,
+                // which keeps the loop terminating: every squad costs at least its minimum strength.
+                // Floor of 1: a template whose only rolled element came up empty would otherwise
+                // cost nothing and spin the loop forever.
+                long generatedValue = Math.Max(1, SquadBattleValue(generatedSquad));
+                remainingValue -= generatedValue;
                 if (factionHasSynapse)
                 {
                     TrackSynapseAccounting(
-                        chosenTemplate, chosenTemplate.BattleValue,
+                        chosenTemplate, generatedValue,
                         ref coverageNeedingBvPurchased, ref synapseSquadsPurchased);
                 }
             }

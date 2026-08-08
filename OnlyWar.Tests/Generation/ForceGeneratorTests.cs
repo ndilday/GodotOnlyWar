@@ -394,7 +394,8 @@ public class ForceGeneratorTests
         SquadTypes squadTypes,
         byte maxSoldiers,
         int battleValue,
-        byte minSoldiers = 0)
+        byte minSoldiers = 0,
+        bool rollsStrength = false)
     {
         // Squad battle value is now derived from its members, so back it out onto a per-squad
         // trooper whose value × the member count reproduces the intended squad battle value.
@@ -407,7 +408,8 @@ public class ForceGeneratorTests
             TestModelFactory.DefaultWeapons,
             [],
             TestModelFactory.TestArmor,
-            [new SquadTemplateElement(trooper, minSoldiers, maxSoldiers)],
+            [new SquadTemplateElement(
+                trooper, minSoldiers, maxSoldiers, rollsStrength: rollsStrength)],
             squadTypes);
     }
 

@@ -806,7 +806,9 @@ public partial class MainGameScene : Control
 	{
 		if (_endOfTurnDialog == null)
 		{
-			return;
+			CreateEndOfTurnDialog();
+			_endOfTurnDialog.SetSnapshot(
+				GameDataSingleton.Instance.Sector?.PlayerForce?.LastTurnReportSnapshot);
 		}
 
 		_endOfTurnDialog.Visible = true;
@@ -821,25 +823,17 @@ public partial class MainGameScene : Control
 		RefreshTopMenuStatus();
 		_sectorMap.RefreshFleets();
 		RefreshSelectedSystemInspector();
-		if(_endOfTurnDialog == null)
-		{
-			PackedScene endOfTurnScene = GD.Load<PackedScene>("res://Scenes/EndOfTurnDialog.tscn");
-			_endOfTurnDialog = (EndOfTurnDialogController)endOfTurnScene.Instantiate();
-			_endOfTurnDialog.CloseButtonPressed += OnDialogClosed;
-			_modalLayer.AddChild(_endOfTurnDialog);
-		}
+		CreateEndOfTurnDialog();
 
 		// handle ship movement
 
 		// display end of turn dialog
-		_endOfTurnDialog.AddData(
-			turnResult.MissionContexts,
-			turnResult.SpecialMissions,
-			turnResult.StrategicCombatResults,
-			turnResult.ConstructionReports,
-			turnResult.FortificationTransfers,
-			turnResult.GovernorRequestReports,
-			turnResult.RecruitmentReport);
+		_endOfTurnDialog.AddData(GameDataSingleton.Instance.Date, turnResult);
+		// Only replace the persisted report after resolution and report construction both succeed.
+		// A failed turn therefore leaves the previous report available to the protected pre-turn
+		// save and to any later manual save.
+		GameDataSingleton.Instance.Sector.PlayerForce.LastTurnReportSnapshot =
+			_endOfTurnDialog.LastReportSnapshot;
 		_endOfTurnDialog.Visible = true;
 
 		// Surface the opening-scenario resolution (win/lapse) if it fired this turn
@@ -878,6 +872,19 @@ public partial class MainGameScene : Control
 			}
 			OpenTrainingUnitScreen(mandatorySetup: true);
 		}
+	}
+
+	private void CreateEndOfTurnDialog()
+	{
+		if (_endOfTurnDialog != null)
+		{
+			return;
+		}
+
+		PackedScene endOfTurnScene = GD.Load<PackedScene>("res://Scenes/EndOfTurnDialog.tscn");
+		_endOfTurnDialog = (EndOfTurnDialogController)endOfTurnScene.Instantiate();
+		_endOfTurnDialog.CloseButtonPressed += OnDialogClosed;
+		_modalLayer.AddChild(_endOfTurnDialog);
 	}
 
 	private void OnSoldierSelectedForDisplay(object sender, int soldierId)

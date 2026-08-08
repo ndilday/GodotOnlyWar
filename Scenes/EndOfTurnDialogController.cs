@@ -9,6 +9,7 @@ using OnlyWar.Models;
 using OnlyWar.Models.Battles;
 using OnlyWar.Models.Missions;
 using OnlyWar.Models.Planets;
+using OnlyWar.Models.Reports;
 using OnlyWar.Models.Supply;
 using System;
 using System.Collections.Generic;
@@ -19,8 +20,9 @@ public partial class EndOfTurnDialogController : DialogController
     private EndOfTurnDialogView _view;
     private MissionDebriefDialogController _missionDebriefDialog;
     private BattleReviewController _battleReviewDialog;
-    private List<MissionContext> _missionContexts = [];
     private List<EndOfTurnReportEntry> _reportEntries = [];
+
+    public LastTurnReportSnapshot LastReportSnapshot { get; private set; }
 
     public override void _Ready()
     {
@@ -46,11 +48,50 @@ public partial class EndOfTurnDialogController : DialogController
         IEnumerable<GovernorRequestReport> governorRequestReports = null,
         RecruitmentTurnReport recruitmentReport = null)
     {
-        _missionContexts = (missionContexts ?? Enumerable.Empty<MissionContext>()).ToList();
-        _reportEntries = BuildReportEntries(
-            _missionContexts, specialMissions, strategicCombatResults, constructionReports,
-            fortificationTransfers, governorRequestReports, recruitmentReport);
-        _view.SetReport(_reportEntries);
+        LastTurnReportBuildResult build = LastTurnReportSnapshotBuilder.Build(
+            null,
+            missionContexts,
+            specialMissions,
+            strategicCombatResults,
+            constructionReports,
+            fortificationTransfers,
+            governorRequestReports,
+            recruitmentReport);
+        ApplyBuild(build);
+    }
+
+    internal void AddData(Date resolvedDate, TurnResolutionResult turnResult)
+    {
+        ApplyBuild(LastTurnReportSnapshotBuilder.Build(resolvedDate, turnResult));
+    }
+
+    /// <summary>
+    /// Rehydrates the report list from the bounded saved representation. The resulting debriefs
+    /// intentionally have no battle replay reference, so the view can show casualty details but
+    /// cannot offer a replay that was not persisted.
+    /// </summary>
+    public void SetSnapshot(LastTurnReportSnapshot snapshot)
+    {
+        LastReportSnapshot = snapshot;
+        _reportEntries = LastTurnReportSnapshotBuilder.BuildPresentationEntries(snapshot).ToList();
+        _view.SetReport(
+            _reportEntries,
+            FormatResolvedDate(snapshot),
+            snapshot == null ? "No previous turn report is available for this save." : null);
+    }
+
+    private void ApplyBuild(LastTurnReportBuildResult build)
+    {
+        LastReportSnapshot = build.Snapshot;
+        _reportEntries = build.PresentationEntries.ToList();
+        _view.SetReport(_reportEntries, FormatResolvedDate(build.Snapshot), null);
+    }
+
+    private static string FormatResolvedDate(LastTurnReportSnapshot snapshot)
+    {
+        return snapshot?.ResolvedDate > 0
+            ? Date.FromTotalWeeks(snapshot.ResolvedDate).ToString()
+            : null;
     }
 
     private void OnEntrySelected(object sender, int entryIndex)
@@ -120,7 +161,7 @@ public partial class EndOfTurnDialogController : DialogController
         _battleReviewDialog.Visible = true;
     }
 
-    private static List<EndOfTurnReportEntry> BuildReportEntries(
+    internal static List<EndOfTurnReportEntry> BuildReportEntries(
         IReadOnlyList<MissionContext> missionContexts,
         IEnumerable<Mission> specialMissions,
         IEnumerable<StrategicCombatResult> strategicCombatResults,

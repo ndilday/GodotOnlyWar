@@ -30,6 +30,14 @@ namespace OnlyWar.Helpers.Battles
         internal const float HitRollMean = 10.5f;
         internal const float HitRollStdDev = 3f;
 
+        /// <summary>
+        /// Standardized cutoff past which a SUBSEQUENT shot in a burst stops being evaluated:
+        /// Phi(-6) is under 1e-9. Applies only to shots after the first -- see
+        /// <see cref="ExpectedBurstRemovalFraction"/> for why the opening shot's tail is
+        /// load-bearing and must not be cut off at all.
+        /// </summary>
+        private const float DeepTailZ = -6f;
+
         // ===================================================================================
         // TUNABLE -- lambda, the graded-damage credit weight (Phase 5,
         // Design/Reference/EngagementScoringOverhaul.md).
@@ -254,13 +262,25 @@ namespace OnlyWar.Helpers.Battles
             for (int k = 1; k <= shots; k++)
             {
                 float threshold = k == 1 ? 0f : 1f + ((k - 1) * recoil);
-                float reachesK = GaussianCalculator.ApproximateNormalCDF(
-                    (mean - threshold) / HitRollStdDev);
-                // q_k is non-increasing in k, so once it or the survival weight underflows no later
-                // term can contribute. Deliberately tested against zero rather than a small epsilon:
-                // a hopeless long-range shot's rate is ~1e-7, not 0, and the engagement-range model
-                // reads exactly that tail to tell "barely worth shooting" from "cannot shoot at
-                // all". The loop is bounded by RateOfFire regardless.
+                float z = (mean - threshold) / HitRollStdDev;
+                // q_k is non-increasing in k (threshold rises with k and recoil is non-negative),
+                // and so is the survival weight, so once a term stops mattering no later one can.
+                //
+                // THE FIRST SHOT IS EXEMPT, and that is the whole point of the k > 1 guard. A
+                // hopeless long-range shot's rate is ~1e-7 rather than 0, and the engagement-range
+                // model reads exactly that tail to tell "barely worth shooting" from "cannot shoot
+                // at all" -- RangedEffectivenessCurve's saturation band is built on the difference.
+                // So q_1 is still evaluated in full and still tested against a hard zero.
+                //
+                // No such argument covers the NINTH bolt round of a burst at z < -6. That term is
+                // under 1e-9 before the survival weight scales it down further, it is a term of a
+                // sum whose other terms are O(0.1), and nothing downstream can resolve it. Testing
+                // z before the call skips the CDF outright instead of computing it to discard it.
+                if (k > 1 && z < DeepTailZ)
+                {
+                    break;
+                }
+                float reachesK = GaussianCalculator.ApproximateNormalCDF(z);
                 if (reachesK <= 0f || weight <= 0f)
                 {
                     break;
@@ -507,22 +527,32 @@ namespace OnlyWar.Helpers.Battles
                 Math.Clamp(woundProgress, 0f, 1f));
         }
 
+        /// <summary>
+        /// The wound ladder, hoisted to a static. As a span literal local this was rebuilt on every
+        /// call: Roslyn can only point a <c>ReadOnlySpan&lt;T&gt;</c> literal at a blittable
+        /// read-only data blob for primitives whose byte layout it knows at compile time, and a
+        /// <c>ValueTuple&lt;WoundLevel, float&gt;</c> does not qualify, so it emitted a stackalloc
+        /// plus eight tuple constructions per call -- 4.0e8 of them per seed, one instrumented
+        /// profile's entire <c>ValueTuple`2..ctor</c> line. That is a Roslyn lowering decision baked
+        /// into the IL, so a Release build does not fix it.
+        /// </summary>
+        private static readonly (WoundLevel Level, float Ratio)[] WoundRatioLadder =
+        [
+            (WoundLevel.Negligible, 0f),
+            (WoundLevel.Minor, 0.125f),
+            (WoundLevel.Moderate, 0.25f),
+            (WoundLevel.Major, 0.5f),
+            (WoundLevel.Critical, 1f),
+            (WoundLevel.Massive, 2f),
+            (WoundLevel.Mortal, 4f),
+            (WoundLevel.Unsurvivable, 8f)
+        ];
+
         private static float FindMinimumDisablingWoundRatio(
             uint currentWounds,
             uint disableThreshold)
         {
-            ReadOnlySpan<(WoundLevel Level, float Ratio)> candidates =
-            [
-                (WoundLevel.Negligible, 0f),
-                (WoundLevel.Minor, 0.125f),
-                (WoundLevel.Moderate, 0.25f),
-                (WoundLevel.Major, 0.5f),
-                (WoundLevel.Critical, 1f),
-                (WoundLevel.Massive, 2f),
-                (WoundLevel.Mortal, 4f),
-                (WoundLevel.Unsurvivable, 8f)
-            ];
-            foreach ((WoundLevel level, float ratio) in candidates)
+            foreach ((WoundLevel level, float ratio) in WoundRatioLadder)
             {
                 if (AddWoundForEstimate(currentWounds, level) >= disableThreshold)
                 {
@@ -556,7 +586,11 @@ namespace OnlyWar.Helpers.Battles
         /// </summary>
         internal static float NormalPdf(float z)
         {
-            return (float)(Math.Exp(-0.5 * z * z) / Math.Sqrt(2.0 * Math.PI));
+            // See GaussianCalculator.InvSqrt2Pi for why the constant is written out: the divisor
+            // was a live square root on all ~6.6e8 calls a seed makes. Single precision throughout
+            // for the same reason it is safe in the CDF -- no cancellation here at all, and the
+            // float return already rounded the double result at the boundary.
+            return GaussianCalculator.InvSqrt2Pi * MathF.Exp(-0.5f * z * z);
         }
     }
 }
