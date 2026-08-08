@@ -82,6 +82,10 @@ namespace OnlyWar.Helpers.Turns
                     orders.Where(order =>
                         !order.AssignedSquads.Any()
                         && order.Mission is ConstructionMission));
+                MissionTurnProcessor.ProcessFeedOrders(
+                    orders.Where(order =>
+                        !order.AssignedSquads.Any()
+                        && order.Mission is FeedMission));
 
                 _missionAftermathProcessor.ApplyMissionResults(_result.MissionContexts);
                 _planetTurnProcessor.UpdatePlanet(planet);
@@ -93,6 +97,31 @@ namespace OnlyWar.Helpers.Turns
 
                 GameLog.Info(() =>
                     $"  week {week + 1}/{turns} '{planet.Name}' done in {weekTimer.ElapsedMilliseconds}ms");
+            }
+
+            ClearTransientAiSquads(planet);
+        }
+
+        /// <summary>
+        /// Removes the transient AI forces still standing when the simulation stops.
+        /// </summary>
+        /// <remarks>
+        /// A patrol screen or recon party is conjured for one week and discarded at the top of the
+        /// planner's next pass (FactionStrategyController.ClearStaleTransientSquads). Generation has
+        /// no next pass, so without this the final week's forces are still landed in their regions
+        /// when the world is handed to the player - squads belonging to no army, on a board the
+        /// opening state is supposed to hand over with nothing landed on it.
+        /// </remarks>
+        private static void ClearTransientAiSquads(Planet planet)
+        {
+            foreach (Region region in planet.Regions)
+            {
+                if (region.RegionFactionMap.Values.Count == 0) continue;
+                foreach (RegionFaction regionFaction in region.RegionFactionMap.Values)
+                {
+                    if (regionFaction.PlanetFaction.Faction.IsPlayerFaction) continue;
+                    regionFaction.LandedSquads.RemoveAll(FactionStrategyController.IsTransientAiSquad);
+                }
             }
         }
     }

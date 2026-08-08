@@ -779,6 +779,50 @@ public class FactionStrategyControllerTests
         Assert.Equal(expected, FactionStrategyController.CalculateRequiredDefensiveBattleValue(quiet));
     }
 
+    // --- Feeding as a planned tasking (Design/Reference/TyranidFeedingAsMission.md) ---
+
+    // Feeding used to be a planet-update side effect that recomputed the swarm's whole deployed
+    // strength, so the same troops fed, defended and patrolled in the same week. It is now allocated
+    // against the same per-region budget as everything else, and what reaches the allocator is the
+    // residual - never the whole swarm.
+    [Fact]
+    public void GenerateFactionOrders_Swarm_CommitsOnlyItsSpareTroopsToFeeding()
+    {
+        Faction swarm = BuildFaction(2, "Hive Fleet", isPlayer: false, isDefault: false, GrowthType.Consumption);
+        Sector sector = BuildSectorWithSingleRegionFaction(
+            swarm, population: 1_000_000, organization: 100, isPublic: true);
+        RegionFaction regionFaction =
+            sector.Planets.Values.First().Regions[0].RegionFactionMap[swarm.Id];
+
+        List<Order> orders = new FactionStrategyController().GenerateFactionOrders(swarm, sector);
+
+        Order feedOrder = Assert.Single(orders, o => o.Mission is FeedMission);
+        FeedMission mission = Assert.IsType<FeedMission>(feedOrder.Mission);
+        Assert.Empty(feedOrder.AssignedSquads);
+        Assert.Equal(regionFaction, mission.RegionFaction);
+
+        // With no enemy visible the defensive reserve is exactly the minimum floor, so feeding gets
+        // what is left of the deployed strength and nothing more.
+        long reserve = (long)(regionFaction.GetDeployedStrength()
+            * FactionStrategyController.MinimumDefensiveReserveFraction);
+        Assert.Equal(regionFaction.GetDeployedStrength() - reserve, mission.CommittedBattleValue);
+        Assert.True(mission.CommittedBattleValue < regionFaction.GetDeployedStrength(),
+            "the swarm must never commit its whole deployed strength to feeding");
+    }
+
+    // A faction that does not eat biomass plans no feeding at all.
+    [Fact]
+    public void GenerateFactionOrders_NonConsumptionFaction_PlansNoFeeding()
+    {
+        Faction cult = CreateNonPlayerFaction();
+        Sector sector = BuildSectorWithSingleRegionFaction(
+            cult, population: 1_000_000, organization: 100, isPublic: true);
+
+        List<Order> orders = new FactionStrategyController().GenerateFactionOrders(cult, sector);
+
+        Assert.DoesNotContain(orders, o => o.Mission is FeedMission);
+    }
+
     private static void AddRegionFaction(Planet planet, Region region, Faction faction,
         long population = 0, int organization = 100, long garrison = 0)
     {

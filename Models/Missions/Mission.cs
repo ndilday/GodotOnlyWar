@@ -95,4 +95,36 @@ namespace OnlyWar.Models.Missions
             BuildAmount = buildAmount;
         }
     }
+
+    /// <summary>
+    /// A Consumption faction's biomass feeding for one turn, in the region it feeds.
+    /// </summary>
+    /// <remarks>
+    /// Feeding is a tasking like any other: the strategy controller allocates it out of the same
+    /// per-region force budget defence, offensives, development and patrols draw on, and what it
+    /// commits is carried here. It used to be a planet-update side effect that recomputed the swarm's
+    /// whole deployed strength from scratch, so the same troops fed, defended, patrolled and attacked
+    /// in the same week (Design/Reference/TyranidFeedingAsMission.md).
+    ///
+    /// Squad-less on the <see cref="ConstructionMission"/> precedent - materializing squads for a
+    /// million-strong swarm would be absurd, and unlike a patrol screen there is nothing for them to
+    /// do tactically. The order carries no squads and resolves instantly in the mission phase
+    /// (MissionTurnProcessor.ProcessFeedOrders).
+    /// </remarks>
+    public class FeedMission : Mission
+    {
+        // Battle value committed to feeding this turn. For a PopulationIsMilitary swarm the BV pool
+        // and the headcount are the same number (RegionFaction.MilitaryStrength), so this drops
+        // straight into the biomass allocator's "troops" term with no conversion.
+        public long CommittedBattleValue { get; private set; }
+
+        public FeedMission(long committedBattleValue, RegionFaction regionFaction)
+            : base(
+                MissionType.Feed,
+                regionFaction,
+                (int)Math.Clamp(committedBattleValue, 0L, int.MaxValue))
+        {
+            CommittedBattleValue = Math.Max(0L, committedBattleValue);
+        }
+    }
 }

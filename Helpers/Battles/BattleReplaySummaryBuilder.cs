@@ -1,4 +1,5 @@
 using OnlyWar.Helpers.Battles.Actions;
+using OnlyWar.Helpers.Battles.Resolutions;
 using OnlyWar.Helpers.UI;
 using OnlyWar.Models.Battles;
 using OnlyWar.Models.Equippables;
@@ -275,7 +276,9 @@ namespace OnlyWar.Helpers.Battles
                     string.IsNullOrWhiteSpace(text) ? action.GetType().Name : text,
                     BuildSeverity(text, woundCount),
                     BuildCategories(action, woundCount),
-                    actor == null ? null : actor.SquadId));
+                    actor == null ? null : actor.SquadId,
+                    BuildTargetFormationIds(action, turn.State),
+                    BuildDamagedFormationIds(action, turn.State)));
             }
 
             if (entries.Count == 0)
@@ -495,6 +498,92 @@ namespace OnlyWar.Helpers.Battles
                 MeleeAttackAction meleeAttackAction => meleeAttackAction.WoundResolutions.Count,
                 _ => 0
             };
+        }
+
+        /// <summary>
+        /// Every formation this action was aimed at. Feeds the SELECTED filter's receiving side,
+        /// so a volley that misses the selected formation entirely still shows up in its log.
+        /// </summary>
+        private static IReadOnlyCollection<int> BuildTargetFormationIds(IAction action, BattleStateSnapshot state)
+        {
+            HashSet<int> formationIds = [];
+            switch (action)
+            {
+                case ShootAction shootAction:
+                    AddSoldierFormation(formationIds, state, shootAction.TargetId);
+                    if (shootAction.StrayTargetId.HasValue)
+                    {
+                        AddSoldierFormation(formationIds, state, shootAction.StrayTargetId.Value);
+                    }
+                    break;
+                case AreaAttackAction areaAttackAction:
+                    AddSoldierFormation(formationIds, state, areaAttackAction.TargetId);
+                    AddSoldierFormations(formationIds, state, areaAttackAction.VictimIds);
+                    break;
+                case BlastAttackAction blastAttackAction:
+                    AddSoldierFormation(formationIds, state, blastAttackAction.TargetId);
+                    AddSoldierFormations(formationIds, state, blastAttackAction.VictimIds);
+                    break;
+                case MeleeAttackAction meleeAttackAction:
+                    AddSoldierFormations(formationIds, state, meleeAttackAction.TargetedDefenderIds);
+                    AddSoldierFormations(
+                        formationIds,
+                        state,
+                        meleeAttackAction.StrikePlans.Select(plan => plan.TargetId));
+                    break;
+            }
+
+            return formationIds;
+        }
+
+        /// <summary>
+        /// Formations that actually took a wound, resolved through the turn snapshot rather than
+        /// the live sufferer wrapper: a soldier killed this round has already been detached from
+        /// his squad, and the snapshot still remembers where he belonged.
+        /// </summary>
+        private static IReadOnlyCollection<int> BuildDamagedFormationIds(IAction action, BattleStateSnapshot state)
+        {
+            HashSet<int> formationIds = [];
+            IEnumerable<WoundResolution> wounds = action switch
+            {
+                ShootAction shootAction => shootAction.WoundResolutions,
+                AreaAttackAction areaAttackAction => areaAttackAction.WoundResolutions,
+                BlastAttackAction blastAttackAction => blastAttackAction.WoundResolutions,
+                MeleeAttackAction meleeAttackAction => meleeAttackAction.WoundResolutions,
+                _ => []
+            };
+
+            foreach (WoundResolution wound in wounds)
+            {
+                int? sufferedId = wound?.Suffererer?.Soldier?.Id;
+                if (!sufferedId.HasValue) continue;
+                if (state.Soldiers.TryGetValue(sufferedId.Value, out BattleSoldierSnapshot sufferer))
+                {
+                    formationIds.Add(sufferer.SquadId);
+                }
+                else if (wound.Suffererer.BattleSquad != null)
+                {
+                    formationIds.Add(wound.Suffererer.BattleSquad.Id);
+                }
+            }
+
+            return formationIds;
+        }
+
+        private static void AddSoldierFormation(HashSet<int> formationIds, BattleStateSnapshot state, int soldierId)
+        {
+            if (state.Soldiers.TryGetValue(soldierId, out BattleSoldierSnapshot soldier))
+            {
+                formationIds.Add(soldier.SquadId);
+            }
+        }
+
+        private static void AddSoldierFormations(HashSet<int> formationIds, BattleStateSnapshot state, IEnumerable<int> soldierIds)
+        {
+            foreach (int soldierId in soldierIds ?? [])
+            {
+                AddSoldierFormation(formationIds, state, soldierId);
+            }
         }
 
         private static BattleEventCategory BuildCategories(IAction action, int woundCount)

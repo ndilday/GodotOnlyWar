@@ -1,7 +1,11 @@
+using System.Collections.Generic;
 using System.Linq;
 using OnlyWar.Helpers;
 using OnlyWar.Helpers.Extensions;
+using OnlyWar.Models.Missions;
+using OnlyWar.Models.Orders;
 using OnlyWar.Models.Planets;
+using OnlyWar.Models.Squads;
 using OnlyWar.Tests.Fixtures;
 using Xunit;
 
@@ -189,6 +193,110 @@ public class BiomassConsumptionTests
         TurnController.RecoverCarryingCapacity(region);
 
         Assert.Equal(505_000, region.CarryingCapacity);
+    }
+
+    // --- Feeding as a budgeted mission (Design/Reference/TyranidFeedingAsMission.md) ---
+
+    // The whole point of the change: feeding eats with the force it was GIVEN, not with the swarm's
+    // whole deployed strength re-derived from population. A swarm that has committed most of itself
+    // to defence, offensives and patrols must feed proportionately less.
+    [Fact]
+    public void ResolveBiomassConsumption_WithACommittedBudget_EatsOnlyWithThatForce()
+    {
+        long StripWith(double troops)
+        {
+            SectorSimulationFixture fixture = SectorSimulationFixture.CreateDetached();
+            Region region = fixture.Planet.Regions[0];
+            region.CarryingCapacity = 1_000_000;
+            region.MaximumCarryingCapacity = 1_000_000;
+            fixture.DefaultRegionFaction(0).Population = 0;
+            RegionFaction swarm = fixture.AddConsumptionFaction(0, population: 200_000, organization: 100);
+
+            TurnController.ResolveBiomassConsumption(swarm, troops);
+            return 1_000_000 - region.CarryingCapacity;
+        }
+
+        long wholeSwarm = StripWith(200_000);
+        long quarterCommitted = StripWith(50_000);
+
+        Assert.True(quarterCommitted > 0, "a committed quarter should still feed");
+        Assert.True(quarterCommitted < wholeSwarm,
+            "committing a quarter of the swarm must strip less than committing all of it");
+    }
+
+    // A feed order is squad-less and resolves instantly, on the ConstructionMission precedent: the
+    // committed battle value on the mission is what reaches the allocator.
+    [Fact]
+    public void ProcessFeedOrders_ResolvesTheCommittedBattleValueWithoutSquads()
+    {
+        SectorSimulationFixture fixture = SectorSimulationFixture.CreateDetached();
+        Region region = fixture.Planet.Regions[0];
+        region.CarryingCapacity = 1_000_000;
+        region.MaximumCarryingCapacity = 1_000_000;
+        fixture.DefaultRegionFaction(0).Population = 0;
+        RegionFaction swarm = fixture.AddConsumptionFaction(0, population: 200_000, organization: 100);
+        long swarmBefore = swarm.Population;
+
+        Order order = new Order(
+            new List<Squad>(), true, false, Aggression.Cautious, new FeedMission(50_000, swarm));
+        TurnController.ProcessFeedOrders(new[] { order });
+
+        long stripped = 1_000_000 - region.CarryingCapacity;
+        Assert.True(stripped > 0, "the order should feed the swarm");
+        Assert.Equal(stripped / 2, swarm.Population - swarmBefore);
+    }
+
+    // Planning only ever sees IsPublic region-factions, so a hidden swarm has no planner to allocate
+    // its force. The planet update keeps feeding it at full strength rather than letting it silently
+    // starve - and must leave a public swarm alone, or that one would eat twice.
+    [Fact]
+    public void ResolveHiddenSwarmConsumption_FeedsAHiddenSwarmAndSkipsAPublicOne()
+    {
+        SectorSimulationFixture fixture = SectorSimulationFixture.CreateDetached();
+        Region region = fixture.Planet.Regions[0];
+        region.CarryingCapacity = 1_000_000;
+        region.MaximumCarryingCapacity = 1_000_000;
+        fixture.DefaultRegionFaction(0).Population = 0;
+
+        RegionFaction publicSwarm = fixture.AddConsumptionFaction(0, population: 200_000, organization: 100);
+        RegionFaction hiddenSwarm = fixture.AddConsumptionFaction(0, population: 200_000, organization: 100);
+        hiddenSwarm.IsPublic = false;
+        long publicBefore = publicSwarm.Population;
+        long hiddenBefore = hiddenSwarm.Population;
+
+        TurnController.ResolveHiddenSwarmConsumption(region);
+
+        Assert.Equal(publicBefore, publicSwarm.Population);
+        Assert.True(hiddenSwarm.Population > hiddenBefore,
+            "a hidden swarm has no planner to budget it and must keep feeding");
+    }
+
+    // Same split for spreading: the planner moves a public swarm out of its spare troops, so the
+    // planet update must only push the swarms it never saw.
+    [Fact]
+    public void ResolveHiddenSwarmExpansion_MovesAHiddenSwarmAndLeavesAPublicOne()
+    {
+        SectorSimulationFixture fixture = SectorSimulationFixture.CreateDetached();
+        Region home = fixture.Planet.Regions[0];
+        home.CarryingCapacity = 0;
+        home.MaximumCarryingCapacity = 1_000_000;
+        fixture.DefaultRegionFaction(0).Population = 0;
+
+        Region neighbor = home.GetAdjacentRegions().First();
+        neighbor.CarryingCapacity = 1_000_000;
+        neighbor.MaximumCarryingCapacity = 1_000_000;
+
+        RegionFaction publicSwarm = fixture.AddConsumptionFaction(0, population: 100_000, organization: 100);
+        RegionFaction hiddenSwarm = fixture.AddConsumptionFaction(0, population: 100_000, organization: 100);
+        hiddenSwarm.IsPublic = false;
+        long publicBefore = publicSwarm.Population;
+        long hiddenBefore = hiddenSwarm.Population;
+
+        TurnController.ResolveHiddenSwarmExpansion(fixture.Planet);
+
+        Assert.Equal(publicBefore, publicSwarm.Population);
+        Assert.True(hiddenSwarm.Population < hiddenBefore,
+            "a hidden swarm on stripped ground should still spread toward fresh biomass");
     }
 
     // --- Forced expansion (PRD §4.24 Tyranid Troop AI, step 2) ---

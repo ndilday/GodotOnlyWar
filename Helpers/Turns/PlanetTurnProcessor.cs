@@ -108,9 +108,20 @@ namespace OnlyWar.Helpers.Turns
 
         internal void UpdatePlanet(Planet planet)
         {
-            // Tyranid troop AI step 2: spreading precedes consumption so departing force is not
-            // counted twice at home.
-            ResolveTyranidExpansion(planet);
+            // A PUBLIC swarm spreads and feeds as planned taskings, allocated out of the same
+            // per-region force budget defence, offensives, development and patrols draw on
+            // (FactionStrategyController PRIORITY 5/6) and resolved in the mission phase. Neither is
+            // a planet-update side effect any more, so the old "spreading precedes consumption so
+            // departing force is not counted twice at home" ordering is obsolete: a shared budget
+            // does that job now, and doing it by phase order only ever fixed the double-count
+            // between those two while leaving both blind to everything else the swarm was tasked
+            // with (Design/Reference/TyranidFeedingAsMission.md).
+            //
+            // What is left here is the hidden swarm. Planning sees IsPublic region-factions only, so
+            // an unrevealed swarm has no planner to allocate its force and would otherwise silently
+            // stop eating. It keeps the old behaviour - whole deployed strength, spread then feed -
+            // because with nothing else claiming that force, the whole of it genuinely is available.
+            ResolveHiddenSwarmExpansion(planet);
 
             foreach (Region region in planet.Regions)
             {
@@ -127,7 +138,7 @@ namespace OnlyWar.Helpers.Turns
                     }
                 }
 
-                ResolveBiomassConsumption(region);
+                ResolveHiddenSwarmConsumption(region);
                 RecoverCarryingCapacity(region);
                 // Before anything is decayed or swept away: a faction that has left the region but
                 // whose works still stand hands them to an ally still holding the ground. This is
@@ -331,42 +342,92 @@ namespace OnlyWar.Helpers.Turns
                 ConsumptionDiminishingExponent);
         }
 
+        /// <summary>
+        /// Spreads every swarm on the planet toward richer ground, each drawing on its whole
+        /// deployed strength.
+        /// </summary>
+        /// <remarks>
+        /// This is the unbudgeted form: it assumes nothing else has a claim on the force. That holds
+        /// for a hidden swarm (which no planner sees) and for tests exercising the movement rule
+        /// directly. A public swarm expands through the strategy controller instead, out of the
+        /// spare troops left after defence, offensives and patrols.
+        /// </remarks>
         internal static void ResolveTyranidExpansion(Planet planet)
+        {
+            ResolveSwarmExpansion(planet, _ => true);
+        }
+
+        internal static void ResolveHiddenSwarmExpansion(Planet planet)
+        {
+            ResolveSwarmExpansion(planet, swarm => !swarm.IsPublic);
+        }
+
+        private static void ResolveSwarmExpansion(Planet planet, Func<RegionFaction, bool> swarmFilter)
         {
             var moves = new List<(RegionFaction Source, Region Destination, long Amount)>();
             foreach (Region region in planet.Regions)
             {
                 foreach (RegionFaction swarm in region.RegionFactionMap.Values
-                    .Where(rf => rf.PlanetFaction.Faction.GrowthType == GrowthType.Consumption && rf.Population > 0))
+                    .Where(rf => rf.PlanetFaction.Faction.GrowthType == GrowthType.Consumption
+                                 && rf.Population > 0
+                                 && swarmFilter(rf)))
                 {
-                    long organized = (long)(swarm.Population * (Math.Max(swarm.Organization, 0) / 100.0));
-                    if (organized <= 0) continue;
-
-                    double homeBiomass = RegionBiomass(region);
-                    Region richest = region.GetAdjacentRegions().OrderByDescending(RegionBiomass).FirstOrDefault();
-                    if (richest == null || RegionBiomass(richest) <= homeBiomass) continue;
-
-                    long movers = Math.Min(swarm.Population,
-                        (long)(organized * RegionDepletion(region) * TyranidExpansionShare));
-                    if (movers > 0)
+                    (Region destination, long movers) =
+                        PlanSwarmExpansion(swarm, swarm.GetDeployedStrength());
+                    if (destination != null && movers > 0)
                     {
-                        moves.Add((swarm, richest, movers));
+                        moves.Add((swarm, destination, movers));
                     }
                 }
             }
 
+            // Planning the whole planet before moving any of it is what stops a swarm that has just
+            // arrived somewhere from being picked up and pushed onward again in the same pass.
             foreach ((RegionFaction source, Region destination, long amount) in moves)
             {
-                long sourceBefore = source.Population;
-                source.Population -= amount;
-                EstablishInvaderPresence(source.PlanetFaction.Faction, destination, amount);
-                GameLog.Trace(() =>
-                    $"Tyranid expansion {source.PlanetFaction.Faction.Name} "
-                    + $"{source.Region.Planet.Name}/{source.Region.Name}->{destination.Name}: "
-                    + $"moved={amount} (sourcePop {sourceBefore}->{source.Population}), "
-                    + $"depletion={RegionDepletion(source.Region):F2}, "
-                    + $"destBiomass={RegionBiomass(destination):F0}");
+                ApplySwarmExpansion(source, destination, amount);
             }
+        }
+
+        /// <summary>
+        /// Where a swarm would push next, and how much of the given budget goes with it.
+        /// </summary>
+        /// <remarks>
+        /// Pure by design: the caller decides when to apply the move. The target is the adjacent
+        /// region of highest biomass (prey plus carrying capacity) and only when it is strictly
+        /// richer than home, and the movers scale by how far home has already been stripped - so a
+        /// swarm gorging on fresh ground stays put and a swarm on a bare region pushes hard.
+        /// </remarks>
+        internal static (Region Destination, long Movers) PlanSwarmExpansion(
+            RegionFaction swarm,
+            long availableTroops)
+        {
+            if (swarm == null || swarm.Population <= 0 || availableTroops <= 0) return (null, 0);
+
+            Region region = swarm.Region;
+            double homeBiomass = RegionBiomass(region);
+            Region richest = region.GetAdjacentRegions().OrderByDescending(RegionBiomass).FirstOrDefault();
+            if (richest == null || RegionBiomass(richest) <= homeBiomass) return (null, 0);
+
+            long movers = Math.Min(
+                Math.Min(swarm.Population, availableTroops),
+                (long)(availableTroops * RegionDepletion(region) * TyranidExpansionShare));
+            return movers > 0 ? (richest, movers) : (null, 0);
+        }
+
+        internal static void ApplySwarmExpansion(RegionFaction source, Region destination, long amount)
+        {
+            if (source == null || destination == null || amount <= 0) return;
+
+            long sourceBefore = source.Population;
+            source.Population -= amount;
+            EstablishInvaderPresence(source.PlanetFaction.Faction, destination, amount);
+            GameLog.Trace(() =>
+                $"Tyranid expansion {source.PlanetFaction.Faction.Name} "
+                + $"{source.Region.Planet.Name}/{source.Region.Name}->{destination.Name}: "
+                + $"moved={amount} (sourcePop {sourceBefore}->{source.Population}), "
+                + $"depletion={RegionDepletion(source.Region):F2}, "
+                + $"destBiomass={RegionBiomass(destination):F0}");
         }
 
         private static double RegionBiomass(Region region)
@@ -388,62 +449,99 @@ namespace OnlyWar.Helpers.Turns
             return 1.0 - 0.5 * (capFraction + preyFraction);
         }
 
+        /// <summary>
+        /// Feeds every swarm in the region at its whole deployed strength.
+        /// </summary>
+        /// <remarks>
+        /// The unbudgeted form, matching <see cref="ResolveTyranidExpansion"/>: correct only where
+        /// nothing else has a claim on the force. A public swarm feeds through a planned
+        /// <see cref="FeedMission"/> carrying the share the strategy controller could spare.
+        /// </remarks>
         internal static void ResolveBiomassConsumption(Region region)
         {
-            foreach (RegionFaction consumer in region.RegionFactionMap.Values
-                .Where(rf => rf.PlanetFaction.Faction.GrowthType == GrowthType.Consumption).ToList())
+            foreach (RegionFaction consumer in Consumers(region))
             {
-                double troops = consumer.Population * (consumer.Organization / 100.0);
-                if (troops <= 0) continue;
-
-                List<RegionFaction> prey = region.RegionFactionMap.Values
-                    .Where(rf => rf.PlanetFaction.Faction.GrowthType != GrowthType.Consumption && rf.Population > 0)
-                    .ToList();
-                double preyRemaining = prey.Sum(rf => rf.Population);
-                double biomassRemaining = Math.Max(0, region.CarryingCapacity);
-
-                double predated = 0;
-                double consumed = 0;
-                double chunk = troops / BiomassAllocationSteps;
-                double troopsRemaining = troops;
-                for (int step = 0; step < BiomassAllocationSteps && troopsRemaining > 0; step++)
-                {
-                    double thisChunk = Math.Min(chunk, troopsRemaining);
-                    troopsRemaining -= thisChunk;
-                    double predationYield = PredationMarginalYield(preyRemaining);
-                    double consumptionYield = ConsumptionMarginalYield(biomassRemaining);
-                    if (predationYield <= 0 && consumptionYield <= 0) break;
-                    if (predationYield >= consumptionYield)
-                    {
-                        double kills = Math.Min(preyRemaining, thisChunk * predationYield);
-                        preyRemaining -= kills;
-                        predated += kills;
-                    }
-                    else
-                    {
-                        double eaten = Math.Min(biomassRemaining, thisChunk * consumptionYield);
-                        biomassRemaining -= eaten;
-                        consumed += eaten;
-                    }
-                }
-
-                long killed = (long)predated;
-                long stripped = (long)consumed;
-                long swarmPopBefore = consumer.Population;
-                long capacityBefore = region.CarryingCapacity;
-                int preyFactionCount = prey.Count;
-                long preyBefore = (long)(preyRemaining + predated);
-                ApplyPredationKills(prey, killed, consumer.PlanetFaction.Faction);
-                region.CarryingCapacity = Math.Max(0, region.CarryingCapacity - stripped);
-                RecordScenarioBlighting(region, stripped, consumer.PlanetFaction.Faction);
-                long converted = (long)((killed + stripped) * BiomassFeedEfficiency);
-                consumer.Population += converted;
-                GameLog.Debug(() =>
-                    $"Biomass consume {DescribeRegionFaction(consumer)}: troops={troops:F0}, "
-                    + $"predated={killed} (prey {preyBefore} across {preyFactionCount} factions), "
-                    + $"consumed={stripped} (capacity {capacityBefore}->{region.CarryingCapacity}), "
-                    + $"converted={converted} (swarmPop {swarmPopBefore}->{consumer.Population})");
+                ResolveBiomassConsumption(consumer, consumer.GetDeployedStrength());
             }
+        }
+
+        internal static void ResolveHiddenSwarmConsumption(Region region)
+        {
+            foreach (RegionFaction consumer in Consumers(region).Where(rf => !rf.IsPublic))
+            {
+                ResolveBiomassConsumption(consumer, consumer.GetDeployedStrength());
+            }
+        }
+
+        private static List<RegionFaction> Consumers(Region region)
+        {
+            return region.RegionFactionMap.Values
+                .Where(rf => rf.PlanetFaction.Faction.GrowthType == GrowthType.Consumption)
+                .ToList();
+        }
+
+        /// <summary>
+        /// Feeds one swarm with a stated number of troops.
+        /// </summary>
+        /// <remarks>
+        /// The prey/land split is decided inside this loop rather than by the caller, and that is
+        /// deliberate: interleaving predation against consumption chunk by chunk over
+        /// <see cref="BiomassAllocationSteps"/> is what makes returns diminish correctly WITHIN a
+        /// turn as each pool depletes. Planning them as two separate taskings would have thrown that
+        /// away for no gain, which is why feeding is one mission type and not two.
+        /// </remarks>
+        internal static void ResolveBiomassConsumption(RegionFaction consumer, double troops)
+        {
+            if (consumer == null || troops <= 0) return;
+            Region region = consumer.Region;
+
+            List<RegionFaction> prey = region.RegionFactionMap.Values
+                .Where(rf => rf.PlanetFaction.Faction.GrowthType != GrowthType.Consumption && rf.Population > 0)
+                .ToList();
+            double preyRemaining = prey.Sum(rf => rf.Population);
+            double biomassRemaining = Math.Max(0, region.CarryingCapacity);
+
+            double predated = 0;
+            double consumed = 0;
+            double chunk = troops / BiomassAllocationSteps;
+            double troopsRemaining = troops;
+            for (int step = 0; step < BiomassAllocationSteps && troopsRemaining > 0; step++)
+            {
+                double thisChunk = Math.Min(chunk, troopsRemaining);
+                troopsRemaining -= thisChunk;
+                double predationYield = PredationMarginalYield(preyRemaining);
+                double consumptionYield = ConsumptionMarginalYield(biomassRemaining);
+                if (predationYield <= 0 && consumptionYield <= 0) break;
+                if (predationYield >= consumptionYield)
+                {
+                    double kills = Math.Min(preyRemaining, thisChunk * predationYield);
+                    preyRemaining -= kills;
+                    predated += kills;
+                }
+                else
+                {
+                    double eaten = Math.Min(biomassRemaining, thisChunk * consumptionYield);
+                    biomassRemaining -= eaten;
+                    consumed += eaten;
+                }
+            }
+
+            long killed = (long)predated;
+            long stripped = (long)consumed;
+            long swarmPopBefore = consumer.Population;
+            long capacityBefore = region.CarryingCapacity;
+            int preyFactionCount = prey.Count;
+            long preyBefore = (long)(preyRemaining + predated);
+            ApplyPredationKills(prey, killed, consumer.PlanetFaction.Faction);
+            region.CarryingCapacity = Math.Max(0, region.CarryingCapacity - stripped);
+            RecordScenarioBlighting(region, stripped, consumer.PlanetFaction.Faction);
+            long converted = (long)((killed + stripped) * BiomassFeedEfficiency);
+            consumer.Population += converted;
+            GameLog.Debug(() =>
+                $"Biomass consume {DescribeRegionFaction(consumer)}: troops={troops:F0}, "
+                + $"predated={killed} (prey {preyBefore} across {preyFactionCount} factions), "
+                + $"consumed={stripped} (capacity {capacityBefore}->{region.CarryingCapacity}), "
+                + $"converted={converted} (swarmPop {swarmPopBefore}->{consumer.Population})");
         }
 
         private static void ApplyPredationKills(List<RegionFaction> prey, long totalKilled, Faction attacker)

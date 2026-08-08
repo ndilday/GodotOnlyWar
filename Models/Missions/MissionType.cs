@@ -28,6 +28,11 @@ namespace OnlyWar.Models.Missions
         // holding this order accrue the squad-weeks that fulfil the request; it is the only
         // order that does so. Appended deliberately: MissionType persists as an int ordinal
         // (PlanetDataAccess.SaveMission), so inserting above this point would corrupt saves.
-        ShowOfForce
+        ShowOfForce,
+        // A Consumption swarm's biomass feeding, planned and budgeted like any other tasking
+        // (Design/Reference/TyranidFeedingAsMission.md). Squad-less: the committed battle value
+        // lives on FeedMission and resolves instantly in the mission phase. Appended for the same
+        // save-ordinal reason as ShowOfForce above.
+        Feed
     }
 }

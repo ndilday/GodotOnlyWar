@@ -1085,10 +1085,11 @@ This is a behavioral specification. It depends on §4.21 (behavior flags, growth
 
 **Tyranid Troop AI**
 - The mobile combat force is the region's concrete `OrganizedMilitaryStrength` pool. The disorganized remainder still exists and can be caught in an ambush; after an assault destroys the organized defence, continuing undefended assault days destroy disorganized BV at a tunable multiple of surviving attacker BV. Reorganization explicitly transfers BV back into the organized pool rather than applying a percentage multiplier.
-- Each turn the AI allocates `organizedTroops` by priority:
-  1. **Fight** — commit force to any in-region military threat (a PDF garrison, or a Cult fighting the swarm); the swarm is drawn to resistance first.
+- Each turn the AI allocates `organizedTroops` by priority. This is **one budget**, drawn down in order: every step spends from the same per-region residual, so a swarm committed to defending and attacking has correspondingly less left to eat with.
+  1. **Fight** — commit force to any in-region military threat (a PDF garrison, or a Cult fighting the swarm); the swarm is drawn to resistance first. This also reserves the region's own defensive minimum.
   2. **Expand** — send a share of the remainder to neighbors, biased toward the richest / most-resistant region. The share scales with local **depletion** (`depletion = 1 − ½·(civiliansLeft/civiliansAtStart + capacity/maxCapacity)`): a rich region keeps its forces home to gorge, a stripped one pushes them onward.
-  3. **Predate + Consume** — the remainder strips the current region: predate while headcount remains, consume the land in parallel, shifting fully to consumption once the survivors are gone.
+  3. **Predate + Consume** — whatever survives every earlier claim strips the current region: predate while headcount remains, consume the land in parallel, shifting fully to consumption once the survivors are gone.
+- Feeding is a **planned tasking, not a background process**: it is one mission type the strategy controller allocates against that budget alongside defence, offensives, development and patrols, so the swarm can never be simultaneously counted as eating and as fighting. Predation and consumption remain a single tasking rather than two, because the returns on each diminish *within* the turn as the other's pool depletes — the allocator decides the prey/land split internally and the planner only decides how many troops to hand it. A swarm the planner cannot see (a hidden `RegionFaction`) has no budget allocated to it and falls back to feeding at full strength rather than silently starving.
 
 **Genestealer Cult Behavior**
 - The Cult reveals itself (all its hidden `RegionFaction`s across the planet flip public) when the hive fleet is known to be inbound — sowing chaos to cripple the defense, not realizing the swarm will devour it as readily as everything else.

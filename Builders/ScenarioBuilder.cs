@@ -4,6 +4,7 @@ using System.Linq;
 using OnlyWar.Helpers;
 using OnlyWar.Helpers.Extensions;
 using OnlyWar.Helpers.Narrative;
+using OnlyWar.Helpers.Simulation;
 using OnlyWar.Models;
 using OnlyWar.Models.Fleets;
 using OnlyWar.Models.Planets;
@@ -121,11 +122,19 @@ namespace OnlyWar.Builders
         }
 
         // The infiltrated Genestealer Cult throws off concealment and rises in open revolt, calling
-        // the hive fleet down. Mirrors the reveal in TurnController.CheckForPlanetaryRevolt: flip the
-        // cult's PlanetFaction and each of its RegionFactions public. It has been waiting for this
-        // moment, so its cells are already fully mobilized (Organization 100 — the whole cell can
-        // field offensive force immediately). Idempotent if no cult is present
-        // (EnsureGenestealerCult always seeds one first).
+        // the hive fleet down. It has been waiting for this moment, so its cells are already fully
+        // mobilized (Organization 100 — the whole cell can field offensive force immediately).
+        // Idempotent if no cult is present (EnsureGenestealerCult always seeds one first).
+        //
+        // The per-region flip goes through FactionRevealService rather than setting IsPublic by
+        // hand, so the opening reveal is the same transition CheckForPlanetaryRevolt performs.
+        // Setting the flag directly skipped the service's whole reason for existing: a hidden cult's
+        // Garrison is personnel embedded in the nominal PDF, and reveal is supposed to strip them
+        // from that roster. Because a PUBLIC Conversion faction neither converts nor drafts, nothing
+        // downstream ever cleared the seeded garrison either, so every cell carried a vestigial
+        // embedded-PDF count for the rest of the campaign. It also picks up HasEmergenceAdvantage
+        // (the cult's first offensive after rising is planned as an Ambush) and the PlanetFaction
+        // rollup, both of which the hand-rolled flip was silently missing.
         private static void RevealGenestealerCult(Planet promised, GameRulesData data)
         {
             Faction cultFaction = data.SectorFactions.Infiltrator;
@@ -138,7 +147,7 @@ namespace OnlyWar.Builders
             {
                 if (region.RegionFactionMap.TryGetValue(cultFaction.Id, out RegionFaction cultRegionFaction))
                 {
-                    cultRegionFaction.IsPublic = true;
+                    FactionRevealService.Reveal(cultRegionFaction);
                     if (cultRegionFaction.Organization < 100)
                     {
                         cultRegionFaction.Organization = 100;

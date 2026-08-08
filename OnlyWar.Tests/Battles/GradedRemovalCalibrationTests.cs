@@ -14,7 +14,7 @@ using Xunit.Abstractions;
 namespace OnlyWar.Tests.Battles;
 
 /// <summary>
-/// Phase 5b of Design/Active/EngagementScoringOverhaul.md: the lambda sweep and the reference
+/// Phase 5b of Design/Reference/EngagementScoringOverhaul.md: the lambda sweep and the reference
 /// scenario it is calibrated against -- ~30 bolter marines at 200 yards from four melee-only
 /// Tyranids (Hive Tyrant BV 84, Lictor BV 37, two melee Carnifexes BV 30). Stats are taken from
 /// Database/OnlyWar.s3db (species attribute templates, Boltgun, soldier-template battle values);
@@ -26,7 +26,7 @@ namespace OnlyWar.Tests.Battles;
 /// where the two conflict -- see <see cref="GradedRemovalTests"/>.</para>
 ///
 /// <para>PHASE 7. The sweep no longer WRITES a static: lambda is a const in shipping code and the
-/// only way to move it is <c>BattleSquadPlanner.OverrideWoundProgressCreditWeight</c>, an internal
+/// only way to move it is <c>RemovalMath.OverrideWoundProgressCreditWeight</c>, an internal
 /// scope that restores on dispose. This class is that seam's only caller. It still runs in the
 /// shared-state collection, because the override is process-wide for its duration.</para>
 /// </summary>
@@ -63,7 +63,7 @@ public class GradedRemovalCalibrationTests
             "-------+-----------------+----------+---------+--------------");
         foreach (float lambda in SweptLambdas)
         {
-            using (BattleSquadPlanner.OverrideWoundProgressCreditWeight(lambda))
+            using (RemovalMath.OverrideWoundProgressCreditWeight(lambda))
             {
                 ScenarioResult result = RunReferenceScenario();
                 _output.WriteLine(
@@ -74,8 +74,8 @@ public class GradedRemovalCalibrationTests
 
         // PHASE 7. The seam's whole justification is that it cannot leave the engine mis-tuned.
         Assert.Equal(
-            BattleSquadPlanner.WoundProgressCreditWeight,
-            BattleSquadPlanner.EffectiveWoundProgressCreditWeight);
+            RemovalMath.WoundProgressCreditWeight,
+            RemovalMath.EffectiveWoundProgressCreditWeight);
     }
 
     [Fact]
@@ -87,7 +87,7 @@ public class GradedRemovalCalibrationTests
         ScenarioResult result = RunReferenceScenario();
 
         _output.WriteLine(
-            $"lambda {BattleSquadPlanner.WoundProgressCreditWeight}: chosen {result.Chosen}, "
+            $"lambda {RemovalMath.WoundProgressCreditWeight}: chosen {result.Chosen}, "
                 + $"outgoing {result.Outgoing:0.###}, future {result.Future:0.###}, "
                 + $"Hold - Close {result.Margin:0.###}");
         Assert.NotEqual(EngagementOptionKind.CloseToContact, result.Chosen);

@@ -9,12 +9,12 @@ using Xunit;
 namespace OnlyWar.Tests.Battles;
 
 /// <summary>
-/// Phase 5 of Design/Active/EngagementScoringOverhaul.md: the graded damage metric
+/// Phase 5 of Design/Reference/EngagementScoringOverhaul.md: the graded damage metric
 /// <c>removal = BV * [ P(takeout) + lambda * E[woundProgress; no takeout] ]</c>.
 ///
 /// <para>These tests are written against the two component quantities rather than against a
 /// particular lambda, so they hold at every setting of
-/// <see cref="BattleSquadPlanner.WoundProgressCreditWeight"/> -- including the 0 that makes the
+/// <see cref="RemovalMath.WoundProgressCreditWeight"/> -- including the 0 that makes the
 /// whole phase behaviour-neutral. The first of them is the invariant the phase must not trade
 /// away: a squad must not be paid for firing at something it cannot damage.</para>
 /// </summary>
@@ -44,11 +44,11 @@ public class GradedRemovalTests
         float damageCoefficient,
         float effectiveArmor)
     {
-        IReadOnlyList<TakeOutLocationTerm> terms = BattleSquadPlanner.BuildTakeOutLocationTerms(
+        IReadOnlyList<TakeOutLocationTerm> terms = RemovalMath.BuildTakeOutLocationTerms(
             target, effectiveArmor, weaponWoundMultiplier: 1f);
         return (
-            BattleSquadPlanner.EvaluateTakeOutProbability(terms, damageCoefficient),
-            BattleSquadPlanner.EvaluateWoundProgress(terms, damageCoefficient));
+            RemovalMath.EvaluateTakeOutProbability(terms, damageCoefficient),
+            RemovalMath.EvaluateWoundProgress(terms, damageCoefficient));
     }
 
     [Fact]
@@ -68,7 +68,7 @@ public class GradedRemovalTests
         Assert.Equal(0f, progress, 6);
         Assert.Equal(
             0f,
-            BattleSquadPlanner.CalculateRemovalFractionOnHit(
+            RemovalMath.CalculateRemovalFractionOnHit(
                 armoured,
                 damageCoefficient: 1f,
                 effectiveArmor: 500f,
@@ -120,9 +120,9 @@ public class GradedRemovalTests
         Assert.True(setupWounds > 0, "the chosen location must have a reachable cripple threshold");
         location.Wounds = new Wounds(setupWounds, 0);
 
-        float freshRemoval = BattleSquadPlanner.CalculateRemovalFractionOnHit(
+        float freshRemoval = RemovalMath.CalculateRemovalFractionOnHit(
             fresh, damageCoefficient: 2f, effectiveArmor: 0f, weaponWoundMultiplier: 1f);
-        float softenedRemoval = BattleSquadPlanner.CalculateRemovalFractionOnHit(
+        float softenedRemoval = RemovalMath.CalculateRemovalFractionOnHit(
             softened, damageCoefficient: 2f, effectiveArmor: 0f, weaponWoundMultiplier: 1f);
 
         Assert.True(
@@ -138,10 +138,10 @@ public class GradedRemovalTests
         // is bounded by 1 and a single hit can never be credited with removing more than the
         // target is worth. (The conditional expectation the design doc's notation suggests would
         // NOT have this property, which is why the partial expectation is used instead.)
-        Assert.InRange(BattleSquadPlanner.WoundProgressCreditWeight, 0f, 1f);
+        Assert.InRange(RemovalMath.WoundProgressCreditWeight, 0f, 1f);
         BattleSoldier weak = Target("Soft", 30_405, constitution: 1);
 
-        float removal = BattleSquadPlanner.CalculateRemovalFractionOnHit(
+        float removal = RemovalMath.CalculateRemovalFractionOnHit(
             weak, damageCoefficient: 50f, effectiveArmor: 0f, weaponWoundMultiplier: 1f);
 
         Assert.InRange(removal, 0f, 1f);

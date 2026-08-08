@@ -161,6 +161,9 @@ public class BattleReplaySummaryBuilderTests
         Assert.True(entry.MatchesAny(BattleEventCategory.Ranged));
         Assert.False(entry.MatchesAny(BattleEventCategory.Melee));
         Assert.False(entry.MatchesAny(BattleEventCategory.Damaging));
+        // The volley belongs in the target formation's log as well as the shooter's.
+        Assert.Contains(opposingSquad.Id, entry.TargetFormationIds);
+        Assert.True(entry.MatchesFilters(BattleEventCategory.None, true, opposingSquad.Id));
     }
 
     [Fact]
@@ -203,6 +206,51 @@ public class BattleReplaySummaryBuilderTests
         Assert.False(alphaMelee.MatchesFilters(BattleEventCategory.Melee, true, 20));
         Assert.False(alphaMelee.MatchesFilters(BattleEventCategory.Ranged, true, 10));
         Assert.False(alphaMelee.MatchesFilters(BattleEventCategory.Melee, true, null));
+    }
+
+    [Fact]
+    public void EventEntry_SelectedFilterIncludesFireDirectedAtTheFormation()
+    {
+        BattleEventEntry volleyAtBravo = new(
+            1,
+            "01:01",
+            "Attacker",
+            "Alpha",
+            "Volley",
+            "A volley that misses.",
+            BattleEventSeverity.Normal,
+            BattleEventCategory.Ranged,
+            formationId: 10,
+            targetFormationIds: new HashSet<int> { 20 });
+
+        Assert.True(volleyAtBravo.MatchesFilters(BattleEventCategory.None, true, 10));
+        Assert.True(volleyAtBravo.MatchesFilters(BattleEventCategory.None, true, 20));
+        Assert.True(volleyAtBravo.MatchesFilters(BattleEventCategory.Ranged, true, 20));
+        Assert.False(volleyAtBravo.MatchesFilters(BattleEventCategory.None, true, 30));
+    }
+
+    [Fact]
+    public void EventEntry_SelectedAndDamagingFilterNarrowsToDamageDealtOrTaken()
+    {
+        BattleEventEntry volleyWoundingCharlie = new(
+            1,
+            "01:01",
+            "Attacker",
+            "Alpha",
+            "Volley",
+            "A volley that draws blood.",
+            BattleEventSeverity.Warning,
+            BattleEventCategory.Ranged | BattleEventCategory.Damaging,
+            formationId: 10,
+            targetFormationIds: new HashSet<int> { 20, 30 },
+            damagedFormationIds: new HashSet<int> { 30 });
+
+        // Damage dealt by the selected formation, and damage taken by it.
+        Assert.True(volleyWoundingCharlie.MatchesFilters(BattleEventCategory.Damaging, true, 10));
+        Assert.True(volleyWoundingCharlie.MatchesFilters(BattleEventCategory.Damaging, true, 30));
+        // Targeted but unwounded formations drop out once DAMAGING is active.
+        Assert.False(volleyWoundingCharlie.MatchesFilters(BattleEventCategory.Damaging, true, 20));
+        Assert.True(volleyWoundingCharlie.MatchesFilters(BattleEventCategory.None, true, 20));
     }
 
     [Fact]

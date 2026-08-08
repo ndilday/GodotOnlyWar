@@ -42,8 +42,11 @@ namespace OnlyWar.Helpers.Missions
                 or MissionType.DeepStrike => MissionReturnPolicy.Hold,
 
             // Operates from, and remains in, its own region. A diversion demonstrates across a border;
-            // patrol, defence, construction and a show of force are all postures held at home.
+            // patrol, defence, construction, feeding and a show of force are all postures held at
+            // home. (Feed never reaches the mission-step machinery at all - it is squad-less - but it
+            // is classified here so the mapping stays total rather than defaulting to Return.)
             MissionType.Diversion
+                or MissionType.Feed
                 or MissionType.Patrol
                 or MissionType.DefenseInDepth
                 or MissionType.LastStand

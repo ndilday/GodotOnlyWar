@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Linq;
 
 namespace OnlyWar.Models.Battles
 {
@@ -174,6 +175,19 @@ namespace OnlyWar.Models.Battles
         public BattleEventCategory Categories { get; }
         public int? FormationId { get; }
 
+        /// <summary>
+        /// Formations on the receiving end of this event — every formation a shot, cone, blast
+        /// or melee swing was aimed at, whether or not it drew blood.
+        /// </summary>
+        public IReadOnlyCollection<int> TargetFormationIds { get; }
+
+        /// <summary>
+        /// Formations that actually took a wound from this event. A subset of
+        /// <see cref="TargetFormationIds"/> except where a stray or friendly-fire hit lands
+        /// somewhere nobody aimed.
+        /// </summary>
+        public IReadOnlyCollection<int> DamagedFormationIds { get; }
+
         public BattleEventEntry(
             int turnNumber,
             string timestamp,
@@ -183,7 +197,9 @@ namespace OnlyWar.Models.Battles
             string text,
             BattleEventSeverity severity,
             BattleEventCategory categories = BattleEventCategory.None,
-            int? formationId = null)
+            int? formationId = null,
+            IReadOnlyCollection<int> targetFormationIds = null,
+            IReadOnlyCollection<int> damagedFormationIds = null)
         {
             TurnNumber = turnNumber;
             Timestamp = timestamp;
@@ -194,18 +210,35 @@ namespace OnlyWar.Models.Battles
             Severity = severity;
             Categories = categories;
             FormationId = formationId;
+            TargetFormationIds = targetFormationIds ?? System.Array.Empty<int>();
+            DamagedFormationIds = damagedFormationIds ?? System.Array.Empty<int>();
         }
 
         public bool MatchesAny(BattleEventCategory categories) =>
             categories == BattleEventCategory.None || (Categories & categories) != 0;
 
+        /// <summary>
+        /// The SELECTED filter covers both sides of an exchange: what the formation did and what
+        /// was done to it. When DAMAGING is also active the receiving side narrows from "was
+        /// aimed at" to "was actually wounded", so the list reads as damage dealt by or to the
+        /// selected formation.
+        /// </summary>
         public bool MatchesFilters(
             BattleEventCategory categories,
             bool selectedOnly,
-            int? selectedFormationId) =>
-            MatchesAny(categories)
-            && (!selectedOnly
-                || (selectedFormationId.HasValue && FormationId == selectedFormationId));
+            int? selectedFormationId)
+        {
+            if (!MatchesAny(categories)) return false;
+            if (!selectedOnly) return true;
+            if (!selectedFormationId.HasValue) return false;
+
+            int formationId = selectedFormationId.Value;
+            if (FormationId == formationId) return true;
+
+            return (categories & BattleEventCategory.Damaging) != 0
+                ? DamagedFormationIds.Contains(formationId)
+                : TargetFormationIds.Contains(formationId);
+        }
     }
 
     public sealed class BattleTimelineEntry

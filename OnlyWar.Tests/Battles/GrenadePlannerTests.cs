@@ -35,9 +35,9 @@ public class GrenadePlannerTests
 
         planner.PrepareActions(shooters);
 
-        BattleSquadPlanner.TemplateFiringLineEvaluation blastThrow =
+        TemplateFiringLineEvaluation blastThrow =
             planner.SelectBestBlastThrow(shooter);
-        BattleSquadPlanner.RangedTargetEvaluation rifleShot =
+        RangedTargetEvaluation rifleShot =
             planner.SelectBestRangedTarget(shooter, useBulk: false);
         Assert.NotNull(blastThrow);
         Assert.True(rifleShot.Score > blastThrow.Score);
@@ -86,7 +86,7 @@ public class GrenadePlannerTests
         // zero; the expendable one accepts the risk. Distance 2 keeps the thrower
         // well inside the blast circle.
         //
-        // Phase 3 (Design/Active/EngagementScoringOverhaul.md) recalibrated the threshold, not the
+        // Phase 3 (Design/Reference/EngagementScoringOverhaul.md) recalibrated the threshold, not the
         // property. Enemy removal used to be scaled by 1/(1 + turnsUntilTargetReachesUs) while the
         // thrower's own expected loss was never scaled, so the refusal was partly an accounting
         // asymmetry rather than a real danger-close judgement. With both sides of the trade now
@@ -189,7 +189,7 @@ public class GrenadePlannerTests
         BattleSquadPlanner planner = CreatePlanner(
             grid, [], [], [], marines, troopers, enemies);
 
-        BattleSquadPlanner.TemplateFiringLineEvaluation marineThrow =
+        TemplateFiringLineEvaluation marineThrow =
             planner.SelectBestBlastThrow(marines.Soldiers[0]);
         Assert.NotNull(marineThrow);
         Assert.Equal(TestModelFactory.FragGrenadeTemplate.Id, marineThrow.Weapon.Template.Id);
@@ -224,9 +224,9 @@ public class GrenadePlannerTests
         BattleSquadPlanner farPlanner = CreatePlanner(
             farGrid, [], [], [], farShooters, farEnemies);
 
-        BattleSquadPlanner.TemplateFiringLineEvaluation closeThrow =
+        TemplateFiringLineEvaluation closeThrow =
             closePlanner.SelectBestBlastThrow(closeShooters.Soldiers[0]);
-        BattleSquadPlanner.TemplateFiringLineEvaluation farThrow =
+        TemplateFiringLineEvaluation farThrow =
             farPlanner.SelectBestBlastThrow(farShooters.Soldiers[0]);
 
         Assert.NotNull(closeThrow);
@@ -260,9 +260,9 @@ public class GrenadePlannerTests
         BattleSquadPlanner secondPlanner = CreatePlanner(
             secondGrid, [], [], [], clumsyShooters, secondEnemies);
 
-        BattleSquadPlanner.TemplateFiringLineEvaluation skilledThrow =
+        TemplateFiringLineEvaluation skilledThrow =
             firstPlanner.SelectBestBlastThrow(cleverShooters.Soldiers[0]);
-        BattleSquadPlanner.TemplateFiringLineEvaluation unskilledThrow =
+        TemplateFiringLineEvaluation unskilledThrow =
             secondPlanner.SelectBestBlastThrow(clumsyShooters.Soldiers[0]);
 
         Assert.NotNull(skilledThrow);

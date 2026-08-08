@@ -3,6 +3,7 @@ using OnlyWar.Helpers;
 using OnlyWar.Helpers.Extensions;
 using OnlyWar.Helpers.Fortifications;
 using OnlyWar.Helpers.StrategicCombat;
+using OnlyWar.Helpers.Turns;
 using OnlyWar.Models;
 using OnlyWar.Models.Missions;
 using OnlyWar.Models.Orders;
@@ -139,9 +140,10 @@ public class FactionStrategyController
     {
         var allNewOrders = new List<Order>();
 
-        // Discard last turn's transient patrol screens before planning this turn's (they are not
-        // persisted roster squads, so they would otherwise pile up in the regions' LandedSquads).
-        ClearStalePatrolSquads(faction, sector);
+        // Discard last turn's transient screens and recon parties before planning this turn's (they
+        // are not persisted roster squads, so they would otherwise pile up in the regions'
+        // LandedSquads).
+        ClearStaleTransientSquads(faction, sector);
 
         if (onlyPlanet != null)
         {
@@ -254,6 +256,85 @@ public class FactionStrategyController
         // PRIORITY 4: PLAN RECON MISSIONS
         PlanPatrolMissionsOnPlanet(faction, planet, regionalForceStates, allNewOrders);
         GameLog.Trace(() => $"    plan {faction.Name}/{planet.Name}: patrols done ({allNewOrders.Count} orders)");
+
+        // PRIORITY 5/6: PLAN SWARM OPERATIONS
+        // A Consumption faction spends what is left on spreading and then feeding. They come last so
+        // both receive the true residual - what survives the defensive reserve, offensives,
+        // development and the patrol screen - and spreading precedes feeding because a swarm on the
+        // move is not grazing.
+        if (faction.GrowthType == GrowthType.Consumption)
+        {
+            PlanSwarmExpansionOnPlanet(faction, planet, regionalForceStates);
+            PlanFeedMissionsOnPlanet(faction, planet, regionalForceStates, allNewOrders);
+            GameLog.Trace(() => $"    plan {faction.Name}/{planet.Name}: swarm operations done ({allNewOrders.Count} orders)");
+        }
+    }
+
+    /// <summary>
+    /// Pushes a share of each region's spare troops onto richer adjacent ground.
+    /// </summary>
+    /// <remarks>
+    /// Expansion used to be a planet-update side effect that helped itself to the swarm's whole
+    /// deployed strength, blind to everything the planner had already committed that force to - the
+    /// same double-count feeding had, one function along. Applied directly here rather than issued as
+    /// an order for the same reason garrison and front reinforcement are: it relocates strength
+    /// between regions, and there is no tactical mission to run.
+    ///
+    /// It is deliberately NOT folded into the ordinary offensive path. Expansion's target is chosen
+    /// by biomass, and the richest neighbour is frequently empty ground with a high carrying capacity
+    /// and no enemy region-faction in it at all - nothing the offensive machinery could take as a
+    /// target. Sharing the budget is what the double-count needed; sharing the code path would have
+    /// cost the swarm the moves that matter most.
+    /// </remarks>
+    private void PlanSwarmExpansionOnPlanet(Faction faction, Planet planet, List<RegionForceState> states)
+    {
+        foreach (RegionForceState state in states)
+        {
+            if (state.SpareTroops <= 0) continue;
+
+            (Region destination, long movers) =
+                PlanetTurnProcessor.PlanSwarmExpansion(state.RegionFaction, state.SpareTroops);
+            if (destination == null || movers <= 0) continue;
+
+            PlanetTurnProcessor.ApplySwarmExpansion(state.RegionFaction, destination, movers);
+            state.SpareTroops = Math.Max(0, state.SpareTroops - movers);
+
+            GameLog.Debug(() =>
+                $"AI swarm spread {faction.Name}/{planet.Name}: "
+                + $"{state.RegionFaction.Region.Name}->{destination.Name}, "
+                + $"movers={movers}, sourceSpare={state.SpareTroops}");
+        }
+    }
+
+    /// <summary>
+    /// Commits whatever spare troops a swarm has left to feeding.
+    /// </summary>
+    /// <remarks>
+    /// No <see cref="ForceGenerator"/> call: feeding is squad-less. Materializing squads for a
+    /// million-strong swarm would be absurd, and unlike a patrol screen there is nothing for them to
+    /// do tactically. The order carries the committed battle value and resolves instantly in the
+    /// mission phase.
+    /// </remarks>
+    private void PlanFeedMissionsOnPlanet(
+        Faction faction,
+        Planet planet,
+        List<RegionForceState> states,
+        List<Order> allOrders)
+    {
+        foreach (RegionForceState state in states)
+        {
+            if (state.SpareTroops <= 0) continue;
+
+            long committed = state.SpareTroops;
+            FeedMission mission = new FeedMission(committed, state.RegionFaction);
+            allOrders.Add(new Order(new List<Squad>(), true, false, Aggression.Cautious, mission));
+            state.SpareTroops = 0;
+
+            GameLog.Debug(() =>
+                $"AI feed {faction.Name}/{planet.Name}/{state.RegionFaction.Region.Name}: "
+                + $"committedBV={committed}, deployed={state.RegionFaction.GetDeployedStrength()}, "
+                + $"defensiveReserve={state.AssignedDefensiveBattleValue}");
+        }
     }
 
     // Defensive reconnaissance: a purely-defensive faction (the PDF under assault) never assaults,
@@ -1252,7 +1333,29 @@ public class FactionStrategyController
     // Removes the transient patrol squads this faction landed on a previous turn before it plans
     // afresh. Patrol forces are AI-generated screens (not persisted roster squads), so they must be
     // cleared each turn rather than accumulating in the region's LandedSquads.
-    private void ClearStalePatrolSquads(Faction faction, Sector sector)
+    /// <summary>
+    /// Whether a landed squad is a transient force this controller conjured for one turn's tasking.
+    /// </summary>
+    /// <remarks>
+    /// An NPC faction has no roster: its strength is a battle-value pool on the RegionFaction, and
+    /// the squads it fields are generated from nothing each planning pass and thrown away at the
+    /// start of the next one. Patrol screens were always cleared this way. Recon parties were not,
+    /// and they land: the force is created with only a CurrentRegion, but a party that survives its
+    /// week is put into its home RegionFaction.LandedSquads by ExfiltrateMissionStep, where nothing
+    /// removed it - so every NPC recon that came home left a permanent ghost squad standing in the
+    /// region, inflating its search difficulty (MissionStealthDifficulty counts Patrol and Recon
+    /// squads as coverage) for the rest of the campaign.
+    ///
+    /// Only ever applied to a non-player faction's own RegionFaction, so a player squad on recon -
+    /// which IS a roster squad and belongs where it landed - is never touched.
+    /// </remarks>
+    internal static bool IsTransientAiSquad(Squad squad)
+    {
+        MissionType? missionType = squad?.CurrentOrders?.Mission?.MissionType;
+        return missionType is MissionType.Patrol or MissionType.Recon;
+    }
+
+    private void ClearStaleTransientSquads(Faction faction, Sector sector)
     {
         foreach (var planet in sector.Planets.Values)
         {
@@ -1260,8 +1363,7 @@ public class FactionStrategyController
             {
                 if (region.RegionFactionMap.TryGetValue(faction.Id, out RegionFaction regionFaction))
                 {
-                    regionFaction.LandedSquads.RemoveAll(
-                        s => s.CurrentOrders?.Mission.MissionType == MissionType.Patrol);
+                    regionFaction.LandedSquads.RemoveAll(IsTransientAiSquad);
                 }
             }
         }

@@ -380,7 +380,7 @@ public class BattleSquadPlannerTests
         BattleSoldier target = targets.Soldiers[0];
         HitLocation location = target.Soldier.Body.HitLocations
             .First(candidate => candidate.Template.IsMotive || candidate.Template.IsVital);
-        float fresh = BattleSquadPlanner.CalculateTakeOutProbabilityOnHit(
+        float fresh = RemovalMath.CalculateTakeOutProbabilityOnHit(
             target, damageCoefficient: 2f, effectiveArmor: 0f, weaponWoundMultiplier: 1f);
 
         uint setupWounds = location.Template.CrippleWound switch
@@ -394,7 +394,7 @@ public class BattleSquadPlannerTests
         Assert.True(setupWounds > 0);
         location.Wounds = new Wounds(setupWounds, 0);
 
-        float wounded = BattleSquadPlanner.CalculateTakeOutProbabilityOnHit(
+        float wounded = RemovalMath.CalculateTakeOutProbabilityOnHit(
             target, damageCoefficient: 2f, effectiveArmor: 0f, weaponWoundMultiplier: 1f);
 
         Assert.True(
@@ -696,7 +696,7 @@ public class BattleSquadPlannerTests
     [Fact]
     public void ChooseEngagementOption_WithdrawingMeleeOpponentProjectsOpeningNotCharging()
     {
-        // Phase 1 (Design/Active/EngagementScoringOverhaul.md): BaselineRangeDelta previously
+        // Phase 1 (Design/Reference/EngagementScoringOverhaul.md): BaselineRangeDelta previously
         // projected any contact-seeking (melee-only) opponent as charging unconditionally. A Bound
         // squad has been ordered to run away (see BattleEngagementFrameBuilder.BuildSide's
         // quarryRunSpeed switch), so the lookahead must stop projecting it as closing to melee range.
@@ -790,7 +790,7 @@ public class BattleSquadPlannerTests
     [Fact]
     public void ChooseEngagementOption_LookaheadSeesOwnMovementInsideWeaponReach()
     {
-        // Phase 2 (Design/Active/EngagementScoringOverhaul.md). Reference scenario: a squad with a
+        // Phase 2 (Design/Reference/EngagementScoringOverhaul.md). Reference scenario: a squad with a
         // non-degrading 1000-range rifle standing 200 yards from a melee-only enemy.
         //
         // Before: PolicyRangeDelta and the depth-0 terminal both used `desired =
@@ -916,7 +916,7 @@ public class BattleSquadPlannerTests
         // MaximumRange for a non-degrading weapon, so against a large, unarmored, non-evasive
         // target accuracy was never the binding constraint and the "effective" range degenerated
         // back to reach -- the Xibarrus Zeta bolter-vs-Carnifex case in
-        // Design/Active/EngagementScoringOverhaul.md. The same scenario now derives the band from
+        // Design/Reference/EngagementScoringOverhaul.md. The same scenario now derives the band from
         // removal(r) - incoming(r), and it lands strictly inside reach: closing improves the hit
         // chance, but it also brings a melee-only enemy in sooner, and the derived standoff is
         // where those two stop trading evenly.
@@ -1045,7 +1045,7 @@ public class BattleSquadPlannerTests
         Place(grid, enemies.Soldiers[0], false, targetX, targetY);
         BattleSquadPlanner planner = CreatePlanner(grid, shooters, enemies);
 
-        BattleSquadPlanner.RangedTargetEvaluation target = planner.SelectBestRangedTarget(
+        RangedTargetEvaluation target = planner.SelectBestRangedTarget(
             shooter,
             useBulk: true,
             movementDirection: new ValueTuple<int, int>(0, 1));
@@ -1258,19 +1258,19 @@ public class BattleSquadPlannerTests
             cleanEnemy);
 
         shooter.TargetId = entangled.Soldier.Id;
-        BattleSquadPlanner.RangedTargetEvaluation entangledScore = planner.EvaluateRangedTarget(
+        RangedTargetEvaluation entangledScore = planner.EvaluateRangedTarget(
             shooter,
             entangled,
             shooter.EquippedRangedWeapons[0],
             4,
             0);
-        BattleSquadPlanner.RangedTargetEvaluation cleanScore = planner.EvaluateRangedTarget(
+        RangedTargetEvaluation cleanScore = planner.EvaluateRangedTarget(
             shooter,
             clean,
             shooter.EquippedRangedWeapons[0],
             8,
             0);
-        BattleSquadPlanner.RangedTargetEvaluation selected = planner.SelectBestRangedTarget(
+        RangedTargetEvaluation selected = planner.SelectBestRangedTarget(
             shooter,
             useBulk: false);
 
@@ -1304,13 +1304,13 @@ public class BattleSquadPlannerTests
             monsterSquad,
             cleanEnemy);
 
-        BattleSquadPlanner.RangedTargetEvaluation monsterScore = planner.EvaluateRangedTarget(
+        RangedTargetEvaluation monsterScore = planner.EvaluateRangedTarget(
             shooter,
             monster,
             shooter.EquippedRangedWeapons[0],
             4,
             0);
-        BattleSquadPlanner.RangedTargetEvaluation selected = planner.SelectBestRangedTarget(
+        RangedTargetEvaluation selected = planner.SelectBestRangedTarget(
             shooter,
             useBulk: false);
 
@@ -1336,7 +1336,7 @@ public class BattleSquadPlannerTests
         Place(grid, fourth.Soldiers[0], false, 5, 0);
         BattleSquadPlanner planner = CreatePlanner(grid, shooters, first, second, third, fourth);
 
-        BattleSquadPlanner.RangedTargetEvaluation selected = planner.SelectBestRangedTarget(
+        RangedTargetEvaluation selected = planner.SelectBestRangedTarget(
             shooter,
             useBulk: false);
 
@@ -1356,7 +1356,7 @@ public class BattleSquadPlannerTests
     [InlineData(WithdrawalRole.Routing)]
     public void RangedRemoval_AgainstWithdrawingTargetIsNotZeroed(WithdrawalRole withdrawalRole)
     {
-        // Phase 3 (Design/Active/EngagementScoringOverhaul.md) replaces the Phase 1 test
+        // Phase 3 (Design/Reference/EngagementScoringOverhaul.md) replaces the Phase 1 test
         // TargetArrivalDiscount_WithdrawingTargetNeverArrives. That test asserted the arrival
         // discount collapsed to 0 for a retreating target -- correct for the quantity it measured,
         // but the quantity itself multiplied RANGED removal, so it made a retreating enemy worth
@@ -1417,7 +1417,7 @@ public class BattleSquadPlannerTests
         Place(grid, enemy.Soldiers[0], false, 4, 0);
         BattleSquadPlanner planner = CreatePlanner(grid, shooters, enemy);
 
-        BattleSquadPlanner.RangedTargetEvaluation evaluation = planner.EvaluateRangedTarget(
+        RangedTargetEvaluation evaluation = planner.EvaluateRangedTarget(
             shooter,
             enemy.Soldiers[0],
             burstWeapon,
@@ -1447,20 +1447,20 @@ public class BattleSquadPlannerTests
         Place(grid, target, false, 4, 0);
         BattleSquadPlanner planner = CreatePlanner(grid, shooters, enemy);
 
-        BattleSquadPlanner.RangedTargetEvaluation first = planner.EvaluateRangedTarget(
+        RangedTargetEvaluation first = planner.EvaluateRangedTarget(
             shooter,
             target,
             weapon,
             4,
             0);
-        BattleSquadPlanner.RangedTargetEvaluation repeated = planner.EvaluateRangedTarget(
+        RangedTargetEvaluation repeated = planner.EvaluateRangedTarget(
             shooter,
             target,
             weapon,
             4,
             0);
         target.CurrentSpeed = 3;
-        BattleSquadPlanner.RangedTargetEvaluation movingTarget = planner.EvaluateRangedTarget(
+        RangedTargetEvaluation movingTarget = planner.EvaluateRangedTarget(
             shooter,
             target,
             weapon,
@@ -1688,7 +1688,7 @@ public class BattleSquadPlannerTests
 
         AreaAttackAction action = Assert.IsType<AreaAttackAction>(Assert.Single(shootActions));
         Assert.Equal(640, action.TargetId);
-        BattleSquadPlanner.TemplateFiringLineEvaluation evaluation =
+        TemplateFiringLineEvaluation evaluation =
             planner.SelectBestTemplateFiringLine(shooter);
         Assert.Equal(3, evaluation.VictimIds.Count);
         Assert.All(evaluation.VictimIds, victimId =>
@@ -1772,34 +1772,41 @@ public class BattleSquadPlannerTests
         Assert.Equal(singleRisk * 3, tripleRisk, precision: 4);
     }
 
+    // NOTE (2026-08-07): these two were named ...ParallelPlanningMatchesSerialPlanning and took a
+    // maxDegreeOfParallelism argument, but BattleSquadPlanner never read that argument -- the
+    // Parallel.For over squad decisions lives in BattleTurnResolver, and this fixture plans ONE
+    // squad through a directly-constructed planner. Both halves of the comparison were therefore
+    // the same serial path, and the tests could not fail for the reason their names claimed.
+    // Renamed to the property they do genuinely cover: planning is deterministic, so a fixed seed
+    // and fixed inputs produce byte-identical actions and soldier state on every run. Real
+    // parallel-vs-serial equivalence needs a resolver-level fixture; it is not covered here.
     [Fact]
-    public void CoverRoleHoldPlan_ParallelPlanningMatchesSerialPlanning()
+    public void CoverRoleHoldPlan_RepeatedPlanningIsDeterministic()
     {
-        var serial = RunParallelPlanningScenario(1);
+        var first = RunPlanningScenario();
 
         for (int repetition = 0; repetition < 20; repetition++)
         {
-            var parallel = RunParallelPlanningScenario(8);
-            Assert.Equal(serial.Actions, parallel.Actions);
-            Assert.Equal(serial.SoldierState, parallel.SoldierState);
+            var repeated = RunPlanningScenario();
+            Assert.Equal(first.Actions, repeated.Actions);
+            Assert.Equal(first.SoldierState, repeated.SoldierState);
         }
     }
 
     [Fact]
-    public void PursuitJogPlan_ParallelMovingFireMatchesSerialPlanning()
+    public void PursuitJogPlan_RepeatedMovingFirePlanningIsDeterministic()
     {
-        var serial = RunParallelPlanningScenario(1, pursuit: true);
+        var first = RunPlanningScenario(pursuit: true);
 
         for (int repetition = 0; repetition < 20; repetition++)
         {
-            var parallel = RunParallelPlanningScenario(8, pursuit: true);
-            Assert.Equal(serial.Actions, parallel.Actions);
-            Assert.Equal(serial.SoldierState, parallel.SoldierState);
+            var repeated = RunPlanningScenario(pursuit: true);
+            Assert.Equal(first.Actions, repeated.Actions);
+            Assert.Equal(first.SoldierState, repeated.SoldierState);
         }
     }
 
-    private static (string[] Actions, string[] SoldierState) RunParallelPlanningScenario(
-        int maxDegreeOfParallelism,
+    private static (string[] Actions, string[] SoldierState) RunPlanningScenario(
         bool pursuit = false)
     {
         BattleSquad shooters = CreateSquad(
@@ -1839,8 +1846,7 @@ public class BattleSquadPlannerTests
             [],
             null,
             CreateMeleeTemplateMap(soldierMap.Values),
-            new SeededRNG(12_345),
-            maxDegreeOfParallelism);
+            new SeededRNG(12_345));
 
         EngagementRoleConstraint constraint = pursuit
             ? new EngagementRoleConstraint(

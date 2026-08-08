@@ -36,7 +36,7 @@ namespace OnlyWar.Helpers.Battles
     }
 
     /// <summary>
-    /// PHASE 6 (Design/Active/EngagementScoringOverhaul.md). THE engagement-range model.
+    /// PHASE 6 (Design/Reference/EngagementScoringOverhaul.md). THE engagement-range model.
     ///
     /// <para>Expected battle value removed per turn, as a smooth function of range, by a set of
     /// shooters firing at a representative target. It replaces four parallel approximations of the
@@ -60,7 +60,7 @@ namespace OnlyWar.Helpers.Battles
     /// gated to 0 beyond that shooter's reach. This is the SAME
     /// <c>hit * (takeOut + lambda * woundProgress) * BV</c> currency Phase 4/5 put `outgoing`,
     /// `future` and <see cref="SquadPairRemovalRate.RateAtRange"/> in; the removal fraction is
-    /// evaluated by <see cref="BattleSquadPlanner.EvaluateRemovalFraction"/> itself, over a single
+    /// evaluated by <see cref="RemovalMath.EvaluateRemovalFraction"/> itself, over a single
     /// synthetic <see cref="TakeOutLocationTerm"/> built from the representative target's scalar
     /// armor and constitution. Sharing that evaluator is what keeps the standing invariant --
     /// squads must not stand off to plink at a target they cannot damage -- true here by
@@ -155,7 +155,7 @@ namespace OnlyWar.Helpers.Battles
                     return 0f;
                 }
                 float fraction = Degrades
-                    ? BattleSquadPlanner.EvaluateRemovalFraction(
+                    ? RemovalMath.EvaluateRemovalFraction(
                         Locations,
                         BattleModifiersUtil.CalculateDamageAtRange(Template, range))
                     : FlatRemovalFraction;
@@ -169,7 +169,7 @@ namespace OnlyWar.Helpers.Battles
                 // this curve is only useful because it is in the same currency as those two.
                 // BaseHitTotal already carries the rate-of-fire modifier for the full RateOfFire,
                 // so that is the shot count the recoil loop is integrated over here.
-                return BattleSquadPlanner.ExpectedBurstRemovalFraction(
+                return RemovalMath.ExpectedBurstRemovalFraction(
                         total,
                         Template.RateOfFire,
                         Template.Recoil,
@@ -307,7 +307,7 @@ namespace OnlyWar.Helpers.Battles
                 Locations = locations,
                 FlatRemovalFraction = degrades
                     ? 0f
-                    : BattleSquadPlanner.EvaluateRemovalFraction(
+                    : RemovalMath.EvaluateRemovalFraction(
                         locations,
                         BattleModifiersUtil.CalculateDamageAtRange(template, 0f))
             };

@@ -9,7 +9,7 @@ namespace OnlyWar.Helpers.Battles
     ///
     /// <para><c>Weight</c> is <c>w_loc</c>, the location's share of the stance's hit lottery.
     /// <c>PenetrationThreshold</c> is <c>K_loc = effectiveArmor + requiredPenetratingDamage</c>;
-    /// <see cref="BattleSquadPlanner.CalculateTakeOutProbabilityOnHit"/> forms
+    /// <see cref="RemovalMath.CalculateTakeOutProbabilityOnHit"/> forms
     /// <c>requiredRoll = K_loc / damageCoefficient</c>, and since the numerator carries no range
     /// term the whole range dependence of take-out lives in <c>damageCoefficient(r)</c>. That is
     /// what makes <see cref="PairRemovalTerm.TakeOutProbabilityAt"/> a fixed-size sum of normal
@@ -24,10 +24,10 @@ namespace OnlyWar.Helpers.Battles
     /// (<c>ratio = (d * weaponWoundMultiplier - naturalArmor) * woundMultiplier / constitution</c>),
     /// the fraction of the remaining gap to the disable threshold closed by a hit is linear in the
     /// damage roll between <c>K_zero</c> and <c>PenetrationThreshold</c>. Those two numbers are
-    /// therefore all <see cref="BattleSquadPlanner.EvaluateWoundProgress"/> needs to price the
+    /// therefore all <see cref="RemovalMath.EvaluateWoundProgress"/> needs to price the
     /// twenty hits that soften a target before the twenty-first takes it out -- no wound-state
     /// traversal, and no separate accumulator, because
-    /// <see cref="BattleSquadPlanner.CalculateTakeOutProbabilityOnHit"/> is already wound-state
+    /// <see cref="RemovalMath.CalculateTakeOutProbabilityOnHit"/> is already wound-state
     /// aware through <c>RequiredRatio</c>.</para>
     /// </summary>
     internal readonly struct TakeOutLocationTerm
@@ -141,7 +141,7 @@ namespace OnlyWar.Helpers.Battles
 
         /// <summary>
         /// Stands in for an unbounded to-hit total where the range term is +infinity. Far enough
-        /// above <see cref="BattleSquadPlanner.HitRollMean"/> that every shot in any burst lands,
+        /// above <see cref="RemovalMath.HitRollMean"/> that every shot in any burst lands,
         /// but finite, so it can be fed to the same arithmetic every other range uses.
         /// </summary>
         private const float CertainHitTotal = 1_000f;
@@ -173,8 +173,8 @@ namespace OnlyWar.Helpers.Battles
         internal float HitProbabilityAt(float range, float targetSpeed)
         {
             return GaussianCalculator.ApproximateNormalCDF(
-                (HitTotalAt(range, targetSpeed) - BattleSquadPlanner.HitRollMean)
-                    / BattleSquadPlanner.HitRollStdDev);
+                (HitTotalAt(range, targetSpeed) - RemovalMath.HitRollMean)
+                    / RemovalMath.HitRollStdDev);
         }
 
         internal float TakeOutProbabilityAt(float range)
@@ -183,7 +183,7 @@ namespace OnlyWar.Helpers.Battles
             {
                 return ReferenceTakeOut;
             }
-            return BattleSquadPlanner.EvaluateTakeOutProbability(
+            return RemovalMath.EvaluateTakeOutProbability(
                 TakeOutTerms,
                 BattleModifiersUtil.CalculateDamageAtRange(WeaponTemplate, range));
         }
@@ -194,7 +194,7 @@ namespace OnlyWar.Helpers.Battles
             {
                 return ReferenceWoundProgress;
             }
-            return BattleSquadPlanner.EvaluateWoundProgress(
+            return RemovalMath.EvaluateWoundProgress(
                 TakeOutTerms,
                 BattleModifiersUtil.CalculateDamageAtRange(WeaponTemplate, range));
         }
@@ -216,14 +216,14 @@ namespace OnlyWar.Helpers.Battles
             // One pass over the location vector for a degrading weapon; a pair of field reads for
             // a non-degrading one, where both halves are range-independent and already captured.
             float removalFraction = TakeOutTerms == null
-                ? BattleSquadPlanner.CombineRemovalFraction(
+                ? RemovalMath.CombineRemovalFraction(
                     ReferenceTakeOut, ReferenceWoundProgress)
-                : BattleSquadPlanner.EvaluateRemovalFraction(
+                : RemovalMath.EvaluateRemovalFraction(
                     TakeOutTerms,
                     BattleModifiersUtil.CalculateDamageAtRange(WeaponTemplate, range));
             // Same burst model as EvaluateRangedTarget -- the doc comment above promises this is
             // the identical currency, so the two must integrate the recoil loop the same way.
-            return BattleSquadPlanner.ExpectedBurstRemovalFraction(
+            return RemovalMath.ExpectedBurstRemovalFraction(
                 HitTotalAt(range, targetSpeed)
                     - (WeaponTemplate.Bulk * Math.Max(0f, shooterBulkMultiplier)),
                 ReferenceShotsToFire,
@@ -240,7 +240,7 @@ namespace OnlyWar.Helpers.Battles
 
     /// <summary>
     /// One (shooter squad, target squad) cell of the Phase 4 removal-rate table
-    /// (Design/Active/EngagementScoringOverhaul.md).
+    /// (Design/Reference/EngagementScoringOverhaul.md).
     ///
     /// <para>SEMANTICS. The rate is the SUM over the shooter squad's able, placed, ranged-armed
     /// soldiers of each soldier's single best target's expected removal -- the same

@@ -14,7 +14,7 @@ using Xunit.Abstractions;
 namespace OnlyWar.Tests.Battles;
 
 /// <summary>
-/// Phase 4 of Design/Active/EngagementScoringOverhaul.md: the per-(shooter squad, target squad)
+/// Phase 4 of Design/Reference/EngagementScoringOverhaul.md: the per-(shooter squad, target squad)
 /// removal-rate table and its closed-form range rescaling. Nothing consumes the table yet, so
 /// these tests are the whole of its coverage.
 /// </summary>
@@ -144,7 +144,7 @@ public class RemovalRateTableTests
 
         foreach (float range in new[] { 3f, 10f, 20f, 75f, 250f, 900f })
         {
-            BattleSquadPlanner.RangedTargetEvaluation direct = planner.EvaluateRangedTarget(
+            RangedTargetEvaluation direct = planner.EvaluateRangedTarget(
                 shooter, target, rifle, range, 0f, referenceSpeed);
 
             Assert.Equal(direct.HitProbability, term.HitProbabilityAt(range, referenceSpeed), 5);
@@ -172,7 +172,7 @@ public class RemovalRateTableTests
 
         SquadPairRemovalRate rate = planner.GetPairRemovalRates(shooters)[enemies.Id];
         PairRemovalTerm term = Assert.Single(rate.Terms);
-        BattleSquadPlanner.RangedTargetEvaluation direct = planner.EvaluateRangedTarget(
+        RangedTargetEvaluation direct = planner.EvaluateRangedTarget(
             shooter, target, rifle, term.ReferenceRange, 0f, term.ReferenceTargetSpeed);
 
         // ln(1) is exactly 0, so the rescaling adds nothing at r0 and the two paths coincide bitwise.
@@ -195,7 +195,7 @@ public class RemovalRateTableTests
         float effectiveArmor = target.Armor.Template.ArmorProvided
             * rifle.Template.ArmorMultiplier;
         IReadOnlyList<TakeOutLocationTerm> terms =
-            BattleSquadPlanner.BuildTakeOutLocationTerms(
+            RemovalMath.BuildTakeOutLocationTerms(
                 target, effectiveArmor, rifle.Template.WoundMultiplier);
         Assert.NotEmpty(terms);
 
@@ -204,9 +204,9 @@ public class RemovalRateTableTests
         {
             float damageCoefficient = BattleModifiersUtil.CalculateDamageAtRange(
                 rifle.Template, range);
-            float direct = BattleSquadPlanner.CalculateTakeOutProbabilityOnHit(
+            float direct = RemovalMath.CalculateTakeOutProbabilityOnHit(
                 target, damageCoefficient, effectiveArmor, rifle.Template.WoundMultiplier);
-            float viaVector = BattleSquadPlanner.EvaluateTakeOutProbability(
+            float viaVector = RemovalMath.EvaluateTakeOutProbability(
                 terms, damageCoefficient);
 
             // Same loop, same accumulation order: this is bitwise identity, not a tolerance.
@@ -217,7 +217,7 @@ public class RemovalRateTableTests
             previous = viaVector;
         }
         Assert.True(
-            BattleSquadPlanner.EvaluateTakeOutProbability(
+            RemovalMath.EvaluateTakeOutProbability(
                 terms,
                 BattleModifiersUtil.CalculateDamageAtRange(rifle.Template, 0f)) > 0,
             "the degrading weapon should be able to take this target out at point blank");
@@ -243,7 +243,7 @@ public class RemovalRateTableTests
 
         foreach (float range in new[] { 5f, 30f, 80f, 150f })
         {
-            BattleSquadPlanner.RangedTargetEvaluation direct = planner.EvaluateRangedTarget(
+            RangedTargetEvaluation direct = planner.EvaluateRangedTarget(
                 shooter, target, rifle, range, 0f, term.ReferenceTargetSpeed);
             Assert.Equal(
                 direct.TakeOutProbabilityOnHit, term.TakeOutProbabilityAt(range), 6);

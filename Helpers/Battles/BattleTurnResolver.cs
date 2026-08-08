@@ -203,8 +203,7 @@ namespace OnlyWar.Helpers.Battles
                 new List<IAction>(),
                 null,
                 _execution.Rules.MeleeWeaponTemplates,
-                _execution.Random,
-                _execution.MaxPlanningDegreeOfParallelism);
+                _execution.Random);
             foreach (BattleSquad squad in GetActiveSquads(ambushSide.Value))
             {
                 planner.SeedAmbushAim(squad);
@@ -586,7 +585,6 @@ namespace OnlyWar.Helpers.Battles
                 log,
                 _execution.Rules.MeleeWeaponTemplates,
                 _execution.Random,
-                _execution.MaxPlanningDegreeOfParallelism,
                 planningContext)
             {
                 TraceTurnNumber = _currentState.TurnNumber,
@@ -1880,7 +1878,7 @@ namespace OnlyWar.Helpers.Battles
         /// away, or null when following will never produce one.
         ///
         /// <para>The quarry's own speed is netted out, exactly as <c>pressTurns</c> nets it out of
-        /// the intercept projection. Following jogs at <see cref="BattleSquadPlanner.JogSpeedMultiplier"/>
+        /// the intercept projection. Following jogs at <see cref="SoldierMovementPlanner.JogSpeedMultiplier"/>
         /// of a run so the guns stay usable, so a quarry running flat out opens the range at half a
         /// run against a follower and no number of turns closes it. Dividing by the raw jog speed
         /// instead reported a finite arrival for a chase that never arrives, and
@@ -1901,7 +1899,7 @@ namespace OnlyWar.Helpers.Battles
             if (reach <= 0) return null;
             if (separation <= reach) return 0;
             float jogSpeed = BuildMetrics(side).FastestPursuitSquadSpeed
-                * BattleSquadPlanner.JogSpeedMultiplier;
+                * SoldierMovementPlanner.JogSpeedMultiplier;
             float closingRate = jogSpeed - Math.Max(0, quarrySpeed);
             // A follower that cannot out-pace the withdrawal has no shot to wait for either: the
             // range is opening, not closing. Null rather than infinity, which is the same answer

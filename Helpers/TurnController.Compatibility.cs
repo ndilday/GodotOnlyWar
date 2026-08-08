@@ -75,6 +75,26 @@ namespace OnlyWar.Helpers
             PlanetTurnProcessor.ResolveBiomassConsumption(region);
         }
 
+        internal static void ResolveBiomassConsumption(RegionFaction consumer, double troops)
+        {
+            PlanetTurnProcessor.ResolveBiomassConsumption(consumer, troops);
+        }
+
+        internal static void ResolveHiddenSwarmConsumption(Region region)
+        {
+            PlanetTurnProcessor.ResolveHiddenSwarmConsumption(region);
+        }
+
+        internal static void ResolveHiddenSwarmExpansion(Planet planet)
+        {
+            PlanetTurnProcessor.ResolveHiddenSwarmExpansion(planet);
+        }
+
+        internal static void ProcessFeedOrders(IEnumerable<Order> feedOrders)
+        {
+            MissionTurnProcessor.ProcessFeedOrders(feedOrders);
+        }
+
         internal static void RecoverCarryingCapacity(Region region)
         {
             PlanetTurnProcessor.RecoverCarryingCapacity(region);

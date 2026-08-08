@@ -117,6 +117,12 @@ namespace OnlyWar.Helpers
 
             var constructionOrders = allOrdersThisTurn.Where(o => !o.AssignedSquads.Any() && o.Mission is ConstructionMission);
             MissionTurnProcessor.ProcessConstructionOrders(constructionOrders);
+
+            // Feeding rides alongside construction: squad-less, resolved instantly, no mission
+            // context. It runs after combat so a swarm that lost ground this week eats on what it
+            // still holds (Design/Reference/TyranidFeedingAsMission.md).
+            var feedOrders = allOrdersThisTurn.Where(o => !o.AssignedSquads.Any() && o.Mission is FeedMission);
+            MissionTurnProcessor.ProcessFeedOrders(feedOrders);
             MissionAftermathProcessor.RemoveConsumedSpecialMissions(playerOrdersThisTurn);
 
             // --- 3. Planetary Simulation & Resolution Phase ---

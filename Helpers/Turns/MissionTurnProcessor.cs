@@ -376,6 +376,36 @@ namespace OnlyWar.Helpers.Turns
             }
         }
 
+        /// <summary>
+        /// Resolves squad-less feed orders: a swarm eats with the force its controller could spare.
+        /// </summary>
+        /// <remarks>
+        /// Dispatched alongside squad-less construction and for the same reason - the order resolves
+        /// instantly and creates no MissionContext. What makes it a mission rather than the planet
+        /// update's old side effect is the budget: the troops here are the residual left after
+        /// defence, offensives, development, patrols and spreading, not the whole swarm re-derived
+        /// from scratch (Design/Reference/TyranidFeedingAsMission.md).
+        /// </remarks>
+        internal static void ProcessFeedOrders(IEnumerable<Order> feedOrders)
+        {
+            List<Order> orders = feedOrders.ToList();
+            foreach (Order order in orders)
+            {
+                if (order.Mission is FeedMission mission)
+                {
+                    PlanetTurnProcessor.ResolveBiomassConsumption(
+                        mission.RegionFaction,
+                        mission.CommittedBattleValue);
+                }
+            }
+            if (orders.Count > 0)
+            {
+                GameLog.Debug(() =>
+                    $"Feeding resolved: orders={orders.Count}, "
+                    + $"committedBV={orders.Sum(o => ((FeedMission)o.Mission).CommittedBattleValue)}");
+            }
+        }
+
         private void ResolveSquadConstruction(
             Order order,
             ConstructionMission mission,
