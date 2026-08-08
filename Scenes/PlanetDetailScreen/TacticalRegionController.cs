@@ -59,8 +59,15 @@ public partial class TacticalRegionController : Control
             : region.GetVisibleEnemyRegionFaction();
 
         int playerCount = playerRegionFaction?.LandedSquads.Sum(s => s.Members.Count()) ?? 0;
-        int assignedCount = playerRegionFaction?.LandedSquads.Count(s => s.CurrentOrders != null) ?? 0;
-        int unassignedCount = playerRegionFaction?.LandedSquads.Count(s => s.CurrentOrders == null) ?? 0;
+        // The orders fraction counts manoeuvre elements only. A detachable formation is a
+        // personnel pool that never takes orders of its own (Design/Reference/SpecialistAttachment.md
+        // §3.3), so counting it as perpetually unassigned would mark the hex as needing attention
+        // forever. Its people still show in the head count above - they are physically here.
+        List<OnlyWar.Models.Squads.Squad> orderableSquads = playerRegionFaction?.LandedSquads
+            .Where(s => s.SquadTemplate?.PermitsIndividualDetachment != true)
+            .ToList() ?? [];
+        int assignedCount = orderableSquads.Count(s => s.CurrentOrders != null);
+        int unassignedCount = orderableSquads.Count(s => s.CurrentOrders == null);
         bool hiddenImperialPopulation = region.HasHiddenDefaultFaction();
         long civilianPopulation = hiddenImperialPopulation ? 0 : region.GetVisibleCivilianPopulation();
         long garrison = region.PlanetaryDefenseForces;
@@ -76,8 +83,10 @@ public partial class TacticalRegionController : Control
         // Layers combine rather than exclude: a tile can show force strength, order
         // status, and intel simultaneously if all three layers are toggled on.
         bool showPlayerPublic = (showForces || showOrders) && playerCount > 0;
-        string playerPopulation = showOrders && playerRegionFaction != null
-            ? $"{assignedCount}/{playerRegionFaction.LandedSquads.Count}"
+        // With nothing orderable present, "0/0" is noise - fall back to the head count so a
+        // region holding only an Apothecarion still reads as occupied.
+        string playerPopulation = showOrders && orderableSquads.Count > 0
+            ? $"{assignedCount}/{orderableSquads.Count}"
             : (playerCount > 0 ? playerCount.ToString() : "");
 
         bool showXenos = (showForces || showIntel) && publicEnemy;
@@ -152,8 +161,8 @@ public partial class TacticalRegionController : Control
             : garrison > 0 ? $"PDF Garrison: {garrison:N0}"
             : hiddenImperialPopulation ? "Imperial Population: Unknown"
             : $"Imperial Population: {civilianPopulation:N0}";
-        string playerTooltip = showOrders && playerRegionFaction != null
-            ? $"Space Marines: {playerCount} ({assignedCount}/{playerRegionFaction.LandedSquads.Count} squads assigned)"
+        string playerTooltip = showOrders && orderableSquads.Count > 0
+            ? $"Space Marines: {playerCount} ({assignedCount}/{orderableSquads.Count} squads assigned)"
             : $"Space Marines: {playerCount}";
         string xenosTooltip = showXenos
             ? multiFactionContested

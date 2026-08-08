@@ -2,6 +2,7 @@
 *.import
 /.vs
 *.uid
+*.csproj.user
 bin/
 obj/
 *.bak-*
