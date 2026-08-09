@@ -138,6 +138,15 @@ Each feature is described as a behavioral specification: what the system does, a
 - *Post-0.7:* If the player's forces capture an opposing officer during a mission, interrogation may reveal that officer's planet of origin, adding it to the known sector map.
 - Clicking a planet opens the Planet Detail Screen for that planet.
 - Subsector regions are visually delineated on the map.
+- The sector map uses zoom-adaptive labels: far zoom shows subsector names, mid zoom adds
+  priority-ordered planet names while retaining dimmed subsector names, and close zoom shows
+  planet names at the finer label band.
+- Subsector labels are derived from the subsector's capital/governance-seat planet and use the
+  form "{capital name} Subsector"; a stable numeric fallback is used only when no seat exists.
+  If the one-line title would be too narrow for its region, it may render as two centered lines
+  ("{capital name}" followed by "Subsector"). Titles that fit comfortably remain on one line.
+- Label placement is collision-aware and keeps subsector titles within their region where the
+  geometry permits. The player can toggle the map label layer with the L key.
 - The current game date is displayed in the top bar.
 - The player can press End Turn from this screen to advance time by one week.
 - The player can save the game from this screen.
@@ -1272,9 +1281,12 @@ Alpha 0.7.2 is deliberately limited to protecting and operating the released cam
   - **Recovery requires control of the battlefield.** Holding the field recovers incapacitated brothers into the normal wound-recovery pipeline. Losing it means presumed dead with gene-seed lost — which gives losing a fight teeth beyond the casualty count, and is contestable later via the battlefield recovery missions in §5.7. A mutually broken-off engagement counts as recovered.
   - **Power-armor biostasis.** A downed brother cannot die of his wounds while awaiting treatment — his armor stases him. This is why there is no deterioration clock or bleed-out pass anywhere in the medical model, and why Apothecary care is exclusively about *speed* of recovery. It also justifies the player/NPC asymmetry in fiction rather than by fiat: enemies without such armor stay under the existing finish-off rules.
 - ✅ **Apothecary field care and specialist attachment.** *(Not previously scoped here; built alongside the two items above, which share its substrate.)* An Apothecary can be attached to an operation as an individual rather than deploying his whole formation, and accelerates recovery for everyone under that order — or clears the backlog at home if left behind. Full spec in §4.8; attachment model in §4.13. Consequence worth noting: **HQ squads and the four chapter offices (Armory, Librarius, Apothecarion, Reclusium) are no longer assignable to orders as units** — they are personnel pools whose members reach the field by attachment. Design records: `Design/Reference/CasualtyRealism.md` and `Design/Reference/SpecialistAttachment.md`.
-- **UX Improvement Phase 1:** Two remaining sub-items, one done. *(**Squad row redesign** has been folded into the 0.8 planet tactical-map legibility redesign, §5.5 item (6) — it was never elaborated beyond the phrase, and it is the same class of problem: making squad state readable at a glance rather than restyling a row.)*
+- **UX Improvement Phase 1:** Complete for the currently scoped items. *(**Squad row redesign** has been folded into the 0.8 planet tactical-map legibility redesign, §5.5 item (6) — it was never elaborated beyond the phrase, and it is the same class of problem: making squad state readable at a glance rather than restyling a row.)*
   - ✅ **Drag-and-drop where applicable.** *(Implemented — `Scenes/FleetScreen/FleetTransferTree.cs` implements Godot's `_GetDragData`/`_CanDropData`/`_DropData` over a squad/unit/ship tree, so squads and whole companies drag between ships in the Classis menu, with legality checked live during the drag and a drag-end cursor reset. This is the only place in the UI where dragging is the natural gesture; the remaining assignment surfaces are click-and-select lists where drag-and-drop would add nothing.)*
-  - ⬜ **Zoom-adaptive planet name labels.** Not started — the sector map draws no planet name labels at any zoom level today, so this is a new label layer plus a zoom-driven visibility/density rule, not a tweak to an existing one.
+  - ✅ **Zoom-adaptive map labels.** Implemented in Scenes/SectorMap/SectorMap.cs with world-space
+    subsector and planet label bands, collision-aware placement, conditional two-line subsector
+    titles, zoom cross-fades, and the L visibility toggle. Covered by the sector-map label
+    layout tests and the governance naming test.
 - ✅ **Insurrectionist irregular squad types.** The Insurrectionists borrowed a clone of the PDF Infantry Squad — the Imperial faction's own species, soldier templates and weapon set — so a revolt fielded forces indistinguishable from the PDF it rose against. They now have their own species, roles, kit and formations (`Database/RulesMigration_InsurrectionistUnits.sql`), and the PDF clone is retired.
   - **Bodies, not soldiers.** A new `Insurrectionist` species centres every attribute on 10 with **σ 2** rather than the PDF's σ 1 — same mean, roughly a 6–14 spread, so a mob contains both people better than any trooper and people much worse. Move speed 5 (the PDF's is a flat 6.001) with a normal 10% spread. MOS training is one doubling below the PDF's: Generic Ranged 2.0 against 3.0.
   - **Three formations.** *Insurrectionist Mob* (Scout-flagged, a Ringleader plus a rolled 4–29 insurgents); *Insurrectionist Weapon Team* (two men sharing one heavy stubber, modelled on the Brood Brother Weapon Squad's pooled-quota pattern); *Insurrectionist Firebrand* (HQ, the figurehead alone, with a Mob as his bodyguard). Autoguns throughout, and **no grenades** — which is why they need faction-owned weapon sets rather than the Imperial `Autogun` set, whose grenade slot carries a frag.

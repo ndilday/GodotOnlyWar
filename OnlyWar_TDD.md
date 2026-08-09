@@ -975,6 +975,38 @@ Warp lane generation (0.7 addition): after subsector clustering, the highest-pop
 4. Compute a bounding circle for each resulting subsector.
 5. Assign grid cells to subsectors by closest-circle membership.
 
+### 6.10 Sector Map Label Layer
+
+SectorMap renders the label layer in world coordinates alongside the subsector fills and
+boundaries. SectorLabelBandStyle resources in Scenes/SectorMap/SectorMap.tscn own the font,
+world size, zoom range, colour, outline, shadow, and letter spacing for the three bands:
+
+- Band A (0.33-1.1): subsector names at display scale.
+- Band B (1.1-3.5): priority-ordered planet names while Band A remains dimmed.
+- Band C (3.5-10): close planet names.
+
+Helpers/UI/SectorMapLabelLayout is the engine-independent placement solver. It receives measured
+world-space extents and returns deterministic, non-overlapping positions. Subsector candidates
+also carry their Voronoi region polygons, so the solver rejects placements whose sampled bounds
+would cross the region. Planet priority is ordered by active work, request severity, governance
+seat, importance, and stable id tiebreakers.
+
+Subsector names are derived during governance assignment from the subsector's capital/governance
+seat planet as "{capital name} Subsector"; Subsector {id} is only the fallback when no seat
+exists. SectorMap keeps the full name on one line when it fits comfortably, and otherwise
+measures and places a centered two-line form:
+
+    Capital Name
+    Subsector
+
+The layout is rebuilt when the map is built or loaded and planet bands are refreshed after a turn.
+Camera zoom only queues a redraw and cross-fades the bands. Camera2D maps the L hotkey to the
+map's label visibility toggle.
+
+OnlyWar.Tests.UI.SectorMapLabelLayoutTests covers band selection, deterministic priority,
+collision rejection, map bounds, scaling, anchor fallback, and region containment. Governance
+hierarchy tests cover the derived subsector name.
+
 ---
 
 ## 7. UI Layer

@@ -126,7 +126,12 @@ public class GaussianCalculatorTests
         for (float z = -9f; z <= 9f; z += 0.0005f)
         {
             float current = GaussianCalculator.ApproximateNormalCDF(z);
-            Assert.True(current >= previous, $"decreased at z={z}: {previous} -> {current}");
+            // Tested rather than passed to Assert.True: the interpolated message would otherwise
+            // be built on all 36,000 iterations instead of the one that fails.
+            if (current < previous)
+            {
+                Assert.Fail($"decreased at z={z}: {previous} -> {current}");
+            }
             previous = current;
         }
     }

@@ -71,6 +71,7 @@ public class MissionTargetStrengthTests
     // Same unguarded log in AssassinateStealthMissionStep. The defender's search effort now prices
     // the approach, so an untrained force is detected each day instead of walking in, and the loop
     // stops at the day budget rather than recursing forever through DetectedMissionStep.
+    [Trait("Category", "Slow")]
     [Fact]
     public void AssassinateStealth_UntrainedForceAgainstASearchedRegion_IsDetected()
     {

@@ -220,35 +220,37 @@ internal static class BattleEngagementFrameBuilder
         // answered: at its very best, anywhere it could stand, is this squad's shooting worth
         // anything against this enemy?
         //
-        // Harvested from the net-score sweep rather than from a second Argmax over the outgoing
-        // curve alone. That second sweep re-evaluated a curve this one has already sampled at every
-        // coarse point, and the two sweeps together were about a third of all curve evaluations in
-        // the battle planner. The two sample sets differ ONLY in the 17-point refinement window,
-        // which the net sweep places around the argmax of removal - incoming and a dedicated sweep
-        // would place around the argmax of removal: so this can report a marginally lower peak when
-        // those two argmaxes fall in different coarse intervals. It cannot matter at the resolution
-        // the value is read at -- a curve is flat by definition at its own peak, so refinement moves
-        // it by O(step^2 * curvature), and the only consumer (BattleSquadPlanner's option mask)
-        // compares it against NegligibleRemovalFraction, a threshold three orders of magnitude
-        // coarser than that.
-        float outgoingPeak = 0f;
+        // TWO SEPARATE SWEEPS, DELIBERATELY. The second one re-evaluates a curve the first has
+        // already sampled at every coarse point, and harvesting the peak from the first sweep's
+        // running max instead is an obvious-looking 34% cut in curve evaluations. It was tried on
+        // 2026-08-08 and reverted: OnlyWar.Tests.Generation.ScenarioBuilderTests went from 1m17s
+        // to 5m6s. One file changed, back to back, on an otherwise idle machine -- that last part
+        // matters, because the same experiment run against a machine doing other work reported
+        // 2.4x and was not trustworthy enough to act on. The extra sweep costs a third more
+        // arithmetic and saves four times the wall clock, because what it buys is a DECISION, not
+        // a number.
+        //
+        // WHY THE TWO SWEEPS ARE NOT INTERCHANGEABLE. They share the 33 coarse samples and differ
+        // only in where the 17-point refinement goes -- this one refines around the argmax of
+        // removal - incoming, a dedicated sweep around the argmax of removal. That sounds like a
+        // rounding difference and is not. The coarse grid spans [1, reach], so at a bolter's 1000
+        // yards its spacing is ~31 yards, and a weapon whose removal spikes near contact has its
+        // whole useful band inside a cell or two. For those curves refinement is not polishing a
+        // peak the sweep already found, it is the only thing that finds it, and the harvested max
+        // comes out first-order low rather than O(step^2) low. peakRemovalFraction then feeds
+        // BattleSquadPlanner.HasNoViableRangedOption, which is a threshold test, so a first-order
+        // error there flips squads between engagement postures.
         float chosen = Math.Clamp(
             RangedEffectivenessCurve.Argmax(
                 band,
-                range =>
-                {
-                    float outgoing = curves.Outgoing.RemovalAt(range);
-                    if (outgoing > outgoingPeak)
-                    {
-                        outgoingPeak = outgoing;
-                    }
-                    return outgoing
-                        - curves.Incoming.RemovalAt(range)
-                        - (meleeThreat
-                            / (1f + (Math.Max(0f, range - ContactGap) / speed)));
-                }),
+                range => curves.Outgoing.RemovalAt(range)
+                    - curves.Incoming.RemovalAt(range)
+                    - (meleeThreat
+                        / (1f + (Math.Max(0f, range - ContactGap) / speed)))),
             0,
             band);
+        float outgoingPeak = curves.Outgoing.RemovalAt(
+            RangedEffectivenessCurve.Argmax(band, curves.Outgoing.RemovalAt));
         // RemovalAt is a squad total in battle value; divide out both the shooter count and the
         // representative opponent's worth to land on "share of one enemy, per shooter, per turn"
         // -- the scale NegligibleRemovalFraction is quoted on.
