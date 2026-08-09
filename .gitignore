@@ -1,5 +1,7 @@
 .godot
 *.import
+!Assets/Fonts/caslon-antique.regular.ttf.import
+!Assets/Fonts/eb-garamond.12-regular-all-smallcaps.ttf.import
 /.vs
 *.uid
 *.csproj.user

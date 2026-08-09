@@ -9,8 +9,9 @@ namespace OnlyWar.Models.Planets
 {
     public class Subsector
     {
-        // if we wanted to be extra "safe", we could make these lists private, with public IReadOnlyList accessors
-        public readonly string Name;
+        // Derived from the governance seat at warp-network build/load time. A subsector with no
+        // Imperial-controlled world keeps a stable fallback name until it gains a capital.
+        public string Name { get; private set; }
         public readonly ushort Id;
         public readonly List<Planet> Planets;
         public readonly List<Vector2I> Cells;
@@ -26,6 +27,14 @@ namespace OnlyWar.Models.Planets
             Id = id;
             Cells = cells;
             Name = name;
+        }
+
+        public void SetGovernanceSeat(Planet seat)
+        {
+            GovernanceSeat = seat;
+            Name = seat == null
+                ? $"Subsector {Id}"
+                : $"{seat.Name} Subsector";
         }
     }
 }

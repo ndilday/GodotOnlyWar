@@ -151,6 +151,19 @@ public class GovernanceHierarchyTests : IClassFixture<GovernanceHierarchyFixture
         }
     }
 
+    [Fact]
+    public void SubsectorName_UsesItsGovernanceSeatName()
+    {
+        foreach (Subsector subsector in _seedOneSector.Subsectors)
+        {
+            string expected = subsector.GovernanceSeat == null
+                ? $"Subsector {subsector.Id}"
+                : $"{subsector.GovernanceSeat.Name} Subsector";
+
+            Assert.Equal(expected, subsector.Name);
+        }
+    }
+
     private static GameRulesData LoadFreshRulesData()
     {
         Directory.SetCurrentDirectory(RulesDatabaseFixture.RepositoryRoot);

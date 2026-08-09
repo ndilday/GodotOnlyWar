@@ -38,7 +38,7 @@ namespace OnlyWar.Builders
             subsectorCellListMap = AssignGridSubsectors(subsectorPlanetMap, subsectorCircleMap, gridDimensions, (ushort)(maxDiameter / 2));
             foreach(var kvp in subsectorCellListMap)
             {
-                subsectorList.Add(new Subsector(kvp.Key.ToString(), kvp.Key, subsectorPlanetMap[kvp.Key], kvp.Value));
+                subsectorList.Add(new Subsector($"Subsector {kvp.Key}", kvp.Key, subsectorPlanetMap[kvp.Key], kvp.Value));
             }
             return subsectorList;
         }

@@ -100,7 +100,7 @@ namespace OnlyWar.Builders
                     .ThenByDescending(p => p.Population)
                     .ThenBy(p => p.Id)
                     .FirstOrDefault();
-                subsector.GovernanceSeat = seat;
+                subsector.SetGovernanceSeat(seat);
                 if (seat == null) continue;
 
                 seat.GovernanceTier = GovernanceTier.SubsectorCapital;

@@ -1,6 +1,7 @@
 using Godot;
 using OnlyWar.Builders;
 using OnlyWar.Helpers.Extensions;
+using OnlyWar.Helpers.UI;
 using OnlyWar.Models;
 using OnlyWar.Models.Fleets;
 using OnlyWar.Models.Planets;
@@ -8,6 +9,7 @@ using OnlyWar.Scenes.MainGameScreen;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using NumericsVector2 = System.Numerics.Vector2;
 
 enum Facing { North, East, South, West}
 struct BorderPoint
@@ -19,6 +21,15 @@ struct BorderPoint
 
 public partial class SectorMap : Node2D
 {
+    private sealed class LabelDrawInfo
+    {
+        public string Text { get; init; }
+        public Vector2 Position { get; init; }
+        public int FontSize { get; init; }
+        public SectorLabelBandStyle Style { get; init; }
+        public Color Color { get; init; }
+    }
+
     private readonly struct EdgeKey : IEquatable<EdgeKey>
     {
         public readonly Vector2I A;
@@ -91,6 +102,12 @@ public partial class SectorMap : Node2D
     public event EventHandler<int> FleetClicked;
     public event EventHandler<int> FleetRightClicked;
 
+    [Export]
+    public Godot.Collections.Array<SectorLabelBandStyle> LabelBandStyles { get; set; } = new();
+
+    [Export]
+    public bool LabelsVisible { get; set; } = true;
+
     public Vector2I GridDimensions { get; private set; }
 	public Vector2I CellSize { get; private set; }
 
@@ -106,6 +123,10 @@ public partial class SectorMap : Node2D
     private Dictionary<ushort, List<Vector2[]>> _voronoiSubsectorLoops = [];
 	private Dictionary<ushort, HashSet<ushort>> _subsectorAdjacencyMap = [];
 	private Dictionary<ushort, int> _subsectorColorIndexMap = [];
+    private List<Subsector> _subsectors = [];
+    private readonly List<LabelDrawInfo> _subsectorLabels = [];
+    private readonly List<LabelDrawInfo> _planetLabelsBandB = [];
+    private readonly List<LabelDrawInfo> _planetLabelsBandC = [];
     private int? _selectedPlanetId;
 
     public override void _EnterTree()
@@ -144,23 +165,24 @@ public partial class SectorMap : Node2D
 		HasPlanet = new bool[GridDimensions.X * GridDimensions.Y];
 		PlacePlanets();
 		RefreshFleets();
-		List<Subsector> subsectors = SubsectorBuilder.BuildSubsectors(GameDataSingleton.Instance.Sector.Planets.Values, GridDimensions, GameDataSingleton.Instance.GameRulesData.MaxSubsectorCellDiameter);
-        foreach(Subsector subsector in subsectors)
+		_subsectors = SubsectorBuilder.BuildSubsectors(GameDataSingleton.Instance.Sector.Planets.Values, GridDimensions, GameDataSingleton.Instance.GameRulesData.MaxSubsectorCellDiameter);
+        foreach(Subsector subsector in _subsectors)
         {
             foreach (Vector2I cell in subsector.Cells)
             {
                 SectorIds[GridPositionToIndex(cell)] = subsector.Id;
             }
         }
-        _subsectorAdjacencyMap = DetermineSubsectorAdjacency(subsectors.Select(subsector => subsector.Id));
+        CopyGovernanceSeatsFromSectorData();
+        _subsectorAdjacencyMap = DetermineSubsectorAdjacency(_subsectors.Select(subsector => subsector.Id));
         _subsectorColorIndexMap = AssignSubsectorColorIndexes(_subsectorAdjacencyMap);
         ValidateSubsectorColoring(_subsectorAdjacencyMap, _subsectorColorIndexMap);
-        _subsectorVertexListMap = DetermineSubsectorBorderPoints(subsectors);
+        _subsectorVertexListMap = DetermineSubsectorBorderPoints(_subsectors);
         _subsectorBoundaryPaths = DetermineSubsectorBoundaryPaths();
         if (UseVoronoiBorders)
         {
             Dictionary<ushort, List<Planet>> subsectorPlanetMap =
-                subsectors.ToDictionary(subsector => subsector.Id, subsector => subsector.Planets);
+                _subsectors.ToDictionary(subsector => subsector.Id, subsector => subsector.Planets);
             var voronoiBorders = OnlyWar.Helpers.VoronoiSubsectorMapper.BuildSubsectorLoops(
                 subsectorPlanetMap,
                 GridDimensions,
@@ -169,7 +191,7 @@ public partial class SectorMap : Node2D
 
             // Recolor from the Voronoi adjacency (shared border edges) so that
             // neighboring subsectors never share a palette color.
-            EnsureAdjacencyEntries(voronoiBorders.Adjacency, subsectors.Select(subsector => subsector.Id));
+            EnsureAdjacencyEntries(voronoiBorders.Adjacency, _subsectors.Select(subsector => subsector.Id));
             _subsectorAdjacencyMap = voronoiBorders.Adjacency;
             _subsectorColorIndexMap = AssignSubsectorColorIndexes(_subsectorAdjacencyMap);
             ValidateSubsectorColoring(_subsectorAdjacencyMap, _subsectorColorIndexMap);
@@ -183,7 +205,21 @@ public partial class SectorMap : Node2D
 
         Vector2I gridPosition = new Vector2I(centerPosition.Value.X, centerPosition.Value.Y);
         Vector2I mapPosition = CalculateMapPosition(gridPosition);
+        RebuildLabelLayouts();
         _camera.ZoomTo(1, mapPosition);
+    }
+
+    private void CopyGovernanceSeatsFromSectorData()
+    {
+        IReadOnlyList<Subsector> sectorSubsectors = GameDataSingleton.Instance.Sector.Subsectors;
+        foreach (Subsector subsector in _subsectors)
+        {
+            Subsector source = sectorSubsectors.FirstOrDefault(candidate => candidate.Id == subsector.Id);
+            if (source != null)
+            {
+                subsector.SetGovernanceSeat(source.GovernanceSeat);
+            }
+        }
     }
 
     private void LayoutBackground()
@@ -205,11 +241,10 @@ public partial class SectorMap : Node2D
         if (UseVoronoiBorders && _voronoiSubsectorLoops.Count > 0)
         {
             DrawVoronoiSubsectors();
+            DrawLabels();
             DrawSelectedSystemOverlay();
             return;
         }
-
-        if (_subsectorVertexListMap.Count == 0) return;
 
 		foreach (var kvp in _subsectorVertexListMap.OrderBy(kvp => kvp.Key))
 		{
@@ -218,8 +253,9 @@ public partial class SectorMap : Node2D
             Color baseColor = GetSubsectorColor(kvp.Key);
 
             DrawSubsectorFill(kvp.Key, polygonPoints, smoothedPolygonPoints, baseColor);
-		}
+        }
         DrawSubsectorBoundaries();
+        DrawLabels();
         DrawSelectedSystemOverlay();
 	}
 
@@ -228,6 +264,565 @@ public partial class SectorMap : Node2D
         _selectedPlanetId = planetId;
         QueueRedraw();
     }
+
+    public void SetLabelsVisible(bool visible)
+    {
+        if (LabelsVisible == visible) return;
+        LabelsVisible = visible;
+        QueueRedraw();
+    }
+
+    public void ToggleLabelVisibility()
+    {
+        SetLabelsVisible(!LabelsVisible);
+    }
+
+    /// <summary>
+    /// Rebuilds the turn-varying planet priorities. Subsector geometry and its placements are
+    /// left untouched because they only change when the map is rebuilt or loaded.
+    /// </summary>
+    public void RefreshLabels()
+    {
+        if (!GameDataSingleton.Instance.IsInitialized || _subsectors.Count == 0) return;
+
+        BuildPlanetLabelLayouts();
+        QueueRedraw();
+    }
+
+    public void OnCameraZoomChanged(float zoom)
+    {
+        QueueRedraw();
+    }
+
+    private void RebuildLabelLayouts()
+    {
+        EnsureLabelStyles();
+        BuildSubsectorLabelLayouts();
+        BuildPlanetLabelLayouts();
+    }
+
+    private void EnsureLabelStyles()
+    {
+        LabelBandStyles ??= new Godot.Collections.Array<SectorLabelBandStyle>();
+        SectorLabelBandStyle[] defaults = CreateDefaultLabelStyles();
+        while (LabelBandStyles.Count < defaults.Length)
+        {
+            LabelBandStyles.Add(defaults[LabelBandStyles.Count]);
+        }
+
+        for (int i = 0; i < defaults.Length; i++)
+        {
+            if (LabelBandStyles[i] == null)
+            {
+                LabelBandStyles[i] = defaults[i];
+            }
+        }
+    }
+
+    private static SectorLabelBandStyle[] CreateDefaultLabelStyles()
+    {
+        return
+        [
+            new SectorLabelBandStyle
+            {
+                Font = CreateFontVariation("res://Assets/Fonts/caslon-antique.regular.ttf", 1.0f),
+                WorldFontSize = 34.0f,
+                MinZoom = 0.33f,
+                MaxZoom = 1.1f,
+                FontColor = new Color(0.980f, 0.906f, 0.725f, 1.0f),
+                OutlineColor = new Color(0.0f, 0.0f, 0.0f, 0.82f),
+                OutlineWidth = 2,
+                ShadowColor = new Color(0.0f, 0.0f, 0.0f, 0.70f),
+                ShadowSize = 1,
+                ShadowOffset = new Vector2(1.0f, 1.0f),
+                LetterSpacing = 1.0f
+            },
+            new SectorLabelBandStyle
+            {
+                Font = CreateFontVariation("res://Assets/Fonts/eb-garamond.12-regular-all-smallcaps.ttf", 1.25f),
+                WorldFontSize = 10.0f,
+                MinZoom = 1.1f,
+                MaxZoom = 3.5f,
+                FontColor = Colors.White,
+                OutlineColor = new Color(0.0f, 0.0f, 0.0f, 0.82f),
+                OutlineWidth = 1,
+                ShadowColor = new Color(0.0f, 0.0f, 0.0f, 0.70f),
+                ShadowSize = 1,
+                ShadowOffset = new Vector2(1.0f, 1.0f),
+                LetterSpacing = 1.25f
+            },
+            new SectorLabelBandStyle
+            {
+                Font = CreateFontVariation("res://Assets/Fonts/eb-garamond.12-regular-all-smallcaps.ttf", 1.0f),
+                WorldFontSize = 3.5f,
+                MinZoom = 3.5f,
+                MaxZoom = 10.0f,
+                FontColor = Colors.White,
+                OutlineColor = new Color(0.0f, 0.0f, 0.0f, 0.82f),
+                OutlineWidth = 1,
+                ShadowColor = new Color(0.0f, 0.0f, 0.0f, 0.70f),
+                ShadowSize = 1,
+                ShadowOffset = new Vector2(1.0f, 1.0f),
+                LetterSpacing = 1.0f
+            }
+        ];
+    }
+
+    private static FontVariation CreateFontVariation(string path, float letterSpacing)
+    {
+        FontVariation variation = new();
+        FontFile baseFont = GD.Load<FontFile>(path);
+        if (baseFont != null)
+        {
+            variation.SetBaseFont(baseFont);
+        }
+
+        variation.SpacingGlyph = Mathf.RoundToInt(letterSpacing);
+        return variation;
+    }
+
+    private SectorLabelBandStyle GetLabelStyle(SectorMapLabelBand band)
+    {
+        EnsureLabelStyles();
+        return LabelBandStyles[(int)band];
+    }
+
+    private void BuildSubsectorLabelLayouts()
+    {
+        _subsectorLabels.Clear();
+        if (_subsectors.Count == 0) return;
+
+        SectorLabelBandStyle style = GetLabelStyle(SectorMapLabelBand.A);
+        List<SectorMapLabelCandidate> candidates = [];
+        Dictionary<int, (string Text, int FontSize, float Scale)> metadata = [];
+
+        foreach (Subsector subsector in _subsectors.OrderBy(subsector => subsector.Id))
+        {
+            string sourceText = string.IsNullOrWhiteSpace(subsector.Name)
+                ? $"Subsector {subsector.Id}"
+                : subsector.Name;
+            (Vector2 anchor, float inscribedWidth) = GetSubsectorLabelGeometry(subsector);
+            IReadOnlyList<IReadOnlyList<NumericsVector2>> allowedRegions =
+                GetSubsectorLabelRegions(subsector);
+            float maxWidth = inscribedWidth * 0.86f;
+            string text = sourceText;
+            (NumericsVector2 extent, int fontSize, float scale) = MeasureSubsectorLabel(
+                style,
+                text,
+                maxWidth,
+                ToNumerics(anchor),
+                allowedRegions);
+
+            // Keep short or comfortably fitting names on one line. The stacked form is
+            // reserved for derived capital names that would otherwise be squeezed too far.
+            if (HasSubsectorSuffix(sourceText) && (extent == NumericsVector2.Zero || scale < 0.90f))
+            {
+                text = FormatSubsectorLabel(sourceText);
+                (extent, fontSize, scale) = MeasureSubsectorLabel(
+                    style,
+                    text,
+                    maxWidth,
+                    ToNumerics(anchor),
+                    allowedRegions);
+            }
+
+            if (extent == NumericsVector2.Zero) continue;
+
+            candidates.Add(new SectorMapLabelCandidate(
+                subsector.Id,
+                ToNumerics(anchor),
+                0,
+                extent,
+                scale,
+                allowedRegions));
+            metadata[subsector.Id] = (text, fontSize, scale);
+        }
+
+        SectorMapLabelBounds mapBounds = GetLabelMapBounds();
+        foreach (SectorMapLabelPlacement placement in SectorMapLabelLayout.Place(candidates, mapBounds))
+        {
+            if (!metadata.TryGetValue(placement.Id, out var data)) continue;
+
+            _subsectorLabels.Add(new LabelDrawInfo
+            {
+                Text = data.Text,
+                Position = ToGodot(placement.Position),
+                FontSize = data.FontSize,
+                Style = style,
+                Color = style.FontColor
+            });
+        }
+    }
+
+    private void BuildPlanetLabelLayouts()
+    {
+        _planetLabelsBandB.Clear();
+        _planetLabelsBandC.Clear();
+        if (!GameDataSingleton.Instance.IsInitialized) return;
+
+        BuildPlanetLabelLayout(GetLabelStyle(SectorMapLabelBand.B), _planetLabelsBandB);
+        BuildPlanetLabelLayout(GetLabelStyle(SectorMapLabelBand.C), _planetLabelsBandC);
+    }
+
+    private void BuildPlanetLabelLayout(
+        SectorLabelBandStyle style,
+        List<LabelDrawInfo> output)
+    {
+        List<SectorMapLabelCandidate> candidates = [];
+        Dictionary<int, (Planet Planet, int FontSize, float Scale)> metadata = [];
+        IEnumerable<Planet> planets = GameDataSingleton.Instance.Sector.Planets.Values
+            .Where(planet => !string.IsNullOrWhiteSpace(planet.Name))
+            .OrderBy(planet => planet.Id);
+
+        foreach (Planet planet in planets)
+        {
+            SectorMapPlanetLabelPriority priority = GetPlanetLabelPriority(planet);
+            (NumericsVector2 extent, int fontSize, float scale) = MeasureLabel(style, planet.Name, 0);
+            if (extent == NumericsVector2.Zero) continue;
+
+            candidates.Add(new SectorMapLabelCandidate(
+                planet.Id,
+                ToNumerics(CalculateMapPosition(new Vector2I(planet.Position.X, planet.Position.Y))),
+                priority.Rank,
+                extent,
+                scale));
+            metadata[planet.Id] = (planet, fontSize, scale);
+        }
+
+        foreach (SectorMapLabelPlacement placement in SectorMapLabelLayout.Place(
+            candidates,
+            GetLabelMapBounds()))
+        {
+            if (!metadata.TryGetValue(placement.Id, out var data)) continue;
+
+            output.Add(new LabelDrawInfo
+            {
+                Text = data.Planet.Name,
+                Position = ToGodot(placement.Position),
+                FontSize = data.FontSize,
+                Style = style,
+                Color = GetPlanetLabelColor(data.Planet, style)
+            });
+        }
+    }
+
+    private SectorMapPlanetLabelPriority GetPlanetLabelPriority(Planet planet)
+    {
+        bool hasActiveRequest = false;
+        RequestSeverity severity = RequestSeverity.Concerned;
+        foreach (IRequest request in GameDataSingleton.Instance.Sector.PlayerForce?.Requests ?? [])
+        {
+            if (request.TargetPlanet != planet
+                || request.Status is not (RequestStatus.Open or RequestStatus.InProgress))
+            {
+                continue;
+            }
+
+            hasActiveRequest = true;
+            severity = (RequestSeverity)Math.Max((int)severity, (int)request.Severity);
+        }
+
+        bool hasActiveMission = planet.Regions
+            .Where(region => region != null)
+            .Any(region => region.SpecialMissions.Count > 0);
+        bool hasActiveOrder = GameDataSingleton.Instance.Sector.Orders.Values
+            .Any(order => order.Mission?.RegionFaction?.Region?.Planet == planet);
+        bool isGovernanceSeat = _subsectors.Any(subsector =>
+            subsector.GovernanceSeat?.Id == planet.Id);
+
+        return new SectorMapPlanetLabelPriority(
+            planet.Id,
+            hasActiveRequest || hasActiveMission || hasActiveOrder,
+            severity,
+            isGovernanceSeat,
+            planet.Importance);
+    }
+
+    private static Color GetPlanetLabelColor(Planet planet, SectorLabelBandStyle style)
+    {
+        Faction controller = planet.GetControllingFaction();
+        if (controller == null) return style.FontColor;
+
+        System.Drawing.Color color = controller.Color;
+        return new Color(color.R / 255.0f, color.G / 255.0f, color.B / 255.0f, 1.0f);
+    }
+
+    private (Vector2 Anchor, float InscribedWidth) GetSubsectorLabelGeometry(Subsector subsector)
+    {
+        if (subsector.Cells.Count > 0)
+        {
+            float minX = float.MaxValue;
+            float minY = float.MaxValue;
+            float maxX = float.MinValue;
+            float maxY = float.MinValue;
+            Vector2 sum = Vector2.Zero;
+            foreach (Vector2I cell in subsector.Cells)
+            {
+                Vector2 center = CalculateMapPosition(cell);
+                sum += center;
+                minX = Mathf.Min(minX, center.X - HalfCellSize.X);
+                minY = Mathf.Min(minY, center.Y - HalfCellSize.Y);
+                maxX = Mathf.Max(maxX, center.X + HalfCellSize.X);
+                maxY = Mathf.Max(maxY, center.Y + HalfCellSize.Y);
+            }
+
+            return (sum / subsector.Cells.Count, Mathf.Max(CellSize.X, (maxX - minX) * 0.82f));
+        }
+
+        if (subsector.Planets.Count > 0)
+        {
+            Vector2 sum = subsector.Planets
+                .Select(planet => CalculateMapPosition(new Vector2I(planet.Position.X, planet.Position.Y)))
+                .Aggregate(Vector2.Zero, (current, point) => current + point);
+            return (sum / subsector.Planets.Count, CellSize.X * 0.82f);
+        }
+
+        return (Vector2.Zero, 0);
+    }
+
+    private IReadOnlyList<IReadOnlyList<NumericsVector2>> GetSubsectorLabelRegions(Subsector subsector)
+    {
+        if (!_voronoiSubsectorLoops.TryGetValue(subsector.Id, out List<Vector2[]> loops))
+            return [];
+
+        return loops
+            .Where(loop => loop.Length >= 3)
+            .Select(loop => (IReadOnlyList<NumericsVector2>)loop
+                .Select(GridToPixel)
+                .Select(ToNumerics)
+                .ToArray())
+            .ToList();
+    }
+
+    private (NumericsVector2 Extent, int FontSize, float Scale) MeasureLabel(
+        SectorLabelBandStyle style,
+        string text,
+        float maxWidth,
+        float fontScaleLimit = 1.0f)
+    {
+        if (string.IsNullOrEmpty(text)) return (NumericsVector2.Zero, 0, 1.0f);
+
+        Font font = GetLabelFont(style);
+        int baseFontSize = Mathf.Max(1, Mathf.RoundToInt(style.WorldFontSize));
+        Godot.Vector2 measured = MeasureText(font, text, baseFontSize);
+        float scale = Mathf.Clamp(fontScaleLimit, 0.05f, 1.0f);
+        if (maxWidth > 0 && measured.X * scale > maxWidth)
+        {
+            scale = maxWidth / measured.X;
+        }
+
+        int fontSize = Mathf.Max(1, Mathf.RoundToInt(baseFontSize * scale));
+        measured = MeasureText(font, text, fontSize);
+        return (
+            new NumericsVector2(measured.X, measured.Y),
+            fontSize,
+            scale);
+    }
+
+    private static Godot.Vector2 MeasureText(Font font, string text, int fontSize)
+    {
+        string[] lines = text.Split('\n');
+        float width = 0.0f;
+        foreach (string line in lines)
+        {
+            width = Mathf.Max(
+                width,
+                font.GetStringSize(line, HorizontalAlignment.Left, -1, fontSize).X);
+        }
+
+        return new Godot.Vector2(width, font.GetHeight(fontSize) * lines.Length);
+    }
+
+    private static string FormatSubsectorLabel(string name)
+    {
+        const string suffix = " Subsector";
+        if (!HasSubsectorSuffix(name)) return name;
+
+        string capitalName = name[..^suffix.Length].TrimEnd();
+        return capitalName.Length == 0 ? name : $"{capitalName}\nSubsector";
+    }
+
+    private static bool HasSubsectorSuffix(string name) =>
+        name.EndsWith(" Subsector", StringComparison.OrdinalIgnoreCase);
+
+    private (NumericsVector2 Extent, int FontSize, float Scale) MeasureSubsectorLabel(
+        SectorLabelBandStyle style,
+        string text,
+        float maxWidth,
+        NumericsVector2 anchor,
+        IReadOnlyList<IReadOnlyList<NumericsVector2>> allowedRegions)
+    {
+        (NumericsVector2 baseExtent, int baseFontSize, float baseScale) = MeasureLabel(style, text, maxWidth);
+        if (baseExtent == NumericsVector2.Zero || allowedRegions.Count == 0)
+            return (baseExtent, baseFontSize, baseScale);
+
+        SectorMapLabelBounds mapBounds = GetLabelMapBounds();
+        for (float scale = baseScale; scale >= 0.20f; scale -= 0.05f)
+        {
+            (NumericsVector2 extent, int fontSize, float actualScale) =
+                MeasureLabel(style, text, maxWidth, scale);
+            SectorMapLabelCandidate candidate = new(
+                0,
+                anchor,
+                0,
+                extent,
+                actualScale,
+                allowedRegions);
+            if (SectorMapLabelLayout.Place([candidate], mapBounds).Count > 0)
+                return (extent, fontSize, actualScale);
+        }
+
+        return (NumericsVector2.Zero, 0, 1.0f);
+    }
+
+    private Font GetLabelFont(SectorLabelBandStyle style)
+    {
+        if (style?.Font == null) return ThemeDB.FallbackFont;
+
+        // FontVariation owns tracking, so the inspector value remains live even when a
+        // scene supplies a shared variation resource for two planet bands.
+        style.Font.SpacingGlyph = Mathf.RoundToInt(style.LetterSpacing);
+        return style.Font;
+    }
+
+    private SectorMapLabelBounds GetLabelMapBounds()
+    {
+        float border = _camera?.MapBorderPixels ?? 100.0f;
+        return new SectorMapLabelBounds(
+            -border,
+            -border,
+            GridDimensions.X * CellSize.X + border,
+            GridDimensions.Y * CellSize.Y + border);
+    }
+
+    private void DrawLabels()
+    {
+        if (!LabelsVisible) return;
+
+        float zoom = _camera?.Zoom.X ?? 1.0f;
+        SectorLabelBandStyle subsectorStyle = GetLabelStyle(SectorMapLabelBand.A);
+        SectorLabelBandStyle bandBStyle = GetLabelStyle(SectorMapLabelBand.B);
+        SectorLabelBandStyle bandCStyle = GetLabelStyle(SectorMapLabelBand.C);
+
+        DrawLabelList(_subsectorLabels, GetSubsectorLabelOpacity(zoom, subsectorStyle, bandBStyle));
+        DrawLabelList(_planetLabelsBandB, GetBandOpacity(zoom, bandBStyle));
+        DrawLabelList(_planetLabelsBandC, GetBandOpacity(zoom, bandCStyle, keepVisibleAtMax: true));
+    }
+
+    private void DrawLabelList(IEnumerable<LabelDrawInfo> labels, float opacity)
+    {
+        if (opacity <= 0.001f) return;
+
+        foreach (LabelDrawInfo label in labels)
+        {
+            Font font = GetLabelFont(label.Style);
+            float alpha = Mathf.Clamp(opacity * label.Style.Opacity * label.Color.A, 0.0f, 1.0f);
+            if (alpha <= 0.001f) continue;
+
+            Color textColor = new(label.Color.R, label.Color.G, label.Color.B, alpha);
+            Color outlineColor = WithAlpha(label.Style.OutlineColor, label.Style.OutlineColor.A * alpha);
+            Color shadowColor = WithAlpha(label.Style.ShadowColor, label.Style.ShadowColor.A * alpha);
+            float lineHeight = font.GetHeight(label.FontSize);
+            float textWidth = MeasureText(font, label.Text, label.FontSize).X;
+            string[] lines = label.Text.Split('\n');
+            for (int lineIndex = 0; lineIndex < lines.Length; lineIndex++)
+            {
+                string line = lines[lineIndex];
+                float lineWidth = font.GetStringSize(
+                    line,
+                    HorizontalAlignment.Left,
+                    -1,
+                    label.FontSize).X;
+                Vector2 baseline = label.Position + new Vector2(
+                    (textWidth - lineWidth) / 2.0f,
+                    font.GetAscent(label.FontSize) + lineHeight * lineIndex);
+
+                if (label.Style.ShadowSize > 0)
+                {
+                    DrawStringOutline(
+                        font,
+                        baseline + label.Style.ShadowOffset,
+                        line,
+                        HorizontalAlignment.Left,
+                        -1,
+                        label.FontSize,
+                        label.Style.ShadowSize,
+                        shadowColor);
+                }
+
+                if (label.Style.OutlineWidth > 0)
+                {
+                    DrawStringOutline(
+                        font,
+                        baseline,
+                        line,
+                        HorizontalAlignment.Left,
+                        -1,
+                        label.FontSize,
+                        label.Style.OutlineWidth,
+                        outlineColor);
+                }
+
+                DrawString(font, baseline, line, HorizontalAlignment.Left, -1, label.FontSize, textColor);
+            }
+        }
+    }
+
+    private static float GetSubsectorLabelOpacity(
+        float zoom,
+        SectorLabelBandStyle subsectorStyle,
+        SectorLabelBandStyle planetStyle)
+    {
+        float firstBoundary = subsectorStyle.MaxZoom;
+        float secondBoundary = planetStyle.MaxZoom;
+        float firstFade = Mathf.Max(0.05f, (secondBoundary - firstBoundary) * 0.12f);
+        float dimmedAlpha = 0.28f;
+
+        if (zoom <= firstBoundary - firstFade) return 1.0f;
+        if (zoom < firstBoundary)
+        {
+            return Mathf.Lerp(1.0f, dimmedAlpha, Smooth01((zoom - (firstBoundary - firstFade)) / firstFade));
+        }
+        if (zoom < secondBoundary - firstFade)
+        {
+            return dimmedAlpha;
+        }
+        if (zoom < secondBoundary)
+        {
+            return Mathf.Lerp(dimmedAlpha, 0.0f, Smooth01((zoom - (secondBoundary - firstFade)) / firstFade));
+        }
+        return 0.0f;
+    }
+
+    private static float GetBandOpacity(
+        float zoom,
+        SectorLabelBandStyle style,
+        bool keepVisibleAtMax = false)
+    {
+        float transition = Mathf.Max(0.05f, (style.MaxZoom - style.MinZoom) * 0.12f);
+        if (zoom <= style.MinZoom - transition) return 0.0f;
+        if (zoom < style.MinZoom)
+        {
+            return Smooth01((zoom - (style.MinZoom - transition)) / transition);
+        }
+        if (keepVisibleAtMax && zoom >= style.MinZoom) return 1.0f;
+        if (zoom < style.MaxZoom - transition) return 1.0f;
+        if (zoom < style.MaxZoom)
+        {
+            return 1.0f - Smooth01((zoom - (style.MaxZoom - transition)) / transition);
+        }
+        return 0.0f;
+    }
+
+    private static float Smooth01(float value)
+    {
+        value = Mathf.Clamp(value, 0.0f, 1.0f);
+        return value * value * (3.0f - 2.0f * value);
+    }
+
+    private static NumericsVector2 ToNumerics(Vector2 vector) => new(vector.X, vector.Y);
+
+    private static Vector2 ToGodot(NumericsVector2 vector) => new(vector.X, vector.Y);
 
     public void ZoomIn()
     {

@@ -467,17 +467,12 @@ namespace OnlyWar.Builders
         }
 
         // §4 token sourcing — subsectors have no authored name, so name the promised world's
-        // subsector after its governance capital ("{Capital} Subsector"). Falls back to the
-        // subsector's id-name, then the planet name, if no capital is seated.
+        // Subsector.Name is derived during governance assignment as "{Capital} Subsector",
+        // with a stable fallback when no capital is seated.
         private static string ResolveSubsectorName(Sector sector, Planet promised)
         {
             Subsector subsector = sector.Subsectors.FirstOrDefault(s => s.Planets.Contains(promised));
-            Planet capital = subsector?.GovernanceSeat;
-            if (capital != null)
-            {
-                return $"{capital.Name} Subsector";
-            }
-            return subsector != null ? $"{subsector.Name} Subsector" : promised.Name;
+            return subsector?.Name ?? promised.Name;
         }
     }
 }

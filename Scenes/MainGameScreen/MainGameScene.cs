@@ -822,6 +822,7 @@ public partial class MainGameScene : Control
 			_turnController.ProcessTurn(GameDataSingleton.Instance.Sector);
 		RefreshTopMenuStatus();
 		_sectorMap.RefreshFleets();
+		_sectorMap.RefreshLabels();
 		RefreshSelectedSystemInspector();
 		CreateEndOfTurnDialog();
 

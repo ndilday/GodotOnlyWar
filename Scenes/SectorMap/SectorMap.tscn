@@ -3,9 +3,63 @@
 [ext_resource type="Script" uid="uid://c546ktqo4gdqq" path="res://Scenes/SectorMap/SectorMap.cs" id="1_6knhr"]
 [ext_resource type="Script" uid="uid://dqvcwskda1r7e" path="res://Scenes/SectorMap/Camera2D.cs" id="2_u2h2t"]
 [ext_resource type="Texture2D" uid="uid://btw8he727amfl" path="res://Assets/SectorMap/sector_map_stellar_background_8192.png" id="3_l4fwm"]
+[ext_resource type="FontFile" path="res://Assets/Fonts/caslon-antique.regular.ttf" id="4_caslon"]
+[ext_resource type="FontFile" path="res://Assets/Fonts/eb-garamond.12-regular-all-smallcaps.ttf" id="5_garamond"]
+[ext_resource type="Script" path="res://Scenes/SectorMap/SectorLabelBandStyle.cs" id="6_band_style"]
+
+[sub_resource type="FontVariation" id="FontVariation_caslon"]
+base_font = ExtResource("4_caslon")
+spacing_glyph = 1
+
+[sub_resource type="FontVariation" id="FontVariation_garamond"]
+base_font = ExtResource("5_garamond")
+spacing_glyph = 1
+
+[sub_resource type="Resource" id="SectorLabelBandStyle_a"]
+script = ExtResource("6_band_style")
+font = SubResource("FontVariation_caslon")
+world_font_size = 34.0
+min_zoom = 0.33
+max_zoom = 1.1
+font_color = Color(0.98, 0.906, 0.725, 1)
+outline_color = Color(0, 0, 0, 0.82)
+outline_width = 2
+shadow_color = Color(0, 0, 0, 0.7)
+shadow_size = 1
+shadow_offset = Vector2(1, 1)
+letter_spacing = 1.0
+
+[sub_resource type="Resource" id="SectorLabelBandStyle_b"]
+script = ExtResource("6_band_style")
+font = SubResource("FontVariation_garamond")
+world_font_size = 10.0
+min_zoom = 1.1
+max_zoom = 3.5
+font_color = Color(1, 1, 1, 1)
+outline_color = Color(0, 0, 0, 0.82)
+outline_width = 1
+shadow_color = Color(0, 0, 0, 0.7)
+shadow_size = 1
+shadow_offset = Vector2(1, 1)
+letter_spacing = 1.25
+
+[sub_resource type="Resource" id="SectorLabelBandStyle_c"]
+script = ExtResource("6_band_style")
+font = SubResource("FontVariation_garamond")
+world_font_size = 3.5
+min_zoom = 3.5
+max_zoom = 10.0
+font_color = Color(1, 1, 1, 1)
+outline_color = Color(0, 0, 0, 0.82)
+outline_width = 1
+shadow_color = Color(0, 0, 0, 0.7)
+shadow_size = 1
+shadow_offset = Vector2(1, 1)
+letter_spacing = 1.0
 
 [node name="SectorMap" type="Node2D" unique_id=291905396]
 script = ExtResource("1_6knhr")
+label_band_styles = Array[Resource]([SubResource("SectorLabelBandStyle_a"), SubResource("SectorLabelBandStyle_b"), SubResource("SectorLabelBandStyle_c")])
 
 [node name="Background" type="Sprite2D" parent="." unique_id=1581012305]
 z_index = -100

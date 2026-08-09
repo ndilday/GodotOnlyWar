@@ -74,6 +74,11 @@ public partial class Camera2D : Godot.Camera2D
             {
                 ZoomOut(null);
             }
+            else if (eventKey.Pressed && eventKey.Keycode == Key.L)
+            {
+                _sectorMap.ToggleLabelVisibility();
+                GetViewport().SetInputAsHandled();
+            }
         }
         else if (@event is InputEventMouseMotion emm && emm.ButtonMask == MouseButtonMask.Right)
 		{
@@ -182,5 +187,6 @@ public partial class Camera2D : Godot.Camera2D
         // Adjust the position to keep the zoom center fixed
         Position += zoomCenter - newCenter;
         ClampCamera();
+        _sectorMap?.OnCameraZoomChanged(Zoom.X);
     }
 }
