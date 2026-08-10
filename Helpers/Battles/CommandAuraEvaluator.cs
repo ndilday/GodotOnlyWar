@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 
 using OnlyWar.Models.Battles;
 using OnlyWar.Models.Soldiers;
@@ -53,7 +54,8 @@ namespace OnlyWar.Helpers.Battles
             BattleSquad squad,
             IEnumerable<BattleSquad> friendlySquads,
             BattleGridManager grid,
-            BaseSkill tacticsSkill)
+            BaseSkill tacticsSkill,
+            ValueTuple<float, float>? receiverCentroid = null)
         {
             ArgumentNullException.ThrowIfNull(squad);
             ArgumentNullException.ThrowIfNull(friendlySquads);
@@ -95,7 +97,11 @@ namespace OnlyWar.Helpers.Battles
                 }
                 anySurvivingHq = true;
                 if (provider.Status == BattleSquadStatus.Active
-                    && grid.GetMinimumDistanceBetweenSquads(squad, provider)
+                    && MinimumDistanceToProvider(
+                        squad,
+                        provider,
+                        grid,
+                        receiverCentroid)
                         <= provider.GetCommandAuraRadius(tacticsSkill))
                 {
                     return MoraleConstants.CommandAuraSupportStrength;
@@ -103,6 +109,46 @@ namespace OnlyWar.Helpers.Battles
             }
 
             return sawHq && !anySurvivingHq ? -MoraleConstants.CommandLossStress : 0f;
+        }
+
+        private static float MinimumDistanceToProvider(
+            BattleSquad receiver,
+            BattleSquad provider,
+            BattleGridManager grid,
+            ValueTuple<float, float>? receiverCentroid)
+        {
+            if (!receiverCentroid.HasValue)
+            {
+                return grid.GetMinimumDistanceBetweenSquads(receiver, provider);
+            }
+
+            List<BattleSoldier> receivers = receiver.AbleSoldiers
+                .Where(soldier => soldier.TopLeft.HasValue)
+                .ToList();
+            List<BattleSoldier> providers = provider.AbleSoldiers
+                .Where(soldier => soldier.TopLeft.HasValue)
+                .ToList();
+            if (receivers.Count == 0 || providers.Count == 0)
+            {
+                return float.MaxValue;
+            }
+
+            (float rootX, float rootY) = BattleEngagementFrameBuilder.Centroid(receiver);
+            float deltaX = receiverCentroid.Value.Item1 - rootX;
+            float deltaY = receiverCentroid.Value.Item2 - rootY;
+            float minimum = float.MaxValue;
+            foreach (BattleSoldier receiverSoldier in receivers)
+            {
+                foreach (BattleSoldier providerSoldier in providers)
+                {
+                    float dx = receiverSoldier.TopLeft.Value.Item1 + deltaX
+                        - providerSoldier.TopLeft.Value.Item1;
+                    float dy = receiverSoldier.TopLeft.Value.Item2 + deltaY
+                        - providerSoldier.TopLeft.Value.Item2;
+                    minimum = Math.Min(minimum, (float)Math.Sqrt(dx * dx + dy * dy));
+                }
+            }
+            return minimum;
         }
     }
 }

@@ -129,6 +129,34 @@ public class CommandAuraTests
     }
 
     [Fact]
+    public void ProjectedReceiverCentroidUsesTheSameAuraGeometryAsRootState()
+    {
+        BattleGridManager grid = new();
+        BattleSquad hq = CreateSquad("Captain", 81_004, SquadTypes.HQ, ego: 14f, soldierCount: 1);
+        BattleSquad troops = CreateSquad(
+            "Advancing Troops", 81_005, SquadTypes.None, ego: 10f, soldierCount: 1);
+        PlaceSquad(grid, hq, 0, 0);
+        PlaceSquad(grid, troops, 50, 0);
+        BattleSquad[] roster = [hq, troops];
+
+        float root = CommandAuraEvaluator.ComputeCommandAuraModifier(
+            troops,
+            roster,
+            grid,
+            TestSkills.Tactics,
+            BattleEngagementFrameBuilder.Centroid(troops));
+        float projectedOutsideAura = CommandAuraEvaluator.ComputeCommandAuraModifier(
+            troops,
+            roster,
+            grid,
+            TestSkills.Tactics,
+            (AuraRadius(hq) + 50f, 0f));
+
+        Assert.Equal(MoraleConstants.CommandAuraSupportStrength, root);
+        Assert.Equal(0f, projectedOutsideAura);
+    }
+
+    [Fact]
     public void Support_DoesNotStackAcrossMultipleHqs()
     {
         BattleGridManager grid = new();

@@ -54,6 +54,14 @@ namespace OnlyWar.Helpers.Battles
         private static float GetBattleValue(BattleSoldier soldier) =>
             SquadPlanningServices.BattleValueOf(soldier);
 
+        // Keep the engagement profile's definition of usable melee capability: an explicitly
+        // armed melee soldier contributes, and an unarmed soldier contributes only when he has no
+        // ranged loadout. A ranged-only soldier can still punch after contact, but that is not a
+        // melee capability the formation is priced around by BattleEngagementFrameBuilder.
+        private static bool IsEngagementMeleeCapable(BattleSoldier soldier) =>
+            soldier?.FunctioningHands > 0
+                && (soldier.MeleeWeapons.Count > 0 || soldier.RangedWeapons.Count == 0);
+
         // Net outcome of a soldier charging the engaged enemy squad: the battle value his strikes
         // would remove on contact, and the friendly battle value expected to be lost crossing the
         // gap under fire. NetValue < 0 means the run-in costs more than the melee gains.
@@ -73,6 +81,96 @@ namespace OnlyWar.Helpers.Battles
                 ClosingCost = closingCost;
                 ReachesContactThisTurn = reachesContactThisTurn;
             }
+        }
+
+        /// <summary>
+        /// Expected enemy battle value removed by one stationary melee exchange. This is the
+        /// melee counterpart to <see cref="SquadPairRemovalRate.RateAtRange"/>: each attacker
+        /// plans its projected strikes against the nearest contact sample, and each strike is
+        /// credited with the same take-out/removal fraction used by melee action planning.
+        /// </summary>
+        internal float EstimateContactRemovalRate(
+            BattleSquad attacker,
+            BattleSquad target)
+        {
+            if (attacker == null || target == null)
+            {
+                return 0f;
+            }
+
+            return EstimateContactRemovalRate(
+                attacker.AbleSoldiers
+                    .Where(IsPlaced)
+                    .Where(IsEngagementMeleeCapable)
+                    .OrderBy(soldier => soldier.Soldier.Id)
+                    .ToList(),
+                target.AbleSoldiers.Where(IsPlaced).OrderBy(soldier => soldier.Soldier.Id).ToList());
+        }
+
+        /// <summary>
+        /// Grid-free form used while building engagement profiles. The inputs are already the
+        /// placed members of the two sides, so the same scoring calculation can be shared with
+        /// the planner without giving the frame builder a targeting context or an action sink.
+        /// </summary>
+        internal static float EstimateContactRemovalRate(
+            IReadOnlyCollection<BattleSoldier> attackers,
+            IReadOnlyCollection<BattleSoldier> targets)
+        {
+            List<BattleSoldier> attackerList = attackers
+                ?.Where(IsEngagementMeleeCapable)
+                .ToList()
+                ?? [];
+            List<BattleSoldier> targetList = targets?.Where(soldier => soldier != null).ToList()
+                ?? [];
+            if (attackerList.Count == 0 || targetList.Count == 0)
+            {
+                return 0f;
+            }
+
+            Dictionary<int, BattleSoldier> targetMap = targetList
+                .GroupBy(soldier => soldier.Soldier.Id)
+                .ToDictionary(group => group.Key, group => group.First());
+            float total = 0f;
+            foreach (BattleSoldier attacker in attackerList.OrderBy(soldier => soldier.Soldier.Id))
+            {
+                List<BattleSoldier> contactTargets = targetList
+                    .OrderBy(target => DistanceBetween(attacker, target))
+                    .ThenBy(target => target.Soldier.Id)
+                    .Take(EngagementMeleeTargetSampleCount)
+                    .ToList();
+                IReadOnlyList<MeleeWeapon> loadout = GetProjectedMeleeLoadoutCore(attacker);
+                if (contactTargets.Count == 0 || loadout.Count == 0)
+                {
+                    continue;
+                }
+
+                MeleeWeapon primary = loadout[0];
+                MeleeWeapon secondary = GetSecondaryMeleeWeapon(loadout);
+                List<MeleeWeapon> plannedWeapons = BuildProjectedWeaponSequence(
+                    attacker, primary, secondary);
+                List<PlannedMeleeStrike> strikePlan = BuildStrikePlanCore(
+                    attacker, contactTargets, plannedWeapons, didMove: false);
+                total += EstimateProjectedMeleeBattleValueCore(
+                    attacker,
+                    strikePlan,
+                    plannedWeapons,
+                    targetMap,
+                    didMove: false);
+            }
+
+            return Math.Min(total, targetList.Sum(GetBattleValue));
+        }
+
+        private static float DistanceBetween(BattleSoldier first, BattleSoldier second)
+        {
+            if (!first.TopLeft.HasValue || !second.TopLeft.HasValue)
+            {
+                return float.MaxValue;
+            }
+
+            float dx = first.TopLeft.Value.Item1 - second.TopLeft.Value.Item1;
+            float dy = first.TopLeft.Value.Item2 - second.TopLeft.Value.Item2;
+            return (float)Math.Sqrt((dx * dx) + (dy * dy));
         }
 
         internal ChargeAssessment EstimateChargeNet(
@@ -203,6 +301,9 @@ namespace OnlyWar.Helpers.Battles
         }
 
         internal IReadOnlyList<MeleeWeapon> GetProjectedMeleeLoadout(BattleSoldier soldier)
+            => GetProjectedMeleeLoadoutCore(soldier);
+
+        private static IReadOnlyList<MeleeWeapon> GetProjectedMeleeLoadoutCore(BattleSoldier soldier)
         {
             if (soldier.EquippedMeleeWeapons.Count > 0)
             {
@@ -241,18 +342,27 @@ namespace OnlyWar.Helpers.Battles
             IReadOnlyList<PlannedMeleeStrike> strikePlans,
             IReadOnlyList<MeleeWeapon> plannedWeapons,
             bool didMove = false)
+            => EstimateProjectedMeleeBattleValueCore(
+                attacker, strikePlans, plannedWeapons, _soldierMap, didMove);
+
+        private static float EstimateProjectedMeleeBattleValueCore(
+            BattleSoldier attacker,
+            IReadOnlyList<PlannedMeleeStrike> strikePlans,
+            IReadOnlyList<MeleeWeapon> plannedWeapons,
+            IReadOnlyDictionary<int, BattleSoldier> soldierMap,
+            bool didMove)
         {
             Dictionary<int, float> targetSurvivalProbability = [];
             int strikeCount = Math.Min(strikePlans.Count, plannedWeapons.Count);
             for (int index = 0; index < strikeCount; index++)
             {
                 PlannedMeleeStrike strike = strikePlans[index];
-                if (!_soldierMap.TryGetValue(strike.TargetId, out BattleSoldier target))
+                if (!soldierMap.TryGetValue(strike.TargetId, out BattleSoldier target))
                 {
                     continue;
                 }
 
-                float strikeTakeOutProbability = EstimateTakeOutProbability(
+                float strikeTakeOutProbability = EstimateTakeOutProbabilityCore(
                     attacker,
                     target,
                     plannedWeapons[index],
@@ -266,7 +376,7 @@ namespace OnlyWar.Helpers.Battles
             }
 
             return targetSurvivalProbability.Sum(entry =>
-                (1 - entry.Value) * GetBattleValue(_soldierMap[entry.Key]));
+                (1 - entry.Value) * GetBattleValue(soldierMap[entry.Key]));
         }
 
         /// <summary>
@@ -466,6 +576,13 @@ namespace OnlyWar.Helpers.Battles
                                                          IReadOnlyList<BattleSoldier> targets,
                                                          IReadOnlyList<MeleeWeapon> plannedWeapons,
                                                          bool didMove)
+            => BuildStrikePlanCore(attacker, targets, plannedWeapons, didMove);
+
+        private static List<PlannedMeleeStrike> BuildStrikePlanCore(
+            BattleSoldier attacker,
+            IReadOnlyList<BattleSoldier> targets,
+            IReadOnlyList<MeleeWeapon> plannedWeapons,
+            bool didMove)
         {
             List<BattleSoldier> untargetedEnemies = targets.ToList();
             List<PlannedMeleeStrike> strikePlans = [];
@@ -477,7 +594,8 @@ namespace OnlyWar.Helpers.Battles
                 if (currentTarget == null)
                 {
                     List<BattleSoldier> targetPool = untargetedEnemies.Count > 0 ? untargetedEnemies : targets.ToList();
-                    currentTarget = SelectBestMeleeTarget(attacker, weapon, targetPool, didMove);
+                    currentTarget = SelectBestMeleeTargetCore(
+                        attacker, weapon, targetPool, didMove);
                     cumulativeTakeOutConfidence = 0;
                 }
 
@@ -491,7 +609,8 @@ namespace OnlyWar.Helpers.Battles
                                                        currentTarget.Soldier.Name,
                                                        weapon.Template.Name));
 
-                float strikeTakeOutChance = EstimateTakeOutProbability(attacker, currentTarget, weapon, didMove);
+                float strikeTakeOutChance = EstimateTakeOutProbabilityCore(
+                    attacker, currentTarget, weapon, didMove);
                 cumulativeTakeOutConfidence = 1 - ((1 - cumulativeTakeOutConfidence) * (1 - strikeTakeOutChance));
                 if (cumulativeTakeOutConfidence >= TargetTakeOutConfidenceThreshold)
                 {
@@ -504,10 +623,11 @@ namespace OnlyWar.Helpers.Battles
             return strikePlans;
         }
 
-        private BattleSoldier SelectBestMeleeTarget(BattleSoldier attacker,
-                                                    MeleeWeapon weapon,
-                                                    IReadOnlyList<BattleSoldier> targets,
-                                                    bool didMove)
+        private static BattleSoldier SelectBestMeleeTargetCore(
+            BattleSoldier attacker,
+            MeleeWeapon weapon,
+            IReadOnlyList<BattleSoldier> targets,
+            bool didMove)
         {
             BattleSoldier bestTarget = null;
             float bestTakeOutChance = float.MinValue;
@@ -516,7 +636,8 @@ namespace OnlyWar.Helpers.Battles
             foreach (BattleSoldier target in targets)
             {
                 float hitChance = EstimateHitProbability(attacker, target, weapon, didMove);
-                float takeOutChance = Math.Clamp(hitChance * EstimateTakeOutOnHit(target, attacker, weapon), 0, 1);
+                float takeOutChance = Math.Clamp(
+                    hitChance * EstimateTakeOutOnHit(target, attacker, weapon), 0, 1);
                 if (takeOutChance > bestTakeOutChance
                     || (Math.Abs(takeOutChance - bestTakeOutChance) < 0.0001f && hitChance > bestHitChance)
                     || (Math.Abs(takeOutChance - bestTakeOutChance) < 0.0001f
@@ -533,12 +654,23 @@ namespace OnlyWar.Helpers.Battles
         }
 
         internal float EstimateTakeOutProbability(BattleSoldier attacker, BattleSoldier target, MeleeWeapon weapon, bool didMove)
+            => EstimateTakeOutProbabilityCore(attacker, target, weapon, didMove);
+
+        private static float EstimateTakeOutProbabilityCore(
+            BattleSoldier attacker,
+            BattleSoldier target,
+            MeleeWeapon weapon,
+            bool didMove)
         {
             float hitChance = EstimateHitProbability(attacker, target, weapon, didMove);
             return Math.Clamp(hitChance * EstimateTakeOutOnHit(target, attacker, weapon), 0, 1);
         }
 
-        private float EstimateHitProbability(BattleSoldier attacker, BattleSoldier target, MeleeWeapon weapon, bool didMove)
+        private static float EstimateHitProbability(
+            BattleSoldier attacker,
+            BattleSoldier target,
+            MeleeWeapon weapon,
+            bool didMove)
         {
             float attackSkill = attacker.Soldier.GetTotalSkillValue(weapon.Template.RelatedSkill);
             float defenderSkill = MeleeAttackAction.GetDefenderMeleeSkill(target, weapon.Template.RelatedSkill);
@@ -556,7 +688,10 @@ namespace OnlyWar.Helpers.Battles
         // credited for wounding would have rigged every ranged-versus-melee comparison the planner
         // makes -- including the Hold-versus-CloseToContact decision this phase is calibrated
         // against. The two must be quoted in one currency or neither is trustworthy.
-        private float EstimateTakeOutOnHit(BattleSoldier target, BattleSoldier attacker, MeleeWeapon weapon)
+        private static float EstimateTakeOutOnHit(
+            BattleSoldier target,
+            BattleSoldier attacker,
+            MeleeWeapon weapon)
         {
             return RemovalMath.CalculateRemovalFractionOnHit(
                 target,

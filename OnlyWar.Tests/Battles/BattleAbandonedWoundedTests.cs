@@ -174,7 +174,10 @@ public class BattleAbandonedWoundedTests
             Directory.SetCurrentDirectory(originalDirectory);
         }
 
-        RNG.Reset(75_000);
+        // Re-baselined from 75_000 when engagement potential began conserving finite casualty
+        // pools universally; the old path still produced the right winner and death tally but no
+        // longer happened to leave a non-mortally-maimed enemy for the anti-vacuity assertion.
+        RNG.Reset(75_001);
         BattleAftermathDependencies aftermath = new(
             date,
             StaticRNG.Instance,

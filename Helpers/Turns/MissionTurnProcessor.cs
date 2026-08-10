@@ -132,8 +132,11 @@ namespace OnlyWar.Helpers.Turns
                     .ToList();
                 if (involvedBattleSquads.Count == 0) continue;
 
+                // Squad.Faction resolves through SquadTemplate.Faction and can be absent; an
+                // unguarded read in a log-only path means raising the log level throws. See the
+                // matching guard in BattleTurnResolver's constructor.
                 GameLog.Debug(() =>
-                    $"Combat mission start {order.AssignedSquads.First().Faction.Name} "
+                    $"Combat mission start {order.AssignedSquads.First().Faction?.Name} "
                     + $"{order.Mission.MissionType} -> {DescribeRegionFaction(order.Mission.RegionFaction)}: "
                     + $"squads={order.AssignedSquads.Count}, soldiers={order.AssignedSquads.Sum(s => s.Members.Count)}, "
                     + $"battleValue={SquadBattleValue(order.AssignedSquads)}");
@@ -220,7 +223,7 @@ namespace OnlyWar.Helpers.Turns
                     MissionFieldExperienceLog.LogGains(context, mission.XpBefore);
                 }
                 GameLog.Debug(() =>
-                    $"Combat mission result {order.AssignedSquads.First().Faction.Name} "
+                    $"Combat mission result {order.AssignedSquads.First().Faction?.Name} "
                     + $"{order.Mission.MissionType} -> {DescribeRegionFaction(order.Mission.RegionFaction)}: "
                     + $"elementSquads={context.MissionSquads.Count}, impact={context.Impact:F2}, "
                     + $"enemiesKilled={context.EnemiesKilled}, days={context.DaysElapsed}, "

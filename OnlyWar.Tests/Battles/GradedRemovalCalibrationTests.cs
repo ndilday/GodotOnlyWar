@@ -22,8 +22,8 @@ namespace OnlyWar.Tests.Battles;
 /// read from the rules database.
 ///
 /// <para>The objective: at 200 yards, thirty bolters grinding a Carnifex down is a better trade
-/// than thirty marines in melee with it, so Hold must beat CloseToContact. The invariant governs
-/// where the two conflict -- see <see cref="GradedRemovalTests"/>.</para>
+/// than thirty marines in melee with it, so Hold must beat a long-range RunToward approach. The
+/// invariant governs where the two conflict -- see <see cref="GradedRemovalTests"/>.</para>
 ///
 /// <para>PHASE 7. The sweep no longer WRITES a static: lambda is a const in shipping code and the
 /// only way to move it is <c>RemovalMath.OverrideWoundProgressCreditWeight</c>, an internal
@@ -49,16 +49,16 @@ public class GradedRemovalCalibrationTests
         float Outgoing,
         float Future,
         float HoldScore,
-        float CloseScore)
+        float ApproachScore)
     {
-        internal float Margin => HoldScore - CloseScore;
+        internal float Margin => HoldScore - ApproachScore;
     }
 
     [Fact]
     public void LambdaSweep_ReferenceScenarioAt200Yards()
     {
         _output.WriteLine(
-            "lambda | chosen          | outgoing | future  | Hold - Close");
+            "lambda | chosen          | outgoing | future  | Hold - Run");
         _output.WriteLine(
             "-------+-----------------+----------+---------+--------------");
         foreach (float lambda in SweptLambdas)
@@ -89,11 +89,11 @@ public class GradedRemovalCalibrationTests
         _output.WriteLine(
             $"lambda {RemovalMath.WoundProgressCreditWeight}: chosen {result.Chosen}, "
                 + $"outgoing {result.Outgoing:0.###}, future {result.Future:0.###}, "
-                + $"Hold - Close {result.Margin:0.###}");
-        Assert.NotEqual(EngagementOptionKind.CloseToContact, result.Chosen);
+                + $"Hold - Run {result.Margin:0.###}");
+        Assert.NotEqual(EngagementOptionKind.RunToward, result.Chosen);
         Assert.True(
             result.Margin > 0f,
-            $"Hold should outscore CloseToContact; margin was {result.Margin:0.#####}");
+            $"Hold should outscore RunToward; margin was {result.Margin:0.#####}");
     }
 
     [Fact]
@@ -241,7 +241,12 @@ public class GradedRemovalCalibrationTests
         BattleSquad lictor = Tyranid(
             "Lictor", 82_210, battleValue: 37, constitution: 120,
             size: 3.06f, moveSpeed: 8.001f, dexterity: 18,
-            armor: System.Math.Min(enemyArmor, (byte)10));
+            // Preserve the reference Lictor's lighter armour in the ordinary sweep, but make the
+            // impenetrable-target invariant genuinely impenetrable for every target in this
+            // whole-stack scenario.
+            armor: enemyArmor == byte.MaxValue
+                ? enemyArmor
+                : System.Math.Min(enemyArmor, (byte)10));
         BattleSquad carnifexA = Tyranid(
             "Melee Carnifex A", 82_220, battleValue: 30, constitution: 224,
             size: 8f, moveSpeed: 7.001f, dexterity: 10, armor: enemyArmor);
@@ -275,14 +280,14 @@ public class GradedRemovalCalibrationTests
 
         EngagementOptionEvaluation hold = decision.Candidates
             .Single(candidate => candidate.Kind == EngagementOptionKind.Hold);
-        EngagementOptionEvaluation close = decision.Candidates
-            .Single(candidate => candidate.Kind == EngagementOptionKind.CloseToContact);
+        EngagementOptionEvaluation approach = decision.Candidates
+            .Single(candidate => candidate.Kind == EngagementOptionKind.RunToward);
         return new ScenarioResult(
             decision.Chosen.Kind,
             hold.ImmediateEnemyRemoval,
             hold.FutureExchange.Sum(),
             hold.Score,
-            close.Score);
+            approach.Score);
     }
 
     private static BattleSquad BolterSquad(string name, int firstSoldierId)

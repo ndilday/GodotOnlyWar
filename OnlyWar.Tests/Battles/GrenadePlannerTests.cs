@@ -448,8 +448,7 @@ public class GrenadePlannerTests
             doesDamageDegradeWithRange: false,
             reloadTime: 3,
             templateType: 1,
-            areaRadius: 5,
-            fuelPerBurst: 10));
+            areaRadius: 5));
         soldier.RangedWeapons.Clear();
         soldier.ClearReadiedRangedWeapons();
         soldier.RangedWeapons.Add(flamer);

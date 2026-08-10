@@ -80,7 +80,7 @@ public class BattleValueCalculatorTests
         accuracy: 0, armorMultiplier: 1, penetrationMultiplier: 2,
         requiredStrength: 0, baseDamage: 6, maxDistance: 1_000, rof: 1, ammo: 12,
         recoil: 0, bulk: 2, doesDamageDegradeWithRange: false, reloadTime: 3,
-        templateType: 2, areaRadius: 6, fuelPerBurst: 0);
+        templateType: 2, areaRadius: 6);
 
     private static BattleValueCalculator.Input WithGrenade(
         BattleValueCalculator.Input input, RangedWeaponTemplate grenade) => new()
@@ -132,7 +132,7 @@ public class BattleValueCalculatorTests
     public void GrenadeLauncher_AsPrimaryWeapon_HasRealOffense()
     {
         // The launcher fires blasts at weapon range with a 12-shell magazine; it must
-        // no longer be zeroed out by the cone branch's fuel duty-cycle guard.
+        // no longer be zeroed out by the cone branch's ammo duty-cycle guard.
         MeleeWeaponTemplate knife = TestModelFactory.DefaultWeapons.PrimaryMeleeWeapon;
         BattleValueCalculator.Result bare = BattleValueCalculator.Calculate(BaselineInput(knife));
         BattleValueCalculator.Result launcher = BattleValueCalculator.Calculate(
@@ -265,7 +265,7 @@ public class BattleValueCalculatorTests
     }
 
     [Fact]
-    public void TemplateWeapon_AutoHitIgnoresSkillAndUsesFuelDutyCycle()
+    public void TemplateWeapon_AutoHitIgnoresSkillAndUsesAmmoDutyCycle()
     {
         RangedWeaponTemplate baseline = TestModelFactory.DefaultWeapons.PrimaryRangedWeapon;
         RangedWeaponTemplate smallTank = new(
@@ -275,7 +275,7 @@ public class BattleValueCalculatorTests
             requiredStrength: baseline.RequiredStrength, baseDamage: 10, maxDistance: 30,
             rof: 1, ammo: 10, recoil: 100, bulk: baseline.Bulk,
             doesDamageDegradeWithRange: false, reloadTime: 10,
-            templateType: 1, areaRadius: 3, fuelPerBurst: 10);
+            templateType: 1, areaRadius: 3);
         RangedWeaponTemplate largeTank = new(
             baseline.Id, "Template Flamer", baseline.Location, baseline.RelatedSkill,
             accuracy: 0, armorMultiplier: baseline.ArmorMultiplier,
@@ -283,7 +283,7 @@ public class BattleValueCalculatorTests
             requiredStrength: baseline.RequiredStrength, baseDamage: 10, maxDistance: 30,
             rof: 1, ammo: 100, recoil: 100, bulk: baseline.Bulk,
             doesDamageDegradeWithRange: false, reloadTime: 10,
-            templateType: 1, areaRadius: 3, fuelPerBurst: 10);
+            templateType: 1, areaRadius: 3);
 
         static BattleValueCalculator.Input InputFor(
             RangedWeaponTemplate weapon,

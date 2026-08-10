@@ -52,7 +52,7 @@ public class GrenadePhase1Tests
         // "Bolt Pistol + Chainsword"-style loadout: without the thrown-weapon exclusion,
         // the grenade filled the second hand and blocked the melee weapon from equipping.
         RangedWeaponTemplate pistol = new(4, "Test Pistol", EquipLocation.OneHand,
-            TestSkills.Ranged, 0, 1, 1, 0, 5, 50, 1, 10, 0, 1, true, 1, 0, 0, 0);
+            TestSkills.Ranged, 0, 1, 1, 0, 5, 50, 1, 10, 0, 1, true, 1, 0, 0);
         BattleSoldier soldier = new(TestModelFactory.CreateSoldier(), null);
 
         soldier.AddWeapons(

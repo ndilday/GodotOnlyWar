@@ -640,7 +640,7 @@ namespace OnlyWar.Helpers.Battles
                         victimIds,
                         expectedEnemyBattleValueRemoved,
                         expectedFriendlyBattleValueLost);
-                    // A zero-value burst wastes fuel, and a negative one knowingly trades
+                    // A zero-value burst wastes ammo, and a negative one knowingly trades
                     // more friendly value than it removes. Neither is a viable firing line.
                     if (evaluation.Score > 0 && (best == null || evaluation.Score > best.Score))
                     {

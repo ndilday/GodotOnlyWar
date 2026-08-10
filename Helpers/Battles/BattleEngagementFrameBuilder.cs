@@ -164,10 +164,10 @@ internal static class BattleEngagementFrameBuilder
     /// INCOMING has two terms, in the same shapes the planner already uses:
     /// - the opposing force's own <see cref="RangedEffectivenessCurve"/> fired at a representative
     ///   member of THIS squad, which is symmetric with our outgoing half; and
-    /// - a melee arrival term, <c>meleeBV * MeleeContactRemovalFraction / (1 + turnsUntilContact)</c>,
-    ///   matching <c>BattleSquadPlanner.MeleeRemovalRate</c> exactly at contact and decaying with
-    ///   approach time. This is the ONE place a turns-based discount is legitimate (Phase 3): a
-    ///   charge really does pay off later, unlike a bolt, which lands now.
+    /// - a melee arrival term, the shared contact take-out/removal rate divided by
+    ///   <c>1 + turnsUntilContact</c>, matching the planner's melee exchange rate exactly at
+    ///   contact and decaying with approach time. This is the ONE place a turns-based discount is
+    ///   legitimate (Phase 3): a charge really does pay off later, unlike a bolt, which lands now.
     ///
     /// OUR OWN MELEE IS DELIBERATELY ABSENT from the outgoing half. The question here is where a
     /// squad wants to STAND AND SHOOT; adding a contact spike would drag every mixed squad to
@@ -266,6 +266,14 @@ internal static class BattleEngagementFrameBuilder
     /// integral (<see cref="CalculatePreferredOpeningRange"/>) cannot drift apart in WHAT they
     /// model while deliberately differing in WHICH QUESTION they ask of it.
     /// </summary>
+    /// <param name="OutgoingSaturationRange">
+    /// The outer edge of the outgoing curve's useful band, at
+    /// <see cref="RangedEffectivenessCurve.SaturationFraction"/>. Carried on the record because
+    /// <see cref="BuildEngagementCurves"/> must compute it anyway to apply the standing invariant
+    /// guard, and <see cref="CalculatePreferredOpeningRange"/> then wants the same number for its
+    /// floor. Recomputing it there cost a second full 50-sample sweep of the same curve for an
+    /// answer that cannot have changed -- nothing between the two mutates the curve.
+    /// </param>
     private sealed record EngagementCurves(
         RangedEffectivenessCurve Outgoing,
         RangedEffectivenessCurve Incoming,
@@ -275,7 +283,8 @@ internal static class BattleEngagementFrameBuilder
         float ClosingSpeed,
         float OpposingBattleValue,
         float OurBattleValue,
-        int OurSoldierCount);
+        int OurSoldierCount,
+        float OutgoingSaturationRange);
 
     /// <param name="degenerateRange">
     /// What the caller must return when this yields null: <paramref name="reach"/> for "there is
@@ -304,7 +313,6 @@ internal static class BattleEngagementFrameBuilder
         float constitution = 0;
         float evasion = 0;
         float battleValue = 0;
-        float meleeBattleValue = 0;
         float closingSpeed = 0;
         List<BattleSoldier> opposingSoldiers = [];
         foreach (BattleSquad opponent in live)
@@ -323,7 +331,6 @@ internal static class BattleEngagementFrameBuilder
                 opposingSoldiers.Add(soldier);
                 float bv = Math.Max(1, soldier.Soldier.Template.BattleValue);
                 battleValue += bv;
-                meleeBattleValue += bv * SoldierCombatShares(soldier).Melee;
             }
         }
         if (weight <= 0) return null;
@@ -346,7 +353,9 @@ internal static class BattleEngagementFrameBuilder
             return null;
         }
         // Invariant guard: if nothing on the outgoing curve is worth shooting, no standoff is.
-        if (outgoing.SaturationRange(RangedEffectivenessCurve.SaturationFraction) <= 0)
+        float saturationRange =
+            outgoing.SaturationRange(RangedEffectivenessCurve.SaturationFraction);
+        if (saturationRange <= 0)
         {
             return null;
         }
@@ -354,16 +363,20 @@ internal static class BattleEngagementFrameBuilder
         EngagementTargetProfile us = RepresentativeProfile(ourSoldiers);
         RangedEffectivenessCurve incomingRanged =
             RangedEffectivenessCurve.Build(opposingSoldiers, us);
+        float meleeRemovalRate = MeleeStrikeEstimator.EstimateContactRemovalRate(
+            opposingSoldiers,
+            ourSoldiers);
         return new EngagementCurves(
             outgoing,
             incomingRanged,
             them,
             band,
-            meleeBattleValue * BattleModifiersUtil.MeleeContactRemovalFraction,
+            meleeRemovalRate,
             Math.Max(0.1f, closingSpeed),
             battleValue,
             ourSoldiers.Sum(soldier => Math.Max(1, soldier.Soldier.Template.BattleValue)),
-            ourSoldiers.Count);
+            ourSoldiers.Count,
+            saturationRange);
     }
 
     // How close the two forces are when the shooting phase ends and the melee begins. Shared with
@@ -470,9 +483,7 @@ internal static class BattleEngagementFrameBuilder
             * ApproachRemovalMargin
             * ApproachRangeParsimony
             / Math.Max(1f, curves.Band);
-        float sufficient = RangedEffectivenessCurve.Argmax(
-            curves.Band,
-            range => CalculateApproachExchange(curves, range) - (parsimony * range));
+        float sufficient = CalculateSufficientOpeningRange(curves, parsimony);
         // FLOOR: never open inside the range our own fire is still worth using, less the headroom
         // below.
         //
@@ -491,37 +502,158 @@ internal static class BattleEngagementFrameBuilder
         // outward with no toughness term in the formula.
         float useful = Math.Max(
             0,
-            curves.Outgoing.SaturationRange(RangedEffectivenessCurve.SaturationFraction)
-                - (RetreatFireTurns * curves.ClosingSpeed));
+            curves.OutgoingSaturationRange - (RetreatFireTurns * curves.ClosingSpeed));
         return Math.Clamp(Math.Max(sufficient, useful), 0, curves.Band);
     }
 
     /// <summary>
-    /// Net battle value this squad expects to trade over the whole approach if the engagement opens
-    /// at <paramref name="openingRange"/>: what it removes from the closing force, less what that
-    /// force removes from it, each saturated at the point where there is nobody left to remove.
+    /// Ceiling on the shared sample grid below. Only binds for a force that closes so slowly that
+    /// the grid would be finer than the approach itself can resolve.
     /// </summary>
-    private static float CalculateApproachExchange(
+    private const int MaximumApproachSamples = 8192;
+
+    /// <summary>
+    /// The opening range whose whole approach trades best: for each candidate, what this squad
+    /// removes from the closing force less what that force removes from it, each saturated at the
+    /// point where there is nobody left to remove, and tilted by <paramref name="parsimony"/> so
+    /// the shortest sufficient range wins a flat plateau.
+    ///
+    /// <para>WHY IT IS NOT A <see cref="RangedEffectivenessCurve.Argmax"/> OVER AN EXCHANGE
+    /// FUNCTION, which is what it was. That shape evaluated the exchange at 50 candidate ranges,
+    /// and each evaluation walked up to <see cref="MaximumApproachTurns"/> turns of approach
+    /// evaluating BOTH force-wide curves per turn -- up to 10,000 whole-force curve evaluations per
+    /// squad, per battle setup, for every squad on both sides, since
+    /// <c>MissionOpeningRange.Interpolate</c> asks this of each side in turn. It was the single
+    /// largest consumer of the removal math in the engine.</para>
+    ///
+    /// <para>THE REDUNDANCY IT REMOVES. The approach from an opening range <c>r</c> visits
+    /// <c>r, r - s, r - 2s, ...</c> for a fixed closing speed <c>s</c>, so two candidate ranges that
+    /// differ by a multiple of <c>s</c> visit overlapping gaps and re-evaluate the same curves at
+    /// the same points. Sampling both curves ONCE on a grid whose spacing divides <c>s</c> makes
+    /// every candidate's approach a stride-<c>stride</c> sub-sequence of one shared array, and its
+    /// running total a difference of two entries in a strided cumulative sum. The sweep goes from
+    /// O(candidates x turns) curve evaluations to O(grid), and the grid is finer than the 50-sample
+    /// search it replaces -- spacing is at worst <c>span/1024</c> against the old refined
+    /// <c>span/512</c>, so this RAISES resolution while cutting the work.</para>
+    ///
+    /// <para>The early break is preserved exactly rather than approximated away. Because removals
+    /// are non-negative, a cumulative sum is non-decreasing along a residue class, so "the first
+    /// turn at which this side is spent" is a binary search over the same array -- see
+    /// <see cref="FirstSaturatedTurn"/>. Both sides' break turns and the turn cap are then combined
+    /// exactly as the sequential loop combined them.</para>
+    /// </summary>
+    private static float CalculateSufficientOpeningRange(
         EngagementCurves curves,
-        float openingRange)
+        float parsimony)
     {
-        float enemyCeiling = curves.OpposingBattleValue * ApproachRemovalMargin;
-        float gap = openingRange;
-        float removedEnemy = 0;
-        float removedUs = 0;
-        for (int turn = 0; turn < MaximumApproachTurns && gap > ContactGap; turn++)
+        // The old Argmax's lower bound, and the range an approach that never opens is scored at.
+        float lower = Math.Min(1f, curves.Band);
+        float span = curves.Band - ContactGap;
+        float closingSpeed = curves.ClosingSpeed;
+        if (span <= 0f || closingSpeed <= 0f)
         {
-            removedEnemy += curves.Outgoing.RemovalAt(gap);
-            removedUs += curves.Incoming.RemovalAt(gap);
-            // Once either side is spent the approach is over; further turns of it are fiction.
-            if (removedEnemy >= enemyCeiling || removedUs >= curves.OurBattleValue)
-            {
-                break;
-            }
-            gap -= curves.ClosingSpeed;
+            return lower;
         }
-        return Math.Min(removedEnemy, enemyCeiling)
-            - Math.Min(removedUs, curves.OurBattleValue);
+
+        // Grid geometry: spacing must DIVIDE the closing speed, or the descent from one candidate
+        // would land between samples and the sharing argument above collapses.
+        float targetSpacing = Math.Max(span / 1024f, 1e-4f);
+        int stride = Math.Max(1, (int)MathF.Round(closingSpeed / targetSpacing));
+        float spacing = closingSpeed / stride;
+        int count = (int)MathF.Ceiling(span / spacing);
+        if (count > MaximumApproachSamples)
+        {
+            count = MaximumApproachSamples;
+            spacing = span / count;
+            stride = Math.Max(1, (int)MathF.Round(closingSpeed / spacing));
+        }
+
+        // Cumulative along the residue class, so entry i already holds the sum over
+        // i, i - stride, i - 2*stride, ... -- one curve evaluation per grid point, not per
+        // (candidate, turn) pair.
+        float[] enemyCumulative = new float[count + 1];
+        float[] ourCumulative = new float[count + 1];
+        for (int index = 1; index <= count; index++)
+        {
+            float gap = ContactGap + (spacing * index);
+            float carriedEnemy = index >= stride ? enemyCumulative[index - stride] : 0f;
+            float carriedOurs = index >= stride ? ourCumulative[index - stride] : 0f;
+            enemyCumulative[index] = carriedEnemy + curves.Outgoing.RemovalAt(gap);
+            ourCumulative[index] = carriedOurs + curves.Incoming.RemovalAt(gap);
+        }
+
+        float enemyCeiling = curves.OpposingBattleValue * ApproachRemovalMargin;
+        float bestRange = lower;
+        // An opening range at or inside contact buys no turns of approach at all, so its exchange
+        // is zero and the parsimony tilt is all that is left of its score -- exactly what the
+        // sequential loop returned for a gap that never cleared ContactGap.
+        float bestScore = -parsimony * lower;
+        for (int index = 1; index <= count; index++)
+        {
+            // Turns before the descent walks inside contact: the number of grid points in this
+            // residue class at or below index.
+            int available = Math.Min(
+                MaximumApproachTurns, (index + stride - 1) / stride);
+            int turns = Math.Min(
+                available,
+                Math.Min(
+                    FirstSaturatedTurn(
+                        enemyCumulative, index, stride, available, enemyCeiling),
+                    FirstSaturatedTurn(
+                        ourCumulative, index, stride, available, curves.OurBattleValue)));
+            int floorIndex = index - (turns * stride);
+            float removedEnemy = enemyCumulative[index]
+                - (floorIndex > 0 ? enemyCumulative[floorIndex] : 0f);
+            float removedUs = ourCumulative[index]
+                - (floorIndex > 0 ? ourCumulative[floorIndex] : 0f);
+            float range = ContactGap + (spacing * index);
+            float score = Math.Min(removedEnemy, enemyCeiling)
+                - Math.Min(removedUs, curves.OurBattleValue)
+                - (parsimony * range);
+            // Strict >, scanning ascending: ties go to the SHORTER range, which is the tie-break
+            // RangedEffectivenessCurve.Argmax gave and which ApproachRangeParsimony exists to make
+            // meaningful.
+            if (score > bestScore)
+            {
+                bestScore = score;
+                bestRange = range;
+            }
+        }
+        return bestRange;
+    }
+
+    /// <summary>
+    /// The first turn of the approach from <paramref name="index"/> at which the running total
+    /// reaches <paramref name="threshold"/>, or <paramref name="available"/> if it never does --
+    /// the turn the sequential loop used to break on.
+    /// </summary>
+    private static int FirstSaturatedTurn(
+        float[] cumulative,
+        int index,
+        int stride,
+        int available,
+        float threshold)
+    {
+        float total = cumulative[index];
+        int low = 1;
+        int high = available;
+        int firstCrossing = available;
+        while (low <= high)
+        {
+            int middle = low + ((high - low) / 2);
+            int floorIndex = index - (middle * stride);
+            float accumulated = total - (floorIndex > 0 ? cumulative[floorIndex] : 0f);
+            if (accumulated >= threshold)
+            {
+                firstCrossing = middle;
+                high = middle - 1;
+            }
+            else
+            {
+                low = middle + 1;
+            }
+        }
+        return firstCrossing;
     }
 
     /// <summary>

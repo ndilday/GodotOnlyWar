@@ -55,16 +55,6 @@ namespace OnlyWar.Helpers.Battles
         public const float ThrownRangePenaltyAtMax = 12f;
 
         /// <summary>
-        /// Share of an attacker's usable melee battle value it removes per turn once it is in
-        /// contact. The last surviving piece of the pre-Phase-4 capability proxy. It lives here
-        /// rather than privately in <c>BattleSquadPlanner</c> because
-        /// <c>BattleEngagementFrameBuilder.CalculateEffectiveEngagementRange</c> prices the same
-        /// melee threat when it derives a standoff, and the two must agree about what a charge
-        /// arriving is worth.
-        /// </summary>
-        internal const float MeleeContactRemovalFraction = 0.13f;
-
-        /// <summary>
         /// The range portion of a blast delivery check. Launched blasts are aimed like
         /// firearms and use the standard logarithmic range curve; thrown blasts instead
         /// take -<see cref="ThrownRangePenaltyAtMax"/> x (range / effective max range)^2,

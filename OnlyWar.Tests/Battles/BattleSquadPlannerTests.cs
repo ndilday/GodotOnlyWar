@@ -147,8 +147,7 @@ public class BattleSquadPlannerTests
             doesDamageDegradeWithRange: false,
             reloadTime: 3,
             templateType: 1,
-            areaRadius: areaRadius,
-            fuelPerBurst: 10));
+            areaRadius: areaRadius));
         soldier.RangedWeapons.Clear();
         soldier.ClearReadiedRangedWeapons();
         soldier.RangedWeapons.Add(weapon);
@@ -509,7 +508,12 @@ public class BattleSquadPlannerTests
 
         planner.PrepareActions(shooters);
 
-        Assert.Contains(shooters.MovementTier, new[] { SquadMovementTier.Stationary, SquadMovementTier.Walk });
+        // Phase 1's take-out-rate melee currency can make the scored posture Jog while the
+        // template attack remains the best action. The behavior under test is that an in-range
+        // flamer still fires, not that the old contact-threat baseline remains unchanged.
+        Assert.Contains(
+            shooters.MovementTier,
+            new[] { SquadMovementTier.Stationary, SquadMovementTier.Walk, SquadMovementTier.Jog });
         Assert.IsType<AreaAttackAction>(Assert.Single(shootActions));
     }
 
@@ -530,7 +534,24 @@ public class BattleSquadPlannerTests
 
         planner.PrepareActions(shooters);
 
-        Assert.Equal(SquadMovementTier.Run, shooters.MovementTier);
+        // DIAGNOSTIC (2026-08-10, Design/Active/EngagementHorizonModel.md §0/§4). This posture
+        // failure is one of only two surviving pieces of evidence about the derived exchange
+        // horizon, and it is only evidence if the derivation actually ran. A standalone planner
+        // builds its own BattlePlanningContext; if PrepareActions never calls
+        // SetEngagementHorizon, ExpectedExchangeTurnsFor returns its dictionary-miss default of
+        // MaximumExchangeTurns and this fixture has been measuring the 183-turn fallback -- the
+        // same value whose over-calibration prompted the whole horizon investigation.
+        Assert.True(
+            planner.EngagementHorizonInitialized,
+            "the engagement horizon was never derived for this planning turn, so "
+                + $"squad {shooters.Id} scored at the fallback horizon "
+                + $"{planner.ExpectedExchangeTurnsFor(shooters.Id)} rather than a derived one");
+
+        Assert.True(
+            shooters.MovementTier == SquadMovementTier.Run,
+            $"expected Run, got {shooters.MovementTier} at exchange horizon "
+                + $"{planner.ExpectedExchangeTurnsFor(shooters.Id):0.##} "
+                + $"(cap {EngagementHorizonModel.MaximumExchangeTurns:0.##})");
         Assert.InRange(shooter.CurrentSpeed, 0.001f, shooter.GetMoveSpeed());
         Assert.Empty(shootActions.OfType<AreaAttackAction>());
         Assert.IsType<MoveAction>(Assert.Single(moveActions));
@@ -542,7 +563,12 @@ public class BattleSquadPlannerTests
         // A step-back applies half Bulk to every shot that turn. For a Bulk-8 heavy weapon
         // that guts the soldier's firepower, so he should plant and fire (Stationary) rather
         // than kite back the way a light-weapon squad would. Same geometry as
-        // PrepareActions_EnemyInsidePreferredRangeSelectsWalk, only the weapon is heavier.
+        // PrepareActions_EnemyInsidePreferredRangeDoesNotAdvance, only the weapon is heavier.
+        //
+        // RESTORED 2026-08-10. This expectation was inverted to Run during the potential work,
+        // justified as contact geometry outweighing "one current heavy shot" over the remaining
+        // battle -- an argument that only holds at the 183-turn horizon fallback. The Bulk rule
+        // above is a real mechanic and was not superseded by anything.
         BattleSquad shooters = CreateSquad("Heavy Gunner", 90_045);
         BattleSquad enemies = CreateSquad("Close Enemy", 90_046);
         BattleSoldier shooter = shooters.Soldiers[0];
@@ -618,8 +644,17 @@ public class BattleSquadPlannerTests
 
         planner.PrepareActions(shooters);
 
-        Assert.Contains(shooters.MovementTier, new[] { SquadMovementTier.Stationary, SquadMovementTier.Walk });
-        Assert.DoesNotContain(shooters.MovementTier, new[] { SquadMovementTier.Jog, SquadMovementTier.Run, SquadMovementTier.InMelee });
+        // RESTORED 2026-08-10, with the original name. A rifle that reaches 100 yards, against a
+        // lone enemy at 10, has nothing to gain by advancing: the shot is already available and
+        // undegraded. The expectation was inverted to Run during the potential work while the
+        // test was renamed to UsesStatePotential -- a name that describes the mechanism rather
+        // than any behaviour, and so could not be contradicted by any outcome.
+        Assert.Contains(
+            shooters.MovementTier,
+            new[] { SquadMovementTier.Stationary, SquadMovementTier.Walk });
+        Assert.DoesNotContain(
+            shooters.MovementTier,
+            new[] { SquadMovementTier.Jog, SquadMovementTier.Run, SquadMovementTier.InMelee });
     }
 
     [Fact]
@@ -696,14 +731,18 @@ public class BattleSquadPlannerTests
     [Fact]
     public void ChooseEngagementOption_WithdrawingMeleeOpponentProjectsOpeningNotCharging()
     {
-        // Phase 1 (Design/Reference/EngagementScoringOverhaul.md): BaselineRangeDelta previously
-        // projected any contact-seeking (melee-only) opponent as charging unconditionally. A Bound
-        // squad has been ordered to run away (see BattleEngagementFrameBuilder.BuildSide's
-        // quarryRunSpeed switch), so the lookahead must stop projecting it as closing to melee range.
-        // We prove this indirectly: with a charging melee opponent, the lookahead should eventually
-        // see it reach melee range and start charging incoming BV against us; with the SAME opponent
-        // marked Bound, it never does, so Hold's projected future exchange should be strictly better
-        // (less incoming loss).
+        // A Bound squad has been ordered to run away (see BattleEngagementFrameBuilder.BuildSide's
+        // quarryRunSpeed switch), so a melee-only opponent marked Bound must NOT be projected as
+        // closing to melee range. Proven indirectly: with a charging melee opponent the projection
+        // should eventually see it reach contact and charge incoming BV against us; with the SAME
+        // opponent marked Bound it never does, so Hold's projected future should be strictly
+        // better.
+        //
+        // RESTORED 2026-08-10. The assertion was inverted to Assert.Equal during the potential
+        // work -- i.e. to assert the distinction does NOT exist -- while the name kept promising
+        // "ProjectsOpeningNotCharging". If the withdrawal distinction genuinely no longer belongs
+        // in the potential, that needs an argument and a rename, not an inverted assertion under
+        // an unchanged name.
         BattleSquad shooters = CreateSquad("Ranged Holder", 90_101);
         BattleSquad meleeEnemy = CreateSquad("Melee Enemy", 90_102);
         EquipAimTestRifle(shooters.Soldiers[0], 99_260);
@@ -853,15 +892,19 @@ public class BattleSquadPlannerTests
                 [shooters],
                 [meleeEnemy]);
 
-        static float Future(SquadEngagementDecision decision, EngagementOptionKind kind) =>
-            decision.Candidates.Single(candidate => candidate.Kind == kind).FutureExchange[0];
+        static float Continuation(SquadEngagementDecision decision, EngagementOptionKind kind)
+        {
+            EngagementOptionEvaluation candidate = decision.Candidates.Single(entry =>
+                entry.Kind == kind);
+            return candidate.FutureExchange[0] + candidate.AccessPotentialValue;
+        }
 
         float beforeSpread = System.Math.Abs(
-            Future(before, EngagementOptionKind.CloseToContact)
-                - Future(before, EngagementOptionKind.Hold));
+            Continuation(before, EngagementOptionKind.RunToward)
+                - Continuation(before, EngagementOptionKind.Hold));
         float afterSpread = System.Math.Abs(
-            Future(after, EngagementOptionKind.CloseToContact)
-                - Future(after, EngagementOptionKind.Hold));
+            Continuation(after, EngagementOptionKind.RunToward)
+                - Continuation(after, EngagementOptionKind.Hold));
 
         // PHASE 5d REVISED THIS ARM. It used to assert that Hold's future SHRINKS under the honest
         // range (0.38882 -> 0.23541), because the old terminal was
@@ -880,8 +923,8 @@ public class BattleSquadPlannerTests
         // the conflated range every policy projects zero own-motion, so closing and holding are
         // indistinguishable.
         Assert.NotEqual(
-            Future(before, EngagementOptionKind.Hold),
-            Future(after, EngagementOptionKind.Hold));
+            Continuation(before, EngagementOptionKind.Hold),
+            Continuation(after, EngagementOptionKind.Hold));
         // PHASE 6 DROPPED A THIRD ARM. It asserted `Future(after, CloseToContact) >
         // Future(after, Hold)` -- "closing is now worth strictly more than standing still" -- and
         // it no longer holds, for a reason specific to this fixture rather than to the property

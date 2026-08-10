@@ -38,6 +38,24 @@ namespace OnlyWar.Helpers.Battles
         /// </summary>
         private const float DeepTailZ = -6f;
 
+        /// <summary>
+        /// The mirror of <see cref="DeepTailZ"/> on the certain side: past it
+        /// <see cref="GaussianCalculator.ApproximateNormalCDF"/> returns exactly 1f, because its
+        /// upper tail is under 1e-9 there and float spacing below 1.0 is 6e-8. Testing z against
+        /// this instead of calling the CDF to be handed a 1 back is bit-identical, not an
+        /// approximation -- see <see cref="ExpectedBurstRemovalFraction"/>.
+        /// </summary>
+        private const float CertainZ = 6f;
+
+        /// <summary>
+        /// The damage roll at <see cref="CertainZ"/> standard deviations above the mean: past this
+        /// multiple of the damage coefficient a threshold is beyond anything the roll produces.
+        /// A location whose take-out AND wound-onset thresholds both sit out here contributes
+        /// nothing to either term, which is the standing "cannot damage it at all" case -- see
+        /// <see cref="SkipLocation"/>.
+        /// </summary>
+        private const float DeepTailRoll = DamageRollMean + (CertainZ * DamageRollStdDev);
+
         // ===================================================================================
         // TUNABLE -- lambda, the graded-damage credit weight (Phase 5,
         // Design/Reference/EngagementScoringOverhaul.md).
@@ -280,7 +298,15 @@ namespace OnlyWar.Helpers.Battles
                 {
                     break;
                 }
-                float reachesK = GaussianCalculator.ApproximateNormalCDF(z);
+                // The other end of the same argument. A cone bearer's reference total is
+                // PairRemovalRateTable.ConeCertainHitTotal (1000), and a point-blank shot is not
+                // far off, so this loop was spending one CDF per shot to be told the shot lands --
+                // nine of them for a bolt burst. Above CertainZ the CDF returns exactly 1f, so
+                // substituting the constant is a bitwise-identical shortcut rather than a
+                // simplification of the model.
+                float reachesK = z > CertainZ
+                    ? 1f
+                    : GaussianCalculator.ApproximateNormalCDF(z);
                 if (reachesK <= 0f || weight <= 0f)
                 {
                     break;
@@ -326,6 +352,10 @@ namespace OnlyWar.Helpers.Battles
             float probability = 0f;
             for (int index = 0; index < terms.Count; index++)
             {
+                if (SkipLocation(terms[index], damageCoefficient))
+                {
+                    continue;
+                }
                 probability += terms[index].Weight
                     * EvaluateTakeOutLocationTail(terms[index], damageCoefficient);
             }
@@ -365,6 +395,10 @@ namespace OnlyWar.Helpers.Battles
             for (int index = 0; index < terms.Count; index++)
             {
                 TakeOutLocationTerm term = terms[index];
+                if (SkipLocation(term, damageCoefficient))
+                {
+                    continue;
+                }
                 takeOut += term.Weight * EvaluateTakeOutLocationTail(term, damageCoefficient);
                 if (graded)
                 {
@@ -387,6 +421,10 @@ namespace OnlyWar.Helpers.Battles
             float progress = 0f;
             for (int index = 0; index < terms.Count; index++)
             {
+                if (SkipLocation(terms[index], damageCoefficient))
+                {
+                    continue;
+                }
                 progress += terms[index].Weight
                     * EvaluateWoundProgressTail(terms[index], damageCoefficient);
             }
@@ -424,10 +462,62 @@ namespace OnlyWar.Helpers.Battles
             {
                 return 0f;
             }
-            float mass = GaussianCalculator.ApproximateNormalCDF(high)
-                - GaussianCalculator.ApproximateNormalCDF(low);
-            float partial = NormalPdf(low) - NormalPdf(high) - (low * mass);
+            // The graded band starts past anything the roll produces: no wound, so no progress.
+            if (low >= CertainZ)
+            {
+                return 0f;
+            }
+            float partial;
+            if (span < NarrowBandSpan)
+            {
+                // A near-degenerate band, where the closed form below differences two nearly equal
+                // values and then divides by the small span that made them nearly equal. The series
+                // integral(A..B) (t-A) phi(t) dt = phi(A)*s^2/2 - A*phi(A)*s^3/6 + O(s^4) has no
+                // such cancellation, and its truncation error at the cutoff is O(s^2) ~ 1e-4
+                // relative. One exp, on a branch that is rare precisely because the band is narrow.
+                partial = NormalPdf(low) * span * span * 0.5f * (1f - (low * span / 3f));
+            }
+            else
+            {
+                // G(A) - G(B) - (B-A)*Q(B), which expands to the pdf/mass form this replaced:
+                // the A*Q terms telescope into -A*(Phi(B) - Phi(A)). See
+                // GaussianCalculator.NormalLoss. Q(B) is taken as Phi(-B) because that is the
+                // branch of the CDF that forms the upper tail directly, without the 1-Phi
+                // cancellation the single-precision path cannot afford.
+                partial = GaussianCalculator.NormalLoss(low)
+                    - GaussianCalculator.NormalLoss(high)
+                    - (span * GaussianCalculator.ApproximateNormalCDF(-high));
+            }
             return Math.Clamp(partial / span, 0f, 1f);
+        }
+
+        /// <summary>
+        /// Below this standardized band width <see cref="EvaluateWoundProgressTail"/> switches to a
+        /// series expansion. Chosen so the series' O(span^2) truncation error and the closed form's
+        /// cancellation-amplified table error cross over well inside the noise of a term that is
+        /// then weighted by a hit-location share and by lambda.
+        /// </summary>
+        private const float NarrowBandSpan = 0.01f;
+
+        /// <summary>
+        /// True when neither term of the graded fraction can be nonzero at this damage coefficient,
+        /// so the whole location can be skipped without evaluating a single tail.
+        ///
+        /// <para>BOTH thresholds must be out of reach, not just one. They are not ordered: a
+        /// location carrying enough accumulated damage that <c>requiredRatio</c> is 0 disables on
+        /// any penetrating hit at all, which puts its take-out threshold BELOW its wound-onset
+        /// threshold. Testing only the onset would silently drop exactly the locations that are
+        /// easiest to take out.</para>
+        ///
+        /// <para>There is deliberately no mirror guard for a certain take-out. Thresholds are
+        /// non-negative (they are armor plus a penetration requirement), so the take-out z is at
+        /// most <c>DamageRollMean / DamageRollStdDev</c> = 2 and the tail is never saturated.</para>
+        /// </summary>
+        private static bool SkipLocation(TakeOutLocationTerm term, float damageCoefficient)
+        {
+            float cutoff = DeepTailRoll * damageCoefficient;
+            return term.PenetrationThreshold >= cutoff
+                && term.ZeroProgressThreshold >= cutoff;
         }
 
         /// <summary>
@@ -509,7 +599,8 @@ namespace OnlyWar.Helpers.Battles
                     effectiveArmor
                         + (location.Template.NaturalArmor / weaponWoundMultiplier));
                 collector?.Add(term);
-                if (damageCoefficient.HasValue)
+                if (damageCoefficient.HasValue
+                    && !SkipLocation(term, damageCoefficient.Value))
                 {
                     probability += term.Weight
                         * EvaluateTakeOutLocationTail(term, damageCoefficient.Value);

@@ -8,29 +8,25 @@ namespace OnlyWar.Helpers.Battles
 {
     /// <summary>
     /// The per-turn exchange model behind posture choice: what a squad and its enemies would remove
-    /// from each other, now and at every projected range the lookahead reaches.
+    /// from each other now, plus the current-turn contact terms.
     ///
     /// <para>Three questions live here. <b>Now</b> -- what is already landing on us this turn
     /// (<see cref="EvaluateIncomingNow"/>) and what a charge would trade (<see
-    /// cref="EvaluateContactTerms"/>). <b>Sooner</b> -- what reaching a useful range earlier is
-    /// worth (<see cref="EvaluateArrivalTimeValue"/>). <b>Later</b> -- a bounded policy rollout in
-    /// which each future state chooses again (<see cref="EvaluateBestContinuation"/>).</para>
+    /// cref="EvaluateContactTerms"/>). Future position value belongs to the state-only
+    /// <see cref="EngagementPotential"/> collaborator, so this class does not own option-specific
+    /// arrival or continuation shaping.</para>
     ///
     /// <para>Everything is denominated in the same currency -- expected battle value removed per
     /// turn -- which is the entire point of Phase 5. Ranged rates come from
-    /// <see cref="PairRemovalRateTable"/>; melee keeps a capability proxy because that table is
-    /// ranged-only. Scoring only: services in, no <see cref="ActionSink"/>, so no path through here
-    /// can emit an action.</para>
+    /// <see cref="PairRemovalRateTable"/> and melee rates come from
+    /// <see cref="MeleeStrikeEstimator"/>. Scoring only: services in, no <see cref="ActionSink"/>,
+    /// so no path through here can emit an action.</para>
     /// </summary>
     internal sealed class EngagementExchangeModel
     {
         // Plies of policy rollout. Each ply re-chooses, so this is a depth, not a fixed script.
         internal const int EngagementLookaheadHorizon = 2;
         internal const float EngagementFutureDiscount = 0.65f;
-        // How many turns of battle a squad expects to still be fighting. Scales the lookahead
-        // terminal so a short rollout does not make a battle that opens at 400 yards read as though
-        // it ends before a charge could pay off.
-        private const float ExpectedRemainingTurns = 20f;
         private const float WalkBulkMultiplier = SoldierMovementPlanner.WalkBulkMultiplier;
         private const float FullBulkMultiplier = SoldierMovementPlanner.FullBulkMultiplier;
 
@@ -40,6 +36,12 @@ namespace OnlyWar.Helpers.Battles
         private readonly PairRemovalRateTable _removalRates;
         private readonly BattleGridManager _grid;
         private readonly BattlePlanningContext _context;
+
+        // Kept for the legacy bounded-rollout helpers below. The live posture scorer uses the
+        // state-only potential, whose horizon is the same frozen turn-level memo.
+        private float ExpectedExchangeTurnsFor(BattleSquad squad) =>
+            _context?.ExpectedExchangeTurnsFor(squad?.Id ?? 0)
+                ?? EngagementHorizonModel.MaximumExchangeTurns;
 
         internal EngagementExchangeModel(
             SquadPlanningServices services,
@@ -217,28 +219,15 @@ namespace OnlyWar.Helpers.Battles
                 Math.Min(closing, profile.TotalAbleBattleValue) + lockCost);
         }
 
-        internal List<float> EvaluateFutureExchange(
-            BattleSquad squad,
-            ValueTuple<float, float> projectedCentroid,
-            EngagementOptionKind kind,
-            BattleSquadCapabilityProfile profile,
-            IReadOnlyDictionary<int, BattleSquadCapabilityProfile> profiles,
-            IReadOnlyDictionary<int, SquadEngagementFrame> frames,
-            IReadOnlyCollection<BattleSquad> enemies)
-        {
-            Dictionary<int, float> ranges = enemies.ToDictionary(
-                enemy => enemy.Id,
-                enemy => Distance(projectedCentroid, BattleEngagementFrameBuilder.Centroid(enemy)));
-            float continuation = EvaluateBestContinuation(
-                squad,
-                profile,
-                profiles,
-                frames,
-                enemies,
-                ranges,
-                EngagementLookaheadHorizon);
-            return [continuation];
-        }
+        /// <summary>
+        /// Returns the expected battle value removed by a stationary contact exchange. This is
+        /// exposed to the state potential so an enemy's declared withdrawal role can affect the
+        /// projected future without smuggling an engagement option into the value calculation.
+        /// </summary>
+        internal float EvaluateContactRemovalRate(
+            BattleSquad attacker,
+            BattleSquad target) =>
+            MeleeRemovalRate(attacker, target, 1f);
 
         /// <summary>
         /// Values the root option's change in time-to-useful-exchange using the same present-value
@@ -350,9 +339,15 @@ namespace OnlyWar.Helpers.Battles
                     opposing,
                     frames,
                     before);
+                // Keep the rate difference signed.  Clipping this per enemy turns the sum into
+                // "only improvements against enemies whose rate improves" rather than the
+                // potential difference for the whole state.  That makes the supposedly common
+                // root-state offset depend on the option's projected geometry: an option can
+                // discard every enemy it makes worse while retaining every enemy it makes
+                // better.  Negative gains are real positional costs and must cancel positive
+                // gains in the same state.
                 float rateGain = exchangeRate - currentRate;
-                if (rateGain <= 0) continue;
-                value += rateGain * ExpectedRemainingTurns * arrivalDiscountDelta;
+                value += rateGain * ExpectedExchangeTurnsFor(squad) * arrivalDiscountDelta;
             }
             return value;
         }
@@ -374,7 +369,7 @@ namespace OnlyWar.Helpers.Battles
                 // what it was shooting at. It remains the same per-turn net exchange as the
                 // plies, but arrival is scaled separately from the short-ply discount:
                 //
-                //     terminal = exchange(rangeWhenActing) * ExpectedRemainingTurns
+                //     terminal = exchange(rangeWhenActing) * ExpectedExchangeTurns
                 //         / (1 + turnsToAct)
                 //
                 // Read literally: "once I am standing where I want to stand, this is what each
@@ -408,7 +403,7 @@ namespace OnlyWar.Helpers.Battles
                         // priced at the Hold retention rather than at a moving policy's.
                         outgoingRetention: 1f,
                         targetSpeed: 0f);
-                    terminal += exchangeRate * ExpectedRemainingTurns
+                    terminal += exchangeRate * ExpectedExchangeTurnsFor(squad)
                         / (1f + turnsToAct);
                     // Terminal value represents attainable action opportunity, not generic distance:
                     // a squad with no usable offense receives no reward merely for closing.
@@ -570,11 +565,10 @@ namespace OnlyWar.Helpers.Battles
         /// squads. So: the enemy's WHOLE-squad rate at our projected separation, times our share.
         /// This mirrors the pre-Phase-5 structure exactly; only the rate itself became honest.</para>
         ///
-        /// <para>MELEE is untouched by the table, which is ranged-only, and keeps its capability
-        /// proxy (13% of the attacker's usable melee battle value inside 1.5). Dropping it would
-        /// make melee-only enemies read as harmless in the lookahead. The outgoing melee half keeps
-        /// its <c>PairWeights</c> allocation -- a squad can only be in contact with so many enemies
-        /// at once -- and the two halves are combined with <c>max</c>, as before.</para>
+        /// <para>MELEE is evaluated by <see cref="MeleeStrikeEstimator"/> against the actual target
+        /// soldiers, while the ranged half reads the removal-rate table. The outgoing melee half
+        /// keeps its <c>PairWeights</c> allocation -- a squad can only be in contact with so many
+        /// enemies at once -- and the two halves are combined with <c>max</c>, as before.</para>
         /// </summary>
         internal float EvaluateOutgoingExchangeRate(
             BattleSquad squad,
@@ -592,7 +586,7 @@ namespace OnlyWar.Helpers.Battles
                 opposing.TotalAbleBattleValue,
                 Math.Max(
                     PairRangedRemovalRate(squad, enemy.Id, range),
-                    outgoingAllocation * MeleeRemovalRate(profile, range)));
+                    outgoingAllocation * MeleeRemovalRate(squad, enemy, range)));
         }
 
         internal float EvaluateExchangeRate(
@@ -605,11 +599,6 @@ namespace OnlyWar.Helpers.Battles
             float outgoingRetention,
             float targetSpeed)
         {
-            float incomingAllocation = frames.TryGetValue(
-                enemy.Id, out SquadEngagementFrame theirFrame)
-                    ? theirFrame.PairWeights.GetValueOrDefault(squad.Id)
-                    : 0f;
-
             float outgoing = EvaluateOutgoingExchangeRate(
                 squad,
                 enemy,
@@ -617,10 +606,38 @@ namespace OnlyWar.Helpers.Battles
                 opposing,
                 frames,
                 range);
+            float incoming = EvaluateIncomingExchangeRate(
+                squad,
+                enemy,
+                profile,
+                frames,
+                range,
+                targetSpeed);
+            return (outgoing * outgoingRetention) - incoming;
+        }
+
+        /// <summary>
+        /// The positive rate at which <paramref name="enemy"/> removes battle value from
+        /// <paramref name="squad"/>. Keeping this direction separate lets finite-pool consumers
+        /// conserve the friendly and enemy pools independently instead of saturating a signed,
+        /// already-netted rate.
+        /// </summary>
+        internal float EvaluateIncomingExchangeRate(
+            BattleSquad squad,
+            BattleSquad enemy,
+            BattleSquadCapabilityProfile profile,
+            IReadOnlyDictionary<int, SquadEngagementFrame> frames,
+            float range,
+            float targetSpeed)
+        {
+            float incomingAllocation = frames.TryGetValue(
+                enemy.Id, out SquadEngagementFrame theirFrame)
+                    ? theirFrame.PairWeights.GetValueOrDefault(squad.Id)
+                    : 0f;
             float incomingBulk = PostureBulkMultiplier(
                 frames.GetValueOrDefault(enemy.Id)?.BaselinePosture
                     ?? EngagementOptionKind.Hold);
-            float incoming = float.IsPositiveInfinity(incomingBulk)
+            return float.IsPositiveInfinity(incomingBulk)
                 ? 0
                 : incomingAllocation * Math.Min(
                     profile.TotalAbleBattleValue,
@@ -630,25 +647,28 @@ namespace OnlyWar.Helpers.Battles
                             range,
                             targetSpeed,
                             incomingBulk),
-                        MeleeRemovalRate(opposing, range)));
-            return (outgoing * outgoingRetention) - incoming;
+                        MeleeRemovalRate(enemy, squad, range)));
         }
 
-        // The one surviving piece of the old capability proxy. The Phase 4/5 removal-rate table is
-        // ranged-only, so melee threat is still priced from the attacker's usable melee battle
-        // value. PHASE 6 did not replace it -- it is a per-turn exchange rate at contact, not a
-        // range question, and the removal-rate table has no melee side to read. What Phase 6 did do
-        // is share the coefficient: BattleEngagementFrameBuilder.CalculateEffectiveEngagementRange
-        // prices the SAME melee threat (discounted by arrival time) when it derives a standoff, and
-        // the two must not disagree about what a charge landing is worth.
-        private static float MeleeRemovalRate(
-            BattleSquadCapabilityProfile attacker,
+        /// <summary>
+        /// The melee counterpart to <see cref="PairRangedRemovalRate"/>. It is deliberately
+        /// calculated from the actual attacker/target soldiers rather than a capability fraction:
+        /// the estimator plans contact strikes and credits their take-out/removal probabilities
+        /// in the same battle-value currency as the ranged removal table.
+        /// </summary>
+        private float MeleeRemovalRate(
+            BattleSquad attacker,
+            BattleSquad target,
             float range)
         {
-            return range <= 1.5f
-                ? attacker.UsableMeleeBattleValue
-                    * BattleModifiersUtil.MeleeContactRemovalFraction
-                : 0f;
+            if (range > 1.5f || attacker == null || target == null)
+            {
+                return 0f;
+            }
+
+            return _context.MeleeContactRemovalRates.GetOrAdd(
+                (attacker.Id, target.Id),
+                _ => _melee.EstimateContactRemovalRate(attacker, target));
         }
 
         /// <summary>

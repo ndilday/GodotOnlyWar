@@ -89,7 +89,6 @@ public class GovernanceHierarchyTests : IClassFixture<GovernanceHierarchyFixture
             lord);
     }
 
-    [Trait("Category", "Slow")]
     [Fact]
     public void Governance_IsDeterministicForSeed()
     {

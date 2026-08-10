@@ -138,8 +138,13 @@ public sealed record SquadEngagementFrame(
     float QuarryRunSpeed = 0);
 
 /// <summary>
-/// Auditable Battle-Value terms for a candidate. FutureExchange stores the bounded continuation
-/// policy value; future rollout code is aggregate-only and never calls per-soldier target selection.
+/// Auditable Battle-Value terms for a candidate. The future-facing columns are the decomposition
+/// of the state-potential transition γΦ(s') − Φ(s): FutureExchange stores the discounted next-state
+/// net-rate component, ArrivalTimeValue stores the root-state offset, and the readiness/role/fire
+/// columns carry their corresponding potential differences. Immediate exchange remains the
+/// current-turn trade; ContactCommitmentCost is the current-turn contact exchange cost. Morale,
+/// command and contribution-access values are state-potential deltas, kept as separate trace
+/// columns.
 /// </summary>
 public sealed record EngagementOptionEvaluation(
     EngagementOptionKind Kind,
@@ -148,23 +153,25 @@ public sealed record EngagementOptionEvaluation(
     float FeasibleSpeed,
     float ImmediateEnemyRemoval,
     float ImmediateFriendlyFire,
+    // Change in stored readiness potential for the projected state. A loaded/aiming weapon is
+    // future value, not a current-turn exchange.
     float ReadinessValue,
-    // Present-value estimate of a full aimed shot that can be completed after the pursuit
-    // fire-window commitment. This is separate from current-turn outgoing fire: Hold may have
-    // no immediate shot while still being correct because it preserves the aim cycle.
+    // Change in the pursuit fire-window component of the screen potential.
     float FireWindowValue,
     float IncomingNow,
     float MeleeNow,
     IReadOnlyList<float> FutureExchange,
-    // Present-value benefit (or cost) of shortening the time to the squad's useful exchange
-    // range for this candidate's projected endpoint. Kept separate from FutureExchange so the
-    // root transition is visible in diagnostics rather than being buried in the bounded rollout.
+    // Negative root-state offset from the net-rate component of Φ. Kept separate from
+    // FutureExchange so the state transition remains visible in diagnostics.
     float ArrivalTimeValue,
+    // Change in the screen-role component of Φ, including pursuit contact progress.
     float RoleTerm,
     float ContactCommitmentCost,
-    float Hysteresis,
     float Score,
-    IReadOnlyList<PlannedSoldierAction> RootActions = null);
+    IReadOnlyList<PlannedSoldierAction> RootActions = null,
+    float MoralePotentialValue = 0,
+    float CommandPotentialValue = 0,
+    float AccessPotentialValue = 0);
 
 /// <summary>Pure Layer-2 result.  Declaration and action construction happen later.</summary>
 public sealed record SquadEngagementDecision(

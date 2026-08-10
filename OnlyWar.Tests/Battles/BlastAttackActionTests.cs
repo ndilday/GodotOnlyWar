@@ -348,8 +348,7 @@ public class BlastAttackActionTests
             false,
             3,
             2,
-            6,
-            0);
+            6);
     }
 
     private static Soldier CreateSoldier(

@@ -465,11 +465,21 @@ public class MissionStealthDifficultyTests
         // DetectedMissionStep began intercepting with the squads a region actually has, this fixture's
         // patrol IS the intercepting force, and a 125-man squad spent ~14 seconds grinding down one
         // saboteur.
+        //
+        // TWO STEPS, NOT RunToCompletion (2026-08-09). Detection is what this test is named for and
+        // it is fully decided once DetectedMissionStep declares the interception, two steps in.
+        // Running to completion fought a battle per mission day -- one saboteur against thirty
+        // patrollers, about a minute a run -- none of which bears on whether the region spotted
+        // him. See AssassinateStealth_UntrainedForceAgainstASearchedRegion_IsDetected for the
+        // fuller note.
         MissionContext context = CreateSabotageContext(
             hordePopulation: 100_000_000, trained: false, defenderIntel: 6f,
             defenderPatrolBattleValue: 60);
+        MissionStepDriver driver = new(
+            CreateExecution(context), new SabotageStealthMissionStep());
 
-        new MissionStepDriver(CreateExecution(context), new SabotageStealthMissionStep()).RunToCompletion();
+        driver.AdvanceOneStep();  // stealth check fails -> DetectedMissionStep
+        driver.AdvanceOneStep();  // interception declared -> the engagement, left unrun
 
         Assert.Contains(context.Log, line => line.Contains("detected and intercepted"));
         Assert.DoesNotContain(context.Log, line => line.Contains("plants explosives"));

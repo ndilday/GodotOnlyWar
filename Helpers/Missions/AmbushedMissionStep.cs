@@ -3,7 +3,6 @@ using OnlyWar.Helpers.Battles.Placers;
 using OnlyWar.Helpers.Extensions;
 using OnlyWar.Models.Missions;
 using OnlyWar.Models.Battles;
-using System;
 using System.Collections.Generic;
 using System.Linq;
 
@@ -36,8 +35,27 @@ namespace OnlyWar.Helpers.Missions
                 squad.ReallocateEquipment();
             }
 
-            // every point of margin of success modifies the starting range by 20 yards
-            ushort range = (ushort)Math.Clamp((int)Math.Round(70 + marginOfSuccess * 20), 1, 200);
+            // Whose fight this is, decided by how badly the force lost the contest that put it here.
+            // marginOfSuccess is DetectedMissionStep's Tactics check, and this step is only reached
+            // when that check FAILED (a positive margin routes to CrossDetectionMissionStep), so the
+            // interpolation sits at or below the midpoint and the engagement opens at or near the
+            // interceptors' preference. That is the right reading: a force that was caught fights on
+            // the catcher's terms.
+            //
+            // This used to be `70 + marginOfSuccess * 20`, clamped to [1, 200] -- two constants that
+            // never asked what either side was carrying. Every other engagement setup had already
+            // moved to the shared derivation (MeetingEngagementMissionStep,
+            // PerformAmbushMissionStep, ReciprocalAssaultResolver); this site was missed, and it is
+            // the only one that still picked a range a force might be unable to shoot at.
+            //
+            // That is not hypothetical. An interception of two skill-6 raiders carrying a 100-yard
+            // degrading rifle opened at 70 yards, where their hit chance is about 1.6e-6 -- and
+            // since the planner will not close from a hopeless range, the battle ran the full
+            // 1000-turn cap seven times over, once per mission day (2026-08-09). Deriving the range
+            // does not fix that planner behaviour, but it stops this step from manufacturing the
+            // situation.
+            ushort range = MissionOpeningRange.Interpolate(
+                missionSquads, opposingSquads, marginOfSuccess, execution.Random);
             // set up Ambush battle with OpFor attacker and context.Squad defender
             BattleGridManager bgm = new BattleGridManager();
             AmbushPlacer placer = new AmbushPlacer(bgm, range);

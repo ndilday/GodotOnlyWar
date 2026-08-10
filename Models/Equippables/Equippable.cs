@@ -66,7 +66,6 @@ namespace OnlyWar.Models.Equippables
         public ushort ReloadTime { get; }
         public byte TemplateType { get; }
         public float AreaRadius { get; }
-        public ushort FuelPerBurst { get; }
         // TemplateType: 0 normal, 1 cone (flamer), 2 launched blast, 3 thrown blast
         public bool IsTemplateWeapon => TemplateType != 0;
         public bool IsConeWeapon => TemplateType == 1;
@@ -79,7 +78,7 @@ namespace OnlyWar.Models.Equippables
                               float requiredStrength, float baseDamage,
                               float maxDistance, byte rof, ushort ammo,
                               ushort recoil, ushort bulk, bool doesDamageDegradeWithRange, ushort reloadTime,
-                              byte templateType = 0, float areaRadius = 0, ushort fuelPerBurst = 0)
+                              byte templateType = 0, float areaRadius = 0)
                               : base(id, name, location, skill, accuracy, armorMultiplier, 
                                      penetrationMultiplier, requiredStrength)
         {
@@ -93,7 +92,6 @@ namespace OnlyWar.Models.Equippables
             ReloadTime = reloadTime;
             TemplateType = templateType;
             AreaRadius = areaRadius;
-            FuelPerBurst = fuelPerBurst;
         }
     }
 

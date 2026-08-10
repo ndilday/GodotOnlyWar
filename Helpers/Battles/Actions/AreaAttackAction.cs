@@ -85,7 +85,7 @@ namespace OnlyWar.Helpers.Battles.Actions
                 }
             }
 
-            weapon.LoadedAmmo = (ushort)Math.Max(0, weapon.LoadedAmmo - weapon.Template.FuelPerBurst);
+            weapon.LoadedAmmo = (ushort)Math.Max(0, weapon.LoadedAmmo - 1);
             shooter.Aim = null;
             shooter.TurnsShooting++;
             _isResolved = true;

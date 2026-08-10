@@ -63,6 +63,38 @@ namespace OnlyWar.Helpers.Battles
         // would otherwise spin the caller's while loop forever, so this caps the fight.
         private const int MaxBattleTurns = 1000;
 
+        /// <summary>
+        /// Consecutive turns in which NOTHING measurable happens -- no change in either side's able
+        /// count, no change in the separation between them -- before the battle is declared inert.
+        ///
+        /// <para>WHY THIS SIGNAL. The turn cap catches a runaway battle 1000 turns after it stopped
+        /// being a battle, and cannot distinguish "ground down slowly" from "did not start". Both
+        /// halves together can: a fight that is actually happening either produces casualties or
+        /// manoeuvres, and one that does neither for a hundred turns is not a slow fight, it is a
+        /// stopped one. Requiring BOTH is what keeps a long-range duel with rare hits from tripping
+        /// it -- any casualty at all resets the count, as does any repositioning.</para>
+        ///
+        /// <para>100 rather than something tighter because the cost of a false positive (a real
+        /// battle aborted, or a spurious test failure) is much higher than the cost of 100 wasted
+        /// turns. It is still a tenth of the turn cap, so an inert battle is caught an order of
+        /// magnitude sooner and with a far more specific diagnosis.</para>
+        /// </summary>
+        private const int InertTurnThreshold = 100;
+
+        // Separation is a float distance; quantize before comparing so sub-yard drift in a centroid
+        // does not read as manoeuvre and reset the counter forever.
+        private const float InertSeparationTolerance = 1f;
+
+        private int _inertTurns;
+        private int _lastAttackerAbleCount = -1;
+        private int _lastOpposingAbleCount = -1;
+        private float _lastSeparation = float.NaN;
+        // What the soldiers were actually DOING on the last turn, by action type and count. An
+        // inert battle's most useful single fact: "aiming and shooting but never hitting" and
+        // "issuing no actions at all" are completely different bugs, and the counters above cannot
+        // tell them apart.
+        private string _lastTurnActionSummary = "none";
+
         // Disambiguates battles that share a date and a region. Process-wide and never persisted:
         // it exists to name a log stream, not to identify a battle across sessions.
         private static int _nextBattleId;
@@ -130,11 +162,18 @@ namespace OnlyWar.Helpers.Battles
 
             BattleLog.BeginBattle(BuildBattleLogName());
 
+            // Null-guarded like _region above, and like every other faction read in this file
+            // (ProcessEndOfBattle, LogTurnCapWarning). A side's Faction resolves through
+            // SquadTemplate.Faction and is genuinely absent for fixture-built and modded squads, so
+            // an unguarded read here meant that merely RAISING THE LOG LEVEL to Debug threw an NRE
+            // out of the resolver's constructor and took the whole battle down -- exactly the
+            // hazard AmbushedMissionStep guards its own log string against, and invisible until
+            // someone turned Debug on (2026-08-09).
             GameLog.Debug(() =>
                 $"Battle start in {_region?.Name}: {_aftermathContext.FirstSideStartingSoldierCount} "
-                + $"{_aftermathContext.FirstSideFaction.Name} vs "
+                + $"{_aftermathContext.FirstSideFaction?.Name} vs "
                 + $"{_aftermathContext.SecondSideStartingSoldierCount}  "
-                + $"{_aftermathContext.SecondSideFaction.Name}");
+                + $"{_aftermathContext.SecondSideFaction?.Name}");
 
             SeedAmbushAim();
         }
@@ -203,7 +242,9 @@ namespace OnlyWar.Helpers.Battles
                 new List<IAction>(),
                 null,
                 _execution.Rules.MeleeWeaponTemplates,
-                _execution.Random);
+                _execution.Random,
+                null,
+                _execution.Rules.Skills.Tactics);
             foreach (BattleSquad squad in GetActiveSquads(ambushSide.Value))
             {
                 planner.SeedAmbushAim(squad);
@@ -315,11 +356,34 @@ namespace OnlyWar.Helpers.Battles
                 executedActions,
                 events,
                 _casualtyMap.Values));
+            _lastTurnActionSummary = executedActions.Count == 0
+                ? "none"
+                : string.Join(", ", executedActions
+                    .GroupBy(action => action.GetType().Name)
+                    .OrderByDescending(group => group.Count())
+                    .Select(group => $"{group.Key} x{group.Count()}"));
             if (_currentState.ActiveAttackerSquads.Count == 0 || _currentState.ActiveOpposingSquads.Count == 0)
             {
                 EnsureTerminalOutcome();
                 Log(false, "One side no longer active, battle over");
                 ProcessEndOfBattle(false);
+            }
+            else if (UpdateInertTurnCount())
+            {
+                Log(false,
+                    $"Battle inert for {InertTurnThreshold} turns; forcing disengagement");
+                LogInertBattleWarning();
+                BattleHistory.Outcome = BuildOutcome(BattleEndReason.TurnCap, null);
+                ProcessEndOfBattle(true);
+                if (_execution.ThrowOnInertBattle)
+                {
+                    // AFTER the graceful shutdown above, deliberately. The battle is already
+                    // properly ended and its history recorded, so a caller that catches this (or a
+                    // test that asserts on it) sees consistent state rather than a half-resolved
+                    // battle. See BattleExecutionContext.ThrowOnInertBattle for why this is a
+                    // test-only escalation of a condition the game itself survives.
+                    throw new InertBattleException(DescribeInertBattle());
+                }
             }
             else if (_currentState.TurnNumber >= MaxBattleTurns)
             {
@@ -340,6 +404,63 @@ namespace OnlyWar.Helpers.Battles
         /// (separation converges on the pursuer's move, so both "cannot close" escape hatches see a
         /// catch as permanently imminent and never fire).
         /// </summary>
+        /// <summary>
+        /// Advances the inert-turn counter and reports whether the battle has now been doing
+        /// nothing for <see cref="InertTurnThreshold"/> consecutive turns. Any casualty on either
+        /// side, or any real change in separation, resets it.
+        /// </summary>
+        private bool UpdateInertTurnCount()
+        {
+            int attackerAble = _currentState.AllAttackerSquads.Values
+                .Sum(squad => squad.AbleSoldiers.Count);
+            int opposingAble = _currentState.AllOpposingSquads.Values
+                .Sum(squad => squad.AbleSoldiers.Count);
+            float separation = MinimumSeparation(BattleSide.Attacker, BattleSide.Opposing);
+            bool unchanged = attackerAble == _lastAttackerAbleCount
+                && opposingAble == _lastOpposingAbleCount
+                && !float.IsNaN(_lastSeparation)
+                && Math.Abs(separation - _lastSeparation) < InertSeparationTolerance;
+            // Only the SEPARATION baseline is left alone while inert. Refreshing it every turn
+            // would let a slow, steady drift stay under the tolerance indefinitely and never
+            // accumulate into a reset -- the counter would run while the squads were genuinely, if
+            // slowly, closing.
+            if (unchanged)
+            {
+                _inertTurns++;
+            }
+            else
+            {
+                _inertTurns = 0;
+                _lastSeparation = separation;
+            }
+            _lastAttackerAbleCount = attackerAble;
+            _lastOpposingAbleCount = opposingAble;
+            return _inertTurns >= InertTurnThreshold;
+        }
+
+        private string DescribeInertBattle()
+        {
+            BattleForceMetrics attackerMetrics = BuildMetrics(BattleSide.Attacker);
+            BattleForceMetrics opposingMetrics = BuildMetrics(BattleSide.Opposing);
+            return $"Battle in {_region?.Name} was inert for {InertTurnThreshold} consecutive "
+                + $"turns at turn {_currentState.TurnNumber}: no casualties on either side and no "
+                + $"change in separation. "
+                + $"{_aftermathContext.FirstSideFaction?.Name} "
+                + $"({attackerMetrics.AbleSoldierCount} able, bv "
+                + $"{attackerMetrics.CurrentBattleValue}) vs "
+                + $"{_aftermathContext.SecondSideFaction?.Name} "
+                + $"({opposingMetrics.AbleSoldierCount} able, bv "
+                + $"{opposingMetrics.CurrentBattleValue}); separation "
+                + $"{MinimumSeparation(BattleSide.Attacker, BattleSide.Opposing):F1}. "
+                + $"Last turn's actions: {_lastTurnActionSummary}. "
+                + "Neither side can damage the other from where it stands, and neither is closing.";
+        }
+
+        private void LogInertBattleWarning()
+        {
+            GameLog.Warn(DescribeInertBattle);
+        }
+
         private void LogTurnCapWarning()
         {
             GameLog.Warn(() =>
@@ -584,7 +705,8 @@ namespace OnlyWar.Helpers.Battles
                 log,
                 _execution.Rules.MeleeWeaponTemplates,
                 _execution.Random,
-                planningContext)
+                planningContext,
+                _execution.Rules.Skills.Tactics)
             {
                 TraceTurnNumber = _currentState.TurnNumber,
                 TraceSideLabel = side == BattleSide.Attacker ? "first" : "second"

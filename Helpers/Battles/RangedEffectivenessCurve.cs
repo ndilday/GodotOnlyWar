@@ -178,7 +178,53 @@ namespace OnlyWar.Helpers.Battles
             }
         }
 
-        private readonly List<List<WeaponCurve>> _shooters;
+        /// <summary>
+        /// One or more shooters whose weapon curves are interchangeable, and how many of them there
+        /// are.
+        ///
+        /// <para>WHY. <see cref="RemovalAt"/> is a plain SUM over shooters, and a
+        /// <see cref="WeaponCurve"/> depends on the shooter through exactly two scalars --
+        /// <c>BaseHitTotal</c> and <c>MaximumEffectiveRange</c>. Everything else in it
+        /// (<c>Locations</c>, <c>FlatRemovalFraction</c>, <c>TargetBattleValue</c>) is a function of
+        /// the weapon template and the one representative target profile the whole curve is built
+        /// against, so two soldiers carrying the same weapons with near-enough skill produce
+        /// numerically indistinguishable curves and can be evaluated once and counted twice.</para>
+        ///
+        /// <para>This is the one place the engagement-range model is APPROXIMATE by choice, and it
+        /// pays off in exactly the case that hurt: the incoming curve is built over EVERY soldier in
+        /// the opposing force, so a hundred-strong horde of identically-equipped cultists cost a
+        /// hundred curve evaluations per sample, times fifty samples per sweep, times several
+        /// sweeps per squad per turn. Bucketing collapses that to the number of distinct loadouts.
+        /// A hand-built force of individuals buckets to itself and pays nothing.</para>
+        /// </summary>
+        private sealed class ShooterGroup
+        {
+            internal List<WeaponCurve> Weapons;
+            internal int Count;
+        }
+
+        /// <summary>
+        /// How far two shooters' pre-roll to-hit totals may differ and still share a bucket.
+        ///
+        /// <para>The total enters only as <c>Phi((total + rangeModifier - 10.5) / 3)</c>, whose
+        /// derivative peaks at <c>phi(0)/3</c> = 0.133, so a quarter point of skill moves a hit
+        /// probability by at most 0.033 and the removal it scales by less than that. That sits an
+        /// order of magnitude under the 0.5-of-peak and 0.1-of-peak thresholds this curve's
+        /// consumers actually test against, and it is a bias-free rounding rather than a systematic
+        /// one: members join the bucket of the first shooter within tolerance, in soldier-id order,
+        /// so the representative is as likely to be above the group as below.</para>
+        /// </summary>
+        private const float HitTotalBucket = 0.25f;
+
+        /// <summary>
+        /// Reach tolerance for the same bucket, in yards. Reach is a hard gate rather than a smooth
+        /// factor -- <see cref="WeaponCurve.RemovalAt"/> returns 0 past it -- so this is kept tight;
+        /// it exists only so thrown weapons, whose reach scales with the thrower's Strength, still
+        /// bucket among throwers of equal strength.
+        /// </summary>
+        private const float ReachBucket = 1f;
+
+        private readonly List<ShooterGroup> _shooters;
         private readonly float _negligibleRemoval;
 
         /// <summary>The furthest range at which any of these shooters can fire at all.</summary>
@@ -187,7 +233,7 @@ namespace OnlyWar.Helpers.Battles
         internal bool IsEmpty => _shooters.Count == 0;
 
         private RangedEffectivenessCurve(
-            List<List<WeaponCurve>> shooters,
+            List<ShooterGroup> shooters,
             float reach,
             float targetBattleValue)
         {
@@ -205,7 +251,8 @@ namespace OnlyWar.Helpers.Battles
             float total = 0f;
             for (int shooter = 0; shooter < _shooters.Count; shooter++)
             {
-                List<WeaponCurve> weapons = _shooters[shooter];
+                ShooterGroup group = _shooters[shooter];
+                List<WeaponCurve> weapons = group.Weapons;
                 float best = 0f;
                 for (int weapon = 0; weapon < weapons.Count; weapon++)
                 {
@@ -215,7 +262,7 @@ namespace OnlyWar.Helpers.Battles
                         best = removal;
                     }
                 }
-                total += best;
+                total += best * group.Count;
             }
             return total;
         }
@@ -224,7 +271,7 @@ namespace OnlyWar.Helpers.Battles
             IEnumerable<BattleSoldier> shooters,
             EngagementTargetProfile target)
         {
-            List<List<WeaponCurve>> built = [];
+            List<ShooterGroup> built = [];
             float reach = 0f;
             foreach (BattleSoldier soldier in shooters ?? Array.Empty<BattleSoldier>())
             {
@@ -251,12 +298,62 @@ namespace OnlyWar.Helpers.Battles
                         reach = curve.MaximumEffectiveRange;
                     }
                 }
-                if (weapons.Count > 0)
+                if (weapons.Count == 0)
                 {
-                    built.Add(weapons);
+                    continue;
+                }
+                ShooterGroup bucket = null;
+                for (int index = 0; index < built.Count; index++)
+                {
+                    if (Interchangeable(built[index].Weapons, weapons))
+                    {
+                        bucket = built[index];
+                        break;
+                    }
+                }
+                if (bucket == null)
+                {
+                    built.Add(new ShooterGroup { Weapons = weapons, Count = 1 });
+                }
+                else
+                {
+                    bucket.Count++;
                 }
             }
             return new RangedEffectivenessCurve(built, reach, target.BattleValue);
+        }
+
+        /// <summary>
+        /// Whether a shooter's weapon curves may be evaluated as a copy of an existing bucket's.
+        /// Linear scan over buckets rather than a hashed key: the bucket count is the number of
+        /// distinct loadouts in a force (single digits in practice, and 1 for the single-soldier
+        /// curve <see cref="BattleModifiersUtil.CalculateOptimalDistance"/> builds), and an
+        /// approximate match on two floats has no exact key to hash anyway.
+        /// </summary>
+        private static bool Interchangeable(
+            List<WeaponCurve> bucket,
+            List<WeaponCurve> candidate)
+        {
+            if (bucket.Count != candidate.Count)
+            {
+                return false;
+            }
+            for (int index = 0; index < bucket.Count; index++)
+            {
+                WeaponCurve left = bucket[index];
+                WeaponCurve right = candidate[index];
+                // Reference equality on the template settles Locations, FlatRemovalFraction,
+                // RateOfFire, Recoil and the degradation branch in one comparison -- all of them
+                // are derived from the template and the shared target profile.
+                if (!ReferenceEquals(left.Template, right.Template)
+                    || MathF.Abs(left.BaseHitTotal - right.BaseHitTotal) > HitTotalBucket
+                    || MathF.Abs(left.MaximumEffectiveRange - right.MaximumEffectiveRange)
+                        > ReachBucket)
+                {
+                    return false;
+                }
+            }
+            return true;
         }
 
         private static WeaponCurve BuildWeaponCurve(

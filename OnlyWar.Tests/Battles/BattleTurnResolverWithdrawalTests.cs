@@ -426,7 +426,6 @@ public class BattleTurnResolverWithdrawalTests
             doesDamageDegradeWithRange: true,
             reloadTime: 1,
             0,
-            0,
             0));
         soldier.RangedWeapons.Clear();
         soldier.ClearReadiedRangedWeapons();
@@ -458,7 +457,6 @@ public class BattleTurnResolverWithdrawalTests
             bulk: 1,
             doesDamageDegradeWithRange: false,
             reloadTime: 1,
-            0,
             0,
             0));
         soldier.RangedWeapons.Clear();

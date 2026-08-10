@@ -63,11 +63,11 @@ public class AreaAttackActionTests
     }
 
     [Theory]
-    [InlineData(25, 15)]
-    [InlineData(5, 0)]
-    public void Execute_ConsumesFuelAndClampsAnEmptyTank(int loadedFuel, int expectedFuel)
+    [InlineData(25, 24)]
+    [InlineData(0, 0)]
+    public void Execute_ConsumesOneAmmoAndClampsAnEmptyMagazine(int loadedAmmo, int expectedAmmo)
     {
-        RangedWeaponTemplate flamer = CreateFlamer(fuelPerBurst: 10);
+        RangedWeaponTemplate flamer = CreateFlamer();
         TestBattle battle = CreateBattle(
             flamer,
             [CreateSoldier(1, "Shooter")],
@@ -75,11 +75,11 @@ public class AreaAttackActionTests
         battle.Place(1, true, 0, 0);
         battle.Place(2, false, 5, 0);
         RangedWeapon weapon = battle.State.GetSoldier(1).EquippedRangedWeapons.Single();
-        weapon.LoadedAmmo = (ushort)loadedFuel;
+        weapon.LoadedAmmo = (ushort)loadedAmmo;
 
         battle.ExecuteAreaAttack(1, 2, seed: 1);
 
-        Assert.Equal(expectedFuel, weapon.LoadedAmmo);
+        Assert.Equal(expectedAmmo, weapon.LoadedAmmo);
     }
 
     [Fact]
@@ -106,9 +106,9 @@ public class AreaAttackActionTests
     }
 
     [Fact]
-    public void Execute_ASecondTimeReusesResolutionWithoutFuelOrTurnChanges()
+    public void Execute_ASecondTimeReusesResolutionWithoutAmmoOrTurnChanges()
     {
-        RangedWeaponTemplate flamer = CreateFlamer(damageMultiplier: 100, fuelPerBurst: 10);
+        RangedWeaponTemplate flamer = CreateFlamer(damageMultiplier: 100);
         TestBattle battle = CreateBattle(
             flamer,
             [CreateSoldier(1, "Shooter")],
@@ -119,19 +119,17 @@ public class AreaAttackActionTests
         AreaAttackAction action = battle.ExecuteAreaAttack(1, 2, seed: 4);
         WoundResolution originalWound = Assert.Single(action.WoundResolutions);
         RangedWeapon weapon = battle.State.GetSoldier(1).EquippedRangedWeapons.Single();
-        ushort remainingFuel = weapon.LoadedAmmo;
+        ushort remainingAmmo = weapon.LoadedAmmo;
         ushort turnsShooting = battle.State.GetSoldier(1).TurnsShooting;
 
         action.Execute(battle.State);
 
         Assert.Same(originalWound, Assert.Single(action.WoundResolutions));
-        Assert.Equal(remainingFuel, weapon.LoadedAmmo);
+        Assert.Equal(remainingAmmo, weapon.LoadedAmmo);
         Assert.Equal(turnsShooting, battle.State.GetSoldier(1).TurnsShooting);
     }
 
-    private static RangedWeaponTemplate CreateFlamer(
-        float damageMultiplier = 10,
-        ushort fuelPerBurst = 10)
+    private static RangedWeaponTemplate CreateFlamer(float damageMultiplier = 10)
     {
         return new RangedWeaponTemplate(
             99,
@@ -151,8 +149,7 @@ public class AreaAttackActionTests
             false,
             1,
             1,
-            3,
-            fuelPerBurst);
+            3);
     }
 
     private static Soldier CreateSoldier(

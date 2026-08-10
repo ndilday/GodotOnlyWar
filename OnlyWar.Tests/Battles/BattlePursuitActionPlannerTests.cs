@@ -493,7 +493,7 @@ public class BattlePursuitActionPlannerTests
                 seed, "Test Sniper Rifle", EquipLocation.TwoHand, TestSkills.Ranged,
                 accuracy: 10, armorMultiplier: 1, penetrationMultiplier: 1, requiredStrength: 0,
                 baseDamage: 12, maxDistance: 800, rof: 1, ammo: 10, recoil: 0, bulk: 1,
-                doesDamageDegradeWithRange: false, reloadTime: 1, 0, 0, 0));
+                doesDamageDegradeWithRange: false, reloadTime: 1, 0, 0));
             soldier.RangedWeapons.Add(sniper);
             soldier.ReadyWeapon(sniper);
             return;
@@ -503,7 +503,7 @@ public class BattlePursuitActionPlannerTests
             seed, "Test Pistol", EquipLocation.OneHand, TestSkills.Ranged,
             accuracy: 0, armorMultiplier: 1, penetrationMultiplier: 1, requiredStrength: 0,
             baseDamage: 1, maxDistance: 6, rof: 1, ammo: 6, recoil: 0, bulk: 1,
-            doesDamageDegradeWithRange: true, reloadTime: 1, 0, 0, 0));
+            doesDamageDegradeWithRange: true, reloadTime: 1, 0, 0));
         MeleeWeapon chainsword = new(new MeleeWeaponTemplate(
             seed + 1, "Test Chainsword", EquipLocation.OneHand, TestSkills.Melee,
             accuracy: 3, armorMultiplier: 1, penetrationMultiplier: 1, requiredStrength: 0,

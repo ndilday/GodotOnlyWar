@@ -358,7 +358,7 @@ public static class BattleValueCalculator
         RangedWeaponTemplate weapon,
         Input defender)
     {
-        if (weapon.FuelPerBurst == 0 || weapon.AmmoCapacity == 0)
+        if (weapon.AmmoCapacity == 0)
         {
             return 0;
         }
@@ -374,12 +374,12 @@ public static class BattleValueCalculator
         float killsPerBurst = expectedVictimsPerBurst * killFractionPerVictim;
 
         // Keep the shared 30m standoff baseline; the template branch changes only how a
-        // burst hits and how its fuel/reload duty cycle is calculated.
+        // burst hits and how its ammo/reload duty cycle is calculated.
         float standoff = Math.Clamp(
             1.0f + 0.12f * (float)Math.Log(Math.Max(1.0f, weapon.MaximumRange) / 30.0f),
             0.8f,
             1.6f);
-        float burstsPerTank = (float)weapon.AmmoCapacity / weapon.FuelPerBurst;
+        float burstsPerTank = weapon.AmmoCapacity;
         float sustain = burstsPerTank / (burstsPerTank + weapon.ReloadTime);
         return killsPerBurst * standoff * sustain;
     }

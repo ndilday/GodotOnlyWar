@@ -112,6 +112,82 @@ namespace OnlyWar.Helpers
             return InvSqrt2Pi * Math.Exp(-0.5 * x * x) * poly;
         }
 
+        // =====================================================================================
+        // TABULATED NORMAL LOSS FUNCTION
+        //
+        // G(x) = integral from x to infinity of (t - x) phi(t) dt = phi(x) - x*Q(x).
+        //
+        // WHY IT EARNS ITS OWN TABLE. RemovalMath.EvaluateWoundProgressTail wants the partial
+        // expectation of the damage roll over a band [A, B], which it computed as
+        // phi(A) - phi(B) - A*(Phi(B) - Phi(A)) -- two CDFs and two live MathF.Exp calls through
+        // NormalPdf. The identity
+        //
+        //     integral from A to B of (t - A) phi(t) dt  =  G(A) - G(B) - (B - A)*Q(B)
+        //
+        // is exact (expand both sides; the A*Q terms telescope), so the same quantity costs three
+        // table lookups and no transcendental at all. That path runs once per hit location per
+        // scored option, which is the second-hottest thing in battle planning after the CDF itself.
+        //
+        // NOT INTERLEAVED WITH UpperTailTable, despite that array's comment inviting it. The
+        // invitation was written for a consumer needing the DENSITY at the same points; this one
+        // needs G at two points and Q at a third, so interleaving would only pair one of the three
+        // reads -- while doubling the stride, and therefore the cache footprint, of the CDF-only
+        // path (EvaluateTakeOutLocationTail, ExpectedBurstRemovalFraction, HitProbabilityAt), which
+        // is hotter than this one and does not want the loss column in its lines at all.
+        //
+        // Same domain, resolution and generator as the tail table, so the two agree by construction
+        // and the interpolation-error argument there carries over unchanged: |G''| = |x*phi(x)|,
+        // whose maximum is 0.242 at x = 1, identical to the bound quoted for Phi''.
+        // =====================================================================================
+
+        /// <summary>
+        /// G(x) = phi(x) - x*Q(x) sampled at <c>x = index / TableScale</c>. Length and sentinel node
+        /// follow <see cref="UpperTailTable"/> for the same rounding reason.
+        /// </summary>
+        private static readonly float[] LossTable = BuildLossTable();
+
+        private static float[] BuildLossTable()
+        {
+            float[] table = new float[TableIntervals + 2];
+            for (int index = 0; index < table.Length; index++)
+            {
+                table[index] = (float)LossExact(index * (double)TableMaxZ / TableIntervals);
+            }
+            return table;
+        }
+
+        private static double LossExact(double x) =>
+            (InvSqrt2Pi * Math.Exp(-0.5 * x * x)) - (x * UpperTailExact(x));
+
+        /// <summary>
+        /// The standard normal loss function <c>G(z) = E[(Z - z)+] = phi(z) - z*Q(z)</c>.
+        ///
+        /// <para>Tabulated on <c>[0, TableMaxZ)</c> only. The reflection
+        /// <c>G(-x) = G(x) + x</c> -- which follows from <c>Q(-x) = 1 - Q(x)</c> -- covers the
+        /// negative half exactly rather than approximately, so no second table is needed and the
+        /// two halves cannot disagree.</para>
+        /// </summary>
+        public static float NormalLoss(float z)
+        {
+            float x = z < 0f ? -z : z;
+            float loss;
+            if (x < TableMaxZ)
+            {
+                float scaled = x * TableScale;
+                int index = (int)scaled;
+                float frac = scaled - index;
+                float lower = LossTable[index];
+                loss = lower + (frac * (LossTable[index + 1] - lower));
+            }
+            else
+            {
+                // Past the table G is under 1e-9 and falling; stay on the generator rather than
+                // clamping, for the same reason ApproximateNormalCDF does.
+                loss = (float)LossExact(x);
+            }
+            return z < 0f ? loss - z : loss;
+        }
+
         public static float ApproximateNormalCDF(float zScore)
         {
             // Math.Abs is a call; the ternary is a sign-bit clear the JIT emits inline.

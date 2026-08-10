@@ -260,7 +260,6 @@ namespace OnlyWar.Helpers.Database.GameRules
                     ushort reloadTime = (ushort)reader.GetInt16(15);
                     byte templateType = reader.GetByte(16);
                     float areaRadius = Convert.ToSingle(reader[17]);
-                    ushort fuelPerBurst = (ushort)reader.GetInt16(18);
 
                     BaseSkill baseSkill = baseSkillMap[baseSkillId];
 
@@ -269,7 +268,7 @@ namespace OnlyWar.Helpers.Database.GameRules
                                                 accuracy, armorMultiplier, woundMultiplier,
                                                 requiredStrength, damageMultiplier, maxRange,
                                                 rof, ammo, recoil, bulk, doesDamageDegrade, reloadTime,
-                                                templateType, areaRadius, fuelPerBurst);
+                                                templateType, areaRadius);
                     factionWeaponTemplateMap[id] = weaponTemplate;
                 }
             }

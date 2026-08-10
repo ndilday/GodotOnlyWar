@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.Threading;
 
 namespace OnlyWar.Helpers.Battles
 {
@@ -26,6 +27,43 @@ namespace OnlyWar.Helpers.Battles
     // so the encapsulated RangedTargetEvaluation type need not be widened.
     public sealed class BattlePlanningContext
     {
+        // The engagement horizon is a turn-level memo, not an option-level calculation. The gate
+        // lets standalone planners and the resolver's parallel planning pass initialize it once
+        // from the same frozen state without making the result depend on which squad wins the
+        // first worker race.
+        internal object EngagementHorizonGate { get; } = new();
+        private IReadOnlyDictionary<int, float> _expectedExchangeTurnsBySquad =
+            new Dictionary<int, float>();
+        private float _engagementBattleValueAtRisk;
+        private float _engagementRemovalRate;
+        private int _engagementHorizonInitialized;
+
+        internal bool EngagementHorizonInitialized =>
+            Volatile.Read(ref _engagementHorizonInitialized) != 0;
+
+        internal float ExpectedExchangeTurnsFor(int squadId) =>
+            Volatile.Read(ref _expectedExchangeTurnsBySquad)
+                .GetValueOrDefault(squadId, EngagementHorizonModel.MaximumExchangeTurns);
+
+        internal float EngagementBattleValueAtRisk =>
+            Volatile.Read(ref _engagementBattleValueAtRisk);
+
+        internal float EngagementRemovalRate =>
+            Volatile.Read(ref _engagementRemovalRate);
+
+        internal void SetEngagementHorizon(
+            IReadOnlyDictionary<int, float> expectedExchangeTurnsBySquad,
+            float battleValueAtRisk,
+            float removalRate)
+        {
+            Volatile.Write(
+                ref _expectedExchangeTurnsBySquad,
+                expectedExchangeTurnsBySquad);
+            Volatile.Write(ref _engagementBattleValueAtRisk, battleValueAtRisk);
+            Volatile.Write(ref _engagementRemovalRate, removalRate);
+            Volatile.Write(ref _engagementHorizonInitialized, 1);
+        }
+
         // Full ranged-shot evaluation, keyed by everything that varies. This cache lived per-worker,
         // where each soldier was evaluated once against distinct targets, so it never amortized
         // (~0.7% hit rate). Shared across the pass, one soldier's evaluations serve later phases.
@@ -77,6 +115,12 @@ namespace OnlyWar.Helpers.Battles
         internal ConcurrentDictionary<
             int,
             IReadOnlyDictionary<int, SquadPairRemovalRate>> PairRemovalRates { get; } = new();
+
+        // Contact melee removal rate, keyed by the attacker/target squad pair. Like the ranged
+        // table this is pure for the frozen planning pass, and the exchange model can ask for the
+        // same contact rate repeatedly across candidates and rollout plies.
+        internal ConcurrentDictionary<(int AttackerSquadId, int TargetSquadId), float>
+            MeleeContactRemovalRates { get; } = new();
     }
 
     /// <summary>

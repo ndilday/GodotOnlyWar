@@ -175,13 +175,24 @@ internal static class TestModelFactory
             true,
             1,
             0,
-            0,
             0),
         primaryMelee: new MeleeWeaponTemplate(
             2,
             "Test Knife",
             EquipLocation.OneHand,
             TestSkills.Melee,
+            // ACCURACY 0 IS LOad-BEARING, and not only as a default. MeleeAttackAction forms
+            //   margin = (attackSkill + accuracy - movePenalty) - (defenderSkill + evasion + parry)
+            // and hits on margin > 0, so two soldiers built from this factory -- same skill, same
+            // knife, evasion and parry both 0 -- tie at exactly 0 and never wound each other.
+            // BattleTurnResolverWithdrawalTests' matched-speed stern chase DEPENDS on that: it
+            // needs a pursuer that cannot settle the fight by killing.
+            //
+            // The same property will hang any battle between evenly matched fixture forces under
+            // FixedRNG, which has no variance to break the tie (2026-08-09,
+            // ReciprocalAssaultCoordinatorTests, 1000 turns). A test that needs melee to RESOLVE
+            // should give its own squads a weapon with nonzero accuracy -- see that file's
+            // DecisiveMeleeWeapons -- rather than changing this shared one.
             0,
             1,
             1,
@@ -209,8 +220,7 @@ internal static class TestModelFactory
         false,
         1,
         3,
-        6,
-        0);
+        6);
 
     public static WeaponSet GrenadierWeapons { get; } = new(
         2,

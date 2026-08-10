@@ -1,4 +1,5 @@
 using OnlyWar.Helpers.Battles;
+using OnlyWar.Models.Equippables;
 using OnlyWar.Helpers.Missions;
 using OnlyWar.Helpers.Missions.Assault;
 using OnlyWar.Helpers.Turns;
@@ -156,12 +157,49 @@ public class ReciprocalAssaultCoordinatorTests
         return new Fixture(firstDriver, secondDriver);
     }
 
+    /// <summary>
+    /// The shared <see cref="TestModelFactory.DefaultWeapons"/> knife with accuracy, which these
+    /// squads need in order for their meeting engagement to END.
+    ///
+    /// <para>MeleeAttackAction forms <c>margin = (attackSkill + accuracy - movePenalty) -
+    /// (defenderSkill + evasion + parry)</c> and hits only on <c>margin &gt; 0</c>. Both squads here
+    /// are built from the same template, so every term cancels and the shared knife's accuracy of 0
+    /// leaves the margin at EXACTLY 0 -- a miss. <see cref="FixedRNG"/> returns a constant 0.0 for
+    /// every draw, so there is no variance to break that tie, and the two troopers missed each
+    /// other identically for 1000 turns until the resolver's turn cap forced a disengagement
+    /// (2026-08-09).</para>
+    ///
+    /// <para>3, not 1, so the margin survives <c>MeleeAttackAction.MovementAttackPenalty</c> (2)
+    /// that a charging or repositioning attacker pays. Fixed in WEAPON DATA rather than by seeding
+    /// the RNG deliberately: FixedRNG's determinism is worth keeping, and a decisive mean margin
+    /// stays correct under engine changes that shift how many draws are consumed, where a seeded
+    /// stream would silently reshuffle outcomes. Local to this file rather than applied to the
+    /// shared weapon set because BattleTurnResolverWithdrawalTests' matched-speed stern chase
+    /// requires the opposite property -- a pursuer that CANNOT settle the fight by killing.</para>
+    /// </summary>
+    private static readonly WeaponSet DecisiveMeleeWeapons = new(
+        3,
+        "Test Weapons (decisive melee)",
+        primaryRanged: TestModelFactory.DefaultWeapons.PrimaryRangedWeapon,
+        primaryMelee: new MeleeWeaponTemplate(
+            4,
+            "Accurate Test Knife",
+            EquipLocation.OneHand,
+            TestSkills.Melee,
+            3,
+            1,
+            1,
+            0,
+            1,
+            0,
+            1));
+
     private static Squad CreateSquad(Faction faction, string name)
     {
         SquadTemplate template = new(
             faction.Id,
             $"{faction.Name} Test Squad",
-            TestModelFactory.DefaultWeapons,
+            DecisiveMeleeWeapons,
             [],
             TestModelFactory.TestArmor,
             [new SquadTemplateElement(TestModelFactory.MarineTemplate, 1, 1)],

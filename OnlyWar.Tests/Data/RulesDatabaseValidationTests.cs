@@ -190,14 +190,12 @@ public class RulesDatabaseValidationTests
             Assert.Equal(1, flamer.TemplateType);
             Assert.Equal(3.0f, flamer.AreaRadius);
             Assert.Equal(5, flamer.AmmoCapacity);
-            Assert.Equal(1, flamer.FuelPerBurst);
             Assert.Equal(0, flamer.Accuracy);
         }
 
         var bolter = rules.RangedWeaponTemplates[1];
         Assert.False(bolter.IsTemplateWeapon);
         Assert.Equal(0, bolter.AreaRadius);
-        Assert.Equal(0, bolter.FuelPerBurst);
     }
 
     [Fact]

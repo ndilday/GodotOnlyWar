@@ -21,14 +21,6 @@ namespace OnlyWar.Helpers.Battles
         // as a destination), short enough that its squared length stays well inside int range.
         private const int RoutLineLength = 1_000;
         private const float WalkAimMultiplier = 0.5f;
-        // TUNABLE (Phase 2 sticky targeting): a soldier keeps engaging the target it already
-        // committed to (soldier.TargetId / soldier.Aim) across turns rather than rescanning the whole
-        // field every turn, re-acquiring only when that target stops being a viable, worthwhile shot
-        // or an un-engaged enemy is about to reach melee. "Worthwhile" reuses the planner's existing
-        // floor: positive expected value and better than a one-in-ten chance to hit. Raising this
-        // makes soldiers abandon marginal targets (and rescan) sooner.
-        private const float StickyMinimumHitProbability =
-            RangedTargetSelector.StickyMinimumHitProbability;
         // Aim bonus a pre-sprung ambusher opens with. Matches the planner's own "aim can no
         // longer be improved" ceiling (the >= 3 checks in the standing/forced-shot paths), so a
         // seeded ambusher is indistinguishable from a soldier who spent three turns lining up the
@@ -37,7 +29,6 @@ namespace OnlyWar.Helpers.Battles
         // A fresh stationary aim starts at bonus 0, takes four Aim actions to reach the planner's
         // full-aim threshold (3), and fires on the fifth turn. Pursuit uses this same cycle when
         // deciding how far a squad must run before it can safely stop and complete a shot.
-        private const int PursuitFireWindowTurns = FullAimBonusTurns + 2;
 
         // The read context and the action bags, bundled so an extracted collaborator takes one
         // parameter per half rather than six loose dependencies. See SquadPlanningServices.
@@ -56,14 +47,19 @@ namespace OnlyWar.Helpers.Battles
         // resolver so both per-side planners reuse each other's results; a standalone planner
         // (tests) gets its own. See BattlePlanningContext for the invariant.
         private readonly BattlePlanningContext _context;
+        private readonly BaseSkill _tacticsSkill;
         // Ranged target selection and shot estimation.
         private readonly RangedTargetSelector _ranged;
         // Movement placement: line + budget -> destination, orientation, and a MoveAction.
         private readonly SoldierMovementPlanner _movement;
         // The Phase 4 lookahead's removal-rate table, memoized per shooter squad.
         private readonly PairRemovalRateTable _removalRates;
-        // Per-turn exchange rates and the bounded policy lookahead behind posture choice.
+        // Per-turn exchange rates and current-turn contact accounting behind posture choice.
         private readonly EngagementExchangeModel _exchange;
+        // State-only Φ behind the posture score. Unlike the option evaluator, this collaborator
+        // never receives an EngagementOptionKind; candidate-specific values arrive as projected
+        // state (endpoint plus pure action descriptors).
+        private readonly EngagementPotential _potential;
         // Melee scoring: strike plans, projected melee value, charge net, forfeited parry risk.
         private readonly MeleeStrikeEstimator _melee;
         // Melee emission: strikes, point-blank shots, charge movement, squad charge resolution.
@@ -132,6 +128,20 @@ namespace OnlyWar.Helpers.Battles
         internal int CachedPairRemovalRateCount =>
             _context.PairRemovalRates.Values.Sum(row => row.Count);
 
+        // Whether SetEngagementHorizon has run for this planning turn. Test visibility only.
+        // A false here means every squad reads ExpectedExchangeTurnsFor's dictionary-miss
+        // default -- MaximumExchangeTurns -- so the derived horizon is not being exercised at
+        // all and any posture measured under it is measuring the fallback.
+        internal bool EngagementHorizonInitialized => _context.EngagementHorizonInitialized;
+
+        // The horizon one squad actually received. Test visibility only.
+        internal float ExpectedExchangeTurnsFor(int squadId) =>
+            _context.ExpectedExchangeTurnsFor(squadId);
+
+        internal EngagementPotential.Breakdown EvaluatePotential(
+            EngagementPotential.State state) =>
+            _potential.Evaluate(state);
+
         public BattleSquadPlanner(BattleGridManager grid,
                                   IReadOnlyDictionary<int, BattleSoldier> soldiers,
                                   ICollection<IAction> shootActions,
@@ -140,7 +150,8 @@ namespace OnlyWar.Helpers.Battles
                                   Action<string> log,
                                   IReadOnlyDictionary<int, MeleeWeaponTemplate> meleeWeaponTemplates,
                                   IRNG random,
-                                  BattlePlanningContext context = null)
+                                  BattlePlanningContext context = null,
+                                  BaseSkill tacticsSkill = null)
         {
             // A standalone planner (unit tests, one-off callers) gets a private context, which
             // reproduces the previous per-planner cache scope exactly.
@@ -158,6 +169,7 @@ namespace OnlyWar.Helpers.Battles
             _random = _services.Random;
             _log = _services.Log;
             _context = _services.Context;
+            _tacticsSkill = tacticsSkill;
             _shootActions = _actions.Shoot;
             _moveActions = _actions.Move;
 
@@ -167,6 +179,12 @@ namespace OnlyWar.Helpers.Battles
             _melee = new MeleeStrikeEstimator(_services, _ranged);
             _exchange = new EngagementExchangeModel(
                 _services, _ranged, _melee, _removalRates);
+            _potential = new EngagementPotential(
+                _grid,
+                _ranged,
+                _exchange,
+                _tacticsSkill,
+                _context);
             _meleeBuilder = new MeleeActionBuilder(
                 _services, _actions, _ranged, _melee, _movement,
                 AddPermittedRunUtilityActionToBag);
@@ -274,13 +292,10 @@ namespace OnlyWar.Helpers.Battles
             }
         }
 
-        // Both owned by EngagementExchangeModel, which is where the rollout they govern lives.
-        // Aliased rather than redeclared so the two cannot drift; BattleEscapeRules reads the
-        // horizon through this name.
+        // Retained as a shared planning horizon for BattleEscapeRules' retargeting policy. The
+        // engagement score itself now uses EngagementPotential rather than a policy rollout.
         internal const int EngagementLookaheadHorizon =
             EngagementExchangeModel.EngagementLookaheadHorizon;
-        private const float EngagementFutureDiscount =
-            EngagementExchangeModel.EngagementFutureDiscount;
         private const float EngagementIndifferenceFraction = 0.02f;
 
         /// <summary>
@@ -298,6 +313,7 @@ namespace OnlyWar.Helpers.Battles
         {
             ArgumentNullException.ThrowIfNull(squad);
             ArgumentNullException.ThrowIfNull(frame);
+            EnsureEngagementHorizon(profiles, allFrames);
             BattleSquadCapabilityProfile profile = profiles[squad.Id];
             List<BattleSquad> enemies = (roleTargets ?? enemySquads ?? [])
                 .Where(candidate => candidate != null
@@ -329,13 +345,133 @@ namespace OnlyWar.Helpers.Battles
                 ?? new EngagementOptionEvaluation(
                     EngagementOptionKind.Hold,
                     SquadMovementTier.Stationary,
-                    null, 0, 0, 0, 0, 0, 0, 0, [], 0, 0, 0, 0, 0);
+                    null, 0, 0, 0, 0, 0, 0, 0, [], 0, 0, 0, 0);
             return new SquadEngagementDecision(
                 squad,
                 frame,
                 chosen,
                 evaluations,
                 roleTargets);
+        }
+
+        /// <summary>
+        /// Freezes the force-level exchange horizon once per planning turn. The value is computed
+        /// from the turn-start geometry and shared by every squad's state potential, so changing a
+        /// candidate option cannot change the horizon used to score that option.
+        /// </summary>
+        private void EnsureEngagementHorizon(
+            IReadOnlyDictionary<int, BattleSquadCapabilityProfile> profiles,
+            IReadOnlyDictionary<int, SquadEngagementFrame> frames)
+        {
+            if (_context.EngagementHorizonInitialized)
+            {
+                return;
+            }
+
+            lock (_context.EngagementHorizonGate)
+            {
+                if (_context.EngagementHorizonInitialized)
+                {
+                    return;
+                }
+
+                List<BattleSquad> active = _soldierMap.Values
+                    .Select(soldier => soldier.BattleSquad)
+                    .Where(candidate => candidate != null
+                        && candidate.Status == BattleSquadStatus.Active
+                        && candidate.AbleSoldiers.Any(IsPlaced))
+                    .DistinctBy(candidate => candidate.Id)
+                    .OrderBy(candidate => candidate.Id)
+                    .ToList();
+                Dictionary<int, bool> sideBySquad = [];
+                foreach (BattleSquad candidate in active)
+                {
+                    BattleSoldier anchor = candidate.AbleSoldiers.First(IsPlaced);
+                    sideBySquad[candidate.Id] = _grid.GetSoldierSide(anchor.Soldier.Id);
+                }
+
+                Dictionary<bool, List<BattleSquad>> sides = active
+                    .GroupBy(candidate => sideBySquad[candidate.Id])
+                    .ToDictionary(group => group.Key, group => group.ToList());
+                Dictionary<int, float> expectedExchangeTurnsBySquad = [];
+                float totalBattleValueAtRisk = 0;
+                float totalRemovalRate = 0;
+                foreach ((bool side, List<BattleSquad> attackers) in sides)
+                {
+                    List<BattleSquad> targets = sides
+                        .Where(entry => entry.Key != side)
+                        .SelectMany(entry => entry.Value)
+                        .OrderBy(candidate => candidate.Id)
+                        .ToList();
+                    float battleValueAtRisk = targets.Sum(candidate =>
+                        profiles.TryGetValue(
+                            candidate.Id,
+                            out BattleSquadCapabilityProfile candidateProfile)
+                                ? candidateProfile.TotalAbleBattleValue
+                                : candidate.AbleSoldiers.Sum(GetBattleValue));
+                    float currentRemovalRate = 0;
+                    foreach (BattleSquad attacker in attackers)
+                    {
+                        if (!frames.TryGetValue(
+                                attacker.Id,
+                                out SquadEngagementFrame attackerFrame)
+                            // A pursuit turn is the no-exchange part of the chase. Its separate
+                            // fire-window potential is already priced elsewhere, so it must not
+                            // inflate the horizon that scales the ordinary exchange rate.
+                            || attackerFrame.Role == EngagementSquadRole.Pursuit)
+                        {
+                            continue;
+                        }
+
+                        if (!profiles.TryGetValue(
+                                attacker.Id,
+                                out BattleSquadCapabilityProfile attackerProfile))
+                        {
+                            continue;
+                        }
+
+                        foreach (BattleSquad target in targets)
+                        {
+                            if (!profiles.TryGetValue(
+                                    target.Id,
+                                    out BattleSquadCapabilityProfile targetProfile)
+                                || !frames.ContainsKey(target.Id))
+                            {
+                                continue;
+                            }
+
+                            float range = EngagementExchangeModel.Distance(
+                                BattleEngagementFrameBuilder.Centroid(attacker),
+                                BattleEngagementFrameBuilder.Centroid(target));
+                            currentRemovalRate += Math.Max(
+                                0,
+                                _exchange.EvaluateOutgoingExchangeRate(
+                                    attacker,
+                                    target,
+                                    attackerProfile,
+                                    targetProfile,
+                                    frames,
+                                    range));
+                        }
+                    }
+
+                    float expectedExchangeTurns =
+                        EngagementHorizonModel.DeriveExpectedExchangeTurns(
+                            battleValueAtRisk,
+                            currentRemovalRate);
+                    foreach (BattleSquad attacker in attackers)
+                    {
+                        expectedExchangeTurnsBySquad[attacker.Id] = expectedExchangeTurns;
+                    }
+                    totalBattleValueAtRisk += battleValueAtRisk;
+                    totalRemovalRate += currentRemovalRate;
+                }
+
+                _context.SetEngagementHorizon(
+                    expectedExchangeTurnsBySquad,
+                    totalBattleValueAtRisk,
+                    totalRemovalRate);
+            }
         }
 
         internal SquadEngagementDecision ChooseEngagementOption(
@@ -434,15 +570,25 @@ namespace OnlyWar.Helpers.Battles
             if (frame.Role == EngagementSquadRole.Pursuit)
             {
                 if (primary == null) return [EngagementOptionKind.Hold];
-                // A stationary aim is a real cross-turn commitment. Once a pursuit squad has
-                // selected Hold and at least one soldier has a still-viable aim on the pursued
-                // squad, movement would clear that aim and restart the cycle. Keep the squad
-                // stationary until the soldier fires or the target/shot becomes invalid.
-                if (HasPursuitFireCommitment(squad, frame, primary))
+                float distance = BattleEngagementFrameBuilder.MinimumDistance(squad, primary);
+                bool contactSeekerMustClose = profile.IsContactSeeking
+                    && (HasNoViableRangedOption(profile)
+                        || distance > profile.PreferredBandUpper);
+                if (contactSeekerMustClose)
+                {
+                    // Contact-seeker doctrine is a mask, including for pursuit frames. Apply it
+                    // before any aimed-fire stickiness so a useless sidearm cannot freeze a squad.
+                    return distance <= profile.MoveSpeed + BattleContactRules.MeleeContactAllowance
+                        ? [EngagementOptionKind.CloseToContact]
+                        : [EngagementOptionKind.RunToward];
+                }
+                // Pursuit stickiness is a policy commitment, not a price for having an aim. The
+                // latter is carried by the state potential so non-pursuit squads may trade it
+                // against geometry and immediate exchange value.
+                if (HasPursuitAimCommitment(squad, frame, primary))
                 {
                     return [EngagementOptionKind.Hold];
                 }
-                float distance = BattleEngagementFrameBuilder.MinimumDistance(squad, primary);
                 EngagementOptionKind fast = distance <= profile.MoveSpeed
                         + BattleContactRules.MeleeContactAllowance
                     ? EngagementOptionKind.CloseToContact
@@ -472,6 +618,28 @@ namespace OnlyWar.Helpers.Battles
                 EngagementOptionKind.JogToward,
                 EngagementOptionKind.CloseToContact
             ];
+            bool hasRangedWeapon = squad.AbleSoldiers.Any(
+                soldier => soldier.RangedWeapons.Count > 0);
+            if (noViableRangedOption
+                && hasRangedWeapon
+                && primaryDistance > profile.MoveSpeed
+                    + BattleContactRules.MeleeContactAllowance)
+            {
+                // A contact-seeker with no useful ranged answer has one doctrine: close as fast
+                // as the movement rules permit. Slower approach policies are not value choices in
+                // this state; exposing them lets a zero-rate exchange tie resolve to a walk/jog
+                // baseline even though every yard covered is the squad's only contribution.
+                result = [EngagementOptionKind.RunToward];
+            }
+            if (!profile.IsContactSeeking
+                && primaryDistance > profile.MoveSpeed + BattleContactRules.MeleeContactAllowance)
+            {
+                // CloseToContact is a charge legality choice, not a long-range approach alias.
+                // Ranged squads keep RunToward/JogToward for movement toward their useful band;
+                // only a contact-reachable state may expose the charge option.
+                result.Remove(EngagementOptionKind.CloseToContact);
+                result.Add(EngagementOptionKind.RunToward);
+            }
             // A melee-only squad with no usable ranged answer has no doctrinal reason to give up
             // ground. This is the old WeakNoOption guarantee expressed as an option mask: the
             // score is still honest, but a negative-EV charge cannot be outvoted by retreat.
@@ -515,99 +683,74 @@ namespace OnlyWar.Helpers.Battles
                 EvaluateImmediateActionValue(squad, tier, direction);
             float incoming = EvaluateIncomingNow(
                 squad, feasibleSpeed, profiles, allFrames, enemies);
-            (float meleeNow, float commitment) = EvaluateContactTerms(
+            (float meleeNow, float contactCommitment) = EvaluateContactTerms(
                 squad, kind, primary, profile);
-            float arrivalTimeValue = _exchange.EvaluateArrivalTimeValue(
-                squad,
-                projectedCentroid,
-                profile,
-                profiles,
-                allFrames,
-                enemies,
-                frame);
-            if (kind == EngagementOptionKind.CloseToContact
-                && !profile.IsContactSeeking
-                && primary != null
-                && BattleEngagementFrameBuilder.MinimumDistance(squad, primary)
-                    > profile.MoveSpeed + BattleContactRules.MeleeContactAllowance)
-            {
-                // A ranged squad's long approach is movement toward its firing band, not a
-                // completed charge. Keep the candidate visible for diagnostics/calibration, but
-                // charge the doctrinal cost of treating a multi-turn run-in as an assault.
-                commitment += profile.TotalAbleBattleValue;
-            }
-            List<float> future = _exchange.EvaluateFutureExchange(
-                squad,
-                projectedCentroid,
-                kind,
-                profile,
-                profiles,
-                allFrames,
-                enemies);
-            float roleTerm = EvaluateScreenRoleTerm(
-                kind, frame, profile, profiles, projectedCentroid, enemies);
-            roleTerm += EvaluatePursuitContactProgress(
-                squad,
-                kind,
-                frame,
-                profile,
-                primary,
-                feasibleSpeed,
-                primary != null
-                    ? allFrames.GetValueOrDefault(primary.Id)?.Role
-                    : null);
-            float fireWindowValue = EvaluatePursuitFireWindowValue(
-                squad,
-                kind,
-                frame,
-                profile,
-                primary,
-                primary != null
-                    ? allFrames.GetValueOrDefault(primary.Id)?.Role
-                    : null);
-            if (squad.MoraleState == MoraleState.Shaken
-                && kind is EngagementOptionKind.StepForward
-                    or EngagementOptionKind.JogToward
-                    or EngagementOptionKind.CloseToContact
-                    or EngagementOptionKind.MoveToInterpose
-                    or EngagementOptionKind.RunToward)
-            {
-                commitment += profile.TotalAbleBattleValue * 0.35f;
-            }
-            if (frame.Role == EngagementSquadRole.Pursuit
-                && kind == EngagementOptionKind.JogToward
-                && feasibleSpeed + 0.0001f < frame.QuarryRunSpeed)
-            {
-                commitment += profile.TotalAbleBattleValue
-                    * (1f - feasibleSpeed / Math.Max(0.1f, frame.QuarryRunSpeed));
-            }
-            if (SuppressHqAdvance(squad, kind))
-            {
-                commitment += profile.TotalAbleBattleValue;
-            }
-            // Stability is a tie policy in ChooseEngagementOption, not utility.  Keep the trace
-            // column for compatibility while preventing an old posture from buying real BV.
-            float hysteresis = 0;
-            float discountedFuture = 0;
-            for (int index = 0; index < future.Count; index++)
-            {
-                discountedFuture += (float)Math.Pow(EngagementFutureDiscount, index + 1)
-                    * future[index];
-            }
-            // CONTRACT (Phase 5, Design/Reference/EngagementScoringOverhaul.md). `enemyRemoval` and
-            // `discountedFuture` are now the SAME currency: both are
-            // hit * (takeOut + lambda * woundProgress) * targetBV, summed per soldier by
-            // per-soldier argmax. `discountedFuture` used to be built on AggregateRemovalRate, a
-            // capability proxy asserting a flat 10% of the ATTACKER'S OWN battle value per turn --
-            // which put the two halves of this sum ~4 orders of magnitude apart (~10^-3 vs ~10^1)
-            // and meant the immediate term could never change which option won. It can now.
-            float score = enemyRemoval - friendlyFire + readiness + fireWindowValue
-                - incoming + meleeNow + discountedFuture + arrivalTimeValue + roleTerm
-                - commitment + hysteresis;
+            IReadOnlyCollection<BattleSquad> friendlySquads = GetFriendlySquads(squad);
+            EngagementPotential.Breakdown rootPotential = _potential.Evaluate(
+                new EngagementPotential.State(
+                    squad,
+                    BattleEngagementFrameBuilder.Centroid(squad),
+                    profile,
+                    profiles,
+                    allFrames,
+                    enemies,
+                    frame,
+                    0,
+                    primary,
+                    null,
+                    friendlySquads));
+            EngagementPotential.Breakdown projectedPotential = _potential.Evaluate(
+                new EngagementPotential.State(
+                    squad,
+                    projectedCentroid,
+                    profile,
+                    profiles,
+                    allFrames,
+                    enemies,
+                    frame,
+                    feasibleSpeed,
+                    primary,
+                    rootActions,
+                    friendlySquads));
+            // The net-rate portion is split across the legacy trace columns so the trace remains
+            // comparable: FutureExchange is γΦ_net(s') and ArrivalTimeValue is -Φ_net(s). The
+            // readiness, screen and access columns carry their own potential differences. Together
+            // these columns are exactly γΦ(s') - Φ(s), not independent option bonuses.
+            float discountedNetRate =
+                EngagementPotential.EngagementPotentialDiscount
+                * projectedPotential.NetRateValue;
+            float arrivalTimeValue = -rootPotential.NetRateValue;
+            readiness = EngagementPotential.EngagementPotentialDiscount
+                * projectedPotential.ReadinessValue
+                - rootPotential.ReadinessValue;
+            float roleTerm = EngagementPotential.EngagementPotentialDiscount
+                * projectedPotential.RoleValue
+                - rootPotential.RoleValue;
+            float fireWindowValue = EngagementPotential.EngagementPotentialDiscount
+                * projectedPotential.FireWindowValue
+                - rootPotential.FireWindowValue;
+            float moraleTerm = EngagementPotential.EngagementPotentialDiscount
+                * projectedPotential.MoraleValue
+                - rootPotential.MoraleValue;
+            float commandTerm = EngagementPotential.EngagementPotentialDiscount
+                * projectedPotential.CommandValue
+                - rootPotential.CommandValue;
+            float accessTerm = EngagementPotential.EngagementPotentialDiscount
+                * projectedPotential.AccessValue
+                - rootPotential.AccessValue;
+            List<float> future = [discountedNetRate];
+            // Phase 3: every value term is now state potential. The only remaining direct
+            // commitment cost is the current-turn contact exchange returned by EvaluateContactTerms.
+            float score = EngagementPotential.ScoreTransition(
+                enemyRemoval - friendlyFire - incoming + meleeNow,
+                rootPotential,
+                projectedPotential,
+                contactCommitment);
             return new EngagementOptionEvaluation(
                 kind, tier, intended, feasibleSpeed,
                 enemyRemoval, friendlyFire, readiness, fireWindowValue, incoming, meleeNow,
-                future, arrivalTimeValue, roleTerm, commitment, hysteresis, score, rootActions);
+                future, arrivalTimeValue, roleTerm, contactCommitment, score, rootActions,
+                moraleTerm, commandTerm, accessTerm);
         }
 
         private static SquadMovementTier GetOptionTier(
@@ -913,7 +1056,11 @@ namespace OnlyWar.Helpers.Battles
                         stickyTarget.Soldier.Id,
                         stickyAim.Item2.Template.Id,
                         stickyRange,
-                        ReadinessValue: GetBattleValue(soldier) * 0.05f);
+                        ExpectedEnemyBattleValueRemoved:
+                            stickyShot.ExpectedEnemyBattleValueRemoved,
+                        ReadinessValue: EngagementPotential.ReadinessForPreparedShot(
+                            soldier,
+                            stickyShot));
             }
 
             float aimMultiplier = tier switch
@@ -1048,7 +1195,10 @@ namespace OnlyWar.Helpers.Battles
                         target.Soldier.Id,
                         aimWeapon.Template.Id,
                         range,
-                        ReadinessValue: GetBattleValue(soldier) * 0.05f);
+                        ExpectedEnemyBattleValueRemoved: aimNow?.ExpectedEnemyBattleValueRemoved ?? 0,
+                        ReadinessValue: EngagementPotential.ReadinessForPreparedShot(
+                            soldier,
+                            aimNow));
                 }
             }
             return new PlannedSoldierAction(soldier.Soldier.Id, PlannedSoldierActionKind.None);
@@ -1128,46 +1278,7 @@ namespace OnlyWar.Helpers.Battles
             BattleSquad shooterSquad) =>
             _removalRates.GetPairRemovalRates(shooterSquad);
 
-
-        private static float EvaluateScreenRoleTerm(
-            EngagementOptionKind kind,
-            SquadEngagementFrame frame,
-            BattleSquadCapabilityProfile profile,
-            IReadOnlyDictionary<int, BattleSquadCapabilityProfile> profiles,
-            ValueTuple<float, float> endpoint,
-            IReadOnlyCollection<BattleSquad> enemies)
-        {
-            if (kind != EngagementOptionKind.MoveToInterpose
-                || !frame.ProtectedSquadId.HasValue
-                || !frame.ScreenThreatSquadId.HasValue)
-            {
-                return 0;
-            }
-            BattleSquad threat = enemies.FirstOrDefault(
-                candidate => candidate.Id == frame.ScreenThreatSquadId.Value);
-            if (threat == null) return 0;
-            BattleSquadCapabilityProfile threatProfile = profiles[threat.Id];
-            // TurnsUntilThreatReachesInterceptPoint: the screener's own projected endpoint to the
-            // threat's speed, no ceiling and no preferred-range subtraction (distinct from the melee
-            // charge-arrival discount above -- see Design/Reference/EngagementScoringOverhaul.md
-            // Phase 0).
-            float interceptDistance = EngagementExchangeModel.Distance(
-                endpoint, BattleEngagementFrameBuilder.Centroid(threat));
-            float turnsUntilThreatReachesInterceptPoint =
-                interceptDistance / Math.Max(0.1f, threatProfile.MoveSpeed);
-            float holding = Math.Min(1f,
-                (profile.UsableMeleeBattleValue + profile.TotalAbleBattleValue * 0.25f)
-                / Math.Max(1, threatProfile.UsableMeleeBattleValue));
-            float capacity = Math.Min(1f,
-                profile.ContactCapacity / (float)Math.Max(1, threatProfile.ContactCapacity));
-            float interceptDiscount = 1f / (1f + turnsUntilThreatReachesInterceptPoint);
-            return Math.Min(
-                threatProfile.UsableMeleeBattleValue,
-                profiles[frame.ProtectedSquadId.Value].TotalAbleBattleValue)
-                * holding * capacity * interceptDiscount;
-        }
-
-        private bool HasPursuitFireCommitment(
+        private bool HasPursuitAimCommitment(
             BattleSquad squad,
             SquadEngagementFrame frame,
             BattleSquad primary)
@@ -1179,232 +1290,13 @@ namespace OnlyWar.Helpers.Battles
                 return false;
             }
 
-            // Aim is the authoritative commitment state. It is copied in the normal battle
-            // snapshot and is cleared by ShootAction or by movement, so this remains true exactly
-            // while the squad has something invested in the current aimed shot. Re-checking the
-            // existing-aim viability gate releases the commitment if the target dies, leaves the
-            // weapon's range, or becomes a bad shot.
+            // Any viable aim is sticky only after the pursuit policy selected Hold. Re-check
+            // viability so a dead, out-of-range, or otherwise invalid target releases the hold.
             return squad.AbleSoldiers.Any(soldier =>
                 soldier.Aim is ValueTuple<int, RangedWeapon, int> aim
                 && _soldierMap.TryGetValue(aim.Item1, out BattleSoldier target)
                 && target.BattleSquad?.Id == primary.Id
                 && _ranged.IsExistingAimStillViable(soldier));
-        }
-
-        /// <summary>
-        /// Values the aimed shot that a pursuit squad can complete after holding for the full
-        /// stationary fire cycle. The range projection is deliberately conservative: the quarry
-        /// is assumed to open by its full withdrawal speed for all five turns, while the actual
-        /// target evaluator supplies the hit, armor, wound-progress, burst, and friendly-fire
-        /// terms. The future shot is discounted by the same continuation discount as the rest of
-        /// engagement scoring, so this is a present-value nudge rather than free immediate fire.
-        /// </summary>
-        private float EvaluatePursuitFireWindowValue(
-            BattleSquad squad,
-            EngagementOptionKind kind,
-            SquadEngagementFrame frame,
-            BattleSquadCapabilityProfile profile,
-            BattleSquad primary,
-            EngagementSquadRole? quarryRole)
-        {
-            if (kind != EngagementOptionKind.Hold
-                || frame.Role != EngagementSquadRole.Pursuit
-                || profile.IsContactSeeking
-                || primary == null)
-            {
-                return 0;
-            }
-
-            float quarrySpeed = EngagementExchangeModel.QuarryWithdrawalRate(frame, quarryRole);
-            float projectedOpening = quarrySpeed * PursuitFireWindowTurns;
-            Dictionary<int, float> awardedByTarget = [];
-            float projectedValue = 0;
-
-            foreach (BattleSoldier shooter in squad.AbleSoldiers.OrderBy(soldier => soldier.Soldier.Id))
-            {
-                if (!IsPlaced(shooter) || shooter.EquippedRangedWeapons.Count == 0)
-                {
-                    continue;
-                }
-
-                RangedTargetEvaluation best = null;
-                foreach (BattleSoldier target in primary.AbleSoldiers
-                    .Where(candidate => candidate.IsCombatEffective && IsPlaced(candidate))
-                    .OrderBy(candidate => candidate.Soldier.Id))
-                {
-                    float currentRange = _grid.GetDistanceBetweenSoldiers(
-                        shooter.Soldier.Id,
-                        target.Soldier.Id);
-                    float projectedRange = currentRange + projectedOpening;
-                    foreach (RangedWeapon weapon in shooter.EquippedRangedWeapons
-                        .Where(candidate => !candidate.Template.IsTemplateWeapon
-                            && candidate.LoadedAmmo > 0
-                            && projectedRange <= candidate.Template.MaximumRange)
-                        .OrderByDescending(candidate => candidate.Template.DamageMultiplier)
-                        .ThenBy(candidate => candidate.Template.Id))
-                    {
-                        RangedTargetEvaluation evaluation = _ranged.EvaluateRangedTarget(
-                            shooter,
-                            target,
-                            weapon,
-                            projectedRange,
-                            weapon.Template.Accuracy + FullAimBonusTurns + 1,
-                            quarrySpeed);
-                        if (evaluation.HitProbability <= StickyMinimumHitProbability
-                            || evaluation.Score <= 0)
-                        {
-                            continue;
-                        }
-                        if (best == null
-                            || evaluation.Score > best.Score
-                            || (Math.Abs(evaluation.Score - best.Score) < 0.0001f
-                                && evaluation.Target.Soldier.Id < best.Target.Soldier.Id))
-                        {
-                            best = evaluation;
-                        }
-                    }
-                }
-
-                if (best == null)
-                {
-                    continue;
-                }
-
-                float alreadyAwarded = awardedByTarget.GetValueOrDefault(best.Target.Soldier.Id);
-                float remainingValue = Math.Max(0, GetBattleValue(best.Target) - alreadyAwarded);
-                float contribution = Math.Min(remainingValue, Math.Max(0, best.Score));
-                if (contribution <= 0)
-                {
-                    continue;
-                }
-                awardedByTarget[best.Target.Soldier.Id] = alreadyAwarded + contribution;
-                projectedValue += contribution;
-            }
-
-            return projectedValue
-                * (float)Math.Pow(EngagementFutureDiscount, PursuitFireWindowTurns);
-        }
-
-        private static float EvaluatePursuitContactProgress(
-            BattleSquad squad,
-            EngagementOptionKind kind,
-            SquadEngagementFrame frame,
-            BattleSquadCapabilityProfile profile,
-            BattleSquad primary,
-            float feasibleSpeed,
-            EngagementSquadRole? quarryRole)
-        {
-            // Pursuit is not the only posture in which closing speed IS the decision. A melee-only
-            // squad on an ordinary approach has no shot to trade away and no legal retreat, so the
-            // only thing separating StepForward from RunToward is how soon it arrives -- yet with
-            // role=Normal this term used to return 0 and leave the choice to `incoming` and
-            // `future`, both of which get slightly WORSE the closer the squad gets. Observed
-            // 2026-08-04 (Xibarrus Nu): two identical Abominants ~490 yards out scored Jog and Run
-            // within 8e-4 of each other and split the tie-break, one jogging and one running.
-            // `arrival_value` cannot carry this: its 1/(1+turns) discount flattens to a ~1e-4
-            // difference at that range, far below the noise it is competing against.
-            bool closingIsTheOnlyPlay = HasNoViableRangedOption(profile);
-            if (frame.Role != EngagementSquadRole.Pursuit && !closingIsTheOnlyPlay
-                || primary == null
-                || kind == EngagementOptionKind.Hold)
-            {
-                return 0;
-            }
-            ValueTuple<float, float> target = BattleEngagementFrameBuilder.Centroid(primary);
-            float before = EngagementExchangeModel.Distance(
-                BattleEngagementFrameBuilder.Centroid(squad), target);
-            float quarrySpeed = EngagementExchangeModel.QuarryWithdrawalRate(frame, quarryRole);
-            float attainable = profile.IsContactSeeking
-                ? profile.UsableMeleeBattleValue
-                : profile.UsableRangedBattleValue;
-
-            // A ranged pursuit does not have a binary "outside reach / inside reach" need. Its
-            // reason to keep running should taper through the authored preferred band: full at
-            // PreferredBandUpper, zero at PreferredBandLower. This removes the discontinuous
-            // score jump that made Hold and Run alternate when a fleeing quarry crossed one
-            // threshold by a few yards. The second factor prices only net closing speed, so a
-            // jog that the quarry outruns still receives no chase credit.
-            if (frame.Role == EngagementSquadRole.Pursuit
-                && !profile.IsContactSeeking
-                && profile.PreferredBandUpper > profile.PreferredBandLower)
-            {
-                float bandWidth = Math.Max(
-                    0.1f,
-                    profile.PreferredBandUpper - profile.PreferredBandLower);
-                float bandPressure = Math.Clamp(
-                    (before - profile.PreferredBandLower) / bandWidth,
-                    0,
-                    1);
-                float maximumNetClosing = Math.Max(0, profile.MoveSpeed - quarrySpeed);
-                float actualNetClosing = Math.Max(0, feasibleSpeed - quarrySpeed);
-                float closingFraction = maximumNetClosing <= 0
-                    ? 0
-                    : Math.Clamp(actualNetClosing / maximumNetClosing, 0, 1);
-                return attainable * bandPressure * closingFraction;
-            }
-
-            // Deliberately still reach, not EffectiveEngagementRange (Phase 2 audit, RE-CHECKED IN
-            // PHASE 6 and unchanged): this term prices recovering a LOST firing solution against a
-            // quarry beyond the lookahead horizon, so the threshold that matters is "can I shoot at
-            // all", and it must go to 0 as soon as the quarry is back in reach rather than paying
-            // for further closing.
-            //
-            // Phase 6 made the derived band a real quantity, which strengthens rather than weakens
-            // the case for reach here. The band answers "where do I want to STAND", and it is
-            // derived from removal MINUS incoming -- a withdrawing quarry's incoming is precisely
-            // what a pursuer has already decided to accept, so pursuing to the standoff band would
-            // stop the chase at a distance chosen by a threat model that does not apply. Worse, the
-            // band can legitimately be 0 (close) or, against a tough enemy, several hundred yards;
-            // either would make pursuit progress mean something different per matchup. Reach is the
-            // one threshold with a fixed meaning for a pursuit: past it there is no shot at all.
-            float desiredRange = profile.IsContactSeeking
-                ? 1f
-                : Math.Max(1f, profile.PreferredBandUpper);
-            if (before <= desiredRange) return 0;
-
-            // Closing is not valuable only to assault troops. A ranged squad that has lost its
-            // firing band must invest movement now to recover a later shot. The short exchange
-            // rollout cannot express that once the quarry is more than its two-turn horizon away,
-            // so price the fraction of one useful full-speed stride completed by this option.
-            // This keeps Hold competitive while it can actually fire, makes Run valuable after
-            // contact is lost, and still lets the existing quarry-speed penalty reject a Jog that
-            // would fall farther behind.
-            float usefulStride = Math.Min(
-                Math.Max(0, profile.MoveSpeed - quarrySpeed),
-                before - desiredRange);
-            float progress = Math.Min(
-                usefulStride,
-                Math.Max(0, feasibleSpeed - quarrySpeed));
-            return usefulStride <= 0
-                ? 0
-                : attainable * progress / Math.Max(0.1f, usefulStride);
-        }
-
-        private bool SuppressHqAdvance(BattleSquad squad, EngagementOptionKind kind)
-        {
-            if (kind is not (EngagementOptionKind.StepForward
-                or EngagementOptionKind.JogToward
-                or EngagementOptionKind.CloseToContact
-                or EngagementOptionKind.RunToward))
-            {
-                return false;
-            }
-            if (squad.Squad?.SquadTemplate?.SquadType.HasFlag(
-                    Models.Squads.SquadTypes.HQ) != true)
-            {
-                return false;
-            }
-            bool side = _grid.GetSoldierSide(squad.AbleSoldiers[0].Soldier.Id);
-            return _soldierMap.Values
-                .Select(soldier => soldier.BattleSquad)
-                .Where(candidate => candidate != null && candidate.Id != squad.Id)
-                .DistinctBy(candidate => candidate.Id)
-                .Any(candidate => candidate.Status == BattleSquadStatus.Active
-                    && candidate.Squad?.SquadTemplate?.SquadType.HasFlag(
-                        Models.Squads.SquadTypes.HQ) != true
-                    && candidate.AbleSoldiers.Any(member => IsPlaced(member)
-                        && _grid.GetSoldierSide(member.Soldier.Id) == side)
-                    && !candidate.IsInMelee);
         }
 
         private static BattleSquad ResolvePrimary(
@@ -1716,8 +1608,10 @@ namespace OnlyWar.Helpers.Battles
                     BattleDecisionTrace.Field("future", string.Join(',', candidate.FutureExchange.Select(value => value.ToString("0.###", CultureInfo.InvariantCulture)))),
                     BattleDecisionTrace.Field("arrival_value", candidate.ArrivalTimeValue),
                     BattleDecisionTrace.Field("role_term", candidate.RoleTerm),
+                    BattleDecisionTrace.Field("access_potential", candidate.AccessPotentialValue),
+                    BattleDecisionTrace.Field("morale_potential", candidate.MoralePotentialValue),
+                    BattleDecisionTrace.Field("command_potential", candidate.CommandPotentialValue),
                     BattleDecisionTrace.Field("commitment", candidate.ContactCommitmentCost),
-                    BattleDecisionTrace.Field("hysteresis", candidate.Hysteresis),
                     BattleDecisionTrace.Field("score", candidate.Score),
                     BattleDecisionTrace.Field("chosen", candidate.Kind == decision.Chosen.Kind),
                     BattleDecisionTrace.Field("margin", decision.Chosen.Score - runnerUp),
@@ -2042,6 +1936,26 @@ namespace OnlyWar.Helpers.Battles
         // Both of these now live on SquadPlanningServices so every collaborator shares one
         // definition; these forwarders keep the planner's own call sites unchanged.
         private bool IsPlaced(BattleSoldier soldier) => _services.IsPlaced(soldier);
+
+        private IReadOnlyCollection<BattleSquad> GetFriendlySquads(BattleSquad squad)
+        {
+            BattleSoldier anchor = squad?.AbleSoldiers.FirstOrDefault(IsPlaced);
+            if (anchor == null)
+            {
+                return squad == null ? [] : [squad];
+            }
+
+            bool side = _grid.GetSoldierSide(anchor.Soldier.Id);
+            return _soldierMap.Values
+                .Select(soldier => soldier.BattleSquad)
+                .Where(candidate => candidate != null
+                    && candidate.AbleSoldiers.Any(member =>
+                        IsPlaced(member)
+                        && _grid.GetSoldierSide(member.Soldier.Id) == side))
+                .DistinctBy(candidate => candidate.Id)
+                .OrderBy(candidate => candidate.Id)
+                .ToList();
+        }
 
         private static float GetBattleValue(BattleSoldier soldier) =>
             SquadPlanningServices.BattleValueOf(soldier);

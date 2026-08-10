@@ -69,20 +69,55 @@ public class MissionTargetStrengthTests
     // --- assassination approach ---
 
     // Same unguarded log in AssassinateStealthMissionStep. The defender's search effort now prices
-    // the approach, so an untrained force is detected each day instead of walking in, and the loop
-    // stops at the day budget rather than recursing forever through DetectedMissionStep.
-    [Trait("Category", "Slow")]
+    // the approach, so an untrained force is detected instead of walking in.
+    //
+    // TWO STEPS, NOT RunToCompletion (2026-08-09). What this test is named for -- a high-intel,
+    // well-patrolled region catching an untrained force -- is fully decided once
+    // DetectedMissionStep has declared the interception, which is two steps in. Running to
+    // completion additionally fought SEVEN battles of two raiders against thirty patrollers, at
+    // about a minute a run.
+    //
+    // The old `DaysElapsed == MissionDurationDays` assertion moved to
+    // AssassinateStealth_OperatingDaysSpent_EndsTheMission, and deliberately did not come with it:
+    // it could only ever pass while those seven battles were INCONCLUSIVE, because
+    // AmbushedMissionStep ends the mission the moment the force is wiped or withdraws. Two raiders
+    // surviving thirty patrollers seven times running is not a property of the mission loop, it was
+    // a symptom of a planner bug that left neither side able to hit the other. A working engine
+    // would have failed this assertion.
     [Fact]
     public void AssassinateStealth_UntrainedForceAgainstASearchedRegion_IsDetected()
     {
         MissionContext context = CreateContext(
             MissionType.Assassination, hordePopulation: 100_000_000, trained: false,
             defenderIntel: 6f, defenderPatrollers: 30);
+        MissionStepDriver driver = new(
+            CreateExecution(context), new AssassinateStealthMissionStep());
 
-        new MissionStepDriver(CreateExecution(context), new AssassinateStealthMissionStep()).RunToCompletion();
+        driver.AdvanceOneStep();  // stealth check fails -> DetectedMissionStep
+        driver.AdvanceOneStep();  // interception declared -> AmbushedMissionStep, left unrun
 
         Assert.Contains(context.Log, line => line.Contains("detected and intercepted"));
         Assert.DoesNotContain(context.Log, line => line.Contains("located the assassination target"));
+    }
+
+    // The day budget, asserted where it lives rather than inferred from seven days of side effects.
+    // AssassinateStealthMissionStep is the assassination loop's re-entry point -- DetectedMissionStep
+    // is handed `this` as its resume step -- so this guard is the only thing bounding a force that
+    // is detected but never intercepted, which would otherwise roll stealth forever.
+    [Fact]
+    public void AssassinateStealth_OperatingDaysSpent_EndsTheMission()
+    {
+        MissionContext context = CreateContext(
+            MissionType.Assassination, hordePopulation: 100_000_000, trained: false,
+            defenderIntel: 6f, defenderPatrollers: 30);
+        context.DaysElapsed = MissionContext.MissionDurationDays;
+
+        MissionStepResult result = new AssassinateStealthMissionStep()
+            .ExecuteMissionStep(CreateExecution(context), 0f, null);
+
+        // Complete, or a handoff to exfiltration for a force with a trip home to make. Either way
+        // the operating loop is over, and no further day is consumed.
+        Assert.True(result.Next == null || result.Next is ExfiltrateMissionStep);
         Assert.Equal(MissionContext.MissionDurationDays, context.DaysElapsed);
     }
 

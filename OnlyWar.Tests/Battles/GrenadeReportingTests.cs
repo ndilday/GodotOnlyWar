@@ -115,8 +115,7 @@ public class GrenadeReportingTests
             doesDamageDegradeWithRange: false,
             reloadTime: 1,
             templateType: 3,
-            areaRadius: 6,
-            fuelPerBurst: 0));
+            areaRadius: 6));
         grenadier.RangedWeapons.Clear();
         grenadier.ClearReadiedRangedWeapons();
         grenadier.RangedWeapons.Add(grenade);
@@ -132,9 +131,12 @@ public class GrenadeReportingTests
 
         BattleGridManager grid = new();
         Place(grid, grenadier, side: true, x: 0, y: 0);
-        Place(grid, victims.Soldiers[0], side: false, x: 10, y: 0);
-        Place(grid, victims.Soldiers[1], side: false, x: 11, y: 0);
-        Place(grid, victims.Soldiers[2], side: false, x: 10, y: 1);
+        // The Phase 1 contact rate makes the old 10-yard opening choose movement before the
+        // blast. Keep the cluster at the grenade's maximum throw distance so this test continues
+        // to isolate blast-wound queuing rather than posture selection.
+        Place(grid, victims.Soldiers[0], side: false, x: 3, y: 0);
+        Place(grid, victims.Soldiers[1], side: false, x: 4, y: 0);
+        Place(grid, victims.Soldiers[2], side: false, x: 3, y: 1);
         BattleAftermathDependencies aftermath = new(
             battleDate, StaticRNG.Instance, NoOpPlayerBattleAftermathSink.Instance);
         BattleExecutionContext execution = new(rules, StaticRNG.Instance, aftermath);

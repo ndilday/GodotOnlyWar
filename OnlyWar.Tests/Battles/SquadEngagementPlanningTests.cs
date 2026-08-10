@@ -106,7 +106,10 @@ public class SquadEngagementPlanningTests
         BattleSquad shooters = Squad("Long Reach", 81_030, 15, 0.05f);
         BattleSquad enemy = Squad("Small Target", 81_031, 10, 0.9f);
         EquipRifle(shooters.Soldiers[0], 91_030, range: 1_000, damage: 20);
-        EquipMelee(enemy.Soldiers[0], 91_031);
+        // Keep the reference opponent unarmed. Phase 1 now prices an armed contact from its
+        // actual take-out probability; that threat legitimately saturates this rifle's preferred
+        // range at reach and would no longer exercise the inside-reach property this fixture
+        // isolates. The armed, tougher comparison below still verifies the standoff response.
         BattleGridManager grid = new();
         Place(grid, shooters, true, 0, 0);
         Place(grid, enemy, false, 200, 0);
@@ -168,6 +171,55 @@ public class SquadEngagementPlanningTests
             BattleEngagementFrameBuilder.BuildProfile(shooters);
 
         Assert.Equal(profile.PreferredBandUpper, profile.EffectiveEngagementRange, 3);
+    }
+
+    [Theory]
+    [InlineData(100f, 10f, 10f)]
+    [InlineData(100f, 0f, 183f)]
+    [InlineData(10_000f, 1f, 183f)]
+    public void EngagementHorizon_DerivesFromRemovalRateAndAppliesTheObservedCap(
+        float battleValueAtRisk,
+        float removalRate,
+        float expectedTurns)
+    {
+        Assert.Equal(
+            expectedTurns,
+            EngagementHorizonModel.DeriveExpectedExchangeTurns(
+                battleValueAtRisk,
+                removalRate),
+            3);
+    }
+
+    [Fact]
+    public void MeleeContactRemovalRate_RespondsToTargetDurability()
+    {
+        BattleSquad attacker = Squad("Melee Attackers", 81_040, 20, 0.95f);
+        EquipMelee(attacker.Soldiers[0], 91_040);
+        ((Soldier)attacker.Soldiers[0].Soldier).AddSkillPoints(TestSkills.Melee, 256);
+
+        BattleSquad softTarget = Squad("Soft Target", 81_041, 10, 0.05f);
+        EquipMelee(softTarget.Soldiers[0], 91_041);
+        BattleGridManager softGrid = new();
+        Place(softGrid, attacker, true, 0, 0);
+        Place(softGrid, softTarget, false, 1, 0);
+        float softRate = MeleeStrikeEstimator.EstimateContactRemovalRate(
+            attacker.AbleSoldiers,
+            softTarget.AbleSoldiers);
+
+        BattleSquad hardTarget = Squad("Hard Target", 81_042, 10, 0.05f);
+        EquipMelee(hardTarget.Soldiers[0], 91_042);
+        hardTarget.Soldiers[0].Armor = new Armor(
+            new ArmorTemplate(92_042, "Heavy Plate", 100, 0));
+        BattleGridManager hardGrid = new();
+        Place(hardGrid, attacker, true, 0, 0);
+        Place(hardGrid, hardTarget, false, 1, 0);
+        float hardRate = MeleeStrikeEstimator.EstimateContactRemovalRate(
+            attacker.AbleSoldiers,
+            hardTarget.AbleSoldiers);
+
+        Assert.True(
+            softRate > hardRate + 0.01f,
+            $"melee removal must read target take-out probability: soft={softRate:F4}, hard={hardRate:F4}");
     }
 
     [Fact]
@@ -333,7 +385,7 @@ public class SquadEngagementPlanningTests
     }
 
     [Fact]
-    public void Pursuit_AtMatchedSpeedPricesNoArrivalAndStandsToShoot()
+    public void Potential_IsOptionIndependentAtTheRootState()
     {
         // Regression for the Xibarrus Theta ambush (2026-08-04). Arrival value measured `before`
         // and `after` against the quarry's CURRENT position, so a pursuer that ran six yards
@@ -343,7 +395,7 @@ public class SquadEngagementPlanningTests
         // beat standing and firing (122 vs 69) for ~997 turns until the resolver's cap.
         //
         // Netting the withdrawal out leaves nothing to buy: the squad cannot get closer, so the
-        // only thing on offer is the shot it already has.
+        // root-state potential must be the same constant for every candidate.
         // Contact-seeking, like the assault squad that actually did this: its desired range is
         // contact, so six yards of separation is outside it and arrival is priced at all. It
         // carries a pistol too, so standing still is a real alternative rather than a null option.
@@ -378,22 +430,291 @@ public class SquadEngagementPlanningTests
             [quarry],
             [quarry]);
 
-        foreach (EngagementOptionEvaluation candidate in decision.Candidates)
-        {
-            Assert.True(
-                candidate.ArrivalTimeValue == 0,
-                $"{candidate.Kind} priced arrival at {candidate.ArrivalTimeValue} against a "
-                    + "quarry withdrawing exactly as fast as the pursuer closes");
-        }
+        float rootPotentialOffset = decision.Candidates[0].ArrivalTimeValue;
+        Assert.All(
+            decision.Candidates,
+            candidate => Assert.Equal(rootPotentialOffset, candidate.ArrivalTimeValue, 5));
         Assert.NotEqual(EngagementOptionKind.RunToward, decision.Chosen.Kind);
     }
 
     [Fact]
-    public void Pursuit_AgainstASlowerQuarryStillPricesArrival()
+    public void Potential_RootReadinessPricesAbandoningAUsefulAim()
+    {
+        BattleSquad shooters = Squad("Aimed Gunners", 81_315, 10, 0.05f);
+        BattleSquad targetSquad = Squad("Aimed Target", 81_316, 10, 0.9f);
+        ((Soldier)shooters.Soldiers[0].Soldier).Dexterity = 20;
+        RangedWeapon rifle = EquipRifle(
+            shooters.Soldiers[0],
+            91_315,
+            range: 500,
+            damage: 20);
+        EquipMelee(targetSquad.Soldiers[0], 91_316);
+        BattleGridManager grid = new();
+        Place(grid, shooters, true, 0, 0);
+        Place(grid, targetSquad, false, 100, 0);
+        shooters.Soldiers[0].Aim = new ValueTuple<int, RangedWeapon, int>(
+            targetSquad.Soldiers[0].Soldier.Id,
+            rifle,
+            3);
+
+        BattleEngagementFrameBuilder.PairedFrame paired =
+            BattleEngagementFrameBuilder.Build([shooters], [targetSquad]);
+        BattleSquadPlanner planner = Planner(grid, shooters, targetSquad);
+        EngagementPotential.State root = new(
+            shooters,
+            BattleEngagementFrameBuilder.Centroid(shooters),
+            paired.Profiles[shooters.Id],
+            paired.Profiles,
+            paired.Frames,
+            [targetSquad],
+            paired.Frames[shooters.Id]);
+        EngagementPotential.Breakdown projected = planner.EvaluatePotential(
+            root with
+            {
+                Actions =
+                [
+                    new PlannedSoldierAction(
+                        shooters.Soldiers[0].Soldier.Id,
+                        PlannedSoldierActionKind.None)
+                ]
+            });
+
+        EngagementPotential.Breakdown rootValue = planner.EvaluatePotential(root);
+        Assert.True(rootValue.ReadinessValue > 0);
+        Assert.Equal(0, projected.ReadinessValue);
+    }
+
+    [Fact]
+    public void AccessPotential_HasNonVanishingGradientAcrossTheApproach()
+    {
+        float[] distances = [900, 400, 120, 40];
+        List<float> values = [];
+        for (int index = 0; index < distances.Length; index++)
+        {
+            BattleSquad gunners = Squad("Gradient Gunners", 81_700 + index, 10, 0.05f);
+            BattleSquad targets = Squad("Gradient Targets", 81_800 + index, 10, 0.05f);
+            ((Soldier)gunners.Soldiers[0].Soldier).AddSkillPoints(TestSkills.Ranged, 256);
+            EquipAutogun(gunners.Soldiers[0], 91_700 + index);
+            targets.Soldiers[0].Armor = new Armor(
+                new ArmorTemplate(92_700 + index, "Gradient Flak", 10, 0));
+            BattleGridManager grid = new();
+            Place(grid, gunners, true, 0, 0);
+            Place(grid, targets, false, (int)distances[index], 0);
+            BattleEngagementFrameBuilder.PairedFrame paired =
+                BattleEngagementFrameBuilder.Build([gunners], [targets]);
+            BattleSquadCapabilityProfile profile = paired.Profiles[gunners.Id];
+            EngagementPotential.Breakdown potential = Planner(grid, gunners, targets)
+                .EvaluatePotential(new EngagementPotential.State(
+                    gunners,
+                    BattleEngagementFrameBuilder.Centroid(gunners),
+                    profile,
+                    paired.Profiles,
+                    paired.Frames,
+                    [targets],
+                    paired.Frames[gunners.Id]));
+            values.Add(potential.AccessValue);
+        }
+
+        float[] slopes = Enumerable.Range(0, distances.Length - 1)
+            .Select(index => System.Math.Abs(values[index] - values[index + 1])
+                / (distances[index] - distances[index + 1]))
+            .ToArray();
+        Assert.All(slopes, slope => Assert.True(slope > 0, $"flat access slope: {string.Join(", ", slopes)}"));
+        Assert.True(
+            slopes.Max() <= slopes.Min() * 10,
+            $"arrival gradient varied by more than one order of magnitude: values="
+                + $"[{string.Join(", ", values.Select(value => value.ToString("F3")))}], "
+                + $"slopes=[{string.Join(", ", slopes.Select(slope => slope.ToString("F5")))}]");
+    }
+
+    [Fact]
+    public void ApproachingUnderFire_PricesClosingAboveHolding()
+    {
+        foreach (int distance in new[] { 900, 400, 120, 40 })
+        {
+            BattleSquad shortRanged = Squad(
+                $"Short Ranged {distance}",
+                81_720 + distance,
+                10,
+                meleeFraction: 0.05f);
+            BattleSquad longRanged = Squad(
+                $"Long Ranged {distance}",
+                81_820 + distance,
+                10,
+                meleeFraction: 0.05f);
+            EquipPistol(shortRanged.Soldiers[0], 91_720 + distance, range: 30, damage: 20);
+            ((Soldier)shortRanged.Soldiers[0].Soldier).Dexterity = 20;
+            ((Soldier)shortRanged.Soldiers[0].Soldier).AddSkillPoints(TestSkills.Ranged, 256);
+            ((Soldier)longRanged.Soldiers[0].Soldier).Dexterity = 20;
+            // Keep the return fire active across the sweep rather than making the fixture
+            // accidentally test only the target's to-hit cliff. The short-ranged side still has
+            // no outgoing value until it closes into its pistol band.
+            ((Soldier)longRanged.Soldiers[0].Soldier).AddSkillPoints(
+                TestSkills.Ranged,
+                1_000_000);
+            EquipRifle(longRanged.Soldiers[0], 91_820 + distance, range: 2_000, damage: 100);
+
+            BattleGridManager grid = new();
+            Place(grid, shortRanged, true, 0, 0);
+            Place(grid, longRanged, false, distance, 0);
+            BattleEngagementFrameBuilder.PairedFrame paired =
+                BattleEngagementFrameBuilder.Build([shortRanged], [longRanged]);
+            SquadEngagementDecision decision = Planner(grid, shortRanged, longRanged)
+                .ChooseEngagementOption(
+                    shortRanged,
+                    paired.Frames[shortRanged.Id],
+                    paired.Profiles,
+                    paired.Frames,
+                    [shortRanged],
+                    [longRanged]);
+
+            EngagementOptionEvaluation hold = decision.Candidates.Single(
+                candidate => candidate.Kind == EngagementOptionKind.Hold);
+            Assert.True(
+                IsClosing(decision.Chosen.Kind),
+                $"at {distance} yards expected closing over holding, chose "
+                    + $"{decision.Chosen.Kind}; margin={decision.Chosen.Score - hold.Score:F4}; "
+                    + string.Join(
+                        " | ",
+                        decision.Candidates.Select(candidate =>
+                            $"{candidate.Kind}: score={candidate.Score:F3}, "
+                                + $"future={candidate.FutureExchange.Sum():F3}, "
+                                + $"incoming={candidate.IncomingNow:F3}")));
+            Assert.True(
+                decision.Chosen.Score - hold.Score
+                    > shortRanged.Soldiers.Sum(soldier => soldier.Soldier.Template.BattleValue)
+                        * 0.02f,
+                $"closing at {distance} yards remained inside the indifference band; "
+                    + $"chosen={decision.Chosen.Kind}, "
+                    + $"margin={decision.Chosen.Score - hold.Score:F4}, "
+                    + $"effective={paired.Profiles[shortRanged.Id].EffectiveEngagementRange:F2}, "
+                    + $"peak={paired.Profiles[shortRanged.Id].PeakRangedRemovalFraction:F4}, "
+                    + string.Join(
+                        " | ",
+                        decision.Candidates.Select(candidate =>
+                            $"{candidate.Kind}:{candidate.Score:F3}/future="
+                                + $"{candidate.FutureExchange.Sum():F3}")));
+        }
+    }
+
+    [Fact]
+    public void ScoreTransition_EqualPotentialOffsetsCancel()
+    {
+        EngagementPotential.Breakdown root = new(10, 1, 2, 3, 4, 5, 6);
+        EngagementPotential.Breakdown projected = new(8, 2, 1, 4, 3, 6, 7);
+        const float potentialConstant = 137.5f;
+        float original = EngagementPotential.ScoreTransition(
+            immediateExchange: 4.5f,
+            root,
+            projected,
+            contactCommitment: 0.75f);
+        float shifted = EngagementPotential.ScoreTransition(
+            immediateExchange: 4.5f,
+            root with { NetRateValue = root.NetRateValue + potentialConstant },
+            projected with { NetRateValue = projected.NetRateValue + potentialConstant },
+            contactCommitment: 0.75f);
+
+        Assert.Equal(original, shifted, 5);
+    }
+
+    [Fact]
+    public void ScoreTransition_TelescopesAlgebraicallyAcrossTurns()
+    {
+        const float gamma = EngagementPotential.EngagementPotentialDiscount;
+        EngagementPotential.Breakdown[] potentials =
+        [
+            new(10, 1, 2, 3, 4, 5),
+            new(8, 2, 1, 4, 3, 6),
+            new(6, 3, 2, 5, 2, 7),
+            new(4, 4, 3, 6, 1, 8)
+        ];
+        float[] immediate = [1.5f, -0.25f, 2.25f];
+        float discountedTurnScores = 0;
+        float discount = 1;
+        for (int turn = 0; turn < immediate.Length; turn++)
+        {
+            discountedTurnScores += discount * EngagementPotential.ScoreTransition(
+                immediate[turn],
+                potentials[turn],
+                potentials[turn + 1],
+                contactCommitment: 0);
+            discount *= gamma;
+        }
+
+        float expanded = immediate
+            .Select((value, index) => (float)System.Math.Pow(gamma, index) * value)
+            .Sum()
+            + (float)System.Math.Pow(gamma, immediate.Length) * potentials[^1].Total
+            - potentials[0].Total;
+        Assert.Equal(expanded, discountedTurnScores, 5);
+    }
+
+    [Fact]
+    public void FinitePoolSaturation_IsBoundedContinuousAndMonotonic()
+    {
+        const float pool = 10f;
+        float[] opportunities = [0, 5, 10, 20, 39.999f, 40.001f, 100];
+        float[] values = opportunities
+            .Select(opportunity => EngagementPotential.SaturateFinitePool(opportunity, pool))
+            .ToArray();
+
+        Assert.All(values, value => Assert.InRange(value, 0, pool));
+        Assert.All(
+            Enumerable.Range(0, values.Length - 1),
+            index => Assert.True(values[index + 1] >= values[index]));
+        Assert.InRange(System.Math.Abs(values[5] - values[4]), 0, 0.001f);
+        Assert.True(values[^1] < pool);
+        Assert.Equal(pool, EngagementPotential.SaturateFinitePool(float.PositiveInfinity, pool));
+    }
+
+    [Fact]
+    public void FinitePoolSaturation_ConservesOutgoingAndIncomingPoolsIndependently()
+    {
+        float outgoing = EngagementPotential.SaturateFinitePool(1_000, 10);
+        float incoming = EngagementPotential.SaturateFinitePool(1_000, 25);
+
+        Assert.InRange(outgoing, 0, 10);
+        Assert.InRange(incoming, 0, 25);
+        Assert.InRange(outgoing - incoming, -25, 10);
+    }
+
+    [Fact]
+    public void ContinuousAccessValue_FadesWithoutAnActivationCliff()
+    {
+        const float targetValue = 10f;
+        float helpless = EngagementPotential.EvaluateContinuousAccessValue(
+            currentRate: 0,
+            destinationRate: 5,
+            turnsToUsefulRange: 10,
+            targetBattleValue: targetValue);
+        float contributing = EngagementPotential.EvaluateContinuousAccessValue(
+            currentRate: 5,
+            destinationRate: 5,
+            turnsToUsefulRange: 10,
+            targetBattleValue: targetValue);
+        float adjacent = EngagementPotential.EvaluateContinuousAccessValue(
+            currentRate: 5.001f,
+            destinationRate: 5,
+            turnsToUsefulRange: 10,
+            targetBattleValue: targetValue);
+
+        Assert.True(helpless < contributing);
+        Assert.InRange(System.Math.Abs(adjacent - contributing), 0, 0.01f);
+        Assert.Equal(
+            0,
+            EngagementPotential.EvaluateContinuousAccessValue(0, 0, 10, targetValue));
+        Assert.Equal(
+            helpless / 2,
+            EngagementPotential.EvaluateContinuousAccessValue(0, 5, 5, targetValue),
+            5);
+    }
+
+    [Fact]
+    public void Pursuit_AgainstASlowerQuarryStillPricesFuturePositionValue()
     {
         // The paired case proving the fix turns on the speed difference and not on the Pursuit
-        // role: the same geometry against a quarry it genuinely outruns still rewards closing,
-        // so a real chase is untouched.
+        // role: the same geometry against a quarry it genuinely outruns still gives the projected
+        // state positive future value, so a real chase is untouched.
         BattleSquad pursuer = Squad("Fast Pursuer", 81_320, 20, 0.9f);
         BattleSquad quarry = Squad("Slow Quarry", 81_321, 10, 0.9f);
         EquipMelee(pursuer.Soldiers[0], 91_322);
@@ -424,9 +745,14 @@ public class SquadEngagementPlanningTests
             [quarry],
             [quarry]);
 
-        Assert.Contains(
-            decision.Candidates,
-            candidate => candidate.ArrivalTimeValue > 0);
+        Assert.True(
+            decision.Candidates.Any(candidate => candidate.FutureExchange[0] > 0),
+            string.Join(
+                " | ",
+                decision.Candidates.Select(candidate =>
+                    $"{candidate.Kind}: future={candidate.FutureExchange[0]:F4}, "
+                        + $"arrival={candidate.ArrivalTimeValue:F4}, "
+                        + $"role={candidate.RoleTerm:F4}, score={candidate.Score:F4}")));
     }
 
     [Fact]
@@ -504,7 +830,7 @@ public class SquadEngagementPlanningTests
     }
 
     [Fact]
-    public void OptionTable_HasBoundedPolicyContinuationAndNonUtilityHysteresis()
+    public void OptionTable_HasStatePotentialContinuationWithoutHysteresis()
     {
         BattleSquad squad = Squad("Rifles", 81_031, 10, 0.1f);
         BattleSquad enemy = Squad("Enemy", 81_032, 10, 0.1f);
@@ -528,7 +854,39 @@ public class SquadEngagementPlanningTests
 
         Assert.All(decision.Candidates, candidate =>
             Assert.Single(candidate.FutureExchange));
-        Assert.All(decision.Candidates, candidate => Assert.Equal(0, candidate.Hysteresis));
+        Assert.All(decision.Candidates, candidate =>
+            Assert.Equal(0, candidate.MoralePotentialValue));
+    }
+
+    [Fact]
+    public void ShakenSquad_PenalizesAdvanceButNotWithdrawal()
+    {
+        BattleSquad squad = Squad("Shaken Rifles", 81_035, 10, 0.1f);
+        BattleSquad enemy = Squad("Enemy", 81_036, 10, 0.1f);
+        squad.MoraleState = MoraleState.Shaken;
+        EquipRifle(squad.Soldiers[0], 91_035, 100, 10);
+        EquipRifle(enemy.Soldiers[0], 91_036, 100, 10);
+        BattleGridManager grid = new();
+        Place(grid, squad, true, 0, 0);
+        Place(grid, enemy, false, 50, 0);
+        BattleEngagementFrameBuilder.PairedFrame paired =
+            BattleEngagementFrameBuilder.Build([squad], [enemy]);
+
+        SquadEngagementDecision decision = Planner(grid, squad, enemy)
+            .ChooseEngagementOption(
+                squad,
+                paired.Frames[squad.Id],
+                paired.Profiles,
+                paired.Frames,
+                [squad],
+                [enemy]);
+
+        EngagementOptionEvaluation retreat = decision.Candidates.Single(
+            candidate => candidate.Kind == EngagementOptionKind.StepBack);
+        EngagementOptionEvaluation advance = decision.Candidates.Single(
+            candidate => candidate.Kind == EngagementOptionKind.StepForward);
+        Assert.Equal(0f, retreat.MoralePotentialValue);
+        Assert.True(advance.MoralePotentialValue < 0);
     }
 
     [Fact]
@@ -818,7 +1176,7 @@ public class SquadEngagementPlanningTests
     }
 
     [Fact]
-    public void ContactSeekingSquad_ValuesFasterArrivalWhenContactExchangeIsUseful()
+    public void ContactSeekingSquad_ValuesFasterContactProgressWhenExchangeIsUseful()
     {
         BattleSquad melee = Squad("Long Charge", 81_145, 20, 0.95f);
         BattleSquad enemy = Squad("Unarmed Target", 82_145, 1, 0.05f);
@@ -846,11 +1204,11 @@ public class SquadEngagementPlanningTests
             candidate => candidate.Kind == EngagementOptionKind.RunToward);
 
         Assert.True(
-            run.ArrivalTimeValue > jog.ArrivalTimeValue
-                && jog.ArrivalTimeValue > walk.ArrivalTimeValue,
-            $"expected faster arrival to be worth more: "
-                + $"walk={walk.ArrivalTimeValue}, jog={jog.ArrivalTimeValue}, "
-                + $"run={run.ArrivalTimeValue}");
+            run.RoleTerm > jog.RoleTerm
+                && jog.RoleTerm > walk.RoleTerm,
+            $"expected faster contact progress to be worth more in the state potential: "
+                + $"walk={walk.RoleTerm}, jog={jog.RoleTerm}, "
+                + $"run={run.RoleTerm}");
         Assert.Equal(EngagementOptionKind.RunToward, decision.Chosen.Kind);
     }
 
@@ -1227,6 +1585,112 @@ public class SquadEngagementPlanningTests
                 + $"({sidearm:0.######}) by orders of magnitude, not by a margin");
         Assert.True(realGun > 0.1f, $"a working rifle scored {realGun:0.######}");
         Assert.True(sidearm < 0.01f, $"a pistol against power armour scored {sidearm:0.######}");
+    }
+
+    /// <summary>
+    /// RULE 2 (2026-08-09). A squad whose weapon cannot hurt the enemy FROM WHERE IT STANDS, but
+    /// could from closer, must move to the range where its gun works.
+    ///
+    /// <para>ENTIRELY REAL CONTENT, unlike the fixture that surfaced this. The numbers below are an
+    /// Autogun (Accuracy 4, RateOfFire 10, DamageMultiplier 5, degrading over MaximumRange 1000)
+    /// against Flak Armor (10) -- both straight out of the rules database:</para>
+    /// <list type="bullet">
+    /// <item><description>900 yards: damage coefficient 0.5, so penetrating armour 10 needs a
+    /// damage roll 9.4 standard deviations up. Never, at any hit rate.</description></item>
+    /// <item><description>200 yards: damage coefficient 4.0, which penetrates about 72% of
+    /// hits.</description></item>
+    /// </list>
+    /// <para>So closing is not a preference here, it is the difference between contributing to the
+    /// battle and not contributing at all. The target is deliberately unarmed, so there is not even
+    /// an incoming-fire cost to weigh against the move.</para>
+    ///
+    /// <para>WHY IT FAILS TODAY. Every option scores ~0: the outgoing rate at 900 is nil, and the
+    /// two-ply lookahead only projects the squad a dozen yards, which does not measurably improve a
+    /// hopeless damage roll. With the candidates within `EngagementIndifferenceFraction` of each
+    /// other the tie-break falls back to the baseline posture, and the baseline reads
+    /// `PreferredBandUpper`/`Lower` -- derived from raw weapon REACH (1000 and 700) -- so 900 yards
+    /// looks like a squad standing exactly where it wants to be. It holds, forever. See
+    /// <see cref="BattleSquadPlanner.HasNoViableRangedOption"/>, whose guard covers this shape only
+    /// for contact-seekers; a ranged-doctrine squad is exempted by design and so is uncovered.</para>
+    /// </summary>
+    [Fact]
+    public void RangedSquadBeyondItsDamageRange_ClosesInsteadOfHolding()
+    {
+        BattleSquad gunners = Squad("Autogunners", 83_500, 10, meleeFraction: 0.05f);
+        BattleSquad targets = Squad("Flak Infantry", 83_501, 10, meleeFraction: 0.05f);
+        // Trained, so the scenario turns on DAMAGE rather than on the untrained -4 to-hit cliff.
+        ((Soldier)gunners.Soldiers[0].Soldier).AddSkillPoints(TestSkills.Ranged, 256);
+        EquipAutogun(gunners.Soldiers[0], 93_500);
+        targets.Soldiers[0].Armor = new Armor(
+            new ArmorTemplate(74_500, "Flak Armor", 10, 0));
+        BattleGridManager grid = new();
+        Place(grid, gunners, true, 0, 0);
+        Place(grid, targets, false, 900, 0);
+        BattleEngagementFrameBuilder.PairedFrame paired =
+            BattleEngagementFrameBuilder.Build([gunners], [targets]);
+
+        SquadEngagementDecision decision = Planner(grid, gunners, targets)
+            .ChooseEngagementOption(
+                gunners,
+                paired.Frames[gunners.Id],
+                paired.Profiles,
+                paired.Frames,
+                [targets]);
+
+        Assert.True(
+            IsClosing(decision.Chosen.Kind),
+            "a squad whose autogun cannot scratch flak armour at 900 yards chose "
+                + $"{decision.Chosen.Kind} rather than closing to a range where it can. "
+                + $"peakRemovalFraction={paired.Profiles[gunners.Id].PeakRangedRemovalFraction:0.######}, "
+                + $"effectiveEngagementRange="
+                + $"{paired.Profiles[gunners.Id].EffectiveEngagementRange:F1}, "
+                + $"terms: {string.Join(" | ", decision.Candidates
+                    .OrderByDescending(candidate => candidate.Score)
+                    .Select(candidate => $"{candidate.Kind} score={candidate.Score:F3} "
+                        + $"arrival={candidate.ArrivalTimeValue:F3} "
+                        + $"readiness={candidate.ReadinessValue:F3} "
+                        + $"outgoing={candidate.ImmediateEnemyRemoval:F3} "
+                        + $"future={candidate.FutureExchange.Sum():F3} "
+                        + $"commitment={candidate.ContactCommitmentCost:F3}"))}");
+        Assert.All(
+            decision.Candidates,
+            candidate => Assert.True(
+                candidate.ReadinessValue < 0.01f,
+                $"a shot that cannot remove flak at 900 yards earned readiness "
+                    + $"{candidate.ReadinessValue:F4} for {candidate.Kind}"));
+    }
+
+    /// <summary>
+    /// The rules database's Autogun, which unlike <see cref="EquipRifle"/> degrades with range and
+    /// fires a burst -- the two properties that make "my gun is useless from here, but not from
+    /// closer" a real situation rather than a contrived one.
+    /// </summary>
+    private static RangedWeapon EquipAutogun(BattleSoldier soldier, int id)
+    {
+        RangedWeapon weapon = new(new RangedWeaponTemplate(
+            id,
+            "Planning Autogun",
+            EquipLocation.TwoHand,
+            TestSkills.Ranged,
+            accuracy: 4,
+            armorMultiplier: 1,
+            penetrationMultiplier: 1,
+            // 0 rather than the database's 8, so the fixture's Strength-10 soldiers are never
+            // gated by it and the test turns purely on range.
+            requiredStrength: 0,
+            baseDamage: 5,
+            maxDistance: 1000,
+            rof: 10,
+            ammo: 30,
+            recoil: 2,
+            bulk: 2,
+            doesDamageDegradeWithRange: true,
+            reloadTime: 3));
+        soldier.RangedWeapons.Clear();
+        soldier.ClearReadiedRangedWeapons();
+        soldier.RangedWeapons.Add(weapon);
+        soldier.ReadyWeapon(weapon);
+        return weapon;
     }
 
     private static bool IsClosing(EngagementOptionKind kind) =>
