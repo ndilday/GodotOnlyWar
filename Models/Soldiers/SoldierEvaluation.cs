@@ -25,9 +25,14 @@ namespace OnlyWar.Models.Soldiers
 
         public SoldierEvaluation(Date evaluationDate, IReadOnlyDictionary<string, float> ratings)
         {
-            EvaluationDate = evaluationDate;
+            // Date is the mutable campaign clock. Persisted evaluations are snapshots,
+            // not live references to the current turn.
+            EvaluationDate = CopyDate(evaluationDate);
             _ratings = new Dictionary<string, float>(ratings);
         }
+
+        private static Date CopyDate(Date date) =>
+            date == null ? null : new Date(date.Millenium, date.Year, date.Week);
 
         // Convenience constructor for the seven well-known ratings (tests, legacy callers).
         public SoldierEvaluation(Date evaluationDate, float melee, float ranged, float lead,

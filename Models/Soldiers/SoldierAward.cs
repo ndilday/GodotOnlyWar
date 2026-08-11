@@ -15,10 +15,15 @@ namespace OnlyWar.Models.Soldiers
 
         public SoldierAward(Date dateAwarded, string name, string type, ushort level)
         {
-            DateAwarded = dateAwarded;
+            // Date is the mutable campaign clock. Records must retain the date on which
+            // they were created rather than following that clock as turns advance.
+            DateAwarded = CopyDate(dateAwarded);
             Name = name;
             Type = type;
             Level = level;
         }
+
+        private static Date CopyDate(Date date) =>
+            date == null ? null : new Date(date.Millenium, date.Year, date.Week);
     }
 }

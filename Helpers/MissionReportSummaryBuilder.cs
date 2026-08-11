@@ -109,8 +109,10 @@ namespace OnlyWar.Helpers
             switch (classification.MissionType)
             {
                 case MissionType.Recon:
-                case MissionType.Patrol:
                     return BuildReconSummary(subject, location, classification);
+
+                case MissionType.Patrol:
+                    return BuildPatrolSummary(subject, location, classification);
 
                 case MissionType.Assassination:
                     return BuildAssassinationSummary(subject, location, classification);
@@ -153,6 +155,25 @@ namespace OnlyWar.Helpers
             if (!classification.WasDetected)
             {
                 return $"{subject} reconnoitered {location} undetected.";
+            }
+
+            if (classification.Disposition == MissionForceDisposition.LostContact)
+            {
+                return $"{subject} were detected in {location} and lost contact with base.";
+            }
+            if (classification.Disposition == MissionForceDisposition.BrokeContact)
+            {
+                return $"{subject} were detected in {location} but broke contact successfully.";
+            }
+            return $"{subject} were detected in {location}.";
+        }
+
+        private static string BuildPatrolSummary(
+            string subject, string location, MissionOutcomeClassification classification)
+        {
+            if (!classification.WasDetected)
+            {
+                return $"{subject} patroled {location}.";
             }
 
             if (classification.Disposition == MissionForceDisposition.LostContact)

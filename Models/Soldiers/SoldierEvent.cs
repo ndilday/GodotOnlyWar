@@ -60,7 +60,9 @@ namespace OnlyWar.Models.Soldiers
                             int? magnitude = null, string locationName = null,
                             IEnumerable<int> relatedSoldierIds = null)
         {
-            Date = date;
+            // Date is the mutable campaign clock. History entries must retain the date
+            // on which they occurred rather than following that clock as turns advance.
+            Date = CopyDate(date);
             Type = type;
             Detail = detail;
             FactionId = factionId;
@@ -69,6 +71,9 @@ namespace OnlyWar.Models.Soldiers
             LocationName = locationName;
             _relatedSoldierIds = relatedSoldierIds?.ToList() ?? [];
         }
+
+        private static Date CopyDate(Date date) =>
+            date == null ? null : new Date(date.Millenium, date.Year, date.Week);
 
         // Formats the service-record line. Career events are date-stamped; death notes are
         // kept as standalone epitaphs because their detail is already a complete record.

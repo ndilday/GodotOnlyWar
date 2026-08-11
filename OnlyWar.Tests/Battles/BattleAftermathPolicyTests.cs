@@ -160,7 +160,7 @@ public class BattleAftermathPolicyTests
         Assert.Empty(campaignArmy.FallenBrothers);
         Assert.Same(assignedSquad, player.AssignedSquad);
         Assert.Contains(player, assignedSquad.Members);
-        Assert.All(player.SoldierEvents, soldierEvent => Assert.Same(battleDate, soldierEvent.Date));
+        Assert.All(player.SoldierEvents, soldierEvent => Assert.Equal(battleDate, soldierEvent.Date));
     }
 
     [Fact]

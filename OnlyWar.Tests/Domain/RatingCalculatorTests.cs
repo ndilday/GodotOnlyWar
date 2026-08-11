@@ -85,6 +85,38 @@ public class RatingCalculatorTests
     }
 
     [Fact]
+    public void ApplyAwards_SnapshotsAwardAndHistoryDates()
+    {
+        RatingCalculator calculator = CreateSingleAwardCalculator();
+        PlayerSoldier soldier = new(TestModelFactory.CreateSoldier(), "Brother Test");
+        Date currentDate = new(39, 500, 1);
+        SoldierEvaluation eval = new(currentDate,
+            new Dictionary<string, float> { [RatingKeys.Ancient] = 113f });
+
+        calculator.ApplyAwards(soldier, eval, currentDate);
+        currentDate.IncrementWeek();
+
+        SoldierAward award = Assert.Single(soldier.SoldierAwards);
+        Assert.Equal(new Date(39, 500, 1), award.DateAwarded);
+        SoldierEvent historyEntry = Assert.Single(soldier.SoldierEvents);
+        Assert.Equal(new Date(39, 500, 1), historyEntry.Date);
+        Assert.Equal(new Date(39, 500, 1), eval.EvaluationDate);
+    }
+
+    private static RatingCalculator CreateSingleAwardCalculator()
+    {
+        RatingDefinition ancient = new(4, RatingKeys.Ancient, "Ancient", RatingAggregation.Product,
+            new[] { new RatingComponent(RatingComponentType.AttributeValue, (int)Attribute.Ego, 0) },
+            new[] { new RatingNormalizationFactor(1.0, 1.0, 0) });
+        RatingAwardTier[] tiers =
+        {
+            new(1, RatingKeys.Ancient, 4, 112, RatingAwardEffect.Award, "Banner", "Adamantium Banner of the Emperor")
+        };
+        return new RatingCalculator(new[] { ancient }, tiers,
+            new Dictionary<int, BaseSkill>(), new FixedRNG());
+    }
+
+    [Fact]
     public void ApplyAwards_InterpolatesBestSkillInCategoryIntoAwardName()
     {
         RatingDefinition ranged = new(2, RatingKeys.Ranged, "Ranged", RatingAggregation.Sum,

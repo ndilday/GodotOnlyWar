@@ -140,6 +140,16 @@ public class MissionReportSummaryBuilderTests
     }
 
     [Fact]
+    public void BuildSummary_Patrol_ReportsPatroledWithoutUndetectedQualifier()
+    {
+        string summary = MissionReportSummaryBuilder.BuildSummary(
+            Classification(MissionType.Patrol, wasDetected: false),
+            "Sacred Ground, Terra");
+
+        Assert.Equal("Your forces patroled Sacred Ground, Terra.", summary);
+    }
+
+    [Fact]
     public void BuildSummary_DetectedReconThatEscapes_ReportsBrokeContact()
     {
         string summary = MissionReportSummaryBuilder.BuildSummary(
