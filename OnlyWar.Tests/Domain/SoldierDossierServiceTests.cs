@@ -139,6 +139,21 @@ public class SoldierDossierServiceTests
         Assert.Contains("Requires", plainSummary);
     }
 
+    [Fact]
+    public void GenerateSoldierInjurySummary_ReportsReplacementForCrippledFunctionalLocation()
+    {
+        Squad squad = CreateAssignedSquad("Tactical Squad");
+        PlayerSoldier soldier = AddPlayerSoldier(squad, "Brother Marius");
+        HitLocation rightFoot = soldier.Body.HitLocations.First(hl => hl.Template.Name == "Right Foot");
+        rightFoot.Wounds.AddWound(WoundLevel.Major);
+
+        string plainSummary = _service.GenerateSoldierInjurySummary(soldier, richText: false);
+
+        Assert.True(rightFoot.IsReplacementEligible);
+        Assert.Contains("Requires replacement treatment", plainSummary);
+        Assert.DoesNotContain("Requires 6 weeks", plainSummary);
+    }
+
     private static Squad CreateAssignedSquad(string squadTemplateName)
     {
         SquadTemplate template = new(

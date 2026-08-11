@@ -209,14 +209,17 @@ namespace OnlyWar.Helpers
         {
             string summary = "";
             byte recoveryTime = 0;
-            bool isSevered = false;
+            bool needsReplacement = false;
             foreach (HitLocation hl in selectedSoldier.Body.HitLocations)
             {
                 if (hl.Wounds.WoundTotal != 0)
                 {
-                    if (hl.IsSevered)
+                    // Keep the Chapter/Soldier dossier aligned with the Apothecarium and weekly
+                    // medical pass. A functional location can require replacement when it is
+                    // crippled without being severed (for example, a Right Foot at Major).
+                    if (hl.IsSevered || hl.IsReplacementEligible)
                     {
-                        isSevered = true;
+                        needsReplacement = true;
                     }
                     byte woundTime = hl.Wounds.RecoveryTimeLeft();
                     if (woundTime > recoveryTime)
@@ -226,9 +229,9 @@ namespace OnlyWar.Helpers
                     summary += hl.ToString() + "\n";
                 }
             }
-            if (isSevered)
+            if (needsReplacement)
             {
-                summary += "Will be unable to perform field duties until receiving cybernetic replacements\n";
+                summary += "Requires replacement treatment before being fully fit for duty\n";
             }
             else if (recoveryTime > 0)
             {
