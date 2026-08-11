@@ -689,7 +689,7 @@ public class FactionStrategyController
         }
 
         // Record the staging region on the assault force so its survivors know where to withdraw to
-        // (raid) — see TurnController.ResolveOffensiveSurvivors. The primary contributing region
+        // (raid) — see MissionAftermathProcessor.ResolveOffensiveSurvivors. The primary contributing region
         // stands in for the whole staging effort.
         Region stagingRegion = contributions.OrderByDescending(c => c.BattleValue)
             .Select(c => c.StagingFaction?.Region)

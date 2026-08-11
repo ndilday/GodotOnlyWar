@@ -7,6 +7,7 @@ using OnlyWar.Helpers.Extensions;
 using OnlyWar.Helpers.Missions;
 using OnlyWar.Helpers.Missions.Raid;
 using OnlyWar.Helpers.StrategicCombat;
+using OnlyWar.Helpers.Turns;
 using OnlyWar.Models;
 using OnlyWar.Models.Fleets;
 using OnlyWar.Models.Missions;
@@ -630,7 +631,7 @@ public class FactionStrategyControllerTests
         Faction scout = CreateNonPlayerFaction();
         RegionFaction target = CreateTargetRegionFaction(scout);
 
-        TurnController.ResolveReconResult(scout, target, 1.5f);
+        MissionAftermathProcessor.ResolveReconResult(scout, target, 1.5f);
 
         Assert.Equal(1.5f, target.PlanetFaction.GetRegionIntel(target.Region));
         Assert.Equal(0f, target.Region.GetPlayerVisibleIntel());
@@ -642,7 +643,7 @@ public class FactionStrategyControllerTests
         Faction player = CreatePlayerFaction();
         RegionFaction target = CreateTargetRegionFaction(CreateNonPlayerFaction());
 
-        TurnController.ResolveReconResult(player, target, 2f);
+        MissionAftermathProcessor.ResolveReconResult(player, target, 2f);
 
         Assert.True(target.Region.Planet.PlanetFactionMap.ContainsKey(player.Id));
         Assert.Equal(2f, target.Region.GetPlayerVisibleIntel());
@@ -656,7 +657,7 @@ public class FactionStrategyControllerTests
         Faction scout = CreateNonPlayerFaction();
         RegionFaction target = CreateTargetRegionFaction(scout);
 
-        TurnController.ResolveReconResult(scout, target, 0f);
+        MissionAftermathProcessor.ResolveReconResult(scout, target, 0f);
 
         Assert.Equal(0f, target.PlanetFaction.GetRegionIntel(target.Region));
     }

@@ -3,16 +3,6 @@ using OnlyWar.Helpers.UI;
 using System;
 using System.Collections.Generic;
 
-public enum CompanyType
-{
-    Veteran,
-    Tactical,
-    ReserveTactical,
-    ReserveAssault,
-    ReserveDevastator,
-    Scout
-}
-
 public partial class ChapterView : MainScreenView
 {
     private const int ChapterIconSize = 48;

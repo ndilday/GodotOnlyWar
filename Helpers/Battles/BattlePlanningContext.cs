@@ -98,7 +98,7 @@ namespace OnlyWar.Helpers.Battles
             (int AttackerSquadId, int TargetSquadId, int TargetSpeedBits, int AttackerBulkBits),
             float> IncomingResponses { get; } = new();
 
-        // Phase 4 removal-rate table (Design/Reference/EngagementScoringOverhaul.md): one
+        // Phase 4 removal-rate table (Design/Reference/BattleLogic.md): one
         // SquadPairRemovalRate per (shooter squad, target squad) pair, holding the closed-form
         // rescalable removal terms the lookahead will use to price its exchanges in the same
         // currency as immediate fire. Stored shooter-squad-major -- ShooterSquadId -> TargetSquadId

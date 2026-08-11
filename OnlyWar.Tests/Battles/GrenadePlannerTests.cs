@@ -86,7 +86,7 @@ public class GrenadePlannerTests
         // zero; the expendable one accepts the risk. Distance 2 keeps the thrower
         // well inside the blast circle.
         //
-        // Phase 3 (Design/Reference/EngagementScoringOverhaul.md) recalibrated the threshold, not the
+        // Phase 3 (Design/Reference/BattleLogic.md) recalibrated the threshold, not the
         // property. Enemy removal used to be scaled by 1/(1 + turnsUntilTargetReachesUs) while the
         // thrower's own expected loss was never scaled, so the refusal was partly an accounting
         // asymmetry rather than a real danger-close judgement. With both sides of the trade now

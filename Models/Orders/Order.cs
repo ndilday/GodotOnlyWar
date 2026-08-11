@@ -50,7 +50,7 @@ namespace OnlyWar.Models.Orders
             LevelOfAggression = levelOfAggression;
             Mission = mission;
             // A squad in an order's AssignedSquads must point back at that order via
-            // CurrentOrders; turn processing (BattleSquad.ShouldContinueMission, OrderProcessor)
+            // CurrentOrders; turn processing (BattleSquad.ShouldContinueMission)
             // reads CurrentOrders for every squad it runs. Establishing the invariant here means
             // no order-creation site (NPC strategy, player UI, save/load) can forget to set it.
             if (orderedSquads != null)

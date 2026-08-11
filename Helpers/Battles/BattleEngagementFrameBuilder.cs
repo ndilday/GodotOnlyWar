@@ -17,7 +17,7 @@ internal static class BattleEngagementFrameBuilder
     // Units: cells/turn per cell of distance (a RATE, not a 0-1 discount -- see `closingRate`
     // below in AssignScreens). A threat closing at this rate covers a 418-cell gap in ~100 turns;
     // slower threats are not worth screening against. Distinct from every "imminence" family renamed in
-    // Design/Reference/EngagementScoringOverhaul.md Phase 0 -- this is the one site whose quantity is
+    // Design/Reference/BattleLogic.md Phase 0 -- this is the one site whose quantity is
     // genuinely a rate, not a turns-based discount.
     // Keep screening active across the long approach distances used by the tactical missions:
     // the reference 418-yard engagement closes at roughly 0.014 cells per yard per turn.
@@ -138,7 +138,7 @@ internal static class BattleEngagementFrameBuilder
     }
 
     /// <summary>
-    /// PHASE 6 (Design/Reference/EngagementScoringOverhaul.md). The single place the
+    /// PHASE 6 (Design/Reference/BattleLogic.md). The single place the
     /// effectiveness-derived engagement range is computed. Phase 2 built this seam; Phase 6
     /// replaced its body and, as the plan predicted, no call site changed.
     ///
@@ -774,7 +774,7 @@ internal static class BattleEngagementFrameBuilder
                 // ProximityWeight: pure inverse distance, no speed or preferred-range input at
                 // all. Feeds PairWeights (target-selection weighting), not a turns-based discount
                 // like the "imminence" family in BattleSquadPlanner -- see
-                // Design/Reference/EngagementScoringOverhaul.md Phase 0.
+                // Design/Reference/BattleLogic.md Phase 0.
                 float proximityWeight = 1f / Math.Max(1, distance);
                 raw[target.Id] = proximityWeight * (float)Math.Sqrt(Math.Max(1, targetBv));
             }
@@ -884,7 +884,7 @@ internal static class BattleEngagementFrameBuilder
             let threatDistance = MinimumDistance(threat, principal)
             // ClosingRate: cells/turn per cell of distance -- a RATE, compared directly against
             // the MinimumScreenClosingRate threshold, not a 0-1 discount like the "imminence"
-            // family in BattleSquadPlanner (see Design/Reference/EngagementScoringOverhaul.md Phase
+            // family in BattleSquadPlanner (see Design/Reference/BattleLogic.md Phase
             // 0). Uses the threat's own speed.
             let closingRate = threatProfile.MoveSpeed / Math.Max(1, threatDistance)
             where closingRate >= MinimumScreenClosingRate

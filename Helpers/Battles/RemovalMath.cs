@@ -26,7 +26,7 @@ namespace OnlyWar.Helpers.Battles
         internal const float DamageRollStdDev = 1.75f;
         // The success roll every to-hit estimate is measured against: hit = Phi((total - 10.5)/3).
         // Named so the Phase 4 closed-form range rescaling reads the same numbers the direct
-        // estimate does. See Design/Reference/EngagementScoringOverhaul.md.
+        // estimate does. See Design/Reference/BattleLogic.md.
         internal const float HitRollMean = 10.5f;
         internal const float HitRollStdDev = 3f;
 
@@ -58,7 +58,7 @@ namespace OnlyWar.Helpers.Battles
 
         // ===================================================================================
         // TUNABLE -- lambda, the graded-damage credit weight (Phase 5,
-        // Design/Reference/EngagementScoringOverhaul.md).
+        // Design/Reference/BattleLogic.md).
         //
         //   removal = BV * [ P(takeout) + lambda * E[woundProgress; no takeout] ]
         //
@@ -159,7 +159,7 @@ namespace OnlyWar.Helpers.Battles
         }
 
         /// <summary>
-        /// PHASE 5 (Design/Reference/EngagementScoringOverhaul.md). The fraction of a target's battle
+        /// PHASE 5 (Design/Reference/BattleLogic.md). The fraction of a target's battle
         /// value one landed hit is credited with removing:
         /// <c>P(takeout) + lambda * E[woundProgress; no takeout]</c>.
         ///
@@ -323,7 +323,7 @@ namespace OnlyWar.Helpers.Battles
         /// <c>K_loc = effectiveArmor + requiredPenetratingDamage</c>. Combined with
         /// <see cref="EvaluateTakeOutProbability"/> this reproduces the full function at any damage
         /// coefficient without walking hit locations or wound state again -- the Phase 4 lookahead
-        /// path (Design/Reference/EngagementScoringOverhaul.md). Both entry points run the SAME loop
+        /// path (Design/Reference/BattleLogic.md). Both entry points run the SAME loop
         /// (<see cref="AccumulateTakeOutTerms"/>), so the two paths cannot drift.
         /// </summary>
         internal static IReadOnlyList<TakeOutLocationTerm> BuildTakeOutLocationTerms(

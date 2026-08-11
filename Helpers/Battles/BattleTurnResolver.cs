@@ -55,8 +55,6 @@ namespace OnlyWar.Helpers.Battles
         private readonly Stopwatch _stopwatch = Stopwatch.StartNew();
         private TimeSpan _planningElapsed;
 
-        internal TimeSpan PlanningElapsed => _planningElapsed;
-
         public event EventHandler<BattleHistory> OnBattleComplete;
 
         // A battle's only natural end is one side's annihilation. Two forces that cannot resolve

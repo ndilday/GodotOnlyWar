@@ -198,8 +198,6 @@ namespace OnlyWar.Helpers.Battles
 
         // How far behind the friendly fighting line an HQ squad tries to stay. Matches the
         // placers' HQ rear offset so a rear-deployed HQ starts the battle already satisfied.
-        private const float HqLineBuffer = 10f;
-
         // Ambush opener (OnlyWar_TDD.md §6.6): an ambushing squad springs the
         // trap with weapons already trained on the kill zone. Called once, before the first turn is
         // planned, for each squad on the ambushing side. Every soldier holding a loaded conventional
@@ -599,7 +597,7 @@ namespace OnlyWar.Helpers.Battles
         /// preferred range of 350 yards -- so they kept `Hold` and `StepBack` on the option list,
         /// scored every static option within 0.06 of the others, and walked backwards for thirty
         /// turns on a tie-break. See `2.500.M39-Xibarrus_Nu-8` and
-        /// Design/Active/EngagementScoringRepair.md.</para>
+        /// Design/Reference/BattleLogic.md.</para>
         /// </summary>
         private static bool HasNoViableRangedOption(BattleSquadCapabilityProfile profile) =>
             profile.IsContactSeeking

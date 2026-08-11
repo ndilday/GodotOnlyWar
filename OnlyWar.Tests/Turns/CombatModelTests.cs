@@ -175,7 +175,7 @@ public class CombatModelTests
         Region target = fixture.Planet.Regions[5];
         Assert.False(target.RegionFactionMap.ContainsKey(tyranids.Id));
 
-        TurnController.EstablishInvaderPresence(tyranids, target, survivors: 250);
+        InvaderPresenceService.Establish(tyranids, target, survivors: 250);
 
         RegionFaction foothold = target.RegionFactionMap[tyranids.Id];
         Assert.True(foothold.IsPublic);
@@ -190,7 +190,7 @@ public class CombatModelTests
         RegionFaction existing = fixture.AddConsumptionFaction(3, population: 1_000, organization: 100);
         Faction tyranids = existing.PlanetFaction.Faction;
 
-        TurnController.EstablishInvaderPresence(tyranids, fixture.Planet.Regions[3], survivors: 400);
+        InvaderPresenceService.Establish(tyranids, fixture.Planet.Regions[3], survivors: 400);
 
         Assert.Equal(1_400, existing.Population);
         Assert.Single(fixture.Planet.Regions[3].RegionFactionMap.Values,

@@ -9,7 +9,7 @@ using Xunit;
 namespace OnlyWar.Tests.Battles;
 
 /// <summary>
-/// Phase 5 of Design/Reference/EngagementScoringOverhaul.md: the graded damage metric
+/// Phase 5 of Design/Reference/BattleLogic.md: the graded damage metric
 /// <c>removal = BV * [ P(takeout) + lambda * E[woundProgress; no takeout] ]</c>.
 ///
 /// <para>These tests are written against the two component quantities rather than against a

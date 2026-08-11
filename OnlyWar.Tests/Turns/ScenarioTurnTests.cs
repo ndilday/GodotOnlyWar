@@ -288,11 +288,11 @@ public class ScenarioTurnTests
         }
 
         TurnController controller = new();
-        controller.ProcessScenario(sector);
+        string notification = controller.ProcessScenario(sector);
 
         Assert.Equal(ObjectiveState.Won, sector.Scenario.State);
         Assert.False(promised.PlanetFactionMap.ContainsKey(player.Id));
-        Assert.Null(controller.ScenarioNotification);
+        Assert.Null(notification);
     }
 
     [Fact]
@@ -394,10 +394,10 @@ public class ScenarioTurnTests
         }
 
         TurnController controller = new();
-        controller.ProcessScenario(sector);
+        string notification = controller.ProcessScenario(sector);
 
-        Assert.False(string.IsNullOrEmpty(controller.ScenarioNotification));
-        Assert.Contains(promised.Name, controller.ScenarioNotification);
+        Assert.False(string.IsNullOrEmpty(notification));
+        Assert.Contains(promised.Name, notification);
     }
 
     [Fact]

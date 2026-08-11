@@ -188,17 +188,6 @@ namespace OnlyWar.Helpers.Battles
                 BattleModifiersUtil.CalculateDamageAtRange(WeaponTemplate, range));
         }
 
-        internal float WoundProgressAt(float range)
-        {
-            if (TakeOutTerms == null)
-            {
-                return ReferenceWoundProgress;
-            }
-            return RemovalMath.EvaluateWoundProgress(
-                TakeOutTerms,
-                BattleModifiersUtil.CalculateDamageAtRange(WeaponTemplate, range));
-        }
-
         /// <summary>
         /// Expected enemy battle value this shooter removes from this target in one turn at
         /// <paramref name="range"/> -- the same
@@ -240,7 +229,7 @@ namespace OnlyWar.Helpers.Battles
 
     /// <summary>
     /// One (shooter squad, target squad) cell of the Phase 4 removal-rate table
-    /// (Design/Reference/EngagementScoringOverhaul.md).
+    /// (Design/Reference/BattleLogic.md).
     ///
     /// <para>SEMANTICS. The rate is the SUM over the shooter squad's able, placed, ranged-armed
     /// soldiers of each soldier's single best target's expected removal -- the same

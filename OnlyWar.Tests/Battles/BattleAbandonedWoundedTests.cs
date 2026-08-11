@@ -38,7 +38,7 @@ public class BattleAbandonedWoundedTests
                                                     // go down maimed rather than dead.
     private const int PdfInfantrySquadTemplateId = 34;
     // Engagement scoring and movement changes shift this seeded battle's winner (most recently
-    // Phase 3 of Design/Reference/EngagementScoringOverhaul.md, which removed the arrival-time
+    // Phase 3 of Design/Reference/BattleLogic.md, which removed the arrival-time
     // discount from ranged removal; before that, the squad-level rout heading and the
     // FindBestLocation sidestep fix). Keep the force size explicit and raise it when the PDF stops
     // holding the field: this is an aftermath test, not a balance baseline, and it only needs a

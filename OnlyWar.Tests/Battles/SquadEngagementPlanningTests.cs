@@ -99,7 +99,7 @@ public class SquadEngagementPlanningTests
     [Fact]
     public void CapabilityProfile_EffectiveEngagementRangeIsDistinctFromWeaponReach()
     {
-        // Phase 2 (Design/Reference/EngagementScoringOverhaul.md): PreferredBandUpper is weapon REACH
+        // Phase 2 (Design/Reference/BattleLogic.md): PreferredBandUpper is weapon REACH
         // (the battle-value-weighted mean of EffectiveMaximumRange). EffectiveEngagementRange is
         // the effectiveness-derived range the lookahead steers toward, and must be derived against
         // the opposing force rather than authored from the weapon's maximum.
@@ -1085,7 +1085,7 @@ public class SquadEngagementPlanningTests
     [Fact]
     public void ReferenceScenario_BolterSquadAt200YardsHasNonTrivialImmediateFireValue()
     {
-        // Phase 3 (Design/Reference/EngagementScoringOverhaul.md). Reference scenario from the trace:
+        // Phase 3 (Design/Reference/BattleLogic.md). Reference scenario from the trace:
         // a ranged squad standing 200 yards from a melee-only enemy. Before Phase 3 the immediate
         // fire term was multiplied by 1/(1 + turnsUntilTargetReachesUs) -- a ~26x crush that put
         // `outgoing` four orders of magnitude below `future`, so it could never move the decision.

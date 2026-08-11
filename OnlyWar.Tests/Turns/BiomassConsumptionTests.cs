@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using System.Linq;
 using OnlyWar.Helpers;
 using OnlyWar.Helpers.Extensions;
+using OnlyWar.Helpers.Turns;
 using OnlyWar.Models.Missions;
 using OnlyWar.Models.Orders;
 using OnlyWar.Models.Planets;
@@ -35,7 +36,7 @@ public class BiomassConsumptionTests
         long capacityBefore = region.CarryingCapacity;
         long tyranidsBefore = tyranids.Population;
 
-        TurnController.ResolveBiomassConsumption(region);
+        PlanetTurnProcessor.ResolveBiomassConsumption(region);
 
         long killed = preyBefore - prey.Population;
         long stripped = capacityBefore - region.CarryingCapacity;
@@ -60,7 +61,7 @@ public class BiomassConsumptionTests
         RegionFaction tyranids = fixture.AddConsumptionFaction(0, population: 200_000, organization: 100);
         long tyranidsBefore = tyranids.Population;
 
-        TurnController.ResolveBiomassConsumption(region);
+        PlanetTurnProcessor.ResolveBiomassConsumption(region);
 
         long stripped = 1_000_000 - region.CarryingCapacity;
         Assert.Equal(0, fixture.DefaultRegionFaction(0).Population);
@@ -81,7 +82,7 @@ public class BiomassConsumptionTests
         RegionFaction tyranids = fixture.AddConsumptionFaction(0, population: 200_000, organization: 100);
         long tyranidsBefore = tyranids.Population;
 
-        TurnController.ResolveBiomassConsumption(region);
+        PlanetTurnProcessor.ResolveBiomassConsumption(region);
 
         long killed = 500_000 - prey.Population;
         Assert.Equal(0, region.CarryingCapacity);
@@ -101,7 +102,7 @@ public class BiomassConsumptionTests
         RegionFaction small = fixture.AddHiddenFaction(0, OnlyWar.Models.GrowthType.Logistic, population: 100_000);
         fixture.AddConsumptionFaction(0, population: 200_000, organization: 100);
 
-        TurnController.ResolveBiomassConsumption(region);
+        PlanetTurnProcessor.ResolveBiomassConsumption(region);
 
         long bigKilled = 900_000 - big.Population;
         long smallKilled = 100_000 - small.Population;
@@ -132,7 +133,7 @@ public class BiomassConsumptionTests
         region.MaximumCarryingCapacity = 1_000_000;
         region.CarryingCapacity = 500_000;
 
-        TurnController.RecoverCarryingCapacity(region);
+        PlanetTurnProcessor.RecoverCarryingCapacity(region);
 
         // 1% of the 500,000 gap.
         Assert.Equal(505_000, region.CarryingCapacity);
@@ -146,7 +147,7 @@ public class BiomassConsumptionTests
         region.MaximumCarryingCapacity = 1_000_000;
         region.CarryingCapacity = 1_000_000;
 
-        TurnController.RecoverCarryingCapacity(region);
+        PlanetTurnProcessor.RecoverCarryingCapacity(region);
 
         Assert.Equal(1_000_000, region.CarryingCapacity);
     }
@@ -159,7 +160,7 @@ public class BiomassConsumptionTests
         region.MaximumCarryingCapacity = 100;
         region.CarryingCapacity = 99; // 1% of a gap of 1 rounds to zero; must still heal
 
-        TurnController.RecoverCarryingCapacity(region);
+        PlanetTurnProcessor.RecoverCarryingCapacity(region);
 
         Assert.Equal(100, region.CarryingCapacity);
     }
@@ -175,7 +176,7 @@ public class BiomassConsumptionTests
         region.CarryingCapacity = 500_000;
         fixture.AddConsumptionFaction(0, population: 50_000, organization: 100); // swarm grazing
 
-        TurnController.RecoverCarryingCapacity(region);
+        PlanetTurnProcessor.RecoverCarryingCapacity(region);
 
         Assert.Equal(500_000, region.CarryingCapacity);
     }
@@ -190,7 +191,7 @@ public class BiomassConsumptionTests
         region.CarryingCapacity = 500_000;
         // no Consumption faction present
 
-        TurnController.RecoverCarryingCapacity(region);
+        PlanetTurnProcessor.RecoverCarryingCapacity(region);
 
         Assert.Equal(505_000, region.CarryingCapacity);
     }
@@ -212,7 +213,7 @@ public class BiomassConsumptionTests
             fixture.DefaultRegionFaction(0).Population = 0;
             RegionFaction swarm = fixture.AddConsumptionFaction(0, population: 200_000, organization: 100);
 
-            TurnController.ResolveBiomassConsumption(swarm, troops);
+            PlanetTurnProcessor.ResolveBiomassConsumption(swarm, troops);
             return 1_000_000 - region.CarryingCapacity;
         }
 
@@ -239,7 +240,7 @@ public class BiomassConsumptionTests
 
         Order order = new Order(
             new List<Squad>(), true, false, Aggression.Cautious, new FeedMission(50_000, swarm));
-        TurnController.ProcessFeedOrders(new[] { order });
+        MissionTurnProcessor.ProcessFeedOrders(new[] { order });
 
         long stripped = 1_000_000 - region.CarryingCapacity;
         Assert.True(stripped > 0, "the order should feed the swarm");
@@ -264,7 +265,7 @@ public class BiomassConsumptionTests
         long publicBefore = publicSwarm.Population;
         long hiddenBefore = hiddenSwarm.Population;
 
-        TurnController.ResolveHiddenSwarmConsumption(region);
+        PlanetTurnProcessor.ResolveHiddenSwarmConsumption(region);
 
         Assert.Equal(publicBefore, publicSwarm.Population);
         Assert.True(hiddenSwarm.Population > hiddenBefore,
@@ -292,7 +293,7 @@ public class BiomassConsumptionTests
         long publicBefore = publicSwarm.Population;
         long hiddenBefore = hiddenSwarm.Population;
 
-        TurnController.ResolveHiddenSwarmExpansion(fixture.Planet);
+        PlanetTurnProcessor.ResolveHiddenSwarmExpansion(fixture.Planet);
 
         Assert.Equal(publicBefore, publicSwarm.Population);
         Assert.True(hiddenSwarm.Population < hiddenBefore,
@@ -319,7 +320,7 @@ public class BiomassConsumptionTests
         int swarmFactionId = swarm.PlanetFaction.Faction.Id;
         long swarmBefore = swarm.Population;
 
-        TurnController.ResolveTyranidExpansion(fixture.Planet);
+        PlanetTurnProcessor.ResolveTyranidExpansion(fixture.Planet);
 
         long moved = swarmBefore - swarm.Population;
         Assert.True(moved > 0, "a stripped swarm should spread toward fresh biomass");
@@ -339,7 +340,7 @@ public class BiomassConsumptionTests
         RegionFaction swarm = fixture.AddConsumptionFaction(0, population: 100_000, organization: 100);
         long swarmBefore = swarm.Population;
 
-        TurnController.ResolveTyranidExpansion(fixture.Planet);
+        PlanetTurnProcessor.ResolveTyranidExpansion(fixture.Planet);
 
         Assert.Equal(swarmBefore, swarm.Population);
     }

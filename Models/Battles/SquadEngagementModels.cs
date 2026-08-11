@@ -83,7 +83,7 @@ public sealed record BattleSquadCapabilityProfile(
     // AggregateRemovalRate's range cutoff went) must keep using PreferredBandUpper;
     // consumers that mean "where do I want to be standing" use this. Derived by
     // BattleEngagementFrameBuilder.CalculateEffectiveEngagementRange against a representative
-    // averaged opponent -- Phase 2, Design/Reference/EngagementScoringOverhaul.md. PHASE 6 replaced
+    // averaged opponent -- Phase 2, Design/Reference/BattleLogic.md. PHASE 6 replaced
     // that derivation's body, without touching any call site, with the argmax of
     // removal(r) - incoming(r): our RangedEffectivenessCurve minus the enemy's, minus an
     // arrival-discounted melee term. For a non-degrading weapon against a penetrable target,

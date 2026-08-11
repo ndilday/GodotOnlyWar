@@ -829,7 +829,7 @@ public class BattleSquadPlannerTests
     [Fact]
     public void ChooseEngagementOption_LookaheadSeesOwnMovementInsideWeaponReach()
     {
-        // Phase 2 (Design/Reference/EngagementScoringOverhaul.md). Reference scenario: a squad with a
+        // Phase 2 (Design/Reference/BattleLogic.md). Reference scenario: a squad with a
         // non-degrading 1000-range rifle standing 200 yards from a melee-only enemy.
         //
         // Before: PolicyRangeDelta and the depth-0 terminal both used `desired =
@@ -959,7 +959,7 @@ public class BattleSquadPlannerTests
         // MaximumRange for a non-degrading weapon, so against a large, unarmored, non-evasive
         // target accuracy was never the binding constraint and the "effective" range degenerated
         // back to reach -- the Xibarrus Zeta bolter-vs-Carnifex case in
-        // Design/Reference/EngagementScoringOverhaul.md. The same scenario now derives the band from
+        // Design/Reference/BattleLogic.md. The same scenario now derives the band from
         // removal(r) - incoming(r), and it lands strictly inside reach: closing improves the hit
         // chance, but it also brings a melee-only enemy in sooner, and the derived standoff is
         // where those two stop trading evenly.
@@ -1399,7 +1399,7 @@ public class BattleSquadPlannerTests
     [InlineData(WithdrawalRole.Routing)]
     public void RangedRemoval_AgainstWithdrawingTargetIsNotZeroed(WithdrawalRole withdrawalRole)
     {
-        // Phase 3 (Design/Reference/EngagementScoringOverhaul.md) replaces the Phase 1 test
+        // Phase 3 (Design/Reference/BattleLogic.md) replaces the Phase 1 test
         // TargetArrivalDiscount_WithdrawingTargetNeverArrives. That test asserted the arrival
         // discount collapsed to 0 for a retreating target -- correct for the quantity it measured,
         // but the quantity itself multiplied RANGED removal, so it made a retreating enemy worth

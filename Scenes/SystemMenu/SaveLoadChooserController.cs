@@ -43,7 +43,6 @@ public partial class SaveLoadChooserController : Control
     public event EventHandler<SaveSlotSelectionEventArgs> DeleteRequested;
 
     public SaveChooserMode Mode => _mode;
-    public SaveSlotViewModel SelectedSlot => _selected;
 
     public override void _Ready()
     {

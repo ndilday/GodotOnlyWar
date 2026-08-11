@@ -75,7 +75,7 @@
   /Simulation             Session-scoped simulation dependencies
   /Turns                  End-of-turn phase processors, shared turn context/result, intel ledger
 /Models
-  /Battles                BattleConfiguration, BattleHistory, BattleTurn, BattleMissionTemplate
+  /Battles                BattleHistory, BattleTurn, BattleMissionTemplate
   /Equippables            Weapon and armor models and templates
   /Fleets                 Fleet, Ship, TaskForce, and their templates
   /Missions               Mission, MissionContext, MissionType enum
@@ -144,9 +144,12 @@ Mission execution is modeled as a chain of `IMissionStep` objects. Each step's `
 
 `MissionStepOrchestrator` is the entry point, selecting the initial step from mission type. If the squad is not already in the target region, an `InfiltrateMissionStep` is prepended regardless of mission type.
 
-### 3.5 ICloneable on Battle Types
+### 3.5 Battle Snapshot Cloning
 
-`BattleSquad` and `BattleSoldier` implement `ICloneable` to support storing snapshots of battlefield state for the `BattleHistory` replay system. Each turn's state is stored as a clone of the current grid state, enabling the Battle Review Screen to step backward and forward through the engagement.
+`BattleSquad` is the single `ICloneable` battle type used to store battlefield snapshots for
+`BattleHistory`. Its copy path creates copied `BattleSoldier` runtime state; `BattleSoldier` itself
+does not implement `ICloneable`, and its underlying `ISoldier` is shared by design because replay
+reads snapshot battle fields and the action log rather than an independent campaign body.
 
 ---
 
@@ -651,7 +654,7 @@ Both were previously side effects of `PlanetTurnProcessor.UpdatePlanet` that re-
 
 `RegionFaction.GetDeployedStrength()` (`MilitaryStrength × Organization / 100`) is the shared "troops actually fielded here" figure behind garrison sizing, the opportunity budget, and the stealth model's ambient term; `MilitaryStrength` resolves the horde-vs-civilian split, so it is correct for a `PopulationIsMilitary` faction with no garrison at all.
 
-**Strategic NPC combat.** NPC-only assaults cross from tactical to `StrategicCombatResolver` when either side exceeds `MaxTacticalActors` (120), generated forces would exceed `MaxGeneratedSquads` (24), or committed strength exceeds `MassCombatBattleValueFloor` (1,500 BV). Named/player squads always remain tactical. Strategic resolution works directly in conserved BV pools: only organized BV deploys and takes ordinary battle casualties; effective strength combines committed BV, aggression, faction quality, entrenchment, and intel-derived surprise. A Gaussian combat ratio determines bounded casualties and whether the attacker clears the 1.10 capture threshold. Invaders establish a foothold on victory, raiders return survivors, and no transient tactical squads are generated. Formulas and tuning questions remain in `Design/Reference/LargeScaleNpcCombat.md`.
+**Strategic NPC combat.** NPC-only assaults cross from tactical to `StrategicCombatResolver` when either side exceeds `MaxTacticalActors` (120), generated forces would exceed `MaxGeneratedSquads` (24), or committed strength exceeds `MassCombatBattleValueFloor` (1,500 BV). Named/player squads always remain tactical. Strategic resolution works directly in conserved BV pools: only organized BV deploys and takes ordinary battle casualties; effective strength combines committed BV, aggression, faction quality, entrenchment, and intel-derived surprise. A Gaussian combat ratio determines bounded casualties and whether the attacker clears the 1.10 capture threshold. Invaders establish a foothold on victory, raiders return survivors, and no transient tactical squads are generated. Equations and rejected alternatives are retained in `Design/Reference/BattleLogic.md`.
 
 **Organized and disorganized military strength.** `RegionFaction.MilitaryStrength` is partitioned into persisted `OrganizedMilitaryStrength` and derived `DisorganizedMilitaryStrength`. Newly raised troops, transferred formations, and returning survivors enter organized. Ordinary engagements remove organized BV and total BV together; disruptive effects may transfer BV into the disorganized pool without killing it. Reorganization is a fixed-BV transfer back, not a percentage increase. Ambush opportunities size against total military strength and distribute casualties proportionally across both pools. After an Advance has eliminated the organized defence, each remaining operating day destroys up to `attacker BV × UndefendedAssaultDestructionMultiplier` disorganized BV (initial multiplier 1.0).
 
@@ -841,7 +844,7 @@ Strength after armor reduction is compared against wound thresholds to determine
 
 The contested melee roll is calibrated to tabletop's intuition band rather than to raw skill differences: `MeleeDefenderAdvantage = 0` (equal skill trades at ~50%, tabletop's "hit on 4s") and a per-side roll σ of `6`, making each skill point worth ~5.6% near parity and compressing large gaps toward tabletop's clamped 33–67% ladder — a Genestealer runs ~72% out / ~28% back against a marine. `StrengthMultiplier` values are doubled against dialed-down heavy-tier `WoundMultiplier`s; the deliberate balance stance is that base marines are two-wound soldiers.
 
-**Battle Value derivation.** `BattleValueCalculator` is an engine-faithful valuation, not a stat-line heuristic: it replays the real to-hit/damage math (recoil decay, aim-vs-fire arbitrage, single-target overkill caps, ammo duty cycle, melee closing and engagement limits) against a four-profile reference threat panel — swarm chaff, light infantry, elite infantry, monster — to derive expected kills per turn and survival turns, then computes `BV = 5 · √(offense × durability) · command`. `SoldierTemplate.BattleValue` rows are generated from it (PDF Trooper 5 as the anchor; Tactical Marine 10, Genestealer 14, Hive Tyrant 95) and the `StrategicCombatRules` BV anchors track those values. An offline `Compute-BattleValue.ps1` harness reproduces the calculator to 6-decimal parity for bulk regeneration. **Player-soldier BV intentionally remains the template guideline rather than a live skill-tracking value** — enemy forces size their responses by estimating the player force, not by reading concrete data on every marine.
+**Battle Value derivation.** `BattleValueCalculator` is an engine-faithful valuation, not a stat-line heuristic: it replays the real to-hit/damage math (recoil decay, aim-vs-fire arbitrage, single-target overkill caps, ammo duty cycle, melee closing and engagement limits) against a four-profile reference threat panel — swarm chaff, light infantry, elite infantry, monster — to derive expected kills per turn and survival turns, then computes `BV = 5 · √(offense × durability) · command`. `SoldierTemplate.BattleValue` rows are generated from it (PDF Trooper 5 as the anchor; current strategic anchors include Tactical Marine 9, Genestealer 13, and Melee Carnifex 30) and the `StrategicCombatRules` BV anchors track those values. An offline `Compute-BattleValue.ps1` harness reproduces the calculator to 6-decimal parity for bulk regeneration. **Player-soldier BV intentionally remains the template guideline rather than a live skill-tracking value** — enemy forces size their responses by estimating the player force, not by reading concrete data on every marine.
 
 **Squad placers:** `AmbushPlacer` and `AnnihilationPlacer` handle initial squad placement for their respective engagement types. Starting range is modified by `marginOfSuccess` from the preceding stealth check.
 
@@ -1313,11 +1316,39 @@ The `TurnController` extraction succeeded, but its largest leaf still owns sever
 
 ### 8.15 Transitional Turn APIs and Dead Prototypes — Low
 
-**Location:** `TurnController.Compatibility.cs`, `Helpers/OrderProcessor.cs`, focused tests/callers
+**Location:** `TurnController.Compatibility.cs`, focused tests/callers
 
-The behavior-preserving controller split intentionally retained historical helper entry points in a compatibility partial. That made the refactor safe, but the shims should not become a permanent second API alongside the focused processors. `OrderProcessor` also appears to be an unused earlier orchestration prototype.
+The behavior-preserving controller split initially retained historical helper entry points in a compatibility partial, alongside an unused early orchestration prototype. The high-confidence dead prototypes and unused compatibility shims have now been removed; direct tests call the focused processors and services. `TurnController` retains only the three result accessors still used by its own orchestration and the scenario-resolution entry point.
 
-**Planned direction:** migrate tests and production callers to `TurnResolutionResult` and the focused owner for each behavior, then delete each compatibility member when its final caller is gone. Confirm unused prototypes with solution-wide reference search and remove them rather than documenting them as supported paths. This cleanup follows the processor/session migration; it must not be combined with behavior changes.
+The remaining result accessors can be folded into private `_lastResult` reads in a later API-tightening pass if the public surface is no longer needed. The scenario entry point now returns its notification directly, so callers do not need a notification compatibility property.
+
+### 8.16 Battle Planning Calibration Seams — Medium
+
+**Location:** `Helpers/Battles/EngagementPotential.cs`, `BattleSquadPlanner.cs`,
+`RangedEffectivenessCurve.cs`, `BattleTurnResolver.cs`
+
+The battle decision contract is stable and covered by the Battles suite, but several seams remain
+calibration or measurement work rather than player-facing rules. The root and projected
+`EngagementPotential` values are constructed through different planner states, so a real
+plan/execute/re-plan test has not yet proven component-by-component telescoping across turns;
+`MoraleValue` and `PursuitClosingValue` are the most important components to audit. The melee half
+of bounded continuation still uses a capability proxy while the ranged half uses the removal-rate
+table, `WITHDRAW_EVAL.friendly_viable_damage` records whether a damaging action occurred rather than
+whether it was effective, and `TotalRangedRemovalRate` intentionally re-sums a continuously varying
+range table.
+
+The named seams `WoundProgressCreditWeight`, `ContactSeekerRangedRelevanceFraction`,
+`RangedEffectivenessCurve.SaturationFraction`, and
+`RangedEffectivenessCurve.NegligibleRemovalFraction` are intentionally code-level calibration
+surfaces. Their values should move only from real-battle evidence or invariant-driven tests, not
+from a single seeded fixture. Running-game verification of the engagement phases is also still a
+manual project check. See `Design/Reference/BattleLogic.md` for the retained derivations and
+`Design/Active/RangedCombatFollowUps.md` for genuinely unshipped ranged features.
+
+Strategic combat has the same kind of balance debt: the 1,500-BV handoff floor, weekly base
+intensity, Imperial Guard quality/counterattack behavior, and future air/void-support modifiers
+are deliberately not settled as player-facing rules. They belong to strategic-combat calibration,
+not to the tactical battle contract.
 
 
 ---

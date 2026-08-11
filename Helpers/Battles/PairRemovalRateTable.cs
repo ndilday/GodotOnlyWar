@@ -6,7 +6,7 @@ using OnlyWar.Models.Equippables;
 namespace OnlyWar.Helpers.Battles
 {
     /// <summary>
-    /// The Phase 4 removal-rate table (Design/Reference/EngagementScoringOverhaul.md): for one
+    /// The Phase 4 removal-rate table (Design/Reference/BattleLogic.md): for one
     /// shooter squad, the expected enemy battle value it removes per turn against each enemy squad,
     /// captured once at a reference posture and rescalable to any projected range in closed form.
     ///

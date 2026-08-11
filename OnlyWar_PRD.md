@@ -532,13 +532,14 @@ Advanced recruitment cultures, specialized facilities, detailed mutation and gen
 - Large NPC-only `Advance` orders are resolved through the strategic large-scale combat model
   instead of the tactical battle engine once the committed regional forces exceed the tactical
   actor/battle-value caps. Tactical resolution remains mandatory for player squads and named
-  player soldiers. See `Design/Reference/LargeScaleNpcCombat.md`.
+  player soldiers. See `Design/Reference/BattleLogic.md`.
 
 ---
 
 ### 4.14 Turn Simulation — Battle
 
-**Description.** The rules governing individual squad-level engagements on a 2D grid.
+**Description.** The rules governing individual squad-level engagements on a 2D grid. Durable
+equations and rejected alternatives are consolidated in `Design/Reference/BattleLogic.md`.
 
 **Acceptance Criteria:**
 
@@ -549,7 +550,7 @@ Advanced recruitment cultures, specialized facilities, detailed mutation and gen
 
 **Turn Structure**
 - Each battle turn, every able squad selects a movement tier based on its tactical situation and aggression setting. Individual soldiers then select legal actions within that squad tier.
-- Available actions include movement toward a destination, fire, aim, charge into melee, melee attack, reload, ready or swap a weapon, or change stance. Recovering from Prone consumes the soldier's full action and cannot be combined with movement; other future utility actions specify their own tier restrictions case by case.
+- Available actions include movement toward a destination, fire, aim, charge into melee, melee attack, reload, and ready or swap a weapon. Stance changes are not shipped; future utility actions specify their tier restrictions case by case.
 - Fire resolves before movement. A soldier therefore fires from their starting position, then carries out the movement selected for the turn.
 
 **Movement Tiers — Battle Logic Phase 4A (implemented)**
@@ -558,7 +559,7 @@ Advanced recruitment cultures, specialized facilities, detailed mutation and gen
 
 | Tier | Maximum movement | Aim | Ranged attack | Melee | Notes |
 |---|---|---|---|---|---|
-| Stationary | 0 | Yes; full bonus | Yes; no movement `Bulk` penalty | Yes | Selecting Stationary resets banked movement; stance effects apply |
+| Stationary | 0 | Yes; full bonus | Yes; no movement `Bulk` penalty | Yes | Selecting Stationary resets banked movement |
 | Walk | 1/5 MoveSpeed | Yes; half applied bonus | Yes; half `Bulk` penalty | Yes | Accumulated aim is preserved |
 | Jog | 1/2 MoveSpeed | No | Yes, within 90° of movement; no aim bonus and full `Bulk` penalty | Yes | Entering Jog resets accumulated aim |
 | Run | Full MoveSpeed | No | No | Charge only | Entering Run resets accumulated aim; turning is limited to 45 degrees (one facing step) |
@@ -571,13 +572,10 @@ Advanced recruitment cultures, specialized facilities, detailed mutation and gen
 - **Jog firing arc.** A soldier combining Jog with a ranged attack may target only within 90 degrees of the planned movement direction: directly forward through either lateral boundary is legal, but targets behind the moving soldier are not. This restriction applies to ordinary firearms and every template delivery, including flamers, thrown grenades, and grenade launchers. Walk retains unrestricted firing direction; Run still prohibits ranged attacks entirely.
 - **Charge.** Run may culminate in a melee attack only for a soldier entering a new engagement; a soldier who began adjacent to an enemy cannot use Run to make an ordinary melee attack. A charging attack uses the existing −2 moved-attack accuracy penalty. The charger forfeits all weapon `ParryModifier` benefit for the remainder of that turn, but receives no additional defensive penalty because their movement speed already makes them harder to hit at range.
 - **In Melee.** This tier is a squad tactical mode rather than a uniform movement rate. A soldier already adjacent to an enemy stays in place and chooses a legal melee or point-blank action. A separated soldier moves toward an available engagement position, using up to Run allowance and charging if they can enter melee this turn; if they cannot reach melee, they continue closing without ranged fire. The selected squad tier is stored in battle state, while `CurrentSpeed` and `LeftoverMovement` remain per-soldier state.
-- **Deferred interactions.** Phase 4A does not implement the later leg-wound movement changes or true stance behavior. Battle Value recalibration caused by the tier system is a separate balance body of work.
+- **Deferred interactions.** Phase 4A does not implement true stance behavior. Graded leg-wound movement impairment is already part of the wound system; terrain, cover, and line-of-sight interactions remain deferred to Battle Visuals Phase 3.
 
 **Stance**
-- Stance is only mechanically relevant when a soldier is stationary, and represents body position: Standing, Crouching, or Prone. Stance affects both incoming ranged hit probability and melee effectiveness.
-- Rather than a flat accuracy penalty, stance filters the valid hit locations before the hit location probability roll: locations not exposed in a given stance are excluded. Crouching excludes lower-body locations (legs, feet); prone excludes everything but locations visible from ground level (head, upper torso depending on orientation). The exact excluded sets are defined per body template.
-- In melee, crouching applies an offense penalty and makes the soldier easier to hit; prone doubles both magnitudes. Specific values are set during implementation.
-- Stance transitions each cost one turn: Standing↔Crouching, Crouching↔Prone, and a direct drop to Prone from any stance. Returning from Prone to Standing takes two turns (passing through Crouching). Changing stance and moving in the same turn is not permitted.
+- The `Stance` enum and per-body hit-location maps exist, but production behavior assigns only `Standing`. Voluntary crouching/prone behavior is deferred until terrain, cover, and line of sight make the exposure trade meaningful; it is not an acceptance criterion for the shipped movement tiers. Involuntary incapacity is handled by the wound system.
 
 **Ranged Combat**
 - Hit probability is derived from the shooter's ranged skill, the target's range, the target's physical size, the target's per-species evasion value (an elusiveness modifier distinct from physical size), and the cover modifier of the target's squad.
@@ -586,7 +584,7 @@ Advanced recruitment cultures, specialized facilities, detailed mutation and gen
 - Weapons have a rate of fire. Firing multiple times in a turn incurs an accuracy penalty for each shot after the first.
 - Equipped weapons are bound to physical hand groups. A one-handed weapon remains usable while its assigned group functions; a two-handed weapon strictly requires two functioning groups and is dropped if either group is disabled.
 - **Shooting into melee.** A shot at a figure engaged with the shooter's allies takes a -3 to-hit penalty. If the modified result is a near miss from -1 through 0, inclusive, one full-strength stray hit is resolved against the connected melee scrum. The nominal target and every connected participant are eligible, weighted by physical size; at point-blank range this can include the shooter.
-- **Ranged target value.** Soldiers score every candidate in the three nearest enemy squads that are within weapon range using `imminence(target squad) x E[enemy BV removed] - E[friendly BV lost]`. Enemy value includes hit probability, expected post-armor wound damage as a fraction of Constitution, and the target template's Battle Value. Friendly loss uses the exact near-miss probability and size-weighted scrum distribution with no imminence discount. Target-squad imminence is cached for the planning turn and is `1 / (1 + turns until that squad can engage)` from distance, movement speed, and preferred engagement range.
+- **Ranged target value.** Soldiers score a bounded set of nearby candidates using expected enemy Battle Value removed minus expected friendly Battle Value lost. Enemy removal uses the live take-out-probability model, including current wounds and thresholds; friendly loss uses the exact near-miss probability and size-weighted scrum distribution. Ranged removal is not discounted by the enemy's arrival time; range and damage math already price whether the shot is useful.
 - **Target-selection intent.** The score normally favors a clean target over an equally valuable enemy entangled with allies, but can still favor a large, high-value monster in melee because its size improves the hit chance and absorbs most size-weighted strays.
 - **Future non-goal.** General dangerous fields of fire and line-of-fire/line-of-sight tracing through friendly formations are not part of this refinement. They require fire-lane tracing plus formation behavior that keeps allies out of those lanes; the reusable scrum stray-distribution rule is the seed for that later system.
 
@@ -615,7 +613,7 @@ Before this rework every soldier got exactly one melee attack action per turn, s
 
 Flamer-type weapons were previously modeled as ordinary single-target guns differentiated only by stats (short range, high accuracy), which lost everything that makes a flamer a flamer. This rework makes them true template weapons. Grenades reuse the same machinery with a thrown/launched blast delivery (see *Template Weapons — Grenades* below; shipped in §5.3).
 
-- **Cone template, not a shot.** A flamer burst projects a cone from the shooter along the aiming line toward its target. The cone always extends to the weapon's full `MaximumRange` (the target sets the direction, not the extent — a flame stream cannot be stopped short), and its half-width grows linearly from the nozzle to the weapon's `AreaRadius` at maximum range. Weapon data: `TemplateType` (0 = normal, 1 = spray/cone; future values reserved for grenade bursts) and `AreaRadius`.
+- **Cone template, not a shot.** A flamer burst projects a cone from the shooter along the aiming line toward its target. The cone always extends to the weapon's full `MaximumRange` (the target sets the direction, not the extent — a flame stream cannot be stopped short), and its half-width grows linearly from the nozzle to the weapon's `AreaRadius` at maximum range. Weapon data: `TemplateType` (0 = normal, 1 = cone, 2 = launched blast, 3 = thrown blast) and `AreaRadius`.
 - **Auto-hit, indiscriminately.** Every soldier — friend or foe — whose footprint falls inside the cone is struck. There is no to-hit roll and no aim bonus; size, speed/range, and per-species `RangedEvasion` modifiers do not apply (you cannot weave away from a wall of fire). Armor and wound resolution work normally per victim (hit location roll, armor × `ArmorMultiplier`, `WoundMultiplier`).
 - **Firing lines matter.** Because the cone burns everything along its length, allies standing between the bearer and his target are hit, and a burst aimed at a melee scrum engulfs every participant on both sides. This *replaces* the near-miss/stray-shot rule for template weapons — engulfment is certain, not a mishap. Target selection must therefore score firing lines (enemy value caught in the cone minus friendly value caught), not individual targets.
 - **Ammo, not fuel.** `AmmoCapacity` is the magazine capacity; each burst consumes one ammo (rate of fire remains 1 — one burst per action). An empty magazine forces the weapon's long reload. The bearer's decision logic weighs a burst's expected value against remaining ammo.
@@ -625,7 +623,7 @@ Flamer-type weapons were previously modeled as ordinary single-target guns diffe
   - **The source rule assumes clothed humans who panic.** Tyranids wear nothing and would need a per-species "does it burn / does it care" flag — an edge-case surface that keeps growing as species are added.
   - **Fire is not exceptionally terrifying *in this setting*.** The GURPS rule prices fire against a baseline where the alternative is a rifle bullet. Here the alternative is a mass-reactive bolt shell detonating inside the torso, plasma, or a lascannon. Fire earns no panic premium over the company it keeps.
   - **Morale is priced on outcomes, not on weapon flavor — deliberately.** Every term in `MoraleConstants` is a consequence (this-turn casualty fraction, cumulative losses, leader dead, visible routing, local outnumbering, command loss); none keys off *what* did the killing. The flamer already earns its terror correctly through that path, and unusually well, since the auto-hit cone is exactly what produces the heavily-weighted this-turn casualty fraction. A fire-specific shock term would be the first exception to the outcome rule *and* would double-count the same burst.
-- **Gated follow-on (Battle Logic Phase 4, §5.4).** Cover/terrain interaction with templates is gated on Battle Visuals Phase 3 line of sight.
+- **Gated follow-on.** Cover/terrain interaction with templates is gated on Battle Visuals Phase 3 line of sight; the durable battle rules are in `Design/Reference/BattleLogic.md`.
 
 **Template Weapons — Grenades (0.7.1, implemented)**
 
@@ -635,7 +633,7 @@ Blast templates extend the cone-template machinery with a second delivery mode: 
 - **Auto-hit inside the blast, with realistic falloff.** Everyone whose footprint falls inside the circle — friend, foe, and **the thrower himself** (unlike the flamer's shooter exclusion, danger-close is legal and self-inflicted casualties are possible) — is struck, with the damage roll scaled down quadratically from full at the impact center to zero at the template rim. Armor and wound resolution are otherwise unchanged per victim.
 - **Skills.** Player soldiers throw with the `Throwing` skill (launcher fire will get a dedicated weapon skill if/when marines carry launchers); NPC soldiers use `Generic Ranged` for both, mirroring the flamer's dual-row pattern.
 - **Strength-scaled throw range.** A thrown grenade's maximum range scales with the thrower's Strength (the template stores range-per-Strength-point), so a marine out-throws a PDF trooper without separate weapon rows. Launched blasts use the weapon's normal `MaximumRange`.
-- **A grenade is a single-shot ranged weapon with a fast reload** (grabbing the next from the belt). Grenade counts are deliberately not tracked: the action economy (throwing forfeits the primary weapon that round) and target opportunity (worthwhile only against a mass of relatively poorly-armored soldiers at close range) are the governors.
+- **Grenades use the ordinary loaded-ammo/reload action economy** and occupy the weapon set's third ranged slot; they have no separate inventory-count path. Throwing forfeits the primary ranged action that round, so opportunity cost and target density govern use.
 - **Ubiquitous via weapon sets, no UI.** Weapon sets gain a third ranged slot for the grenade; all Space Marine sets, the Imperial/PDF sets, and the human-tier Genestealer Cult sets carry frag grenades. No squad-screen changes.
 - **Frag only.** Krak grenades (thrown single-target anti-armor, not a blast template) are deferred to the Vehicles backlog item (§5.7), where they matter.
 - **Decision logic.** The planner scores a throw exactly like a flamer firing line — expected enemy BV removed (falloff-scaled) minus expected friendly BV lost, with the thrower's own expected loss included — and throws only when that beats the soldier's best conventional action, keeping lone targets on the rifle and clusters on the grenade.
@@ -1369,7 +1367,7 @@ The remaining dependents of the cross-faction substrate, which now ships in 0.8 
   defender preparation, attacker aggression, and conquest/withdrawal outcomes without
   generating transient tactical armies. This is the concrete strategic attrition model called
   for by the Tyranid/PDF opening-scenario work; named player forces remain tactical. Spec:
-  `Design/Reference/LargeScaleNpcCombat.md`.
+  `Design/Reference/BattleLogic.md`.
 - **Next-level NPC mission planning — shaping and special operations.** `FactionStrategyController`
   generates only Ambush, Advance, LightningRaid, Recon, Patrol, and construction orders. Every
   mechanic a Diversion, Sabotage, or Assassination needs is already built and already symmetric
@@ -1395,7 +1393,7 @@ Documented for planning purposes; not scheduled:
 
 **Mission System Expansion.** *(Moved here from 0.7.3.)* Talent recruitment missions; IG support missions; Chaos cult investigation; STC hunt; prisoner recovery. The intelligence/hook request outcome in §4.23 surfaces mission opportunities that these mission types would consume, and remains a lead without a destination until they exist.
 
-**Stance & prone combat.** *(Moved here from 0.7.3, where it was a dependency of the Leg Wound item — §5.4.)* The `Stance` enum and a per-stance `HitProbabilityMap` exist in the codebase, but nothing ever assigns a stance other than Standing: stance is spec, not behavior. Delivering it means both a felled-but-armed soldier firing prone at a penalty after a short delay, and prone's melee consequences (doubled crouch offense penalty, far easier to hit). Deferred on two independent grounds, both still binding. **First, sequencing:** stance's real payoff is prone *behind* something, and there is no terrain, cover, or line-of-sight system yet — building voluntary stance before Battle Visuals Phase 3 (above) means building it twice, since prone in open ground is a thin decision. **Second, risk:** stance is fundamentally a trade of exposure against mobility and accuracy — a *defensive* term — and the squad planner scores primarily outgoing effect, with its ranged and melee metrics not yet commensurable (`Design/Active/EngagementScoringRepair.md`). Adding a defensive axis to a scorer whose offensive terms are still being reconciled is the exact shape of change that produced the last regression. Note the asymmetry: *involuntary* prone (a felled soldier makes no choices) is materially safer than voluntary stance, since it adds no decision axis — it is a subtraction from the planner, needing a squad member excluded from cohesion/formation/movement planning while still included in targeting and morale.
+**Stance & prone combat.** *(Moved here from 0.7.3, where it was a dependency of the Leg Wound item — §5.4.)* The `Stance` enum and a per-stance `HitProbabilityMap` exist in the codebase, but nothing ever assigns a stance other than Standing: stance is spec, not behavior. Delivering it means both a felled-but-armed soldier firing prone at a penalty after a short delay, and prone's melee consequences (doubled crouch offense penalty, far easier to hit). Deferred on two independent grounds, both still binding. **First, sequencing:** stance's real payoff is prone *behind* something, and there is no terrain, cover, or line-of-sight system yet — building voluntary stance before Battle Visuals Phase 3 (above) means building it twice, since prone in open ground is a thin decision. **Second, risk:** stance is fundamentally a trade of exposure against mobility and accuracy — a *defensive* term — and the squad planner scores primarily outgoing effect, with its ranged and melee metrics not yet commensurable (`Design/Reference/BattleLogic.md`). Adding a defensive axis to a scorer whose offensive terms are still being reconciled is the exact shape of change that produced the last regression. Note the asymmetry: *involuntary* prone (a felled soldier makes no choices) is materially safer than voluntary stance, since it adds no decision axis — it is a subtraction from the planner, needing a squad member excluded from cohesion/formation/movement planning while still included in targeting and morale.
 
 **Characters as units of one in battle.** A one-man battle entity that can attach itself to a squad and leave for another mid-fight, tolerated by formation, cohesion, morale, and the planner. Order-level specialist attachment (§4.13) ships without this: an attached specialist is *with* the force but abstracted out of the engagement, which is why an attached Apothecary cannot currently become a casualty. This is the unlock for every *battlefield* specialist effect — a Champion's presence, a Chaplain's morale aura, a Techmarine's field repairs — and the point at which an attached specialist's capacity must stop the day he goes down. Deliberately unscheduled: adding entity kinds to the squad planner is a change to take on deliberately rather than incidentally, and the open question is what governs join/leave decisions (player order, squad planner, or a specialist-specific heuristic). Design record: `Design/Reference/SpecialistAttachment.md` §4.
 

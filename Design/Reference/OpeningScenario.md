@@ -97,7 +97,7 @@ did not survive contact:
 Opinion swings on win/lapse are `±0.5`. The win window and idle-player lapse behavior have been
 validated in-engine; current values are tuned, subject to ordinary balance adjustment.
 
-Detailed army-scale formulas are retained in `Design/Reference/LargeScaleNpcCombat.md`.
+Detailed army-scale formulas are retained in `Design/Reference/BattleLogic.md`.
 
 ## Deliberately deferred
 

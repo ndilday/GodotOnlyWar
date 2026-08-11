@@ -312,7 +312,7 @@ namespace OnlyWar.Helpers.Battles
         // damage roll. A throw that only catches the squad when it scatters is no longer free:
         // every miss node lands the template somewhere and pays its friendly cost. Neither enemy
         // nor friendly value carries an arrival-time discount -- the grenade detonates this turn
-        // (Phase 3, Design/Reference/EngagementScoringOverhaul.md), matching the conventional ranged
+        // (Phase 3, Design/Reference/BattleLogic.md), matching the conventional ranged
         // path. Replaces the former perfect-impact-times-confidence estimate. See
         // OnlyWar_TDD.md §6.6.
         private BlastThrowOutcome EvaluateThrow(

@@ -11,12 +11,9 @@ curve, and §2.6's field-care triage rules are decision tables that stay useful.
 architecture is summarized in `OnlyWar_TDD.md` §5.3 and §6.6.1; this document is the *why*.
 
 **Residual items live elsewhere, not here:**
-- **Ranged-vs-melee pricing repair** (§3.3) — `Design/Active/EngagementScoringRepair.md`. It holds two
-  `.Battles` tests red *by design*:
-  `BattleSquadPlannerTests.TemplateWeaponBearer_EmitsAreaAttackWithoutAimingOrShooting` and
-  `GrenadePlannerTests.FlamerBearerWithABeltGrenade_StillFiresTheConeOnAnEvenTrade`. Do not "fix"
-  those tests — they are the signal that melee is still priced in raw battle value while ranged is
-  priced in take-out probability.
+- **Ranged-vs-melee pricing** is now part of the unified `Design/Reference/BattleLogic.md`; the
+  two cone/grenade planner tests are green regression coverage. This file retains the wound-band
+  and medical decision tables rather than the engagement-scoring implementation history.
 - **Phase 2c** (characters as units of one in battle) and **Phase 4** (stance / prone combat) — PRD
   §5.7, deliberately not scheduled. §5 below is the confidence assessment behind cutting stance and
   remains the governing argument.
@@ -485,35 +482,11 @@ men carrying several Critical wounds who would otherwise be out for two months.
   deliberately: in the moment the squad cannot tell a dead brother from an unconscious one, and
   discounting the stress would mean the squad reacting to information it does not have. Revisit if
   §2.6's field care ever makes recovery visible on the battlefield.
-- **★ Ranged-vs-melee pricing — resolved 2026-08-06, fix scheduled.** Phase 3 verification surfaced
-  this concretely rather than theoretically. Raising the leg bar roughly **halved** a flamer's
-  expected removal against an unarmoured target (~1.8 → 0.77 BV), because `Hold`'s
-  `ImmediateEnemyRemoval` runs through `AccumulateTakeOutTerms` and reads
-  `min(CrippleWound, SeverWound)` per location. But `CloseToContact`'s reward in
-  `EvaluatePursuitContactProgress` is `profile.UsableMeleeBattleValue` — **a raw battle-value proxy
-  that never consults the wound model at all.** Phase 3 moved one side of a comparison whose other
-  side is priced in a different currency, and the charge overtook the burn.
-
-  Two `.Battles` tests went red as a result — `BattleSquadPlannerTests
-  .TemplateWeaponBearer_EmitsAreaAttackWithoutAimingOrShooting` and `GrenadePlannerTests
-  .FlamerBearerWithABeltGrenade_StillFiresTheConeOnAnEvenTrade`. Neither is a Phase 3 defect: the
-  cone is still selected and still positively valued; the *squad-level* posture flips to
-  `CloseToContact` at `Run` tier, and `Run` suppresses shooting, so `shootActions` comes back empty.
-
-  **Decision: price the melee reward through the same take-out model, rather than rebaselining the
-  fixtures.** Rebaselining would have hidden a real mispricing behind a fixture accident (the
-  fixture squad is a lone flamer bearer, which `SoldierCombatShares` classifies as 70 % melee
-  because its best ranged reach is ≤ 50 yards). This is the item already open in
-  `EngagementScoringOverhaul.md` / `EngagementScoringRepair.md`, and it lands there.
-
-  **Sequenced with it:** `BattleSquadPlanner.cs` `AccumulateTakeOutTerms` still models a crippled
-  **foot** as removing the target, which §2.1's 0.4 floor made false — so the planner over-values
-  shots to feet. Fixing that lowers ranged value further and pushes these two tests further from
-  passing, so the two repairs must land together.
-- **Battle Value.** Marines become materially harder to take out of a fight. Does this fold into the
-  recalibration Phase 4A already deferred, or force it sooner? Phase 3 verification measured the
-  pressure as real and visible (expected removal per burst roughly halved against unarmoured
-  targets), but did not act on it.
+ - **★ Ranged-vs-melee pricing — resolved in `BattleLogic.md`.** Tactical scoring now uses the
+  resolver-mirroring take-out model for ranged, template, and melee contact value. The cone and
+  grenade tie fixtures now select the cone as intended; they are regression coverage, not an open
+  casualty-realism defect. This document retains the wound and medical decisions that feed that
+  shared model, not the engagement-scoring implementation history.
 - **Consciousness threshold.** Is incapacitation purely vital-crippled/immobilized, or also a
   whole-body wound-load threshold? The latter needs a new aggregate.
 - **Save compatibility. Resolved (Phase 1) — no new persisted state at all.** The condition is
@@ -639,8 +612,7 @@ multiplier with the foot floor. Expect battle-balance churn and BV recalibration
 
 **Phase 4 — Stance and prone combat. Not scheduled.** Revisit only after terrain and cover land
 (PRD §5.7 Battle Visuals Phase 3), since stance's real payoff is prone *behind* something, and
-after the engagement-scoring work in `EngagementScoringOverhaul.md` /
-`EngagementScoringRepair.md` has stabilized. See §5.
+after the engagement-scoring work in `Design/Reference/BattleLogic.md` has stabilized. See §5.
 
 Every phase this plan scopes is now built. Godot-side verification is required at the end of Phases
 1, 2a, 2b and 3 and is the user's to perform. For **2b** specifically:
@@ -681,13 +653,11 @@ still a change to the code that has needed the most iteration.
 **Voluntary stance** (squads choose to kneel or go prone tactically): *low confidence*, and the
 reason is structural rather than a matter of care taken. Stance's entire value is a trade of
 exposure against mobility and accuracy — that is, a *defensive* term. The squad planner scores
-primarily outgoing effect, and the one open item in that area is precisely that the ranged and
-melee scoring metrics are not yet commensurable (`Design/Reference/EngagementScoringOverhaul.md`, and
-the repair doc that exists because the overhaul introduced a defect). Adding a defensive-value axis
-to a scorer whose offensive terms are still being reconciled is the exact shape of change that
-produced the last regression. Separately, prone in open ground is a thin decision; the interesting
-one is prone behind cover, and there is no terrain or line-of-sight system yet — so building
-voluntary stance before terrain means building it twice.
+primarily outgoing effect, and the current reconciliation is documented in
+`Design/Reference/BattleLogic.md`. Adding a defensive-value axis before terrain and line of sight
+exist would still make the decision hard to interpret. Separately, prone in open ground is a thin
+decision; the interesting one is prone behind cover, and there is no terrain or line-of-sight system
+yet — so building voluntary stance before terrain means building it twice.
 
 The recommendation follows the low-confidence half: cut stance entirely for now, take the fidelity
 loss in §2.2, and note that Phase 3 delivers most of the PRD's stated motivation anyway. The item's

@@ -36,7 +36,7 @@ namespace OnlyWar.Helpers.Battles
     }
 
     /// <summary>
-    /// PHASE 6 (Design/Reference/EngagementScoringOverhaul.md). THE engagement-range model.
+    /// PHASE 6 (Design/Reference/BattleLogic.md). THE engagement-range model.
     ///
     /// <para>Expected battle value removed per turn, as a smooth function of range, by a set of
     /// shooters firing at a representative target. It replaces four parallel approximations of the

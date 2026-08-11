@@ -1,6 +1,7 @@
 using System.Linq;
 using OnlyWar.Helpers;
 using OnlyWar.Helpers.Extensions;
+using OnlyWar.Helpers.Turns;
 using OnlyWar.Models;
 using OnlyWar.Models.Planets;
 using OnlyWar.Tests.Fixtures;
@@ -28,7 +29,7 @@ public class GenestealerCultTests
         long preyBefore = prey.Population;
         long cultBefore = cult.Population;
 
-        TurnController.ResolveCultManeuvers(region);
+        PlanetTurnProcessor.ResolveCultManeuvers(region);
 
         Assert.True(prey.Population < preyBefore, "the Cult should slaughter local Imperials");
         // Conversion, not slaughter, is the Cult's growth: sacrifices add nothing to its numbers.
@@ -47,7 +48,7 @@ public class GenestealerCultTests
         long preyBefore = prey.Population;
         long cultBefore = cult.Population;
 
-        TurnController.ResolveCultManeuvers(region);
+        PlanetTurnProcessor.ResolveCultManeuvers(region);
 
         // A front region's force is committed to the raid machinery, not idle predation/relocation.
         Assert.Equal(preyBefore, prey.Population);
@@ -68,7 +69,7 @@ public class GenestealerCultTests
         int cultFactionId = cult.PlanetFaction.Faction.Id;
         long cultBefore = cult.Population;
 
-        TurnController.ResolveCultManeuvers(r0);
+        PlanetTurnProcessor.ResolveCultManeuvers(r0);
 
         long moved = cultBefore - cult.Population;
         Assert.True(moved > 0, "idle force should flow toward the front");

@@ -39,11 +39,6 @@ public partial class MainGameScene
 	private string _startupWarning;
 	private string _lastSaveStatus;
 
-	internal bool IsSystemMenuVisibleForSmoke => _systemMenu?.Visible == true;
-	internal SaveChooserMode? VisibleSaveChooserModeForSmoke =>
-		_saveLoadChooser?.Visible == true ? _saveLoadChooser.Mode : null;
-	internal bool IsEndTurnPreflightVisibleForSmoke => _endTurnPreflightDialog?.Visible == true;
-
 	internal void SetStartupWarning(string warning)
 	{
 		_startupWarning = warning;

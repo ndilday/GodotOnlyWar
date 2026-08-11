@@ -6,6 +6,7 @@ using System.Linq;
 using System.Text;
 using OnlyWar.Builders;
 using OnlyWar.Helpers;
+using OnlyWar.Helpers.Turns;
 using OnlyWar.Helpers.Extensions;
 using OnlyWar.Models;
 using OnlyWar.Models.Planets;
@@ -198,9 +199,9 @@ public class ScenarioTraceDiagnostics
         for (int turn = 1; turn <= IdleTurns; turn++)
         {
             TurnController controller = new();
-            controller.ProcessTurn(sector);
+            TurnResolutionResult result = controller.ProcessTurn(sector);
             Snapshot(data, sector, promised, seed, turn, postLandingWeeks,
-                controller.MissionContexts.Count, controller.StrategicCombatResults.Count, csv, report);
+                result.MissionContexts.Count, result.StrategicCombatResults.Count, csv, report);
         }
 
         report.AppendLine();

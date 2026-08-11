@@ -14,7 +14,7 @@ using Xunit.Abstractions;
 namespace OnlyWar.Tests.Battles;
 
 /// <summary>
-/// Phase 5b of Design/Reference/EngagementScoringOverhaul.md: the lambda sweep and the reference
+/// Phase 5b of Design/Reference/BattleLogic.md: the lambda sweep and the reference
 /// scenario it is calibrated against -- ~30 bolter marines at 200 yards from four melee-only
 /// Tyranids (Hive Tyrant BV 84, Lictor BV 37, two melee Carnifexes BV 30). Stats are taken from
 /// Database/OnlyWar.s3db (species attribute templates, Boltgun, soldier-template battle values);

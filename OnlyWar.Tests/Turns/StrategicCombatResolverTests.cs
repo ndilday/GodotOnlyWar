@@ -1,7 +1,9 @@
 ﻿using System.Collections.Generic;
 using System.Linq;
 using OnlyWar.Helpers;
+using OnlyWar.Helpers.Simulation;
 using OnlyWar.Helpers.StrategicCombat;
+using OnlyWar.Helpers.Turns;
 using OnlyWar.Models;
 using OnlyWar.Models.Missions;
 using OnlyWar.Models.Orders;
@@ -57,7 +59,7 @@ public class StrategicCombatResolverTests
         RegionFaction target = fixture.DefaultRegionFaction(1);
         // small enough for the assault to annihilate outright (defender losses cap at 75% per
         // battle, so a larger garrison survives the round and only hides later, once ground to
-        // zero, via TurnController.UpdateImperialRemnantState)
+        // zero, via PlanetTurnProcessor.UpdateImperialRemnantState)
         target.Garrison = 2;
         target.Entrenchment = 6;
         target.ListeningPost = 4;
@@ -276,12 +278,16 @@ public class StrategicCombatResolverTests
             Aggression.Normal,
             invadesOnVictory: true);
         Order order = new(new List<Squad>(), false, true, Aggression.Normal, mission);
-        TurnController controller = new();
+        GameDataSingleton data = GameDataSingleton.Instance;
+        MissionTurnProcessor processor = new(
+            new GameSession(data.GameRulesData, fixture.Sector, data.Date, StaticRNG.Instance),
+            null,
+            null);
+        List<StrategicCombatResult> results = [];
 
-        controller.ProcessStrategicCombatMissions([order]);
+        processor.ProcessStrategicCombatMissions([order], results);
 
-        Assert.Empty(controller.MissionContexts);
-        StrategicCombatResult result = Assert.Single(controller.StrategicCombatResults);
+        StrategicCombatResult result = Assert.Single(results);
         Assert.Equal(StrategicCombatOutcome.InvaderFoothold, result.Outcome);
     }
 

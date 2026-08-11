@@ -9,16 +9,15 @@ namespace OnlyWar.Tests.Turns;
 public class TurnResolutionResultTests
 {
     [Fact]
-    public void ProcessTurn_ReturnsResultExposedByCompatibilityProperties()
+    public void ProcessTurn_ReturnsResolutionResult()
     {
         SectorSimulationFixture fixture = SectorSimulationFixture.Create();
         TurnController controller = new();
 
         TurnResolutionResult result = controller.ProcessTurn(fixture.Sector);
 
-        Assert.Same(result.MissionContexts, controller.MissionContexts);
-        Assert.Same(result.SpecialMissions, controller.SpecialMissions);
-        Assert.Same(result.StrategicCombatResults, controller.StrategicCombatResults);
-        Assert.Equal(result.ScenarioNotification, controller.ScenarioNotification);
+        Assert.NotNull(result.MissionContexts);
+        Assert.NotNull(result.SpecialMissions);
+        Assert.NotNull(result.StrategicCombatResults);
     }
 }

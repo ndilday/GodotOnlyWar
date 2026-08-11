@@ -301,7 +301,7 @@ namespace OnlyWar.Helpers.Battles.Placers
         /// chose, floored by <see cref="MinimumStandoff"/> so the ambushers never share cells with
         /// the column and never spring the ambush inside a single enemy bound.
         ///
-        /// <para>PHASE 7 (Design/Reference/EngagementScoringOverhaul.md) REMOVED THE UPPER CLAMP. It
+        /// <para>PHASE 7 (Design/Reference/BattleLogic.md) REMOVED THE UPPER CLAMP. It
         /// was <c>Math.Clamp((int)_engagementRange, 1, 200)</c>, added 2026-07-08 in commit 4d6182c
         /// inside a change about PDF drafting and garrison rates, unmentioned in that commit's
         /// message and accompanied only by a test asserting that coordinates do not wrap. It was an

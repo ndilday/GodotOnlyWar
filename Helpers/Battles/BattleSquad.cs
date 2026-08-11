@@ -319,7 +319,7 @@ namespace OnlyWar.Helpers.Battles
         /// The range at which this squad prefers to OPEN an engagement against
         /// <paramref name="opposingSquads"/>.
         ///
-        /// <para>PHASE 7 (Design/Reference/EngagementScoringOverhaul.md). Kept as a named seam, but it
+        /// <para>PHASE 7 (Design/Reference/BattleLogic.md). Kept as a named seam, but it
         /// is now the SAME derived band the squad will steer toward once the fight starts, so
         /// opening there costs zero turns of approach. Phase 6 had it ask
         /// <c>BattleModifiersUtil.CalculateOptimalDistance</c> -- the effectiveness curve's

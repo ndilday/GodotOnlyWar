@@ -14,7 +14,7 @@ using Xunit.Abstractions;
 namespace OnlyWar.Tests.Battles;
 
 /// <summary>
-/// Phase 4 of Design/Reference/EngagementScoringOverhaul.md: the per-(shooter squad, target squad)
+/// Phase 4 of Design/Reference/BattleLogic.md: the per-(shooter squad, target squad)
 /// removal-rate table and its closed-form range rescaling. Nothing consumes the table yet, so
 /// these tests are the whole of its coverage.
 /// </summary>

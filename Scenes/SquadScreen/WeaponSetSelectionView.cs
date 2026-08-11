@@ -12,7 +12,6 @@ public partial class WeaponSetSelectionView : PanelContainer
 	private RichTextLabel _header;
 	private int _minimumCount;
 	private int _maximumCount;
-	private int _temporaryMaximumCount;
 	public string OptionName { get; private set; }
 
 	public event EventHandler<ValueTuple<string, int>> WeaponSetCountChanged;

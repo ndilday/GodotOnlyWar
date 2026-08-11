@@ -39,7 +39,7 @@ namespace OnlyWar.Helpers.Battles.Placers
             // into that int tuple, which did nothing except silently wrap any layout wider than 32,767
             // -- a large standoff would land a leg at x = -65,543, truncate to a cell near the origin,
             // and throw on the collision with the force it was meant to be standing off from. See
-            // Design/Reference/EngagementScoringOverhaul.md; AmbushPlacer carried a ceiling to dodge this
+            // Design/Reference/BattleLogic.md; AmbushPlacer carried a ceiling to dodge this
             // and no longer needs one.
             ValueTuple<int, int> startingLocation = new ValueTuple<int, int>(bottomLeft.Item1 + ((squadBoxSize.X - 1) / 2),
                                                                            bottomLeft.Item2 + squadBoxSize.Y - 1);

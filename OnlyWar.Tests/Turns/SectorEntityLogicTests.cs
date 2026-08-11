@@ -1,5 +1,7 @@
 using OnlyWar.Helpers;
 using OnlyWar.Helpers.Extensions;
+using OnlyWar.Helpers.Simulation;
+using OnlyWar.Helpers.Turns;
 using OnlyWar.Models;
 using OnlyWar.Models.Missions;
 using OnlyWar.Models.Planets;
@@ -72,7 +74,7 @@ public class SectorEntityLogicTests
         pdf.Garrison = 0;
         fixture.AddPublicCult(0, population: 100, organization: 100);
 
-        new TurnController().EndOfTurnRegionFactionsUpdate(pdf, pdfRatio: 0.5f);
+        CreatePlanetProcessor(fixture).EndOfTurnRegionFactionsUpdate(pdf, pdfRatio: 0.5f);
 
         Assert.Equal(60, pdf.Garrison); // 1,000,000 * 0.0004 baseline growth * 15%
     }
@@ -404,7 +406,7 @@ public class SectorEntityLogicTests
         SectorSimulationFixture fixture = SectorSimulationFixture.Create();
         RegionFaction enemy = fixture.AddPublicCult(0, population: 1000, organization: 100);
         enemy.Garrison = enemy.Population;
-        TurnController controller = new();
+        PlanetTurnProcessor processor = CreatePlanetProcessor(fixture);
 
         // Each opportunity roll only has ~50% odds of producing a mission (chance < 0 rolls
         // nothing), so a single call rarely reaches the budget. But the loop bound
@@ -415,7 +417,7 @@ public class SectorEntityLogicTests
         // the pre-fix behavior where the lone faction consumed the entire region budget.
         for (int i = 0; i < 100; i++)
         {
-            controller.HandlePublicFactionIntelligence(enemy, specMissionBudget: 5f);
+            processor.HandlePublicFactionIntelligence(enemy, specMissionBudget: 5f);
         }
 
         Assert.Equal(5, enemy.Region.SpecialMissions.Count(m => m.RegionFaction == enemy));
@@ -442,9 +444,9 @@ public class SectorEntityLogicTests
             // despite the per-turn quarter decay (ProcessTurn_DecaysRegionIntelligenceByQuarter) -
             // the point here is the SPLIT across factions, not the intel economy itself.
             fixture.DefaultPlanetFaction.SetRegionIntel(region, 4096f);
-            controller.ProcessTurn(fixture.Sector);
-            strongCount += controller.SpecialMissions.Count(m => m.RegionFaction == strong);
-            weakCount += controller.SpecialMissions.Count(m => m.RegionFaction == weak);
+            TurnResolutionResult result = controller.ProcessTurn(fixture.Sector);
+            strongCount += result.SpecialMissions.Count(m => m.RegionFaction == strong);
+            weakCount += result.SpecialMissions.Count(m => m.RegionFaction == weak);
         }
 
         // with the pre-fix, iteration-order-first-come budget, whichever faction the dictionary
@@ -454,5 +456,13 @@ public class SectorEntityLogicTests
         Assert.True(strongCount > weakCount * 3,
             $"expected strong ({strongCount}) to lead weak ({weakCount}) by roughly the 9:1 deployed-strength ratio");
         Assert.True(weakCount > 0, "the weaker faction should still receive some opportunities, not be starved entirely");
+    }
+
+    private static PlanetTurnProcessor CreatePlanetProcessor(SectorSimulationFixture fixture)
+    {
+        GameDataSingleton data = GameDataSingleton.Instance;
+        return new PlanetTurnProcessor(
+            new GameSession(data.GameRulesData, fixture.Sector, data.Date, StaticRNG.Instance),
+            []);
     }
 }

@@ -207,7 +207,7 @@ namespace OnlyWar.Helpers.Battles
 
             float moveSpeed = soldier.GetMoveSpeed();
             // TurnsUntilWeReachTarget (attacker's own speed, distance less the 1-cell contact
-            // allowance) -- see Design/Reference/EngagementScoringOverhaul.md Phase 0. This is the ONE
+            // allowance) -- see Design/Reference/BattleLogic.md Phase 0. This is the ONE
             // arrival discount Phase 3 kept: a charge's payoff genuinely does not exist until the
             // charger arrives, unlike a bolt, which lands the turn it is fired.
             int turnsToContact = moveSpeed <= 0

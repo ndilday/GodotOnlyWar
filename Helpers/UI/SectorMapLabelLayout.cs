@@ -159,20 +159,6 @@ public static class SectorMapLabelLayout
         return extent * scale;
     }
 
-    public static long GetPlanetPriority(
-        bool hasActiveWork,
-        RequestSeverity requestSeverity,
-        bool isGovernanceSeat,
-        int importance)
-    {
-        return new SectorMapPlanetLabelPriority(
-            PlanetId: 0,
-            hasActiveWork,
-            requestSeverity,
-            isGovernanceSeat,
-            importance).Rank;
-    }
-
     public static IReadOnlyList<SectorMapPlanetLabelPriority> OrderPlanetPriorities(
         IEnumerable<SectorMapPlanetLabelPriority> priorities)
     {

@@ -1,4 +1,6 @@
 using OnlyWar.Helpers;
+using OnlyWar.Helpers.Simulation;
+using OnlyWar.Helpers.Turns;
 using OnlyWar.Models;
 using OnlyWar.Models.Planets;
 using OnlyWar.Models.Squads;
@@ -24,7 +26,7 @@ public class ImperialRemnantTests
         remnant.Garrison = 0;
         fixture.AddConsumptionFaction(0, population: 50_000, organization: 100);
 
-        TurnController.UpdateImperialRemnantState(fixture.Planet.Regions[0]);
+        PlanetTurnProcessor.UpdateImperialRemnantState(fixture.Planet.Regions[0]);
 
         Assert.False(remnant.IsPublic);
     }
@@ -37,7 +39,7 @@ public class ImperialRemnantTests
         remnant.Garrison = 1_000; // besieged but still defending
         fixture.AddConsumptionFaction(0, population: 50_000, organization: 100);
 
-        TurnController.UpdateImperialRemnantState(fixture.Planet.Regions[0]);
+        PlanetTurnProcessor.UpdateImperialRemnantState(fixture.Planet.Regions[0]);
 
         Assert.True(remnant.IsPublic);
     }
@@ -49,7 +51,7 @@ public class ImperialRemnantTests
         RegionFaction remnant = fixture.DefaultRegionFaction(0);
         remnant.Garrison = 0; // a peaceful region with no standing garrison does not hide
 
-        TurnController.UpdateImperialRemnantState(fixture.Planet.Regions[0]);
+        PlanetTurnProcessor.UpdateImperialRemnantState(fixture.Planet.Regions[0]);
 
         Assert.True(remnant.IsPublic);
     }
@@ -63,7 +65,7 @@ public class ImperialRemnantTests
         remnant.Garrison = 0;
         // no public enemy in the region → liberation
 
-        TurnController.UpdateImperialRemnantState(fixture.Planet.Regions[0]);
+        PlanetTurnProcessor.UpdateImperialRemnantState(fixture.Planet.Regions[0]);
 
         Assert.True(remnant.IsPublic);
     }
@@ -77,7 +79,7 @@ public class ImperialRemnantTests
         remnant.Garrison = 0;
         fixture.AddConsumptionFaction(0, population: 50_000, organization: 100);
 
-        TurnController.UpdateImperialRemnantState(fixture.Planet.Regions[0]);
+        PlanetTurnProcessor.UpdateImperialRemnantState(fixture.Planet.Regions[0]);
 
         Assert.False(remnant.IsPublic);
     }
@@ -92,7 +94,7 @@ public class ImperialRemnantTests
         // Region 0 (Alpha) borders three governed regions on the hex board — 1 (Beta),
         // 2 (Gamma) and 4 (Epsilon) — each starting with population 20,000.
 
-        TurnController.ProcessImperialEmigration(fixture.Planet.Regions[0]);
+        PlanetTurnProcessor.ProcessImperialEmigration(fixture.Planet.Regions[0]);
 
         Assert.Equal(95_000, remnant.Population);
         // 5% of 100,000 = 5,000, split across three equally-populated refuges (the last
@@ -119,7 +121,7 @@ public class ImperialRemnantTests
         fixture.DefaultRegionFaction(2).Population = 10_000;
         fixture.DefaultRegionFaction(4).Population = 10_000;
 
-        TurnController.ProcessImperialEmigration(fixture.Planet.Regions[0]);
+        PlanetTurnProcessor.ProcessImperialEmigration(fixture.Planet.Regions[0]);
 
         // 5,000 refugees split 3:1:1 by the refuges' 30k/10k/10k populations
         Assert.Equal(33_000, fixture.DefaultRegionFaction(1).Population);
@@ -139,7 +141,7 @@ public class ImperialRemnantTests
         fixture.DefaultRegionFaction(2).IsPublic = false;
         fixture.DefaultRegionFaction(4).IsPublic = false;
 
-        TurnController.ProcessImperialEmigration(fixture.Planet.Regions[0]);
+        PlanetTurnProcessor.ProcessImperialEmigration(fixture.Planet.Regions[0]);
 
         Assert.Equal(100_000, remnant.Population);
     }
@@ -151,7 +153,7 @@ public class ImperialRemnantTests
         RegionFaction governing = fixture.DefaultRegionFaction(0);
         governing.Population = 100_000; // public: not in hiding, does not flee
 
-        TurnController.ProcessImperialEmigration(fixture.Planet.Regions[0]);
+        PlanetTurnProcessor.ProcessImperialEmigration(fixture.Planet.Regions[0]);
 
         Assert.Equal(100_000, governing.Population);
         Assert.Equal(20_000, fixture.DefaultRegionFaction(1).Population);
@@ -169,7 +171,7 @@ public class ImperialRemnantTests
         remnant.Garrison = 0;
         remnant.IsPublic = false; // gone to ground, but still a living resistance
 
-        new TurnController().EndOfTurnRegionFactionsUpdate(remnant, pdfRatio: 0.5f);
+        CreatePlanetProcessor(fixture).EndOfTurnRegionFactionsUpdate(remnant, pdfRatio: 0.5f);
 
         Assert.True(remnant.Population > 1_000_000, "a hidden resistance still has children");
         Assert.True(remnant.Garrison > 0, "and arms that growth into the underground");
@@ -187,7 +189,7 @@ public class ImperialRemnantTests
         // a weak public swarm still holds ground in the region
         fixture.AddConsumptionFaction(0, population: 1_000, organization: 100);
 
-        TurnController.UpdateImperialRemnantState(fixture.Planet.Regions[0]);
+        PlanetTurnProcessor.UpdateImperialRemnantState(fixture.Planet.Regions[0]);
 
         Assert.True(remnant.IsPublic, "the resistance rises to retake the region when it can win");
     }
@@ -202,7 +204,7 @@ public class ImperialRemnantTests
         remnant.Garrison = 100; // a token underground, hopelessly outnumbered
         fixture.AddConsumptionFaction(0, population: 500_000, organization: 100);
 
-        TurnController.UpdateImperialRemnantState(fixture.Planet.Regions[0]);
+        PlanetTurnProcessor.UpdateImperialRemnantState(fixture.Planet.Regions[0]);
 
         Assert.False(remnant.IsPublic, "a weak remnant stays hidden while the occupier is stronger");
     }
@@ -218,7 +220,7 @@ public class ImperialRemnantTests
         remnant.AntiAir = 2;
         fixture.AddConsumptionFaction(0, population: 50_000, organization: 100);
 
-        TurnController.UpdateImperialRemnantState(fixture.Planet.Regions[0]);
+        PlanetTurnProcessor.UpdateImperialRemnantState(fixture.Planet.Regions[0]);
 
         Assert.False(remnant.IsPublic);
         // falling to the occupier wrecks or forfeits half the defensive works
@@ -236,7 +238,7 @@ public class ImperialRemnantTests
         remnant.Entrenchment = 8;
         fixture.AddConsumptionFaction(0, population: 50_000, organization: 100);
 
-        TurnController.UpdateImperialRemnantState(fixture.Planet.Regions[0]);
+        PlanetTurnProcessor.UpdateImperialRemnantState(fixture.Planet.Regions[0]);
 
         Assert.True(remnant.IsPublic);
         Assert.Equal(8.0, remnant.Entrenchment);
@@ -254,7 +256,7 @@ public class ImperialRemnantTests
         remnant.AntiAir = 0.2;
         fixture.AddConsumptionFaction(0, population: 50_000, organization: 100);
 
-        TurnController.DecayUnmannedDefenses(fixture.Planet.Regions[0]);
+        PlanetTurnProcessor.DecayUnmannedDefenses(fixture.Planet.Regions[0]);
 
         // the occupier strips a quarter level per stat per turn, floored at zero
         Assert.Equal(3.75, remnant.Entrenchment);
@@ -271,7 +273,7 @@ public class ImperialRemnantTests
         remnant.Garrison = 0;
         remnant.Entrenchment = 4;
 
-        TurnController.DecayUnmannedDefenses(fixture.Planet.Regions[0]);
+        PlanetTurnProcessor.DecayUnmannedDefenses(fixture.Planet.Regions[0]);
 
         Assert.Equal(4.0, remnant.Entrenchment);
     }
@@ -285,7 +287,7 @@ public class ImperialRemnantTests
         defender.Entrenchment = 4;
         fixture.AddConsumptionFaction(0, population: 50_000, organization: 100);
 
-        TurnController.DecayUnmannedDefenses(fixture.Planet.Regions[0]);
+        PlanetTurnProcessor.DecayUnmannedDefenses(fixture.Planet.Regions[0]);
 
         Assert.Equal(4.0, defender.Entrenchment);
     }
@@ -341,10 +343,18 @@ public class ImperialRemnantTests
         governing.Population = 1_000_000;
         governing.Garrison = 0;
 
-        new TurnController().EndOfTurnRegionFactionsUpdate(governing, pdfRatio: 0.0f);
+        CreatePlanetProcessor(fixture).EndOfTurnRegionFactionsUpdate(governing, pdfRatio: 0.0f);
 
         Assert.True(governing.Population > 1_000_000, "a governing population grows organically");
         Assert.True(governing.Garrison > 0, "a governing PDF drafts from its growth");
+    }
+
+    private static PlanetTurnProcessor CreatePlanetProcessor(SectorSimulationFixture fixture)
+    {
+        GameDataSingleton data = GameDataSingleton.Instance;
+        return new PlanetTurnProcessor(
+            new GameSession(data.GameRulesData, fixture.Sector, data.Date, StaticRNG.Instance),
+            []);
     }
 
     private static RegionFaction AddPlayerRegionFaction(SectorSimulationFixture fixture, Region region)

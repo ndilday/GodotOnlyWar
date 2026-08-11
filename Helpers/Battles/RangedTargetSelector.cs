@@ -628,7 +628,7 @@ namespace OnlyWar.Helpers.Battles
                         {
                             // Undiscounted, matching the conventional ranged path: this burst is
                             // fired now, so when the victim's squad would have reached us is
-                            // irrelevant (Phase 3, Design/Reference/EngagementScoringOverhaul.md).
+                            // irrelevant (Phase 3, Design/Reference/BattleLogic.md).
                             expectedEnemyBattleValueRemoved += expectedBattleValueRemoval;
                         }
                     }
@@ -684,7 +684,7 @@ namespace OnlyWar.Helpers.Battles
             float takeOutProbability = Math.Clamp(attackEstimate.Item2, 0, 1);
             // CONTRACT: the expected battle value this shot removes THIS TURN -- hit probability x
             // take-out probability x the target's battle value. It is deliberately undiscounted:
-            // Phase 3 (Design/Reference/EngagementScoringOverhaul.md) removed the old
+            // Phase 3 (Design/Reference/BattleLogic.md) removed the old
             // 1/(1 + turnsUntilTargetReachesUs) factor, which scaled a fired bolt's worth by when
             // its target would reach us. Arrival time does not affect whether a bolt lands, and the
             // temporal preference it was standing in for is already carried by

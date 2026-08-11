@@ -363,7 +363,7 @@ namespace OnlyWar.Helpers.Battles
         {
             if (depth <= 0)
             {
-                // PHASE 5d (Design/Reference/EngagementScoringOverhaul.md). The terminal used to be
+                // PHASE 5d (Design/Reference/BattleLogic.md). The terminal used to be
                 // `attainable * 0.25 / (1 + turnsToAct)` -- 41% of `future` (9.312 of 22.84) built
                 // from the squad's OWN battle value, with no per-turn semantics and no reference to
                 // what it was shooting at. It remains the same per-turn net exchange as the
@@ -457,7 +457,7 @@ namespace OnlyWar.Helpers.Battles
         }
 
         // Projected own motion for one lookahead policy. Phase 2
-        // (Design/Reference/EngagementScoringOverhaul.md): `desired` is the effectiveness-derived
+        // (Design/Reference/BattleLogic.md): `desired` is the effectiveness-derived
         // EffectiveEngagementRange, not PreferredBandUpper. PreferredBandUpper is the weapon's
         // MAXIMUM range, so any range already inside reach yielded `range > desired == false` and
         // this returned 0 own-motion for EVERY policy -- the lookahead could not see its own
@@ -484,7 +484,7 @@ namespace OnlyWar.Helpers.Battles
         // precedence over IsContactSeeking, so a melee-only profile does not get projected as
         // charging while its own side has it fleeing. Cover/RearGuard hold position to screen the
         // withdrawal (quarryRunSpeed 0 for those) and fall through to the normal band logic below --
-        // Phase 1, Design/Reference/EngagementScoringOverhaul.md.
+        // Phase 1, Design/Reference/BattleLogic.md.
         private static float BaselineRangeDelta(
             BattleSquadCapabilityProfile profile,
             EngagementSquadRole opposingRole,
@@ -532,7 +532,7 @@ namespace OnlyWar.Helpers.Battles
                     : 0;
 
         /// <summary>
-        /// PHASE 5c (Design/Reference/EngagementScoringOverhaul.md). One ply's net battle-value
+        /// PHASE 5c (Design/Reference/BattleLogic.md). One ply's net battle-value
         /// exchange between <paramref name="squad"/> and <paramref name="enemy"/> at a projected
         /// centroid separation. This is what makes `outgoing` and `future` commensurable: both are
         /// now <c>hit * (takeOut + lambda * woundProgress) * targetBV</c>, summed per-soldier.

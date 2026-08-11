@@ -23,7 +23,7 @@ namespace OnlyWar.Helpers.Battles
         // at. Recorded rather than re-derived so the Phase 4 removal-rate table can rescale
         // this shot to another range in closed form -- inverting the CDF would be lossy, and
         // recomputing the total would duplicate RangedHitEstimateContext's assembly order.
-        // See Design/Reference/EngagementScoringOverhaul.md.
+        // See Design/Reference/BattleLogic.md.
         public float PreRollHitTotal { get; }
         public float TargetSpeed { get; }
         // Phase 5: E[woundProgress; no takeout] for this shot, captured alongside the take-out
