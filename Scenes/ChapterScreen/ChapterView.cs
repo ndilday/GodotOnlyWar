@@ -313,7 +313,7 @@ public partial class ChapterView : MainScreenView
         {
             Button navigateButton = new Button
             {
-                Text = "GOTO",
+                Text = "GO",
                 CustomMinimumSize = new Vector2(46, 32),
                 MouseDefaultCursorShape = CursorShape.PointingHand,
                 TooltipText = "Go to this squad's location"

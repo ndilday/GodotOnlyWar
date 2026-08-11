@@ -170,8 +170,52 @@ public partial class RegionScreenController : DialogController
         _selectedMission = mission;
         _selectedTargetFactionId = mission?.TargetFaction?
             .PlanetFaction?.Faction?.Id ?? -1;
+
+        // An assigned mission is also a roster context: selecting it from the right-hand panel
+        // selects the same squads and attached specialists that belong to its order. This mirrors
+        // the squad rows' assignment badge and makes the specialist's region badge actionable.
+        Order assignedOrder = FindAssignedOrder(mission);
+        _editingOrder = assignedOrder;
+        if (assignedOrder != null)
+        {
+            _aggression = assignedOrder.LevelOfAggression;
+        }
+
+        // Rebuild before selecting so specialists attached to this order are selectable in the
+        // tree, while specialists committed to a different order remain visible with their
+        // assignment badge.
+        IReadOnlyList<string> previousSelection = _view.GetSelectedKeys();
+        _view.PopulateSelectionTree(BuildRoster());
+        if (assignedOrder != null)
+        {
+            _view.SetSelectedKeys(assignedOrder.AssignedSquads.Select(squad => SquadKey(squad.Id))
+                .Concat(assignedOrder.AttachedSoldiers.Select(soldier => SpecialistKey(soldier.Id)))
+                .ToList());
+        }
+        else
+        {
+            // Keep ordinary squad/free-specialist selections when moving to a new mission, but
+            // do not carry attached specialists from the previously edited order into it.
+            _view.SetSelectedKeys(previousSelection
+                .Where(key => !key.StartsWith("soldier:")
+                    || ResolveSoldierFromKey(key)?.AttachedOrder == null)
+                .ToList());
+        }
+        RecomputeSelectedSquads();
+        UpdateSelectionSummary();
         RefreshTargetFactionSelector();
         RefreshCommitBar();
+    }
+
+    private Order FindAssignedOrder(AvailableMission mission)
+    {
+        if (mission == null) return null;
+
+        Sector sector = GameDataSingleton.Instance.Sector;
+        return sector?.Orders.Values
+            .Where(order => order?.AssignedSquads?.Any(
+                squad => squad?.Faction?.IsPlayerFaction == true) == true)
+            .FirstOrDefault(mission.RepresentsOrder);
     }
 
     private void OnAggressionChanged(object sender, Aggression aggression)
@@ -470,14 +514,15 @@ public partial class RegionScreenController : DialogController
     }
 
     // The ATTACHMENTS group: individuals a personnel-pool formation landed here may lend to
-    // this operation. Empty (and therefore absent) unless such a formation is in this region.
+    // this operation. Every member stays visible after attachment, just like an assigned squad;
+    // the right-hand badge carries the assigned target region.
     private List<CommandTreeNode> BuildAttachmentNodes()
     {
-        IReadOnlyList<SpecialistOption> candidates = SpecialistAvailability.EnumerateCandidates(
+        IReadOnlyList<SpecialistOption> specialists = SpecialistAvailability.EnumerateRoster(
             GetPlayerRegionFaction(), _currentRegion, _editingOrder);
-        if (candidates.Count == 0) return [];
+        if (specialists.Count == 0) return [];
 
-        List<CommandTreeNode> children = candidates
+        List<CommandTreeNode> children = specialists
             .Select(option => new CommandTreeNode(
                 SpecialistKey(option.Soldier.Id),
                 option.Label,
@@ -486,11 +531,12 @@ public partial class RegionScreenController : DialogController
                 option.StatusLabel))
             .ToList();
 
+        int availableCount = specialists.Count(option => option.IsAvailable);
         return
         [
             new CommandTreeNode(
                 "attachments",
-                $"ATTACHMENTS · {children.Count} available",
+                $"ATTACHMENTS · {availableCount} available / {children.Count}",
                 children,
                 null,
                 null,

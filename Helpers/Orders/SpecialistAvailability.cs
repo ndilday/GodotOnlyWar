@@ -18,12 +18,22 @@ namespace OnlyWar.Helpers.Orders
         // Where he currently is, for the roster's right-hand status column: the region of the
         // operation he is attached to, or "None".
         public string StatusLabel { get; }
+        // Whether this person can be added to the order represented by the current roster
+        // context. This is separate from row visibility/selection: like squads, an attached
+        // specialist remains a selectable roster row so he can be recalled.
+        public bool IsAvailable { get; }
+        public bool IsSelectable => true;
 
-        public SpecialistOption(PlayerSoldier soldier, Squad homeSquad, string statusLabel)
+        public SpecialistOption(
+            PlayerSoldier soldier,
+            Squad homeSquad,
+            string statusLabel,
+            bool isAvailable = true)
         {
             Soldier = soldier;
             HomeSquad = homeSquad;
             StatusLabel = statusLabel;
+            IsAvailable = isAvailable;
         }
 
         public string Label => $"{Soldier.Name} | {Soldier.Template.Name} | {HomeSquad?.Name}";
@@ -59,6 +69,23 @@ namespace OnlyWar.Helpers.Orders
             Region originRegion,
             Order contextOrder = null)
         {
+            return EnumerateRoster(playerRegionFaction, originRegion, contextOrder)
+                .Where(option => option.IsAvailable)
+                .ToList();
+        }
+
+        /// <summary>
+        /// Every member of a landed personnel-pool formation for the Region Ops roster. Unlike
+        /// <see cref="EnumerateCandidates"/>, this keeps unavailable or already-attached men in
+        /// the tree as selectable rows, so assigning a specialist never makes him disappear from
+        /// the region detail view. Their assignment status is displayed beside the row, and the
+        /// availability flag still prevents a second attachment from being accepted.
+        /// </summary>
+        public static IReadOnlyList<SpecialistOption> EnumerateRoster(
+            RegionFaction playerRegionFaction,
+            Region originRegion,
+            Order contextOrder = null)
+        {
             if (playerRegionFaction == null)
             {
                 return [];
@@ -68,18 +95,29 @@ namespace OnlyWar.Helpers.Orders
                 .Where(squad => squad?.SquadTemplate?.PermitsIndividualDetachment == true)
                 .SelectMany(squad => squad.Members
                     .OfType<PlayerSoldier>()
-                    .Where(soldier => OrderAttachment.CanAttach(
-                        soldier, contextOrder, null, originRegion, out _))
-                    .Select(soldier => new SpecialistOption(
-                        soldier, squad, DescribeStatus(soldier))))
+                    .Select(soldier =>
+                    {
+                        bool isAvailable = OrderAttachment.CanAttach(
+                            soldier, contextOrder, null, originRegion, out _);
+                        return new SpecialistOption(
+                            soldier,
+                            squad,
+                            DescribeStatus(soldier, isAvailable),
+                            isAvailable);
+                    }))
                 .OrderBy(option => option.HomeSquad.Name)
                 .ThenBy(option => option.Soldier.Name)
                 .ToList();
         }
 
-        private static string DescribeStatus(PlayerSoldier soldier)
+        private static string DescribeStatus(PlayerSoldier soldier, bool isAvailable)
         {
-            return soldier.AttachedOrder?.Mission?.RegionFaction?.Region?.Name ?? "None";
+            if (soldier.AttachedOrder != null)
+            {
+                string regionName = soldier.AttachedOrder.Mission?.RegionFaction?.Region?.Name;
+                return regionName ?? "None";
+            }
+            return isAvailable ? "None" : "Unavailable";
         }
 
         /// <summary>

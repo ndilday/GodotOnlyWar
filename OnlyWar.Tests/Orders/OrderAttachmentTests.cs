@@ -457,11 +457,20 @@ public class OrderAttachmentTests
             SpecialistAvailability.EnumerateCandidates(playerRegionFaction, origin);
         IReadOnlyList<SpecialistOption> editing =
             SpecialistAvailability.EnumerateCandidates(playerRegionFaction, origin, order);
+        IReadOnlyList<SpecialistOption> roster =
+            SpecialistAvailability.EnumerateRoster(playerRegionFaction, origin);
 
         // Issuing a new order: the committed man is not on offer for a second one.
         Assert.Equal(["Free Apothecary"], fresh.Select(o => o.Soldier.Name).ToArray());
         // Re-opening the order he is already on: he is selectable so he can be released.
         Assert.Equal(2, editing.Count);
+        // The region roster still shows him as a selectable row, but he is not available for a
+        // second attachment.
+        SpecialistOption committedRow = Assert.Single(
+            roster, option => option.Soldier == committed);
+        Assert.False(committedRow.IsAvailable);
+        Assert.True(committedRow.IsSelectable);
+        Assert.Equal("Region 5", committedRow.StatusLabel);
         // Line-squad members never appear at all.
         Assert.DoesNotContain(editing, o => o.HomeSquad == line);
     }
