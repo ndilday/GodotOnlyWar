@@ -964,6 +964,7 @@ public partial class MainGameScene : Control
 			_regionScreen = (RegionScreenController)regionScene.Instantiate();
 			_regionScreen.CloseButtonPressed += OnCloseScreen;
 			_regionScreen.SquadDoubleClicked += OnSquadDoubleClicked;
+			_regionScreen.CharacterDoubleClicked += OnCharacterDoubleClicked;
 			_regionScreen.AdjacentRegionChangeRequested += OnAdjacentRegionChangeRequested;
 			_regionScreen.CampaignChanged += OnCampaignChanged;
 			_modalLayer.AddChild(_regionScreen);
@@ -1001,6 +1002,19 @@ public partial class MainGameScene : Control
 		Control control = (Control)sender;
 		_previousScreenStack.Push(control);
 		control.Visible = false;
+	}
+
+	private void OnCharacterDoubleClicked(object sender, PlayerSoldier soldier)
+	{
+		if (soldier?.AssignedSquad == null)
+		{
+			return;
+		}
+
+		// Character loadouts are edited alongside the character's home squad. Reuse the same
+		// loadout screen used by a squad double-click so the personal override and inherited
+		// options are available for this character.
+		OnSquadDoubleClicked(sender, soldier.AssignedSquad);
 	}
 
 	private void OnOrbitalSquadDoubleClicked(object sender, Squad squad)

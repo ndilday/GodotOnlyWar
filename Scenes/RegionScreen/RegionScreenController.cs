@@ -42,6 +42,7 @@ public partial class RegionScreenController : DialogController
     private string _rosterFilter = "all";
 
     public event EventHandler<Squad> SquadDoubleClicked;
+    public event EventHandler<PlayerSoldier> CharacterDoubleClicked;
     public event EventHandler<Region> AdjacentRegionChangeRequested;
     public event EventHandler CampaignChanged;
 
@@ -131,6 +132,13 @@ public partial class RegionScreenController : DialogController
         if (squad != null)
         {
             SquadDoubleClicked?.Invoke(this, squad);
+            return;
+        }
+
+        PlayerSoldier soldier = ResolveSoldierFromKey(key);
+        if (soldier?.AssignedSquad != null)
+        {
+            CharacterDoubleClicked?.Invoke(this, soldier);
         }
     }
 
@@ -616,6 +624,15 @@ public partial class RegionScreenController : DialogController
         if (string.IsNullOrWhiteSpace(key) || !key.StartsWith("squad:")) return null;
         int squadId = int.Parse(key.Split(':')[1]);
         return GetPlayerRegionFaction()?.LandedSquads.FirstOrDefault(squad => squad.Id == squadId);
+    }
+
+    private PlayerSoldier ResolveSoldierFromKey(string key)
+    {
+        if (string.IsNullOrWhiteSpace(key) || !key.StartsWith("soldier:")) return null;
+        int soldierId = int.Parse(key.Split(':')[1]);
+        return GetPlayerRegionFaction()?.LandedSquads
+            .SelectMany(squad => squad.Members.OfType<PlayerSoldier>())
+            .FirstOrDefault(soldier => soldier.Id == soldierId);
     }
 
     private void UnassignSelectedSquads()

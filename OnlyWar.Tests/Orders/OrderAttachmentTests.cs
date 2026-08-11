@@ -466,6 +466,23 @@ public class OrderAttachmentTests
         Assert.DoesNotContain(editing, o => o.HomeSquad == line);
     }
 
+    [Fact]
+    public void SpecialistAvailability_LabelIncludesRankTitleBeforeHomeSquad()
+    {
+        SectorSimulationFixture fixture = SectorSimulationFixture.Create();
+        Region origin = fixture.Planet.Regions[0];
+        RegionFaction playerRegionFaction = EnsurePlayerPresence(fixture, origin);
+        PlayerSoldier specialist = CreateSpecialist("Brother Apothecary");
+        Squad home = CreateDetachableSquad("Apothecarion", specialist);
+        home.CurrentRegion = origin;
+        playerRegionFaction.LandedSquads.Add(home);
+
+        SpecialistOption option = Assert.Single(
+            SpecialistAvailability.EnumerateCandidates(playerRegionFaction, origin));
+
+        Assert.Equal("Brother Apothecary | Test Marine | Apothecarion", option.Label);
+    }
+
     private static RegionFaction EnsurePlayerPresence(
         SectorSimulationFixture fixture, Region region)
     {

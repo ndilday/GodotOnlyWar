@@ -26,7 +26,7 @@ namespace OnlyWar.Helpers.Orders
             StatusLabel = statusLabel;
         }
 
-        public string Label => $"{Soldier.Name} | {HomeSquad?.Name}";
+        public string Label => $"{Soldier.Name} | {Soldier.Template.Name} | {HomeSquad?.Name}";
     }
 
     public static class SpecialistAvailability
