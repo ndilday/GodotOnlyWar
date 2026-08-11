@@ -632,8 +632,8 @@ Every phase this plan scopes is now built. Godot-side verification is required a
    wound and a co-located Apothecary should drop several weeks of recovery time in one turn,
    visibly more than the one band natural healing gives.
 6. Confirm the leg change from Task A in play: a marine felled by a leg wound comes back
-   **crippled, not amputated** — the Apothecarium should offer a replacement procedure but not
-   report the leg as Severed.
+   **crippled, not amputated** — the Apothecarium should allow the wound to heal naturally and
+   should not offer a replacement procedure or report the leg as Severed.
 
 ---
 

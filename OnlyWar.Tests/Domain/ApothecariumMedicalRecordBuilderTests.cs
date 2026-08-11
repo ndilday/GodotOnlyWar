@@ -46,9 +46,31 @@ public class ApothecariumMedicalRecordBuilderTests
         MedicalSoldierSummary summary = builder.BuildSoldierSummary(soldier);
 
         Assert.Contains(summary.Wounds, w => w.LocationName == "Left Arm" && w.NeedsReplacement && w.Severity == MedicalSeverity.Lost);
-        Assert.Contains(summary.ReplacementOptions, o => o.LocationName == "Left Arm" && o.Type == MedicalProcedureType.Cybernetic);
-        Assert.Contains(summary.ReplacementOptions, o => o.LocationName == "Left Arm" && o.Type == MedicalProcedureType.VatGrown);
+        Assert.Contains(summary.ReplacementOptions, o =>
+            o.LocationName == "Left Arm" && o.Type == MedicalProcedureType.Cybernetic && o.Weeks == 4);
+        Assert.Contains(summary.ReplacementOptions, o =>
+            o.LocationName == "Left Arm" && o.Type == MedicalProcedureType.VatGrown && o.Weeks == 6);
         Assert.Equal("Safe", summary.GeneSeedStatus);
+    }
+
+    [Fact]
+    public void BuildSoldierSummary_DoesNotOfferReplacementForCrippledVitalLocation()
+    {
+        PlayerSoldier soldier = CreatePlayerSoldier(17, "Crippled Vital", 20_000);
+        HitLocation torso = soldier.Body.HitLocations.First(hl => hl.Template.Name == "Torso");
+        torso.Wounds.AddWound(WoundLevel.Massive);
+
+        MedicalSoldierSummary summary = new ApothecariumMedicalRecordBuilder()
+            .BuildSoldierSummary(soldier);
+
+        Assert.True(torso.IsCrippled);
+        Assert.False(torso.IsSevered);
+        Assert.False(torso.IsReplacementEligible);
+        Assert.DoesNotContain(summary.ReplacementOptions, option => option.LocationName == "Torso");
+        Assert.Contains(summary.Wounds, wound =>
+            wound.LocationName == "Torso"
+            && !wound.NeedsReplacement
+            && wound.Recovery == "15 weeks");
     }
 
     [Fact]
@@ -188,7 +210,7 @@ public class ApothecariumMedicalRecordBuilderTests
         Assert.Equal(2, summary.WoundedCount);
         Assert.Equal(1, summary.OutOfActionCount);
         Assert.True(summary.MaxRecoveryWeeks >= 3);
-        Assert.Contains(summary.SeriousWounds, row => row.SoldierName == "Out" && row.Recommendation == "assign replacement");
+        Assert.Contains(summary.SeriousWounds, row => row.SoldierName == "Out" && row.Recommendation == "recover");
         Assert.Contains(summary.SeriousWounds, row => row.SoldierName == "Wounded" && row.Wound.Contains("Torso"));
     }
 

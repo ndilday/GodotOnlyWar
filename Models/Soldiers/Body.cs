@@ -432,20 +432,17 @@ namespace OnlyWar.Models.Soldiers
             }
         }
 
-        // A location qualifies for a cybernetic/vat-grown replacement when it matters for
-        // function (a limb, weapon hand, or a vital location) and has reached its cripple or
-        // sever threshold (PRD 4.8). This is the single source of truth shared by the
-        // Apothecarium view and the weekly healing pass: an eligible location does not heal
-        // naturally — it stays frozen until a replacement procedure restores it.
+        // A non-vital location qualifies for a cybernetic/vat-grown replacement when it is
+        // severed (PRD 4.8). Crippled locations do not require replacement for now; they remain
+        // on the ordinary natural-healing path while the question of partial vital replacement
+        // is still open. This is the single source of truth shared by the Apothecarium view and
+        // the weekly healing pass.
         public bool IsReplacementEligible
         {
             get
             {
-                bool canMatterForFunction = Template.IsMotive
-                    || Template.HandGroupId.HasValue
-                    || Template.IsVital;
-                return canMatterForFunction
-                    && (IsSevered || IsCrippled)
+                return !Template.IsVital
+                    && IsSevered
                     && !IsCoveredBySeveredParent;
             }
         }

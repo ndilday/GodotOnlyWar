@@ -73,12 +73,11 @@ namespace OnlyWar.Helpers
             }
             foreach (HitLocation location in body.HitLocations)
             {
-                // A week passes for every wounded location, but natural healing never
-                // restores a location that needs surgical intervention: a severed location
-                // (gone) or a crippled functional/vital location (replacement-eligible) stays
-                // frozen until a cybernetic/vat-grown procedure treats it; cybernetic locations
-                // require specialist repair as well. Locations under an
-                // active procedure are inherently in that excluded set.
+                // A week passes for every wounded location, but natural healing never restores a
+                // location that needs surgical intervention: a severed non-vital location (gone)
+                // or a cybernetic location requiring specialist repair. Locations under an
+                // active procedure are inherently in that excluded set. Crippled locations do
+                // not require replacement for now and therefore remain on this healing path.
                 if (location.Wounds.WoundTotal > 0
                     && !location.IsCybernetic
                     && !location.IsSevered

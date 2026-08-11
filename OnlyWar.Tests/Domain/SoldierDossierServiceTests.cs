@@ -140,7 +140,7 @@ public class SoldierDossierServiceTests
     }
 
     [Fact]
-    public void GenerateSoldierInjurySummary_ReportsReplacementForCrippledFunctionalLocation()
+    public void GenerateSoldierInjurySummary_ReportsNaturalRecoveryForCrippledFunctionalLocation()
     {
         Squad squad = CreateAssignedSquad("Tactical Squad");
         PlayerSoldier soldier = AddPlayerSoldier(squad, "Brother Marius");
@@ -149,9 +149,9 @@ public class SoldierDossierServiceTests
 
         string plainSummary = _service.GenerateSoldierInjurySummary(soldier, richText: false);
 
-        Assert.True(rightFoot.IsReplacementEligible);
-        Assert.Contains("Requires replacement treatment", plainSummary);
-        Assert.DoesNotContain("Requires 6 weeks", plainSummary);
+        Assert.False(rightFoot.IsReplacementEligible);
+        Assert.Contains("Requires 6 weeks", plainSummary);
+        Assert.DoesNotContain("Requires replacement treatment", plainSummary);
     }
 
     private static Squad CreateAssignedSquad(string squadTemplateName)

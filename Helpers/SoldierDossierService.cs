@@ -215,9 +215,9 @@ namespace OnlyWar.Helpers
                 if (hl.Wounds.WoundTotal != 0)
                 {
                     // Keep the Chapter/Soldier dossier aligned with the Apothecarium and weekly
-                    // medical pass. A functional location can require replacement when it is
-                    // crippled without being severed (for example, a Right Foot at Major).
-                    if (hl.IsSevered || hl.IsReplacementEligible)
+                    // medical pass. Current replacement eligibility is limited to severed
+                    // non-vital locations.
+                    if (hl.IsReplacementEligible)
                     {
                         needsReplacement = true;
                     }

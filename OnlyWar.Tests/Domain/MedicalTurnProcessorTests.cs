@@ -106,29 +106,23 @@ public class MedicalTurnProcessorTests
     }
 
     [Fact]
-    public void ApplyWeeklyHealing_DoesNotHealACrippledFunctionalLocation()
+    public void ApplyWeeklyHealing_HealsACrippledFunctionalLocation()
     {
         Body body = new(HumanBodyTemplate.Instance);
-        // Left Foot (motive) crippled but not severed: needs a replacement, so it is frozen.
+        // Left Foot (motive) crippled but not severed: replacement is not required for now.
         //
-        // Was the Left Leg on one Critical wound until Phase 3 of
-        // Design/Reference/CasualtyRealism.md raised the leg cripple threshold to Massive, which
-        // collided with the leg's sever threshold and briefly deleted "crippled but not severed"
-        // as a state a leg could hold. RulesMigration_LegSeverThreshold.sql restored it by moving
-        // leg sever up to Mortal (§2.1, "Why sever moved too"), and the leg case is pinned
-        // separately below. This one deliberately STAYS on the foot: it is the extremity half of
-        // the rule, where cripple and sever have always been a band apart, and it would be a
-        // regression to lose coverage of it by moving the test back.
+        // Keep this on the foot so the test covers a non-severed crippled motive location.
         HitLocation foot = Location(body, 11);
         foot.Wounds.AddWound(WoundLevel.Major);
         Assert.True(foot.IsCrippled);
         Assert.False(foot.IsSevered);
-        Assert.True(foot.IsReplacementEligible);
+        Assert.False(foot.IsReplacementEligible);
         uint before = foot.Wounds.WoundTotal;
 
         MedicalTurnProcessor.ApplyWeeklyHealing(body);
 
         Assert.Equal(before, foot.Wounds.WoundTotal);
+        Assert.Equal(0x1000u, foot.Wounds.WeeksOfHealing);
     }
 
     // Design/Reference/CasualtyRealism.md §2.1, "Why sever moved too" (2026-08-06). Phase 3 raised leg
@@ -138,7 +132,7 @@ public class MedicalTurnProcessorTests
     // §2.3's Incapacitated outcome is built on. Moving sever up to Mortal restores it, and this is
     // the test that says so: a leg at Massive fells the man and stays attached.
     [Fact]
-    public void ALegAtMassive_IsCrippledButNotSevered_AndStaysFrozen()
+    public void ALegAtMassive_IsCrippledButNotSevered_AndHeals()
     {
         Body body = new(HumanBodyTemplate.Instance);
         HitLocation leg = Location(body, 9);
@@ -146,11 +140,12 @@ public class MedicalTurnProcessorTests
 
         Assert.True(leg.IsCrippled);
         Assert.False(leg.IsSevered);
-        Assert.True(leg.IsReplacementEligible);
+        Assert.False(leg.IsReplacementEligible);
 
         uint before = leg.Wounds.WoundTotal;
         MedicalTurnProcessor.ApplyWeeklyHealing(body);
         Assert.Equal(before, leg.Wounds.WoundTotal);
+        Assert.Equal(0x100000u, leg.Wounds.WeeksOfHealing);
     }
 
     // The other half of the same decision: the leg does still come off, one band higher up. Without

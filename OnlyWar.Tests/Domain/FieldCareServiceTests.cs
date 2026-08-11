@@ -310,14 +310,14 @@ public class FieldCareServiceTests
     // ---- What field care may not touch --------------------------------------------------------
 
     [Fact]
-    public void ReplacementEligibleAndSeveredLocationsAreLeftAlone()
+    public void SeveredLocationsAreLeftAlone()
     {
-        // "Surgery remains surgery" (§2.6): a crippled leg awaiting a replacement is frozen for
-        // field care exactly as it is for natural weekly healing.
+        // A severed leg is gone and remains frozen for field care exactly as it is for natural
+        // weekly healing.
         PlayerSoldier apothecary = Apothecary("Kadmon", 130f);
         PlayerSoldier patient = Healthy("Rhys", BrotherTemplate);
         HitLocation leg = patient.Body.HitLocations.First(hl => hl.Template.Name == "Left Leg");
-        leg.Wounds.AddWound(WoundLevel.Massive);
+        leg.Wounds.AddWound(WoundLevel.Mortal);
         Assert.True(leg.IsReplacementEligible);
         uint before = leg.Wounds.WoundTotal;
 

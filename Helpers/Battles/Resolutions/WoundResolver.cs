@@ -118,11 +118,12 @@ namespace OnlyWar.Helpers.Battles.Resolutions
                             wound.HitLocation.Template.HandGroupId.Value);
                         if (!wound.Suffererer.IsCombatEffective)
                         {
+                            wound.Description += $"{wound.Suffererer.Soldier.Name} can no longer fight\n";
                             OnSoldierFall.Invoke(wound, woundLevel);
                         }
                     }
-                    // A crippled vital is mortal for everyone the enemy leaves lying. For a player
-                    // soldier it is not a verdict: power-armor biostasis holds him, and
+                    // A crippled vital is incapacitating. For a player
+                    // soldier, power-armor biostasis holds him, and
                     // PlayerChapterBattleAftermathPolicy decides at battle end whether he died
                     // (severed vital, or abandoned on ground the Chapter did not hold).
                     if (wound.HitLocation.Template.IsVital && wound.HitLocation.IsCrippled)

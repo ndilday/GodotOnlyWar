@@ -23,7 +23,14 @@ public class MedicalProcedureServiceTests
         new(11, TestModelFactory.HumanSpecies, "Techmarine", 1, 1, false, 0, Array.Empty<ValueTuple<BaseSkill, float>>());
 
     private static ReplacementOption CyberneticLeftArm(int cost = 40) =>
-        new(4, MedicalProcedureType.Cybernetic, "Left Arm", "Cybernetic Left Arm", "desc", 6, cost, true);
+        new(4, MedicalProcedureType.Cybernetic, "Left Arm", "Cybernetic Left Arm", "desc", 4, cost, true);
+
+    [Fact]
+    public void SeveredReplacementDurations_UseFourWeeksCyberneticAndSixVatGrown()
+    {
+        Assert.Equal(4, MedicalProcedureRules.GetWeeks(MedicalProcedureType.Cybernetic, isSevered: true));
+        Assert.Equal(6, MedicalProcedureRules.GetWeeks(MedicalProcedureType.VatGrown, isSevered: true));
+    }
 
     [Fact]
     public void EvaluateRequisites_AllMet_WhenStaffCoLocatedSiteValidAndAffordable()
@@ -54,7 +61,7 @@ public class MedicalProcedureServiceTests
         Assert.Equal(wounded.Id, procedure.SoldierId);
         Assert.Equal(4, procedure.HitLocationTemplateId);
         Assert.Equal(MedicalProcedureType.Cybernetic, procedure.ProcedureType);
-        Assert.Equal(6, procedure.WeeksRemaining);
+        Assert.Equal(4, procedure.WeeksRemaining);
         Assert.Equal(40, procedure.RequisitionCost);
         Assert.True(wounded.IsUndergoingMedicalProcedure);
         Assert.False(wounded.IsDeployable);

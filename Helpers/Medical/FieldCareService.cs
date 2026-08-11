@@ -70,12 +70,11 @@ namespace OnlyWar.Helpers.Medical
     /// unconditional for everyone else.
     ///
     /// A CONSEQUENCE WORTH STATING, because it is not obvious from §2.6 alone: since
-    /// <c>HitLocation.IsReplacementEligible</c> is true from the CRIPPLE threshold upward, the worst
-    /// wound field care can ever reach is the band immediately below that threshold -- Critical for
-    /// a torso, Critical for a leg. A brother who has actually gone down is a surgical case, and an
-    /// Apothecary in the field cannot shortcut that. What he CAN do is exactly what the feature was
-    /// asked for: return the walking wounded to the line, including men carrying several Critical
-    /// wounds who would otherwise be out for two months.
+    /// <c>HitLocation.IsReplacementEligible</c> is true for severed non-vital locations only.
+    /// Field care can therefore continue working on crippled locations, while a brother who has
+    /// actually lost a non-vital part remains a surgical case. An Apothecary in the field cannot
+    /// shortcut that surgery. What he CAN do is return the walking wounded to the line, including
+    /// men carrying several severe wounds who would otherwise be out for months.
     ///
     /// NO BATTLEFIELD PRESENCE. The Apothecary is abstracted out of the engagement entirely and
     /// cannot become a casualty (§2.6 first-pass scope limit).
@@ -418,8 +417,8 @@ namespace OnlyWar.Helpers.Medical
         /// <summary>
         /// A location field care may work on. Mirrors the weekly natural-healing exclusions exactly
         /// -- a severed location is gone, an augmetic location needs specialist repair, and a
-        /// replacement-eligible one stays frozen until a cybernetic or vat-grown procedure treats
-        /// it (§2.6: "surgery remains surgery"). Bands below Moderate are excluded by
+        /// replacement-eligible severed non-vital locations stay frozen until a cybernetic or
+        /// vat-grown procedure treats them. Bands below Moderate are excluded by
         /// <see cref="Wounds.FindTreatableBand"/> itself.
         /// </summary>
         private static bool IsTreatable(HitLocation location)
