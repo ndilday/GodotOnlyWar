@@ -557,6 +557,14 @@ public class SaveLoadRoundTripTests
                 false)]);
         Unit armyRoot = sector.PlayerForce.Army.OrderOfBattle;
         int expectedSoldierCount = armyRoot.GetAllMembers().Count();
+        PlayerSoldier procedureSubject = armyRoot.GetAllMembers().OfType<PlayerSoldier>().First();
+        HitLocation procedureLocation = procedureSubject.Body.HitLocations
+            .Single(location => location.Template.Id == 4);
+        procedureLocation.Wounds.AddWound(WoundLevel.Critical);
+        procedureLocation.Wounds.AddWound(WoundLevel.Critical);
+        procedureLocation.Wounds.AddWound(WoundLevel.Critical);
+        sector.PlayerForce.Army.MedicalProcedures.Add(
+            new MedicalProcedure(procedureSubject.Id, 4, MedicalProcedureType.Cybernetic, 5, 40));
 
         string dbPath = GameStateRoundTripFixture.CreateTempDbPath("onlywar_load_reconstruct");
         try
@@ -579,6 +587,9 @@ public class SaveLoadRoundTripTests
             Assert.Equal(
                 "Previous turn",
                 Assert.Single(rebuilt.PlayerForce.LastTurnReportSnapshot.Entries).Title);
+            PlayerSoldier rebuiltProcedureSubject = rebuilt.PlayerForce.Army.PlayerSoldierMap[procedureSubject.Id];
+            Assert.True(rebuiltProcedureSubject.IsUndergoingMedicalProcedure);
+            Assert.False(rebuiltProcedureSubject.IsDeployable);
         }
         finally
         {

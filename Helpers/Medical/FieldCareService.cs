@@ -64,9 +64,10 @@ namespace OnlyWar.Helpers.Medical
     /// dedup is the caller's (MissionTurnProcessor collects distinct orders once), and Phase 1b's
     /// daily-healing pass established the same precedent.
     ///
-    /// WHAT IT CANNOT DO. Unfreeze a replacement-eligible location -- surgery remains surgery -- and
-    /// touch a severed location. It is a bonus on top of natural healing, never a prerequisite for
-    /// it: <c>MedicalTurnProcessor.ApplyWeeklyHealing</c> stays unconditional for everyone.
+    /// WHAT IT CANNOT DO. Unfreeze a replacement-eligible location -- surgery remains surgery --
+    /// touch a severed location, or repair an augmetic location. It is a bonus on top of natural
+    /// healing, never a prerequisite for it: <c>MedicalTurnProcessor.ApplyWeeklyHealing</c> stays
+    /// unconditional for everyone else.
     ///
     /// A CONSEQUENCE WORTH STATING, because it is not obvious from §2.6 alone: since
     /// <c>HitLocation.IsReplacementEligible</c> is true from the CRIPPLE threshold upward, the worst
@@ -416,13 +417,15 @@ namespace OnlyWar.Helpers.Medical
 
         /// <summary>
         /// A location field care may work on. Mirrors the weekly natural-healing exclusions exactly
-        /// -- a severed location is gone, and a replacement-eligible one stays frozen until a
-        /// cybernetic or vat-grown procedure treats it (§2.6: "surgery remains surgery"). Bands below
-        /// Moderate are excluded by <see cref="Wounds.FindTreatableBand"/> itself.
+        /// -- a severed location is gone, an augmetic location needs specialist repair, and a
+        /// replacement-eligible one stays frozen until a cybernetic or vat-grown procedure treats
+        /// it (§2.6: "surgery remains surgery"). Bands below Moderate are excluded by
+        /// <see cref="Wounds.FindTreatableBand"/> itself.
         /// </summary>
         private static bool IsTreatable(HitLocation location)
         {
             if (location == null
+                || location.IsCybernetic
                 || location.IsSevered
                 || location.IsCoveredBySeveredParent
                 || location.IsReplacementEligible)

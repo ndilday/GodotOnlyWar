@@ -35,6 +35,7 @@ namespace OnlyWar.Helpers
                 new ProcedureRequisite("Techmarine co-located",
                     HasCoLocatedStaff(force, soldier, TechmarineTemplates)),
                 new ProcedureRequisite("Valid surgery site", IsValidSurgerySite(squad)),
+                new ProcedureRequisite("Organic hit location", !IsCyberneticLocation(soldier, option)),
                 new ProcedureRequisite(
                     $"Requisition {option.RequisitionCost} (have {balance})",
                     balance >= option.RequisitionCost),
@@ -60,7 +61,28 @@ namespace OnlyWar.Helpers
             force.Army.Requisition -= option.RequisitionCost;
             force.Army.MedicalProcedures.Add(new MedicalProcedure(
                 soldier.Id, option.HitLocationId, option.Type, option.Weeks, option.RequisitionCost));
+            SynchronizeProcedureReservations(
+                force.Army.PlayerSoldierMap.Values,
+                force.Army.MedicalProcedures);
             return true;
+        }
+
+        /// <summary>
+        /// Projects the Army's persisted procedure list onto the PlayerSoldier readiness flag.
+        /// The procedure list is the save-owned source of truth; the soldier flag keeps the
+        /// existing combat/deployment predicates independent of a force reference.
+        /// </summary>
+        public static void SynchronizeProcedureReservations(
+            IEnumerable<PlayerSoldier> soldiers,
+            IEnumerable<MedicalProcedure> procedures)
+        {
+            HashSet<int> reservedSoldierIds = (procedures ?? Enumerable.Empty<MedicalProcedure>())
+                .Select(procedure => procedure.SoldierId)
+                .ToHashSet();
+            foreach (PlayerSoldier soldier in soldiers ?? Enumerable.Empty<PlayerSoldier>())
+            {
+                soldier.IsUndergoingMedicalProcedure = reservedSoldierIds.Contains(soldier.Id);
+            }
         }
 
         public bool HasProcedureInProgress(PlayerForce force, int soldierId, int hitLocationTemplateId)
@@ -77,6 +99,10 @@ namespace OnlyWar.Helpers
         /// </summary>
         public static bool IsApothecary(ISoldier soldier) =>
             soldier?.Template != null && ApothecaryTemplates.Contains(soldier.Template.Name);
+
+        private static bool IsCyberneticLocation(ISoldier soldier, ReplacementOption option) =>
+            soldier?.Body?.HitLocations?.Any(location =>
+                location.Template.Id == option.HitLocationId && location.IsCybernetic) == true;
 
         private static bool HasCoLocatedStaff(PlayerForce force, ISoldier wounded, HashSet<string> templateNames)
         {

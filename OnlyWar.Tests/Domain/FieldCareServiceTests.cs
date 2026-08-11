@@ -330,6 +330,22 @@ public class FieldCareServiceTests
     }
 
     [Fact]
+    public void CyberneticLocationsAreNotTreatedByAnApothecary()
+    {
+        PlayerSoldier apothecary = Apothecary("Kadmon", 130f);
+        PlayerSoldier patient = Wounded("Rhys", BrotherTemplate, TorsoId, WoundLevel.Critical);
+        HitLocation cyberneticTorso = Torso(patient);
+        cyberneticTorso.IsCybernetic = true;
+        uint before = cyberneticTorso.Wounds.WoundTotal;
+
+        FieldCareReport report = new();
+        FieldCareService.ApplyDailyFieldCare(OrderFor(apothecary, patient), report);
+
+        Assert.Equal(before, cyberneticTorso.Wounds.WoundTotal);
+        Assert.Equal(0, report.TreatmentCount);
+    }
+
+    [Fact]
     public void LightWoundsAreNotWorthAnApothecarysDay()
     {
         // Bands below Moderate carry no healing clock and clear on the next natural pass anyway.

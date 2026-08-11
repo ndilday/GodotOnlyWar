@@ -122,9 +122,14 @@ public partial class ApothecariumScreenView : MainScreenView
         _soldierSubtitle.Text = string.IsNullOrEmpty(summary.FieldCareStatus)
             ? summary.Assignment
             : $"{summary.Assignment}\n{summary.FieldCareStatus}";
+        bool hasCyberneticDamage = summary.Wounds.Any(w =>
+            w.IsCybernetic && w.Severity > MedicalSeverity.None);
         PopulateMetrics(_soldierMetrics, [
             ("Status", summary.IsCombatEffective ? "Ready" : "Out", summary.IsCombatEffective ? MedicalSeverity.Stable : MedicalSeverity.Critical),
-            ("Recovery", summary.ReplacementOptions.Count > 0 ? "Replacement" : $"{summary.MaxRecoveryWeeks} wk", summary.ReplacementOptions.Count > 0 ? MedicalSeverity.Critical : MedicalSeverity.Watch),
+            ("Recovery", summary.ReplacementOptions.Count > 0
+                ? "Replacement"
+                : hasCyberneticDamage ? "Techmarine repair" : $"{summary.MaxRecoveryWeeks} wk",
+                summary.ReplacementOptions.Count > 0 || hasCyberneticDamage ? MedicalSeverity.Critical : MedicalSeverity.Watch),
             ("Gene-seed", summary.GeneSeedStatus, summary.GeneSeedStatus == "Safe" ? MedicalSeverity.Stable : MedicalSeverity.Critical),
             ("Wounds", summary.Wounds.Count(w => w.Severity > MedicalSeverity.None).ToString(), summary.WorstSeverity)
         ]);
@@ -132,16 +137,31 @@ public partial class ApothecariumScreenView : MainScreenView
         ClearContainer(_woundRows);
         foreach (WoundLocationSummary wound in summary.Wounds.Where(w => w.Severity > MedicalSeverity.None || w.HoldsProgenoid || w.IsCybernetic))
         {
+            string title = wound.IsCybernetic
+                ? $"{wound.LocationName} - CYBERNETIC"
+                : wound.LocationName;
             string subtitle = wound.HoldsProgenoid
                 ? $"{wound.Recovery} - progenoid-bearing"
                 : wound.Recovery;
-            _woundRows.AddChild(CreateDataRow(wound.LocationName, subtitle, wound.Status, wound.Severity));
+            if (wound.IsCybernetic)
+            {
+                subtitle += " - no natural healing or Apothecary care";
+            }
+            _woundRows.AddChild(CreateDataRow(title, subtitle, wound.Status, wound.Severity));
         }
 
         ClearContainer(_replacementRows);
+        if (hasCyberneticDamage)
+        {
+            _replacementRows.AddChild(CreateInfoLabel(
+                "Cybernetic damage requires Techmarine repair; Apothecary care is unavailable."));
+        }
         if (summary.ReplacementOptions.Count == 0)
         {
-            _replacementRows.AddChild(CreateInfoLabel("No replacement procedure required."));
+            if (!hasCyberneticDamage)
+            {
+                _replacementRows.AddChild(CreateInfoLabel("No replacement procedure required."));
+            }
             return;
         }
 

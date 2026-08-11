@@ -51,8 +51,9 @@ namespace OnlyWar.Helpers
             }
             foreach (HitLocation location in soldier.Body.HitLocations)
             {
-                // A severed location is gone; nothing about it knits closed on its own.
-                if (location.IsSevered)
+                // A severed location is gone, and an augmetic location requires specialist
+                // repair; neither closes a wound on its own.
+                if (location.IsSevered || location.IsCybernetic)
                 {
                     continue;
                 }
@@ -75,9 +76,11 @@ namespace OnlyWar.Helpers
                 // A week passes for every wounded location, but natural healing never
                 // restores a location that needs surgical intervention: a severed location
                 // (gone) or a crippled functional/vital location (replacement-eligible) stays
-                // frozen until a cybernetic/vat-grown procedure treats it. Locations under an
+                // frozen until a cybernetic/vat-grown procedure treats it; cybernetic locations
+                // require specialist repair as well. Locations under an
                 // active procedure are inherently in that excluded set.
                 if (location.Wounds.WoundTotal > 0
+                    && !location.IsCybernetic
                     && !location.IsSevered
                     && !location.IsCoveredBySeveredParent
                     && !location.IsReplacementEligible)
@@ -109,6 +112,9 @@ namespace OnlyWar.Helpers
                 CompleteProcedure(procedure, soldierMap);
                 procedures.RemoveAt(i);
             }
+            MedicalProcedureService.SynchronizeProcedureReservations(
+                soldierMap?.Values,
+                procedures);
         }
 
         private static void CompleteProcedure(MedicalProcedure procedure,
@@ -135,6 +141,13 @@ namespace OnlyWar.Helpers
                 if (procedure.ProcedureType == MedicalProcedureType.Cybernetic)
                 {
                     restoredLocation.IsCybernetic = true;
+                }
+                else
+                {
+                    // A destroyed augmetic is replaced like any other destroyed location; vat
+                    // growth restores an organic part rather than carrying the old cybernetic
+                    // state forward.
+                    restoredLocation.IsCybernetic = false;
                 }
             }
         }

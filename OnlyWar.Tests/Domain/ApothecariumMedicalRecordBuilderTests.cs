@@ -82,6 +82,50 @@ public class ApothecariumMedicalRecordBuilderTests
         Assert.All(
             summary.Wounds.Where(wound => wound.NeedsReplacement),
             wound => Assert.Equal("2 weeks", wound.Recovery));
+        Assert.All(
+            summary.Wounds.Where(wound => wound.NeedsReplacement),
+            wound => Assert.Equal("Replacement in progress", wound.Status));
+    }
+
+    [Fact]
+    public void BuildSoldierSummary_LabelsCyberneticLocationsAndExplainsTheirRecovery()
+    {
+        PlayerSoldier soldier = CreatePlayerSoldier(15, "Augmetic", 20_000);
+        HitLocation arm = soldier.Body.HitLocations.First(hl => hl.Template.Name == "Left Arm");
+        arm.IsCybernetic = true;
+        arm.Wounds.AddWound(WoundLevel.Moderate);
+
+        MedicalSoldierSummary summary = new ApothecariumMedicalRecordBuilder()
+            .BuildSoldierSummary(soldier);
+
+        WoundLocationSummary wound = Assert.Single(
+            summary.Wounds, w => w.LocationName == "Left Arm");
+        Assert.True(wound.IsCybernetic);
+        Assert.Equal("Cybernetic", wound.Status);
+        Assert.Equal("Cybernetic repair required", wound.Recovery);
+        Assert.DoesNotContain(summary.ReplacementOptions, option => option.LocationName == "Left Arm");
+    }
+
+    [Fact]
+    public void BuildSoldierSummary_ReturnsDestroyedCyberneticLocationsToNormalReplacementFlow()
+    {
+        PlayerSoldier soldier = CreatePlayerSoldier(16, "Destroyed Augmetic", 20_000);
+        HitLocation arm = soldier.Body.HitLocations.First(hl => hl.Template.Name == "Left Arm");
+        arm.IsCybernetic = true;
+        arm.Wounds.AddWound(WoundLevel.Critical);
+        arm.Wounds.AddWound(WoundLevel.Critical);
+        arm.Wounds.AddWound(WoundLevel.Critical);
+
+        MedicalSoldierSummary summary = new ApothecariumMedicalRecordBuilder()
+            .BuildSoldierSummary(soldier);
+
+        Assert.False(arm.IsCybernetic);
+        Assert.Contains(summary.ReplacementOptions,
+            option => option.LocationName == "Left Arm" && option.Type == MedicalProcedureType.Cybernetic);
+        Assert.Contains(summary.ReplacementOptions,
+            option => option.LocationName == "Left Arm" && option.Type == MedicalProcedureType.VatGrown);
+        Assert.Contains(summary.Wounds,
+            wound => wound.LocationName == "Left Arm" && !wound.IsCybernetic && wound.Status == "Severed");
     }
 
     [Fact]

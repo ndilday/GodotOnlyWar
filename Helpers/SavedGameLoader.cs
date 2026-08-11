@@ -40,6 +40,9 @@ namespace OnlyWar.Helpers
             army.LoadoutDoctrine.ReplaceWith(gameState.ChapterLoadoutDoctrine);
             army.CharacterLoadoutDoctrine.ReplaceWith(gameState.CharacterLoadoutDoctrine);
             army.MedicalProcedures.AddRange(gameState.MedicalProcedures ?? new List<MedicalProcedure>());
+            MedicalProcedureService.SynchronizeProcedureReservations(
+                army.PlayerSoldierMap.Values,
+                army.MedicalProcedures);
             // Restore the fallen brothers, who belong to no unit and so are carried separately.
             foreach (PlayerSoldier fallen in gameState.FallenBrothers ?? new List<PlayerSoldier>())
             {

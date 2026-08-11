@@ -59,6 +59,34 @@ public class MedicalTurnProcessorTests
     }
 
     [Fact]
+    public void ApplyWeeklyHealing_DoesNotHealACyberneticLocation()
+    {
+        Body body = new(HumanBodyTemplate.Instance);
+        HitLocation arm = Location(body, 4);
+        arm.IsCybernetic = true;
+        arm.Wounds.AddWound(WoundLevel.Moderate);
+        uint before = arm.Wounds.WoundTotal;
+
+        MedicalTurnProcessor.ApplyWeeklyHealing(body);
+
+        Assert.Equal(before, arm.Wounds.WoundTotal);
+    }
+
+    [Fact]
+    public void ASeveredCyberneticLocationStopsBeingCybernetic()
+    {
+        Body body = new(HumanBodyTemplate.Instance);
+        HitLocation arm = Location(body, 4);
+        arm.IsCybernetic = true;
+        arm.Wounds.AddWound(WoundLevel.Critical);
+        arm.Wounds.AddWound(WoundLevel.Critical);
+        arm.Wounds.AddWound(WoundLevel.Critical);
+
+        Assert.True(arm.IsSevered);
+        Assert.False(arm.IsCybernetic);
+    }
+
+    [Fact]
     public void ApplyWeeklyHealing_DoesNotHealAHandCoveredByASeveredArm()
     {
         Body body = new(HumanBodyTemplate.Instance);
@@ -151,6 +179,7 @@ public class MedicalTurnProcessorTests
         Assert.Equal(1, procedure.WeeksRemaining);
         Assert.True(arm.IsSevered);
         Assert.False(arm.IsCybernetic);
+        Assert.True(soldier.IsUndergoingMedicalProcedure);
     }
 
     [Fact]
@@ -167,6 +196,7 @@ public class MedicalTurnProcessorTests
         Assert.Equal((uint)0, arm.Wounds.WoundTotal);
         Assert.False(arm.IsSevered);
         Assert.True(arm.IsCybernetic);
+        Assert.False(soldier.IsUndergoingMedicalProcedure);
     }
 
     [Fact]

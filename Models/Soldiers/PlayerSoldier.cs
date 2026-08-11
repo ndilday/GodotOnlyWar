@@ -31,6 +31,12 @@ namespace OnlyWar.Models.Soldiers
         public IReadOnlyList<SoldierEvaluation> SoldierEvaluationHistory { get => _soldierEvaluationHistory; }
         public IReadOnlyList<SoldierAward> SoldierAwards { get => _soldierAwards; }
 
+        // A brother whose replacement procedure is in progress is not available for field duty,
+        // even if the underlying wound leaves him technically mobile. The Army owns the
+        // procedure records; this flag is synchronized from those records on assignment, load,
+        // and weekly resolution so all existing deployability callers see the same reservation.
+        public bool IsUndergoingMedicalProcedure { get; internal set; }
+
         #region ISoldier passthrough
         public int Id => _soldier.Id;
 
@@ -102,7 +108,7 @@ namespace OnlyWar.Models.Soldiers
         {
             get
             {
-                return _soldier.IsCombatEffective;
+                return !IsUndergoingMedicalProcedure && _soldier.IsCombatEffective;
             }
         }
 
@@ -226,6 +232,7 @@ namespace OnlyWar.Models.Soldiers
                                      _factionCasualtyCountMap.ToDictionary(kvp => kvp.Key, kvp => kvp.Value))
             {
                 GeneticCompatibility = GeneticCompatibility,
+                IsUndergoingMedicalProcedure = IsUndergoingMedicalProcedure,
                 RecruitmentBirthDate = RecruitmentBirthDate == null
                     ? null
                     : new Date(

@@ -130,6 +130,20 @@ public class AstartesDailyHealingTests
     }
 
     [Fact]
+    public void DailyPass_LeavesACyberneticLocationAlone()
+    {
+        Soldier marine = CreateAstartes();
+        HitLocation location = FirstLocation(marine);
+        location.IsCybernetic = true;
+        location.Wounds.AddWound(WoundLevel.Negligible);
+        uint before = location.Wounds.WoundTotal;
+
+        MedicalTurnProcessor.ApplyDailyHealing(marine);
+
+        Assert.Equal(before, location.Wounds.WoundTotal);
+    }
+
+    [Fact]
     public void GarrisonUpkeep_RunsTheDailyPassOverTheWholeRoster()
     {
         // Days outside a mission still get the pass. A collection overload exists precisely so the

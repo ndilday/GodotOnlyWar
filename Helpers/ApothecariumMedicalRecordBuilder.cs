@@ -362,17 +362,24 @@ namespace OnlyWar.Helpers
         {
             MedicalSeverity severity = GetSeverity(location);
             bool needsReplacement = location.IsReplacementEligible;
-            string status = GetStatus(location);
             MedicalProcedure procedure = GetActiveProcedure(force, soldierId, location.Template.Id);
             HitLocation replacementParent = body?.GetReplacementParent(location);
             MedicalProcedure parentProcedure = replacementParent == null
                 ? null
                 : GetActiveProcedure(force, soldierId, replacementParent.Template.Id);
             bool coveredBySeveredParent = replacementParent?.IsSevered == true;
+            MedicalProcedure activeProcedure = coveredBySeveredParent ? parentProcedure : procedure;
+            string status = GetStatus(location, activeProcedure);
             string recovery = coveredBySeveredParent
                 ? parentProcedure == null
                     ? "Covered by arm replacement"
                     : $"{Math.Max(0, parentProcedure.WeeksRemaining)} weeks"
+                : location.IsCybernetic
+                ? procedure != null
+                    ? $"{Math.Max(0, procedure.WeeksRemaining)} weeks"
+                    : location.Wounds.WoundTotal > 0
+                        ? "Cybernetic repair required"
+                        : "Cybernetic - no natural healing"
                 : needsReplacement
                 ? procedure == null
                     ? "Replacement required"
@@ -399,6 +406,8 @@ namespace OnlyWar.Helpers
         {
             List<ReplacementOption> options = [];
             foreach (HitLocation location in locations.Where(l =>
+                !l.IsCybernetic
+                &&
                 l.IsReplacementEligible
                 && GetActiveProcedure(force, soldierId, l.Template.Id) == null))
             {
@@ -626,8 +635,12 @@ namespace OnlyWar.Helpers
             return MedicalSeverity.None;
         }
 
-        private static string GetStatus(HitLocation location)
+        private static string GetStatus(HitLocation location, MedicalProcedure activeProcedure = null)
         {
+            if (activeProcedure != null)
+            {
+                return "Replacement in progress";
+            }
             if (location.IsCybernetic)
             {
                 return "Cybernetic";

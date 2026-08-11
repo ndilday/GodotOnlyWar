@@ -56,6 +56,8 @@ public class MedicalProcedureServiceTests
         Assert.Equal(MedicalProcedureType.Cybernetic, procedure.ProcedureType);
         Assert.Equal(6, procedure.WeeksRemaining);
         Assert.Equal(40, procedure.RequisitionCost);
+        Assert.True(wounded.IsUndergoingMedicalProcedure);
+        Assert.False(wounded.IsDeployable);
     }
 
     [Fact]
@@ -98,6 +100,24 @@ public class MedicalProcedureServiceTests
             service.EvaluateRequisites(force, wounded, CyberneticLeftArm());
 
         Assert.False(requisites.First(r => r.Label == "Valid surgery site").IsMet);
+    }
+
+    [Fact]
+    public void EvaluateRequisites_RejectsAnApothecariumProcedureForACyberneticLocation()
+    {
+        (PlayerForce force, PlayerSoldier wounded) = BuildScenario(
+            apothecaryPresent: true, techmarinePresent: true, requisition: 100, developedWorld: true);
+        HitLocation cyberneticArm = wounded.Body.HitLocations.First(location => location.Template.Id == 4);
+        cyberneticArm.Wounds.HealWounds();
+        cyberneticArm.Wounds.AddWound(WoundLevel.Critical);
+        cyberneticArm.IsCybernetic = true;
+        MedicalProcedureService service = new();
+
+        IReadOnlyList<ProcedureRequisite> requisites =
+            service.EvaluateRequisites(force, wounded, CyberneticLeftArm());
+
+        Assert.False(requisites.First(r => r.Label == "Organic hit location").IsMet);
+        Assert.False(service.CanAssign(force, wounded, CyberneticLeftArm()));
     }
 
     private static (PlayerForce, PlayerSoldier) BuildScenario(

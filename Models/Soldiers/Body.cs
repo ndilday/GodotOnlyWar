@@ -395,10 +395,24 @@ namespace OnlyWar.Models.Soldiers
                 {
                     _wounds.Changed += Wounds_Changed;
                 }
+                if (_isCybernetic && IsSevered)
+                {
+                    _isCybernetic = false;
+                }
                 InjuryChanged?.Invoke();
             }
         }
-        public bool IsCybernetic;
+        private bool _isCybernetic;
+
+        // An augmetic is a property of the currently installed part. Once that part is severed,
+        // the location follows the ordinary replacement flow again. The computed read also handles
+        // a distal location covered by a severed cybernetic parent before the parent procedure
+        // restores the group.
+        public bool IsCybernetic
+        {
+            get => _isCybernetic && !IsSevered;
+            set => _isCybernetic = value && !IsSevered;
+        }
         public float Armor;
         
         public bool IsSevered
@@ -447,23 +461,27 @@ namespace OnlyWar.Models.Soldiers
         public HitLocationTemplate Template { get; private set; }
         public HitLocation(HitLocationTemplate template)
         {
+            Template = template;
             Wounds = new Wounds(0, 0);
             IsCybernetic = false;
             Armor = 0;
-            Template = template;
         }
 
         public HitLocation(HitLocationTemplate template, bool isCybernetic, float armor, 
             uint woundTotal, uint weeksOfHealing)
         {
+            Template = template;
             Wounds = new Wounds(woundTotal, weeksOfHealing);
             IsCybernetic = isCybernetic;
             Armor = armor;
-            Template = template;
         }
 
         private void Wounds_Changed()
         {
+            if (_isCybernetic && IsSevered)
+            {
+                _isCybernetic = false;
+            }
             InjuryChanged?.Invoke();
         }
 
