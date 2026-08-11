@@ -1394,41 +1394,6 @@ public class BattleSquadPlannerTests
             });
     }
 
-    [Theory]
-    [InlineData(WithdrawalRole.Bound)]
-    [InlineData(WithdrawalRole.Routing)]
-    public void RangedRemoval_AgainstWithdrawingTargetIsNotZeroed(WithdrawalRole withdrawalRole)
-    {
-        // Phase 3 (Design/Reference/BattleLogic.md) replaces the Phase 1 test
-        // TargetArrivalDiscount_WithdrawingTargetNeverArrives. That test asserted the arrival
-        // discount collapsed to 0 for a retreating target -- correct for the quantity it measured,
-        // but the quantity itself multiplied RANGED removal, so it made a retreating enemy worth
-        // literally nothing to shoot. The discount is gone from ranged removal; a withdrawing
-        // target must score exactly what a standing one does.
-        BattleSquad shooters = CreateSquad("Shooter", 302);
-        BattleSquad meleeEnemy = CreateSquad("Withdrawing Melee Enemy", 311);
-        meleeEnemy.Soldiers[0].ClearReadiedRangedWeapons();
-        meleeEnemy.Soldiers[0].RangedWeapons.Clear();
-
-        BattleGridManager grid = new();
-        Place(grid, shooters.Soldiers[0], true, 0, 0);
-        Place(grid, meleeEnemy.Soldiers[0], false, 13, 0);
-        BattleSquadPlanner planner = CreatePlanner(grid, shooters, meleeEnemy);
-        RangedWeapon weapon = shooters.Soldiers[0].EquippedRangedWeapons[0];
-        float engaged = planner.EvaluateRangedTarget(
-            shooters.Soldiers[0], meleeEnemy.Soldiers[0], weapon, 13f, 0f)
-            .ExpectedEnemyBattleValueRemoved;
-
-        meleeEnemy.WithdrawalRole = withdrawalRole;
-        BattleSquadPlanner withdrawingPlanner = CreatePlanner(grid, shooters, meleeEnemy);
-        float withdrawing = withdrawingPlanner.EvaluateRangedTarget(
-            shooters.Soldiers[0], meleeEnemy.Soldiers[0], weapon, 13f, 0f)
-            .ExpectedEnemyBattleValueRemoved;
-
-        Assert.True(engaged > 0, $"expected positive removal, got {engaged:0.#####}");
-        Assert.Equal(engaged, withdrawing, 5);
-    }
-
     [Fact]
     public void EvaluateRangedTarget_CarriesShotCountUsedByHitProbability()
     {

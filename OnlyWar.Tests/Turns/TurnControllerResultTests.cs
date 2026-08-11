@@ -6,10 +6,10 @@ using Xunit;
 namespace OnlyWar.Tests.Turns;
 
 [Collection(OnlyWar.Tests.TestCollections.SharedState)]
-public class TurnResolutionResultTests
+public class TurnControllerResultTests
 {
     [Fact]
-    public void ProcessTurn_ReturnsResolutionResult()
+    public void ProcessTurn_ReturnsResolutionCollections()
     {
         SectorSimulationFixture fixture = SectorSimulationFixture.Create();
         TurnController controller = new();

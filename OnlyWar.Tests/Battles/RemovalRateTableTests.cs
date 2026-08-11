@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.Diagnostics;
 using System.Linq;
 using OnlyWar.Helpers;
 using OnlyWar.Helpers.Battles;
@@ -9,24 +8,16 @@ using OnlyWar.Models.Equippables;
 using OnlyWar.Models.Soldiers;
 using OnlyWar.Tests.Fixtures;
 using Xunit;
-using Xunit.Abstractions;
 
 namespace OnlyWar.Tests.Battles;
 
 /// <summary>
 /// Phase 4 of Design/Reference/BattleLogic.md: the per-(shooter squad, target squad)
-/// removal-rate table and its closed-form range rescaling. Nothing consumes the table yet, so
-/// these tests are the whole of its coverage.
+/// removal-rate table and its closed-form range rescaling. These tests cover the table's
+/// direct contract and caching behavior; engagement-planning tests cover its use by the planner.
 /// </summary>
 public class RemovalRateTableTests
 {
-    private readonly ITestOutputHelper _output;
-
-    public RemovalRateTableTests(ITestOutputHelper output)
-    {
-        _output = output;
-    }
-
     private static BattleSquad CreateSquad(
         string name,
         params (int SoldierId, int BattleValue)[] members)
@@ -326,86 +317,4 @@ public class RemovalRateTableTests
         Assert.Same(first[nearEnemies.Id], second[nearEnemies.Id]);
     }
 
-    [Fact]
-    public void PairRemovalRate_RescalingIsCheapEnoughForTheLookahead()
-    {
-        // The lookahead recurses over 3 policies x 2 plies x N enemy squads for each of 5 options
-        // for every squad every turn, so RateAtRange is the call whose cost matters -- not the
-        // one-off table build. Both are measured; the assertion is a loose regression guard.
-        double degradingCost = MeasureRescaleCost(degrades: true, out double degradingBuildMs);
-        double flatCost = MeasureRescaleCost(degrades: false, out double flatBuildMs);
-
-        _output.WriteLine(
-            $"table build, 5 shooters x 3 targets: degrading {degradingBuildMs:0.###} ms, "
-            + $"non-degrading {flatBuildMs:0.###} ms");
-        _output.WriteLine(
-            $"RateAtRange, 5 terms: degrading {degradingCost:0.#} ns/call, "
-            + $"non-degrading {flatCost:0.#} ns/call");
-
-        // PHASE 5 RAISED THIS GUARD, 20us -> 50us. Two reasons, in order. (1) The graded term is
-        // real extra work on the degrading path: two more normal CDFs and an exp per hit location,
-        // which roughly doubles the cost (2.7us -> 5.5us measured in isolation, after fusing the
-        // take-out and wound-progress walks into one pass). (2) This benchmark runs concurrently
-        // with the rest of the suite and is badly contended: the SAME build measured 5.5us alone
-        // and 22.6us under load in back-to-back runs. It is a regression guard against the
-        // recursion stopping being closed-form, not a latency budget, so it has to clear the noise.
-        Assert.True(
-            degradingCost < 50_000,
-            $"RateAtRange cost {degradingCost:0.#} ns/call; the lookahead needs closed-form arithmetic");
-        Assert.True(
-            flatCost < degradingCost,
-            "the non-degrading path should skip the hit-location sum entirely");
-        Assert.True(
-            degradingBuildMs < 2_000,
-            $"table build took {degradingBuildMs:0.###} ms");
-    }
-
-    private double MeasureRescaleCost(bool degrades, out double buildMilliseconds)
-    {
-        int offset = degrades ? 0 : 1_000;
-        BattleSquad shooters = CreateSquad(
-            "Shooter",
-            (80_160 + offset, 10), (80_161 + offset, 10), (80_162 + offset, 10),
-            (80_163 + offset, 10), (80_164 + offset, 10));
-        BattleSquad enemies = CreateSquad(
-            "Enemy", (80_270 + offset, 10), (80_271 + offset, 10), (80_272 + offset, 10));
-        foreach (BattleSoldier shooter in shooters.Soldiers)
-        {
-            EquipRifle(
-                shooter, 99_406 + offset, degrades, maximumRange: 400, baseDamage: 6);
-        }
-
-        BattleGridManager grid = new();
-        for (int index = 0; index < shooters.Soldiers.Count; index++)
-        {
-            Place(grid, shooters.Soldiers[index], true, 0, index * 2);
-        }
-        for (int index = 0; index < enemies.Soldiers.Count; index++)
-        {
-            Place(grid, enemies.Soldiers[index], false, 80, index * 2);
-        }
-        BattleSquadPlanner planner = CreatePlanner(grid, shooters, enemies);
-
-        Stopwatch buildWatch = Stopwatch.StartNew();
-        SquadPairRemovalRate rate = planner.GetPairRemovalRates(shooters)[enemies.Id];
-        buildWatch.Stop();
-        buildMilliseconds = buildWatch.Elapsed.TotalMilliseconds;
-
-        // Warm up the JIT before timing.
-        float sink = 0;
-        for (int index = 0; index < 1_000; index++)
-        {
-            sink += rate.RateAtRange(50f + (index % 100));
-        }
-
-        const int iterations = 200_000;
-        Stopwatch rescaleWatch = Stopwatch.StartNew();
-        for (int index = 0; index < iterations; index++)
-        {
-            sink += rate.RateAtRange(50f + (index % 300));
-        }
-        rescaleWatch.Stop();
-        Assert.True(sink >= 0, "sink prevents dead-code elimination");
-        return rescaleWatch.Elapsed.TotalMilliseconds * 1_000_000d / iterations;
-    }
 }

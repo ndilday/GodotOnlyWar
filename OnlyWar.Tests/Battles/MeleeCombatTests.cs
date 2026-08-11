@@ -14,7 +14,7 @@ using SoldierAttribute = OnlyWar.Models.Soldiers.Attribute;
 
 namespace OnlyWar.Tests.Battles;
 
-public class MeleeCombatReworkTests
+public class MeleeCombatTests
 {
     private static readonly BaseSkill PrimaryParrySkill = new(701, SkillCategory.Melee, "Primary Parry", SoldierAttribute.Strength, 0);
     private static readonly BaseSkill OffHandParrySkill = new(702, SkillCategory.Melee, "Off-Hand Parry", SoldierAttribute.Strength, 0);

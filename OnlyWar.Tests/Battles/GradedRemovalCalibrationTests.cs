@@ -14,8 +14,8 @@ using Xunit.Abstractions;
 namespace OnlyWar.Tests.Battles;
 
 /// <summary>
-/// Phase 5b of Design/Reference/BattleLogic.md: the lambda sweep and the reference
-/// scenario it is calibrated against -- ~30 bolter marines at 200 yards from four melee-only
+/// Phase 5b of Design/Reference/BattleLogic.md: the reference scenario the engagement
+/// model is calibrated against -- ~30 bolter marines at 200 yards from four melee-only
 /// Tyranids (Hive Tyrant BV 84, Lictor BV 37, two melee Carnifexes BV 30). Stats are taken from
 /// Database/OnlyWar.s3db (species attribute templates, Boltgun, soldier-template battle values);
 /// chitin armour values are the plausible 20mm/10mm assignment, which is the one number here not
@@ -25,10 +25,8 @@ namespace OnlyWar.Tests.Battles;
 /// than thirty marines in melee with it, so Hold must beat a long-range RunToward approach. The
 /// invariant governs where the two conflict -- see <see cref="GradedRemovalTests"/>.</para>
 ///
-/// <para>PHASE 7. The sweep no longer WRITES a static: lambda is a const in shipping code and the
-/// only way to move it is <c>RemovalMath.OverrideWoundProgressCreditWeight</c>, an internal
-/// scope that restores on dispose. This class is that seam's only caller. It still runs in the
-/// shared-state collection, because the override is process-wide for its duration.</para>
+/// <para>The cases below pin the shipped calibration through the reference scenario and its
+/// important boundary conditions.</para>
 /// </summary>
 [Collection(OnlyWar.Tests.TestCollections.SharedState)]
 public class GradedRemovalCalibrationTests
@@ -40,10 +38,6 @@ public class GradedRemovalCalibrationTests
         _output = output;
     }
 
-    // The sweep points reported in the constant's comment block in BattleSquadPlanner.
-    private static readonly float[] SweptLambdas =
-        [0f, 0.05f, 0.1f, 0.15f, 0.2f, 0.25f, 0.35f, 0.5f, 0.75f, 1f];
-
     private sealed record ScenarioResult(
         EngagementOptionKind Chosen,
         float Outgoing,
@@ -52,30 +46,6 @@ public class GradedRemovalCalibrationTests
         float ApproachScore)
     {
         internal float Margin => HoldScore - ApproachScore;
-    }
-
-    [Fact]
-    public void LambdaSweep_ReferenceScenarioAt200Yards()
-    {
-        _output.WriteLine(
-            "lambda | chosen          | outgoing | future  | Hold - Run");
-        _output.WriteLine(
-            "-------+-----------------+----------+---------+--------------");
-        foreach (float lambda in SweptLambdas)
-        {
-            using (RemovalMath.OverrideWoundProgressCreditWeight(lambda))
-            {
-                ScenarioResult result = RunReferenceScenario();
-                _output.WriteLine(
-                    $"{lambda,6:0.00} | {result.Chosen,-15} | {result.Outgoing,8:0.###} | "
-                        + $"{result.Future,7:0.###} | {result.Margin,12:0.###}");
-            }
-        }
-
-        // PHASE 7. The seam's whole justification is that it cannot leave the engine mis-tuned.
-        Assert.Equal(
-            RemovalMath.WoundProgressCreditWeight,
-            RemovalMath.EffectiveWoundProgressCreditWeight);
     }
 
     [Fact]

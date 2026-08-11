@@ -1,16 +1,28 @@
 # OnlyWar Test Project
 
-This project starts with fast regression tests for the systems called out in the TDD:
+The test project contains fast unit tests, application-level turn and mission tests, and a smaller
+set of persistence and generation integration tests. The main areas covered are:
 
-- wound arithmetic and healing
-- skill math
-- Gaussian helper math and seeded RNG behavior
-- mission check selection rules
-- battle soldier clone-state preservation
+- domain rules: wounds, healing, training, recruitment, factions, supplies, transfers, and medical care
+- battle rules: actions, placement, morale, withdrawal, engagement planning, damage, casualties, and replay data
+- mission and order processing, including stealth, detection, continuation, outcomes, and reporting
+- campaign generation, governance, force composition, and deterministic seeded behavior
+- turn processing, strategic combat, reports, intelligence, construction, and multi-turn invariants
+- save/load, deployment storage, rules-database validation, and atomic save recovery
+- controller-facing projections and labels for fleet, planet, chapter, region, battle review, and training screens
 
-Next high-value additions:
+The default verification command excludes the deliberately slow diagnostics:
 
-1. Save/load round-trip tests using a temporary SQLite save.
-2. Data validation tests for hardcoded skill/template names.
-3. `ForceGenerator` and `SubsectorBuilder` tests with compact fixtures.
-4. Seeded multi-turn simulation smoke tests once more global RNG usage is isolated.
+```powershell
+dotnet test OnlyWar.Tests\OnlyWar.Tests.csproj --filter "Category!=Slow"
+```
+
+The `ScenarioTraceDiagnostics` tests are opt-in balance tools rather than correctness tests. They are
+gated by `RUN_SCENARIO_TRACE` or `RUN_POCKET_DUMP` and write human-readable traces under the temporary
+directory. Run them only when investigating campaign behavior.
+
+The slow persistence and generation tests can be run separately:
+
+```powershell
+dotnet test OnlyWar.Tests\OnlyWar.Tests.csproj --filter "Category=Slow"
+```

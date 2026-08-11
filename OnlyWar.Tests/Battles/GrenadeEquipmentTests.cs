@@ -7,10 +7,10 @@ using Xunit;
 
 namespace OnlyWar.Tests.Battles;
 
-// Phase 1 (data layer) coverage for grenades: the WeaponSet grenade slot and the
-// Strength-scaled effective-range helper. Blast geometry, actions, and planner
-// behavior are covered by the later phases.
-public class GrenadePhase1Tests
+// Coverage for grenade equipment: the WeaponSet grenade slot and the
+// strength-scaled effective-range helper. Blast geometry, actions, and planner
+// behavior have their own focused test files.
+public class GrenadeEquipmentTests
 {
     [Fact]
     public void GetRangedWeapons_IncludesTheGrenadeSlot()

@@ -12,7 +12,7 @@ using Xunit;
 
 namespace OnlyWar.Tests.Battles;
 
-public class BattleGridManagerTests
+public class BattleGridAndPlacementTests
 {
     private static BattleSoldier CreateBattleSoldier(int id)
     {
