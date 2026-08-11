@@ -26,6 +26,7 @@
    - 5.6 [Missions & Orders](#56-missions--orders)
    - 5.7 [Characters & Requests](#57-characters--requests)
    - 5.8 [Campaign Scenario](#58-campaign-scenario)
+   - 5.9 [Recruitment](#59-recruitment)
 6. [System Implementations](#6-system-implementations)
    - 6.1 [Turn Controller](#61-turn-controller)
    - 6.2 [Faction Strategy](#62-faction-strategy)
@@ -403,6 +404,8 @@ Legs cripple at `Massive` and sever at `Mortal` — deliberately a band apart, s
 
 `CasualtyState { Unharmed, Impaired, Incapacitated, Killed }` with `CasualtyStateEvaluator` classifies the outcome from the body plus one external fact (whether the body was recovered). **Power-armor biostasis:** a downed player soldier cannot die of his wounds awaiting treatment, so there is no deterioration clock, no bleed-out pass, and medical care is only ever about *speed* of recovery. Nothing new is persisted — the condition derives from wounds already in the `HitLocation` table, and a recovered brother keeps his squad, so he never trips the null-squad-means-dead path at load.
 
+`PlayerChapterBattleAftermathPolicy` settles the external recovery fact from `BattleOutcome.SideHoldingField`: a side holding the field recovers incapacitated brothers, a lost field moves them through the dead/fallen path with geneseed loss, and a mutual disengagement or turn-cap result counts as recovered. `BattleHistory.IncapacitatedSoldierIds` is kept disjoint from `KilledSoldierIds`; mission reports and debriefs render the two casualty classes separately.
+
 #### Skill Model
 
 ```
@@ -472,6 +475,23 @@ however many turn out. Consequences, all confined to rolling elements:
 
 As of 0.7.3 the only rolling element in the database is the Insurrectionist Mob's 4–29 insurgents
 (`Database/RulesMigration_InsurrectionistUnits.sql`).
+
+**Insurrectionist formations.** The rules migration defines an `Insurrectionist` species rather than
+reusing the PDF species: attributes are centered at 10 with σ 2, MoveSpeed is centered at 5 with a
+10% spread, and Generic Ranged MOS is 2.0 rather than the PDF's 3.0. The faction owns three
+formations — a Scout-flagged Mob with a Ringleader and the rolling 4–29 insurgents, a two-man
+Weapon Team with one pooled heavy stubber, and a one-man Firebrand HQ with a Mob bodyguard. Their
+weapon sets use autoguns and omit grenades. The Firebrand gives revolt assassination missions a
+valid HQ target and supplies the faction's command aura.
+
+The stored Battle Value remains template-level: an Insurrectionist trooper prices at the PDF
+trooper anchor of 5, while the heavy-stubber carrier is worth more at runtime but shares the same
+template value as his Weapon Team partner. This is an intentional approximation inherited from
+other pooled crew-served weapons. Omitting grenades does not change the BV of a trooper who has a
+working primary because the calculator values mutually exclusive primary-versus-sidearm fire; the
+grenade contributes only to a fists-only profile. Light Armour is retained because armour values
+below roughly 10 are invisible against the current reference threats. The faction is therefore
+distinct in organization and force behavior, not cheaper per man.
 
 `PlayerForce` contains:
 - `Army : Unit` — the top-level chapter unit (order of battle root)
@@ -589,6 +609,16 @@ Requests snapshot their readable force package, deadline, hidden Battle-Value-Ti
 `Sector.Scenario` is an optional persisted `CampaignScenario`; `null` retains sandbox behavior. The current `PromisedWorld` scenario stores its promised planet, objective state (`Pending`, `Won`, or `Lapsed`), one-shot briefing acknowledgement, composed briefing text, and original authority id. Mechanical authority is resolved from the current governance hierarchy rather than pinned to the original character.
 
 Governance designations are derived, not persisted. `SectorBuilder.AssignGovernance` deterministically selects the highest-importance Imperial world as sector capital and one Imperial governance seat per subsector; the governor characters themselves already round-trip. `ScenarioBuilder` stamps the opening objective and starting opposition after normal sector generation, while `ScenarioTurnProcessor` evaluates success or lapse only after the week's missions and planetary simulation settle.
+
+### 5.9 Recruitment
+
+`PlayerForce.RecruitmentProgram` is one persisted aggregate keyed to the Chapter Home World. It is created by the Promised World win and remains locked until the founding setup is complete. The aggregate owns the standing doctrine (`RecruitmentPolicy`, attribute thresholds, genetic threshold, source-world type), staff assignments, unscreened cohorts, qualified candidates, aspirants, implantation procedures, and program events.
+
+Staff assignments are synchronized from the administrative Scout/Recruitment squad rather than maintained by a separate roster. Eligible Scout Sergeants provide non-genetic screening and training capacity; Apothecaries provide genetic screening, implantation capacity, and medical rating; Chaplains or Judiciars provide spiritual screening and training capacity. The Captain is the administrative master of recruitment but is not a throughput post. Screening capacity is the minimum of the three independent screening roles, and aspirant training capacity is the minimum of Sergeant and Chaplain capacity, so one missing role pauses the program rather than being substituted by surplus staff elsewhere.
+
+`RecruitmentTurnProcessor` advances the aggregate once per campaign week during Chapter upkeep: it grows or draws the unscreened pool, applies compliance and policy, generates qualified candidates, admits candidates into Phase 0 when capacity exists, advances training and implantation through Phases 1–13, and promotes survivors through the player-directed neophyte and Scout path. Each implantation phase consumes one compatibility check; Phase 1 consumes one mature progenoid, and Black Carapace completion moves the survivor into the player-selected reserved Devastator seat. The forecast service uses the same centralized `RecruitmentRules` as processing so the Recruiter preview and simulation share rates, costs, age windows, and world modifiers.
+
+Persistence is isolated at the save boundary by `RecruitmentSaveMapper` and `RecruitmentDataAccess`. The program and its child rows persist cohorts, candidates, aspirants, skill points, aspirant history, pending procedures, and the program log; domain objects do not issue SQLite commands directly.
 
 ---
 
@@ -802,6 +832,8 @@ All checks: `zAdvantage = (skillValue − difficulty) / 5.0`, then `GaussianCalc
 - A one-hand ranged weapon leaves the off-hand available for a one-hand melee weapon.
 - Equipped weapons are bound to physical hand groups. Disabling an arm or hand drops the weapon gripped by that group; two-handed weapons require two functioning groups and drop if either group is disabled.
 
+`BattleSquad.ReallocateEquipment` runs at the start of every battle in a mission. Player squads resolve the planet → chapter → template doctrine through `LoadoutDoctrineService`, then resolve each surviving character's kit through `CharacterLoadoutService`; there is no stored player loadout that needs a post-battle mutation. A fallen carrier's weapon is therefore reassigned during the next allocation, while a mauled squad keeps its remaining pooled special weapons rather than scaling the doctrine or applying element quotas after the battle.
+
 **Hit location resolution:**
 - `HitProbabilityMap` is a 3-element array for short, medium, and long range bands.
 - A random value is drawn against the weighted sum of all location probabilities for the applicable range band.
@@ -926,6 +958,8 @@ Gene-seed recovery resolves once per confirmed-dead brother in `BattleTurnResolv
 ### 6.7 Force Generation
 
 `ForceGenerator.GenerateForce(ForceGenerationRequest, IRNG, IEntityIdAllocator)` dispatches by `ForceCompositionProfile`. The allocator is optional at persistent-campaign call sites; tactical missions supply a mission-local `TacticalEntityIdAllocator`, which issues negative IDs and therefore does not advance or collide with the positive campaign counters:
+
+The irregular-strength path is opt-in through `SquadTemplateElement.RollsStrength`; `Min < Max` alone never enables it. This protects establishment formations such as Tactical Squads and chapter offices, whose minimum is an understrength floor rather than a random muster. For a rolling element, the template's Battle Value uses `ExpectedNumber` (the midpoint), while the generated force charges the budget for the actual rolled count. The roll consumes the shared tactical RNG; non-rolling elements remain exact no-ops. If a faction has no squad-template map, force generation normalizes the null map to empty and returns no force instead of dereferencing it.
 
 - **Generic (Garrison, AssaultForce, AmbushForce):** Adds one affordable HQ squad when the budget can still field at least three full non-HQ squads afterward. It then randomly selects among affordable non-HQ squad templates, cycling through unused affordable types before repeating so large forces become mixed formations instead of copies of the most expensive squad. When no full squad fits the remaining budget, it generates the highest-value partial squad that can fit. `TargetBattleValue` is a `long` (region garrisons can reach billions on hive/forge worlds). When generating a region's *defending* force, `PrepareAssaultMissionStep` caps the mobilized garrison at `MaxMobilizedGarrison` (10,000 troopers) so battles stay tabletop-scale; very large garrisons act as a deterrent to direct assault, to be engaged at scale by future bombardment/war-machine mechanics.
 - **SpecialHQTarget:** Selects an HQ template by tier index from sorted HQ templates. Adds a bodyguard squad if `TargetBattleValue ≤ 0` and a `BodyguardSquadTemplate` is defined.
