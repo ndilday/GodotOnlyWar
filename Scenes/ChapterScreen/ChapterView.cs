@@ -6,6 +6,8 @@ using System.Collections.Generic;
 public partial class ChapterView : MainScreenView
 {
     private const int ChapterIconSize = 48;
+    private const int SoldierInfoButtonSize = 24;
+    private const int SoldierRowVerticalPadding = 4;
 
     // Pointer travel (in viewport pixels) still treated as a click rather than a drag.
     private const float ClickDragTolerance = 6f;
@@ -183,12 +185,22 @@ public partial class ChapterView : MainScreenView
 
     private Control CreateMenuRow(ChapterBrowserMenuItem item)
     {
+        bool isSoldierEntry = item.Level == ChapterBrowserLevel.Soldier;
         PanelContainer row = new PanelContainer
         {
-            CustomMinimumSize = new Vector2(0, 58),
+            CustomMinimumSize = new Vector2(0, isSoldierEntry ? 56 : 58),
             MouseDefaultCursorShape = CursorShape.PointingHand
         };
         OnlyWarStyle.ApplyListRow(row, item.IsSelected);
+        if (isSoldierEntry)
+        {
+            // Keep the 48px roster icon and both text lines intact while removing the
+            // excess panel padding that otherwise makes a ten-man squad spill below the viewport.
+            StyleBoxFlat compactRowStyle = OnlyWarStyle.GetListRowStyle(item.IsSelected);
+            compactRowStyle.ContentMarginTop = SoldierRowVerticalPadding;
+            compactRowStyle.ContentMarginBottom = SoldierRowVerticalPadding;
+            row.AddThemeStyleboxOverride("panel", compactRowStyle);
+        }
         // A press only arms the row; the selection fires on release, and only if the pointer
         // stayed put. Otherwise drag-scrolling the menu would select whichever row the drag
         // happened to start on.
@@ -285,7 +297,9 @@ public partial class ChapterView : MainScreenView
         Button drillButton = new Button
         {
             Text = item.CanDrill ? item.DrillText : "i",
-            CustomMinimumSize = new Vector2(32, 32),
+            CustomMinimumSize = new Vector2(
+                isSoldierEntry ? SoldierInfoButtonSize : 32,
+                isSoldierEntry ? SoldierInfoButtonSize : 32),
             MouseDefaultCursorShape = CursorShape.PointingHand,
             TooltipText = item.CanDrill ? "Drill into this item" : "Show details",
             Disabled = !item.CanDrill && item.Level != ChapterBrowserLevel.Soldier
