@@ -20,6 +20,10 @@ namespace OnlyWar.Helpers.Battles
         private float _motiveSpeedMultiplier = 1f;
         private Body _cachedInjuryBody;
         private int _cachedInjuryRevision = -1;
+        private TakeOutLocationTerm[] _unitTakeOutTerms = [];
+        private Body _takeOutTermsBody;
+        private int _takeOutTermsRevision = -1;
+        private Stance _takeOutTermsStance;
         private Body _weaponGripInjuryBody;
         private int _weaponGripInjuryRevision = -1;
         private bool _synchronizingWeaponGrips;
@@ -149,6 +153,28 @@ namespace OnlyWar.Helpers.Battles
             {
                 EnsureInjuryState();
                 return _functioningHandGroupIds.Count;
+            }
+        }
+
+        /// <summary>
+        /// This soldier's take-out location vector at the unit weapon -- see
+        /// <see cref="RemovalMath.BuildUnitTakeOutTerms"/>, which is where the meaning lives. Every
+        /// shooter, weapon and range scoring against him rescales this one vector instead of
+        /// re-walking his body, so the memo is the difference between one body traversal per
+        /// (soldier, stance, injury) and one per (shooter, weapon, range, candidate option).
+        ///
+        /// Cached on the same terms as the injury state above -- body identity plus
+        /// <see cref="Body.InjuryRevision"/> -- and additionally on <see cref="Stance"/>, which
+        /// sets the hit-lottery weights the vector is normalized against. Like the injury state it
+        /// is materialized up front by <see cref="PrepareForParallelPlanning"/> so planning workers
+        /// only ever read it.
+        /// </summary>
+        internal IReadOnlyList<TakeOutLocationTerm> UnitTakeOutTerms
+        {
+            get
+            {
+                EnsureTakeOutTerms();
+                return _unitTakeOutTerms;
             }
         }
         public bool CanUseTwoHandedWeapon => FunctioningHands >= 2;
@@ -381,9 +407,12 @@ namespace OnlyWar.Helpers.Battles
         internal void RefreshInjuryState()
         {
             Body body = Soldier.Body;
-            int[] functioningHandGroupIds = Soldier.FunctioningHandGroupIds.ToArray();
-            _functioningHandGroupIds = Array.AsReadOnly(functioningHandGroupIds);
-            _functioningHandGroupIdSet = functioningHandGroupIds.ToHashSet();
+            // Held by reference, not copied: Soldier caches this on the same InjuryRevision key
+            // and already hands out an immutable view, so the old ToArray/AsReadOnly pair was two
+            // allocations buying nothing.
+            IReadOnlyList<int> functioningHandGroupIds = Soldier.FunctioningHandGroupIds;
+            _functioningHandGroupIds = functioningHandGroupIds;
+            _functioningHandGroupIdSet = new HashSet<int>(functioningHandGroupIds);
             _canFight = Soldier.CanFight;
             _motiveSpeedMultiplier = MotiveImpairment.CalculateSpeedMultiplier(body);
             _canMove = _motiveSpeedMultiplier > 0f;
@@ -401,6 +430,9 @@ namespace OnlyWar.Helpers.Battles
         {
             RefreshInjuryState();
             SynchronizeWeaponGrips();
+            // After the injury refresh, not before: the vector reads IsCombatEffective and
+            // FunctioningHandGroupIds, both of which are injury-derived.
+            RefreshTakeOutTerms();
         }
 
         private void EnsureInjuryState()
@@ -411,6 +443,26 @@ namespace OnlyWar.Helpers.Battles
             {
                 RefreshInjuryState();
             }
+        }
+
+        private void EnsureTakeOutTerms()
+        {
+            Body body = Soldier.Body;
+            if (!ReferenceEquals(_takeOutTermsBody, body)
+                || _takeOutTermsRevision != body.InjuryRevision
+                || _takeOutTermsStance != Stance)
+            {
+                RefreshTakeOutTerms();
+            }
+        }
+
+        private void RefreshTakeOutTerms()
+        {
+            Body body = Soldier.Body;
+            _unitTakeOutTerms = RemovalMath.BuildUnitTakeOutTerms(this);
+            _takeOutTermsBody = body;
+            _takeOutTermsRevision = body.InjuryRevision;
+            _takeOutTermsStance = Stance;
         }
 
         public MeleeWeapon GetPrimaryMeleeWeapon(MeleeWeapon defaultWeapon)

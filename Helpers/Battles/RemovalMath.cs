@@ -521,8 +521,125 @@ namespace OnlyWar.Helpers.Battles
         }
 
         /// <summary>
-        /// The single hit-location walk behind both <see cref="CalculateTakeOutProbabilityOnHit"/>
-        /// and <see cref="BuildTakeOutLocationTerms"/>. Pass a damage coefficient to get the
+        /// The hit-location walk, evaluated at the UNIT weapon: <c>effectiveArmor = 0</c> and
+        /// <c>weaponWoundMultiplier = 1</c>. This is the whole expensive half of the removal
+        /// estimate -- the body traversal, the motive/vital/last-hand filter, the wound-ladder
+        /// search -- and NONE of it depends on the shooter, the weapon, or the range.
+        ///
+        /// <para>WHY THIS SPLIT EXISTS. Look at what the walk produces per location:
+        /// <c>K_loc = A + X/m</c> and <c>K_zero = A + naturalArmor/m</c>, where <c>A</c> is
+        /// effective armor, <c>m</c> is the weapon's wound multiplier, and
+        /// <c>X = constitution * ratio / woundMultiplier + naturalArmor</c>. The weapon enters as
+        /// one additive offset and one divisor, so a single vector captured at <c>A = 0, m = 1</c>
+        /// rescales to any weapon in two multiply-adds -- see <see cref="RescaleToWeapon"/>.
+        /// Before this split every (shooter, weapon, range, candidate option) combination re-walked
+        /// the same body: an instrumented seed-1 sector generation ran the walk 9.0e6 times, for
+        /// 7.0e8 <c>HitLocation.Template</c> reads and 3.7e8 wound-ladder carry steps, all of it
+        /// recomputing identical numbers.</para>
+        ///
+        /// <para>The vector is memoized per soldier by
+        /// <see cref="BattleSoldier.UnitTakeOutTerms"/>, keyed on body identity,
+        /// <see cref="Body.InjuryRevision"/> and <see cref="BattleSoldier.Stance"/> -- the three
+        /// things it actually varies with. That keeps this class stateless (the memo belongs to
+        /// the soldier being described, not to the math) and keeps the estimate wound-state aware
+        /// outside a frozen planning pass, where a per-turn planning memo would not be valid.</para>
+        /// </summary>
+        internal static TakeOutLocationTerm[] BuildUnitTakeOutTerms(BattleSoldier target)
+        {
+            if (target == null || !target.IsCombatEffective)
+            {
+                return [];
+            }
+
+            Body body = target.Soldier.Body;
+            int totalLocationWeight = body.TotalProbabilityMap[(int)target.Stance];
+            if (totalLocationWeight <= 0)
+            {
+                return [];
+            }
+
+            IReadOnlyList<int> functioningHands = target.FunctioningHandGroupIds;
+            int? lastFunctioningHand = functioningHands.Count == 1
+                ? functioningHands[0]
+                : null;
+            List<TakeOutLocationTerm> terms = [];
+            foreach (HitLocation location in body.HitLocations)
+            {
+                // One local instead of the nine repeated `location.Template.` reads this loop used
+                // to make. The property is a plain field read, but at 7.0e8 calls a seed it was the
+                // single largest line in an instrumented profile.
+                HitLocationTemplate template = location.Template;
+                int locationWeight = template.HitProbabilityMap[(int)target.Stance];
+                if (locationWeight <= 0 || location.IsSevered)
+                {
+                    continue;
+                }
+
+                bool canTakeOut =
+                    template.IsMotive
+                    || template.IsVital
+                    || (lastFunctioningHand.HasValue
+                        && template.HandGroupId == lastFunctioningHand);
+                if (!canTakeOut)
+                {
+                    continue;
+                }
+
+                float requiredRatio = FindMinimumDisablingWoundRatio(
+                    location.Wounds.WoundTotal,
+                    Math.Min(template.CrippleWound, template.SeverWound));
+                if (float.IsPositiveInfinity(requiredRatio))
+                {
+                    continue;
+                }
+
+                // Execution first requires weapon penetration, then the resolver subtracts
+                // natural armor and applies the hit-location multiplier before classifying the
+                // wound. A carried Negligible wound only requires positive weapon penetration.
+                //
+                // X, the unit-weapon numerator. The division by the weapon's wound multiplier and
+                // the addition of effective armor are what RescaleToWeapon puts back, in that
+                // order, so the rescaled value is bit-identical to computing it here.
+                float unitPenetratingDamage = requiredRatio <= 0f
+                    ? 0f
+                    : (target.Soldier.Constitution * requiredRatio)
+                        / Math.Max(0.0001f, template.WoundMultiplier)
+                        + template.NaturalArmor;
+                // K_loc at the unit weapon. Range-independent: the numerator of requiredRoll
+                // carries no range term, which is what lets the Phase 4 table rescale take-out in
+                // closed form. K_zero (Phase 5): the same expression evaluated at ratio -> 0+, i.e.
+                // the damage at which this location first takes a wound at all. The gap between the
+                // two is the graded band the woundProgress term integrates over.
+                terms.Add(new TakeOutLocationTerm(
+                    locationWeight / (float)totalLocationWeight,
+                    unitPenetratingDamage,
+                    requiredRatio,
+                    template.NaturalArmor));
+            }
+            return terms.ToArray();
+        }
+
+        /// <summary>
+        /// One unit-weapon term put back into a specific weapon's currency:
+        /// <c>K = effectiveArmor + unit / weaponWoundMultiplier</c> for both thresholds. Bit-identical
+        /// to forming them inside the walk, because that is the same expression in the same
+        /// association -- see <see cref="BuildUnitTakeOutTerms"/>.
+        /// </summary>
+        private static TakeOutLocationTerm RescaleToWeapon(
+            in TakeOutLocationTerm unitTerm,
+            float effectiveArmor,
+            float weaponWoundMultiplier)
+        {
+            return new TakeOutLocationTerm(
+                unitTerm.Weight,
+                effectiveArmor + (unitTerm.PenetrationThreshold / weaponWoundMultiplier),
+                unitTerm.RequiredRatio,
+                effectiveArmor + (unitTerm.ZeroProgressThreshold / weaponWoundMultiplier));
+        }
+
+        /// <summary>
+        /// The single evaluation behind both <see cref="CalculateTakeOutProbabilityOnHit"/> and
+        /// <see cref="BuildTakeOutLocationTerms"/>. Pass a damage coefficient to get the
         /// probability, a collector to capture the range-independent terms, or both. When
         /// <paramref name="collector"/> is null nothing is allocated, so the hot scoring path is
         /// unchanged.
@@ -534,79 +651,31 @@ namespace OnlyWar.Helpers.Battles
             float? damageCoefficient,
             List<TakeOutLocationTerm> collector)
         {
-            if (target == null || !target.IsCombatEffective || weaponWoundMultiplier <= 0)
+            if (target == null || weaponWoundMultiplier <= 0)
             {
                 return (0f, 0f);
             }
 
-            Body body = target.Soldier.Body;
-            int totalLocationWeight = body.TotalProbabilityMap[target.Stance];
-            if (totalLocationWeight <= 0)
-            {
-                return (0f, 0f);
-            }
-
-            IReadOnlyList<int> functioningHands = target.FunctioningHandGroupIds;
-            int? lastFunctioningHand = functioningHands.Count == 1
-                ? functioningHands[0]
-                : null;
+            // Empty for a target that is not combat effective or carries no hit lottery at this
+            // stance -- the two early returns the walk used to make.
+            IReadOnlyList<TakeOutLocationTerm> unitTerms = target.UnitTakeOutTerms;
+            // Only computed when lambda can actually use it; at lambda = 0 this evaluation is
+            // bitwise identical to the pre-Phase-5 one. Hoisted out of the loop -- the override
+            // scope that can move it is test-only and never runs concurrently with scoring.
+            bool graded = EffectiveWoundProgressCreditWeight > 0f;
             float probability = 0f;
             float woundProgress = 0f;
-            foreach (HitLocation location in body.HitLocations)
+            for (int index = 0; index < unitTerms.Count; index++)
             {
-                int locationWeight = location.Template.HitProbabilityMap[(int)target.Stance];
-                if (locationWeight <= 0 || location.IsSevered)
-                {
-                    continue;
-                }
-
-                bool canTakeOut =
-                    location.Template.IsMotive
-                    || location.Template.IsVital
-                    || (lastFunctioningHand.HasValue
-                        && location.Template.HandGroupId == lastFunctioningHand);
-                if (!canTakeOut)
-                {
-                    continue;
-                }
-
-                float requiredRatio = FindMinimumDisablingWoundRatio(
-                    location.Wounds.WoundTotal,
-                    Math.Min(location.Template.CrippleWound, location.Template.SeverWound));
-                if (float.IsPositiveInfinity(requiredRatio))
-                {
-                    continue;
-                }
-
-                // Execution first requires weapon penetration, then the resolver subtracts
-                // natural armor and applies the hit-location multiplier before classifying the
-                // wound. A carried Negligible wound only requires positive weapon penetration.
-                float requiredPenetratingDamage = requiredRatio <= 0f
-                    ? 0f
-                    : ((target.Soldier.Constitution * requiredRatio)
-                        / Math.Max(0.0001f, location.Template.WoundMultiplier)
-                        + location.Template.NaturalArmor)
-                        / weaponWoundMultiplier;
-                // K_loc. Range-independent: the numerator of requiredRoll carries no range term,
-                // which is what lets the Phase 4 table rescale take-out in closed form.
-                // K_zero (Phase 5): the same expression evaluated at ratio -> 0+, i.e. the damage
-                // at which this location first takes a wound at all. The gap between the two is
-                // the graded band the woundProgress term integrates over.
-                TakeOutLocationTerm term = new(
-                    locationWeight / (float)totalLocationWeight,
-                    effectiveArmor + requiredPenetratingDamage,
-                    requiredRatio,
-                    effectiveArmor
-                        + (location.Template.NaturalArmor / weaponWoundMultiplier));
+                TakeOutLocationTerm term = RescaleToWeapon(
+                    unitTerms[index], effectiveArmor, weaponWoundMultiplier);
                 collector?.Add(term);
                 if (damageCoefficient.HasValue
                     && !SkipLocation(term, damageCoefficient.Value))
                 {
                     probability += term.Weight
                         * EvaluateTakeOutLocationTail(term, damageCoefficient.Value);
-                    // Only computed when lambda can actually use it; at lambda = 0 this walk is
-                    // bitwise identical to the pre-Phase-5 one.
-                    if (EffectiveWoundProgressCreditWeight > 0f)
+                    if (graded)
                     {
                         woundProgress += term.Weight
                             * EvaluateWoundProgressTail(term, damageCoefficient.Value);
@@ -627,25 +696,37 @@ namespace OnlyWar.Helpers.Battles
         /// profile's entire <c>ValueTuple`2..ctor</c> line. That is a Roslyn lowering decision baked
         /// into the IL, so a Release build does not fix it.
         /// </summary>
-        private static readonly (WoundLevel Level, float Ratio)[] WoundRatioLadder =
+        /// <remarks>
+        /// <c>Nibble</c> is the band's index in the packed <see cref="Wounds.WoundTotal"/> layout --
+        /// each level is 16x the one below, so <c>Negligible</c> occupies nibble 0, <c>Minor</c>
+        /// nibble 1, and so on. Carried here rather than derived per call because it is exactly
+        /// where <see cref="AddWoundForEstimate"/>'s carry has to start.
+        /// </remarks>
+        private static readonly (WoundLevel Level, float Ratio, int Nibble)[] WoundRatioLadder =
         [
-            (WoundLevel.Negligible, 0f),
-            (WoundLevel.Minor, 0.125f),
-            (WoundLevel.Moderate, 0.25f),
-            (WoundLevel.Major, 0.5f),
-            (WoundLevel.Critical, 1f),
-            (WoundLevel.Massive, 2f),
-            (WoundLevel.Mortal, 4f),
-            (WoundLevel.Unsurvivable, 8f)
+            (WoundLevel.Negligible, 0f, 0),
+            (WoundLevel.Minor, 0.125f, 1),
+            (WoundLevel.Moderate, 0.25f, 2),
+            (WoundLevel.Major, 0.5f, 3),
+            (WoundLevel.Critical, 1f, 4),
+            (WoundLevel.Massive, 2f, 5),
+            (WoundLevel.Mortal, 4f, 6),
+            (WoundLevel.Unsurvivable, 8f, 7)
         ];
 
-        private static float FindMinimumDisablingWoundRatio(
+        /// <summary>
+        /// The smallest wound ratio that would push <paramref name="currentWounds"/> to or past
+        /// <paramref name="disableThreshold"/>, or +infinity when no single wound can. Internal
+        /// rather than private for <c>WoundLadderTests</c>, which pins
+        /// <see cref="AddWoundForEstimate"/>'s bounded carry against a full-scan reference.
+        /// </summary>
+        internal static float FindMinimumDisablingWoundRatio(
             uint currentWounds,
             uint disableThreshold)
         {
-            foreach ((WoundLevel level, float ratio) in WoundRatioLadder)
+            foreach ((WoundLevel level, float ratio, int nibble) in WoundRatioLadder)
             {
-                if (AddWoundForEstimate(currentWounds, level) >= disableThreshold)
+                if (AddWoundForEstimate(currentWounds, level, nibble) >= disableThreshold)
                 {
                     return ratio;
                 }
@@ -655,15 +736,30 @@ namespace OnlyWar.Helpers.Battles
 
         // Pure mirror of Wounds.AddWound's six-per-level carry. Keeping this local lets scoring
         // inspect hypothetical hits without mutating the frozen battle state.
-        private static uint AddWoundForEstimate(uint currentWounds, WoundLevel wound)
+        //
+        // PRECONDITION: currentWounds is normalized -- every nibble at or below Wounds.WOUND_MAX.
+        // Wounds.Normalize establishes that on every mutation path, and this method only ever reads
+        // HitLocation.Wounds.WoundTotal.
+        //
+        // Under that precondition the scan is bounded at both ends rather than sweeping all seven
+        // nibbles. It STARTS at woundNibble because adding one wound of one level touches that band
+        // and nothing below it, so every lower nibble is still the normalized input. It STOPS at the
+        // first band that does not overflow, because the only thing that can push a higher band over
+        // is the carry this loop deposits, and a band that did not overflow deposited none.
+        //
+        // Wounds.Normalize itself scans from 0 and uses `continue` because it also has to repair
+        // state it did not create -- a Wounds built from a raw uint, or a healing step-down onto an
+        // occupied band. This mirror never sees that state, and already could not have repaired it:
+        // it carries 1, not count / (WOUND_MAX + 1).
+        private static uint AddWoundForEstimate(uint currentWounds, WoundLevel wound, int woundNibble)
         {
             uint total = currentWounds + (uint)wound;
-            for (int nibble = 0; nibble < 7; nibble++)
+            for (int nibble = woundNibble; nibble < 7; nibble++)
             {
                 int shift = nibble * 4;
                 if (((total >> shift) & 0xfu) <= Wounds.WOUND_MAX)
                 {
-                    continue;
+                    break;
                 }
                 total &= ~(0xfu << shift);
                 total += 1u << (shift + 4);

@@ -958,31 +958,40 @@ namespace OnlyWar.Models.Soldiers
     public class Body
     {
         public HitLocation[] HitLocations { get; private set; }
-        public Dictionary<Stance, int> TotalProbabilityMap { get; private set; }
+
+        /// <summary>
+        /// The stance's total hit-lottery weight, indexed by <c>(int)Stance</c> -- the denominator
+        /// every per-location share is taken against. An array rather than a
+        /// <c>Dictionary&lt;Stance, int&gt;</c> because it is read once per removal estimate on the
+        /// battle planner's hot path, where the hash lookup and its comparer call were pure
+        /// overhead against three contiguous ints. <see cref="HitLocationTemplate.HitProbabilityMap"/>,
+        /// which it sums, was already indexed this way.
+        /// </summary>
+        public int[] TotalProbabilityMap { get; private set; }
         public int InjuryRevision { get; private set; }
 
         public Body(List<HitLocation> hitLocations)
         {
             HitLocations = hitLocations.ToArray();
             SubscribeToInjuries();
-            TotalProbabilityMap = new Dictionary<Stance, int>
-            {
-                [Stance.Standing] = HitLocations.Sum(hl => hl.Template.HitProbabilityMap[(int)Stance.Standing]),
-                [Stance.Kneeling] = HitLocations.Sum(hl => hl.Template.HitProbabilityMap[(int)Stance.Kneeling]),
-                [Stance.Prone] = HitLocations.Sum(hl => hl.Template.HitProbabilityMap[(int)Stance.Prone])
-            };
+            TotalProbabilityMap = BuildTotalProbabilityMap(HitLocations);
         }
 
         public Body(BodyTemplate template)
         {
             HitLocations = template.HitLocations.Select(hlt => new HitLocation(hlt)).ToArray();
             SubscribeToInjuries();
-            TotalProbabilityMap = new Dictionary<Stance, int>
-            {
-                [Stance.Standing] = HitLocations.Sum(hl => hl.Template.HitProbabilityMap[(int)Stance.Standing]),
-                [Stance.Kneeling] = HitLocations.Sum(hl => hl.Template.HitProbabilityMap[(int)Stance.Kneeling]),
-                [Stance.Prone] = HitLocations.Sum(hl => hl.Template.HitProbabilityMap[(int)Stance.Prone])
-            };
+            TotalProbabilityMap = BuildTotalProbabilityMap(HitLocations);
+        }
+
+        private static int[] BuildTotalProbabilityMap(HitLocation[] hitLocations)
+        {
+            return
+            [
+                hitLocations.Sum(hl => hl.Template.HitProbabilityMap[(int)Stance.Standing]),
+                hitLocations.Sum(hl => hl.Template.HitProbabilityMap[(int)Stance.Kneeling]),
+                hitLocations.Sum(hl => hl.Template.HitProbabilityMap[(int)Stance.Prone])
+            ];
         }
 
         private void SubscribeToInjuries()

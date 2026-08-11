@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
+using System.Threading.Tasks;
 using OnlyWar.Helpers.Battles.Actions;
 using OnlyWar.Models.Equippables;
 using OnlyWar.Models.Battles;
@@ -355,13 +356,44 @@ namespace OnlyWar.Helpers.Battles
         }
 
         /// <summary>
+        /// Freezes the force-level exchange horizon for this planning turn, from the resolver,
+        /// BEFORE the parallel squad-decision pass starts.
+        ///
+        /// <para>WHY THE RESOLVER CALLS THIS. <see cref="ChooseEngagementOption"/> begins with
+        /// <see cref="EnsureEngagementHorizon"/>, so when it was only ever reached from inside the
+        /// worker body every worker piled onto <c>EngagementHorizonGate</c> at once: one computed
+        /// the horizon and the rest blocked for its full duration. In an instrumented seed-1
+        /// generation that was 8,614 <c>Monitor.Enter</c> calls -- about one per worker per
+        /// planning pass -- for 603 seconds of blocked worker time, 23% of all thread time in the
+        /// profile. Doing it here means the gate is already satisfied when the workers start and
+        /// none of them ever contends for it.</para>
+        ///
+        /// <para>The horizon is force-level, not side-level: it walks every active squad on both
+        /// sides, so either side's planner computes the identical value and the resolver need only
+        /// call one of them.</para>
+        /// </summary>
+        internal void InitializeEngagementHorizon(
+            IReadOnlyDictionary<int, BattleSquadCapabilityProfile> profiles,
+            IReadOnlyDictionary<int, SquadEngagementFrame> frames,
+            int maxDegreeOfParallelism)
+        {
+            EnsureEngagementHorizon(profiles, frames, maxDegreeOfParallelism);
+        }
+
+        /// <summary>
         /// Freezes the force-level exchange horizon once per planning turn. The value is computed
         /// from the turn-start geometry and shared by every squad's state potential, so changing a
         /// candidate option cannot change the horizon used to score that option.
+        ///
+        /// <para>The double-checked gate remains for the standalone path -- a planner constructed
+        /// directly, as the tests do, still has to initialize its own horizon lazily. In a resolver
+        /// pass <see cref="InitializeEngagementHorizon"/> has already run and every call here takes
+        /// the volatile fast path.</para>
         /// </summary>
         private void EnsureEngagementHorizon(
             IReadOnlyDictionary<int, BattleSquadCapabilityProfile> profiles,
-            IReadOnlyDictionary<int, SquadEngagementFrame> frames)
+            IReadOnlyDictionary<int, SquadEngagementFrame> frames,
+            int maxDegreeOfParallelism = 1)
         {
             if (_context.EngagementHorizonInitialized)
             {
@@ -409,9 +441,23 @@ namespace OnlyWar.Helpers.Battles
                             out BattleSquadCapabilityProfile candidateProfile)
                                 ? candidateProfile.TotalAbleBattleValue
                                 : candidate.AbleSoldiers.Sum(GetBattleValue));
-                    float currentRemovalRate = 0;
-                    foreach (BattleSquad attacker in attackers)
+                    // The dominant cost of the whole horizon: |attackers| x |targets| exchange-rate
+                    // evaluations, each of which is a full pass over the removal math. Every
+                    // attacker is independent -- EvaluateOutgoingExchangeRate reads frozen
+                    // turn-start state and writes only BattlePlanningContext's concurrent memos,
+                    // which the squad-decision pass below already drives from many workers -- so
+                    // the attackers fan out.
+                    //
+                    // Each attacker's rate lands in its own slot and the slots are summed in
+                    // attacker order afterwards, rather than being accumulated across threads. The
+                    // result is therefore identical run to run, which is what the planner's
+                    // determinism rests on. It is NOT bit-identical to the old single running
+                    // total, which folded one attacker's target loop into the next attacker's, so
+                    // seeded battles diverge from this commit.
+                    float[] attackerRates = new float[attackers.Count];
+                    void AccumulateAttackerRate(int attackerIndex)
                     {
+                        BattleSquad attacker = attackers[attackerIndex];
                         if (!frames.TryGetValue(
                                 attacker.Id,
                                 out SquadEngagementFrame attackerFrame)
@@ -420,16 +466,17 @@ namespace OnlyWar.Helpers.Battles
                             // inflate the horizon that scales the ordinary exchange rate.
                             || attackerFrame.Role == EngagementSquadRole.Pursuit)
                         {
-                            continue;
+                            return;
                         }
 
                         if (!profiles.TryGetValue(
                                 attacker.Id,
                                 out BattleSquadCapabilityProfile attackerProfile))
                         {
-                            continue;
+                            return;
                         }
 
+                        float attackerRate = 0;
                         foreach (BattleSquad target in targets)
                         {
                             if (!profiles.TryGetValue(
@@ -443,7 +490,7 @@ namespace OnlyWar.Helpers.Battles
                             float range = EngagementExchangeModel.Distance(
                                 BattleEngagementFrameBuilder.Centroid(attacker),
                                 BattleEngagementFrameBuilder.Centroid(target));
-                            currentRemovalRate += Math.Max(
+                            attackerRate += Math.Max(
                                 0,
                                 _exchange.EvaluateOutgoingExchangeRate(
                                     attacker,
@@ -453,6 +500,32 @@ namespace OnlyWar.Helpers.Battles
                                     frames,
                                     range));
                         }
+                        attackerRates[attackerIndex] = attackerRate;
+                    }
+
+                    if (maxDegreeOfParallelism <= 1 || attackers.Count <= 1)
+                    {
+                        for (int index = 0; index < attackers.Count; index++)
+                        {
+                            AccumulateAttackerRate(index);
+                        }
+                    }
+                    else
+                    {
+                        Parallel.For(
+                            0,
+                            attackers.Count,
+                            new ParallelOptions
+                            {
+                                MaxDegreeOfParallelism = maxDegreeOfParallelism
+                            },
+                            AccumulateAttackerRate);
+                    }
+
+                    float currentRemovalRate = 0;
+                    for (int index = 0; index < attackerRates.Length; index++)
+                    {
+                        currentRemovalRate += attackerRates[index];
                     }
 
                     float expectedExchangeTurns =

@@ -610,6 +610,16 @@ namespace OnlyWar.Helpers.Battles
             LogScreenEvaluations(BattleSide.Attacker, attacker, opposing, paired);
             LogScreenEvaluations(BattleSide.Opposing, opposing, attacker, paired);
 
+            // Before the workers start, not from inside them. ChooseEngagementOption's first act is
+            // to ensure this horizon exists, so leaving it to the workers made every one of them
+            // contend for BattlePlanningContext.EngagementHorizonGate while one did the work --
+            // 23% of all thread time in an instrumented profile, spent blocked. See
+            // BattleSquadPlanner.InitializeEngagementHorizon.
+            planners[BattleSide.Attacker].InitializeEngagementHorizon(
+                paired.Profiles,
+                paired.Frames,
+                _execution.MaxPlanningDegreeOfParallelism);
+
             List<(BattleSide Side, List<BattleSquad> Friendly, List<BattleSquad> Enemy,
                 BattleSquad Squad)> jobs = [];
             foreach ((BattleSide side, List<BattleSquad> friendly, List<BattleSquad> enemy) in new[]

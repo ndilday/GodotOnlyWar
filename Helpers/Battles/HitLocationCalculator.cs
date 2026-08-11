@@ -12,7 +12,7 @@ namespace OnlyWar.Helpers.Battles
             // for each available body party defines the size of the random linear distribution
             // TODO: factor in cover/body position
             // 
-            int roll = random.GetIntBelowMax(0, soldier.Soldier.Body.TotalProbabilityMap[soldier.Stance]);
+            int roll = random.GetIntBelowMax(0, soldier.Soldier.Body.TotalProbabilityMap[(int)soldier.Stance]);
             foreach (HitLocation location in soldier.Soldier.Body.HitLocations)
             {
                 int locationChance = location.Template.HitProbabilityMap[(int)soldier.Stance];

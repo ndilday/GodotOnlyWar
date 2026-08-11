@@ -1,6 +1,7 @@
 ﻿using OnlyWar.Models.Squads;
 using System;
 using System.Collections.Generic;
+using System.Collections.ObjectModel;
 using System.Linq;
 
 namespace OnlyWar.Models.Soldiers
@@ -10,6 +11,9 @@ namespace OnlyWar.Models.Soldiers
         protected readonly Dictionary<int, Skill> _skills;
         private Body _body;
         private KeyValuePair<int, HitLocation[]>[] _handLocationsByGroupId = [];
+        private IReadOnlyList<int> _functioningHandGroupIds = Array.Empty<int>();
+        private Body _functioningHandBody;
+        private int _functioningHandRevision = -1;
 
         public Soldier(BodyTemplate body)
         {
@@ -43,33 +47,56 @@ namespace OnlyWar.Models.Soldiers
             return newSoldier;
         }
 
+        /// <summary>
+        /// The hand groups this soldier can still use. Recomputed only when his injuries actually
+        /// change: the getter used to allocate a fresh <c>List&lt;int&gt;</c> on every read, and it
+        /// is read repeatedly per soldier per battle turn -- by <see cref="FunctioningHands"/>,
+        /// <see cref="CanUseTwoHandedWeapon"/>, weapon gripping, and the battle planners' injury
+        /// snapshot. The result is a pure function of the body's wound state, so
+        /// <see cref="Body.InjuryRevision"/> is an exact cache key.
+        /// </summary>
         public IReadOnlyList<int> FunctioningHandGroupIds
         {
             get
             {
-                List<int> functioningGroupIds = [];
-                foreach ((int groupId, HitLocation[] locations) in _handLocationsByGroupId)
+                Body body = _body;
+                if (!ReferenceEquals(_functioningHandBody, body)
+                    || _functioningHandRevision != body.InjuryRevision)
                 {
-                    bool isFunctioning = true;
-                    foreach (HitLocation location in locations)
-                    {
-                        uint wounds = location.Wounds.WoundTotal;
-                        if (wounds >= location.Template.CrippleWound
-                            || wounds >= location.Template.SeverWound)
-                        {
-                            isFunctioning = false;
-                            break;
-                        }
-                    }
+                    RefreshFunctioningHandGroupIds(body);
+                }
+                return _functioningHandGroupIds;
+            }
+        }
 
-                    if (isFunctioning)
+        private void RefreshFunctioningHandGroupIds(Body body)
+        {
+            List<int> functioningGroupIds = [];
+            foreach ((int groupId, HitLocation[] locations) in _handLocationsByGroupId)
+            {
+                bool isFunctioning = true;
+                foreach (HitLocation location in locations)
+                {
+                    uint wounds = location.Wounds.WoundTotal;
+                    if (wounds >= location.Template.CrippleWound
+                        || wounds >= location.Template.SeverWound)
                     {
-                        functioningGroupIds.Add(groupId);
+                        isFunctioning = false;
+                        break;
                     }
                 }
 
-                return functioningGroupIds;
+                if (isFunctioning)
+                {
+                    functioningGroupIds.Add(groupId);
+                }
             }
+
+            // Wrapped once, here, rather than by every caller: the collection is handed out to
+            // battle code that holds it across a turn, so it must not be mutable through the cast.
+            _functioningHandGroupIds = new ReadOnlyCollection<int>(functioningGroupIds);
+            _functioningHandBody = body;
+            _functioningHandRevision = body.InjuryRevision;
         }
 
         public int FunctioningHands => FunctioningHandGroupIds.Count;
