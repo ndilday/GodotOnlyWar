@@ -13,7 +13,14 @@ namespace OnlyWar.Helpers.Missions
 {
     public class MeetingEngagementMissionStep : IMissionStep
     {
+        private readonly bool _defendersMayBurrow;
+
         public string Description { get { return "Meeting Engagement"; } }
+
+        public MeetingEngagementMissionStep(bool defendersMayBurrow = true)
+        {
+            _defendersMayBurrow = defendersMayBurrow;
+        }
 
         public MissionStepResult ExecuteMissionStep(MissionExecutionContext execution, float marginOfSuccess, IMissionStep resumeStep)
         {
@@ -51,7 +58,17 @@ namespace OnlyWar.Helpers.Missions
             var squadPostionMap = placer.PlaceSquads(missionSquads, opposingSquads);
             // burrow-capable squads (e.g. Raveners) erupt directly into melee instead
             // of advancing across the gap — see OnlyWar_TDD.md §6.6
-            BurrowPlacer.PlaceBurrowers(bgm, missionSquads.Concat(opposingSquads));
+            List<BattleSquad> allSquads = missionSquads.Concat(opposingSquads).ToList();
+            if (_defendersMayBurrow)
+            {
+                BurrowPlacer.PlaceBurrowers(bgm, allSquads);
+            }
+            else
+            {
+                // Assassination targets are defending a prepared position; they cannot
+                // use burrow arrival after the attacking force reaches them.
+                BurrowPlacer.PlaceBurrowers(bgm, allSquads, missionSquads);
+            }
             int oppForSize = opposingSquads.Sum(s => s.AbleSoldiers.Count);
             // See AmbushedMissionStep: Faction is guarded rather than assumed everywhere else it is read.
             string opposingFaction = opposingSquads.First().Squad?.Faction?.Name ?? "an unidentified force";

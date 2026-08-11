@@ -29,13 +29,27 @@ namespace OnlyWar.Helpers.Battles.Placers
         public static void PlaceBurrowers(BattleGridManager grid, IEnumerable<BattleSquad> squads)
         {
             List<BattleSquad> allSquads = squads.ToList();
-            foreach (BattleSquad squad in allSquads)
+            PlaceBurrowers(grid, allSquads, allSquads);
+        }
+
+        /// <summary>
+        /// Places only the eligible squads, while using every squad to resolve each
+        /// burrower's nearest enemy target. This is used for asymmetric engagements
+        /// such as ambushes and assassination, where only one side may burrow.
+        /// </summary>
+        public static void PlaceBurrowers(BattleGridManager grid,
+                                          IEnumerable<BattleSquad> allSquads,
+                                          IEnumerable<BattleSquad> eligibleSquads)
+        {
+            List<BattleSquad> placedSquads = allSquads.ToList();
+            HashSet<BattleSquad> eligible = eligibleSquads.ToHashSet();
+            foreach (BattleSquad squad in placedSquads)
             {
-                if (!squad.CanBurrow)
+                if (!eligible.Contains(squad) || !squad.CanBurrow)
                 {
                     continue;
                 }
-                BattleSquad target = FindNearestEnemySquad(grid, squad, allSquads);
+                BattleSquad target = FindNearestEnemySquad(grid, squad, placedSquads);
                 if (target == null)
                 {
                     continue;

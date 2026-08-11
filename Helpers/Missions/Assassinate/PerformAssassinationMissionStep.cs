@@ -80,7 +80,7 @@ namespace OnlyWar.Helpers.Missions.Assassinate
             // could still walk home. WithdrawIfAbleMissionStep carries the two conditions this step
             // used to apply inline (still able to continue, and standing on ground it does not hold).
             return MissionStepResult.Continue(
-                new MeetingEngagementMissionStep(),
+                new MeetingEngagementMissionStep(defendersMayBurrow: false),
                 margin,
                 then: new WithdrawIfAbleMissionStep());
         }

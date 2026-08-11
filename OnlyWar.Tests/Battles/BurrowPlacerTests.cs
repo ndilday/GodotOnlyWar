@@ -77,6 +77,31 @@ public class BurrowPlacerTests
     }
 
     [Fact]
+    public void PlaceBurrowers_LeavesIneligibleBurrowersInPlace()
+    {
+        BattleGridManager grid = new();
+        BattleSquad enemy = CreateSquad("Enemy", TestModelFactory.MarineTemplate, 1);
+        BattleSquad eligibleBurrowers = CreateSquad("Eligible", TestModelFactory.BurrowerTemplate, 2);
+        BattleSquad ineligibleBurrowers = CreateSquad("Ineligible", TestModelFactory.BurrowerTemplate, 3);
+
+        BattleSoldier enemySoldier = Place(grid, enemy, 0, side: false, x: 0, y: 0);
+        Place(grid, eligibleBurrowers, 0, side: true, x: 10, y: 10);
+        BattleSoldier ineligibleSoldier = Place(grid, ineligibleBurrowers, 0, side: true, x: 10, y: 20);
+
+        BurrowPlacer.PlaceBurrowers(
+            grid,
+            new[] { eligibleBurrowers, ineligibleBurrowers, enemy },
+            new[] { eligibleBurrowers });
+
+        float eligibleDistance = grid.GetDistanceBetweenSoldiers(
+            eligibleBurrowers.Soldiers[0].Soldier.Id,
+            enemySoldier.Soldier.Id);
+        Assert.True(eligibleDistance <= 1.001f);
+        Assert.Equal(new ValueTuple<int, int>(10, 20),
+            grid.GetSoldierPosition(ineligibleSoldier.Soldier.Id)[0]);
+    }
+
+    [Fact]
     public void PlaceBurrowers_SpillsIntoOuterRingsWhenPerimeterFills()
     {
         // a lone enemy has only 4 orthogonally adjacent cells; 6 burrowers must
