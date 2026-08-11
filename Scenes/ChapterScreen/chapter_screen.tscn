@@ -170,10 +170,20 @@ layout_mode = 2
 text = "Chapter"
 autowrap_mode = 2
 
-[node name="SubtitleLabel" type="Label" parent="ChapterView/Content/MainLayout/DetailPanel/Panel/MarginContainer/DetailStack/Hero/TitleStack"]
+[node name="SubtitleLine" type="HBoxContainer" parent="ChapterView/Content/MainLayout/DetailPanel/Panel/MarginContainer/DetailStack/Hero/TitleStack"]
 layout_mode = 2
+theme_override_constants/separation = 4
+
+[node name="SubtitleLabel" type="Label" parent="ChapterView/Content/MainLayout/DetailPanel/Panel/MarginContainer/DetailStack/Hero/TitleStack/SubtitleLine"]
+layout_mode = 2
+size_flags_horizontal = 3
 text = "Chapter overview"
 autowrap_mode = 2
+
+[node name="LocationLink" type="LinkButton" parent="ChapterView/Content/MainLayout/DetailPanel/Panel/MarginContainer/DetailStack/Hero/TitleStack/SubtitleLine"]
+layout_mode = 2
+visible = false
+mouse_default_cursor_shape = 2
 
 [node name="MetricGrid" type="GridContainer" parent="ChapterView/Content/MainLayout/DetailPanel/Panel/MarginContainer/DetailStack/Hero"]
 custom_minimum_size = Vector2(340, 0)

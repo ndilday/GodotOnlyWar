@@ -79,6 +79,7 @@ namespace OnlyWar.Helpers
                 // active procedure are inherently in that excluded set.
                 if (location.Wounds.WoundTotal > 0
                     && !location.IsSevered
+                    && !location.IsCoveredBySeveredParent
                     && !location.IsReplacementEligible)
                 {
                     location.Wounds.ApplyWeekOfHealing();
@@ -125,10 +126,16 @@ namespace OnlyWar.Helpers
             {
                 return;
             }
-            location.Wounds.HealWounds();
-            if (procedure.ProcedureType == MedicalProcedureType.Cybernetic)
+            IEnumerable<HitLocation> restoredLocations = soldier.Body.HitLocations
+                .Where(candidate => candidate == location
+                    || soldier.Body.GetReplacementParent(candidate) == location);
+            foreach (HitLocation restoredLocation in restoredLocations)
             {
-                location.IsCybernetic = true;
+                restoredLocation.Wounds.HealWounds();
+                if (procedure.ProcedureType == MedicalProcedureType.Cybernetic)
+                {
+                    restoredLocation.IsCybernetic = true;
+                }
             }
         }
     }

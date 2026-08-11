@@ -97,7 +97,8 @@ public partial class ApothecariumScreenController : MainScreenController
         }
 
         _apothecariumView.SetVaultSelected(_selectedKind == ApothecariumSelectionKind.Vault);
-        _apothecariumView.SetTree(_recordBuilder.BuildTree(chapter, _selectedKind, _selectedId, woundedOnly: true));
+        _apothecariumView.SetTree(_recordBuilder.BuildTree(
+            chapter, _selectedKind, _selectedId, woundedOnly: true, force: force));
         RenderSelectedDetail(chapter, force);
     }
 
@@ -114,10 +115,10 @@ public partial class ApothecariumScreenController : MainScreenController
         switch (_selectedKind)
         {
             case ApothecariumSelectionKind.Unit:
-                RenderUnit(chapter);
+                RenderUnit(chapter, force);
                 break;
             case ApothecariumSelectionKind.Squad:
-                RenderSquad(chapter);
+                RenderSquad(chapter, force);
                 break;
             case ApothecariumSelectionKind.Soldier:
                 RenderSoldier(chapter);
@@ -133,7 +134,7 @@ public partial class ApothecariumScreenController : MainScreenController
         _apothecariumView.ShowVault(_recordBuilder.BuildVault(force, GameDataSingleton.Instance.Date));
     }
 
-    private void RenderUnit(Unit chapter)
+    private void RenderUnit(Unit chapter, PlayerForce force)
     {
         Unit unit = chapter.Id == _selectedId ? chapter : chapter.ChildUnits.SelectMany(FlattenUnits).FirstOrDefault(u => u.Id == _selectedId);
         if (unit == null)
@@ -142,10 +143,10 @@ public partial class ApothecariumScreenController : MainScreenController
             return;
         }
 
-        _apothecariumView.ShowRollup(_recordBuilder.BuildUnitSummary(unit));
+        _apothecariumView.ShowRollup(_recordBuilder.BuildUnitSummary(unit, force));
     }
 
-    private void RenderSquad(Unit chapter)
+    private void RenderSquad(Unit chapter, PlayerForce force)
     {
         Squad squad = chapter.GetAllSquads().FirstOrDefault(s => s.Id == _selectedId);
         if (squad == null)
@@ -154,7 +155,7 @@ public partial class ApothecariumScreenController : MainScreenController
             return;
         }
 
-        _apothecariumView.ShowRollup(_recordBuilder.BuildSquadSummary(squad));
+        _apothecariumView.ShowRollup(_recordBuilder.BuildSquadSummary(squad, force));
     }
 
     private void RenderSoldier(Unit chapter)

@@ -146,6 +146,23 @@ public partial class PlanetTacticalScreenController : DialogController
 		RefreshWorkspace();
 	}
 
+	public void FocusRegion(Region region)
+	{
+		if (_selectedPlanet == null || region == null || region.Planet != _selectedPlanet)
+		{
+			return;
+		}
+
+		_selectedRegion = _selectedPlanet.Regions.FirstOrDefault(candidate => candidate.Id == region.Id);
+		if (_selectedRegion == null)
+		{
+			return;
+		}
+
+		_regionContextFocused = true;
+		RefreshContextAndCommands();
+	}
+
 	private void OnMapLayerToggled(object sender, MapLayer layer)
 	{
 		_activeLayers ^= layer;

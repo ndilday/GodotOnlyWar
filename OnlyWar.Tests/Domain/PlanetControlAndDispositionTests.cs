@@ -72,6 +72,21 @@ public class PlanetControlAndDispositionTests
     }
 
     [Fact]
+    public void RegionControl_TreatsPlayerAndDefaultFactionAsOneAlliedBloc()
+    {
+        Faction imperial = CreateFaction(1, "Imperium", isDefault: true);
+        Faction player = CreateFaction(2, "Chapter", isPlayer: true);
+        Planet planet = CreatePlanet(imperial, player, regionCount: 1);
+        Region region = planet.Regions[0];
+        region.RegionFactionMap[imperial.Id].IsPublic = true;
+        region.RegionFactionMap[player.Id].IsPublic = true;
+
+        Assert.Same(imperial, region.ControllingFaction.PlanetFaction.Faction);
+        Assert.Same(imperial, planet.GetControllingFaction());
+        Assert.False(planet.IsContested());
+    }
+
+    [Fact]
     public void Disposition_PublicHumanRebelsTruceWithImperiumDuringExternalAttack()
     {
         Faction imperial = CreateFaction(1, "Imperium", isDefault: true);
@@ -171,9 +186,9 @@ public class PlanetControlAndDispositionTests
     }
 
     private static Faction CreateFaction(int id, string name, bool isDefault = false,
-        bool canInfiltrate = false, GrowthType growthType = GrowthType.None)
+        bool canInfiltrate = false, GrowthType growthType = GrowthType.None, bool isPlayer = false)
     {
-        return new Faction(id, name, Color.Red, false, isDefault, canInfiltrate, growthType,
+        return new Faction(id, name, Color.Red, isPlayer, isDefault, canInfiltrate, growthType,
             new Dictionary<int, Species>(), new Dictionary<int, SoldierTemplate>(),
             new Dictionary<int, SquadTemplate>(), new Dictionary<int, UnitTemplate>(),
             new Dictionary<int, BoatTemplate>(), new Dictionary<int, ShipTemplate>(),

@@ -59,6 +59,25 @@ public class MedicalTurnProcessorTests
     }
 
     [Fact]
+    public void ApplyWeeklyHealing_DoesNotHealAHandCoveredByASeveredArm()
+    {
+        Body body = new(HumanBodyTemplate.Instance);
+        HitLocation arm = Location(body, 4);
+        HitLocation hand = Location(body, 6);
+        arm.Wounds.AddWound(WoundLevel.Critical);
+        arm.Wounds.AddWound(WoundLevel.Critical);
+        arm.Wounds.AddWound(WoundLevel.Critical);
+        hand.Wounds.AddWound(WoundLevel.Moderate);
+        uint before = hand.Wounds.WoundTotal;
+
+        Assert.True(hand.IsCoveredBySeveredParent);
+        Assert.False(hand.IsReplacementEligible);
+        MedicalTurnProcessor.ApplyWeeklyHealing(body);
+
+        Assert.Equal(before, hand.Wounds.WoundTotal);
+    }
+
+    [Fact]
     public void ApplyWeeklyHealing_DoesNotHealACrippledFunctionalLocation()
     {
         Body body = new(HumanBodyTemplate.Instance);
@@ -148,6 +167,28 @@ public class MedicalTurnProcessorTests
         Assert.Equal((uint)0, arm.Wounds.WoundTotal);
         Assert.False(arm.IsSevered);
         Assert.True(arm.IsCybernetic);
+    }
+
+    [Fact]
+    public void ResolveProcedures_ArmReplacementAlsoRestoresItsGroupedHand()
+    {
+        PlayerSoldier soldier = SeveredArmSoldier(1, out HitLocation arm);
+        HitLocation hand = soldier.Body.HitLocations.First(location => location.Template.Name == "Left Hand");
+        hand.Wounds.AddWound(WoundLevel.Critical);
+        List<MedicalProcedure> procedures =
+            [new(1, arm.Template.Id, MedicalProcedureType.Cybernetic, 1, 40)];
+
+        Assert.True(hand.IsSevered);
+        MedicalTurnProcessor.ResolveProcedures(
+            procedures,
+            new Dictionary<int, PlayerSoldier> { [1] = soldier });
+
+        Assert.Empty(procedures);
+        Assert.Equal((uint)0, arm.Wounds.WoundTotal);
+        Assert.Equal((uint)0, hand.Wounds.WoundTotal);
+        Assert.True(arm.IsCybernetic);
+        Assert.True(hand.IsCybernetic);
+        Assert.False(hand.IsSevered);
     }
 
     [Fact]

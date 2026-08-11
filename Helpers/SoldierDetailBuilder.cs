@@ -1,6 +1,7 @@
 using OnlyWar.Helpers;
 using OnlyWar.Models;
 using OnlyWar.Models.Soldiers;
+using OnlyWar.Models.Squads;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -40,14 +41,21 @@ public class SoldierDetailBuilder
             title += $" - {soldier.AssignedSquad.Name}, {soldier.AssignedSquad.ParentUnit.Name}";
         }
 
+        Squad squad = soldier.AssignedSquad;
+        string status = soldier.IsCombatEffective ? "Available for duty" : "Wounded or impaired";
+        string location = SquadLocationFormatter.Format(squad);
+        bool canNavigateToLocation = SquadLocationNavigation.Resolve(squad) is not null;
+
         return new ChapterBrowserDetail(
             GetSoldierIconKey(soldier),
             title,
-            $"{(soldier.IsCombatEffective ? "Available for duty" : "Wounded or impaired")} - {SquadLocationFormatter.Format(soldier.AssignedSquad)}",
+            canNavigateToLocation ? $"{status} -" : $"{status} - {location}",
             [],
             cards,
             includeOpenFullRecordAction ? "Open Full Record" : null,
-            includeOpenFullRecordAction ? "archive" : null);
+            includeOpenFullRecordAction ? "archive" : null,
+            canNavigateToLocation ? location : null,
+            canNavigateToLocation ? squad.Id : null);
     }
 
     public static string GetSoldierIconKey(ISoldier soldier)

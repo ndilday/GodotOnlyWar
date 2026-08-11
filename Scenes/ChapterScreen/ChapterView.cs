@@ -14,6 +14,7 @@ public partial class ChapterView : MainScreenView
 
     private HBoxContainer _breadcrumbBar;
     private HBoxContainer _breadcrumbItems;
+    private LinkButton _detailLocationLink;
     private Button _loadoutsButton;
     private Label _leftTitleLabel;
     private Button _filterButton;
@@ -26,12 +27,15 @@ public partial class ChapterView : MainScreenView
     private GridContainer _detailCardGrid;
     private Button _detailActionButton;
     private MenuButton _transferButton;
+    private int? _detailLocationSquadId;
 
     public event EventHandler<ChapterBrowserItemEvent> BrowserItemSelected;
     public event EventHandler<ChapterBrowserItemEvent> BrowserItemDrillRequested;
     public event EventHandler<ChapterBrowserLevel> BreadcrumbPressed;
     public event EventHandler DetailPrimaryActionPressed;
     public event EventHandler<int> TransferTargetSelected;
+    public event EventHandler<ChapterBrowserItemEvent> BrowserItemLocationRequested;
+    public event EventHandler<int> DetailLocationRequested;
     public event EventHandler FilterButtonPressed;
     public event EventHandler ChapterLoadoutsPressed;
 
@@ -46,7 +50,8 @@ public partial class ChapterView : MainScreenView
         _leftMenuVBox = GetNode<VBoxContainer>("Content/MainLayout/LeftMenu/Panel/MarginContainer/MenuStack/ScrollContainer/LeftMenuVBox");
         _detailIcon = GetNode<TextureRect>("Content/MainLayout/DetailPanel/Panel/MarginContainer/DetailStack/Hero/DetailIcon");
         _detailTitleLabel = GetNode<Label>("Content/MainLayout/DetailPanel/Panel/MarginContainer/DetailStack/Hero/TitleStack/TitleLabel");
-        _detailSubtitleLabel = GetNode<Label>("Content/MainLayout/DetailPanel/Panel/MarginContainer/DetailStack/Hero/TitleStack/SubtitleLabel");
+        _detailSubtitleLabel = GetNode<Label>("Content/MainLayout/DetailPanel/Panel/MarginContainer/DetailStack/Hero/TitleStack/SubtitleLine/SubtitleLabel");
+        _detailLocationLink = GetNode<LinkButton>("Content/MainLayout/DetailPanel/Panel/MarginContainer/DetailStack/Hero/TitleStack/SubtitleLine/LocationLink");
         _metricGrid = GetNode<GridContainer>("Content/MainLayout/DetailPanel/Panel/MarginContainer/DetailStack/Hero/MetricGrid");
         _detailCardLayout = GetNode<HBoxContainer>("Content/MainLayout/DetailPanel/Panel/MarginContainer/DetailStack/DetailScroll/DetailCardLayout");
         _detailCardGrid = GetNode<GridContainer>("Content/MainLayout/DetailPanel/Panel/MarginContainer/DetailStack/DetailScroll/DetailCardLayout/DetailCardGrid");
@@ -62,6 +67,7 @@ public partial class ChapterView : MainScreenView
         _detailIcon.ExpandMode = TextureRect.ExpandModeEnum.IgnoreSize;
         _detailActionButton.Pressed += () => DetailPrimaryActionPressed?.Invoke(this, EventArgs.Empty);
         _transferButton.GetPopup().IndexPressed += index => TransferTargetSelected?.Invoke(this, (int)index);
+        _detailLocationLink.Pressed += OnDetailLocationLinkPressed;
     }
 
     public void SetBreadcrumbs(IReadOnlyList<ChapterBreadcrumbItem> breadcrumbs)
@@ -117,6 +123,15 @@ public partial class ChapterView : MainScreenView
         _detailIcon.Texture = IconAtlas.GetIcon(detail.IconKey);
         _detailTitleLabel.Text = detail.Title;
         _detailSubtitleLabel.Text = detail.Subtitle;
+        _detailLocationSquadId = detail.SubtitleLinkSquadId;
+        bool hasLocationLink = _detailLocationSquadId.HasValue
+            && !string.IsNullOrWhiteSpace(detail.SubtitleLinkText);
+        _detailLocationLink.Text = hasLocationLink ? detail.SubtitleLinkText : "";
+        _detailLocationLink.TooltipText = hasLocationLink
+            ? $"Go to {detail.SubtitleLinkText}"
+            : "";
+        _detailLocationLink.Visible = hasLocationLink;
+        _detailLocationLink.Disabled = !hasLocationLink;
 
         ClearContainer(_metricGrid);
         foreach (ChapterBrowserMetric metric in detail.Metrics)
@@ -294,6 +309,20 @@ public partial class ChapterView : MainScreenView
             textStack.AddChild(location);
         }
 
+        if (item.CanNavigate)
+        {
+            Button navigateButton = new Button
+            {
+                Text = "GOTO",
+                CustomMinimumSize = new Vector2(46, 32),
+                MouseDefaultCursorShape = CursorShape.PointingHand,
+                TooltipText = "Go to this squad's location"
+            };
+            navigateButton.Pressed += () =>
+                BrowserItemLocationRequested?.Invoke(this, new ChapterBrowserItemEvent(item.Level, item.Id));
+            rowContent.AddChild(navigateButton);
+        }
+
         Button drillButton = new Button
         {
             Text = item.CanDrill ? item.DrillText : "i",
@@ -318,6 +347,14 @@ public partial class ChapterView : MainScreenView
         rowContent.AddChild(drillButton);
 
         return row;
+    }
+
+    private void OnDetailLocationLinkPressed()
+    {
+        if (_detailLocationSquadId.HasValue)
+        {
+            DetailLocationRequested?.Invoke(this, _detailLocationSquadId.Value);
+        }
     }
 
     private Control CreateMetricPanel(ChapterBrowserMetric metric)

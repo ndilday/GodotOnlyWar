@@ -1,4 +1,5 @@
 ﻿using OnlyWar.Models.Missions;
+using OnlyWar.Helpers;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -72,19 +73,31 @@ namespace OnlyWar.Models.Planets
             }
         }
 
-        // really basic, for now: if there's only one public faction, it's the controlling faction
+        // A region is controlled when all public factions belong to the same allied bloc. The
+        // player's Chapter and the world's default Imperial faction are separate presences in the
+        // region map, but they share control of the ground rather than contesting it. Keep the
+        // default faction as the representative when both are present so landing Chapter forces
+        // does not visually transfer civilian control away from the world.
         public RegionFaction ControllingFaction
         {
             get
             {
-                if(RegionFactionMap.Where(rf => rf.Value.IsPublic).Count() == 1)
-                {
-                    return RegionFactionMap.Where(rf => rf.Value.IsPublic).First().Value;
-                }
-                else
+                List<RegionFaction> publicFactions = RegionFactionMap.Values
+                    .Where(regionFaction => regionFaction.IsPublic)
+                    .ToList();
+                if (publicFactions.Count == 0) return null;
+
+                Faction controlFaction = publicFactions[0].PlanetFaction.Faction;
+                if (publicFactions.Skip(1).Any(regionFaction =>
+                    !FactionDispositionService.AreAllied(
+                        controlFaction, regionFaction.PlanetFaction.Faction)))
                 {
                     return null;
                 }
+
+                return publicFactions.FirstOrDefault(regionFaction =>
+                    regionFaction.PlanetFaction.Faction.IsDefaultFaction)
+                    ?? publicFactions[0];
             }
         }
 

@@ -117,7 +117,8 @@ public sealed record ChapterBrowserMenuItem(
     bool CanDrill,
     bool IsSelected,
     string DrillText = ">",
-    string Location = null);
+    string Location = null,
+    bool CanNavigate = false);
 
 public sealed record ChapterBrowserMetric(string Value, string Label);
 
@@ -136,4 +137,6 @@ public sealed record ChapterBrowserDetail(
     IReadOnlyList<ChapterBrowserMetric> Metrics,
     IReadOnlyList<ChapterBrowserDetailCard> Cards,
     string PrimaryActionText = null,
-    string PrimaryActionIconKey = null);
+    string PrimaryActionIconKey = null,
+    string SubtitleLinkText = null,
+    int? SubtitleLinkSquadId = null);

@@ -77,6 +77,10 @@ public partial class CommandWorkspaceView : MainScreenView
             string key = item.GetMetadata(0).AsString();
             if (!string.IsNullOrEmpty(key) && wanted.Contains(key))
             {
+                for (TreeItem ancestor = item.GetParent(); ancestor != null && ancestor != root; ancestor = ancestor.GetParent())
+                {
+                    ancestor.Collapsed = false;
+                }
                 item.Select(0);
             }
         }

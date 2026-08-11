@@ -24,7 +24,7 @@ public partial class FleetScreenController : MainScreenController
         PopulateFleetData();
     }
 
-    public void PopulateFleetData()
+    public void PopulateFleetData(int? focusSquadId = null)
     {
         if (_view == null) return;
 
@@ -35,6 +35,10 @@ public partial class FleetScreenController : MainScreenController
             .ToList();
 
         _view.PopulateFleetTree(fleetNodes);
+        if (focusSquadId.HasValue)
+        {
+            _view.FocusSquad(focusSquadId.Value);
+        }
     }
 
     internal static TreeNode CreateFleetNode(TaskForce taskForce)

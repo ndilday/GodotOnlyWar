@@ -289,7 +289,46 @@ public partial class MainGameScene : Control
 		_chapterScreen = (ChapterController)chapterScene.Instantiate();
 		_chapterScreen.CloseRequested += OnCloseScreen;
 		_chapterScreen.CampaignChanged += OnCampaignChanged;
+		_chapterScreen.SquadLocationRequested += OnChapterSquadLocationRequested;
 		AddPrimaryScreen(_chapterScreen);
+	}
+
+	private void OnChapterSquadLocationRequested(object sender, Squad squad)
+	{
+		if (SquadLocationNavigation.Resolve(squad) is not SquadLocationNavigationTarget target)
+		{
+			return;
+		}
+
+		if (target.Kind == SquadLocationNavigationKind.Ship)
+		{
+			ShowFleetScreen(squad);
+			return;
+		}
+
+		if (target.Kind == SquadLocationNavigationKind.Region)
+		{
+			NavigateToLandedSquad(target.Region, squad);
+		}
+	}
+
+	private void NavigateToLandedSquad(Region region, Squad squad)
+	{
+		if (region?.Planet == null || squad == null)
+		{
+			return;
+		}
+
+		// Close the Chapter primary screen first so the normal overlay stack can restore its
+		// previous surface (or the sector map) underneath the planet and region detail screens.
+		if (_activePrimaryScreen == _chapterScreen)
+		{
+			_chapterScreen.RequestClose();
+		}
+
+		LoadPlanetTacticalScreen(region.Planet);
+		_planetTacticalScreen.FocusRegion(region);
+		OpenRegionScreen(region, squad.Id, _planetTacticalScreen);
 	}
 
 	private void OnCloseScreen(object sender, EventArgs e)
@@ -517,6 +556,11 @@ public partial class MainGameScene : Control
 
 	private void OnFleetButtonPressed(object sender, EventArgs e)
 	{
+		ShowFleetScreen();
+	}
+
+	private void ShowFleetScreen(Squad focusSquad = null)
+	{
 		PushVisibleOverlaySurface();
 		if (_fleetScreen == null)
 		{
@@ -526,11 +570,12 @@ public partial class MainGameScene : Control
 			_fleetScreen.CampaignChanged += OnCampaignChanged;
 			AddPrimaryScreen(_fleetScreen);
 		}
-		if (ToggleOffActivePrimaryScreen(_fleetScreen, BottomMenu.Destination.Fleet))
+		if (focusSquad == null
+			&& ToggleOffActivePrimaryScreen(_fleetScreen, BottomMenu.Destination.Fleet))
 		{
 			return;
 		}
-		_fleetScreen.PopulateFleetData();
+		_fleetScreen.PopulateFleetData(focusSquad?.Id);
 		ShowPrimaryScreen(
 			_fleetScreen,
 			"Classis",
@@ -903,6 +948,16 @@ public partial class MainGameScene : Control
 
 	private void OnRegionDoubleClicked(object sender, Region region)
 	{
+		OpenRegionScreen(region, null, sender as Control);
+	}
+
+	private void OpenRegionScreen(Region region, int? selectedSquadId, Control returnSurface)
+	{
+		if (region == null)
+		{
+			return;
+		}
+
 		if(_regionScreen == null)
 		{
 			PackedScene regionScene = GD.Load<PackedScene>("res://Scenes/RegionScreen/region_screen.tscn");
@@ -913,12 +968,14 @@ public partial class MainGameScene : Control
 			_regionScreen.CampaignChanged += OnCampaignChanged;
 			_modalLayer.AddChild(_regionScreen);
 		}
-		_regionScreen.DisplayRegion(region);
+		_regionScreen.DisplayRegion(region, selectedSquadId);
 		_regionScreen.Visible = true;
 		_regionScreen.MoveToFront();
-		Control control = (Control)sender;
-		_previousScreenStack.Push(control);
-		control.Visible = false;
+		if (returnSurface != null)
+		{
+			_previousScreenStack.Push(returnSurface);
+			returnSurface.Visible = false;
+		}
 	}
 
 	private void OnAdjacentRegionChangeRequested(object sender, Region region)

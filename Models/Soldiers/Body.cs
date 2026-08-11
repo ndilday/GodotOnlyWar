@@ -405,7 +405,8 @@ namespace OnlyWar.Models.Soldiers
         {
             get
             {
-                return Wounds.WoundTotal >= (uint)Template.SeverWound;
+                return Wounds.WoundTotal >= (uint)Template.SeverWound
+                    || IsCoveredBySeveredParent;
             }
         }
 
@@ -429,9 +430,19 @@ namespace OnlyWar.Models.Soldiers
                 bool canMatterForFunction = Template.IsMotive
                     || Template.HandGroupId.HasValue
                     || Template.IsVital;
-                return canMatterForFunction && (IsSevered || IsCrippled);
+                return canMatterForFunction
+                    && (IsSevered || IsCrippled)
+                    && !IsCoveredBySeveredParent;
             }
         }
+
+        // A severed proximal arm already takes its grouped hand with it. The arm replacement
+        // restores the complete hand group, so the distal location must not create a second
+        // procedure of its own or receive independent field/natural care.
+        public bool IsCoveredBySeveredParent =>
+            OwningBody?.GetReplacementParent(this)?.IsSevered == true;
+
+        internal Body OwningBody { get; set; }
 
         public HitLocationTemplate Template { get; private set; }
         public HitLocation(HitLocationTemplate template)
@@ -973,6 +984,7 @@ namespace OnlyWar.Models.Soldiers
         public Body(List<HitLocation> hitLocations)
         {
             HitLocations = hitLocations.ToArray();
+            AttachLocationsToBody();
             SubscribeToInjuries();
             TotalProbabilityMap = BuildTotalProbabilityMap(HitLocations);
         }
@@ -980,8 +992,38 @@ namespace OnlyWar.Models.Soldiers
         public Body(BodyTemplate template)
         {
             HitLocations = template.HitLocations.Select(hlt => new HitLocation(hlt)).ToArray();
+            AttachLocationsToBody();
             SubscribeToInjuries();
             TotalProbabilityMap = BuildTotalProbabilityMap(HitLocations);
+        }
+
+        /// <summary>
+        /// Returns the more proximal member of a hand group, such as the arm for a hand. The
+        /// rules data expresses that relationship through the larger cripple threshold on the
+        /// proximal location, avoiding name-based special cases for non-human species.
+        /// </summary>
+        public HitLocation GetReplacementParent(HitLocation location)
+        {
+            if (location?.Template?.HandGroupId == null)
+            {
+                return null;
+            }
+
+            return HitLocations
+                .Where(candidate => candidate != location
+                    && candidate.Template.HandGroupId == location.Template.HandGroupId
+                    && candidate.Template.CrippleWound > location.Template.CrippleWound)
+                .OrderByDescending(candidate => candidate.Template.CrippleWound)
+                .ThenByDescending(candidate => candidate.Template.SeverWound)
+                .FirstOrDefault();
+        }
+
+        private void AttachLocationsToBody()
+        {
+            foreach (HitLocation location in HitLocations)
+            {
+                location.OwningBody = this;
+            }
         }
 
         private static int[] BuildTotalProbabilityMap(HitLocation[] hitLocations)

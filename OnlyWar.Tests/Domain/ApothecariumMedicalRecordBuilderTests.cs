@@ -52,6 +52,65 @@ public class ApothecariumMedicalRecordBuilderTests
     }
 
     [Fact]
+    public void BuildSoldierSummary_UsesActiveProcedureWeeksForRecovery()
+    {
+        Date currentDate = new(20_000);
+        PlayerSoldier soldier = CreatePlayerSoldier(13, "Augmetic", currentDate.GetTotalWeeks() - 6 * 52);
+        PlayerForce force = CreateForce(currentDate, soldier);
+        HitLocation[] locations =
+        [
+            soldier.Body.HitLocations.First(hl => hl.Template.Name == "Left Arm"),
+            soldier.Body.HitLocations.First(hl => hl.Template.Name == "Right Arm"),
+            soldier.Body.HitLocations.First(hl => hl.Template.Name == "Left Foot")
+        ];
+
+        foreach (HitLocation location in locations)
+        {
+            location.Wounds.AddWound(WoundLevel.Critical);
+            location.Wounds.AddWound(WoundLevel.Critical);
+            location.Wounds.AddWound(WoundLevel.Critical);
+            force.Army.MedicalProcedures.Add(new MedicalProcedure(
+                soldier.Id, location.Template.Id, MedicalProcedureType.Cybernetic, 2, 40));
+        }
+
+        ApothecariumMedicalRecordBuilder builder = new();
+
+        MedicalSoldierSummary summary = builder.BuildSoldierSummary(soldier, force);
+
+        Assert.Equal(2, summary.MaxRecoveryWeeks);
+        Assert.Empty(summary.ReplacementOptions);
+        Assert.All(
+            summary.Wounds.Where(wound => wound.NeedsReplacement),
+            wound => Assert.Equal("2 weeks", wound.Recovery));
+    }
+
+    [Fact]
+    public void BuildSoldierSummary_DoesNotOfferASeparateHandWhenItsArmIsSevered()
+    {
+        Date currentDate = new(20_000);
+        PlayerSoldier soldier = CreatePlayerSoldier(14, "One Procedure", currentDate.GetTotalWeeks() - 6 * 52);
+        PlayerForce force = CreateForce(currentDate, soldier);
+        HitLocation arm = soldier.Body.HitLocations.First(hl => hl.Template.Name == "Left Arm");
+        HitLocation hand = soldier.Body.HitLocations.First(hl => hl.Template.Name == "Left Hand");
+        arm.Wounds.AddWound(WoundLevel.Critical);
+        arm.Wounds.AddWound(WoundLevel.Critical);
+        arm.Wounds.AddWound(WoundLevel.Critical);
+        hand.Wounds.AddWound(WoundLevel.Critical);
+
+        MedicalSoldierSummary summary = new ApothecariumMedicalRecordBuilder()
+            .BuildSoldierSummary(soldier, force);
+
+        Assert.True(arm.IsReplacementEligible);
+        Assert.True(arm.IsSevered);
+        Assert.True(hand.IsSevered);
+        Assert.False(hand.IsReplacementEligible);
+        Assert.Contains(summary.ReplacementOptions, option => option.LocationName == "Left Arm");
+        Assert.DoesNotContain(summary.ReplacementOptions, option => option.LocationName == "Left Hand");
+        Assert.Contains(summary.Wounds, wound =>
+            wound.LocationName == "Left Hand" && wound.Recovery == "Covered by arm replacement");
+    }
+
+    [Fact]
     public void BuildSoldierSummary_IncludesCurrentLocationInAssignmentHeader()
     {
         Date currentDate = new(20_000);

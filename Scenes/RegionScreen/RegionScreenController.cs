@@ -92,7 +92,7 @@ public partial class RegionScreenController : DialogController
         RefreshWorkspace();
     }
 
-    public void DisplayRegion(Region region)
+    public void DisplayRegion(Region region, int? selectedSquadId = null)
     {
         _currentRegion = region;
         _targetRegion = region;
@@ -103,6 +103,14 @@ public partial class RegionScreenController : DialogController
         _selectedTargetFactionId = -1;
         _aggression = Aggression.Normal;
         RefreshWorkspace();
+
+        if (selectedSquadId.HasValue)
+        {
+            _view.SetSelectedKeys([SquadKey(selectedSquadId.Value)]);
+            RecomputeSelectedSquads();
+            UpdateSelectionSummary();
+            RefreshCommitBar();
+        }
     }
 
     public void RefreshFromExternalChange()

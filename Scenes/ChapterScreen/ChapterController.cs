@@ -32,6 +32,7 @@ public partial class ChapterController : MainScreenController
     public ChapterView ChapterView { get; set; }
 
     public event EventHandler CampaignChanged;
+    public event EventHandler<Squad> SquadLocationRequested;
 
     public override void _Ready()
     {
@@ -43,6 +44,8 @@ public partial class ChapterController : MainScreenController
 
         ChapterView.BrowserItemSelected += OnBrowserItemSelected;
         ChapterView.BrowserItemDrillRequested += OnBrowserItemDrillRequested;
+        ChapterView.BrowserItemLocationRequested += OnBrowserItemLocationRequested;
+        ChapterView.DetailLocationRequested += OnDetailLocationRequested;
         ChapterView.BreadcrumbPressed += OnBreadcrumbPressed;
         ChapterView.TransferTargetSelected += OnTransferTargetSelected;
         ChapterView.FilterButtonPressed += OnFilterButtonPressed;
@@ -90,6 +93,8 @@ public partial class ChapterController : MainScreenController
 
         ChapterView.BrowserItemSelected -= OnBrowserItemSelected;
         ChapterView.BrowserItemDrillRequested -= OnBrowserItemDrillRequested;
+        ChapterView.BrowserItemLocationRequested -= OnBrowserItemLocationRequested;
+        ChapterView.DetailLocationRequested -= OnDetailLocationRequested;
         ChapterView.BreadcrumbPressed -= OnBreadcrumbPressed;
         ChapterView.TransferTargetSelected -= OnTransferTargetSelected;
         ChapterView.FilterButtonPressed -= OnFilterButtonPressed;
@@ -152,6 +157,29 @@ public partial class ChapterController : MainScreenController
         _activeFilter = [];
         _navigator.DrillInto(item);
         RenderCurrentPath();
+    }
+
+    private void OnBrowserItemLocationRequested(object sender, ChapterBrowserItemEvent item)
+    {
+        Squad squad = GetChapter()?.GetAllSquads().FirstOrDefault(candidate => candidate.Id == item.Id);
+        if (SquadLocationNavigation.Resolve(squad) is not null)
+        {
+            SquadLocationRequested?.Invoke(this, squad);
+            return;
+        }
+
+        // The campaign can change while a dynamically-created row is being clicked. Refreshing
+        // removes a now-invalid affordance instead of leaving a dead navigation control visible.
+        RenderCurrentPath();
+    }
+
+    private void OnDetailLocationRequested(object sender, int squadId)
+    {
+        Squad squad = GetChapter()?.GetAllSquads().FirstOrDefault(candidate => candidate.Id == squadId);
+        if (SquadLocationNavigation.Resolve(squad) is not null)
+        {
+            SquadLocationRequested?.Invoke(this, squad);
+        }
     }
 
     private void OnBreadcrumbPressed(object sender, ChapterBrowserLevel level)
@@ -443,7 +471,8 @@ public partial class ChapterController : MainScreenController
                 $"{squad.SquadTemplate.Name} - {squad.Members.Count} soldiers",
                 true,
                 selectedSquad?.Id == squad.Id,
-                ">"))
+                ">",
+                CanNavigate: SquadLocationNavigation.Resolve(squad) is not null))
             .ToList();
 
         chapterItems.AddRange(chapter.ChildUnits
@@ -477,7 +506,8 @@ public partial class ChapterController : MainScreenController
                 $"{squad.SquadTemplate.Name} - {squad.Members.Count} soldiers",
                 true,
                 selectedSquad?.Id == squad.Id,
-                Location: SquadLocationFormatter.Format(squad)))
+                Location: SquadLocationFormatter.Format(squad),
+                CanNavigate: SquadLocationNavigation.Resolve(squad) is not null))
             .ToList();
 
         ChapterView.SetLeftMenu($"{company.Name} Squads", squads);

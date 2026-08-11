@@ -422,7 +422,10 @@ namespace OnlyWar.Helpers.Medical
         /// </summary>
         private static bool IsTreatable(HitLocation location)
         {
-            if (location == null || location.IsSevered || location.IsReplacementEligible)
+            if (location == null
+                || location.IsSevered
+                || location.IsCoveredBySeveredParent
+                || location.IsReplacementEligible)
             {
                 return false;
             }

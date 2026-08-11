@@ -14,7 +14,12 @@ namespace OnlyWar.Helpers
         private const int FirstProgenoidMaturesWeeks = 5 * 52;
         private const int SecondProgenoidMaturesWeeks = 10 * 52;
 
-        public IReadOnlyList<ApothecariumTreeItem> BuildTree(Unit chapter, ApothecariumSelectionKind selectedKind, int? selectedId, bool woundedOnly = true)
+        public IReadOnlyList<ApothecariumTreeItem> BuildTree(
+            Unit chapter,
+            ApothecariumSelectionKind selectedKind,
+            int? selectedId,
+            bool woundedOnly = true,
+            PlayerForce force = null)
         {
             if (chapter == null)
             {
@@ -24,7 +29,7 @@ namespace OnlyWar.Helpers
             List<ApothecariumTreeItem> items = [];
             foreach (Unit company in chapter.ChildUnits ?? [])
             {
-                ApothecariumTreeItem item = BuildUnitTreeItem(company, selectedKind, selectedId, woundedOnly);
+                ApothecariumTreeItem item = BuildUnitTreeItem(company, selectedKind, selectedId, woundedOnly, force);
                 if (item != null)
                 {
                     items.Add(item);
@@ -33,7 +38,7 @@ namespace OnlyWar.Helpers
 
             foreach (Squad squad in chapter.Squads ?? [])
             {
-                ApothecariumTreeItem item = BuildSquadTreeItem(squad, selectedKind, selectedId, woundedOnly);
+                ApothecariumTreeItem item = BuildSquadTreeItem(squad, selectedKind, selectedId, woundedOnly, force);
                 if (item != null)
                 {
                     items.Add(item);
@@ -81,7 +86,7 @@ namespace OnlyWar.Helpers
                 puritySeverity);
         }
 
-        public MedicalUnitSummary BuildUnitSummary(Unit unit)
+        public MedicalUnitSummary BuildUnitSummary(Unit unit, PlayerForce force = null)
         {
             IReadOnlyList<ISoldier> soldiers = GetUnitMembers(unit);
             return BuildUnitSummary(
@@ -90,10 +95,11 @@ namespace OnlyWar.Helpers
                 "chapter",
                 unit?.Name ?? "Unit",
                 $"{CountWounded(soldiers)} wounded / {CountOutOfAction(soldiers)} out of action",
-                soldiers);
+                soldiers,
+                force);
         }
 
-        public MedicalUnitSummary BuildSquadSummary(Squad squad)
+        public MedicalUnitSummary BuildSquadSummary(Squad squad, PlayerForce force = null)
         {
             IReadOnlyList<ISoldier> soldiers = squad?.Members?.ToList() ?? [];
             return BuildUnitSummary(
@@ -102,7 +108,8 @@ namespace OnlyWar.Helpers
                 GetSquadIconKey(squad),
                 squad?.Name ?? "Squad",
                 $"{squad?.ParentUnit?.Name ?? "Unassigned"} - {CountWounded(soldiers)} wounded / {CountOutOfAction(soldiers)} out",
-                soldiers);
+                soldiers,
+                force);
         }
 
         public MedicalSoldierSummary BuildSoldierSummary(ISoldier soldier) =>
@@ -111,8 +118,9 @@ namespace OnlyWar.Helpers
         /// <param name="force">
         /// Supplies the chapter roster needed to work out who is covering this brother medically
         /// (Design/Reference/CasualtyRealism.md §2.6). Optional: with no force the field-care readout
-        /// is simply blank, which keeps the internal callers below -- which only want recovery
-        /// weeks -- from paying for a roster sweep per soldier.
+        /// is simply blank, and active procedure countdowns are omitted. This keeps the internal
+        /// callers below -- which only want wound recovery weeks -- from paying for a roster sweep
+        /// per soldier.
         /// </param>
         public MedicalSoldierSummary BuildSoldierSummary(ISoldier soldier, PlayerForce force)
         {
@@ -122,10 +130,12 @@ namespace OnlyWar.Helpers
             }
 
             List<WoundLocationSummary> wounds = soldier.Body.HitLocations
-                .Select(BuildWoundLocationSummary)
+                .Select(location => BuildWoundLocationSummary(location, soldier.Body, force, soldier.Id))
                 .ToList();
             MedicalSeverity worstSeverity = wounds.Count == 0 ? MedicalSeverity.None : wounds.Max(w => w.Severity);
-            int maxRecovery = wounds.Select(w => ParseRecoveryWeeks(w.Recovery)).DefaultIfEmpty(0).Max();
+            int maxRecovery = Math.Max(
+                wounds.Select(w => ParseRecoveryWeeks(w.Recovery)).DefaultIfEmpty(0).Max(),
+                GetActiveProcedureRecoveryWeeks(force, soldier.Id));
             string geneSeedStatus = BuildGeneSeedStatus(wounds);
             Squad squad = soldier.AssignedSquad;
 
@@ -139,7 +149,7 @@ namespace OnlyWar.Helpers
                 geneSeedStatus,
                 worstSeverity,
                 wounds,
-                BuildReplacementOptions(soldier.Body.HitLocations),
+                BuildReplacementOptions(soldier.Body.HitLocations, force, soldier.Id),
                 BuildFieldCareStatus(soldier, force));
         }
 
@@ -178,12 +188,17 @@ namespace OnlyWar.Helpers
             return soldier.Template?.IsSquadLeader == true ? "rank_sergeant" : "rank_battle_brother";
         }
 
-        private ApothecariumTreeItem BuildUnitTreeItem(Unit unit, ApothecariumSelectionKind selectedKind, int? selectedId, bool woundedOnly)
+        private ApothecariumTreeItem BuildUnitTreeItem(
+            Unit unit,
+            ApothecariumSelectionKind selectedKind,
+            int? selectedId,
+            bool woundedOnly,
+            PlayerForce force)
         {
             List<ApothecariumTreeItem> children = [];
             foreach (Unit childUnit in unit.ChildUnits ?? [])
             {
-                ApothecariumTreeItem child = BuildUnitTreeItem(childUnit, selectedKind, selectedId, woundedOnly);
+                ApothecariumTreeItem child = BuildUnitTreeItem(childUnit, selectedKind, selectedId, woundedOnly, force);
                 if (child != null)
                 {
                     children.Add(child);
@@ -192,7 +207,7 @@ namespace OnlyWar.Helpers
 
             foreach (Squad squad in unit.Squads ?? [])
             {
-                ApothecariumTreeItem child = BuildSquadTreeItem(squad, selectedKind, selectedId, woundedOnly);
+                ApothecariumTreeItem child = BuildSquadTreeItem(squad, selectedKind, selectedId, woundedOnly, force);
                 if (child != null)
                 {
                     children.Add(child);
@@ -218,14 +233,19 @@ namespace OnlyWar.Helpers
                 children);
         }
 
-        private ApothecariumTreeItem BuildSquadTreeItem(Squad squad, ApothecariumSelectionKind selectedKind, int? selectedId, bool woundedOnly)
+        private ApothecariumTreeItem BuildSquadTreeItem(
+            Squad squad,
+            ApothecariumSelectionKind selectedKind,
+            int? selectedId,
+            bool woundedOnly,
+            PlayerForce force)
         {
             List<ApothecariumTreeItem> children = [];
             foreach (ISoldier soldier in squad.Members ?? [])
             {
                 if (!woundedOnly || IsMedicallyRelevant(soldier))
                 {
-                    children.Add(BuildSoldierTreeItem(soldier, selectedKind, selectedId));
+                    children.Add(BuildSoldierTreeItem(soldier, selectedKind, selectedId, force));
                 }
             }
 
@@ -248,9 +268,13 @@ namespace OnlyWar.Helpers
                 children);
         }
 
-        private ApothecariumTreeItem BuildSoldierTreeItem(ISoldier soldier, ApothecariumSelectionKind selectedKind, int? selectedId)
+        private ApothecariumTreeItem BuildSoldierTreeItem(
+            ISoldier soldier,
+            ApothecariumSelectionKind selectedKind,
+            int? selectedId,
+            PlayerForce force)
         {
-            MedicalSoldierSummary summary = BuildSoldierSummary(soldier);
+            MedicalSoldierSummary summary = BuildSoldierSummary(soldier, force);
             string status = summary.ReplacementOptions.Count > 0
                 ? "replacement"
                 : summary.MaxRecoveryWeeks > 0
@@ -275,13 +299,14 @@ namespace OnlyWar.Helpers
             string iconKey,
             string title,
             string subtitle,
-            IReadOnlyList<ISoldier> soldiers)
+            IReadOnlyList<ISoldier> soldiers,
+            PlayerForce force)
         {
             int healthy = soldiers.Count(s => !IsWounded(s));
             int wounded = CountWounded(soldiers);
             int outOfAction = CountOutOfAction(soldiers);
-            int readyNext = soldiers.Count(s => IsWounded(s) && BuildSoldierSummary(s).MaxRecoveryWeeks <= 1 && s.IsCombatEffective);
-            int maxRecovery = soldiers.Select(s => BuildSoldierSummary(s).MaxRecoveryWeeks).DefaultIfEmpty(0).Max();
+            int readyNext = soldiers.Count(s => IsWounded(s) && BuildSoldierSummary(s, force).MaxRecoveryWeeks <= 1 && s.IsCombatEffective);
+            int maxRecovery = soldiers.Select(s => BuildSoldierSummary(s, force).MaxRecoveryWeeks).DefaultIfEmpty(0).Max();
 
             return new MedicalUnitSummary(
                 kind,
@@ -294,15 +319,17 @@ namespace OnlyWar.Helpers
                 outOfAction,
                 readyNext,
                 maxRecovery,
-                BuildSeriousWoundRows(soldiers));
+                BuildSeriousWoundRows(soldiers, force));
         }
 
-        private IReadOnlyList<MedicalSeriousWoundRow> BuildSeriousWoundRows(IReadOnlyList<ISoldier> soldiers)
+        private IReadOnlyList<MedicalSeriousWoundRow> BuildSeriousWoundRows(
+            IReadOnlyList<ISoldier> soldiers,
+            PlayerForce force)
         {
             List<MedicalSeriousWoundRow> rows = [];
             foreach (ISoldier soldier in soldiers)
             {
-                MedicalSoldierSummary summary = BuildSoldierSummary(soldier);
+                MedicalSoldierSummary summary = BuildSoldierSummary(soldier, force);
                 WoundLocationSummary wound = summary.Wounds
                     .Where(w => w.Severity >= MedicalSeverity.Watch || w.NeedsReplacement)
                     .OrderByDescending(w => w.Severity)
@@ -327,13 +354,29 @@ namespace OnlyWar.Helpers
                 .ToList();
         }
 
-        private WoundLocationSummary BuildWoundLocationSummary(HitLocation location)
+        private WoundLocationSummary BuildWoundLocationSummary(
+            HitLocation location,
+            Body body,
+            PlayerForce force = null,
+            int soldierId = 0)
         {
             MedicalSeverity severity = GetSeverity(location);
             bool needsReplacement = location.IsReplacementEligible;
             string status = GetStatus(location);
-            string recovery = needsReplacement
-                ? "Replacement required"
+            MedicalProcedure procedure = GetActiveProcedure(force, soldierId, location.Template.Id);
+            HitLocation replacementParent = body?.GetReplacementParent(location);
+            MedicalProcedure parentProcedure = replacementParent == null
+                ? null
+                : GetActiveProcedure(force, soldierId, replacementParent.Template.Id);
+            bool coveredBySeveredParent = replacementParent?.IsSevered == true;
+            string recovery = coveredBySeveredParent
+                ? parentProcedure == null
+                    ? "Covered by arm replacement"
+                    : $"{Math.Max(0, parentProcedure.WeeksRemaining)} weeks"
+                : needsReplacement
+                ? procedure == null
+                    ? "Replacement required"
+                    : $"{Math.Max(0, procedure.WeeksRemaining)} weeks"
                 : location.Wounds.RecoveryTimeLeft() > 0
                     ? $"{location.Wounds.RecoveryTimeLeft()} weeks"
                     : "No delay";
@@ -349,10 +392,15 @@ namespace OnlyWar.Helpers
                 severity);
         }
 
-        private IReadOnlyList<ReplacementOption> BuildReplacementOptions(IEnumerable<HitLocation> locations)
+        private IReadOnlyList<ReplacementOption> BuildReplacementOptions(
+            IEnumerable<HitLocation> locations,
+            PlayerForce force = null,
+            int soldierId = 0)
         {
             List<ReplacementOption> options = [];
-            foreach (HitLocation location in locations.Where(l => l.IsReplacementEligible))
+            foreach (HitLocation location in locations.Where(l =>
+                l.IsReplacementEligible
+                && GetActiveProcedure(force, soldierId, l.Template.Id) == null))
             {
                 bool severed = location.IsSevered;
                 options.Add(new ReplacementOption(
@@ -376,6 +424,29 @@ namespace OnlyWar.Helpers
             }
 
             return options;
+        }
+
+        private static int GetActiveProcedureRecoveryWeeks(PlayerForce force, int soldierId)
+        {
+            if (force?.Army?.MedicalProcedures == null)
+            {
+                return 0;
+            }
+
+            // Procedures run concurrently, so a brother's return date is the longest remaining
+            // procedure rather than the sum of all replacements being performed.
+            return force.Army.MedicalProcedures
+                .Where(procedure => procedure.SoldierId == soldierId)
+                .Select(procedure => Math.Max(0, procedure.WeeksRemaining))
+                .DefaultIfEmpty(0)
+                .Max();
+        }
+
+        private static MedicalProcedure GetActiveProcedure(PlayerForce force, int soldierId, int hitLocationId)
+        {
+            return force?.Army?.MedicalProcedures?.FirstOrDefault(procedure =>
+                procedure.SoldierId == soldierId
+                && procedure.HitLocationTemplateId == hitLocationId);
         }
 
         private IReadOnlyList<GeneSeedFormationSummary> BuildFormationSummaries(PlayerForce force, Date currentDate)

@@ -1355,7 +1355,8 @@ The connective pass that turns 0.7's broad simulation into a legible, felt, sust
 - **(B) Orks & Indelible Infestation** (depends on A) — `UniversallyHostile | Indelible` Ork faction; indelible `RegionFaction` with pop-0 → non-public → regrow-to-1; logistic growth with an Ork multiplier and a feral efficiency penalty; two-dimensional state (awareness × expansion) yielding unnoticed-feral / noticed-feral / WAAAGH!; feral amassing migration and internal-scale WAAAGH! emergence; imperfect Imperial cull of noticed-feral Orks (gated on `Confirmed` intel and spare capacity); a viable Ork species/weapon/squad roster; tactical Waaagh! morale pressure; and derived escalation from feral through local, subsector, and sector threats. WAAAGH!-as-beacon spawning unmapped Ork worlds in empty tiles plus reinforcing fleets remains the sector-scale expression. Spec: §4.22. Open question: terminal Ork-controlled world state (§6.8).
 - **(C) Character Equipment & Bespoke Loadouts** — move from squad-template weapon choices toward persistent per-character loadouts with a one-or-two-hand primary entry, an optional one-hand entry, armor, and data-driven equipment capacity. Enforce handedness, species/faction, armor, role, duplicate, and capacity rules in the shared loadout model; expose the result in the Chapter/Soldier screens; and preserve valid loadouts through transfers, save/load, battle-start allocation, and casualty replacement. The default equipment-entry count remains a balance decision, but the schema and UI must support a finite data-driven capacity. Spec: §4.5.
 
-The remaining dependents of the substrate — the Tyranid line and Large-Scale NPC Combat — stay in §5.6 and now build on substrate work already shipped in 0.8.
+Residual follow-through for the Tyranid line and Large-Scale NPC Combat stays in §5.6; the
+completed behavior is specified in §4.24 and the TDD rather than repeated in release scope.
 
 **Techmarines & the Mars pipeline.** Flesh Techmarines out from the current placeholder (identified aspirants leave for ~2 years and return immediately) into a deferred-cohort pipeline that gives the young chapter a long capability arc and gates the machinery it cannot yet maintain. This is the **prerequisite for Vehicles** (currently Post-0.8 backlog, §5.7): armor and vehicles cannot be fielded until the chapter has Techmarines to wake and maintain their machine spirits, so the Mars pipeline must land first. Scope for 0.8:
 
@@ -1375,31 +1376,48 @@ The remaining dependents of the substrate — the Tyranid line and Large-Scale N
 
 ### 5.6 Alpha 0.8+ — Tyranid Invasion & Large-Scale NPC Combat
 
-The remaining dependents of the cross-faction substrate, which now ships in 0.8 (§5.5) along with the Ork faction that first exploits it. Both items below assume the Stance store, `FactionBehavior` flags, and intelligence-as-belief model (§4.21) are already in place.
+The core Tyranid invasion, biomass consumption, Genestealer Cult behavior, PDF defensive posture,
+opening-scenario sequencing, and large-scale NPC combat now ship in 0.8. Their behavior belongs in
+§4.24 and their architecture and formulas belong in `OnlyWar_TDD.md` and
+`Design/Reference/BattleLogic.md`. This section records only the incomplete follow-through.
 
-- **Tyranid Invasion & Biomass Consumption** (depends on the §4.21 substrate) — `UniversallyHostile` Tyranid faction on a new `GrowthType.Consumption` (no birthrate; grows only by eating); Predate (proportional headcount kills) vs. Consume (degrade `CarryingCapacity` toward a new `MaximumCarryingCapacity`, slow recovery); depletion-driven troop allocation (fight → expand → predate+consume); doomed Genestealer Cult uprising (reveal-on-inbound, seeded insider belief, relocate to active-PDF neighbors, sacrificial predation with no growth); region-level Imperial hide/unhide with civilian emigration; the PDF made a defensive strategic actor (fortify/hold, weaker than the Guard §6.4); a strategic attrition combat model distinct from the tactical Battle engine; and the opening-scenario sequencing (cult reveal → seed insider belief → pre-landing sim → authored beachhead → Navy strands the swarm → Gaussian post-landing sim → player arrival). Spec: §4.24. Open questions: breeding structures (§6.11), region-level going-public generalization (§6.12).
-- **Large-Scale NPC Combat** — NPC-only regional assaults above tactical scale resolve in
-  battle-value space against `RegionFaction.MilitaryStrength`, applying weekly attrition,
-  defender preparation, attacker aggression, and conquest/withdrawal outcomes without
-  generating transient tactical armies. This is the concrete strategic attrition model called
-  for by the Tyranid/PDF opening-scenario work; named player forces remain tactical. Spec:
-  `Design/Reference/BattleLogic.md`.
-- **Next-level NPC mission planning — shaping and special operations.** `FactionStrategyController`
-  generates only Ambush, Advance, LightningRaid, Recon, Patrol, and construction orders. Every
-  mechanic a Diversion, Sabotage, or Assassination needs is already built and already symmetric
-  between sides (`OnlyWar_TDD.md §6.4`); what is missing is purely the
-  planning side that would *issue* those orders, plus the target-selection heuristics to pick where
-  they are worth running. Two consequences make this more than a completeness item. First, the daily
-  resolution model's most interesting property — that a diverted patrol fails to detect an attack, so
-  a feint prises a screen away from the ground it was covering — currently only cuts in the player's
-  favour, because nothing on the AI side ever feints. Second, the AI presently treats
-  `Aggression` as a constant per order type rather than a decision; shaping missions are where
-  choosing it deliberately (bold where the ground looks dormant, quiet where it is being searched,
-  read off `MissionStealthDifficulty.CalculateWatchScore`) starts to matter. Subsumes the
-  "Enemy-generated diversions" backlog entry in §5.7, whose NPC-vs-player analysis — the feint
-  against a player must become a one-turn-lagged intelligence deception, since the player commits
-  orders before `ProcessTurn` — remains the governing design note for that half and should be read
-  before implementation.
+- **Complete the cross-faction substrate.** Replace the interim `Faction` booleans and
+  Imperial/non-Imperial relationship rule with the per-faction-pair Stance store, `[Flags]
+  FactionBehavior`, and the `UniversallyHostile` behavior described in §4.21. Ensure the resulting
+  policy makes Tyranids hostile to other non-Imperial factions where required, including strategic
+  Tyranid-versus-Cult targeting.
+- **Correct the Imperial remnant lifecycle.** A hidden default-Imperial remnant must receive no
+  organic growth or garrison drafting, and should return to public control only after the last public
+  hostile faction has been cleared. Preserve the existing region-level state transition and defense
+  handoff behavior while correcting these conditions. Spec: §4.24.
+- **Complete civilian emigration destinations.** Refugees from a hidden remnant should be able to
+  move to any adjacent public Imperial-controlled region, including a player-held region, weighted by
+  destination population and without a capacity clamp. Spec: §4.24.
+- **Finish Tyranid expansion valuation.** Keep the shared force budget and depletion-driven spreading,
+  but add the intended resistance component to destination selection so biomass richness and military
+  resistance both influence which neighboring region is worth entering. Spec: §4.24.
+- **Add the remaining strategic-combat modifiers.** Extend the battle-value resolver with the
+  deferred Anti-Air and Guard-quality effects, plus any explicitly chosen air, void-support, or
+  blockade modifiers. The current attrition resolver, conquest/withdrawal outcomes, and tactical-scale
+  handoff are already shipped. Related deferrals: §6.4 and `Design/Reference/OpeningScenario.md`.
+- **Make the stranded-swarm premise explicit.** Add a durable narrative/simulation state for the
+  Navy's destruction of the hive fleet or blockade of the world, rather than relying only on the
+  current absence of an orbital-reinforcement mechanic. The state should preserve the opening
+  scenario's no-reinforcement rule and be available to future void-support systems.
+- **Add NPC-generated diversion planning.** Teach `FactionStrategyController` to issue diversion
+  feints for NPC-versus-NPC situations, with target selection and a follow-through plan that fits the
+  existing weekly planning and daily mission-resolution flow.
+- **Add NPC sabotage and assassination planning.** Use the existing mission mechanics and generated
+  opportunities to let NPC factions select worthwhile defense assets and leadership targets, budget
+  forces for those operations, and issue the corresponding orders.
+- **Finish mission-risk and aggression heuristics.** Extend the existing reconnaissance aggression
+  choice to diversions and special operations, using target value, watch effort, expected exposure,
+  and mission effect to choose both targets and `Aggression`. Review the remaining fixed aggression
+  values on assaults and raids where the broader decision model requires it.
+- **Add NPC-versus-player feint deception.** Resolve the player-facing half of enemy diversions as a
+  one-turn-lagged intelligence deception: define the effect channel, persistence, displayed estimate,
+  resolution timing, and the AI's cross-turn feint-plus-assault planning horizon. This supersedes the
+  "Enemy-generated diversions" backlog entry in §5.7.
 
 ### 5.7 Post-0.8 Backlog
 

@@ -34,6 +34,25 @@ public partial class FleetScreenView : MainScreenView
         AddTreeChildren(root, entries, collapsedByKey, "");
     }
 
+    public bool FocusSquad(int squadId)
+    {
+        TreeItem root = _fleetTree.GetRoot();
+        TreeItem squadItem = FindTreeItem(root?.GetFirstChild(), $"Squad:{squadId}");
+        if (squadItem == null)
+        {
+            return false;
+        }
+
+        _fleetTree.DeselectAll();
+        for (TreeItem ancestor = squadItem.GetParent(); ancestor != null && ancestor != root; ancestor = ancestor.GetParent())
+        {
+            ancestor.Collapsed = false;
+        }
+
+        squadItem.Select(0);
+        return true;
+    }
+
     private void AddTreeChildren(TreeItem parentItem, IReadOnlyList<TreeNode> nodes, IReadOnlyDictionary<string, bool> collapsedByKey, string parentPath)
     {
         foreach (TreeNode childNode in nodes)
@@ -56,6 +75,27 @@ public partial class FleetScreenView : MainScreenView
                 }
             }
         }
+    }
+
+    private static TreeItem FindTreeItem(TreeItem item, string metadata)
+    {
+        while (item != null)
+        {
+            if (item.GetMetadata(0).AsString() == metadata)
+            {
+                return item;
+            }
+
+            TreeItem descendant = FindTreeItem(item.GetFirstChild(), metadata);
+            if (descendant != null)
+            {
+                return descendant;
+            }
+
+            item = item.GetNext();
+        }
+
+        return null;
     }
 
     private Dictionary<string, bool> CaptureCollapsedStates()
