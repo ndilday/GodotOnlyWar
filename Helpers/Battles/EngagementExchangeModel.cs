@@ -194,9 +194,9 @@ namespace OnlyWar.Helpers.Battles
                 MeleeStrikeEstimator.ChargeAssessment estimate =
                     _melee.EstimateChargeNet(soldier, primary, distance);
                 closing += estimate.ClosingCost;
-                // EstimateChargeNet already discounts the melee payoff by arrival time. It is
-                // still a valid future commitment when contact takes several turns; this flag is
-                // only about seats and weapon-lock cost that apply on the current turn.
+                // EstimateChargeNet discounts only the turns after the current one. The current
+                // turn's incoming fire is already represented by EvaluateIncomingNow; this
+                // commitment is only the remaining future exposure while contact is pending.
                 melee += estimate.MeleeBattleValue;
                 if (estimate.ReachesContactThisTurn)
                 {

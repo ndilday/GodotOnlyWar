@@ -172,8 +172,8 @@ public partial class RegionScreenController : DialogController
             .PlanetFaction?.Faction?.Id ?? -1;
 
         // An assigned mission is also a roster context: selecting it from the right-hand panel
-        // selects the same squads and attached specialists that belong to its order. This mirrors
-        // the squad rows' assignment badge and makes the specialist's region badge actionable.
+        // makes its attached specialists visible and selectable. Keep any squads the player
+        // already picked, though: choosing a mission must not discard the force being assembled.
         Order assignedOrder = FindAssignedOrder(mission);
         _editingOrder = assignedOrder;
         if (assignedOrder != null)
@@ -186,21 +186,21 @@ public partial class RegionScreenController : DialogController
         // assignment badge.
         IReadOnlyList<string> previousSelection = _view.GetSelectedKeys();
         _view.PopulateSelectionTree(BuildRoster());
-        if (assignedOrder != null)
+        List<string> selectionToRestore = previousSelection
+            .Where(key => !key.StartsWith("soldier:")
+                || ResolveSoldierFromKey(key)?.AttachedOrder == null)
+            .ToList();
+        bool alreadyPickingSquad = selectionToRestore.Any(key => key.StartsWith("squad:"));
+        if (assignedOrder != null && !alreadyPickingSquad)
         {
-            _view.SetSelectedKeys(assignedOrder.AssignedSquads.Select(squad => SquadKey(squad.Id))
-                .Concat(assignedOrder.AttachedSoldiers.Select(soldier => SpecialistKey(soldier.Id)))
-                .ToList());
+            // With no squad selection to preserve, an assigned mission still opens with its
+            // order selected so the existing operation can be reviewed or unassigned.
+            selectionToRestore.AddRange(assignedOrder.AssignedSquads
+                .Select(squad => SquadKey(squad.Id)));
+            selectionToRestore.AddRange(assignedOrder.AttachedSoldiers
+                .Select(soldier => SpecialistKey(soldier.Id)));
         }
-        else
-        {
-            // Keep ordinary squad/free-specialist selections when moving to a new mission, but
-            // do not carry attached specialists from the previously edited order into it.
-            _view.SetSelectedKeys(previousSelection
-                .Where(key => !key.StartsWith("soldier:")
-                    || ResolveSoldierFromKey(key)?.AttachedOrder == null)
-                .ToList());
-        }
+        _view.SetSelectedKeys(selectionToRestore.Distinct().ToList());
         RecomputeSelectedSquads();
         UpdateSelectionSummary();
         RefreshTargetFactionSelector();

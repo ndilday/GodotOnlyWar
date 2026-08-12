@@ -1130,17 +1130,32 @@ public class SquadEngagementPlanningTests
     }
 
     [Fact]
-    public void MeleeChargePayoff_StillDiscountsByTurnsUntilWeReachContact()
+    public void MeleeChargePayoff_IsFullWhenContactOccursThisTurn()
     {
-        // Phase 3 retains the arrival discount where it is genuinely correct: the melee charge
-        // payoff in EstimateChargeNet really is deferred until contact. A charger already in
-        // contact (turnsToContact 0) collects full value; one that needs a turn of movement
-        // collects 1/(1 + 1) = half.
+        // Contact reached during this turn belongs to this turn's exchange. Only turns after the
+        // current one defer the payoff.
         float atContact = ReferenceChargeMeleeNow(separation: 1);
         float oneTurnAway = ReferenceChargeMeleeNow(separation: 5);
+        float twoTurnsAway = ReferenceChargeMeleeNow(separation: 13);
 
         Assert.True(atContact > 0, $"expected charge value at contact, got {atContact:0.#####}");
-        Assert.Equal(atContact * 0.5f, oneTurnAway, 4);
+        Assert.Equal(atContact, oneTurnAway, 4);
+        Assert.Equal(atContact * 0.5f, twoTurnsAway, 4);
+    }
+
+    [Fact]
+    public void SameTurnCharge_DoesNotDoubleCountCurrentIncomingFireAsCommitment()
+    {
+        (float oneTurnIncoming, float oneTurnCommitment) = ReferenceChargeTerms(separation: 5);
+        (float twoTurnIncoming, float twoTurnCommitment) = ReferenceChargeTerms(separation: 13);
+
+        Assert.True(oneTurnIncoming > 0,
+            $"expected current-turn incoming fire for one-turn charge, got {oneTurnIncoming:0.#####}");
+        Assert.Equal(0, oneTurnCommitment, 5);
+        Assert.True(twoTurnIncoming > 0,
+            $"expected current-turn incoming fire for two-turn charge, got {twoTurnIncoming:0.#####}");
+        Assert.True(twoTurnCommitment > 0,
+            $"expected future closing exposure for two-turn charge, got {twoTurnCommitment:0.#####}");
     }
 
     [Fact]
@@ -1735,6 +1750,9 @@ public class SquadEngagementPlanningTests
         BattleSquad chargers = Squad("Chargers", 81_130, 20, 0.9f);
         BattleSquad enemy = Squad("Charge Target", 81_131, 20, 0.9f);
         EquipMelee(chargers.Soldiers[0], 91_130);
+        // Keep CloseToContact legal beyond one move so the helper can inspect the arrival
+        // discount at both one-turn and multi-turn separations.
+        EquipRifle(chargers.Soldiers[0], 91_134, range: 2_000, damage: 20);
         EquipMelee(enemy.Soldiers[0], 91_131);
         ((Soldier)chargers.Soldiers[0].Soldier).MoveSpeed = 8;
         BattleGridManager grid = new();
@@ -1750,6 +1768,32 @@ public class SquadEngagementPlanningTests
         return decision.Candidates
             .Single(candidate => candidate.Kind == EngagementOptionKind.CloseToContact)
             .MeleeNow;
+    }
+
+    private static (float Incoming, float Commitment) ReferenceChargeTerms(int separation)
+    {
+        BattleSquad chargers = Squad("Incoming Chargers", 81_132, 20, 0.9f);
+        BattleSquad enemy = Squad("Ranged Charge Target", 81_133, 20, 0.05f);
+        EquipMelee(chargers.Soldiers[0], 91_132);
+        // A weak ranged option keeps CloseToContact legal at the two-turn separation while the
+        // enemy's rifle supplies the incoming exposure being tested.
+        EquipRifle(chargers.Soldiers[0], 91_135, range: 2_000, damage: 20);
+        ((Soldier)chargers.Soldiers[0].Soldier).MoveSpeed = 8;
+        ((Soldier)enemy.Soldiers[0].Soldier).Dexterity = 20;
+        EquipRifle(enemy.Soldiers[0], 91_133, range: 2_000, damage: 20);
+        BattleGridManager grid = new();
+        Place(grid, chargers, true, 0, 0);
+        Place(grid, enemy, false, separation, 0);
+        BattleEngagementFrameBuilder.PairedFrame paired =
+            BattleEngagementFrameBuilder.Build([chargers], [enemy]);
+        BattleSquadPlanner planner = Planner(grid, chargers, enemy);
+
+        SquadEngagementDecision decision = planner.ChooseEngagementOption(
+            chargers, paired.Frames[chargers.Id], paired.Profiles, paired.Frames,
+            [chargers], [enemy]);
+        EngagementOptionEvaluation charge = decision.Candidates
+            .Single(candidate => candidate.Kind == EngagementOptionKind.CloseToContact);
+        return (charge.IncomingNow, charge.ContactCommitmentCost);
     }
 
     private static BattleSquad ReferenceBolterSquad(out RangedWeapon rifle)

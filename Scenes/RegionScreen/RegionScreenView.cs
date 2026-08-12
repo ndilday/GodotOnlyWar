@@ -490,9 +490,13 @@ public partial class RegionScreenView : CommandWorkspaceView
             Text = "Unassign",
             Disabled = true,
             MouseDefaultCursorShape = CursorShape.PointingHand,
-            CustomMinimumSize = new Vector2(96, 32)
+            Alignment = HorizontalAlignment.Center,
+            SizeFlagsHorizontal = SizeFlags.ShrinkCenter,
+            // Leave room for the lock icon, label, and theme padding so the adjacent Assign
+            // button never crowds or visually overlaps this control.
+            CustomMinimumSize = new Vector2(124, 32)
         };
-        IconAtlas.Apply(_unassignButton, "locked", 96);
+        IconAtlas.Apply(_unassignButton, "locked", 124);
         _unassignButton.Pressed += () => UnassignPressed?.Invoke(this, EventArgs.Empty);
         assignRow.AddChild(_unassignButton);
 
@@ -501,6 +505,7 @@ public partial class RegionScreenView : CommandWorkspaceView
             Text = "Assign 0 Squads",
             Disabled = true,
             MouseDefaultCursorShape = CursorShape.PointingHand,
+            Alignment = HorizontalAlignment.Center,
             SizeFlagsHorizontal = SizeFlags.ExpandFill,
             CustomMinimumSize = new Vector2(0, 32)
         };

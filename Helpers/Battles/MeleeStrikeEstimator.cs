@@ -214,20 +214,29 @@ namespace OnlyWar.Helpers.Battles
                 ? int.MaxValue
                 : (int)Math.Ceiling(Math.Max(0f, distance - 1f) / moveSpeed);
             // Quote future melee in the same present-value currency as ranged targeting. Contact
-            // already made has full value; every turn spent closing discounts the payoff.
-            float chargeArrivalDiscount = turnsToContact == int.MaxValue
+            // reached during this turn is part of this turn's exchange, so only turns AFTER the
+            // current one discount the payoff. The current-turn incoming term is scored separately
+            // by EngagementExchangeModel.EvaluateIncomingNow.
+            int futureTurnsBeforeContact = turnsToContact == int.MaxValue
+                ? int.MaxValue
+                : Math.Max(0, turnsToContact - 1);
+            float chargeArrivalDiscount = futureTurnsBeforeContact == int.MaxValue
                 ? 0f
-                : 1f / (1f + turnsToContact);
+                : 1f / (1f + futureTurnsBeforeContact);
             meleeBattleValue *= chargeArrivalDiscount;
             bool reachesThisTurn = turnsToContact <= 1;
-            float closingCost = EstimateClosingCost(soldier, distance, turnsToContact);
+            // Incoming fire for the current turn is already part of the posture's immediate
+            // exchange. Do not charge that same shooting window again as run-in exposure.
+            float closingCost = EstimateClosingCost(soldier, distance, futureTurnsBeforeContact);
             return new ChargeAssessment(meleeBattleValue, closingCost, reachesThisTurn);
         }
 
-        // Expected friendly battle value lost while this soldier crosses to melee: the incoming
-        // ranged removal against him per turn, integrated over the (capped) number of turns the
-        // run-in is exposed. Threat is evaluated at the midpoint of the approach to each shooter,
-        // modeling the fact that fire grows more accurate as he closes.
+        // Expected friendly battle value lost while this soldier crosses to melee AFTER the
+        // current turn: the incoming ranged removal against him per future turn, integrated over
+        // the (capped) number of turns the run-in remains exposed. Current-turn incoming fire is
+        // already scored by the posture's immediate exchange. Threat is evaluated at the midpoint
+        // of the approach to each shooter, modeling the fact that fire grows more accurate as he
+        // closes.
         private float EstimateClosingCost(
             BattleSoldier soldier,
             float distance,

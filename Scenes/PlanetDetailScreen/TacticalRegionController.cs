@@ -137,7 +137,13 @@ public partial class TacticalRegionController : Control
         }
         else if (playerCount > 0 && (showForces || showOrders))
         {
-            color = MutedMapColor(playerRegionFaction.PlanetFaction.Faction.Color.ToGodotColor(), 0.18f);
+            // Player forces share the ground with the Imperial population/PDF while the region
+            // remains Imperial-controlled. This is especially important on the promised world:
+            // landing Chapter forces must not visually transfer civilian control before the world
+            // is formally granted. Region.ControllingFaction keeps that allied bloc represented
+            // by the default faction, so use the resolved controller here instead of recoloring
+            // the whole region blue just because a Chapter force is present.
+            color = GetPlayerOccupiedRegionColor(region);
         }
         else if (multiFactionContested && (showForces || showIntel))
         {
@@ -205,6 +211,11 @@ public partial class TacticalRegionController : Control
         return region.ControllingFaction != null
             ? region.ControllingFaction.PlanetFaction.Faction.Color.ToGodotColor()
             : ContestedRegionColor;
+    }
+
+    internal static Color GetPlayerOccupiedRegionColor(Region region)
+    {
+        return MutedMapColor(GetControlColor(region), 0.18f);
     }
 
     private static string FormatCompact(long value)
