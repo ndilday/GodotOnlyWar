@@ -10,12 +10,15 @@ public static class RosterRowStyle
     public const int IconSize = 48;
     public const int StandardRowHeight = 58;
     public const int SoldierRowHeight = 56;
+    public const int SoldierReplacementRowHeight = 72;
     public const int SoldierInfoButtonSize = 24;
     public const int SoldierRowVerticalPadding = 4;
     public const int ContentSeparation = 8;
 
-    public static int GetRowHeight(bool isSoldierEntry) =>
-        isSoldierEntry ? SoldierRowHeight : StandardRowHeight;
+    public static int GetRowHeight(bool isSoldierEntry, bool hasMultilineStatus = false) =>
+        isSoldierEntry
+            ? hasMultilineStatus ? SoldierReplacementRowHeight : SoldierRowHeight
+            : StandardRowHeight;
 
     public static void ApplyCompactSoldierRow(PanelContainer row, bool selected)
     {

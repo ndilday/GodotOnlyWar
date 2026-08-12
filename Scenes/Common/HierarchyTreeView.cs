@@ -30,7 +30,10 @@ public partial class HierarchyTreeView : Tree
         ItemActivated += OnTreeItemActivated;
     }
 
-    public void ConfigureColumns(int columnCount, int secondaryColumnMinimumWidth = 0)
+    public void ConfigureColumns(
+        int columnCount,
+        int secondaryColumnMinimumWidth = 0,
+        int trailingColumnMinimumWidth = 0)
     {
         Columns = Math.Max(1, columnCount);
         SetColumnExpand(0, true);
@@ -39,6 +42,12 @@ public partial class HierarchyTreeView : Tree
         {
             SetColumnExpand(1, false);
             SetColumnCustomMinimumWidth(1, secondaryColumnMinimumWidth);
+        }
+
+        if (Columns > 2)
+        {
+            SetColumnExpand(2, false);
+            SetColumnCustomMinimumWidth(2, trailingColumnMinimumWidth);
         }
     }
 

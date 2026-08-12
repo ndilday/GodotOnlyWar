@@ -226,7 +226,9 @@ public partial class ApothecariumScreenView : MainScreenView
             SelectMode = Tree.SelectModeEnum.Row
         };
         _unitTree.IconMaxWidth = RosterRowStyle.IconSize;
-        _unitTree.ConfigureColumns(2, 88);
+        // Keep a small empty trailing column so right-aligned status text does not touch the
+        // selected-row highlight at the edge of the tree.
+        _unitTree.ConfigureColumns(3, 88, 4);
         _unitTree.SetColumnTitle(0, "Unit");
         _unitTree.SetColumnTitle(1, "Status");
         _unitTree.SelectionChanged += OnTreeItemSelected;
@@ -520,6 +522,11 @@ public partial class ApothecariumScreenView : MainScreenView
 
     private static HierarchyTreeItem ToHierarchyTreeItem(ApothecariumTreeItem item)
     {
+        bool hasMultilineStatus = item.Status == "replacement";
+        string status = hasMultilineStatus
+            ? "requires\nlimb\nreplacement"
+            : item.Status;
+
         return new HierarchyTreeItem(
             $"{(int)item.Kind}:{item.Id}",
             item.Title,
@@ -527,13 +534,15 @@ public partial class ApothecariumScreenView : MainScreenView
                 .Select(ToHierarchyTreeItem)
                 .ToList(),
             item.IconKey,
-            item.Status,
+            status,
             item.Subtitle,
             selectable: true,
             isSelected: item.IsSelected,
             badgeColor: ColorFor(item.Severity),
             iconMaxWidth: RosterRowStyle.IconSize,
-            rowHeight: RosterRowStyle.GetRowHeight(item.Kind == ApothecariumSelectionKind.Soldier));
+            rowHeight: RosterRowStyle.GetRowHeight(
+                item.Kind == ApothecariumSelectionKind.Soldier,
+                hasMultilineStatus));
     }
 
     private void OnTreeItemSelected(object sender, string key)

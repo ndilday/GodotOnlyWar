@@ -117,6 +117,18 @@ corner_radius_top_right = 2
 corner_radius_bottom_right = 2
 corner_radius_bottom_left = 2
 
+[sub_resource type="StyleBoxFlat" id="TreeHoveredSelected"]
+bg_color = Color(0.17, 0.13, 0.06, 0.96)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(0.956863, 0.839216, 0.521569, 0.95)
+corner_radius_top_left = 2
+corner_radius_top_right = 2
+corner_radius_bottom_right = 2
+corner_radius_bottom_left = 2
+
 [sub_resource type="StyleBoxFlat" id="LineEditFocus"]
 content_margin_left = 8.0
 content_margin_top = 5.0
@@ -453,3 +465,5 @@ Tree/styles/focus = SubResource("ButtonFocus")
 Tree/styles/panel = SubResource("PanelInset")
 Tree/styles/selected = SubResource("ListSelected")
 Tree/styles/selected_focus = SubResource("ListSelected")
+Tree/styles/hovered_selected = SubResource("TreeHoveredSelected")
+Tree/styles/hovered_selected_focus = SubResource("TreeHoveredSelected")

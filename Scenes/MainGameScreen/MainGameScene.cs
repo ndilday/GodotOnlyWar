@@ -418,7 +418,7 @@ public partial class MainGameScene : Control
 		_apothecariumScreen.RefreshFromExternalChange();
 		ShowPrimaryScreen(
 			_apothecariumScreen,
-			"Apothecarion",
+			"Apothecarium",
 			BottomMenu.Destination.Apothecarium);
 	}
 
