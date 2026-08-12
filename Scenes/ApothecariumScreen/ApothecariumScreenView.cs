@@ -8,11 +8,8 @@ using System.Linq;
 
 public partial class ApothecariumScreenView : MainScreenView
 {
-    private const int ChapterRowHeight = 58;
-    private const int ChapterSoldierRowHeight = 56;
-
     private Button _vaultButton;
-    private Tree _unitTree;
+    private HierarchyTreeView _unitTree;
     private VBoxContainer _vaultMetricGrid;
     private VBoxContainer _vaultRows;
     private VBoxContainer _vaultFormationRows;
@@ -49,13 +46,10 @@ public partial class ApothecariumScreenView : MainScreenView
 
     public void SetTree(IReadOnlyList<ApothecariumTreeItem> items)
     {
-        _unitTree.Clear();
-        _unitTree.HideRoot = true;
-        TreeItem root = _unitTree.CreateItem();
-        foreach (ApothecariumTreeItem item in items ?? [])
-        {
-            AddTreeItem(root, item);
-        }
+        _unitTree.Populate(
+            (items ?? [])
+                .Select(ToHierarchyTreeItem)
+                .ToList());
     }
 
     public void ShowVault(GeneSeedVaultSummary summary)
@@ -119,12 +113,7 @@ public partial class ApothecariumScreenView : MainScreenView
         ShowPanel(_soldierPanel);
         _soldierIcon.Texture = IconAtlas.GetIcon(summary.IconKey);
         _soldierTitle.Text = summary.Name;
-        // Field-care coverage rides on the assignment line rather than claiming a metric tile: it is
-        // context for the recovery numbers beside it, not a fifth headline figure
-        // (Design/Reference/CasualtyRealism.md §2.6).
-        _soldierSubtitle.Text = string.IsNullOrEmpty(summary.FieldCareStatus)
-            ? summary.Assignment
-            : $"{summary.Assignment}\n{summary.FieldCareStatus}";
+        _soldierSubtitle.Text = summary.Assignment;
         bool hasCyberneticDamage = summary.Wounds.Any(w =>
             w.IsCybernetic && w.Severity > MedicalSeverity.None);
         PopulateMetrics(_soldierMetrics, [
@@ -227,7 +216,7 @@ public partial class ApothecariumScreenView : MainScreenView
         filterRow.AddChild(CreateSmallChip("Out-of-action", MedicalSeverity.Critical));
         stack.AddChild(filterRow);
 
-        _unitTree = new Tree
+        _unitTree = new HierarchyTreeView
         {
             HideRoot = true,
             Columns = 2,
@@ -236,12 +225,11 @@ public partial class ApothecariumScreenView : MainScreenView
             // target. Row mode makes clicks in either visual column select the same item.
             SelectMode = Tree.SelectModeEnum.Row
         };
+        _unitTree.IconMaxWidth = RosterRowStyle.IconSize;
+        _unitTree.ConfigureColumns(2, 88);
         _unitTree.SetColumnTitle(0, "Unit");
         _unitTree.SetColumnTitle(1, "Status");
-        _unitTree.SetColumnExpand(0, true);
-        _unitTree.SetColumnExpand(1, false);
-        _unitTree.SetColumnCustomMinimumWidth(1, 88);
-        _unitTree.ItemSelected += OnTreeItemSelected;
+        _unitTree.SelectionChanged += OnTreeItemSelected;
         stack.AddChild(_unitTree);
 
         return panel;
@@ -530,41 +518,38 @@ public partial class ApothecariumScreenView : MainScreenView
         _soldierPanel.Visible = panel == _soldierPanel;
     }
 
-    private void AddTreeItem(TreeItem parent, ApothecariumTreeItem item)
+    private static HierarchyTreeItem ToHierarchyTreeItem(ApothecariumTreeItem item)
     {
-        TreeItem node = _unitTree.CreateItem(parent);
-        node.SetText(0, item.Title);
-        node.SetText(1, item.Status);
-        node.SetTooltipText(0, item.Subtitle);
-        node.SetTooltipText(1, item.Status);
-        node.SetIcon(0, IconAtlas.GetIcon(item.IconKey));
-        node.SetIconMaxWidth(0, 48);
-        node.SetCustomMinimumHeight(item.Kind == ApothecariumSelectionKind.Soldier
-            ? ChapterSoldierRowHeight
-            : ChapterRowHeight);
-        node.SetMetadata(0, Variant.From(new Vector2I((int)item.Kind, item.Id)));
-        node.SetCustomColor(1, ColorFor(item.Severity));
-        if (item.IsSelected)
-        {
-            _unitTree.SetSelected(node, 0);
-        }
-
-        foreach (ApothecariumTreeItem child in item.Children ?? [])
-        {
-            AddTreeItem(node, child);
-        }
+        return new HierarchyTreeItem(
+            $"{(int)item.Kind}:{item.Id}",
+            item.Title,
+            (item.Children ?? [])
+                .Select(ToHierarchyTreeItem)
+                .ToList(),
+            item.IconKey,
+            item.Status,
+            item.Subtitle,
+            selectable: true,
+            isSelected: item.IsSelected,
+            badgeColor: ColorFor(item.Severity),
+            iconMaxWidth: RosterRowStyle.IconSize,
+            rowHeight: RosterRowStyle.GetRowHeight(item.Kind == ApothecariumSelectionKind.Soldier));
     }
 
-    private void OnTreeItemSelected()
+    private void OnTreeItemSelected(object sender, string key)
     {
-        TreeItem selected = _unitTree.GetSelected();
-        if (selected == null)
+        string[] parts = key?.Split(':', 2);
+        if (parts == null
+            || parts.Length != 2
+            || !int.TryParse(parts[0], out int kindValue)
+            || !int.TryParse(parts[1], out int id))
         {
             return;
         }
 
-        Vector2I meta = selected.GetMetadata(0).As<Vector2I>();
-        TreeSelectionChanged?.Invoke(this, new ApothecariumSelection((ApothecariumSelectionKind)meta.X, meta.Y));
+        TreeSelectionChanged?.Invoke(
+            this,
+            new ApothecariumSelection((ApothecariumSelectionKind)kindValue, id));
     }
 
     private static void ClearContainer(Container container)

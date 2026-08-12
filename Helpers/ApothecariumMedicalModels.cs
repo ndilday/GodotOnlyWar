@@ -97,11 +97,7 @@ namespace OnlyWar.Helpers
         string GeneSeedStatus,
         MedicalSeverity WorstSeverity,
         IReadOnlyList<WoundLocationSummary> Wounds,
-        IReadOnlyList<ReplacementOption> ReplacementOptions,
-        // Apothecary field care covering this brother right now, as a one-line readout
-        // (Design/Reference/CasualtyRealism.md §2.6). Appended last and defaulted so every existing
-        // construction site keeps compiling. Empty when the caller supplied no force context.
-        string FieldCareStatus = "");
+        IReadOnlyList<ReplacementOption> ReplacementOptions);
 
     public sealed record WoundLocationSummary(
         int HitLocationId,

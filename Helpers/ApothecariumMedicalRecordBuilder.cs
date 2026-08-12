@@ -1,4 +1,3 @@
-using OnlyWar.Helpers.Medical;
 using OnlyWar.Models;
 using OnlyWar.Models.Soldiers;
 using OnlyWar.Models.Squads;
@@ -149,33 +148,7 @@ namespace OnlyWar.Helpers
                 geneSeedStatus,
                 worstSeverity,
                 wounds,
-                BuildReplacementOptions(soldier.Body.HitLocations, force, soldier.Id),
-                BuildFieldCareStatus(soldier, force));
-        }
-
-        /// <summary>
-        /// Who is treating this brother, and how much of an Apothecary's day he has access to
-        /// (Design/Reference/CasualtyRealism.md §2.6). Shown on the Apothecarium so the cost of sending
-        /// an Apothecary forward is visible where the backlog is: the brothers he left behind read
-        /// "no Apothecary on hand" the moment he is attached to an order.
-        /// </summary>
-        public static string BuildFieldCareStatus(ISoldier soldier, PlayerForce force)
-        {
-            if (soldier is not PlayerSoldier player || force?.Army?.OrderOfBattle == null)
-            {
-                return "";
-            }
-            IReadOnlyList<PlayerSoldier> covering = FieldCareService.GetCoveringApothecaries(
-                player, force.Army.OrderOfBattle.GetAllMembers().OfType<PlayerSoldier>());
-            if (covering.Count == 0)
-            {
-                return "Field care: no Apothecary on hand.";
-            }
-            float capacity = covering.Sum(FieldCareService.GetCapacity);
-            string who = covering.Count == 1
-                ? covering[0].Name
-                : $"{covering.Count} Apothecaries";
-            return $"Field care: {who} ({capacity:0.0} wound treatments/day).";
+                BuildReplacementOptions(soldier.Body.HitLocations, force, soldier.Id));
         }
 
         public static string GetSoldierIconKey(ISoldier soldier)
