@@ -8,6 +8,9 @@ using System.Linq;
 
 public partial class ApothecariumScreenView : MainScreenView
 {
+    private const int ChapterRowHeight = 58;
+    private const int ChapterSoldierRowHeight = 56;
+
     private Button _vaultButton;
     private Tree _unitTree;
     private VBoxContainer _vaultMetricGrid;
@@ -126,7 +129,7 @@ public partial class ApothecariumScreenView : MainScreenView
             w.IsCybernetic && w.Severity > MedicalSeverity.None);
         PopulateMetrics(_soldierMetrics, [
             ("Status", summary.IsCombatEffective ? "Ready" : "Out", summary.IsCombatEffective ? MedicalSeverity.Stable : MedicalSeverity.Critical),
-            ("Recovery", summary.ReplacementOptions.Count > 0
+            ("Recovery (without treatment)", summary.ReplacementOptions.Count > 0
                 ? "Replacement"
                 : hasCyberneticDamage ? "Techmarine repair" : $"{summary.MaxRecoveryWeeks} wk",
                 summary.ReplacementOptions.Count > 0 || hasCyberneticDamage ? MedicalSeverity.Critical : MedicalSeverity.Watch),
@@ -536,6 +539,9 @@ public partial class ApothecariumScreenView : MainScreenView
         node.SetTooltipText(1, item.Status);
         node.SetIcon(0, IconAtlas.GetIcon(item.IconKey));
         node.SetIconMaxWidth(0, 48);
+        node.SetCustomMinimumHeight(item.Kind == ApothecariumSelectionKind.Soldier
+            ? ChapterSoldierRowHeight
+            : ChapterRowHeight);
         node.SetMetadata(0, Variant.From(new Vector2I((int)item.Kind, item.Id)));
         node.SetCustomColor(1, ColorFor(item.Severity));
         if (item.IsSelected)

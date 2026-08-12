@@ -720,19 +720,29 @@ namespace OnlyWar.Helpers
 
         private static string GetSquadIconKey(Squad squad)
         {
-            if (squad == null)
+            SquadTypes type = squad?.SquadTemplate?.SquadType ?? SquadTypes.None;
+            if ((type & SquadTypes.HQ) != 0)
             {
-                return "infantry";
+                return "chapter";
+            }
+            if ((type & SquadTypes.Elite) != 0)
+            {
+                return "elite";
+            }
+            if ((type & SquadTypes.Fast) != 0)
+            {
+                return "fast";
+            }
+            if ((type & SquadTypes.Heavy) != 0)
+            {
+                return "heavy";
+            }
+            if ((type & SquadTypes.Scout) != 0)
+            {
+                return "scout";
             }
 
-            SquadTypes type = squad.SquadTemplate?.SquadType ?? SquadTypes.None;
-            if ((type & SquadTypes.HQ) != 0) return "hq";
-            if ((type & SquadTypes.Scout) != 0) return "scout";
-            if ((type & SquadTypes.Elite) != 0) return "elite";
-            if ((type & SquadTypes.Fast) != 0) return "fast";
-            if ((type & SquadTypes.Heavy) != 0) return "heavy";
-            if ((type & SquadTypes.Bodyguard) != 0) return "bodyguard";
-            return "infantry";
+            return "default";
         }
     }
 }

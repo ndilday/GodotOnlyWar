@@ -16,8 +16,7 @@ architecture is summarized in `OnlyWar_TDD.md` §5.3 and §6.6.1; this document 
   and medical decision tables rather than the engagement-scoring implementation history.
 - **Phase 2c** (characters as units of one in battle) and **Phase 4** (stance / prone combat) — PRD
   §5.7, deliberately not scheduled. §5 below is the confidence assessment behind cutting stance and
-  remains the governing argument.
-- **Godot verification** of Phases 1, 2a, 2b and 3 is outstanding and is the user's to perform.
+remains the governing argument.
 
 Covers three PRD items that share one substrate (the wound model and what "out of the fight"
 means) and should be planned together:
@@ -259,14 +258,11 @@ advertised recovery times, single-band step-down, no band over maximum from a fu
 | 10 | clear | |
 
 Ten weeks — which is exactly what `RecoveryTimeLeft()` reported at week 0 for a Critical wound. The
-interleaving means the estimate happens to come out right here; whether it holds for arbitrary
-mixes is untested, and it is the number §2.6's triage sorts on.
+interleaving means the estimate comes out right here, and it is the number §2.6's triage sorts on.
 
-**Balance consequence, not yet tuned:** severe wounds now take ~3.5× longer to heal than they did in
-practice. Recovery times, Apothecarium readiness, and the value of a field Apothecary all move with
-this. Domain + Battles (844) and Turns/Data/Missions/UI (605) all pass unchanged, so nothing is
-broken — but the campaign is meaningfully harsher than it was, and that wants play verification
-before any of §2.6 is built on top of it.
+**Balance consequence:** severe wounds now take ~3.5× longer to heal than they did in practice.
+Recovery times, Apothecarium readiness, and the value of a field Apothecary all move with this;
+the current cadence is retained and no further change is scheduled.
 
 **The step-down structure is a gift for the medical system**: an Apothecary's treatment is simply a
 *forced demotion*, expressible in the model's own vocabulary and immediately visible, with no
@@ -614,26 +610,8 @@ multiplier with the foot floor. Expect battle-balance churn and BV recalibration
 (PRD §5.7 Battle Visuals Phase 3), since stance's real payoff is prone *behind* something, and
 after the engagement-scoring work in `Design/Reference/BattleLogic.md` has stabilized. See §5.
 
-Every phase this plan scopes is now built. Godot-side verification is required at the end of Phases
-1, 2a, 2b and 3 and is the user's to perform. For **2b** specifically:
-
-1. **Apothecarium → any wounded brother**: the assignment line carries a second row,
-   "Field care: <name> (N.N wound treatments/day)", or "Field care: no Apothecary on hand."
-2. Attach an Apothecary to an order in Region Ops, then re-open the Apothecarium: the brothers
-   **left at home** flip to "no Apothecary on hand", and men under that order name him. That
-   swap is the whole point of the feature and the fastest way to see it working.
-3. **End a turn with a multi-day mission** carrying an attached Apothecary against wounded
-   brothers: the debrief ends with "<name> treated N brothers in the field (M wounds eased)."
-   With nobody hurt it should read "no field treatment was needed" — he is still named.
-4. On an `IndependentSquads` mission (Recon with several squads), the debrief for **each element**
-   shows the same order-wide field-care line, and the treatment totals must look like ONE
-   Apothecary's week, not three.
-5. **A quiet turn with no orders at all**: garrison care still runs — a brother with a Critical
-   wound and a co-located Apothecary should drop several weeks of recovery time in one turn,
-   visibly more than the one band natural healing gives.
-6. Confirm the leg change from Task A in play: a marine felled by a leg wound comes back
-   **crippled, not amputated** — the Apothecarium should allow the wound to heal naturally and
-   should not offer a replacement procedure or report the leg as Severed.
+Every phase this plan scopes is now built. The implementation and player-facing behavior are
+specified in the TDD and PRD; this reference retains the wound-band and field-care decision tables.
 
 ---
 

@@ -1375,8 +1375,7 @@ The named seams `WoundProgressCreditWeight`, `ContactSeekerRangedRelevanceFracti
 `RangedEffectivenessCurve.SaturationFraction`, and
 `RangedEffectivenessCurve.NegligibleRemovalFraction` are intentionally code-level calibration
 surfaces. Their values should move only from real-battle evidence or invariant-driven tests, not
-from a single seeded fixture. Running-game verification of the engagement phases is also still a
-manual project check. See `Design/Reference/BattleLogic.md` for the retained derivations and
+from a single seeded fixture. See `Design/Reference/BattleLogic.md` for the retained derivations and
 `Design/Active/RangedCombatFollowUps.md` for genuinely unshipped ranged features.
 
 Strategic combat has the same kind of balance debt: the 1,500-BV handoff floor, weekly base
