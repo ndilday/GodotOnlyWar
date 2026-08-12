@@ -26,7 +26,8 @@ namespace OnlyWar.Models.Battles
         Attacker = 0,
         Defender = 1,
         Ambusher = 2,
-        Ambushed = 3
+        Ambushed = 3,
+        AssassinationAttacker = 4
     }
 
     public enum BattleSquadStatus

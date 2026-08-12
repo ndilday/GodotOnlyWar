@@ -1,6 +1,7 @@
 using OnlyWar.Helpers.Extensions;
 using OnlyWar.Helpers.Fortifications;
 using OnlyWar.Models.Missions;
+using OnlyWar.Models.Battles;
 using OnlyWar.Models.Planets;
 using OnlyWar.Models.Soldiers;
 using OnlyWar.Models.Squads;
@@ -80,7 +81,9 @@ namespace OnlyWar.Helpers.Missions.Assassinate
             // could still walk home. WithdrawIfAbleMissionStep carries the two conditions this step
             // used to apply inline (still able to continue, and standing on ground it does not hold).
             return MissionStepResult.Continue(
-                new MeetingEngagementMissionStep(defendersMayBurrow: false),
+                new MeetingEngagementMissionStep(
+                    defendersMayBurrow: false,
+                    attackerBattleRole: BattleRole.AssassinationAttacker),
                 margin,
                 then: new WithdrawIfAbleMissionStep());
         }

@@ -14,12 +14,16 @@ namespace OnlyWar.Helpers.Missions
     public class MeetingEngagementMissionStep : IMissionStep
     {
         private readonly bool _defendersMayBurrow;
+        private readonly BattleRole _attackerBattleRole;
 
         public string Description { get { return "Meeting Engagement"; } }
 
-        public MeetingEngagementMissionStep(bool defendersMayBurrow = true)
+        public MeetingEngagementMissionStep(
+            bool defendersMayBurrow = true,
+            BattleRole attackerBattleRole = BattleRole.Attacker)
         {
             _defendersMayBurrow = defendersMayBurrow;
+            _attackerBattleRole = attackerBattleRole;
         }
 
         public MissionStepResult ExecuteMissionStep(MissionExecutionContext execution, float marginOfSuccess, IMissionStep resumeStep)
@@ -84,7 +88,7 @@ namespace OnlyWar.Helpers.Missions
                 opposingSquads,
                 context.Order.Mission.RegionFaction.Region,
                 execution.Battle,
-                context.CreateMissionBattleProfile(BattleRole.Attacker),
+                context.CreateMissionBattleProfile(_attackerBattleRole),
                 MissionContext.CreateOpposingBattleProfile(opposingSquads, BattleRole.Defender));
             bool battleDone = false;
             resolver.OnBattleComplete += (sender, e) => { battleDone = true; };

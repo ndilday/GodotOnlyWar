@@ -6,7 +6,11 @@ using System.Linq;
 using OnlyWar.Helpers;
 using OnlyWar.Helpers.Battles;
 using OnlyWar.Helpers.Battles.Aftermath;
+using OnlyWar.Helpers.Battles.Actions;
 using OnlyWar.Models;
+using OnlyWar.Models.Battles;
+using OnlyWar.Models.Equippables;
+using OnlyWar.Models.Orders;
 using OnlyWar.Models.Soldiers;
 using OnlyWar.Models.Squads;
 using OnlyWar.Tests.Fixtures;
@@ -58,6 +62,78 @@ public class BattleTurnResolverTests
             resolver.BattleHistory.Turns.Select(turn => turn.TurnNumber));
         Assert.Single(resolver.BattleHistory.Turns[0].State.AttackerSquads[attackers.Id].Soldiers);
         Assert.Equal(0, resolver.BattleHistory.Turns[0].TurnNumber);
+    }
+
+    [Fact]
+    public void AssassinationAttacker_OpensWithAimedFire()
+    {
+        GameRulesData rules = new();
+        Date battleDate = new(1, 1, 1);
+        string originalDirectory = Environment.CurrentDirectory;
+        try
+        {
+            Directory.SetCurrentDirectory(RulesDatabaseFixture.RepositoryRoot);
+            GameDataSingleton.Instance.LoadGameDataFromBlob(rules, battleDate, null);
+        }
+        finally
+        {
+            Directory.SetCurrentDirectory(originalDirectory);
+        }
+
+        RNG.Reset(42);
+        BattleSquad attacker = CreateBattleSquad(CreateFaction(81_001, "Assassins"), "Assassins", 81_101);
+        BattleSquad defender = CreateBattleSquad(CreateFaction(81_002, "Bodyguard"), "Bodyguard", 81_201);
+        EquipAimTestRifle(attacker.Soldiers[0], 81_301);
+        EquipAimTestRifle(defender.Soldiers[0], 81_302);
+        BattleGridManager grid = new();
+        Place(grid, attacker.Soldiers[0], side: true, x: 0, y: 0);
+        Place(grid, defender.Soldiers[0], side: false, x: 10, y: 0);
+        BattleAftermathDependencies aftermath = new(
+            battleDate, StaticRNG.Instance, NoOpPlayerBattleAftermathSink.Instance);
+        BattleExecutionContext execution = new(rules, StaticRNG.Instance, aftermath);
+        BattleTurnResolver resolver = new(
+            grid,
+            [attacker],
+            [defender],
+            region: null,
+            execution,
+            new BattleSideProfile(Aggression.Normal, BattleRole.AssassinationAttacker),
+            new BattleSideProfile(Aggression.Normal, BattleRole.Defender));
+
+        resolver.ProcessNextTurn();
+
+        Assert.Contains(
+            resolver.BattleHistory.Turns[1].Actions,
+            action => action is ShootAction shot && shot.ShooterId == attacker.Soldiers[0].Soldier.Id);
+        Assert.DoesNotContain(
+            resolver.BattleHistory.Turns[1].Actions,
+            action => action is AimAction aim && aim.ActorId == attacker.Soldiers[0].Soldier.Id);
+    }
+
+    private static void EquipAimTestRifle(BattleSoldier soldier, int templateId)
+    {
+        ((Soldier)soldier.Soldier).Dexterity = 20;
+        RangedWeapon rifle = new(new RangedWeaponTemplate(
+            templateId,
+            "Aim Test Rifle",
+            EquipLocation.TwoHand,
+            TestSkills.Ranged,
+            accuracy: 6,
+            armorMultiplier: 1,
+            penetrationMultiplier: 1,
+            requiredStrength: 0,
+            baseDamage: 100,
+            maxDistance: 100,
+            rof: 1,
+            ammo: 10,
+            recoil: 0,
+            bulk: 4,
+            doesDamageDegradeWithRange: false,
+            reloadTime: 1));
+        soldier.RangedWeapons.Clear();
+        soldier.ClearReadiedRangedWeapons();
+        soldier.RangedWeapons.Add(rifle);
+        soldier.ReadyWeapon(rifle);
     }
 
     private static BattleSquad CreateBattleSquad(Faction faction, string name, int soldierId)
