@@ -1,3 +1,4 @@
+using OnlyWar.Helpers;
 using OnlyWar.Models.Orders;
 using OnlyWar.Models.Soldiers;
 using OnlyWar.Models.Soldiers.Ratings;
@@ -15,7 +16,8 @@ namespace OnlyWar.Helpers.Medical
         string LocationName,
         WoundLevel FromBand,
         int WoundsMoved,
-        float Cost);
+        float Cost,
+        int Day = 0);
 
     /// <summary>
     /// What field care did for one order (or one garrison location) over the days it ran. Carried
@@ -88,7 +90,8 @@ namespace OnlyWar.Helpers.Medical
         public static void ApplyDailyFieldCare(
             Order order,
             FieldCareReport report,
-            IReadOnlyList<BaseSkill> medicalSkills = null)
+            IReadOnlyList<BaseSkill> medicalSkills = null,
+            int day = 0)
         {
             if (order == null || report == null) return;
 
@@ -103,7 +106,7 @@ namespace OnlyWar.Helpers.Medical
                 report.ApothecaryNames.Add(apothecary.Name);
             }
 
-            RunOneDay(apothecaries, underOrder, report, medicalSkills);
+            RunOneDay(apothecaries, underOrder, report, medicalSkills, day, order.Id);
         }
 
         /// <summary>
@@ -152,7 +155,7 @@ namespace OnlyWar.Helpers.Medical
 
                 for (int day = 1; day <= FieldCareConstants.GarrisonDaysPerTurn; day++)
                 {
-                    RunOneDay(apothecaries, present, report, medicalSkills);
+                    RunOneDay(apothecaries, present, report, medicalSkills, day, null);
                 }
                 reports.Add(report);
             }
@@ -295,7 +298,9 @@ namespace OnlyWar.Helpers.Medical
             IReadOnlyList<PlayerSoldier> apothecaries,
             IReadOnlyList<PlayerSoldier> pool,
             FieldCareReport report,
-            IReadOnlyList<BaseSkill> medicalSkills)
+            IReadOnlyList<BaseSkill> medicalSkills,
+            int day,
+            int? orderId)
         {
             float capacity = apothecaries.Sum(GetCapacity);
             if (capacity <= 0f) return;
@@ -327,7 +332,12 @@ namespace OnlyWar.Helpers.Medical
                     spent += cost;
                     report.RecordTreatment(new FieldCareTreatment(
                         patient.Id, patient.Name, location.Template?.Name ?? "wound",
-                        band, count, cost));
+                        band, count, cost, day));
+                    GameLog.Debug(() =>
+                        $"FIELD_CARE order={(orderId.HasValue ? orderId.Value.ToString() : "garrison")} "
+                        + $"day={day} apothecaries=[{string.Join(",", apothecaries.Select(a => $"{a.Name}#{a.Id}"))}] "
+                        + $"patient={patient.Name}#{patient.Id} location={location.Template?.Name ?? "wound"} "
+                        + $"from={band} woundsMoved={count} cost={cost:F2}");
                     treated = true;
                     break;
                 }

@@ -444,7 +444,10 @@ namespace OnlyWar.Helpers.Battles
                         outgoingRetention,
                         targetSpeed: Math.Max(0, -ourMotion));
                     float theirMotion = (frames[squad.Id].Role
-                        is EngagementSquadRole.Pursuit or EngagementSquadRole.Standoff)
+                        is EngagementSquadRole.Pursuit
+                            or EngagementSquadRole.Follow
+                            or EngagementSquadRole.Press
+                            or EngagementSquadRole.Standoff)
                         ? Math.Max(0, frames[squad.Id].QuarryRunSpeed)
                         : BaselineRangeDelta(opposing, frames[enemy.Id].Role, range);
                     nextRanges[enemy.Id] = Math.Max(0, range + ourMotion + theirMotion);
@@ -526,8 +529,10 @@ namespace OnlyWar.Helpers.Battles
         internal static float QuarryWithdrawalRate(
             SquadEngagementFrame frame,
             EngagementSquadRole? quarryRole) =>
-            frame.Role == EngagementSquadRole.Pursuit
-                && quarryRole is EngagementSquadRole.Bound or EngagementSquadRole.Routing
+            (frame.Role is EngagementSquadRole.Pursuit
+                or EngagementSquadRole.Follow
+                or EngagementSquadRole.Press)
+                && (quarryRole is EngagementSquadRole.Bound or EngagementSquadRole.Routing)
                     ? Math.Max(0, frame.QuarryRunSpeed)
                     : 0;
 

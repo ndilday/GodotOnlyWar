@@ -289,6 +289,41 @@ public class BattlePursuitActionPlannerTests
     }
 
     [Fact]
+    public void PursuingSquadWithEffectiveRangedWeapon_ShootsWhileWithinUsefulRange()
+    {
+        // This is the pursuit case that the force-level tests do not exercise: the pursuing squad
+        // has no melee alternative, but its rifle can already inflict worthwhile damage on the withdrawing
+        // target. Choosing RunToward would throw away the shot because the run tier only creates
+        // utility actions (ready/reload/none), never Aim or Shoot.
+        BattleSquad pursuer = CreateSquad(
+            "Armed Pursuer", 72_076, Loadout.EffectiveRanged);
+        BattleSquad withdrawing = CreateSquad("Withdrawer", 72_077, Loadout.Rifle);
+        withdrawing.WithdrawalRole = WithdrawalRole.Routing;
+        Fixture fixture = CreateFixture(
+            (pursuer, true, 0, 0),
+            (withdrawing, false, 60, 0));
+
+        SquadEngagementDecision decision = PlanPursuit(
+            fixture,
+            pursuer,
+            [withdrawing],
+            role: EngagementSquadRole.Follow);
+
+        Assert.True(
+            decision.Chosen.Kind is EngagementOptionKind.Hold or EngagementOptionKind.JogToward,
+            $"an effective ranged pursuit should keep a firing-compatible option, but chose "
+                + $"{decision.Chosen.Kind} (score {decision.Chosen.Score:F3})");
+        Assert.True(decision.Chosen.ImmediateEnemyRemoval > 0);
+        Assert.Contains(
+            decision.Chosen.RootActions,
+            action => action.Kind == PlannedSoldierActionKind.Shoot);
+        Assert.Contains(
+            fixture.ShootActions,
+            action => action is ShootAction shot
+                && shot.TargetId == withdrawing.Soldiers[0].Soldier.Id);
+    }
+
+    [Fact]
     public void RunToward_UsesCurrentRoleConstraintToPreferCoverOverNearerBoundSquad()
     {
         // Bound squads cannot shoot while the Cover squad can. The pursuit frame therefore selects
@@ -457,7 +492,7 @@ public class BattlePursuitActionPlannerTests
         return selected;
     }
 
-    private enum Loadout { Rifle, FireSupport, Assault }
+    private enum Loadout { Rifle, FireSupport, Assault, EffectiveRanged }
 
     private static BattleSquad CreateSquad(
         string name,
@@ -496,6 +531,18 @@ public class BattlePursuitActionPlannerTests
                 doesDamageDegradeWithRange: false, reloadTime: 1, 0, 0));
             soldier.RangedWeapons.Add(sniper);
             soldier.ReadyWeapon(sniper);
+            return;
+        }
+
+        if (loadout == Loadout.EffectiveRanged)
+        {
+            RangedWeapon rifle = new(new RangedWeaponTemplate(
+                seed, "Test Assault Rifle", EquipLocation.TwoHand, TestSkills.Ranged,
+                accuracy: 10, armorMultiplier: 1, penetrationMultiplier: 1, requiredStrength: 0,
+                baseDamage: 12, maxDistance: 800, rof: 1, ammo: 10, recoil: 0, bulk: 1,
+                doesDamageDegradeWithRange: false, reloadTime: 1, 0, 0));
+            soldier.RangedWeapons.Add(rifle);
+            soldier.ReadyWeapon(rifle);
             return;
         }
 

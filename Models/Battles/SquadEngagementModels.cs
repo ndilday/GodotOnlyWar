@@ -29,7 +29,11 @@ public enum EngagementSquadRole
     Bound = 4,
     Routing = 5,
     BreakOff = 6,
-    Standoff = 7
+    Standoff = 7,
+    // Force-level Follow and Press postures must remain distinct at squad planning time:
+    // Follow may jog while firing, whereas Press runs to contact without ranged fire.
+    Follow = 8,
+    Press = 9
 }
 
 /// <summary>

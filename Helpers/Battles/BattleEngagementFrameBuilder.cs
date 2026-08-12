@@ -790,7 +790,10 @@ internal static class BattleEngagementFrameBuilder
             // counterpart. Read the paired current-turn role constraints rather than mutable
             // BattleSquad role state so both sides use the same frozen declaration snapshot.
             HashSet<int> coveringTargetIds = (constraint.Role
-                    is EngagementSquadRole.Pursuit or EngagementSquadRole.Standoff)
+                    is EngagementSquadRole.Pursuit
+                        or EngagementSquadRole.Follow
+                        or EngagementSquadRole.Press
+                        or EngagementSquadRole.Standoff)
                 ? enemy.Where(target => constraints?.GetValueOrDefault(target.Id)?.Role is
                         EngagementSquadRole.Cover or EngagementSquadRole.RearGuard)
                     .Select(target => target.Id)
@@ -816,7 +819,10 @@ internal static class BattleEngagementFrameBuilder
             // old force minimum could belong to an entirely different withdrawing squad, making a
             // jog look able to hold a gap that its real target was opening.
             float quarryRunSpeed = (constraint.Role
-                    is EngagementSquadRole.Pursuit or EngagementSquadRole.Standoff)
+                    is EngagementSquadRole.Pursuit
+                        or EngagementSquadRole.Follow
+                        or EngagementSquadRole.Press
+                        or EngagementSquadRole.Standoff)
                 && primary.HasValue
                     ? primaryRole switch
                     {

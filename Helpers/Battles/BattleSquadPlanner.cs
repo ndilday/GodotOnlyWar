@@ -462,7 +462,9 @@ namespace OnlyWar.Helpers.Battles
                             // A pursuit turn is the no-exchange part of the chase. Its separate
                             // fire-window potential is already priced elsewhere, so it must not
                             // inflate the horizon that scales the ordinary exchange rate.
-                            || attackerFrame.Role == EngagementSquadRole.Pursuit)
+                            || attackerFrame.Role is EngagementSquadRole.Pursuit
+                                or EngagementSquadRole.Follow
+                                or EngagementSquadRole.Press)
                         {
                             return;
                         }
@@ -606,6 +608,11 @@ namespace OnlyWar.Helpers.Battles
                     || profile.PeakRangedRemovalFraction
                         < ContactSeekerRangedRelevanceFraction);
 
+        private static bool IsPursuitRole(EngagementSquadRole role) =>
+            role is EngagementSquadRole.Pursuit
+                or EngagementSquadRole.Follow
+                or EngagementSquadRole.Press;
+
         private List<EngagementOptionKind> GetLegalOptionKinds(
             BattleSquad squad,
             SquadEngagementFrame frame,
@@ -637,6 +644,35 @@ namespace OnlyWar.Helpers.Battles
                 // current shot. It is a hard movement constraint: preserve aimed standing fire
                 // rather than allowing the pursuit scorer to invent a running chase.
                 return [EngagementOptionKind.Hold];
+            }
+            if (frame.Role == EngagementSquadRole.Follow)
+            {
+                if (primary == null) return [EngagementOptionKind.Hold];
+                float distance = BattleEngagementFrameBuilder.MinimumDistance(squad, primary);
+                bool contactSeekerMustClose = profile.IsContactSeeking
+                    && (HasNoViableRangedOption(profile)
+                        || distance > profile.PreferredBandUpper);
+                if (contactSeekerMustClose)
+                {
+                    return distance <= profile.MoveSpeed + BattleContactRules.MeleeContactAllowance
+                        ? [EngagementOptionKind.CloseToContact]
+                        : [EngagementOptionKind.RunToward];
+                }
+                if (HasPursuitAimCommitment(squad, frame, primary))
+                {
+                    return [EngagementOptionKind.Hold];
+                }
+                // Follow is the fire-preserving pursuit posture: it may hold and shoot or jog
+                // while retaining moving fire, but it must not expose a RunToward candidate.
+                return [EngagementOptionKind.Hold, EngagementOptionKind.JogToward];
+            }
+            if (frame.Role == EngagementSquadRole.Press)
+            {
+                if (primary == null) return [EngagementOptionKind.Hold];
+                float distance = BattleEngagementFrameBuilder.MinimumDistance(squad, primary);
+                return distance <= profile.MoveSpeed + BattleContactRules.MeleeContactAllowance
+                    ? [EngagementOptionKind.CloseToContact]
+                    : [EngagementOptionKind.RunToward];
             }
             if (frame.Role == EngagementSquadRole.Pursuit)
             {
@@ -870,7 +906,7 @@ namespace OnlyWar.Helpers.Battles
             if (kind == EngagementOptionKind.MoveToInterpose) return frame.InterposePoint;
             if (primary == null) return null;
             ValueTuple<float, float> target = BattleEngagementFrameBuilder.Centroid(primary);
-            if (frame.Role != EngagementSquadRole.Pursuit
+            if (!IsPursuitRole(frame.Role)
                 || allFrames.GetValueOrDefault(primary.Id)?.Role is not
                     (EngagementSquadRole.Bound or EngagementSquadRole.Routing))
             {
@@ -1354,7 +1390,7 @@ namespace OnlyWar.Helpers.Battles
             SquadEngagementFrame frame,
             BattleSquad primary)
         {
-            if (frame.Role != EngagementSquadRole.Pursuit
+            if (!IsPursuitRole(frame.Role)
                 || squad.LastEngagementOptionKind != EngagementOptionKind.Hold
                 || primary == null)
             {

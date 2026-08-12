@@ -123,6 +123,37 @@ public class FieldCareServiceTests
         Assert.Equal(0, Torso(patient).Wounds.CriticalWounds);
     }
 
+    [Fact]
+    public void TreatmentRecordsCampaignDayAndEmitsDiagnosticDetail()
+    {
+        PlayerSoldier apothecary = Apothecary("Kadmon", 100f);
+        PlayerSoldier patient = Wounded("Rhys", BrotherTemplate, TorsoId, WoundLevel.Critical);
+        Order order = OrderFor(apothecary, patient);
+        FieldCareReport report = new();
+        List<string> logs = [];
+        GameLogLevel previousMinimum = GameLog.MinimumLevel;
+        Action<GameLogLevel, string> previousSink = GameLog.Sink;
+
+        try
+        {
+            GameLog.MinimumLevel = GameLogLevel.Debug;
+            GameLog.Sink = (level, message) => logs.Add(message);
+            FieldCareService.ApplyDailyFieldCare(order, report, day: 3);
+        }
+        finally
+        {
+            GameLog.Sink = previousSink;
+            GameLog.MinimumLevel = previousMinimum;
+        }
+
+        FieldCareTreatment treatment = Assert.Single(report.Treatments);
+        Assert.Equal(3, treatment.Day);
+        Assert.Contains(logs, log => log.Contains("FIELD_CARE")
+            && log.Contains("day=3")
+            && log.Contains($"patient={patient.Name}#{patient.Id}")
+            && log.Contains($"location={Torso(patient).Template.Name}"));
+    }
+
     // A location carrying several wounds of one band is severe without being crippled -- two
     // Critical torso wounds are 0x20000, still short of Massive -- and the count surcharge means
     // treating them costs more than treating one, but nowhere near twice as much.

@@ -196,10 +196,10 @@ namespace OnlyWar.Helpers.Turns
                 onDayStart: _ => ResetCommittedAttention(),
                 onActingDayStart: (missions, day) =>
                     ResolveReciprocalAssaults(missions, day),
-                onDayEnd: _ =>
+                onDayEnd: day =>
                 {
                     ApplyDailyHealing();
-                    ApplyDailyFieldCare(distinctPlayerOrders, fieldCareByOrder, medicalSkills);
+                    ApplyDailyFieldCare(distinctPlayerOrders, fieldCareByOrder, medicalSkills, day);
                 });
 
             foreach (ScheduledMission mission in scheduled)
@@ -337,12 +337,13 @@ namespace OnlyWar.Helpers.Turns
         private static void ApplyDailyFieldCare(
             IReadOnlyDictionary<int, Order> distinctPlayerOrders,
             IReadOnlyDictionary<int, FieldCareReport> reports,
-            IReadOnlyList<BaseSkill> medicalSkills)
+            IReadOnlyList<BaseSkill> medicalSkills,
+            int day)
         {
             foreach (KeyValuePair<int, Order> entry in distinctPlayerOrders)
             {
                 FieldCareService.ApplyDailyFieldCare(
-                    entry.Value, reports[entry.Key], medicalSkills);
+                    entry.Value, reports[entry.Key], medicalSkills, day);
             }
         }
 

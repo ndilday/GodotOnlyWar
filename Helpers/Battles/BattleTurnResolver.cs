@@ -673,6 +673,8 @@ namespace OnlyWar.Helpers.Battles
             foreach ((_, SquadEngagementDecision decision) in decisions)
             {
                 if ((decision.Frame.Role is EngagementSquadRole.Pursuit
+                        or EngagementSquadRole.Follow
+                        or EngagementSquadRole.Press
                         or EngagementSquadRole.Standoff)
                     && decision.Frame.PrimaryCounterpartSquadId is int targetSquadId)
                 {
@@ -859,6 +861,8 @@ namespace OnlyWar.Helpers.Battles
                         {
                             PursuitPosture.BreakOff => EngagementSquadRole.BreakOff,
                             PursuitPosture.Standoff => EngagementSquadRole.Standoff,
+                            PursuitPosture.Follow => EngagementSquadRole.Follow,
+                            PursuitPosture.Press => EngagementSquadRole.Press,
                             _ => EngagementSquadRole.Pursuit
                         },
                         QuarryRunSpeed: quarryRunSpeed,

@@ -227,6 +227,69 @@ public class BattleTurnResolverWithdrawalTests
     }
 
     [Fact]
+    public void FollowPursuit_PreservesFollowRoleForSquadPlanning()
+    {
+        // The force planner's Follow posture means that squads may jog while retaining ranged
+        // fire. It must therefore survive the resolver handoff as a distinct squad role; mapping
+        // it to generic Pursuit also exposes the full contact-closing score and permits a run to
+        // win over an otherwise worthwhile shot.
+        SoldierTemplate zeroValueHuman = new(
+            73_055,
+            TestModelFactory.HumanSpecies,
+            "Zero Value Runner",
+            1,
+            1,
+            false,
+            0,
+            Array.Empty<ValueTuple<BaseSkill, float>>(),
+            battleValue: 0);
+        BattleSquad withdrawing = CreateSquad("Withdrawing", 73_056, zeroValueHuman);
+        withdrawing.Soldiers[0].RangedWeapons.Clear();
+        withdrawing.Soldiers[0].ClearReadiedRangedWeapons();
+        BattleSquad pursuer = CreateSquad(
+            "Rifle Pursuer",
+            73_057,
+            TestModelFactory.MarineTemplate,
+            isPlayerSquad: true);
+        EquipAccurateLongGun(pursuer.Soldiers[0]);
+        pursuer.Soldiers[0].MeleeWeapons.Clear();
+        pursuer.Soldiers[0].ClearReadiedMeleeWeapons();
+        ((Soldier)pursuer.Soldiers[0].Soldier).MoveSpeed = 8;
+        ((Soldier)withdrawing.Soldiers[0].Soldier).MoveSpeed = 6;
+
+        BattleGridManager grid = new();
+        Place(grid, withdrawing.Soldiers[0], true, 0, 0);
+        Place(grid, pursuer.Soldiers[0], false, 60, 0);
+        BattleTurnResolver resolver = CreateResolver(
+            grid,
+            [withdrawing],
+            [pursuer],
+            Aggression.Normal,
+            Aggression.Aggressive);
+        List<string> trace = [];
+        Action<string> originalSink = BattleLog.Sink;
+        try
+        {
+            BattleLog.Sink = trace.Add;
+            resolver.ProcessNextTurn();
+            resolver.ProcessNextTurn();
+        }
+        finally
+        {
+            BattleLog.Sink = originalSink;
+        }
+
+        Assert.Contains(
+            trace,
+            line => line.Contains("PURSUIT_EVAL")
+                && line.Contains("decision=Follow"));
+        Assert.Contains(
+            trace,
+            line => line.Contains("ENGAGE_EVAL turn=2 side=second")
+                && line.Contains("role=Follow"));
+    }
+
+    [Fact]
     public void ProcessNextTurn_UnpursuedBoundBeyondRelativeRetargetHorizonDisengages()
     {
         SoldierTemplate zeroValueHuman = new(

@@ -23,6 +23,14 @@ namespace OnlyWar.Helpers.Battles
         // whole-horizon multiplication removed from the finite exchange component.
         internal const float AccessValueTurns = 5f;
 
+        private static bool IsPursuitRole(EngagementSquadRole role) =>
+            role is EngagementSquadRole.Pursuit
+                or EngagementSquadRole.Follow
+                or EngagementSquadRole.Press;
+
+        private static bool IsFirePreservingPursuitRole(EngagementSquadRole role) =>
+            role is EngagementSquadRole.Pursuit or EngagementSquadRole.Follow;
+
         private readonly BattleGridManager _grid;
         private readonly RangedTargetSelector _ranged;
         private readonly EngagementExchangeModel _exchange;
@@ -154,7 +162,8 @@ namespace OnlyWar.Helpers.Battles
                 // that band, moving still changes the live shot but does not create a new arrival
                 // opportunity worth buying with a whole-battle horizon. Other doctrines retain
                 // the actual-in-band destination rate so contact geometry can still be valued.
-                float destinationRange = state.Frame?.Role == EngagementSquadRole.Pursuit
+                float destinationRange = state.Frame != null
+                    && IsPursuitRole(state.Frame.Role)
                     ? Math.Max(1f, desiredRange)
                     : Math.Min(range, Math.Max(desiredRange, 0));
                 float currentOutgoingRate = _exchange.EvaluateOutgoingExchangeRate(
@@ -425,7 +434,7 @@ namespace OnlyWar.Helpers.Battles
         private static float EvaluatePursuitClosingValue(State state)
         {
             if (state.Frame == null
-                || state.Frame.Role != EngagementSquadRole.Pursuit
+                || !IsPursuitRole(state.Frame.Role)
                 || state.FeasibleSpeed <= 0
                 || state.Frame.QuarryRunSpeed <= 0
                 || state.FeasibleSpeed >= state.Frame.QuarryRunSpeed)
@@ -554,7 +563,7 @@ namespace OnlyWar.Helpers.Battles
         {
             bool closingIsTheOnlyPlay = HasNoViableRangedOption(state.Profile);
             if (state.Frame == null
-                || (state.Frame.Role != EngagementSquadRole.Pursuit && !closingIsTheOnlyPlay)
+                || (!IsPursuitRole(state.Frame.Role) && !closingIsTheOnlyPlay)
                 || state.Primary == null)
             {
                 return 0;
@@ -572,7 +581,7 @@ namespace OnlyWar.Helpers.Battles
                 ? state.Profile.UsableMeleeBattleValue
                 : state.Profile.UsableRangedBattleValue;
 
-            if (state.Frame.Role == EngagementSquadRole.Pursuit
+            if (IsFirePreservingPursuitRole(state.Frame.Role)
                 && !state.Profile.IsContactSeeking
                 && state.Profile.PreferredBandUpper > state.Profile.PreferredBandLower)
             {
@@ -620,7 +629,7 @@ namespace OnlyWar.Helpers.Battles
                 || !state.Actions.Any(action =>
                     action?.Kind == PlannedSoldierActionKind.Aim)
                 || state.Frame == null
-                || state.Frame.Role != EngagementSquadRole.Pursuit
+                || !IsFirePreservingPursuitRole(state.Frame.Role)
                 || state.Profile.IsContactSeeking
                 || state.Primary == null)
             {
