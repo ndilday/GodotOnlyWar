@@ -58,6 +58,32 @@ public class BattlePursuitActionPlannerTests
     }
 
     [Fact]
+    public void FollowCanChooseRunToward_WhenClosingOutweighsAWeakMovingShot()
+    {
+        // Follow normally preserves moving fire, but a full run is the better trade when the
+        // current shot is too weak to justify giving up the extra closing distance.
+        BattleSquad pursuer = CreateSquad("Ranged Follow", 72_033);
+        BattleSquad withdrawing = CreateSquad("Withdrawer", 72_034);
+        Fixture fixture = CreateFixture(
+            (pursuer, true, 0, 0),
+            (withdrawing, false, 400, 0));
+
+        SquadEngagementDecision decision = PlanPursuit(
+            fixture,
+            pursuer,
+            [withdrawing],
+            role: EngagementSquadRole.Follow);
+
+        Assert.Equal(EngagementOptionKind.RunToward, decision.Chosen.Kind);
+        Assert.Contains(
+            decision.Candidates,
+            candidate => candidate.Kind == EngagementOptionKind.JogToward);
+        Assert.Equal(SquadMovementTier.Run, pursuer.MovementTier);
+        Assert.Empty(fixture.ShootActions);
+        Assert.Single(fixture.MoveActions);
+    }
+
+    [Fact]
     public void Pursuit_HoldCommitmentKeepsAimingStationaryUntilShotOrInvalidation()
     {
         BattleSquad pursuer = CreateSquad("Committed Pursuer", 72_035, Loadout.FireSupport);

@@ -107,7 +107,7 @@ namespace OnlyWar.Helpers.Battles
         /// exactly 0.5, taking no account of how much a hit is worth -- and, for damage, where a
         /// hand-placed one-third-quantile damage roll stopped penetrating.</para>
         /// </summary>
-        internal const float SaturationFraction = 0.1f;
+        internal const float SaturationFraction = 0.2f;
 
         /// <summary>
         /// SAMPLING BUDGET. 33 coarse samples spanning [1, reach] locate the peak (or the outermost

@@ -662,9 +662,16 @@ namespace OnlyWar.Helpers.Battles
                 {
                     return [EngagementOptionKind.Hold];
                 }
-                // Follow is the fire-preserving pursuit posture: it may hold and shoot or jog
-                // while retaining moving fire, but it must not expose a RunToward candidate.
-                return [EngagementOptionKind.Hold, EngagementOptionKind.JogToward];
+                // Follow normally preserves the option to fire, but it may also choose a full
+                // run when the projected gain from closing outweighs the moving shot it gives up.
+                // RunToward is intentionally scored here rather than treated as Press doctrine:
+                // this keeps the choice between hold, low-accuracy moving fire, and a faster
+                // approach in the same value comparison.
+                return [
+                    EngagementOptionKind.Hold,
+                    EngagementOptionKind.JogToward,
+                    EngagementOptionKind.RunToward
+                ];
             }
             if (frame.Role == EngagementSquadRole.Press)
             {
