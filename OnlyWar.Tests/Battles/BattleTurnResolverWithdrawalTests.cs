@@ -48,6 +48,53 @@ public class BattleTurnResolverWithdrawalTests
     }
 
     [Fact]
+    public void ProcessNextTurn_EnemyWipedDuringExistingWithdrawalWinsTheBattle()
+    {
+        SoldierTemplate zeroValueHuman = new(
+            73_005,
+            TestModelFactory.HumanSpecies,
+            "Zero Value Human",
+            1,
+            1,
+            false,
+            0,
+            Array.Empty<ValueTuple<BaseSkill, float>>(),
+            battleValue: 0);
+        BattleSquad withdrawing = CreateSquad("Withdrawing", 73_006, zeroValueHuman);
+        EquipAccurateLongGun(withdrawing.Soldiers[0]);
+        withdrawing.Soldiers[0].EquippedRangedWeapons.Single().LoadedAmmo = 0;
+        ((Soldier)withdrawing.Soldiers[0].Soldier).Constitution = 5_000;
+
+        BattleSquad holder = CreateSquad("Holder", 73_007, TestModelFactory.MarineTemplate);
+        holder.Soldiers[0].ClearWeapons();
+        ((Soldier)holder.Soldiers[0].Soldier).MoveSpeed = 10f;
+        BattleGridManager grid = new();
+        Place(grid, withdrawing.Soldiers[0], true, 0, 0);
+        Place(grid, holder.Soldiers[0], false, 40, 0);
+        BattleTurnResolver resolver = CreateResolver(
+            grid,
+            [withdrawing],
+            [holder],
+            Aggression.Normal,
+            Aggression.Aggressive);
+
+        for (int turn = 0; turn < 20 && resolver.BattleHistory.Outcome == null; turn++)
+        {
+            resolver.ProcessNextTurn();
+        }
+
+        BattleOutcome outcome = Assert.IsType<BattleOutcome>(resolver.BattleHistory.Outcome);
+        Assert.Equal(BattleEndReason.Annihilation, outcome.EndReason);
+        Assert.Equal(BattleSide.Attacker, outcome.SideHoldingField);
+        Assert.Contains(holder.Id, outcome.EliminatedSquadIds);
+        Assert.DoesNotContain(withdrawing.Id, outcome.DisengagedSquadIds);
+        Assert.Contains(
+            resolver.BattleHistory.Turns.SelectMany(turn => turn.Events),
+            battleEvent => battleEvent.Type == BattleEventType.WithdrawalOrdered
+                && battleEvent.Side == BattleSide.Attacker);
+    }
+
+    [Fact]
     public void ProcessNextTurn_VoluntaryWithdrawalWithBreakOffEmitsTypedEventsAndOutcome()
     {
         SoldierTemplate zeroValueHuman = new(
@@ -347,7 +394,7 @@ public class BattleTurnResolverWithdrawalTests
     }
 
     [Fact]
-    public void ProcessNextTurn_MatchedSpeedSternChaseEndsInsteadOfGrindingToTheTurnCap()
+    public void ProcessNextTurn_EnemyWipeOverridesSternChaseWithdrawal()
     {
         // Regression for the Xibarrus Theta ambush (2026-08-04). Two Marine squads chased one
         // Abominant at 6.001 vs 6.001 for ~997 turns and hit MaxBattleTurns. Both rules that
@@ -411,8 +458,10 @@ public class BattleTurnResolverWithdrawalTests
         }
 
         BattleOutcome outcome = Assert.IsType<BattleOutcome>(resolver.BattleHistory.Outcome);
-        Assert.Equal(BattleEndReason.Withdrawal, outcome.EndReason);
-        Assert.Contains(withdrawing.Id, outcome.DisengagedSquadIds);
+        Assert.Equal(BattleEndReason.Annihilation, outcome.EndReason);
+        Assert.Equal(BattleSide.Attacker, outcome.SideHoldingField);
+        Assert.Contains(pursuer.Id, outcome.EliminatedSquadIds);
+        Assert.DoesNotContain(withdrawing.Id, outcome.DisengagedSquadIds);
         // The point of the whole exercise: it ends in a handful of turns rather than grinding.
         Assert.True(
             resolver.BattleHistory.Turns.Count < 10,

@@ -97,6 +97,28 @@ public class MissionStepOutcomeSignalTests
     }
 
     [Fact]
+    public void RecordBattleOutcome_MissionAnnihilatesOpposition_OverridesHistoricalRout()
+    {
+        BattleSquad missionSquad = CreateOrderedBattleSquad(Aggression.Cautious);
+        Mission mission = new(MissionType.Advance, CreateRegionFaction(), 0);
+        Order order = new([missionSquad.Squad], true, false, Aggression.Cautious, mission);
+        MissionContext context = new(order, [missionSquad], []);
+        BattleHistory history = new()
+        {
+            FirstSideEnemyDeaths = 1,
+            Outcome = new BattleOutcome(
+                BattleEndReason.Annihilation,
+                BattleSide.Attacker,
+                routingSquadIds: [missionSquad.Id])
+        };
+
+        context.RecordBattleOutcome(history);
+
+        Assert.Equal(1, context.EnemiesKilled);
+        Assert.False(context.ForceWithdrewUnderFire);
+    }
+
+    [Fact]
     public void RecordBattleOutcome_MutualDisengagement_RecordsMissionWithdrawal()
     {
         MissionContext context = CreateContext(MissionType.Advance);

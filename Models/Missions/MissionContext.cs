@@ -418,6 +418,16 @@ namespace OnlyWar.Models.Missions
                 return false;
             }
 
+            // A routed/disengaged squad can remain in the typed outcome after another squad
+            // finishes the opposing force. Once the mission side holds the field by annihilation,
+            // those historical IDs are not a withdrawal of the mission as a whole. This also keeps
+            // the mission report from turning a same-turn wipeout into "MISSION FAILED".
+            if (outcome.EndReason == BattleEndReason.Annihilation
+                && outcome.SideHoldingField == BattleSide.Attacker)
+            {
+                return false;
+            }
+
             HashSet<int> missionSquadIds = MissionSquads.Select(squad => squad.Id).ToHashSet();
             if (outcome.DisengagedSquadIds.Any(missionSquadIds.Contains)
                 || outcome.RoutingSquadIds.Any(missionSquadIds.Contains))

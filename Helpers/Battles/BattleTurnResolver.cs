@@ -336,8 +336,17 @@ namespace OnlyWar.Helpers.Battles
                 _currentState.RemoveSoldier(casualtyId);
             }
             RecordRoundMetrics(executedActions);
-            ResolveUnpursuedWithdrawalEscapes(events);
-            ResolveContactBreaks(events);
+            // Terminal casualties take precedence over contact resolution. A force that was
+            // already withdrawing can still kill the last opposing squad during this turn; if
+            // the opponent is gone, that is an annihilation victory rather than a withdrawal.
+            // Running escape/contact logic first would disengage the surviving force and make the
+            // subsequent terminal check report Withdrawal (or Rout) instead.
+            if (_currentState.ActiveAttackerSquads.Count > 0
+                && _currentState.ActiveOpposingSquads.Count > 0)
+            {
+                ResolveUnpursuedWithdrawalEscapes(events);
+                ResolveContactBreaks(events);
+            }
             if (_currentState.ActiveAttackerSquads.Count > 0
                 && _currentState.ActiveOpposingSquads.Count > 0)
             {
@@ -1844,7 +1853,15 @@ namespace OnlyWar.Helpers.Battles
             BattleSide? holder = attackerActive
                 ? BattleSide.Attacker
                 : opposingActive ? BattleSide.Opposing : null;
-            BattleEndReason reason = attackerDisengaged || opposingDisengaged
+            bool attackerAnnihilated = !attackerActive
+                && _currentState.AllAttackerSquads.Values.All(
+                    squad => squad.Status == BattleSquadStatus.Eliminated);
+            bool opposingAnnihilated = !opposingActive
+                && _currentState.AllOpposingSquads.Values.All(
+                    squad => squad.Status == BattleSquadStatus.Eliminated);
+            BattleEndReason reason = attackerAnnihilated || opposingAnnihilated
+                ? BattleEndReason.Annihilation
+                : attackerDisengaged || opposingDisengaged
                 ? BattleEndReason.Withdrawal
                 : BattleEndReason.Annihilation;
             BattleHistory.Outcome = BuildOutcome(reason, holder);
