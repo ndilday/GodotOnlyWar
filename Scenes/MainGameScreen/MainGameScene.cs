@@ -6,7 +6,10 @@ using OnlyWar.Helpers.Turns;
 using OnlyWar.Helpers.Recruitment;
 using OnlyWar.Helpers.Simulation;
 using OnlyWar.Models;
+using OnlyWar.Models.Command;
 using OnlyWar.Models.Fleets;
+using OnlyWar.Models.Missions;
+using OnlyWar.Models.Orders;
 using OnlyWar.Models.Planets;
 using OnlyWar.Models.Soldiers;
 using OnlyWar.Models.Squads;
@@ -39,14 +42,13 @@ public partial class MainGameScene : Control
 	private Control _primaryContentHost;
 	private Control _modalLayer;
 	private MainScreenController _activePrimaryScreen;
+	private CommandScreenController _commandScreen;
 	private ActivityOverlay _activityOverlay;
 	private TurnController _turnController;
 	private EndOfTurnDialogController _endOfTurnDialog;
-	private BriefingDialogController _briefingDialog;
 	private BriefingDialogController _scenarioNotificationDialog;
 	private PopupMenu _recruitmentPlacementMenu;
 	private int _pendingRecruitmentSubjectId;
-	private CampaignScenario _pendingBriefingScenario;
 	private int? _selectedPlanetId;
 	private int? _selectedFleetId;
 	private bool _isProcessingTurn;
@@ -80,7 +82,7 @@ public partial class MainGameScene : Control
 		_bottomMenu.TrainingUnitButtonPressed += OnTrainingUnitButtonPressed;
 		_bottomMenu.FleetButtonPressed += OnFleetButtonPressed;
 		_bottomMenu.DiplomacyButtonPressed += OnDiplomacyButtonPressed;
-		_bottomMenu.ArchiveButtonPressed += OnArchiveButtonPressed;
+		_bottomMenu.CommandButtonPressed += OnCommandButtonPressed;
 		_bottomMenu.EndTurnButtonPressed += OnEndTurnButtonPressed;
 		_sectorMap = GetNode<SectorMap>("SectorMap");
 		_sectorMap.PlanetClicked += OnPlanetClicked;
@@ -104,40 +106,18 @@ public partial class MainGameScene : Control
 		_sectorMap.SetSelectedPlanet(initialPlanet?.Id);
 		_systemInspector.DisplayPlanet(initialPlanet);
 
-		// One-shot opening briefing (Design/Reference/OpeningScenario.md): show on first entry after a
-		// new game and never again. BriefingAcknowledged is persisted, so a freshly stamped
-		// scenario shows it once; a reloaded, acknowledged game does not.
+		// The first-turn directive belongs to the Command Brief. It is acknowledged only after the
+		// workspace has been instantiated and rendered successfully; later manual visits keep it
+		// visible while the objective remains relevant.
 		CampaignScenario scenario = GameDataSingleton.Instance.Sector.Scenario;
 		if (scenario is { State: ObjectiveState.Pending, BriefingAcknowledged: false })
 		{
-			ShowBriefingDialog(scenario);
+			if (OpenCommandScreen(autoOpen: true))
+			{
+				scenario.BriefingAcknowledged = true;
+				MarkCampaignChanged();
+			}
 		}
-	}
-
-	private void ShowBriefingDialog(CampaignScenario scenario)
-	{
-		if (_briefingDialog == null)
-		{
-			PackedScene briefingScene = GD.Load<PackedScene>("res://Scenes/MainGameScreen/briefing_dialog.tscn");
-			_briefingDialog = (BriefingDialogController)briefingScene.Instantiate();
-			_briefingDialog.CloseButtonPressed += OnBriefingDialogClosed;
-			_modalLayer.AddChild(_briefingDialog);
-		}
-		_pendingBriefingScenario = scenario;
-		_briefingDialog.SetBriefing(scenario.BriefingText);
-		_briefingDialog.Visible = true;
-	}
-
-	private void OnBriefingDialogClosed(object sender, EventArgs e)
-	{
-		if (_pendingBriefingScenario != null)
-		{
-			// Persisted on the next save; the guard survives reload (§5).
-			_pendingBriefingScenario.BriefingAcknowledged = true;
-			MarkCampaignChanged();
-			_pendingBriefingScenario = null;
-		}
-		_briefingDialog.Visible = false;
 	}
 
 	public override void _Input(InputEvent @event)
@@ -293,6 +273,304 @@ public partial class MainGameScene : Control
 		AddPrimaryScreen(_chapterScreen);
 	}
 
+	private void OnCommandButtonPressed(object sender, EventArgs e)
+	{
+		OpenCommandScreen(autoOpen: false);
+	}
+
+	private void EnsureCommandScreen()
+	{
+		if (_commandScreen != null)
+		{
+			return;
+		}
+
+		PackedScene commandScene = GD.Load<PackedScene>(
+			"res://Scenes/CommandScreen/command_screen.tscn");
+		_commandScreen = commandScene.Instantiate<CommandScreenController>();
+		_commandScreen.CloseRequested += OnCloseScreen;
+		_commandScreen.NavigationRequested += OnCommandNavigationRequested;
+		_commandScreen.LastTurnReportRequested += OnCommandLastTurnReportRequested;
+		AddPrimaryScreen(_commandScreen);
+	}
+
+	private bool OpenCommandScreen(bool autoOpen)
+	{
+		PushVisibleOverlaySurface();
+		EnsureCommandScreen();
+		if (!autoOpen && ToggleOffActivePrimaryScreen(
+			_commandScreen,
+			BottomMenu.Destination.Command))
+		{
+			return false;
+		}
+
+		if (autoOpen)
+		{
+			_commandScreen.SelectBrief();
+		}
+		else
+		{
+			_commandScreen.RefreshFromExternalChange();
+		}
+		ShowPrimaryScreen(
+			_commandScreen,
+			"Command",
+			BottomMenu.Destination.Command);
+		return _commandScreen.HasRenderedBrief || !autoOpen;
+	}
+
+	private void OnCommandLastTurnReportRequested(object sender, EventArgs e)
+	{
+		ShowLastTurnReport();
+	}
+
+	private void ShowLastTurnReport()
+	{
+		CreateEndOfTurnDialog();
+		_endOfTurnDialog.SetSnapshot(
+			GameDataSingleton.Instance.Sector?.PlayerForce?.LastTurnReportSnapshot);
+		_endOfTurnDialog.Visible = true;
+		_endOfTurnDialog.MoveToFront();
+	}
+
+	private void OnCommandNavigationRequested(
+		object sender,
+		CampaignNavigationTarget target)
+	{
+		if (target == null || !target.IsAvailable)
+		{
+			return;
+		}
+
+		switch (target.Kind)
+		{
+			case CampaignNavigationTargetKind.LastTurnReport:
+				ShowLastTurnReport();
+				return;
+			case CampaignNavigationTargetKind.Recruitment:
+				PrepareCommandReturnSurface();
+				OpenTrainingUnitScreen();
+				return;
+			case CampaignNavigationTargetKind.Fleet:
+				if (TryGetPlayerFleet(target.PrimaryId, out TaskForce fleet))
+				{
+					PrepareCommandReturnSurface();
+					ShowFleetScreen();
+				}
+				return;
+			case CampaignNavigationTargetKind.Squad:
+				if (TryGetPlayerSquad(target.PrimaryId, out Squad squad))
+				{
+					NavigateFromCommandToSquad(squad);
+				}
+				return;
+			case CampaignNavigationTargetKind.Soldier:
+				if (TryGetPlayerSoldier(target.PrimaryId, out PlayerSoldier soldier))
+				{
+					NavigateFromCommandToSoldier(soldier);
+				}
+				return;
+			case CampaignNavigationTargetKind.Planet:
+				if (TryGetPlanet(target.PrimaryId, out Planet planet))
+				{
+					SelectPlanet(planet);
+					LoadPlanetTacticalScreen(planet);
+				}
+				return;
+			case CampaignNavigationTargetKind.Region:
+				if (TryGetRegion(target.PrimaryId, out Region region))
+				{
+					NavigateFromCommandToRegion(region, selectedSquadId: null);
+				}
+				return;
+			case CampaignNavigationTargetKind.Mission:
+				if (TryGetMission(target.PrimaryId, out Mission mission)
+					&& mission.RegionFaction?.Region is Region missionRegion)
+				{
+					NavigateFromCommandToRegion(missionRegion, selectedSquadId: null);
+				}
+				return;
+			case CampaignNavigationTargetKind.Order:
+				if (TryGetOrder(target.PrimaryId, out Order order))
+				{
+					if (order.Mission?.RegionFaction?.Region is Region orderRegion)
+					{
+						NavigateFromCommandToRegion(orderRegion, selectedSquadId: null);
+					}
+					else if (order.AssignedSquads?.FirstOrDefault() is Squad orderedSquad)
+					{
+						NavigateFromCommandToSquad(orderedSquad);
+					}
+				}
+				return;
+			case CampaignNavigationTargetKind.Diplomacy:
+				PrepareCommandReturnSurface();
+				OnDiplomacyButtonPressed(this, EventArgs.Empty);
+				if (target.PrimaryId.HasValue)
+				{
+					_diplomacyScreen.FocusRequest(target.PrimaryId.Value);
+				}
+				return;
+			case CampaignNavigationTargetKind.Apothecarium:
+				PrepareCommandReturnSurface();
+				OnApothecariumButtonPressed(this, EventArgs.Empty);
+				if (target.PrimaryId.HasValue)
+				{
+					_apothecariumScreen.FocusSoldier(target.PrimaryId.Value);
+				}
+				return;
+			case CampaignNavigationTargetKind.SectorMap:
+				if (_activePrimaryScreen == _commandScreen)
+				{
+					_commandScreen.Visible = false;
+					_activePrimaryScreen = null;
+				}
+				_topMenu.SetScreenText("Sector Map");
+				_bottomMenu.SetActiveDestination(BottomMenu.Destination.None);
+				SetMapWorkspaceVisibility(true);
+				return;
+		}
+	}
+
+	private void PrepareCommandReturnSurface()
+	{
+		if (_activePrimaryScreen == _commandScreen)
+		{
+			_commandScreen.Visible = false;
+			_activePrimaryScreen = null;
+			_previousScreenStack.Push(_commandScreen);
+		}
+	}
+
+	private void NavigateFromCommandToSquad(Squad squad)
+	{
+		if (squad == null)
+		{
+			return;
+		}
+
+		if (SquadLocationNavigation.Resolve(squad) is SquadLocationNavigationTarget location
+			&& location.Kind == SquadLocationNavigationKind.Region)
+		{
+			NavigateFromCommandToRegion(location.Region, squad.Id);
+			return;
+		}
+
+		PrepareCommandReturnSurface();
+		ShowFleetScreen(squad);
+	}
+
+	private void NavigateFromCommandToSoldier(PlayerSoldier soldier)
+	{
+		if (soldier == null)
+		{
+			return;
+		}
+
+		EnsureChapterScreen();
+		_chapterScreen.DisplaySoldier(soldier.Id);
+		PrepareCommandReturnSurface();
+		ShowPrimaryScreen(
+			_chapterScreen,
+			"Chapter Overview",
+			BottomMenu.Destination.Chapter);
+	}
+
+	private void NavigateFromCommandToRegion(Region region, int? selectedSquadId)
+	{
+		if (region == null)
+		{
+			return;
+		}
+
+		_commandScreen.Visible = false;
+		if (_activePrimaryScreen == _commandScreen)
+		{
+			_activePrimaryScreen = null;
+		}
+		OpenRegionScreen(region, selectedSquadId, _commandScreen);
+	}
+
+	private bool TryGetPlayerFleet(int? fleetId, out TaskForce fleet)
+	{
+		fleet = null;
+		return fleetId.HasValue
+			&& GameDataSingleton.Instance.Sector.Fleets.TryGetValue(fleetId.Value, out fleet)
+			&& fleet.Faction == GameDataSingleton.Instance.Sector.PlayerForce.Faction;
+	}
+
+	private bool TryGetPlayerSquad(int? squadId, out Squad squad)
+	{
+		squad = null;
+		if (!squadId.HasValue)
+		{
+			return false;
+		}
+
+		squad = GameDataSingleton.Instance.Sector.PlayerForce.Army.OrderOfBattle
+			.GetAllSquads()
+			.FirstOrDefault(candidate => candidate.Id == squadId.Value);
+		return squad != null;
+	}
+
+	private bool TryGetPlayerSoldier(int? soldierId, out PlayerSoldier soldier)
+	{
+		soldier = null;
+		if (!soldierId.HasValue)
+		{
+			return false;
+		}
+
+		PlayerForce force = GameDataSingleton.Instance.Sector.PlayerForce;
+		return force.Army.PlayerSoldierMap.TryGetValue(soldierId.Value, out soldier)
+			|| force.Army.FallenBrothers.TryGetValue(soldierId.Value, out soldier);
+	}
+
+	private bool TryGetPlanet(int? planetId, out Planet planet)
+	{
+		planet = null;
+		return planetId.HasValue
+			&& GameDataSingleton.Instance.Sector.Planets.TryGetValue(planetId.Value, out planet);
+	}
+
+	private bool TryGetRegion(int? regionId, out Region region)
+	{
+		region = null;
+		if (!regionId.HasValue)
+		{
+			return false;
+		}
+
+		region = GameDataSingleton.Instance.Sector.Planets.Values
+			.SelectMany(planet => planet.Regions)
+			.FirstOrDefault(candidate => candidate?.Id == regionId.Value);
+		return region != null;
+	}
+
+	private bool TryGetMission(int? missionId, out Mission mission)
+	{
+		mission = null;
+		if (!missionId.HasValue)
+		{
+			return false;
+		}
+
+		mission = GameDataSingleton.Instance.Sector.Planets.Values
+			.SelectMany(planet => planet.Regions)
+			.SelectMany(region => region?.SpecialMissions ?? [])
+			.FirstOrDefault(candidate => candidate?.Id == missionId.Value);
+		return mission != null;
+	}
+
+	private bool TryGetOrder(int? orderId, out Order order)
+	{
+		order = null;
+		return orderId.HasValue
+			&& GameDataSingleton.Instance.Sector.Orders.TryGetValue(orderId.Value, out order)
+			&& order != null;
+	}
+
 	private void OnChapterSquadLocationRequested(object sender, Squad squad)
 	{
 		if (SquadLocationNavigation.Resolve(squad) is not SquadLocationNavigationTarget target)
@@ -349,6 +627,13 @@ public partial class MainGameScene : Control
 				_activePrimaryScreen = _chapterScreen;
 				_topMenu.SetScreenText("Chapter Overview");
 				_bottomMenu.SetActiveDestination(BottomMenu.Destination.Chapter);
+			}
+			else if (control == _commandScreen)
+			{
+				_activePrimaryScreen = _commandScreen;
+				_commandScreen.RefreshFromExternalChange();
+				_topMenu.SetScreenText("Command");
+				_bottomMenu.SetActiveDestination(BottomMenu.Destination.Command);
 			}
 			else if (control == _trainingUnitScreen)
 			{
@@ -847,19 +1132,6 @@ public partial class MainGameScene : Control
 		RequestEndTurn();
 	}
 
-	private void OnArchiveButtonPressed(object sender, EventArgs e)
-	{
-		if (_endOfTurnDialog == null)
-		{
-			CreateEndOfTurnDialog();
-			_endOfTurnDialog.SetSnapshot(
-				GameDataSingleton.Instance.Sector?.PlayerForce?.LastTurnReportSnapshot);
-		}
-
-		_endOfTurnDialog.Visible = true;
-		_endOfTurnDialog.MoveToFront();
-	}
-
 	private void ProcessTurnCore()
 	{
 		// handle squad orders
@@ -880,6 +1152,7 @@ public partial class MainGameScene : Control
 		// save and to any later manual save.
 		GameDataSingleton.Instance.Sector.PlayerForce.LastTurnReportSnapshot =
 			_endOfTurnDialog.LastReportSnapshot;
+		_commandScreen?.RefreshFromExternalChange();
 		_endOfTurnDialog.Visible = true;
 
 		// Surface the opening-scenario resolution (win/lapse) if it fired this turn
@@ -892,7 +1165,7 @@ public partial class MainGameScene : Control
 
 	// Reuses the briefing dialog scene (a BBCode message + single acknowledge button) as a
 	// generic scenario-resolution notification, on its own instance so its dismissal does not
-	// touch the one-shot opening-briefing guard.
+	// touch the Command Brief's automatic-opening acknowledgement.
 	private void ShowScenarioNotification(string text)
 	{
 		if (_scenarioNotificationDialog == null)

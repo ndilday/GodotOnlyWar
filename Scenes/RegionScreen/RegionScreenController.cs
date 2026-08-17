@@ -714,8 +714,11 @@ public partial class RegionScreenController : DialogController
 
     private static List<RegionFaction> GetPublicEnemyRegionFactions(Region region)
     {
-        return region.RegionFactionMap.Values
-            .Where(rf => rf.IsPublic && !FactionDispositionService.IsImperial(rf.PlanetFaction.Faction))
+        if (region?.Planet?.RelationshipLedger == null) return [];
+        FactionIntelligenceService.ObservePublicActivity(region.Planet, 0);
+        return IntelligenceTargetService.GetPlayerVisibleTargets(region)
+            .Select(target => target.CurrentPresence)
+            .Where(rf => rf != null && rf.IsPublic)
             .OrderBy(rf => rf.PlanetFaction.Faction.Name)
             .ThenBy(rf => rf.PlanetFaction.Faction.Id)
             .ToList();

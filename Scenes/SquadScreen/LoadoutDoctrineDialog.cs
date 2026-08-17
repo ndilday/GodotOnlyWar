@@ -31,13 +31,14 @@ public partial class LoadoutDoctrineDialog : Control
     private HBoxContainer _modeRow;
     private Button _squadModeButton;
     private Button _characterModeButton;
+    private EquipmentLoadoutEditorView _equipmentEditor;
     private PanelContainer _listPanel;
     private VBoxContainer _squadEditorStack;
     private HBoxContainer _footer;
-    // Characters mode rows are keyed by SoldierTemplate.Id (CharacterLoadoutDoctrine's own key),
-    // but CharacterLoadoutService.SetRoleDefault needs the element itself — this recovers it
-    // when a row fires its key back on selection/reset.
+    // Character rows are keyed by the stable PersonalEquipmentRole id. The element is retained
+    // here because its SoldierTemplate supplies the validation context for the shared editor.
     private Dictionary<int, SquadTemplateElement> _characterRoleElements = new();
+    private int? _editingRoleId;
     // Characters are equipped by role rather than by squad type, so they get their own mode
     // instead of a row in the squad-template list. Chapter scope only: there is no theater tier
     // for characters (see CharacterLoadoutDoctrine).
@@ -166,6 +167,7 @@ public partial class LoadoutDoctrineDialog : Control
         };
         _characterEditor.CharacterSelectionChanged += OnCharacterRoleSelected;
         _characterEditor.CharacterResetRequested += OnCharacterRoleReset;
+        _characterEditor.CharacterCustomizeRequested += OnCharacterRoleCustomize;
         characterScroll.AddChild(_characterEditor);
         editorRoot.AddChild(characterScroll);
         _characterScroll = characterScroll;
@@ -185,6 +187,10 @@ public partial class LoadoutDoctrineDialog : Control
         footer.AddChild(_inheritButton);
         footer.AddChild(_saveButton);
         outer.AddChild(footer);
+
+        _equipmentEditor = new EquipmentLoadoutEditorView();
+        _equipmentEditor.SaveRequested += OnEquipmentLoadoutSaved;
+        AddChild(_equipmentEditor);
 
         Visible = false;
     }
@@ -247,35 +253,55 @@ public partial class LoadoutDoctrineDialog : Control
         }
     }
 
-    // Every character role the chapter actually fields, gathered from the order of battle so a
-    // chapter without (say) a Judiciar never shows one. Administrative formations are excluded
-    // for the same reason the squad list excludes them: they never deploy as units, so a combat
-    // loadout for them is noise. Roles they share with a company HQ (Apothecary, Chaplain,
-    // Judiciar) still appear via that HQ; only roles unique to a Chapter office drop out. Grouped
-    // by SoldierTemplate.Id (not element) because that's what CharacterLoadoutDoctrine.RoleDefaults
-    // is keyed by — the same "Sergeant" role fielded by three squad types is one row, one
-    // default, not three.
+    // Every personal-equipment role the chapter actually fields, gathered from the order of
+    // battle so a chapter without (say) a Judiciar never shows one. Administrative formations are
+    // excluded because they never deploy as units. Roles are keyed by the stable role id, not by
+    // SoldierTemplate.Id: the same template may be pooled in one formation and personally
+    // equipped in another.
     private void PopulateCharacterRoles()
     {
         List<SquadTemplateElement> elements = _force?.Army?.OrderOfBattle?.GetAllSquads()
             .Where(squad => squad.IsOperational)
             .SelectMany(squad => squad.SquadTemplate.Elements)
-            .Where(element => element.TryGetQuota(CharacterLoadoutService.CommandWeaponGroup, out _))
-            .GroupBy(element => element.SoldierTemplate.Id)
+            .Where(element => element.PersonalEquipmentRole != null)
+            .GroupBy(element => element.PersonalEquipmentRole.Id)
             .Select(group => group.First())
-            .OrderByDescending(element => element.SoldierTemplate.Rank)
-            .ThenBy(element => element.SoldierTemplate.Name, StringComparer.OrdinalIgnoreCase)
+            .OrderBy(element => element.PersonalEquipmentRole.Name, StringComparer.OrdinalIgnoreCase)
             .ToList() ?? [];
 
-        _characterRoleElements = elements.ToDictionary(element => element.SoldierTemplate.Id);
+        _characterRoleElements = elements.ToDictionary(element => element.PersonalEquipmentRole.Id);
 
+        EquipmentRulesCatalog catalog = GameDataSingleton.Instance?.GameRulesData?.EquipmentCatalog;
+        EquipmentLoadoutDoctrine equipmentDoctrine = _force?.Army?.EquipmentLoadoutDoctrine;
         CharacterLoadoutDoctrine doctrine = _force?.Army?.CharacterLoadoutDoctrine;
         _characterEditor.SetData(elements.Select(element =>
         {
+            PersonalEquipmentRole role = element.PersonalEquipmentRole;
+            if (catalog?.PersonalEquipmentRoles.ContainsKey(role.Id) == true
+                && catalog.EquipmentKits.TryGetValue(role.DefaultKitId, out EquipmentKitTemplate authoredKit))
+            {
+                EquipmentLoadout resolvedLoadout = equipmentDoctrine?.TryGetRoleDefault(
+                    role.Id, out EquipmentLoadout roleLoadout) == true
+                    ? roleLoadout
+                    : authoredKit.ToLoadout();
+                string source = equipmentDoctrine?.RoleDefaults.ContainsKey(role.Id) == true
+                    ? "Chapter role override"
+                    : "Authored role kit";
+                return new CharacterLoadoutRowData(
+                    role.Id,
+                    role.Name,
+                    $"{source} · {DescribeEquipmentLoadout(resolvedLoadout, BuildEquipmentContext(element))}",
+                    [],
+                    null,
+                    equipmentDoctrine?.RoleDefaults.ContainsKey(role.Id) == true);
+            }
+
+            // Compatibility display for a focused fixture that predates the itemized rules
+            // tables. Production uses the branch above and the shared editor.
             EffectiveCharacterLoadout resolved = CharacterLoadoutService.ResolveRole(element, _force);
             return new CharacterLoadoutRowData(
-                element.SoldierTemplate.Id,
-                element.SoldierTemplate.Name,
+                role.Id,
+                role.Name,
                 CharacterLoadoutService.DescribeSource(resolved),
                 element.GetMenu(CharacterLoadoutService.CommandWeaponGroup),
                 resolved?.WeaponSet,
@@ -295,11 +321,102 @@ public partial class LoadoutDoctrineDialog : Control
 
     private void OnCharacterRoleReset(object sender, int soldierTemplateId)
     {
-        if (_force?.Army?.CharacterLoadoutDoctrine.ClearRoleDefault(soldierTemplateId) == true)
+        EquipmentRulesCatalog catalog = GameDataSingleton.Instance?.GameRulesData?.EquipmentCatalog;
+        if (catalog?.PersonalEquipmentRoles.ContainsKey(soldierTemplateId) == true)
+        {
+            _force?.Army?.EquipmentLoadoutDoctrine.ClearRoleDefault(soldierTemplateId);
+            DoctrineChanged?.Invoke(this, EventArgs.Empty);
+            PopulateCharacterRoles();
+            return;
+        }
+
+        if (_force?.Army?.CharacterLoadoutDoctrine.ClearRoleDefault(
+                _characterRoleElements.TryGetValue(soldierTemplateId, out SquadTemplateElement element)
+                    ? element.SoldierTemplate.Id
+                    : soldierTemplateId) == true)
         {
             DoctrineChanged?.Invoke(this, EventArgs.Empty);
         }
         PopulateCharacterRoles();
+    }
+
+    private void OnCharacterRoleCustomize(object sender, int roleId)
+    {
+        if (!_characterRoleElements.TryGetValue(roleId, out SquadTemplateElement element)) return;
+        EquipmentRulesCatalog catalog = GameDataSingleton.Instance?.GameRulesData?.EquipmentCatalog;
+        if (catalog == null || !catalog.PersonalEquipmentRoles.TryGetValue(roleId, out PersonalEquipmentRole role))
+        {
+            return;
+        }
+        if (!catalog.EquipmentKits.TryGetValue(role.DefaultKitId, out EquipmentKitTemplate authoredKit))
+        {
+            return;
+        }
+
+        EquipmentLoadoutDoctrine doctrine = _force?.Army?.EquipmentLoadoutDoctrine;
+        EquipmentLoadout loadout = doctrine?.TryGetRoleDefault(roleId, out EquipmentLoadout stored) == true
+            ? stored
+            : authoredKit.ToLoadout();
+        _editingRoleId = roleId;
+        _equipmentEditor.Open(
+            $"{role.Name} equipment",
+            "Save a complete role default. Individual soldiers may later save their own complete personal override.",
+            catalog,
+            loadout,
+            BuildEquipmentContext(element),
+            catalog.EquipmentKits.Values);
+    }
+
+    private void OnEquipmentLoadoutSaved(EquipmentLoadout loadout)
+    {
+        if (!_editingRoleId.HasValue
+            || !_characterRoleElements.TryGetValue(_editingRoleId.Value, out SquadTemplateElement element))
+        {
+            return;
+        }
+
+        try
+        {
+            EquipmentLoadoutService.SetRoleDefault(
+                _force.Army.EquipmentLoadoutDoctrine,
+                element.PersonalEquipmentRole,
+                loadout,
+                BuildEquipmentContext(element));
+            DoctrineChanged?.Invoke(this, EventArgs.Empty);
+            PopulateCharacterRoles();
+        }
+        catch (ArgumentException exception)
+        {
+            GD.PushWarning($"Equipment role loadout was not saved: {exception.Message}");
+        }
+        finally
+        {
+            _editingRoleId = null;
+        }
+    }
+
+    private EquipmentValidationContext BuildEquipmentContext(SquadTemplateElement element) => new()
+    {
+        FactionId = _force?.Faction?.Id,
+        SpeciesId = element?.SoldierTemplate?.Species?.Id,
+        SoldierTemplateId = element?.SoldierTemplate?.Id,
+        PersonalEquipmentRole = element?.PersonalEquipmentRole,
+        Strength = element?.SoldierTemplate?.Species?.Strength?.BaseValue ?? 0,
+        HandGroups = 2,
+        BaseCapacity = element?.SoldierTemplate?.Species?.BaseCapacity ?? 16
+    };
+
+    private static string DescribeEquipmentLoadout(
+        EquipmentLoadout loadout,
+        EquipmentValidationContext context)
+    {
+        if (loadout == null) return "No loadout";
+        string armor = loadout.Armor?.Name ?? "No armor";
+        string items = string.Join(", ", loadout.Items.Select(item =>
+            item.Quantity > 1 ? $"{item.Equipment.Name} ×{item.Quantity}" : item.Equipment.Name));
+        return $"{armor} · {(string.IsNullOrEmpty(items) ? "No carried items" : items)} · "
+            + $"{EquipmentLoadoutValidator.GetUsedCapacity(loadout):0.##}/"
+            + $"{EquipmentLoadoutValidator.GetAvailableCapacity(loadout, context):0.##} load";
     }
 
     private void PopulateTemplateList()
@@ -316,8 +433,8 @@ public partial class LoadoutDoctrineDialog : Control
             // two groups are both (0,1) and it is still very much a squad type worth a doctrine.
             .Where(squad => squad.IsOperational
                 && squad.SquadTemplate.Elements.Any(
-                    element => element.Quotas.Any(
-                        quota => quota.OptionGroup != CharacterLoadoutService.CommandWeaponGroup)))
+                    element => element.PersonalEquipmentRole == null
+                        && element.Quotas.Count > 0))
             .Select(squad => squad.SquadTemplate)
             .GroupBy(template => template.Id)
             .Select(group => group.First())

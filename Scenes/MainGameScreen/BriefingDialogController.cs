@@ -1,4 +1,5 @@
-// Controller for the Promised World opening briefing dialog (Design/Reference/OpeningScenario.md).
+// Controller for the compact scenario narrative dialog (used for resolution notifications;
+// normal founding onboarding now lives in the Command Brief).
 // Mirrors EndOfTurnDialogController: the base DialogController forwards the view's acknowledge
 // (CloseButton) press as CloseButtonPressed; MainGameScene shows this once on a new game and sets
 // CampaignScenario.BriefingAcknowledged on dismiss.

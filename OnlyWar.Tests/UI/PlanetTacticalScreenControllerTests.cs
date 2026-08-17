@@ -238,7 +238,7 @@ public class PlanetTacticalScreenControllerTests
             Color.Blue,
             true,
             false,
-            false,
+            FactionBehavior.None,
             GrowthType.None,
             new Dictionary<int, OnlyWar.Models.Soldiers.Species>(),
             new Dictionary<int, OnlyWar.Models.Soldiers.SoldierTemplate>(),

@@ -11,12 +11,15 @@ public partial class SquadScreenView : MainScreenView
     private Label _source;
     private Button _returnToDoctrine;
     private ElementLoadoutEditorView _editor;
+    private EquipmentLoadoutEditorView _equipmentEditor;
 
     public event EventHandler LoadoutChanged;
     public event EventHandler ReturnToDoctrinePressed;
     public event EventHandler ClosePressed;
     public event EventHandler<(int SoldierId, WeaponSet WeaponSet)> CharacterLoadoutSelected;
     public event EventHandler<int> CharacterLoadoutReset;
+    public event EventHandler<int> CharacterCustomizeRequested;
+    public event Action<EquipmentLoadout> EquipmentLoadoutSaveRequested;
 
     public IReadOnlyList<WeaponSet> WorkingLoadout => _editor.WorkingLoadout;
 
@@ -108,6 +111,8 @@ public partial class SquadScreenView : MainScreenView
             CharacterLoadoutSelected?.Invoke(this, (change.Key, change.WeaponSet));
         _editor.CharacterResetRequested += (_, soldierId) =>
             CharacterLoadoutReset?.Invoke(this, soldierId);
+        _editor.CharacterCustomizeRequested += (_, soldierId) =>
+            CharacterCustomizeRequested?.Invoke(this, soldierId);
         editorStack.AddChild(_editor);
         stack.AddChild(scroll);
 
@@ -125,6 +130,10 @@ public partial class SquadScreenView : MainScreenView
         footer.AddChild(_returnToDoctrine);
         footer.AddChild(done);
         stack.AddChild(footer);
+
+        _equipmentEditor = new EquipmentLoadoutEditorView();
+        _equipmentEditor.SaveRequested += loadout => EquipmentLoadoutSaveRequested?.Invoke(loadout);
+        AddChild(_equipmentEditor);
     }
 
     public void Display(
@@ -147,5 +156,15 @@ public partial class SquadScreenView : MainScreenView
     {
         _source.Text = source;
         _returnToDoctrine.Visible = isCustom;
+    }
+
+    public void OpenEquipmentEditor(
+        string title,
+        string subtitle,
+        EquipmentRulesCatalog catalog,
+        EquipmentLoadout loadout,
+        EquipmentValidationContext context)
+    {
+        _equipmentEditor.Open(title, subtitle, catalog, loadout, context, catalog.EquipmentKits.Values);
     }
 }

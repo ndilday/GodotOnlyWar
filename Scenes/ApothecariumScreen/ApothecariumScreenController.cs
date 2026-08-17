@@ -87,6 +87,18 @@ public partial class ApothecariumScreenController : MainScreenController
         Render();
     }
 
+    /// <summary>
+    /// Selects a medical record requested by another workspace while keeping the Apothecarium's
+    /// normal tree/detail presentation authoritative.
+    /// </summary>
+    public void FocusSoldier(int soldierId)
+    {
+        _selectedKind = ApothecariumSelectionKind.Soldier;
+        _selectedId = soldierId;
+        Render();
+        _apothecariumView?.FocusSoldier(soldierId);
+    }
+
     private void Render()
     {
         PlayerForce force = GameDataSingleton.Instance?.Sector?.PlayerForce;

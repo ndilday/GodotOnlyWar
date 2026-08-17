@@ -313,7 +313,7 @@ public class FleetScreenControllerTests
             Color.Blue,
             true,
             false,
-            false,
+            FactionBehavior.None,
             GrowthType.None,
             new Dictionary<int, OnlyWar.Models.Soldiers.Species>(),
             new Dictionary<int, OnlyWar.Models.Soldiers.SoldierTemplate>(),

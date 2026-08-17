@@ -504,6 +504,10 @@ public partial class MainGameScene
 	private void OnCampaignChanged(object sender, EventArgs e)
 	{
 		MarkCampaignChanged();
+		if (_activePrimaryScreen == _commandScreen)
+		{
+			_commandScreen.RefreshFromExternalChange();
+		}
 	}
 
 	private void OnRecoverabilityStateChanged(object sender, EventArgs e)

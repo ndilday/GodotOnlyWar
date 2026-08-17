@@ -1,6 +1,8 @@
 using OnlyWar.Helpers.Settings;
+using OnlyWar.Helpers.Command;
 using OnlyWar.Helpers.Turns;
 using OnlyWar.Models;
+using OnlyWar.Models.Command;
 using OnlyWar.Models.Fleets;
 using OnlyWar.Models.Missions;
 using OnlyWar.Models.Orders;
@@ -196,7 +198,7 @@ public class EndTurnPreflightTests
     public void Evaluate_UnassignedSpecialMissionExplainsIndependentTwentyFivePercentRisk()
     {
         TestCampaign campaign = CreateCampaign();
-        campaign.PlayerPlanetFaction.SetRegionIntel(campaign.Region, 3f);
+        campaign.PlayerPlanetFaction.SetRegionAwareness(campaign.Region, 3f);
         Mission mission = CreateMission(campaign, MissionType.Sabotage);
         campaign.Region.SpecialMissions.Add(mission);
 
@@ -220,7 +222,7 @@ public class EndTurnPreflightTests
     public void Evaluate_SpecialMissionWithIntelBelowOneExplainsItWillBeCleared()
     {
         TestCampaign campaign = CreateCampaign();
-        campaign.PlayerPlanetFaction.SetRegionIntel(campaign.Region, 0.5f);
+        campaign.PlayerPlanetFaction.SetRegionAwareness(campaign.Region, 0.5f);
         Mission mission = CreateMission(campaign, MissionType.Assassination);
         campaign.Region.SpecialMissions.Add(mission);
 
@@ -281,6 +283,37 @@ public class EndTurnPreflightTests
 
         EndTurnAttentionItem item = Assert.Single(report.Items);
         Assert.Equal(EndTurnWarningCategory.ActionableTaskForces, item.Category);
+    }
+
+    [Fact]
+    public void BriefRetainsEveryAttentionFactWhenPreflightPreferencesSuppressInterruption()
+    {
+        TestCampaign campaign = CreateCampaign();
+        AddSquad(campaign, "Squad Unassigned", campaign.Region);
+        AddTaskForce(campaign, 41, campaign.Planet, CreateShip(41, "Unassigned Ship"));
+        campaign.Region.SpecialMissions.Add(CreateMission(campaign, MissionType.Extermination));
+
+        EndTurnWarningPreferences disabled = new()
+        {
+            WarnIdleDeployableSquads = false,
+            WarnLeaderlessSquads = false,
+            WarnActionableTaskForces = false,
+            WarnSpecialMissionOpportunities = false,
+            WarnRecruitmentProgram = false
+        };
+        IReadOnlyList<CommandAttentionFact> facts = EndTurnPreflight.EvaluateFacts(campaign.Sector);
+        EndTurnPreflightReport report = EndTurnPreflight.Evaluate(campaign.Sector, disabled);
+        CommandBriefModel brief = new CommandBriefBuilder().Build(
+            new Date(1, 1, 1),
+            campaign.Sector,
+            null,
+            null);
+
+        Assert.Empty(report.Items);
+        Assert.NotEmpty(facts);
+        Assert.All(facts, fact => Assert.Contains(
+            brief.Items,
+            item => item.StableKey == fact.StableKey));
     }
 
     // Design/Reference/SpecialistAttachment.md §7.3. Two ways a formation stops being "idle":
@@ -580,7 +613,7 @@ public class EndTurnPreflightTests
             Color.Red,
             isPlayer,
             isDefaultFaction: false,
-            canInfiltrate: false,
+            behavior: FactionBehavior.None,
             GrowthType.None,
             new Dictionary<int, Species> { [TestModelFactory.HumanSpecies.Id] = TestModelFactory.HumanSpecies },
             new Dictionary<int, SoldierTemplate>(),

@@ -451,7 +451,7 @@ public partial class PlanetTacticalScreenController : DialogController
 	{
 		List<DossierCardData> cards = [];
 		Faction controllingFaction = planet.GetControllingFaction();
-		bool imperialOrPlayer = FactionDispositionService.IsImperial(controllingFaction);
+		bool imperialOrPlayer = FactionRelationshipService.IsImperial(controllingFaction);
 
 		List<ValueTuple<string, string>> worldRows = [Row("Control", controllingFaction?.Name ?? "Unknown")];
 		if (imperialOrPlayer)
@@ -1114,8 +1114,11 @@ public partial class PlanetTacticalScreenController : DialogController
 
 	private static List<RegionFaction> GetPublicEnemyRegionFactions(Region region)
 	{
-		return region.RegionFactionMap.Values
-			.Where(rf => rf.IsPublic && !FactionDispositionService.IsImperial(rf.PlanetFaction.Faction))
+		if (region?.Planet?.RelationshipLedger == null) return [];
+		FactionIntelligenceService.ObservePublicActivity(region.Planet, 0);
+		return IntelligenceTargetService.GetPlayerVisibleTargets(region)
+			.Select(target => target.CurrentPresence)
+			.Where(rf => rf != null && rf.IsPublic)
 			.ToList();
 	}
 

@@ -52,6 +52,11 @@ public partial class ApothecariumScreenView : MainScreenView
                 .ToList());
     }
 
+    public void FocusSoldier(int soldierId)
+    {
+        _unitTree?.SetSelectedKeys([$"{(int)ApothecariumSelectionKind.Soldier}:{soldierId}"]);
+    }
+
     public void ShowVault(GeneSeedVaultSummary summary)
     {
         ShowPanel(_vaultPanel);

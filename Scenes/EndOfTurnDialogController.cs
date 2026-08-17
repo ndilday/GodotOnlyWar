@@ -11,6 +11,7 @@ using OnlyWar.Models.Missions;
 using OnlyWar.Models.Planets;
 using OnlyWar.Models.Reports;
 using OnlyWar.Models.Supply;
+using OnlyWar.Models.Events;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -168,7 +169,9 @@ public partial class EndOfTurnDialogController : DialogController
         IEnumerable<ConstructionProgressReport> constructionReports,
         IEnumerable<FortificationTransferReport> fortificationTransfers,
         IEnumerable<GovernorRequestReport> governorRequestReports = null,
-        RecruitmentTurnReport recruitmentReport = null)
+        RecruitmentTurnReport recruitmentReport = null,
+        IEnumerable<CampaignEvent> campaignEvents = null,
+        CampaignIdentity campaignIdentity = null)
     {
         List<EndOfTurnReportEntry> entries = [];
         HashSet<MissionContext> reportedContexts = [];
@@ -246,6 +249,17 @@ public partial class EndOfTurnDialogController : DialogController
         if (recruitmentReport != null)
         {
             entries.Add(BuildRecruitmentEntry(recruitmentReport));
+        }
+
+        foreach (CampaignEvent @event in campaignEvents ?? Enumerable.Empty<CampaignEvent>())
+        {
+            if (!@event.Publication.PublishesToTurnReport) continue;
+            entries.Add(new EndOfTurnReportEntry(
+                @event.Type == CampaignEventType.FirstBlood ? "First Blood" : "Campaign Event",
+                @event.CorrelationKey == null ? "Personal service record" : @event.CorrelationKey,
+                CampaignEventNarrator.RenderTurnReport(@event, campaignIdentity),
+                false,
+                @event.Publication.Importance.ToString().ToUpperInvariant()));
         }
 
         if (entries.Count == 0)
@@ -438,8 +452,8 @@ public partial class EndOfTurnDialogController : DialogController
         // is false except when the player's own squads fought this mission's force directly (below);
         // that closes the old full-mission-log leak while still letting real battles be reviewed.
         MissionOutcomeClassification npcClassification = MissionOutcomeClassifier.Classify(context);
-        bool spotterIsPlayerSide = FactionDispositionService.IsImperial(context.Spotter?.PlanetFaction?.Faction);
-        bool targetIsPlayerSide = FactionDispositionService.IsImperial(mission?.RegionFaction?.PlanetFaction?.Faction);
+        bool spotterIsPlayerSide = FactionRelationshipService.IsImperial(context.Spotter?.PlanetFaction?.Faction);
+        bool targetIsPlayerSide = FactionRelationshipService.IsImperial(mission?.RegionFaction?.PlanetFaction?.Faction);
         bool playerForcesEngaged = context.OpposingSquads?.Any(squad => squad?.IsPlayerSquad == true) == true;
         float playerVisibleIntel = region?.GetPlayerVisibleIntel() ?? 0f;
 

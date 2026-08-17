@@ -57,12 +57,12 @@ public static class ElementLoadoutSections
 
         foreach (SquadTemplateElement element in template.Elements)
         {
-            // Command Weapon is the per-person kit group and is rendered as individual rows; every
-            // other group is a pool drawn from this element's bodies. The split is by group, NOT
-            // by the quota's own maximum: a Tactical Squad's "Heavy Weapon" is (0,1) yet still a
-            // pool, because that one weapon goes to one of nine troopers rather than to a named
-            // man. This mirrors how SquadFactory and BattleSquad already divide the two.
-            List<CountGroupData> groups = element.Quotas
+            // An explicit PersonalEquipmentRole owns the element's complete composition and
+            // never enters the pooled count editor. Legacy fixtures without that relation retain
+            // the old Command Weapon split until their rules rows are migrated.
+            List<CountGroupData> groups = element.PersonalEquipmentRole != null
+                ? []
+                : element.Quotas
                 .Where(quota => quota.OptionGroup != CharacterLoadoutService.CommandWeaponGroup)
                 .Select(quota => new CountGroupData(
                     quota.OptionGroup,
@@ -103,6 +103,8 @@ public partial class ElementLoadoutEditorView : VBoxContainer
     public event EventHandler<(int Key, WeaponSet WeaponSet)> CharacterSelectionChanged;
     /// <summary>Raised with a character row's key when the player clears its override.</summary>
     public event EventHandler<int> CharacterResetRequested;
+    /// <summary>Raised when the itemized editor should open for a character row.</summary>
+    public event EventHandler<int> CharacterCustomizeRequested;
 
     public IReadOnlyList<WeaponSet> WorkingLoadout => _workingLoadout;
 
@@ -200,25 +202,48 @@ public partial class ElementLoadoutEditorView : VBoxContainer
         identity.AddChild(detail);
         content.AddChild(identity);
 
-        OptionButton picker = new() { CustomMinimumSize = new Vector2(280, 34) };
-        for (int i = 0; i < row.Options.Count; i++)
-        {
-            picker.AddItem(row.Options[i].Name, i);
-        }
-        int selectedIndex = row.Selected == null
-            ? -1
-            : row.Options.ToList().FindIndex(option => option.Id == row.Selected.Id);
-        picker.Selected = selectedIndex;
-        picker.Disabled = row.Options.Count <= 1;
-        // Capture the row's own key and options; the handler outlives this loop iteration.
         int key = row.Key;
-        IReadOnlyList<WeaponSet> options = row.Options;
-        picker.ItemSelected += index =>
+        if (row.Options.Count > 0)
         {
-            if (index < 0 || index >= options.Count) return;
-            CharacterSelectionChanged?.Invoke(this, (key, options[(int)index]));
+            OptionButton picker = new() { CustomMinimumSize = new Vector2(280, 34) };
+            for (int i = 0; i < row.Options.Count; i++)
+            {
+                picker.AddItem(row.Options[i].Name, i);
+            }
+            int selectedIndex = row.Selected == null
+                ? -1
+                : row.Options.ToList().FindIndex(option => option.Id == row.Selected.Id);
+            picker.Selected = selectedIndex;
+            picker.Disabled = row.Options.Count <= 1;
+            // Capture the row's own key and options; the handler outlives this loop iteration.
+            IReadOnlyList<WeaponSet> options = row.Options;
+            picker.ItemSelected += index =>
+            {
+                if (index < 0 || index >= options.Count) return;
+                CharacterSelectionChanged?.Invoke(this, (key, options[(int)index]));
+            };
+            content.AddChild(picker);
+        }
+        else
+        {
+            Label itemized = new()
+            {
+                Text = "Itemized loadout",
+                CustomMinimumSize = new Vector2(180, 34),
+                VerticalAlignment = VerticalAlignment.Center
+            };
+            itemized.AddThemeColorOverride("font_color", OnlyWarStyle.PlayerAccent);
+            content.AddChild(itemized);
+        }
+
+        Button customize = new()
+        {
+            Text = "Customize",
+            CustomMinimumSize = new Vector2(104, 34),
+            TooltipText = "Compose the complete armor, weapons, gear, and ammunition loadout"
         };
-        content.AddChild(picker);
+        customize.Pressed += () => CharacterCustomizeRequested?.Invoke(this, key);
+        content.AddChild(customize);
 
         Button reset = new()
         {

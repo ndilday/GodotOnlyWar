@@ -21,6 +21,7 @@ public partial class ChapterController : MainScreenController
     private SoldierTransferOption _pendingTransferOption;
     private int? _pendingTransferSoldierId;
     private int? _currentDetailSoldierId;
+    private int? _historicalSoldierId;
     private bool _pendingBlackCarapaceSurgery;
     private ConfirmationDialog _transferConfirmationDialog;
     private ConfirmationDialog _recallConfirmationDialog;
@@ -117,6 +118,7 @@ public partial class ChapterController : MainScreenController
 
     public void PopulateCompanyList()
     {
+        _historicalSoldierId = null;
         _navigator.ResetToChapter();
         RenderCurrentPath();
     }
@@ -124,6 +126,20 @@ public partial class ChapterController : MainScreenController
     public void DisplaySoldier(int soldierId)
     {
         ISoldier soldier = GetSoldier(soldierId);
+        if (soldier == null)
+        {
+            return;
+        }
+
+        if (soldier.AssignedSquad == null)
+        {
+            _historicalSoldierId = soldierId;
+            _activeFilter = [];
+            RenderCurrentPath();
+            return;
+        }
+
+        _historicalSoldierId = null;
         Squad squad = soldier.AssignedSquad;
         _activeFilter = [];
         _navigator.OpenSoldier(FindCompanyId(squad), squad.Id, soldier.Id);
@@ -392,6 +408,14 @@ public partial class ChapterController : MainScreenController
 
     private void RenderCurrentPath()
     {
+        if (_historicalSoldierId.HasValue
+            && GameDataSingleton.Instance?.Sector?.PlayerForce?.Army?.FallenBrothers
+                .TryGetValue(_historicalSoldierId.Value, out PlayerSoldier fallen) == true)
+        {
+            RenderHistoricalSoldier(fallen);
+            return;
+        }
+
         Unit chapter = TryGetChapter();
         if (chapter == null)
         {
@@ -425,6 +449,46 @@ public partial class ChapterController : MainScreenController
                 RenderSoldierLevel(GetSoldier(_navigator.Path.SoldierId.Value));
                 break;
         }
+    }
+
+    private void RenderHistoricalSoldier(PlayerSoldier soldier)
+    {
+        _currentDetailSoldierId = soldier.Id;
+        _transferOptions = [];
+        List<ChapterBrowserMenuItem> fallenBrothers = GameDataSingleton.Instance.Sector.PlayerForce.Army
+            .FallenBrothers.Values
+            .OrderBy(candidate => candidate.Name, StringComparer.OrdinalIgnoreCase)
+            .ThenBy(candidate => candidate.Id)
+            .Select(candidate => new ChapterBrowserMenuItem(
+                ChapterBrowserLevel.Soldier,
+                candidate.Id,
+                GetSoldierIconKey(candidate),
+                $"{candidate.Template.Name} {candidate.Name}",
+                "Fallen — preserved dossier",
+                true,
+                candidate.Id == soldier.Id,
+                "i"))
+            .ToList();
+        ChapterView.SetLeftMenu("Fallen Brothers", fallenBrothers);
+        ChapterBrowserDetail baseDetail = _soldierDetailBuilder.Build(
+            soldier,
+            false,
+            includeSquadInTitle: true);
+        ChapterBrowserDetail detail = baseDetail with
+        {
+            Subtitle = "Fallen — preserved dossier",
+            Cards =
+            [
+                new ChapterBrowserDetailCard(
+                    "archive",
+                    "Historical Dossier",
+                    "No active posting",
+                    "This brother is no longer part of the active order of battle. His name, service record, and campaign history remain preserved here."),
+                .. baseDetail.Cards
+            ]
+        };
+        ChapterView.SetDetail(detail);
+        ChapterView.SetTransferOptions([]);
     }
 
     private void RenderNoChapterData()
@@ -1062,7 +1126,9 @@ public partial class ChapterController : MainScreenController
 
     private ISoldier GetSoldier(int soldierId)
     {
-        return GetChapter().GetAllMembers().First(soldier => soldier.Id == soldierId);
+        return GetChapter().GetAllMembers().FirstOrDefault(soldier => soldier.Id == soldierId)
+            ?? GameDataSingleton.Instance?.Sector?.PlayerForce?.Army?.FallenBrothers
+                .GetValueOrDefault(soldierId);
     }
 
     // Companies always have a single HQ squad plus a variable number of line

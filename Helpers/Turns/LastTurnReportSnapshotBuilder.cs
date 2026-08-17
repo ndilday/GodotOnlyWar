@@ -4,6 +4,7 @@ using OnlyWar.Models.Battles;
 using OnlyWar.Models.Missions;
 using OnlyWar.Models.Reports;
 using OnlyWar.Models.Supply;
+using OnlyWar.Models.Events;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -31,7 +32,9 @@ namespace OnlyWar.Helpers.Turns
                 result.ConstructionReports,
                 result.FortificationTransfers,
                 result.GovernorRequestReports,
-                result.RecruitmentReport);
+                result.RecruitmentReport,
+                result.CampaignEvents,
+                result.CampaignIdentity);
         }
 
         internal static LastTurnReportBuildResult Build(
@@ -42,7 +45,9 @@ namespace OnlyWar.Helpers.Turns
             IEnumerable<ConstructionProgressReport> constructionReports = null,
             IEnumerable<FortificationTransferReport> fortificationTransfers = null,
             IEnumerable<GovernorRequestReport> governorRequestReports = null,
-            RecruitmentTurnReport recruitmentReport = null)
+            RecruitmentTurnReport recruitmentReport = null,
+            IEnumerable<CampaignEvent> campaignEvents = null,
+            CampaignIdentity campaignIdentity = null)
         {
             List<EndOfTurnReportEntry> presentationEntries = EndOfTurnDialogController.BuildReportEntries(
                 (missionContexts ?? Enumerable.Empty<MissionContext>()).ToList(),
@@ -51,7 +56,9 @@ namespace OnlyWar.Helpers.Turns
                 constructionReports,
                 fortificationTransfers,
                 governorRequestReports,
-                recruitmentReport);
+                recruitmentReport,
+                campaignEvents,
+                campaignIdentity);
 
             LastTurnReportSnapshot snapshot = BuildSnapshot(resolvedDate, presentationEntries);
             return new LastTurnReportBuildResult(snapshot, presentationEntries);

@@ -46,17 +46,34 @@ public partial class TacticalRegionController : Control
         _region = region;
         RegionFaction playerRegionFaction = region.RegionFactionMap.Values.FirstOrDefault(rf => rf.PlanetFaction.Faction.IsPlayerFaction);
         RegionFaction defaultFaction = region.RegionFactionMap.Values.FirstOrDefault(rf => rf.PlanetFaction.Faction.IsDefaultFaction);
-        // A region can hold more than one public enemy faction at once (e.g. a Tyranid incursion
-        // contesting the same ground as an uprising cult). The hex tile only has room for a single
-        // xenos slot, so we surface the strongest public enemy there and fold the rest into the
-        // count/tooltip rather than collapsing to whichever faction iterates first.
-        List<RegionFaction> publicEnemyFactions = region.RegionFactionMap.Values
-            .Where(rf => rf.IsPublic && !FactionDispositionService.IsImperial(rf.PlanetFaction.Faction))
+        // Target rows come from the Chapter/PDF belief stores. A current RegionFaction is attached
+        // only for resolving works on a target that happens to be present; it is never used to
+        // discover an enemy row or to turn awareness into a precision mask.
+        Faction playerFaction = region.Planet.PlanetFactionMap.Values
+            .Select(planetFaction => planetFaction.Faction)
+            .FirstOrDefault(faction => faction.IsPlayerFaction)
+            ?? region.Planet.PlanetFactionMap.Values
+                .Select(planetFaction => planetFaction.Faction)
+                .FirstOrDefault(faction => faction.IsDefaultFaction);
+        List<FactionIntelBelief> visibleEnemyBeliefs = IntelligenceTargetService
+            .GetPlayerVisibleBeliefs(region)
+            .Where(belief => belief.Level >= IntelLevel.Suspected
+                && (playerFaction == null
+                    || FactionRelationshipService.GetEffectiveStance(
+                        playerFaction,
+                        belief.TargetFaction,
+                        region.Planet) == FactionStance.Hostile))
             .ToList();
-        bool multiFactionContested = publicEnemyFactions.Count > 1;
-        RegionFaction xenosRegionFaction = publicEnemyFactions.Count > 0
-            ? publicEnemyFactions.OrderByDescending(rf => rf.GetDeployedStrength()).First()
-            : region.GetVisibleEnemyRegionFaction();
+        bool multiFactionContested = visibleEnemyBeliefs.Count > 1;
+        FactionIntelBelief xenosBelief = visibleEnemyBeliefs
+            .OrderByDescending(belief => belief.EstimatedMilitaryStrength ?? 0)
+            .ThenByDescending(belief => belief.Evidence)
+            .ThenBy(belief => belief.TargetFaction.Id)
+            .FirstOrDefault();
+        Faction xenosFaction = xenosBelief?.TargetFaction;
+        RegionFaction xenosRegionFaction = xenosFaction == null
+            ? null
+            : region.RegionFactionMap.GetValueOrDefault(xenosFaction.Id);
 
         int playerCount = playerRegionFaction?.LandedSquads.Sum(s => s.Members.Count()) ?? 0;
         // The orders fraction counts manoeuvre elements only. A detachable formation is a
@@ -71,14 +88,15 @@ public partial class TacticalRegionController : Control
         bool hiddenImperialPopulation = region.HasHiddenDefaultFaction();
         long civilianPopulation = hiddenImperialPopulation ? 0 : region.GetVisibleCivilianPopulation();
         long garrison = region.PlanetaryDefenseForces;
-        bool publicEnemy = xenosRegionFaction != null && xenosRegionFaction.IsPublic;
-        bool hiddenEnemy = xenosRegionFaction != null && !xenosRegionFaction.IsPublic;
+        bool publicEnemy = xenosBelief?.Level >= IntelLevel.Confirmed;
+        bool hiddenEnemy = xenosBelief != null && !publicEnemy;
         float visibleIntel = region.GetPlayerVisibleIntel();
 
         bool showForces = layers.HasFlag(MapLayer.Forces);
         bool showOrders = layers.HasFlag(MapLayer.Orders);
         bool showIntel = layers.HasFlag(MapLayer.Intel);
-        bool showEntrenchment = showIntel && publicEnemy && visibleIntel > 1;
+        bool showEntrenchment = showIntel && publicEnemy && visibleIntel > 1
+            && xenosRegionFaction != null;
 
         // Layers combine rather than exclude: a tile can show force strength, order
         // status, and intel simultaneously if all three layers are toggled on.
@@ -96,8 +114,8 @@ public partial class TacticalRegionController : Control
         // would need scene changes to TacticalRegionView and is left for a future pass.
         string xenosText = showXenos
             ? multiFactionContested
-                ? $"{xenosRegionFaction.GetForceMagnitudeDescription()} +{publicEnemyFactions.Count - 1}"
-                : xenosRegionFaction.GetForceMagnitudeDescription()
+                ? $"{RegionFactionExtensions.GetForceMagnitudeDescription(xenosBelief)} +{visibleEnemyBeliefs.Count - 1}"
+                : RegionFactionExtensions.GetForceMagnitudeDescription(xenosBelief)
             : "";
 
         bool showPlayerHidden = (showForces && hiddenEnemy && visibleIntel > 0)
@@ -107,12 +125,14 @@ public partial class TacticalRegionController : Control
         bool showCivilian = showEntrenchment || garrison > 0 || (showForces && (civilianPopulation > 0 || hiddenImperialPopulation));
         string civilianText = showEntrenchment
             ? RegionFactionExtensions.GetDefenseLevelDescription(
-                RegionDefenses.GetShared(xenosRegionFaction, DefenseType.Entrenchment))
+                xenosRegionFaction == null
+                    ? 0
+                    : RegionDefenses.GetShared(xenosRegionFaction, DefenseType.Entrenchment))
             : garrison > 0 ? FormatCompact(garrison) : (hiddenImperialPopulation ? "?" : (showForces ? FormatCompact(civilianPopulation) : ""));
 
         bool showObjective = region.SpecialMissions.Count > 0 || (showOrders && assignedCount > 0);
         const bool showDropPod = false;
-        string xenosIconKey = IconAtlas.GetFactionIconKey(xenosRegionFaction?.PlanetFaction.Faction);
+        string xenosIconKey = IconAtlas.GetFactionIconKey(xenosFaction);
         string civilianIconKey = showEntrenchment
             ? xenosIconKey
             : garrison > 0 ? "pdf_forces" : "imperial_population";
@@ -149,12 +169,12 @@ public partial class TacticalRegionController : Control
         {
             // Distinguish "several enemy factions fighting over this ground" from a clean
             // single-faction hold by blending in the contested-region hazard color.
-            Color blended = xenosRegionFaction.PlanetFaction.Faction.Color.ToGodotColor().Lerp(ContestedRegionColor, 0.5f);
+            Color blended = xenosFaction.Color.ToGodotColor().Lerp(ContestedRegionColor, 0.5f);
             color = MutedMapColor(blended, 0.18f);
         }
         else if (publicEnemy && (showForces || showIntel))
         {
-            color = MutedMapColor(xenosRegionFaction.PlanetFaction.Faction.Color.ToGodotColor(), 0.18f);
+            color = MutedMapColor(xenosFaction.Color.ToGodotColor(), 0.18f);
         }
         else
         {
@@ -172,10 +192,11 @@ public partial class TacticalRegionController : Control
             : $"Space Marines: {playerCount}";
         string xenosTooltip = showXenos
             ? multiFactionContested
-                ? string.Join("\n", publicEnemyFactions
-                    .OrderByDescending(rf => rf.GetDeployedStrength())
-                    .Select(rf => $"{rf.PlanetFaction.Faction.Name}: {rf.GetForceMagnitudeDescription()}"))
-                : $"{xenosRegionFaction.PlanetFaction.Faction.Name}: {xenosText}"
+                ? string.Join("\n", visibleEnemyBeliefs
+                    .OrderByDescending(belief => belief.EstimatedMilitaryStrength ?? 0)
+                    .Select(belief => $"{belief.TargetFaction.Name}: "
+                        + $"{RegionFactionExtensions.GetForceMagnitudeDescription(belief)}"))
+                : $"{xenosFaction?.Name}: {xenosText}"
             : "";
 
         _view.Populate(

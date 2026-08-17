@@ -48,8 +48,8 @@ public partial class DiplomacyScreenController : MainScreenController
         }
 
         // The Sector Lord's promise sits above the governors' petitions: it is the standing
-        // obligation the whole opening is framed around, and until now it was only ever visible in
-        // the one-shot briefing popup, which the player cannot get back once dismissed.
+        // obligation the whole opening is framed around, and it remains available through the
+        // Command Brief/Chronicle surfaces after the initial directive is acknowledged.
         TreeNode promiseNode = CreatePromisedWorldNode(sector);
         if (promiseNode != null)
         {
@@ -57,6 +57,15 @@ public partial class DiplomacyScreenController : MainScreenController
         }
 
         _view.PopulateRequestTree(nodes);
+    }
+
+    /// <summary>
+    /// Selects a petition requested by another workspace without changing its owning-surface
+    /// rendering or inventing a second request-detail view.
+    /// </summary>
+    public void FocusRequest(int requestId)
+    {
+        _view?.FocusRequest(requestId);
     }
 
     /// <summary>
@@ -110,7 +119,7 @@ public partial class DiplomacyScreenController : MainScreenController
         List<RegionFaction> enemyHoldings = promised.Regions
             .SelectMany(region => region.RegionFactionMap.Values)
             .Where(regionFaction => regionFaction.IsPublic
-                && !FactionDispositionService.IsImperial(regionFaction.PlanetFaction.Faction)
+                && !FactionRelationshipService.IsImperial(regionFaction.PlanetFaction.Faction)
                 && (regionFaction.Population > 0 || regionFaction.Garrison > 0))
             .ToList();
 
@@ -171,7 +180,7 @@ public partial class DiplomacyScreenController : MainScreenController
             new TreeNode(0, status, [], selectable: false)
         ];
 
-        return new TreeNode(request.Id, $"{requesterName}, Governor of {planetName}", details, selectable: false);
+        return new TreeNode(request.Id, $"{requesterName}, Governor of {planetName}", details, selectable: true);
     }
 
     private static string FormatOffer(IRequest request) => request.OfferedScheduleKind switch

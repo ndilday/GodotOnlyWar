@@ -11,7 +11,8 @@ public partial class BottomMenu : Control
         Apothecarium,
         TrainingUnit,
         Fleet,
-        Diplomacy
+        Diplomacy,
+        Command
     }
 
     private readonly System.Collections.Generic.Dictionary<Destination, Button> _destinationButtons = [];
@@ -21,7 +22,7 @@ public partial class BottomMenu : Control
     public event EventHandler TrainingUnitButtonPressed;
     public event EventHandler FleetButtonPressed;
     public event EventHandler DiplomacyButtonPressed;
-    public event EventHandler ArchiveButtonPressed;
+    public event EventHandler CommandButtonPressed;
     public event EventHandler EndTurnButtonPressed;
 
     public override void _Ready()
@@ -52,9 +53,10 @@ public partial class BottomMenu : Control
         RegisterDestination(Destination.Diplomacy, diplomacyButton);
         IconAtlas.Apply(diplomacyButton, "diplomacy", 96);
         diplomacyButton.Pressed += () => DiplomacyButtonPressed?.Invoke(this, EventArgs.Empty);
-        Button archiveButton = GetNode<Button>("Panel/MarginContainer/HBoxContainer/ArchiveButton");
-        IconAtlas.Apply(archiveButton, "archive", 92);
-        archiveButton.Pressed += () => ArchiveButtonPressed?.Invoke(this, EventArgs.Empty);
+        Button commandButton = GetNode<Button>("Panel/MarginContainer/HBoxContainer/CommandButton");
+        RegisterDestination(Destination.Command, commandButton);
+        IconAtlas.Apply(commandButton, "archive", 92);
+        commandButton.Pressed += () => CommandButtonPressed?.Invoke(this, EventArgs.Empty);
         Button endTurnButton = GetNode<Button>("Panel/MarginContainer/HBoxContainer/EndTurnButton");
         IconAtlas.Apply(endTurnButton, "end_turn", 110);
         endTurnButton.Pressed += () => EndTurnButtonPressed?.Invoke(this, EventArgs.Empty);
