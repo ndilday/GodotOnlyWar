@@ -33,6 +33,12 @@ namespace OnlyWar.Helpers.Battles
         private readonly List<MeleeWeapon> _meleeWeaponDropWorklist = [];
 
         public ISoldier Soldier { get; private set; }
+        /// <summary>
+        /// True when this wrapper was equipped from the itemized equipment catalog. Legacy
+        /// weapon-set fixtures retain intrinsic tactical value until their allocation path is
+        /// migrated, which keeps old mod/test fixtures deterministic during the transition.
+        /// </summary>
+        public bool UsesItemizedEquipment { get; internal set; }
 
         public ValueTuple<int, int>? TopLeft { get; set; }
         public ushort Orientation { get; set; }
@@ -179,6 +185,19 @@ namespace OnlyWar.Helpers.Battles
         }
         public bool CanUseTwoHandedWeapon => FunctioningHands >= 2;
 
+        /// <summary>
+        /// Tactical value of the currently resolved equipment. This is intentionally derived from
+        /// live carried templates, not stored back onto SoldierTemplate.BattleValue, so strategic
+        /// force-generation accounting remains intrinsic.
+        /// </summary>
+        public int EffectiveBattleValue => UsesItemizedEquipment
+            ? EffectiveBattleValueCalculator.CalculateRuntime(
+                Soldier,
+                Armor,
+                RangedWeapons,
+                MeleeWeapons)
+            : Soldier?.Template?.BattleValue ?? 0;
+
         public int HandsFree
         {
             get
@@ -260,6 +279,15 @@ namespace OnlyWar.Helpers.Battles
         // action log, not an independent body, and the squad back-reference must be
         // set to the cloned squad, which a parameterless Clone() cannot do.
         public BattleSoldier(BattleSoldier soldier, BattleSquad squad)
+            : this(soldier, squad, null, null)
+        {
+        }
+
+        internal BattleSoldier(
+            BattleSoldier soldier,
+            BattleSquad squad,
+            IReadOnlyDictionary<RangedWeapon, RangedWeapon> rangedWeaponCopies,
+            IReadOnlyDictionary<MeleeWeapon, MeleeWeapon> meleeWeaponCopies)
         {
             Soldier = soldier.Soldier;
             BattleSquad = squad;
@@ -269,7 +297,8 @@ namespace OnlyWar.Helpers.Battles
             RefreshInjuryState();
             TopLeft = soldier.TopLeft;
             Orientation = soldier.Orientation;
-            Armor = soldier.Armor;
+            Armor = soldier.Armor == null ? null : new Armor(soldier.Armor.Template);
+            UsesItemizedEquipment = soldier.UsesItemizedEquipment;
             IsInMelee = soldier.IsInMelee;
             ReloadingPhase = soldier.ReloadingPhase;
             Stance = soldier.Stance;
@@ -285,19 +314,42 @@ namespace OnlyWar.Helpers.Battles
             RangedSkillXp = soldier.RangedSkillXp;
             MeleeSkillXp = soldier.MeleeSkillXp;
             EnemiesTakenDown = soldier.EnemiesTakenDown;
-            Aim = soldier.Aim;
-            _equippedMeleeWeapons.AddRange(soldier.EquippedMeleeWeapons);
-            _equippedRangedWeapons.AddRange(soldier.EquippedRangedWeapons);
+            Dictionary<RangedWeapon, RangedWeapon> rangedCopies = rangedWeaponCopies == null
+                ? soldier.RangedWeapons.ToDictionary(weapon => weapon, weapon => weapon.DeepCopy())
+                : new Dictionary<RangedWeapon, RangedWeapon>(rangedWeaponCopies);
+            Dictionary<MeleeWeapon, MeleeWeapon> meleeCopies = meleeWeaponCopies == null
+                ? soldier.MeleeWeapons.ToDictionary(weapon => weapon, weapon => new MeleeWeapon(weapon.Template))
+                : new Dictionary<MeleeWeapon, MeleeWeapon>(meleeWeaponCopies);
+            Aim = soldier.Aim is (int, RangedWeapon, int) aim
+                && rangedCopies.TryGetValue(aim.Item2, out RangedWeapon aimedWeapon)
+                ? (aim.Item1, aimedWeapon, aim.Item3)
+                : null;
+            _equippedMeleeWeapons.AddRange(soldier.EquippedMeleeWeapons
+                .Select(weapon => meleeCopies.GetValueOrDefault(weapon))
+                .Where(weapon => weapon != null));
+            _equippedRangedWeapons.AddRange(soldier.EquippedRangedWeapons
+                .Select(weapon => rangedCopies.GetValueOrDefault(weapon))
+                .Where(weapon => weapon != null));
             foreach (MeleeWeapon weapon in EquippedMeleeWeapons)
             {
-                _meleeWeaponHandGroups[weapon] = soldier.GetHandGroupIds(weapon).ToArray();
+                MeleeWeapon originalWeapon = meleeCopies
+                    .First(pair => ReferenceEquals(pair.Value, weapon)).Key;
+                _meleeWeaponHandGroups[weapon] = soldier.GetHandGroupIds(originalWeapon).ToArray();
             }
             foreach (RangedWeapon weapon in EquippedRangedWeapons)
             {
-                _rangedWeaponHandGroups[weapon] = soldier.GetHandGroupIds(weapon).ToArray();
+                RangedWeapon originalWeapon = rangedCopies
+                    .First(pair => ReferenceEquals(pair.Value, weapon)).Key;
+                _rangedWeaponHandGroups[weapon] = soldier.GetHandGroupIds(originalWeapon).ToArray();
             }
-            MeleeWeapons = soldier.MeleeWeapons;
-            RangedWeapons = soldier.RangedWeapons;
+            MeleeWeapons = soldier.MeleeWeapons
+                .Select(weapon => meleeCopies.GetValueOrDefault(weapon))
+                .Where(weapon => weapon != null)
+                .ToList();
+            RangedWeapons = soldier.RangedWeapons
+                .Select(weapon => rangedCopies.GetValueOrDefault(weapon))
+                .Where(weapon => weapon != null)
+                .ToList();
             TargetId = soldier.TargetId;
         }
         
@@ -333,6 +385,11 @@ namespace OnlyWar.Helpers.Battles
             if (meleeWeapons?.Count > 0)
             {
                 MeleeWeapons.AddRange(meleeWeapons);
+            }
+
+            if (ReadyInitialPreferences())
+            {
+                return;
             }
 
             // thrown weapons (grenades) ride on the belt and are thrown directly from
@@ -392,6 +449,28 @@ namespace OnlyWar.Helpers.Battles
                     }
                 }
             }
+        }
+
+        private bool ReadyInitialPreferences()
+        {
+            List<(int Order, RangedWeapon Ranged, MeleeWeapon Melee)> preferences = RangedWeapons
+                .Where(weapon => !weapon.Template.IsThrown && weapon.InitialReadyOrder.HasValue)
+                .Select(weapon => (weapon.InitialReadyOrder.Value, weapon, (MeleeWeapon)null))
+                .Concat(MeleeWeapons
+                    .Where(weapon => weapon.InitialReadyOrder.HasValue)
+                    .Select(weapon => (weapon.InitialReadyOrder.Value, (RangedWeapon)null, weapon)))
+                // Lower numbers have higher priority. Apply lower-priority choices first so a
+                // later high-priority two-handed choice can displace them when hands conflict.
+                .OrderByDescending(item => item.Item1)
+                .ToList();
+            if (preferences.Count == 0) return false;
+
+            foreach ((int _, RangedWeapon ranged, MeleeWeapon melee) in preferences)
+            {
+                if (ranged != null) ReadyWeapon(ranged);
+                else ReadyWeapon(melee);
+            }
+            return true;
         }
 
         /// <summary>

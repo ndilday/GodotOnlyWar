@@ -88,6 +88,6 @@ public class GenestealerCultTests
         SectorSimulationFixture fixture = SectorSimulationFixture.Create();
         RegionFaction cult = fixture.AddPublicCult(0, population: 1_000, organization: 100);
 
-        Assert.False(cult.PlanetFaction.Faction.InvadesOnVictory);
+        Assert.False(cult.PlanetFaction.Faction.HasBehavior(FactionBehavior.InvadesOnVictory));
     }
 }

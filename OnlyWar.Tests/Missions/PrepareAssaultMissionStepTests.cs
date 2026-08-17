@@ -65,6 +65,9 @@ public class PrepareAssaultMissionStepTests
         Planet planet = new(1, "Terra", new Coordinate(0, 0), 1, null, 0, 0);
         Region region = new(1, planet, 0, "Terra Lambda", new RegionCoordinate(0, 0), 0);
         planet.Regions[0] = region;
+        FactionRelationshipLedger relationships = new();
+        planet.AttachRelationshipLedger(relationships);
+        relationships.SetStance(player, imperial, FactionStance.Allied);
         RegionFaction target = AddPresence(region, imperial);
         RegionFaction playerPresence = AddPresence(region, player);
         RegionFaction enemyPresence = AddPresence(region, enemy);
@@ -212,7 +215,7 @@ public class PrepareAssaultMissionStepTests
     }
 
     private static Faction CreateFaction(int id, string name, bool isPlayer = false, bool isDefault = false) =>
-        new(id, name, Color.White, isPlayer, isDefault, false, GrowthType.Logistic,
+        new(id, name, Color.White, isPlayer, isDefault, FactionBehavior.None, GrowthType.Logistic,
             new Dictionary<int, OnlyWar.Models.Soldiers.Species>(),
             new Dictionary<int, OnlyWar.Models.Soldiers.SoldierTemplate>(),
             new Dictionary<int, SquadTemplate>(),

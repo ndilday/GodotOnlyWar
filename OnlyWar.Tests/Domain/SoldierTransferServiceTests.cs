@@ -8,6 +8,7 @@ using OnlyWar.Models.Soldiers.Ratings;
 using OnlyWar.Models.Squads;
 using OnlyWar.Models.Units;
 using OnlyWar.Tests.Fixtures;
+using System.Drawing;
 using System.Collections.Generic;
 using System.Linq;
 using Xunit;
@@ -422,7 +423,22 @@ public class SoldierTransferServiceTests
         Region region = new(
             1, planet, 0, "Fortress Region", new RegionCoordinate(0, 0), 0f);
         planet.Regions[0] = region;
-        RegionFaction presence = new(new PlanetFaction(null), region);
+        Faction presenceFaction = new(
+            1,
+            "Planetary Presence",
+            Color.Red,
+            false,
+            false,
+            FactionBehavior.None,
+            GrowthType.None,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null);
+        RegionFaction presence = new(new PlanetFaction(presenceFaction), region);
         region.RegionFactionMap[1] = presence;
         source.CurrentRegion = region;
         presence.LandedSquads.Add(source);

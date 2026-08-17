@@ -427,7 +427,7 @@ public class ForceGeneratorTests
             Color.Black,
             false,
             false,
-            false,
+            FactionBehavior.None,
             GrowthType.None,
             new Dictionary<int, Species> { [TestModelFactory.HumanSpecies.Id] = TestModelFactory.HumanSpecies },
             new Dictionary<int, SoldierTemplate> { [TestModelFactory.MarineTemplate.Id] = TestModelFactory.MarineTemplate },

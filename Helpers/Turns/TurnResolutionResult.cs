@@ -2,6 +2,7 @@ using OnlyWar.Helpers.Missions;
 using OnlyWar.Helpers.StrategicCombat;
 using OnlyWar.Models.Missions;
 using OnlyWar.Models.Supply;
+using OnlyWar.Models.Events;
 using System.Collections.Generic;
 
 namespace OnlyWar.Helpers.Turns
@@ -27,6 +28,8 @@ namespace OnlyWar.Helpers.Turns
         internal List<GovernorRequestReport> GovernorRequestReports { get; } = new();
         internal RecruitmentTurnReport RecruitmentReport { get; set; }
         internal string ScenarioNotification { get; set; }
+        internal List<CampaignEvent> CampaignEvents { get; } = new();
+        internal CampaignIdentity CampaignIdentity { get; set; }
 
         internal void Clear()
         {
@@ -38,6 +41,8 @@ namespace OnlyWar.Helpers.Turns
             GovernorRequestReports.Clear();
             RecruitmentReport = null;
             ScenarioNotification = null;
+            CampaignEvents.Clear();
+            CampaignIdentity = null;
         }
     }
 }

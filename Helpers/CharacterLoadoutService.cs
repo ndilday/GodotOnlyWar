@@ -49,7 +49,8 @@ namespace OnlyWar.Helpers
 
         public static bool IsCharacter(ISoldier soldier) =>
             FindElement(soldier) is SquadTemplateElement element
-            && element.TryGetQuota(CommandWeaponGroup, out _);
+            && (element.PersonalEquipmentRole != null
+                || element.TryGetQuota(CommandWeaponGroup, out _));
 
         /// <summary>
         /// Personal override, else the chapter's default for the role, else the element's own

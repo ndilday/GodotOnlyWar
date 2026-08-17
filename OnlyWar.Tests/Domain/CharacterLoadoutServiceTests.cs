@@ -123,7 +123,7 @@ public class CharacterLoadoutServiceTests
             [element], SquadTypes.None);
 
         Faction faction = new(
-            11, "Player", Color.Black, true, false, false, GrowthType.None,
+            11, "Player", Color.Black, true, false, FactionBehavior.None, GrowthType.None,
             null, null, new Dictionary<int, SquadTemplate>(),
             null, null, null, null);
         Army army = new("Army", null, null, null, []);

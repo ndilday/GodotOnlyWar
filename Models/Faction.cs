@@ -29,26 +29,8 @@ namespace OnlyWar.Models
         public Color Color { get; }
         public bool IsPlayerFaction { get; }
         public bool IsDefaultFaction { get; }
-        public bool CanInfiltrate { get; }
+        public FactionBehavior Behavior { get; }
         public GrowthType GrowthType { get; }
-        // Whether the faction's population IS its fighting force (Tyranids, Genestealer Cults, and
-        // — once implemented — Orks and Necrons), so battle casualties come out of Population.
-        // Factions with a separate civilian base (the Imperium, Tau, Votann, and for now
-        // Chaos/Eldar/Drukhari) instead lose their military pool (Garrison). This is an interim
-        // behavioral flag pending the data-driven FactionBehavior consolidation (PRD §4.21);
-        // settable so a specific faction can override the default below.
-        public bool PopulationIsMilitary { get; set; }
-        // Whether a victorious offensive leaves its survivors behind to seize the ground (invade)
-        // rather than returning them to their staging region (raid). A Tyranid tide invades; a
-        // raider returns home. Interim default keyed off the consuming growth type (§4.24).
-        public bool InvadesOnVictory { get; set; }
-        // Hidden infiltrators with this semantic continue to serve in the host's defenses against
-        // an external attacker without revealing themselves. Relationship policy is centralized in
-        // FactionDispositionService; callers should not infer this from a faction name.
-        public bool DefendsHostWhileHidden { get; set; }
-        // Public human insurgents may suspend their war with Imperial forces while a public external
-        // enemy is present on the planet. Cults deliberately do not receive this public truce.
-        public bool OffersExternalEnemyTruce { get; set; }
         // How strongly a squad of this faction distributes its fire across the enemy frontage rather
         // than piling every weapon onto the single most valuable target (Phase 3 fire distribution).
         // 1 = tight sector discipline; 0 = an undisciplined mob that dogpiles. Interim derivation
@@ -81,8 +63,8 @@ namespace OnlyWar.Models
                 .DefaultIfEmpty(0)
                 .Min() ?? 0;
 
-        public Faction(int id, string name, Color color, bool isPlayerFaction, 
-                       bool isDefaultFaction, bool canInfiltrate, GrowthType growthType,
+        public Faction(int id, string name, Color color, bool isPlayerFaction,
+                       bool isDefaultFaction, FactionBehavior behavior, GrowthType growthType,
                        IReadOnlyDictionary<int, Species> species,
                        IReadOnlyDictionary<int, SoldierTemplate> soldierTemplates,
                        IReadOnlyDictionary<int, SquadTemplate> squadTemplates,
@@ -96,16 +78,8 @@ namespace OnlyWar.Models
             Color = color;
             IsPlayerFaction = isPlayerFaction;
             IsDefaultFaction = isDefaultFaction;
-            CanInfiltrate = canInfiltrate;
+            Behavior = behavior;
             GrowthType = growthType;
-            // Interim derivations (see property comments): every non-Imperial NPC faction that
-            // currently exists is a population-is-military horde, and Tyranids (Consumption) are the
-            // invaders. Both are overridable once FactionBehavior/rules data carry them explicitly.
-            PopulationIsMilitary = !isPlayerFaction && !isDefaultFaction;
-            InvadesOnVictory = growthType is GrowthType.Consumption or GrowthType.Unrest;
-            DefendsHostWhileHidden = growthType == GrowthType.Conversion
-                || growthType == GrowthType.Unrest;
-            OffersExternalEnemyTruce = growthType == GrowthType.Unrest;
             FireDiscipline =
                 isPlayerFaction || isDefaultFaction || growthType == GrowthType.Consumption
                     ? 1.0f
@@ -127,5 +101,7 @@ namespace OnlyWar.Models
             }
             Units = [];
         }
+
+        public bool HasBehavior(FactionBehavior behavior) => (Behavior & behavior) == behavior;
     }
 }

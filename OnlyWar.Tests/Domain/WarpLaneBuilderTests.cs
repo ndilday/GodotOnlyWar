@@ -156,7 +156,7 @@ public class WarpLaneBuilderTests
 
     private static Faction CreateFaction(int id, string name, bool isDefault = false)
     {
-        return new Faction(id, name, System.Drawing.Color.Red, false, isDefault, false,
+        return new Faction(id, name, System.Drawing.Color.Red, false, isDefault, FactionBehavior.None,
             GrowthType.None, null, null, null, null, null, null, null);
     }
 }

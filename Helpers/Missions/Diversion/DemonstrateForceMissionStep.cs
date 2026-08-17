@@ -121,7 +121,7 @@ namespace OnlyWar.Helpers.Missions.Diversion
             // the way ambient search is capped would make a hive fleet as gullible as a village. It
             // borrows only Magnitude's log10(1+x) shape so an emptied region reads as 0 rather than
             // -infinity.
-            float difficulty = enemyFaction.GetOwnRegionIntel() * 0.5f;
+            float difficulty = enemyFaction.GetOwnRegionAwareness() * 0.5f;
             difficulty += MissionStealthDifficulty.Magnitude(enemyFaction.GetDeployedStrength());
             // Credibility is RELATIVE. A squad demonstrating at a hive fleet is noise; a company
             // demonstrating at a village is overwhelming. Without this term every feint was equally

@@ -494,7 +494,7 @@ namespace OnlyWar.Helpers
             }
             RegionFaction controller = region.ControllingFaction;
             return controller != null
-                   && FactionDispositionService.IsImperial(controller.PlanetFaction.Faction);
+                   && FactionRelationshipService.IsImperial(controller.PlanetFaction.Faction);
         }
 
         private static Planet GetSquadPlanet(Squad squad)

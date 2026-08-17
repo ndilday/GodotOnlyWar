@@ -190,7 +190,7 @@ public class FleetMovementTests
                 Color.Blue,
                 true,
                 false,
-                false,
+                FactionBehavior.None,
                 GrowthType.None,
                 new Dictionary<int, Species>(),
                 new Dictionary<int, SoldierTemplate>(),

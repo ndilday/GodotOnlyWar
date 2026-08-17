@@ -166,7 +166,7 @@ namespace OnlyWar.Helpers.Turns
 
         private static bool IsEnemyFaction(Faction faction)
         {
-            return faction != null && !FactionDispositionService.IsImperial(faction);
+            return faction != null && !FactionRelationshipService.IsImperial(faction);
         }
     }
 }

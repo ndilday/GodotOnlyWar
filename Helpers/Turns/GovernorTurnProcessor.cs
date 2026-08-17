@@ -1,4 +1,5 @@
 using OnlyWar.Builders;
+using OnlyWar.Helpers.Extensions;
 using OnlyWar.Helpers.Simulation;
 using OnlyWar.Helpers.Supply;
 using OnlyWar.Models;
@@ -32,12 +33,15 @@ namespace OnlyWar.Helpers.Turns
 
         internal void ProcessGovernor(Planet planet, PlanetFaction planetFaction)
         {
-            if (AgeAndCheckForDeath(planet, planetFaction))
+            Character governor = planetFaction.Leader;
+            IRNG random = _session.NamedRandomStreams.Get(
+                NamedRandomStreamKeys.Governor(governor.Id),
+                streamVersion: 1);
+            if (AgeAndCheckForDeath(planet, planetFaction, random))
             {
                 return;
             }
 
-            Character governor = planetFaction.Leader;
             if (governor.ActiveRequest != null)
             {
                 IRequest request = governor.ActiveRequest;
@@ -80,11 +84,11 @@ namespace OnlyWar.Helpers.Turns
                      && (governor.NextRequestEligibleDate == null
                          || _session.CurrentDate.IsAfterOrEqual(governor.NextRequestEligibleDate)))
             {
-                GenerateRequest(planet, planetFaction);
+                GenerateRequest(planet, planetFaction, random);
             }
         }
 
-        private bool AgeAndCheckForDeath(Planet planet, PlanetFaction planetFaction)
+        private bool AgeAndCheckForDeath(Planet planet, PlanetFaction planetFaction, IRNG random)
         {
             Character leader = planetFaction.Leader;
             if (_session.CurrentDate.Week == 1)
@@ -95,7 +99,7 @@ namespace OnlyWar.Helpers.Turns
             float ageFactor = Math.Max(0, leader.Age - 50) / 50f;
             float importanceFactor = 1f - (Math.Min(planet.Importance, 6000) / 12000f);
             float weeklyDeathChance = ageFactor * 0.002f * importanceFactor;
-            if (_session.Random.GetLinearDouble() >= weeklyDeathChance)
+            if (random.GetLinearDouble() >= weeklyDeathChance)
             {
                 return false;
             }
@@ -121,17 +125,36 @@ namespace OnlyWar.Helpers.Turns
             return true;
         }
 
-        private void GenerateRequest(Planet planet, PlanetFaction planetFaction)
+        private void GenerateRequest(Planet planet, PlanetFaction planetFaction, IRNG random)
         {
-            Faction threatFaction = FindPublicHostileFaction(planet, planetFaction);
-            bool generate = threatFaction != null
-                ? _session.Random.GetLinearDouble() < planetFaction.Leader.Investigation
-                : _session.Random.GetLinearDouble() < planetFaction.Leader.Paranoia;
-
-            if (!generate)
+            FactionIntelBelief threatBelief = FindConfirmedThreat(planet, planetFaction);
+            bool concernDetected = false;
+            if (threatBelief == null)
             {
-                return;
+                Faction observedThreat = FindPublicHostileFaction(planet, planetFaction);
+                if (observedThreat != null)
+                {
+                    if (random.GetLinearDouble() >= planetFaction.Leader.Investigation)
+                    {
+                        return;
+                    }
+
+                    ApplyGovernorInvestigation(planet, planetFaction, observedThreat);
+                    threatBelief = FindConfirmedThreat(planet, planetFaction);
+                }
+                else
+                {
+                    if (random.GetLinearDouble() >= planetFaction.Leader.Paranoia)
+                    {
+                        return;
+                    }
+
+                    concernDetected = ApplyGovernorParanoia(planet, planetFaction);
+                }
             }
+
+            if (threatBelief == null && !concernDetected) return;
+            Faction threatFaction = threatBelief?.TargetFaction;
 
             SupplyEconomyRules supplyRules = _session.Rules.SupplyEconomyRules;
             // RequestGenerationRate throttles the whole petition economy. Both gates are linear in
@@ -140,7 +163,7 @@ namespace OnlyWar.Helpers.Turns
             float chance = (float)supplyRules.RequestGenerationRate
                 * planetFaction.Leader.Neediness
                 * planetFaction.Leader.OpinionOfPlayerForce;
-            if (_session.Random.GetLinearDouble() >= chance)
+            if (random.GetLinearDouble() >= chance)
             {
                 return;
             }
@@ -148,10 +171,16 @@ namespace OnlyWar.Helpers.Turns
             // Classify first: the deadline follows from severity, and the deadline is what the
             // commitment package is priced against (RequestValueCalculator derives its throughput
             // premium from effort/CompletionDeadlineWeeks, so a short fuse pays more on its own).
-            (RequestSeverity severity, RequestHazard hazard) = ClassifyRequest(planet, threatFaction);
+            (RequestSeverity severity, RequestHazard hazard) = ClassifyRequest(
+                planet,
+                planetFaction,
+                threatFaction);
             int deadlineWeeks = ResolveDeadlineWeeks(severity);
             ForceCommitmentPackage commitment = BuildCommitmentPackage(
-                planet, threatFaction, deadlineWeeks);
+                planet,
+                planetFaction,
+                threatFaction,
+                deadlineWeeks);
             int nominalOffer = CalculateOffer(
                 planet, planetFaction.Leader, commitment, severity, hazard);
             PledgeScheduleKind scheduleKind = nominalOffer >= supplyRules.StandingMinimumOffer
@@ -298,11 +327,16 @@ namespace OnlyWar.Helpers.Turns
         }
 
         private ForceCommitmentPackage BuildCommitmentPackage(
-            Planet planet, Faction threatFaction, int deadlineWeeks)
+            Planet planet,
+            PlanetFaction observer,
+            Faction threatFaction,
+            int deadlineWeeks)
         {
             SquadTemplate reference = _session.Rules.ChapterTemplates.TacticalSquad;
             SupplyEconomyRules rules = _session.Rules.SupplyEconomyRules;
-            long hostileStrength = threatFaction == null ? 0 : SumMilitaryStrength(planet, threatFaction);
+            long hostileStrength = threatFaction == null
+                ? 0
+                : SumBelievedMilitaryStrength(observer, threatFaction);
             int packageCount = hostileStrength <= 0
                 ? 1
                 : (int)Math.Clamp(
@@ -358,11 +392,12 @@ namespace OnlyWar.Helpers.Turns
 
         private (RequestSeverity Severity, RequestHazard Hazard) ClassifyRequest(
             Planet planet,
+            PlanetFaction observer,
             Faction threatFaction)
         {
             if (threatFaction == null)
                 return (RequestSeverity.Concerned, RequestHazard.Routine);
-            decimal ratio = CalculateThreatRatio(planet, threatFaction);
+            decimal ratio = CalculateThreatRatio(planet, observer, threatFaction);
             if (ratio > 2m)
                 return (RequestSeverity.Existential, RequestHazard.Extreme);
             if (ratio > 1m)
@@ -370,12 +405,107 @@ namespace OnlyWar.Helpers.Turns
             return (RequestSeverity.Serious, RequestHazard.Dangerous);
         }
 
-        private decimal CalculateThreatRatio(Planet planet, Faction threatFaction)
+        private decimal CalculateThreatRatio(
+            Planet planet,
+            PlanetFaction observer,
+            Faction threatFaction)
         {
             if (threatFaction == null) return 0m;
-            long hostile = SumMilitaryStrength(planet, threatFaction);
+            long hostile = SumBelievedMilitaryStrength(observer, threatFaction);
             long defenders = SumMilitaryStrength(planet, _session.Rules.DefaultFaction);
             return hostile / (decimal)Math.Max(1, defenders);
+        }
+
+        private static FactionIntelBelief FindConfirmedThreat(
+            Planet planet,
+            PlanetFaction observer)
+        {
+            return observer.TargetIntel.Values
+                .Where(belief => belief.Level >= IntelLevel.Confirmed
+                    && FactionRelationshipService.GetEffectiveStance(
+                        observer.Faction,
+                        belief.TargetFaction,
+                        planet) == FactionStance.Hostile)
+                .OrderByDescending(belief => belief.Evidence)
+                .ThenBy(belief => belief.Region.Id)
+                .ThenBy(belief => belief.TargetFaction.Id)
+                .FirstOrDefault();
+        }
+
+        private void ApplyGovernorInvestigation(
+            Planet planet,
+            PlanetFaction observer,
+            Faction targetFaction)
+        {
+            int evidenceWeek = _session.CurrentDate.GetTotalWeeks();
+            foreach (RegionFaction target in planet.Regions
+                .SelectMany(region => region.RegionFactionMap.Values)
+                .Where(regionFaction => regionFaction.PlanetFaction.Faction.Id == targetFaction.Id)
+                .OrderBy(regionFaction => regionFaction.Region.Id))
+            {
+                FactionIntelBelief previous = observer.GetTargetBelief(
+                    target.Region,
+                    targetFaction);
+                float evidenceDelta = Math.Max(
+                    0.25f,
+                    FactionIntelligenceRules.ConfirmedThreshold
+                    - (previous?.Evidence ?? 0f));
+                if (evidenceDelta <= 0f) continue;
+
+                FactionIntelligenceService.ApplyObservation(
+                    planet,
+                    new IntelObservation(
+                        observer,
+                        target.Region,
+                        targetFaction,
+                        evidenceDelta,
+                        target.Population,
+                        target.GetDeployedStrength(),
+                        IntelObservationSource.GovernorInvestigation,
+                        evidenceWeek));
+            }
+        }
+
+        private bool ApplyGovernorParanoia(
+            Planet planet,
+            PlanetFaction observer)
+        {
+            Faction target = _session.Rules.Factions
+                .Where(faction => faction.Id != observer.Faction.Id)
+                .Where(faction => FactionRelationshipService.GetEffectiveStance(
+                    observer.Faction,
+                    faction,
+                    planet) == FactionStance.Hostile)
+                .Where(faction => !planet.Regions.Any(region =>
+                    region.RegionFactionMap.ContainsKey(faction.Id)))
+                .OrderBy(faction => faction.Id)
+                .FirstOrDefault();
+            Region region = planet.Regions.OrderBy(candidate => candidate.Id).FirstOrDefault();
+            if (target == null || region == null) return false;
+
+            int evidenceWeek = _session.CurrentDate.GetTotalWeeks();
+            FactionIntelligenceService.ApplyObservation(
+                planet,
+                new IntelObservation(
+                    observer,
+                    region,
+                    target,
+                    FactionIntelligenceRules.RumorThreshold,
+                    null,
+                    null,
+                    IntelObservationSource.GovernorParanoia,
+                    evidenceWeek));
+            return true;
+        }
+
+        private static long SumBelievedMilitaryStrength(
+            PlanetFaction observer,
+            Faction targetFaction)
+        {
+            if (observer == null || targetFaction == null) return 0;
+            return observer.TargetIntel.Values
+                .Where(belief => belief.TargetFaction.Id == targetFaction.Id)
+                .Sum(belief => Math.Max(0L, belief.EstimatedMilitaryStrength ?? 0L));
         }
 
         private static long SumMilitaryStrength(Planet planet, Faction faction) =>
@@ -413,8 +543,10 @@ namespace OnlyWar.Helpers.Turns
                 .Select(other => other.Faction)
                 .FirstOrDefault(other => other.Id != planetFaction.Faction.Id
                     && planet.PlanetFactionMap[other.Id].IsPublic
-                    && !other.IsDefaultFaction
-                    && !other.IsPlayerFaction);
+                    && FactionRelationshipService.AreHostile(
+                        planetFaction.Faction,
+                        other,
+                        planet));
         }
     }
 }

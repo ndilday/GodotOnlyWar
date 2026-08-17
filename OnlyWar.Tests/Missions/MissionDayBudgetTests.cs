@@ -269,7 +269,7 @@ public class MissionDayBudgetTests
             Color.Red,
             isPlayerFaction: false,
             isDefaultFaction: false,
-            canInfiltrate: false,
+            behavior: FactionBehavior.None,
             GrowthType.Conversion,
             new Dictionary<int, Species>(),
             new Dictionary<int, SoldierTemplate>(),

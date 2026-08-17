@@ -55,11 +55,11 @@ namespace OnlyWar.Helpers.Battles
 
         /// <summary>
         /// The battle value a soldier is worth to remove -- the currency every planning score is
-        /// denominated in. Static because it reads nothing but the soldier's own template, and
-        /// null-tolerant because callers routinely price a target they have not yet resolved.
+        /// denominated in. It uses the tactical equipment-aware value while leaving the intrinsic
+        /// SoldierTemplate.BattleValue untouched for strategic force generation.
         /// </summary>
         internal static float BattleValueOf(BattleSoldier soldier) =>
-            Math.Max(0, soldier?.Soldier?.Template?.BattleValue ?? 0);
+            Math.Max(0, soldier?.EffectiveBattleValue ?? soldier?.Soldier?.Template?.BattleValue ?? 0);
     }
 
     /// <summary>

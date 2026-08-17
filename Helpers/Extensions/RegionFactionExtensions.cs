@@ -1,4 +1,4 @@
-﻿using OnlyWar.Models;
+using OnlyWar.Models;
 using OnlyWar.Models.Missions;
 using OnlyWar.Models.Planets;
 using OnlyWar.Models.Squads;
@@ -17,17 +17,17 @@ namespace OnlyWar.Helpers.Extensions
         // patrols, and recon; consumed by strategic combat and stealth-check difficulty. A patrol now
         // raises this directly (recon of one's own ground), so an actively-patrolled region is harder
         // to infiltrate as an emergent consequence rather than via a bolted-on penalty.
-        public static float GetOwnRegionIntel(this RegionFaction regionFaction) =>
-            regionFaction.PlanetFaction.GetRegionIntel(regionFaction.Region);
+        public static float GetOwnRegionAwareness(this RegionFaction regionFaction) =>
+            regionFaction.PlanetFaction.GetRegionAwareness(regionFaction.Region);
 
         // How well an arbitrary faction understands this region (0 if it has no presence/awareness).
         // The offensive face of the same value: what an attacker believes about a region it may hit.
-        public static float GetFactionRegionIntel(this Region region, Faction faction) =>
-            region.GetFactionRegionIntel(faction.Id);
+        public static float GetFactionRegionAwareness(this Region region, Faction faction) =>
+            region.GetFactionRegionAwareness(faction.Id);
 
-        public static float GetFactionRegionIntel(this Region region, int factionId) =>
+        public static float GetFactionRegionAwareness(this Region region, int factionId) =>
             region.Planet.PlanetFactionMap.TryGetValue(factionId, out PlanetFaction planetFaction)
-                ? planetFaction.GetRegionIntel(region)
+                ? planetFaction.GetRegionAwareness(region)
                 : 0f;
 
         public static float GetPlayerVisibleIntel(this Region region)
@@ -36,44 +36,28 @@ namespace OnlyWar.Helpers.Extensions
 
             // The Chapter and the PDF share player-visible intelligence. A Chapter
             // PlanetFaction is created lazily when Marines first establish a presence on a
-            // planet, so it may have no historical RegionIntel entries even though the PDF
+            // planet, so it may have no historical RegionAwareness entries even though the PDF
             // already knows the region. Do not let that empty, newly-created map mask the
             // allied intelligence that was visible before the Chapter presence existed.
             return region.Planet.PlanetFactionMap.Values
                 .Where(pf => pf.Faction.IsPlayerFaction || pf.Faction.IsDefaultFaction)
-                .Select(pf => pf.GetRegionIntel(region))
+                .Select(pf => pf.GetRegionAwareness(region))
                 .DefaultIfEmpty(0f)
                 .Max();
         }
 
         public static string GetPopulationDescription(this RegionFaction regionFaction)
         {
-            if (regionFaction != null && regionFaction.IsPublic)
+            if (regionFaction == null) return "None";
+            if (regionFaction.PlanetFaction.Faction.IsPlayerFaction)
             {
-                float intel = regionFaction.Region.GetPlayerVisibleIntel();
-                if (intel <= 0)
-                {
-                    return "Unknown";
-                }
-                else if (intel >= 6)
-                {
-                    return regionFaction.Population.ToString();
-                }
-                else
-                {
-                    int divisor = (int)Math.Pow(10, 6 - (int)intel);
-                    long popCount = regionFaction.Population / divisor * divisor;
-                    if (popCount > 0)
-                    {
-                        return popCount.ToString();
-                    }
-                    else if (regionFaction.Population > 0)
-                    {
-                        return "Low";
-                    }
-                }
+                return regionFaction.Population.ToString();
             }
-            return "None";
+
+            FactionIntelBelief belief = IntelligenceTargetService.GetBestPlayerVisibleBelief(
+                regionFaction.Region,
+                regionFaction.PlanetFaction.Faction);
+            return FormatBelievedPopulation(belief);
         }
 
         // Fuzzy, fog-of-war-friendly description of a defensive value (Entrenchment,
@@ -160,34 +144,39 @@ namespace OnlyWar.Helpers.Extensions
         // fog-of-war disclosure. Lower intel yields coarser estimates (same as GetPopulationDescription).
         public static string GetForceMagnitudeDescription(this RegionFaction regionFaction)
         {
-            if (regionFaction != null && regionFaction.IsPublic)
+            if (regionFaction == null) return "None";
+            if (regionFaction.PlanetFaction.Faction.IsPlayerFaction)
             {
-                float intel = regionFaction.Region.GetPlayerVisibleIntel();
-                if (intel <= 0)
-                {
-                    return "Unknown";
-                }
-
-                long deployedStrength = regionFaction.GetDeployedStrength();
-
-                if (intel >= 6)
-                {
-                    // Exact value available
-                    return GetMagnitudeWord(deployedStrength);
-                }
-                else
-                {
-                    // Round to nearest order of magnitude based on intel level
-                    int divisor = (int)Math.Pow(10, 6 - (int)intel);
-                    long roundedStrength = deployedStrength / divisor * divisor;
-                    if (roundedStrength == 0 && deployedStrength > 0)
-                    {
-                        return "Handful";  // Very small non-zero force below rounding threshold
-                    }
-                    return GetMagnitudeWord(roundedStrength);
-                }
+                return GetMagnitudeWord(regionFaction.GetDeployedStrength());
             }
-            return "None";
+
+            FactionIntelBelief belief = IntelligenceTargetService.GetBestPlayerVisibleBelief(
+                regionFaction.Region,
+                regionFaction.PlanetFaction.Faction);
+            if (belief == null) return "None";
+            if (belief.Level == IntelLevel.Rumor) return "Rumor";
+            return belief.EstimatedMilitaryStrength.HasValue
+                ? GetMagnitudeWord(belief.EstimatedMilitaryStrength.Value)
+                : "Unknown";
+        }
+
+        public static string GetForceMagnitudeDescription(FactionIntelBelief belief)
+        {
+            if (belief == null) return "None";
+            if (belief.Level == IntelLevel.Rumor) return "Rumor";
+            return belief.EstimatedMilitaryStrength.HasValue
+                ? GetMagnitudeWord(belief.EstimatedMilitaryStrength.Value)
+                : "Unknown";
+        }
+
+        private static string FormatBelievedPopulation(FactionIntelBelief belief)
+        {
+            if (belief == null) return "None";
+            if (belief.Level == IntelLevel.Rumor) return "Rumor";
+            if (!belief.EstimatedPopulation.HasValue) return "Unknown";
+            return belief.EstimatedPopulation.Value > 0
+                ? belief.EstimatedPopulation.Value.ToString()
+                : "Low";
         }
 
         // Maps a deployed strength value to a rough order-of-magnitude word.

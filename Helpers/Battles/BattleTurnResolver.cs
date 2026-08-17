@@ -136,6 +136,10 @@ namespace OnlyWar.Helpers.Battles
                 region,
                 BattleHistory,
                 execution.Aftermath);
+            if (execution.Aftermath.PlayerSink is IPlayerNarrativeEventSink narrativeSink)
+            {
+                narrativeSink.BeginBattle(_aftermathContext.BattleEventContext);
+            }
             _aftermathPolicy = BattleAftermathPolicyFactory.Create(_aftermathContext);
 
             _currentState = new BattleState(
@@ -293,6 +297,14 @@ namespace OnlyWar.Helpers.Battles
             _grid.ClearReservations();
             _casualtyMap.Clear();
             _currentState.AdvanceTurn();
+            foreach (RangedWeapon weapon in _currentState.AllAttackerSquads.Values
+                         .Concat(_currentState.AllOpposingSquads.Values)
+                         .SelectMany(squad => squad.Soldiers)
+                         .SelectMany(soldier => soldier.RangedWeapons)
+                         .Distinct())
+            {
+                weapon.AdvanceRecovery();
+            }
 
             Log(false, "Turn " + _currentState.TurnNumber.ToString());
 
@@ -520,12 +532,30 @@ namespace OnlyWar.Helpers.Battles
             // same battle. Death wins; the two sets must be disjoint before anything reports on
             // them. The player policy below settles battle-brothers itself and keeps them disjoint.
             BattleHistory.IncapacitatedSoldierIds.ExceptWith(BattleHistory.KilledSoldierIds);
+            CommitMissionWeaponState();
             _aftermathPolicy.OnBattleCompleted(_currentState);
             // Closes the per-battle log stream before control returns to the campaign turn, so
             // whatever the caller does next is not filed under this battle. Anything the aftermath
             // policy logs above still belongs to it.
             BattleLog.EndBattle();
             OnBattleComplete?.Invoke(this, BattleHistory);
+        }
+
+        private void CommitMissionWeaponState()
+        {
+            foreach (BattleSquad missionSquad in _aftermathContext.ParticipatingSquads)
+            {
+                if (_currentState.AllAttackerSquads.TryGetValue(
+                        missionSquad.Id, out BattleSquad attackerSnapshot))
+                {
+                    missionSquad.CommitEquipmentStateFrom(attackerSnapshot);
+                }
+                else if (_currentState.AllOpposingSquads.TryGetValue(
+                             missionSquad.Id, out BattleSquad opposingSnapshot))
+                {
+                    missionSquad.CommitEquipmentStateFrom(opposingSnapshot);
+                }
+            }
         }
 
         // A side that quits the field abandons everyone it could not carry off with it. Soldiers
@@ -1738,7 +1768,7 @@ namespace OnlyWar.Helpers.Battles
         {
             List<BattleSquad> squads = GetActiveSquads(side).ToList();
             List<BattleSoldier> soldiers = squads.SelectMany(squad => squad.AbleSoldiers).ToList();
-            int current = soldiers.Sum(soldier => soldier.Soldier.Template.BattleValue);
+            int current = soldiers.Sum(soldier => soldier.EffectiveBattleValue);
             Queue<int> history = _battleValueHistory[side];
             int prior = history.Count > 0 ? history.Peek() : current;
             float fastest = squads.Select(SafeSquadMove).DefaultIfEmpty(0).Max();
@@ -1915,7 +1945,7 @@ namespace OnlyWar.Helpers.Battles
             .Sum(CurrentBattleValue);
 
         private static int CurrentBattleValue(BattleSquad squad) => squad.AbleSoldiers
-            .Sum(soldier => soldier.Soldier.Template.BattleValue);
+            .Sum(soldier => soldier.EffectiveBattleValue);
 
         private static float SafeSquadMove(BattleSquad squad) =>
             squad.AbleSoldiers.Count == 0 ? 0 : squad.GetSquadMove();

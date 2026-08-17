@@ -1,4 +1,4 @@
-﻿using OnlyWar.Models.Missions;
+using OnlyWar.Models.Missions;
 using OnlyWar.Helpers;
 using System;
 using System.Collections.Generic;
@@ -68,7 +68,8 @@ namespace OnlyWar.Models.Planets
                 return RegionFactionMap.Values
                     .Where(rf =>
                         (rf.IsPublic && rf.PlanetFaction.Faction.IsDefaultFaction)
-                        || (!rf.IsPublic && rf.PlanetFaction.Faction.DefendsHostWhileHidden))
+                        || (!rf.IsPublic && rf.PlanetFaction.Faction.HasBehavior(
+                            FactionBehavior.DefendsHostWhileHidden)))
                     .Sum(rf => rf.Garrison);
             }
         }
@@ -89,8 +90,10 @@ namespace OnlyWar.Models.Planets
 
                 Faction controlFaction = publicFactions[0].PlanetFaction.Faction;
                 if (publicFactions.Skip(1).Any(regionFaction =>
-                    !FactionDispositionService.AreAllied(
-                        controlFaction, regionFaction.PlanetFaction.Faction)))
+                    !FactionRelationshipService.AreAllied(
+                        controlFaction,
+                        regionFaction.PlanetFaction.Faction,
+                        Planet)))
                 {
                     return null;
                 }

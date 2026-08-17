@@ -150,9 +150,10 @@ namespace OnlyWar.Helpers.Fortifications
             List<RegionFaction> candidates = departing.Region.RegionFactionMap.Values
                 .Where(rf => !ReferenceEquals(rf, departing)
                     && rf.IsPublic
-                    && FactionDispositionService.AreAllied(
+                    && FactionRelationshipService.AreAllied(
                         rf.PlanetFaction.Faction,
-                        departing.PlanetFaction.Faction)
+                        departing.PlanetFaction.Faction,
+                        departing.Region.Planet)
                     && HasPresence(rf))
                 .ToList();
             if (candidates.Count == 0) return null;
@@ -202,9 +203,10 @@ namespace OnlyWar.Helpers.Fortifications
             {
                 if (ReferenceEquals(other, regionFaction)) continue;
                 if (!other.IsPublic) continue;
-                if (!FactionDispositionService.AreAllied(
+                if (!FactionRelationshipService.AreAllied(
                     other.PlanetFaction.Faction,
-                    regionFaction.PlanetFaction.Faction))
+                    regionFaction.PlanetFaction.Faction,
+                    regionFaction.Region.Planet))
                 {
                     continue;
                 }

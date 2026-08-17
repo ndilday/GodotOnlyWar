@@ -1,4 +1,4 @@
-﻿using System.Collections.Generic;
+using System.Collections.Generic;
 using Godot;
 using OnlyWar.Models.Missions;
 using OnlyWar.Models.Squads;
@@ -87,7 +87,9 @@ namespace OnlyWar.Models.Planets
         public long MilitaryStrength =>
             PlanetFaction.Faction.GrowthType == GrowthType.Unrest
                 ? Garrison + ArmedCivilians
-                : PlanetFaction.Faction.PopulationIsMilitary ? Population : Garrison;
+                : PlanetFaction.Faction.HasBehavior(FactionBehavior.PopulationIsMilitary)
+                    ? Population
+                    : Garrison;
 
         // Military strength is partitioned into forces that can currently deploy and forces that
         // still exist but have lost the command, supply, or formation needed to fight coherently.
@@ -135,7 +137,7 @@ namespace OnlyWar.Models.Planets
         public double Entrenchment { get; set; }
         // ListeningPost is a buildable/sabotageable sensor structure (like Entrenchment/AntiAir). It
         // no longer directly provides an awareness bonus; instead it passively feeds this faction's
-        // situational awareness of the region each turn (PlanetFaction.RegionIntel). Its awareness
+        // situational awareness of the region each turn (PlanetFaction.RegionAwareness). Its awareness
         // role moved to the unified per-(faction, region) intel value.
         public double ListeningPost { get; set; }
         // AntiAir provides bonuses against air atacks and air assaults
@@ -209,7 +211,7 @@ namespace OnlyWar.Models.Planets
                 Population += battleValue;
                 ArmedCivilians += battleValue;
             }
-            else if (PlanetFaction.Faction.PopulationIsMilitary) Population += battleValue;
+            else if (PlanetFaction.Faction.HasBehavior(FactionBehavior.PopulationIsMilitary)) Population += battleValue;
             else Garrison += battleValue;
 
             // The military-pool property setters add newly raised strength to the organized pool.
@@ -371,7 +373,7 @@ namespace OnlyWar.Models.Planets
                 ArmedCivilians -= civiliansLost;
                 Population -= lost;
             }
-            else if (PlanetFaction.Faction.PopulationIsMilitary)
+            else if (PlanetFaction.Faction.HasBehavior(FactionBehavior.PopulationIsMilitary))
             {
                 // A horde's numbers are its army: losses come straight out of population (the setter
                 // trims any vestigial garrison that would now exceed it).

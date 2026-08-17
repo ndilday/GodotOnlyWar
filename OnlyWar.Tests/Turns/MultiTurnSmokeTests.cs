@@ -33,7 +33,7 @@ public class MultiTurnSmokeTests
         RegionFaction cult = fixture.AddHiddenFaction(0, GrowthType.Conversion, population: 50);
         fixture.AddControllingFaction(1, "Heretic Rebels", population: 5000);
         Character governor = fixture.InstallGovernor(investigation: 1f, neediness: 1f, opinion: 1f);
-        fixture.DefaultPlanetFaction.SetRegionIntel(fixture.Planet.Regions[5], 10.0f);
+        fixture.DefaultPlanetFaction.SetRegionAwareness(fixture.Planet.Regions[5], 10.0f);
 
         long startingPopulation = fixture.Planet.Population;
 

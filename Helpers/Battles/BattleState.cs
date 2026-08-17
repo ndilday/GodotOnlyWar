@@ -115,7 +115,7 @@ namespace OnlyWar.Models.Battles
 		{
 			List<BattleSoldier> soldiers = squads.SelectMany(squad => squad.Soldiers).ToList();
 			return new BattleSideState(profile,
-				soldiers.Sum(soldier => soldier.Soldier.Template.BattleValue), soldiers.Count);
+				soldiers.Sum(soldier => soldier.EffectiveBattleValue), soldiers.Count);
 		}
 
 		// Helper method to get a soldier by ID

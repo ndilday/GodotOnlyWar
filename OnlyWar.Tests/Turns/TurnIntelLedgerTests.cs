@@ -5,25 +5,25 @@ using Xunit;
 
 namespace OnlyWar.Tests.Turns;
 
-public class TurnIntelLedgerTests
+public class TurnIntelligenceLedgerTests
 {
     [Fact]
     public void ReconEvidence_UsesSixPointSoftCap()
     {
-        Assert.Equal(0f, TurnIntelLedger.DiminishEvidence(0f));
+        Assert.Equal(0f, TurnIntelligenceLedger.DiminishEvidence(0f));
         Assert.Equal(6f * (1f - (float)System.Math.Exp(-1f)),
-            TurnIntelLedger.DiminishEvidence(6f), precision: 5);
-        Assert.True(TurnIntelLedger.DiminishEvidence(100f) < 6f);
+            TurnIntelligenceLedger.DiminishEvidence(6f), precision: 5);
+        Assert.True(TurnIntelligenceLedger.DiminishEvidence(100f) < 6f);
     }
 
     [Fact]
     public void ReconEvidence_DiminishesPositiveAndNegativePoolsSeparately()
     {
-        float actual = TurnIntelLedger.CalculateReconAdjustment(10f, 9f);
-        float netFirst = TurnIntelLedger.DiminishEvidence(1f);
+        float actual = TurnIntelligenceLedger.CalculateReconAdjustment(10f, 9f);
+        float netFirst = TurnIntelligenceLedger.DiminishEvidence(1f);
 
         Assert.Equal(
-            TurnIntelLedger.DiminishEvidence(10f) - TurnIntelLedger.DiminishEvidence(9f),
+            TurnIntelligenceLedger.DiminishEvidence(10f) - TurnIntelligenceLedger.DiminishEvidence(9f),
             actual,
             precision: 5);
         Assert.True(actual < netFirst);
@@ -35,8 +35,8 @@ public class TurnIntelLedgerTests
         SectorSimulationFixture fixture = SectorSimulationFixture.CreateDetached();
         Region region = fixture.Planet.Regions[0];
         PlanetFaction observer = fixture.DefaultPlanetFaction;
-        observer.SetRegionIntel(region, 0.5f);
-        TurnIntelLedger ledger = new();
+        observer.SetRegionAwareness(region, 0.5f);
+        TurnIntelligenceLedger ledger = new();
 
         for (int i = 0; i < 5; i++)
         {
@@ -44,7 +44,7 @@ public class TurnIntelLedgerTests
         }
         ledger.Apply(fixture.Planet);
 
-        Assert.Equal(0f, observer.GetRegionIntel(region));
+        Assert.Equal(0f, observer.GetRegionAwareness(region));
     }
 
     [Fact]
@@ -53,7 +53,7 @@ public class TurnIntelLedgerTests
         SectorSimulationFixture fixture = SectorSimulationFixture.CreateDetached();
         Region region = fixture.Planet.Regions[0];
         PlanetFaction observer = fixture.DefaultPlanetFaction;
-        TurnIntelLedger ledger = new();
+        TurnIntelligenceLedger ledger = new();
 
         for (int i = 0; i < 5; i++)
         {
@@ -62,8 +62,8 @@ public class TurnIntelLedgerTests
         ledger.Apply(fixture.Planet);
 
         Assert.Equal(
-            TurnIntelLedger.DiminishEvidence(10f),
-            observer.GetRegionIntel(region),
+            TurnIntelligenceLedger.DiminishEvidence(10f),
+            observer.GetRegionAwareness(region),
             precision: 5);
     }
 
@@ -75,14 +75,14 @@ public class TurnIntelLedgerTests
         PlanetFaction defaultObserver = fixture.DefaultPlanetFaction;
         PlanetFaction playerObserver = new(fixture.Sector.PlayerForce.Faction);
         fixture.Planet.PlanetFactionMap[playerObserver.Faction.Id] = playerObserver;
-        TurnIntelLedger ledger = new();
+        TurnIntelligenceLedger ledger = new();
 
         ledger.RecordReconEvidence(defaultObserver, region, 5f);
         ledger.RecordReconEvidence(playerObserver, region, 5f);
         ledger.Apply(fixture.Planet);
 
-        float expected = TurnIntelLedger.DiminishEvidence(10f);
-        Assert.Equal(expected, defaultObserver.GetRegionIntel(region), precision: 5);
-        Assert.Equal(expected, playerObserver.GetRegionIntel(region), precision: 5);
+        float expected = TurnIntelligenceLedger.DiminishEvidence(10f);
+        Assert.Equal(expected, defaultObserver.GetRegionAwareness(region), precision: 5);
+        Assert.Equal(expected, playerObserver.GetRegionAwareness(region), precision: 5);
     }
 }

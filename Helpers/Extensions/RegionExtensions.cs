@@ -1,4 +1,4 @@
-﻿using OnlyWar.Helpers.Missions;
+using OnlyWar.Helpers.Missions;
 using OnlyWar.Models.Planets;
 using System;
 using System.Collections.Generic;
@@ -10,7 +10,7 @@ namespace OnlyWar.Helpers.Extensions
     {
         // The non-player, non-default factions that could plausibly detect an intruder in this
         // region: any faction with a force fielded here (MilitaryStrength) or its own awareness of
-        // the ground (RegionIntel). A region can hold more than one at once (e.g. a public Tyranid
+        // the ground (RegionAwareness). A region can hold more than one at once (e.g. a public Tyranid
         // incursion sitting on a still-hidden cult), so detection must aggregate across all of them.
         // Both the aggregated stealth difficulty (ReconStealthMissionStep) and the spotter roll
         // (SelectSpotter) read this same set so the difficulty and the interceptor always agree on
@@ -18,8 +18,8 @@ namespace OnlyWar.Helpers.Extensions
         public static List<RegionFaction> GetDetectingEnemyFactions(this Region region)
         {
             return region.RegionFactionMap.Values
-                .Where(rf => !FactionDispositionService.IsImperial(rf.PlanetFaction.Faction)
-                             && (rf.MilitaryStrength > 0 || rf.GetOwnRegionIntel() > 0))
+                .Where(rf => !FactionRelationshipService.IsImperial(rf.PlanetFaction.Faction)
+                             && (rf.MilitaryStrength > 0 || rf.GetOwnRegionAwareness() > 0))
                 .ToList();
         }
 
@@ -104,7 +104,7 @@ namespace OnlyWar.Helpers.Extensions
         public static RegionFaction GetVisibleEnemyRegionFaction(this Region region)
         {
             List<RegionFaction> enemies = region.RegionFactionMap.Values
-                .Where(rf => !FactionDispositionService.IsImperial(rf.PlanetFaction.Faction))
+                .Where(rf => !FactionRelationshipService.IsImperial(rf.PlanetFaction.Faction))
                 .ToList();
             return enemies.FirstOrDefault(rf => rf.IsPublic) ?? enemies.FirstOrDefault();
         }
@@ -119,7 +119,7 @@ namespace OnlyWar.Helpers.Extensions
         {
             return region.RegionFactionMap.Values
                 .Where(rf => rf.IsPublic
-                             && FactionDispositionService.IsImperial(rf.PlanetFaction.Faction))
+                             && FactionRelationshipService.IsImperial(rf.PlanetFaction.Faction))
                 .Sum(rf => rf.Population);
         }
 

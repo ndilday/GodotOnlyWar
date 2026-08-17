@@ -7,7 +7,7 @@ using Xunit;
 namespace OnlyWar.Tests.Domain;
 
 // Covers the fog-of-war grading the UI relies on: enemy population is hidden until recon
-// raises player-visible RegionIntel, and defensive values are only ever shown as fuzzy
+// raises player-visible RegionAwareness, and defensive values are only ever shown as fuzzy
 // descriptions (RegionFactionExtensions).
 public class OpForVisibilityTests
 {
@@ -16,7 +16,7 @@ public class OpForVisibilityTests
     {
         SectorSimulationFixture fixture = SectorSimulationFixture.CreateDetached();
         RegionFaction cult = fixture.AddHiddenFaction(0, OnlyWar.Models.GrowthType.Logistic, population: 50000);
-        fixture.DefaultPlanetFaction.SetRegionIntel(fixture.Planet.Regions[0], 6f);
+        fixture.DefaultPlanetFaction.SetRegionAwareness(fixture.Planet.Regions[0], 6f);
 
         // a non-public faction is never described, regardless of intelligence
         Assert.Equal("None", cult.GetPopulationDescription());
@@ -27,9 +27,9 @@ public class OpForVisibilityTests
     {
         SectorSimulationFixture fixture = SectorSimulationFixture.CreateDetached();
         RegionFaction enemy = fixture.AddControllingFaction(1, "Rebels", population: 12345);
-        fixture.DefaultPlanetFaction.SetRegionIntel(fixture.Planet.Regions[1], 0f);
+        fixture.DefaultPlanetFaction.SetRegionAwareness(fixture.Planet.Regions[1], 0f);
 
-        Assert.Equal("Unknown", enemy.GetPopulationDescription());
+        Assert.Equal("None", enemy.GetPopulationDescription());
     }
 
     [Fact]
@@ -38,7 +38,14 @@ public class OpForVisibilityTests
         SectorSimulationFixture fixture = SectorSimulationFixture.CreateDetached();
         RegionFaction enemy = fixture.AddControllingFaction(1, "Rebels", population: 12345);
         // intelligence 3 => divisor 10^(6-3) = 1000 => 12345 rounded down to 12000
-        fixture.DefaultPlanetFaction.SetRegionIntel(fixture.Planet.Regions[1], 3f);
+        fixture.DefaultPlanetFaction.SetRegionAwareness(fixture.Planet.Regions[1], 3f);
+        fixture.DefaultPlanetFaction.SeedTargetBelief(
+            fixture.Planet.Regions[1],
+            enemy.PlanetFaction.Faction,
+            3f,
+            12_000,
+            1_000,
+            1);
 
         Assert.Equal("12000", enemy.GetPopulationDescription());
     }
@@ -48,7 +55,14 @@ public class OpForVisibilityTests
     {
         SectorSimulationFixture fixture = SectorSimulationFixture.CreateDetached();
         RegionFaction enemy = fixture.AddControllingFaction(1, "Rebels", population: 12345);
-        fixture.DefaultPlanetFaction.SetRegionIntel(fixture.Planet.Regions[1], 6f);
+        fixture.DefaultPlanetFaction.SetRegionAwareness(fixture.Planet.Regions[1], 6f);
+        fixture.DefaultPlanetFaction.SeedTargetBelief(
+            fixture.Planet.Regions[1],
+            enemy.PlanetFaction.Faction,
+            6f,
+            12_345,
+            1_234,
+            1);
 
         Assert.Equal("12345", enemy.GetPopulationDescription());
     }
@@ -58,7 +72,7 @@ public class OpForVisibilityTests
     {
         SectorSimulationFixture fixture = SectorSimulationFixture.CreateDetached();
         Region region = fixture.Planet.Regions[0];
-        fixture.DefaultPlanetFaction.SetRegionIntel(region, 2.6576f);
+        fixture.DefaultPlanetFaction.SetRegionAwareness(region, 2.6576f);
 
         Faction player = fixture.Sector.PlayerForce.Faction;
         fixture.Planet.PlanetFactionMap[player.Id] = new PlanetFaction(player)

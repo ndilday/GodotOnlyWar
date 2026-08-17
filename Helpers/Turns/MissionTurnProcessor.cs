@@ -32,12 +32,14 @@ namespace OnlyWar.Helpers.Turns
         private readonly MissionRules _missionRules;
         private readonly BattleExecutionContext _battleExecution;
         private readonly Action<PlanetFaction, Region, float> _recordIntelGain;
+        private readonly Action<IntelObservation> _recordTargetObservation;
         private readonly Action<RegionFaction, long, Faction> _recordScenarioPdfLost;
 
         internal MissionTurnProcessor(
             GameSession session,
             Action<PlanetFaction, Region, float> recordIntelGain,
-            Action<RegionFaction, long, Faction> recordScenarioPdfLost)
+            Action<RegionFaction, long, Faction> recordScenarioPdfLost,
+            Action<IntelObservation> recordTargetObservation = null)
         {
             _session = session ?? throw new ArgumentNullException(nameof(session));
             _missionRules = new MissionRules(
@@ -52,6 +54,7 @@ namespace OnlyWar.Helpers.Turns
                 _session.Random,
                 aftermath);
             _recordIntelGain = recordIntelGain;
+            _recordTargetObservation = recordTargetObservation;
             _recordScenarioPdfLost = recordScenarioPdfLost;
         }
 
@@ -61,7 +64,8 @@ namespace OnlyWar.Helpers.Turns
         {
             var resolver = new StrategicCombatResolver(
                 rng: _session.Random,
-                recordIntelGain: _recordIntelGain);
+                recordIntelGain: _recordIntelGain,
+                recordTargetObservation: _recordTargetObservation);
             foreach (Order order in strategicCombatOrders)
             {
                 if (order.Mission is not StrategicCombatMission mission) continue;
@@ -106,6 +110,14 @@ namespace OnlyWar.Helpers.Turns
 
             foreach (Order order in combatOrders)
             {
+                if (order?.Mission?.RegionFaction == null
+                    && order?.Mission?.Region != null
+                    && order.Mission.TargetFaction != null)
+                {
+                    ResolveNoContactSearch(order);
+                    continue;
+                }
+
                 // A Defense order still runs no steps of its own: it is a posture, resolved when
                 // something attacks (PrepareAssaultMissionStep.ContestPreparation).
                 if (order.Mission.MissionType == MissionType.DefenseInDepth) continue;
@@ -230,6 +242,50 @@ namespace OnlyWar.Helpers.Turns
                     + $"killCredits={context.EnemyKillCredits}, "
                     + $"logEntries={context.Log.Count}");
             }
+        }
+
+        private void ResolveNoContactSearch(Order order)
+        {
+            if (_recordTargetObservation == null || order?.Mission?.Region == null)
+            {
+                return;
+            }
+
+            Faction observerFaction = order.AssignedSquads
+                .Select(squad => squad?.Faction)
+                .FirstOrDefault(faction => faction != null);
+            if (observerFaction == null) return;
+
+            Planet planet = order.Mission.Region.Planet;
+            PlanetFaction observer = planet.PlanetFactionMap.GetValueOrDefault(observerFaction.Id);
+            if (observer == null)
+            {
+                observer = new PlanetFaction(observerFaction)
+                {
+                    IsPublic = observerFaction.IsPlayerFaction
+                };
+                planet.PlanetFactionMap[observerFaction.Id] = observer;
+                planet.NotifyPlanetFactionAdded(observer);
+            }
+
+            Faction target = order.Mission.TargetFaction;
+            FactionIntelBelief previous = observer.GetTargetBelief(order.Mission.Region, target);
+            float negativeEvidence = -Math.Max(
+                0.25f,
+                Math.Min(2f, previous?.Evidence ?? 0.25f));
+            _recordTargetObservation(new IntelObservation(
+                observer,
+                order.Mission.Region,
+                target,
+                negativeEvidence,
+                null,
+                null,
+                IntelObservationSource.Recon,
+                0));
+            GameLog.Debug(() =>
+                $"No-contact search {observerFaction.Name} -> "
+                + $"{order.Mission.Region.Planet.Name}/{order.Mission.Region.Name}/"
+                + $"{target.Name}; evidence={negativeEvidence:F2}");
         }
 
         internal static void ResolveReciprocalAssaults(

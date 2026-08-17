@@ -562,7 +562,7 @@ public class MissionStealthDifficultyTests
         {
             Population = hordePopulation
         };
-        planetFaction.SetRegionIntel(region, defenderIntel);
+        planetFaction.SetRegionAwareness(region, defenderIntel);
         region.RegionFactionMap[horde.Id] = target;
         if (defenderPatrolBattleValue > 0)
         {
@@ -735,7 +735,23 @@ public class MissionStealthDifficultyTests
     private static RegionFaction AddGarrisonFaction(
         Region region, Faction faction, long garrison, float intel)
     {
-        faction.PopulationIsMilitary = false;
+        // The behavior composition is immutable authored data. Build a civilian fixture faction
+        // explicitly instead of mutating a migrated flag after construction.
+        faction = new Faction(
+            faction.Id,
+            faction.Name,
+            faction.Color,
+            faction.IsPlayerFaction,
+            faction.IsDefaultFaction,
+            FactionBehavior.None,
+            faction.GrowthType,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null);
         return AddEnemy(
             region, faction, population: garrison * 100, organization: 100, intel: intel,
             garrison: garrison);
@@ -758,7 +774,7 @@ public class MissionStealthDifficultyTests
             Organization = organization,
             IsPublic = true
         };
-        planetFaction.SetRegionIntel(region, intel);
+        planetFaction.SetRegionAwareness(region, intel);
         region.RegionFactionMap[faction.Id] = regionFaction;
         return regionFaction;
     }
@@ -768,8 +784,8 @@ public class MissionStealthDifficultyTests
     private static Region CreateRegion() =>
         new(0, null, 0, "Test Region", new RegionCoordinate(0, 0), 0);
 
-    // A non-player, non-default faction defaults to PopulationIsMilitary, so MilitaryStrength is its
-    // Population and its Garrison stays zero — the horde case most of these tests are about.
+    // This fixture represents a horde explicitly. Production rules no longer infer behavior from
+    // player/default identity, so the test must declare the authored PopulationIsMilitary flag.
     private static Faction CreateFaction(int id, string name)
     {
         return new Faction(
@@ -778,7 +794,7 @@ public class MissionStealthDifficultyTests
             Color.Red,
             isPlayerFaction: false,
             isDefaultFaction: false,
-            canInfiltrate: false,
+            behavior: FactionBehavior.PopulationIsMilitary,
             GrowthType.Conversion,
             new Dictionary<int, Species>(),
             new Dictionary<int, SoldierTemplate>(),

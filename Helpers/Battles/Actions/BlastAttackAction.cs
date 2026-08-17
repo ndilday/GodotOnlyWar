@@ -98,6 +98,11 @@ namespace OnlyWar.Helpers.Battles.Actions
             _targetName = target.Soldier.Name;
             _weaponName = weapon.Template.Name;
             _isThrown = weapon.Template.IsThrown;
+            if (!weapon.CanFire)
+            {
+                _isResolved = true;
+                return;
+            }
 
             // A grenade is thrown at a spot, not a person: range vs a stationary point
             // and Bulk while moving apply; size, RangedEvasion, aim, and rate-of-fire
@@ -151,7 +156,7 @@ namespace OnlyWar.Helpers.Battles.Actions
                 }
             }
 
-            weapon.LoadedAmmo = (ushort)Math.Max(0, weapon.LoadedAmmo - 1);
+            weapon.TryConsume(1);
             shooter.Aim = null;
             shooter.TurnsShooting++;
             _isResolved = true;

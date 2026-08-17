@@ -18,6 +18,7 @@ namespace OnlyWar.Models
         private readonly List<WarpLane> _warpLanes;
         private readonly List<Character> _characters;
         private readonly Dictionary<int, Order> _orders;
+        private readonly FactionRelationshipLedger _relationshipLedger;
 
         public List<Character> Characters { get => _characters; }
         public IReadOnlyDictionary<int, Planet> Planets { get => _planets; }
@@ -28,6 +29,8 @@ namespace OnlyWar.Models
         public IReadOnlyDictionary<int, TaskForce> Fleets { get => _fleets; }
         public IReadOnlyDictionary<int, Order> Orders { get => _orders; }
         public PlayerForce PlayerForce { get; }
+        public FactionRelationshipLedger RelationshipLedger => _relationshipLedger;
+        public FactionRelationshipLedger FactionRelationships => _relationshipLedger;
 
         // The framed opening scenario stamped onto this sector at generation
         // (Design/Reference/OpeningScenario.md). Null for plain-sandbox sectors,
@@ -46,18 +49,33 @@ namespace OnlyWar.Models
             _subsectors = [];
             _warpLanes = [];
             _orders = [];
+            _relationshipLedger = new FactionRelationshipLedger();
         }
 
-        public Sector(PlayerForce playerForce, List<Character> characters, List<Planet> planets, List<TaskForce> fleets) 
+        public Sector(PlayerForce playerForce, List<Character> characters, List<Planet> planets, List<TaskForce> fleets,
+                      FactionRelationshipLedger relationshipLedger = null)
             : this()
         {
+            if (relationshipLedger != null)
+            {
+                _relationshipLedger = relationshipLedger;
+            }
             PlayerForce = playerForce;
             _characters.AddRange(characters);
 
             foreach (Planet planet in planets)
             {
                 _planets[planet.Id] = planet;
+                planet.AttachRelationshipLedger(_relationshipLedger);
+                planet.PlanetFactionAdded += OnPlanetFactionAdded;
+                foreach (PlanetFaction planetFaction in planet.PlanetFactionMap.Values)
+                {
+                    AttachFactionIntelEvents(planetFaction);
+                }
             }
+
+            SeedDefaultImperialAlliance();
+            _relationshipLedger.StanceChanged += OnStanceChanged;
 
             foreach (TaskForce fleet in fleets)
             {
@@ -67,6 +85,75 @@ namespace OnlyWar.Models
                     fleet.Planet.OrbitingTaskForceList.Add(fleet);
                 }
             }
+        }
+
+        private void SeedDefaultImperialAlliance()
+        {
+            Faction playerFaction = PlayerForce?.Faction;
+            Faction defaultFaction = _planets.Values
+                .SelectMany(planet => planet.PlanetFactionMap.Values)
+                .Select(planetFaction => planetFaction.Faction)
+                .FirstOrDefault(faction => faction.IsDefaultFaction);
+            if (playerFaction == null || defaultFaction == null || playerFaction.Id == defaultFaction.Id)
+            {
+                return;
+            }
+
+            // Generation/load establishes this before any region-level relationship query runs.
+            if (_relationshipLedger.GetStance(playerFaction, defaultFaction) == FactionStance.Hostile)
+            {
+                _relationshipLedger.SetStance(playerFaction, defaultFaction, FactionStance.Allied);
+            }
+        }
+
+        private void OnPlanetFactionAdded(object sender, PlanetFaction planetFaction)
+        {
+            AttachFactionIntelEvents(planetFaction);
+        }
+
+        private void AttachFactionIntelEvents(PlanetFaction planetFaction)
+        {
+            if (planetFaction == null) return;
+            planetFaction.TargetIntelChanged -= OnTargetIntelChanged;
+            planetFaction.TargetIntelChanged += OnTargetIntelChanged;
+        }
+
+        private void OnTargetIntelChanged(object sender, FactionIntelChangedEventArgs change)
+        {
+            if (PlayerForce?.CampaignEventRecorder == null
+                || sender is not PlanetFaction observer
+                || (!observer.Faction.IsPlayerFaction && !observer.Faction.IsDefaultFaction))
+            {
+                return;
+            }
+
+            FactionIntelBelief belief = change.Current ?? change.Previous;
+            if (belief?.Region?.Planet == null) return;
+            PlayerForce.CampaignEventRecorder.RecordFactionIntel(
+                change,
+                belief.Region.Planet.Id,
+                change.Observation.EvidenceWeek);
+        }
+
+        private void OnStanceChanged(object sender, FactionRelationshipChangedEventArgs change)
+        {
+            if (PlayerForce?.CampaignEventRecorder == null) return;
+            if (!_relationshipLedger.KnownFactions.TryGetValue(
+                    change.Pair.LowerFactionId,
+                    out Faction lowerFaction)
+                || !_relationshipLedger.KnownFactions.TryGetValue(
+                    change.Pair.HigherFactionId,
+                    out Faction higherFaction))
+            {
+                return;
+            }
+
+            int occurredWeek = GameDataSingleton.Instance.Date?.GetTotalWeeks() ?? 0;
+            PlayerForce.CampaignEventRecorder.RecordFactionRelationship(
+                change,
+                lowerFaction,
+                higherFaction,
+                occurredWeek);
         }
 
         public void InitializeWarpNetwork(IEnumerable<Subsector> subsectors, IEnumerable<WarpLane> warpLanes)

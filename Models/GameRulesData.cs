@@ -43,6 +43,11 @@ namespace OnlyWar.Models
         public IReadOnlyDictionary<int, RangedWeaponTemplate> RangedWeaponTemplates { get; }
         public IReadOnlyDictionary<int, MeleeWeaponTemplate> MeleeWeaponTemplates { get; }
         public IReadOnlyDictionary<int, WeaponSet> WeaponSets { get; }
+        public EquipmentRulesCatalog EquipmentCatalog { get; }
+        public IReadOnlyDictionary<int, EquipmentTemplate> EquipmentTemplates => EquipmentCatalog?.EquipmentTemplates;
+        public IReadOnlyDictionary<int, EquipmentKitTemplate> EquipmentKits => EquipmentCatalog?.EquipmentKits;
+        public IReadOnlyDictionary<int, AmmunitionType> AmmunitionTypes => EquipmentCatalog?.AmmunitionTypes;
+        public IReadOnlyDictionary<int, PersonalEquipmentRole> PersonalEquipmentRoles => EquipmentCatalog?.PersonalEquipmentRoles;
         public IReadOnlyDictionary<int, TrainingProfile> TrainingProfiles { get; }
         public IReadOnlyList<RatingDefinition> RatingDefinitions { get; }
         public IReadOnlyList<RatingAwardTier> RatingAwardTiers { get; }
@@ -82,6 +87,7 @@ namespace OnlyWar.Models
             RangedWeaponTemplates = gameBlob.RangedWeaponTemplates;
             MeleeWeaponTemplates = gameBlob.MeleeWeaponTemplates;
             WeaponSets = gameBlob.WeaponSets;
+            EquipmentCatalog = gameBlob.EquipmentCatalog;
             TrainingProfiles = gameBlob.TrainingProfiles;
             RatingDefinitions = gameBlob.RatingDefinitions;
             RatingAwardTiers = gameBlob.RatingAwardTiers;

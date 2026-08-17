@@ -1,6 +1,7 @@
 using OnlyWar.Helpers.Medical;
 using OnlyWar.Helpers.Simulation;
 using OnlyWar.Models;
+using OnlyWar.Models.Events;
 using OnlyWar.Models.Fleets;
 using OnlyWar.Models.Missions;
 using OnlyWar.Models.Soldiers;
@@ -35,13 +36,23 @@ namespace OnlyWar.Helpers.Turns
         // replacement procedure.
         internal void ProcessMedical(Sector sector)
         {
-            Army army = sector.PlayerForce?.Army;
+            PlayerForce force = sector.PlayerForce;
+            Army army = force?.Army;
             if (army == null)
             {
                 return;
             }
 
             IEnumerable<ISoldier> members = army.OrderOfBattle?.GetAllMembers();
+            Dictionary<int, OpenNearDeathEpisode> openEpisodes = force.CampaignEventLedger
+                .OpenNearDeathEpisodes
+                .Values
+                .ToDictionary(episode => episode.SoldierId);
+            Dictionary<int, bool> deployabilityBefore = openEpisodes.Values
+                .Where(episode => army.PlayerSoldierMap.ContainsKey(episode.SoldierId))
+                .ToDictionary(
+                    episode => episode.SoldierId,
+                    episode => army.PlayerSoldierMap[episode.SoldierId].IsDeployable);
             // Days outside a mission get their daily pass too. Weeks with no combat orders never
             // enter MissionDayScheduler at all, and even an active week ends its day loop as soon
             // as the last mission finishes, so this is the garrison half of the Astartes daily
@@ -65,7 +76,94 @@ namespace OnlyWar.Helpers.Turns
                 FieldCareService.ResolveMedicalSkills(
                     _session.Rules?.RatingDefinitions, _session.Rules?.BaseSkillMap));
             MedicalTurnProcessor.ApplyWeeklyHealing(members);
-            MedicalTurnProcessor.ResolveProcedures(army.MedicalProcedures, army.PlayerSoldierMap);
+            IReadOnlyList<CompletedMedicalProcedure> completedProcedures =
+                MedicalTurnProcessor.ResolveProcedures(army.MedicalProcedures, army.PlayerSoldierMap);
+            RecordCompletedReplacements(force, completedProcedures);
+            RecordNearDeathRecoveries(force, openEpisodes, deployabilityBefore, completedProcedures);
+        }
+
+        private void RecordCompletedReplacements(
+            PlayerForce force,
+            IReadOnlyList<CompletedMedicalProcedure> completedProcedures)
+        {
+            foreach (CompletedMedicalProcedure completion in completedProcedures ?? [])
+            {
+                OpenNearDeathEpisode episode = force.CampaignEventLedger
+                    .GetOpenNearDeathEpisode(completion.Soldier.Id);
+                BattleEventContextSnapshot context = episode == null
+                    ? null
+                    : (force.CampaignEventLedger.GetById(episode.SourceIncapacitationEventId)
+                        ?.Payload as IncapacitatedPayload)?.BattleContext;
+                force.CampaignEventRecorder.RecordBodyPartReplacement(
+                    completion.Soldier,
+                    _session.CurrentDate,
+                    new BodyPartReplacementPayload(
+                        completion.PrimaryHitLocationTemplateId,
+                        completion.PrimaryHitLocationName,
+                        completion.ProcedureType,
+                        completion.WasAlreadyCybernetic,
+                        completion.ProcedureDurationWeeks,
+                        completion.RequisitionCost,
+                        episode?.SourceIncapacitationEventId),
+                    context);
+            }
+        }
+
+        private void RecordNearDeathRecoveries(
+            PlayerForce force,
+            IReadOnlyDictionary<int, OpenNearDeathEpisode> openEpisodes,
+            IReadOnlyDictionary<int, bool> deployabilityBefore,
+            IReadOnlyList<CompletedMedicalProcedure> completedProcedures)
+        {
+            foreach (OpenNearDeathEpisode episode in openEpisodes.Values)
+            {
+                if (!force.Army.PlayerSoldierMap.TryGetValue(
+                        episode.SoldierId,
+                        out PlayerSoldier soldier))
+                {
+                    force.CampaignEventLedger.CloseOpenNearDeathEpisode(
+                        episode.SoldierId,
+                        episode.SourceIncapacitationEventId);
+                    continue;
+                }
+                if (!deployabilityBefore.TryGetValue(episode.SoldierId, out bool wasDeployable)
+                    || wasDeployable
+                    || !soldier.IsDeployable)
+                {
+                    continue;
+                }
+
+                CampaignEvent source = force.CampaignEventLedger
+                    .GetById(episode.SourceIncapacitationEventId);
+                if (source?.Payload is not IncapacitatedPayload incapacitated)
+                {
+                    continue;
+                }
+                CompletedMedicalProcedure procedure = (completedProcedures ?? [])
+                    .Where(completion => completion.Soldier.Id == soldier.Id)
+                    .OrderBy(completion => completion.PrimaryHitLocationTemplateId)
+                    .FirstOrDefault();
+                NearDeathRecoveryMethod method = procedure?.ProcedureType switch
+                {
+                    MedicalProcedureType.Cybernetic => NearDeathRecoveryMethod.Cybernetic,
+                    MedicalProcedureType.VatGrown => NearDeathRecoveryMethod.VatGrown,
+                    _ => NearDeathRecoveryMethod.NaturalOrFieldCare
+                };
+                int durationWeeks = Math.Max(
+                    0,
+                    _session.CurrentDate.GetTotalWeeks() - source.OccurredWeek);
+                force.CampaignEventRecorder.RecordNearDeathRecovery(
+                    soldier,
+                    _session.CurrentDate,
+                    new NearDeathRecoveryPayload(
+                        episode.SourceIncapacitationEventId,
+                        durationWeeks,
+                        incapacitated.DefiningHitLocationTemplateId,
+                        incapacitated.DefiningHitLocationName,
+                        method,
+                        soldier.Body.HitLocations.Any(location => location.Wounds.WoundTotal > 0),
+                        incapacitated.BattleContext));
+            }
         }
 
         /// <param name="missionDaysBySquad">

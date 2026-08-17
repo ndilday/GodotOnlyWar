@@ -1,4 +1,4 @@
-﻿using OnlyWar.Builders;
+using OnlyWar.Builders;
 using OnlyWar.Helpers;
 using OnlyWar.Helpers.Extensions;
 using OnlyWar.Helpers.Fortifications;
@@ -147,12 +147,20 @@ public class FactionStrategyController
 
         if (onlyPlanet != null)
         {
+            if (onlyPlanet.RelationshipLedger != null)
+            {
+                FactionIntelligenceService.ObservePublicActivity(onlyPlanet, 0);
+            }
             GeneratePlanetOrders(faction, onlyPlanet, defensiveOnly, allNewOrders);
         }
         else
         {
             foreach (var planet in sector.Planets.Values)
             {
+                if (planet.RelationshipLedger != null)
+                {
+                    FactionIntelligenceService.ObservePublicActivity(planet, 0);
+                }
                 GeneratePlanetOrders(faction, planet, defensiveOnly, allNewOrders);
             }
         }
@@ -454,7 +462,7 @@ public class FactionStrategyController
     private static double ReconUtility(Faction faction, PotentialOffensive offensive)
     {
         double intelGap = Math.Max(0.25, ReconIntelThreshold
-            - offensive.TargetRegion.GetFactionRegionIntel(faction.Id));
+            - offensive.TargetRegion.GetFactionRegionAwareness(faction.Id));
         return offensive.Reward * intelGap / Math.Max(offensive.AvailableAttackingForce, 1);
     }
 
@@ -479,7 +487,7 @@ public class FactionStrategyController
     // A target is well-reconnoitred once the attacker's intelligence on it clears the threshold;
     // below that the strength estimate is too noisy to stake an assault on.
     internal static bool IsWellReconnoitred(PotentialOffensive offensive, int attackerFactionId) =>
-        offensive.TargetRegion.GetFactionRegionIntel(attackerFactionId) >= ReconIntelThreshold;
+        offensive.TargetRegion.GetFactionRegionAwareness(attackerFactionId) >= ReconIntelThreshold;
 
     // Among under-known targets, scout the richest first — the objective most worth understanding
     // before committing force.
@@ -561,7 +569,7 @@ public class FactionStrategyController
     /// originally, had it quietly handicap the one thing it runs recon for, since the intel gathered
     /// is what sharpens its own garrison sizing (GarrisonFullSightIntel).
     ///
-    /// The signal is <see cref="RegionExtensions.GetFactionRegionIntel"/> - what this faction has
+    /// The signal is <see cref="RegionExtensions.GetFactionRegionAwareness"/> - what this faction has
     /// already learned about that region - and NOT the region's true watch score. That distinction is
     /// the same one Q4 turns on (OnlyWar_TDD.md §6.4): reading
     /// MissionStealthDifficulty here would hand the planner exact knowledge of an enemy's sensors and
@@ -575,7 +583,7 @@ public class FactionStrategyController
     /// </remarks>
     internal static Aggression ChooseReconAggression(Faction faction, Region target)
     {
-        float known = target.GetFactionRegionIntel(faction);
+        float known = target.GetFactionRegionAwareness(faction);
         if (known < UnfamiliarGroundIntel) return Aggression.Cautious;
         if (known < GarrisonFullSightIntel) return Aggression.Normal;
         return Aggression.Attritional;
@@ -661,7 +669,7 @@ public class FactionStrategyController
                 committedBattleValue,
                 contributions,
                 aggression,
-                faction.InvadesOnVictory,
+                faction.HasBehavior(FactionBehavior.InvadesOnVictory),
                 missionType);
             allOrders.Add(new Order(new List<Squad>(), false, true, aggression, strategicMission));
             return true;
@@ -787,7 +795,7 @@ public class FactionStrategyController
         return sourceRegion.GetAdjacentRegions()
             .Where(region => region != currentTarget)
             .Count(region => region.RegionFactionMap.Values.Any(rf =>
-                rf.IsPublic && FactionDispositionService.AreEnemies(
+                rf.IsPublic && FactionRelationshipService.AreHostile(
                     faction, rf.PlanetFaction.Faction, region.Planet)));
     }
 
@@ -840,7 +848,7 @@ public class FactionStrategyController
             GameLog.Trace(() =>
                 $"AI candidate {faction.Name}/{planet.Name}: {DescribeOffensive(offensive)}, "
                 + $"reward={offensive.Reward:F0}, score={RewardRiskScore(offensive):F2}, "
-                + $"intel={offensive.TargetRegion.GetFactionRegionIntel(faction.Id):F2}/{ReconIntelThreshold:F2}, "
+                + $"intel={offensive.TargetRegion.GetFactionRegionAwareness(faction.Id):F2}/{ReconIntelThreshold:F2}, "
                 + $"wellKnown={IsWellReconnoitred(offensive, faction.Id)}, winnable={IsWinnable(offensive)}, "
                 + $"staging={string.Join(",", offensive.AttackingRegions.Select(r => r.Name))}");
         }
@@ -987,7 +995,7 @@ public class FactionStrategyController
         RegionFaction rf = state.RegionFaction;
         bool localEnemy = HasLocalEnemyMilitary(faction, rf.Region);
         bool adjacentEnemy = VisibleAdjacentEnemyMilitary(faction, rf.Region) > 0;
-        float ownIntel = rf.GetOwnRegionIntel();
+        float ownIntel = rf.GetOwnRegionAwareness();
 
         long orgCost = projected.Org < 100
             ? (long)(Math.Pow(2, projected.Org / 10) * (rf.Population / 10000.0f)) + 1
@@ -1079,10 +1087,9 @@ public class FactionStrategyController
         {
             if (state.SpareTroops < MinimumDevelopmentSpendTroops) continue;
 
-            bool bordersPublicEnemy = state.RegionFaction.Region.GetAdjacentRegions()
-                .Any(r => r.RegionFactionMap.Values
-                           .Any(rf => rf.IsPublic && FactionDispositionService.AreEnemies(
-                               faction, rf.PlanetFaction.Faction, r.Planet)));
+            bool bordersPublicEnemy = GetBelievedTargets(faction, state.RegionFaction.Region.Planet)
+                .Any(target => target.CurrentPresence?.IsPublic == true
+                    && state.RegionFaction.Region.GetAdjacentRegions().Contains(target.Region));
             if (!bordersPublicEnemy) continue;
 
             double level = state.RegionFaction.ListeningPost;
@@ -1108,10 +1115,16 @@ public class FactionStrategyController
 
     private bool HasPublicEnemyOnPlanet(Faction faction, Planet planet)
     {
+        if (planet?.RelationshipLedger != null)
+        {
+            return GetBelievedTargets(faction, planet)
+                .Any(target => target.CurrentPresence?.IsPublic == true);
+        }
+
         return planet.Regions
             .SelectMany(region => region.RegionFactionMap.Values)
             .Any(regionFaction => regionFaction.IsPublic
-                                  && FactionDispositionService.AreEnemies(
+                                  && FactionRelationshipService.AreHostile(
                                       faction, regionFaction.PlanetFaction.Faction, planet));
     }
 
@@ -1199,8 +1212,18 @@ public class FactionStrategyController
 
     private static bool HasLocalEnemyCiviliansButNoMilitary(Faction faction, Region region)
     {
+        if (region?.Planet?.RelationshipLedger != null)
+        {
+            List<StrategicTarget> believedTargets = GetBelievedTargets(faction, region.Planet)
+                .Where(target => target.Region == region && target.CurrentPresence?.IsPublic == true)
+                .ToList();
+            return believedTargets.Any(target =>
+                target.Belief?.EstimatedPopulation > 0
+                && (target.Belief?.EstimatedMilitaryStrength ?? 0) <= 0);
+        }
+
         List<RegionFaction> enemies = region.RegionFactionMap.Values
-            .Where(rf => rf.IsPublic && FactionDispositionService.AreEnemies(
+            .Where(rf => rf.IsPublic && FactionRelationshipService.AreHostile(
                 faction, rf.PlanetFaction.Faction, region.Planet))
             .ToList();
         return enemies.Any(rf => rf.Population > 0)
@@ -1209,19 +1232,51 @@ public class FactionStrategyController
 
     private static bool HasLocalEnemyMilitary(Faction faction, Region region)
     {
+        if (region?.Planet?.RelationshipLedger != null)
+        {
+            return GetBelievedTargets(faction, region.Planet)
+                .Any(target => target.Region == region
+                    && target.CurrentPresence?.IsPublic == true
+                    && target.Belief?.EstimatedMilitaryStrength > 0);
+        }
+
         return region.RegionFactionMap.Values.Any(rf =>
             rf.IsPublic
-            && FactionDispositionService.AreEnemies(faction, rf.PlanetFaction.Faction, region.Planet)
+            && FactionRelationshipService.AreHostile(faction, rf.PlanetFaction.Faction, region.Planet)
             && CalculateDefenderBattleValue(rf) > 0);
     }
 
     private static long VisibleAdjacentEnemyMilitary(Faction faction, Region region)
     {
+        if (region?.Planet?.RelationshipLedger != null)
+        {
+            return GetBelievedTargets(faction, region.Planet)
+                .Where(target => target.CurrentPresence?.IsPublic == true
+                    && target.Region.GetAdjacentRegions().Contains(region))
+                .Sum(target => target.Belief?.EstimatedMilitaryStrength ?? 0);
+        }
+
         return region.GetAdjacentRegions()
             .SelectMany(adjacent => adjacent.RegionFactionMap.Values)
-            .Where(rf => rf.IsPublic && FactionDispositionService.AreEnemies(
+            .Where(rf => rf.IsPublic && FactionRelationshipService.AreHostile(
                 faction, rf.PlanetFaction.Faction, region.Planet))
             .Sum(CalculateDefenderBattleValue);
+    }
+
+    private static IReadOnlyList<StrategicTarget> GetBelievedTargets(
+        Faction observerFaction,
+        Planet planet,
+        IntelLevel minimumLevel = IntelLevel.Confirmed)
+    {
+        if (planet?.RelationshipLedger == null || observerFaction == null)
+        {
+            return Array.Empty<StrategicTarget>();
+        }
+
+        PlanetFaction observer = planet.PlanetFactionMap.GetValueOrDefault(observerFaction.Id);
+        return observer == null
+            ? Array.Empty<StrategicTarget>()
+            : IntelligenceTargetService.GetTargets(observer, minimumLevel);
     }
 
     private void PlanPatrolMissionsOnPlanet(Faction faction, Planet planet, List<RegionForceState> regionalForceStates, List<Order> allOrders)
@@ -1371,9 +1426,15 @@ public class FactionStrategyController
 
     private List<PotentialOffensive> IdentifyPotentialOffensivesOnPlanet(Faction attackingFaction, Planet planet, List<RegionForceState> regionalForceStates)
     {
-        var allEnemyRegionFactions = planet.Regions.SelectMany(r => r.RegionFactionMap.Values)
-                                           .Where(rf => FactionDispositionService.AreEnemies(
-                                               attackingFaction, rf.PlanetFaction.Faction, planet) && rf.IsPublic).ToList();
+        PlanetFaction observer = planet.PlanetFactionMap.GetValueOrDefault(attackingFaction.Id);
+        if (observer == null) return [];
+
+        List<RegionFaction> allEnemyRegionFactions = IntelligenceTargetService
+            .GetTargets(observer, IntelLevel.Confirmed)
+            .Select(target => target.CurrentPresence)
+            .Where(regionFaction => regionFaction != null && regionFaction.IsPublic)
+            .Distinct()
+            .ToList();
 
         var localOffensives = new List<PotentialOffensive>();
         foreach (var targetFaction in allEnemyRegionFactions)
@@ -1414,9 +1475,17 @@ public class FactionStrategyController
 
         long defenderBattleValue = StrategicCombatResolver.CalculateDefenderBattleValueAgainst(
             targetFaction, attackingFaction);
-        // The attacker's estimate sharpens with its awareness of the target region —
-        // built by reconnoitring it (see PlanMajorOffensiveOnPlanet), not blanket coverage.
-        float intel = targetFaction.Region.GetFactionRegionIntel(attackingFaction.Id);
+        PlanetFaction observer = targetFaction.Region.Planet.PlanetFactionMap
+            .GetValueOrDefault(attackingFaction.Id);
+        FactionIntelBelief belief = observer?.GetTargetBelief(
+            targetFaction.Region,
+            targetFaction.PlanetFaction.Faction);
+        long estimatedDefenderBattleValue = belief?.EstimatedMilitaryStrength
+            ?? defenderBattleValue;
+        // Regional awareness remains the planner's recon/readiness signal. The strength estimate
+        // itself comes from the stored target belief; it is never rounded from the live target here.
+        float intel = belief?.Evidence
+            ?? targetFaction.Region.GetFactionRegionAwareness(attackingFaction.Id);
 
         potentialOffensives.Add(new PotentialOffensive
         {
@@ -1427,7 +1496,7 @@ public class FactionStrategyController
             Reward = CalculateOffensiveReward(targetFaction, attackingFaction, availableForce, defenderBattleValue),
             DefenderBattleValue = defenderBattleValue,
             EstimatedDefenderBattleValue =
-                CautiousDefenderEstimate(defenderBattleValue, intel)
+                CautiousDefenderEstimate(estimatedDefenderBattleValue, intel)
         });
     }
 
@@ -1450,6 +1519,11 @@ public class FactionStrategyController
         Faction defenderFaction = defender.PlanetFaction.Faction;
         Region region = defender.Region;
 
+        if (region.Planet.RelationshipLedger != null)
+        {
+            FactionIntelligenceService.ObservePublicActivity(region.Planet, 0);
+        }
+
         long highestThreat = 0;
         foreach (Region adjacentRegion in region.GetAdjacentRegions())
         {
@@ -1460,18 +1534,26 @@ public class FactionStrategyController
             // regions (StrategicCombatResolver), so a region that got hit last turn plans around
             // the threat instead of instantly raising a larger combat garrison.
             float sight = Math.Min(1.0f,
-                adjacentRegion.GetFactionRegionIntel(defenderFaction.Id) / GarrisonFullSightIntel);
+                adjacentRegion.GetFactionRegionAwareness(defenderFaction.Id) / GarrisonFullSightIntel);
             if (sight <= 0f) continue;
 
-            // Threat measured in battle value (MilitaryStrength — Population for a horde/cult, Garrison
-            // for a civilian-base faction — plus landed squads by their soldiers' BV), NOT raw garrison
-            // headcount. The old headcount rule read zero for a population-is-military cult (its strength
-            // is its Population, with no standing Garrison), so a PDF perceived no threat from a massing
-            // uprising next door and held nothing back.
-            long adjacentThreat = adjacentRegion.RegionFactionMap.Values
-                .Where(rf => FactionDispositionService.AreEnemies(
-                    defenderFaction, rf.PlanetFaction.Faction, region.Planet))
-                .Sum(rf => (long)(CalculateDefenderBattleValue(rf) * sight));
+            long adjacentThreat;
+            if (region.Planet.RelationshipLedger != null)
+            {
+                adjacentThreat = GetBelievedTargets(defenderFaction, region.Planet, IntelLevel.Suspected)
+                    .Where(target => target.Region == adjacentRegion
+                        && target.CurrentPresence?.IsPublic == true)
+                    .Sum(target => (long)((target.Belief?.EstimatedMilitaryStrength ?? 0) * sight));
+            }
+            else
+            {
+                // Detached domain fixtures without a sector ledger have no observation boundary;
+                // retain their direct combat calculation so the helper remains useful in isolation.
+                adjacentThreat = adjacentRegion.RegionFactionMap.Values
+                    .Where(rf => FactionRelationshipService.AreHostile(
+                        defenderFaction, rf.PlanetFaction.Faction, region.Planet))
+                    .Sum(rf => (long)(CalculateDefenderBattleValue(rf) * sight));
+            }
 
             if (adjacentThreat > highestThreat) highestThreat = adjacentThreat;
         }

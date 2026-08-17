@@ -18,12 +18,13 @@ namespace OnlyWar.Helpers.Battles.Actions
 
         public void Execute(BattleState state)
         {
-            _soldier.ReloadingPhase++;
-            if(_soldier.ReloadingPhase == _weapon.Template.ReloadTime)
+            if (!_weapon.HasSoldierReload || !_weapon.CanReload)
             {
-                _weapon.LoadedAmmo = _weapon.Template.AmmoCapacity;
-                _soldier.ReloadingPhase = 0;
+                return;
             }
+
+            _weapon.AdvanceReload();
+            _soldier.ReloadingPhase = _weapon.ReloadProgress;
         }
 
         public string Description()

@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using System.Drawing;
+using System.Linq;
 using OnlyWar.Helpers;
 using OnlyWar.Helpers.Extensions;
 using OnlyWar.Helpers.StrategicCombat;
@@ -90,20 +91,18 @@ public class PlanetControlAndDispositionTests
     public void Disposition_PublicHumanRebelsTruceWithImperiumDuringExternalAttack()
     {
         Faction imperial = CreateFaction(1, "Imperium", isDefault: true);
-        Faction rebels = CreateFaction(2, "Insurrectionists");
-        rebels.OffersExternalEnemyTruce = true;
-        rebels.DefendsHostWhileHidden = true;
+        Faction rebels = CreateFaction(2, "Insurrectionists", growthType: GrowthType.Unrest);
         Faction xenos = CreateFaction(3, "Xenos");
         Planet planet = CreatePlanet(imperial, rebels, xenos, regionCount: 1);
 
-        Assert.True(FactionDispositionService.AreEnemies(imperial, rebels, planet));
+        Assert.True(FactionRelationshipService.AreHostile(imperial, rebels, planet));
 
         planet.Regions[0].RegionFactionMap[xenos.Id].IsPublic = true;
 
-        Assert.False(FactionDispositionService.AreEnemies(imperial, rebels, planet));
-        Assert.True(FactionDispositionService.AreEnemies(imperial, xenos, planet));
-        Assert.True(FactionDispositionService.AreEnemies(rebels, xenos, planet));
-        Assert.True(FactionDispositionService.DefendsHostAgainst(
+        Assert.False(FactionRelationshipService.AreHostile(imperial, rebels, planet));
+        Assert.True(FactionRelationshipService.AreHostile(imperial, xenos, planet));
+        Assert.True(FactionRelationshipService.AreHostile(rebels, xenos, planet));
+        Assert.True(FactionRelationshipService.DefendsHostAgainst(
             HiddenPresence(planet, rebels), xenos));
     }
 
@@ -111,15 +110,15 @@ public class PlanetControlAndDispositionTests
     public void Disposition_PublicCultDoesNotReceiveHumanRebelTruce()
     {
         Faction imperial = CreateFaction(1, "Imperium", isDefault: true);
-        Faction cult = CreateFaction(2, "Cult", canInfiltrate: true, growthType: GrowthType.Conversion);
+        Faction cult = CreateFaction(2, "Cult", behavior: FactionBehavior.CanInfiltrate, growthType: GrowthType.Conversion);
         Faction xenos = CreateFaction(3, "Xenos");
         Planet planet = CreatePlanet(imperial, cult, xenos, regionCount: 1);
         planet.Regions[0].RegionFactionMap[cult.Id].IsPublic = true;
         planet.Regions[0].RegionFactionMap[xenos.Id].IsPublic = true;
 
-        Assert.True(cult.DefendsHostWhileHidden);
-        Assert.False(cult.OffersExternalEnemyTruce);
-        Assert.True(FactionDispositionService.AreEnemies(imperial, cult, planet));
+        Assert.True(cult.HasBehavior(FactionBehavior.DefendsHostWhileHidden));
+        Assert.False(cult.HasBehavior(FactionBehavior.OffersExternalEnemyTruce));
+        Assert.True(FactionRelationshipService.AreHostile(imperial, cult, planet));
     }
 
     [Fact]
@@ -155,9 +154,21 @@ public class PlanetControlAndDispositionTests
     private static Planet CreatePlanet(Faction first, Faction second, Faction third, int regionCount)
     {
         Planet planet = new(1, "Test", new Coordinate(0, 0), 16, null, 1, 0);
+        planet.AttachRelationshipLedger(new FactionRelationshipLedger());
         foreach (Faction faction in new[] { first, second, third })
         {
             if (faction != null) planet.PlanetFactionMap[faction.Id] = new PlanetFaction(faction);
+        }
+        Faction playerFaction = new[] { first, second, third }
+            .FirstOrDefault(faction => faction?.IsPlayerFaction == true);
+        Faction defaultFaction = new[] { first, second, third }
+            .FirstOrDefault(faction => faction?.IsDefaultFaction == true);
+        if (playerFaction != null && defaultFaction != null)
+        {
+            planet.RelationshipLedger.SetStance(
+                playerFaction,
+                defaultFaction,
+                FactionStance.Allied);
         }
 
         for (int index = 0; index < regionCount; index++)
@@ -186,9 +197,26 @@ public class PlanetControlAndDispositionTests
     }
 
     private static Faction CreateFaction(int id, string name, bool isDefault = false,
-        bool canInfiltrate = false, GrowthType growthType = GrowthType.None, bool isPlayer = false)
+        FactionBehavior behavior = FactionBehavior.None, GrowthType growthType = GrowthType.None, bool isPlayer = false)
     {
-        return new Faction(id, name, Color.Red, isPlayer, isDefault, canInfiltrate, growthType,
+        if (!isPlayer && !isDefault)
+        {
+            behavior |= FactionBehavior.PopulationIsMilitary;
+        }
+        if (growthType is GrowthType.Consumption or GrowthType.Unrest)
+        {
+            behavior |= FactionBehavior.InvadesOnVictory;
+        }
+        if (growthType is GrowthType.Conversion or GrowthType.Unrest)
+        {
+            behavior |= FactionBehavior.DefendsHostWhileHidden;
+        }
+        if (growthType == GrowthType.Unrest)
+        {
+            behavior |= FactionBehavior.OffersExternalEnemyTruce;
+        }
+
+        return new Faction(id, name, Color.Red, isPlayer, isDefault, behavior, growthType,
             new Dictionary<int, Species>(), new Dictionary<int, SoldierTemplate>(),
             new Dictionary<int, SquadTemplate>(), new Dictionary<int, UnitTemplate>(),
             new Dictionary<int, BoatTemplate>(), new Dictionary<int, ShipTemplate>(),

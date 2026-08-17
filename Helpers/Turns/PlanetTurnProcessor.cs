@@ -41,12 +41,11 @@ namespace OnlyWar.Helpers.Turns
         private const double TyranidExpansionShare = 0.5;
         private const double CultRelocationRate = 0.25;
 
-        private const float IntelDecayRate = 0.75f;
         private const float IntelPerListeningPostLevel = 0.2f;
 
         private readonly GameSession _session;
         private readonly List<Mission> _specialMissions;
-        private readonly TurnIntelLedger _intelLedger;
+        private readonly TurnIntelligenceLedger _intelLedger;
         private readonly GovernorTurnProcessor _governorTurnProcessor;
         private readonly CivilUnrestTurnProcessor _civilUnrestTurnProcessor;
         private readonly Dictionary<(int PlanetId, int FactionId), long> _organicPopulationGrowth = [];
@@ -55,14 +54,14 @@ namespace OnlyWar.Helpers.Turns
         internal PlanetTurnProcessor(
             GameSession session,
             List<Mission> specialMissions,
-            TurnIntelLedger intelLedger = null,
+            TurnIntelligenceLedger intelLedger = null,
             ICollection<FortificationTransferReport> fortificationTransfers = null,
             ICollection<GovernorRequestReport> governorRequestReports = null)
         {
             _session = session ?? throw new ArgumentNullException(nameof(session));
             _specialMissions = specialMissions ?? throw new ArgumentNullException(nameof(specialMissions));
             _fortificationTransfers = fortificationTransfers;
-            _intelLedger = intelLedger ?? new TurnIntelLedger();
+            _intelLedger = intelLedger ?? new TurnIntelligenceLedger();
             _governorTurnProcessor = new GovernorTurnProcessor(_session, governorRequestReports);
             _civilUnrestTurnProcessor = new CivilUnrestTurnProcessor(_session);
         }
@@ -96,6 +95,12 @@ namespace OnlyWar.Helpers.Turns
         internal void RecordReconEvidence(PlanetFaction planetFaction, Region region, float evidence)
         {
             _intelLedger.RecordReconEvidence(planetFaction, region, evidence);
+        }
+
+        internal void RecordTargetObservation(IntelObservation observation)
+        {
+            if (observation == null) throw new ArgumentNullException(nameof(observation));
+            _intelLedger.RecordObservation(observation);
         }
 
         internal void UpdatePlanets(IEnumerable<Planet> planets)
@@ -177,19 +182,30 @@ namespace OnlyWar.Helpers.Turns
                         : 0);
                 bool hasRegionalPresence = planet.Regions.Any(region =>
                     region.RegionFactionMap.ContainsKey(planetFaction.Faction.Id));
-                bool hasIntel = planetFaction.RegionIntel.Count > 0
+                bool hasIntel = planetFaction.HasIntelligenceFootprint
                     || _intelLedger.HasPendingEntries(planetFaction, planet);
                 if (!hasRegionalPresence && !hasIntel)
                 {
                     planet.PlanetFactionMap.Remove(planetFaction.Faction.Id);
                 }
-                else if (planetFactionPopulation > 0 && planetFaction.Leader != null)
+            }
+
+            UpdateRegionAwareness(planet);
+
+            // Governors consume the same settled belief state that the player and NPC planners use:
+            // decay, passive sensors, mission evidence, public activity, and Allied fan-out have all
+            // been applied before Investigation/Paranoia can generate a request.
+            foreach (PlanetFaction planetFaction in planet.PlanetFactionMap.Values.ToList())
+            {
+                long planetFactionPopulation = planet.Regions.Sum(
+                    r => r.RegionFactionMap.TryGetValue(planetFaction.Faction.Id, out RegionFaction rf)
+                        ? rf.Population
+                        : 0);
+                if (planetFactionPopulation > 0 && planetFaction.Leader != null)
                 {
                     _governorTurnProcessor.ProcessGovernor(planet, planetFaction);
                 }
             }
-
-            UpdateRegionIntel(planet);
         }
 
         internal void EndOfTurnRegionFactionsUpdate(RegionFaction regionFaction, float pdfRatio)
@@ -303,7 +319,7 @@ namespace OnlyWar.Helpers.Turns
             return regionFaction.Region.RegionFactionMap.Values.Any(other =>
                 other != regionFaction
                 && other.IsPublic
-                && !FactionDispositionService.IsImperial(other.PlanetFaction.Faction));
+                && !FactionRelationshipService.IsImperial(other.PlanetFaction.Faction));
         }
 
         private float ConvertPopulation(Region region, RegionFaction regionFaction, float newPop)
@@ -613,7 +629,7 @@ namespace OnlyWar.Helpers.Turns
         {
             return region.GetSelfAndAdjacentRegions().Any(r => r.RegionFactionMap.Values.Any(rf =>
                 rf.IsPublic
-                && FactionDispositionService.IsImperial(rf.PlanetFaction.Faction)
+                && FactionRelationshipService.IsImperial(rf.PlanetFaction.Faction)
                 && (rf.Garrison > 0 || rf.LandedSquads.Count > 0)));
         }
 
@@ -689,7 +705,7 @@ namespace OnlyWar.Helpers.Turns
             foreach (RegionFaction rf in region.RegionFactionMap.Values)
             {
                 Faction faction = rf.PlanetFaction.Faction;
-                if (FactionDispositionService.IsImperial(faction))
+                if (FactionRelationshipService.IsImperial(faction))
                 {
                     loyal += rf.MilitaryStrength;
                     loyal += SquadBattleValue(rf.LandedSquads);
@@ -717,9 +733,10 @@ namespace OnlyWar.Helpers.Turns
                 bool occupierPresent = region.RegionFactionMap.Values.Any(other =>
                     other.IsPublic
                     && other.MilitaryStrength > 0
-                    && !FactionDispositionService.AreAllied(
+                    && !FactionRelationshipService.AreAllied(
                         other.PlanetFaction.Faction,
-                        regionFaction.PlanetFaction.Faction));
+                        regionFaction.PlanetFaction.Faction,
+                        region.Planet));
                 if (!occupierPresent) continue;
 
                 regionFaction.Entrenchment = Math.Max(0.0, regionFaction.Entrenchment - OccupiedDefenseDecayPerTurn);
@@ -791,7 +808,7 @@ namespace OnlyWar.Helpers.Turns
         {
             return region.RegionFactionMap.Values.Any(rf =>
                 rf.IsPublic
-                && !FactionDispositionService.IsImperial(rf.PlanetFaction.Faction)
+                && !FactionRelationshipService.IsImperial(rf.PlanetFaction.Faction)
                 && (rf.Population > 0 || rf.Garrison > 0));
         }
 
@@ -841,7 +858,7 @@ namespace OnlyWar.Helpers.Turns
 
                 bool externalEnemyPresent = region.RegionFactionMap.Values.Any(rf =>
                     rf.IsPublic
-                    && FactionDispositionService.IsExternalEnemy(rf.PlanetFaction.Faction));
+                    && FactionRelationshipService.IsExternalEnemy(rf.PlanetFaction.Faction));
                 foreach (RegionFaction infiltrator in region.RegionFactionMap.Values
                     .Where(rf => !rf.IsPublic
                         && rf.PlanetFaction.Faction.GrowthType == GrowthType.Conversion)
@@ -928,13 +945,17 @@ namespace OnlyWar.Helpers.Turns
             return strength;
         }
 
-        private void UpdateRegionIntel(Planet planet)
+        private void UpdateRegionAwareness(Planet planet)
         {
             foreach (PlanetFaction planetFaction in planet.PlanetFactionMap.Values)
             {
-                foreach (Region region in planetFaction.RegionIntel.Keys.ToList())
+                planetFaction.DecayTargetBeliefs();
+                foreach (Region region in planetFaction.RegionAwareness.Keys.ToList())
                 {
-                    planetFaction.SetRegionIntel(region, planetFaction.GetRegionIntel(region) * IntelDecayRate);
+                    planetFaction.SetRegionAwareness(
+                        region,
+                        planetFaction.GetRegionAwareness(region)
+                            * FactionIntelligenceRules.WeeklyDecayMultiplier);
                 }
             }
 
@@ -952,13 +973,13 @@ namespace OnlyWar.Helpers.Turns
                         * IntelPerListeningPostLevel);
                     if (sensorGain > 0f)
                     {
-                        regionFaction.PlanetFaction.AddRegionIntel(region, sensorGain);
+                        regionFaction.PlanetFaction.AddRegionAwareness(region, sensorGain);
                     }
 
                     // Patrol deliberately grants NO intelligence (OnlyWar_TDD.md §6.4
                     // §5). It used to add a flat 1.0 + log10(headcount) here, which made it a strictly
                     // better intel source than Recon: this path routes through RecordIntelGain, which
-                    // bypasses the diminishing-returns curve TurnIntelLedger applies to recon evidence,
+                    // bypasses the diminishing-returns curve TurnIntelligenceLedger applies to recon evidence,
                     // and it cost no roll, no risk, and no operating days. Patrolling your own region
                     // beat reconnoitring it.
                     //
@@ -970,6 +991,7 @@ namespace OnlyWar.Helpers.Turns
                 }
             }
 
+            QueuePublicActivityObservations(planet);
             _intelLedger.Apply(planet);
         }
 
@@ -986,12 +1008,27 @@ namespace OnlyWar.Helpers.Turns
             foreach (Region region in planet.Regions)
             {
                 float visibleIntel = region.GetPlayerVisibleIntel();
+                Faction playerFaction = planet.PlanetFactionMap.Values
+                    .Select(planetFaction => planetFaction.Faction)
+                    .FirstOrDefault(faction => faction.IsPlayerFaction)
+                    ?? planet.PlanetFactionMap.Values
+                        .Select(planetFaction => planetFaction.Faction)
+                        .FirstOrDefault(faction => faction.IsDefaultFaction);
+                List<FactionIntelBelief> playerBeliefs = IntelligenceTargetService
+                    .GetPlayerVisibleBeliefs(region)
+                    .Where(belief => belief.Level >= IntelLevel.Confirmed
+                        && (playerFaction == null
+                            || FactionRelationshipService.GetEffectiveStance(
+                                playerFaction,
+                                belief.TargetFaction,
+                                planet) == FactionStance.Hostile))
+                    .ToList();
                 // Show of Force is not an intelligence find - it is a standing petition from the
                 // world's own governor, delivered by astropath. Losing eyes on the ground does not
                 // withdraw it, and it does not go stale, so it survives both the intel wipe and
                 // the weekly expiry roll that clear ordinary opportunities. Only
                 // GovernorTurnProcessor retires it, when the request resolves.
-                if (visibleIntel < 1f)
+                if (visibleIntel < 1f && playerBeliefs.Count == 0)
                 {
                     region.SpecialMissions.RemoveAll(
                         mission => mission.MissionType != MissionType.ShowOfForce);
@@ -1006,34 +1043,127 @@ namespace OnlyWar.Helpers.Turns
                         region.SpecialMissions.Remove(mission);
                     }
                 }
-                if (visibleIntel > 0)
+                if (visibleIntel > 0 || playerBeliefs.Count > 0)
                 {
-                    float regionSpecMissionBudget = (float)Math.Log(visibleIntel, 2) + 1;
-                    List<RegionFaction> publicEnemyFactions = region.RegionFactionMap.Values
-                        .Where(rf => !FactionDispositionService.IsImperial(rf.PlanetFaction.Faction)
-                                     && rf.IsPublic)
-                        .ToList();
-                    long totalDeployedStrength = publicEnemyFactions.Sum(rf => rf.GetDeployedStrength());
-
-                    foreach (RegionFaction regionFaction in region.RegionFactionMap.Values)
+                    float beliefEvidence = playerBeliefs
+                        .Select(belief => belief.Evidence)
+                        .DefaultIfEmpty(0f)
+                        .Max();
+                    float regionSpecMissionBudget =
+                        (float)Math.Log(Math.Max(1f, Math.Max(visibleIntel, beliefEvidence)), 2) + 1;
+                    foreach (FactionIntelBelief belief in playerBeliefs)
                     {
-                        if (regionFaction.PlanetFaction.Faction.IsPlayerFaction
-                            || regionFaction.PlanetFaction.Faction.IsDefaultFaction)
-                        {
-                            continue;
-                        }
-                        if (regionFaction.IsPublic)
-                        {
-                            float share = totalDeployedStrength > 0
-                                ? (float)regionFaction.GetDeployedStrength() / totalDeployedStrength
-                                : 1.0f / publicEnemyFactions.Count;
-                            HandlePublicFactionIntelligence(regionFaction, regionSpecMissionBudget * share);
-                        }
-                        else
-                        {
-                            HandleHiddenFactionIntelligence(regionFaction);
-                        }
+                        double totalBelievedStrength = playerBeliefs
+                            .Select(item => (double)Math.Max(
+                                1L,
+                                item.EstimatedMilitaryStrength ?? 1L))
+                            .Sum();
+                        double beliefWeight = Math.Max(
+                            1L,
+                            belief.EstimatedMilitaryStrength ?? 1L)
+                            / totalBelievedStrength;
+                        HandleBeliefIntelligence(
+                            belief,
+                            (float)(regionSpecMissionBudget * beliefWeight));
                     }
+                }
+            }
+        }
+
+        private void QueuePublicActivityObservations(Planet planet)
+        {
+            int evidenceWeek = _session.CurrentDate.GetTotalWeeks();
+            foreach (Region region in planet.Regions
+                .Where(region => region != null)
+                .OrderBy(region => region.Id))
+            {
+                foreach (RegionFaction target in region.RegionFactionMap.Values
+                    .Where(regionFaction => regionFaction.IsPublic)
+                    .OrderBy(regionFaction => regionFaction.PlanetFaction.Faction.Id))
+                {
+                    Faction targetFaction = target.PlanetFaction.Faction;
+                    foreach (PlanetFaction observer in planet.PlanetFactionMap.Values
+                        .Where(planetFaction => planetFaction.Faction.Id != targetFaction.Id)
+                        .OrderBy(planetFaction => planetFaction.Faction.Id))
+                    {
+                        bool hasPlanetaryPresence = planet.Regions.Any(candidateRegion =>
+                            candidateRegion.RegionFactionMap.ContainsKey(observer.Faction.Id));
+                        bool hasRegionalAwareness = observer.GetRegionAwareness(region) > 0f;
+                        if (!hasPlanetaryPresence && !hasRegionalAwareness) continue;
+
+                        FactionIntelBelief previous = observer.GetTargetBelief(region, targetFaction);
+                        float evidenceDelta = FactionIntelligenceRules.ConfirmedThreshold
+                            - (previous?.Evidence ?? 0f);
+                        if (evidenceDelta <= 0f) continue;
+
+                        _intelLedger.RecordObservation(new IntelObservation(
+                            observer,
+                            region,
+                            targetFaction,
+                            evidenceDelta,
+                            EstimatePublicActivity(target.Population, observer.GetRegionAwareness(region)),
+                            EstimatePublicActivity(target.GetDeployedStrength(), observer.GetRegionAwareness(region)),
+                            IntelObservationSource.PublicActivity,
+                            evidenceWeek));
+                    }
+                }
+            }
+        }
+
+        private static long? EstimatePublicActivity(long value, float awareness)
+        {
+            if (value < 0) return null;
+            if (awareness >= FactionIntelligenceRules.LocatedThreshold) return value;
+            long divisor = (long)Math.Pow(
+                10,
+                Math.Max(0, 3 - (int)Math.Floor(Math.Max(0f, awareness))));
+            if (divisor <= 1) return value;
+            return value <= 0 ? 0 : Math.Max(1, value / divisor * divisor);
+        }
+
+        private void HandleBeliefIntelligence(FactionIntelBelief belief, float specMissionBudget)
+        {
+            Region region = belief.Region;
+            int existing = region.SpecialMissions.Count(mission =>
+                mission.Region == region
+                && mission.TargetFaction?.Id == belief.TargetFaction.Id);
+            float remaining = specMissionBudget - existing;
+            for (int i = 0; i < remaining; i++)
+            {
+                double chance = _session.Random.NextRandomZValue();
+                RegionFaction current = region.RegionFactionMap
+                    .GetValueOrDefault(belief.TargetFaction.Id);
+                if (current == null)
+                {
+                    int size = Math.Max(1, (int)Math.Ceiling(belief.Evidence));
+                    region.SpecialMissions.Add(
+                        new Mission(
+                            MissionType.Extermination,
+                            region,
+                            belief.TargetFaction,
+                            size));
+                }
+                else if (chance >= 2)
+                {
+                    GenerateAssassinationMission(current);
+                }
+                else if (chance >= 1)
+                {
+                    double defenseTotal = RegionDefenses.GetShared(current, DefenseType.Entrenchment)
+                        + RegionDefenses.GetShared(current, DefenseType.ListeningPost)
+                        + RegionDefenses.GetShared(current, DefenseType.AntiAir);
+                    if (defenseTotal <= 0)
+                    {
+                        GenerateAmbushMission(current);
+                    }
+                    else
+                    {
+                        GenerateSabotageMission(current, defenseTotal);
+                    }
+                }
+                else
+                {
+                    GenerateAmbushMission(current);
                 }
             }
         }

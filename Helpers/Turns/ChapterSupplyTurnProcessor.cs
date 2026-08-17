@@ -40,7 +40,7 @@ namespace OnlyWar.Helpers.Turns
 
             Faction controller = source.GetControllingFaction();
             if (controller == null) return false;
-            return FactionDispositionService.IsImperial(controller);
+            return FactionRelationshipService.IsImperial(controller);
         }
     }
 }

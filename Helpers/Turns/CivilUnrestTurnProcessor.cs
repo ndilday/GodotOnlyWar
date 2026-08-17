@@ -401,7 +401,7 @@ namespace OnlyWar.Helpers.Turns
                 .SelectMany(region => region.RegionFactionMap.Values)
                 .Any(rf => rf.IsPublic
                     && rf.PlanetFaction.Faction.Id != unrestFaction.Id
-                    && FactionDispositionService.IsExternalEnemy(
+                    && FactionRelationshipService.IsExternalEnemy(
                         rf.PlanetFaction.Faction, unrestFaction));
 
         private static (Region NextStep, RegionFaction Target) FindMigrationStep(

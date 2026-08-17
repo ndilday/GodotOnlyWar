@@ -170,7 +170,7 @@ public class BattleTurnResolverTests
             Color.Red,
             isPlayerFaction: false,
             isDefaultFaction: false,
-            canInfiltrate: false,
+            behavior: FactionBehavior.None,
             GrowthType.None,
             new Dictionary<int, Species> { [TestModelFactory.HumanSpecies.Id] = TestModelFactory.HumanSpecies },
             new Dictionary<int, SoldierTemplate> { [TestModelFactory.MarineTemplate.Id] = TestModelFactory.MarineTemplate },

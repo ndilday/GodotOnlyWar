@@ -1,5 +1,7 @@
 using OnlyWar.Helpers.Battles;
+using OnlyWar.Helpers.Extensions;
 using OnlyWar.Helpers.Fortifications;
+using OnlyWar.Helpers;
 using OnlyWar.Models;
 using OnlyWar.Models.Missions;
 using OnlyWar.Models.Orders;
@@ -18,14 +20,17 @@ namespace OnlyWar.Helpers.Turns
     internal sealed class MissionAftermathProcessor
     {
         private readonly Action<PlanetFaction, Region, float> _recordIntelGain;
+        private readonly Action<IntelObservation> _recordTargetObservation;
         private readonly Action<RegionFaction, long, Faction> _recordScenarioPdfLost;
 
         internal MissionAftermathProcessor(
             Action<PlanetFaction, Region, float> recordIntelGain,
-            Action<RegionFaction, long, Faction> recordScenarioPdfLost)
+            Action<RegionFaction, long, Faction> recordScenarioPdfLost,
+            Action<IntelObservation> recordTargetObservation = null)
         {
             _recordIntelGain = recordIntelGain;
             _recordScenarioPdfLost = recordScenarioPdfLost;
+            _recordTargetObservation = recordTargetObservation;
         }
 
         internal void ApplyMissionResults(IEnumerable<MissionContext> missionContexts)
@@ -55,7 +60,11 @@ namespace OnlyWar.Helpers.Turns
                             context.Order.AssignedSquads.FirstOrDefault()?.Faction,
                             regionFaction,
                             context.Impact,
-                            _recordIntelGain);
+                            _recordIntelGain,
+                            _recordTargetObservation);
+                        break;
+                    case MissionType.Patrol:
+                        RecordPatrolContacts(context, _recordTargetObservation);
                         break;
                     case MissionType.Sabotage:
                         SabotageMission sabotageMission = (SabotageMission)context.Order.Mission;
@@ -69,6 +78,8 @@ namespace OnlyWar.Helpers.Turns
                             regionFaction, sabotageMission.DefenseType, impact);
                         break;
                 }
+
+                RecordTacticalBattleContacts(context, _recordTargetObservation);
 
                 // Cumulative across every engagement in the mission, not just the last one.
                 // context.OpposingSquads is REPLACED each time a step raises a fresh opposing force, so
@@ -135,7 +146,7 @@ namespace OnlyWar.Helpers.Turns
             foreach (Order order in playerOrdersThisTurn.Where(o => !ShouldPersistPlayerOrder(o)))
             {
                 Mission mission = order.Mission;
-                mission.RegionFaction?.Region?.SpecialMissions.Remove(mission);
+                mission.Region?.SpecialMissions.Remove(mission);
             }
         }
 
@@ -201,7 +212,8 @@ namespace OnlyWar.Helpers.Turns
             Faction reconningFaction,
             RegionFaction target,
             float impact,
-            Action<PlanetFaction, Region, float> recordIntelGain = null)
+            Action<PlanetFaction, Region, float> recordIntelGain = null,
+            Action<IntelObservation> recordTargetObservation = null)
         {
             if (target == null) return;
             PlanetFaction reconningPlanetFaction = null;
@@ -212,7 +224,7 @@ namespace OnlyWar.Helpers.Turns
                     reconningFaction.Id,
                     out reconningPlanetFaction))
                 {
-                    // RegionIntel belongs to the observer, even when that faction does not occupy
+                    // RegionAwareness belongs to the observer, even when that faction does not occupy
                     // ground on the target planet. Recon from orbit therefore still needs a sparse
                     // PlanetFaction record in which to retain the resulting belief.
                     reconningPlanetFaction = new PlanetFaction(reconningFaction)
@@ -220,6 +232,7 @@ namespace OnlyWar.Helpers.Turns
                         IsPublic = reconningFaction.IsPlayerFaction
                     };
                     planet.PlanetFactionMap[reconningFaction.Id] = reconningPlanetFaction;
+                    planet.NotifyPlanetFactionAdded(reconningPlanetFaction);
                 }
             }
             if (reconningPlanetFaction != null)
@@ -230,13 +243,190 @@ namespace OnlyWar.Helpers.Turns
                 }
                 else
                 {
-                    reconningPlanetFaction.AddRegionIntel(target.Region, impact);
+                    reconningPlanetFaction.AddRegionAwareness(target.Region, impact);
+                }
+
+                if (recordTargetObservation != null
+                    && impact != 0f
+                    && target.PlanetFaction?.Faction != null
+                    && target.PlanetFaction.Faction.Id != reconningFaction.Id)
+                {
+                    float evidence = impact > 0f
+                        ? Math.Max(0.25f, impact)
+                        : Math.Min(-0.25f, impact);
+                    recordTargetObservation(new IntelObservation(
+                        reconningPlanetFaction,
+                        target.Region,
+                        target.PlanetFaction.Faction,
+                        evidence,
+                        evidence > 0f ? target.Population : null,
+                        evidence > 0f ? target.GetDeployedStrength() : null,
+                        IntelObservationSource.Recon,
+                        0));
                 }
             }
             GameLog.Debug(() =>
                 $"Recon result {reconningFaction?.Name ?? "Unknown"} -> "
                 + $"{MissionTurnProcessor.DescribeRegionFaction(target)}: "
                 + $"impact={impact:F2}");
+        }
+
+        private static void RecordPatrolContacts(
+            MissionContext context,
+            Action<IntelObservation> recordTargetObservation)
+        {
+            if (recordTargetObservation == null || context?.Order?.Mission?.RegionFaction == null)
+            {
+                return;
+            }
+
+            RegionFaction observerPresence = context.Order.Mission.RegionFaction;
+            Faction observerFaction = observerPresence.PlanetFaction?.Faction;
+            Region region = observerPresence.Region;
+            if (observerFaction == null || region?.Planet == null || context.Impact <= 0f)
+            {
+                return;
+            }
+
+            PlanetFaction observer = GetAttachedPlanetFaction(region.Planet, observerPresence.PlanetFaction);
+            float evidence = Math.Max(0.25f, context.Impact);
+            foreach (RegionFaction target in region.RegionFactionMap.Values
+                .Where(candidate => candidate?.PlanetFaction?.Faction != null
+                    && candidate.PlanetFaction.Faction.Id != observerFaction.Id
+                    && FactionRelationshipService.AreHostile(
+                        observerFaction,
+                        candidate.PlanetFaction.Faction,
+                        region.Planet))
+                .OrderBy(candidate => candidate.PlanetFaction.Faction.Id))
+            {
+                recordTargetObservation(new IntelObservation(
+                    observer,
+                    region,
+                    target.PlanetFaction.Faction,
+                    evidence,
+                    target.Population,
+                    target.GetDeployedStrength(),
+                    IntelObservationSource.PatrolContact,
+                    0));
+            }
+        }
+
+        private static PlanetFaction GetAttachedPlanetFaction(
+            Planet planet,
+            PlanetFaction preferred)
+        {
+            if (planet.PlanetFactionMap.TryGetValue(
+                preferred.Faction.Id,
+                out PlanetFaction attached))
+            {
+                return attached;
+            }
+
+            planet.PlanetFactionMap[preferred.Faction.Id] = preferred;
+            planet.NotifyPlanetFactionAdded(preferred);
+            return preferred;
+        }
+
+        private static void RecordTacticalBattleContacts(
+            MissionContext context,
+            Action<IntelObservation> recordTargetObservation)
+        {
+            if (recordTargetObservation == null
+                || context?.Order?.Mission?.RegionFaction == null
+                || context.MissionSquads == null
+                || context.MissionSquads.Count == 0)
+            {
+                return;
+            }
+
+            RegionFaction targetPresence = context.Order.Mission.RegionFaction;
+            Region region = targetPresence.Region;
+            Faction attackerFaction = context.MissionSquads
+                .Select(squad => squad?.Squad?.Faction)
+                .FirstOrDefault(faction => faction != null);
+            if (region?.Planet == null || attackerFaction == null) return;
+
+            PlanetFaction attackerObserver = GetAttachedPlanetFaction(
+                region.Planet,
+                GetOrCreatePlanetFaction(region.Planet, attackerFaction));
+            List<(Faction Faction, PlanetFaction Observer, long? Population, long? Military)> participants =
+                new()
+                {
+                    (
+                        attackerFaction,
+                        attackerObserver,
+                        null,
+                        Math.Max(0L, context.MissionSquads
+                            .SelectMany(squad => squad.AbleSoldiers)
+                            .Sum(soldier => (long)soldier.Soldier.Template.BattleValue)))
+                };
+
+            AddTacticalParticipant(
+                participants,
+                targetPresence.PlanetFaction,
+                targetPresence.Population,
+                targetPresence.GetDeployedStrength());
+
+            foreach (BattleSquad opposing in context.OpposingSquads ?? [])
+            {
+                Faction faction = opposing?.Squad?.Faction;
+                if (faction == null || participants.Any(item => item.Faction.Id == faction.Id)) continue;
+                RegionFaction presence = region.RegionFactionMap.GetValueOrDefault(faction.Id);
+                AddTacticalParticipant(
+                    participants,
+                    presence?.PlanetFaction ?? GetOrCreatePlanetFaction(region.Planet, faction),
+                    presence?.Population,
+                    presence?.GetDeployedStrength());
+            }
+
+            foreach ((Faction Faction, PlanetFaction Observer, long? Population, long? Military) observer in participants)
+            {
+                foreach ((Faction Faction, PlanetFaction Observer, long? Population, long? Military) subject in participants)
+                {
+                    if (observer.Faction.Id == subject.Faction.Id) continue;
+                    FactionIntelBelief previous = observer.Observer.GetTargetBelief(region, subject.Faction);
+                    float evidenceDelta = Math.Max(
+                        0.25f,
+                        FactionIntelligenceRules.LocatedThreshold - (previous?.Evidence ?? 0f));
+                    recordTargetObservation(new IntelObservation(
+                        observer.Observer,
+                        region,
+                        subject.Faction,
+                        evidenceDelta,
+                        subject.Population,
+                        subject.Military,
+                        IntelObservationSource.BattleContact,
+                        0));
+                }
+            }
+        }
+
+        private static void AddTacticalParticipant(
+            ICollection<(Faction Faction, PlanetFaction Observer, long? Population, long? Military)> participants,
+            PlanetFaction observer,
+            long? population,
+            long? military)
+        {
+            if (observer?.Faction == null
+                || participants.Any(item => item.Faction.Id == observer.Faction.Id))
+            {
+                return;
+            }
+
+            participants.Add((observer.Faction, observer, population, military));
+        }
+
+        private static PlanetFaction GetOrCreatePlanetFaction(Planet planet, Faction faction)
+        {
+            if (planet.PlanetFactionMap.TryGetValue(faction.Id, out PlanetFaction existing))
+            {
+                return existing;
+            }
+
+            PlanetFaction created = new(faction) { IsPublic = faction.IsPlayerFaction };
+            planet.PlanetFactionMap[faction.Id] = created;
+            planet.NotifyPlanetFactionAdded(created);
+            return created;
         }
 
         private static long FallenBattleValue(IEnumerable<BattleSquad> squads)
@@ -271,7 +461,7 @@ namespace OnlyWar.Helpers.Turns
 
             Faction attacker = first.Squad.Faction;
             if (context.Order.Mission.MissionType == MissionType.Advance
-                && attacker.InvadesOnVictory
+                && attacker.HasBehavior(FactionBehavior.InvadesOnVictory)
                 && !context.ReciprocalAssaultDefeated)
             {
                 EstablishInvaderPresence(

@@ -12,7 +12,7 @@ namespace OnlyWar.Models
     // Persistent objective state carried through the campaign and across save/load
     // (Design/Reference/OpeningScenario.md). Attached to Sector as a nullable property and
     // persisted on the extended GlobalData row (§7). BriefingText is composed once at
-    // generation and stored so the popup, Chapter screen, and any recap read the same
+    // generation and stored so the Command Brief, Chapter screen, and any recap read the same
     // authored text. The mechanically-relevant authority is always the *current* Sector
     // Lord (resolved on demand via Sector.GetSectorLord), so only the original promiser's
     // id is stored here, for narrative continuity.
@@ -21,8 +21,9 @@ namespace OnlyWar.Models
         public ScenarioType Type { get; }
         public int PromisedPlanetId { get; }
         public ObjectiveState State { get; set; }
-        // One-shot guard for the briefing popup. Persisted, so the popup never shows twice
-        // and never on load without a separate "is new game" flag (§5).
+        // One-shot guard for automatic Command Brief opening. Persisted, so an acknowledged
+        // campaign does not reopen onboarding on load; manual visits continue to show the
+        // directive while it remains relevant (§5).
         public bool BriefingAcknowledged { get; set; }
         public string BriefingText { get; }
         // The Sector Lord who first promised the world (flavor/continuity only; may dangle

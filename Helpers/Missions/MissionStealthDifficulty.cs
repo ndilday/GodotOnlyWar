@@ -105,7 +105,7 @@ namespace OnlyWar.Helpers.Missions
             // is the only negative term in the model, and it is bounded by the intel scale, so the
             // total can go slightly below zero for a well-briefed force crossing empty ground - which
             // is the intended "this is a formality" case, not a numerical accident.
-            float intelMod = intruder == null ? 0f : region.GetFactionRegionIntel(intruder);
+            float intelMod = intruder == null ? 0f : region.GetFactionRegionAwareness(intruder);
             return new StealthDifficultyTerms(
                 surveillance, ownTroopMod, patrol, ambient, intelMod, enemies.Count);
         }
@@ -122,7 +122,7 @@ namespace OnlyWar.Helpers.Missions
             if (rf == null) return new WatchTerms(0f, 0f, 0f);
 
             // Sensors, informants, and standing awareness of its own ground.
-            float surveillance = SurveillanceWeight * rf.GetOwnRegionIntel();
+            float surveillance = SurveillanceWeight * rf.GetOwnRegionAwareness();
 
             // Troops actually out looking. This is the term with no ceiling on it, because sweeping
             // scales the way searching really does: doubling the number of patrols genuinely doubles

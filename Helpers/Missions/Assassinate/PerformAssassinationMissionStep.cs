@@ -41,7 +41,7 @@ namespace OnlyWar.Helpers.Missions.Assassinate
             // between them fortify one set of works, and the target shelters behind all of it.
             float difficulty = (float)((
                     RegionDefenses.GetShared(enemyFaction, DefenseType.Entrenchment)
-                    + enemyFaction.GetOwnRegionIntel()) * 0.5)
+                    + enemyFaction.GetOwnRegionAwareness()) * 0.5)
                 + MissionStealthDifficulty.Magnitude(enemyFaction.GetDeployedStrength())
                 // Aggression's EFFECT axis: taking the shot is what boldness buys. A force unwilling to
                 // expose itself cannot get close enough for a clean kill.

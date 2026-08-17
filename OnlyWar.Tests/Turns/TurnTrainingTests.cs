@@ -403,7 +403,7 @@ public class TurnTrainingTests
                 Color.Blue,
                 true,
                 false,
-                false,
+                FactionBehavior.None,
                 GrowthType.None,
                 new Dictionary<int, Species> { [TestModelFactory.HumanSpecies.Id] = TestModelFactory.HumanSpecies },
                 new Dictionary<int, SoldierTemplate>(),

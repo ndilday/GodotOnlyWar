@@ -9,6 +9,8 @@ using OnlyWar.Models;
 using OnlyWar.Models.Fleets;
 using OnlyWar.Models.Planets;
 using OnlyWar.Models.Squads;
+using OnlyWar.Models.Soldiers;
+using OnlyWar.Models.Events;
 
 namespace OnlyWar.Builders
 {
@@ -67,6 +69,27 @@ namespace OnlyWar.Builders
                                                    out GovernanceTier authorityTier);
             string briefingText = ComposeBriefing(sector, promised, authority, authorityTier,
                                                   playerForce, data, currentDate);
+
+            PlayerSoldier chapterMaster = playerForce.Army.OrderOfBattle
+                .GetAllMembers()
+                .OfType<PlayerSoldier>()
+                .FirstOrDefault(soldier => soldier.Template == data.ChapterTemplates.ChapterMaster);
+            playerForce.RecordChapterFounded(
+                currentDate,
+                new ChapterFoundedPayload(
+                    playerForce.Army.OrderOfBattle.Name,
+                    currentDate.GetTotalWeeks(),
+                    chapterMaster?.Id,
+                    chapterMaster?.Name,
+                    playerForce.Army.PlayerSoldierMap.Count,
+                    authority.Name,
+                    briefingText,
+                    promised.Id,
+                    promised.Name),
+                chapterMaster?.Id,
+                chapterMaster?.Name,
+                promised.Id,
+                promised.Name);
 
             return new CampaignScenario(
                 ScenarioType.PromisedWorld,
@@ -183,7 +206,22 @@ namespace OnlyWar.Builders
                          .Where(region => region.RegionFactionMap.Values
                              .Any(rf => rf.PlanetFaction.Faction.Id != cultFaction.Id && rf.IsPublic)))
             {
-                cultPlanetFaction.AddRegionIntel(region, ScenarioRules.PromisedWorldCultStartingIntel);
+                cultPlanetFaction.AddRegionAwareness(region, ScenarioRules.PromisedWorldCultStartingIntel);
+
+                foreach (RegionFaction target in region.RegionFactionMap.Values
+                    .Where(regionFaction => regionFaction.PlanetFaction.Faction.Id != cultFaction.Id
+                        && regionFaction.IsPublic)
+                    .OrderBy(regionFaction => regionFaction.PlanetFaction.Faction.Id))
+                {
+                    cultPlanetFaction.SeedTargetBelief(
+                        region,
+                        target.PlanetFaction.Faction,
+                        FactionIntelligenceRules.ConfirmedThreshold,
+                        target.Population,
+                        target.GetDeployedStrength(),
+                        0,
+                        IntelObservationSource.Scenario);
+                }
             }
         }
 
@@ -462,7 +500,6 @@ namespace OnlyWar.Builders
                 + $"to the {chapterName} should the {enemyName} be driven from it — the world to "
                 + "become the Chapter's home."
             });
-
             return briefingText;
         }
 

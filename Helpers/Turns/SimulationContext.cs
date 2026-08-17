@@ -14,7 +14,7 @@ namespace OnlyWar.Helpers.Turns
     {
         internal GameSession Session { get; }
         internal TurnResolutionResult Result { get; }
-        internal TurnIntelLedger IntelLedger { get; }
+        internal TurnIntelligenceLedger IntelLedger { get; }
         internal List<Order> PlayerOrders { get; }
         internal List<Order> AllOrders { get; }
         internal Planet PlanetScope { get; }
@@ -27,7 +27,7 @@ namespace OnlyWar.Helpers.Turns
         internal SimulationContext(
             GameSession session,
             TurnResolutionResult result,
-            TurnIntelLedger intelLedger,
+            TurnIntelligenceLedger intelLedger,
             IEnumerable<Order> playerOrders = null,
             Planet planetScope = null)
         {

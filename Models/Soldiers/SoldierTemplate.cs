@@ -10,6 +10,10 @@ namespace OnlyWar.Models.Soldiers
         private static readonly IReadOnlyDictionary<string, IReadOnlyList<WeaponSet>> EmptyWeaponOptions =
             new Dictionary<string, IReadOnlyList<WeaponSet>>();
         private static readonly IReadOnlyList<WeaponSet> EmptyMenu = Array.Empty<WeaponSet>();
+        private static readonly IReadOnlyDictionary<string, IReadOnlyList<EquipmentKitTemplate>> EmptyEquipmentOptions =
+            new Dictionary<string, IReadOnlyList<EquipmentKitTemplate>>();
+        private static readonly IReadOnlyList<EquipmentKitTemplate> EmptyEquipmentMenu =
+            Array.Empty<EquipmentKitTemplate>();
 
         public int Id { get; }
         public string Name { get; }
@@ -40,6 +44,7 @@ namespace OnlyWar.Models.Soldiers
         /// Empty for a role with no authored menu at all.
         /// </summary>
         public IReadOnlyDictionary<string, IReadOnlyList<WeaponSet>> WeaponOptionsByGroup { get; }
+        public IReadOnlyDictionary<string, IReadOnlyList<EquipmentKitTemplate>> EquipmentKitOptionsByGroup { get; }
 
         public SoldierTemplate(int id, Species species, string name, byte rank, byte subrank,
                                bool isSquadLeader, byte specialistType,
@@ -48,7 +53,8 @@ namespace OnlyWar.Models.Soldiers
                                int battleValue = 0,
                                IReadOnlyList<SoldierTemplateRequirement> promotionRequirements = null,
                                float? meleeFraction = null,
-                               IReadOnlyDictionary<string, IReadOnlyList<WeaponSet>> weaponOptionsByGroup = null)
+                               IReadOnlyDictionary<string, IReadOnlyList<WeaponSet>> weaponOptionsByGroup = null,
+                               IReadOnlyDictionary<string, IReadOnlyList<EquipmentKitTemplate>> equipmentKitOptionsByGroup = null)
         {
             Id = id;
             Species = species;
@@ -64,6 +70,7 @@ namespace OnlyWar.Models.Soldiers
             MeleeFraction = Math.Clamp(meleeFraction ?? 0, 0, 1);
             PromotionRequirements = promotionRequirements ?? [];
             WeaponOptionsByGroup = weaponOptionsByGroup ?? EmptyWeaponOptions;
+            EquipmentKitOptionsByGroup = equipmentKitOptionsByGroup ?? EmptyEquipmentOptions;
         }
 
         /// <summary>The menu for one option group, or empty if this role authors none.</summary>
@@ -71,5 +78,11 @@ namespace OnlyWar.Models.Soldiers
             WeaponOptionsByGroup.TryGetValue(optionGroup, out IReadOnlyList<WeaponSet> options)
                 ? options
                 : EmptyMenu;
+
+        /// <summary>The itemized-kit menu for one contextual personal-equipment role.</summary>
+        public IReadOnlyList<EquipmentKitTemplate> GetEquipmentKitOptions(string optionGroup) =>
+            EquipmentKitOptionsByGroup.TryGetValue(optionGroup, out IReadOnlyList<EquipmentKitTemplate> options)
+                ? options
+                : EmptyEquipmentMenu;
     }
 }

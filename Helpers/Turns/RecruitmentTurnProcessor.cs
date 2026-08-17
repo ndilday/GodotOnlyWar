@@ -5,6 +5,7 @@ using OnlyWar.Helpers.Recruitment;
 using OnlyWar.Helpers.Simulation;
 using OnlyWar.Helpers.Battles.Aftermath;
 using OnlyWar.Models;
+using OnlyWar.Models.Events;
 using OnlyWar.Models.Planets;
 using OnlyWar.Models.Recruitment;
 using OnlyWar.Models.Soldiers;
@@ -197,14 +198,15 @@ namespace OnlyWar.Helpers.Turns
                 if (_session.Random.GetLinearDouble()
                     >= procedure.GeneticCompatibility)
                 {
-                    neophyte.AddEvent(new SoldierEvent(
-                        CopyDate(_session.CurrentDate),
-                        SoldierEventType.Death,
-                        $"{neophyte.Name} died during Black Carapace implantation."));
-                    neophyte.AddEvent(new SoldierEvent(
-                        CopyDate(_session.CurrentDate),
-                        SoldierEventType.GeneseedRecovery,
-                        "No mature progenoid gene-seed was recovered."));
+                    CampaignEvent deathEvent = force.RecordProceduralDeath(
+                        _session.CurrentDate,
+                        neophyte,
+                        $"{neophyte.Name} died during Black Carapace implantation.");
+                    force.RecordProceduralGeneseedRecovery(
+                        _session.CurrentDate,
+                        neophyte,
+                        deathEvent.Id,
+                        GeneseedRecoveryOutcome.Immature);
                     new PlayerBattleAftermathSink(force).MoveToFallenBrothers(neophyte);
                     program.ProgramEvents.Add(new RecruitmentProgramEvent
                     {

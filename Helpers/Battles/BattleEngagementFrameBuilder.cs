@@ -82,7 +82,7 @@ internal static class BattleEngagementFrameBuilder
         Dictionary<int, float> groups = [];
         foreach (BattleSoldier soldier in able)
         {
-            float bv = Math.Max(1, soldier.Soldier.Template.BattleValue);
+            float bv = Math.Max(1, soldier.EffectiveBattleValue);
             total += bv;
             bool usableRanged = soldier.FunctioningHands > 0
                 && soldier.RangedWeapons.Any(weapon => weapon.LoadedAmmo > 0)
@@ -329,7 +329,7 @@ internal static class BattleEngagementFrameBuilder
                 .OrderBy(member => member.Soldier.Id))
             {
                 opposingSoldiers.Add(soldier);
-                float bv = Math.Max(1, soldier.Soldier.Template.BattleValue);
+                float bv = Math.Max(1, soldier.EffectiveBattleValue);
                 battleValue += bv;
             }
         }
@@ -374,7 +374,7 @@ internal static class BattleEngagementFrameBuilder
             meleeRemovalRate,
             Math.Max(0.1f, closingSpeed),
             battleValue,
-            ourSoldiers.Sum(soldier => Math.Max(1, soldier.Soldier.Template.BattleValue)),
+            ourSoldiers.Sum(soldier => Math.Max(1, soldier.EffectiveBattleValue)),
             ourSoldiers.Count,
             saturationRange);
     }
@@ -674,7 +674,7 @@ internal static class BattleEngagementFrameBuilder
             {
                 continue;
             }
-            float bv = Math.Max(1, soldier.Soldier.Template.BattleValue);
+            float bv = Math.Max(1, soldier.EffectiveBattleValue);
             weighted += bv * soldier.EquippedRangedWeapons
                 .Where(weapon => weapon.LoadedAmmo > 0)
                 .Select(weapon => EffectiveMaximumRange(soldier, weapon))
@@ -704,7 +704,7 @@ internal static class BattleEngagementFrameBuilder
             armor += soldier.Armor?.Template.ArmorProvided ?? 0;
             constitution += soldier.Soldier.Constitution;
             evasion += soldier.Soldier.Template.Species.RangedEvasion;
-            battleValue += Math.Max(1, soldier.Soldier.Template.BattleValue);
+            battleValue += Math.Max(1, soldier.EffectiveBattleValue);
         }
         return new EngagementTargetProfile(
             size / soldiers.Count,

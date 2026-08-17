@@ -175,7 +175,7 @@ namespace OnlyWar.Helpers
             bool developed = SurgeryCapableWorlds.Contains(planet.Template.Name);
             bool imperialControlled = region.RegionFactionMap.Values.Any(rf =>
                 rf.IsPublic
-                && FactionDispositionService.IsImperial(rf.PlanetFaction.Faction));
+                && FactionRelationshipService.IsImperial(rf.PlanetFaction.Faction));
             return developed && imperialControlled;
         }
     }

@@ -15,11 +15,16 @@ namespace OnlyWar.Helpers.StrategicCombat
     {
         private readonly IRNG _rng;
         private readonly Action<PlanetFaction, Region, float> _recordIntelGain;
+        private readonly Action<IntelObservation> _recordTargetObservation;
 
-        public StrategicCombatResolver(IRNG rng = null, Action<PlanetFaction, Region, float> recordIntelGain = null)
+        public StrategicCombatResolver(
+            IRNG rng = null,
+            Action<PlanetFaction, Region, float> recordIntelGain = null,
+            Action<IntelObservation> recordTargetObservation = null)
         {
             _rng = rng ?? StaticRNG.Instance;
             _recordIntelGain = recordIntelGain;
+            _recordTargetObservation = recordTargetObservation;
         }
 
         public StrategicCombatResult Resolve(StrategicCombatMission mission)
@@ -38,8 +43,8 @@ namespace OnlyWar.Helpers.StrategicCombat
             // against a blind PDF. It fades as the defender builds awareness (listening posts, patrols,
             // recon). Applied to the attacker's effective strength so it shifts both the win check and
             // the casualty exchange.
-            double attackerIntel = target.Region.GetFactionRegionIntel(attacker);
-            double defenderIntel = target.GetOwnRegionIntel();
+            double attackerIntel = target.Region.GetFactionRegionAwareness(attacker);
+            double defenderIntel = target.GetOwnRegionAwareness();
             double surprise = StrategicCombatRules.AmbushSurpriseMultiplier(attackerIntel, defenderIntel);
 
             double attackerEffective = CalculateAttackerEffectiveStrength(mission) * surprise;
@@ -109,12 +114,14 @@ namespace OnlyWar.Helpers.StrategicCombat
                         }
                         else
                         {
-                            target.PlanetFaction.AddRegionIntel(
+                            target.PlanetFaction.AddRegionAwareness(
                                 stagingRegion, StrategicCombatRules.IntelGainedFromBeingAttacked);
                         }
                     }
                 }
             }
+
+            RecordBattleContact(mission, target, defenders, defenderBattleValue, committed);
 
             return new StrategicCombatResult(
                 target,
@@ -129,6 +136,100 @@ namespace OnlyWar.Helpers.StrategicCombat
                 outcome,
                 attackerWon,
                 controlChanged);
+        }
+
+        private void RecordBattleContact(
+            StrategicCombatMission mission,
+            RegionFaction target,
+            IReadOnlyCollection<RegionFaction> defenders,
+            long defenderBattleValue,
+            long committedBattleValue)
+        {
+            if (_recordTargetObservation == null
+                || target?.Region?.Planet == null
+                || mission?.Attacker == null)
+            {
+                return;
+            }
+
+            Planet planet = target.Region.Planet;
+            List<(Faction Faction, PlanetFaction Presence, long? Population, long? Military)> participants =
+                new();
+
+            PlanetFaction attackerObserver = GetOrMaterializeObserver(planet, mission.Attacker);
+            participants.Add((
+                mission.Attacker,
+                attackerObserver,
+                null,
+                committedBattleValue > 0 ? committedBattleValue : null));
+
+            foreach (RegionFaction defender in defenders
+                .Where(defender => defender?.PlanetFaction?.Faction != null)
+                .OrderBy(defender => defender.PlanetFaction.Faction.Id))
+            {
+                Faction faction = defender.PlanetFaction.Faction;
+                if (participants.Any(participant => participant.Faction.Id == faction.Id)) continue;
+                participants.Add((
+                    faction,
+                    defender.PlanetFaction,
+                    Math.Max(0L, defender.Population),
+                    Math.Max(0L, CalculateDefenderBattleValue(defender))));
+            }
+
+            foreach ((Faction Faction, PlanetFaction Presence, long? Population, long? Military) observer in participants)
+            {
+                foreach ((Faction Faction, PlanetFaction Presence, long? Population, long? Military) subject in participants)
+                {
+                    if (observer.Faction.Id == subject.Faction.Id) continue;
+                    RecordLocatedObservation(
+                        observer.Presence,
+                        target.Region,
+                        subject.Faction,
+                        subject.Population,
+                        subject.Military);
+                }
+            }
+        }
+
+        private void RecordLocatedObservation(
+            PlanetFaction observer,
+            Region region,
+            Faction targetFaction,
+            long? estimatedPopulation,
+            long? estimatedMilitaryStrength)
+        {
+            if (observer == null || region == null || targetFaction == null
+                || observer.Faction.Id == targetFaction.Id)
+            {
+                return;
+            }
+
+            FactionIntelBelief previous = observer.GetTargetBelief(region, targetFaction);
+            float evidenceDelta = Math.Max(
+                0.25f,
+                FactionIntelligenceRules.LocatedThreshold - (previous?.Evidence ?? 0f));
+            _recordTargetObservation(new IntelObservation(
+                observer,
+                region,
+                targetFaction,
+                evidenceDelta,
+                estimatedPopulation,
+                estimatedMilitaryStrength,
+                IntelObservationSource.BattleContact,
+                0));
+        }
+
+        private static PlanetFaction GetOrMaterializeObserver(Planet planet, Faction faction)
+        {
+            if (planet.PlanetFactionMap.TryGetValue(faction.Id, out PlanetFaction existing))
+            {
+                return existing;
+            }
+
+            PlanetFaction materialized = new(faction) { IsPublic = faction.IsPlayerFaction };
+            planet.PlanetFactionMap[faction.Id] = materialized;
+            planet.NotifyPlanetFactionAdded(materialized);
+            return materialized;
         }
 
         public static long CalculateDefenderBattleValue(RegionFaction defender)
@@ -166,8 +267,8 @@ namespace OnlyWar.Helpers.StrategicCombat
                 return fullDefenderBattleValue;
             }
 
-            double attackerIntel = target.Region.GetFactionRegionIntel(mission.Attacker);
-            double defenderIntel = target.GetOwnRegionIntel();
+            double attackerIntel = target.Region.GetFactionRegionAwareness(mission.Attacker);
+            double defenderIntel = target.GetOwnRegionAwareness();
             double intelEdge = Math.Clamp(attackerIntel - defenderIntel, -2.0, 4.0);
             double exposedShare = Math.Clamp(0.40 + intelEdge * 0.08, 0.25, 0.75);
             long exposedDefenders = (long)Math.Round(fullDefenderBattleValue * exposedShare);
@@ -182,7 +283,7 @@ namespace OnlyWar.Helpers.StrategicCombat
             List<RegionFaction> defenders = [target];
             defenders.AddRange(target.Region.RegionFactionMap.Values.Where(candidate =>
                 candidate != target
-                && FactionDispositionService.DefendsHostAgainst(candidate, attacker)));
+                && FactionRelationshipService.DefendsHostAgainst(candidate, attacker)));
             return defenders;
         }
 
@@ -274,7 +375,7 @@ namespace OnlyWar.Helpers.StrategicCombat
         private static void HideBrokenCivilianDefender(RegionFaction defender)
         {
             if (defender?.PlanetFaction?.Faction == null) return;
-            if (defender.PlanetFaction.Faction.PopulationIsMilitary) return;
+            if (defender.PlanetFaction.Faction.HasBehavior(FactionBehavior.PopulationIsMilitary)) return;
             if (defender.MilitaryStrength > 0) return;
             if (defender.Population <= 0) return;
             defender.IsPublic = false;

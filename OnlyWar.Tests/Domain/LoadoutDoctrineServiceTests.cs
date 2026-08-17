@@ -63,7 +63,7 @@ public class LoadoutDoctrineServiceTests
         WeaponSet standard = new(700, "Standard set");
         SquadTemplate template = new(501, "Tactical Squad", standard, [], null, [], SquadTypes.None);
         Faction faction = new(
-            11, "Player", Color.Black, true, false, false, GrowthType.None,
+            11, "Player", Color.Black, true, false, FactionBehavior.None, GrowthType.None,
             null, null, new Dictionary<int, SquadTemplate> { [template.Id] = template },
             null, null, null, null);
         Squad squad = new(601, "Alpha", null, template);

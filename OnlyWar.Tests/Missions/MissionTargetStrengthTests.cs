@@ -1,4 +1,4 @@
-﻿using System.Collections.Generic;
+using System.Collections.Generic;
 using System.Drawing;
 using System.Linq;
 using OnlyWar.Helpers;
@@ -325,7 +325,7 @@ public class MissionTargetStrengthTests
         {
             Population = hordePopulation
         };
-        hordePlanetFaction.SetRegionIntel(region, defenderIntel);
+        hordePlanetFaction.SetRegionAwareness(region, defenderIntel);
         region.RegionFactionMap[horde.Id] = target;
         if (defenderPatrollers > 0)
         {
@@ -374,8 +374,8 @@ public class MissionTargetStrengthTests
     private static MissionExecutionContext CreateExecution(MissionContext context) =>
         TestExecutionContextFactory.CreateMission(context, new FixedRNG());
 
-    // A non-player, non-default faction defaults to PopulationIsMilitary, so MilitaryStrength is its
-    // Population and its Garrison stays zero.
+    // This fixture represents a horde explicitly. Production rules no longer infer behavior from
+    // player/default identity, so the test must declare the authored PopulationIsMilitary flag.
     private static Faction CreateFaction(int id, string name)
     {
         return new Faction(
@@ -384,7 +384,7 @@ public class MissionTargetStrengthTests
             Color.Red,
             isPlayerFaction: false,
             isDefaultFaction: false,
-            canInfiltrate: false,
+            behavior: FactionBehavior.PopulationIsMilitary,
             GrowthType.Conversion,
             new Dictionary<int, Species>(),
             new Dictionary<int, SoldierTemplate>(),

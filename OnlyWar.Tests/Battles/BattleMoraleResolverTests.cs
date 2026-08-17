@@ -282,7 +282,7 @@ public class BattleMoraleResolverTests
             Color.Red,
             isPlayerFaction: false,
             isDefaultFaction: false,
-            canInfiltrate: false,
+            behavior: FactionBehavior.None,
             GrowthType.None,
             new Dictionary<int, Species> { [template.Species.Id] = template.Species },
             new Dictionary<int, SoldierTemplate> { [template.Id] = template },

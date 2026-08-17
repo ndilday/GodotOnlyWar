@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using OnlyWar.Models.Events;
 using OnlyWar.Models.Squads;
 
 namespace OnlyWar.Models.Soldiers
@@ -17,6 +18,7 @@ namespace OnlyWar.Models.Soldiers
         private readonly Dictionary<int, ushort> _meleeWeaponCasualtyCountMap;
         private readonly Dictionary<int, ushort> _factionCasualtyCountMap;
         private Squad _assignedSquad;
+        private CampaignEventRecorder _campaignEventRecorder;
 
         public Date ProgenoidImplantDate { get; set; }
         // Null identifies a founding-era brother whose implantation decisions were
@@ -245,7 +247,24 @@ namespace OnlyWar.Models.Soldiers
 
         public void AddEvent(SoldierEvent soldierEvent)
         {
+            if (soldierEvent == null) throw new ArgumentNullException(nameof(soldierEvent));
+            if (soldierEvent.CampaignEventId == 0 && _campaignEventRecorder != null)
+            {
+                _campaignEventRecorder.RecordLegacySoldierEvent(this, soldierEvent);
+                return;
+            }
             _soldierEvents.Add(soldierEvent);
+        }
+
+        internal void AttachCampaignEventRecorder(CampaignEventRecorder recorder)
+        {
+            _campaignEventRecorder = recorder;
+        }
+
+        internal void ReplaceEvents(IEnumerable<SoldierEvent> events)
+        {
+            _soldierEvents.Clear();
+            _soldierEvents.AddRange(events ?? Enumerable.Empty<SoldierEvent>());
         }
 
         public void AddEvaluation(SoldierEvaluation evaluation)

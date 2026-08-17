@@ -202,6 +202,11 @@ public class ShootActionFriendlyFireTests
         {
             ShootAction action = CreateAction(shooter, target, grid, new SeededRNG(seed));
             action.Execute(state);
+            // Resolution is intentionally ammunition-consuming now. The loop is a deterministic
+            // probe over many candidate rolls, so restore the fixture's magazine between probes.
+            shooter.RangedWeapons[0].LoadedAmmo = shooter.RangedWeapons[0].Template.AmmoCapacity;
+            state.GetSoldier(shooter.Soldier.Id).RangedWeapons[0].LoadedAmmo =
+                state.GetSoldier(shooter.Soldier.Id).RangedWeapons[0].Template.AmmoCapacity;
             if (action.StrayTargetId.HasValue)
             {
                 matchingSeed = seed;

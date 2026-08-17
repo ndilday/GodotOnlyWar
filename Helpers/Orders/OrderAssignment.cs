@@ -316,7 +316,7 @@ namespace OnlyWar.Helpers.Orders
                         // turn it into a Move by silently targeting the player's own presence.
                         if (enemyRegionFaction == null
                             || !enemyRegionFaction.IsPublic
-                            || FactionDispositionService.IsImperial(
+                            || FactionRelationshipService.IsImperial(
                                 enemyRegionFaction.PlanetFaction.Faction))
                         {
                             return null;
@@ -374,7 +374,7 @@ namespace OnlyWar.Helpers.Orders
         private static RegionFaction GetEnemyRegionFaction(Region region)
         {
             return region.RegionFactionMap.Values.FirstOrDefault(rf =>
-                !FactionDispositionService.IsImperial(rf.PlanetFaction.Faction));
+                !FactionRelationshipService.IsImperial(rf.PlanetFaction.Faction));
         }
 
         // Looks up the enemy RegionFaction the player picked in the Target Faction dropdown by

@@ -193,6 +193,22 @@ public class HandGroupTests
         Assert.Equal(replacement, Assert.Single(battleSoldier.EquippedRangedWeapons));
     }
 
+    [Fact]
+    public void AddWeapons_UsesLowestInitialReadyOrderAsHighestPriority()
+    {
+        Soldier soldier = TestModelFactory.CreateSoldier();
+        BattleSoldier battleSoldier = new(soldier, null);
+        RangedWeapon rifle = new(
+            TestModelFactory.DefaultWeapons.PrimaryRangedWeapon,
+            initialReadyOrder: 1);
+        RangedWeapon pistol = new(CreatePistol(), initialReadyOrder: 0);
+
+        battleSoldier.AddWeapons([rifle, pistol], []);
+
+        Assert.Equal(pistol, Assert.Single(battleSoldier.EquippedRangedWeapons));
+        Assert.Empty(battleSoldier.GetHandGroupIds(rifle));
+    }
+
     private static HitLocation Find(Soldier soldier, string name)
     {
         return soldier.Body.HitLocations.Single(location => location.Template.Name == name);

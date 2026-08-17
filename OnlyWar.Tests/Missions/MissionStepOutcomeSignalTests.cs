@@ -240,7 +240,7 @@ public class MissionStepOutcomeSignalTests
     private static RegionFaction CreateRegionFaction()
     {
         Faction faction = new(1, "Enemy", Color.Red, isPlayerFaction: false, isDefaultFaction: false,
-            canInfiltrate: false, GrowthType.None,
+            behavior: FactionBehavior.None, GrowthType.None,
             new Dictionary<int, Species>(), new Dictionary<int, SoldierTemplate>(),
             new Dictionary<int, SquadTemplate>(), new Dictionary<int, OnlyWar.Models.Units.UnitTemplate>(),
             new Dictionary<int, OnlyWar.Models.Fleets.BoatTemplate>(),

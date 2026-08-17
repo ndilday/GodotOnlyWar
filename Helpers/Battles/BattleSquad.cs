@@ -28,6 +28,13 @@ namespace OnlyWar.Helpers.Battles
         private float _averageConstitution;
         private float _squadMove;
         private readonly int _missionStartingAbleSoldierCount;
+        // Physical weapon objects are the sole mutable equipment state for the lifetime of this
+        // mission squad. Itemized weapons share AmmunitionReservePool instances; legacy WeaponSet
+        // weapons retain weapon-local reserves until the pooled doctrine UI is migrated.
+        private readonly List<RangedWeapon> _missionRangedWeapons = [];
+        private readonly List<MeleeWeapon> _missionMeleeWeapons = [];
+        private readonly Dictionary<(int TemplateId, bool Itemized), int> _rangedAllocationCursor = [];
+        private readonly Dictionary<(int TemplateId, bool Itemized), int> _meleeAllocationCursor = [];
 
         public int Id { get; private set; }
         public string Name { get; private set; }
@@ -51,7 +58,6 @@ namespace OnlyWar.Helpers.Battles
         public int? LastProtectedSquadId { get; set; }
 
         public Squad Squad { get; }
-
         public List<BattleSoldier> AbleSoldiers
         {
             get
@@ -196,14 +202,75 @@ namespace OnlyWar.Helpers.Battles
             LastScreenThreatSquadId = original.LastScreenThreatSquadId;
             LastProtectedSquadId = original.LastProtectedSquadId;
             _missionStartingAbleSoldierCount = original._missionStartingAbleSoldierCount;
+            Dictionary<AmmunitionReservePool, AmmunitionReservePool> reservePoolCopies = [];
+            Dictionary<RangedWeapon, RangedWeapon> rangedWeaponCopies = original._missionRangedWeapons
+                .ToDictionary(
+                    weapon => weapon,
+                    weapon => weapon.DeepCopy(CopyReservePool(weapon.ReservePool, reservePoolCopies)));
+            Dictionary<MeleeWeapon, MeleeWeapon> meleeWeaponCopies = original._missionMeleeWeapons
+                .ToDictionary(
+                    weapon => weapon,
+                    weapon => new MeleeWeapon(
+                        weapon.Template,
+                        weapon.InitialReadyOrder,
+                        weapon.IsItemized));
+            foreach (BattleSoldier soldier in original.Soldiers)
+            {
+                foreach (RangedWeapon weapon in soldier.RangedWeapons
+                             .Where(weapon => !rangedWeaponCopies.ContainsKey(weapon)))
+                {
+                    rangedWeaponCopies[weapon] = weapon.DeepCopy(
+                        CopyReservePool(weapon.ReservePool, reservePoolCopies));
+                }
+                foreach (MeleeWeapon weapon in soldier.MeleeWeapons
+                             .Where(weapon => !meleeWeaponCopies.ContainsKey(weapon)))
+                {
+                    meleeWeaponCopies[weapon] = new MeleeWeapon(
+                        weapon.Template,
+                        weapon.InitialReadyOrder,
+                        weapon.IsItemized);
+                }
+            }
+            _missionRangedWeapons.AddRange(rangedWeaponCopies.Values);
+            _missionMeleeWeapons.AddRange(meleeWeaponCopies.Values);
             // because of the circular reference, the clone function won't work,
             // so I made a custom BattleSoldier constructor that does basically the same thing
-            Soldiers = original.Soldiers.Select(s => new BattleSoldier(s, this)).ToList();
+            Soldiers = original.Soldiers
+                .Select(s => new BattleSoldier(s, this, rangedWeaponCopies, meleeWeaponCopies))
+                .ToList();
+        }
+
+        private static AmmunitionReservePool CopyReservePool(
+            AmmunitionReservePool source,
+            IDictionary<AmmunitionReservePool, AmmunitionReservePool> copies)
+        {
+            if (source == null) return null;
+            if (!copies.TryGetValue(source, out AmmunitionReservePool copy))
+            {
+                copy = source.DeepCopy();
+                copies[source] = copy;
+            }
+            return copy;
         }
 
         public object Clone()
         {
             return new BattleSquad(this);
+        }
+
+        /// <summary>
+        /// Commits the live weapon state from a battle snapshot back to the mission-owned squad.
+        /// Battle history snapshots own deep copies, while the mission pool remains the physical
+        /// source used by the next battle in the same mission.
+        /// </summary>
+        internal void CommitEquipmentStateFrom(BattleSquad snapshot)
+        {
+            if (snapshot == null) return;
+            int count = Math.Min(_missionRangedWeapons.Count, snapshot._missionRangedWeapons.Count);
+            for (int index = 0; index < count; index++)
+            {
+                _missionRangedWeapons[index].CopyLiveStateFrom(snapshot._missionRangedWeapons[index]);
+            }
         }
 
         public Coordinate GetSquadBoxSize()
@@ -364,6 +431,8 @@ namespace OnlyWar.Helpers.Battles
         /// </remarks>
         internal void ReallocateEquipment()
         {
+            _rangedAllocationCursor.Clear();
+            _meleeAllocationCursor.Clear();
             foreach (BattleSoldier soldier in Soldiers)
             {
                 soldier.ClearWeapons();
@@ -373,6 +442,8 @@ namespace OnlyWar.Helpers.Battles
 
         private void AllocateEquipment()
         {
+            _rangedAllocationCursor.Clear();
+            _meleeAllocationCursor.Clear();
             List<BattleSoldier> tempSquad = new List<BattleSoldier>(AbleSoldiers);
             // A squad with no able soldiers (every member wiped or fully incapacitated by prior
             // combat) has nothing to equip. Callers should avoid deploying such a squad — see
@@ -402,15 +473,19 @@ namespace OnlyWar.Helpers.Battles
                 if (ws.PrimaryRangedWeapon != null)
                 {
                     BattleSoldier bestShooter = tempSquad.OrderByDescending(s => s.Soldier.GetTotalSkillValue(ws.PrimaryRangedWeapon.RelatedSkill)).First();
-                    bestShooter.AddWeapons(ws.GetRangedWeapons(), ws.GetMeleeWeapons());
+                    (List<RangedWeapon> ranged, List<MeleeWeapon> melee) = GetMissionWeapons(ws);
+                    bestShooter.AddWeapons(ranged, melee);
                     bestShooter.Armor = new Armor(Squad.SquadTemplate.Armor);
+                    MarkEquipmentValueSource(bestShooter);
                     tempSquad.Remove(bestShooter);
                 }
                 else
                 {
                     BattleSoldier bestHitter = tempSquad.OrderByDescending(s => s.Soldier.GetTotalSkillValue(ws.PrimaryMeleeWeapon.RelatedSkill)).First();
-                    bestHitter.AddWeapons(ws.GetRangedWeapons(), ws.GetMeleeWeapons());
+                    (List<RangedWeapon> ranged, List<MeleeWeapon> melee) = GetMissionWeapons(ws);
+                    bestHitter.AddWeapons(ranged, melee);
                     bestHitter.Armor = new Armor(Squad.SquadTemplate.Armor);
+                    MarkEquipmentValueSource(bestHitter);
                     tempSquad.Remove(bestHitter);
                 }
             }
@@ -419,11 +494,23 @@ namespace OnlyWar.Helpers.Battles
                 foreach(BattleSoldier soldier in tempSquad)
                 {
                     WeaponSet defaultWeapons = ResolveElementDefaultWeapons(soldier.Soldier);
-                    soldier.AddWeapons(defaultWeapons.GetRangedWeapons(), defaultWeapons.GetMeleeWeapons());
+                    (List<RangedWeapon> ranged, List<MeleeWeapon> melee) = GetMissionWeapons(defaultWeapons);
+                    soldier.AddWeapons(ranged, melee);
                     // TODO: personalize armor and weapons
                     soldier.Armor = new Armor(Squad.SquadTemplate.Armor);
+                    MarkEquipmentValueSource(soldier);
                 }
             }
+        }
+
+        private static void MarkEquipmentValueSource(BattleSoldier soldier)
+        {
+            // A live campaign has a sector and therefore uses the itemized rules catalog for
+            // tactical attribution even when a pooled carrier is still on the compatibility menu.
+            // Isolated battle fixtures often load rules without a sector; keep those legacy
+            // WeaponSet battles intrinsic so their zero-value withdrawal premises remain valid.
+            soldier.UsesItemizedEquipment = GameDataSingleton.Instance?.IsInitialized == true
+                && GameDataSingleton.Instance.GameRulesData?.EquipmentCatalog != null;
         }
 
         // The soldier's own slot default, falling back to the squad template's default
@@ -448,15 +535,271 @@ namespace OnlyWar.Helpers.Battles
             for (int i = tempSquad.Count - 1; i >= 0; i--)
             {
                 BattleSoldier battleSoldier = tempSquad[i];
+                if (TryGetItemizedEquipment(
+                        battleSoldier,
+                        out List<RangedWeapon> itemizedRanged,
+                        out List<MeleeWeapon> itemizedMelee,
+                        out Armor itemizedArmor))
+                {
+                    battleSoldier.AddWeapons(itemizedRanged, itemizedMelee);
+                    battleSoldier.Armor = itemizedArmor;
+                    tempSquad.RemoveAt(i);
+                    continue;
+                }
                 WeaponSet weaponSet = CharacterLoadoutService.GetEffectiveWeaponSet(battleSoldier.Soldier);
                 if (weaponSet == null)
                 {
                     continue;
                 }
-                battleSoldier.AddWeapons(weaponSet.GetRangedWeapons(), weaponSet.GetMeleeWeapons());
+                (List<RangedWeapon> ranged, List<MeleeWeapon> melee) = GetMissionWeapons(weaponSet);
+                battleSoldier.AddWeapons(ranged, melee);
                 battleSoldier.Armor = new Armor(Squad.SquadTemplate.Armor);
                 tempSquad.RemoveAt(i);
             }
+        }
+
+        private bool TryGetItemizedEquipment(
+            BattleSoldier battleSoldier,
+            out List<RangedWeapon> rangedWeapons,
+            out List<MeleeWeapon> meleeWeapons,
+            out Armor armor)
+        {
+            rangedWeapons = [];
+            meleeWeapons = [];
+            armor = null;
+            GameDataSingleton game = GameDataSingleton.Instance;
+            EquipmentRulesCatalog catalog = game.IsInitialized
+                ? game.GameRulesData?.EquipmentCatalog
+                : null;
+            SquadTemplateElement element = Squad.SquadTemplate?.Elements
+                .FirstOrDefault(candidate => candidate.SoldierTemplate == battleSoldier.Soldier.Template);
+            if (catalog == null || element?.PersonalEquipmentRole == null)
+            {
+                return false;
+            }
+
+            EquipmentLoadoutDoctrine doctrine = game.Sector?.PlayerForce?.Army?.EquipmentLoadoutDoctrine;
+            EquipmentKitTemplate authoredRoleKit = catalog.EquipmentKits.GetValueOrDefault(
+                element.PersonalEquipmentRole.DefaultKitId);
+            EquipmentKitTemplate elementFallbackKit = element.DefaultWeapons == null
+                ? null
+                : catalog.EquipmentKits.GetValueOrDefault(
+                    EquipmentRulesCatalog.GetKitId(element.DefaultWeapons.Id));
+            EquipmentKitTemplate squadFallbackKit = Squad.SquadTemplate.DefaultWeapons == null
+                ? null
+                : catalog.EquipmentKits.GetValueOrDefault(
+                    EquipmentRulesCatalog.GetKitId(Squad.SquadTemplate.DefaultWeapons.Id));
+            EquipmentValidationContext validationContext = new()
+            {
+                FactionId = Squad.Faction?.Id,
+                SpeciesId = battleSoldier.Soldier.Template.Species?.Id,
+                SoldierTemplateId = battleSoldier.Soldier.Template.Id,
+                PersonalEquipmentRole = element.PersonalEquipmentRole,
+                Strength = battleSoldier.Soldier.Strength,
+                BaseCapacity = battleSoldier.Soldier.Template.Species?.BaseCapacity ?? 16f,
+                HandGroups = Math.Max(1, battleSoldier.FunctioningHands)
+            };
+            ResolvedEquipmentLoadout resolved = EquipmentLoadoutService.Resolve(
+                battleSoldier.Soldier.Id,
+                element,
+                doctrine,
+                authoredRoleKit,
+                elementFallbackKit,
+                squadFallbackKit,
+                validationContext);
+            if (resolved.Loadout == null || resolved.ValidationIssues.Count > 0)
+            {
+                return false;
+            }
+            battleSoldier.UsesItemizedEquipment = true;
+
+            Dictionary<int, int> reserveByAmmunitionType = [];
+            foreach (EquipmentLoadoutEntry entry in resolved.Loadout.Items)
+            {
+                if (entry.Equipment.AmmunitionProfile == null)
+                {
+                    continue;
+                }
+                int ammunitionId = entry.Equipment.AmmunitionProfile.AmmunitionType.Id;
+                reserveByAmmunitionType[ammunitionId] =
+                    reserveByAmmunitionType.GetValueOrDefault(ammunitionId)
+                    + entry.Quantity * entry.Equipment.AmmunitionProfile.RoundsPerPackage;
+            }
+            AmmunitionReservePool reservePool = new(reserveByAmmunitionType);
+
+            foreach (EquipmentLoadoutEntry entry in resolved.Loadout.Items)
+            {
+                EquipmentTemplate equipment = entry.Equipment;
+                if (equipment.RangedProfile != null)
+                {
+                    if (equipment.RangedProfile.AmmunitionBehavior == AmmunitionBehavior.ConsumableItem)
+                    {
+                        RangedWeapon weapon = AcquireMissionRangedWeapon(
+                            ToLegacyRangedTemplate(equipment),
+                            reservePool,
+                            entry.InitialReadyOrder);
+                        weapon.ConsumableQuantity = entry.Quantity;
+                        rangedWeapons.Add(weapon);
+                    }
+                    else
+                    {
+                        for (int index = 0; index < entry.Quantity; index++)
+                        {
+                            rangedWeapons.Add(AcquireMissionRangedWeapon(
+                                ToLegacyRangedTemplate(equipment),
+                                reservePool,
+                                index == 0 ? entry.InitialReadyOrder : null));
+                        }
+                    }
+                }
+                else if (equipment.MeleeProfile != null)
+                {
+                    for (int index = 0; index < entry.Quantity; index++)
+                    {
+                        meleeWeapons.Add(AcquireMissionMeleeWeapon(
+                            ToLegacyMeleeTemplate(equipment),
+                            itemized: true,
+                            index == 0 ? entry.InitialReadyOrder : null));
+                    }
+                }
+            }
+
+            if (resolved.Loadout.Armor?.ArmorProfile != null)
+            {
+                ArmorProfile profile = resolved.Loadout.Armor.ArmorProfile;
+                armor = new Armor(new ArmorTemplate(
+                    resolved.Loadout.Armor.Id,
+                    resolved.Loadout.Armor.Name,
+                    profile.ArmorProvided,
+                    profile.StealthModifier,
+                    profile.CapacityModifier));
+            }
+            return true;
+        }
+
+        private static RangedWeaponTemplate ToLegacyRangedTemplate(EquipmentTemplate equipment)
+        {
+            RangedWeaponProfile profile = equipment.RangedProfile;
+            return new RangedWeaponTemplate(
+                equipment.Id,
+                equipment.Name,
+                profile.Location,
+                profile.RelatedSkill,
+                profile.Accuracy,
+                profile.ArmorMultiplier,
+                profile.WoundMultiplier,
+                profile.RequiredStrength,
+                profile.DamageMultiplier,
+                profile.MaximumRange,
+                profile.RateOfFire,
+                profile.LoadedCapacity,
+                profile.Recoil,
+                profile.Bulk,
+                profile.DoesDamageDegradeWithRange,
+                profile.ReloadDuration,
+                profile.TemplateType,
+                profile.AreaRadius,
+                profile.AmmunitionType,
+                profile.AmmunitionBehavior,
+                profile.ConsumptionRule,
+                profile.ReloadAmount,
+                profile.RecoveryDuration,
+                profile.RecoveryAmount);
+        }
+
+        private static MeleeWeaponTemplate ToLegacyMeleeTemplate(EquipmentTemplate equipment)
+        {
+            MeleeWeaponProfile profile = equipment.MeleeProfile;
+            return new MeleeWeaponTemplate(
+                equipment.Id,
+                equipment.Name,
+                profile.Location,
+                profile.RelatedSkill,
+                profile.Accuracy,
+                profile.ArmorMultiplier,
+                profile.WoundMultiplier,
+                profile.RequiredStrength,
+                profile.StrengthMultiplier,
+                profile.ParryModifier,
+                profile.AttackSpeedMultiplier);
+        }
+
+        private (List<RangedWeapon> Ranged, List<MeleeWeapon> Melee) GetMissionWeapons(WeaponSet weaponSet)
+        {
+            List<RangedWeapon> ranged = [];
+            List<MeleeWeapon> melee = [];
+            if (weaponSet == null)
+            {
+                return (ranged, melee);
+            }
+
+            foreach (RangedWeapon requested in weaponSet.GetRangedWeapons() ?? Array.Empty<RangedWeapon>())
+            {
+                ranged.Add(AcquireMissionRangedWeapon(requested.Template));
+            }
+            foreach (MeleeWeapon requested in weaponSet.GetMeleeWeapons() ?? Array.Empty<MeleeWeapon>())
+            {
+                melee.Add(AcquireMissionMeleeWeapon(requested.Template));
+            }
+            return (ranged, melee);
+        }
+
+        private RangedWeapon AcquireMissionRangedWeapon(
+            RangedWeaponTemplate template,
+            AmmunitionReservePool reservePool = null,
+            int? initialReadyOrder = null)
+        {
+            bool itemized = reservePool != null;
+            (int TemplateId, bool Itemized) key = (template.Id, itemized);
+            int cursor = _rangedAllocationCursor.GetValueOrDefault(key);
+            List<RangedWeapon> matching = _missionRangedWeapons
+                .Where(weapon => weapon.Template.Id == template.Id
+                    && (weapon.ReservePool != null) == itemized)
+                .ToList();
+            RangedWeapon weapon;
+            if (cursor < matching.Count)
+            {
+                weapon = matching[cursor];
+            }
+            else
+            {
+                weapon = new RangedWeapon(template, reservePool, initialReadyOrder);
+                if (!itemized && template.AmmunitionType != null)
+                {
+                    // The legacy WeaponSet bridge has no explicit package rows. Its authored
+                    // kit carries one standard package for each magazine, which is enough for
+                    // one tactical reload while the itemized allocator is adopted by squads.
+                    weapon.ReserveAmmo = template.AmmoCapacity;
+                }
+                _missionRangedWeapons.Add(weapon);
+            }
+            _rangedAllocationCursor[key] = cursor + 1;
+            return weapon;
+        }
+
+        private MeleeWeapon AcquireMissionMeleeWeapon(
+            MeleeWeaponTemplate template,
+            bool itemized = false,
+            int? initialReadyOrder = null)
+        {
+            (int TemplateId, bool Itemized) key = (template.Id, itemized);
+            int cursor = _meleeAllocationCursor.GetValueOrDefault(key);
+            List<MeleeWeapon> matching = _missionMeleeWeapons
+                .Where(weapon => weapon.Template.Id == template.Id
+                    && weapon.IsItemized == itemized)
+                .ToList();
+            MeleeWeapon weapon;
+            if (cursor < matching.Count)
+            {
+                weapon = matching[cursor];
+            }
+            else
+            {
+                weapon = new MeleeWeapon(template, initialReadyOrder, itemized);
+                _missionMeleeWeapons.Add(weapon);
+            }
+            _meleeAllocationCursor[key] = cursor + 1;
+            return weapon;
         }
 
         private void EnsureStatistics()

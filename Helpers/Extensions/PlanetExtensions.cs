@@ -1,4 +1,4 @@
-﻿using OnlyWar.Models;
+using OnlyWar.Models;
 using OnlyWar.Models.Planets;
 using System;
 using System.Collections.Generic;
@@ -13,14 +13,14 @@ namespace OnlyWar.Helpers.Extensions
             // see what factions are represented in orbit
             if (planet == null) return false;
             var fleetFactions = planet.OrbitingTaskForceList.Select(tf => tf.Faction).Distinct();
-            bool playerFleets = fleetFactions.Any(FactionDispositionService.IsImperial);
-            bool enemyFleets = fleetFactions.Any(f => !FactionDispositionService.IsImperial(f));
+            bool playerFleets = fleetFactions.Any(FactionRelationshipService.IsImperial);
+            bool enemyFleets = fleetFactions.Any(f => !FactionRelationshipService.IsImperial(f));
             // if both friendly and enemy fleets present, it's an assault
             if(playerFleets && enemyFleets) return true;
             foreach (Region region in planet.Regions)
             {
-                bool containsPublicEnemy = region.RegionFactionMap.Values.Any(rf => rf.IsPublic && !FactionDispositionService.IsImperial(rf.PlanetFaction.Faction));
-                bool containsPlayer = region.RegionFactionMap.Values.Any(rf => FactionDispositionService.IsImperial(rf.PlanetFaction.Faction));
+                bool containsPublicEnemy = region.RegionFactionMap.Values.Any(rf => rf.IsPublic && !FactionRelationshipService.IsImperial(rf.PlanetFaction.Faction));
+                bool containsPlayer = region.RegionFactionMap.Values.Any(rf => FactionRelationshipService.IsImperial(rf.PlanetFaction.Faction));
                 // if both friendly and enemy factions present, it's an assault
                 if (containsPublicEnemy && containsPlayer) return true;
                 // if the region has a public enemy and friendly fleets in orbit, it's an assault

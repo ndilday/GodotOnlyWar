@@ -198,7 +198,7 @@ public class MedicalProcedureServiceTests
     private static Faction BuildPlayerFaction()
     {
         return new Faction(
-            2, "Test Chapter", Color.Red, true, false, false, GrowthType.None,
+            2, "Test Chapter", Color.Red, true, false, FactionBehavior.None, GrowthType.None,
             new Dictionary<int, Species> { [TestModelFactory.HumanSpecies.Id] = TestModelFactory.HumanSpecies },
             new Dictionary<int, SoldierTemplate>(),
             new Dictionary<int, SquadTemplate>(),

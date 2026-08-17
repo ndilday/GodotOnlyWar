@@ -35,7 +35,9 @@ namespace OnlyWar.Models.Soldiers
         NearDeathRecovery = 105,
 
         // Recorded when a player-run non-battle mission finishes.
-        MissionOutcome = 106
+        MissionOutcome = 106,
+        SquadHeldAgainstOdds = 107,
+        BodyPartReplacement = 108
     }
 
     // A single, queryable entry in a soldier's history. Date, type, faction, weapon,
@@ -46,6 +48,10 @@ namespace OnlyWar.Models.Soldiers
         private readonly List<int> _relatedSoldierIds;
 
         public Date Date { get; }
+        // Canonical event id for format-8 Service Record projections. A value of zero is
+        // retained only for direct compatibility/test entries that have not yet crossed the
+        // campaign recorder boundary.
+        public long CampaignEventId { get; }
         public SoldierEventType Type { get; }
         // The human-readable body of the event, without any leading date stamp.
         public string Detail { get; }
@@ -58,11 +64,14 @@ namespace OnlyWar.Models.Soldiers
         public SoldierEvent(Date date, SoldierEventType type, string detail,
                             int? factionId = null, int? weaponTemplateId = null,
                             int? magnitude = null, string locationName = null,
-                            IEnumerable<int> relatedSoldierIds = null)
+                            IEnumerable<int> relatedSoldierIds = null,
+                            long campaignEventId = 0)
         {
             // Date is the mutable campaign clock. History entries must retain the date
             // on which they occurred rather than following that clock as turns advance.
             Date = CopyDate(date);
+            if (campaignEventId < 0) throw new System.ArgumentOutOfRangeException(nameof(campaignEventId));
+            CampaignEventId = campaignEventId;
             Type = type;
             Detail = detail;
             FactionId = factionId;

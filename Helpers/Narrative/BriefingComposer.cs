@@ -20,11 +20,12 @@ namespace OnlyWar.Helpers.Narrative
         public int TemplateSelector { get; init; }
     }
 
-    // Minimal token-substitution composer for the "Promised World" opening briefing
+    // Minimal token-substitution composer for the "Promised World" founding directive
     // (Design/Reference/OpeningScenario.md). This is an explicit placeholder for the eventual §4.19
     // narrative system: it fills one of a small set of hand-authored templates, chosen
     // deterministically from the tokens, so a run has flavor variety without authoring a full
-    // narrator. Output is BBCode (rendered by the briefing dialog's RichTextLabel).
+    // narrator. Output is BBCode (rendered by the Command Brief's RichTextLabel or the compact
+    // scenario notification dialog).
     public static class BriefingComposer
     {
         // Hand-authored templates. Each uses the same placeholder set so substitution leaves no

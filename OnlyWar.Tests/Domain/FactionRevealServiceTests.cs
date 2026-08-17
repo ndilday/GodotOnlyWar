@@ -60,7 +60,7 @@ public class FactionRevealServiceTests
     {
         var (region, _, unrest) = BuildRegion(GrowthType.Unrest, 10_000, 700, 2_000);
 
-        Assert.True(unrest.PlanetFaction.Faction.DefendsHostWhileHidden);
+        Assert.True(unrest.PlanetFaction.Faction.HasBehavior(FactionBehavior.DefendsHostWhileHidden));
         Assert.Equal(3_700, region.PlanetaryDefenseForces);
     }
 
@@ -69,7 +69,7 @@ public class FactionRevealServiceTests
     {
         var (region, _, hiddenXenos) = BuildRegion(GrowthType.Logistic, 10_000, 700);
 
-        Assert.False(hiddenXenos.PlanetFaction.Faction.DefendsHostWhileHidden);
+        Assert.False(hiddenXenos.PlanetFaction.Faction.HasBehavior(FactionBehavior.DefendsHostWhileHidden));
         Assert.Equal(3_000, region.PlanetaryDefenseForces);
     }
 
@@ -130,14 +130,23 @@ public class FactionRevealServiceTests
         return (region, imperial, hidden);
     }
 
-    private static Faction BuildFaction(int id, GrowthType growthType, bool isDefault) =>
-        new(
+    private static Faction BuildFaction(int id, GrowthType growthType, bool isDefault)
+    {
+        FactionBehavior behavior = growthType is GrowthType.Conversion or GrowthType.Unrest
+            ? FactionBehavior.DefendsHostWhileHidden
+            : FactionBehavior.None;
+        if (growthType == GrowthType.Unrest)
+        {
+            behavior |= FactionBehavior.OffersExternalEnemyTruce;
+        }
+
+        return new(
             id,
             growthType.ToString(),
             Color.Red,
             isPlayerFaction: false,
             isDefaultFaction: isDefault,
-            canInfiltrate: false,
+            behavior,
             growthType,
             new Dictionary<int, Species> { [TestModelFactory.HumanSpecies.Id] = TestModelFactory.HumanSpecies },
             new Dictionary<int, SoldierTemplate>(),
@@ -146,4 +155,5 @@ public class FactionRevealServiceTests
             new Dictionary<int, BoatTemplate>(),
             new Dictionary<int, ShipTemplate>(),
             new Dictionary<int, FleetTemplate>());
+    }
 }

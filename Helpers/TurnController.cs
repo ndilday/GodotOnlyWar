@@ -5,6 +5,7 @@ using OnlyWar.Models.Missions;
 using OnlyWar.Models.Orders;
 using OnlyWar.Models.Planets;
 using OnlyWar.Models.Soldiers;
+using OnlyWar.Models.Events;
 using System.Collections.Generic;
 using System.Linq;
 
@@ -23,7 +24,7 @@ namespace OnlyWar.Helpers
         private readonly ChapterSupplyTurnProcessor _chapterSupplyTurnProcessor;
         private readonly RecruitmentTurnProcessor _recruitmentTurnProcessor;
         private readonly GameSession _session;
-        private readonly TurnIntelLedger _intelLedger;
+        private readonly TurnIntelligenceLedger _intelLedger;
         private readonly TurnResolutionResult _lastResult;
 
         public TurnController() : this(CreateCurrentSession(), null)
@@ -44,7 +45,7 @@ namespace OnlyWar.Helpers
             _chapterUpkeepProcessor = new ChapterUpkeepProcessor(_session, trainingService);
             _fleetTurnProcessor = new FleetTurnProcessor(_chapterUpkeepProcessor);
             _lastResult = new TurnResolutionResult();
-            _intelLedger = new TurnIntelLedger();
+            _intelLedger = new TurnIntelligenceLedger();
             _planetTurnProcessor = new PlanetTurnProcessor(
                 _session,
                 _lastResult.SpecialMissions,
@@ -54,10 +55,12 @@ namespace OnlyWar.Helpers
             _missionTurnProcessor = new MissionTurnProcessor(
                 _session,
                 _planetTurnProcessor.RecordIntelGain,
-                ScenarioMetricsCollector.RecordScenarioPdfLost);
+                ScenarioMetricsCollector.RecordScenarioPdfLost,
+                _planetTurnProcessor.RecordTargetObservation);
             _missionAftermathProcessor = new MissionAftermathProcessor(
                 _planetTurnProcessor.RecordReconEvidence,
-                ScenarioMetricsCollector.RecordScenarioPdfLost);
+                ScenarioMetricsCollector.RecordScenarioPdfLost,
+                _planetTurnProcessor.RecordTargetObservation);
             _planetForwardSimulator = new PlanetForwardSimulator(
                 _session,
                 _orderPlanner,
@@ -82,6 +85,7 @@ namespace OnlyWar.Helpers
             _session.CurrentDate.IncrementWeek();
 
             _lastResult.Clear();
+            _session.Sector.PlayerForce?.CurrentTurnEvents.Clear();
             _planetTurnProcessor.ClearTurnIntelGains();
             _planetTurnProcessor.ClearOrganicPopulationGrowth();
             Faction defaultFaction = _session.Rules.DefaultFaction;
@@ -145,6 +149,13 @@ namespace OnlyWar.Helpers
             ScenarioMetricsCollector.LogScenarioRegionMetrics($"date={_session.CurrentDate}");
             ScenarioMetricsCollector.EndScenarioRegionMetrics();
             MissionAftermathProcessor.CleanupResolvedPlayerOrders(sector, playerOrdersThisTurn);
+            _lastResult.CampaignEvents.AddRange(_session.Sector.PlayerForce?.CurrentTurnEvents ?? []);
+            _lastResult.CampaignIdentity = _session.Sector.PlayerForce?.CampaignIdentity;
+            ChapterChronicleProjector.ReconcileRecent(
+                _session.Sector.PlayerForce?.CampaignEventLedger,
+                _session.Sector.PlayerForce?.ChapterChronicle,
+                _session.Sector.PlayerForce?.CurrentTurnEvents,
+                _session.Sector.PlayerForce?.CampaignIdentity);
             return _lastResult;
         }
 

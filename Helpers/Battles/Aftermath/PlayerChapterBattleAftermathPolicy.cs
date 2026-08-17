@@ -1,7 +1,10 @@
 using OnlyWar.Helpers.Battles.Resolutions;
 using OnlyWar.Models;
 using OnlyWar.Models.Battles;
+using OnlyWar.Models.Events;
 using OnlyWar.Models.Equippables;
+using OnlyWar.Models.Missions;
+using OnlyWar.Models.Orders;
 using OnlyWar.Models.Planets;
 using OnlyWar.Models.Soldiers;
 using System;
@@ -23,6 +26,7 @@ namespace OnlyWar.Helpers.Battles.Aftermath
         // log agreeing with who really died, and holds it to one entry however many mortal wounds
         // landed before the wound queue drained.
         private readonly Dictionary<int, WeaponTemplate> _mortalWoundWeapons = new();
+        private readonly Dictionary<int, WeaponTemplate> _incapacitatingWoundWeapons = new();
         // (inflicter, sufferer) pairs already credited to a player soldier's career this battle.
         // Hit locations resolve independently, so one WoundResolver pass can raise the fall hook
         // (a motive or hand location lost) and the death hook (a vital location crippled) for the
@@ -30,13 +34,16 @@ namespace OnlyWar.Helpers.Battles.Aftermath
         private readonly HashSet<(int InflicterId, int SuffererId)> _creditedTakedowns = new();
         // Dev-facing skill/attribute growth log: snapshot before the fight, diffed once it ends.
         private readonly SoldierProgressLog.ProgressSnapshot _progressBefore;
+        private readonly NarrativeEventRules _narrativeEventRules;
 
         public PlayerChapterBattleAftermathPolicy(
             BattleAftermathContext context,
-            BattleAftermathDependencies dependencies)
+            BattleAftermathDependencies dependencies,
+            NarrativeEventRules narrativeEventRules = null)
         {
             _context = context ?? throw new ArgumentNullException(nameof(context));
             _dependencies = dependencies ?? throw new ArgumentNullException(nameof(dependencies));
+            _narrativeEventRules = narrativeEventRules ?? NarrativeEventRules.Initial;
             foreach (BattleSoldier soldier in context.StartingPlayerSoldiers)
             {
                 RememberPlayerSnapshot(soldier);
@@ -53,6 +60,10 @@ namespace OnlyWar.Helpers.Battles.Aftermath
             if (wound.Suffererer.Soldier is not PlayerSoldier)
             {
                 CreditPlayerSoldierForKill(wound.Inflicter, wound.Suffererer, wound.Weapon);
+            }
+            else if (_context.AreOpposingSides(wound.Inflicter, wound.Suffererer))
+            {
+                _incapacitatingWoundWeapons.TryAdd(wound.Suffererer.Soldier.Id, wound.Weapon);
             }
         }
 
@@ -78,13 +89,14 @@ namespace OnlyWar.Helpers.Battles.Aftermath
         public void OnBattleCompleted(BattleState finalState)
         {
             RememberFinalPlayerSnapshots(finalState);
-            ProcessSoldierHistoryForBattle();
             ApplySoldierExperienceForBattle(finalState);
             SoldierProgressLog.LogDelta(
                 $"Battle XP [{_context.Region.Name}, {_context.Region.Planet.Name}]",
                 _context.StartingPlayerSoldiers.Select(soldier => soldier.Soldier),
                 _progressBefore);
             PlayerCasualtyDisposition disposition = ResolvePlayerCasualtyDispositions();
+            ProcessSoldierHistoryForBattle();
+            EmitBattleAchievements(disposition);
             LogBattleToChapterHistory(disposition);
         }
 
@@ -144,13 +156,26 @@ namespace OnlyWar.Helpers.Battles.Aftermath
                 }
 
                 PlayerSoldier playerSoldier = (PlayerSoldier)startingSoldier.Soldier;
-                playerSoldier.AddEvent(new SoldierEvent(
-                    _dependencies.Date,
-                    SoldierEventType.BattleParticipation,
-                    detail,
-                    factionId: opposingFaction?.Id,
-                    magnitude: soldier.EnemiesTakenDown > 0 ? soldier.EnemiesTakenDown : null,
-                    locationName: $"{_context.Region.Name}, {_context.Region.Planet.Name}"));
+                if (_dependencies.PlayerSink is IPlayerNarrativeEventSink narrativeSink)
+                {
+                    narrativeSink.RecordBattleParticipation(
+                        _dependencies.Date,
+                        playerSoldier,
+                        _context.GetPlayerEventContext(startingSoldier, PlayerHeldTheField()),
+                        opposingFaction,
+                        soldier.EnemiesTakenDown,
+                        (int)soldier.WoundsTaken);
+                }
+                else
+                {
+                    playerSoldier.AddEvent(new SoldierEvent(
+                        _dependencies.Date,
+                        SoldierEventType.BattleParticipation,
+                        detail,
+                        factionId: opposingFaction?.Id,
+                        magnitude: soldier.EnemiesTakenDown > 0 ? soldier.EnemiesTakenDown : null,
+                        locationName: $"{_context.Region.Name}, {_context.Region.Planet.Name}"));
+                }
             }
         }
 
@@ -252,8 +277,8 @@ namespace OnlyWar.Helpers.Battles.Aftermath
                             CasualtyStateEvaluator.HasSeveredVitalLocation(playerSoldier);
                         killedIds.Add(playerSoldier.Id);
                         dead.Add(playerSoldier);
-                        RecordDeath(playerSoldier, soldier, bodyRecovered);
-                        RecordGeneseedRecovery(playerSoldier, bodyRecovered);
+                        CampaignEvent deathEvent = RecordDeath(playerSoldier, soldier, bodyRecovered);
+                        RecordGeneseedRecovery(playerSoldier, bodyRecovered, deathEvent);
                         _dependencies.PlayerSink.MoveToFallenBrothers(playerSoldier);
                         break;
                     case CasualtyState.Incapacitated:
@@ -274,7 +299,7 @@ namespace OnlyWar.Helpers.Battles.Aftermath
         // <paramref name="bodyRecovered"/> separates the two ways to die: a severed vital, with the
         // Chapter standing over him, and being left on ground the Chapter could not hold. The
         // second is a presumption, and the record says so rather than inventing a killing blow.
-        private void RecordDeath(
+        private CampaignEvent RecordDeath(
             PlayerSoldier soldier, BattleSoldier battleSoldier, bool bodyRecovered)
         {
             Faction opposingFaction = _context.GetOpposingFaction(battleSoldier);
@@ -294,6 +319,32 @@ namespace OnlyWar.Helpers.Battles.Aftermath
                     ? $"Killed in battle with the {enemy}"
                     : $"Killed in battle with the {enemy} by a {weapon.Name}";
             }
+            HitLocation definingLocation = FindDefiningLocation(soldier);
+            if (_dependencies.PlayerSink is IPlayerNarrativeEventSink narrativeSink)
+            {
+                BattleEventContextSnapshot context = _context.GetPlayerEventContext(
+                    battleSoldier,
+                    PlayerHeldTheField());
+                DeathPayload payload = new(
+                    context,
+                    bodyRecovered
+                        ? DeathDisposition.BodyRecovered
+                        : DeathDisposition.BodyLeftPresumedDead,
+                    opposingFaction?.Id,
+                    opposingFaction?.Name,
+                    bodyRecovered ? weapon?.Id : null,
+                    bodyRecovered ? weapon?.Name : null,
+                    soldier.Template?.Id,
+                    soldier.Template?.Name,
+                    soldier.Template?.Rank,
+                    GetServiceStartWeek(soldier),
+                    soldier.FactionCasualtyCountMap.Values.Sum(value => (int)value),
+                    definingLocation?.Template?.Id,
+                    definingLocation?.Template?.Name,
+                    definingLocation?.Template?.IsVital == true,
+                    bodyRecovered);
+                return narrativeSink.RecordDeath(_dependencies.Date, soldier, payload);
+            }
 
             soldier.AddEvent(new SoldierEvent(
                 _dependencies.Date,
@@ -301,6 +352,7 @@ namespace OnlyWar.Helpers.Battles.Aftermath
                 detail,
                 factionId: opposingFaction?.Id,
                 weaponTemplateId: bodyRecovered ? weapon?.Id : null));
+            return null;
         }
 
         // A brother carried off the field alive but out of the fight. He keeps his place on the
@@ -310,6 +362,21 @@ namespace OnlyWar.Helpers.Battles.Aftermath
         {
             Faction opposingFaction = _context.GetOpposingFaction(battleSoldier);
             string enemy = opposingFaction?.Name ?? "enemy";
+            HitLocation definingLocation = FindDefiningLocation(soldier);
+            bool qualifiesAsNearDeath = definingLocation?.Template?.IsVital == true
+                && definingLocation.IsCrippled
+                && !definingLocation.IsSevered;
+            if (_dependencies.PlayerSink is IPlayerNarrativeEventSink narrativeSink)
+            {
+                narrativeSink.RecordIncapacitation(
+                    _dependencies.Date,
+                    soldier,
+                    _context.GetPlayerEventContext(battleSoldier, PlayerHeldTheField()),
+                    definingLocation,
+                    _incapacitatingWoundWeapons.GetValueOrDefault(soldier.Id),
+                    qualifiesAsNearDeath);
+                return;
+            }
             soldier.AddEvent(new SoldierEvent(
                 _dependencies.Date,
                 SoldierEventType.Incapacitated,
@@ -320,11 +387,37 @@ namespace OnlyWar.Helpers.Battles.Aftermath
                     : $"{_context.Region.Name}, {_context.Region.Planet.Name}"));
         }
 
-        private void RecordGeneseedRecovery(PlayerSoldier soldier, bool bodyRecovered)
+        private CampaignEvent RecordGeneseedRecovery(
+            PlayerSoldier soldier,
+            bool bodyRecovered,
+            CampaignEvent deathEvent)
         {
             (GeneseedRecoveryResult result, float purity) =
                 ResolveGeneseedRecovery(soldier, bodyRecovered);
             _geneseedResults[soldier.Id] = result;
+            if (_dependencies.PlayerSink is IPlayerNarrativeEventSink narrativeSink
+                && deathEvent != null)
+            {
+                BattleSoldier battleSoldier = _latestPlayerSoldierSnapshots.GetValueOrDefault(soldier.Id);
+                BattleEventContextSnapshot context = battleSoldier == null
+                    ? null
+                    : _context.GetPlayerEventContext(battleSoldier, PlayerHeldTheField());
+                CampaignEvent @event = narrativeSink.RecordGeneseedRecovery(
+                    _dependencies.Date,
+                    soldier,
+                    new GeneseedRecoveryPayload(
+                        context,
+                        deathEvent.Id,
+                        result switch
+                        {
+                            GeneseedRecoveryResult.Recovered => GeneseedRecoveryOutcome.Recovered,
+                            GeneseedRecoveryResult.Destroyed => GeneseedRecoveryOutcome.Destroyed,
+                            GeneseedRecoveryResult.Lost => GeneseedRecoveryOutcome.Lost,
+                            _ => GeneseedRecoveryOutcome.Immature
+                        },
+                        result == GeneseedRecoveryResult.Recovered ? purity : null));
+                return @event;
+            }
             soldier.AddEvent(new SoldierEvent(
                 _dependencies.Date,
                 SoldierEventType.GeneseedRecovery,
@@ -332,6 +425,7 @@ namespace OnlyWar.Helpers.Battles.Aftermath
                 magnitude: result == GeneseedRecoveryResult.Recovered
                     ? (int?)(int)System.Math.Round(purity * 100)
                     : null));
+            return null;
         }
 
         private (GeneseedRecoveryResult, float) ResolveGeneseedRecovery(
@@ -403,6 +497,83 @@ namespace OnlyWar.Helpers.Battles.Aftermath
             return battleEvents;
         }
 
+        private void EmitBattleAchievements(PlayerCasualtyDisposition disposition)
+        {
+            if (_dependencies.PlayerSink is not IPlayerNarrativeEventSink narrativeSink)
+            {
+                return;
+            }
+
+            bool heldField = PlayerHeldTheField();
+            int endingCombatEffectiveCount = _context.StartingPlayerSoldiers
+                .Count(soldier => soldier.Soldier is PlayerSoldier player && player.IsCombatEffective);
+            if (_context.StartingPlayerSoldiers.Count >= _narrativeEventRules.LastSurvivorMinimumParticipants
+                && endingCombatEffectiveCount == 1)
+            {
+                BattleSoldier survivor = _context.StartingPlayerSoldiers
+                    .First(soldier => soldier.Soldier is PlayerSoldier player && player.IsCombatEffective);
+                PlayerSoldier survivorSoldier = (PlayerSoldier)survivor.Soldier;
+                narrativeSink.RecordLastSurvivor(
+                    survivorSoldier,
+                    new LastSurvivorPayload(
+                        _context.GetPlayerEventContext(survivor, heldField),
+                        _context.StartingPlayerSoldiers.Count,
+                        endingCombatEffectiveCount,
+                        disposition.Killed.Count,
+                        disposition.Incapacitated.Count,
+                        heldField));
+            }
+
+            foreach (BattleAftermathContext.StartingPlayerSquad startingSquad in _context.StartingPlayerSquads)
+            {
+                int killed = startingSquad.Participants.Count(disposition.Killed.Contains);
+                int incapacitated = startingSquad.Participants.Count(disposition.Incapacitated.Contains);
+                int casualties = killed + incapacitated;
+                double casualtyFraction = startingSquad.Participants.Count == 0
+                    ? 0
+                    : (double)casualties / startingSquad.Participants.Count;
+                MissionType? missionType = startingSquad.MissionType;
+                if (!heldField
+                    || startingSquad.Participants.Count < _narrativeEventRules.SquadHeldMinimumParticipants
+                    || casualtyFraction < _narrativeEventRules.SquadHeldMinimumCasualtyFraction
+                    || !_narrativeEventRules.IsDefensiveCommitment(missionType))
+                {
+                    continue;
+                }
+
+                narrativeSink.RecordSquadHeldAgainstOdds(
+                    startingSquad.Id,
+                    startingSquad.Name,
+                    new SquadHeldAgainstOddsPayload(
+                        _context.GetPlayerEventContext(startingSquad, heldField),
+                        startingSquad.Participants.Count,
+                        killed,
+                        incapacitated,
+                        casualtyFraction,
+                        missionType,
+                        startingSquad.Aggression,
+                        heldField),
+                    startingSquad.Participants);
+            }
+        }
+
+        private static HitLocation FindDefiningLocation(PlayerSoldier soldier)
+        {
+            HitLocation[] locations = soldier?.Body?.HitLocations ?? Array.Empty<HitLocation>();
+            return locations.FirstOrDefault(location =>
+                    location.Template.IsVital && location.IsCrippled && !location.IsSevered)
+                ?? locations.FirstOrDefault(location => location.Template.IsVital && location.IsSevered)
+                ?? locations.FirstOrDefault(location => location.IsSevered || location.IsCrippled);
+        }
+
+        private static int GetServiceStartWeek(PlayerSoldier soldier) =>
+            soldier?.SoldierEvents
+                ?.Select(entry => entry.Date?.GetTotalWeeks())
+                .Where(week => week.HasValue)
+                .Select(week => week.Value)
+                .DefaultIfEmpty(0)
+                .Min() ?? 0;
+
         // Who lived, who did not, once the field had an owner.
         private sealed record PlayerCasualtyDisposition(
             IReadOnlyList<PlayerSoldier> Killed,
@@ -434,6 +605,16 @@ namespace OnlyWar.Helpers.Battles.Aftermath
             else
             {
                 playerSoldier.AddRangedKill(factionId, weapon.Id);
+            }
+            if (_dependencies.PlayerSink is IPlayerCampaignEventSink eventSink)
+            {
+                eventSink.RecordCreditedKill(
+                    _dependencies.Date,
+                    playerSoldier,
+                    sufferer.BattleSquad?.Squad?.Faction,
+                    weapon,
+                    _context.Region,
+                    sufferer.Soldier.Name);
             }
             return true;
         }

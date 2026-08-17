@@ -3,6 +3,7 @@ using OnlyWar.Models;
 using OnlyWar.Models.Missions;
 using OnlyWar.Models.Orders;
 using OnlyWar.Models.Planets;
+using OnlyWar.Helpers;
 using System.Collections.Generic;
 using System.Linq;
 
@@ -143,9 +144,14 @@ namespace OnlyWar.Helpers.Missions
         public static IReadOnlyList<AvailableMission> GetAvailableMissions(Region originRegion, Region targetRegion)
         {
             List<AvailableMission> missionOptions = new List<AvailableMission>();
-            List<RegionFaction> publicEnemies = targetRegion.RegionFactionMap.Values
-                .Where(rf => rf.IsPublic
-                    && !FactionDispositionService.IsImperial(rf.PlanetFaction.Faction))
+            if (targetRegion?.Planet?.RelationshipLedger != null)
+            {
+                FactionIntelligenceService.ObservePublicActivity(targetRegion.Planet, 0);
+            }
+            List<RegionFaction> publicEnemies = IntelligenceTargetService
+                .GetPlayerVisibleTargets(targetRegion)
+                .Select(target => target.CurrentPresence)
+                .Where(rf => rf != null && rf.IsPublic)
                 .OrderBy(rf => rf.PlanetFaction.Faction.Name)
                 .ThenBy(rf => rf.PlanetFaction.Faction.Id)
                 .ToList();

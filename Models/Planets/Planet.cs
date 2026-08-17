@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 
 using OnlyWar.Models.Fleets;
+using OnlyWar.Models;
 using OnlyWar.Helpers.Extensions;
 using OnlyWar.Models.Squads;
 
@@ -30,6 +31,12 @@ namespace OnlyWar.Models.Planets
 
         public List<TaskForce> OrbitingTaskForceList;
         public readonly Dictionary<int, PlanetFaction> PlanetFactionMap;
+        internal event EventHandler<PlanetFaction> PlanetFactionAdded;
+        /// <summary>
+        /// The sector-owned relationship context. Every planet in a sector points at the same
+        /// ledger; it is assigned before the planet is exposed to derived control/defense queries.
+        /// </summary>
+        public FactionRelationshipLedger RelationshipLedger { get; private set; }
         public LoadoutDoctrine LoadoutDoctrine { get; } = new();
 
         // Governance designation, recomputed by SectorBuilder.GenerateWarpNetwork.
@@ -104,6 +111,17 @@ namespace OnlyWar.Models.Planets
         public void SetCapitalRegion(int regionId)
         {
             CapitalRegionId = regionId;
+        }
+
+        public void AttachRelationshipLedger(FactionRelationshipLedger relationshipLedger)
+        {
+            RelationshipLedger = relationshipLedger
+                ?? throw new ArgumentNullException(nameof(relationshipLedger));
+        }
+
+        internal void NotifyPlanetFactionAdded(PlanetFaction planetFaction)
+        {
+            PlanetFactionAdded?.Invoke(this, planetFaction);
         }
 
     }

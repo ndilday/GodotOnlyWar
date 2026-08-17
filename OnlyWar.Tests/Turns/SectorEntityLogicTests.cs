@@ -125,16 +125,16 @@ public class SectorEntityLogicTests
     }
 
     [Fact]
-    public void ProcessTurn_DecaysRegionIntelligenceByQuarter()
+    public void ProcessTurn_DecaysRegionAwarenessligenceByQuarter()
     {
         RNG.Reset(1);
         SectorSimulationFixture fixture = SectorSimulationFixture.Create();
         Region region = fixture.Planet.Regions[3];
-        fixture.DefaultPlanetFaction.SetRegionIntel(region, 4.0f);
+        fixture.DefaultPlanetFaction.SetRegionAwareness(region, 4.0f);
 
         fixture.ProcessTurn();
 
-        Assert.Equal(3.0f, fixture.DefaultPlanetFaction.GetRegionIntel(region), precision: 4);
+        Assert.Equal(3.0f, fixture.DefaultPlanetFaction.GetRegionAwareness(region), precision: 4);
         Assert.Equal(3.0f, region.GetPlayerVisibleIntel(), precision: 4);
     }
 
@@ -152,7 +152,7 @@ public class SectorEntityLogicTests
             IsPublic = true,
             Organization = 100
         };
-        playerPlanetFaction.SetRegionIntel(region, 2f);
+        playerPlanetFaction.SetRegionAwareness(region, 2f);
 
         fixture.ProcessTurn();
 
@@ -163,9 +163,9 @@ public class SectorEntityLogicTests
     [Fact]
     // Listening posts are structures, so allied installations combine on the same logarithmic
     // curve as every other kind of works (RegionDefenses/FortificationMath) and each ally reads
-    // the resulting shared coverage. They deliberately do NOT go through TurnIntelLedger's
+    // the resulting shared coverage. They deliberately do NOT go through TurnIntelligenceLedger's
     // additive pooling, which would count one shared sensor net once per ally - that pooling is
-    // for activities like recon and patrols, and is covered by TurnIntelLedgerTests.
+    // for activities like recon and patrols, and is covered by TurnIntelligenceLedgerTests.
     public void ProcessTurn_AlliedListeningPostsCombineIntoOneSharedSensorNet()
     {
         RNG.Reset(1);
@@ -183,16 +183,16 @@ public class SectorEntityLogicTests
                 ListeningPost = 3
             };
         fixture.DefaultRegionFaction(3).ListeningPost = 2;
-        playerPlanetFaction.SetRegionIntel(region, 2.0f);
-        fixture.DefaultPlanetFaction.SetRegionIntel(region, 3.0f);
+        playerPlanetFaction.SetRegionAwareness(region, 2.0f);
+        fixture.DefaultPlanetFaction.SetRegionAwareness(region, 3.0f);
 
         fixture.ProcessTurn();
 
         // Chapter LP 3 (111 points) and PDF LP 2 (11 points) pool to 122 points = level 3.041,
         // worth 0.6082 intel to each ally. Prior intel decays at 0.75 first, and only this turn's
         // gain is shared - accumulated belief stays each faction's own.
-        Assert.Equal(2.1082f, playerPlanetFaction.GetRegionIntel(region), precision: 4);
-        Assert.Equal(2.8582f, fixture.DefaultPlanetFaction.GetRegionIntel(region), precision: 4);
+        Assert.Equal(2.1082f, playerPlanetFaction.GetRegionAwareness(region), precision: 4);
+        Assert.Equal(2.8582f, fixture.DefaultPlanetFaction.GetRegionAwareness(region), precision: 4);
     }
 
     [Fact]
@@ -204,7 +204,7 @@ public class SectorEntityLogicTests
         Region region = fixture.Planet.Regions[0];
         // The staleness (25% decay) path only applies while the player still has intel on the
         // region; below 1 intel the opportunities expire wholesale (see the test below).
-        fixture.DefaultPlanetFaction.SetRegionIntel(region, 10.0f);
+        fixture.DefaultPlanetFaction.SetRegionAwareness(region, 10.0f);
         for (int i = 0; i < 100; i++)
         {
             region.SpecialMissions.Add(new Mission(MissionType.Ambush, cult, 1));
@@ -225,7 +225,7 @@ public class SectorEntityLogicTests
         Region region = fixture.Planet.Regions[0];
         // Insufficient intel on the region: the opportunities that earlier intel produced can no longer be
         // tracked, so they should all expire rather than lingering as stale menu entries.
-        fixture.DefaultPlanetFaction.SetRegionIntel(region, 0.5f);
+        fixture.DefaultPlanetFaction.SetRegionAwareness(region, 0.5f);
         for (int i = 0; i < 100; i++)
         {
             region.SpecialMissions.Add(new Mission(MissionType.Ambush, cult, 1));
@@ -441,9 +441,9 @@ public class SectorEntityLogicTests
         for (int turn = 0; turn < 20; turn++)
         {
             // re-assert region intel each turn so the region-wide budget stays large and stable
-            // despite the per-turn quarter decay (ProcessTurn_DecaysRegionIntelligenceByQuarter) -
+            // despite the per-turn quarter decay (ProcessTurn_DecaysRegionAwarenessligenceByQuarter) -
             // the point here is the SPLIT across factions, not the intel economy itself.
-            fixture.DefaultPlanetFaction.SetRegionIntel(region, 4096f);
+            fixture.DefaultPlanetFaction.SetRegionAwareness(region, 4096f);
             TurnResolutionResult result = controller.ProcessTurn(fixture.Sector);
             strongCount += result.SpecialMissions.Count(m => m.RegionFaction == strong);
             weakCount += result.SpecialMissions.Count(m => m.RegionFaction == weak);

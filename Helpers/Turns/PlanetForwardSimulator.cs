@@ -19,7 +19,7 @@ namespace OnlyWar.Helpers.Turns
         private readonly MissionTurnProcessor _missionTurnProcessor;
         private readonly MissionAftermathProcessor _missionAftermathProcessor;
         private readonly PlanetTurnProcessor _planetTurnProcessor;
-        private readonly TurnIntelLedger _intelLedger;
+        private readonly TurnIntelligenceLedger _intelLedger;
         private readonly TurnResolutionResult _result;
 
         internal PlanetForwardSimulator(
@@ -28,7 +28,7 @@ namespace OnlyWar.Helpers.Turns
             MissionTurnProcessor missionTurnProcessor,
             MissionAftermathProcessor missionAftermathProcessor,
             PlanetTurnProcessor planetTurnProcessor,
-            TurnIntelLedger intelLedger,
+            TurnIntelligenceLedger intelLedger,
             TurnResolutionResult result)
         {
             _session = session;

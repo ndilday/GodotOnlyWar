@@ -43,7 +43,7 @@ namespace OnlyWar.Helpers.Turns
             // (ImperialRemnantFraction) is hidden but alive, so "no Imperial presence" never held
             // either. Reading public control instead makes both ends reachable and matches how the
             // rest of the simulation decides who owns a region.
-            bool loyalistsHoldGround = HasPublicPresence(promised, FactionDispositionService.IsImperial);
+            bool loyalistsHoldGround = HasPublicPresence(promised, FactionRelationshipService.IsImperial);
             if (!loyalistsHoldGround)
             {
                 scenario.State = ObjectiveState.Lapsed;
@@ -60,7 +60,7 @@ namespace OnlyWar.Helpers.Turns
                 return true;
             }
 
-            if (!HasPublicPresence(promised, faction => !FactionDispositionService.IsImperial(faction)))
+            if (!HasPublicPresence(promised, faction => !FactionRelationshipService.IsImperial(faction)))
             {
                 scenario.State = ObjectiveState.Won;
                 SectorBuilder.ReplaceChapterPlanetFaction(promised, player);

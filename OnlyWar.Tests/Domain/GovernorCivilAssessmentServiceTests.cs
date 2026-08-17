@@ -60,6 +60,6 @@ public class GovernorCivilAssessmentServiceTests
     }
 
     private static Faction Faction(int id, bool isDefault, GrowthType growthType) => new(
-        id, $"Faction {id}", Color.Red, false, isDefault, growthType == GrowthType.Unrest,
+        id, $"Faction {id}", Color.Red, false, isDefault, FactionBehavior.None,
         growthType, null, null, null, null, null, null, null);
 }

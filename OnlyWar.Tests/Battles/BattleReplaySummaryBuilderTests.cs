@@ -504,7 +504,7 @@ public class BattleReplaySummaryBuilderTests
             Color.White,
             isPlayerFaction: false,
             isDefaultFaction: true,
-            canInfiltrate: false,
+            behavior: FactionBehavior.None,
             growthType: GrowthType.None,
             species: null,
             soldierTemplates: null,

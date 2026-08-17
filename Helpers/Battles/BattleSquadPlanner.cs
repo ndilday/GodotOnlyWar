@@ -1137,7 +1137,7 @@ namespace OnlyWar.Helpers.Battles
                         ReadinessValue: GetBattleValue(soldier) * 0.025f);
             }
             RangedWeapon equipped = soldier.EquippedRangedWeapons[0];
-            if (soldier.ReloadingPhase > 0 || equipped.LoadedAmmo == 0)
+            if (equipped.CanReload && (equipped.ReloadProgress > 0 || equipped.LoadedAmmo == 0))
             {
                 return new PlannedSoldierAction(
                     soldier.Soldier.Id,
@@ -1239,7 +1239,7 @@ namespace OnlyWar.Helpers.Battles
                     .Concat(soldier.RangedWeapons)
                     .FirstOrDefault(weapon => weapon.Template.IsBlastWeapon
                         && weapon.LoadedAmmo == 0);
-                return soldier.ReloadingPhase == 0 && emptyBlast != null
+                return emptyBlast != null && emptyBlast.CanReload && emptyBlast.ReloadProgress == 0
                     ? new PlannedSoldierAction(
                         soldier.Soldier.Id,
                         PlannedSoldierActionKind.Reload,
@@ -1339,11 +1339,12 @@ namespace OnlyWar.Helpers.Battles
                         WeaponTemplateId: ready.Template.Id,
                         ReadinessValue: GetBattleValue(soldier) * 0.025f);
             }
-            RangedWeapon weapon = soldier.ReloadingPhase > 0
-                || soldier.EquippedRangedWeapons[0].LoadedAmmo == 0
-                    ? soldier.EquippedRangedWeapons[0]
+            RangedWeapon equipped = soldier.EquippedRangedWeapons[0];
+            RangedWeapon weapon = equipped.CanReload
+                && (equipped.ReloadProgress > 0 || equipped.LoadedAmmo == 0)
+                    ? equipped
                     : soldier.RangedWeapons.FirstOrDefault(candidate =>
-                        candidate.Template.IsBlastWeapon && candidate.LoadedAmmo == 0);
+                        candidate.Template.IsBlastWeapon && candidate.CanReload && candidate.LoadedAmmo == 0);
             return weapon == null
                 ? new PlannedSoldierAction(soldier.Soldier.Id, PlannedSoldierActionKind.None)
                 : new PlannedSoldierAction(
@@ -1950,7 +1951,9 @@ namespace OnlyWar.Helpers.Battles
             {
                 AddEquipRangedWeaponActionToBag(soldier);
             }
-            else if (soldier.ReloadingPhase > 0 || soldier.EquippedRangedWeapons[0].LoadedAmmo == 0)
+            else if (soldier.EquippedRangedWeapons[0].CanReload
+                && (soldier.EquippedRangedWeapons[0].ReloadProgress > 0
+                    || soldier.EquippedRangedWeapons[0].LoadedAmmo == 0))
             {
                 AddReloadRangedWeaponActionToBag(soldier);
             }
@@ -1959,7 +1962,8 @@ namespace OnlyWar.Helpers.Battles
                 RangedWeapon emptyBlastWeapon = soldier.RangedWeapons
                     .FirstOrDefault(weapon => weapon.Template.IsBlastWeapon
                         && weapon.LoadedAmmo == 0);
-                if (soldier.ReloadingPhase == 0 && emptyBlastWeapon != null)
+                if (emptyBlastWeapon != null && emptyBlastWeapon.CanReload
+                    && emptyBlastWeapon.ReloadProgress == 0)
                 {
                     _shootActions.Add(new ReloadRangedWeaponAction(soldier, emptyBlastWeapon));
                 }

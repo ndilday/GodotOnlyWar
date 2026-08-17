@@ -126,7 +126,7 @@ public class FactionStrategyControllerTests
         Region enemyRegion = pdfRegion.GetAdjacentRegions().First();
         AddRegionFaction(planet, pdfRegion, pdf, population: 1_000_000, organization: 100, garrison: 2_000);
         AddRegionFaction(planet, enemyRegion, enemy, population: 1_000, organization: 100);
-        planet.PlanetFactionMap[pdf.Id].SetRegionIntel(enemyRegion, FactionStrategyController.GarrisonFullSightIntel);
+        planet.PlanetFactionMap[pdf.Id].SetRegionAwareness(enemyRegion, FactionStrategyController.GarrisonFullSightIntel);
         Sector sector = new(CreatePlayerForce(), [], [planet], []);
 
         List<Order> orders = new FactionStrategyController()
@@ -172,7 +172,7 @@ public class FactionStrategyControllerTests
             IsPublic = true
         };
         adjacentRegion.RegionFactionMap[imperial.Id] = adjacentTarget;
-        attackerPlanetFaction.SetRegionIntel(localRegion, FactionStrategyController.ReconIntelThreshold);
+        attackerPlanetFaction.SetRegionAwareness(localRegion, FactionStrategyController.ReconIntelThreshold);
         Sector sector = new(CreatePlayerForce(), [], [planet], []);
 
         List<Order> orders = new FactionStrategyController().GenerateFactionOrders(attacker, sector);
@@ -278,7 +278,7 @@ public class FactionStrategyControllerTests
         AddRegionFaction(planet, staging, attacker, population: 50_000, organization: 100);
         AddRegionFaction(planet, target, defender, population: 10_000, organization: 100, garrison: 10_000);
         RegionFaction targetFaction = target.RegionFactionMap[defender.Id];
-        planet.PlanetFactionMap[attacker.Id].AddRegionIntel(target, FactionStrategyController.ReconIntelThreshold);
+        planet.PlanetFactionMap[attacker.Id].AddRegionAwareness(target, FactionStrategyController.ReconIntelThreshold);
         Sector sector = new(CreatePlayerForce(), [], [planet], []);
 
         List<Order> orders = new FactionStrategyController().GenerateFactionOrders(attacker, sector);
@@ -356,7 +356,7 @@ public class FactionStrategyControllerTests
 
         AddRegionFaction(planet, staging, attacker, population: 1_000, organization: 100);
         AddRegionFaction(planet, target, defender, population: 10, organization: 100, garrison: 2);
-        planet.PlanetFactionMap[attacker.Id].SetRegionIntel(target, FactionStrategyController.ReconIntelThreshold);
+        planet.PlanetFactionMap[attacker.Id].SetRegionAwareness(target, FactionStrategyController.ReconIntelThreshold);
         Sector sector = new(CreatePlayerForce(), [], [planet], []);
 
         List<Order> orders = new FactionStrategyController().GenerateFactionOrders(attacker, sector);
@@ -406,8 +406,8 @@ public class FactionStrategyControllerTests
         AddRegionFaction(planet, stagingB, attacker, population: 50_000, organization: 100);
         AddRegionFaction(planet, targetA, defender, population: 10_000, organization: 100, garrison: 10_000);
         AddRegionFaction(planet, targetB, defender, population: 10_000, organization: 100, garrison: 10_000);
-        planet.PlanetFactionMap[attacker.Id].SetRegionIntel(targetA, FactionStrategyController.ReconIntelThreshold);
-        planet.PlanetFactionMap[attacker.Id].SetRegionIntel(targetB, FactionStrategyController.ReconIntelThreshold);
+        planet.PlanetFactionMap[attacker.Id].SetRegionAwareness(targetA, FactionStrategyController.ReconIntelThreshold);
+        planet.PlanetFactionMap[attacker.Id].SetRegionAwareness(targetB, FactionStrategyController.ReconIntelThreshold);
         Sector sector = new(CreatePlayerForce(), [], [planet], []);
 
         List<Order> orders = new FactionStrategyController().GenerateFactionOrders(attacker, sector);
@@ -434,7 +434,7 @@ public class FactionStrategyControllerTests
 
         AddRegionFaction(planet, staging, attacker, population: 10_000, organization: 100);
         AddRegionFaction(planet, target, defender, population: 100_000, organization: 100, garrison: 10_000);
-        planet.PlanetFactionMap[attacker.Id].SetRegionIntel(target, FactionStrategyController.ReconIntelThreshold);
+        planet.PlanetFactionMap[attacker.Id].SetRegionAwareness(target, FactionStrategyController.ReconIntelThreshold);
         Sector sector = new(CreatePlayerForce(), [], [planet], []);
 
         List<Order> orders = new FactionStrategyController().GenerateFactionOrders(attacker, sector);
@@ -463,7 +463,7 @@ public class FactionStrategyControllerTests
         AddRegionFaction(planet, flexibleSource, attacker, population: 50_000, organization: 100);
         AddRegionFaction(planet, target, defender, population: 10_000, organization: 100, garrison: 10_000);
         AddRegionFaction(planet, extraTarget, defender, population: 1_000, organization: 100, garrison: 100);
-        planet.PlanetFactionMap[attacker.Id].SetRegionIntel(target, FactionStrategyController.ReconIntelThreshold);
+        planet.PlanetFactionMap[attacker.Id].SetRegionAwareness(target, FactionStrategyController.ReconIntelThreshold);
         Sector sector = new(CreatePlayerForce(), [], [planet], []);
 
         new FactionStrategyController().GenerateFactionOrders(attacker, sector);
@@ -514,7 +514,7 @@ public class FactionStrategyControllerTests
         AddRegionFaction(planet, needy, attacker, population: 500, organization: 100);
         AddRegionFaction(planet, enemyFront, defender, population: 100_000, organization: 100, garrison: 5_000);
         // The attacker must see the enemy front to perceive the threat that sizes needy's garrison.
-        planet.PlanetFactionMap[attacker.Id].SetRegionIntel(
+        planet.PlanetFactionMap[attacker.Id].SetRegionAwareness(
             enemyFront, FactionStrategyController.GarrisonFullSightIntel);
         Sector sector = new(CreatePlayerForce(), [], [planet], []);
 
@@ -621,7 +621,7 @@ public class FactionStrategyControllerTests
         var offensive = Offensive(rf, attackForce: 1, estimatedDefenderBv: 1, reward: 1);
 
         Assert.False(FactionStrategyController.IsWellReconnoitred(offensive, attacker.Id));
-        rf.PlanetFaction.AddRegionIntel(rf.Region, FactionStrategyController.ReconIntelThreshold);
+        rf.PlanetFaction.AddRegionAwareness(rf.Region, FactionStrategyController.ReconIntelThreshold);
         Assert.True(FactionStrategyController.IsWellReconnoitred(offensive, attacker.Id));
     }
 
@@ -633,12 +633,12 @@ public class FactionStrategyControllerTests
 
         MissionAftermathProcessor.ResolveReconResult(scout, target, 1.5f);
 
-        Assert.Equal(1.5f, target.PlanetFaction.GetRegionIntel(target.Region));
+        Assert.Equal(1.5f, target.PlanetFaction.GetRegionAwareness(target.Region));
         Assert.Equal(0f, target.Region.GetPlayerVisibleIntel());
     }
 
     [Fact]
-    public void ResolveReconResult_PlayerReconFeedsPlayerVisibleRegionIntel()
+    public void ResolveReconResult_PlayerReconFeedsPlayerVisibleRegionAwareness()
     {
         Faction player = CreatePlayerFaction();
         RegionFaction target = CreateTargetRegionFaction(CreateNonPlayerFaction());
@@ -659,7 +659,7 @@ public class FactionStrategyControllerTests
 
         MissionAftermathProcessor.ResolveReconResult(scout, target, 0f);
 
-        Assert.Equal(0f, target.PlanetFaction.GetRegionIntel(target.Region));
+        Assert.Equal(0f, target.PlanetFaction.GetRegionAwareness(target.Region));
     }
 
     // ----- Patrol as a counter-force (PRD §4.24) -----
@@ -964,13 +964,29 @@ public class FactionStrategyControllerTests
         GrowthType growthType = GrowthType.Conversion,
         IReadOnlyDictionary<int, SquadTemplate> squadTemplates = null)
     {
+        FactionBehavior behavior = isPlayer || isDefault
+            ? FactionBehavior.None
+            : FactionBehavior.PopulationIsMilitary;
+        if (growthType is GrowthType.Consumption or GrowthType.Unrest)
+        {
+            behavior |= FactionBehavior.InvadesOnVictory;
+        }
+        if (growthType is GrowthType.Conversion or GrowthType.Unrest)
+        {
+            behavior |= FactionBehavior.DefendsHostWhileHidden;
+        }
+        if (growthType == GrowthType.Unrest)
+        {
+            behavior |= FactionBehavior.OffersExternalEnemyTruce;
+        }
+
         return new Faction(
             id,
             name,
             Color.Red,
             isPlayer,
             isDefault,
-            false,
+            behavior,
             growthType,
             new Dictionary<int, Species> { [TestModelFactory.HumanSpecies.Id] = TestModelFactory.HumanSpecies },
             new Dictionary<int, SoldierTemplate>(),

@@ -34,4 +34,13 @@ namespace OnlyWar.Models.Soldiers
             RequisitionCost = requisitionCost;
         }
     }
+
+    public sealed record CompletedMedicalProcedure(
+        PlayerSoldier Soldier,
+        int PrimaryHitLocationTemplateId,
+        string PrimaryHitLocationName,
+        MedicalProcedureType ProcedureType,
+        bool WasAlreadyCybernetic,
+        int ProcedureDurationWeeks,
+        int RequisitionCost);
 }

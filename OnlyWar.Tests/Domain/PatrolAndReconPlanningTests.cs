@@ -138,7 +138,7 @@ public class PatrolAndReconPlanningTests
 
         PlanetFaction scoutPlanetFaction = new(scout) { IsPublic = true };
         planet.PlanetFactionMap[scout.Id] = scoutPlanetFaction;
-        scoutPlanetFaction.SetRegionIntel(region, intel);
+        scoutPlanetFaction.SetRegionAwareness(region, intel);
 
         return (scout, region);
     }
@@ -181,7 +181,7 @@ public class PatrolAndReconPlanningTests
             Color.Red,
             isPlayerFaction: false,
             isDefaultFaction: false,
-            canInfiltrate: false,
+            behavior: FactionBehavior.None,
             GrowthType.Conversion,
             new Dictionary<int, Species> { [TestModelFactory.HumanSpecies.Id] = TestModelFactory.HumanSpecies },
             new Dictionary<int, SoldierTemplate>(),

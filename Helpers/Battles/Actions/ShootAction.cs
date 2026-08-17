@@ -27,6 +27,8 @@ namespace OnlyWar.Helpers.Battles.Actions
         public bool UseBulk => BulkMultiplier > 0;
         public float BulkMultiplier { get; }
         public float AimMultiplier { get; }
+        /// <summary>The burst actually committed after the weapon's live ammunition was clamped.</summary>
+        public int CommittedShots { get; private set; }
         public int? StrayTargetId { get; private set; }
         public bool IsFriendlyFire => StrayTargetId.HasValue && _strayHitWasFriendly;
         public int HitCount { get; private set; }
@@ -90,6 +92,27 @@ namespace OnlyWar.Helpers.Battles.Actions
                 _targetName = target.Soldier.Name;
                 _weaponName = weapon.Template.Name;
 
+                int ammunitionUnits = weapon.GetAmmunitionUnitsForAttack(NumberOfShots);
+                int availableUnits = weapon.Template.AmmunitionBehavior == AmmunitionBehavior.Unlimited
+                    ? ammunitionUnits
+                    : weapon.Template.AmmunitionBehavior == AmmunitionBehavior.ConsumableItem
+                        ? weapon.ConsumableQuantity
+                        : weapon.LoadedAmmo;
+                bool canCommitAttack = weapon.Template.ConsumptionRule
+                    == AmmunitionConsumptionRule.PerAttack
+                    ? availableUnits >= ammunitionUnits
+                    : availableUnits > 0;
+                CommittedShots = canCommitAttack
+                    ? weapon.Template.ConsumptionRule == AmmunitionConsumptionRule.PerAttack
+                        ? NumberOfShots
+                        : Math.Min(NumberOfShots, Math.Max(0, availableUnits))
+                    : 0;
+                if (CommittedShots == 0)
+                {
+                    _isResolved = true;
+                    return;
+                }
+
                 var skill = shooter.Soldier.GetTotalSkillValue(weapon.Template.RelatedSkill);
                 bool firingIntoMelee = _grid?.IsTargetEngagedWithShootersAllies(ShooterId, TargetId) == true;
                 var modifier = CalculateToHitModifiers(shooter, target, weapon, skill, firingIntoMelee);
@@ -103,7 +126,7 @@ namespace OnlyWar.Helpers.Battles.Actions
                 if (total > 0)
                 {
                     // there were hits, determine how many
-                    int numberOfShots = NumberOfShots;
+                    int numberOfShots = CommittedShots;
                     do
                     {
                         HitCount++;
@@ -137,6 +160,10 @@ namespace OnlyWar.Helpers.Battles.Actions
                         WoundResolutions.Add(woundResolution);
                     }
                 }
+                // Ammunition is committed by the action, not refunded for recoil misses or for
+                // a wound that stopped at armor. This is intentionally after resolution so every
+                // legal outcome pays the same authored burst cost.
+                weapon.TryConsume(weapon.GetAmmunitionUnitsForAttack(CommittedShots));
                 shooter.TurnsShooting++;
                 _isResolved = true;
             }
@@ -166,7 +193,8 @@ namespace OnlyWar.Helpers.Battles.Actions
                 totalModifier += fullAimBonus * AimMultiplier;
             }
             // apply modifiers for rate of fire, taget size, and range
-            totalModifier += BattleModifiersUtil.CalculateRateOfFireModifier(NumberOfShots);
+            int shotsForModifiers = CommittedShots > 0 ? CommittedShots : NumberOfShots;
+            totalModifier += BattleModifiersUtil.CalculateRateOfFireModifier(shotsForModifiers);
             totalModifier += BattleModifiersUtil.CalculateSizeModifier(target.Soldier.Size);
             totalModifier += BattleModifiersUtil.CalculateRangeModifier(Range, target.CurrentSpeed);
             // elusive targets (serpentine Raveners, weaving Genestealers, camo-caped
@@ -205,7 +233,8 @@ namespace OnlyWar.Helpers.Battles.Actions
 
         public string Description()
         {
-            string desc = $"{_soldierName} fires a {_weaponName} {NumberOfShots} {TimeWord(NumberOfShots)} at {_targetName}\n";
+            int describedShots = CommittedShots > 0 ? CommittedShots : NumberOfShots;
+            string desc = $"{_soldierName} fires a {_weaponName} {describedShots} {TimeWord(describedShots)} at {_targetName}\n";
             if (StrayTargetId.HasValue)
             {
                 string allegiance = IsFriendlyFire ? "friendly fire" : "a stray hit";

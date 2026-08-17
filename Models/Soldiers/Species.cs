@@ -29,6 +29,7 @@ namespace OnlyWar.Models.Soldiers
         public NormalizedValueTemplate Size { get; }
         public ushort Width { get; }
         public ushort Depth { get; }
+        public float BaseCapacity { get; }
 
         // Defensive "harder to hit" levers. Melee evasion is subtracted from the
         // attacker's total in the contested melee roll; ranged evasion is a flat
@@ -53,7 +54,9 @@ namespace OnlyWar.Models.Soldiers
                        NormalizedValueTemplate mov, NormalizedValueTemplate siz,
                        ushort width, ushort depth, float meleeEvasion, float rangedEvasion,
                        SpeciesAbilities abilities, BodyTemplate bodyTemplate,
-                       MeleeWeaponTemplate defaultUnarmedWeapon, float synapseRadius = 0f)
+                       MeleeWeaponTemplate defaultUnarmedWeapon,
+                       float synapseRadius = 0f,
+                       float baseCapacity = 16f)
         {
             Id = id;
             Name = name;
@@ -70,6 +73,7 @@ namespace OnlyWar.Models.Soldiers
             Size = siz;
             Width = width;
             Depth = depth;
+            BaseCapacity = baseCapacity;
             MeleeEvasion = meleeEvasion;
             RangedEvasion = rangedEvasion;
             SynapseRadius = synapseRadius;

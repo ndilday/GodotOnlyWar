@@ -128,7 +128,7 @@ public class ScenarioBuilderTests
         // The cult knows its home ground: it starts with strong awareness of every region holding a
         // public Imperial force. Seeded at reveal, before the pre-landing sim decays it a little.
         Assert.Contains(imperialRegions, region =>
-            cultPlanetFaction.GetRegionIntel(region) > 0f);
+            cultPlanetFaction.GetRegionAwareness(region) > 0f);
     }
 
     // The opening now plays out as a pre-/post-landing simulation during generation, so the promised

@@ -209,14 +209,30 @@ internal sealed class SectorSimulationFixture
     }
 
     // Bare faction with no planet or region attached, for tests that only need the faction flags
-    // (FactionDispositionServiceTests).
+    // (FactionRelationshipServiceTests).
     public static Faction BuildTestFaction(int id, string name, bool isPlayer, bool isDefault) =>
         BuildFaction(id, name, isPlayer, isDefault, GrowthType.None);
 
     private static Faction BuildFaction(int id, string name, bool isPlayer, bool isDefault, GrowthType growthType)
     {
+        FactionBehavior behavior = isPlayer || isDefault
+            ? FactionBehavior.None
+            : FactionBehavior.PopulationIsMilitary;
+        if (growthType is GrowthType.Consumption or GrowthType.Unrest)
+        {
+            behavior |= FactionBehavior.InvadesOnVictory;
+        }
+        if (growthType is GrowthType.Conversion or GrowthType.Unrest)
+        {
+            behavior |= FactionBehavior.DefendsHostWhileHidden;
+        }
+        if (growthType == GrowthType.Unrest)
+        {
+            behavior |= FactionBehavior.OffersExternalEnemyTruce;
+        }
+
         return new Faction(
-            id, name, Color.Red, isPlayer, isDefault, false, growthType,
+            id, name, Color.Red, isPlayer, isDefault, behavior, growthType,
             new Dictionary<int, Species> { [TestModelFactory.HumanSpecies.Id] = TestModelFactory.HumanSpecies },
             new Dictionary<int, SoldierTemplate>(),
             new Dictionary<int, SquadTemplate>(),

@@ -88,6 +88,10 @@ namespace OnlyWar.Helpers.Recruitment
                 GeneticCompatibility = aspirant.GeneticCompatibility,
                 RecruitmentBirthDate = CopyDate(aspirant.BirthDate)
             };
+            target.AddSquadMember(neophyte);
+            force.Army.PlayerSoldierMap[neophyte.Id] = neophyte;
+            force.AttachCampaignEventRecorder(neophyte);
+            PlayerSoldier mentor = SelectMentor(force, target, program, neophyte);
             neophyte.AddEvent(new SoldierEvent(
                 CopyDate(aspirant.AdmittedDate),
                 SoldierEventType.AcceptedToTraining,
@@ -96,9 +100,10 @@ namespace OnlyWar.Helpers.Recruitment
                 CopyDate(_session.CurrentDate),
                 SoldierEventType.Promotion,
                 $"promoted to Scout Marine and assigned to {target.Name}"));
-
-            target.AddSquadMember(neophyte);
-            force.Army.PlayerSoldierMap[neophyte.Id] = neophyte;
+            if (mentor != null)
+            {
+                force.RecordMentorAssigned(_session.CurrentDate, neophyte, mentor, target);
+            }
             program.Aspirants.Remove(aspirant);
             program.ProgramEvents.Add(new RecruitmentProgramEvent
             {
@@ -267,6 +272,38 @@ namespace OnlyWar.Helpers.Recruitment
             return force.Army.SquadMap.TryGetValue(squadId, out Squad squad)
                 ? squad
                 : null;
+        }
+
+        private static PlayerSoldier SelectMentor(
+            PlayerForce force,
+            Squad target,
+            RecruitmentProgram program,
+            PlayerSoldier mentee)
+        {
+            PlayerSoldier squadMentor = target?.Members
+                .OfType<PlayerSoldier>()
+                .Where(soldier => soldier.Id != mentee.Id
+                    && soldier.IsCombatEffective
+                    && soldier.Template?.IsSquadLeader == true)
+                .OrderBy(soldier => soldier.Id)
+                .FirstOrDefault();
+            if (squadMentor != null) return squadMentor;
+
+            foreach (RecruitmentStaffAssignment assignment in (program?.StaffAssignments ?? [])
+                         .Where(staff => staff.Role == RecruitmentStaffRole.ScoutSergeant)
+                         .OrderByDescending(staff => staff.LeadershipRating)
+                         .ThenBy(staff => staff.SoldierId))
+            {
+                if (force?.Army?.PlayerSoldierMap.TryGetValue(
+                        assignment.SoldierId,
+                        out PlayerSoldier staffMentor) == true
+                    && staffMentor.Id != mentee.Id
+                    && staffMentor.IsCombatEffective)
+                {
+                    return staffMentor;
+                }
+            }
+            return null;
         }
 
         private static bool IsEligibleTarget(

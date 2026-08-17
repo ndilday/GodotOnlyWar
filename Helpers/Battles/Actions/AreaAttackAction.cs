@@ -55,6 +55,11 @@ namespace OnlyWar.Helpers.Battles.Actions
                 .First(candidate => candidate.Template.Id == WeaponId);
             _soldierName = shooter.Soldier.Name;
             _weaponName = weapon.Template.Name;
+            if (!weapon.CanFire)
+            {
+                _isResolved = true;
+                return;
+            }
 
             VictimIds = ConeTemplate.GetVictimIds(
                 _grid,
@@ -85,7 +90,7 @@ namespace OnlyWar.Helpers.Battles.Actions
                 }
             }
 
-            weapon.LoadedAmmo = (ushort)Math.Max(0, weapon.LoadedAmmo - 1);
+            weapon.TryConsume(1);
             shooter.Aim = null;
             shooter.TurnsShooting++;
             _isResolved = true;

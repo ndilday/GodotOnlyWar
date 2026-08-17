@@ -32,9 +32,9 @@ public class CombatModelTests
         Faction cult = fixture.AddHiddenFaction(1, GrowthType.Logistic, population: 1_000)
             .PlanetFaction.Faction;
 
-        Assert.False(fixture.Default.PopulationIsMilitary); // the Imperium has a civilian base
-        Assert.True(tyranids.PopulationIsMilitary);         // the swarm's numbers are its army
-        Assert.True(cult.PopulationIsMilitary);
+        Assert.False(fixture.Default.HasBehavior(FactionBehavior.PopulationIsMilitary)); // the Imperium has a civilian base
+        Assert.True(tyranids.HasBehavior(FactionBehavior.PopulationIsMilitary));         // the swarm's numbers are its army
+        Assert.True(cult.HasBehavior(FactionBehavior.PopulationIsMilitary));
     }
 
     [Fact]
@@ -46,9 +46,9 @@ public class CombatModelTests
         Faction cult = fixture.AddHiddenFaction(1, GrowthType.Logistic, population: 1_000)
             .PlanetFaction.Faction;
 
-        Assert.True(tyranids.InvadesOnVictory);   // the tide seizes ground it takes
-        Assert.False(cult.InvadesOnVictory);      // others raid and withdraw
-        Assert.False(fixture.Default.InvadesOnVictory);
+        Assert.True(tyranids.HasBehavior(FactionBehavior.InvadesOnVictory));   // the tide seizes ground it takes
+        Assert.False(cult.HasBehavior(FactionBehavior.InvadesOnVictory));      // others raid and withdraw
+        Assert.False(fixture.Default.HasBehavior(FactionBehavior.InvadesOnVictory));
     }
 
     [Fact]

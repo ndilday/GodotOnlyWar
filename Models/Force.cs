@@ -1,4 +1,5 @@
 ﻿using System.Collections.Generic;
+using System;
 using System.Linq;
 using OnlyWar.Models.Fleets;
 using OnlyWar.Models.Soldiers;
@@ -7,6 +8,7 @@ using OnlyWar.Models.Units;
 using OnlyWar.Models.Supply;
 using OnlyWar.Models.Recruitment;
 using OnlyWar.Models.Reports;
+using OnlyWar.Models.Events;
 
 namespace OnlyWar.Models
 {
@@ -53,6 +55,9 @@ namespace OnlyWar.Models
         // Command staff and specialists are equipped by role and by individual rather than by
         // squad type, so their kit lives outside the squad doctrine hierarchy.
         public CharacterLoadoutDoctrine CharacterLoadoutDoctrine { get; } = new();
+        // Itemized role and personal loadouts. This is deliberately separate from the legacy
+        // weapon-set doctrine while existing pooled-squad UI and saves are retired.
+        public EquipmentLoadoutDoctrine EquipmentLoadoutDoctrine { get; } = new();
         // The chapter's abstract supply/favor currency (PRD 4.23): earned from request
         // fulfillment, spent on medical procedures and (later) other materiel sinks.
         public int Requisition { get; set; }
@@ -131,6 +136,23 @@ namespace OnlyWar.Models
 
     public class PlayerForce : SectorForce
     {
+        public CampaignEventLedger CampaignEventLedger { get; }
+        public CampaignEventLedger EventLedger => CampaignEventLedger;
+        public CampaignEventRecorder CampaignEventRecorder { get; }
+        public CampaignEventRecorder EventRecorder => CampaignEventRecorder;
+        public TurnEventBuffer CurrentTurnEvents { get; } = new();
+        public ChapterChronicleLedger ChapterChronicle { get; } = new();
+        private CampaignIdentity _campaignIdentity;
+        public CampaignIdentity CampaignIdentity
+        {
+            get => _campaignIdentity;
+            set
+            {
+                _campaignIdentity = value ?? CampaignIdentity.Empty;
+                CampaignEventRecorder?.SetCampaignIdentity(_campaignIdentity);
+            }
+        }
+
         public ushort GeneseedStockpile { get; set; }
 
         // The most recently resolved turn report. This is deliberately a bounded presentation
@@ -152,10 +174,180 @@ namespace OnlyWar.Models
         public PlayerForce(Faction faction, Army army, Fleet fleet)
             : base(faction, null, army, fleet)
         {
+            CampaignIdentity = OnlyWar.Models.Events.CampaignIdentity.CreateNew(1);
+            CampaignEventLedger = new CampaignEventLedger(id =>
+                army?.PlayerSoldierMap.GetValueOrDefault(id)
+                ?? army?.FallenBrothers.GetValueOrDefault(id));
+            CampaignEventRecorder = new CampaignEventRecorder(
+                CampaignEventLedger,
+                turnBuffer: CurrentTurnEvents,
+                chronicle: ChapterChronicle,
+                soldierResolver: id =>
+                    army?.PlayerSoldierMap.GetValueOrDefault(id)
+                    ?? army?.FallenBrothers.GetValueOrDefault(id));
+            foreach (PlayerSoldier soldier in (army?.PlayerSoldierMap.Values
+                                               ?? Enumerable.Empty<PlayerSoldier>())
+                         .Concat(army?.FallenBrothers.Values
+                             ?? Enumerable.Empty<PlayerSoldier>()))
+            {
+                soldier.AttachCampaignEventRecorder(CampaignEventRecorder);
+            }
+            CampaignEventRecorder.SetCampaignIdentity(CampaignIdentity);
             GeneseedStockpile = 0;
             GeneseedPurity = 1.0f;
             HomeWorldPlanetId = null;
             RecruitmentProgram = null;
+        }
+
+        internal void AttachCampaignEventRecorder(PlayerSoldier soldier)
+        {
+            soldier?.AttachCampaignEventRecorder(CampaignEventRecorder);
+        }
+
+        // Production callers use this boundary for the canonical battle fact. The legacy
+        // AddToBattleHistory method remains available to the load/migration compatibility path,
+        // but new-format persistence must not depend on its free-text representation.
+        internal CampaignEvent RecordBattleResolved(
+            Date date,
+            string title,
+            IReadOnlyList<string> subEvents,
+            string correlationKey,
+            string dedupeKey)
+        {
+            if (date == null) throw new ArgumentNullException(nameof(date));
+            if (string.IsNullOrWhiteSpace(title))
+                throw new ArgumentException("A battle title is required.", nameof(title));
+            if (string.IsNullOrWhiteSpace(correlationKey))
+                throw new ArgumentException("A battle correlation key is required.", nameof(correlationKey));
+            if (string.IsNullOrWhiteSpace(dedupeKey))
+                throw new ArgumentException("A battle dedupe key is required.", nameof(dedupeKey));
+
+            List<string> entries = subEvents?.ToList() ?? [];
+            return CampaignEventRecorder.Record(new CampaignEventCandidate(
+                CampaignEventType.BattleResolved,
+                date.GetTotalWeeks(),
+                date.GetTotalWeeks(),
+                correlationKey,
+                dedupeKey,
+                1,
+                new BattleResolvedPayload(title, string.Join(" ", entries))));
+        }
+
+        internal CampaignEvent RecordChapterFounded(
+            Date date,
+            ChapterFoundedPayload payload,
+            int? chapterMasterId,
+            string chapterMasterName,
+            int promisedPlanetId,
+            string promisedPlanetName)
+        {
+            if (date == null) throw new ArgumentNullException(nameof(date));
+            if (payload == null) throw new ArgumentNullException(nameof(payload));
+            List<CampaignEventEntityRef> entities =
+            [
+                new CampaignEventEntityRef(
+                    CampaignEntityKind.Chapter,
+                    0,
+                    CampaignEventEntityRole.Subject,
+                    payload.ChapterName),
+                new CampaignEventEntityRef(
+                    CampaignEntityKind.Planet,
+                    promisedPlanetId,
+                    CampaignEventEntityRole.Location,
+                    promisedPlanetName)
+            ];
+            if (chapterMasterId.HasValue && !string.IsNullOrWhiteSpace(chapterMasterName))
+            {
+                entities.Add(new CampaignEventEntityRef(
+                    CampaignEntityKind.Soldier,
+                    chapterMasterId.Value,
+                    CampaignEventEntityRole.Authority,
+                    chapterMasterName));
+            }
+            return CampaignEventRecorder.Record(new CampaignEventCandidate(
+                CampaignEventType.ChapterFounded,
+                date.GetTotalWeeks(),
+                date.GetTotalWeeks(),
+                null,
+                "chapter/founded",
+                1,
+                payload,
+                entities,
+                surfaceHint: CampaignEventSurfaceFlags.ChapterChronicle,
+                importanceHint: CampaignEventImportance.Defining,
+                chronicleTreatmentHint: CampaignEventChronicleTreatment.Standalone));
+        }
+
+        internal CampaignEvent RecordProceduralDeath(
+            Date date,
+            PlayerSoldier soldier,
+            string detail)
+        {
+            if (date == null) throw new ArgumentNullException(nameof(date));
+            if (soldier == null) throw new ArgumentNullException(nameof(soldier));
+            int serviceStartWeek = soldier.SoldierEvents
+                .Select(entry => entry.Date?.GetTotalWeeks())
+                .Where(week => week.HasValue)
+                .Select(week => week.Value)
+                .DefaultIfEmpty(0)
+                .Min();
+            return CampaignEventRecorder.RecordDeath(
+                soldier,
+                date,
+                new DeathPayload(
+                    null,
+                    DeathDisposition.NonBattleProcedural,
+                    null,
+                    null,
+                    null,
+                    null,
+                    soldier.Template?.Id,
+                    soldier.Template?.Name,
+                    soldier.Template?.Rank,
+                    serviceStartWeek,
+                    soldier.FactionCasualtyCountMap.Values.Sum(value => (int)value),
+                    null,
+                    null,
+                    false,
+                    false,
+                    detail));
+        }
+
+        internal CampaignEvent RecordProceduralGeneseedRecovery(
+            Date date,
+            PlayerSoldier soldier,
+            long sourceDeathEventId,
+            GeneseedRecoveryOutcome outcome,
+            float? purity = null)
+        {
+            if (date == null) throw new ArgumentNullException(nameof(date));
+            if (soldier == null) throw new ArgumentNullException(nameof(soldier));
+            return CampaignEventRecorder.RecordGeneseedRecovery(
+                soldier,
+                date,
+                new GeneseedRecoveryPayload(null, sourceDeathEventId, outcome, purity));
+        }
+
+        internal CampaignEvent RecordMentorAssigned(
+            Date date,
+            PlayerSoldier mentee,
+            PlayerSoldier mentor,
+            Squad scoutSquad)
+        {
+            if (date == null) throw new ArgumentNullException(nameof(date));
+            if (mentee == null) throw new ArgumentNullException(nameof(mentee));
+            if (mentor == null) throw new ArgumentNullException(nameof(mentor));
+            if (scoutSquad == null) throw new ArgumentNullException(nameof(scoutSquad));
+            return CampaignEventRecorder.RecordMentorAssigned(
+                mentee,
+                date,
+                new MentorAssignedPayload(
+                    MentorRelationshipKind.ScoutMentor,
+                    MentorAssignmentContext.NeophytePlacement,
+                    scoutSquad.Id,
+                    scoutSquad.Name,
+                    mentor.Id,
+                    mentor.Name));
         }
 
         // Adds one recovered gland of the given purity to the stockpile, folding it into the

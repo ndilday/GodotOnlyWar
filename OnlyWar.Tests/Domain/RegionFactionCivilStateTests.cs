@@ -50,7 +50,7 @@ public class RegionFactionCivilStateTests
     private static RegionFaction CreateUnrest(long population)
     {
         Faction faction = new(
-            99, "Insurrectionists", Color.Red, false, false, true, GrowthType.Unrest,
+            99, "Insurrectionists", Color.Red, false, false, FactionBehavior.None, GrowthType.Unrest,
             null, null, null, null, null, null, null);
         Planet planet = new(1, "Test", new Coordinate(0, 0), 1, null, 0, 0);
         Region region = new(1, planet, 0, "Capital", new RegionCoordinate(0, 0), 0);

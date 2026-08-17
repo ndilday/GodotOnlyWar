@@ -93,12 +93,14 @@ namespace OnlyWar.Helpers
         // result to the hit location and removes it (PRD 4.8 / 5.3). Cybernetic completion
         // marks the location augmetic; vat-grown restores it organically. Both clear the
         // location's wounds, returning it to full capability.
-        public static void ResolveProcedures(IList<MedicalProcedure> procedures,
-                                             IReadOnlyDictionary<int, PlayerSoldier> soldierMap)
+        public static IReadOnlyList<CompletedMedicalProcedure> ResolveProcedures(
+            IList<MedicalProcedure> procedures,
+            IReadOnlyDictionary<int, PlayerSoldier> soldierMap)
         {
+            List<CompletedMedicalProcedure> completed = new();
             if (procedures == null)
             {
-                return;
+                return completed;
             }
             for (int i = procedures.Count - 1; i >= 0; i--)
             {
@@ -108,29 +110,37 @@ namespace OnlyWar.Helpers
                 {
                     continue;
                 }
-                CompleteProcedure(procedure, soldierMap);
+                CompletedMedicalProcedure completion = CompleteProcedure(procedure, soldierMap);
+                if (completion != null)
+                {
+                    completed.Add(completion);
+                }
                 procedures.RemoveAt(i);
             }
             MedicalProcedureService.SynchronizeProcedureReservations(
                 soldierMap?.Values,
                 procedures);
+            return completed;
         }
 
-        private static void CompleteProcedure(MedicalProcedure procedure,
-                                              IReadOnlyDictionary<int, PlayerSoldier> soldierMap)
+        private static CompletedMedicalProcedure CompleteProcedure(
+            MedicalProcedure procedure,
+            IReadOnlyDictionary<int, PlayerSoldier> soldierMap)
         {
             if (soldierMap == null
                 || !soldierMap.TryGetValue(procedure.SoldierId, out PlayerSoldier soldier)
                 || soldier?.Body == null)
             {
-                return;
+                return null;
             }
             HitLocation location = soldier.Body.HitLocations
                 .FirstOrDefault(hl => hl.Template.Id == procedure.HitLocationTemplateId);
             if (location == null)
             {
-                return;
+                return null;
             }
+            bool wasAlreadyCybernetic = location.IsCybernetic;
+            bool wasSevered = location.IsSevered;
             IEnumerable<HitLocation> restoredLocations = soldier.Body.HitLocations
                 .Where(candidate => candidate == location
                     || soldier.Body.GetReplacementParent(candidate) == location);
@@ -149,6 +159,14 @@ namespace OnlyWar.Helpers
                     restoredLocation.IsCybernetic = false;
                 }
             }
+            return new CompletedMedicalProcedure(
+                soldier,
+                location.Template.Id,
+                location.Template.Name,
+                procedure.ProcedureType,
+                wasAlreadyCybernetic,
+                MedicalProcedureRules.GetWeeks(procedure.ProcedureType, wasSevered),
+                procedure.RequisitionCost);
         }
     }
 }

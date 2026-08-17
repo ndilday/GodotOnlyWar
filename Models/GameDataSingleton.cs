@@ -14,6 +14,7 @@ namespace OnlyWar.Models
         public GameRulesData GameRulesData { get; private set; }
         public Sector Sector { get; private set; }
         public Date Date { get; set; }
+        public bool UpgradePending { get; internal set; }
         public bool IsInitialized => GameRulesData != null && Sector != null && Date != null;
         internal CampaignRecoverabilityTracker Recoverability { get; } = new();
 
@@ -22,13 +23,19 @@ namespace OnlyWar.Models
             GameRulesData = gameRulesData;
             Date = date;
             Sector = SectorBuilder.GenerateSector(seed, gameRulesData, date, chapterName); // New sector generation
+            UpgradePending = false;
             Recoverability.BeginNewCampaign();
         }
-        public void LoadGameDataFromBlob(GameRulesData gameRulesData, Date date, Sector sector)
+        public void LoadGameDataFromBlob(
+            GameRulesData gameRulesData,
+            Date date,
+            Sector sector,
+            bool upgradePending = false)
         {
             GameRulesData = gameRulesData;
             Date = date;
             Sector = sector; // Load existing sector data
+            UpgradePending = upgradePending;
             Recoverability.BeginLoadedCampaign();
          }
 

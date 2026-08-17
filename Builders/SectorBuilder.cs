@@ -6,6 +6,7 @@ using System.Collections.Generic;
 using System.Linq;
 using OnlyWar.Helpers;
 using OnlyWar.Helpers.Extensions;
+using OnlyWar.Models.Events;
 
 namespace OnlyWar.Builders
 {
@@ -47,6 +48,7 @@ namespace OnlyWar.Builders
             ISoldierTrainingService trainingService = new SoldierTrainingCalculator(
                 data.BaseSkillMap.Values, data.TrainingProfiles.Values, ratingCalculator);
             PlayerForce playerForce = NewChapterBuilder.CreateChapter(data, trainingService, trainingStartDate, currentDate, chapterName);
+            playerForce.CampaignIdentity = CampaignIdentity.CreateNew(seed);
 
             // The scenario stamp resolves the sitting Sector Lord, so the sector and its derived
             // governance designation must exist first. The fleet starts empty here; the scenario
@@ -58,6 +60,10 @@ namespace OnlyWar.Builders
             GameDataSingleton.Instance.SetSectorDuringGeneration(sector);
             sector.Scenario = ScenarioBuilder.StampPromisedWorld(
                 sector, data, currentDate, playerForce, planetList, characterList);
+            ChapterChronicleProjector.Reconcile(
+                playerForce.CampaignEventLedger,
+                playerForce.ChapterChronicle,
+                playerForce.CampaignIdentity);
             return sector;
         }
 

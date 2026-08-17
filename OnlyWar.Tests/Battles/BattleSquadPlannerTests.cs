@@ -2080,7 +2080,7 @@ public class BattleSquadPlannerTests
             Color.Red,
             isPlayer,
             isDefaultFaction: false,
-            canInfiltrate: false,
+            behavior: FactionBehavior.None,
             GrowthType.Logistic,
             new Dictionary<int, Species> { [TestModelFactory.HumanSpecies.Id] = TestModelFactory.HumanSpecies },
             new Dictionary<int, SoldierTemplate>(),

@@ -248,7 +248,7 @@ public class MissionOutcomeRecorderTests
     }
 
     private static Faction CreateFaction(int id, string name, bool isPlayer) =>
-        new(id, name, Color.White, isPlayer, isDefaultFaction: false, canInfiltrate: false, GrowthType.None,
+        new(id, name, Color.White, isPlayer, isDefaultFaction: false, behavior: FactionBehavior.None, GrowthType.None,
             new Dictionary<int, Species> { [TestModelFactory.HumanSpecies.Id] = TestModelFactory.HumanSpecies },
             new Dictionary<int, SoldierTemplate> { [TestModelFactory.MarineTemplate.Id] = TestModelFactory.MarineTemplate },
             new Dictionary<int, SquadTemplate>(),

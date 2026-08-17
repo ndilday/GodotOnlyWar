@@ -160,10 +160,13 @@ namespace OnlyWar.Helpers.Missions.Assault
             // A defence order protects the geographic region, not merely one faction's enclave
             // within it, so every allied presence in the assaulted region is pooled into the
             // defence. Until diplomacy exists that means the Chapter and the world's own defence
-            // forces and nobody else (FactionDispositionService.AreAllied) - two xenos factions
+            // forces and nobody else (FactionRelationshipService.AreAllied) - two xenos factions
             // sharing a region do NOT reinforce each other, they each defend alone.
             List<RegionFaction> alliedDefenders = defendingRegionFaction.Region.RegionFactionMap.Values
-                .Where(rf => FactionDispositionService.AreAllied(rf.PlanetFaction.Faction, defendingRegionFaction.PlanetFaction.Faction))
+                .Where(rf => FactionRelationshipService.AreAllied(
+                    rf.PlanetFaction.Faction,
+                    defendingRegionFaction.PlanetFaction.Faction,
+                    defendingRegionFaction.Region.Planet))
                 .ToList();
 
             // 1. Get all landed squads in the region with defensive orders. A diversion force is
@@ -434,7 +437,10 @@ namespace OnlyWar.Helpers.Missions.Assault
         {
             Faction defender = defendingRegionFaction.PlanetFaction.Faction;
             return defendingRegionFaction.Region.RegionFactionMap.Values
-                .Where(rf => FactionDispositionService.AreAllied(rf.PlanetFaction.Faction, defender))
+                .Where(rf => FactionRelationshipService.AreAllied(
+                    rf.PlanetFaction.Faction,
+                    defender,
+                    defendingRegionFaction.Region.Planet))
                 .SelectMany(rf => rf.LandedSquads)
                 .Where(s => s.CurrentOrders?.Mission.MissionType == MissionType.DefenseInDepth
                          || s.CurrentOrders?.Mission.MissionType == MissionType.Diversion

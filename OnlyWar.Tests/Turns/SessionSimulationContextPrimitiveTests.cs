@@ -1,4 +1,4 @@
-﻿using OnlyWar.Helpers.Simulation;
+using OnlyWar.Helpers.Simulation;
 using OnlyWar.Helpers.Turns;
 using OnlyWar.Models;
 using OnlyWar.Models.Orders;
@@ -35,7 +35,7 @@ public sealed class SessionSimulationContextPrimitiveTests
     {
         GameSession session = CreateSession();
         TurnResolutionResult result = new();
-        TurnIntelLedger intelLedger = new();
+        TurnIntelligenceLedger intelLedger = new();
         Planet planet = new(7, "Scope", new Coordinate(1, 2), 1, null, 0, 0);
         Order firstOrder = CreateOrder(101);
         Order secondOrder = CreateOrder(102);
@@ -67,7 +67,7 @@ public sealed class SessionSimulationContextPrimitiveTests
         SimulationContext context = new(
             CreateSession(),
             new TurnResolutionResult(),
-            new TurnIntelLedger(),
+            new TurnIntelligenceLedger(),
             playerOrders: null);
 
         Assert.Empty(context.PlayerOrders);
@@ -100,7 +100,7 @@ public sealed class SessionSimulationContextPrimitiveTests
     {
         GameSession session = CreateSession();
         TurnResolutionResult result = new();
-        TurnIntelLedger intelLedger = new();
+        TurnIntelligenceLedger intelLedger = new();
 
         Assert.Equal("session", Assert.Throws<ArgumentNullException>(
             () => new SimulationContext(null, result, intelLedger)).ParamName);

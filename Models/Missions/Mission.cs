@@ -1,5 +1,6 @@
 ﻿using OnlyWar.Builders;
 using OnlyWar.Models.Planets;
+using OnlyWar.Models;
 using System;
 
 namespace OnlyWar.Models.Missions
@@ -18,6 +19,13 @@ namespace OnlyWar.Models.Missions
         public int Id { get; private set; }
         public MissionType MissionType { get; private set; }
         public RegionFaction RegionFaction { get; private set; }
+        private Region TargetRegion { get; }
+        private Faction TargetFactionWithoutPresence { get; }
+        public Region Region => RegionFaction?.Region ?? TargetRegion;
+        public Faction TargetFaction => RegionFaction?.PlanetFaction?.Faction ?? TargetFactionWithoutPresence;
+        public StrategicTarget Target => Region == null || TargetFaction == null
+            ? null
+            : new StrategicTarget(Region, TargetFaction, RegionFaction);
         public int MissionSize { get; private set; }
         // Ambush opportunities roll their concrete opposing-force budget when intelligence
         // discovers them, so the player can make an informed commitment and execution can use
@@ -34,6 +42,30 @@ namespace OnlyWar.Models.Missions
             Id = id;
             MissionType = missionType;
             RegionFaction = regionFaction;
+            TargetRegion = regionFaction?.Region;
+            TargetFactionWithoutPresence = regionFaction?.PlanetFaction?.Faction;
+            MissionSize = missionSize;
+            TargetBattleValue = targetBattleValue;
+        }
+
+        /// <summary>
+        /// Creates an intelligence-led mission whose target may not currently occupy the region.
+        /// Execution resolves the optional current presence through <see cref="Target"/>.
+        /// </summary>
+        public Mission(
+            int id,
+            MissionType missionType,
+            Region region,
+            Faction targetFaction,
+            int missionSize,
+            long? targetBattleValue = null)
+        {
+            Id = id;
+            MissionType = missionType;
+            RegionFaction = null;
+            TargetRegion = region ?? throw new ArgumentNullException(nameof(region));
+            TargetFactionWithoutPresence = targetFaction
+                ?? throw new ArgumentNullException(nameof(targetFaction));
             MissionSize = missionSize;
             TargetBattleValue = targetBattleValue;
         }
@@ -47,6 +79,21 @@ namespace OnlyWar.Models.Missions
                 IdGenerator.GetNextMissionId(),
                 missionType,
                 regionFaction,
+                missionSize,
+                targetBattleValue)
+        { }
+
+        public Mission(
+            MissionType missionType,
+            Region region,
+            Faction targetFaction,
+            int missionSize,
+            long? targetBattleValue = null)
+            : this(
+                IdGenerator.GetNextMissionId(),
+                missionType,
+                region,
+                targetFaction,
                 missionSize,
                 targetBattleValue)
         { }

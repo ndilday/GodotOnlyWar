@@ -31,7 +31,7 @@ public class ChapterGenerationTemplatesTests
             playerFaction.Color,
             playerFaction.IsPlayerFaction,
             playerFaction.IsDefaultFaction,
-            playerFaction.CanInfiltrate,
+            playerFaction.Behavior,
             playerFaction.GrowthType,
             playerFaction.Species,
             playerFaction.SoldierTemplates.Values.Where(st => st.Name != "Captain").ToDictionary(st => st.Id),

@@ -38,6 +38,12 @@ namespace OnlyWar.Models.Squads
         /// SquadTemplate.DefaultWeapons.
         /// </summary>
         public WeaponSet DefaultWeapons { get; }
+        /// <summary>
+        /// When present, this element owns a contextual personal-equipment role. The same
+        /// SoldierTemplate can therefore be individually equipped in one formation and pooled in
+        /// another without a global character flag.
+        /// </summary>
+        public PersonalEquipmentRole PersonalEquipmentRole { get; }
         public IReadOnlyList<SquadTemplateElementQuota> Quotas { get; }
 
         /// <summary>
@@ -66,13 +72,15 @@ namespace OnlyWar.Models.Squads
             int id = 0,
             WeaponSet defaultWeapons = null,
             IReadOnlyList<SquadTemplateElementQuota> quotas = null,
-            bool rollsStrength = false)
+            bool rollsStrength = false,
+            PersonalEquipmentRole personalEquipmentRole = null)
         {
             Id = id;
             SoldierTemplate = soldierTemplate;
             MinimumNumber = minNumber;
             MaximumNumber = maxNumber;
             DefaultWeapons = defaultWeapons;
+            PersonalEquipmentRole = personalEquipmentRole;
             Quotas = quotas ?? [];
             RollsStrength = rollsStrength && maxNumber > minNumber;
         }
