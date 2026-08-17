@@ -1,8 +1,11 @@
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using OnlyWar.Helpers.Database.GameState;
 using OnlyWar.Models;
 using OnlyWar.Models.Orders;
+using OnlyWar.Models.Events;
+using OnlyWar.Models.Planets;
 using OnlyWar.Models.Soldiers;
 
 namespace OnlyWar.Helpers
@@ -39,6 +42,7 @@ namespace OnlyWar.Helpers
             army.Requisition = gameState.Requisition;
             army.LoadoutDoctrine.ReplaceWith(gameState.ChapterLoadoutDoctrine);
             army.CharacterLoadoutDoctrine.ReplaceWith(gameState.CharacterLoadoutDoctrine);
+            army.EquipmentLoadoutDoctrine.ReplaceWith(gameState.EquipmentLoadoutDoctrine);
             army.MedicalProcedures.AddRange(gameState.MedicalProcedures ?? new List<MedicalProcedure>());
             MedicalProcedureService.SynchronizeProcedureReservations(
                 army.PlayerSoldierMap.Values,
@@ -57,18 +61,44 @@ namespace OnlyWar.Helpers
                 gameRulesData.PlayerFaction,
                 army,
                 fleet);
+            playerForce.CampaignIdentity = gameState.CampaignIdentity
+                ?? OnlyWar.Models.Events.CampaignIdentity.Empty;
+            foreach (var @event in gameState.CampaignEventLedger?.Events ?? [])
+            {
+                playerForce.CampaignEventLedger.Append(@event);
+            }
+            foreach (var entry in gameState.ChapterChronicle?.Entries ?? [])
+            {
+                playerForce.ChapterChronicle.Append(entry);
+            }
             playerForce.GeneseedStockpile = (ushort)gameState.GeneseedStockpile;
             playerForce.GeneseedPurity = gameState.GeneseedPurity;
             playerForce.HomeWorldPlanetId = gameState.HomeWorldPlanetId;
             playerForce.RecruitmentProgram =
                 RecruitmentSaveMapper.FromSaveData(gameState.Recruitment);
             playerForce.LastTurnReportSnapshot = gameState.LastTurnReportSnapshot;
+            foreach (var historyDay in gameState.History ?? new Dictionary<Date, List<EventHistory>>())
+            {
+                foreach (EventHistory entry in historyDay.Value ?? [])
+                {
+                    playerForce.AddToBattleHistory(
+                        historyDay.Key,
+                        entry.EventTitle,
+                        entry.SubEvents ?? []);
+                }
+            }
             playerForce.Requests.AddRange(gameState.Requests ?? []);
             playerForce.Pledges.AddRange(gameState.Pledges ?? []);
-            Sector sector = new Sector(playerForce, gameState.Characters, gameState.Planets, gameState.Fleets);
+            Sector sector = new Sector(
+                playerForce,
+                gameState.Characters,
+                gameState.Planets,
+                gameState.Fleets,
+                gameState.RelationshipLedger);
             // Reattach the Opening Scenario state (null for sandbox saves), which rides on the
             // GlobalData row rather than being derived (Design/Reference/OpeningScenario.md).
             sector.Scenario = gameState.Scenario;
+            EnsureCompatibilityFoundingEvent(playerForce, sector, gameRulesData, gameState.CurrentDate);
 
             // The data-access layer restores each Order onto its squads (Squad.CurrentOrders) but
             // never re-registers it with the Sector, whose Orders collection is authoritative for
@@ -86,6 +116,64 @@ namespace OnlyWar.Helpers
                 sector.AddNewOrder(order);
             }
             return sector;
+        }
+
+        private static void EnsureCompatibilityFoundingEvent(
+            PlayerForce playerForce,
+            Sector sector,
+            GameRulesData gameRulesData,
+            Date currentDate)
+        {
+            if (playerForce == null
+                || sector?.Scenario == null
+                || playerForce.CampaignEventLedger.Events.Any(
+                    @event => @event.Type == CampaignEventType.ChapterFounded))
+            {
+                return;
+            }
+
+            Planet promisedWorld = sector.Planets.GetValueOrDefault(
+                sector.Scenario.PromisedPlanetId);
+            string chapterName = playerForce.Army.OrderOfBattle?.Name
+                ?? playerForce.Faction?.Name
+                ?? "Chapter";
+            PlayerSoldier chapterMaster = playerForce.Army.OrderOfBattle?.GetAllMembers()
+                .OfType<PlayerSoldier>()
+                .FirstOrDefault(soldier => soldier.Template?.Id
+                    == gameRulesData.ChapterTemplates.ChapterMaster.Id);
+            Character authority = sector.Characters.FirstOrDefault(character =>
+                character.Id == sector.Scenario.OriginalAuthorityCharacterId);
+            int fallbackWeek = Math.Max(1, currentDate?.GetTotalWeeks() ?? 1);
+            int foundingWeek = playerForce.CampaignEventLedger.Events
+                .Select(@event => @event.OccurredWeek)
+                .Where(week => week > 0)
+                .DefaultIfEmpty(fallbackWeek)
+                .Min();
+            string planetName = promisedWorld?.Name
+                ?? $"Planet {sector.Scenario.PromisedPlanetId}";
+            string directive = string.IsNullOrWhiteSpace(sector.Scenario.BriefingText)
+                ? "The Chapter's opening directive was preserved without additional briefing text."
+                : sector.Scenario.BriefingText;
+            int activeStrength = playerForce.Army.OrderOfBattle == null
+                ? 0
+                : playerForce.Army.OrderOfBattle.GetAllMembers().Count();
+            ChapterFoundedPayload payload = new(
+                chapterName,
+                foundingWeek,
+                chapterMaster?.Id,
+                chapterMaster?.Name ?? "Unknown Chapter Master",
+                activeStrength,
+                authority?.Name ?? "The Sector Lord",
+                directive,
+                sector.Scenario.PromisedPlanetId,
+                planetName);
+            playerForce.RecordChapterFounded(
+                Date.FromTotalWeeks(foundingWeek),
+                payload,
+                chapterMaster?.Id,
+                chapterMaster?.Name,
+                sector.Scenario.PromisedPlanetId,
+                planetName);
         }
     }
 }

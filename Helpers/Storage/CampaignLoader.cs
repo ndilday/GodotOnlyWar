@@ -30,7 +30,8 @@ namespace OnlyWar.Helpers.Storage
             GameDataSingleton.Instance.LoadGameDataFromBlob(
                 gameRulesData,
                 gameState.CurrentDate,
-                sector);
+                sector,
+                gameState.UpgradePending);
         }
 
         private static GameStateDataBlob LoadGameData(
@@ -68,7 +69,9 @@ namespace OnlyWar.Helpers.Storage
                 gameRulesData.WeaponSets,
                 hitLocationMap,
                 gameRulesData.BaseSkillMap,
-                soldierTemplateMap);
+                soldierTemplateMap,
+                gameRulesData.EquipmentTemplates,
+                gameRulesData.EquipmentKits);
         }
     }
 }

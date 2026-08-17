@@ -1,8 +1,11 @@
 using OnlyWar.Models.Equippables;
 using OnlyWar.Models.Planets;
 using OnlyWar.Models.Squads;
+using System;
 using System.Collections.Generic;
 using System.Data;
+using System.IO;
+using System.Linq;
 
 namespace OnlyWar.Helpers.Database.GameState
 {
@@ -148,6 +151,203 @@ namespace OnlyWar.Helpers.Database.GameState
                     + "WHERE EXISTS (SELECT 1 FROM Soldier WHERE Id = @key)";
                 command.AddParam("@key", soldierId);
                 command.AddParam("@weaponSetId", weaponSet.Id);
+                command.ExecuteNonQuery();
+            }
+        }
+
+        internal EquipmentLoadoutDoctrine GetEquipmentDoctrine(
+            IDbConnection connection,
+            IReadOnlyDictionary<int, EquipmentTemplate> equipmentTemplates,
+            IReadOnlyDictionary<int, EquipmentKitTemplate> equipmentKits)
+        {
+            EquipmentLoadoutDoctrine doctrine = new();
+            Dictionary<int, EquipmentLoadout> roleLoadouts = ReadEquipmentProfiles(
+                connection,
+                "ChapterEquipmentRoleLoadout",
+                "PersonalEquipmentRoleId",
+                equipmentTemplates);
+            foreach ((int roleId, EquipmentLoadout loadout) in roleLoadouts)
+            {
+                doctrine.SetRoleDefault(roleId, loadout);
+            }
+
+            Dictionary<int, EquipmentLoadout> personalLoadouts = ReadEquipmentProfiles(
+                connection,
+                "SoldierEquipmentLoadout",
+                "SoldierId",
+                equipmentTemplates);
+            foreach ((int soldierId, EquipmentLoadout loadout) in personalLoadouts)
+            {
+                doctrine.SetPersonalLoadout(soldierId, loadout);
+            }
+            return doctrine;
+        }
+
+        internal void SaveEquipmentDoctrine(
+            IDbTransaction transaction, EquipmentLoadoutDoctrine doctrine)
+        {
+            if (doctrine == null)
+            {
+                return;
+            }
+
+            foreach ((int roleId, EquipmentLoadout loadout) in doctrine.RoleDefaults)
+            {
+                InsertEquipmentProfile(
+                    transaction,
+                    "ChapterEquipmentRoleLoadout",
+                    "PersonalEquipmentRoleId",
+                    roleId,
+                    loadout);
+                InsertEquipmentItems(
+                    transaction,
+                    "ChapterEquipmentRoleLoadoutItem",
+                    "PersonalEquipmentRoleId",
+                    roleId,
+                    loadout);
+            }
+
+            foreach ((int soldierId, EquipmentLoadout loadout) in doctrine.PersonalLoadouts)
+            {
+                using IDbCommand profileCommand = transaction.Connection.CreateCommand();
+                profileCommand.Transaction = transaction;
+                profileCommand.CommandText =
+                    "INSERT INTO SoldierEquipmentLoadout (SoldierId, ArmorEquipmentId) "
+                    + "SELECT @key, @armorId "
+                    + "WHERE EXISTS (SELECT 1 FROM Soldier WHERE Id = @key)";
+                profileCommand.AddParam("@key", soldierId);
+                profileCommand.AddParam("@armorId", loadout.Armor?.Id);
+                profileCommand.ExecuteNonQuery();
+
+                using IDbCommand itemCommand = transaction.Connection.CreateCommand();
+                itemCommand.Transaction = transaction;
+                itemCommand.CommandText =
+                    "INSERT INTO SoldierEquipmentLoadoutItem "
+                    + "(SoldierId, EquipmentId, Quantity, InitialReadyOrder) "
+                    + "SELECT @key, @equipmentId, @quantity, @readyOrder "
+                    + "WHERE EXISTS (SELECT 1 FROM Soldier WHERE Id = @key)";
+                itemCommand.AddParam("@key", soldierId);
+                itemCommand.AddParam("@equipmentId", 0);
+                itemCommand.AddParam("@quantity", 0);
+                itemCommand.AddParam("@readyOrder", null);
+                foreach (EquipmentLoadoutEntry item in loadout.Items)
+                {
+                    ((IDataParameter)itemCommand.Parameters["@equipmentId"]).Value = item.Equipment.Id;
+                    ((IDataParameter)itemCommand.Parameters["@quantity"]).Value = item.Quantity;
+                    ((IDataParameter)itemCommand.Parameters["@readyOrder"]).Value = item.InitialReadyOrder;
+                    itemCommand.ExecuteNonQuery();
+                }
+            }
+        }
+
+        private static Dictionary<int, EquipmentLoadout> ReadEquipmentProfiles(
+            IDbConnection connection,
+            string profileTable,
+            string keyColumn,
+            IReadOnlyDictionary<int, EquipmentTemplate> equipmentTemplates)
+        {
+            Dictionary<int, EquipmentTemplate> armorByKey = [];
+            Dictionary<int, List<EquipmentLoadoutEntry>> itemsByKey = [];
+            using (IDbCommand profileCommand = connection.CreateCommand())
+            {
+                profileCommand.CommandText =
+                    $"SELECT {keyColumn}, ArmorEquipmentId FROM {profileTable}";
+                using IDataReader reader = profileCommand.ExecuteReader();
+                while (reader.Read())
+                {
+                    int key = reader.GetInt32(0);
+                    armorByKey[key] = reader.IsDBNull(1)
+                        ? null
+                        : ResolveEquipment(equipmentTemplates, reader.GetInt32(1));
+                }
+            }
+
+            string itemTable = profileTable + "Item";
+            using (IDbCommand itemCommand = connection.CreateCommand())
+            {
+                itemCommand.CommandText =
+                    $"SELECT {keyColumn}, EquipmentId, Quantity, InitialReadyOrder FROM {itemTable}";
+                using IDataReader reader = itemCommand.ExecuteReader();
+                while (reader.Read())
+                {
+                    int key = reader.GetInt32(0);
+                    if (!itemsByKey.TryGetValue(key, out List<EquipmentLoadoutEntry> items))
+                    {
+                        items = [];
+                        itemsByKey[key] = items;
+                    }
+                    items.Add(new EquipmentLoadoutEntry(
+                        ResolveEquipment(equipmentTemplates, reader.GetInt32(1)),
+                        reader.GetInt32(2),
+                        reader.IsDBNull(3) ? null : reader.GetInt32(3)));
+                }
+            }
+
+            foreach ((int key, List<EquipmentLoadoutEntry> items) in itemsByKey)
+            {
+                if (!armorByKey.ContainsKey(key))
+                {
+                    armorByKey[key] = null;
+                }
+            }
+
+            return armorByKey.ToDictionary(
+                pair => pair.Key,
+                pair => new EquipmentLoadout(
+                    pair.Value,
+                    itemsByKey.GetValueOrDefault(pair.Key) ?? []));
+        }
+
+        private static EquipmentTemplate ResolveEquipment(
+            IReadOnlyDictionary<int, EquipmentTemplate> equipmentTemplates,
+            int equipmentId)
+        {
+            if (equipmentTemplates == null
+                || !equipmentTemplates.TryGetValue(equipmentId, out EquipmentTemplate equipment))
+            {
+                throw new InvalidDataException(
+                    $"Save references unknown equipment template {equipmentId}.");
+            }
+            return equipment;
+        }
+
+        private static void InsertEquipmentProfile(
+            IDbTransaction transaction,
+            string table,
+            string keyColumn,
+            int key,
+            EquipmentLoadout loadout)
+        {
+            using IDbCommand command = transaction.Connection.CreateCommand();
+            command.Transaction = transaction;
+            command.CommandText =
+                $"INSERT INTO {table} ({keyColumn}, ArmorEquipmentId) VALUES (@key, @armorId)";
+            command.AddParam("@key", key);
+            command.AddParam("@armorId", loadout.Armor?.Id);
+            command.ExecuteNonQuery();
+        }
+
+        private static void InsertEquipmentItems(
+            IDbTransaction transaction,
+            string table,
+            string keyColumn,
+            int key,
+            EquipmentLoadout loadout)
+        {
+            using IDbCommand command = transaction.Connection.CreateCommand();
+            command.Transaction = transaction;
+            command.CommandText =
+                $"INSERT INTO {table} ({keyColumn}, EquipmentId, Quantity, InitialReadyOrder) "
+                + "VALUES (@key, @equipmentId, @quantity, @readyOrder)";
+            command.AddParam("@key", key);
+            command.AddParam("@equipmentId", 0);
+            command.AddParam("@quantity", 0);
+            command.AddParam("@readyOrder", null);
+            foreach (EquipmentLoadoutEntry item in loadout.Items)
+            {
+                ((IDataParameter)command.Parameters["@equipmentId"]).Value = item.Equipment.Id;
+                ((IDataParameter)command.Parameters["@quantity"]).Value = item.Quantity;
+                ((IDataParameter)command.Parameters["@readyOrder"]).Value = item.InitialReadyOrder;
                 command.ExecuteNonQuery();
             }
         }

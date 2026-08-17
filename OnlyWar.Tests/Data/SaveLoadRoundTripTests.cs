@@ -148,10 +148,10 @@ public class SaveLoadRoundTripTests
         PlanetFaction intelFaction = intelPlanet.PlanetFactionMap.Values.First();
         Region intelRegionA = intelPlanet.Regions.First(r => r != null);
         Region intelRegionB = intelPlanet.Regions.Last(r => r != null);
-        float baseIntelA = intelFaction.GetRegionIntel(intelRegionA);
-        float baseIntelB = intelFaction.GetRegionIntel(intelRegionB);
-        intelFaction.AddRegionIntel(intelRegionA, 2.25f);
-        intelFaction.AddRegionIntel(intelRegionB, 0.5f);
+        float baseIntelA = intelFaction.GetRegionAwareness(intelRegionA);
+        float baseIntelB = intelFaction.GetRegionAwareness(intelRegionB);
+        intelFaction.AddRegionAwareness(intelRegionA, 2.25f);
+        intelFaction.AddRegionAwareness(intelRegionB, 0.5f);
 
         Squad orderedSquad = armyRoot.GetAllSquads().First(s => s.Members.Count > 0);
         Region orderRegion = sector.Planets.Values
@@ -413,8 +413,8 @@ public class SaveLoadRoundTripTests
             PlanetFaction loadedIntelFaction = loadedIntelPlanet.PlanetFactionMap[intelFaction.Faction.Id];
             Region loadedIntelA = loadedIntelPlanet.Regions.Single(r => r != null && r.Id == intelRegionA.Id);
             Region loadedIntelB = loadedIntelPlanet.Regions.Single(r => r != null && r.Id == intelRegionB.Id);
-            Assert.Equal(baseIntelA + 2.25f, loadedIntelFaction.GetRegionIntel(loadedIntelA), 3);
-            Assert.Equal(baseIntelB + 0.5f, loadedIntelFaction.GetRegionIntel(loadedIntelB), 3);
+            Assert.Equal(baseIntelA + 2.25f, loadedIntelFaction.GetRegionAwareness(loadedIntelA), 3);
+            Assert.Equal(baseIntelB + 0.5f, loadedIntelFaction.GetRegionAwareness(loadedIntelB), 3);
 
             Squad loadedSquad = loaded.Units
                 .SelectMany(u => u.GetAllSquads())

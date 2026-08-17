@@ -1,4 +1,5 @@
 using OnlyWar.Models;
+using OnlyWar.Models.Events;
 using System;
 using System.Data;
 using System.IO;
@@ -12,7 +13,7 @@ namespace OnlyWar.Helpers.Database.GameState
     // nullable Home World id is set when the Promised World is secured.
     public sealed record GlobalState(Date Date, int Requisition, int GeneseedStockpile,
                                      float GeneseedPurity, CampaignScenario Scenario,
-                                     int? HomeWorldPlanetId);
+                                     int? HomeWorldPlanetId, CampaignIdentity CampaignIdentity = null);
 
     public class GlobalDataAccess
     {
@@ -29,15 +30,16 @@ namespace OnlyWar.Helpers.Database.GameState
             return Convert.ToInt32(result);
         }
 
-        public void EnsureCompatibleSaveVersion(IDbConnection connection)
+        public int EnsureCompatibleSaveVersion(IDbConnection connection)
         {
             int version = GetSaveVersion(connection);
-            if (version != SaveFormat.CurrentVersion)
+            if (version < SaveFormat.FirstMigratableVersion || version > SaveFormat.CurrentVersion)
             {
                 throw new InvalidDataException(
                     $"Save version {version} is not supported by this build "
-                    + $"(expected {SaveFormat.CurrentVersion}).");
+                    + $"(supported {SaveFormat.FirstMigratableVersion}-{SaveFormat.CurrentVersion}).");
             }
+            return version;
         }
 
         public GlobalState GetGlobalData(IDbConnection connection)
@@ -71,9 +73,10 @@ namespace OnlyWar.Helpers.Database.GameState
                     }
 
                     int? homeWorldPlanetId = reader[13] is DBNull ? null : reader.GetInt32(13);
+                    CampaignIdentity campaignIdentity = ReadCampaignIdentity(reader);
                     state = new GlobalState(new Date(millenium, year, week), requisition,
                                             geneseedStockpile, geneseedPurity, scenario,
-                                            homeWorldPlanetId);
+                                            homeWorldPlanetId, campaignIdentity);
                 }
             }
             return state;
@@ -81,7 +84,8 @@ namespace OnlyWar.Helpers.Database.GameState
 
         public void SaveGlobalData(IDbTransaction transaction, Date currentDate, int requisition,
                                    int geneseedStockpile, float geneseedPurity,
-                                   CampaignScenario scenario, int? homeWorldPlanetId)
+                                   CampaignScenario scenario, int? homeWorldPlanetId,
+                                   CampaignIdentity campaignIdentity = null)
         {
             using (var command = transaction.Connection.CreateCommand())
             {
@@ -90,12 +94,14 @@ namespace OnlyWar.Helpers.Database.GameState
                     (Millenium, Year, Week, SaveVersion, Requisition, GeneseedStockpile,
                      GeneseedPurity, ScenarioType, ScenarioPromisedPlanetId, ScenarioState,
                      ScenarioBriefingAcknowledged, ScenarioBriefingText,
-                     ScenarioOriginalAuthorityCharacterId, HomeWorldPlanetId)
+                     ScenarioOriginalAuthorityCharacterId, HomeWorldPlanetId,
+                     CampaignId, CampaignSeed, RandomAlgorithmVersion)
                     VALUES
                     (@millenium, @year, @week, @saveVersion, @requisition, @geneseedStockpile,
                      @geneseedPurity, @scenarioType, @scenarioPromisedPlanetId, @scenarioState,
                      @scenarioBriefingAcknowledged, @scenarioBriefingText,
-                     @scenarioOriginalAuthorityCharacterId, @homeWorldPlanetId);";
+                     @scenarioOriginalAuthorityCharacterId, @homeWorldPlanetId,
+                     @campaignId, @campaignSeed, @randomAlgorithmVersion);";
                 command.AddParam("@millenium", currentDate.Millenium);
                 command.AddParam("@year", currentDate.Year);
                 command.AddParam("@week", currentDate.Week);
@@ -112,8 +118,40 @@ namespace OnlyWar.Helpers.Database.GameState
                 command.AddParam("@scenarioOriginalAuthorityCharacterId",
                     scenario?.OriginalAuthorityCharacterId ?? 0);
                 command.AddParam("@homeWorldPlanetId", homeWorldPlanetId);
+                CampaignIdentity identity = campaignIdentity ?? CampaignIdentity.Empty;
+                command.AddParam("@campaignId", identity.CampaignId.ToString("D"));
+                command.AddParam("@campaignSeed", identity.CampaignSeed);
+                command.AddParam("@randomAlgorithmVersion", identity.RandomAlgorithmVersion);
                 command.ExecuteNonQuery();
             }
+        }
+
+        private static CampaignIdentity ReadCampaignIdentity(IDataRecord reader)
+        {
+            int campaignIdOrdinal = TryGetOrdinal(reader, "CampaignId");
+            int seedOrdinal = TryGetOrdinal(reader, "CampaignSeed");
+            int versionOrdinal = TryGetOrdinal(reader, "RandomAlgorithmVersion");
+            if (campaignIdOrdinal < 0 || seedOrdinal < 0 || versionOrdinal < 0
+                || reader.IsDBNull(campaignIdOrdinal) || reader.IsDBNull(seedOrdinal))
+            {
+                return null;
+            }
+
+            string campaignIdText = reader.GetString(campaignIdOrdinal);
+            if (!Guid.TryParse(campaignIdText, out Guid campaignId))
+                throw new InvalidDataException($"GlobalData contains invalid CampaignId '{campaignIdText}'.");
+            long seed = Convert.ToInt64(reader.GetValue(seedOrdinal));
+            int version = reader.IsDBNull(versionOrdinal) ? 1 : Convert.ToInt32(reader.GetValue(versionOrdinal));
+            return new CampaignIdentity(campaignId, seed, version);
+        }
+
+        private static int TryGetOrdinal(IDataRecord reader, string name)
+        {
+            for (int i = 0; i < reader.FieldCount; i++)
+            {
+                if (string.Equals(reader.GetName(i), name, StringComparison.OrdinalIgnoreCase)) return i;
+            }
+            return -1;
         }
     }
 }

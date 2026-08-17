@@ -38,12 +38,19 @@ namespace OnlyWar.Helpers.Storage
                 units,
                 force.Army.PlayerSoldierMap.Values,
                 force.Army.FallenBrothers.Values,
-                force.BattleHistory,
                 force.Army.LoadoutDoctrine,
                 force.Army.CharacterLoadoutDoctrine,
                 homeWorldPlanetId: force.HomeWorldPlanetId,
                 recruitment: RecruitmentSaveMapper.ToSaveData(force.RecruitmentProgram),
-                lastTurnReportSnapshot: force.LastTurnReportSnapshot);
+                lastTurnReportSnapshot: force.LastTurnReportSnapshot,
+                campaignEventLedger: force.CampaignEventLedger,
+                chapterChronicle: force.ChapterChronicle,
+                campaignIdentity: force.CampaignIdentity,
+                relationshipLedger: game.Sector.RelationshipLedger,
+                equipmentLoadoutDoctrine: force.Army.EquipmentLoadoutDoctrine);
+            // A current-format save has committed successfully at this point. SaveData is
+            // atomic, so reaching this line is the success boundary.
+            game.UpgradePending = false;
         }
     }
 }

@@ -18,6 +18,7 @@ namespace OnlyWar.Helpers.Storage
     internal enum SaveGameCompatibility
     {
         Compatible,
+        UpgradeAvailable,
         Incompatible,
         Corrupt
     }
@@ -33,7 +34,9 @@ namespace OnlyWar.Helpers.Storage
         SaveGameCompatibility Compatibility,
         string FailureReason)
     {
-        internal bool IsCompatible => Compatibility == SaveGameCompatibility.Compatible;
+        internal bool IsCompatible => Compatibility is SaveGameCompatibility.Compatible
+            or SaveGameCompatibility.UpgradeAvailable;
+        internal bool IsUpgradeAvailable => Compatibility == SaveGameCompatibility.UpgradeAvailable;
         internal DateTime LastWriteTimeLocal => LastWriteTimeUtc.ToLocalTime();
         internal bool IsLegacyDefault => string.Equals(
             Path.GetFileName(FilePath),
@@ -121,12 +124,13 @@ namespace OnlyWar.Helpers.Storage
                 campaignDate = TryReadCampaignDate(connection);
                 campaignName = TryReadCampaignName(connection) ?? campaignName;
 
-                if (version.Value != SaveFormat.CurrentVersion)
+                if (version.Value < SaveFormat.FirstMigratableVersion
+                    || version.Value > SaveFormat.CurrentVersion)
                 {
                     return Invalid(filePath, displayName, campaignName, campaignDate,
                         lastWriteTimeUtc, kind, version, SaveGameCompatibility.Incompatible,
                         $"Save version {version} is not supported by this build "
-                        + $"(expected {SaveFormat.CurrentVersion}).");
+                        + $"(supported {SaveFormat.FirstMigratableVersion}-{SaveFormat.CurrentVersion}).");
                 }
 
                 if (campaignDate == null)
@@ -136,6 +140,7 @@ namespace OnlyWar.Helpers.Storage
                         "The save contains no campaign date.");
                 }
 
+                SaveGameCompatibility compatibility = SaveGameCompatibility.Compatible;
                 return new SaveGameEntry(
                     filePath,
                     displayName,
@@ -144,7 +149,7 @@ namespace OnlyWar.Helpers.Storage
                     lastWriteTimeUtc,
                     kind,
                     version,
-                    SaveGameCompatibility.Compatible,
+                    compatibility,
                     null);
             }
             catch (Exception exception) when (

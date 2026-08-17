@@ -12,6 +12,12 @@ namespace OnlyWar.Helpers.Database.GameState
         //    Design/Reference/SpecialistAttachment.md). Added 2026-08-07 after a v5 save crashed with
         //    "no such table: OrderSoldier" instead of being reported as incompatible.
         // 7: LastTurnReport table (bounded JSON snapshot of the latest resolved turn report).
-        internal const int CurrentVersion = 7;
+        // 8: canonical CampaignEvent/ChapterChronicle tables and persisted campaign RNG identity.
+        // 9: faction relationships, authored behavior flags, regional-awareness rename, and
+        //    target-specific intelligence beliefs. This is a deliberate save break: v8 is rejected.
+        // 10: itemized equipment role/personal loadout tables and mission equipment foundations.
+        //     This is a deliberate save break: v9 and older saves are rejected.
+        internal const int CurrentVersion = 10;
+        internal const int FirstMigratableVersion = 10;
     }
 }

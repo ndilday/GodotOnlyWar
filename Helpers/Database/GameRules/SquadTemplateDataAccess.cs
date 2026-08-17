@@ -5,6 +5,7 @@ using OnlyWar.Models.Squads;
 using System;
 using System.Collections.Generic;
 using System.Data;
+using System.Data.Common;
 using System.Linq;
 
 namespace OnlyWar.Helpers.Database.GameRules
@@ -34,7 +35,8 @@ namespace OnlyWar.Helpers.Database.GameRules
             var meleeWeapons = GetMeleeWeaponTemplates(connection, baseSkillMap);
             var species = GetSpeciesByFactionId(connection, attributes, hitLocationMap, meleeWeapons);
             var soldierTemplateRequirements = GetSoldierTemplateRequirements(connection);
-            var rangedWeapons = GetRangedWeaponTemplates(connection, baseSkillMap);
+            var ammunitionTypes = GetAmmunitionTypes(connection);
+            var rangedWeapons = GetRangedWeaponTemplates(connection, baseSkillMap, ammunitionTypes);
             // Weapon sets are built before soldier templates because every role's weapon menu
             // (see SoldierTemplate.WeaponOptionsByGroup) references them.
             var weaponSets = GetWeaponSetMap(connection, meleeWeapons, rangedWeapons);
@@ -49,11 +51,32 @@ namespace OnlyWar.Helpers.Database.GameRules
                     weaponOptionsByTemplateId);
             var armorTemplates = GetArmorTemplates(connection);
             var elementQuotas = GetElementQuotasByElementId(connection);
+            Dictionary<int, PersonalEquipmentRole> personalEquipmentRoles = [];
+            Dictionary<int, int> personalRoleByElement = [];
+            bool hasExplicitPersonalRoleBindings = false;
+            try
+            {
+                personalEquipmentRoles = GetPersonalEquipmentRoles(connection);
+                personalRoleByElement = GetPersonalRoleBindingsByElementId(connection);
+                hasExplicitPersonalRoleBindings = true;
+            }
+            catch (DbException exception) when (
+                exception.Message.Contains("no such table", StringComparison.OrdinalIgnoreCase))
+            {
+                // A pre-foundation focused fixture has no explicit role table. The production
+                // rules database does, and therefore never uses the compatibility inference below.
+            }
             var basicSoldierTemplateMap = soldierTemplates.Values
                                                           .SelectMany(st => st)
                                                           .ToDictionary(st => st.Id);
             var squadElements = GetSquadTemplateElementsBySquadId(
-                connection, basicSoldierTemplateMap, weaponSets, elementQuotas);
+                connection,
+                basicSoldierTemplateMap,
+                weaponSets,
+                elementQuotas,
+                personalEquipmentRoles,
+                personalRoleByElement,
+                hasExplicitPersonalRoleBindings);
             var squadTemplates = GetSquadTemplatesById(connection, squadElements, weaponSets,
                                                        armorTemplates, trainingProfiles);
             return new SquadTemplateDataBlob
@@ -185,8 +208,12 @@ namespace OnlyWar.Helpers.Database.GameRules
                     //int location = reader.GetInt32(3);
                     int armorProvided = reader.GetInt32(4);
                     int stealthMod = reader.GetInt32(5);
+                    float capacityModifier = reader.FieldCount > 6 && reader[6].GetType() != typeof(DBNull)
+                        ? Convert.ToSingle(reader[6])
+                        : 0f;
                     ArmorTemplate armorTemplate = new ArmorTemplate(id, name, (byte)armorProvided, 
-                                                                    (short)stealthMod);
+                                                                    (short)stealthMod,
+                                                                    capacityModifier);
                     armorTemplateMap[id] = armorTemplate;
                 }
             }
@@ -230,9 +257,35 @@ namespace OnlyWar.Helpers.Database.GameRules
             return factionWeaponTemplateMap;
         }
 
+        private Dictionary<int, AmmunitionType> GetAmmunitionTypes(IDbConnection connection)
+        {
+            Dictionary<int, AmmunitionType> ammunitionTypes = [];
+            using (var command = connection.CreateCommand())
+            {
+                command.CommandText =
+                    "SELECT Id, Name FROM AmmunitionType";
+                try
+                {
+                    var reader = command.ExecuteReader();
+                    while (reader.Read())
+                    {
+                        ammunitionTypes[reader.GetInt32(0)] =
+                            new AmmunitionType(reader.GetInt32(0), reader.GetString(1));
+                    }
+                }
+                catch (DbException)
+                {
+                    // A small rules fixture may predate the itemized tables. Legacy weapon
+                    // templates remain valid with null ammunition identities in that case.
+                }
+            }
+            return ammunitionTypes;
+        }
+
         private Dictionary<int, RangedWeaponTemplate> GetRangedWeaponTemplates(
             IDbConnection connection,
-            Dictionary<int, BaseSkill> baseSkillMap)
+            Dictionary<int, BaseSkill> baseSkillMap,
+            Dictionary<int, AmmunitionType> ammunitionTypes)
         {
             Dictionary<int, RangedWeaponTemplate> factionWeaponTemplateMap =
                 [];
@@ -260,6 +313,16 @@ namespace OnlyWar.Helpers.Database.GameRules
                     ushort reloadTime = (ushort)reader.GetInt16(15);
                     byte templateType = reader.GetByte(16);
                     float areaRadius = Convert.ToSingle(reader[17]);
+                    AmmunitionType ammunitionType = ammunitionTypes.GetValueOrDefault(
+                        EquipmentRulesCatalog.GetAmmunitionTypeId(id));
+                    AmmunitionBehavior ammunitionBehavior = templateType == 3
+                        ? AmmunitionBehavior.ConsumableItem
+                        : IsBiologicalWeaponName(name)
+                            ? AmmunitionBehavior.SelfRegenerating
+                            : AmmunitionBehavior.Magazine;
+                    AmmunitionConsumptionRule consumptionRule = templateType == 0
+                        ? AmmunitionConsumptionRule.PerShot
+                        : AmmunitionConsumptionRule.PerAttack;
 
                     BaseSkill baseSkill = baseSkillMap[baseSkillId];
 
@@ -268,11 +331,24 @@ namespace OnlyWar.Helpers.Database.GameRules
                                                 accuracy, armorMultiplier, woundMultiplier,
                                                 requiredStrength, damageMultiplier, maxRange,
                                                 rof, ammo, recoil, bulk, doesDamageDegrade, reloadTime,
-                                                templateType, areaRadius);
+                                                templateType, areaRadius, ammunitionType,
+                                                ammunitionBehavior, consumptionRule, ammo,
+                                                reloadTime, ammo);
                     factionWeaponTemplateMap[id] = weaponTemplate;
                 }
             }
             return factionWeaponTemplateMap;
+        }
+
+        private static bool IsBiologicalWeaponName(string name)
+        {
+            string value = name?.ToLowerInvariant() ?? string.Empty;
+            return value.Contains("devourer")
+                || value.Contains("deathspitter")
+                || value.Contains("spinefist")
+                || value.Contains("fleshborer")
+                || value.Contains("symbiote")
+                || value.Contains("bio-");
         }
 
         private Dictionary<int, WeaponSet> GetWeaponSetMap(
@@ -384,7 +460,10 @@ namespace OnlyWar.Helpers.Database.GameRules
             IDbConnection connection,
             Dictionary<int, SoldierTemplate> soldierTemplateMap,
             Dictionary<int, WeaponSet> weaponSetMap,
-            Dictionary<int, List<SquadTemplateElementQuota>> quotaMap)
+            Dictionary<int, List<SquadTemplateElementQuota>> quotaMap,
+            IReadOnlyDictionary<int, PersonalEquipmentRole> personalEquipmentRoles,
+            IReadOnlyDictionary<int, int> personalRoleByElement,
+            bool hasExplicitPersonalRoleBindings)
         {
             Dictionary<int, List<SquadTemplateElement>> elementsMap =
                 [];
@@ -410,6 +489,32 @@ namespace OnlyWar.Helpers.Database.GameRules
                     SoldierTemplate template = soldierTemplateMap[soldierTemplateId];
                     IReadOnlyList<SquadTemplateElementQuota> quotas =
                         quotaMap.TryGetValue(id, out List<SquadTemplateElementQuota> list) ? list : [];
+                    PersonalEquipmentRole personalRole = null;
+                    if (hasExplicitPersonalRoleBindings
+                        && personalRoleByElement.TryGetValue(id, out int personalRoleId))
+                    {
+                        if (!personalEquipmentRoles.TryGetValue(personalRoleId, out personalRole))
+                        {
+                            throw new InvalidOperationException(
+                                $"Squad template element {id} references missing personal equipment role "
+                                + $"{personalRoleId}.");
+                        }
+                    }
+                    else if (!hasExplicitPersonalRoleBindings)
+                    {
+                        // Compatibility only for old test fixtures. Shipped rules use the
+                        // explicit SquadTemplateElementEquipmentRole relation above.
+                        SquadTemplateElementQuota personalQuota = quotas.FirstOrDefault(
+                            quota => quota.OptionGroup == "Command Weapon");
+                        WeaponSet personalDefault = defaultWeapons
+                            ?? template.GetWeaponOptions("Command Weapon").FirstOrDefault();
+                        personalRole = personalQuota != null && personalDefault != null
+                            ? new PersonalEquipmentRole(
+                                7_000_000 + id,
+                                $"{template.Name} equipment",
+                                EquipmentRulesCatalog.GetKitId(personalDefault.Id))
+                            : null;
+                    }
 
                     if (!elementsMap.ContainsKey(squadTemplateId))
                     {
@@ -417,10 +522,48 @@ namespace OnlyWar.Helpers.Database.GameRules
                     }
                     elementsMap[squadTemplateId].Add(
                         new SquadTemplateElement(
-                            template, (byte)min, (byte)max, id, defaultWeapons, quotas, rollsStrength));
+                            template, (byte)min, (byte)max, id, defaultWeapons, quotas, rollsStrength,
+                            personalRole));
                 }
             }
             return elementsMap;
+        }
+
+        private static Dictionary<int, PersonalEquipmentRole> GetPersonalEquipmentRoles(
+            IDbConnection connection)
+        {
+            Dictionary<int, PersonalEquipmentRole> roles = [];
+            using var command = connection.CreateCommand();
+            command.CommandText =
+                "SELECT Id, Name, DefaultKitId, CapacityModifier "
+                + "FROM PersonalEquipmentRole ORDER BY Id";
+            using var reader = command.ExecuteReader();
+            while (reader.Read())
+            {
+                int id = reader.GetInt32(0);
+                roles[id] = new PersonalEquipmentRole(
+                    id,
+                    reader.GetString(1),
+                    reader.GetInt32(2),
+                    Convert.ToSingle(reader.GetValue(3)));
+            }
+            return roles;
+        }
+
+        private static Dictionary<int, int> GetPersonalRoleBindingsByElementId(
+            IDbConnection connection)
+        {
+            Dictionary<int, int> bindings = [];
+            using var command = connection.CreateCommand();
+            command.CommandText =
+                "SELECT SquadTemplateElementId, PersonalEquipmentRoleId "
+                + "FROM SquadTemplateElementEquipmentRole ORDER BY SquadTemplateElementId";
+            using var reader = command.ExecuteReader();
+            while (reader.Read())
+            {
+                bindings[reader.GetInt32(0)] = reader.GetInt32(1);
+            }
+            return bindings;
         }
 
         private ValueTuple<Dictionary<int, List<SquadTemplate>>, Dictionary<int, SquadTemplate>> GetSquadTemplatesById(
@@ -557,6 +700,9 @@ namespace OnlyWar.Helpers.Database.GameRules
                     float synapseRadius = reader.FieldCount > 21 && reader[21].GetType() != typeof(DBNull)
                         ? (float)reader.GetDouble(21)
                         : 0f;
+                    float baseCapacity = reader.FieldCount > 22 && reader[22].GetType() != typeof(DBNull)
+                        ? Convert.ToSingle(reader[22])
+                        : 16f;
                     MeleeWeaponTemplate defaultUnarmedWeapon = ResolveDefaultUnarmedWeapon(
                         id, name, defaultUnarmedWeaponTemplateId, meleeWeaponTemplateMap);
                     Species species = new Species(id, name,
@@ -578,7 +724,8 @@ namespace OnlyWar.Helpers.Database.GameRules
                                                   abilities,
                                                   new BodyTemplate(hitLocationTemplateMap[bodyId]),
                                                   defaultUnarmedWeapon,
-                                                  synapseRadius);
+                                                  synapseRadius,
+                                                  baseCapacity);
 
                     if (!speciesMap.ContainsKey(factionId))
                     {

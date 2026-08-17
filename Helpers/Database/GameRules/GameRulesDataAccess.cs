@@ -9,6 +9,7 @@ using OnlyWar.Models.Units;
 using System;
 using System.Collections.Generic;
 using System.Data;
+using System.Data.Common;
 using System.Drawing;
 using System.IO;
 using System.Linq;
@@ -26,6 +27,7 @@ namespace OnlyWar.Helpers.Database.GameRules
         public IReadOnlyDictionary<int, RangedWeaponTemplate> RangedWeaponTemplates { get; set; }
         public IReadOnlyDictionary<int, MeleeWeaponTemplate> MeleeWeaponTemplates { get; set; }
         public IReadOnlyDictionary<int, WeaponSet> WeaponSets { get; set; }
+        public EquipmentRulesCatalog EquipmentCatalog { get; set; }
         public IReadOnlyDictionary<int, TrainingProfile> TrainingProfiles { get; set; }
         public IReadOnlyList<Models.Soldiers.Ratings.RatingDefinition> RatingDefinitions { get; set; }
         public IReadOnlyList<Models.Soldiers.Ratings.RatingAwardTier> RatingAwardTiers { get; set; }
@@ -102,6 +104,27 @@ namespace OnlyWar.Helpers.Database.GameRules
                                                fleetDataBlob.BoatTemplates, 
                                                fleetDataBlob.ShipTemplates, 
                                                fleetDataBlob.FleetTemplates);
+            EquipmentRulesCatalog compatibilityEquipmentCatalog = EquipmentRulesCatalog.FromLegacyRules(
+                squadDataBlob.RangedWeaponTemplateMap,
+                squadDataBlob.MeleeWeaponTemplateMap,
+                squadDataBlob.ArmorTemplates,
+                squadDataBlob.WeaponSetMap,
+                squadDataBlob.SquadTemplatesById.Values.ToList());
+            EquipmentRulesCatalog equipmentCatalog;
+            try
+            {
+                equipmentCatalog = EquipmentRulesCatalog.FromDatabase(
+                    dbCon,
+                    baseSkills,
+                    compatibilityEquipmentCatalog);
+            }
+            catch (DbException exception) when (
+                exception.Message.Contains("no such table", StringComparison.OrdinalIgnoreCase))
+            {
+                // Focused legacy fixtures may not carry the Alpha 0.8 itemized tables. The
+                // shipped database does, and therefore never takes this path.
+                equipmentCatalog = compatibilityEquipmentCatalog;
+            }
             var ratingDefinitions = _ratingDataAccess.GetRatingDefinitions(dbCon);
             var ratingAwardTiers = _ratingDataAccess.GetRatingAwardTiers(dbCon);
             var supplyEconomyRules = _supplyRulesDataAccess.GetData(dbCon);
@@ -115,6 +138,7 @@ namespace OnlyWar.Helpers.Database.GameRules
                 RangedWeaponTemplates = squadDataBlob.RangedWeaponTemplateMap,
                 MeleeWeaponTemplates = squadDataBlob.MeleeWeaponTemplateMap,
                 WeaponSets = squadDataBlob.WeaponSetMap,
+                EquipmentCatalog = equipmentCatalog,
                 TrainingProfiles = squadDataBlob.TrainingProfilesById,
                 RatingDefinitions = ratingDefinitions,
                 RatingAwardTiers = ratingAwardTiers,
@@ -134,7 +158,8 @@ namespace OnlyWar.Helpers.Database.GameRules
             List<Faction> factionList = [];
             using (var command = connection.CreateCommand())
             {
-                command.CommandText = "SELECT * FROM Faction";
+                command.CommandText = @"SELECT Id, Name, color, IsPlayerFaction, IsDefaultFaction,
+                    Behavior, GrowthType FROM Faction ORDER BY Id";
                 var reader = command.ExecuteReader();
                 while (reader.Read())
                 {
@@ -143,8 +168,9 @@ namespace OnlyWar.Helpers.Database.GameRules
                     Color color = ConvertDatabaseObjectToColor(reader[2]);
                     bool isPlayer = Convert.ToBoolean(reader[3]);
                     bool isDefault = Convert.ToBoolean(reader[4]);
-                    bool canInfiltrate = Convert.ToBoolean(reader[5]);
+                    FactionBehavior behavior = (FactionBehavior)reader.GetInt32(5);
                     GrowthType growthType = (GrowthType)reader.GetInt32(6);
+                    ValidateFactionBehavior(id, name, behavior, isPlayer, isDefault, growthType);
 
                     var speciesMap = factionSpeciesMap.ContainsKey(id) ?
                         factionSpeciesMap[id].ToDictionary(st => st.Id) : null;
@@ -165,13 +191,44 @@ namespace OnlyWar.Helpers.Database.GameRules
                     }
 
                     Faction factionTemplate = new Faction(id, name, color, isPlayer, isDefault,
-                                                          canInfiltrate, growthType, speciesMap,
+                                                          behavior, growthType, speciesMap,
                                                           soldierMap, squadMap, unitMap, boatMap,
                                                           shipMap, fleetMap);
                     factionList.Add(factionTemplate);
                 }
             }
             return factionList;
+        }
+
+        private static void ValidateFactionBehavior(
+            int id,
+            string name,
+            FactionBehavior behavior,
+            bool isPlayer,
+            bool isDefault,
+            GrowthType growthType)
+        {
+            const FactionBehavior allKnown =
+                FactionBehavior.CanInfiltrate
+                | FactionBehavior.PopulationIsMilitary
+                | FactionBehavior.InvadesOnVictory
+                | FactionBehavior.DefendsHostWhileHidden
+                | FactionBehavior.OffersExternalEnemyTruce
+                | FactionBehavior.UniversallyHostile
+                | FactionBehavior.Indelible;
+            if ((behavior & ~allKnown) != 0)
+            {
+                throw new InvalidDataException(
+                    $"Faction '{name}' ({id}) contains unknown behavior bits {(int)(behavior & ~allKnown)}.");
+            }
+            if ((behavior.HasFlag(FactionBehavior.UniversallyHostile)
+                    && (isPlayer || isDefault))
+                || (behavior.HasFlag(FactionBehavior.OffersExternalEnemyTruce)
+                    && !growthType.Equals(GrowthType.Unrest)))
+            {
+                throw new InvalidDataException(
+                    $"Faction '{name}' ({id}) contains an illegal behavior composition.");
+            }
         }
 
         private List<SkillTemplate> GetSkillTemplates(IDbConnection connection,

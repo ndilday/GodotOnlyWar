@@ -4,6 +4,7 @@ using System.Linq;
 using OnlyWar.Builders;
 using OnlyWar.Helpers;
 using OnlyWar.Models;
+using OnlyWar.Models.Equippables;
 using OnlyWar.Models.Soldiers;
 using OnlyWar.Models.Soldiers.Ratings;
 using OnlyWar.Models.Squads;
@@ -30,6 +31,9 @@ public class RulesDatabaseValidationTests
         Assert.NotNull(rules.SupplyEconomyRules);
         Assert.NotEmpty(rules.SupplyEconomyRules.RequestValuation.ThroughputBands);
         Assert.True(rules.SupplyEconomyRules.RequestValuation.RequisitionPerBattleValueTime > 0);
+        Assert.NotEmpty(rules.EquipmentTemplates);
+        Assert.NotEmpty(rules.EquipmentKits);
+        Assert.NotEmpty(rules.PersonalEquipmentRoles);
         Assert.NotNull(rules.PlayerFaction);
         Assert.NotNull(rules.DefaultFaction);
     }
@@ -233,6 +237,32 @@ public class RulesDatabaseValidationTests
         Assert.Equal(6.0f, grenadeLauncher.DamageMultiplier);
         Assert.Equal(1.0f, grenadeLauncher.ArmorMultiplier);
         Assert.Equal(1000.0f, grenadeLauncher.MaximumRange);
+    }
+
+    [Fact]
+    public void EquipmentCatalog_ModelsFiniteGrenadesAndBiologicalWeapons()
+    {
+        var rules = RulesDatabaseFixture.LoadRules();
+        EquipmentRulesCatalog catalog = rules.EquipmentCatalog;
+        EquipmentTemplate grenade = catalog.EquipmentTemplates[
+            EquipmentRulesCatalog.GetRangedEquipmentId(35)];
+        EquipmentTemplate bioWeapon = catalog.EquipmentTemplates[
+            EquipmentRulesCatalog.GetRangedEquipmentId(13)];
+
+        Assert.Equal(AmmunitionBehavior.ConsumableItem,
+            grenade.RangedProfile.AmmunitionBehavior);
+        Assert.Equal(AmmunitionBehavior.SelfRegenerating,
+            bioWeapon.RangedProfile.AmmunitionBehavior);
+        Assert.Null(grenade.RangedProfile.AmmunitionType);
+        Assert.NotNull(catalog.EquipmentTemplates[
+            EquipmentRulesCatalog.GetAmmunitionPackageId(
+                EquipmentRulesCatalog.GetAmmunitionTypeId(1))]);
+        Assert.All(catalog.EquipmentKits.Values, kit =>
+        {
+            EquipmentValidationResult validation = EquipmentLoadoutValidator.Validate(kit);
+            Assert.True(validation.IsValid,
+                $"{kit.Name}: {string.Join("; ", validation.Issues.Select(issue => issue.Message))}");
+        });
     }
 
     [Fact]

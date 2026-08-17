@@ -86,13 +86,17 @@ internal sealed class GameStateRoundTripFixture
             units,
             sector.PlayerForce.Army.PlayerSoldierMap.Values,
             sector.PlayerForce.Army.FallenBrothers.Values,
-            sector.PlayerForce.BattleHistory,
             sector.PlayerForce.Army.LoadoutDoctrine,
             sector.PlayerForce.Army.CharacterLoadoutDoctrine,
             schemaPath,
             sector.PlayerForce.HomeWorldPlanetId,
             RecruitmentSaveMapper.ToSaveData(sector.PlayerForce.RecruitmentProgram),
-            sector.PlayerForce.LastTurnReportSnapshot);
+            sector.PlayerForce.LastTurnReportSnapshot,
+            campaignEventLedger: sector.PlayerForce.CampaignEventLedger,
+            chapterChronicle: sector.PlayerForce.ChapterChronicle,
+            campaignIdentity: sector.PlayerForce.CampaignIdentity,
+            relationshipLedger: sector.RelationshipLedger,
+            equipmentLoadoutDoctrine: sector.PlayerForce.Army.EquipmentLoadoutDoctrine);
     }
 
     public GameStateDataBlob Load(string dbPath)
@@ -118,6 +122,8 @@ internal sealed class GameStateRoundTripFixture
             _data.WeaponSets,
             hitLocations,
             _data.BaseSkillMap,
-            soldierTypeMap);
+            soldierTypeMap,
+            _data.EquipmentCatalog?.EquipmentTemplates,
+            _data.EquipmentCatalog?.EquipmentKits);
     }
 }

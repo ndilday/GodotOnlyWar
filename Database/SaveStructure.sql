@@ -17,7 +17,7 @@ CREATE TABLE Fleet (Id INTEGER PRIMARY KEY UNIQUE NOT NULL, FactionId INTEGER NO
 -- ScenarioType 0 (None) means no scenario. HomeWorldPlanetId remains null until the
 -- Promised World is won. Format v5 is an intentional clean break from older saves and adds
 -- chapter/planet loadout doctrine plus character (role and individual) loadout persistence.
-CREATE TABLE GlobalData (Millenium INTEGER NOT NULL, Year INTEGER NOT NULL, Week INTEGER NOT NULL, SaveVersion INTEGER NOT NULL, Requisition INTEGER NOT NULL DEFAULT 0, GeneseedStockpile INTEGER NOT NULL DEFAULT 0, GeneseedPurity REAL NOT NULL DEFAULT 1.0, ScenarioType INTEGER NOT NULL DEFAULT 0, ScenarioPromisedPlanetId INTEGER NOT NULL DEFAULT 0, ScenarioState INTEGER NOT NULL DEFAULT 0, ScenarioBriefingAcknowledged BOOLEAN NOT NULL DEFAULT 0, ScenarioBriefingText TEXT, ScenarioOriginalAuthorityCharacterId INTEGER NOT NULL DEFAULT 0, HomeWorldPlanetId INTEGER REFERENCES Planet (Id));
+CREATE TABLE GlobalData (Millenium INTEGER NOT NULL, Year INTEGER NOT NULL, Week INTEGER NOT NULL, SaveVersion INTEGER NOT NULL, Requisition INTEGER NOT NULL DEFAULT 0, GeneseedStockpile INTEGER NOT NULL DEFAULT 0, GeneseedPurity REAL NOT NULL DEFAULT 1.0, ScenarioType INTEGER NOT NULL DEFAULT 0, ScenarioPromisedPlanetId INTEGER NOT NULL DEFAULT 0, ScenarioState INTEGER NOT NULL DEFAULT 0, ScenarioBriefingAcknowledged BOOLEAN NOT NULL DEFAULT 0, ScenarioBriefingText TEXT, ScenarioOriginalAuthorityCharacterId INTEGER NOT NULL DEFAULT 0, HomeWorldPlanetId INTEGER REFERENCES Planet (Id), CampaignId TEXT, CampaignSeed INTEGER, RandomAlgorithmVersion INTEGER NOT NULL DEFAULT 1);
 
 -- The latest resolved turn report is intentionally one bounded JSON payload. A missing row is
 -- valid for a campaign that has not resolved a turn yet.
@@ -54,7 +54,7 @@ CREATE TABLE RecruitmentAspirant (Id INTEGER PRIMARY KEY UNIQUE NOT NULL, Progra
 CREATE TABLE RecruitmentAspirantSkill (AspirantId INTEGER NOT NULL REFERENCES RecruitmentAspirant (Id), BaseSkillId INTEGER NOT NULL, PointsInvested REAL NOT NULL, PRIMARY KEY (AspirantId, BaseSkillId));
 
 -- Table: RecruitmentAspirantEvent
--- Aspirant histories remain private to recruitment and do not enter PlayerFactionEvent.
+-- Aspirant histories remain private to recruitment and do not enter the campaign event ledger.
 CREATE TABLE RecruitmentAspirantEvent (AspirantId INTEGER NOT NULL REFERENCES RecruitmentAspirant (Id), EventDate INTEGER NOT NULL, EventType INTEGER NOT NULL, Detail STRING NOT NULL);
 
 -- Table: RecruitmentProcedure
@@ -74,7 +74,7 @@ CREATE TABLE Region (Id INTEGER PRIMARY KEY UNIQUE NOT NULL, PlanetId INTEGER NO
 -- Table: RegionFaction
 -- GrowthMultiplier (default 1.0) throttles organic growth; legacy rows default to 1.0 via a
 -- column-count guard in PlanetDataAccess.PopulateRegionFactions (Design/Reference/OpeningScenario.md §2.2, §7).
--- ListeningPost is a sensor structure (formerly "Detection"); it now feeds PlanetFactionRegionIntel
+-- ListeningPost is a sensor structure (formerly "Detection"); it now feeds PlanetFactionRegionAwareness
 -- rather than providing an awareness bonus directly. Column is positional in the loader.
 -- AssignedDefensiveBattleValue is nullable on purpose: NULL means the region has never been through a
 -- planning pass (including every row in a save written before the column existed), which the loader
@@ -84,17 +84,43 @@ CREATE TABLE RegionFaction (RegionId INTEGER REFERENCES Region (Id) NOT NULL, Fa
 
 -- Table: PlanetFaction
 CREATE TABLE PlanetFaction (PlanetId INTEGER REFERENCES Planet (Id) NOT NULL, FactionId INTEGER NOT NULL, IsPublic BOOLEAN NOT NULL, PlanetaryControl INTEGER NOT NULL, PlayerReputation REAL NOT NULL, LeaderId INTEGER REFERENCES Character (Id));
--- Table: PlanetFactionRegionIntel
--- A faction's single per-region situational-awareness value (replaces RegionFactionObserverIntel and
--- the awareness role of RegionFaction.Detection). FactionId is the faction that holds the awareness;
--- serves both its offensive knowledge of enemy regions and its defensive sight of its own ground.
-CREATE TABLE PlanetFactionRegionIntel (PlanetId INTEGER REFERENCES Planet (Id) NOT NULL, FactionId INTEGER NOT NULL, RegionId INTEGER REFERENCES Region (Id) NOT NULL, IntelLevel REAL NOT NULL);
+-- Table: PlanetFactionRegionAwareness
+-- A faction's single per-region situational-awareness value. FactionId is the faction that holds
+-- the awareness; it serves both offensive knowledge of enemy regions and defensive sight of its
+-- own ground. Faction ids refer to the read-only rules database.
+CREATE TABLE PlanetFactionRegionAwareness (
+    PlanetId INTEGER NOT NULL REFERENCES Planet (Id),
+    FactionId INTEGER NOT NULL,
+    RegionId INTEGER NOT NULL REFERENCES Region (Id),
+    Awareness REAL NOT NULL,
+    PRIMARY KEY (PlanetId, FactionId, RegionId)
+);
 
--- Table: PlayeFactionSubEvent
-CREATE TABLE PlayerFactionSubEvent (PlayerFactionEventId INTEGER REFERENCES PlayerFactionEvent (Id) NOT NULL, Entry TEXT NOT NULL);
+-- Only non-default, canonical faction-pair stances are stored. An absent row is Hostile.
+CREATE TABLE FactionRelationship (
+    LowerFactionId INTEGER NOT NULL,
+    HigherFactionId INTEGER NOT NULL,
+    Stance INTEGER NOT NULL,
+    PRIMARY KEY (LowerFactionId, HigherFactionId),
+    CHECK (LowerFactionId < HigherFactionId),
+    CHECK (Stance IN (1, 2))
+);
 
--- Table: PlayerFactionEvent
-CREATE TABLE PlayerFactionEvent (Id INTEGER PRIMARY KEY UNIQUE NOT NULL, Millenium INTEGER NOT NULL, Year INTEGER NOT NULL, Week INTEGER NOT NULL, Title TEXT NOT NULL);
+-- Target-specific intelligence is a sparse belief store. IntelLevel is derived from Evidence and
+-- deliberately is not persisted; the record never says whether the target is really present.
+CREATE TABLE PlanetFactionTargetIntel (
+    PlanetId INTEGER NOT NULL REFERENCES Planet (Id),
+    ObserverFactionId INTEGER NOT NULL,
+    RegionId INTEGER NOT NULL REFERENCES Region (Id),
+    TargetFactionId INTEGER NOT NULL,
+    Evidence REAL NOT NULL,
+    EstimatedPopulation BIGINT,
+    EstimatedMilitaryStrength BIGINT,
+    LastEvidenceWeek INTEGER NOT NULL,
+    PRIMARY KEY (PlanetId, ObserverFactionId, RegionId, TargetFactionId),
+    CHECK (ObserverFactionId <> TargetFactionId),
+    CHECK (Evidence >= 0.25)
+);
 
 -- Table: PlayerSoldier
 CREATE TABLE PlayerSoldier (SoldierId INTEGER PRIMARY KEY REFERENCES Soldier (Id) UNIQUE NOT NULL, ImplantMillenium INTEGER NOT NULL, ImplantYear INTEGER NOT NULL, ImplantWeek INTEGER NOT NULL, GeneticCompatibility REAL, RecruitmentBirthMillenium INTEGER, RecruitmentBirthYear INTEGER, RecruitmentBirthWeek INTEGER);
@@ -110,12 +136,6 @@ CREATE TABLE SoldierAward (SoldierId INTEGER NOT NULL REFERENCES Soldier (Id), M
 
 -- Table: PlayerSoldierFactionCasualtyCount
 CREATE TABLE PlayerSoldierFactionCasualtyCount (PlayerSoldierId INTEGER NOT NULL REFERENCES PlayerSoldier (SoldierId), FactionId INTEGER NOT NULL, Count INTEGER NOT NULL);
-
--- Table: PlayerSoldierEvent
--- Structured soldier history. FactionId/WeaponTemplateId are rules-data ids (no save-DB
--- table), so they carry no foreign key, matching PlayerSoldierFactionCasualtyCount.
--- RelatedSoldierIds is a CSV reserved for later passes (unused in step 1).
-CREATE TABLE PlayerSoldierEvent (PlayerSoldierId INTEGER NOT NULL REFERENCES PlayerSoldier (SoldierId), Millenium INTEGER NOT NULL, Year INTEGER NOT NULL, Week INTEGER NOT NULL, EventType INTEGER NOT NULL, FactionId INTEGER, WeaponTemplateId INTEGER, Magnitude INTEGER, LocationName STRING, Detail STRING, RelatedSoldierIds STRING);
 
 -- Table: PlayerSoldierMeleeWeaponCasualtyCount
 CREATE TABLE PlayerSoldierMeleeWeaponCasualtyCount (PlayerSoldierId INTEGER REFERENCES PlayerSoldier (SoldierId) NOT NULL, MeleeWeaponTemplateId INTEGER, Count INTEGER NOT NULL);
@@ -161,8 +181,31 @@ CREATE TABLE PlanetLoadoutWeaponSet (PlanetId INTEGER NOT NULL, SquadTemplateId 
 CREATE TABLE ChapterCharacterLoadout (SoldierTemplateId INTEGER PRIMARY KEY NOT NULL, WeaponSetId INTEGER NOT NULL);
 CREATE TABLE SoldierLoadout (SoldierId INTEGER PRIMARY KEY NOT NULL REFERENCES Soldier (Id), WeaponSetId INTEGER NOT NULL);
 
+-- Itemized equipment doctrine. These rows persist complete equipment compositions rather than
+-- fixed weapon columns. Rules-database equipment ids are intentionally not foreign keys because
+-- the rules database is read-only and is loaded alongside a save.
+CREATE TABLE ChapterEquipmentRoleLoadout (PersonalEquipmentRoleId INTEGER PRIMARY KEY NOT NULL, ArmorEquipmentId INTEGER);
+CREATE TABLE ChapterEquipmentRoleLoadoutItem (PersonalEquipmentRoleId INTEGER NOT NULL REFERENCES ChapterEquipmentRoleLoadout (PersonalEquipmentRoleId), EquipmentId INTEGER NOT NULL, Quantity INTEGER NOT NULL, InitialReadyOrder INTEGER);
+CREATE TABLE SoldierEquipmentLoadout (SoldierId INTEGER PRIMARY KEY NOT NULL REFERENCES Soldier (Id), ArmorEquipmentId INTEGER);
+CREATE TABLE SoldierEquipmentLoadoutItem (SoldierId INTEGER NOT NULL REFERENCES SoldierEquipmentLoadout (SoldierId), EquipmentId INTEGER NOT NULL, Quantity INTEGER NOT NULL, InitialReadyOrder INTEGER);
+
 -- Table: Unit
 CREATE TABLE Unit (Id INTEGER PRIMARY KEY UNIQUE NOT NULL, FactionId INTEGER NOT NULL, UnitTemplateId INTEGER NOT NULL, ParentUnitId INTEGER REFERENCES Unit (Id), Name STRING NOT NULL);
+
+-- Canonical campaign-event ledger (introduced in format 8; current schema format 10).
+-- PayloadJson is typed by the (EventType,
+-- PayloadVersion) registry in code; CLR type names are never persisted.
+CREATE TABLE CampaignEvent (Id INTEGER PRIMARY KEY, EventType INTEGER NOT NULL, OccurredWeek INTEGER NOT NULL, RecordedWeek INTEGER NOT NULL, CorrelationKey TEXT, DedupeKey TEXT NOT NULL UNIQUE, PayloadVersion INTEGER NOT NULL, PayloadJson TEXT NOT NULL);
+CREATE TABLE CampaignEventEntity (CampaignEventId INTEGER NOT NULL REFERENCES CampaignEvent (Id), EntityKind INTEGER NOT NULL, EntityId INTEGER NOT NULL, EntityRole INTEGER NOT NULL, DisplayName TEXT NOT NULL, SortOrder INTEGER NOT NULL, PRIMARY KEY (CampaignEventId, EntityKind, EntityId, EntityRole));
+CREATE TABLE CampaignEventPublication (CampaignEventId INTEGER PRIMARY KEY REFERENCES CampaignEvent (Id), PublishServiceRecord BOOLEAN NOT NULL, PublishTurnReport BOOLEAN NOT NULL, PublishChapterChronicle BOOLEAN NOT NULL, Importance INTEGER NOT NULL, ReasonFlags INTEGER NOT NULL, ChronicleTreatment INTEGER NOT NULL, ClassifierVersion INTEGER NOT NULL);
+CREATE TABLE ChapterChronicleEntry (Id INTEGER PRIMARY KEY, OccurredWeek INTEGER NOT NULL, RecordedWeek INTEGER NOT NULL, Importance INTEGER NOT NULL, CorrelationKey TEXT, DedupeKey TEXT NOT NULL UNIQUE, Title TEXT NOT NULL, Body TEXT NOT NULL, NarratorKey TEXT NOT NULL, NarratorVersion INTEGER NOT NULL, NarrativeVariant INTEGER NOT NULL);
+CREATE TABLE ChapterChronicleEvent (ChronicleEntryId INTEGER NOT NULL REFERENCES ChapterChronicleEntry (Id), CampaignEventId INTEGER NOT NULL REFERENCES CampaignEvent (Id), SortOrder INTEGER NOT NULL, PRIMARY KEY (ChronicleEntryId, CampaignEventId));
+CREATE INDEX IX_CampaignEvent_OccurredWeek ON CampaignEvent (OccurredWeek, Id);
+CREATE INDEX IX_CampaignEvent_RecordedWeek ON CampaignEvent (RecordedWeek, Id);
+CREATE INDEX IX_CampaignEvent_Correlation ON CampaignEvent (CorrelationKey, Id);
+CREATE INDEX IX_CampaignEventEntity_Entity ON CampaignEventEntity (EntityKind, EntityId, CampaignEventId);
+CREATE INDEX IX_CampaignEventPublication_Surface ON CampaignEventPublication (PublishChapterChronicle, Importance, CampaignEventId);
+CREATE INDEX IX_ChapterChronicleEntry_Date ON ChapterChronicleEntry (OccurredWeek DESC, Id DESC);
 
 -- Table: Mission
 -- FactionId has no foreign key: factions live in the read-only rules database, not

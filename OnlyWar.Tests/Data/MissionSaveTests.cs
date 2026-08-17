@@ -130,7 +130,10 @@ public class MissionSaveTests
             region => region.Id,
             region => region);
         Mission loaded = new PlanetDataAccess()
-            .PopulateRegionMissions(connection, regions)[original.Id];
+            .PopulateRegionMissions(connection, regions, new Dictionary<int, Faction>
+            {
+                [faction.Id] = faction
+            })[original.Id];
 
         Assert.Equal(270, loaded.TargetBattleValue);
         Assert.Contains(loaded, planet.Regions[0].SpecialMissions);
@@ -157,7 +160,10 @@ public class MissionSaveTests
             region => region.Id,
             region => region);
         Mission loaded = new PlanetDataAccess()
-            .PopulateRegionMissions(connection, regions)[original.Id];
+            .PopulateRegionMissions(connection, regions, new Dictionary<int, Faction>
+            {
+                [faction.Id] = faction
+            })[original.Id];
 
         Assert.Equal(
             AmbushMissionSizing.EstimateLegacyTargetBattleValue(2),
@@ -203,8 +209,11 @@ public class MissionSaveTests
                 Contentment REAL NOT NULL DEFAULT 70.0, ArmedCivilians INTEGER NOT NULL DEFAULT 0,
                 HasEmergenceAdvantage BOOLEAN NOT NULL DEFAULT 0, OrganizedMilitaryStrength BIGINT,
                 AssignedDefensiveBattleValue BIGINT);
-            CREATE TABLE PlanetFactionRegionIntel (PlanetId INTEGER NOT NULL, FactionId INTEGER NOT NULL, RegionId INTEGER NOT NULL,
-                IntelLevel REAL NOT NULL);
+            CREATE TABLE PlanetFactionRegionAwareness (PlanetId INTEGER NOT NULL, FactionId INTEGER NOT NULL, RegionId INTEGER NOT NULL,
+                Awareness REAL NOT NULL);
+            CREATE TABLE PlanetFactionTargetIntel (PlanetId INTEGER NOT NULL, ObserverFactionId INTEGER NOT NULL,
+                RegionId INTEGER NOT NULL, TargetFactionId INTEGER NOT NULL, Evidence REAL NOT NULL,
+                EstimatedPopulation BIGINT, EstimatedMilitaryStrength BIGINT, LastEvidenceWeek INTEGER NOT NULL);
             CREATE TABLE Mission (Id INTEGER PRIMARY KEY UNIQUE NOT NULL, MissionType INTEGER NOT NULL, RegionId INTEGER NOT NULL,
                 FactionId INTEGER NOT NULL, MissionSize INTEGER NOT NULL, DefenseTypeId INTEGER, IsRegionMission BOOLEAN NOT NULL,
                 TargetBattleValue BIGINT);";
@@ -215,7 +224,7 @@ public class MissionSaveTests
     private static Faction CreateFaction()
     {
         return new Faction(
-            1, "Mission Save Test Faction", Color.Red, false, false, false,
+            1, "Mission Save Test Faction", Color.Red, false, false, FactionBehavior.None,
             GrowthType.None,
             new Dictionary<int, Species>(),
             new Dictionary<int, SoldierTemplate>(),

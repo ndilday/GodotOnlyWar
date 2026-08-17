@@ -1,4 +1,5 @@
-﻿using OnlyWar.Builders;
+using OnlyWar.Builders;
+using OnlyWar.Helpers;
 using OnlyWar.Helpers.Extensions;
 using OnlyWar.Helpers.Missions.Ambush;
 using OnlyWar.Models;
@@ -7,6 +8,7 @@ using OnlyWar.Models.Planets;
 using System;
 using System.Collections.Generic;
 using System.Data;
+using System.IO;
 using System.Linq;
 
 namespace OnlyWar.Helpers.Database.GameState
@@ -104,7 +106,8 @@ namespace OnlyWar.Helpers.Database.GameState
         // SpecialMissions list; order-attached missions (IsRegionMission = 0) are not, but are
         // still returned in the map so order loading can resolve them by id.
         public Dictionary<int, Mission> PopulateRegionMissions(IDbConnection connection,
-                                           IReadOnlyDictionary<int, Region> regionMap)
+                                           IReadOnlyDictionary<int, Region> regionMap,
+                                           IReadOnlyDictionary<int, Faction> factionMap)
         {
             Dictionary<int, Mission> missionMap = [];
             using (var command = connection.CreateCommand())
@@ -142,17 +145,40 @@ namespace OnlyWar.Helpers.Database.GameState
                     }
 
                     Region region = regionMap[regionId];
-                    RegionFaction regionFaction = region.RegionFactionMap[factionId];
+                    region.RegionFactionMap.TryGetValue(factionId, out RegionFaction regionFaction);
+                    if (regionFaction == null && !factionMap.ContainsKey(factionId))
+                    {
+                        throw new InvalidDataException(
+                            $"Mission {id} references unknown faction {factionId}.");
+                    }
+
+                    if (regionFaction == null
+                        && (defenseType.HasValue || RequiresCurrentPresence(missionType)))
+                    {
+                        throw new InvalidDataException(
+                            $"Mission {id} ({missionType}) requires a current target presence, "
+                            + $"but faction {factionId} is absent from region {regionId}.");
+                    }
                     Mission mission;
                     // Both SabotageMission and ConstructionMission carry a DefenseType; distinguish
                     // them by MissionType so a saved construction mission does not load back as a
                     // sabotage mission.
-                    if (defenseType == null)
+                    if (defenseType == null && regionFaction != null)
                     {
                         mission = new Mission(
                             id,
                             missionType,
                             regionFaction,
+                            missionSize,
+                            targetBattleValue);
+                    }
+                    else if (defenseType == null)
+                    {
+                        mission = new Mission(
+                            id,
+                            missionType,
+                            region,
+                            factionMap[factionId],
                             missionSize,
                             targetBattleValue);
                     }
@@ -321,41 +347,99 @@ namespace OnlyWar.Helpers.Database.GameState
                 }
             }
 
-            PopulateRegionIntel(connection, regionMap);
+            PopulateRegionAwareness(connection, regionMap, factionMap);
+            PopulateTargetIntel(connection, regionMap, factionMap);
         }
 
-        // Loads each planet faction's per-region awareness onto its RegionIntel map. Tolerant of the
-        // table being absent (saves that predate the unified-intel model) — those load with no prior
-        // awareness and rebuild it from listening posts/patrols/recon over the first turns.
-        private static void PopulateRegionIntel(IDbConnection connection,
-                                                IReadOnlyDictionary<int, Region> regionMap)
+        // Loads each planet faction's per-region awareness onto its RegionAwareness map. Save-format
+        // validation happens before this method, so a missing table is corruption rather than a
+        // reason to silently discard the player's intelligence state.
+        private static void PopulateRegionAwareness(IDbConnection connection,
+                                                IReadOnlyDictionary<int, Region> regionMap,
+                                                IReadOnlyDictionary<int, Faction> factionMap)
         {
-            using (var tableCheck = connection.CreateCommand())
-            {
-                tableCheck.CommandText =
-                    "SELECT name FROM sqlite_master WHERE type='table' AND name='PlanetFactionRegionIntel'";
-                if (tableCheck.ExecuteScalar() == null)
-                {
-                    return;
-                }
-            }
-
             using (var command = connection.CreateCommand())
             {
-                command.CommandText = "SELECT PlanetId, FactionId, RegionId, IntelLevel FROM PlanetFactionRegionIntel";
+                command.CommandText = @"SELECT PlanetId, FactionId, RegionId, Awareness
+                                        FROM PlanetFactionRegionAwareness";
                 var reader = command.ExecuteReader();
                 while (reader.Read())
                 {
+                    int planetId = reader.GetInt32(0);
                     int factionId = reader.GetInt32(1);
                     int regionId = reader.GetInt32(2);
-                    float intelLevel = (float)reader.GetDouble(3);
+                    float awareness = Convert.ToSingle(reader.GetValue(3));
 
-                    if (regionMap.TryGetValue(regionId, out Region region)
-                        && region.Planet.PlanetFactionMap.TryGetValue(factionId, out PlanetFaction planetFaction))
+                    if (!factionMap.ContainsKey(factionId)
+                        || !regionMap.TryGetValue(regionId, out Region region)
+                        || region.Planet.Id != planetId
+                        || !region.Planet.PlanetFactionMap.TryGetValue(
+                            factionId,
+                            out PlanetFaction planetFaction)
+                        || !float.IsFinite(awareness)
+                        || awareness <= 0f)
                     {
-                        planetFaction.SetRegionIntel(region, intelLevel);
+                        throw new InvalidDataException(
+                            $"Save contains an invalid regional-awareness row for planet {planetId}, "
+                            + $"faction {factionId}, region {regionId}.");
                     }
+
+                    planetFaction.SetRegionAwareness(region, awareness);
                 }
+            }
+        }
+
+        // Loads the sparse observer/region/target belief map after regions and PlanetFactions exist.
+        // IntelLevel is derived by FactionIntelBelief and is never read from storage.
+        private static void PopulateTargetIntel(
+            IDbConnection connection,
+            IReadOnlyDictionary<int, Region> regionMap,
+            IReadOnlyDictionary<int, Faction> factionMap)
+        {
+            using var command = connection.CreateCommand();
+            command.CommandText = @"SELECT PlanetId, ObserverFactionId, RegionId, TargetFactionId,
+                                           Evidence, EstimatedPopulation, EstimatedMilitaryStrength,
+                                           LastEvidenceWeek
+                                    FROM PlanetFactionTargetIntel";
+            using IDataReader reader = command.ExecuteReader();
+            while (reader.Read())
+            {
+                int planetId = reader.GetInt32(0);
+                int observerFactionId = reader.GetInt32(1);
+                int regionId = reader.GetInt32(2);
+                int targetFactionId = reader.GetInt32(3);
+                float evidence = Convert.ToSingle(reader.GetValue(4));
+                long? estimatedPopulation = reader.IsDBNull(5) ? null : reader.GetInt64(5);
+                long? estimatedMilitaryStrength = reader.IsDBNull(6) ? null : reader.GetInt64(6);
+                int lastEvidenceWeek = reader.GetInt32(7);
+
+                if (!factionMap.TryGetValue(observerFactionId, out Faction observerFaction)
+                    || !factionMap.TryGetValue(targetFactionId, out Faction targetFaction)
+                    || observerFactionId == targetFactionId
+                    || !regionMap.TryGetValue(regionId, out Region region)
+                    || region.Planet.Id != planetId
+                    || !region.Planet.PlanetFactionMap.TryGetValue(
+                        observerFactionId,
+                        out PlanetFaction observer)
+                    || !float.IsFinite(evidence)
+                    || evidence < FactionIntelligenceRules.RumorThreshold
+                    || evidence > FactionIntelligenceRules.MaxEvidence
+                    || estimatedPopulation is < 0
+                    || estimatedMilitaryStrength is < 0
+                    || lastEvidenceWeek < 0)
+                {
+                    throw new InvalidDataException(
+                        $"Save contains an invalid target-intelligence row for planet {planetId}, "
+                        + $"observer {observerFactionId}, region {regionId}, target {targetFactionId}.");
+                }
+
+                observer.SeedTargetBelief(
+                    region,
+                    targetFaction,
+                    evidence,
+                    estimatedPopulation,
+                    estimatedMilitaryStrength,
+                    lastEvidenceWeek);
             }
         }
 
@@ -453,7 +537,8 @@ namespace OnlyWar.Helpers.Database.GameState
             SavePlanetFactions(transaction, planet.Id, planet.PlanetFactionMap);
             SavePlanetRegions(transaction, planet.Id, planet.Regions);
             SaveRegionFactions(transaction, planet.Regions);
-            SavePlanetFactionRegionIntel(transaction, planet);
+            SavePlanetFactionRegionAwareness(transaction, planet);
+            SavePlanetFactionTargetIntel(transaction, planet);
             SaveMissions(transaction, planet.Regions);
         }
 
@@ -576,22 +661,58 @@ namespace OnlyWar.Helpers.Database.GameState
         // Persists each planet faction's per-region intelligence beliefs. Stored faction-centric
         // (keyed by the observing faction + region) so a faction's awareness of regions it does NOT
         // occupy is captured alongside its sight of its own ground.
-        private static void SavePlanetFactionRegionIntel(IDbTransaction transaction, Planet planet)
+        private static void SavePlanetFactionRegionAwareness(IDbTransaction transaction, Planet planet)
         {
             foreach (KeyValuePair<int, PlanetFaction> planetFaction in planet.PlanetFactionMap)
             {
-                foreach (KeyValuePair<Region, float> intel in planetFaction.Value.RegionIntel)
+                foreach (KeyValuePair<Region, float> intel in planetFaction.Value.RegionAwareness)
                 {
                     if (intel.Value <= 0) continue;
                     using var command = transaction.Connection.CreateCommand();
                     command.Transaction = transaction;
-                    command.CommandText = @"INSERT INTO PlanetFactionRegionIntel
-                        (PlanetId, FactionId, RegionId, IntelLevel) VALUES
-                        (@planetId, @factionId, @regionId, @intelLevel);";
+                    command.CommandText = @"INSERT INTO PlanetFactionRegionAwareness
+                        (PlanetId, FactionId, RegionId, Awareness) VALUES
+                        (@planetId, @factionId, @regionId, @awareness);";
                     command.AddParam("@planetId", planet.Id);
                     command.AddParam("@factionId", planetFaction.Key);
                     command.AddParam("@regionId", intel.Key.Id);
-                    command.AddParam("@intelLevel", intel.Value);
+                    command.AddParam("@awareness", intel.Value);
+                    command.ExecuteNonQuery();
+                }
+            }
+        }
+
+        private static void SavePlanetFactionTargetIntel(
+            IDbTransaction transaction,
+            Planet planet)
+        {
+            foreach (PlanetFaction observer in planet.PlanetFactionMap.Values)
+            {
+                foreach (FactionIntelBelief belief in observer.TargetIntel.Values)
+                {
+                    if (belief.Region.Planet != planet
+                        || belief.TargetFaction.Id == observer.Faction.Id
+                        || belief.Evidence < FactionIntelligenceRules.RumorThreshold)
+                    {
+                        throw new InvalidDataException(
+                            $"Cannot persist invalid target intelligence for observer {observer.Faction.Id}.");
+                    }
+
+                    using var command = transaction.Connection.CreateCommand();
+                    command.Transaction = transaction;
+                    command.CommandText = @"INSERT INTO PlanetFactionTargetIntel
+                        (PlanetId, ObserverFactionId, RegionId, TargetFactionId, Evidence,
+                         EstimatedPopulation, EstimatedMilitaryStrength, LastEvidenceWeek) VALUES
+                        (@planetId, @observerFactionId, @regionId, @targetFactionId, @evidence,
+                         @estimatedPopulation, @estimatedMilitaryStrength, @lastEvidenceWeek);";
+                    command.AddParam("@planetId", planet.Id);
+                    command.AddParam("@observerFactionId", observer.Faction.Id);
+                    command.AddParam("@regionId", belief.Region.Id);
+                    command.AddParam("@targetFactionId", belief.TargetFaction.Id);
+                    command.AddParam("@evidence", belief.Evidence);
+                    command.AddParam("@estimatedPopulation", belief.EstimatedPopulation);
+                    command.AddParam("@estimatedMilitaryStrength", belief.EstimatedMilitaryStrength);
+                    command.AddParam("@lastEvidenceWeek", belief.LastEvidenceWeek);
                     command.ExecuteNonQuery();
                 }
             }
@@ -611,15 +732,20 @@ namespace OnlyWar.Helpers.Database.GameState
 
         private static bool IsValidRegionMission(Region region, Mission mission)
         {
-            RegionFaction target = mission.RegionFaction;
-            if (target?.PlanetFaction?.Faction == null) return false;
-            if (!ReferenceEquals(target.Region, region)) return false;
-            if (!region.RegionFactionMap.TryGetValue(target.PlanetFaction.Faction.Id, out RegionFaction current))
+            if (mission?.Region != region || mission.TargetFaction == null)
             {
                 return false;
             }
 
-            return ReferenceEquals(current, target);
+            if (mission.RegionFaction == null)
+            {
+                return !RequiresCurrentPresence(mission.MissionType);
+            }
+
+            return region.RegionFactionMap.TryGetValue(
+                       mission.TargetFaction.Id,
+                       out RegionFaction current)
+                && ReferenceEquals(current, mission.RegionFaction);
         }
 
         // Persists a single mission row. Region special missions pass isRegionMission: true;
@@ -642,8 +768,12 @@ namespace OnlyWar.Helpers.Database.GameState
                     (@id, @missionType, @regionId, @factionId, @missionSize, @defenseType, @isRegionMission, @targetBattleValue);";
                 command.AddParam("@id", mission.Id);
                 command.AddParam("@missionType", (int)mission.MissionType);
-                command.AddParam("@regionId", mission.RegionFaction.Region.Id);
-                command.AddParam("@factionId", mission.RegionFaction.PlanetFaction.Faction.Id);
+                if (mission.Region == null || mission.TargetFaction == null)
+                {
+                    throw new InvalidDataException("A mission must have a strategic target.");
+                }
+                command.AddParam("@regionId", mission.Region.Id);
+                command.AddParam("@factionId", mission.TargetFaction.Id);
                 command.AddParam("@missionSize", mission.MissionSize);
                 command.AddParam("@defenseType", defenseType);
                 command.AddParam("@isRegionMission", isRegionMission ? 1 : 0);
@@ -655,5 +785,12 @@ namespace OnlyWar.Helpers.Database.GameState
                 command.ExecuteNonQuery();
             }
         }
+
+        private static bool RequiresCurrentPresence(MissionType missionType) =>
+            missionType is MissionType.Assassination
+                or MissionType.Construction
+                or MissionType.Sabotage
+                or MissionType.ShowOfForce
+                or MissionType.Feed;
     }
 }

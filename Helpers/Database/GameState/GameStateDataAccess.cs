@@ -16,6 +16,7 @@ using OnlyWar.Models.Orders;
 using OnlyWar.Helpers.Storage;
 using OnlyWar.Models.Supply;
 using OnlyWar.Models.Reports;
+using OnlyWar.Models.Events;
 
 namespace OnlyWar.Helpers.Database.GameState
 {
@@ -48,7 +49,13 @@ namespace OnlyWar.Helpers.Database.GameState
         public CampaignScenario Scenario { get; set; }
         public LoadoutDoctrine ChapterLoadoutDoctrine { get; set; }
         public CharacterLoadoutDoctrine CharacterLoadoutDoctrine { get; set; }
+        public EquipmentLoadoutDoctrine EquipmentLoadoutDoctrine { get; set; }
         public LastTurnReportSnapshot LastTurnReportSnapshot { get; set; }
+        public CampaignEventLedger CampaignEventLedger { get; set; }
+        public ChapterChronicleLedger ChapterChronicle { get; set; }
+        public CampaignIdentity CampaignIdentity { get; set; }
+        public FactionRelationshipLedger RelationshipLedger { get; set; }
+        public bool UpgradePending { get; set; }
     }
 
     public class GameStateDataAccess
@@ -60,12 +67,13 @@ namespace OnlyWar.Helpers.Database.GameState
         private readonly SoldierDataAccess _soldierDataAccess;
         private readonly PlayerSoldierDataAccess _playerSoldierDataAccess;
         private readonly GlobalDataAccess _globalDataAccess;
-        private readonly PlayerFactionEventDataAccess _playerFactionEventDataAccess;
         private readonly MedicalProcedureDataAccess _medicalProcedureDataAccess;
         private readonly PledgeDataAccess _pledgeDataAccess;
         private readonly RecruitmentDataAccess _recruitmentDataAccess;
         private readonly LoadoutDoctrineDataAccess _loadoutDoctrineDataAccess;
         private readonly LastTurnReportDataAccess _lastTurnReportDataAccess;
+        private readonly CampaignEventDataAccess _campaignEventDataAccess;
+        private readonly ChapterChronicleDataAccess _chapterChronicleDataAccess;
         private static GameStateDataAccess _instance;
         public static GameStateDataAccess Instance
         {
@@ -88,12 +96,13 @@ namespace OnlyWar.Helpers.Database.GameState
             _soldierDataAccess = new SoldierDataAccess();
             _playerSoldierDataAccess = new PlayerSoldierDataAccess();
             _globalDataAccess = new GlobalDataAccess();
-            _playerFactionEventDataAccess = new PlayerFactionEventDataAccess();
             _medicalProcedureDataAccess = new MedicalProcedureDataAccess();
             _pledgeDataAccess = new PledgeDataAccess();
             _recruitmentDataAccess = new RecruitmentDataAccess();
             _loadoutDoctrineDataAccess = new LoadoutDoctrineDataAccess();
             _lastTurnReportDataAccess = new LastTurnReportDataAccess();
+            _campaignEventDataAccess = new CampaignEventDataAccess();
+            _chapterChronicleDataAccess = new ChapterChronicleDataAccess();
         }
 
         public GameStateDataBlob GetData(string filePath,
@@ -105,7 +114,9 @@ namespace OnlyWar.Helpers.Database.GameState
                             IReadOnlyDictionary<int, WeaponSet> weaponSets,
                             IReadOnlyDictionary<int, HitLocationTemplate> hitLocationTemplates,
                             IReadOnlyDictionary<int, BaseSkill> baseSkillMap, 
-                            IReadOnlyDictionary<int, SoldierTemplate> soldierTemplateMap)
+                            IReadOnlyDictionary<int, SoldierTemplate> soldierTemplateMap,
+                            IReadOnlyDictionary<int, EquipmentTemplate> equipmentTemplates = null,
+                            IReadOnlyDictionary<int, EquipmentKitTemplate> equipmentKits = null)
         {
             string fullPath = Path.GetFullPath(filePath);
             if (!File.Exists(fullPath))
@@ -116,7 +127,10 @@ namespace OnlyWar.Helpers.Database.GameState
             string connection = BuildConnectionString(fullPath, SqliteOpenMode.ReadOnly);
             using IDbConnection dbCon = new SqliteConnection(connection);
             dbCon.Open();
-            _globalDataAccess.EnsureCompatibleSaveVersion(dbCon);
+            int saveVersion = _globalDataAccess.EnsureCompatibleSaveVersion(dbCon);
+            FactionRelationshipLedger relationshipLedger = LoadFactionRelationships(
+                dbCon,
+                factionMap);
             var characterMap = _planetDataAccess.GetCharacterMap(dbCon, factionMap);
             //var regionData = _planetDataAccess.Get
             var planets = _planetDataAccess.GetPlanets(dbCon, factionMap, characterMap,
@@ -125,9 +139,12 @@ namespace OnlyWar.Helpers.Database.GameState
             _loadoutDoctrineDataAccess.PopulatePlanetDoctrines(dbCon, planetMap, weaponSets);
             var chapterLoadoutDoctrine = _loadoutDoctrineDataAccess.GetChapterDoctrine(dbCon, weaponSets);
             var characterLoadoutDoctrine = _loadoutDoctrineDataAccess.GetCharacterDoctrine(dbCon, weaponSets);
-            var regions = _planetDataAccess.GetRegions(dbCon, factionMap, planets);
+            var equipmentLoadoutDoctrine = equipmentTemplates != null && equipmentKits != null
+                ? _loadoutDoctrineDataAccess.GetEquipmentDoctrine(dbCon, equipmentTemplates, equipmentKits)
+                : new EquipmentLoadoutDoctrine();
+                var regions = _planetDataAccess.GetRegions(dbCon, factionMap, planets);
             PlanetDataAccess.PopulateRegionFactions(dbCon, factionMap, regions);
-            var missionMap = _planetDataAccess.PopulateRegionMissions(dbCon, regions);
+            var missionMap = _planetDataAccess.PopulateRegionMissions(dbCon, regions, factionMap);
             var requests = _requestDataAccess.GetRequests(dbCon, characterMap, factionMap, planets);
             var pledges = _pledgeDataAccess.GetPledges(dbCon);
             var ships = _fleetDataAccess.GetShipsByFleetId(dbCon, shipTemplateMap);
@@ -154,13 +171,26 @@ namespace OnlyWar.Helpers.Database.GameState
             _unitDataAccess.PopulateOrderAttachments(dbCon, squadMap, playerSoldiers);
             var global = _globalDataAccess.GetGlobalData(dbCon);
             var medicalProcedures = _medicalProcedureDataAccess.GetProcedures(dbCon);
-            var history = _playerFactionEventDataAccess.GetHistory(dbCon);
             var lastTurnReportSnapshot = _lastTurnReportDataAccess.GetSnapshot(dbCon);
             // Decorated soldiers with no squad are fallen brothers; the living are reached
             // through the loaded units, so only the fallen need to ride along in the blob.
             var fallenBrothers = playerSoldiers.Values
                 .Where(s => s.AssignedSquad == null)
                 .ToList();
+            CampaignIdentity campaignIdentity = global?.CampaignIdentity
+                ?? throw new InvalidDataException(
+                    "The current-format save contains no campaign identity.");
+            CampaignEventLedger campaignEvents = _campaignEventDataAccess.GetLedger(
+                dbCon,
+                id => playerSoldiers.GetValueOrDefault(id) ?? fallenBrothers.FirstOrDefault(soldier => soldier.Id == id));
+            ChapterChronicleLedger chronicle = _chapterChronicleDataAccess.GetLedger(dbCon, campaignEvents);
+            CampaignEventProjectionBuilder.PopulateSoldierServiceRecords(
+                campaignEvents,
+                playerSoldiers.Values.Concat(fallenBrothers),
+                campaignIdentity);
+            ChapterChronicleProjector.Reconcile(campaignEvents, chronicle, campaignIdentity);
+            Dictionary<Date, List<EventHistory>> history =
+                CampaignEventProjectionBuilder.BuildBattleHistoryView(chronicle, campaignEvents);
             return new GameStateDataBlob
             {
                 Characters = characterMap.Values.ToList(),
@@ -181,7 +211,13 @@ namespace OnlyWar.Helpers.Database.GameState
                 Scenario = global?.Scenario,
                 ChapterLoadoutDoctrine = chapterLoadoutDoctrine,
                 CharacterLoadoutDoctrine = characterLoadoutDoctrine,
-                LastTurnReportSnapshot = lastTurnReportSnapshot
+                EquipmentLoadoutDoctrine = equipmentLoadoutDoctrine,
+                LastTurnReportSnapshot = lastTurnReportSnapshot,
+                CampaignEventLedger = campaignEvents,
+                ChapterChronicle = chronicle,
+                CampaignIdentity = campaignIdentity,
+                RelationshipLedger = relationshipLedger,
+                UpgradePending = false
             };
         }
 
@@ -200,14 +236,23 @@ namespace OnlyWar.Helpers.Database.GameState
                              IEnumerable<Unit> units,
                              IEnumerable<PlayerSoldier> playerSoldiers,
                              IEnumerable<PlayerSoldier> fallenBrothers,
-                             IReadOnlyDictionary<Date, List<EventHistory>> history,
                              LoadoutDoctrine chapterLoadoutDoctrine,
                              CharacterLoadoutDoctrine characterLoadoutDoctrine,
                              string schemaFilePath = null,
                              int? homeWorldPlanetId = null,
                              RecruitmentSaveData recruitment = null,
-                             LastTurnReportSnapshot lastTurnReportSnapshot = null)
+                             LastTurnReportSnapshot lastTurnReportSnapshot = null,
+                             CampaignEventLedger campaignEventLedger = null,
+                             ChapterChronicleLedger chapterChronicle = null,
+                             CampaignIdentity campaignIdentity = null,
+                             FactionRelationshipLedger relationshipLedger = null,
+                             EquipmentLoadoutDoctrine equipmentLoadoutDoctrine = null)
         {
+            ArgumentNullException.ThrowIfNull(campaignEventLedger);
+            ArgumentNullException.ThrowIfNull(chapterChronicle);
+            ArgumentNullException.ThrowIfNull(campaignIdentity);
+            ArgumentNullException.ThrowIfNull(relationshipLedger);
+            ArgumentNullException.ThrowIfNull(equipmentLoadoutDoctrine);
 
             // Write the whole save to a sibling temp file first and only swap it over the
             // real file once everything has committed. The previous save is left untouched
@@ -230,9 +275,11 @@ namespace OnlyWar.Helpers.Database.GameState
                 GenerateTables(tempPath, schemaFilePath ?? DefaultSchemaFilePath());
                 WriteSaveData(tempPath, currentDate, requisition, geneseedStockpile,
                               geneseedPurity, scenario, medicalProcedures, characters, requests,
-                              pledges, planets, fleets, playerSoldiers, fallenBrothers, history, squads,
+                              pledges, planets, fleets, playerSoldiers, fallenBrothers, squads,
                               ships, units, chapterLoadoutDoctrine, characterLoadoutDoctrine,
-                              homeWorldPlanetId, recruitment, lastTurnReportSnapshot);
+                              homeWorldPlanetId, recruitment, lastTurnReportSnapshot,
+                              campaignEventLedger, chapterChronicle, campaignIdentity,
+                              relationshipLedger, equipmentLoadoutDoctrine);
                 // Release the pooled SQLite handles so the temp file can be moved over the
                 // target on Windows (an open handle would block the move).
                 SqliteConnection.ClearAllPools();
@@ -270,7 +317,6 @@ namespace OnlyWar.Helpers.Database.GameState
                                    IEnumerable<TaskForce> fleets,
                                    IEnumerable<PlayerSoldier> playerSoldiers,
                                    IEnumerable<PlayerSoldier> fallenBrothers,
-                                   IReadOnlyDictionary<Date, List<EventHistory>> history,
                                    IEnumerable<Squad> squads,
                                    IEnumerable<Ship> ships,
                                    IEnumerable<Unit> units,
@@ -278,7 +324,12 @@ namespace OnlyWar.Helpers.Database.GameState
                                    CharacterLoadoutDoctrine characterLoadoutDoctrine,
                                    int? homeWorldPlanetId,
                                    RecruitmentSaveData recruitment,
-                                   LastTurnReportSnapshot lastTurnReportSnapshot)
+                                   LastTurnReportSnapshot lastTurnReportSnapshot,
+                                   CampaignEventLedger campaignEventLedger,
+                                   ChapterChronicleLedger chapterChronicle,
+                                   CampaignIdentity campaignIdentity,
+                                   FactionRelationshipLedger relationshipLedger,
+                                   EquipmentLoadoutDoctrine equipmentLoadoutDoctrine)
         {
             string connection = BuildConnectionString(filePath, SqliteOpenMode.ReadWriteCreate);
             using IDbConnection dbCon = new SqliteConnection(connection);
@@ -287,6 +338,8 @@ namespace OnlyWar.Helpers.Database.GameState
             {
                 try
                 {
+                    // Saving is passive: reconciliation and narration happen at
+                    // load/new-game/turn boundaries before this transaction begins.
                     foreach(Character character in characters)
                     {
                         _planetDataAccess.SaveCharacter(transaction, character);
@@ -297,6 +350,8 @@ namespace OnlyWar.Helpers.Database.GameState
                         _planetDataAccess.SavePlanet(transaction, planet);
                         _loadoutDoctrineDataAccess.SavePlanetDoctrine(transaction, planet);
                     }
+
+                    SaveFactionRelationships(transaction, relationshipLedger);
 
                     _loadoutDoctrineDataAccess.SaveChapterDoctrine(transaction, chapterLoadoutDoctrine);
 
@@ -349,6 +404,7 @@ namespace OnlyWar.Helpers.Database.GameState
                     // After the soldier rows exist: personal loadouts carry a foreign key to
                     // Soldier, and the insert drops entries for anyone no longer on the roster.
                     _loadoutDoctrineDataAccess.SaveCharacterDoctrine(transaction, characterLoadoutDoctrine);
+                    _loadoutDoctrineDataAccess.SaveEquipmentDoctrine(transaction, equipmentLoadoutDoctrine);
                     // missions already written as region special missions, so order missions
                     // that reuse one are not inserted twice (primary-key conflict)
                     HashSet<int> savedMissionIds = planets
@@ -387,8 +443,9 @@ namespace OnlyWar.Helpers.Database.GameState
                     _recruitmentDataAccess.SaveData(transaction, recruitment);
                     _globalDataAccess.SaveGlobalData(transaction, currentDate, requisition,
                                                      geneseedStockpile, geneseedPurity, scenario,
-                                                     homeWorldPlanetId);
-                    _playerFactionEventDataAccess.SaveData(transaction, history);
+                                                     homeWorldPlanetId, campaignIdentity);
+                    _campaignEventDataAccess.SaveLedger(transaction, campaignEventLedger);
+                    _chapterChronicleDataAccess.SaveLedger(transaction, chapterChronicle);
                     _lastTurnReportDataAccess.SaveSnapshot(transaction, lastTurnReportSnapshot);
                 }
                 catch (Exception)
@@ -418,6 +475,94 @@ namespace OnlyWar.Helpers.Database.GameState
                 ForeignKeys = true,
                 Pooling = false
             }.ToString();
+        }
+
+        private static FactionRelationshipLedger LoadFactionRelationships(
+            IDbConnection connection,
+            IReadOnlyDictionary<int, Faction> factionMap)
+        {
+            FactionRelationshipLedger ledger = new();
+            foreach (Faction faction in factionMap.Values)
+            {
+                ledger.RegisterFaction(faction);
+            }
+
+            using IDbCommand command = connection.CreateCommand();
+            command.CommandText = @"SELECT LowerFactionId, HigherFactionId, Stance
+                                    FROM FactionRelationship";
+            using IDataReader reader = command.ExecuteReader();
+            while (reader.Read())
+            {
+                int lowerId = reader.GetInt32(0);
+                int higherId = reader.GetInt32(1);
+                if (lowerId >= higherId
+                    || !factionMap.ContainsKey(lowerId)
+                    || !factionMap.ContainsKey(higherId))
+                {
+                    throw new InvalidDataException(
+                        $"Save contains an invalid faction relationship pair ({lowerId}, {higherId}).");
+                }
+
+                int stanceValue = reader.GetInt32(2);
+                if (stanceValue is < (int)FactionStance.Neutral or > (int)FactionStance.Allied)
+                {
+                    throw new InvalidDataException(
+                        $"Save contains an invalid faction relationship stance {stanceValue}.");
+                }
+
+                Faction lowerFaction = factionMap[lowerId];
+                Faction higherFaction = factionMap[higherId];
+                if ((lowerFaction.HasBehavior(FactionBehavior.UniversallyHostile)
+                    || higherFaction.HasBehavior(FactionBehavior.UniversallyHostile))
+                    && stanceValue != (int)FactionStance.Hostile)
+                {
+                    throw new InvalidDataException(
+                        $"Save contains a non-hostile relationship for universally hostile factions ({lowerId}, {higherId}).");
+                }
+
+                try
+                {
+                    ledger.LoadEntry(
+                        lowerId,
+                        higherId,
+                        (FactionStance)stanceValue);
+                }
+                catch (Exception exception) when (
+                    exception is ArgumentException or InvalidOperationException)
+                {
+                    throw new InvalidDataException(
+                        $"Save contains an illegal faction relationship ({lowerId}, {higherId}).",
+                        exception);
+                }
+            }
+
+            return ledger;
+        }
+
+        private static void SaveFactionRelationships(
+            IDbTransaction transaction,
+            FactionRelationshipLedger relationshipLedger)
+        {
+            if (relationshipLedger == null) return;
+
+            foreach (KeyValuePair<FactionPair, FactionStance> entry in relationshipLedger.Entries)
+            {
+                if (entry.Value is not FactionStance.Neutral and not FactionStance.Allied)
+                {
+                    throw new InvalidDataException(
+                        $"Cannot persist faction relationship {entry.Key}: invalid stance.");
+                }
+
+                using IDbCommand command = transaction.Connection.CreateCommand();
+                command.Transaction = transaction;
+                command.CommandText = @"INSERT INTO FactionRelationship
+                    (LowerFactionId, HigherFactionId, Stance)
+                    VALUES (@lowerFactionId, @higherFactionId, @stance);";
+                command.AddParam("@lowerFactionId", entry.Key.LowerFactionId);
+                command.AddParam("@higherFactionId", entry.Key.HigherFactionId);
+                command.AddParam("@stance", (int)entry.Value);
+                command.ExecuteNonQuery();
+            }
         }
 
         private void GenerateTables(string filePath, string schemaFilePath)

@@ -63,10 +63,13 @@ public sealed class DeploymentStorageTests : IDisposable
         Assert.False(File.Exists(missingPath));
     }
 
-    [Fact]
-    public void IncompatibleSave_IsRejectedBeforeSectorTablesAreRead()
+    [Theory]
+    [InlineData(7)]
+    [InlineData(9)]
+    [InlineData(11)]
+    public void NonCurrentSave_IsRejectedBeforeCampaignTablesAreRead(int saveVersion)
     {
-        string savePath = CreateMetadataDatabase("future.s3db", SaveFormat.CurrentVersion + 1);
+        string savePath = CreateMetadataDatabase($"format-{saveVersion}.s3db", saveVersion);
 
         InvalidDataException exception = Assert.Throws<InvalidDataException>(() =>
             GameStateDataAccess.Instance.GetData(
