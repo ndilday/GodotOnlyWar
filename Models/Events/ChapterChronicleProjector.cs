@@ -22,7 +22,16 @@ namespace OnlyWar.Models.Events
             if (@event.Publication.PublishesToChapterChronicle
                 && @event.Publication.ChronicleTreatment == CampaignEventChronicleTreatment.Standalone)
             {
-                AppendIfMissing(chronicle, composer, @event, $"chronicle/event/{@event.Id}");
+                if (@event.Type != CampaignEventType.Death)
+                    AppendIfMissing(chronicle, composer, @event, $"chronicle/event/{@event.Id}", events.Events);
+            }
+
+            if (@event.Type == CampaignEventType.GeneseedRecovery
+                && @event.Payload is GeneseedRecoveryPayload geneseed)
+            {
+                CampaignEvent death = events.GetById(geneseed.SourceDeathEventId);
+                if (death?.Publication.PublishesToChapterChronicle == true)
+                    AppendIfMissing(chronicle, composer, [death, @event], $"chronicle/event/{death.Id}", events.Events);
             }
 
             if (@event.Type == CampaignEventType.BattleResolved)
@@ -40,11 +49,23 @@ namespace OnlyWar.Models.Events
             ChapterChronicleComposer composer = new(identity);
             foreach (CampaignEvent @event in events.Events
                 .Where(item => item.Publication.PublishesToChapterChronicle
-                    && item.Publication.ChronicleTreatment == CampaignEventChronicleTreatment.Standalone)
+                    && item.Publication.ChronicleTreatment == CampaignEventChronicleTreatment.Standalone
+                    && item.Type != CampaignEventType.Death)
                 .OrderBy(item => item.OccurredWeek)
                 .ThenBy(item => item.Id))
             {
-                AppendIfMissing(chronicle, composer, @event, $"chronicle/event/{@event.Id}");
+                AppendIfMissing(chronicle, composer, @event, $"chronicle/event/{@event.Id}", events.Events);
+            }
+
+            foreach (CampaignEvent geneseedEvent in events.Events
+                .Where(item => item.Type == CampaignEventType.GeneseedRecovery)
+                .OrderBy(item => item.OccurredWeek)
+                .ThenBy(item => item.Id))
+            {
+                GeneseedRecoveryPayload geneseed = (GeneseedRecoveryPayload)geneseedEvent.Payload;
+                CampaignEvent death = events.GetById(geneseed.SourceDeathEventId);
+                if (death?.Publication.PublishesToChapterChronicle == true)
+                    AppendIfMissing(chronicle, composer, [death, geneseedEvent], $"chronicle/event/{death.Id}", events.Events);
             }
 
             foreach (string correlation in events.Events
@@ -79,11 +100,20 @@ namespace OnlyWar.Models.Events
                 .ToList();
             foreach (CampaignEvent @event in recent
                 .Where(item => item.Publication.PublishesToChapterChronicle
-                    && item.Publication.ChronicleTreatment == CampaignEventChronicleTreatment.Standalone)
+                    && item.Publication.ChronicleTreatment == CampaignEventChronicleTreatment.Standalone
+                    && item.Type != CampaignEventType.Death)
                 .OrderBy(item => item.OccurredWeek)
                 .ThenBy(item => item.Id))
             {
-                AppendIfMissing(chronicle, composer, @event, $"chronicle/event/{@event.Id}");
+                AppendIfMissing(chronicle, composer, @event, $"chronicle/event/{@event.Id}", events.Events);
+            }
+            foreach (CampaignEvent geneseedEvent in recent
+                .Where(item => item.Type == CampaignEventType.GeneseedRecovery))
+            {
+                GeneseedRecoveryPayload geneseed = (GeneseedRecoveryPayload)geneseedEvent.Payload;
+                CampaignEvent death = events.GetById(geneseed.SourceDeathEventId);
+                if (death?.Publication.PublishesToChapterChronicle == true)
+                    AppendIfMissing(chronicle, composer, [death, geneseedEvent], $"chronicle/event/{death.Id}", events.Events);
             }
 
             foreach (string correlation in recent
@@ -126,24 +156,32 @@ namespace OnlyWar.Models.Events
                 chronicle,
                 composer,
                 contributors,
-                $"chronicle/correlation/{correlationKey}");
+                $"chronicle/correlation/{correlationKey}",
+                events.Events);
         }
 
         private static void AppendIfMissing(
             ChapterChronicleLedger chronicle,
             ChapterChronicleComposer composer,
             CampaignEvent @event,
-            string dedupeKey) =>
-            AppendIfMissing(chronicle, composer, [@event], dedupeKey);
+            string dedupeKey,
+            IEnumerable<CampaignEvent> earlierEvents = null) =>
+            AppendIfMissing(chronicle, composer, [@event], dedupeKey, earlierEvents);
 
         private static void AppendIfMissing(
             ChapterChronicleLedger chronicle,
             ChapterChronicleComposer composer,
             IReadOnlyList<CampaignEvent> contributors,
-            string dedupeKey)
+            string dedupeKey,
+            IEnumerable<CampaignEvent> earlierEvents = null)
         {
             if (chronicle.GetByDedupeKey(dedupeKey) != null) return;
-            chronicle.Append(composer.Compose(chronicle.NextId, contributors, dedupeKey));
+            chronicle.Append(composer.Compose(
+                chronicle.NextId,
+                contributors,
+                dedupeKey,
+                earlierEvents: earlierEvents,
+                previouslyUsedCallbackIds: chronicle.Entries.SelectMany(item => item.CallbackEventIds)));
         }
     }
 }

@@ -132,7 +132,7 @@ namespace OnlyWar.Models.Events
                         change.Current?.Evidence ?? 0f,
                         true,
                         CampaignEventType.FactionFirstContact),
-                    entities: null));
+                    entities: @event.Entities));
             }
 
             return @event;
@@ -477,13 +477,80 @@ namespace OnlyWar.Models.Events
                     : $"battle/{context.CorrelationKey}/soldier/{soldier.Id}/death"),
                 3,
                 payload,
-                BuildBattleEntities(soldier, context, additionalEntities),
-                importanceHint: payload.Disposition == DeathDisposition.NonBattleProcedural
-                    ? CampaignEventImportance.Routine
-                    : CampaignEventImportance.Major,
-                chronicleTreatmentHint: payload.Disposition == DeathDisposition.NonBattleProcedural
-                    ? null
-                    : CampaignEventChronicleTreatment.Standalone));
+                BuildBattleEntities(soldier, context, additionalEntities)));
+        }
+
+        public CampaignEvent RecordSquadLeaderUnavailable(
+            PlayerSoldier soldier,
+            int squadId,
+            string squadName,
+            bool wasActualLeader,
+            BattleEventContextSnapshot battleContext = null)
+        {
+            if (soldier == null) throw new ArgumentNullException(nameof(soldier));
+            int occurredWeek = battleContext?.OccurredWeek ?? 0;
+            SquadLeaderUnavailablePayload payload = new(
+                squadId,
+                string.IsNullOrWhiteSpace(squadName) ? $"Squad {squadId}" : squadName,
+                soldier.Template?.Rank ?? 0,
+                soldier.Template?.Subrank ?? 0,
+                wasActualLeader,
+                soldier.IsDeployable,
+                battleContext);
+            return Record(new CampaignEventCandidate(
+                CampaignEventType.SquadLeaderUnavailable,
+                occurredWeek,
+                occurredWeek,
+                battleContext?.CorrelationKey,
+                $"squad-leader-unavailable/{squadId}/{soldier.Id}/{occurredWeek}",
+                1,
+                payload,
+                BuildBattleEntities(soldier, battleContext,
+                [new CampaignEventEntityRef(
+                    CampaignEntityKind.Squad,
+                    squadId,
+                    CampaignEventEntityRole.Related,
+                    payload.SquadName)])));
+        }
+
+        public CampaignEvent RecordHiddenCultRevealed(
+            int planetId,
+            string planetName,
+            int factionId,
+            string factionName,
+            int occurredWeek)
+        {
+            HiddenCultRevealedPayload payload = new(
+                planetId, planetName, factionId, factionName, occurredWeek);
+            return Record(new CampaignEventCandidate(
+                CampaignEventType.HiddenCultRevealed,
+                occurredWeek,
+                occurredWeek,
+                null,
+                $"cult-revealed/{factionId}/{planetId}",
+                1,
+                payload,
+                [
+                    new CampaignEventEntityRef(CampaignEntityKind.Faction, factionId,
+                        CampaignEventEntityRole.Subject, factionName),
+                    new CampaignEventEntityRef(CampaignEntityKind.Planet, planetId,
+                        CampaignEventEntityRole.Location, planetName)
+                ]));
+        }
+
+        public CampaignEvent RecordWorldControlChanged(WorldControlChangedPayload payload)
+        {
+            if (payload == null) throw new ArgumentNullException(nameof(payload));
+            return Record(new CampaignEventCandidate(
+                payload.EventType,
+                payload.EpisodeCompletedWeek,
+                payload.EpisodeCompletedWeek,
+                $"world-control/{payload.PlanetId}/{payload.EpisodeStartedWeek}",
+                $"world-control/{payload.PlanetId}/{payload.EpisodeStartedWeek}/{payload.EventType}",
+                1,
+                payload,
+                [new CampaignEventEntityRef(CampaignEntityKind.Planet, payload.PlanetId,
+                    CampaignEventEntityRole.Subject, payload.PlanetName)]));
         }
 
         public CampaignEvent RecordGeneseedRecovery(

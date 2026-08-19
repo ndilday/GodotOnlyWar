@@ -103,6 +103,15 @@ namespace OnlyWar.Helpers.Battles.Aftermath
                 BuildSquadEntity(soldier));
         }
 
+        public CampaignEvent RecordSquadLeaderUnavailable(
+            PlayerSoldier soldier,
+            int squadId,
+            string squadName,
+            bool wasActualLeader,
+            BattleEventContextSnapshot context) =>
+            RequirePlayerForce().CampaignEventRecorder.RecordSquadLeaderUnavailable(
+                soldier, squadId, squadName, wasActualLeader, context);
+
         public CampaignEvent RecordDeath(Date date, PlayerSoldier soldier, DeathPayload payload)
         {
             PlayerForce force = RequirePlayerForce();

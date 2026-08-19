@@ -6,6 +6,7 @@ using OnlyWar.Models.Orders;
 using OnlyWar.Models.Planets;
 using OnlyWar.Models.Soldiers;
 using OnlyWar.Models.Events;
+using OnlyWar.Helpers.Extensions;
 using System.Collections.Generic;
 using System.Linq;
 
@@ -100,6 +101,8 @@ namespace OnlyWar.Helpers
             ScenarioMetricsCollector.BeginScenarioRegionMetrics(
                 ScenarioMetricsCollector.GetScenarioMetricsPlanet(sector),
                 defaultFaction);
+            InitializeWorldControlEpisodes(sector, defaultFaction);
+            HashSet<(int PlanetId, int FactionId)> hiddenCults = SnapshotHiddenCults(sector);
 
             // There is no longer a pre-planning shaping phase. Diversions used to resolve here, before
             // NPC planning, so their projected threat could inflate the garrison the enemy chose to
@@ -145,6 +148,7 @@ namespace OnlyWar.Helpers
             _chapterUpkeepProcessor.TrainNonDeployedPlayerForces(sector, BuildMissionDaysBySquad());
             _fleetTurnProcessor.AdvanceFleetMovement(sector);
             _planetTurnProcessor.UpdatePlanets(sector.Planets.Values);
+            RecordStrategicNarrativeEvents(sector, defaultFaction, hiddenCults);
             _lastResult.RecruitmentReport = _recruitmentTurnProcessor.Process();
             MissionAftermathProcessor.PruneInvalidSpecialMissions(sector.Planets.Values);
             _planetIntelligenceProcessor.RefreshSpecialMissions(sector.Planets.Values);
@@ -166,6 +170,72 @@ namespace OnlyWar.Helpers
                 _session.Sector.PlayerForce?.CampaignIdentity);
             return _lastResult;
         }
+
+        private void InitializeWorldControlEpisodes(Sector sector, Faction imperialFaction)
+        {
+            PlayerForce force = sector.PlayerForce;
+            foreach (Planet planet in sector.Planets.Values)
+            {
+                Faction controller = planet.GetControllingFaction();
+                force?.WorldControlEpisodes.Observe(
+                    planet.Id,
+                    planet.Name,
+                    imperialFaction.Id,
+                    controller?.Id,
+                    planet.IsContested(),
+                    _session.CurrentDate.GetTotalWeeks(),
+                    isImperialControlled: controller != null
+                        && FactionRelationshipService.IsImperial(controller));
+            }
+        }
+
+        private void RecordStrategicNarrativeEvents(
+            Sector sector,
+            Faction imperialFaction,
+            HashSet<(int PlanetId, int FactionId)> previouslyHiddenCults)
+        {
+            PlayerForce force = sector.PlayerForce;
+            if (force == null) return;
+            int week = _session.CurrentDate.GetTotalWeeks();
+            foreach (Planet planet in sector.Planets.Values)
+            {
+                bool participated = force.CurrentTurnEvents.Any(@event =>
+                    (@event.Type is CampaignEventType.BattleParticipation
+                        or CampaignEventType.BattleResolved
+                        or CampaignEventType.MissionOutcome)
+                    && @event.Entities.Any(entity => entity.Kind == CampaignEntityKind.Planet
+                        && entity.EntityId == planet.Id));
+                Faction controller = planet.GetControllingFaction();
+                WorldControlChangedPayload completed = force.WorldControlEpisodes.Observe(
+                    planet.Id,
+                    planet.Name,
+                    imperialFaction.Id,
+                    controller?.Id,
+                    planet.IsContested(),
+                    week,
+                    participated,
+                    controller != null && FactionRelationshipService.IsImperial(controller));
+                if (completed != null)
+                    force.CampaignEventRecorder.RecordWorldControlChanged(completed);
+
+                foreach (PlanetFaction presence in planet.PlanetFactionMap.Values.Where(item =>
+                    item.IsPublic
+                    && item.Faction.GrowthType == GrowthType.Conversion
+                    && previouslyHiddenCults.Contains((planet.Id, item.Faction.Id))))
+                {
+                    force.CampaignEventRecorder.RecordHiddenCultRevealed(
+                        planet.Id, planet.Name, presence.Faction.Id, presence.Faction.Name, week);
+                }
+            }
+        }
+
+        private static HashSet<(int PlanetId, int FactionId)> SnapshotHiddenCults(Sector sector) =>
+            sector.Planets.Values
+                .SelectMany(planet => planet.PlanetFactionMap.Values
+                    .Where(presence => !presence.IsPublic
+                        && presence.Faction.GrowthType == GrowthType.Conversion)
+                    .Select(presence => (planet.Id, presence.Faction.Id)))
+                .ToHashSet();
 
         // Runs a planet-scoped slice of the weekly turn for a single world, for the given number of
         // weeks. Used by the opening-scenario stamp to let the promised world evolve during

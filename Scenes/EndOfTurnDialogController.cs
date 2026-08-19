@@ -353,20 +353,11 @@ public partial class EndOfTurnDialogController : DialogController
 
     private static string BuildRequestArrivalSummary(IRequest request)
     {
-        string commitment =
-            $"{request.Commitment.PackageCount} "
-            + $"{request.Commitment.DisplayUnitName}"
-            + (request.Commitment.PackageCount == 1 ? "" : "s")
-            + $" for {request.Commitment.ServiceWeeks} weeks";
-        string concern = request.ThreatFaction != null
-            ? $"{request.ThreatFaction.Name} are in open revolt"
-            : "an unverified threat is reported";
+        GovernorRequestNarrative narrative = GovernorRequestNarrator.Compose(request);
         string ask = request.FulfillmentKind == RequestFulfillmentKind.ThreatSuppressed
             ? "Suppress the threat before the deadline."
             : "Assign squads to the Show of Force order posted in the capital region.";
-        return $"A petition has reached the Chapter: {concern}. The governor asks for "
-            + $"{commitment}, by {FormatDate(request.Deadline)}, and offers "
-            + $"{request.OfferedRequisition:N0} Requisition. {ask} "
+        return narrative.Flavor + " " + narrative.MechanicalSummary + " " + ask + " "
             + "Full terms are on the Diplomacy screen.";
     }
 

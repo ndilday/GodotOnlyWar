@@ -7,6 +7,7 @@ using OnlyWar.Models.Missions;
 using OnlyWar.Models.Orders;
 using OnlyWar.Models.Planets;
 using OnlyWar.Models.Soldiers;
+using OnlyWar.Models.Squads;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -342,7 +343,8 @@ namespace OnlyWar.Helpers.Battles.Aftermath
                     definingLocation?.Template?.Id,
                     definingLocation?.Template?.Name,
                     definingLocation?.Template?.IsVital == true,
-                    bodyRecovered);
+                    bodyRecovered,
+                    SoldierSubrank: soldier.Template?.Subrank);
                 return narrativeSink.RecordDeath(_dependencies.Date, soldier, payload);
             }
 
@@ -368,13 +370,26 @@ namespace OnlyWar.Helpers.Battles.Aftermath
                 && !definingLocation.IsSevered;
             if (_dependencies.PlayerSink is IPlayerNarrativeEventSink narrativeSink)
             {
+                Squad assignedSquad = soldier.AssignedSquad;
+                bool wasActualLeader = assignedSquad?.SquadLeader == soldier;
+                BattleEventContextSnapshot eventContext =
+                    _context.GetPlayerEventContext(battleSoldier, PlayerHeldTheField());
                 narrativeSink.RecordIncapacitation(
                     _dependencies.Date,
                     soldier,
-                    _context.GetPlayerEventContext(battleSoldier, PlayerHeldTheField()),
+                    eventContext,
                     definingLocation,
                     _incapacitatingWoundWeapons.GetValueOrDefault(soldier.Id),
                     qualifiesAsNearDeath);
+                if (wasActualLeader && !soldier.IsDeployable)
+                {
+                    narrativeSink.RecordSquadLeaderUnavailable(
+                        soldier,
+                        assignedSquad.Id,
+                        assignedSquad.Name,
+                        true,
+                        eventContext);
+                }
                 return;
             }
             soldier.AddEvent(new SoldierEvent(

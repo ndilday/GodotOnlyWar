@@ -5,15 +5,20 @@ namespace OnlyWar.Models.Events
 {
     public sealed class CampaignEventClassifier
     {
-        public const int CurrentVersion = 1;
+        public const int CurrentVersion = 2;
         private readonly KillMilestoneRules _milestoneRules;
+        private readonly NarrativeEventRules _eventRules;
 
-        public CampaignEventClassifier(KillMilestoneRules milestoneRules = null)
+        public CampaignEventClassifier(
+            KillMilestoneRules milestoneRules = null,
+            NarrativeEventRules eventRules = null)
         {
             _milestoneRules = milestoneRules ?? KillMilestoneRules.Initial;
+            _eventRules = eventRules ?? NarrativeEventRules.Initial;
         }
 
         public KillMilestoneRules MilestoneRules => _milestoneRules;
+        public NarrativeEventRules EventRules => _eventRules;
 
         public CampaignEventPublication Classify(CampaignEventCandidate candidate)
         {
@@ -36,8 +41,7 @@ namespace OnlyWar.Models.Events
                     treatment = CampaignEventChronicleTreatment.GroupWithCorrelation;
                     break;
                 case CampaignEventType.KillMilestone:
-                    surfaces |= CampaignEventSurfaceFlags.ServiceRecord
-                        | CampaignEventSurfaceFlags.TurnReport;
+                    surfaces = CampaignEventSurfaceFlags.ServiceRecord;
                     reasons |= CampaignEventReasonFlags.KillMilestone;
                     if (candidate.Payload is KillMilestonePayload milestone
                         && _milestoneRules.Rules is { Count: > 0 })
@@ -48,6 +52,8 @@ namespace OnlyWar.Models.Events
                         {
                             importance = rule.Importance;
                             treatment = rule.ChronicleTreatment;
+                            if (rule.Threshold >= 100)
+                                surfaces |= CampaignEventSurfaceFlags.TurnReport;
                         }
                     }
                     if (treatment != CampaignEventChronicleTreatment.None)
@@ -100,10 +106,38 @@ namespace OnlyWar.Models.Events
                         ? CampaignEventImportance.Notable
                         : importance;
                     break;
+                case CampaignEventType.WorldSaved:
+                    surfaces = CampaignEventSurfaceFlags.TurnReport | CampaignEventSurfaceFlags.ChapterChronicle;
+                    importance = CampaignEventImportance.Major;
+                    reasons |= CampaignEventReasonFlags.WorldChangedHands | CampaignEventReasonFlags.WorldSaved;
+                    treatment = CampaignEventChronicleTreatment.Standalone;
+                    break;
+                case CampaignEventType.WorldLost:
+                    surfaces = CampaignEventSurfaceFlags.TurnReport | CampaignEventSurfaceFlags.ChapterChronicle;
+                    importance = CampaignEventImportance.Major;
+                    reasons |= CampaignEventReasonFlags.WorldChangedHands | CampaignEventReasonFlags.WorldLost;
+                    treatment = CampaignEventChronicleTreatment.Standalone;
+                    break;
+                case CampaignEventType.HiddenCultRevealed:
+                    surfaces = CampaignEventSurfaceFlags.TurnReport | CampaignEventSurfaceFlags.ChapterChronicle;
+                    importance = CampaignEventImportance.Notable;
+                    reasons |= CampaignEventReasonFlags.HiddenCultRevealed;
+                    treatment = CampaignEventChronicleTreatment.Standalone;
+                    break;
                 case CampaignEventType.Death:
                     surfaces |= CampaignEventSurfaceFlags.ServiceRecord;
+                    if (candidate.Payload is DeathPayload death)
+                    {
+                        reasons &= ~(CampaignEventReasonFlags.VeteranDeath
+                            | CampaignEventReasonFlags.OfficerCasualty
+                            | CampaignEventReasonFlags.SeniorCasualty);
+                        if (death.HadTerminatorHonours)
+                            reasons |= CampaignEventReasonFlags.VeteranDeath;
+                        if (_eventRules.IsNotableCasualty(death.SoldierRank, death.SoldierSubrank))
+                            reasons |= CampaignEventReasonFlags.SeniorCasualty;
+                    }
                     if (reasons.HasFlag(CampaignEventReasonFlags.VeteranDeath)
-                        || reasons.HasFlag(CampaignEventReasonFlags.OfficerCasualty))
+                        || reasons.HasFlag(CampaignEventReasonFlags.SeniorCasualty))
                     {
                         surfaces |= CampaignEventSurfaceFlags.TurnReport
                             | CampaignEventSurfaceFlags.ChapterChronicle;
@@ -116,23 +150,55 @@ namespace OnlyWar.Models.Events
                         surfaces |= CampaignEventSurfaceFlags.ChapterChronicle;
                     }
                     break;
+                case CampaignEventType.SquadLeaderUnavailable:
+                    if (candidate.Payload is SquadLeaderUnavailablePayload unavailable
+                        && unavailable.WasActualLeader
+                        && !unavailable.IsDeployableAfterInjury)
+                    {
+                        surfaces = CampaignEventSurfaceFlags.TurnReport;
+                        importance = CampaignEventImportance.Notable;
+                        reasons |= CampaignEventReasonFlags.SquadLeaderUnavailable;
+                    }
+                    else
+                    {
+                        surfaces = CampaignEventSurfaceFlags.None;
+                        importance = CampaignEventImportance.Routine;
+                        treatment = CampaignEventChronicleTreatment.None;
+                    }
+                    break;
                 case CampaignEventType.LastSurvivor:
                     surfaces |= CampaignEventSurfaceFlags.ServiceRecord;
-                    reasons |= CampaignEventReasonFlags.LastSurvivor;
-                    importance = importance == CampaignEventImportance.Routine
-                        ? CampaignEventImportance.Notable
-                        : importance;
-                    surfaces |= CampaignEventSurfaceFlags.ChapterChronicle;
-                    treatment = CampaignEventChronicleTreatment.GroupWithCorrelation;
+                    reasons &= ~CampaignEventReasonFlags.LastSurvivor;
+                    if (candidate.Payload is LastSurvivorPayload survivor
+                        && survivor.StartingChapterParticipantCount >= _eventRules.LastSurvivorMinimumParticipants
+                        && survivor.IsOnlyBrotherStillAbleToFight)
+                    {
+                        reasons |= CampaignEventReasonFlags.LastSurvivor;
+                        importance = importance == CampaignEventImportance.Routine
+                            ? CampaignEventImportance.Notable
+                            : importance;
+                        surfaces |= CampaignEventSurfaceFlags.TurnReport
+                            | CampaignEventSurfaceFlags.ChapterChronicle;
+                        treatment = CampaignEventChronicleTreatment.GroupWithCorrelation;
+                    }
                     break;
                 case CampaignEventType.SquadHeldAgainstOdds:
                     surfaces |= CampaignEventSurfaceFlags.ServiceRecord;
-                    reasons |= CampaignEventReasonFlags.SquadHeldAgainstOdds;
-                    importance = importance == CampaignEventImportance.Routine
-                        ? CampaignEventImportance.Notable
-                        : importance;
-                    surfaces |= CampaignEventSurfaceFlags.ChapterChronicle;
-                    treatment = CampaignEventChronicleTreatment.GroupWithCorrelation;
+                    reasons &= ~CampaignEventReasonFlags.SquadHeldAgainstOdds;
+                    if (candidate.Payload is SquadHeldAgainstOddsPayload held
+                        && held.StartingSquadParticipantCount >= _eventRules.SquadHeldMinimumParticipants
+                        && held.CasualtyFraction >= _eventRules.SquadHeldMinimumCasualtyFraction
+                        && held.ChapterHeldField
+                        && _eventRules.IsDefensiveCommitment(held.DefensiveMissionType))
+                    {
+                        reasons |= CampaignEventReasonFlags.SquadHeldAgainstOdds;
+                        importance = importance == CampaignEventImportance.Routine
+                            ? CampaignEventImportance.Notable
+                            : importance;
+                        surfaces |= CampaignEventSurfaceFlags.TurnReport
+                            | CampaignEventSurfaceFlags.ChapterChronicle;
+                        treatment = CampaignEventChronicleTreatment.GroupWithCorrelation;
+                    }
                     break;
                 case CampaignEventType.MentorAssigned:
                     surfaces |= CampaignEventSurfaceFlags.ServiceRecord;
@@ -145,9 +211,22 @@ namespace OnlyWar.Models.Events
                     surfaces |= CampaignEventSurfaceFlags.ServiceRecord;
                     reasons |= CampaignEventReasonFlags.BodyPartReplacement;
                     break;
-                default:
+                case CampaignEventType.AcceptedToTraining:
+                case CampaignEventType.PsychicDetected:
+                case CampaignEventType.Promotion:
+                case CampaignEventType.Transfer:
+                case CampaignEventType.RatingFlag:
+                case CampaignEventType.AwardReceived:
+                case CampaignEventType.BattleParticipation:
+                case CampaignEventType.Incapacitated:
+                case CampaignEventType.GeneseedRecovery:
+                case CampaignEventType.MissionOutcome:
+                case CampaignEventType.Oath:
+                case CampaignEventType.Founding:
                     surfaces |= CampaignEventSurfaceFlags.ServiceRecord;
                     break;
+                default:
+                    throw new NotSupportedException($"No publication matrix entry exists for {candidate.Type}.");
             }
 
             return new CampaignEventPublication(

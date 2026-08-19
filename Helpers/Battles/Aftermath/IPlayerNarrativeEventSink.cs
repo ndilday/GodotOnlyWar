@@ -32,6 +32,13 @@ namespace OnlyWar.Helpers.Battles.Aftermath
             WeaponTemplate causingWeapon,
             bool qualifiesAsNearDeath);
 
+        CampaignEvent RecordSquadLeaderUnavailable(
+            PlayerSoldier soldier,
+            int squadId,
+            string squadName,
+            bool wasActualLeader,
+            BattleEventContextSnapshot context);
+
         CampaignEvent RecordDeath(
             Date date,
             PlayerSoldier soldier,

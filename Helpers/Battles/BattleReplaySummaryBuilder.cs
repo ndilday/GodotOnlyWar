@@ -273,7 +273,10 @@ namespace OnlyWar.Helpers.Battles
                     actor?.Soldier?.Name ?? $"Actor {action.ActorId}",
                     actor?.SquadName ?? "Unknown formation",
                     BuildEventType(action),
-                    string.IsNullOrWhiteSpace(text) ? action.GetType().Name : text,
+                    string.IsNullOrWhiteSpace(text)
+                        ? $"{actor?.Soldier?.Name ?? "The acting combatant"} carried out "
+                            + $"a {BuildEventType(action).ToLowerInvariant()} action."
+                        : text,
                     BuildSeverity(text, woundCount),
                     BuildCategories(action, woundCount),
                     actor == null ? null : actor.SquadId,
@@ -610,7 +613,9 @@ namespace OnlyWar.Helpers.Battles
             }
             catch
             {
-                return action.GetType().Name;
+                // The caller supplies an authored, actor-named fallback. Never expose a CLR type
+                // name on the player-visible Battle Review surface.
+                return "";
             }
         }
 

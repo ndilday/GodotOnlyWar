@@ -264,8 +264,9 @@ post-turn dialog.
 `ChapterChronicleProjector` composes standalone entries as events settle and grouped battle entries
 when their `BattleResolved` anchor arrives. `ChapterFounded` is a defining Chapter-level event;
 routine `BattleResolved` facts remain Turn Report material unless a qualifying correlated or explicit
-strategic publication promotes them. Chronicle prose, narrator version, and contributor ids are
-frozen in `ChapterChronicleEntry`; browsing uses typed filters, newest-first pages of 20, and live or
+strategic publication promotes them. Chronicle prose, narrator version, variant, contributor ids,
+and selected callback ids are frozen in `ChapterChronicleEntry`; linked archival annotations append
+cooler corrections without rewriting the original. Browsing uses typed filters, newest-first pages of 20, and live or
 historical/unavailable entity links without re-narrating. Save transactions only validate and write
 the already-projected ledgers. New campaigns emit the founding event after scenario construction;
 loaded scenario saves missing it receive a deterministic compatibility event from persisted roster,
@@ -358,11 +359,18 @@ ChapterChronicleEntry    (Id, OccurredWeek, RecordedWeek, Importance, Correlatio
                           DedupeKey, Title, Body, NarratorKey, NarratorVersion, NarrativeVariant)
 ChapterChronicleEvent    (ChronicleEntryId→ChapterChronicleEntry,
                           CampaignEventId→CampaignEvent, SortOrder)
+ChapterChronicleCallback (ChronicleEntryId→ChapterChronicleEntry,
+                          CampaignEventId→CampaignEvent, SortOrder)
+ChapterChronicleAnnotation (Id, ChronicleEntryId→ChapterChronicleEntry,
+                            EvidenceEventId→CampaignEvent, RecordedWeek, Body,
+                            NarratorKey, NarratorVersion, DedupeKey, IsCorrection)
+WorldControlEpisode      (PlanetId→Planet, ImperialFactionId, LastControllingFactionId,
+                          WasImperialControlled, ContestedSinceWeek, ChapterParticipated)
 ```
 
 **Note:** Region adjacency is runtime-only. It is reconstructed from the ordered region array on load and is not persisted.
 
-**Canonical campaign event spine.** The current format-10 save retains the format-8 event spine as the durable source of truth
+**Canonical campaign event spine.** The current format-11 save retains the format-8 event spine as the durable source of truth
 for player-facing career and battle facts. `PayloadJson` is decoded through the explicit
 `(CampaignEventType, PayloadVersion)` registry; entity rows retain stable ids and display-name
 snapshots, and publication rows retain the classifier decision so loading never reclassifies an old
@@ -376,7 +384,24 @@ are v3 for battle participation, incapacitation, death, gene-seed, last-survivor
 near-death payloads, and v1 for squad-held and body-part replacement payloads. Legacy v1/v2 payload
 readers remain registered. Battle payloads carry one immutable `BattleEventContextSnapshot`, and
 the ledger validates source-event references and maintains the derived open-near-death projection
-while loading in event-id order. No separate projection table or format bump is required.
+while loading in event-id order.
+
+Classifier v2 owns the complete publication matrix. Its initial kill thresholds are 10 and 50
+(Service Record only), 100 (major), 500 (major), and 1,000 (defining); 25 and 250 are not rules.
+Death seniority is derived lexicographically from snapshotted rank/subrank against
+`NarrativeEventRules.NotableCasualtyMinimumRank/Subrank`. The veteran reason is set only by the
+snapshotted Terminator Honours fact and is dormant while honours have no emitter. Actual squad
+leaders who fail the shared `IsDeployable` rule emit an operational disruption fact without
+automatic Chronicle publication.
+
+Format 11 adds `WorldControlEpisode`, preserving contested episodes and bounded Chapter
+participation until a world is restored or lost. Completed events and per-planet/per-faction cult
+revelations use stable dedupe keys. Chronicle composition uses the `chapter-internal` narrator;
+Service Record, Turn Report, Command Brief, and Battle Review have separate composition paths.
+Notable death prose waits for its correlated gene-seed outcome. Chronicle body text, narrator
+version, deterministic variant, and callback ids are persisted and never regenerated on load.
+Later corrections append `ChapterChronicleAnnotation` rows in the archival-annotation voice and
+leave the original body untouched.
 
 ---
 
@@ -1653,7 +1678,7 @@ Coverage for the promoted Alpha 0.8 slice includes:
 - `CampaignEventSpineTests`: recorder dedupe/projection, crossed milestones, grouped Chronicle entries, founding projection/idempotence, and routine battle Chronicle policy.
 - `NarrativeEventEmissionTests`: near-death projection/recovery, typed medical/mentor/gene-seed facts, payload/entity data-access round trips, and invalid source/correlation validation.
 - `EndTurnPreflightTests`: shared attention-fact identity, preference-only suppression, and Command Brief retention.
-- `SaveLoadRoundTripTests` plus the data-access tests: current format-10 relationship, awareness, target-belief, mission, latest-report, and itemized equipment persistence; compatibility tests verify that the preceding format 9 is rejected before campaign-table loading. `EquipmentDoctrinePersistenceTests` covers complete role/personal loadouts, quantities, armor, and ready order.
+- `SaveLoadRoundTripTests` plus the data-access tests: current format-11 relationship, awareness, target-belief, mission, latest-report, narrative episode, Chronicle callback/annotation, and itemized equipment persistence; compatibility tests verify that format 10 is rejected before campaign-table loading. `EquipmentDoctrinePersistenceTests` covers complete role/personal loadouts, quantities, armor, and ready order.
 - `EquipmentFoundationTests`, `RulesDatabaseValidationTests`, and the focused battle coverage: global equipment identity, requirements/capacity, kit validation, shared mission reserves, ammunition behavior, reload/recovery, initial-ready priority, effective tactical Battle Value, and carrier reassignment.
 - `Scenes/Debug/release_scene_wiring_smoke.tscn` plus the stable headless main-scene smoke: shallow scene wiring; visual layout remains release QA.
 

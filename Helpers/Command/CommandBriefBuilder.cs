@@ -10,6 +10,7 @@ using OnlyWar.Models.Recruitment;
 using OnlyWar.Models.Reports;
 using OnlyWar.Models.Soldiers;
 using OnlyWar.Models.Squads;
+using OnlyWar.Models.Supply;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -208,6 +209,7 @@ namespace OnlyWar.Helpers.Command
                 string requester = request.Requester?.Name ?? "Unknown governor";
                 string world = request.TargetPlanet?.Name ?? "unknown world";
                 string progress = FormatRequestProgress(request);
+                GovernorRequestNarrative narrative = GovernorRequestNarrator.Compose(request);
                 CampaignNavigationTarget target = new(
                     CampaignNavigationTargetKind.Diplomacy,
                     request.Id,
@@ -232,7 +234,7 @@ namespace OnlyWar.Helpers.Command
                     CommandBriefCategory.PetitionsAndOpportunities,
                     priority,
                     $"Petition from {requester}",
-                    $"{world}. {progress} {request.HasPlayerResponded switch
+                    $"{narrative.Flavor} {narrative.MechanicalSummary} {progress} {request.HasPlayerResponded switch
                     {
                         true => "The Chapter has answered and the commitment is underway.",
                         _ => "No response has been recorded from the Chapter yet."
@@ -460,13 +462,24 @@ namespace OnlyWar.Helpers.Command
             foreach (CampaignEvent @event in boundedEvents)
             {
                 string key = $"event/{@event.Id}";
+                bool commandDisruption = @event.Type == CampaignEventType.SquadLeaderUnavailable;
                 items.Add(new CommandBriefItem(
                     key,
-                    CommandBriefCategory.StrategicSituation,
-                    CommandBriefPriority.Monitor,
-                    @event.Type == CampaignEventType.FirstBlood ? "First Blood" : "Known Campaign Event",
-                    CampaignEventNarrator.RenderTurnReport(@event, sector.PlayerForce?.CampaignIdentity),
-                    "Recorded this week",
+                    commandDisruption
+                        ? CommandBriefCategory.RequiresOrders
+                        : CommandBriefCategory.StrategicSituation,
+                    commandDisruption ? CommandBriefPriority.Actionable : CommandBriefPriority.Monitor,
+                    @event.Type switch
+                    {
+                        CampaignEventType.FirstBlood => "First Blood",
+                        CampaignEventType.SquadLeaderUnavailable => "Squad leader unavailable",
+                        CampaignEventType.WorldSaved => "World restored",
+                        CampaignEventType.WorldLost => "World lost",
+                        CampaignEventType.HiddenCultRevealed => "Hidden cult revealed",
+                        _ => "Known Campaign Event"
+                    },
+                    CampaignEventNarrator.RenderCommandBrief(@event, sector.PlayerForce?.CampaignIdentity),
+                    commandDisruption ? "Requires attention" : "Recorded this week",
                     "archive",
                     false,
                     BuildEventTarget(@event, sector),

@@ -55,6 +55,7 @@ namespace OnlyWar.Helpers.Database.GameState
         public ChapterChronicleLedger ChapterChronicle { get; set; }
         public CampaignIdentity CampaignIdentity { get; set; }
         public FactionRelationshipLedger RelationshipLedger { get; set; }
+        public IReadOnlyList<WorldControlEpisodeState> WorldControlEpisodes { get; set; }
         public bool UpgradePending { get; set; }
     }
 
@@ -74,6 +75,7 @@ namespace OnlyWar.Helpers.Database.GameState
         private readonly LastTurnReportDataAccess _lastTurnReportDataAccess;
         private readonly CampaignEventDataAccess _campaignEventDataAccess;
         private readonly ChapterChronicleDataAccess _chapterChronicleDataAccess;
+        private readonly WorldControlEpisodeDataAccess _worldControlEpisodeDataAccess;
         private static GameStateDataAccess _instance;
         public static GameStateDataAccess Instance
         {
@@ -103,6 +105,7 @@ namespace OnlyWar.Helpers.Database.GameState
             _lastTurnReportDataAccess = new LastTurnReportDataAccess();
             _campaignEventDataAccess = new CampaignEventDataAccess();
             _chapterChronicleDataAccess = new ChapterChronicleDataAccess();
+            _worldControlEpisodeDataAccess = new WorldControlEpisodeDataAccess();
         }
 
         public GameStateDataBlob GetData(string filePath,
@@ -184,6 +187,8 @@ namespace OnlyWar.Helpers.Database.GameState
                 dbCon,
                 id => playerSoldiers.GetValueOrDefault(id) ?? fallenBrothers.FirstOrDefault(soldier => soldier.Id == id));
             ChapterChronicleLedger chronicle = _chapterChronicleDataAccess.GetLedger(dbCon, campaignEvents);
+            IReadOnlyList<WorldControlEpisodeState> worldControlEpisodes =
+                _worldControlEpisodeDataAccess.GetStates(dbCon);
             CampaignEventProjectionBuilder.PopulateSoldierServiceRecords(
                 campaignEvents,
                 playerSoldiers.Values.Concat(fallenBrothers),
@@ -217,6 +222,7 @@ namespace OnlyWar.Helpers.Database.GameState
                 ChapterChronicle = chronicle,
                 CampaignIdentity = campaignIdentity,
                 RelationshipLedger = relationshipLedger,
+                WorldControlEpisodes = worldControlEpisodes,
                 UpgradePending = false
             };
         }
@@ -246,7 +252,8 @@ namespace OnlyWar.Helpers.Database.GameState
                              ChapterChronicleLedger chapterChronicle = null,
                              CampaignIdentity campaignIdentity = null,
                              FactionRelationshipLedger relationshipLedger = null,
-                             EquipmentLoadoutDoctrine equipmentLoadoutDoctrine = null)
+                             EquipmentLoadoutDoctrine equipmentLoadoutDoctrine = null,
+                             IEnumerable<WorldControlEpisodeState> worldControlEpisodes = null)
         {
             ArgumentNullException.ThrowIfNull(campaignEventLedger);
             ArgumentNullException.ThrowIfNull(chapterChronicle);
@@ -279,7 +286,7 @@ namespace OnlyWar.Helpers.Database.GameState
                               ships, units, chapterLoadoutDoctrine, characterLoadoutDoctrine,
                               homeWorldPlanetId, recruitment, lastTurnReportSnapshot,
                               campaignEventLedger, chapterChronicle, campaignIdentity,
-                              relationshipLedger, equipmentLoadoutDoctrine);
+                              relationshipLedger, equipmentLoadoutDoctrine, worldControlEpisodes);
                 // Release the pooled SQLite handles so the temp file can be moved over the
                 // target on Windows (an open handle would block the move).
                 SqliteConnection.ClearAllPools();
@@ -329,7 +336,8 @@ namespace OnlyWar.Helpers.Database.GameState
                                    ChapterChronicleLedger chapterChronicle,
                                    CampaignIdentity campaignIdentity,
                                    FactionRelationshipLedger relationshipLedger,
-                                   EquipmentLoadoutDoctrine equipmentLoadoutDoctrine)
+                                   EquipmentLoadoutDoctrine equipmentLoadoutDoctrine,
+                                   IEnumerable<WorldControlEpisodeState> worldControlEpisodes)
         {
             string connection = BuildConnectionString(filePath, SqliteOpenMode.ReadWriteCreate);
             using IDbConnection dbCon = new SqliteConnection(connection);
@@ -446,6 +454,7 @@ namespace OnlyWar.Helpers.Database.GameState
                                                      homeWorldPlanetId, campaignIdentity);
                     _campaignEventDataAccess.SaveLedger(transaction, campaignEventLedger);
                     _chapterChronicleDataAccess.SaveLedger(transaction, chapterChronicle);
+                    _worldControlEpisodeDataAccess.SaveStates(transaction, worldControlEpisodes);
                     _lastTurnReportDataAccess.SaveSnapshot(transaction, lastTurnReportSnapshot);
                 }
                 catch (Exception)

@@ -142,6 +142,7 @@ namespace OnlyWar.Models
         public CampaignEventRecorder EventRecorder => CampaignEventRecorder;
         public TurnEventBuffer CurrentTurnEvents { get; } = new();
         public ChapterChronicleLedger ChapterChronicle { get; } = new();
+        public WorldControlEpisodeTracker WorldControlEpisodes { get; private set; } = new();
         private CampaignIdentity _campaignIdentity;
         public CampaignIdentity CampaignIdentity
         {
@@ -203,6 +204,9 @@ namespace OnlyWar.Models
         {
             soldier?.AttachCampaignEventRecorder(CampaignEventRecorder);
         }
+
+        internal void RestoreWorldControlEpisodes(IEnumerable<WorldControlEpisodeState> states) =>
+            WorldControlEpisodes = new WorldControlEpisodeTracker(states);
 
         // Production callers use this boundary for the canonical battle fact. The legacy
         // AddToBattleHistory method remains available to the load/migration compatibility path,
@@ -310,7 +314,8 @@ namespace OnlyWar.Models
                     null,
                     false,
                     false,
-                    detail));
+                    detail,
+                    SoldierSubrank: soldier.Template?.Subrank));
         }
 
         internal CampaignEvent RecordProceduralGeneseedRecovery(

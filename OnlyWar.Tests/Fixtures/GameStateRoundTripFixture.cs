@@ -96,7 +96,8 @@ internal sealed class GameStateRoundTripFixture
             chapterChronicle: sector.PlayerForce.ChapterChronicle,
             campaignIdentity: sector.PlayerForce.CampaignIdentity,
             relationshipLedger: sector.RelationshipLedger,
-            equipmentLoadoutDoctrine: sector.PlayerForce.Army.EquipmentLoadoutDoctrine);
+            equipmentLoadoutDoctrine: sector.PlayerForce.Army.EquipmentLoadoutDoctrine,
+            worldControlEpisodes: sector.PlayerForce.WorldControlEpisodes.States);
     }
 
     public GameStateDataBlob Load(string dbPath)

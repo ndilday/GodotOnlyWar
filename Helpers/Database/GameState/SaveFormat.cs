@@ -17,7 +17,8 @@ namespace OnlyWar.Helpers.Database.GameState
         //    target-specific intelligence beliefs. This is a deliberate save break: v8 is rejected.
         // 10: itemized equipment role/personal loadout tables and mission equipment foundations.
         //     This is a deliberate save break: v9 and older saves are rejected.
-        internal const int CurrentVersion = 10;
-        internal const int FirstMigratableVersion = 10;
+        // 11: persisted world-control narrative episode state.
+        internal const int CurrentVersion = 11;
+        internal const int FirstMigratableVersion = 11;
     }
 }

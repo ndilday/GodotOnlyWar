@@ -43,7 +43,11 @@ namespace OnlyWar.Models.Events
         FactionPresenceLocated = 2201,
         FactionPresenceDisproven = 2202,
         FactionFirstContact = 2203,
-        FactionRelationshipChanged = 2204
+        FactionRelationshipChanged = 2204,
+        WorldSaved = 2205,
+        WorldLost = 2206,
+        HiddenCultRevealed = 2207,
+        SquadLeaderUnavailable = 2208
     }
 
     public enum CampaignEntityKind
@@ -99,7 +103,12 @@ namespace OnlyWar.Models.Events
         WorldChangedHands = 1 << 6,
         SquadHeldAgainstOdds = 1 << 7,
         NearDeathRecovery = 1 << 8,
-        BodyPartReplacement = 1 << 9
+        BodyPartReplacement = 1 << 9,
+        SeniorCasualty = 1 << 10,
+        SquadLeaderUnavailable = 1 << 11,
+        WorldSaved = 1 << 12,
+        WorldLost = 1 << 13,
+        HiddenCultRevealed = 1 << 14
     }
 
     public enum CampaignEventChronicleTreatment
@@ -397,6 +406,10 @@ namespace OnlyWar.Models.Events
             Register<FactionIntelEventPayload>(CampaignEventType.FactionPresenceDisproven, 1);
             Register<FactionIntelEventPayload>(CampaignEventType.FactionFirstContact, 1);
             Register<FactionRelationshipEventPayload>(CampaignEventType.FactionRelationshipChanged, 1);
+            Register<WorldControlChangedPayload>(CampaignEventType.WorldSaved, 1);
+            Register<WorldControlChangedPayload>(CampaignEventType.WorldLost, 1);
+            Register<HiddenCultRevealedPayload>(CampaignEventType.HiddenCultRevealed, 1);
+            Register<SquadLeaderUnavailablePayload>(CampaignEventType.SquadLeaderUnavailable, 1);
             foreach (CampaignEventType type in typedVersionThreeTypes)
             {
                 RegisterTypedVersionThree(type);

@@ -52,14 +52,14 @@ public sealed class CampaignEventSpineTests
             soldier, 24, 51, 12, 44, 100, "battle/100/2");
 
         Assert.Equal(
-            new[] { CampaignEventType.KillMilestone, CampaignEventType.KillMilestone },
+            new[] { CampaignEventType.KillMilestone },
             events.Select(@event => @event.Type));
-        Assert.Equal(new[] { 25, 50 }, events.Select(@event => ((KillMilestonePayload)@event.Payload).Threshold));
-        Assert.Equal(2, soldier.SoldierEvents.Count);
+        Assert.Equal(new[] { 50 }, events.Select(@event => ((KillMilestonePayload)@event.Payload).Threshold));
+        Assert.Single(soldier.SoldierEvents);
 
         Assert.Empty(recorder.RecordKillMilestones(
             soldier, 24, 51, 12, 44, 100, "battle/100/2"));
-        Assert.Equal(2, ledger.Events.Count);
+        Assert.Single(ledger.Events);
     }
 
     [Fact]

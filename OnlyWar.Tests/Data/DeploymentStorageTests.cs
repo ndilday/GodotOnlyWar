@@ -66,7 +66,7 @@ public sealed class DeploymentStorageTests : IDisposable
     [Theory]
     [InlineData(7)]
     [InlineData(9)]
-    [InlineData(11)]
+    [InlineData(12)]
     public void NonCurrentSave_IsRejectedBeforeCampaignTablesAreRead(int saveVersion)
     {
         string savePath = CreateMetadataDatabase($"format-{saveVersion}.s3db", saveVersion);

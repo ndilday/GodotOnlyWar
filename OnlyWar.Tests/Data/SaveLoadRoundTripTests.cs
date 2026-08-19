@@ -17,6 +17,7 @@ using OnlyWar.Models.Units;
 using OnlyWar.Models.Supply;
 using OnlyWar.Models.Equippables;
 using OnlyWar.Models.Reports;
+using OnlyWar.Models.Events;
 using OnlyWar.Tests.Fixtures;
 using Xunit;
 
@@ -69,6 +70,36 @@ public class SaveLoadRoundTripTests
                 "COMPLETE",
                 false)]);
         sector.PlayerForce.LastTurnReportSnapshot = expectedReport;
+        Planet episodePlanet = sector.Planets.Values.First();
+        sector.PlayerForce.RestoreWorldControlEpisodes(
+        [
+            new WorldControlEpisodeState(
+                episodePlanet.Id,
+                _data.DefaultFaction.Id,
+                null,
+                true,
+                _date.GetTotalWeeks() - 2,
+                true)
+        ]);
+        CampaignEvent narrativeEvidence = sector.PlayerForce.CampaignEventLedger.Events.First();
+        ChapterChronicleEntry callbackEntry = new(
+            sector.PlayerForce.ChapterChronicle.NextId,
+            narrativeEvidence.OccurredWeek,
+            narrativeEvidence.RecordedWeek,
+            CampaignEventImportance.Major,
+            narrativeEvidence.CorrelationKey,
+            "roundtrip/callback-entry",
+            "Frozen account",
+            "This prose must remain unchanged.",
+            CampaignEventNarrator.ChapterInternalNarratorKey,
+            CampaignEventNarrator.CurrentVersion,
+            0,
+            [narrativeEvidence.Id],
+            callbackEventIds: [narrativeEvidence.Id]);
+        sector.PlayerForce.ChapterChronicle.Append(callbackEntry);
+        sector.PlayerForce.ChapterChronicle.AppendAnnotation(new ChapterChronicleAnnotation(
+            1, callbackEntry.Id, narrativeEvidence.Id, narrativeEvidence.RecordedWeek,
+            "Subsequent testimony refined the account.", "roundtrip/annotation"));
 
         Character pledgeAuthority = sector.Characters.First(character => character.Id >= 0);
         Planet pledgeSource = sector.Planets.Values.First(planet => planet.Id >= 0);
@@ -300,6 +331,14 @@ public class SaveLoadRoundTripTests
             Assert.Equal(0.83f, loaded.GeneseedPurity, 3);
             Assert.Equal(expectedReport.ResolvedDate, loaded.LastTurnReportSnapshot.ResolvedDate);
             Assert.Equal("Mission", Assert.Single(loaded.LastTurnReportSnapshot.Entries).Title);
+            WorldControlEpisodeState loadedEpisode = Assert.Single(loaded.WorldControlEpisodes);
+            Assert.Equal(episodePlanet.Id, loadedEpisode.PlanetId);
+            Assert.True(loadedEpisode.ChapterParticipated);
+            ChapterChronicleEntry loadedCallback = loaded.ChapterChronicle.GetByDedupeKey(
+                "roundtrip/callback-entry");
+            Assert.Equal(new[] { narrativeEvidence.Id }, loadedCallback.CallbackEventIds);
+            Assert.Equal("This prose must remain unchanged.", loadedCallback.Body);
+            Assert.Single(loaded.ChapterChronicle.GetAnnotations(loadedCallback.Id));
             Assert.Equal(sector.Planets.Count, loaded.Planets.Count);
             Assert.Equal(sector.Characters.Count(), loaded.Characters.Count);
             Assert.True(loaded.ChapterLoadoutDoctrine.TryGetLoadout(

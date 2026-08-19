@@ -218,12 +218,56 @@ namespace OnlyWar.Models.Events
         string DefiningHitLocationName,
         bool DefiningLocationIsVital,
         bool BodyRecovered,
-        string Detail = null) : ICampaignEventPayload
+        string Detail = null,
+        int? SoldierSubrank = null,
+        bool HadTerminatorHonours = false) : ICampaignEventPayload
     {
         public CampaignEventType EventType => CampaignEventType.Death;
         public ushort Version => 3;
 
         public bool IsBattleDeath => BattleContext != null;
+    }
+
+    public sealed record SquadLeaderUnavailablePayload(
+        int SquadId,
+        string SquadName,
+        int SoldierRank,
+        int SoldierSubrank,
+        bool WasActualLeader,
+        bool IsDeployableAfterInjury,
+        BattleEventContextSnapshot BattleContext) : ICampaignEventPayload
+    {
+        public CampaignEventType EventType => CampaignEventType.SquadLeaderUnavailable;
+        public ushort Version => 1;
+    }
+
+    public sealed record WorldControlChangedPayload(
+        int PlanetId,
+        string PlanetName,
+        int ImperialFactionId,
+        int PreviousControllingFactionId,
+        int CurrentControllingFactionId,
+        int EpisodeStartedWeek,
+        int EpisodeCompletedWeek,
+        bool ChapterParticipated,
+        bool? CurrentControlIsImperial = null) : ICampaignEventPayload
+    {
+        public CampaignEventType EventType => (CurrentControlIsImperial
+            ?? CurrentControllingFactionId == ImperialFactionId)
+            ? CampaignEventType.WorldSaved
+            : CampaignEventType.WorldLost;
+        public ushort Version => 1;
+    }
+
+    public sealed record HiddenCultRevealedPayload(
+        int PlanetId,
+        string PlanetName,
+        int FactionId,
+        string FactionName,
+        int RevealedWeek) : ICampaignEventPayload
+    {
+        public CampaignEventType EventType => CampaignEventType.HiddenCultRevealed;
+        public ushort Version => 1;
     }
 
     public sealed record GeneseedRecoveryPayload(
@@ -340,12 +384,10 @@ namespace OnlyWar.Models.Events
 
         public static KillMilestoneRules Initial { get; } = new(
         [
-            new(10, CampaignEventImportance.Notable, CampaignEventChronicleTreatment.GroupWithCorrelation),
-            new(25, CampaignEventImportance.Notable, CampaignEventChronicleTreatment.GroupWithCorrelation),
-            new(50, CampaignEventImportance.Major, CampaignEventChronicleTreatment.Standalone),
+            new(10, CampaignEventImportance.Routine, CampaignEventChronicleTreatment.None),
+            new(50, CampaignEventImportance.Routine, CampaignEventChronicleTreatment.None),
             new(100, CampaignEventImportance.Major, CampaignEventChronicleTreatment.Standalone),
-            new(250, CampaignEventImportance.Defining, CampaignEventChronicleTreatment.Standalone),
-            new(500, CampaignEventImportance.Defining, CampaignEventChronicleTreatment.Standalone),
+            new(500, CampaignEventImportance.Major, CampaignEventChronicleTreatment.Standalone),
             new(1000, CampaignEventImportance.Defining, CampaignEventChronicleTreatment.Standalone)
         ]);
     }
@@ -360,11 +402,15 @@ namespace OnlyWar.Models.Events
         public int LastSurvivorMinimumParticipants { get; }
         public int SquadHeldMinimumParticipants { get; }
         public double SquadHeldMinimumCasualtyFraction { get; }
+        public int NotableCasualtyMinimumRank { get; }
+        public int NotableCasualtyMinimumSubrank { get; }
 
         public NarrativeEventRules(
             int lastSurvivorMinimumParticipants = 5,
             int squadHeldMinimumParticipants = 5,
-            double squadHeldMinimumCasualtyFraction = 0.5)
+            double squadHeldMinimumCasualtyFraction = 0.5,
+            int notableCasualtyMinimumRank = 2,
+            int notableCasualtyMinimumSubrank = 1)
         {
             if (lastSurvivorMinimumParticipants <= 0)
                 throw new ArgumentOutOfRangeException(nameof(lastSurvivorMinimumParticipants));
@@ -372,10 +418,16 @@ namespace OnlyWar.Models.Events
                 throw new ArgumentOutOfRangeException(nameof(squadHeldMinimumParticipants));
             if (squadHeldMinimumCasualtyFraction is < 0 or > 1)
                 throw new ArgumentOutOfRangeException(nameof(squadHeldMinimumCasualtyFraction));
+            if (notableCasualtyMinimumRank < 0)
+                throw new ArgumentOutOfRangeException(nameof(notableCasualtyMinimumRank));
+            if (notableCasualtyMinimumSubrank < 0)
+                throw new ArgumentOutOfRangeException(nameof(notableCasualtyMinimumSubrank));
 
             LastSurvivorMinimumParticipants = lastSurvivorMinimumParticipants;
             SquadHeldMinimumParticipants = squadHeldMinimumParticipants;
             SquadHeldMinimumCasualtyFraction = squadHeldMinimumCasualtyFraction;
+            NotableCasualtyMinimumRank = notableCasualtyMinimumRank;
+            NotableCasualtyMinimumSubrank = notableCasualtyMinimumSubrank;
         }
 
         public static NarrativeEventRules Initial { get; } = new();
@@ -385,5 +437,10 @@ namespace OnlyWar.Models.Events
                 or MissionType.Fortify
                 or MissionType.LastStand
                 or MissionType.ShowOfForce;
+
+        public bool IsNotableCasualty(int? rank, int? subrank) => rank.HasValue
+            && (rank.Value > NotableCasualtyMinimumRank
+                || (rank.Value == NotableCasualtyMinimumRank
+                    && (subrank ?? 0) >= NotableCasualtyMinimumSubrank));
     }
 }

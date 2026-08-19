@@ -77,6 +77,7 @@ namespace OnlyWar.Helpers
             playerForce.RecruitmentProgram =
                 RecruitmentSaveMapper.FromSaveData(gameState.Recruitment);
             playerForce.LastTurnReportSnapshot = gameState.LastTurnReportSnapshot;
+            playerForce.RestoreWorldControlEpisodes(gameState.WorldControlEpisodes);
             foreach (var historyDay in gameState.History ?? new Dictionary<Date, List<EventHistory>>())
             {
                 foreach (EventHistory entry in historyDay.Value ?? [])

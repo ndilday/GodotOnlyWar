@@ -76,6 +76,7 @@ namespace OnlyWar.Models.Events
         public int NarratorVersion { get; }
         public int NarrativeVariant { get; }
         public IReadOnlyList<long> CampaignEventIds { get; }
+        public IReadOnlyList<long> CallbackEventIds { get; }
         public IReadOnlySet<ChapterChronicleCategory> Categories { get; }
         public bool HasCategoryMetadata { get; }
 
@@ -92,7 +93,8 @@ namespace OnlyWar.Models.Events
             int narratorVersion,
             int narrativeVariant,
             IEnumerable<long> campaignEventIds,
-            IEnumerable<ChapterChronicleCategory> categories = null)
+            IEnumerable<ChapterChronicleCategory> categories = null,
+            IEnumerable<long> callbackEventIds = null)
         {
             if (id <= 0) throw new ArgumentOutOfRangeException(nameof(id));
             if (occurredWeek < 0) throw new ArgumentOutOfRangeException(nameof(occurredWeek));
@@ -116,6 +118,7 @@ namespace OnlyWar.Models.Events
             NarratorVersion = narratorVersion;
             NarrativeVariant = narrativeVariant;
             CampaignEventIds = ids.AsReadOnly();
+            CallbackEventIds = (callbackEventIds ?? []).Distinct().ToList().AsReadOnly();
             HasCategoryMetadata = categories != null;
             Categories = new HashSet<ChapterChronicleCategory>(
                 categories ?? Enumerable.Empty<ChapterChronicleCategory>());
@@ -132,9 +135,13 @@ namespace OnlyWar.Models.Events
         private readonly Dictionary<ChapterChronicleCategory, List<ChapterChronicleEntry>> _byCategory = [];
         private int _unindexedEntryCount;
         private long _nextId = 1;
+        private long _nextAnnotationId = 1;
 
         public IReadOnlyList<ChapterChronicleEntry> Entries => _entries;
+        private readonly List<ChapterChronicleAnnotation> _annotations = [];
+        public IReadOnlyList<ChapterChronicleAnnotation> Annotations => _annotations;
         public long NextId => _nextId;
+        public long NextAnnotationId => _nextAnnotationId;
         public bool HasUnindexedCategoryMetadata => _unindexedEntryCount > 0;
 
         public ChapterChronicleEntry Append(ChapterChronicleEntry entry)
@@ -168,6 +175,36 @@ namespace OnlyWar.Models.Events
 
         public ChapterChronicleEntry GetByDedupeKey(string dedupeKey) =>
             dedupeKey != null && _byDedupe.TryGetValue(dedupeKey, out ChapterChronicleEntry entry) ? entry : null;
+
+        public ChapterChronicleAnnotation AppendAnnotation(ChapterChronicleAnnotation annotation)
+        {
+            if (annotation == null) throw new ArgumentNullException(nameof(annotation));
+            if (!_byId.ContainsKey(annotation.ChronicleEntryId))
+                throw new InvalidDataException("An annotation must reference an existing Chronicle entry.");
+            if (_annotations.Any(item => item.DedupeKey == annotation.DedupeKey))
+                throw new InvalidDataException($"Chronicle annotation key '{annotation.DedupeKey}' is duplicated.");
+            _annotations.Add(annotation);
+            _nextAnnotationId = Math.Max(_nextAnnotationId, annotation.Id + 1);
+            return annotation;
+        }
+
+        public ChapterChronicleAnnotation Annotate(
+            long chronicleEntryId,
+            CampaignEvent evidence,
+            int recordedWeek,
+            string body,
+            string dedupeKey,
+            bool isCorrection = true)
+        {
+            if (evidence == null) throw new ArgumentNullException(nameof(evidence));
+            return AppendAnnotation(new ChapterChronicleAnnotation(
+                _nextAnnotationId, chronicleEntryId, evidence.Id, recordedWeek,
+                body, dedupeKey, isCorrection));
+        }
+
+        public IReadOnlyList<ChapterChronicleAnnotation> GetAnnotations(long entryId) =>
+            _annotations.Where(item => item.ChronicleEntryId == entryId)
+                .OrderBy(item => item.RecordedWeek).ThenBy(item => item.Id).ToList();
 
         public IReadOnlyList<ChapterChronicleEntry> GetPage(int page, int pageSize)
         {
@@ -250,7 +287,9 @@ namespace OnlyWar.Models.Events
             long id,
             IReadOnlyList<CampaignEvent> events,
             string dedupeKey = null,
-            string narratorKey = "campaign-event-v1")
+            string narratorKey = CampaignEventNarrator.ChapterInternalNarratorKey,
+            IEnumerable<CampaignEvent> earlierEvents = null,
+            IEnumerable<long> previouslyUsedCallbackIds = null)
         {
             if (events == null || events.Count == 0) throw new ArgumentException("Events are required.");
             List<CampaignEvent> ordered = events.OrderBy(item => item.OccurredWeek).ThenBy(item => item.Id).ToList();
@@ -270,19 +309,38 @@ namespace OnlyWar.Models.Events
                     ((LegacyChapterHistoryPayload)anchor.Payload).Title,
                 CampaignEventType.ChapterFounded when anchor.Payload is ChapterFoundedPayload founding =>
                     $"The {founding.ChapterName} is Founded",
+                CampaignEventType.WorldSaved when anchor.Payload is WorldControlChangedPayload world =>
+                    $"The Restoration of {world.PlanetName}",
+                CampaignEventType.WorldLost when anchor.Payload is WorldControlChangedPayload world =>
+                    $"The Loss of {world.PlanetName}",
+                CampaignEventType.HiddenCultRevealed when anchor.Payload is HiddenCultRevealedPayload cult =>
+                    $"The Hidden War on {cult.PlanetName}",
+                CampaignEventType.Death => $"The Fall of {GetSubjectName(anchor)}",
                 CampaignEventType.BattleResolved when anchor.Payload is BattleResolvedPayload battle => battle.Title,
                 _ => "Campaign Service Record"
             };
-            string body = string.Join(" ", ordered
-                .OrderByDescending(item => ReferenceEquals(item, anchor))
-                .ThenBy(item => item.OccurredWeek)
-                .ThenBy(item => item.Id)
-                .Select(RenderBody));
+            CampaignEvent death = ordered.FirstOrDefault(item => item.Type == CampaignEventType.Death);
+            CampaignEvent geneseed = ordered.FirstOrDefault(item => item.Type == CampaignEventType.GeneseedRecovery);
+            string body = death != null && geneseed != null
+                ? CampaignEventNarrator.RenderEulogy(death, geneseed, _identity)
+                : string.Join(" ", ordered
+                    .OrderByDescending(item => ReferenceEquals(item, anchor))
+                    .ThenBy(item => item.OccurredWeek)
+                    .ThenBy(item => item.Id)
+                    .Select(RenderBody));
+            IReadOnlyList<CampaignEvent> callbacks = ChronicleContinuitySelector.Select(
+                anchor,
+                ordered,
+                earlierEvents,
+                anchor.Publication.Importance == CampaignEventImportance.Defining ? 2 : 1,
+                previouslyUsedCallbackIds);
+            foreach (CampaignEvent callback in callbacks)
+                body += " " + CampaignEventNarrator.RenderContinuityCallback(callback, anchor);
             int variant = NarrativeVariantSelector.SelectVariant(
                 _identity,
                 anchor.Id,
                 narratorKey,
-                1,
+                CampaignEventNarrator.CurrentVersion,
                 3);
             string stableDedupe = dedupeKey
                 ?? (first.Publication.ChronicleTreatment == CampaignEventChronicleTreatment.GroupWithCorrelation
@@ -303,25 +361,98 @@ namespace OnlyWar.Models.Events
                 1,
                 variant,
                 ordered.Select(item => item.Id),
-                categories);
+                categories,
+                callbacks.Select(item => item.Id));
         }
 
-        private static string RenderBody(CampaignEvent @event) => @event.Payload switch
-        {
-            LegacyChapterHistoryPayload legacy => string.Join(" ", legacy.SubEvents ?? []),
-            BattleResolvedPayload battle => battle.Summary,
-            ChapterFoundedPayload founding =>
-                $"The {founding.ChapterName} was founded with {founding.InitialActiveStrength:N0} "
-                + $"active battle brothers. {founding.OpeningDirective}",
-            FirstBloodPayload first => $"{GetSubjectName(@event)} drew First Blood with {first.NewCumulativeTotal} confirmed kill.",
-            KillMilestonePayload milestone =>
-                $"{GetSubjectName(@event)} reached {milestone.Threshold} confirmed kills.",
-            LegacySoldierEventPayload soldier => soldier.Detail,
-            _ => CampaignEventNarrator.RenderServiceRecord(@event)
-        };
+        private static string RenderBody(CampaignEvent @event) =>
+            CampaignEventNarrator.RenderChronicle(@event);
 
         private static string GetSubjectName(CampaignEvent @event) =>
             @event.Entities.FirstOrDefault(entity => entity.Role == CampaignEventEntityRole.Subject)
                 ?.DisplayNameSnapshot ?? "A battle-brother";
+    }
+
+    public sealed record ChapterChronicleAnnotation
+    {
+        public long Id { get; }
+        public long ChronicleEntryId { get; }
+        public long EvidenceEventId { get; }
+        public int RecordedWeek { get; }
+        public string Body { get; }
+        public string NarratorKey { get; }
+        public int NarratorVersion { get; }
+        public string DedupeKey { get; }
+        public bool IsCorrection { get; }
+
+        public ChapterChronicleAnnotation(long id, long chronicleEntryId, long evidenceEventId,
+            int recordedWeek, string body, string dedupeKey, bool isCorrection = true,
+            string narratorKey = CampaignEventNarrator.ArchivalAnnotationNarratorKey,
+            int narratorVersion = CampaignEventNarrator.CurrentVersion)
+        {
+            if (id <= 0 || chronicleEntryId <= 0 || evidenceEventId <= 0)
+                throw new ArgumentOutOfRangeException(nameof(id));
+            if (recordedWeek < 0) throw new ArgumentOutOfRangeException(nameof(recordedWeek));
+            if (string.IsNullOrWhiteSpace(body) || string.IsNullOrWhiteSpace(dedupeKey))
+                throw new ArgumentException("Annotation body and dedupe key are required.");
+            Id = id;
+            ChronicleEntryId = chronicleEntryId;
+            EvidenceEventId = evidenceEventId;
+            RecordedWeek = recordedWeek;
+            Body = body.StartsWith("Later annotation:", StringComparison.OrdinalIgnoreCase)
+                ? body
+                : "Later annotation: " + body;
+            DedupeKey = dedupeKey;
+            IsCorrection = isCorrection;
+            NarratorKey = narratorKey;
+            NarratorVersion = narratorVersion;
+        }
+    }
+
+    public static class ChronicleContinuitySelector
+    {
+        public static IReadOnlyList<CampaignEvent> Select(CampaignEvent anchor,
+            IEnumerable<CampaignEvent> contributors, IEnumerable<CampaignEvent> history,
+            int maximum = 1, IEnumerable<long> previouslyUsedCallbackIds = null)
+        {
+            if (anchor == null || maximum <= 0) return [];
+            HashSet<long> excluded = (contributors ?? []).Select(item => item.Id).ToHashSet();
+            HashSet<(CampaignEntityKind Kind, int Id)> shared = anchor.Entities
+                .Select(entity => (entity.Kind, entity.EntityId)).ToHashSet();
+            HashSet<long> repeated = (previouslyUsedCallbackIds ?? []).ToHashSet();
+            return (history ?? [])
+                .Where(item => item.Id < anchor.Id && !excluded.Contains(item.Id)
+                    && item.RecordedWeek <= anchor.RecordedWeek
+                    && item.Entities.Any(entity => shared.Contains((entity.Kind, entity.EntityId))))
+                .Select(item => new
+                {
+                    Event = item,
+                    Score = Score(item, anchor) - (repeated.Contains(item.Id) ? 25 : 0)
+                })
+                .Where(item => item.Score > 0)
+                .OrderByDescending(item => item.Score)
+                .ThenByDescending(item => item.Event.RecordedWeek)
+                .ThenBy(item => item.Event.Id)
+                .Take(Math.Min(2, maximum))
+                .Select(item => item.Event).ToList();
+        }
+
+        private static int Score(CampaignEvent candidate, CampaignEvent anchor)
+        {
+            int score = candidate.Type switch
+            {
+                CampaignEventType.MentorAssigned => 100,
+                CampaignEventType.NearDeathRecovery => 80,
+                CampaignEventType.KillMilestone => 40,
+                CampaignEventType.FirstBlood => 30,
+                CampaignEventType.AcceptedToTraining => 20,
+                _ => 10
+            };
+            if (candidate.Entities.Any(left => anchor.Entities.Any(right =>
+                left.Kind == right.Kind && left.EntityId == right.EntityId
+                && left.Kind is CampaignEntityKind.Planet or CampaignEntityKind.Faction))) score += 50;
+            if (candidate.Publication.Importance >= CampaignEventImportance.Major) score += 20;
+            return score;
+        }
     }
 }

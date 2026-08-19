@@ -42,7 +42,7 @@ namespace OnlyWar.Helpers.Command
                     ? chronicle.GetPage(entry => Matches(entry, events, filter), page, PageSize)
                     : chronicle.GetPage(ToCategory(filter), page, PageSize);
             return entries
-                .Select(entry => ToViewModel(entry, events, sector))
+                .Select(entry => ToViewModel(entry, events, sector, chronicle.GetAnnotations(entry.Id)))
                 .ToList()
                 .AsReadOnly();
         }
@@ -148,7 +148,8 @@ namespace OnlyWar.Helpers.Command
         private static ChronicleEntryViewModel ToViewModel(
             ChapterChronicleEntry entry,
             CampaignEventLedger events,
-            Sector sector)
+            Sector sector,
+            IReadOnlyList<ChapterChronicleAnnotation> annotations)
         {
             List<CampaignEvent> contributors = GetEvents(entry, events).ToList();
             IReadOnlySet<ChronicleFilter> categories = GetCategories(entry, events);
@@ -185,7 +186,9 @@ namespace OnlyWar.Helpers.Command
                 entry.Importance,
                 primaryCategory,
                 entry.Title,
-                entry.Body,
+                annotations == null || annotations.Count == 0
+                    ? entry.Body
+                    : entry.Body + "\n\n" + string.Join("\n", annotations.Select(item => item.Body)),
                 links.AsReadOnly(),
                 relatedBattle);
         }

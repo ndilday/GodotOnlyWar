@@ -15,6 +15,7 @@ namespace OnlyWar.Helpers.Database.GameState
             ChapterChronicleLedger ledger = new();
             if (!TableExists(connection, "ChapterChronicleEntry")) return ledger;
             Dictionary<long, List<long>> contributors = GetContributors(connection);
+            Dictionary<long, List<long>> callbacks = GetOrderedEventLinks(connection, "ChapterChronicleCallback");
             HashSet<long> loadedEntryIds = new();
             using IDbCommand command = connection.CreateCommand();
             command.CommandText = @"SELECT Id, OccurredWeek, RecordedWeek, Importance,
@@ -51,11 +52,13 @@ namespace OnlyWar.Helpers.Database.GameState
                     reader.GetInt32(9),
                     reader.GetInt32(10),
                     eventIds,
-                    ChapterChronicleCategoryMapper.FromEvents(contributorEvents)));
+                    ChapterChronicleCategoryMapper.FromEvents(contributorEvents),
+                    callbackEventIds: callbacks.GetValueOrDefault(id) ?? []));
             }
             long orphanContributor = contributors.Keys.FirstOrDefault(id => !loadedEntryIds.Contains(id));
             if (orphanContributor != 0)
                 throw new InvalidDataException($"Chronicle contributor row references missing entry {orphanContributor}.");
+            LoadAnnotations(connection, ledger, events);
             return ledger;
         }
 
@@ -64,8 +67,12 @@ namespace OnlyWar.Helpers.Database.GameState
             if (ledger == null) return;
             using IDbCommand entryCommand = transaction.Connection.CreateCommand();
             using IDbCommand eventCommand = transaction.Connection.CreateCommand();
+            using IDbCommand callbackCommand = transaction.Connection.CreateCommand();
+            using IDbCommand annotationCommand = transaction.Connection.CreateCommand();
             entryCommand.Transaction = transaction;
             eventCommand.Transaction = transaction;
+            callbackCommand.Transaction = transaction;
+            annotationCommand.Transaction = transaction;
             entryCommand.CommandText = @"INSERT INTO ChapterChronicleEntry
                 (Id, OccurredWeek, RecordedWeek, Importance, CorrelationKey, DedupeKey,
                  Title, Body, NarratorKey, NarratorVersion, NarrativeVariant)
@@ -74,6 +81,14 @@ namespace OnlyWar.Helpers.Database.GameState
             eventCommand.CommandText = @"INSERT INTO ChapterChronicleEvent
                 (ChronicleEntryId, CampaignEventId, SortOrder)
                 VALUES (@entryId, @eventId, @sortOrder)";
+            callbackCommand.CommandText = @"INSERT INTO ChapterChronicleCallback
+                (ChronicleEntryId, CampaignEventId, SortOrder)
+                VALUES (@entryId, @eventId, @sortOrder)";
+            annotationCommand.CommandText = @"INSERT INTO ChapterChronicleAnnotation
+                (Id, ChronicleEntryId, EvidenceEventId, RecordedWeek, Body, NarratorKey,
+                 NarratorVersion, DedupeKey, IsCorrection)
+                VALUES (@id, @entryId, @evidenceId, @week, @body, @narrator,
+                 @version, @dedupe, @correction)";
             foreach (ChapterChronicleEntry entry in ledger.Entries.OrderBy(item => item.Id))
             {
                 entryCommand.Parameters.Clear();
@@ -99,6 +114,29 @@ namespace OnlyWar.Helpers.Database.GameState
                     eventCommand.AddParam("@sortOrder", sortOrder++);
                     eventCommand.ExecuteNonQuery();
                 }
+                sortOrder = 0;
+                foreach (long eventId in entry.CallbackEventIds)
+                {
+                    callbackCommand.Parameters.Clear();
+                    callbackCommand.AddParam("@entryId", entry.Id);
+                    callbackCommand.AddParam("@eventId", eventId);
+                    callbackCommand.AddParam("@sortOrder", sortOrder++);
+                    callbackCommand.ExecuteNonQuery();
+                }
+            }
+            foreach (ChapterChronicleAnnotation annotation in ledger.Annotations.OrderBy(item => item.Id))
+            {
+                annotationCommand.Parameters.Clear();
+                annotationCommand.AddParam("@id", annotation.Id);
+                annotationCommand.AddParam("@entryId", annotation.ChronicleEntryId);
+                annotationCommand.AddParam("@evidenceId", annotation.EvidenceEventId);
+                annotationCommand.AddParam("@week", annotation.RecordedWeek);
+                annotationCommand.AddParam("@body", annotation.Body);
+                annotationCommand.AddParam("@narrator", annotation.NarratorKey);
+                annotationCommand.AddParam("@version", annotation.NarratorVersion);
+                annotationCommand.AddParam("@dedupe", annotation.DedupeKey);
+                annotationCommand.AddParam("@correction", annotation.IsCorrection ? 1 : 0);
+                annotationCommand.ExecuteNonQuery();
             }
         }
 
@@ -128,6 +166,43 @@ namespace OnlyWar.Helpers.Database.GameState
                 ids.Add(reader.GetInt64(1));
             }
             return result;
+        }
+
+        private static Dictionary<long, List<long>> GetOrderedEventLinks(
+            IDbConnection connection, string table)
+        {
+            Dictionary<long, List<long>> result = new();
+            using IDbCommand command = connection.CreateCommand();
+            command.CommandText = $"SELECT ChronicleEntryId, CampaignEventId, SortOrder FROM {table} ORDER BY ChronicleEntryId, SortOrder";
+            using IDataReader reader = command.ExecuteReader();
+            while (reader.Read())
+            {
+                long entryId = reader.GetInt64(0);
+                if (!result.TryGetValue(entryId, out List<long> ids))
+                    result[entryId] = ids = [];
+                ids.Add(reader.GetInt64(1));
+            }
+            return result;
+        }
+
+        private static void LoadAnnotations(
+            IDbConnection connection, ChapterChronicleLedger ledger, CampaignEventLedger events)
+        {
+            using IDbCommand command = connection.CreateCommand();
+            command.CommandText = @"SELECT Id, ChronicleEntryId, EvidenceEventId, RecordedWeek,
+                Body, NarratorKey, NarratorVersion, DedupeKey, IsCorrection
+                FROM ChapterChronicleAnnotation ORDER BY Id";
+            using IDataReader reader = command.ExecuteReader();
+            while (reader.Read())
+            {
+                long evidenceId = reader.GetInt64(2);
+                if (events.GetById(evidenceId) == null)
+                    throw new InvalidDataException($"Chronicle annotation references missing event {evidenceId}.");
+                ledger.AppendAnnotation(new ChapterChronicleAnnotation(
+                    reader.GetInt64(0), reader.GetInt64(1), evidenceId, reader.GetInt32(3),
+                    reader.GetString(4), reader.GetString(7), System.Convert.ToBoolean(reader[8]),
+                    reader.GetString(5), reader.GetInt32(6)));
+            }
         }
 
         private static TEnum ReadEnum<TEnum>(int value, string label, long id)
