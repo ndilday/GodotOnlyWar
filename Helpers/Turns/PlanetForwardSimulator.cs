@@ -19,6 +19,7 @@ namespace OnlyWar.Helpers.Turns
         private readonly MissionTurnProcessor _missionTurnProcessor;
         private readonly MissionAftermathProcessor _missionAftermathProcessor;
         private readonly PlanetTurnProcessor _planetTurnProcessor;
+        private readonly PlanetIntelligenceProcessor _intelligenceProcessor;
         private readonly TurnIntelligenceLedger _intelLedger;
         private readonly TurnResolutionResult _result;
 
@@ -28,6 +29,7 @@ namespace OnlyWar.Helpers.Turns
             MissionTurnProcessor missionTurnProcessor,
             MissionAftermathProcessor missionAftermathProcessor,
             PlanetTurnProcessor planetTurnProcessor,
+            PlanetIntelligenceProcessor intelligenceProcessor,
             TurnIntelligenceLedger intelLedger,
             TurnResolutionResult result)
         {
@@ -36,6 +38,7 @@ namespace OnlyWar.Helpers.Turns
             _missionTurnProcessor = missionTurnProcessor;
             _missionAftermathProcessor = missionAftermathProcessor;
             _planetTurnProcessor = planetTurnProcessor;
+            _intelligenceProcessor = intelligenceProcessor;
             _intelLedger = intelLedger;
             _result = result;
         }
@@ -49,7 +52,7 @@ namespace OnlyWar.Helpers.Turns
             {
                 System.Diagnostics.Stopwatch weekTimer = System.Diagnostics.Stopwatch.StartNew();
                 _result.Clear();
-                _planetTurnProcessor.ClearTurnIntelGains();
+                _intelligenceProcessor.ClearTurnGains();
                 ScenarioMetricsCollector.BeginScenarioRegionMetrics(planet, defaultFaction);
 
                 SimulationContext context = new(
@@ -90,7 +93,7 @@ namespace OnlyWar.Helpers.Turns
                 _missionAftermathProcessor.ApplyMissionResults(_result.MissionContexts);
                 _planetTurnProcessor.UpdatePlanet(planet);
                 MissionAftermathProcessor.PruneInvalidSpecialMissions(new[] { planet });
-                _planetTurnProcessor.UpdateIntelligence(planet);
+                _intelligenceProcessor.RefreshSpecialMissions(planet);
                 ScenarioMetricsCollector.LogScenarioRegionMetrics(
                     $"generationWeek={week + 1}/{turns}");
                 ScenarioMetricsCollector.EndScenarioRegionMetrics();

@@ -67,7 +67,7 @@ The former engagement-scoring trackers and large-scale NPC-combat record were di
 `Reference/BattleLogic.md` and removed. Their phase history, test counts, and open-work lists do not
 belong in a reference appendix.
 
-`TyranidFeedingAsMission.md` also moved to `Reference/` on 2026-08-07, implemented: biomass feeding
+`ConsumptionFeedingAsMission.md` also moved to `Reference/` on 2026-08-07, implemented: biomass feeding
 and swarm spreading are now planner-allocated taskings competing on the same per-region force budget
 as defence and offence, rather than planet-update side effects that each spent the whole swarm. It is
 retained for the two decisions the code cannot explain — why feeding is one mission type and not two,

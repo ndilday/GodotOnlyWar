@@ -1086,7 +1086,7 @@ public partial class PlanetTacticalScreenController : DialogController
 		if (region == null || regionFaction == null || regionFaction.LandedSquads.Count > 0) return;
 
 		// No squads left here, so hand any works to an ally that can still man them - the same rule
-		// the turn loop applies (PlanetTurnProcessor.TransferAbandonedWorksToAllies). Doing it here
+		// the turn loop applies through RegionControlTurnProcessor. Doing it here
 		// too keeps a save loaded mid-campaign consistent with one that played through the turn.
 		RegionDefenses.TransferToAlly(regionFaction);
 

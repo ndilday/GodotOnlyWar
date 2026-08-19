@@ -23,8 +23,8 @@ namespace OnlyWar.Helpers
 
         // Number of regions stamped with Tyranid presence (a contiguous-ish cluster of the
         // world's 16 regions). Chosen deterministically within this inclusive band.
-        public const int MinTyranidRegions = 2;
-        public const int MaxTyranidRegions = 3;
+        public const int MinInvaderRegions = 2;
+        public const int MaxInvaderRegions = 3;
 
         // Total starting Tyranid strength on the promised world, as a multiple of the planet's
         // WHOLE Imperial garrison measured before the stamp (§8), split evenly across the stamped
@@ -48,7 +48,7 @@ namespace OnlyWar.Helpers
         // feeds unopposed for PostLandingTurns weeks before the player arrives, which multiplied
         // the stamp by ~6.8x on that seed, so halving the seed buys well under a week of grace.
         // The consumption yield curve and the post-landing window are the stronger levers.
-        public const float TyranidGarrisonStrengthMultiple = 1.0f;
+        public const float InvaderGarrisonStrengthMultiple = 1.0f;
 
         // Fraction of a stamped region's original Imperial civilian population left behind as a
         // displaced remnant, so the region reads as "overrun" rather than empty. The remnant's
@@ -78,12 +78,12 @@ namespace OnlyWar.Helpers
         // on 2026-08-07: at 10% the promised world handed off with the invaders outnumbering the
         // Imperial populace (the seed-1 "invaded but not conquered" invariant failed), and the cult's
         // share is pure transfer out of the Imperial column, so it moves that ratio twice over.
-        public const float PromisedWorldCultStrengthFraction = 0.05f;
+        public const float PromisedWorldInfiltratorStrengthFraction = 0.05f;
 
         // The promised world's Cult has infiltrated the PDF and government before it rises, so it
         // starts with enough per-region belief to choose assaults from knowledge rather than spending
         // the opening sim repeatedly scouting what its agents should already understand.
-        public const float PromisedWorldCultStartingIntel = 3.0f;
+        public const float PromisedWorldInfiltratorStartingIntel = 3.0f;
 
         // Post-landing feeding runs for max(0, round(PostLandingTurnsMean + z)) weeks, z ~ N(0,1):
         // sometimes the player inherits a fresh beachhead, sometimes a month-eaten ruin.

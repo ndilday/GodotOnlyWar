@@ -21,7 +21,7 @@ namespace OnlyWar.Helpers.Fortifications
     ///
     /// Only public allies pool their works. A faction that has gone to ground has abandoned or
     /// concealed its works (RegionFaction.HalveDefensesOnGoingToGround, then
-    /// PlanetTurnProcessor.DecayUnmannedDefenses grinds down the remainder) precisely because
+    /// RegionControlTurnProcessor.DecayUnmannedDefenses grinds down the remainder) precisely because
     /// nobody is manning them, so they cannot fortify the ally still standing in the open.
     /// </remarks>
     public static class RegionDefenses

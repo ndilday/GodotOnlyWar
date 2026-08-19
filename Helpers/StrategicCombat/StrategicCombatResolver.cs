@@ -383,7 +383,7 @@ namespace OnlyWar.Helpers.StrategicCombat
             // not stop existing because the faction that dug them was broken, and the merge is
             // level-preserving for the side (RegionDefenses.TransferToAlly). Only when nobody is
             // left to man them does the conquest wreck or capture half, with the remainder rotting
-            // each turn it sits unmanned under the occupier (PlanetTurnProcessor.DecayUnmannedDefenses).
+            // each turn it sits unmanned under the occupier (RegionControlTurnProcessor.DecayUnmannedDefenses).
             if (RegionDefenses.TransferToAlly(defender) == null)
             {
                 defender.HalveDefensesOnGoingToGround();

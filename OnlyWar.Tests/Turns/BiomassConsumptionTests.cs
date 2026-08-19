@@ -12,15 +12,15 @@ using Xunit;
 
 namespace OnlyWar.Tests.Turns;
 
-// Coverage for the Tyranid biomass model (PRD §4.24): Predate (headcount) and Consume (carrying
-// capacity) both feed the swarm at half efficiency, kills distribute proportionally across prey,
+// Coverage for the Consumption biomass model (PRD §4.24): Predate (headcount) and Consume (carrying
+// capacity) both feed the consumer at half efficiency, kills distribute proportionally across prey,
 // consumers are excluded from the crowding that limits ordinary growth, and stripped land slowly
 // heals toward its natural ceiling. The biomass methods are exercised directly (not through a full
 // ProcessTurn) so the conservation arithmetic can be asserted exactly.
 public class BiomassConsumptionTests
 {
     [Fact]
-    public void ResolveBiomassConsumption_FeedsHalfOfAllBiomassEatenToTheSwarm()
+    public void ResolveFeeding_FeedsHalfOfAllBiomassEatenToTheConsumer()
     {
         SectorSimulationFixture fixture = SectorSimulationFixture.CreateDetached();
         Region region = fixture.Planet.Regions[0];
@@ -36,7 +36,7 @@ public class BiomassConsumptionTests
         long capacityBefore = region.CarryingCapacity;
         long tyranidsBefore = tyranids.Population;
 
-        PlanetTurnProcessor.ResolveBiomassConsumption(region);
+        ConsumptionTurnProcessor.ResolveFeeding(region);
 
         long killed = preyBefore - prey.Population;
         long stripped = capacityBefore - region.CarryingCapacity;
@@ -50,7 +50,7 @@ public class BiomassConsumptionTests
     }
 
     [Fact]
-    public void ResolveBiomassConsumption_WithNoPrey_OnlyStripsCapacity()
+    public void ResolveFeeding_WithNoPrey_OnlyStripsCapacity()
     {
         SectorSimulationFixture fixture = SectorSimulationFixture.CreateDetached();
         Region region = fixture.Planet.Regions[0];
@@ -61,7 +61,7 @@ public class BiomassConsumptionTests
         RegionFaction tyranids = fixture.AddConsumptionFaction(0, population: 200_000, organization: 100);
         long tyranidsBefore = tyranids.Population;
 
-        PlanetTurnProcessor.ResolveBiomassConsumption(region);
+        ConsumptionTurnProcessor.ResolveFeeding(region);
 
         long stripped = 1_000_000 - region.CarryingCapacity;
         Assert.Equal(0, fixture.DefaultRegionFaction(0).Population);
@@ -70,7 +70,7 @@ public class BiomassConsumptionTests
     }
 
     [Fact]
-    public void ResolveBiomassConsumption_WithNoBiomass_OnlyPredates()
+    public void ResolveFeeding_WithNoBiomass_OnlyPredates()
     {
         SectorSimulationFixture fixture = SectorSimulationFixture.CreateDetached();
         Region region = fixture.Planet.Regions[0];
@@ -82,7 +82,7 @@ public class BiomassConsumptionTests
         RegionFaction tyranids = fixture.AddConsumptionFaction(0, population: 200_000, organization: 100);
         long tyranidsBefore = tyranids.Population;
 
-        PlanetTurnProcessor.ResolveBiomassConsumption(region);
+        ConsumptionTurnProcessor.ResolveFeeding(region);
 
         long killed = 500_000 - prey.Population;
         Assert.Equal(0, region.CarryingCapacity);
@@ -91,7 +91,7 @@ public class BiomassConsumptionTests
     }
 
     [Fact]
-    public void ResolveBiomassConsumption_DistributesKillsAcrossPreyByPopulationShare()
+    public void ResolveFeeding_DistributesKillsAcrossPreyByPopulationShare()
     {
         SectorSimulationFixture fixture = SectorSimulationFixture.CreateDetached();
         Region region = fixture.Planet.Regions[0];
@@ -102,7 +102,7 @@ public class BiomassConsumptionTests
         RegionFaction small = fixture.AddHiddenFaction(0, OnlyWar.Models.GrowthType.Logistic, population: 100_000);
         fixture.AddConsumptionFaction(0, population: 200_000, organization: 100);
 
-        PlanetTurnProcessor.ResolveBiomassConsumption(region);
+        ConsumptionTurnProcessor.ResolveFeeding(region);
 
         long bigKilled = 900_000 - big.Population;
         long smallKilled = 100_000 - small.Population;
@@ -133,7 +133,7 @@ public class BiomassConsumptionTests
         region.MaximumCarryingCapacity = 1_000_000;
         region.CarryingCapacity = 500_000;
 
-        PlanetTurnProcessor.RecoverCarryingCapacity(region);
+        ConsumptionTurnProcessor.RecoverCarryingCapacity(region);
 
         // 1% of the 500,000 gap.
         Assert.Equal(505_000, region.CarryingCapacity);
@@ -147,7 +147,7 @@ public class BiomassConsumptionTests
         region.MaximumCarryingCapacity = 1_000_000;
         region.CarryingCapacity = 1_000_000;
 
-        PlanetTurnProcessor.RecoverCarryingCapacity(region);
+        ConsumptionTurnProcessor.RecoverCarryingCapacity(region);
 
         Assert.Equal(1_000_000, region.CarryingCapacity);
     }
@@ -160,7 +160,7 @@ public class BiomassConsumptionTests
         region.MaximumCarryingCapacity = 100;
         region.CarryingCapacity = 99; // 1% of a gap of 1 rounds to zero; must still heal
 
-        PlanetTurnProcessor.RecoverCarryingCapacity(region);
+        ConsumptionTurnProcessor.RecoverCarryingCapacity(region);
 
         Assert.Equal(100, region.CarryingCapacity);
     }
@@ -176,7 +176,7 @@ public class BiomassConsumptionTests
         region.CarryingCapacity = 500_000;
         fixture.AddConsumptionFaction(0, population: 50_000, organization: 100); // swarm grazing
 
-        PlanetTurnProcessor.RecoverCarryingCapacity(region);
+        ConsumptionTurnProcessor.RecoverCarryingCapacity(region);
 
         Assert.Equal(500_000, region.CarryingCapacity);
     }
@@ -191,18 +191,18 @@ public class BiomassConsumptionTests
         region.CarryingCapacity = 500_000;
         // no Consumption faction present
 
-        PlanetTurnProcessor.RecoverCarryingCapacity(region);
+        ConsumptionTurnProcessor.RecoverCarryingCapacity(region);
 
         Assert.Equal(505_000, region.CarryingCapacity);
     }
 
-    // --- Feeding as a budgeted mission (Design/Reference/TyranidFeedingAsMission.md) ---
+    // --- Feeding as a budgeted mission (Design/Reference/ConsumptionFeedingAsMission.md) ---
 
     // The whole point of the change: feeding eats with the force it was GIVEN, not with the swarm's
     // whole deployed strength re-derived from population. A swarm that has committed most of itself
     // to defence, offensives and patrols must feed proportionately less.
     [Fact]
-    public void ResolveBiomassConsumption_WithACommittedBudget_EatsOnlyWithThatForce()
+    public void ResolveFeeding_WithACommittedBudget_EatsOnlyWithThatForce()
     {
         long StripWith(double troops)
         {
@@ -213,7 +213,7 @@ public class BiomassConsumptionTests
             fixture.DefaultRegionFaction(0).Population = 0;
             RegionFaction swarm = fixture.AddConsumptionFaction(0, population: 200_000, organization: 100);
 
-            PlanetTurnProcessor.ResolveBiomassConsumption(swarm, troops);
+            ConsumptionTurnProcessor.ResolveFeeding(swarm, troops);
             return 1_000_000 - region.CarryingCapacity;
         }
 
@@ -251,7 +251,7 @@ public class BiomassConsumptionTests
     // its force. The planet update keeps feeding it at full strength rather than letting it silently
     // starve - and must leave a public swarm alone, or that one would eat twice.
     [Fact]
-    public void ResolveHiddenSwarmConsumption_FeedsAHiddenSwarmAndSkipsAPublicOne()
+    public void ResolveHiddenFeeding_FeedsAHiddenConsumerAndSkipsAPublicOne()
     {
         SectorSimulationFixture fixture = SectorSimulationFixture.CreateDetached();
         Region region = fixture.Planet.Regions[0];
@@ -265,7 +265,7 @@ public class BiomassConsumptionTests
         long publicBefore = publicSwarm.Population;
         long hiddenBefore = hiddenSwarm.Population;
 
-        PlanetTurnProcessor.ResolveHiddenSwarmConsumption(region);
+        ConsumptionTurnProcessor.ResolveHiddenFeeding(region);
 
         Assert.Equal(publicBefore, publicSwarm.Population);
         Assert.True(hiddenSwarm.Population > hiddenBefore,
@@ -275,7 +275,7 @@ public class BiomassConsumptionTests
     // Same split for spreading: the planner moves a public swarm out of its spare troops, so the
     // planet update must only push the swarms it never saw.
     [Fact]
-    public void ResolveHiddenSwarmExpansion_MovesAHiddenSwarmAndLeavesAPublicOne()
+    public void ResolveHiddenExpansion_MovesAHiddenConsumerAndLeavesAPublicOne()
     {
         SectorSimulationFixture fixture = SectorSimulationFixture.CreateDetached();
         Region home = fixture.Planet.Regions[0];
@@ -293,7 +293,7 @@ public class BiomassConsumptionTests
         long publicBefore = publicSwarm.Population;
         long hiddenBefore = hiddenSwarm.Population;
 
-        PlanetTurnProcessor.ResolveHiddenSwarmExpansion(fixture.Planet);
+        ConsumptionTurnProcessor.ResolveHiddenExpansion(fixture.Planet);
 
         Assert.Equal(publicBefore, publicSwarm.Population);
         Assert.True(hiddenSwarm.Population < hiddenBefore,
@@ -303,7 +303,7 @@ public class BiomassConsumptionTests
     // --- Forced expansion (PRD §4.24 Tyranid Troop AI, step 2) ---
 
     [Fact]
-    public void ResolveTyranidExpansion_StrippedRegion_PushesForceToARicherNeighbor()
+    public void ResolveConsumptionExpansion_StrippedRegion_PushesForceToARicherNeighbor()
     {
         SectorSimulationFixture fixture = SectorSimulationFixture.CreateDetached();
         Region home = fixture.Planet.Regions[0];
@@ -320,7 +320,7 @@ public class BiomassConsumptionTests
         int swarmFactionId = swarm.PlanetFaction.Faction.Id;
         long swarmBefore = swarm.Population;
 
-        PlanetTurnProcessor.ResolveTyranidExpansion(fixture.Planet);
+        ConsumptionTurnProcessor.ResolveExpansion(fixture.Planet);
 
         long moved = swarmBefore - swarm.Population;
         Assert.True(moved > 0, "a stripped swarm should spread toward fresh biomass");
@@ -330,7 +330,7 @@ public class BiomassConsumptionTests
     }
 
     [Fact]
-    public void ResolveTyranidExpansion_RichRegion_KeepsTheSwarmHomeToGorge()
+    public void ResolveConsumptionExpansion_RichRegion_KeepsTheConsumerHomeToFeed()
     {
         SectorSimulationFixture fixture = SectorSimulationFixture.CreateDetached();
         Region home = fixture.Planet.Regions[0];
@@ -340,7 +340,7 @@ public class BiomassConsumptionTests
         RegionFaction swarm = fixture.AddConsumptionFaction(0, population: 100_000, organization: 100);
         long swarmBefore = swarm.Population;
 
-        PlanetTurnProcessor.ResolveTyranidExpansion(fixture.Planet);
+        ConsumptionTurnProcessor.ResolveExpansion(fixture.Planet);
 
         Assert.Equal(swarmBefore, swarm.Population);
     }

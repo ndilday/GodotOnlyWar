@@ -166,7 +166,7 @@ namespace OnlyWar.Helpers.Missions
             count <= 0L ? 0f : (float)Math.Log10(1.0 + count);
 
         // Order of magnitude of a troop count, floored at zero, WITHOUT the +1 shift. This is the
-        // banding form: PlanetTurnProcessor.GenerateAmbushMission and GenerateAssassinationMission use
+        // banding form: PlanetIntelligenceProcessor's generated missions use
         // it to cap a rolled mission size against how large the defender actually is, where the useful
         // property is that 100 troops means band 2 and 1,000,000 means band 6 exactly. The stealth
         // model deliberately does NOT use this - see Magnitude above for why the shifted form is the

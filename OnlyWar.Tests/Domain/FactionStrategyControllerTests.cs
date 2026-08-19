@@ -780,7 +780,7 @@ public class FactionStrategyControllerTests
         Assert.Equal(expected, FactionStrategyController.CalculateRequiredDefensiveBattleValue(quiet));
     }
 
-    // --- Feeding as a planned tasking (Design/Reference/TyranidFeedingAsMission.md) ---
+    // --- Feeding as a planned tasking (Design/Reference/ConsumptionFeedingAsMission.md) ---
 
     // Feeding used to be a planet-update side effect that recomputed the swarm's whole deployed
     // strength, so the same troops fed, defended and patrolled in the same week. It is now allocated

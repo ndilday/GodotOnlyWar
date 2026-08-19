@@ -9,16 +9,16 @@ using Xunit;
 
 namespace OnlyWar.Tests.Turns;
 
-// Coverage for Genestealer Cult idle-force behavior (PRD §4.24): a public Cult grinds down the PDF
-// via cross-border raids (the offensive machinery, tested elsewhere); ResolveCultManeuvers governs
+// Coverage for Conversion-faction idle-force behavior (PRD §4.24): a public converter grinds down
+// the PDF via cross-border raids (the offensive machinery, tested elsewhere); ResolveManeuvers governs
 // the force in regions with no active Imperial enemy in reach — it flows toward the front where one
 // remains adjacent, and slaughters the local Imperial population as sacrifices (with no growth of
 // its own) where the fight is wholly out of reach. Exercised directly for exact assertions.
 [Collection(OnlyWar.Tests.TestCollections.SharedState)]
-public class GenestealerCultTests
+public class ConversionManeuverTests
 {
     [Fact]
-    public void ResolveCultManeuvers_IsolatedCult_SacrificiallyPredates_WithoutGrowing()
+    public void ResolveManeuvers_IsolatedConverter_SacrificiallyPredates_WithoutGrowing()
     {
         SectorSimulationFixture fixture = SectorSimulationFixture.Create();
         Region region = fixture.Planet.Regions[0];
@@ -29,7 +29,7 @@ public class GenestealerCultTests
         long preyBefore = prey.Population;
         long cultBefore = cult.Population;
 
-        PlanetTurnProcessor.ResolveCultManeuvers(region);
+        ConversionTurnProcessor.ResolveManeuvers(region);
 
         Assert.True(prey.Population < preyBefore, "the Cult should slaughter local Imperials");
         // Conversion, not slaughter, is the Cult's growth: sacrifices add nothing to its numbers.
@@ -37,7 +37,7 @@ public class GenestealerCultTests
     }
 
     [Fact]
-    public void ResolveCultManeuvers_WithActivePdfNearby_LeavesTheFightToRaids()
+    public void ResolveManeuvers_WithActivePdfNearby_LeavesTheFightToRaids()
     {
         SectorSimulationFixture fixture = SectorSimulationFixture.Create();
         Region region = fixture.Planet.Regions[0];
@@ -48,7 +48,7 @@ public class GenestealerCultTests
         long preyBefore = prey.Population;
         long cultBefore = cult.Population;
 
-        PlanetTurnProcessor.ResolveCultManeuvers(region);
+        ConversionTurnProcessor.ResolveManeuvers(region);
 
         // A front region's force is committed to the raid machinery, not idle predation/relocation.
         Assert.Equal(preyBefore, prey.Population);
@@ -56,7 +56,7 @@ public class GenestealerCultTests
     }
 
     [Fact]
-    public void ResolveCultManeuvers_RelocatesIdleForceTowardTheFront()
+    public void ResolveManeuvers_RelocatesIdleForceTowardTheFront()
     {
         SectorSimulationFixture fixture = SectorSimulationFixture.Create();
         Region r0 = fixture.Planet.Regions[0];
@@ -69,7 +69,7 @@ public class GenestealerCultTests
         int cultFactionId = cult.PlanetFaction.Faction.Id;
         long cultBefore = cult.Population;
 
-        PlanetTurnProcessor.ResolveCultManeuvers(r0);
+        ConversionTurnProcessor.ResolveManeuvers(r0);
 
         long moved = cultBefore - cult.Population;
         Assert.True(moved > 0, "idle force should flow toward the front");

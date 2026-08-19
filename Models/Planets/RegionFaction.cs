@@ -251,7 +251,7 @@ namespace OnlyWar.Models.Planets
 
         // A faction beaten into hiding abandons its defensive works to the occupier: half of each
         // structure is wrecked in the collapse or captured. The remainder then rots away each turn
-        // it stays unmanned under enemy control (PlanetTurnProcessor.DecayUnmannedDefenses), so a remnant
+        // it stays unmanned under enemy control (RegionControlTurnProcessor.DecayUnmannedDefenses), so a remnant
         // that resurfaces after a long occupation does not get its old bastion back for free.
         public void HalveDefensesOnGoingToGround()
         {

@@ -231,6 +231,6 @@ public class CivilUnrestTurnProcessorIntegrationTests
 
         internal void ProcessCivilUnrest() => new CivilUnrestTurnProcessor(_session).ProcessPlanet(Planet);
 
-        internal void ProcessPlanetTurn() => new PlanetTurnProcessor(_session, []).UpdatePlanet(Planet);
+        internal void ProcessPlanetTurn() => new PlanetTurnProcessor(_session).UpdatePlanet(Planet);
     }
 }

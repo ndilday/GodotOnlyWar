@@ -19,7 +19,7 @@ using Xunit;
 namespace OnlyWar.Tests.Turns;
 
 // Turn-loop integration for the "Promised World" opening (Design/Reference/OpeningScenario.md):
-// the general GrowthMultiplier throttle applied to organic growth in EndOfTurnRegionFactionsUpdate,
+// the general GrowthMultiplier throttle applied by PlanetDemographicsProcessor,
 // and the ProcessScenario win/lapse resolution. The throttle is exercised on a Logistic faction
 // through the compact SectorSimulationFixture (Tyranids grow by consumption and ignore it — PRD
 // §4.24); the win/lapse paths are exercised against a real stamped sector so they read the actual

@@ -81,7 +81,7 @@ Scenario tuning lives in `ScenarioRules`, not in this document. The intended bal
 Two decisions behind the current knobs are worth retaining, because both replaced an approach that
 did not survive contact:
 
-- **Tyranid strength is relative, not absolute.** `TyranidGarrisonStrengthMultiple = 1.0` sizes the
+- **Invader strength is relative, not absolute.** `InvaderGarrisonStrengthMultiple = 1.0` sizes the
   swarm against the promised world's own PDF — the planet's whole pre-stamp garrison, split across
   the stamped regions. Absolute constants were tried first and a headless diagnostic showed them
   roughly three orders of magnitude too small. The basis was the average region's *civilian

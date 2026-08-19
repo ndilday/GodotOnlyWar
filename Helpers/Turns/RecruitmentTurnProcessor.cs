@@ -29,17 +29,17 @@ namespace OnlyWar.Helpers.Turns
         private const float ImplantPhysicalGrowth = 0.25f;
 
         private readonly GameSession _session;
-        private readonly PlanetTurnProcessor _planetProcessor;
+        private readonly OrganicPopulationGrowthLedger _growthLedger;
         private readonly RecruitmentStaffService _staffService = new();
         private readonly RecruitmentForecastService _forecastService = new();
 
         internal RecruitmentTurnProcessor(
             GameSession session,
-            PlanetTurnProcessor planetProcessor)
+            OrganicPopulationGrowthLedger growthLedger)
         {
             _session = session ?? throw new ArgumentNullException(nameof(session));
-            _planetProcessor = planetProcessor
-                ?? throw new ArgumentNullException(nameof(planetProcessor));
+            _growthLedger = growthLedger
+                ?? throw new ArgumentNullException(nameof(growthLedger));
         }
 
         internal RecruitmentTurnReport Process()
@@ -63,7 +63,7 @@ namespace OnlyWar.Helpers.Turns
                 chapter.Id, out PlanetFaction chapterPlanetFaction)
                     ? chapterPlanetFaction.PlayerReputation
                     : 0;
-            long organicGrowth = _planetProcessor.GetOrganicPopulationGrowth(
+            long organicGrowth = _growthLedger.Get(
                 homeWorld.Id, chapter.Id);
             RecruitmentForecast forecast = _forecastService.Calculate(
                 program,

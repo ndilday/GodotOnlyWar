@@ -54,7 +54,7 @@ public class MissionStealthDifficultyTests
     }
 
     // TroopMagnitude is the unshifted banding form and stays that way: the special-mission generators
-    // (PlanetTurnProcessor.GenerateAmbushMission / GenerateAssassinationMission) cap a rolled mission
+    // PlanetIntelligenceProcessor's generated missions cap a rolled mission
     // size against it, and there the useful property is that 1,000 troops means band 3 exactly. It
     // keeps its own Max(1, ...) floor because it is not part of the difficulty model.
     [Theory]

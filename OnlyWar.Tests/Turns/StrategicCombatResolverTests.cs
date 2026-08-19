@@ -59,7 +59,7 @@ public class StrategicCombatResolverTests
         RegionFaction target = fixture.DefaultRegionFaction(1);
         // small enough for the assault to annihilate outright (defender losses cap at 75% per
         // battle, so a larger garrison survives the round and only hides later, once ground to
-        // zero, via PlanetTurnProcessor.UpdateImperialRemnantState)
+        // zero, via RegionControlTurnProcessor.UpdateImperialRemnantState)
         target.Garrison = 2;
         target.Entrenchment = 6;
         target.ListeningPost = 4;

@@ -151,7 +151,7 @@ namespace OnlyWar.Models.Missions
     /// per-region force budget defence, offensives, development and patrols draw on, and what it
     /// commits is carried here. It used to be a planet-update side effect that recomputed the swarm's
     /// whole deployed strength from scratch, so the same troops fed, defended, patrolled and attacked
-    /// in the same week (Design/Reference/TyranidFeedingAsMission.md).
+    /// in the same week (Design/Reference/ConsumptionFeedingAsMission.md).
     ///
     /// Squad-less on the <see cref="ConstructionMission"/> precedent - materializing squads for a
     /// million-strong swarm would be absurd, and unlike a patrol screen there is nothing for them to

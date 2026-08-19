@@ -30,7 +30,7 @@ namespace OnlyWar.Models.Missions
         // (PlanetDataAccess.SaveMission), so inserting above this point would corrupt saves.
         ShowOfForce,
         // A Consumption swarm's biomass feeding, planned and budgeted like any other tasking
-        // (Design/Reference/TyranidFeedingAsMission.md). Squad-less: the committed battle value
+        // (Design/Reference/ConsumptionFeedingAsMission.md). Squad-less: the committed battle value
         // lives on FeedMission and resolves instantly in the mission phase. Appended for the same
         // save-ordinal reason as ShowOfForce above.
         Feed

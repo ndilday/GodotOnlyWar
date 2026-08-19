@@ -184,7 +184,7 @@ public class MissionTargetStrengthTests
     [Fact]
     public void GenerateAmbushMission_AgainstAZeroGarrisonHorde_HasAUsableSize()
     {
-        (PlanetTurnProcessor processor, RegionFaction horde, List<Mission> generated) =
+        (PlanetIntelligenceProcessor processor, RegionFaction horde, List<Mission> generated) =
             CreateGenerator(hordePopulation: 100_000_000, branchZ: AmbushBranchZ, sizeZ: 0.0);
 
         processor.HandlePublicFactionIntelligence(horde, specMissionBudget: 1.0f);
@@ -210,7 +210,7 @@ public class MissionTargetStrengthTests
     public void GenerateAmbushMission_SizeIsCappedByTheDefendersMagnitude(
         long hordePopulation, int expectedSize)
     {
-        (PlanetTurnProcessor processor, RegionFaction horde, List<Mission> generated) =
+        (PlanetIntelligenceProcessor processor, RegionFaction horde, List<Mission> generated) =
             CreateGenerator(hordePopulation, branchZ: AmbushBranchZ, sizeZ: 3.0);
 
         processor.HandlePublicFactionIntelligence(horde, specMissionBudget: 1.0f);
@@ -242,7 +242,7 @@ public class MissionTargetStrengthTests
     [InlineData(100_000_000L)]
     public void GenerateAssassinationMission_AlwaysPicksARealTargetRank(long hordePopulation)
     {
-        (PlanetTurnProcessor processor, RegionFaction horde, List<Mission> generated) =
+        (PlanetIntelligenceProcessor processor, RegionFaction horde, List<Mission> generated) =
             CreateGenerator(hordePopulation, branchZ: AssassinationBranchZ, sizeZ: 0.0);
 
         processor.HandlePublicFactionIntelligence(horde, specMissionBudget: 1.0f);
@@ -259,7 +259,7 @@ public class MissionTargetStrengthTests
     public void GenerateAssassinationMission_SizeIsCappedByTheFactionsPopulation(
         long hordePopulation, int expectedSize)
     {
-        (PlanetTurnProcessor processor, RegionFaction horde, List<Mission> generated) =
+        (PlanetIntelligenceProcessor processor, RegionFaction horde, List<Mission> generated) =
             CreateGenerator(hordePopulation, branchZ: AssassinationBranchZ, sizeZ: 3.0);
 
         processor.HandlePublicFactionIntelligence(horde, specMissionBudget: 1.0f);
@@ -276,7 +276,7 @@ public class MissionTargetStrengthTests
 
     // A turn processor over a single region held by one public PopulationIsMilitary horde, with both
     // z-rolls pinned: the first picks the branch, the second the rolled (pre-cap) mission size.
-    private static (PlanetTurnProcessor, RegionFaction, List<Mission>) CreateGenerator(
+    private static (PlanetIntelligenceProcessor, RegionFaction, List<Mission>) CreateGenerator(
         long hordePopulation, double branchZ, double sizeZ)
     {
         Planet planet = new(1, "Test Planet", new Coordinate(0, 0), 1, null, 0, 0);
@@ -295,7 +295,7 @@ public class MissionTargetStrengthTests
         GameSession session = new(
             new GameRulesData(), new Sector(), new Date(1, 1, 1), new SequencedZRng(branchZ, sizeZ));
         List<Mission> generated = [];
-        return (new PlanetTurnProcessor(session, generated), horde, generated);
+        return (new PlanetIntelligenceProcessor(session, generated), horde, generated);
     }
 
     // A force standing in the region it is operating against, so there is no infiltration or

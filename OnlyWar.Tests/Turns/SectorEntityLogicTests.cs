@@ -65,7 +65,7 @@ public class SectorEntityLogicTests
     }
 
     [Fact]
-    public void EndOfTurnRegionFactionsUpdate_PublicEnemyInRegionDraftsMorePdfFromGrowth()
+    public void ProcessRegionFaction_PublicEnemyInRegionDraftsMorePdfFromGrowth()
     {
         RNG.Reset(1);
         SectorSimulationFixture fixture = SectorSimulationFixture.Create();
@@ -74,7 +74,7 @@ public class SectorEntityLogicTests
         pdf.Garrison = 0;
         fixture.AddPublicCult(0, population: 100, organization: 100);
 
-        CreatePlanetProcessor(fixture).EndOfTurnRegionFactionsUpdate(pdf, pdfRatio: 0.5f);
+        CreateDemographicsProcessor(fixture).ProcessRegionFaction(pdf, pdfRatio: 0.5f);
 
         Assert.Equal(60, pdf.Garrison); // 1,000,000 * 0.0004 baseline growth * 15%
     }
@@ -406,7 +406,7 @@ public class SectorEntityLogicTests
         SectorSimulationFixture fixture = SectorSimulationFixture.Create();
         RegionFaction enemy = fixture.AddPublicCult(0, population: 1000, organization: 100);
         enemy.Garrison = enemy.Population;
-        PlanetTurnProcessor processor = CreatePlanetProcessor(fixture);
+        PlanetIntelligenceProcessor processor = CreateIntelligenceProcessor(fixture);
 
         // Each opportunity roll only has ~50% odds of producing a mission (chance < 0 rolls
         // nothing), so a single call rarely reaches the budget. But the loop bound
@@ -458,10 +458,20 @@ public class SectorEntityLogicTests
         Assert.True(weakCount > 0, "the weaker faction should still receive some opportunities, not be starved entirely");
     }
 
-    private static PlanetTurnProcessor CreatePlanetProcessor(SectorSimulationFixture fixture)
+    private static PlanetDemographicsProcessor CreateDemographicsProcessor(
+        SectorSimulationFixture fixture)
     {
         GameDataSingleton data = GameDataSingleton.Instance;
-        return new PlanetTurnProcessor(
+        return new PlanetDemographicsProcessor(
+            new GameSession(data.GameRulesData, fixture.Sector, data.Date, StaticRNG.Instance),
+            new OrganicPopulationGrowthLedger());
+    }
+
+    private static PlanetIntelligenceProcessor CreateIntelligenceProcessor(
+        SectorSimulationFixture fixture)
+    {
+        GameDataSingleton data = GameDataSingleton.Instance;
+        return new PlanetIntelligenceProcessor(
             new GameSession(data.GameRulesData, fixture.Sector, data.Date, StaticRNG.Instance),
             []);
     }

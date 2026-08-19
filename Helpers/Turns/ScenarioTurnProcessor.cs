@@ -36,7 +36,7 @@ namespace OnlyWar.Helpers.Turns
             // Both outcomes are measured by who holds ground OPENLY, not by headcount. An earlier
             // rule required every non-Imperial faction on the world to reach zero population and
             // garrison, which no campaign could ever reach: the stamp seeds a Genestealer Cult in
-            // all sixteen regions (ScenarioRules.PromisedWorldCultStrengthFraction), a cult driven
+            // all sixteen regions (ScenarioRules.PromisedWorldInfiltratorStrengthFraction), an infiltrator driven
             // below the suppression threshold goes to ground with its population intact and can no
             // longer be targeted at all, and organic growth replaces it between turns. The mirror
             // defect sat on the lapse side: the displaced Imperial remnant left by the stamp

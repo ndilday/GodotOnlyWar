@@ -84,7 +84,7 @@ public class FactionStrategyController
         // from the staging regions' pools, 1:1 with headcount — §4.24).
         public long AvailableAttackingForce { get; set; }
         // The biomass the attacker stands to gain from taking the region (target population, plus
-        // the land's carrying capacity for a Consumption swarm that eats the ground itself).
+        // the land's carrying capacity for a Consumption faction that eats the ground itself).
         public double Reward { get; set; }
         // True defender strength in battle value (garrison pool + landed squads weighted by their
         // soldiers' battle value, not raw headcount).
@@ -268,13 +268,13 @@ public class FactionStrategyController
         // PRIORITY 5/6: PLAN SWARM OPERATIONS
         // A Consumption faction spends what is left on spreading and then feeding. They come last so
         // both receive the true residual - what survives the defensive reserve, offensives,
-        // development and the patrol screen - and spreading precedes feeding because a swarm on the
+        // development and the patrol screen - and spreading precedes feeding because a consumer on the
         // move is not grazing.
         if (faction.GrowthType == GrowthType.Consumption)
         {
-            PlanSwarmExpansionOnPlanet(faction, planet, regionalForceStates);
+            PlanConsumptionExpansionOnPlanet(faction, planet, regionalForceStates);
             PlanFeedMissionsOnPlanet(faction, planet, regionalForceStates, allNewOrders);
-            GameLog.Trace(() => $"    plan {faction.Name}/{planet.Name}: swarm operations done ({allNewOrders.Count} orders)");
+            GameLog.Trace(() => $"    plan {faction.Name}/{planet.Name}: consumption operations done ({allNewOrders.Count} orders)");
         }
     }
 
@@ -282,7 +282,7 @@ public class FactionStrategyController
     /// Pushes a share of each region's spare troops onto richer adjacent ground.
     /// </summary>
     /// <remarks>
-    /// Expansion used to be a planet-update side effect that helped itself to the swarm's whole
+    /// Expansion used to be a planet-update side effect that helped itself to the consumer's whole
     /// deployed strength, blind to everything the planner had already committed that force to - the
     /// same double-count feeding had, one function along. Applied directly here rather than issued as
     /// an order for the same reason garrison and front reinforcement are: it relocates strength
@@ -292,34 +292,37 @@ public class FactionStrategyController
     /// by biomass, and the richest neighbour is frequently empty ground with a high carrying capacity
     /// and no enemy region-faction in it at all - nothing the offensive machinery could take as a
     /// target. Sharing the budget is what the double-count needed; sharing the code path would have
-    /// cost the swarm the moves that matter most.
+    /// cost the consumer the moves that matter most.
     /// </remarks>
-    private void PlanSwarmExpansionOnPlanet(Faction faction, Planet planet, List<RegionForceState> states)
+    private void PlanConsumptionExpansionOnPlanet(
+        Faction faction,
+        Planet planet,
+        List<RegionForceState> states)
     {
         foreach (RegionForceState state in states)
         {
             if (state.SpareTroops <= 0) continue;
 
             (Region destination, long movers) =
-                PlanetTurnProcessor.PlanSwarmExpansion(state.RegionFaction, state.SpareTroops);
+                ConsumptionTurnProcessor.PlanExpansion(state.RegionFaction, state.SpareTroops);
             if (destination == null || movers <= 0) continue;
 
-            PlanetTurnProcessor.ApplySwarmExpansion(state.RegionFaction, destination, movers);
+            ConsumptionTurnProcessor.ApplyExpansion(state.RegionFaction, destination, movers);
             state.SpareTroops = Math.Max(0, state.SpareTroops - movers);
 
             GameLog.Debug(() =>
-                $"AI swarm spread {faction.Name}/{planet.Name}: "
+                $"AI consumption spread {faction.Name}/{planet.Name}: "
                 + $"{state.RegionFaction.Region.Name}->{destination.Name}, "
                 + $"movers={movers}, sourceSpare={state.SpareTroops}");
         }
     }
 
     /// <summary>
-    /// Commits whatever spare troops a swarm has left to feeding.
+    /// Commits whatever spare troops a Consumption faction has left to feeding.
     /// </summary>
     /// <remarks>
     /// No <see cref="ForceGenerator"/> call: feeding is squad-less. Materializing squads for a
-    /// million-strong swarm would be absurd, and unlike a patrol screen there is nothing for them to
+    /// million-strong consumer would be absurd, and unlike a patrol screen there is nothing for them to
     /// do tactically. The order carries the committed battle value and resolves instantly in the
     /// mission phase.
     /// </remarks>
@@ -1637,7 +1640,7 @@ public class FactionStrategyController
     }
 
     // The biomass the attacker gains by taking the region: the target population (headcount to
-    // kill, convert, or seize) plus — only for a Consumption swarm that devours the land itself —
+    // kill, convert, or seize) plus — only for a Consumption faction that devours the land itself —
     // the region's carrying capacity (PRD §4.24).
     internal static double CalculateOffensiveReward(RegionFaction targetFaction, Faction attackingFaction, long availableAttackingForce, long defenderForce)
     {

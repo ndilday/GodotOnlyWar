@@ -19,12 +19,14 @@ namespace OnlyWar.Helpers
         private readonly MissionTurnProcessor _missionTurnProcessor;
         private readonly MissionAftermathProcessor _missionAftermathProcessor;
         private readonly PlanetTurnProcessor _planetTurnProcessor;
+        private readonly PlanetIntelligenceProcessor _planetIntelligenceProcessor;
         private readonly PlanetForwardSimulator _planetForwardSimulator;
         private readonly ScenarioTurnProcessor _scenarioTurnProcessor;
         private readonly ChapterSupplyTurnProcessor _chapterSupplyTurnProcessor;
         private readonly RecruitmentTurnProcessor _recruitmentTurnProcessor;
         private readonly GameSession _session;
         private readonly TurnIntelligenceLedger _intelLedger;
+        private readonly OrganicPopulationGrowthLedger _organicPopulationGrowthLedger;
         private readonly TurnResolutionResult _lastResult;
 
         public TurnController() : this(CreateCurrentSession(), null)
@@ -46,33 +48,39 @@ namespace OnlyWar.Helpers
             _fleetTurnProcessor = new FleetTurnProcessor(_chapterUpkeepProcessor);
             _lastResult = new TurnResolutionResult();
             _intelLedger = new TurnIntelligenceLedger();
-            _planetTurnProcessor = new PlanetTurnProcessor(
+            _organicPopulationGrowthLedger = new OrganicPopulationGrowthLedger();
+            _planetIntelligenceProcessor = new PlanetIntelligenceProcessor(
                 _session,
                 _lastResult.SpecialMissions,
-                _intelLedger,
+                _intelLedger);
+            _planetTurnProcessor = new PlanetTurnProcessor(
+                _session,
+                _planetIntelligenceProcessor,
+                _organicPopulationGrowthLedger,
                 _lastResult.FortificationTransfers,
                 _lastResult.GovernorRequestReports);
             _missionTurnProcessor = new MissionTurnProcessor(
                 _session,
-                _planetTurnProcessor.RecordIntelGain,
+                _planetIntelligenceProcessor.RecordIntelGain,
                 ScenarioMetricsCollector.RecordScenarioPdfLost,
-                _planetTurnProcessor.RecordTargetObservation);
+                _planetIntelligenceProcessor.RecordTargetObservation);
             _missionAftermathProcessor = new MissionAftermathProcessor(
-                _planetTurnProcessor.RecordReconEvidence,
+                _planetIntelligenceProcessor.RecordReconEvidence,
                 ScenarioMetricsCollector.RecordScenarioPdfLost,
-                _planetTurnProcessor.RecordTargetObservation);
+                _planetIntelligenceProcessor.RecordTargetObservation);
             _planetForwardSimulator = new PlanetForwardSimulator(
                 _session,
                 _orderPlanner,
                 _missionTurnProcessor,
                 _missionAftermathProcessor,
                 _planetTurnProcessor,
+                _planetIntelligenceProcessor,
                 _intelLedger,
                 _lastResult);
             _scenarioTurnProcessor = new ScenarioTurnProcessor(_session);
             _chapterSupplyTurnProcessor = new ChapterSupplyTurnProcessor(_session);
             _recruitmentTurnProcessor = new RecruitmentTurnProcessor(
-                _session, _planetTurnProcessor);
+                _session, _organicPopulationGrowthLedger);
         }
 
         public TurnResolutionResult ProcessTurn(Sector sector)
@@ -86,8 +94,8 @@ namespace OnlyWar.Helpers
 
             _lastResult.Clear();
             _session.Sector.PlayerForce?.CurrentTurnEvents.Clear();
-            _planetTurnProcessor.ClearTurnIntelGains();
-            _planetTurnProcessor.ClearOrganicPopulationGrowth();
+            _planetIntelligenceProcessor.ClearTurnGains();
+            _organicPopulationGrowthLedger.Clear();
             Faction defaultFaction = _session.Rules.DefaultFaction;
             ScenarioMetricsCollector.BeginScenarioRegionMetrics(
                 ScenarioMetricsCollector.GetScenarioMetricsPlanet(sector),
@@ -123,8 +131,8 @@ namespace OnlyWar.Helpers
             MissionTurnProcessor.ProcessConstructionOrders(constructionOrders);
 
             // Feeding rides alongside construction: squad-less, resolved instantly, no mission
-            // context. It runs after combat so a swarm that lost ground this week eats on what it
-            // still holds (Design/Reference/TyranidFeedingAsMission.md).
+            // context. It runs after combat so a consumer that lost ground this week eats on what it
+            // still holds (Design/Reference/ConsumptionFeedingAsMission.md).
             var feedOrders = allOrdersThisTurn.Where(o => !o.AssignedSquads.Any() && o.Mission is FeedMission);
             MissionTurnProcessor.ProcessFeedOrders(feedOrders);
             MissionAftermathProcessor.RemoveConsumedSpecialMissions(playerOrdersThisTurn);
@@ -139,7 +147,7 @@ namespace OnlyWar.Helpers
             _planetTurnProcessor.UpdatePlanets(sector.Planets.Values);
             _lastResult.RecruitmentReport = _recruitmentTurnProcessor.Process();
             MissionAftermathProcessor.PruneInvalidSpecialMissions(sector.Planets.Values);
-            _planetTurnProcessor.UpdateIntelligence(sector.Planets.Values);
+            _planetIntelligenceProcessor.RefreshSpecialMissions(sector.Planets.Values);
             _chapterSupplyTurnProcessor.ProcessDeliveries();
 
             // --- 4. Scenario Resolution Phase ---

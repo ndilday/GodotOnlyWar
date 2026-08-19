@@ -79,15 +79,15 @@ public class ScenarioBuilderTests
         Assert.True(imperialPop > largestInvaderPop,
             $"expected Imperial population {imperialPop} to exceed the largest invader's {largestInvaderPop}");
 
-        // The stamp seeds MinTyranidRegions..MaxTyranidRegions regions, but generation then runs the
+        // The stamp seeds MinInvaderRegions..MaxInvaderRegions regions, but generation then runs the
         // post-landing sim, during which a now-fully-organized swarm can spread to fresh biomass.
         // The hand-off invariants: the swarm holds at least the stamp floor and not the whole world.
         List<RegionFaction> tyranidFactions = TyranidRegions(promised, tyranids)
             .Select(r => r.RegionFactionMap[tyranids.Id])
             .ToList();
         Assert.NotEmpty(tyranidFactions);
-        Assert.True(tyranidFactions.Count >= ScenarioRules.MinTyranidRegions,
-            $"expected at least {ScenarioRules.MinTyranidRegions} Tyranid regions, got {tyranidFactions.Count}");
+        Assert.True(tyranidFactions.Count >= ScenarioRules.MinInvaderRegions,
+            $"expected at least {ScenarioRules.MinInvaderRegions} invader regions, got {tyranidFactions.Count}");
         Assert.True(tyranidFactions.Count < promised.Regions.Length,
             "the swarm should not hold the entire world at hand-off");
 

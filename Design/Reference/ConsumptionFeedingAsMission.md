@@ -1,4 +1,4 @@
-# Tyranid Feeding as a Planned Mission
+# Consumption Feeding as a Planned Mission
 
 Status: **implemented 2026-08-07.** Written and built the same day. Retained in `Reference/` because
 the reasoning behind the two non-obvious choices — one mission type rather than two, and expansion
@@ -8,12 +8,12 @@ The mechanism itself is summarized in `OnlyWar_TDD.md` §6.2 and `OnlyWar_PRD.md
 What shipped, against the plan below:
 
 - `MissionType.Feed` + `FeedMission` (committed battle value), appended to the enum (§1, §3).
-- `FactionStrategyController` PRIORITY 5/6: `PlanSwarmExpansionOnPlanet` then
+- `FactionStrategyController` PRIORITY 5/6: `PlanConsumptionExpansionOnPlanet` then
   `PlanFeedMissionsOnPlanet`, both after patrols, both drawing down the same `SpareTroops` (§2).
 - `MissionTurnProcessor.ProcessFeedOrders`, dispatched beside squad-less construction from both
   `TurnController.ProcessTurn` and `PlanetForwardSimulator.Simulate` (§3).
-- `ResolveTyranidExpansion` / `ResolveBiomassConsumption` dropped from `UpdatePlanet` in favour of
-  hidden-swarm fallbacks (§4 resolved, §5 resolved — see those sections).
+- Consumption expansion and feeding dropped from `UpdatePlanet` in favour of hidden-consumer
+  fallbacks (§4 resolved, §5 resolved — see those sections).
 - Line references below are to the pre-change code and are left as written.
 
 One thing the change surfaced rather than caused: `ClearStalePatrolSquads` swept only Patrol squads,
@@ -51,16 +51,16 @@ Two things break the link to feeding:
    `AssignedDefensiveBattleValue` (`Helpers/FactionStrategyController.cs:185`) — which exists
    *precisely because* a downstream consumer was re-deriving force instead of reading the
    commitment. Same class of bug, different consumer.
-2. **Feeding recomputes from scratch.** `ResolveBiomassConsumption`
-   (`Helpers/Turns/PlanetTurnProcessor.cs:396`) uses `Population × Organization/100`, which is the
+2. **Feeding recomputed from scratch.** The former planet-turn feeding path used
+   `Population × Organization/100`, which is the
    *same quantity* as `GetDeployedStrength()` — not the residual after commitments.
 
 Timing is not the obstacle: planning is Phase 1 of `TurnController.ProcessTurn`
 (`Helpers/TurnController.cs:108`) and `UpdatePlanets` is Phase 3 (`:129`), so the turn's assignments
 are current and persisted when feeding runs. There is simply no field carrying the leftover.
 
-There is a **third** independent accounting of the same troops: `ResolveTyranidExpansion`
-(`Helpers/Turns/PlanetTurnProcessor.cs:334`) computes its own `organized = Population ×
+There was a **third** independent accounting of the same troops: consumption expansion
+computed its own `organized = Population ×
 Organization/100` and is equally blind to the planner. It runs *before* consumption specifically so
 movers are not double-counted — phase ordering standing in for a shared budget.
 
@@ -121,14 +121,13 @@ comes from the mission's committed BV instead of `consumer.Population * (consume
 `RecordScenarioBlighting`, `BiomassFeedEfficiency = 0.5` conversion, the `GameLog.Debug` line) is
 unchanged.
 
-Then **delete** the `ResolveBiomassConsumption(region)` call from `UpdatePlanet`
-(`Helpers/Turns/PlanetTurnProcessor.cs:130`). This is the "no special-case function" part of the
+Then **delete** the former feeding call from `UpdatePlanet`. This is the "no special-case function" part of the
 change: feeding stops being a planet-update side effect and becomes a mission executed in the
 mission phase.
 
 ### 4. Expansion — RESOLVED: shares the budget, keeps its own path
 
-`ResolveTyranidExpansion` is the third accounting. If feeding draws from `SpareTroops` but expansion
+Consumption expansion is the third accounting. If feeding draws from `SpareTroops` but expansion
 still helps itself to the full pool, the double-count is fixed in one place and left in the other.
 
 Expansion is conceptually already an `Advance`: the strategy controller has offensive machinery that
@@ -144,7 +143,7 @@ a high carrying capacity and **no enemy `RegionFaction` in it at all** — nothi
 factions. Routing expansion through the offensive path would have silently deleted exactly the moves
 that make the tide spread. The double-count needed a shared *budget*, not a shared *code path*.
 
-So the move now happens in `PlanSwarmExpansionOnPlanet`, at PRIORITY 5, sized from `SpareTroops`
+So the move now happens in `PlanConsumptionExpansionOnPlanet`, at PRIORITY 5, sized from `SpareTroops`
 rather than from the whole deployed strength, and applied directly rather than issued as an order —
 the same shape `PlanGarrisonReinforcement` and `PlanFrontReinforcement` already use for relocating
 strength between regions. Spreading precedes feeding in the planner because a swarm on the move is
@@ -153,12 +152,12 @@ not grazing. The behaviours that survived unchanged:
 - Move target is the adjacent region of highest `RegionBiomass` (prey population + carrying
   capacity), and only when strictly richer than home (`:345`).
 - Movers scale by `RegionDepletion(region)` — home gets emptier as it is stripped — times
-  `TyranidExpansionShare = 0.5`. The base is now `SpareTroops` instead of `organized`.
+  `ConsumptionExpansionShare = 0.5`. The base is now `SpareTroops` instead of `organized`.
 - Movers arrive via `EstablishInvaderPresence`. They no longer feed the destination the same turn:
   the budget is committed before they leave, and an advancing force is not eating.
 
-The phase-ordering comment at `Helpers/Turns/PlanetTurnProcessor.cs:111` ("spreading precedes
-consumption so departing force is not counted twice at home") is gone, replaced by a note recording
+The former phase-ordering comment ("spreading precedes consumption so departing force is not
+counted twice at home") is gone, replaced by a note recording
 why the ordering no longer does that job. Ordering only ever de-duplicated those two functions
 against each other while leaving both blind to everything else the swarm was tasked with; the shared
 budget covers all of it.
@@ -170,11 +169,11 @@ feeding today runs for any Consumption faction regardless of visibility. Irrelev
 world (the opening stamp sets `IsPublic = true`), but a hidden swarm would silently stop eating.
 
 **Resolved with a fallback, not a behaviour change.** `UpdatePlanet` now calls
-`ResolveHiddenSwarmExpansion` / `ResolveHiddenSwarmConsumption`, which run the old whole-strength
-logic filtered to `!IsPublic`. A swarm nothing planned for genuinely does have its whole strength
+`ConsumptionTurnProcessor.ResolveHiddenExpansion` / `ResolveHiddenFeeding`, which run the old
+whole-strength logic filtered to `!IsPublic`. A consumer nothing planned for genuinely has its whole strength
 available, so full strength is the right budget for it — the fallback is correct on its own terms
-rather than merely conservative. The unfiltered `ResolveTyranidExpansion(Planet)` /
-`ResolveBiomassConsumption(Region)` entry points remain for the direct-arithmetic tests.
+rather than merely conservative. The unfiltered `ConsumptionTurnProcessor.ResolveExpansion(Planet)` /
+`ResolveFeeding(Region)` entry points remain for the direct-arithmetic tests.
 
 ## Expected effect
 
@@ -187,7 +186,7 @@ the opening scenario than either scenario tunable.
 
 ## Related work in flight
 
-- **Already applied this session:** `ScenarioRules.PromisedWorldCultStrengthFraction` cut from
+- **Already applied this session:** `ScenarioRules.PromisedWorldInfiltratorStrengthFraction` cut from
   `0.10f` to `0.05f` (`Helpers/ScenarioRules.cs:78`), with a comment recording why. Motivation: the
   seed-1 "invaded but not conquered" invariant was failing. **Not yet verified** — the test had not
   been re-run after the edit.
@@ -213,13 +212,13 @@ the opening scenario than either scenario tunable.
 
 If the opening scenario still hands off badly after this change, in rough order of strength:
 
-1. `BiomassAppetitePerTroop = 0.5` (`Helpers/Turns/PlanetTurnProcessor.cs:35`) — the base of the
+1. `BiomassAppetitePerTroop = 0.5` (`Helpers/Turns/ConsumptionTurnProcessor.cs`) — the base of the
    growth exponential.
 2. `ScenarioRules.PostLandingTurnsMean = 4.0` — weeks the swarm feeds unopposed before the player
    arrives. Drawn as `max(0, round(mean + z))`, `z ~ N(0,1)`, deterministic per seed
    (`Builders/ScenarioBuilder.cs:81`). Worth checking what `z` seed 1 actually rolled before
    assuming a typical 4 weeks.
-3. `ScenarioRules.TyranidGarrisonStrengthMultiple = 1.0f` — the landing stamp, sized as the planet's
+3. `ScenarioRules.InvaderGarrisonStrengthMultiple = 1.0f` — the landing stamp, sized as the planet's
    whole pre-stamp Imperial *garrison* split across 2–3 regions. A linear knob sitting under an
    exponential; its own comment records that on seed 1 the post-landing window multiplied it ~6.8x,
    so halving it buys well under a week of grace.
