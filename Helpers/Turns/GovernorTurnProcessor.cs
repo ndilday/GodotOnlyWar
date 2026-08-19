@@ -34,9 +34,7 @@ namespace OnlyWar.Helpers.Turns
         internal void ProcessGovernor(Planet planet, PlanetFaction planetFaction)
         {
             Character governor = planetFaction.Leader;
-            IRNG random = _session.NamedRandomStreams.Get(
-                NamedRandomStreamKeys.Governor(governor.Id),
-                streamVersion: 1);
+            IRNG random = _session.Random;
             if (AgeAndCheckForDeath(planet, planetFaction, random))
             {
                 return;

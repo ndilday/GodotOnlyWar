@@ -66,16 +66,5 @@ namespace OnlyWar.Models.Events
             return Encoding.UTF8.GetBytes(canonical);
         }
 
-        public static (ulong InitialState, ulong StreamSelector) DeriveState(
-            CampaignIdentity identity,
-            int turn,
-            string streamKey,
-            int streamVersion)
-        {
-            byte[] digest = SHA256.HashData(BuildBytes(identity, turn, streamKey, streamVersion));
-            return (
-                BinaryPrimitives.ReadUInt64LittleEndian(digest.AsSpan(0, 8)),
-                BinaryPrimitives.ReadUInt64LittleEndian(digest.AsSpan(8, 8)));
-        }
     }
 }

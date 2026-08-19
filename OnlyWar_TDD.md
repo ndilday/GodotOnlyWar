@@ -1540,13 +1540,11 @@ Surfaced while writing the `SectorEntityLogic` / multi-turn coverage (§9.2.1 #5
 
 Covered by `SectorEntityLogicTests` and `MultiTurnSmokeTests`.
 
-### 8.13 Production RNG Reproducibility — PARTIALLY RESOLVED
+### 8.13 Production RNG Policy
 
-**Location:** `GameSession`, `StaticRNG`, save metadata, simulation processors
+**Location:** `GameSession`, `StaticRNG`, simulation processors
 
-`CampaignIdentity` now persists the campaign id, seed, and random-algorithm version. `NamedRandomStreamFactory` and the versioned project-owned `Pcg32Rng` derive deterministic streams from that identity, the current turn, a stable subsystem key, and a stream version. `GovernorTurnProcessor` is the first production consumer migrated to a named stream (`turn/governor/{id}`); the remaining processors continue to use `StaticRNG` as a compatibility path. This is a bounded migration, not yet a claim of full campaign replay equivalence.
-
-**Remaining work:** migrate the other turn, generation, and battle consumers deliberately, preserving draw order within each boundary and characterizing results before switching it. Keep stream keys and versions explicit so algorithm changes do not masquerade as the same reproducible simulation. Add or revise golden stream fixtures when a key or algorithm version changes.
+Production simulation consumes the `IRNG` supplied by `GameSession`; the production composition boundary supplies the shared `StaticRNG` adapter. Random draw ordering belongs to the evolving simulation execution, not to a persisted replay contract. Reloading the same save and submitting the same orders is not guaranteed to reproduce identical outcomes, and draws in one subsystem may affect later randomized outcomes. Tests may still inject fixed or seeded implementations when deterministic test setup is useful. Persisted `CampaignIdentity` remains part of event and narrative presentation; it does not define production simulation streams.
 
 ### 8.14 PlanetTurnProcessor Breadth — Medium
 
@@ -1652,7 +1650,7 @@ Initial coverage now exists for wounds, skill math, Gaussian math, mission check
 
 Coverage for the promoted Alpha 0.8 slice includes:
 
-- `CampaignEventSpineTests`: recorder dedupe/projection, crossed milestones, grouped Chronicle entries, founding projection/idempotence, routine battle Chronicle policy, named-stream identity/isolation, and PCG initialization.
+- `CampaignEventSpineTests`: recorder dedupe/projection, crossed milestones, grouped Chronicle entries, founding projection/idempotence, and routine battle Chronicle policy.
 - `NarrativeEventEmissionTests`: near-death projection/recovery, typed medical/mentor/gene-seed facts, payload/entity data-access round trips, and invalid source/correlation validation.
 - `EndTurnPreflightTests`: shared attention-fact identity, preference-only suppression, and Command Brief retention.
 - `SaveLoadRoundTripTests` plus the data-access tests: current format-10 relationship, awareness, target-belief, mission, latest-report, and itemized equipment persistence; compatibility tests verify that the preceding format 9 is rejected before campaign-table loading. `EquipmentDoctrinePersistenceTests` covers complete role/personal loadouts, quantities, armor, and ready order.
@@ -1670,4 +1668,3 @@ These areas are particularly likely to produce hard-to-detect bugs as features a
 - Changing the `Wounds.WeeksToHeal` nibble-offset encoding without updating all dependent healing logic.
 - Adding new data-driven rules tables without adding rules-load validation and regression tests.
 - Changing the save schema without bumping the exact-version guard and covering current-format round trip plus early rejection of the preceding version.
-- Renaming or re-keying a deterministic RNG stream without an explicit stream-version decision and reproducibility fixture.

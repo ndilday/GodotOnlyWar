@@ -108,21 +108,6 @@ public sealed class CampaignEventSpineTests
     }
 
     [Fact]
-    public void NamedStreams_AreReproducibleAndIsolatedByKey()
-    {
-        CampaignIdentity identity = new(System.Guid.Parse("00112233-4455-6677-8899-aabbccddeeff"), 17);
-        NamedRandomStreamFactory first = new(identity, 5);
-        NamedRandomStreamFactory replay = new(identity, 5);
-
-        uint firstValue = first.Get("turn/governor/3").NextUInt();
-        uint replayValue = replay.Get("turn/governor/3").NextUInt();
-
-        Assert.Equal(firstValue, replayValue);
-        Assert.Same(first.Get("turn/governor/3"), first.Get("turn/governor/3"));
-        Assert.NotEqual(first.Get("turn/governor/3").NextUInt(), first.Get("turn/governor/4").NextUInt());
-    }
-
-    [Fact]
     public void Recorder_ComposesStandaloneFoundingEntryImmediatelyAndOnlyOnce()
     {
         CampaignEventLedger ledger = new();
@@ -226,14 +211,6 @@ public sealed class CampaignEventSpineTests
             new BattleResolvedPayload("Another routine battle", "No defining event.")));
 
         Assert.Empty(routineChronicle.Entries);
-    }
-
-    [Fact]
-    public void Pcg32_UsesTheStandardVersionOneInitializationVector()
-    {
-        Pcg32Rng rng = new(42, 54);
-
-        Assert.Equal(0xA15C02B7u, rng.NextUInt());
     }
 
     private static PlayerSoldier CreateSoldier(int id, string name)
