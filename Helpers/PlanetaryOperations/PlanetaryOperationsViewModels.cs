@@ -105,15 +105,15 @@ namespace OnlyWar.Helpers.PlanetaryOperations
         {
             List<Region> regions = (planet?.Regions ?? [])
                 .Where(region => region != null)
-                .OrderBy(region => region.Coordinates.X)
-                .ThenBy(region => region.Coordinates.Y)
+                .OrderBy(GetVisualRowKey)
+                .ThenBy(region => region.Coordinates.X)
                 .ThenBy(region => region.Id)
                 .ToList();
 
             List<List<Region>> coordinateRows = regions
-                .GroupBy(region => region.Coordinates.X)
+                .GroupBy(GetVisualRowKey)
                 .OrderBy(group => group.Key)
-                .Select(group => group.OrderBy(region => region.Coordinates.Y).ToList())
+                .Select(group => group.OrderBy(region => region.Coordinates.X).ThenBy(region => region.Id).ToList())
                 .ToList();
             bool validDiamond = coordinateRows.Count == DiamondRowCounts.Length
                 && coordinateRows.Select(row => row.Count).SequenceEqual(DiamondRowCounts);
@@ -140,6 +140,12 @@ namespace OnlyWar.Helpers.PlanetaryOperations
                 selectedFactionId,
                 OverlayLegend(overlay));
         }
+
+        // Rotate the encoded hex projection counter-clockwise for the compact rectangular map.
+        // The old logical coordinates use 2*Y-X as the horizontal axis; using its inverse as the
+        // visual row keeps the existing 1-2-3-4-3-2-1 footprint while putting Alpha at the left.
+        internal static int GetVisualRowKey(Region region) =>
+            region.Coordinates.X - (2 * region.Coordinates.Y);
 
         private static RegionMapCardViewModel BuildCard(
             Sector sector,
@@ -564,7 +570,7 @@ namespace OnlyWar.Helpers.PlanetaryOperations
                     ? "Unknown"
                     : region.GetVisibleCivilianPopulation().ToString("N0")),
                 Row("PDF Strength", region.PlanetaryDefenseForces.ToString("N0")),
-                Row("Disclosed Presence", control.Presences.Count == 0
+                Row("Detected Factions", control.Presences.Count == 0
                     ? "None"
                     : string.Join(", ", control.Presences.Select(item => item.FactionName)))
             ];

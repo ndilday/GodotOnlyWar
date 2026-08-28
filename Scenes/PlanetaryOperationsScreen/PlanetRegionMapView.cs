@@ -356,12 +356,25 @@ public partial class PlanetRegionMapView : PanelContainer
         {
             if (!_cardsByRegionId.TryGetValue(model.Region.Id, out RegionMapCardView card)) continue;
             List<Region> neighbours = model.Region.GetAdjacentRegions();
-            Region north = neighbours.OrderBy(region => region.Coordinates.X).FirstOrDefault();
-            Region south = neighbours.OrderByDescending(region => region.Coordinates.X).FirstOrDefault();
-            Region west = neighbours.Where(region => region.Coordinates.Y <= model.Region.Coordinates.Y)
-                .OrderBy(region => region.Coordinates.Y).FirstOrDefault();
-            Region east = neighbours.Where(region => region.Coordinates.Y >= model.Region.Coordinates.Y)
-                .OrderByDescending(region => region.Coordinates.Y).FirstOrDefault();
+            int rowKey = PlanetRegionMapViewModelBuilder.GetVisualRowKey(model.Region);
+            Region north = neighbours
+                .Where(region => PlanetRegionMapViewModelBuilder.GetVisualRowKey(region) < rowKey)
+                .OrderByDescending(region => PlanetRegionMapViewModelBuilder.GetVisualRowKey(region))
+                .ThenBy(region => Math.Abs(region.Coordinates.X - model.Region.Coordinates.X))
+                .FirstOrDefault();
+            Region south = neighbours
+                .Where(region => PlanetRegionMapViewModelBuilder.GetVisualRowKey(region) > rowKey)
+                .OrderBy(region => PlanetRegionMapViewModelBuilder.GetVisualRowKey(region))
+                .ThenBy(region => Math.Abs(region.Coordinates.X - model.Region.Coordinates.X))
+                .FirstOrDefault();
+            Region west = neighbours.Where(region => region.Coordinates.X < model.Region.Coordinates.X)
+                .OrderByDescending(region => region.Coordinates.X)
+                .ThenBy(region => Math.Abs(PlanetRegionMapViewModelBuilder.GetVisualRowKey(region) - rowKey))
+                .FirstOrDefault();
+            Region east = neighbours.Where(region => region.Coordinates.X > model.Region.Coordinates.X)
+                .OrderBy(region => region.Coordinates.X)
+                .ThenBy(region => Math.Abs(PlanetRegionMapViewModelBuilder.GetVisualRowKey(region) - rowKey))
+                .FirstOrDefault();
             card.FocusNeighborTop = CardPath(north);
             card.FocusNeighborBottom = CardPath(south);
             card.FocusNeighborLeft = CardPath(west);

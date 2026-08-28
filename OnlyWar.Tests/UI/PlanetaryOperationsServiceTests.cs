@@ -215,6 +215,34 @@ public class PlanetaryOperationsServiceTests
     }
 
     [Fact]
+    public void MapBuilder_RotatesRowsToMatchEncodedHexProjection()
+    {
+        SectorSimulationFixture fixture = SectorSimulationFixture.CreateDetached();
+        PlanetRegionMapViewModel map = PlanetRegionMapViewModelBuilder.Build(
+            fixture.Sector, fixture.Planet, PlanetMapOverlay.Control, fixture.Default.Id);
+
+        Assert.Equal(
+            new[] { "9", "5,12", "2,8,14", "0,4,11,15", "1,7,13", "3,10", "6" },
+            map.Rows.Select(row => string.Join(",", row.Select(card =>
+                System.Array.IndexOf(fixture.Planet.Regions, card.Region)))));
+    }
+
+    [Fact]
+    public void Eligibility_UsesCanonicalTopologyForBetaAndGamma()
+    {
+        SectorSimulationFixture fixture = SectorSimulationFixture.CreateDetached();
+        Region beta = fixture.Planet.Regions[1];
+        Region gamma = fixture.Planet.Regions[2];
+        Squad squad = AddPlayerSquad(fixture, beta, "Beta Squad");
+
+        RegionalEligibilityResult result = RegionalOrderEligibilityService.Build(
+            fixture.Sector, gamma);
+
+        Assert.DoesNotContain(result.Candidates, candidate => candidate.Squad == squad);
+        Assert.DoesNotContain(result.Groups, group => group.Origin == beta);
+    }
+
+    [Fact]
     public void MapBuilder_UsesControllingEnemyFactionColorForRegionBorder()
     {
         SectorSimulationFixture fixture = SectorSimulationFixture.CreateDetached();
