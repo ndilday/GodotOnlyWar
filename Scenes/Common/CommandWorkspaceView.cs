@@ -34,8 +34,8 @@ public partial class CommandWorkspaceView : MainScreenView
         _selectionHintLabel.Text = hint;
     }
 
-    // Switches the roster Tree between single- and multi-selection. Multi-select uses Godot's
-    // standard ctrl/shift-click semantics; non-selectable rows (unit headers) are unaffected.
+    // Switches the roster between single- and multi-selection. Multi-select supports ctrl-click
+    // toggling; non-selectable rows (unit headers) are unaffected.
     public void SetSelectionMultiSelect(bool multiSelect)
     {
         _selectionTree.SelectMode = multiSelect ? Tree.SelectModeEnum.Multi : Tree.SelectModeEnum.Single;
@@ -216,8 +216,7 @@ public partial class CommandWorkspaceView : MainScreenView
         float contextBottomAnchor,
         float commandTopAnchor = 0.805f,
         bool includeHeader = true,
-        float topAnchor = 0.08f,
-        int selectionBadgeColumnWidth = 116)
+        float topAnchor = 0.08f)
     {
         if (includeHeader)
         {
@@ -241,13 +240,8 @@ public partial class CommandWorkspaceView : MainScreenView
         _selectionTree = new HierarchyTreeView
         {
             SizeFlagsVertical = SizeFlags.ExpandFill,
-            CustomMinimumSize = new Vector2(0, 260),
-            Columns = 2
+            CustomMinimumSize = new Vector2(0, 260)
         };
-        _selectionTree.ConfigureColumns(2, selectionBadgeColumnWidth);
-        // Region Ops reserves room here for target-region badges ("Terra Lambda"). Screens that
-        // do not show badges can pass zero so their roster labels reclaim the empty column.
-        _selectionTree.AddThemeConstantOverride("item_margin", 6);
         _selectionTree.SelectionChanged += OnSelectionTreeItemSelected;
         _selectionTree.Activated += OnSelectionTreeItemActivated;
         leftStack.AddChild(_selectionTree);

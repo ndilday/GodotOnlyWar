@@ -5,29 +5,32 @@ using System.Collections.Generic;
 using System.Linq;
 
 /// <summary>
-/// Shared Tree behavior for hierarchical rosters and selection lists.
+/// Shared hierarchical roster behavior rendered as full-width rows.
 ///
-/// Screens provide presentation rows and receive stable string keys back. This keeps selection,
-/// activation, expansion restoration, and TreeItem metadata conventions out of individual views.
+/// Screens provide presentation rows and receive stable string keys back. The view owns row
+/// selection, activation, expansion, scroll restoration, and the common icon/name/badge layout.
 /// Fleet-specific drag/drop remains outside this component.
 /// </summary>
-public partial class HierarchyTreeView : Tree
+public partial class HierarchyTreeView : ScrollContainer
 {
     public const int DefaultIconMaxWidth = 20;
+    private const int IndentWidth = 8;
+    private const int ExpanderWidth = 14;
+    private const int RowDefaultHeight = 34;
 
-    private bool _multiSelectionNotificationPending;
-    private string _pendingMultiSelectionKey = "";
-    private bool _pendingMultiSelectionSelected;
+    private VBoxContainer _content;
+    private readonly List<RowState> _rows = [];
+    private readonly Dictionary<string, RowState> _rowsByKey = [];
     private bool _suppressSelectionSignals;
 
     public int IconMaxWidth { get; set; } = DefaultIconMaxWidth;
 
-    /// <summary>
-    /// When enabled for a three-column tree, the icon occupies a compact leading column, the
-    /// row text occupies the expanding middle column, and the badge occupies the trailing column.
-    /// Existing two-column trees retain the original icon-and-text layout.
-    /// </summary>
-    public bool UseLeadingIconColumn { get; set; }
+    // Retain Godot's enum at the boundary so existing screens can continue to configure the
+    // component without depending on a second selection-mode type. Row mode is treated as single
+    // selection because every click target is already the complete row.
+    public Tree.SelectModeEnum SelectMode { get; set; } = Tree.SelectModeEnum.Single;
+
+    public bool AllowReselect { get; set; }
 
     public event EventHandler<string> SelectionChanged;
     public event EventHandler<string> Activated;
@@ -35,50 +38,16 @@ public partial class HierarchyTreeView : Tree
     public override void _Ready()
     {
         base._Ready();
-        ItemSelected += OnTreeItemSelected;
-        MultiSelected += OnTreeItemMultiSelected;
-        ItemActivated += OnTreeItemActivated;
+        EnsureContent();
     }
 
-    public void ConfigureColumns(
-        int columnCount,
-        int secondaryColumnMinimumWidth = 0,
-        int trailingColumnMinimumWidth = 0,
-        bool useLeadingIconColumn = false,
-        int leadingColumnMinimumWidth = 0)
-    {
-        Columns = Math.Max(1, columnCount);
-        UseLeadingIconColumn = useLeadingIconColumn && Columns > 2;
-        SetColumnExpand(0, !UseLeadingIconColumn);
-        if (UseLeadingIconColumn)
-        {
-            SetColumnCustomMinimumWidth(0, leadingColumnMinimumWidth);
-        }
-
-        if (Columns > 1)
-        {
-            SetColumnExpand(1, UseLeadingIconColumn);
-            SetColumnCustomMinimumWidth(1, secondaryColumnMinimumWidth);
-        }
-
-        if (Columns > 2)
-        {
-            SetColumnExpand(2, false);
-            SetColumnCustomMinimumWidth(2, trailingColumnMinimumWidth);
-        }
-    }
-
-    /// <summary>
-    /// Rebuilds the tree. Restoring preserved selection calls <c>TreeItem.Select</c>, which Godot
-    /// reports through <see cref="SelectionChanged"/> exactly as if the user had clicked the row.
-    /// Pass <paramref name="suppressSelectionSignals"/> when the caller is going to render off the
-    /// new state itself, so that programmatic restoration does not trigger a redundant rebuild.
-    /// </summary>
     public void Populate(
         IReadOnlyList<HierarchyTreeItem> entries,
         bool preserveUiState = true,
         bool suppressSelectionSignals = false)
     {
+        EnsureContent();
+
         Dictionary<string, bool> collapsedByPath = preserveUiState
             ? CaptureCollapsedStates()
             : [];
@@ -90,56 +59,48 @@ public partial class HierarchyTreeView : Tree
         _suppressSelectionSignals = suppressSelectionSignals;
         try
         {
-            Clear();
-            HideRoot = true;
-            TreeItem root = CreateItem();
-            AddTreeItems(root, entries ?? Array.Empty<HierarchyTreeItem>(), "", collapsedByPath, selectedKeys);
-            ExpandSelectedAncestors(root.GetFirstChild());
+            ClearRows();
+            AddTreeItems(
+                _content,
+                entries ?? Array.Empty<HierarchyTreeItem>(),
+                "",
+                null,
+                0,
+                collapsedByPath,
+                selectedKeys);
+
+            ExpandSelectedAncestors();
         }
         finally
         {
             _suppressSelectionSignals = previous;
         }
+
+        if (!suppressSelectionSignals)
+        {
+            string selectedKey = GetSelectedKeys().FirstOrDefault() ?? "";
+            SelectionChanged?.Invoke(this, selectedKey);
+        }
     }
 
     public IReadOnlyList<string> GetSelectedKeys()
     {
-        List<string> keys = [];
-        TreeItem root = GetRoot();
-        if (root != null)
-        {
-            CollectSelectedKeys(root.GetFirstChild(), keys);
-        }
-
-        return keys;
+        return _rows
+            .Where(row => row.Selected)
+            .Select(row => row.Entry.Key)
+            .ToList();
     }
 
-    public int GetVerticalScrollOffset()
-    {
-        VScrollBar scrollbar = GetChildren(includeInternal: true)
-            .OfType<VScrollBar>()
-            .FirstOrDefault();
-        return scrollbar == null ? 0 : (int)scrollbar.Value;
-    }
+    public int GetVerticalScrollOffset() => ScrollVertical;
 
     public void SetVerticalScrollOffset(int offset)
     {
-        VScrollBar scrollbar = GetChildren(includeInternal: true)
-            .OfType<VScrollBar>()
-            .FirstOrDefault();
-        scrollbar?.SetDeferred(Godot.Range.PropertyName.Value, Math.Max(0, offset));
+        SetDeferred("scroll_vertical", Math.Max(0, offset));
     }
 
     public IReadOnlyDictionary<string, bool> GetCollapsedStatesByKey()
     {
-        Dictionary<string, bool> states = [];
-        TreeItem root = GetRoot();
-        if (root != null)
-        {
-            CaptureCollapsedStatesByKey(root.GetFirstChild(), states);
-        }
-
-        return states;
+        return _rows.ToDictionary(row => row.Entry.Key, row => !row.Expanded);
     }
 
     public void SetCollapsedStates(IReadOnlyDictionary<string, bool> states)
@@ -149,306 +110,400 @@ public partial class HierarchyTreeView : Tree
             return;
         }
 
-        TreeItem root = GetRoot();
-        if (root == null)
+        foreach (RowState row in _rows)
         {
-            return;
-        }
-
-        foreach (TreeItem item in EnumerateTreeItems(root.GetFirstChild()))
-        {
-            if (states.TryGetValue(GetItemKey(item), out bool collapsed))
+            if (states.TryGetValue(row.Entry.Key, out bool collapsed))
             {
-                item.Collapsed = collapsed;
+                SetExpanded(row, !collapsed);
             }
         }
     }
 
     public void ClearSelection()
     {
-        DeselectAll();
+        bool changed = ClearSelectionInternal();
+        if (changed && !_suppressSelectionSignals)
+        {
+            SelectionChanged?.Invoke(this, "");
+        }
     }
 
     /// <summary>
-    /// Selects the rows whose metadata keys are in <paramref name="keys"/>. By default this reports
-    /// through <see cref="SelectionChanged"/>, which callers such as
-    /// <c>ApothecariumScreenView.FocusSoldier</c> rely on to drive navigation. Pass
-    /// <paramref name="suppressSelectionSignals"/> when the caller renders off the new state itself.
+    /// Selects the rows whose keys are in <paramref name="keys"/>. Selection restoration also
+    /// expands each selected row's ancestors so the requested rows remain visible.
     /// </summary>
     public void SetSelectedKeys(IReadOnlyCollection<string> keys, bool suppressSelectionSignals = false)
     {
         HashSet<string> wanted = keys == null ? [] : [.. keys];
-
         bool previous = _suppressSelectionSignals;
         _suppressSelectionSignals = suppressSelectionSignals;
         try
         {
-            DeselectAll();
-
-            TreeItem root = GetRoot();
-            if (root == null)
+            ClearSelectionInternal();
+            foreach (RowState row in _rows)
             {
-                return;
-            }
-
-            foreach (TreeItem item in EnumerateTreeItems(root.GetFirstChild()))
-            {
-                string key = GetItemKey(item);
-                if (string.IsNullOrEmpty(key) || !wanted.Contains(key))
+                if (!row.Entry.Selectable || !wanted.Contains(row.Entry.Key))
                 {
                     continue;
                 }
 
-                for (TreeItem ancestor = item.GetParent(); ancestor != null && ancestor != root; ancestor = ancestor.GetParent())
+                row.Selected = true;
+                RefreshRowStyle(row);
+                for (RowState ancestor = row.Parent; ancestor != null; ancestor = ancestor.Parent)
                 {
-                    ancestor.Collapsed = false;
+                    SetExpanded(ancestor, true);
                 }
-
-                item.Select(GetSelectionColumn());
             }
         }
         finally
         {
             _suppressSelectionSignals = previous;
         }
+
+        if (!suppressSelectionSignals)
+        {
+            SelectionChanged?.Invoke(this, wanted.FirstOrDefault(key => _rowsByKey.ContainsKey(key)) ?? "");
+        }
     }
 
-    private void OnTreeItemSelected()
+    private void EnsureContent()
     {
-        if (_suppressSelectionSignals)
+        if (_content != null && IsInstanceValid(_content))
         {
             return;
         }
 
-        SelectionChanged?.Invoke(this, GetItemKey(GetSelected()));
+        HorizontalScrollMode = ScrollMode.Disabled;
+        VerticalScrollMode = ScrollMode.Auto;
+        FollowFocus = true;
+        ClipContents = true;
+
+        _content = new VBoxContainer
+        {
+            SizeFlagsHorizontal = SizeFlags.ExpandFill,
+            MouseFilter = MouseFilterEnum.Ignore
+        };
+        _content.AddThemeConstantOverride("separation", 3);
+        AddChild(_content);
     }
 
-    // Godot emits the deselection half of a multi-select change before it clears the TreeItem's
-    // selected flag. Defer the notification until the complete click transaction has settled.
-    private void OnTreeItemMultiSelected(TreeItem item, long column, bool selected)
+    private void ClearRows()
     {
-        // Checked here rather than in the deferred handler: this runs synchronously inside the
-        // suppressed Select() call, whereas the deferred emit runs after the flag has been restored.
-        if (_suppressSelectionSignals)
+        foreach (Node child in _content.GetChildren())
         {
-            return;
+            _content.RemoveChild(child);
+            child.QueueFree();
         }
 
-        // A click on a parent in multi-select mode can emit one selected event for the parent
-        // followed by deselected events for all of its children. Keep the selected item as the
-        // transaction key, otherwise the final child deselection is reported to the caller.
-        if (!_multiSelectionNotificationPending
-            || (selected && !_pendingMultiSelectionSelected))
-        {
-            _pendingMultiSelectionKey = GetItemKey(item);
-            _pendingMultiSelectionSelected = selected;
-        }
-        if (_multiSelectionNotificationPending)
-        {
-            return;
-        }
-
-        _multiSelectionNotificationPending = true;
-        CallDeferred(MethodName.EmitSettledMultiSelectionChanged);
+        _rows.Clear();
+        _rowsByKey.Clear();
     }
 
-    private void EmitSettledMultiSelectionChanged()
-    {
-        _multiSelectionNotificationPending = false;
-        string key = _pendingMultiSelectionKey;
-        _pendingMultiSelectionKey = "";
-        _pendingMultiSelectionSelected = false;
-        SelectionChanged?.Invoke(this, key);
-    }
-
-    private void OnTreeItemActivated()
-    {
-        Activated?.Invoke(this, GetItemKey(GetSelected()));
-    }
-
-    private void AddTreeItems(
-        TreeItem parent,
+    private bool AddTreeItems(
+        Container parent,
         IReadOnlyList<HierarchyTreeItem> entries,
         string parentPath,
+        RowState parentRow,
+        int depth,
         IReadOnlyDictionary<string, bool> collapsedByPath,
         IReadOnlySet<string> selectedKeys)
     {
+        bool containsSelection = false;
         foreach (HierarchyTreeItem entry in entries)
         {
-            TreeItem item = CreateItem(parent);
-            int textColumn = UseLeadingIconColumn ? 1 : 0;
-            int badgeColumn = UseLeadingIconColumn ? 2 : 1;
-            item.SetText(textColumn, entry.Text);
-            item.SetMetadata(0, Variant.From(entry.Key));
-
-            if (!string.IsNullOrWhiteSpace(entry.Tooltip))
-            {
-                item.SetTooltipText(textColumn, entry.Tooltip);
-            }
-
-            if (!string.IsNullOrWhiteSpace(entry.IconKey))
-            {
-                int iconColumn = UseLeadingIconColumn ? 0 : textColumn;
-                item.SetIcon(iconColumn, IconAtlas.GetIcon(entry.IconKey));
-                item.SetIconMaxWidth(iconColumn,
-                    entry.IconMaxWidth > 0 ? entry.IconMaxWidth : IconMaxWidth);
-            }
-
-            if (Columns > 1)
-            {
-                item.SetText(badgeColumn, entry.Badge ?? "");
-                item.SetTextAlignment(badgeColumn, HorizontalAlignment.Right);
-                item.SetSelectable(badgeColumn, false);
-                if (entry.BadgeColor.HasValue)
-                {
-                    item.SetCustomColor(badgeColumn, entry.BadgeColor.Value);
-                }
-            }
-
-            if (UseLeadingIconColumn)
-            {
-                item.SetSelectable(0, false);
-            }
-
-            if (!entry.Selectable)
-            {
-                item.SetSelectable(textColumn, false);
-                item.SetCustomColor(textColumn, OnlyWarStyle.MutedText);
-            }
-
-            if (entry.RowHeight > 0)
-            {
-                item.SetCustomMinimumHeight(entry.RowHeight);
-            }
-
-            if (entry.Selectable && (entry.IsSelected || selectedKeys.Contains(entry.Key)))
-            {
-                item.Select(textColumn);
-            }
-
-            if (entry.Children.Count == 0)
-            {
-                continue;
-            }
-
             string path = $"{parentPath}/{entry.Key}";
-            AddTreeItems(item, entry.Children, path, collapsedByPath, selectedKeys);
-            if (collapsedByPath.TryGetValue(path, out bool wasCollapsed))
+            VBoxContainer branch = new()
             {
-                item.Collapsed = wasCollapsed;
-            }
-            else
+                SizeFlagsHorizontal = SizeFlags.ExpandFill,
+                MouseFilter = MouseFilterEnum.Ignore
+            };
+            parent.AddChild(branch);
+
+            RowState row = CreateRow(entry, parentRow, depth);
+            row.Path = path;
+            branch.AddChild(row.Panel);
+            _rows.Add(row);
+            _rowsByKey[entry.Key] = row;
+
+            bool childContainsSelection = false;
+            if (entry.Children.Count > 0)
             {
-                item.Collapsed = entry.CollapsedByDefault;
-            }
-        }
-    }
-
-    private Dictionary<string, bool> CaptureCollapsedStates()
-    {
-        Dictionary<string, bool> collapsedByPath = [];
-        TreeItem root = GetRoot();
-        if (root == null)
-        {
-            return collapsedByPath;
-        }
-
-        CaptureCollapsedStates(root.GetFirstChild(), "", collapsedByPath);
-        return collapsedByPath;
-    }
-
-    private static void CaptureCollapsedStates(
-        TreeItem item,
-        string parentPath,
-        Dictionary<string, bool> collapsedByPath)
-    {
-        while (item != null)
-        {
-            string key = GetItemKey(item);
-            if (!string.IsNullOrEmpty(key))
-            {
-                string path = $"{parentPath}/{key}";
-                collapsedByPath[path] = item.Collapsed;
-                CaptureCollapsedStates(item.GetFirstChild(), path, collapsedByPath);
-            }
-
-            item = item.GetNext();
-        }
-    }
-
-    private static void CaptureCollapsedStatesByKey(
-        TreeItem item,
-        Dictionary<string, bool> states)
-    {
-        while (item != null)
-        {
-            string key = GetItemKey(item);
-            if (!string.IsNullOrEmpty(key))
-            {
-                states[key] = item.Collapsed;
-            }
-
-            CaptureCollapsedStatesByKey(item.GetFirstChild(), states);
-            item = item.GetNext();
-        }
-    }
-
-    private static void CollectSelectedKeys(TreeItem item, List<string> keys)
-    {
-        while (item != null)
-        {
-            if (item.IsSelected(0) || item.IsSelected(1))
-            {
-                string key = GetItemKey(item);
-                if (!string.IsNullOrEmpty(key))
+                VBoxContainer childContainer = new()
                 {
-                    keys.Add(key);
-                }
+                    SizeFlagsHorizontal = SizeFlags.ExpandFill,
+                    MouseFilter = MouseFilterEnum.Ignore
+                };
+                childContainer.AddThemeConstantOverride("separation", 3);
+                branch.AddChild(childContainer);
+                row.Children = childContainer;
+                childContainsSelection = AddTreeItems(
+                    childContainer,
+                    entry.Children,
+                    path,
+                    row,
+                    depth + 1,
+                    collapsedByPath,
+                    selectedKeys);
+
+                bool expanded = collapsedByPath.TryGetValue(path, out bool wasCollapsed)
+                    ? !wasCollapsed
+                    : !entry.CollapsedByDefault;
+                SetExpanded(row, expanded);
             }
 
-            CollectSelectedKeys(item.GetFirstChild(), keys);
-            item = item.GetNext();
-        }
-    }
-
-    private static bool ExpandSelectedAncestors(TreeItem item)
-    {
-        bool containsSelection = false;
-        while (item != null)
-        {
-            bool containsSelectedDescendant = ExpandSelectedAncestors(item.GetFirstChild());
-            bool selected = item.IsSelected(0) || item.IsSelected(1);
-            if (containsSelectedDescendant)
+            containsSelection |= row.Selected || childContainsSelection;
+            if (childContainsSelection)
             {
-                item.Collapsed = false;
+                SetExpanded(row, true);
             }
-
-            containsSelection |= selected || containsSelectedDescendant;
-            item = item.GetNext();
         }
 
         return containsSelection;
     }
 
-    private static IEnumerable<TreeItem> EnumerateTreeItems(TreeItem item)
+    private RowState CreateRow(HierarchyTreeItem entry, RowState parent, int depth)
     {
-        while (item != null)
+        PanelContainer panel = new()
         {
-            yield return item;
+            CustomMinimumSize = new Vector2(0,
+                entry.RowHeight > 0 ? entry.RowHeight : RowDefaultHeight),
+            SizeFlagsHorizontal = SizeFlags.ExpandFill,
+            MouseFilter = MouseFilterEnum.Stop,
+            TooltipText = entry.Tooltip ?? "",
+            MouseDefaultCursorShape = entry.Selectable
+                ? CursorShape.PointingHand
+                : CursorShape.Arrow
+        };
+        OnlyWarStyle.ApplyListRow(panel, false);
 
-            foreach (TreeItem child in EnumerateTreeItems(item.GetFirstChild()))
+        HBoxContainer content = new()
+        {
+            SizeFlagsHorizontal = SizeFlags.ExpandFill,
+            SizeFlagsVertical = SizeFlags.ExpandFill,
+            MouseFilter = MouseFilterEnum.Ignore
+        };
+        content.AddThemeConstantOverride("separation", RosterRowStyle.ContentSeparation);
+        panel.AddChild(content);
+
+        content.AddChild(new Control
+        {
+            CustomMinimumSize = new Vector2(depth * IndentWidth, 0),
+            MouseFilter = MouseFilterEnum.Ignore
+        });
+
+        Button expander = null;
+        if (entry.Children.Count > 0)
+        {
+            expander = new Button
             {
-                yield return child;
-            }
+                CustomMinimumSize = new Vector2(ExpanderWidth, 0),
+                SizeFlagsVertical = SizeFlags.ShrinkCenter,
+                Flat = true,
+                FocusMode = FocusModeEnum.None,
+                MouseDefaultCursorShape = CursorShape.PointingHand,
+                MouseFilter = MouseFilterEnum.Stop
+            };
+            expander.AddThemeFontSizeOverride("font_size", 12);
+            content.AddChild(expander);
+        }
+        if (!string.IsNullOrWhiteSpace(entry.IconKey))
+        {
+            int iconWidth = Math.Max(1, entry.IconMaxWidth > 0 ? entry.IconMaxWidth : IconMaxWidth);
+            TextureRect icon = new()
+            {
+                Texture = IconAtlas.GetIcon(entry.IconKey),
+                CustomMinimumSize = new Vector2(iconWidth, iconWidth),
+                ExpandMode = TextureRect.ExpandModeEnum.IgnoreSize,
+                StretchMode = TextureRect.StretchModeEnum.KeepAspectCentered,
+                SizeFlagsHorizontal = SizeFlags.ShrinkCenter,
+                SizeFlagsVertical = SizeFlags.ShrinkCenter,
+                MouseFilter = MouseFilterEnum.Ignore
+            };
+            content.AddChild(icon);
+        }
 
-            item = item.GetNext();
+        Color primaryColor = entry.Selectable ? OnlyWarStyle.BodyText : OnlyWarStyle.MutedText;
+        Label text = new()
+        {
+            Text = entry.Text,
+            SizeFlagsHorizontal = SizeFlags.ExpandFill,
+            SizeFlagsVertical = SizeFlags.ShrinkCenter,
+            VerticalAlignment = VerticalAlignment.Center,
+            AutowrapMode = TextServer.AutowrapMode.WordSmart,
+            ClipText = false,
+            TextOverrunBehavior = TextServer.OverrunBehavior.NoTrimming,
+            MouseFilter = MouseFilterEnum.Ignore
+        };
+        text.AddThemeColorOverride("font_color", primaryColor);
+        content.AddChild(text);
+
+        Label badge = null;
+        if (!string.IsNullOrWhiteSpace(entry.Badge))
+        {
+            badge = new Label
+            {
+                Text = entry.Badge,
+                SizeFlagsHorizontal = SizeFlags.ShrinkEnd,
+                SizeFlagsVertical = SizeFlags.ShrinkCenter,
+                HorizontalAlignment = HorizontalAlignment.Right,
+                VerticalAlignment = VerticalAlignment.Center,
+                // Metadata stays a single natural-width line. With wrapping enabled, ShrinkEnd
+                // can collapse the label to one character and make every badge render vertically.
+                AutowrapMode = TextServer.AutowrapMode.Off,
+                ClipText = false,
+                TextOverrunBehavior = TextServer.OverrunBehavior.NoTrimming,
+                MouseFilter = MouseFilterEnum.Ignore
+            };
+            badge.AddThemeColorOverride("font_color", entry.BadgeColor ?? primaryColor);
+            content.AddChild(badge);
+        }
+
+        RowState row = new(entry, parent, panel, expander);
+        panel.GuiInput += input => OnRowGuiInput(row, input);
+        panel.MouseEntered += () => SetRowHovered(row, true);
+        panel.MouseExited += () => SetRowHovered(row, false);
+        if (expander != null)
+        {
+            expander.Pressed += () => SetExpanded(row, !row.Expanded);
+        }
+
+        RefreshRowStyle(row);
+        return row;
+    }
+
+    private void OnRowGuiInput(RowState row, InputEvent inputEvent)
+    {
+        if (inputEvent is not InputEventMouseButton mouseButton
+            || mouseButton.ButtonIndex != MouseButton.Left
+            || !mouseButton.Pressed)
+        {
+            return;
+        }
+
+        if (!row.Entry.Selectable)
+        {
+            return;
+        }
+
+        bool controlPressed = Input.IsKeyPressed(Key.Ctrl) || Input.IsKeyPressed(Key.Meta);
+        bool wasSelected = row.Selected;
+        if (SelectMode == Tree.SelectModeEnum.Multi && controlPressed)
+        {
+            row.Selected = !row.Selected;
+        }
+        else
+        {
+            ClearSelectionInternal();
+            row.Selected = true;
+        }
+
+        RefreshAllRowStyles();
+        if (mouseButton.DoubleClick)
+        {
+            Activated?.Invoke(this, row.Entry.Key);
+        }
+
+        if (row.Selected != wasSelected || AllowReselect)
+        {
+            SelectionChanged?.Invoke(this, row.Entry.Key);
         }
     }
 
-    private static string GetItemKey(TreeItem item)
+    private void SetRowHovered(RowState row, bool hovered)
     {
-        return item == null ? "" : item.GetMetadata(0).AsString();
+        row.Hovered = hovered;
+        RefreshRowStyle(row);
     }
 
-    private int GetSelectionColumn() => UseLeadingIconColumn ? 1 : 0;
+    private void SetExpanded(RowState row, bool expanded)
+    {
+        if (row.Children == null)
+        {
+            return;
+        }
+
+        row.Expanded = expanded;
+        row.Children.Visible = expanded;
+        row.Expander.Text = expanded ? "⌄" : "›";
+    }
+
+    private bool ClearSelectionInternal()
+    {
+        bool changed = false;
+        foreach (RowState row in _rows)
+        {
+            if (!row.Selected)
+            {
+                continue;
+            }
+
+            row.Selected = false;
+            changed = true;
+        }
+
+        if (changed)
+        {
+            RefreshAllRowStyles();
+        }
+
+        return changed;
+    }
+
+    private void RefreshAllRowStyles()
+    {
+        foreach (RowState row in _rows)
+        {
+            RefreshRowStyle(row);
+        }
+    }
+
+    private static void RefreshRowStyle(RowState row)
+    {
+        StyleBoxFlat style = OnlyWarStyle.GetListRowStyle(row.Selected || row.Hovered);
+        style.ContentMarginLeft = 4;
+        row.Panel.AddThemeStyleboxOverride("panel", style);
+    }
+
+    private Dictionary<string, bool> CaptureCollapsedStates()
+    {
+        return _rows.ToDictionary(row => row.Path, row => !row.Expanded);
+    }
+
+    private void ExpandSelectedAncestors()
+    {
+        foreach (RowState row in _rows.Where(row => row.Selected))
+        {
+            for (RowState ancestor = row.Parent; ancestor != null; ancestor = ancestor.Parent)
+            {
+                SetExpanded(ancestor, true);
+            }
+        }
+    }
+
+    private sealed class RowState
+    {
+        public RowState(
+            HierarchyTreeItem entry,
+            RowState parent,
+            PanelContainer panel,
+            Button expander)
+        {
+            Entry = entry;
+            Parent = parent;
+            Panel = panel;
+            Expander = expander;
+            Selected = entry.IsSelected;
+            Expanded = entry.Children.Count == 0;
+        }
+
+        public HierarchyTreeItem Entry { get; }
+        public RowState Parent { get; }
+        public PanelContainer Panel { get; }
+        public Button Expander { get; }
+        public VBoxContainer Children { get; set; }
+        public string Path { get; set; }
+        public bool Selected { get; set; }
+        public bool Hovered { get; set; }
+        public bool Expanded { get; set; }
+    }
 }

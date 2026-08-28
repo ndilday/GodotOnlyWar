@@ -273,19 +273,11 @@ public partial class ApothecariumScreenView : MainScreenView
 
         _unitTree = new HierarchyTreeView
         {
-            HideRoot = true,
-            Columns = 2,
+            SizeFlagsHorizontal = SizeFlags.ExpandFill,
             SizeFlagsVertical = SizeFlags.ExpandFill,
-            // The status is presentation within the roster row, not a second interaction
-            // target. Row mode makes clicks in either visual column select the same item.
             SelectMode = Tree.SelectModeEnum.Row
         };
         _unitTree.IconMaxWidth = RosterRowStyle.IconSize;
-        // Keep a small empty trailing column so right-aligned status text does not touch the
-        // selected-row highlight at the edge of the tree.
-        _unitTree.ConfigureColumns(3, 88, 4);
-        _unitTree.SetColumnTitle(0, "Unit");
-        _unitTree.SetColumnTitle(1, "Status");
         _unitTree.SelectionChanged += OnTreeItemSelected;
         stack.AddChild(_unitTree);
 

@@ -348,7 +348,8 @@ public partial class PlanetaryOperationsScreenView : Control
         VBoxContainer leftStack = new()
         {
             SizeFlagsHorizontal = SizeFlags.ExpandFill,
-            SizeFlagsVertical = SizeFlags.ExpandFill
+            SizeFlagsVertical = SizeFlags.ExpandFill,
+            ClipContents = true
         };
         leftStack.SetAnchorsAndOffsetsPreset(LayoutPreset.FullRect);
         leftSurface.AddChild(leftStack);
@@ -365,10 +366,15 @@ public partial class PlanetaryOperationsScreenView : Control
         {
             CustomMinimumSize = new Vector2(0, 64),
             SizeFlagsHorizontal = SizeFlags.ExpandFill,
-            SizeFlagsVertical = SizeFlags.ShrinkEnd
+            SizeFlagsVertical = SizeFlags.ShrinkEnd,
+            ClipContents = true
         };
         OnlyWarStyle.ApplyContentPanel(_bottomPanel);
-        _bottomContent = new VBoxContainer();
+        _bottomContent = new VBoxContainer
+        {
+            SizeFlagsHorizontal = SizeFlags.ExpandFill,
+            SizeFlagsVertical = SizeFlags.ExpandFill
+        };
         _bottomPanel.AddChild(_bottomContent);
         leftStack.AddChild(_bottomPanel);
         body.AddChild(leftPanel);
@@ -445,17 +451,12 @@ public partial class PlanetaryOperationsScreenView : Control
         }
         HierarchyTreeView tree = new()
         {
+            SizeFlagsHorizontal = SizeFlags.ExpandFill,
             CustomMinimumSize = new Vector2(0, 360),
             SizeFlagsVertical = SizeFlags.ExpandFill,
             SelectMode = Tree.SelectModeEnum.Multi,
             AllowReselect = true
         };
-        tree.AddThemeConstantOverride("item_margin", 6);
-        tree.ConfigureColumns(
-            3,
-            trailingColumnMinimumWidth: 150,
-            useLeadingIconColumn: true,
-            leadingColumnMinimumWidth: 28);
         tree.SelectionChanged += (_, key) => ForceNodePressed?.Invoke(this, key);
         tree.Activated += (_, key) => ForceNodeActivated?.Invoke(this, key);
         parent.AddChild(tree);
@@ -690,11 +691,11 @@ public partial class PlanetaryOperationsScreenView : Control
             int visibleRows = entries.Count + expandedShipCount;
             HierarchyTreeView tree = new()
             {
+                SizeFlagsHorizontal = SizeFlags.ExpandFill,
                 CustomMinimumSize = new Vector2(0, Math.Min(360, 70 + (visibleRows + 2) * 38)),
                 SizeFlagsVertical = SizeFlags.ExpandFill,
                 AllowReselect = true
             };
-            tree.ConfigureColumns(2, secondaryColumnMinimumWidth: 190);
             tree.SelectionChanged += (_, key) =>
             {
                 if (key?.StartsWith("ship:") == true && int.TryParse(key[5..], out int id))
@@ -738,17 +739,22 @@ public partial class PlanetaryOperationsScreenView : Control
     {
         _bottomPanel.Visible = true;
         Clear(_bottomContent);
-        HBoxContainer row = new() { Alignment = BoxContainer.AlignmentMode.End };
+        HBoxContainer row = new()
+        {
+            Alignment = BoxContainer.AlignmentMode.End,
+            SizeFlagsHorizontal = SizeFlags.ExpandFill
+        };
         Label status = new()
         {
             Text = order == null
                 ? "Select a mission, then add squads"
                 : $"LIVE · {order.AssignedSquads.Count} squads · {order.LevelOfAggression}",
             SizeFlagsHorizontal = SizeFlags.ExpandFill,
+            SizeFlagsVertical = SizeFlags.ExpandFill,
             VerticalAlignment = VerticalAlignment.Center,
-            AutowrapMode = TextServer.AutowrapMode.Off,
-            ClipText = true,
-            TextOverrunBehavior = TextServer.OverrunBehavior.TrimEllipsis
+            AutowrapMode = TextServer.AutowrapMode.WordSmart,
+            ClipText = false,
+            TextOverrunBehavior = TextServer.OverrunBehavior.NoTrimming
         };
         status.AddThemeColorOverride("font_color", OnlyWarStyle.MutedText);
         row.AddChild(status);
@@ -769,7 +775,11 @@ public partial class PlanetaryOperationsScreenView : Control
     {
         _bottomPanel.Visible = true;
         Clear(_bottomContent);
-        HBoxContainer row = new() { Alignment = BoxContainer.AlignmentMode.End };
+        HBoxContainer row = new()
+        {
+            Alignment = BoxContainer.AlignmentMode.End,
+            SizeFlagsHorizontal = SizeFlags.ExpandFill
+        };
         Button confirm = ActionButton(MovementConfirmText(selectedCount),
             _verb == PlanetaryOperationsVerb.Land ? "land_squads"
             : _verb == PlanetaryOperationsVerb.Embark ? "load_squads" : "medical");
