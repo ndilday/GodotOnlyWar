@@ -253,6 +253,22 @@ public class SectorEntityLogicTests
     }
 
     [Fact]
+    public void ProcessTurn_RetiresHiddenCellAmbushWhenFactionBecomesPublic()
+    {
+        RNG.Reset(98765);
+        SectorSimulationFixture fixture = SectorSimulationFixture.Create();
+        RegionFaction cult = fixture.AddHiddenFaction(0, GrowthType.Logistic, population: 20000);
+        Region region = fixture.Planet.Regions[0];
+        Mission hiddenCellAmbush = new(MissionType.Extermination, cult, 1);
+        region.SpecialMissions.Add(hiddenCellAmbush);
+        cult.IsPublic = true;
+
+        fixture.ProcessTurn();
+
+        Assert.DoesNotContain(hiddenCellAmbush, region.SpecialMissions);
+    }
+
+    [Fact]
     public void ProcessTurn_GeneratesGovernorRequestAgainstPublicThreat()
     {
         RNG.Reset(1);

@@ -167,6 +167,13 @@ namespace OnlyWar.Helpers
                 case SoldierFilterField.TimeInSquad:
                     return MatchesDuration(soldier, condition, currentDate);
 
+                case SoldierFilterField.SergeantRecommended:
+                    bool recommended = soldier is PlayerSoldier candidate
+                        && candidate.SoldierEvaluationHistory.LastOrDefault()?.LeadershipRating > 55;
+                    return condition.Operator == SoldierFilterOperator.NotEquals
+                        ? !recommended
+                        : recommended;
+
                 default:
                     return true;
             }

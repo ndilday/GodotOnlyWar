@@ -369,7 +369,10 @@ namespace OnlyWar.Helpers
                 location.Template.HoldsProgenoid,
                 location.IsCybernetic,
                 needsReplacement,
-                severity);
+                severity,
+                GetPrincipalWoundLevel(location.Wounds),
+                location.IsSevered,
+                location.IsCrippled);
         }
 
         private IReadOnlyList<ReplacementOption> BuildReplacementOptions(
@@ -606,6 +609,20 @@ namespace OnlyWar.Helpers
             }
 
             return MedicalSeverity.None;
+        }
+
+        private static WoundLevel GetPrincipalWoundLevel(Wounds wounds)
+        {
+            if (wounds == null) return WoundLevel.None;
+            if (wounds.UnsurvivableWounds > 0) return WoundLevel.Unsurvivable;
+            if (wounds.MortalWounds > 0) return WoundLevel.Mortal;
+            if (wounds.MassiveWounds > 0) return WoundLevel.Massive;
+            if (wounds.CriticalWounds > 0) return WoundLevel.Critical;
+            if (wounds.MajorWounds > 0) return WoundLevel.Major;
+            if (wounds.ModerateWounds > 0) return WoundLevel.Moderate;
+            if (wounds.MinorWounds > 0) return WoundLevel.Minor;
+            if (wounds.NegligibleWounds > 0) return WoundLevel.Negligible;
+            return WoundLevel.None;
         }
 
         private static string GetStatus(HitLocation location, MedicalProcedure activeProcedure = null)

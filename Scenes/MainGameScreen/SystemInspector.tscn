@@ -61,18 +61,17 @@ layout_mode = 2
 text = "Select a star system on the sector map"
 autowrap_mode = 2
 
-[node name="PlanetSection" type="VBoxContainer" parent="Panel/MarginContainer/ScrollContainer/VBoxContainer"]
+[node name="DossierSection" type="VBoxContainer" parent="Panel/MarginContainer/ScrollContainer/VBoxContainer"]
 layout_mode = 2
-theme_override_constants/separation = 4
+theme_override_constants/separation = 6
 
-[node name="PlanetHeaderLabel" type="Label" parent="Panel/MarginContainer/ScrollContainer/VBoxContainer/PlanetSection"]
+[node name="DossierHeaderLabel" type="Label" parent="Panel/MarginContainer/ScrollContainer/VBoxContainer/DossierSection"]
 layout_mode = 2
-text = "PLANETS"
+text = "WORLD DOSSIER"
 
-[node name="PlanetDetailLabel" type="Label" parent="Panel/MarginContainer/ScrollContainer/VBoxContainer/PlanetSection"]
+[node name="DossierContent" type="VBoxContainer" parent="Panel/MarginContainer/ScrollContainer/VBoxContainer/DossierSection"]
 layout_mode = 2
-text = "Planet data will appear here."
-autowrap_mode = 2
+theme_override_constants/separation = 6
 
 [node name="OrbitSection" type="VBoxContainer" parent="Panel/MarginContainer/ScrollContainer/VBoxContainer"]
 layout_mode = 2
@@ -111,6 +110,10 @@ text = "REQUESTS"
 layout_mode = 2
 text = "Active requests will appear here."
 autowrap_mode = 2
+
+[node name="AnswerRequestButton" type="Button" parent="Panel/MarginContainer/ScrollContainer/VBoxContainer/RequestSection"]
+layout_mode = 2
+text = "Answer this"
 
 [node name="ActionSection" type="VBoxContainer" parent="Panel/MarginContainer/ScrollContainer/VBoxContainer"]
 layout_mode = 2

@@ -190,7 +190,11 @@ public class MedicalProcedureServiceTests
         planet.Regions[0] = region;
         PlanetFaction planetFaction = new(player) { IsPublic = true };
         planet.PlanetFactionMap[player.Id] = planetFaction;
-        RegionFaction regionFaction = new(planetFaction, region) { IsPublic = true };
+        RegionFaction regionFaction = new(planetFaction, region)
+        {
+            IsPublic = true,
+            Population = MedicalFacilityRules.MinimumImperialPopulation
+        };
         region.RegionFactionMap[player.Id] = regionFaction;
         return region;
     }

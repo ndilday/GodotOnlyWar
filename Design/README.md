@@ -43,12 +43,16 @@ Generated Godot `.import` metadata does not belong here. Render scripts should o
 
 ## Current active designs
 
-The Alpha 0.8 event spine, Command workspace, faction-relationship/target-intelligence plans, and
-equipment/ammunition foundation have been promoted into `OnlyWar_TDD.md`; their implementation
-facts, verification boundaries, and remaining follow-ups are recorded there. Active design work
-currently retained here is:
+The Alpha 0.8 event spine, Command workspace, faction-relationship/target-intelligence plans,
+equipment/ammunition foundation, Chapter Muster and squad-lineage work, Recovery Operations and
+individual postings, and Planetary Operations workspace have been promoted into `OnlyWar_TDD.md`;
+their implementation facts and verification boundaries are recorded there. The three corresponding
+Active plans were deleted on 2026-08-21 under the promotion rule. Active design work currently retained
+here is:
 
 - `RangedCombatFollowUps.md` — narrow ranged-combat backlog described below.
+- `PlanetaryOperationsRework.md` — implemented 2026-08-25; retained temporarily as its phase-by-phase
+  acceptance record. The shipped architecture is summarized in `OnlyWar_TDD.md` §7.5.
 
 Audited 2026-08-16 against the code. The equipment/ammunition foundation is implemented and its
 active plan was removed under the promotion rule; the narrow pooled `WeaponSet` compatibility

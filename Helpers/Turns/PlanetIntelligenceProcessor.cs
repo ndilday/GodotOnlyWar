@@ -140,6 +140,19 @@ namespace OnlyWar.Helpers.Turns
                 }
                 if (visibleIntel <= 0 && playerBeliefs.Count == 0) continue;
 
+                // A hidden faction can present an intelligence-led ambush opportunity. The
+                // mission deliberately retains the hidden RegionFaction anchor because execution
+                // needs a concrete region target; beliefs without a current regional presence are
+                // not assignable operations.
+                foreach (RegionFaction hiddenFaction in region.RegionFactionMap.Values
+                    .Where(regionFaction => regionFaction?.PlanetFaction?.Faction != null
+                        && !regionFaction.PlanetFaction.Faction.IsPlayerFaction
+                        && !regionFaction.PlanetFaction.Faction.IsDefaultFaction
+                        && !regionFaction.IsPublic))
+                {
+                    HandleHiddenFactionIntelligence(hiddenFaction);
+                }
+
                 float beliefEvidence = playerBeliefs
                     .Select(belief => belief.Evidence)
                     .DefaultIfEmpty(0f)
@@ -225,14 +238,12 @@ namespace OnlyWar.Helpers.Turns
                 RegionFaction current = region.RegionFactionMap.GetValueOrDefault(belief.TargetFaction.Id);
                 if (current == null)
                 {
-                    int size = Math.Max(1, (int)Math.Ceiling(belief.Evidence));
-                    region.SpecialMissions.Add(new Mission(
-                        MissionType.Extermination,
-                        region,
-                        belief.TargetFaction,
-                        size));
+                    // Intelligence may know a hostile faction is active without having a current
+                    // regional presence. Keep that as intel only because this ambush needs a
+                    // concrete hidden RegionFaction anchor to execute against.
+                    continue;
                 }
-                else if (chance >= 2)
+                if (chance >= 2)
                 {
                     GenerateAssassinationMission(current);
                 }
@@ -248,6 +259,28 @@ namespace OnlyWar.Helpers.Turns
                 {
                     GenerateAmbushMission(current);
                 }
+            }
+        }
+
+        internal void HandleHiddenFactionIntelligence(RegionFaction enemyRegionFaction)
+        {
+            long regionPopulation = Math.Max(1, enemyRegionFaction.Region.Population);
+            float popRatio = Math.Clamp(
+                (float)enemyRegionFaction.Population / regionPopulation,
+                0.0001f,
+                0.9999f);
+            float zScore = GaussianCalculator.ApproximateInverseNormalCDF(popRatio);
+            zScore += enemyRegionFaction.Region.GetPlayerVisibleIntel() / 10.0f;
+            double chance = _session.Random.NextRandomZValue();
+            if (chance < zScore)
+            {
+                int size = Math.Max((int)(zScore - chance), 1);
+                Mission hiddenCellAmbush = new Mission(
+                    MissionType.Extermination,
+                    enemyRegionFaction,
+                    size);
+                enemyRegionFaction.Region.SpecialMissions.Add(hiddenCellAmbush);
+                _specialMissions.Add(hiddenCellAmbush);
             }
         }
 
@@ -279,24 +312,6 @@ namespace OnlyWar.Helpers.Turns
                 {
                     GenerateAmbushMission(enemyRegionFaction);
                 }
-            }
-        }
-
-        internal void HandleHiddenFactionIntelligence(RegionFaction enemyRegionFaction)
-        {
-            long regionPopulation = Math.Max(1, enemyRegionFaction.Region.Population);
-            float popRatio = Math.Clamp(
-                (float)enemyRegionFaction.Population / regionPopulation,
-                0.0001f,
-                0.9999f);
-            float zScore = GaussianCalculator.ApproximateInverseNormalCDF(popRatio);
-            zScore += enemyRegionFaction.Region.GetPlayerVisibleIntel() / 10.0f;
-            double chance = _session.Random.NextRandomZValue();
-            if (chance < zScore)
-            {
-                int size = Math.Max((int)(zScore - chance), 1);
-                enemyRegionFaction.Region.SpecialMissions.Add(
-                    new Mission(MissionType.Extermination, enemyRegionFaction, size));
             }
         }
 

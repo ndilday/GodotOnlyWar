@@ -17,6 +17,7 @@ public partial class ChapterFilterDialog : AcceptDialog
     [
         SoldierFilterField.Rank,
         SoldierFilterField.Honor,
+        SoldierFilterField.SergeantRecommended,
         SoldierFilterField.TimeInService,
         SoldierFilterField.TimeInRank,
         SoldierFilterField.TimeInSquad
@@ -26,6 +27,7 @@ public partial class ChapterFilterDialog : AcceptDialog
     {
         SoldierFilterField.Rank => "Rank / role",
         SoldierFilterField.Honor => "Honor",
+        SoldierFilterField.SergeantRecommended => "Sergeant recommended",
         SoldierFilterField.TimeInService => "Time in service",
         SoldierFilterField.TimeInRank => "Time in rank",
         SoldierFilterField.TimeInSquad => "Time in squad",
@@ -42,11 +44,13 @@ public partial class ChapterFilterDialog : AcceptDialog
 
     public override void _Ready()
     {
-        Title = "Filter Battle Brothers";
+        Theme = GD.Load<Theme>("res://Scenes/OnlyWarTheme.tres");
+        Title = "FILTER BATTLE BROTHERS";
         OkButtonText = "Apply";
         MinSize = DialogMinimumSize;
         Size = DialogMinimumSize;
         Unresizable = false;
+        ApplyDialogSurface();
 
         MarginContainer margin = new();
         margin.AddThemeConstantOverride("margin_left", 12);
@@ -59,6 +63,14 @@ public partial class ChapterFilterDialog : AcceptDialog
         VBoxContainer root = new();
         root.AddThemeConstantOverride("separation", 8);
         margin.AddChild(root);
+
+        Label titleLabel = new()
+        {
+            Text = "FILTER BATTLE BROTHERS"
+        };
+        titleLabel.AddThemeColorOverride("font_color", OnlyWarStyle.Gold);
+        titleLabel.AddThemeFontSizeOverride("font_size", 16);
+        root.AddChild(titleLabel);
 
         Label header = new()
         {
@@ -94,6 +106,63 @@ public partial class ChapterFilterDialog : AcceptDialog
         AddButton("Clear", true, "clear");
         CustomAction += OnCustomAction;
         Confirmed += OnConfirmed;
+
+        Panel dialogFrame = new()
+        {
+            MouseFilter = Control.MouseFilterEnum.Ignore
+        };
+        dialogFrame.AddThemeStyleboxOverride("panel", CreateDialogPanelStyle(
+            new Color(0.003f, 0.005f, 0.006f, 1f),
+            OnlyWarStyle.Gold,
+            2));
+        dialogFrame.SetAnchorsAndOffsetsPreset(Control.LayoutPreset.FullRect);
+        AddChild(dialogFrame);
+        MoveChild(dialogFrame, 0);
+    }
+
+    private void ApplyDialogSurface()
+    {
+        StyleBoxFlat surface = CreateDialogPanelStyle(
+            new Color(0.004f, 0.006f, 0.008f, 0.98f),
+            OnlyWarStyle.Gold,
+            2);
+        ApplyDialogSurfaceRecursive(this, surface);
+    }
+
+    private static void ApplyDialogSurfaceRecursive(Node node, StyleBoxFlat surface)
+    {
+        if (node is Panel panel)
+        {
+            panel.AddThemeStyleboxOverride("panel", (StyleBoxFlat)surface.Duplicate());
+        }
+        else if (node is PanelContainer panelContainer)
+        {
+            panelContainer.AddThemeStyleboxOverride("panel", (StyleBoxFlat)surface.Duplicate());
+        }
+
+        foreach (Node child in node.GetChildren())
+        {
+            ApplyDialogSurfaceRecursive(child, surface);
+        }
+    }
+
+    private static StyleBoxFlat CreateDialogPanelStyle(Color background, Color border, int borderWidth)
+    {
+        return new StyleBoxFlat
+        {
+            BgColor = background,
+            BorderColor = border,
+            BorderWidthLeft = borderWidth,
+            BorderWidthTop = borderWidth,
+            BorderWidthRight = borderWidth,
+            BorderWidthBottom = borderWidth,
+            CornerRadiusTopLeft = 2,
+            CornerRadiusTopRight = 2,
+            CornerRadiusBottomLeft = 2,
+            CornerRadiusBottomRight = 2,
+            ShadowColor = new Color(0, 0, 0, 0.72f),
+            ShadowSize = 8
+        };
     }
 
     // Refreshes the option lists from the current scope and rebuilds the rows to match the
@@ -249,6 +318,7 @@ public partial class ChapterFilterDialog : AcceptDialog
             {
                 SoldierFilterField.Rank => RankOps,
                 SoldierFilterField.Honor => HonorOps,
+                SoldierFilterField.SergeantRecommended => EqualityOps,
                 _ => DurationOps
             };
             _operatorOption.Clear();
@@ -283,6 +353,12 @@ public partial class ChapterFilterDialog : AcceptDialog
             {
                 SizeFlagsHorizontal = Control.SizeFlags.ExpandFill
             };
+            if (field == SoldierFilterField.SergeantRecommended)
+            {
+                _valueOption.AddItem("Recommended");
+                _valueSlot.AddChild(_valueOption);
+                return;
+            }
             int optionCount = field == SoldierFilterField.Rank ? _roles.Count : _honors.Count;
             if (optionCount == 0)
             {
@@ -373,7 +449,9 @@ public partial class ChapterFilterDialog : AcceptDialog
                 Operator = op,
                 TextValue = field == SoldierFilterField.Honor
                     ? _honors[_valueOption.Selected].Value
-                    : _valueOption.GetItemText(_valueOption.Selected)
+                    : field == SoldierFilterField.SergeantRecommended
+                        ? "true"
+                        : _valueOption.GetItemText(_valueOption.Selected)
             };
         }
     }

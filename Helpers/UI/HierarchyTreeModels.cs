@@ -21,6 +21,7 @@ namespace OnlyWar.Helpers.UI
         public Color? BadgeColor { get; }
         public int IconMaxWidth { get; }
         public int RowHeight { get; }
+        public bool CollapsedByDefault { get; }
 
         public HierarchyTreeItem(
             string key,
@@ -33,7 +34,8 @@ namespace OnlyWar.Helpers.UI
             bool isSelected = false,
             Color? badgeColor = null,
             int iconMaxWidth = 0,
-            int rowHeight = 0)
+            int rowHeight = 0,
+            bool collapsedByDefault = false)
         {
             Key = key ?? throw new ArgumentNullException(nameof(key));
             Text = text ?? "";
@@ -46,6 +48,7 @@ namespace OnlyWar.Helpers.UI
             BadgeColor = badgeColor;
             IconMaxWidth = iconMaxWidth;
             RowHeight = rowHeight;
+            CollapsedByDefault = collapsedByDefault;
         }
     }
 }

@@ -27,10 +27,20 @@ public partial class ApothecariumScreenView : MainScreenView
     private Control _vaultPanel;
     private Control _rollupPanel;
     private Control _soldierPanel;
+    private HBoxContainer _standardRoot;
+    private RecoveryOperationsView _recoveryView;
 
     public event EventHandler VaultButtonPressed;
     public event EventHandler<ApothecariumSelection> TreeSelectionChanged;
     public event EventHandler<ReplacementOption> ReplacementOptionPressed;
+    public event EventHandler RecoveryOperationsPressed;
+    public event EventHandler RecoveryBackPressed;
+    public event EventHandler<int> RecoveryPatientSelected;
+    public event EventHandler<RecoverySortRequest> RecoverySortChanged;
+    public event EventHandler<OnlyWar.Models.CampaignLocation> RecoveryDestinationSelected;
+    public event EventHandler<RecoveryMovementChoice> RecoveryMovementSelected;
+    public event EventHandler<ReplacementOption> RecoveryTreatmentSelected;
+    public event EventHandler RecoveryConfirmPressed;
 
     public override void _Ready()
     {
@@ -55,6 +65,19 @@ public partial class ApothecariumScreenView : MainScreenView
     public void FocusSoldier(int soldierId)
     {
         _unitTree?.SetSelectedKeys([$"{(int)ApothecariumSelectionKind.Soldier}:{soldierId}"]);
+    }
+
+    public void ShowRecoveryOperations(RecoveryOperationsViewModel model)
+    {
+        _standardRoot.Visible = false;
+        _recoveryView.Visible = true;
+        _recoveryView.SetModel(model);
+    }
+
+    public void HideRecoveryOperations()
+    {
+        _standardRoot.Visible = true;
+        _recoveryView.Visible = false;
     }
 
     public void ShowVault(GeneSeedVaultSummary summary)
@@ -182,9 +205,25 @@ public partial class ApothecariumScreenView : MainScreenView
         };
         root.AddThemeConstantOverride("separation", 12);
         AddChild(root);
+        _standardRoot = root;
 
         root.AddChild(BuildLeftPanel());
         root.AddChild(BuildRightPanel());
+
+        _recoveryView = new RecoveryOperationsView
+        {
+            AnchorRight = 1,
+            AnchorBottom = 1,
+            Visible = false
+        };
+        _recoveryView.BackPressed += (_, _) => RecoveryBackPressed?.Invoke(this, EventArgs.Empty);
+        _recoveryView.PatientSelected += (_, id) => RecoveryPatientSelected?.Invoke(this, id);
+        _recoveryView.SortChanged += (_, request) => RecoverySortChanged?.Invoke(this, request);
+        _recoveryView.DestinationSelected += (_, location) => RecoveryDestinationSelected?.Invoke(this, location);
+        _recoveryView.MovementSelected += (_, movement) => RecoveryMovementSelected?.Invoke(this, movement);
+        _recoveryView.TreatmentSelected += (_, option) => RecoveryTreatmentSelected?.Invoke(this, option);
+        _recoveryView.ConfirmPressed += (_, _) => RecoveryConfirmPressed?.Invoke(this, EventArgs.Empty);
+        AddChild(_recoveryView);
     }
 
     private Control BuildLeftPanel()
@@ -210,6 +249,17 @@ public partial class ApothecariumScreenView : MainScreenView
         IconAtlas.Apply(_vaultButton, "medical");
         _vaultButton.Pressed += () => VaultButtonPressed?.Invoke(this, EventArgs.Empty);
         stack.AddChild(_vaultButton);
+
+        Button recoveryButton = new()
+        {
+            Text = "Recovery Operations\ncasualties, care pathways, reunion",
+            CustomMinimumSize = new Vector2(0, 58),
+            Alignment = HorizontalAlignment.Left,
+            MouseDefaultCursorShape = CursorShape.PointingHand
+        };
+        IconAtlas.Apply(recoveryButton, "medical_detachment");
+        recoveryButton.Pressed += () => RecoveryOperationsPressed?.Invoke(this, EventArgs.Empty);
+        stack.AddChild(recoveryButton);
 
         HBoxContainer filterRow = new();
         filterRow.AddThemeConstantOverride("separation", 6);

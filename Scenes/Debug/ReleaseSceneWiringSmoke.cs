@@ -3,9 +3,12 @@ using OnlyWar.Helpers.Settings;
 using OnlyWar.Helpers.Turns;
 using OnlyWar.Helpers.UI;
 using OnlyWar.Helpers.UI.SystemMenu;
+using OnlyWar.Models;
+using OnlyWar.Models.Planets;
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Threading.Tasks;
 
 /// <summary>
@@ -99,6 +102,24 @@ public partial class ReleaseSceneWiringSmoke : Node
 
         CloseOpeningBriefingIfPresent(mainGame);
         await NextFrame();
+
+        VBoxContainer dossierSection = RequireNode<VBoxContainer>(systemInspector,
+            "Panel/MarginContainer/ScrollContainer/VBoxContainer/DossierSection");
+        VBoxContainer dossierContent = RequireNode<VBoxContainer>(systemInspector,
+            "Panel/MarginContainer/ScrollContainer/VBoxContainer/DossierSection/DossierContent");
+        Require(dossierSection?.Visible == true && dossierContent?.GetChildCount() > 0,
+            "Selecting the initial planet did not show its world dossier.");
+        Planet selectedPlanet = GameDataSingleton.Instance.Sector.Planets.Values.FirstOrDefault();
+        if (selectedPlanet != null)
+        {
+            systemInspector.DisplayFleetContext(selectedPlanet);
+            Require(!dossierSection.Visible,
+                "Selecting a non-planet map object left the world dossier visible.");
+            systemInspector.DisplayEmptyState();
+            Require(!dossierSection.Visible && dossierContent.GetChildCount() == 0,
+                "Clearing the map selection left dossier content visible.");
+            systemInspector.DisplayPlanet(selectedPlanet);
+        }
 
         Button systemOptionsButton = RequireNode<Button>(mainGame,
             "UILayer/TopMenu/Panel/MarginContainer/CommandRow/RightSection/SystemOptionsButton");
@@ -415,6 +436,8 @@ public partial class ReleaseSceneWiringSmoke : Node
                 ["Panel/Margin/Content/Header/CloseButton", "Panel/Margin/Content/Footer/PrimaryButton"]),
             ("res://Scenes/MainGameScreen/end_turn_preflight_dialog.tscn",
                 ["DialogView/PreflightPanel/ContentMargin/Layout/ActionRow/ProceedButton"]),
+            ("res://Scenes/PlanetaryOperationsScreen/planetary_operations_screen.tscn",
+                ["DialogView/PlanetaryOperationsScreenView"]),
             ("res://Scenes/SystemMenu/destructive_navigation_dialog.tscn",
                 ["Panel/Margin/Content/Buttons/CancelButton"]),
             ("res://Scenes/SystemMenu/diagnostics_export_dialog.tscn",
@@ -434,6 +457,17 @@ public partial class ReleaseSceneWiringSmoke : Node
             Node instance = packed.Instantiate();
             AddChild(instance);
             await NextFrame();
+            if (path.EndsWith("planetary_operations_screen.tscn"))
+            {
+                PlanetaryOperationsScreenView operationsView =
+                    FindDescendant<PlanetaryOperationsScreenView>(instance);
+                Require(operationsView != null,
+                    "Planetary Operations did not instantiate its view.");
+                Require(FindDescendant<PlanetRegionMapView>(instance) != null,
+                    "Planetary Operations did not mount its one shared map view.");
+                Require(operationsView?.MapInstanceId > 0,
+                    "Planetary Operations shared map has no persistent instance id.");
+            }
             foreach (string requiredNode in requiredNodes)
             {
                 Require(instance.GetNodeOrNull(requiredNode) != null,

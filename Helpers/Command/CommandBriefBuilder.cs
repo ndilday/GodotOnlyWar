@@ -79,9 +79,9 @@ namespace OnlyWar.Helpers.Command
                 fact.Kind switch
                 {
                     CommandAttentionKind.IdleDeployableSquad =>
-                        (CommandBriefCategory.RequiresOrders, CommandBriefPriority.Actionable, "squad", "Review Squad"),
+                        (CommandBriefCategory.RequiresOrders, CommandBriefPriority.Actionable, "tactical", "Review Squad"),
                     CommandAttentionKind.LeaderlessSquad =>
-                        (CommandBriefCategory.RequiresOrders, CommandBriefPriority.Actionable, "squad", "Review Squad"),
+                        (CommandBriefCategory.RequiresOrders, CommandBriefPriority.Actionable, "tactical", "Review Squad"),
                     CommandAttentionKind.ActionableTaskForce =>
                         (CommandBriefCategory.RequiresOrders, CommandBriefPriority.Actionable, "fleet", "Open Classis"),
                     CommandAttentionKind.SpecialMissionOpportunity =>
@@ -89,13 +89,13 @@ namespace OnlyWar.Helpers.Command
                             fact.DeadlineWeek.HasValue
                                 ? CommandBriefPriority.Critical
                                 : CommandBriefPriority.Actionable,
-                            "mission", "View Opportunity"),
+                            "mission_recon", "View Opportunity"),
                     CommandAttentionKind.RecruitmentDecision =>
                         (CommandBriefCategory.RecoveryAndReinforcement,
                             fact.StableKey.EndsWith("/funding", StringComparison.Ordinal)
                                 ? CommandBriefPriority.Critical
                                 : CommandBriefPriority.Actionable,
-                            "recruitment", "Open Recruitment"),
+                            "training_unit", "Open Recruitment"),
                     _ => (CommandBriefCategory.StrategicSituation, CommandBriefPriority.Monitor, "archive", "Review")
                 };
 
@@ -145,7 +145,7 @@ namespace OnlyWar.Helpers.Command
                     $"{squadCount} assigned squad{(squadCount == 1 ? string.Empty : "s")} "
                         + $"are committed at {location}. The operation's result will be known when the turn resolves.",
                     "Active order",
-                    "mission",
+                    "order_active",
                     false,
                     orderTarget,
                     "Review Operation",
@@ -368,7 +368,7 @@ namespace OnlyWar.Helpers.Command
                         + $"{(program.Aspirants.Count == 1 ? " is" : "s are")} in the training pipeline. "
                         + "Placement and procedure decisions remain in the Brief when they become actionable.",
                     "Program active",
-                    "recruitment",
+                    "training_unit",
                     false,
                     new CampaignNavigationTarget(
                         CampaignNavigationTargetKind.Recruitment,
@@ -562,7 +562,7 @@ namespace OnlyWar.Helpers.Command
                     ? "A squad is committed to an operation on the promised world."
                     : "Assign a mission or defensive commitment so the Chapter's first turn has a clear purpose.",
                 hasRelevantOrder ? "Complete" : "Founding checklist",
-                "mission",
+                "mission_recon",
                 !hasRelevantOrder,
                 worldTarget with
                 {

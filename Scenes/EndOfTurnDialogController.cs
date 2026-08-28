@@ -230,10 +230,11 @@ public partial class EndOfTurnDialogController : DialogController
         {
             Region region = mission.RegionFaction?.Region;
             string location = region == null ? "Unknown location" : $"{region.Name}, {region.Planet?.Name}";
+            string missionName = SpecialMissionPresentation.GetMissionTypeLabel(mission.MissionType);
             entries.Add(new EndOfTurnReportEntry(
                 "New Opportunity",
-                $"{mission.MissionType} in {location}",
-                $"Intelligence has identified a {mission.MissionType} opportunity.",
+                $"{missionName} in {location}",
+                $"Intelligence has identified a {missionName} opportunity.",
                 false,
                 null));
         }

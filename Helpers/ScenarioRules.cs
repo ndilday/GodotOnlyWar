@@ -3,8 +3,7 @@ namespace OnlyWar.Helpers
     // Centralized tunables for the Opening Scenario ("Promised World" — Design/Reference/OpeningScenario.md
     // §8). These are the load-bearing balance numbers that decide whether the first objective is
     // tense-and-winnable; they live here (mirroring MedicalProcedureRules / GeneseedRules) so they
-    // are tuned in one place rather than scattered as literals across the builder. The values below
-    // are a starting point flagged for playtesting (design step 7), not final.
+    // are tuned in one place rather than scattered as literals across the builder.
     public static class ScenarioRules
     {
         // The promised world is constrained by *type* rather than by a population floor. There is no

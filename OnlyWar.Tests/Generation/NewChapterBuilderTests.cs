@@ -98,6 +98,22 @@ public class NewChapterBuilderTests
     }
 
     [Fact]
+    public void CreateChapter_NamesScoutSquadsAfterTheirAssignedSergeant()
+    {
+        PlayerForce chapter = NewChapterBuilder.CreateChapter(
+            _data, CreateTrainingService(), new Date(39, 496, 1), new Date(39, 500, 1), "Crimson Sentinels");
+
+        List<Squad> scoutSquads = chapter.Army.OrderOfBattle.GetAllSquads()
+            .Where(squad => squad.SquadTemplate == _data.ChapterTemplates.ScoutSquad)
+            .Where(squad => squad.SquadLeader != null)
+            .ToList();
+
+        Assert.NotEmpty(scoutSquads);
+        Assert.All(scoutSquads, squad =>
+            Assert.Equal(SquadDesignationFormatter.FormatScoutSquad(squad), squad.Name));
+    }
+
+    [Fact]
     public void CreateChapter_VeteranLineSquadsAreLedByVeteranSergeantsNotCaptains()
     {
         PlayerForce chapter = NewChapterBuilder.CreateChapter(

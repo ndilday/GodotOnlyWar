@@ -76,6 +76,7 @@ namespace OnlyWar.Helpers
             playerForce.HomeWorldPlanetId = gameState.HomeWorldPlanetId;
             playerForce.RecruitmentProgram =
                 RecruitmentSaveMapper.FromSaveData(gameState.Recruitment);
+            ValidateSquadLineageInvariants(playerForce);
             playerForce.LastTurnReportSnapshot = gameState.LastTurnReportSnapshot;
             playerForce.RestoreWorldControlEpisodes(gameState.WorldControlEpisodes);
             foreach (var historyDay in gameState.History ?? new Dictionary<Date, List<EventHistory>>())
@@ -117,6 +118,50 @@ namespace OnlyWar.Helpers
                 sector.AddNewOrder(order);
             }
             return sector;
+        }
+
+        private static void ValidateSquadLineageInvariants(PlayerForce force)
+        {
+            force.Army.PopulateSquadMap();
+            List<OnlyWar.Models.Squads.Squad> squads = force.Army.OrderOfBattle
+                .GetAllSquads().ToList();
+            foreach (OnlyWar.Models.Squads.Squad squad in squads.Where(squad => squad.Members.Count == 0))
+            {
+                if (squad.CurrentOrders != null || squad.BoardedLocation != null || squad.CurrentRegion != null)
+                {
+                    throw new InvalidOperationException(
+                        $"Save contains empty formation {squad.Id} with an active deployment.");
+                }
+            }
+            foreach (var company in squads
+                .Where(SquadDesignationFormatter.IsNumberedLineFormation)
+                .GroupBy(squad => squad.ParentUnit))
+            {
+                if (company.Any(squad => !squad.FormationOrdinal.HasValue))
+                {
+                    throw new InvalidOperationException(
+                        $"Save contains a numbered line formation without an ordinal in {company.Key?.Name}.");
+                }
+                if (company.GroupBy(squad => squad.FormationOrdinal.Value).Any(group => group.Count() > 1))
+                {
+                    throw new InvalidOperationException(
+                        $"Save contains duplicate formation ordinals in {company.Key?.Name}.");
+                }
+                foreach (var squad in company)
+                {
+                    string canonical = SquadDesignationFormatter.Format(squad);
+                    if (!string.Equals(squad.Name, canonical, StringComparison.Ordinal))
+                    {
+                        throw new InvalidOperationException(
+                            $"Save contains non-canonical designation '{squad.Name}' for formation {squad.Id}; expected '{canonical}'.");
+                    }
+                }
+            }
+            HashSet<int> retainedIds = squads.Select(squad => squad.Id).ToHashSet();
+            if (!retainedIds.SetEquals(force.Army.SquadMap.Keys))
+            {
+                throw new InvalidOperationException("Save squad map does not match retained Chapter formations.");
+            }
         }
 
         private static void EnsureCompatibilityFoundingEvent(

@@ -29,7 +29,7 @@ public static class DossierCard
     // right-hand panel: uppercase muted category title, accent-colored subtitle, muted label/value
     // rows, and an optional accent strength bar. An empty subtitle is skipped so category-only cards
     // (e.g. "Region") don't leave a blank line.
-    public static Control Create(DossierCardData card)
+    public static Control Create(DossierCardData card, float extraBottomSpacing = 0)
     {
         PanelContainer cardPanel = new() { SizeFlagsHorizontal = Control.SizeFlags.ExpandFill };
         OnlyWarStyle.ApplyTintedListRow(cardPanel, false, card.AccentColor);
@@ -90,7 +90,11 @@ public static class DossierCard
                 TooltipText = row.Item2
             };
             value.AddThemeFontSizeOverride("font_size", 12);
-            value.AddThemeColorOverride("font_color", OnlyWarStyle.BodyText);
+            value.AddThemeColorOverride(
+                "font_color",
+                row.Item1 == "Intelligence"
+                    ? OnlyWarStyle.GetIntelligenceColor(row.Item2)
+                    : OnlyWarStyle.BodyText);
             rowBox.AddChild(label);
             rowBox.AddChild(value);
             cardStack.AddChild(rowBox);
@@ -110,6 +114,9 @@ public static class DossierCard
             bar.AddThemeStyleboxOverride("fill", fill);
             cardStack.AddChild(bar);
         }
+
+        if (extraBottomSpacing > 0)
+            cardStack.AddChild(new Control { CustomMinimumSize = new Vector2(0, extraBottomSpacing) });
 
         return cardPanel;
     }

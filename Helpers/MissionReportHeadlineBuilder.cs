@@ -1,4 +1,5 @@
 using OnlyWar.Models.Missions;
+using OnlyWar.Helpers.Missions;
 using System.Collections.Generic;
 using System.Linq;
 
@@ -17,7 +18,7 @@ namespace OnlyWar.Helpers
             string regionName,
             string planetName)
         {
-            string missionName = missionType.ToString();
+            string missionName = SpecialMissionPresentation.GetMissionTypeLabel(missionType);
             string region = ValueOrFallback(regionName, "Unknown region");
             string planet = ValueOrFallback(planetName, "Unknown planet");
             string location = $"{region}, {planet}";

@@ -12,9 +12,18 @@ public partial class ApothecariumScreenController : MainScreenController
 {
     private readonly ApothecariumMedicalRecordBuilder _recordBuilder = new();
     private readonly MedicalProcedureService _procedureService = new();
+    private readonly RecoveryOperationsViewModelBuilder _recoveryBuilder = new();
+    private readonly RecoveryPlanService _recoveryPlans = new();
     private ApothecariumScreenView _apothecariumView;
     private ApothecariumSelectionKind _selectedKind = ApothecariumSelectionKind.Vault;
     private int? _selectedId;
+    private bool _showRecoveryOperations;
+    private RecoverySortMode _recoverySort = RecoverySortMode.Severity;
+    private bool _recoveryAscending;
+    private CampaignLocation _recoveryDestination;
+    private RecoveryMovementChoice _recoveryMovement;
+    private int? _recoveryHitLocationId;
+    private MedicalProcedureType? _recoveryProcedureType;
 
     public event EventHandler CampaignChanged;
 
@@ -25,6 +34,14 @@ public partial class ApothecariumScreenController : MainScreenController
         _apothecariumView.VaultButtonPressed += OnVaultButtonPressed;
         _apothecariumView.TreeSelectionChanged += OnTreeSelectionChanged;
         _apothecariumView.ReplacementOptionPressed += OnReplacementOptionPressed;
+        _apothecariumView.RecoveryOperationsPressed += OnRecoveryOperationsPressed;
+        _apothecariumView.RecoveryBackPressed += OnRecoveryBackPressed;
+        _apothecariumView.RecoveryPatientSelected += OnRecoveryPatientSelected;
+        _apothecariumView.RecoverySortChanged += OnRecoverySortChanged;
+        _apothecariumView.RecoveryDestinationSelected += OnRecoveryDestinationSelected;
+        _apothecariumView.RecoveryMovementSelected += OnRecoveryMovementSelected;
+        _apothecariumView.RecoveryTreatmentSelected += OnRecoveryTreatmentSelected;
+        _apothecariumView.RecoveryConfirmPressed += OnRecoveryConfirmPressed;
         Render();
     }
 
@@ -35,6 +52,14 @@ public partial class ApothecariumScreenController : MainScreenController
             _apothecariumView.VaultButtonPressed -= OnVaultButtonPressed;
             _apothecariumView.TreeSelectionChanged -= OnTreeSelectionChanged;
             _apothecariumView.ReplacementOptionPressed -= OnReplacementOptionPressed;
+            _apothecariumView.RecoveryOperationsPressed -= OnRecoveryOperationsPressed;
+            _apothecariumView.RecoveryBackPressed -= OnRecoveryBackPressed;
+            _apothecariumView.RecoveryPatientSelected -= OnRecoveryPatientSelected;
+            _apothecariumView.RecoverySortChanged -= OnRecoverySortChanged;
+            _apothecariumView.RecoveryDestinationSelected -= OnRecoveryDestinationSelected;
+            _apothecariumView.RecoveryMovementSelected -= OnRecoveryMovementSelected;
+            _apothecariumView.RecoveryTreatmentSelected -= OnRecoveryTreatmentSelected;
+            _apothecariumView.RecoveryConfirmPressed -= OnRecoveryConfirmPressed;
         }
     }
 
@@ -68,13 +93,115 @@ public partial class ApothecariumScreenController : MainScreenController
         {
             return;
         }
-        if (_procedureService.TryAssign(force, soldier, option))
+        _selectedKind = ApothecariumSelectionKind.Soldier;
+        _selectedId = soldier.Id;
+        _recoveryHitLocationId = option.HitLocationId;
+        _recoveryProcedureType = option.Type;
+        _showRecoveryOperations = true;
+        RenderRecoveryOperations();
+    }
+
+    private void OnRecoveryOperationsPressed(object sender, EventArgs e)
+    {
+        _showRecoveryOperations = true;
+        RenderRecoveryOperations();
+    }
+
+    private void OnRecoveryBackPressed(object sender, EventArgs e)
+    {
+        _showRecoveryOperations = false;
+        _apothecariumView.HideRecoveryOperations();
+        Render();
+    }
+
+    private void OnRecoveryPatientSelected(object sender, int soldierId)
+    {
+        _selectedKind = ApothecariumSelectionKind.Soldier;
+        _selectedId = soldierId;
+        _recoveryDestination = null;
+        _recoveryMovement = RecoveryMovementChoice.None;
+        _recoveryHitLocationId = null;
+        _recoveryProcedureType = null;
+        RenderRecoveryOperations();
+    }
+
+    private void OnRecoverySortChanged(object sender, RecoverySortRequest request)
+    {
+        _recoverySort = request.Mode;
+        _recoveryAscending = request.Ascending;
+        RenderRecoveryOperations();
+    }
+
+    private void OnRecoveryDestinationSelected(object sender, CampaignLocation location)
+    {
+        _recoveryDestination = location;
+        RenderRecoveryOperations();
+    }
+
+    private void OnRecoveryMovementSelected(object sender, RecoveryMovementChoice movement)
+    {
+        _recoveryMovement = movement;
+        RenderRecoveryOperations();
+    }
+
+    private void OnRecoveryTreatmentSelected(object sender, ReplacementOption option)
+    {
+        _recoveryHitLocationId = option?.HitLocationId;
+        _recoveryProcedureType = option?.Type;
+        _recoveryDestination = null;
+        RenderRecoveryOperations();
+    }
+
+    private void OnRecoveryConfirmPressed(object sender, EventArgs e)
+    {
+        PlayerForce force = GameDataSingleton.Instance?.Sector?.PlayerForce;
+        PlayerSoldier patient = force?.Army?.PlayerSoldierMap?.GetValueOrDefault(_selectedId ?? -1);
+        if (patient?.IndividualPosting?.Kind == IndividualPostingKind.AwaitingReunion)
+        {
+            RecoveryPlanCommitResult reunion = _recoveryPlans.Rejoin(patient);
+            if (reunion.Succeeded) CampaignChanged?.Invoke(this, EventArgs.Empty);
+            RenderRecoveryOperations();
+            return;
+        }
+        ReplacementOption option = patient == null
+            ? null
+            : _recordBuilder.BuildSoldierSummary(patient, force).ReplacementOptions.FirstOrDefault(candidate =>
+                candidate.HitLocationId == _recoveryHitLocationId
+                && candidate.Type == _recoveryProcedureType)
+                ?? _recordBuilder.BuildSoldierSummary(patient, force).ReplacementOptions.FirstOrDefault();
+        RecoveryPlanCommitResult result = _recoveryPlans.Commit(
+            force,
+            patient,
+            option,
+            _recoveryDestination,
+            _recoveryMovement,
+            GameDataSingleton.Instance?.Date);
+        if (result.Succeeded)
         {
             CampaignChanged?.Invoke(this, EventArgs.Empty);
-            // The procedure now holds the location; refresh so it drops out of the offered
-            // options, the Requisition spend is reflected, and the soldier reads as in care.
-            Render();
+            _recoveryDestination = null;
+            _recoveryMovement = RecoveryMovementChoice.None;
         }
+        RenderRecoveryOperations();
+    }
+
+    private void RenderRecoveryOperations()
+    {
+        var data = GameDataSingleton.Instance;
+        PlayerForce force = data?.Sector?.PlayerForce;
+        if (force == null) return;
+        RecoveryOperationsViewModel model = _recoveryBuilder.Build(
+            force,
+            data.Sector.Planets.Values,
+            _selectedId,
+            _recoverySort,
+            _recoveryAscending,
+            _recoveryDestination,
+            _recoveryMovement,
+            _recoveryHitLocationId,
+            _recoveryProcedureType);
+        if (_selectedId == null && model.Patient != null) _selectedId = model.Patient.SoldierId;
+        _apothecariumView.ShowRecoveryOperations(model);
     }
 
     /// <summary>
@@ -108,6 +235,12 @@ public partial class ApothecariumScreenController : MainScreenController
             return;
         }
 
+        if (_showRecoveryOperations)
+        {
+            RenderRecoveryOperations();
+            return;
+        }
+        _apothecariumView.HideRecoveryOperations();
         _apothecariumView.SetVaultSelected(_selectedKind == ApothecariumSelectionKind.Vault);
         _apothecariumView.SetTree(_recordBuilder.BuildTree(
             chapter, _selectedKind, _selectedId, woundedOnly: true, force: force));

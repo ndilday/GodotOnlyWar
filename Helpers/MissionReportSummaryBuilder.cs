@@ -142,10 +142,10 @@ namespace OnlyWar.Helpers
                 case MissionType.LastStand:
                 case MissionType.Training:
                 case MissionType.Construction:
-                    return $"{subject} carried out {classification.MissionType} operations in {location}.";
+                    return $"{subject} carried out {DisplayMissionType(classification.MissionType)} operations in {location}.";
 
                 default:
-                    return $"{subject} conducted a {classification.MissionType} in {location}.";
+                    return $"{subject} conducted a {DisplayMissionType(classification.MissionType)} in {location}.";
             }
         }
 
@@ -288,8 +288,11 @@ namespace OnlyWar.Helpers
                     ? $"{subject} found no viable target in {location} and returned to base."
                     : $"{subject} found no viable target in {location}.";
             }
-            return $"{subject} conducted a {classification.MissionType} in {location} without confirmed enemy casualties.";
+            return $"{subject} conducted a {DisplayMissionType(classification.MissionType)} in {location} without confirmed enemy casualties.";
         }
+
+        private static string DisplayMissionType(MissionType missionType) =>
+            SpecialMissionPresentation.GetMissionTypeLabel(missionType);
 
         // An ambush that was detected still ends in a battle, and the plain combat summary above
         // reported that battle as though the ambush had gone to plan - the player had no way to tell

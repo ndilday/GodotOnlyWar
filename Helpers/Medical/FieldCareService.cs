@@ -173,7 +173,7 @@ namespace OnlyWar.Helpers.Medical
             if (order == null) return [];
             IEnumerable<PlayerSoldier> fromSquads = (order.AssignedSquads ?? [])
                 .Where(squad => squad != null)
-                .SelectMany(squad => squad.Members)
+                .SelectMany(SoldierPresenceService.PresentMembers)
                 .OfType<PlayerSoldier>();
             return fromSquads
                 .Concat(order.AttachedSoldiers ?? [])
@@ -210,7 +210,8 @@ namespace OnlyWar.Helpers.Medical
         /// partition with one expression, as SpecialistAttachment.md §8 predicted it would.
         /// </summary>
         public static bool IsOnMission(PlayerSoldier soldier) =>
-            soldier?.AttachedOrder != null || soldier?.AssignedSquad?.CurrentOrders != null;
+            soldier?.IndividualPosting?.Kind == IndividualPostingKind.OperationalAttachment
+            || (soldier?.IndividualPosting == null && soldier?.AssignedSquad?.CurrentOrders != null);
 
         /// <summary>
         /// Where this brother is, for co-location purposes. Routed through
@@ -225,12 +226,9 @@ namespace OnlyWar.Helpers.Medical
             // Aboard ship beats a region: a boarded squad's CurrentRegion may still be set from
             // wherever it embarked, which is the same precedence MedicalProcedureService.SameLocation
             // applies.
-            if (soldier.AttachedOrder == null && soldier.AssignedSquad?.BoardedLocation != null)
-            {
-                return $"ship:{soldier.AssignedSquad.BoardedLocation.Id}";
-            }
-            Models.Planets.Region region = soldier.EffectiveRegion;
-            return region == null ? null : $"region:{region.Id}";
+            Models.CampaignLocation location = CampaignLocationService.ForSoldier(soldier);
+            if (location?.Ship != null) return $"ship:{location.Ship.Id}";
+            return location?.Region == null ? null : $"region:{location.Region.Id}";
         }
 
         /// <summary>

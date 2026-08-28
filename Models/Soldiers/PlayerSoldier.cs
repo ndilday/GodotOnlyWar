@@ -149,7 +149,30 @@ namespace OnlyWar.Models.Soldiers
         /// Set only through Helpers/Orders/OrderAttachment, which owns both halves of the
         /// pointer pair (Order.AttachedSoldiers is the other).
         /// </summary>
-        public Orders.Order AttachedOrder { get; set; }
+        public IndividualPosting IndividualPosting { get; internal set; }
+
+        // Compatibility projection for consumers still phrased in terms of an order attachment.
+        // IndividualPosting is the source of truth and this property is intentionally read-only.
+        public Orders.Order AttachedOrder
+        {
+            get => IndividualPosting?.Order;
+            set
+            {
+                // Compatibility setter for older tests and migration-only callers. New feature
+                // code must use IndividualPostingService so projections and capacity stay paired.
+                if (value == null)
+                {
+                    IndividualPosting = null;
+                    return;
+                }
+                IndividualPosting = new IndividualPosting(
+                    IndividualPostingKind.OperationalAttachment,
+                    CampaignLocation.Landed(value.Mission?.RegionFaction?.Region)
+                        ?? Helpers.CampaignLocationService.ForSquad(AssignedSquad),
+                    GameDataSingleton.Instance?.Date ?? new Date(1),
+                    value);
+            }
+        }
 
         /// <summary>
         /// Where this brother physically is for campaign purposes: with the operation he is
@@ -157,8 +180,10 @@ namespace OnlyWar.Models.Soldiers
         /// Apothecary's home squad may sit aboard ship while he is forward, so anything asking
         /// "where is this man" must go through here rather than AssignedSquad.CurrentRegion.
         /// </summary>
-        public Planets.Region EffectiveRegion =>
-            AttachedOrder?.Mission?.RegionFaction?.Region ?? AssignedSquad?.CurrentRegion;
+        public CampaignLocation EffectiveLocation =>
+            Helpers.CampaignLocationService.ForSoldier(this);
+
+        public Planets.Region EffectiveRegion => EffectiveLocation?.Region;
 
         public void AddSkillPoints(BaseSkill skill, float points)
         {

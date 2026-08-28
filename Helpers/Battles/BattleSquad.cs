@@ -171,7 +171,8 @@ namespace OnlyWar.Helpers.Battles
             Id = squad.Id;
             Name = squad.Name;
             Squad = squad;
-            Soldiers = squad.Members.Select(s => new BattleSoldier(s, this)).ToList();
+            Soldiers = SoldierPresenceService.PresentMembers(squad)
+                .Select(s => new BattleSoldier(s, this)).ToList();
             _missionStartingAbleSoldierCount = AbleSoldiers.Count;
             IsPlayerSquad = isPlayerSquad;
             IsInMelee = false;

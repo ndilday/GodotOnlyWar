@@ -46,7 +46,12 @@ namespace OnlyWar.Helpers.Battles.Aftermath
             // Only his own death ends an attachment; releasing it here keeps a dead man out
             // of an order's AttachedSoldiers (and out of the OrderSoldier save table).
             Orders.OrderAttachment.Detach(soldier);
-            soldier.AssignedSquad?.RemoveSquadMember(soldier);
+            Squad formerSquad = soldier.AssignedSquad;
+            formerSquad?.RemoveSquadMember(soldier);
+            if (formerSquad?.Members.Count == 0)
+            {
+                new SquadLifecycleService(playerForce).HandleEmptySquad(formerSquad);
+            }
             soldier.AssignedSquad = null;
             playerForce.Army.PlayerSoldierMap.Remove(soldier.Id);
             playerForce.Army.FallenBrothers[soldier.Id] = soldier;

@@ -18,7 +18,9 @@ namespace OnlyWar.Helpers.Database.GameState
         // 10: itemized equipment role/personal loadout tables and mission equipment foundations.
         //     This is a deliberate save break: v9 and older saves are rejected.
         // 11: persisted world-control narrative episode state.
-        internal const int CurrentVersion = 11;
-        internal const int FirstMigratableVersion = 11;
+        // 12: stable line-formation ordinals and durable squad battle-history retention.
+        // 13: IndividualPosting replaces OrderSoldier as the physical-location source of truth.
+        internal const int CurrentVersion = 13;
+        internal const int FirstMigratableVersion = 13;
     }
 }

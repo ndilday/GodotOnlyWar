@@ -7,6 +7,8 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
+using OnlyWar.Helpers.Missions.Ambush;
+using OnlyWar.Helpers.PlanetaryOperations;
 
 namespace OnlyWar.Helpers.Missions
 {
@@ -49,6 +51,36 @@ namespace OnlyWar.Helpers.Missions
                 : BuildBaseLabel(mission, region);
         }
 
+        public static string GetMissionTypeLabel(MissionType missionType) =>
+            missionType == MissionType.Extermination
+                ? "Ambush Hidden Cell"
+                : Humanize(missionType.ToString());
+
+        public static string FormatRecommendedForce(Mission mission, int currentWeek)
+        {
+            if (mission == null) return null;
+            FactionIntelBelief belief = IntelligenceTargetService.GetBestPlayerVisibleBelief(
+                mission.RegionFaction?.Region,
+                mission.RegionFaction?.PlanetFaction?.Faction);
+            IntelLevel level = belief?.Level ?? IntelLevel.Rumor;
+            long target = mission.TargetBattleValue
+                ?? AmbushMissionSizing.EstimateLegacyTargetBattleValue(mission.MissionSize);
+            long squads = AmbushMissionSizing.RecommendedMinimumSquads(target);
+            string unit = squads == 1 ? "squad" : "squads";
+            if (FactionRelationshipService.IsImperial(
+                mission.RegionFaction?.PlanetFaction?.Faction))
+            {
+                return $"Recommended force: {squads:N0} {unit}";
+            }
+            return level switch
+            {
+                IntelLevel.Located => $"Recommended force: {squads:N0} {unit}",
+                IntelLevel.Confirmed => $"Recommended force: {squads:N0}–{squads + 1:N0} squads",
+                IntelLevel.Suspected => $"Recommended force: roughly {Math.Max(1, squads / 2):N0}–{Math.Max(2, squads * 2):N0} squads",
+                _ => "Recommended force: strength too uncertain; recon advised"
+            };
+        }
+
         private static string BuildBaseLabel(Mission mission, Region region)
         {
             if (mission.MissionType == MissionType.ShowOfForce)
@@ -63,7 +95,7 @@ namespace OnlyWar.Helpers.Missions
                     : $"Show of Force — Governor {governor.Name}'s Request";
             }
 
-            string type = Humanize(mission.MissionType.ToString());
+            string type = GetMissionTypeLabel(mission.MissionType);
             RegionFaction target = mission.RegionFaction;
             string targetName = target?.IsPublic == true
                 ? target.PlanetFaction?.Faction?.Name ?? "Unknown target"

@@ -14,7 +14,8 @@ The following remain deliberately separate because they describe adjacent system
 battle engine itself:
 
 - `CasualtyRealism.md` contains the detailed wound-band, healing, and Apothecary decision tables.
-- `SpecialistAttachment.md` contains order-level personnel attachment and save/load details.
+- `SpecialistAttachment.md` contains the historical order-level personnel-attachment decisions and
+  save/load rationale; current posting architecture is in `OnlyWar_TDD.md` §5.3, §5.6, and §6.10.
 - `../Active/RangedCombatFollowUps.md` is the live backlog for terrain/line-of-fire, krak grenades,
   launcher expansion, and other intentionally unshipped ranged work.
 

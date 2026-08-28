@@ -1,0 +1,19 @@
+[gd_scene load_steps=4 format=3]
+
+[ext_resource type="PackedScene" uid="uid://cadpqoqxtyo0p" path="res://Scenes/Dialog.tscn" id="1_dialog"]
+[ext_resource type="Script" path="res://Scenes/PlanetaryOperationsScreen/PlanetaryOperationsScreenController.cs" id="2_controller"]
+[ext_resource type="Script" path="res://Scenes/PlanetaryOperationsScreen/PlanetaryOperationsScreenView.cs" id="3_view"]
+
+[node name="PlanetaryOperationsScreenController" instance=ExtResource("1_dialog")]
+offset_top = 64.0
+offset_bottom = -72.0
+script = ExtResource("2_controller")
+
+[node name="PlanetaryOperationsScreenView" type="Control" parent="DialogView"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+script = ExtResource("3_view")

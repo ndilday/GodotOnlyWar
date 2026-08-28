@@ -2,6 +2,7 @@ using Godot;
 using OnlyWar.Helpers.UI;
 using System;
 using System.Collections.Generic;
+using System.Linq;
 
 /// <summary>
 /// Shared Tree behavior for hierarchical rosters and selection lists.
@@ -16,8 +17,17 @@ public partial class HierarchyTreeView : Tree
 
     private bool _multiSelectionNotificationPending;
     private string _pendingMultiSelectionKey = "";
+    private bool _pendingMultiSelectionSelected;
+    private bool _suppressSelectionSignals;
 
     public int IconMaxWidth { get; set; } = DefaultIconMaxWidth;
+
+    /// <summary>
+    /// When enabled for a three-column tree, the icon occupies a compact leading column, the
+    /// row text occupies the expanding middle column, and the badge occupies the trailing column.
+    /// Existing two-column trees retain the original icon-and-text layout.
+    /// </summary>
+    public bool UseLeadingIconColumn { get; set; }
 
     public event EventHandler<string> SelectionChanged;
     public event EventHandler<string> Activated;
@@ -33,14 +43,21 @@ public partial class HierarchyTreeView : Tree
     public void ConfigureColumns(
         int columnCount,
         int secondaryColumnMinimumWidth = 0,
-        int trailingColumnMinimumWidth = 0)
+        int trailingColumnMinimumWidth = 0,
+        bool useLeadingIconColumn = false,
+        int leadingColumnMinimumWidth = 0)
     {
         Columns = Math.Max(1, columnCount);
-        SetColumnExpand(0, true);
+        UseLeadingIconColumn = useLeadingIconColumn && Columns > 2;
+        SetColumnExpand(0, !UseLeadingIconColumn);
+        if (UseLeadingIconColumn)
+        {
+            SetColumnCustomMinimumWidth(0, leadingColumnMinimumWidth);
+        }
 
         if (Columns > 1)
         {
-            SetColumnExpand(1, false);
+            SetColumnExpand(1, UseLeadingIconColumn);
             SetColumnCustomMinimumWidth(1, secondaryColumnMinimumWidth);
         }
 
@@ -51,7 +68,16 @@ public partial class HierarchyTreeView : Tree
         }
     }
 
-    public void Populate(IReadOnlyList<HierarchyTreeItem> entries, bool preserveUiState = true)
+    /// <summary>
+    /// Rebuilds the tree. Restoring preserved selection calls <c>TreeItem.Select</c>, which Godot
+    /// reports through <see cref="SelectionChanged"/> exactly as if the user had clicked the row.
+    /// Pass <paramref name="suppressSelectionSignals"/> when the caller is going to render off the
+    /// new state itself, so that programmatic restoration does not trigger a redundant rebuild.
+    /// </summary>
+    public void Populate(
+        IReadOnlyList<HierarchyTreeItem> entries,
+        bool preserveUiState = true,
+        bool suppressSelectionSignals = false)
     {
         Dictionary<string, bool> collapsedByPath = preserveUiState
             ? CaptureCollapsedStates()
@@ -60,10 +86,20 @@ public partial class HierarchyTreeView : Tree
             ? [.. GetSelectedKeys()]
             : [];
 
-        Clear();
-        HideRoot = true;
-        TreeItem root = CreateItem();
-        AddTreeItems(root, entries ?? Array.Empty<HierarchyTreeItem>(), "", collapsedByPath, selectedKeys);
+        bool previous = _suppressSelectionSignals;
+        _suppressSelectionSignals = suppressSelectionSignals;
+        try
+        {
+            Clear();
+            HideRoot = true;
+            TreeItem root = CreateItem();
+            AddTreeItems(root, entries ?? Array.Empty<HierarchyTreeItem>(), "", collapsedByPath, selectedKeys);
+            ExpandSelectedAncestors(root.GetFirstChild());
+        }
+        finally
+        {
+            _suppressSelectionSignals = previous;
+        }
     }
 
     public IReadOnlyList<string> GetSelectedKeys()
@@ -78,15 +114,40 @@ public partial class HierarchyTreeView : Tree
         return keys;
     }
 
-    public void ClearSelection()
+    public int GetVerticalScrollOffset()
     {
-        DeselectAll();
+        VScrollBar scrollbar = GetChildren(includeInternal: true)
+            .OfType<VScrollBar>()
+            .FirstOrDefault();
+        return scrollbar == null ? 0 : (int)scrollbar.Value;
     }
 
-    public void SetSelectedKeys(IReadOnlyCollection<string> keys)
+    public void SetVerticalScrollOffset(int offset)
     {
-        HashSet<string> wanted = keys == null ? [] : [.. keys];
-        DeselectAll();
+        VScrollBar scrollbar = GetChildren(includeInternal: true)
+            .OfType<VScrollBar>()
+            .FirstOrDefault();
+        scrollbar?.SetDeferred(Godot.Range.PropertyName.Value, Math.Max(0, offset));
+    }
+
+    public IReadOnlyDictionary<string, bool> GetCollapsedStatesByKey()
+    {
+        Dictionary<string, bool> states = [];
+        TreeItem root = GetRoot();
+        if (root != null)
+        {
+            CaptureCollapsedStatesByKey(root.GetFirstChild(), states);
+        }
+
+        return states;
+    }
+
+    public void SetCollapsedStates(IReadOnlyDictionary<string, bool> states)
+    {
+        if (states == null || states.Count == 0)
+        {
+            return;
+        }
 
         TreeItem root = GetRoot();
         if (root == null)
@@ -96,23 +157,69 @@ public partial class HierarchyTreeView : Tree
 
         foreach (TreeItem item in EnumerateTreeItems(root.GetFirstChild()))
         {
-            string key = GetItemKey(item);
-            if (string.IsNullOrEmpty(key) || !wanted.Contains(key))
+            if (states.TryGetValue(GetItemKey(item), out bool collapsed))
             {
-                continue;
+                item.Collapsed = collapsed;
+            }
+        }
+    }
+
+    public void ClearSelection()
+    {
+        DeselectAll();
+    }
+
+    /// <summary>
+    /// Selects the rows whose metadata keys are in <paramref name="keys"/>. By default this reports
+    /// through <see cref="SelectionChanged"/>, which callers such as
+    /// <c>ApothecariumScreenView.FocusSoldier</c> rely on to drive navigation. Pass
+    /// <paramref name="suppressSelectionSignals"/> when the caller renders off the new state itself.
+    /// </summary>
+    public void SetSelectedKeys(IReadOnlyCollection<string> keys, bool suppressSelectionSignals = false)
+    {
+        HashSet<string> wanted = keys == null ? [] : [.. keys];
+
+        bool previous = _suppressSelectionSignals;
+        _suppressSelectionSignals = suppressSelectionSignals;
+        try
+        {
+            DeselectAll();
+
+            TreeItem root = GetRoot();
+            if (root == null)
+            {
+                return;
             }
 
-            for (TreeItem ancestor = item.GetParent(); ancestor != null && ancestor != root; ancestor = ancestor.GetParent())
+            foreach (TreeItem item in EnumerateTreeItems(root.GetFirstChild()))
             {
-                ancestor.Collapsed = false;
-            }
+                string key = GetItemKey(item);
+                if (string.IsNullOrEmpty(key) || !wanted.Contains(key))
+                {
+                    continue;
+                }
 
-            item.Select(0);
+                for (TreeItem ancestor = item.GetParent(); ancestor != null && ancestor != root; ancestor = ancestor.GetParent())
+                {
+                    ancestor.Collapsed = false;
+                }
+
+                item.Select(GetSelectionColumn());
+            }
+        }
+        finally
+        {
+            _suppressSelectionSignals = previous;
         }
     }
 
     private void OnTreeItemSelected()
     {
+        if (_suppressSelectionSignals)
+        {
+            return;
+        }
+
         SelectionChanged?.Invoke(this, GetItemKey(GetSelected()));
     }
 
@@ -120,7 +227,22 @@ public partial class HierarchyTreeView : Tree
     // selected flag. Defer the notification until the complete click transaction has settled.
     private void OnTreeItemMultiSelected(TreeItem item, long column, bool selected)
     {
-        _pendingMultiSelectionKey = GetItemKey(item);
+        // Checked here rather than in the deferred handler: this runs synchronously inside the
+        // suppressed Select() call, whereas the deferred emit runs after the flag has been restored.
+        if (_suppressSelectionSignals)
+        {
+            return;
+        }
+
+        // A click on a parent in multi-select mode can emit one selected event for the parent
+        // followed by deselected events for all of its children. Keep the selected item as the
+        // transaction key, otherwise the final child deselection is reported to the caller.
+        if (!_multiSelectionNotificationPending
+            || (selected && !_pendingMultiSelectionSelected))
+        {
+            _pendingMultiSelectionKey = GetItemKey(item);
+            _pendingMultiSelectionSelected = selected;
+        }
         if (_multiSelectionNotificationPending)
         {
             return;
@@ -135,6 +257,7 @@ public partial class HierarchyTreeView : Tree
         _multiSelectionNotificationPending = false;
         string key = _pendingMultiSelectionKey;
         _pendingMultiSelectionKey = "";
+        _pendingMultiSelectionSelected = false;
         SelectionChanged?.Invoke(this, key);
     }
 
@@ -153,35 +276,44 @@ public partial class HierarchyTreeView : Tree
         foreach (HierarchyTreeItem entry in entries)
         {
             TreeItem item = CreateItem(parent);
-            item.SetText(0, entry.Text);
+            int textColumn = UseLeadingIconColumn ? 1 : 0;
+            int badgeColumn = UseLeadingIconColumn ? 2 : 1;
+            item.SetText(textColumn, entry.Text);
             item.SetMetadata(0, Variant.From(entry.Key));
 
             if (!string.IsNullOrWhiteSpace(entry.Tooltip))
             {
-                item.SetTooltipText(0, entry.Tooltip);
+                item.SetTooltipText(textColumn, entry.Tooltip);
             }
 
             if (!string.IsNullOrWhiteSpace(entry.IconKey))
             {
-                item.SetIcon(0, IconAtlas.GetIcon(entry.IconKey));
-                item.SetIconMaxWidth(0, entry.IconMaxWidth > 0 ? entry.IconMaxWidth : IconMaxWidth);
+                int iconColumn = UseLeadingIconColumn ? 0 : textColumn;
+                item.SetIcon(iconColumn, IconAtlas.GetIcon(entry.IconKey));
+                item.SetIconMaxWidth(iconColumn,
+                    entry.IconMaxWidth > 0 ? entry.IconMaxWidth : IconMaxWidth);
             }
 
             if (Columns > 1)
             {
-                item.SetText(1, entry.Badge ?? "");
-                item.SetTextAlignment(1, HorizontalAlignment.Right);
-                item.SetSelectable(1, false);
+                item.SetText(badgeColumn, entry.Badge ?? "");
+                item.SetTextAlignment(badgeColumn, HorizontalAlignment.Right);
+                item.SetSelectable(badgeColumn, false);
                 if (entry.BadgeColor.HasValue)
                 {
-                    item.SetCustomColor(1, entry.BadgeColor.Value);
+                    item.SetCustomColor(badgeColumn, entry.BadgeColor.Value);
                 }
+            }
+
+            if (UseLeadingIconColumn)
+            {
+                item.SetSelectable(0, false);
             }
 
             if (!entry.Selectable)
             {
-                item.SetSelectable(0, false);
-                item.SetCustomColor(0, OnlyWarStyle.MutedText);
+                item.SetSelectable(textColumn, false);
+                item.SetCustomColor(textColumn, OnlyWarStyle.MutedText);
             }
 
             if (entry.RowHeight > 0)
@@ -191,7 +323,7 @@ public partial class HierarchyTreeView : Tree
 
             if (entry.Selectable && (entry.IsSelected || selectedKeys.Contains(entry.Key)))
             {
-                item.Select(0);
+                item.Select(textColumn);
             }
 
             if (entry.Children.Count == 0)
@@ -204,6 +336,10 @@ public partial class HierarchyTreeView : Tree
             if (collapsedByPath.TryGetValue(path, out bool wasCollapsed))
             {
                 item.Collapsed = wasCollapsed;
+            }
+            else
+            {
+                item.Collapsed = entry.CollapsedByDefault;
             }
         }
     }
@@ -240,6 +376,23 @@ public partial class HierarchyTreeView : Tree
         }
     }
 
+    private static void CaptureCollapsedStatesByKey(
+        TreeItem item,
+        Dictionary<string, bool> states)
+    {
+        while (item != null)
+        {
+            string key = GetItemKey(item);
+            if (!string.IsNullOrEmpty(key))
+            {
+                states[key] = item.Collapsed;
+            }
+
+            CaptureCollapsedStatesByKey(item.GetFirstChild(), states);
+            item = item.GetNext();
+        }
+    }
+
     private static void CollectSelectedKeys(TreeItem item, List<string> keys)
     {
         while (item != null)
@@ -256,6 +409,25 @@ public partial class HierarchyTreeView : Tree
             CollectSelectedKeys(item.GetFirstChild(), keys);
             item = item.GetNext();
         }
+    }
+
+    private static bool ExpandSelectedAncestors(TreeItem item)
+    {
+        bool containsSelection = false;
+        while (item != null)
+        {
+            bool containsSelectedDescendant = ExpandSelectedAncestors(item.GetFirstChild());
+            bool selected = item.IsSelected(0) || item.IsSelected(1);
+            if (containsSelectedDescendant)
+            {
+                item.Collapsed = false;
+            }
+
+            containsSelection |= selected || containsSelectedDescendant;
+            item = item.GetNext();
+        }
+
+        return containsSelection;
     }
 
     private static IEnumerable<TreeItem> EnumerateTreeItems(TreeItem item)
@@ -277,4 +449,6 @@ public partial class HierarchyTreeView : Tree
     {
         return item == null ? "" : item.GetMetadata(0).AsString();
     }
+
+    private int GetSelectionColumn() => UseLeadingIconColumn ? 1 : 0;
 }

@@ -138,7 +138,9 @@ namespace OnlyWar.Helpers.Missions
                     ? "Move"
                     : target == null ? "Attack" : $"Attack ({target.Name})";
             }
-            return mission?.MissionType.ToString() ?? string.Empty;
+            return mission == null
+                ? string.Empty
+                : SpecialMissionPresentation.GetMissionTypeLabel(mission.MissionType);
         }
 
         public static IReadOnlyList<AvailableMission> GetAvailableMissions(Region originRegion, Region targetRegion)
@@ -188,7 +190,9 @@ namespace OnlyWar.Helpers.Missions
             }
             IReadOnlyDictionary<int, string> specialMissionLabels =
                 SpecialMissionPresentation.BuildLabels(targetRegion);
-            foreach (var mission in targetRegion.SpecialMissions)
+            foreach (var mission in targetRegion.SpecialMissions
+                .Where(mission => mission.MissionType != MissionType.Extermination
+                    || mission.RegionFaction != null && !mission.RegionFaction.IsPublic))
             {
                 // Show of Force has no movement step - the squads hold position to be seen - so a
                 // squad ordered onto it from elsewhere would never actually arrive, and only

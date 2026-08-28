@@ -101,6 +101,7 @@ public partial class SectorMap : Node2D
     public event EventHandler<int> PlanetDoubleClicked;
     public event EventHandler<int> FleetClicked;
     public event EventHandler<int> FleetRightClicked;
+    public event EventHandler BackgroundClicked;
 
     [Export]
     public Godot.Collections.Array<SectorLabelBandStyle> LabelBandStyles { get; set; } = new();
@@ -207,6 +208,30 @@ public partial class SectorMap : Node2D
         Vector2I mapPosition = CalculateMapPosition(gridPosition);
         RebuildLabelLayouts();
         _camera.ZoomTo(1, mapPosition);
+    }
+
+    public override void _UnhandledInput(InputEvent @event)
+    {
+        if (@event is not InputEventMouseButton
+            {
+                ButtonIndex: MouseButton.Left,
+                Pressed: true
+            }
+            || !IsVisibleInTree()
+            || IsPointerOverMapObject())
+        {
+            return;
+        }
+
+        BackgroundClicked?.Invoke(this, EventArgs.Empty);
+        GetViewport().SetInputAsHandled();
+    }
+
+    private bool IsPointerOverMapObject()
+    {
+        return GetChildren().OfType<ClickableSprite2D>()
+            .Any(sprite => sprite.IsVisibleInTree()
+                && sprite.IsPixelOpaque(sprite.GetLocalMousePosition()));
     }
 
     private void CopyGovernanceSeatsFromSectorData()

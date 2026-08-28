@@ -557,6 +557,35 @@ public class SoldierTransferServiceTests
     }
 
     [Fact]
+    public void GetTransferOptions_DoesNotOfferNewCompanySquadBeforeHqIsFounded()
+    {
+        SquadTemplate headquartersTemplate = CreateSquadTemplate(
+            "Company HQ",
+            SquadTypes.HQ,
+            (TestModelFactory.CaptainTemplate, 1, 1));
+        SquadTemplate lineTemplate = CreateSquadTemplate(
+            "Line Squad",
+            (TestModelFactory.SergeantTemplate, 0, 1),
+            (TestModelFactory.MarineTemplate, 0, 4));
+        UnitTemplate companyTemplate = new(
+            1,
+            "Company Template",
+            true,
+            headquartersTemplate,
+            [new SquadTemplateSlot(lineTemplate, 0, 2)]);
+        Unit company = new("Company", companyTemplate);
+        Squad source = AddSquad(company, "Source Squad", lineTemplate);
+        PlayerSoldier soldier = AddPlayerSoldier(source, TestModelFactory.MarineTemplate, "Brother Marius");
+
+        Assert.DoesNotContain(_service.GetTransferOptions(company, soldier), option => option.IsNewSquad);
+
+        company.HQSquad.AddSquadMember(
+            TestModelFactory.CreateSoldier(TestModelFactory.CaptainTemplate, "Captain Aurelius"));
+
+        Assert.Contains(_service.GetTransferOptions(company, soldier), option => option.IsNewSquad);
+    }
+
+    [Fact]
     public void GetTransferOptions_DoesNotOfferNewSquadWhenAtCap()
     {
         SquadTemplate lineTemplate = CreateSquadTemplate(
@@ -573,7 +602,30 @@ public class SoldierTransferServiceTests
     }
 
     [Fact]
-    public void ApplyTransfer_CreatesNewSquadAndRemovesEmptiedSource()
+    public void GetTransferOptions_DoesNotRepeatCompanyForNumberedSquadDisplay()
+    {
+        SquadTemplate lineTemplate = CreateSquadTemplate(
+            "Assault Squad",
+            (TestModelFactory.SergeantTemplate, 0, 1),
+            (TestModelFactory.MarineTemplate, 0, 4));
+        Unit company = CreateUnit("Second Company");
+        Squad source = AddSquad(company, "Source Squad", lineTemplate);
+        PlayerSoldier soldier = AddPlayerSoldier(
+            source, TestModelFactory.MarineTemplate, "Brother Marius");
+        Squad target = AddSquad(company, "II Assault Squad, 2 Co.", lineTemplate);
+        target.FormationOrdinal = 2;
+        AddPlayerSoldier(target, TestModelFactory.SergeantTemplate, "Sergeant Titus");
+
+        SoldierTransferOption option = _service
+            .GetTransferOptions(company, soldier)
+            .Single(candidate => candidate.SquadId == target.Id
+                && candidate.SoldierTemplate == TestModelFactory.MarineTemplate);
+
+        Assert.Equal("Test Marine, II Assault Squad, 2 Co.", option.DisplayName);
+    }
+
+    [Fact]
+    public void ApplyTransfer_CreatesNewSquadAndRetainsEmptiedLineage()
     {
         SquadTemplate lineTemplate = CreateSquadTemplate(
             "Line Squad",
@@ -596,9 +648,10 @@ public class SoldierTransferServiceTests
         Assert.Equal(lineTemplate, newSquad.SquadTemplate);
         Assert.Contains(newSquad, company.Squads);
         Assert.True(squadMap.ContainsKey(newSquad.Id));
-        // Moving the only member out empties the source line squad (MinCount 0), so it is removed.
-        Assert.DoesNotContain(source, company.Squads);
-        Assert.False(squadMap.ContainsKey(source.Id));
+        // Stable non-Scout lineages remain available for later reconstitution.
+        Assert.Contains(source, company.Squads);
+        Assert.True(squadMap.ContainsKey(source.Id));
+        Assert.Empty(source.Members);
     }
 
     [Fact]
@@ -656,7 +709,7 @@ public class SoldierTransferServiceTests
     }
 
     [Fact]
-    public void ApplyTransfer_RenamesLineSquadAfterItsNewSergeant()
+    public void ApplyTransfer_DoesNotRenameLineSquadAfterItsNewSergeant()
     {
         SquadTemplate lineTemplate = CreateSquadTemplate(
             "Tactical Squad",
@@ -673,7 +726,7 @@ public class SoldierTransferServiceTests
 
         _service.ApplyTransfer(soldier, option, squadMap, _date);
 
-        Assert.Equal("Marius Squad", target.Name);
+        Assert.Equal("Tactical Squad", target.Name);
     }
 
     [Fact]

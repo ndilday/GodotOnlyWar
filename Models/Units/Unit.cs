@@ -4,6 +4,7 @@ using System.Linq;
 using System.Threading;
 using OnlyWar.Models.Soldiers;
 using OnlyWar.Models.Squads;
+using OnlyWar.Helpers;
 
 namespace OnlyWar.Models.Units
 {
@@ -69,7 +70,7 @@ namespace OnlyWar.Models.Units
             _squads = [];
             if (template.HQSquad != null)
             {
-                _squads.Add(new Squad(name + " HQ Squad", this, template.HQSquad));
+                AddSquad(new Squad(name + " HQ Squad", this, template.HQSquad));
                 i++;
             }
             // Only the always-present squads (MinCount, e.g. the chapter's command
@@ -79,7 +80,7 @@ namespace OnlyWar.Models.Units
             {
                 for (int n = 0; n < slot.MinCount; n++)
                 {
-                    _squads.Add(new Squad(slot.Template.Name, this, slot.Template));
+                    AddSquad(new Squad(slot.Template.Name, this, slot.Template));
                     i++;
                 }
             }
@@ -114,6 +115,13 @@ namespace OnlyWar.Models.Units
 
         public void AddSquad(Squad squad)
         {
+            if (squad == null) throw new ArgumentNullException(nameof(squad));
+            squad.ParentUnit = this;
+            if (SquadDesignationFormatter.IsNumberedLineFormation(squad))
+            {
+                squad.FormationOrdinal ??= FormationOrdinalAllocator.GetNextOrdinal(this, squad.SquadTemplate);
+                squad.Name = SquadDesignationFormatter.Format(squad);
+            }
             _squads.Add(squad);
         }
 

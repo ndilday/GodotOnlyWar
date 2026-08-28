@@ -1,4 +1,6 @@
+using Godot;
 using OnlyWar.Helpers.Extensions;
+using OnlyWar.Helpers.UI;
 using OnlyWar.Models;
 using OnlyWar.Models.Planets;
 using OnlyWar.Tests.Fixtures;
@@ -65,6 +67,47 @@ public class OpForVisibilityTests
             1);
 
         Assert.Equal("12345", enemy.GetPopulationDescription());
+    }
+
+    [Theory]
+    [InlineData(0f, "None")]
+    [InlineData(0.99f, "Basic")]
+    [InlineData(1f, "Limited")]
+    [InlineData(1.99f, "Limited")]
+    [InlineData(2f, "Partial")]
+    [InlineData(2.99f, "Partial")]
+    [InlineData(3f, "Reliable")]
+    [InlineData(3.99f, "Reliable")]
+    [InlineData(4f, "Detailed")]
+    [InlineData(5.99f, "Detailed")]
+    [InlineData(6f, "Comprehensive")]
+    [InlineData(20f, "Comprehensive")]
+    public void GetIntelligenceLevelDescription_UsesPlayerFacingBands(
+        float intelligence,
+        string expected)
+    {
+        Assert.Equal(
+            expected,
+            RegionFactionExtensions.GetIntelligenceLevelDescription(intelligence));
+    }
+
+    [Theory]
+    [InlineData("None", 211, 47, 47)]
+    [InlineData("Basic", 230, 74, 25)]
+    [InlineData("Limited", 255, 179, 0)]
+    [InlineData("Partial", 224, 224, 224)]
+    [InlineData("Reliable", 174, 213, 129)]
+    [InlineData("Detailed", 102, 187, 106)]
+    [InlineData("Comprehensive", 56, 142, 60)]
+    public void IntelligenceColor_UsesConfiguredPalette(
+        string level,
+        int red,
+        int green,
+        int blue)
+    {
+        Assert.Equal(
+            Color.Color8((byte)red, (byte)green, (byte)blue),
+            OnlyWarStyle.GetIntelligenceColor(level));
     }
 
     [Fact]

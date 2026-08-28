@@ -34,7 +34,7 @@ namespace OnlyWar.Helpers
                     HasCoLocatedStaff(force, soldier, ApothecaryTemplates)),
                 new ProcedureRequisite("Techmarine co-located",
                     HasCoLocatedStaff(force, soldier, TechmarineTemplates)),
-                new ProcedureRequisite("Valid surgery site", IsValidSurgerySite(squad)),
+                new ProcedureRequisite("Valid surgery site", IsValidSurgerySite(soldier)),
                 new ProcedureRequisite("Organic hit location", !IsCyberneticLocation(soldier, option)),
                 new ProcedureRequisite(
                     $"Requisition {option.RequisitionCost} (have {balance})",
@@ -100,6 +100,9 @@ namespace OnlyWar.Helpers
         public static bool IsApothecary(ISoldier soldier) =>
             soldier?.Template != null && ApothecaryTemplates.Contains(soldier.Template.Name);
 
+        public static bool IsTechmarine(ISoldier soldier) =>
+            soldier?.Template != null && TechmarineTemplates.Contains(soldier.Template.Name);
+
         private static bool IsCyberneticLocation(ISoldier soldier, ReplacementOption option) =>
             soldier?.Body?.HitLocations?.Any(location =>
                 location.Template.Id == option.HitLocationId && location.IsCybernetic) == true;
@@ -132,9 +135,10 @@ namespace OnlyWar.Helpers
         /// </summary>
         private static (Ship Ship, Region Region) ResolveLocation(ISoldier soldier)
         {
-            if (soldier is PlayerSoldier player && player.AttachedOrder != null)
+            if (soldier is PlayerSoldier player)
             {
-                return (null, player.EffectiveRegion);
+                CampaignLocation location = CampaignLocationService.ForSoldier(player);
+                return (location?.Ship, location?.Region);
             }
             Squad squad = soldier?.AssignedSquad;
             return (squad?.BoardedLocation, squad?.CurrentRegion);
@@ -153,18 +157,22 @@ namespace OnlyWar.Helpers
             return false;
         }
 
-        private static bool IsValidSurgerySite(Squad squad)
+        private static bool IsValidSurgerySite(ISoldier soldier)
         {
+            CampaignLocation effective = soldier is PlayerSoldier player
+                ? CampaignLocationService.ForSoldier(player)
+                : CampaignLocationService.ForSquad(soldier?.AssignedSquad);
+            Squad squad = soldier?.AssignedSquad;
             if (squad == null)
             {
                 return false;
             }
             // Aboard a ship: the fleet carries an apothecarion.
-            if (squad.BoardedLocation != null)
+            if (effective?.Ship != null)
             {
-                return true;
+                return new MedicalFacilityService().SupportsMajorSurgery(effective.Ship.Template);
             }
-            Region region = squad.CurrentRegion;
+            Region region = effective?.Region;
             Planet planet = region?.Planet;
             if (region == null || planet?.Template == null)
             {
@@ -172,11 +180,7 @@ namespace OnlyWar.Helpers
             }
             // On the ground: the region must be held by the chapter or the wider Imperium,
             // on a world developed enough to host augmetic surgery.
-            bool developed = SurgeryCapableWorlds.Contains(planet.Template.Name);
-            bool imperialControlled = region.RegionFactionMap.Values.Any(rf =>
-                rf.IsPublic
-                && FactionRelationshipService.IsImperial(rf.PlanetFaction.Faction));
-            return developed && imperialControlled;
+            return new MedicalFacilityService().SupportsMajorSurgery(region);
         }
     }
 }

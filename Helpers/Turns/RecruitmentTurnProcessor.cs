@@ -222,6 +222,10 @@ namespace OnlyWar.Helpers.Turns
 
                 Squad oldSquad = neophyte.AssignedSquad;
                 oldSquad?.RemoveSquadMember(neophyte);
+                if (oldSquad?.Members.Count == 0)
+                {
+                    new SquadLifecycleService(force).HandleEmptySquad(oldSquad);
+                }
                 target.AddSquadMember(neophyte);
                 neophyte.Template = _session.Rules.ChapterTemplates.DevastatorMarine;
                 neophyte.AddEvent(new SoldierEvent(

@@ -111,8 +111,8 @@ namespace OnlyWar.Helpers.Missions
 
                 case MissionType.Extermination:
                     return killed > 0
-                        ? $"Extermination operation conducted in {regionName}; {killed} {enemyName} eliminated."
-                        : $"Extermination operation conducted in {regionName}.";
+                        ? $"Hidden-cell ambush conducted in {regionName}; {killed} {enemyName} eliminated."
+                        : $"Hidden-cell ambush conducted in {regionName}.";
 
                 default:
                     return aborted

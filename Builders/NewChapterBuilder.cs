@@ -723,8 +723,11 @@ namespace OnlyWar.Builders
                 company.AddSquad(squad);
                 if (sgtList.Count > 0)
                 {
-                    squad.Name = sgtList[0].Name.Split(' ')[1] + " Squad";
                     AssignSoldier(unassignedSoldierMap, sgtList, squad, sgtType, year);
+                    if ((squadTemplate.SquadType & SquadTypes.Scout) != 0)
+                    {
+                        squad.Name = SquadDesignationFormatter.FormatScoutSquad(squad);
+                    }
                 }
                 int squadSize = squadSizeFunc(soldierList, sgtList);
                 while (squad.Members.Count < squadSize
@@ -769,8 +772,8 @@ namespace OnlyWar.Builders
                 overflowCompany.AddSquad(squad);
                 if (leaderList.Count > 0)
                 {
-                    squad.Name = leaderList[0].Name.Split(' ')[1] + " Squad";
                     AssignSoldier(unassignedSoldierMap, leaderList, squad, scoutSgt, year);
+                    squad.Name = SquadDesignationFormatter.FormatScoutSquad(squad);
                 }
                 while (scoutList.Count > 0 && squad.Members.Count < 10)
                 {

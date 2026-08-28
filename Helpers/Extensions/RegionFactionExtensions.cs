@@ -87,6 +87,26 @@ namespace OnlyWar.Helpers.Extensions
             }
         }
 
+        // Player-facing description of regional intelligence. The boundaries preserve the
+        // meaningful awareness thresholds used by recon, garrison planning, activity reporting,
+        // and located target estimates without exposing the underlying score.
+        public static string GetIntelligenceLevelDescription(float intelligence)
+        {
+            if (!float.IsFinite(intelligence) || intelligence <= 0f)
+                return "None";
+            if (intelligence < 1f)
+                return "Basic";
+            if (intelligence < 2f)
+                return "Limited";
+            if (intelligence < 3f)
+                return "Partial";
+            if (intelligence < 4f)
+                return "Reliable";
+            if (intelligence < 6f)
+                return "Detailed";
+            return "Comprehensive";
+        }
+
         // Troops this faction actually has fielded and active in the region — the organized
         // portion of its fighting strength. MilitaryStrength resolves the horde-vs-civilian
         // split (Population for PopulationIsMilitary factions, Garrison otherwise). This is the
@@ -169,6 +189,30 @@ namespace OnlyWar.Helpers.Extensions
                 : "Unknown";
         }
 
+        // A world dossier may contain several disclosed regions for the same faction. Summarize
+        // the faction by its largest intel-gated estimate so a stronger disclosed concentration
+        // is not hidden by smaller regional bands.
+        public static string GetMaximumForceMagnitudeDescription(
+            this IEnumerable<RegionFaction> regionFactions)
+        {
+            if (regionFactions == null) return "None";
+
+            List<string> descriptions = regionFactions
+                .Where(regionFaction => regionFaction != null)
+                .Select(regionFaction => regionFaction.GetForceMagnitudeDescription())
+                .Distinct()
+                .ToList();
+            if (descriptions.Count == 0) return "None";
+
+            List<string> magnitudes = descriptions
+                .Where(IsMagnitudeWord)
+                .OrderByDescending(GetMagnitudeWordIndex)
+                .ToList();
+            return magnitudes.Count > 0
+                ? magnitudes[0]
+                : descriptions.Count == 1 ? descriptions[0] : "Unknown";
+        }
+
         private static string FormatBelievedPopulation(FactionIntelBelief belief)
         {
             if (belief == null) return "None";
@@ -196,5 +240,18 @@ namespace OnlyWar.Helpers.Extensions
                 return "Millions";
             return "Billions";
         }
+
+        private static bool IsMagnitudeWord(string value) => GetMagnitudeWordIndex(value) >= 0;
+
+        private static int GetMagnitudeWordIndex(string value) => value switch
+        {
+            "Handful" => 0,
+            "Dozens" => 1,
+            "Hundreds" => 2,
+            "Thousands" => 3,
+            "Millions" => 4,
+            "Billions" => 5,
+            _ => -1
+        };
     }
 }

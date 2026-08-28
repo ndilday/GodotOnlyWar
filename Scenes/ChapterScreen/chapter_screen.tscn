@@ -152,54 +152,80 @@ theme_override_constants/separation = 10
 [node name="Hero" type="HBoxContainer" parent="ChapterView/Content/MainLayout/DetailPanel/Panel/MarginContainer/DetailStack"]
 custom_minimum_size = Vector2(0, 94)
 layout_mode = 2
-theme_override_constants/separation = 12
+theme_override_constants/separation = 8
 
-[node name="DetailIcon" type="TextureRect" parent="ChapterView/Content/MainLayout/DetailPanel/Panel/MarginContainer/DetailStack/Hero"]
+[node name="ChapterHeader" type="HBoxContainer" parent="ChapterView/Content/MainLayout/DetailPanel/Panel/MarginContainer/DetailStack/Hero"]
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 4
+size_flags_stretch_ratio = 1.0
+theme_override_constants/separation = 8
+
+[node name="DetailIcon" type="TextureRect" parent="ChapterView/Content/MainLayout/DetailPanel/Panel/MarginContainer/DetailStack/Hero/ChapterHeader"]
 custom_minimum_size = Vector2(48, 48)
 layout_mode = 2
 expand_mode = 1
 stretch_mode = 5
 
-[node name="TitleStack" type="VBoxContainer" parent="ChapterView/Content/MainLayout/DetailPanel/Panel/MarginContainer/DetailStack/Hero"]
+[node name="TitleStack" type="VBoxContainer" parent="ChapterView/Content/MainLayout/DetailPanel/Panel/MarginContainer/DetailStack/Hero/ChapterHeader"]
 layout_mode = 2
 size_flags_horizontal = 3
 theme_override_constants/separation = 4
 
-[node name="TitleLabel" type="Label" parent="ChapterView/Content/MainLayout/DetailPanel/Panel/MarginContainer/DetailStack/Hero/TitleStack"]
+[node name="TitleLabel" type="Label" parent="ChapterView/Content/MainLayout/DetailPanel/Panel/MarginContainer/DetailStack/Hero/ChapterHeader/TitleStack"]
 layout_mode = 2
 text = "Chapter"
 autowrap_mode = 2
 
-[node name="SubtitleLine" type="HBoxContainer" parent="ChapterView/Content/MainLayout/DetailPanel/Panel/MarginContainer/DetailStack/Hero/TitleStack"]
+[node name="SubtitleLine" type="HBoxContainer" parent="ChapterView/Content/MainLayout/DetailPanel/Panel/MarginContainer/DetailStack/Hero/ChapterHeader/TitleStack"]
 layout_mode = 2
 theme_override_constants/separation = 4
 
-[node name="SubtitleLabel" type="Label" parent="ChapterView/Content/MainLayout/DetailPanel/Panel/MarginContainer/DetailStack/Hero/TitleStack/SubtitleLine"]
+[node name="SubtitleLabel" type="Label" parent="ChapterView/Content/MainLayout/DetailPanel/Panel/MarginContainer/DetailStack/Hero/ChapterHeader/TitleStack/SubtitleLine"]
 layout_mode = 2
 size_flags_horizontal = 3
 text = "Chapter overview"
 autowrap_mode = 2
 
-[node name="LocationLink" type="LinkButton" parent="ChapterView/Content/MainLayout/DetailPanel/Panel/MarginContainer/DetailStack/Hero/TitleStack/SubtitleLine"]
+[node name="LocationLink" type="LinkButton" parent="ChapterView/Content/MainLayout/DetailPanel/Panel/MarginContainer/DetailStack/Hero/ChapterHeader/TitleStack/SubtitleLine"]
 layout_mode = 2
 visible = false
 mouse_default_cursor_shape = 2
 
 [node name="MetricGrid" type="GridContainer" parent="ChapterView/Content/MainLayout/DetailPanel/Panel/MarginContainer/DetailStack/Hero"]
-custom_minimum_size = Vector2(340, 0)
 layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 4
+size_flags_stretch_ratio = 1.0
 columns = 3
+theme_override_constants/h_separation = 8
 
-[node name="LoadoutsButton" type="Button" parent="ChapterView/Content/MainLayout/DetailPanel/Panel/MarginContainer/DetailStack/Hero"]
-custom_minimum_size = Vector2(150, 36)
+[node name="ActionHeader" type="HBoxContainer" parent="ChapterView/Content/MainLayout/DetailPanel/Panel/MarginContainer/DetailStack/Hero"]
 layout_mode = 2
-size_flags_vertical = 0
+size_flags_horizontal = 3
+size_flags_vertical = 4
+size_flags_stretch_ratio = 1.0
+theme_override_constants/separation = 8
+
+[node name="LoadoutsButton" type="Button" parent="ChapterView/Content/MainLayout/DetailPanel/Panel/MarginContainer/DetailStack/Hero/ActionHeader"]
+custom_minimum_size = Vector2(0, 72)
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 4
 text = "Chapter Loadouts"
 
-[node name="TransferButton" type="MenuButton" parent="ChapterView/Content/MainLayout/DetailPanel/Panel/MarginContainer/DetailStack/Hero"]
+[node name="MusterButton" type="Button" parent="ChapterView/Content/MainLayout/DetailPanel/Panel/MarginContainer/DetailStack/Hero/ActionHeader"]
+custom_minimum_size = Vector2(0, 72)
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 4
+text = "Muster"
+
+[node name="TransferButton" type="MenuButton" parent="ChapterView/Content/MainLayout/DetailPanel/Panel/MarginContainer/DetailStack/Hero/ActionHeader"]
 custom_minimum_size = Vector2(0, 36)
 layout_mode = 2
-size_flags_vertical = 0
+size_flags_horizontal = 3
+size_flags_vertical = 4
 visible = false
 flat = false
 text = "Transfer"

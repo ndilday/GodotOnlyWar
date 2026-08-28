@@ -2,7 +2,7 @@
   "atlas": "res://Assets/UI/Icons/icon_atlas.png",
   "cellSize": 128,
   "columns": 8,
-  "rows": 9,
+  "rows": 13,
   "icons": {
     "sector": {
       "x": 0,
@@ -528,6 +528,202 @@
       "w": 128,
       "h": 128,
       "group": "faction"
+    },
+    "honor_gun": {
+      "x": 0,
+      "y": 1152,
+      "w": 128,
+      "h": 128,
+      "group": "honor"
+    },
+    "honor_sword": {
+      "x": 128,
+      "y": 1152,
+      "w": 128,
+      "h": 128,
+      "group": "honor"
+    },
+    "honor_voice": {
+      "x": 256,
+      "y": 1152,
+      "w": 128,
+      "h": 128,
+      "group": "honor"
+    },
+    "honor_banner": {
+      "x": 384,
+      "y": 1152,
+      "w": 128,
+      "h": 128,
+      "group": "honor"
+    },
+    "squad_lineage": {
+      "x": 512,
+      "y": 1152,
+      "w": 128,
+      "h": 128,
+      "group": "chapter_muster"
+    },
+    "formation_create": {
+      "x": 640,
+      "y": 1152,
+      "w": 128,
+      "h": 128,
+      "group": "chapter_muster"
+    },
+    "fleet_rebalance": {
+      "x": 768,
+      "y": 1152,
+      "w": 128,
+      "h": 128,
+      "group": "chapter_muster"
+    },
+    "sort": {
+      "x": 0,
+      "y": 1280,
+      "w": 128,
+      "h": 128,
+      "group": "recovery_operations"
+    },
+    "recovery_time": {
+      "x": 128,
+      "y": 1280,
+      "w": 128,
+      "h": 128,
+      "group": "recovery_operations"
+    },
+    "limb_replacement": {
+      "x": 256,
+      "y": 1280,
+      "w": 128,
+      "h": 128,
+      "group": "recovery_operations"
+    },
+    "medical_detachment": {
+      "x": 384,
+      "y": 1280,
+      "w": 128,
+      "h": 128,
+      "group": "recovery_operations"
+    },
+    "individual_posting": {
+      "x": 512,
+      "y": 1280,
+      "w": 128,
+      "h": 128,
+      "group": "recovery_operations"
+    },
+    "reunion": {
+      "x": 640,
+      "y": 1280,
+      "w": 128,
+      "h": 128,
+      "group": "recovery_operations"
+    },
+    "control_contested": {
+      "x": 0,
+      "y": 1408,
+      "w": 128,
+      "h": 128,
+      "group": "planetary_operations"
+    },
+    "mission_recon": {
+      "x": 128,
+      "y": 1408,
+      "w": 128,
+      "h": 128,
+      "group": "planetary_operations"
+    },
+    "mission_defend": {
+      "x": 256,
+      "y": 1408,
+      "w": 128,
+      "h": 128,
+      "group": "planetary_operations"
+    },
+    "mission_patrol": {
+      "x": 384,
+      "y": 1408,
+      "w": 128,
+      "h": 128,
+      "group": "planetary_operations"
+    },
+    "mission_attack": {
+      "x": 512,
+      "y": 1408,
+      "w": 128,
+      "h": 128,
+      "group": "planetary_operations"
+    },
+    "mission_diversion": {
+      "x": 640,
+      "y": 1408,
+      "w": 128,
+      "h": 128,
+      "group": "planetary_operations"
+    },
+    "fortification_entrenchment": {
+      "x": 768,
+      "y": 1408,
+      "w": 128,
+      "h": 128,
+      "group": "planetary_operations"
+    },
+    "fortification_listening_post": {
+      "x": 896,
+      "y": 1408,
+      "w": 128,
+      "h": 128,
+      "group": "planetary_operations"
+    },
+    "fortification_anti_air": {
+      "x": 0,
+      "y": 1536,
+      "w": 128,
+      "h": 128,
+      "group": "planetary_operations"
+    },
+    "mission_ambush": {
+      "x": 128,
+      "y": 1536,
+      "w": 128,
+      "h": 128,
+      "group": "planetary_operations"
+    },
+    "mission_sabotage": {
+      "x": 256,
+      "y": 1536,
+      "w": 128,
+      "h": 128,
+      "group": "planetary_operations"
+    },
+    "mission_show_of_force": {
+      "x": 384,
+      "y": 1536,
+      "w": 128,
+      "h": 128,
+      "group": "planetary_operations"
+    },
+    "order_active": {
+      "x": 512,
+      "y": 1536,
+      "w": 128,
+      "h": 128,
+      "group": "planetary_operations"
+    },
+    "order_assigned": {
+      "x": 640,
+      "y": 1536,
+      "w": 128,
+      "h": 128,
+      "group": "planetary_operations"
+    },
+    "order_unassigned": {
+      "x": 768,
+      "y": 1536,
+      "w": 128,
+      "h": 128,
+      "group": "planetary_operations"
     }
   },
   "recommendedNextIcons": [
@@ -543,9 +739,6 @@
     "armor",
     "garrison",
     "governor",
-    "mission_recon",
-    "mission_ambush",
-    "mission_sabotage",
     "mission_assassinate",
     "mission_assault"
   ]

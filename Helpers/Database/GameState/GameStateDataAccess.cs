@@ -76,6 +76,7 @@ namespace OnlyWar.Helpers.Database.GameState
         private readonly CampaignEventDataAccess _campaignEventDataAccess;
         private readonly ChapterChronicleDataAccess _chapterChronicleDataAccess;
         private readonly WorldControlEpisodeDataAccess _worldControlEpisodeDataAccess;
+        private readonly IndividualPostingDataAccess _individualPostingDataAccess;
         private static GameStateDataAccess _instance;
         public static GameStateDataAccess Instance
         {
@@ -106,6 +107,7 @@ namespace OnlyWar.Helpers.Database.GameState
             _campaignEventDataAccess = new CampaignEventDataAccess();
             _chapterChronicleDataAccess = new ChapterChronicleDataAccess();
             _worldControlEpisodeDataAccess = new WorldControlEpisodeDataAccess();
+            _individualPostingDataAccess = new IndividualPostingDataAccess();
         }
 
         public GameStateDataBlob GetData(string filePath,
@@ -167,11 +169,10 @@ namespace OnlyWar.Helpers.Database.GameState
                 .Max();
             SoldierFactory.Instance.SetCurrentHighestSoldierId(highestIdentity);
             var playerSoldiers = _playerSoldierDataAccess.GetData(dbCon, soldiers);
-            // Must run here, not inside GetSquadsByUnitId where the orders are built: the
-            // PlayerSoldier constructor swaps the wrapper into the squad in place of the base
-            // Soldier, so attachments have to be resolved against the wrappers that the call
-            // above just produced (Design/Reference/SpecialistAttachment.md §6.3).
-            _unitDataAccess.PopulateOrderAttachments(dbCon, squadMap, playerSoldiers);
+            // Postings hydrate only after soldiers, squads, ships, regions, and orders exist.
+            // The service rebuilds both order and individual-ship projections from these rows.
+            _individualPostingDataAccess.Populate(
+                dbCon, squadMap, playerSoldiers, shipMap, regions);
             var global = _globalDataAccess.GetGlobalData(dbCon);
             var medicalProcedures = _medicalProcedureDataAccess.GetProcedures(dbCon);
             var lastTurnReportSnapshot = _lastTurnReportDataAccess.GetSnapshot(dbCon);
@@ -443,6 +444,10 @@ namespace OnlyWar.Helpers.Database.GameState
                     foreach(PlayerSoldier playerSoldier in playerSoldiers.Concat(fallen))
                     {
                         _playerSoldierDataAccess.SavePlayerSoldier(transaction, playerSoldier);
+                    }
+                    foreach (PlayerSoldier playerSoldier in playerSoldiers)
+                    {
+                        _individualPostingDataAccess.Save(transaction, playerSoldier);
                     }
                     foreach (MedicalProcedure procedure in medicalProcedures ?? [])
                     {

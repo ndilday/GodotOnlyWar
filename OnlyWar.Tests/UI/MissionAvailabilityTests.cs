@@ -108,6 +108,31 @@ public class MissionAvailabilityTests
             new AvailableMission("Changed display label", MissionAvailabilityKind.Special, first)));
     }
 
+    [Fact]
+    public void HiddenCellAmbushesAreAvailableOnlyAgainstNonPublicTargets()
+    {
+        SectorSimulationFixture fixture = SectorSimulationFixture.CreateDetached();
+        RegionFaction hiddenTarget = fixture.AddHiddenFaction(
+            region: 0, GrowthType.Conversion, population: 2_000);
+        RegionFaction publicTarget = fixture.AddPublicCult(
+            region: 0, population: 2_000, organization: 100);
+        Mission hiddenMission = new(MissionType.Extermination, hiddenTarget, missionSize: 1);
+        Mission publicMission = new(MissionType.Extermination, publicTarget, missionSize: 1);
+        hiddenTarget.Region.SpecialMissions.Add(hiddenMission);
+        hiddenTarget.Region.SpecialMissions.Add(publicMission);
+
+        AvailableMission[] missions = MissionAvailability
+            .GetAvailableMissions(hiddenTarget.Region, hiddenTarget.Region)
+            .Where(mission => mission.Kind == MissionAvailabilityKind.Special)
+            .ToArray();
+
+        AvailableMission available = Assert.Single(
+            missions,
+            mission => mission.SpecialMission?.Id == hiddenMission.Id);
+        Assert.Equal("Ambush Hidden Cell — Unknown cell", available.Label);
+        Assert.DoesNotContain(missions, mission => mission.SpecialMission?.Id == publicMission.Id);
+    }
+
     [Theory]
     [InlineData(90L, "Recommended Minimum Force: 1 squad")]
     [InlineData(91L, "Recommended Minimum Force: 2 squads")]

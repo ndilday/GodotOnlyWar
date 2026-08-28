@@ -160,7 +160,7 @@ CREATE TABLE SoldierSkill (SoldierId INTEGER NOT NULL REFERENCES Soldier (Id), B
 -- Table: Squad
 -- Doctrine-following is the default. Only an explicitly customized squad uses its persisted
 -- SquadWeaponSet rows directly.
-CREATE TABLE Squad (Id INTEGER PRIMARY KEY UNIQUE NOT NULL, SquadTemplateId INTEGER NOT NULL, ParentUnitId INTEGER NOT NULL REFERENCES Unit (Id), Name STRING NOT NULL, LoadedShipId INTEGER REFERENCES Ship (Id), LandedRegionId INTEGER REFERENCES Region(Id), TrainingFocus INTEGER NOT NULL DEFAULT 0, IsAdministrative BOOLEAN NOT NULL DEFAULT 0, UsesLoadoutDoctrine BOOLEAN NOT NULL DEFAULT 1);
+CREATE TABLE Squad (Id INTEGER PRIMARY KEY UNIQUE NOT NULL, SquadTemplateId INTEGER NOT NULL, ParentUnitId INTEGER NOT NULL REFERENCES Unit (Id), Name STRING NOT NULL, LoadedShipId INTEGER REFERENCES Ship (Id), LandedRegionId INTEGER REFERENCES Region(Id), TrainingFocus INTEGER NOT NULL DEFAULT 0, IsAdministrative BOOLEAN NOT NULL DEFAULT 0, UsesLoadoutDoctrine BOOLEAN NOT NULL DEFAULT 1, FormationOrdinal INTEGER, HasBattleHistory BOOLEAN NOT NULL DEFAULT 0);
 
 -- Table: SquadWeaponSet
 CREATE TABLE SquadWeaponSet (SquadId INTEGER NOT NULL REFERENCES Squad (Id), WeaponSetId INTEGER NOT NULL);
@@ -192,7 +192,7 @@ CREATE TABLE SoldierEquipmentLoadoutItem (SoldierId INTEGER NOT NULL REFERENCES 
 -- Table: Unit
 CREATE TABLE Unit (Id INTEGER PRIMARY KEY UNIQUE NOT NULL, FactionId INTEGER NOT NULL, UnitTemplateId INTEGER NOT NULL, ParentUnitId INTEGER REFERENCES Unit (Id), Name STRING NOT NULL);
 
--- Canonical campaign-event ledger (introduced in format 8; current schema format 10).
+-- Canonical campaign-event ledger (introduced in format 8; current schema format 13).
 -- PayloadJson is typed by the (EventType,
 -- PayloadVersion) registry in code; CLR type names are never persisted.
 CREATE TABLE CampaignEvent (Id INTEGER PRIMARY KEY, EventType INTEGER NOT NULL, OccurredWeek INTEGER NOT NULL, RecordedWeek INTEGER NOT NULL, CorrelationKey TEXT, DedupeKey TEXT NOT NULL UNIQUE, PayloadVersion INTEGER NOT NULL, PayloadJson TEXT NOT NULL);
@@ -222,11 +222,9 @@ CREATE TABLE Assignment (Id INTEGER PRIMARY KEY UNIQUE NOT NULL, MissionId INTEG
 -- Table: SquadOrder
 CREATE TABLE OrderSquad (OrderId INTEGER NOT NULL REFERENCES Assignment (Id), SquadId INTEGER NOT NULL REFERENCES Squad (Id));
 
--- Table: OrderSoldier
--- Individuals attached to an operation without their home squad (Order.AttachedSoldiers,
--- Design/Reference/SpecialistAttachment.md). The soldier's Soldier.SquadId still points at his home
--- squad; this table is the only record that he is currently detached to an operation.
-CREATE TABLE OrderSoldier (OrderId INTEGER NOT NULL REFERENCES Assignment (Id), SoldierId INTEGER NOT NULL REFERENCES Soldier (Id));
+-- Table: IndividualPosting
+-- Save-owned physical location and commitment for a soldier away from his home formation.
+CREATE TABLE IndividualPosting (SoldierId INTEGER PRIMARY KEY REFERENCES Soldier (Id), PostingKind INTEGER NOT NULL, OrderId INTEGER REFERENCES Assignment (Id), LoadedShipId INTEGER REFERENCES Ship (Id), LandedRegionId INTEGER REFERENCES Region (Id), StartedDate INTEGER NOT NULL, CHECK ((LoadedShipId IS NOT NULL) <> (LandedRegionId IS NOT NULL)));
 
 
 COMMIT TRANSACTION;

@@ -29,11 +29,13 @@ public partial class ChapterController : MainScreenController
     private AcceptDialog _transferBlockedDialog;
     private ChapterFilterDialog _filterDialog;
     private LoadoutDoctrineDialog _loadoutDoctrineDialog;
+    private ChapterMusterScreenController _musterScreen;
 
     public ChapterView ChapterView { get; set; }
 
     public event EventHandler CampaignChanged;
     public event EventHandler<Squad> SquadLocationRequested;
+    public event EventHandler<string> ScreenTitleChanged;
 
     public override void _Ready()
     {
@@ -51,6 +53,7 @@ public partial class ChapterController : MainScreenController
         ChapterView.TransferTargetSelected += OnTransferTargetSelected;
         ChapterView.FilterButtonPressed += OnFilterButtonPressed;
         ChapterView.ChapterLoadoutsPressed += OnChapterLoadoutsPressed;
+        ChapterView.ChapterMusterPressed += (_, _) => OpenMuster(_currentDetailSoldierId);
 
         _transferConfirmationDialog = new ConfirmationDialog
         {
@@ -83,6 +86,48 @@ public partial class ChapterController : MainScreenController
         AddChild(_loadoutDoctrineDialog);
 
         RenderCurrentPath();
+    }
+
+    private void EnsureMusterScreen()
+    {
+        if (_musterScreen != null)
+        {
+            return;
+        }
+
+        PackedScene scene = GD.Load<PackedScene>(
+            "res://Scenes/ChapterMusterScreen/chapter_muster_screen.tscn");
+        _musterScreen = scene.Instantiate<ChapterMusterScreenController>();
+        _musterScreen.Visible = false;
+        _musterScreen.CampaignChanged += (_, _) => CampaignChanged?.Invoke(this, EventArgs.Empty);
+        _musterScreen.BackRequested += (_, _) => ShowChapterOverview();
+        AddChild(_musterScreen);
+    }
+
+    private void OpenMuster(int? soldierId)
+    {
+        EnsureMusterScreen();
+        ChapterView.Visible = false;
+        _musterScreen.Visible = true;
+        _musterScreen.OpenForSoldier(soldierId);
+        ScreenTitleChanged?.Invoke(this, "Bulk Transfers");
+    }
+
+    private void ShowChapterOverview(bool refresh = true)
+    {
+        if (_musterScreen != null)
+        {
+            _musterScreen.Visible = false;
+        }
+        if (ChapterView != null)
+        {
+            ChapterView.Visible = true;
+        }
+        if (refresh)
+        {
+            RenderCurrentPath();
+        }
+        ScreenTitleChanged?.Invoke(this, "Chapter Overview");
     }
 
     public override void _ExitTree()
@@ -118,6 +163,7 @@ public partial class ChapterController : MainScreenController
 
     public void PopulateCompanyList()
     {
+        ShowChapterOverview(refresh: false);
         _historicalSoldierId = null;
         _navigator.ResetToChapter();
         RenderCurrentPath();
@@ -125,6 +171,7 @@ public partial class ChapterController : MainScreenController
 
     public void DisplaySoldier(int soldierId)
     {
+        ShowChapterOverview(refresh: false);
         ISoldier soldier = GetSoldier(soldierId);
         if (soldier == null)
         {

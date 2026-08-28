@@ -12,8 +12,14 @@ using Xunit;
 
 namespace OnlyWar.Tests.Battles;
 
+[Collection(OnlyWar.Tests.TestCollections.SharedState)]
 public class SquadEngagementPlanningTests
 {
+    public SquadEngagementPlanningTests()
+    {
+        LegacyWeaponSetBattleFixture.UseIntrinsicBattleValues();
+    }
+
     [Fact]
     public void PairedFrame_AssignsMeleeScreenToFireSupportAgainstContactThreat()
     {

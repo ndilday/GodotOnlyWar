@@ -25,6 +25,7 @@ namespace OnlyWar.Helpers.Orders
     // soldier as a FALLEN BROTHER on load -- so evicting him would kill him on the next save.
     public static class OrderAttachment
     {
+        private static readonly IndividualPostingService PostingService = new();
         // Attaches an individual to an operation. Idempotent for the same order; re-attaching
         // a soldier who is on a different order moves him.
         public static void Attach(PlayerSoldier soldier, Order order)
@@ -42,9 +43,24 @@ namespace OnlyWar.Helpers.Orders
                 return;
             }
 
-            Detach(soldier);
-            order.AttachedSoldiers.Add(soldier);
-            soldier.AttachedOrder = order;
+            // Some legacy test/migration objects predate organizational squad ownership. Keep
+            // the facade tolerant of those incomplete objects; production posting creation still
+            // enforces a home formation through IndividualPostingService.CanCreate.
+            if (soldier.AssignedSquad == null)
+            {
+                Detach(soldier);
+                soldier.AttachedOrder = order;
+                order.AttachedSoldiers.Add(soldier);
+                return;
+            }
+
+            PostingService.Restore(
+                soldier,
+                IndividualPostingKind.OperationalAttachment,
+                CampaignLocation.Landed(order.Mission?.RegionFaction?.Region)
+                    ?? CampaignLocationService.ForSquad(soldier.AssignedSquad),
+                GameDataSingleton.Instance?.Date ?? new Date(1),
+                order);
         }
 
         // Releases one individual from whatever operation he is on. Safe on an unattached man.
@@ -54,8 +70,15 @@ namespace OnlyWar.Helpers.Orders
             {
                 return;
             }
-            soldier.AttachedOrder.AttachedSoldiers.Remove(soldier);
-            soldier.AttachedOrder = null;
+            if (soldier.IndividualPosting?.Location == null)
+            {
+                soldier.AttachedOrder.AttachedSoldiers.Remove(soldier);
+                soldier.AttachedOrder = null;
+            }
+            else
+            {
+                PostingService.ReleaseFromOrder(soldier);
+            }
         }
 
         // Releases every individual attached to an order. Called wherever an order ends:
@@ -69,9 +92,8 @@ namespace OnlyWar.Helpers.Orders
             }
             foreach (PlayerSoldier soldier in order.AttachedSoldiers.ToList())
             {
-                soldier.AttachedOrder = null;
+                PostingService.ReleaseFromOrder(soldier);
             }
-            order.AttachedSoldiers.Clear();
         }
 
         // True if this squad has any member currently attached to a different order. Used by
@@ -124,6 +146,10 @@ namespace OnlyWar.Helpers.Orders
             {
                 reason = "No soldier selected.";
                 return false;
+            }
+            if (order != null && ReferenceEquals(soldier.AttachedOrder, order))
+            {
+                return true;
             }
 
             // 1. Only formations whose function is to supply specialists may give a man up.

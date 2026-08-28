@@ -195,6 +195,11 @@ namespace OnlyWar.Helpers.Turns
                         RegionFaction target = mission.RegionFaction;
                         if (target?.PlanetFaction?.Faction == null) return true;
                         if (!ReferenceEquals(target.Region, region)) return true;
+                        if (mission.MissionType == MissionType.Extermination
+                            && target.IsPublic)
+                        {
+                            return true;
+                        }
                         if (!region.RegionFactionMap.TryGetValue(
                             target.PlanetFaction.Faction.Id,
                             out RegionFaction current))

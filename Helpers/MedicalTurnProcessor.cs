@@ -18,6 +18,7 @@ namespace OnlyWar.Helpers
             foreach (ISoldier soldier in soldiers)
             {
                 ApplyWeeklyHealing(soldier?.Body);
+                MarkAwaitingReunionWhenRecovered(soldier as PlayerSoldier);
             }
         }
 
@@ -120,7 +121,23 @@ namespace OnlyWar.Helpers
             MedicalProcedureService.SynchronizeProcedureReservations(
                 soldierMap?.Values,
                 procedures);
+            foreach (PlayerSoldier soldier in completed.Select(item => item.Soldier).Distinct())
+            {
+                MarkAwaitingReunionWhenRecovered(soldier);
+            }
             return completed;
+        }
+
+        private static void MarkAwaitingReunionWhenRecovered(PlayerSoldier soldier)
+        {
+            if (soldier?.IndividualPosting?.Kind != IndividualPostingKind.MedicalDetachment
+                || soldier.IsUndergoingMedicalProcedure
+                || soldier.Body?.HitLocations.Any(location =>
+                    location.Wounds.WoundTotal > 0 || location.IsSevered) == true)
+            {
+                return;
+            }
+            new IndividualPostingService().MarkAwaitingReunion(soldier);
         }
 
         private static CompletedMedicalProcedure CompleteProcedure(

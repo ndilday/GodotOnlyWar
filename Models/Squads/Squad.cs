@@ -18,6 +18,16 @@ namespace OnlyWar.Models.Squads
         private bool _isAdministrative;
         public int Id { get; }
         public string Name { get; set; }
+        /// <summary>
+        /// Stable number for a line formation inside its parent company. The number belongs to
+        /// the formation, not to its current leader or its position in a sorted roster.
+        /// </summary>
+        public int? FormationOrdinal { get; set; }
+        /// <summary>
+        /// Durable, monotonic marker used to retain an empty Scout lineage after deployment.
+        /// Detailed history remains in the campaign event ledger.
+        /// </summary>
+        public bool HasBattleHistory { get; set; }
         public SquadTemplate SquadTemplate { get; }
         public bool IsAdministrative
         {
@@ -131,6 +141,8 @@ namespace OnlyWar.Models.Squads
             // loadout doesn't need a deep copy
             clone.Loadout = Loadout;
             clone.UsesLoadoutDoctrine = UsesLoadoutDoctrine;
+            clone.FormationOrdinal = FormationOrdinal;
+            clone.HasBattleHistory = HasBattleHistory;
             return clone;
         }
 

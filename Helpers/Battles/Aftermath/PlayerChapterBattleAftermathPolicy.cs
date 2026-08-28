@@ -89,6 +89,15 @@ namespace OnlyWar.Helpers.Battles.Aftermath
 
         public void OnBattleCompleted(BattleState finalState)
         {
+            // Mark every strategic formation before casualty disposition can remove its last
+            // surviving member. This is monotonic, so an aftermath retry is harmless.
+            foreach (Squad squad in _context.StartingPlayerSoldiers
+                .Select(participant => participant.Soldier?.AssignedSquad)
+                .Where(squad => squad != null)
+                .Distinct())
+            {
+                squad.HasBattleHistory = true;
+            }
             RememberFinalPlayerSnapshots(finalState);
             ApplySoldierExperienceForBattle(finalState);
             SoldierProgressLog.LogDelta(

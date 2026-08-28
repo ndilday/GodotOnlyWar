@@ -128,7 +128,7 @@ namespace OnlyWar.Helpers.Extensions
             return new List<Region> { region }.Union(GetAdjacentRegions(region)).ToList();
         }
 
-        // The regions are laid out as a flat-top hex board (see PlanetTacticalScreenView's
+        // The regions are laid out as a flat-top hex board (see PlanetRegionMapView's
         // diamond layout). In coordinate space a region's row is X and its horizontal offset is
         // (2*Y - X), so the six hex neighbours are NOT the square 8-neighbourhood of (X, Y) but
         // the offsets below. Using a square neighbourhood here made the region-detail screen show

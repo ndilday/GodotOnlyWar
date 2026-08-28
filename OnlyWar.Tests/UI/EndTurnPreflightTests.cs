@@ -1,6 +1,7 @@
 using OnlyWar.Helpers.Settings;
 using OnlyWar.Helpers.Command;
 using OnlyWar.Helpers.Turns;
+using OnlyWar.Helpers.UI;
 using OnlyWar.Models;
 using OnlyWar.Models.Command;
 using OnlyWar.Models.Fleets;
@@ -87,13 +88,13 @@ public class EndTurnPreflightTests
             Assert.Equal(EndTurnWarningCategory.IdleDeployableSquads, item.Category));
         EndTurnAttentionItem landedItem = Assert.Single(
             report.Items, item => item.EntityId == idle.Id);
-        Assert.Contains("Squad Invictus", landedItem.Title);
+        Assert.Contains(idle.Name, landedItem.Title);
         Assert.Contains("Region Primus, Vigilus", landedItem.Detail);
         Assert.Contains("no orders", landedItem.Detail, StringComparison.OrdinalIgnoreCase);
 
         EndTurnAttentionItem embarkedItem = Assert.Single(
             report.Items, item => item.EntityId == embarked.Id);
-        Assert.Contains("Squad Aboard", embarkedItem.Title);
+        Assert.Contains(embarked.Name, embarkedItem.Title);
         Assert.Contains("orbiting Vigilus", embarkedItem.Detail);
         Assert.DoesNotContain(report.Items, item => item.EntityId == inTransit.Id);
     }
@@ -314,6 +315,24 @@ public class EndTurnPreflightTests
         Assert.All(facts, fact => Assert.Contains(
             brief.Items,
             item => item.StableKey == fact.StableKey));
+    }
+
+    [Fact]
+    public void CommandBriefIconsAreRegisteredInTheAtlas()
+    {
+        TestCampaign campaign = CreateCampaign();
+        AddSquad(campaign, "Squad Icon Audit", campaign.Region);
+
+        CommandBriefModel brief = new CommandBriefBuilder().Build(
+            new Date(1, 1, 1),
+            campaign.Sector,
+            null,
+            null);
+
+        Assert.NotEmpty(brief.Items);
+        Assert.All(brief.Items, item => Assert.True(
+            IconAtlas.HasIcon(item.IconKey),
+            $"Command Brief item '{item.StableKey}' uses unregistered icon '{item.IconKey}'."));
     }
 
     // Design/Reference/SpecialistAttachment.md §7.3. Two ways a formation stops being "idle":

@@ -46,7 +46,7 @@ namespace OnlyWar.Models.Events
         ];
         private static readonly string[] FoundingChronicleVariants =
         [
-            "The {chapter} entered the rolls of war with {strength} active battle brothers under {master}. {authority} charged the Chapter: {directive}",
+            "The {chapter} entered the rolls of war with {strength} active battle brothers and scouts under Chapter Master {master}. {authority} charged the Chapter: {directive}",
             "With {strength} active battle brothers, the {chapter} was entered into the Imperial record under {master}. Its first charge came from {authority}: {directive}"
         ];
         private static readonly string[] CultChronicleVariants =

@@ -1,6 +1,7 @@
 using OnlyWar.Helpers.Orders;
 using OnlyWar.Helpers.Recruitment;
 using OnlyWar.Helpers.Extensions;
+using OnlyWar.Helpers.Missions;
 using OnlyWar.Models;
 using OnlyWar.Models.Command;
 using OnlyWar.Models.Fleets;
@@ -107,7 +108,10 @@ namespace OnlyWar.Helpers.Turns
             facts.AddRange(sector.Planets.Values
                 .SelectMany(planet => planet.Regions.Where(region => region != null))
                 .SelectMany(region => region.SpecialMissions)
-                .Where(mission => mission != null && !assignedMissionIds.Contains(mission.Id))
+                .Where(mission => mission != null
+                    && (mission.MissionType != MissionType.Extermination
+                        || mission.RegionFaction != null && !mission.RegionFaction.IsPublic)
+                    && !assignedMissionIds.Contains(mission.Id))
                 .OrderBy(mission => mission.RegionFaction?.Region?.Planet?.Name)
                 .ThenBy(mission => mission.RegionFaction?.Region?.Name)
                 .ThenBy(mission => mission.MissionType)
@@ -376,7 +380,7 @@ namespace OnlyWar.Helpers.Turns
                 CommandAttentionKind.SpecialMissionOpportunity,
                 EndTurnWarningCategory.SpecialMissionOpportunities,
                 mission.Id,
-                $"{mission.MissionType} opportunity",
+                $"{SpecialMissionPresentation.GetMissionTypeLabel(mission.MissionType)} opportunity",
                 $"{location}. {risk}",
                 target,
                 insufficientVisibleIntel ? 1 : null);

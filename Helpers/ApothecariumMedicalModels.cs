@@ -107,7 +107,10 @@ namespace OnlyWar.Helpers
         bool HoldsProgenoid,
         bool IsCybernetic,
         bool NeedsReplacement,
-        MedicalSeverity Severity);
+        MedicalSeverity Severity,
+        WoundLevel PrincipalWoundLevel = WoundLevel.None,
+        bool IsSevered = false,
+        bool IsCrippled = false);
 
     public sealed record ReplacementOption(
         int HitLocationId,

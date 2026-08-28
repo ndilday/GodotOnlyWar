@@ -35,8 +35,8 @@ public partial class MainGameScene : Control
 	private PopupMenu _fleetContextMenu;
 	private int _contextFleetId;
 	private SquadScreenController _squadScreen;
-	private PlanetTacticalScreenController _planetTacticalScreen;
-	private RegionScreenController _regionScreen;
+	private PlanetaryOperationsScreenController _planetaryOperationsScreen;
+	private bool _planetaryOperationsReturnsToStack;
 	private Stack<Control> _previousScreenStack;
 	private CanvasLayer _mainUILayer;
 	private Control _primaryContentHost;
@@ -77,6 +77,7 @@ public partial class MainGameScene : Control
 		_systemInspector.MergeFleetPressed += OnInspectorMergeFleetPressed;
 		_systemInspector.LandSquadsPressed += OnInspectorOpenFleetPlanetPressed;
 		_systemInspector.LoadSquadsPressed += OnInspectorOpenFleetPlanetPressed;
+		_systemInspector.AnswerGovernorRequestPressed += OnInspectorAnswerGovernorRequestPressed;
 		_bottomMenu.ChapterButtonPressed += OnChapterButtonPressed;
 		_bottomMenu.ApothecariumButtonPressed += OnApothecariumButtonPressed;
 		_bottomMenu.TrainingUnitButtonPressed += OnTrainingUnitButtonPressed;
@@ -89,6 +90,7 @@ public partial class MainGameScene : Control
 		_sectorMap.PlanetDoubleClicked += OnPlanetDoubleClicked;
 		_sectorMap.FleetClicked += OnFleetClicked;
 		_sectorMap.FleetRightClicked += OnFleetRightClicked;
+		_sectorMap.BackgroundClicked += OnMapBackgroundClicked;
 		_mainUILayer = GetNode<CanvasLayer>("UILayer");
 		_primaryContentHost = GetNode<Control>("UILayer/PrimaryContentHost");
 		_modalLayer = GetNode<Control>("UILayer/ModalLayer");
@@ -103,8 +105,7 @@ public partial class MainGameScene : Control
 		Planet initialPlanet =
 			GameDataSingleton.Instance.Sector.PlayerForce.Fleet.TaskForces.FirstOrDefault()?.Planet
 			?? GameDataSingleton.Instance.Sector.Planets.Values.FirstOrDefault();
-		_sectorMap.SetSelectedPlanet(initialPlanet?.Id);
-		_systemInspector.DisplayPlanet(initialPlanet);
+		SelectPlanet(initialPlanet);
 
 		// The first-turn directive belongs to the Command Brief. It is acknowledged only after the
 		// workspace has been instantiated and rendered successfully; later manual visits keep it
@@ -233,7 +234,7 @@ public partial class MainGameScene : Control
 	// sector map underneath the still-visible surface.
 	private void PushVisibleOverlaySurface()
 	{
-		foreach (Control surface in new Control[] { _squadScreen, _regionScreen, _planetTacticalScreen })
+		foreach (Control surface in new Control[] { _squadScreen, _planetaryOperationsScreen })
 		{
 			if (surface?.Visible == true)
 			{
@@ -270,7 +271,13 @@ public partial class MainGameScene : Control
 		_chapterScreen.CloseRequested += OnCloseScreen;
 		_chapterScreen.CampaignChanged += OnCampaignChanged;
 		_chapterScreen.SquadLocationRequested += OnChapterSquadLocationRequested;
+		_chapterScreen.ScreenTitleChanged += OnChapterScreenTitleChanged;
 		AddPrimaryScreen(_chapterScreen);
+	}
+
+	private void OnChapterScreenTitleChanged(object sender, string title)
+	{
+		_topMenu.SetScreenText(title);
 	}
 
 	private void OnCommandButtonPressed(object sender, EventArgs e)
@@ -375,7 +382,7 @@ public partial class MainGameScene : Control
 				if (TryGetPlanet(target.PrimaryId, out Planet planet))
 				{
 					SelectPlanet(planet);
-					LoadPlanetTacticalScreen(planet);
+					OpenPlanetaryOperations(planet);
 				}
 				return;
 			case CampaignNavigationTargetKind.Region:
@@ -489,7 +496,7 @@ public partial class MainGameScene : Control
 		{
 			_activePrimaryScreen = null;
 		}
-		OpenRegionScreen(region, selectedSquadId, _commandScreen);
+		OpenPlanetaryOperationsRegion(region, selectedSquadId, _commandScreen);
 	}
 
 	private bool TryGetPlayerFleet(int? fleetId, out TaskForce fleet)
@@ -604,9 +611,7 @@ public partial class MainGameScene : Control
 			_chapterScreen.RequestClose();
 		}
 
-		LoadPlanetTacticalScreen(region.Planet);
-		_planetTacticalScreen.FocusRegion(region);
-		OpenRegionScreen(region, squad.Id, _planetTacticalScreen);
+		OpenPlanetaryOperationsRegion(region, squad.Id, null);
 	}
 
 	private void OnCloseScreen(object sender, EventArgs e)
@@ -642,16 +647,9 @@ public partial class MainGameScene : Control
 				_topMenu.SetScreenText("10th Company");
 				_bottomMenu.SetActiveDestination(BottomMenu.Destination.TrainingUnit);
 			}
-			else if (control == _planetTacticalScreen)
+			else if (control == _planetaryOperationsScreen)
 			{
-				_planetTacticalScreen.RefreshFromExternalChange();
-				_topMenu.SetScreenText("Sector Map");
-				_bottomMenu.SetActiveDestination(BottomMenu.Destination.None);
-				SetMapWorkspaceVisibility(true);
-			}
-			else if (control == _regionScreen)
-			{
-				_regionScreen.RefreshFromExternalChange();
+				_planetaryOperationsScreen.RefreshFromExternalChange();
 				_topMenu.SetScreenText("Sector Map");
 				_bottomMenu.SetActiveDestination(BottomMenu.Destination.None);
 				SetMapWorkspaceVisibility(true);
@@ -660,7 +658,7 @@ public partial class MainGameScene : Control
 			{
 				_bottomMenu.SetActiveDestination(BottomMenu.Destination.None);
 			}
-			if (control != _planetTacticalScreen && control != _regionScreen)
+			if (control != _planetaryOperationsScreen)
 			{
 				SetMapWorkspaceVisibility(false);
 			}
@@ -900,7 +898,12 @@ public partial class MainGameScene : Control
 	{
 		Planet planet = GameDataSingleton.Instance.Sector.Planets[planetId];
 		SelectPlanet(planet);
-		LoadPlanetTacticalScreen(planet);
+		OpenPlanetaryOperations(planet);
+	}
+
+	private void OnMapBackgroundClicked(object sender, EventArgs e)
+	{
+		SelectPlanet(null);
 	}
 
 	private void SelectPlanet(Planet planet, int? selectedFleetId = null)
@@ -915,7 +918,19 @@ public partial class MainGameScene : Control
 	{
 		if (!_selectedPlanetId.HasValue)
 		{
-			_systemInspector.DisplayEmptyState();
+			if (_selectedFleetId.HasValue
+				&& GameDataSingleton.Instance.Sector.Fleets.TryGetValue(
+					_selectedFleetId.Value, out TaskForce selectedFleet))
+			{
+				Planet fleetContext = selectedFleet.Planet
+					?? selectedFleet.Origin
+					?? selectedFleet.Destination;
+				_systemInspector.DisplayFleetContext(fleetContext, selectedFleet.Id);
+			}
+			else
+			{
+				_systemInspector.DisplayEmptyState();
+			}
 			return;
 		}
 
@@ -928,23 +943,41 @@ public partial class MainGameScene : Control
 		_systemInspector.DisplayPlanet(planet, _selectedFleetId);
 	}
 
-	private void LoadPlanetTacticalScreen(Planet planet)
+	private void OpenPlanetaryOperations(Planet planet)
 	{
-		if (_planetTacticalScreen == null)
+		if (_planetaryOperationsScreen == null)
 		{
-			PackedScene planetScene = GD.Load<PackedScene>("res://Scenes/PlanetDetailScreen/planet_tactical_screen.tscn");
-			_planetTacticalScreen = (PlanetTacticalScreenController)planetScene.Instantiate();
+			PackedScene planetScene = GD.Load<PackedScene>("res://Scenes/PlanetaryOperationsScreen/planetary_operations_screen.tscn");
+			_planetaryOperationsScreen = (PlanetaryOperationsScreenController)planetScene.Instantiate();
 
-			_planetTacticalScreen.CloseButtonPressed += OnDialogClosed;
-			_planetTacticalScreen.OrbitalSquadDoubleClicked += OnOrbitalSquadDoubleClicked;
-			_planetTacticalScreen.RegionDoubleClicked += OnRegionDoubleClicked;
-			_planetTacticalScreen.CampaignChanged += OnCampaignChanged;
-			_modalLayer.AddChild(_planetTacticalScreen);
+			_planetaryOperationsScreen.CloseButtonPressed += OnPlanetaryOperationsClosed;
+			_planetaryOperationsScreen.SquadDoubleClicked += OnSquadDoubleClicked;
+			_planetaryOperationsScreen.FleetManagementRequested += OnPlanetaryFleetManagementRequested;
+			_planetaryOperationsScreen.RecoveryOperationsRequested += OnPlanetaryRecoveryOperationsRequested;
+			_planetaryOperationsScreen.CampaignChanged += OnCampaignChanged;
+			_modalLayer.AddChild(_planetaryOperationsScreen);
 		}
-		_planetTacticalScreen.PopulatePlanetData(planet);
-		_planetTacticalScreen.Visible = true;
-		_planetTacticalScreen.MoveToFront();
+		_planetaryOperationsReturnsToStack = false;
+		_planetaryOperationsScreen.DisplayPlanet(planet);
+		_planetaryOperationsScreen.Visible = true;
+		_planetaryOperationsScreen.MoveToFront();
 		GD.Print($"Planet {planet.Id} Clicked");
+	}
+
+	private void OnPlanetaryFleetManagementRequested(object sender, Planet planet)
+	{
+		ShowFleetScreen();
+	}
+
+	private void OnPlanetaryOperationsClosed(object sender, EventArgs e)
+	{
+		if (_planetaryOperationsReturnsToStack)
+		{
+			_planetaryOperationsReturnsToStack = false;
+			OnCloseScreen(sender, e);
+			return;
+		}
+		OnDialogClosed(sender, e);
 	}
 
 	private void PlaceMainContentOverlay(Control overlay)
@@ -968,23 +1001,24 @@ public partial class MainGameScene : Control
 	private void OnFleetClicked(object sender, int fleetId)
 	{
 		TaskForce taskForce = GameDataSingleton.Instance.Sector.Fleets[fleetId];
-		Planet contextPlanet = taskForce.Planet ?? taskForce.Origin ?? taskForce.Destination;
-		if (contextPlanet != null)
-		{
-			SelectPlanet(contextPlanet, fleetId);
-		}
+		SelectFleetContext(taskForce);
 	}
 
 	private void OnFleetRightClicked(object sender, int fleetId)
 	{
 		TaskForce taskForce = GameDataSingleton.Instance.Sector.Fleets[fleetId];
-		Planet contextPlanet = taskForce.Planet ?? taskForce.Origin ?? taskForce.Destination;
-		if (contextPlanet != null)
-		{
-			SelectPlanet(contextPlanet, fleetId);
-		}
+		SelectFleetContext(taskForce);
 
 		ShowFleetContextMenu(taskForce);
+	}
+
+	private void SelectFleetContext(TaskForce taskForce)
+	{
+		_selectedPlanetId = null;
+		_selectedFleetId = taskForce?.Id;
+		_sectorMap.SetSelectedPlanet(null);
+		Planet contextPlanet = taskForce?.Planet ?? taskForce?.Origin ?? taskForce?.Destination;
+		_systemInspector.DisplayFleetContext(contextPlanet, taskForce?.Id);
 	}
 
 	private void ShowFleetContextMenu(TaskForce taskForce)
@@ -1021,7 +1055,7 @@ public partial class MainGameScene : Control
 		if (!GameDataSingleton.Instance.Sector.Planets.TryGetValue(planetId, out Planet planet)) return;
 
 		SelectPlanet(planet);
-		LoadPlanetTacticalScreen(planet);
+		OpenPlanetaryOperations(planet);
 	}
 
 	private void OnInspectorPlotCoursePressed(object sender, int fleetId)
@@ -1046,7 +1080,7 @@ public partial class MainGameScene : Control
 	{
 		if (!TryGetActionableFleet(fleetId, out TaskForce taskForce)) return;
 		SelectPlanet(taskForce.Planet, fleetId);
-		LoadPlanetTacticalScreen(taskForce.Planet);
+		OpenPlanetaryOperations(taskForce.Planet);
 	}
 
 	private bool TryGetActionableFleet(int fleetId, out TaskForce taskForce)
@@ -1130,6 +1164,14 @@ public partial class MainGameScene : Control
 	private void OnEndTurnButtonPressed(object sender, EventArgs e)
 	{
 		RequestEndTurn();
+	}
+
+	private void OnInspectorAnswerGovernorRequestPressed(object sender, int planetId)
+	{
+		if (!GameDataSingleton.Instance.Sector.Planets.TryGetValue(planetId, out Planet planet)) return;
+		SelectPlanet(planet);
+		OpenPlanetaryOperations(planet);
+		_planetaryOperationsScreen.DisplayGovernorRequest(planet);
 	}
 
 	private void ProcessTurnCore()
@@ -1221,42 +1263,48 @@ public partial class MainGameScene : Control
 
 	private void OnRegionDoubleClicked(object sender, Region region)
 	{
-		OpenRegionScreen(region, null, sender as Control);
+		OpenPlanetaryOperationsRegion(region, null, sender as Control);
 	}
 
-	private void OpenRegionScreen(Region region, int? selectedSquadId, Control returnSurface)
+	private void OpenPlanetaryOperationsRegion(Region region, int? selectedSquadId, Control returnSurface)
 	{
 		if (region == null)
 		{
 			return;
 		}
 
-		if(_regionScreen == null)
+		if (_planetaryOperationsScreen == null)
 		{
-			PackedScene regionScene = GD.Load<PackedScene>("res://Scenes/RegionScreen/region_screen.tscn");
-			_regionScreen = (RegionScreenController)regionScene.Instantiate();
-			_regionScreen.CloseButtonPressed += OnCloseScreen;
-			_regionScreen.SquadDoubleClicked += OnSquadDoubleClicked;
-			_regionScreen.CharacterDoubleClicked += OnCharacterDoubleClicked;
-			_regionScreen.AdjacentRegionChangeRequested += OnAdjacentRegionChangeRequested;
-			_regionScreen.CampaignChanged += OnCampaignChanged;
-			_modalLayer.AddChild(_regionScreen);
+			PackedScene operationsScene = GD.Load<PackedScene>("res://Scenes/PlanetaryOperationsScreen/planetary_operations_screen.tscn");
+			_planetaryOperationsScreen = (PlanetaryOperationsScreenController)operationsScene.Instantiate();
+			_planetaryOperationsScreen.CloseButtonPressed += OnPlanetaryOperationsClosed;
+			_planetaryOperationsScreen.SquadDoubleClicked += OnSquadDoubleClicked;
+			_planetaryOperationsScreen.FleetManagementRequested += OnPlanetaryFleetManagementRequested;
+			_planetaryOperationsScreen.RecoveryOperationsRequested += OnPlanetaryRecoveryOperationsRequested;
+			_planetaryOperationsScreen.CampaignChanged += OnCampaignChanged;
+			_modalLayer.AddChild(_planetaryOperationsScreen);
 		}
-		_regionScreen.DisplayRegion(region, selectedSquadId);
-		_regionScreen.Visible = true;
-		_regionScreen.MoveToFront();
+		_planetaryOperationsScreen.DisplayRegion(region, selectedSquadId);
+		_planetaryOperationsScreen.Visible = true;
+		_planetaryOperationsScreen.MoveToFront();
 		if (returnSurface != null)
 		{
+			_planetaryOperationsReturnsToStack = true;
 			_previousScreenStack.Push(returnSurface);
 			returnSurface.Visible = false;
 		}
+		else
+		{
+			_planetaryOperationsReturnsToStack = false;
+		}
 	}
 
-	private void OnAdjacentRegionChangeRequested(object sender, Region region)
+	private void OnPlanetaryRecoveryOperationsRequested(object sender, PlayerSoldier soldier)
 	{
-		_regionScreen?.DisplayRegion(region);
+		if (soldier == null) return;
+		OnApothecariumButtonPressed(sender, EventArgs.Empty);
+		_apothecariumScreen?.FocusSoldier(soldier.Id);
 	}
-
 	private void OnSquadDoubleClicked(object sender, Squad squad)
 	{
 		if (_squadScreen == null)

@@ -55,6 +55,6 @@ public class MissionReportHeadlineBuilderTests
             "Terra Lambda",
             "Terra");
 
-        Assert.Equal("2 squads Extermination on Genestealer Cult in Terra Lambda, Terra", headline);
+        Assert.Equal("2 squads Ambush Hidden Cell on Genestealer Cult in Terra Lambda, Terra", headline);
     }
 }

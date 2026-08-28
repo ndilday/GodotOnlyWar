@@ -2,6 +2,7 @@ using Godot;
 using OnlyWar.Builders;
 using OnlyWar.Helpers.Extensions;
 using OnlyWar.Helpers.UI;
+using OnlyWar.Helpers.PlanetaryOperations;
 using OnlyWar.Models;
 using OnlyWar.Models.Fleets;
 using OnlyWar.Models.Planets;
@@ -17,10 +18,10 @@ public partial class SystemInspector : Control
     public event EventHandler<int> MergeFleetPressed;
     public event EventHandler<int> LandSquadsPressed;
     public event EventHandler<int> LoadSquadsPressed;
+    public event EventHandler<int> AnswerGovernorRequestPressed;
 
     private Label _nameLabel;
     private Label _controlLabel;
-    private Label _planetDetailLabel;
     private Label _orbitDetailLabel;
     private Label _requestDetailLabel;
     private Label _selectedFleetDetailLabel;
@@ -31,6 +32,9 @@ public partial class SystemInspector : Control
     private Button _mergeButton;
     private Button _landSquadsButton;
     private Button _loadSquadsButton;
+    private Button _answerRequestButton;
+    private VBoxContainer _dossierSection;
+    private VBoxContainer _dossierContent;
     private Planet _selectedPlanet;
     private readonly List<TaskForce> _orbitingFleets = [];
     private int? _selectedFleetId;
@@ -40,7 +44,6 @@ public partial class SystemInspector : Control
     {
         _nameLabel = GetNode<Label>("Panel/MarginContainer/ScrollContainer/VBoxContainer/Header/SystemNameLabel");
         _controlLabel = GetNode<Label>("Panel/MarginContainer/ScrollContainer/VBoxContainer/ControlLabel");
-        _planetDetailLabel = GetNode<Label>("Panel/MarginContainer/ScrollContainer/VBoxContainer/PlanetSection/PlanetDetailLabel");
         _orbitDetailLabel = GetNode<Label>("Panel/MarginContainer/ScrollContainer/VBoxContainer/OrbitSection/OrbitDetailLabel");
         _requestDetailLabel = GetNode<Label>("Panel/MarginContainer/ScrollContainer/VBoxContainer/RequestSection/RequestDetailLabel");
         _fleetList = GetNode<ItemList>("Panel/MarginContainer/ScrollContainer/VBoxContainer/OrbitSection/FleetList");
@@ -51,6 +54,9 @@ public partial class SystemInspector : Control
         _mergeButton = GetNode<Button>("Panel/MarginContainer/ScrollContainer/VBoxContainer/ActionSection/MergeButton");
         _landSquadsButton = GetNode<Button>("Panel/MarginContainer/ScrollContainer/VBoxContainer/ActionSection/LandSquadsButton");
         _loadSquadsButton = GetNode<Button>("Panel/MarginContainer/ScrollContainer/VBoxContainer/ActionSection/LoadSquadsButton");
+        _answerRequestButton = GetNode<Button>("Panel/MarginContainer/ScrollContainer/VBoxContainer/RequestSection/AnswerRequestButton");
+        _dossierSection = GetNode<VBoxContainer>("Panel/MarginContainer/ScrollContainer/VBoxContainer/DossierSection");
+        _dossierContent = GetNode<VBoxContainer>("Panel/MarginContainer/ScrollContainer/VBoxContainer/DossierSection/DossierContent");
         IconAtlas.Apply(_openSystemButton, "planet");
         IconAtlas.Apply(_plotCourseButton, "plot_course");
         IconAtlas.Apply(_divideButton, "divide");
@@ -67,10 +73,23 @@ public partial class SystemInspector : Control
         _mergeButton.Pressed += () => InvokeSelectedFleetAction(MergeFleetPressed);
         _landSquadsButton.Pressed += () => InvokeSelectedFleetAction(LandSquadsPressed);
         _loadSquadsButton.Pressed += () => InvokeSelectedFleetAction(LoadSquadsPressed);
+        _answerRequestButton.Pressed += () =>
+        {
+            if (_selectedPlanet != null) AnswerGovernorRequestPressed?.Invoke(this, _selectedPlanet.Id);
+        };
         DisplayEmptyState();
     }
 
-    public void DisplayPlanet(Planet planet, int? selectedFleetId = null)
+    public void DisplayPlanet(Planet planet, int? selectedFleetId = null) =>
+        DisplaySystemContext(planet, selectedFleetId, showDossier: true);
+
+    public void DisplayFleetContext(Planet planet, int? selectedFleetId = null) =>
+        DisplaySystemContext(planet, selectedFleetId, showDossier: false);
+
+    private void DisplaySystemContext(
+        Planet planet,
+        int? selectedFleetId,
+        bool showDossier)
     {
         if (planet == null)
         {
@@ -94,9 +113,20 @@ public partial class SystemInspector : Control
         _controlLabel.Text = controllingFaction != null
             ? $"Controlled by {controllingFaction.Name}"
             : "Control unknown";
-        _planetDetailLabel.Text = $"{planet.Template.Name} | Pop {FormatPopulation(planet.Population)} | PDF {planet.PlanetaryDefenseForces:N0}";
         _orbitDetailLabel.Text = _orbitingFleets.Count == 1 ? "1 task force in orbit" : $"{_orbitingFleets.Count} task forces in orbit";
         _requestDetailLabel.Text = openRequests == 1 ? "1 active request" : $"{openRequests} active requests";
+        _answerRequestButton.Visible = planet.Governor?.ActiveRequest is IRequest request
+            && request.Status is RequestStatus.Open or RequestStatus.InProgress;
+        _dossierSection.Visible = showDossier;
+        if (showDossier)
+        {
+            RenderDossier(PlanetaryOperationsViewModelBuilder.BuildWorld(
+                GameDataSingleton.Instance.Sector, planet, null));
+        }
+        else
+        {
+            Clear(_dossierContent);
+        }
 
         if (_selectedFleetId.HasValue && !_orbitingFleets.Any(fleet => fleet.Id == _selectedFleetId.Value))
         {
@@ -133,12 +163,50 @@ public partial class SystemInspector : Control
         _orbitingFleets.Clear();
         _nameLabel.Text = "No System Selected";
         _controlLabel.Text = "Select a star system on the sector map";
-        _planetDetailLabel.Text = "Planet data will appear here.";
         _orbitDetailLabel.Text = "Orbital task forces will appear here.";
         _requestDetailLabel.Text = "Active requests will appear here.";
         if (_selectedFleetDetailLabel != null) _selectedFleetDetailLabel.Text = "Select a task force for fleet actions.";
         _fleetList?.Clear();
+        if (_answerRequestButton != null) _answerRequestButton.Visible = false;
+        if (_dossierSection != null) _dossierSection.Visible = false;
+        Clear(_dossierContent);
         RefreshActionState();
+    }
+
+    public override void _UnhandledInput(InputEvent @event)
+    {
+        // ScrollContainer stops consuming wheel events at its scroll limits. Keep
+        // those events inside the inspector instead of letting the map interpret
+        // them as zoom commands.
+        if (!IsVisibleInTree()
+            || @event is not InputEventMouseButton mouse
+            || !mouse.Pressed
+            || mouse.ButtonIndex is not (MouseButton.WheelUp or MouseButton.WheelDown)
+            || !GetGlobalRect().HasPoint(GetViewport().GetMousePosition()))
+        {
+            return;
+        }
+
+        GetViewport().SetInputAsHandled();
+    }
+
+    private void RenderDossier(WorldDossierViewModel dossier)
+    {
+        Clear(_dossierContent);
+        foreach (DossierCardData card in dossier.ProfileCards.Concat(dossier.StrengthCards))
+        {
+            _dossierContent.AddChild(DossierCard.Create(card));
+        }
+    }
+
+    private static void Clear(Node parent)
+    {
+        if (parent == null) return;
+        foreach (Node child in parent.GetChildren())
+        {
+            parent.RemoveChild(child);
+            child.QueueFree();
+        }
     }
 
     private void PopulateFleetList()

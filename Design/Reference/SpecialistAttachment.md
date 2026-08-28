@@ -1,8 +1,13 @@
 # Specialist Attachment — Order-Level Attachment of Individuals
 
-Status: **IMPLEMENTED — reference record.** Moved from `Active/` to `Reference/` on 2026-08-07.
+Status: **IMPLEMENTED — historical reference record.** Moved from `Active/` to `Reference/` on 2026-08-07.
 Produced to answer `CasualtyRealism.md` §3.1, which decided order-level attachment but left the
 sub-questions open and asked for a doc of its own; built as Phase 2a of that plan.
+
+The current source of truth is `OnlyWar_TDD.md` §5.3, §5.6, and §6.10. The original `OrderSoldier`
+table and direct attachment pointers described in the implementation record below were superseded by
+the persisted `IndividualPosting` model in save format 13; the historical details remain only for the
+resolved design rationale and load-ordering trap.
 
 Retained rather than distilled away for three things that stay useful: the resolved sub-question
 table in §4, the rationale in §2.2 for carrying the detachment flag as a `SquadTypes` bit rather
@@ -10,14 +15,15 @@ than a new column, and the load-ordering trap in §6.3 (`PlayerSoldier`'s constr
 `Soldier` from its squad, so attachment hydration must run after soldiers load and be pinned by a
 reference-equality assertion). The shipped architecture is summarized in `OnlyWar_TDD.md` §5.6.
 
-**Two corrections from implementation**, recorded so this document is not read as the final word:
+**Historical corrections from the original implementation**, recorded so this document is not read as
+the final word:
 - §3.1's four-argument `CanAttach` could not work as written — order issue must validate *before* the
   `Order` object exists — so an overload taking the staging squads explicitly was added, and the
   documented signature delegates to it.
-- The save-format version had to be bumped (`SaveFormat.CurrentVersion` 5 → 6). §6 says correctly
-  that the writer recreates the schema on every save and therefore needs no migration; that reasoning
-  does **not** extend to the reader, and an older save met by a newer build faulted with
-  "no such table: OrderSoldier" until the version moved. See PRD §4.18 / TDD §4.2.
+- The original save-format version had to be bumped (`SaveFormat.CurrentVersion` 5 → 6). §6 says
+  correctly that the writer recreates the schema on every save and therefore needs no migration; that
+  reasoning does **not** extend to the reader. The later format-13 posting redesign replaced the
+  historical `OrderSoldier` table; see PRD §4.18 / TDD §4.2.
 
 Scope: attachment as a purely **organizational** concept. An attached specialist is *with* the force,
 not *in* the engagement — no battlefield presence, no battle-time squad binding, cannot become a

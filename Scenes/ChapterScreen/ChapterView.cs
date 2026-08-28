@@ -7,11 +7,13 @@ public partial class ChapterView : MainScreenView
 {
     // Pointer travel (in viewport pixels) still treated as a click rather than a drag.
     private const float ClickDragTolerance = 6f;
+    private const float HeroElementHeight = 72f;
 
     private HBoxContainer _breadcrumbBar;
     private HBoxContainer _breadcrumbItems;
     private LinkButton _detailLocationLink;
     private Button _loadoutsButton;
+    private Button _musterButton;
     private Label _leftTitleLabel;
     private Button _filterButton;
     private VBoxContainer _leftMenuVBox;
@@ -34,31 +36,40 @@ public partial class ChapterView : MainScreenView
     public event EventHandler<int> DetailLocationRequested;
     public event EventHandler FilterButtonPressed;
     public event EventHandler ChapterLoadoutsPressed;
+    public event EventHandler ChapterMusterPressed;
 
     public override void _Ready()
     {
         base._Ready();
         _breadcrumbBar = GetNode<HBoxContainer>("Content/BreadcrumbBar");
         _breadcrumbItems = GetNode<HBoxContainer>("Content/BreadcrumbBar/BreadcrumbItems");
-        _loadoutsButton = GetNode<Button>("Content/MainLayout/DetailPanel/Panel/MarginContainer/DetailStack/Hero/LoadoutsButton");
+        _loadoutsButton = GetNode<Button>("Content/MainLayout/DetailPanel/Panel/MarginContainer/DetailStack/Hero/ActionHeader/LoadoutsButton");
+        _musterButton = GetNode<Button>("Content/MainLayout/DetailPanel/Panel/MarginContainer/DetailStack/Hero/ActionHeader/MusterButton");
         _leftTitleLabel = GetNode<Label>("Content/MainLayout/LeftMenu/Panel/MarginContainer/MenuStack/Header/TitleLabel");
         _filterButton = GetNode<Button>("Content/MainLayout/LeftMenu/Panel/MarginContainer/MenuStack/Header/FilterButton");
         _leftMenuVBox = GetNode<VBoxContainer>("Content/MainLayout/LeftMenu/Panel/MarginContainer/MenuStack/ScrollContainer/LeftMenuVBox");
-        _detailIcon = GetNode<TextureRect>("Content/MainLayout/DetailPanel/Panel/MarginContainer/DetailStack/Hero/DetailIcon");
-        _detailTitleLabel = GetNode<Label>("Content/MainLayout/DetailPanel/Panel/MarginContainer/DetailStack/Hero/TitleStack/TitleLabel");
-        _detailSubtitleLabel = GetNode<Label>("Content/MainLayout/DetailPanel/Panel/MarginContainer/DetailStack/Hero/TitleStack/SubtitleLine/SubtitleLabel");
-        _detailLocationLink = GetNode<LinkButton>("Content/MainLayout/DetailPanel/Panel/MarginContainer/DetailStack/Hero/TitleStack/SubtitleLine/LocationLink");
+        _detailIcon = GetNode<TextureRect>("Content/MainLayout/DetailPanel/Panel/MarginContainer/DetailStack/Hero/ChapterHeader/DetailIcon");
+        _detailTitleLabel = GetNode<Label>("Content/MainLayout/DetailPanel/Panel/MarginContainer/DetailStack/Hero/ChapterHeader/TitleStack/TitleLabel");
+        _detailSubtitleLabel = GetNode<Label>("Content/MainLayout/DetailPanel/Panel/MarginContainer/DetailStack/Hero/ChapterHeader/TitleStack/SubtitleLine/SubtitleLabel");
+        _detailLocationLink = GetNode<LinkButton>("Content/MainLayout/DetailPanel/Panel/MarginContainer/DetailStack/Hero/ChapterHeader/TitleStack/SubtitleLine/LocationLink");
         _metricGrid = GetNode<GridContainer>("Content/MainLayout/DetailPanel/Panel/MarginContainer/DetailStack/Hero/MetricGrid");
         _detailCardLayout = GetNode<HBoxContainer>("Content/MainLayout/DetailPanel/Panel/MarginContainer/DetailStack/DetailScroll/DetailCardLayout");
         _detailCardGrid = GetNode<GridContainer>("Content/MainLayout/DetailPanel/Panel/MarginContainer/DetailStack/DetailScroll/DetailCardLayout/DetailCardGrid");
         _detailActionButton = GetNode<Button>("Content/MainLayout/DetailPanel/Panel/MarginContainer/DetailStack/DetailActionButton");
-        _transferButton = GetNode<MenuButton>("Content/MainLayout/DetailPanel/Panel/MarginContainer/DetailStack/Hero/TransferButton");
+        _transferButton = GetNode<MenuButton>("Content/MainLayout/DetailPanel/Panel/MarginContainer/DetailStack/Hero/ActionHeader/TransferButton");
 
         ConfigureHeaderLabel(_leftTitleLabel);
         _filterButton.MouseDefaultCursorShape = CursorShape.PointingHand;
+        _filterButton.TooltipText = "Filter the current Chapter roster view.";
         _filterButton.Pressed += () => FilterButtonPressed?.Invoke(this, EventArgs.Empty);
-        IconAtlas.Apply(_loadoutsButton, "armamentarium", 150);
+        SetHeroElementHeight(_loadoutsButton);
+        IconAtlas.Apply(_loadoutsButton, "armamentarium");
         _loadoutsButton.Pressed += () => ChapterLoadoutsPressed?.Invoke(this, EventArgs.Empty);
+        SetHeroElementHeight(_musterButton);
+        IconAtlas.Apply(_musterButton, "chapter");
+        _musterButton.Text = "Bulk Transfer";
+        _musterButton.TooltipText = "Open Chapter Muster to promote, transfer, and organize multiple soldiers as one staged plan.";
+        _musterButton.Pressed += () => ChapterMusterPressed?.Invoke(this, EventArgs.Empty);
         _detailIcon.CustomMinimumSize = new Vector2(RosterRowStyle.IconSize, RosterRowStyle.IconSize);
         _detailIcon.ExpandMode = TextureRect.ExpandModeEnum.IgnoreSize;
         _detailActionButton.Pressed += () => DetailPrimaryActionPressed?.Invoke(this, EventArgs.Empty);
@@ -354,7 +365,9 @@ public partial class ChapterView : MainScreenView
     {
         PanelContainer panel = new PanelContainer
         {
-            CustomMinimumSize = new Vector2(110, 58)
+            CustomMinimumSize = new Vector2(0, HeroElementHeight),
+            SizeFlagsHorizontal = SizeFlags.ExpandFill,
+            SizeFlagsVertical = SizeFlags.ShrinkCenter
         };
         OnlyWarStyle.ApplyInsetPanel(panel);
 
@@ -373,6 +386,12 @@ public partial class ChapterView : MainScreenView
         stack.AddChild(label);
 
         return panel;
+    }
+
+    private static void SetHeroElementHeight(Control control)
+    {
+        control.CustomMinimumSize = new Vector2(control.CustomMinimumSize.X, HeroElementHeight);
+        control.SizeFlagsVertical = SizeFlags.ShrinkCenter;
     }
 
     private Control CreateDetailCard(ChapterBrowserDetailCard card)

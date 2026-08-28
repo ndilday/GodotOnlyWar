@@ -7,6 +7,7 @@ using OnlyWar.Models.Planets;
 using OnlyWar.Models.Soldiers;
 using OnlyWar.Models.Squads;
 using OnlyWar.Models.Units;
+using OnlyWar.Models;
 using System;
 using System.Collections.Generic;
 using System.Data;
@@ -46,6 +47,11 @@ namespace OnlyWar.Helpers.Database.GameState
                     // are non-operational and their setter intentionally clears deployments.
                     squad.IsAdministrative = reader.GetBoolean(7);
                     squad.UsesLoadoutDoctrine = reader.GetBoolean(8);
+                    if (reader[9].GetType() != typeof(DBNull))
+                    {
+                        squad.FormationOrdinal = reader.GetInt32(9);
+                    }
+                    squad.HasBattleHistory = reader.GetBoolean(10);
                     squadByIdMap[id] = squad;
 
 
@@ -254,9 +260,11 @@ namespace OnlyWar.Helpers.Database.GameState
                 command.Transaction = transaction;
                 command.CommandText = @"INSERT INTO Squad
                     (Id, SquadTemplateId, ParentUnitId, Name, LoadedShipId, LandedRegionId,
-                     TrainingFocus, IsAdministrative, UsesLoadoutDoctrine) VALUES
+                     TrainingFocus, IsAdministrative, UsesLoadoutDoctrine, FormationOrdinal,
+                     HasBattleHistory) VALUES
                     (@id, @templateId, @parentUnitId, @name, @ship, @region, @trainingFocus,
-                     @isAdministrative, @usesLoadoutDoctrine);";
+                     @isAdministrative, @usesLoadoutDoctrine, @formationOrdinal,
+                     @hasBattleHistory);";
                 command.AddParam("@id", squad.Id);
                 command.AddParam("@templateId", squad.SquadTemplate.Id);
                 command.AddParam("@parentUnitId", squad.ParentUnit.Id);
@@ -266,6 +274,10 @@ namespace OnlyWar.Helpers.Database.GameState
                 command.AddParam("@trainingFocus", (int)squad.TrainingFocus);
                 command.AddParam("@isAdministrative", squad.IsAdministrative ? 1 : 0);
                 command.AddParam("@usesLoadoutDoctrine", squad.UsesLoadoutDoctrine ? 1 : 0);
+                command.AddParam("@formationOrdinal", squad.FormationOrdinal.HasValue
+                    ? squad.FormationOrdinal.Value
+                    : null);
+                command.AddParam("@hasBattleHistory", squad.HasBattleHistory ? 1 : 0);
                 command.ExecuteNonQuery();
             }
 
@@ -318,61 +330,7 @@ namespace OnlyWar.Helpers.Database.GameState
                     command.ExecuteNonQuery();
                 }
             }
-            // Individuals lent to this operation without their home squad. Their Soldier rows
-            // were already written (the squad loop above covers them, since attachment never
-            // removes a man from Squad.Members), so the FK resolves.
-            foreach (PlayerSoldier soldier in order.AttachedSoldiers)
-            {
-                using (var command = transaction.Connection.CreateCommand())
-                {
-                    command.Transaction = transaction;
-                    command.CommandText = @"INSERT INTO OrderSoldier VALUES
-                        (@orderId, @soldierId);";
-                    command.AddParam("@orderId", order.Id);
-                    command.AddParam("@soldierId", soldier.Id);
-                    command.ExecuteNonQuery();
-                }
-            }
         }
 
-        /// <summary>
-        /// Restores Order.AttachedSoldiers / PlayerSoldier.AttachedOrder from the OrderSoldier
-        /// table. Deliberately NOT part of GetSquadsByUnitId: the orders are built there, but
-        /// soldiers do not exist yet at that point, and -- worse -- PlayerSoldier's constructor
-        /// evicts the base Soldier from its squad and inserts the wrapper in its place. Anything
-        /// resolving soldier references before the PlayerSoldier pass would capture objects that
-        /// are no longer in any squad. So this runs after the player soldiers are loaded and
-        /// resolves against them (Design/Reference/SpecialistAttachment.md §6.3).
-        /// </summary>
-        public void PopulateOrderAttachments(
-            IDbConnection connection,
-            IReadOnlyDictionary<int, Squad> squadMap,
-            IReadOnlyDictionary<int, PlayerSoldier> playerSoldierMap)
-        {
-            Dictionary<int, Order> orderMap = squadMap.Values
-                .Select(squad => squad.CurrentOrders)
-                .Where(order => order != null)
-                .Distinct()
-                .ToDictionary(order => order.Id);
-            if (orderMap.Count == 0)
-            {
-                return;
-            }
-
-            using var command = connection.CreateCommand();
-            command.CommandText = "SELECT * FROM OrderSoldier";
-            var reader = command.ExecuteReader();
-            while (reader.Read())
-            {
-                int orderId = reader.GetInt32(0);
-                int soldierId = reader.GetInt32(1);
-                if (orderMap.TryGetValue(orderId, out Order order)
-                    && playerSoldierMap.TryGetValue(soldierId, out PlayerSoldier soldier))
-                {
-                    order.AttachedSoldiers.Add(soldier);
-                    soldier.AttachedOrder = order;
-                }
-            }
-        }
     }
 }

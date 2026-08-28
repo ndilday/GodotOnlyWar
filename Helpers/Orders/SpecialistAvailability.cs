@@ -7,8 +7,8 @@ using System.Linq;
 
 namespace OnlyWar.Helpers.Orders
 {
-    // The rules behind the Region Ops "ATTACHMENTS" roster group, extracted out of
-    // RegionScreenController for the same reason OrderAssignment was: a Godot partial class
+    // The rules behind the Planetary Operations "ATTACHMENTS" roster group, extracted out of
+    // PlanetaryOperationsScreenController for the same reason OrderAssignment was: a Godot partial class
     // cannot be unit-tested, so the decisions live here and the controller only does tree
     // wiring. See Design/Reference/SpecialistAttachment.md §7.1.
     public sealed class SpecialistOption
@@ -41,6 +41,23 @@ namespace OnlyWar.Helpers.Orders
 
     public static class SpecialistAvailability
     {
+        /// <summary>
+        /// Whether a formation belongs in the Orders squad roster. HQs and administrative
+        /// formations are command/personnel pools rather than mission squads; formations that
+        /// lend individual specialists are likewise never assigned as a whole squad.
+        /// This is a type/role check only: empty or otherwise unavailable formations can still
+        /// be shown by the Orders UI with an exclusion reason.
+        /// </summary>
+        public static bool IsMissionSquadFormation(Squad squad)
+        {
+            if (squad == null || squad.IsAdministrative) return false;
+
+            SquadTypes type = squad.SquadTemplate?.SquadType ?? SquadTypes.None;
+            return (type & (SquadTypes.HQ
+                | SquadTypes.Administrative
+                | SquadTypes.PermitsIndividualDetachment)) == 0;
+        }
+
         /// <summary>
         /// May this squad be offered in the Region Ops squad roster as a deployable unit?
         /// Formations that lend individuals are personnel pools and never deploy as units

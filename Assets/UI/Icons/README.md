@@ -1,8 +1,8 @@
 # Icon Atlas
 
-`icon_atlas.svg` is the editable source for the first UI icon atlas. It uses an
-8 by 8 grid of 64px cells. `icon_atlas_manifest.json` provides stable names and
-texture rectangles for each cell.
+`icon_atlas.png` is the UI icon atlas. It uses an 8 by 13 grid of 128px cells.
+`icon_atlas_manifest.json` provides stable names and texture rectangles for each
+cell.
 
 The first pass is organized around the current UI needs:
 
@@ -18,6 +18,21 @@ The first pass is organized around the current UI needs:
   warp, wounded, medical, training, locked, rank markers, award
 - planet and region detail: imperial population, PDF/Astra Militarum forces,
   landed player forces, Tyranids, Genestealer Cult, Chaos
+- Chapter Muster: tintable gun, sword, voice, and banner honors; historical
+  lineage; create formation; fleet rebalance
+- Recovery Operations: sort, recovery time, limb replacement, medical
+  detachment, individual posting, and reunion
+
+The approved full-resolution Chapter Muster masters live in
+`Masters/ChapterMuster`. Run `build_chapter_muster_atlas.ps1` after changing one
+of those masters to rebuild row 10 without moving existing atlas cells. The
+script also accepts seven source paths, in manifest order, for the one-time
+import of generated review images whose checkerboard background must be
+converted to real transparency.
+
+Approved Recovery Operations raster masters live in
+`Masters/RecoveryOperations`. The same build script rebuilds row 11 from those
+masters while preserving all established atlas coordinates.
 
 Recommended next atlas expansion:
 
@@ -32,3 +47,21 @@ Recommended next atlas expansion:
 Implementation note: once the SVG import looks good in Godot, create either
 named `AtlasTexture` resources for common icons or a small helper that reads the
 manifest and returns an `AtlasTexture` by icon key.
+
+## Planetary Operations
+
+Rows 12 and 13 contain the dark-brass Planetary Operations set:
+
+- control: `control_contested`
+- ordinary missions: `mission_recon`, `mission_defend`, `mission_patrol`,
+  `mission_attack`, and `mission_diversion`
+- fortifications: `fortification_entrenchment`,
+  `fortification_listening_post`, and `fortification_anti_air`
+- special missions: `mission_ambush`, `mission_sabotage`, and
+  `mission_show_of_force`
+- order state: `order_active`, `order_assigned`, and `order_unassigned`
+
+The approved source sheet, transparent per-icon masters, and integrated review
+strip live in `Masters/PlanetaryOperations`. Run
+`build_planetary_operations_atlas.ps1` to regenerate those masters and the two
+atlas rows while preserving the earlier 11 rows.

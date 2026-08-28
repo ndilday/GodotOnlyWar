@@ -2,7 +2,7 @@
 
 **Version:** Alpha 0.8
 
-**Last Updated:** August 15, 2026
+**Last Updated:** August 21, 2026
 
 **Author:** Nathan Dilday
 
@@ -38,11 +38,14 @@
    - 6.7 [Force Generation](#67-force-generation)
    - 6.8 [Chapter Generation](#68-chapter-generation)
    - 6.9 [Sector Generation](#69-sector-generation)
+   - 6.10 [Campaign Operations Services](#610-campaign-operations-services)
+   - 6.11 [Sector Map Label Layer](#611-sector-map-label-layer)
 7. [UI Layer](#7-ui-layer)
    - 7.1 [View / Controller Pattern](#71-view--controller-pattern)
    - 7.2 [Screen Inventory](#72-screen-inventory)
    - 7.3 [Navigation Model](#73-navigation-model)
    - 7.4 [Last-Turn Report Snapshot](#74-last-turn-report-snapshot)
+   - 7.5 [Operations Workspaces](#75-operations-workspaces)
 8. [Identified Technical Risks & Debt](#8-identified-technical-risks--debt)
 9. [Testing Strategy](#9-testing-strategy)
 
@@ -94,9 +97,8 @@
   /GalaxyView
   /MainGameScreen
   /MainMenuScreen
-  /PlanetDetailScreen
+  /PlanetaryOperationsScreen
   /RecruiterScreen
-  /RegionScreen
   /SoldierScreen
   /SquadScreen
 ```
@@ -236,11 +238,11 @@ Three properties of this design are easy to break and worth stating. The compone
 
 Written in full on each save (file is deleted and recreated from scratch using the loose, read-only `Database/SaveStructure.sql`). Read on load via `GameStateDataAccess` (singleton). All writes are wrapped in a single transaction; exceptions trigger rollback. Player saves live under `user://saves` (`%APPDATA%\OnlyWar\saves` on Windows), never in the install directory. `SaveGameCatalog` discovers `*.s3db` files and inspects only their metadata for the start menu.
 
-**Current Alpha 0.8 behavior:** `SaveFormat.CurrentVersion` is 10 and is written to `GlobalData.SaveVersion`. Format 10 adds itemized chapter-role and soldier-personal equipment loadout tables on top of the format-9 relationship/intelligence schema; format 9 and every older version are rejected before sector-table loading. Save discovery marks only format 10 as compatible, while newer or older versions are incompatible. Missing saves are opened in neither create nor write mode, preventing a failed load from leaving behind an empty SQLite file. The visible chooser retains compatible, incompatible, and corrupt entries with an explicit reason instead of silently choosing the newest file.
+**Current Alpha 0.8 behavior:** `SaveFormat.CurrentVersion` is 13 and is written to `GlobalData.SaveVersion`. Format 12 adds stable line-formation ordinals and durable squad battle-history retention; format 13 adds persisted individual postings and makes them the source of truth for a detached soldier's physical location and commitment. Only format 13 is currently accepted; older and newer versions are rejected before campaign-table loading. Missing saves are opened in neither create nor write mode, preventing a failed load from leaving behind an empty SQLite file. The visible chooser retains compatible, incompatible, and corrupt entries with an explicit reason instead of silently choosing the newest file.
 
 Named manual slots, the initial recovery point, three rolling post-turn autosaves, and the protected pre-turn recovery point all use the same atomic persistence path. `CampaignRecoverabilityTracker` records whether the current in-memory revision has a successfully written recovery point, while `SaveGameManager` owns slot naming, metadata, retention, overwrite protection, and restoration of the prior valid save on failure. The protected pre-turn write completes before `ProcessTurn` mutates state; failure blocks turn resolution. Alpha saves use exact-version compatibility only: there is no legacy save migrator or legacy-history import path.
 
-**Format version 7 (historical, 2026-08-08).** The `LastTurnReport` table stores one optional bounded JSON snapshot of the latest resolved turn report. The row is written in the same atomic transaction as the campaign and is hydrated onto `PlayerForce`; a missing table or row is treated as a null report so a campaign-start/pre-turn save can still load and show an intentional empty Last Turn Report state. The payload contains display strings, debrief lines, and compact casualty data only — never `MissionContext`, `BattleHistory`, or live campaign entities. Current format 10 loading rejects format 7 before table access.
+**Format version 7 (historical, 2026-08-08).** The `LastTurnReport` table stores one optional bounded JSON snapshot of the latest resolved turn report. The row is written in the same atomic transaction as the campaign and is hydrated onto `PlayerForce`; a missing table or row is treated as a null report so a campaign-start/pre-turn save can still load and show an intentional empty Last Turn Report state. The payload contains display strings, debrief lines, and compact casualty data only — never `MissionContext`, `BattleHistory`, or live campaign entities. Current format 13 loading rejects format 7 before table access.
 
 **Format version 8 (historical, 2026-08-11).** The save schema includes the canonical `CampaignEvent` /
 `CampaignEventEntity` / `CampaignEventPublication` tables, the persistent Chapter Chronicle
@@ -272,7 +274,7 @@ the already-projected ledgers. New campaigns emit the founding event after scena
 loaded scenario saves missing it receive a deterministic compatibility event from persisted roster,
 scenario, and world facts.
 
-The format-10 change follows the same rule established by format 6: any change to `SaveStructure.sql`'s shape bumps `SaveFormat.CurrentVersion`. A save/load round-trip test cannot catch a missed bump because the writer recreates the schema from scratch; only an older file read by a newer build exposes it. There is intentionally no migration boundary for this feature: a format-9 or older file is reported as incompatible and must be replaced by a new format-10 campaign. `ChapterEquipmentRoleLoadout` and `SoldierEquipmentLoadout` store complete armor/item compositions; their item tables preserve quantity and initial-ready order, and personal rows are filtered against the current `Soldier` roster during save.
+The format-13 change follows the same rule established by format 6: any change to `SaveStructure.sql`'s shape bumps `SaveFormat.CurrentVersion`. A save/load round-trip test cannot catch a missed bump because the writer recreates the schema from scratch; only an older file read by a newer build exposes it. There is intentionally no migration boundary for this feature: a format-12 or older file is reported as incompatible and must be replaced by a new format-13 campaign. `ChapterEquipmentRoleLoadout` and `SoldierEquipmentLoadout` store complete armor/item compositions; their item tables preserve quantity and initial-ready order, and personal rows are filtered against the current `Soldier` roster during save. `Squad.FormationOrdinal` and `Squad.HasBattleHistory` preserve line identity and historical Scout retention, while `IndividualPosting` preserves one detached soldier's posting kind, physical location, order projection, and start date.
 
 `CurrentCampaignSaveWriter` passes `PlayerForce.LastTurnReportSnapshot` explicitly to `GameStateDataAccess.SaveData`. A null snapshot is written as a valid current-version save with no `LastTurnReport` row; it is not an error and represents a campaign whose first turn has not resolved yet. Full battle replay is deliberately not part of this payload. The chapter event chronicle is also separate: it cannot reconstruct all strategic, construction, governor, recruitment, and mission-report cards.
 
@@ -311,7 +313,8 @@ Fleet                (Id, FactionId, x, y, DestinationPlanetId)
 Ship                 (Id, ShipTemplateId, FleetId, Name)
 
 Unit                 (Id, UnitTemplateId, ParentUnitId, Name)
-Squad                (Id, SquadTemplateId, UnitId, ShipId, RegionId, Name)
+Squad                (Id, SquadTemplateId, UnitId, ShipId, RegionId, Name,
+                      FormationOrdinal, HasBattleHistory)
 SquadWeaponSet       (SquadId, WeaponSetId)
 ChapterEquipmentRoleLoadout
                      (PersonalEquipmentRoleId, ArmorEquipmentId)
@@ -326,12 +329,10 @@ SoldierEquipmentLoadoutItem
 Assignment           (Id, MissionId, Disposition, IsQuiet,
                       IsActivelyEngaging, Aggression)     -- the "Order" domain object
 OrderSquad           (OrderId→Assignment, SquadId)       -- order-to-squad junction
-OrderSoldier         (OrderId→Assignment, SoldierId)     -- individual specialists attached to an
-                                                         -- operation without their home squad
-                                                         -- (Design/Reference/SpecialistAttachment.md).
-                                                         -- Soldier.SquadId still points at the home
-                                                         -- squad; this row is the only record that
-                                                         -- he is currently detached forward.
+IndividualPosting    (SoldierId→Soldier, PostingKind, OrderId→Assignment,
+                      LoadedShipId→Ship, LandedRegionId→Region, StartedDate)
+                                                          -- one optional posting per soldier;
+                                                          -- exactly one physical location
 
 Soldier              (Id, SoldierTemplateId, SquadId, Name, Strength, Dexterity,
                       Constitution, Intelligence, Perception, Ego, Charisma,
@@ -370,7 +371,7 @@ WorldControlEpisode      (PlanetId→Planet, ImperialFactionId, LastControllingF
 
 **Note:** Region adjacency is runtime-only. It is reconstructed from the ordered region array on load and is not persisted.
 
-**Canonical campaign event spine.** The current format-11 save retains the format-8 event spine as the durable source of truth
+**Canonical campaign event spine.** The current format-13 save retains the format-8 event spine as the durable source of truth
 for player-facing career and battle facts. `PayloadJson` is decoded through the explicit
 `(CampaignEventType, PayloadVersion)` registry; entity rows retain stable ids and display-name
 snapshots, and publication rows retain the classifier decision so loading never reclassifies an old
@@ -575,6 +576,23 @@ Legs cripple at `Massive` and sever at `Mortal` — deliberately a band apart, s
 
 `PlayerChapterBattleAftermathPolicy` settles the external recovery fact from `BattleOutcome.SideHoldingField`: a side holding the field recovers incapacitated brothers, a lost field moves them through the dead/fallen path with geneseed loss, and a mutual disengagement or turn-cap result counts as recovered. `BattleHistory.IncapacitatedSoldierIds` is kept disjoint from `KilledSoldierIds`; mission reports and debriefs render the two casualty classes separately.
 
+**Individual postings.** `PlayerSoldier.AssignedSquad` is the permanent organizational home. An optional
+`IndividualPosting` overrides the soldier's physical location and commitment without removing him from
+`Squad.Members`, preserving nominal strength, lineage, save ownership, and fallen-brother detection.
+`CampaignLocation` represents exactly one ship or one landed region. Posting kinds are
+`OperationalAttachment`, `IndependentDeployment`, `MedicalDetachment`, and `AwaitingReunion`.
+`IndividualPostingService` owns creation, movement, order projection, medical detachment, reunion, death
+cleanup, and individual ship manifests; `Order.AttachedSoldiers` is a compatibility projection rather
+than an independent source of truth. Posted soldiers never occupy two locations, and ending an order or
+procedure does not teleport them home.
+
+`SoldierPresenceService` keeps organizational and physical counts separate: nominal members include all
+home-squad members, present members exclude posted soldiers, deployable members additionally require
+combat effectiveness and existing deployment gates, and order participants combine present squad members
+with operationally posted specialists. Movement, battle rosters, field care, construction, readiness,
+and transport use the appropriate projection rather than approximating all of them with
+`Squad.Members.Count`.
+
 #### Skill Model
 
 ```
@@ -609,7 +627,9 @@ Squad
   ├─ CurrentOrders : Order
   ├─ CurrentRegion : Region         (null if aboard a ship)
   ├─ BoardedLocation : Ship         (null if on a planet)
-  └─ ParentUnit : Unit
+  ├─ ParentUnit : Unit
+  ├─ FormationOrdinal : int?        (stable line identity within the parent unit)
+  └─ HasBattleHistory : bool       (historical Scout retention predicate)
 
 SquadTemplate
   ├─ Elements : List<SquadTemplateElement>
@@ -670,6 +690,19 @@ distinct in organization and force behavior, not cheaper per man.
 - `BattleHistory : Dictionary<Date, List<EventHistory>>`
 - `Army.SquadMap : Dictionary<int, Squad>` — flat lookup populated by `Army.PopulateSquadMap()`
 
+Non-Scout line formations have a durable designation allocated by `FormationOrdinalAllocator` and
+formatted by `SquadDesignationFormatter`; the designation does not change when a Sergeant leaves, dies,
+or is replaced. Empty non-Scout formations retain their identity and lineage. Empty Scouts without battle
+history are discarded after deployment references are cleared, while Scouts with recorded battle history
+remain as historical, unlocated formations. `SquadLifecycleService` is the shared owner of this cleanup
+across transfer, death, recruitment/procedure, and other final-member removal paths. The battle aftermath
+marks a Scout's history before casualty removal so a wiped historical formation is retained.
+
+Chapter Muster uses `MusterPlanService` for an editable, stable draft of transfers, promotions, role
+changes, and new/reconstituted formations. It validates the complete plan before any mutation and
+revalidates at commit. `FleetCapacityPlanService` supplies direct-placement and bounded whole-squad
+rebalance results; it never splits squads or silently relocates unrelated formations.
+
 ### 5.5 Fleet
 
 ```
@@ -689,6 +722,11 @@ Ship
   ├─ LoadedSquads : IEnumerable<Squad>
   └─ AvailableCapacity : int
 ```
+
+`ShipCapacityService` calculates present passenger load and validates whole-squad boarding. Individual
+postings consume one berth and are not double-counted when the posting and home squad reference the same
+ship. Land and embark operations update ship manifests, region presence, and order cleanup atomically;
+failed capacity or live-state validation changes none of those relationships.
 
 ### 5.6 Missions & Orders
 
@@ -729,7 +767,12 @@ MissionContext  (runtime only, not persisted)
 
 #### Specialist Attachment
 
-Orders bind squads; an individual specialist reaches an operation by **attachment** instead. `Order.AttachedSoldiers` ⟷ `PlayerSoldier.AttachedOrder` is a pointer pair owned entirely by `OrderAttachment` (`Attach`/`Detach`/`ReleaseAll`/`CanAttach`), so nothing can half-attach. `SpecialistAvailability` holds the selection rules, extracted from the Godot controller so they are unit-testable.
+Orders bind squads; an individual specialist reaches an operation by **attachment** instead. The
+`IndividualPosting` on the soldier is the source of truth for operational attachment, while
+`Order.AttachedSoldiers` is maintained as a compatibility projection by `IndividualPostingService` and
+the short-lived `OrderAttachment` facade (`Attach`/`Detach`/`ReleaseAll`/`CanAttach`). Nothing can
+half-attach. `SpecialistAvailability` holds the selection rules, extracted from the Godot controller so
+they are unit-testable.
 
 An attached soldier **stays in `Squad.Members`** — the save keys a soldier's squad, and a null squad at load means *dead*, so removing him would resurrect him as a fallen brother. Home-squad headcount therefore still counts him; only "ready right now" displays subtract him.
 
@@ -737,7 +780,10 @@ An attached soldier **stays in `Squad.Members`** — the save keys a soldier's s
 
 Invariant: **an order always has ≥1 assigned squad.** A specialists-only order is rejected; several sites partition orders on `AssignedSquads.Any()`. Attachment lifetime is order lifetime — it is released when the player unassigns, when `MissionAftermathProcessor` cleans up a resolved order, when the last squad leaves, when the home squad turns administrative, or on the man's death. An attached specialist has **no battlefield presence**: he is in no `BattleSquad`, cannot become a casualty, and is added to the mission report explicitly rather than via battle participation.
 
-Persistence is the `OrderSoldier` table. Hydration must run **after** player soldiers load, not where orders are constructed, because `PlayerSoldier`'s constructor evicts the base `Soldier` from its squad and inserts the wrapper — so the round-trip test asserts *reference* equality, not matching ids.
+Persistence is the `IndividualPosting` table. Hydration runs **after** player soldiers, squads, ships,
+regions, and orders load, then restores the posting and both compatibility projections. This ordering is
+required because `PlayerSoldier` construction evicts the base `Soldier` from its squad and inserts the
+wrapper; round-trip tests therefore assert *reference* equality, not matching ids.
 
 ### 5.7 Characters & Requests
 
@@ -1244,7 +1290,37 @@ Warp lane generation (0.7 addition): after subsector clustering, the highest-pop
 4. Compute a bounding circle for each resulting subsector.
 5. Assign grid cells to subsectors by closest-circle membership.
 
-### 6.10 Sector Map Label Layer
+### 6.10 Campaign Operations Services
+
+The campaign operations workflows use pure services and read models beneath Godot views. They keep
+multi-entity changes staged until confirmation and revalidate against live state before commit.
+
+**Chapter Muster.** `SquadLifecycleService` owns final-member cleanup and the distinction between
+historical and disposable empty Scouts. `SquadDesignationFormatter` and `FormationOrdinalAllocator`
+provide stable non-Scout line identities. `MusterPlanService` stages transfers, promotions, role changes,
+and new or reconstituted formations, while `ChapterMusterViewModelBuilder` supplies candidate,
+formation, roster-delta, and constraint rows. `FleetCapacityPlanService` returns typed direct-placement,
+rebalance-required, or impossible results; it never splits a squad. Commit is all-or-nothing after
+revalidation, and canceled provisional formations do not consume ordinals.
+
+**Recovery Operations.** `IndividualPostingService` is the single mutation boundary for detached
+personnel. `MedicalFacilityService` enumerates known treatment sites with typed Ready, Resolvable, and
+Ineligible outcomes; `RecoveryOperationsViewModelBuilder` and `RecoveryPlanService` expose and commit
+care destination, patient movement, staff/capacity, treatment, and reunion decisions. A medical
+detachment removes the soldier from physical squad presence while retaining nominal membership. When
+care completes the posting becomes `AwaitingReunion`; reunion is explicit and requires co-location.
+
+**Planetary Operations.** `RegionalOrderEligibilityService` scopes candidates to the target and adjacent
+surface regions, includes squads already assigned to the selected order, and excludes orbiting or
+otherwise ineligible formations. `OrderMutationService` owns typed create, assign, add, remove, and cancel
+operations. `PlanetForceMovementService` performs atomic landing and whole-squad embarkation with
+capacity checks and order cleanup. `PlanetRegionMapViewModelBuilder` and the shared
+`PlanetRegionMapView` keep the sixteen-card regional topology mounted while Order, Land, Embark, and
+Detach verbs re-scope the force tree and live editor. `SystemInspector` owns the world dossier.
+Hostile estimates preserve confidence, age, and evidence-decay information instead of flattening the
+belief ledger to one magnitude word.
+
+### 6.11 Sector Map Label Layer
 
 SectorMap renders the label layer in world coordinates alongside the subsector fills and
 boundaries. SectorLabelBandStyle resources in Scenes/SectorMap/SectorMap.tscn own the font,
@@ -1292,11 +1368,11 @@ See Section 3.1. All events flow View → Controller → Model → Controller �
 | `main_game_screen` | `MainGameScreenController` | — | Top-level orchestrator; screen stack |
 | `GalaxyView` | `GalaxyController` | `GalaxyView` | Sector map; planet selection; End Turn |
 | `chapter_screen` | `ChapterController` | `ChapterView` | Order of battle; squad assignment |
+| `chapter_muster_screen` | `ChapterMusterScreenController` | scene-backed controls | Staged promotion, transfer, formation, and capacity planning |
 | `soldier_screen` | `SoldierController` | `SoldierView` | Individual marine detail |
 | `squad_screen` | `SquadScreenController` | `SquadScreenView` | Squad detail |
-| `planet_detail_screen` | `PlanetDetailScreenController` | `PlanetDetailScreenView` | Planet info; fleet/troop management |
-| `region_screen` | `RegionScreenController` | `RegionScreenView` | Region detail; order assignment |
-| `apothecary_screen` | *(controller)* | *(view)* | Wound and geneseed management |
+| `planetary_operations_screen` | `PlanetaryOperationsScreenController` | `PlanetaryOperationsScreenView` | Regional order, movement, specialist, and detachment workspace |
+| `apothecary_screen` | `ApothecariumScreenController` | `ApothecariumScreenView` | Wound, geneseed, and Recovery Operations management |
 | `recruiter_screen` | *(controller)* | *(view)* | Training pipeline |
 | `BattleReviewScreen` | `BattleReviewController` | `BattleReviewView` | Post-battle replay |
 | `CommandScreen` | `CommandScreenController` | `CommandScreenView` | Live Command Brief, frozen Chapter Chronicle, and Last Turn Report access |
@@ -1412,6 +1488,42 @@ invariants are:
 - Save failures and turn-resolution failures do not erase the last known snapshot.
 - A current-version save with an absent report row loads with no snapshot; earlier save versions remain
   incompatible under the existing save policy.
+
+### 7.5 Operations Workspaces
+
+The Alpha 0.8 operations surfaces consolidate multi-step campaign actions while preserving the existing
+view/controller boundary. The raster studies in `Design/Exploration/ForceCommandWorkflows/` are
+composition references; runtime controls, typography, badges, and states come from the Godot theme,
+shared components, and the icon atlas.
+
+**Chapter Muster.** `ChapterMusterScreenController` presents an explicitly scoped candidate list, the
+formation board, staged roster deltas, and a logistics/plan panel. Candidate rows use existing squad and
+rank badges plus honor/status presentation. Empty line formations show identity and lineage but no
+location. A proposed leader's destination rank and resulting title distinguish leader assignment from
+ordinary membership. The screen supports direct capacity, bounded fleet rebalance, and unsatisfiable
+states without applying a partial plan.
+
+**Recovery Operations.** `RecoveryOperationsView` is hosted by the Apothecarium screen. It presents the
+recovery queue, a complete injury ledger and code-drawn body map, factual squad status, eligible care
+destinations, patient movement choice, dependent staff/capacity/treatment actions, and explicit reunion.
+Queue sorting is by severity, recovery time, squad, or location. The plan surface exposes blockers and
+revalidates after logistics detours; medical completion does not implicitly reunite the soldier.
+
+**Planetary Operations.** `PlanetaryOperationsScreen` keeps one selected planet, selected region, and
+shared sixteen-card map mounted while Order, Land, Embark, and Detach verbs re-scope its force tree and
+editor. The sector-map `SystemInspector` owns the world dossier; the operations header carries live
+regional, landed/orbit, and request aggregates and reopens the dossier as an overlay. Orders are edited
+live: the first squad creates one, the last removal ends it, aggression and specialist attachments mutate
+immediately, and one-step undo covers the last edit. Land and Embark retain explicit confirmation and
+atomic movement validation. Detach creates a medical posting to a ship in orbit without moving the home
+squad, while Recovery Operations owns treatment and onward care. Hostile estimates show intel-dependent
+precision, four-rung confidence, evidence age, and deterministic decay. The force tree is collapsed and
+summarized by company or ship, supports parent selection and filtering, and retains excluded formations
+with their typed reason.
+
+These workspaces are covered primarily by pure domain/view-model tests and shallow scene-wiring smoke;
+supported-resolution visual layout remains release QA. The orphaned Planet Detail and Region Detail
+surfaces were removed after their remaining specialist and tree behavior was ported.
 
 ---
 
@@ -1678,9 +1790,10 @@ Coverage for the promoted Alpha 0.8 slice includes:
 - `CampaignEventSpineTests`: recorder dedupe/projection, crossed milestones, grouped Chronicle entries, founding projection/idempotence, and routine battle Chronicle policy.
 - `NarrativeEventEmissionTests`: near-death projection/recovery, typed medical/mentor/gene-seed facts, payload/entity data-access round trips, and invalid source/correlation validation.
 - `EndTurnPreflightTests`: shared attention-fact identity, preference-only suppression, and Command Brief retention.
-- `SaveLoadRoundTripTests` plus the data-access tests: current format-11 relationship, awareness, target-belief, mission, latest-report, narrative episode, Chronicle callback/annotation, and itemized equipment persistence; compatibility tests verify that format 10 is rejected before campaign-table loading. `EquipmentDoctrinePersistenceTests` covers complete role/personal loadouts, quantities, armor, and ready order.
+- `SaveLoadRoundTripTests` plus the data-access tests: current format-13 relationship, awareness, target-belief, mission, latest-report, narrative episode, Chronicle callback/annotation, itemized equipment, squad-lineage, and individual-posting persistence; compatibility tests verify that format 12 is rejected before campaign-table loading. `EquipmentDoctrinePersistenceTests` covers complete role/personal loadouts, quantities, armor, and ready order.
 - `EquipmentFoundationTests`, `RulesDatabaseValidationTests`, and the focused battle coverage: global equipment identity, requirements/capacity, kit validation, shared mission reserves, ammunition behavior, reload/recovery, initial-ready priority, effective tactical Battle Value, and carrier reassignment.
-- `Scenes/Debug/release_scene_wiring_smoke.tscn` plus the stable headless main-scene smoke: shallow scene wiring; visual layout remains release QA.
+- `SquadLineageTests`, `FleetCapacityPlanServiceTests`, `IndividualPostingServiceTests`, and `DeploymentStorageTests`: line identity/history retention, whole-squad capacity planning, individual posting invariants, and format-13 persistence. `PlanetaryOperationsServiceTests` and the Recovery/Planetary icon tests cover mission-scoped eligibility, atomic land/embark behavior, and required UI registrations.
+- `Scenes/Debug/release_scene_wiring_smoke.tscn` plus the stable headless main-scene smoke: shallow scene wiring.
 
 ### 9.3 Regression Risk Areas
 

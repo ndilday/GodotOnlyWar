@@ -10,7 +10,8 @@ namespace OnlyWar.Helpers
         Honor,          // award Type + minimum Level, or a rating flag; Has / DoesNotHave
         TimeInService,  // weeks; AtLeast / AtMost
         TimeInRank,     // weeks; AtLeast / AtMost
-        TimeInSquad     // weeks; AtLeast / AtMost
+        TimeInSquad,    // weeks; AtLeast / AtMost
+        SergeantRecommended // latest evaluation Leadership > 55; Equals / NotEquals
     }
 
     public enum SoldierFilterOperator

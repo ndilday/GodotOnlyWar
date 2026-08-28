@@ -504,7 +504,7 @@ public partial class MainGameScene
 	private void OnCampaignChanged(object sender, EventArgs e)
 	{
 		MarkCampaignChanged();
-		if (_activePrimaryScreen == _commandScreen)
+		if (_commandScreen != null && _activePrimaryScreen == _commandScreen)
 		{
 			_commandScreen.RefreshFromExternalChange();
 		}
